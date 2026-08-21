@@ -1,0 +1,13 @@
+# truth-mirror runtime state - machine-generated
+*
+!.gitignore
+!config.toml
+runs/
+review-queue.jsonl
+ledger.jsonl
+ledger.md
+tmp/
+logs/
+*.local.*
+
+!TRUTH.md

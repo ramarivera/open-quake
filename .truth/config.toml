@@ -1,0 +1,36 @@
+# truth-mirror - open-quake adversarial review config.
+# Writer (watched) harness vs opposed reviewer are DECOUPLED; the reviewer MODEL is the
+# adversarial knob. Topology mirrors the ONYXIO repo pattern, with the standing
+# requirement that OMP-harness-driven changes are adversarially reviewed by
+# gpt-5.6-terra@low from the Codex harness (Ramiro, 2026-08-21).
+#
+# Strict two-pass drives P(undetected lie) down. Reviewer wall clock is reviewer.timeout_secs.
+
+enabled = true
+
+default_writer = "omp"
+allow_same_model = false
+
+[pairs.omp]
+reviewer = { harness = "codex", model = "gpt-5.6-terra", effort = "low" }
+arbiter = { harness = "claude", model = "claude-opus-5", effort = "xhigh" }
+
+[pairs.claude]
+reviewer = { harness = "codex", model = "gpt-5.6-sol", effort = "low" }
+arbiter = { harness = "claude", model = "claude-opus-5", effort = "xhigh" }
+
+[pairs.codex]
+reviewer = { harness = "claude", model = "claude-opus-5", effort = "xhigh" }
+arbiter = { harness = "codex", model = "gpt-5.6-sol", effort = "xhigh" }
+
+[pairs.grok]
+reviewer = { harness = "codex", model = "gpt-5.6-terra", effort = "low" }
+arbiter = { harness = "claude", model = "claude-opus-5", effort = "xhigh" }
+
+[strict]
+stop_after_lies = 3
+stop_after_fuckups = 3
+max_passes = 6
+
+[reviewer]
+timeout_secs = 3600

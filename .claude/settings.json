@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "truth-mirror reinject --agent claude",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}
