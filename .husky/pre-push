@@ -8,6 +8,12 @@ if ! command -v truth-mirror >/dev/null 2>&1; then
 	exit 1
 fi
 
+if [ ! -f ".truth/config.toml" ]; then
+	echo "pre-push blocked: .truth/config.toml missing - push denied" >&2
+	exit 1
+fi
+unset TRUTH_MIRROR_STATE_DIR
+
 # truth-mirror managed hook
-truth-mirror hook-dispatch pre-push "$@"
+truth-mirror --state-dir .truth hook-dispatch pre-push "$@"
 # truth-mirror hook end
