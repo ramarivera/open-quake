@@ -1,7 +1,4 @@
 #!/bin/sh
-# Entire CLI hooks (folded into the husky content hook - see .husky/commit-msg)
-if command -v entire >/dev/null 2>&1; then entire hooks git pre-push "$1"; else :; fi
-
 # truth-mirror managed hook
 if command -v truth-mirror >/dev/null 2>&1; then truth-mirror hook-dispatch pre-push "$@"; else :; fi
 # truth-mirror hook end

@@ -1,19 +1,14 @@
 #!/bin/sh
 # Husky + Entire + truth-mirror chain.
 #
-# Layering note (2026-08-22): `entire enable` normally wraps the husky ENTRY
-# shims in .husky/_/<hook>, saving them as <hook>.pre-entire. That breaks two
-# things: husky's h dispatcher derives the hook name from $0 ("commit-msg.pre-
-# entirre" style), silently skipping .husky/commit-msg (the onyxio "foundry
-# finding"), and truth-mirror's husky validator does not recognize Entire's
-# forwarder style, so `truth status` reports the gate as missing. The fix used
-# here: keep .husky/_/<hook> as the bare husky shim and run Entire's dispatch
-# from INSIDE this content hook, ahead of the truth-mirror block. Both tools
-# execute; both validators are satisfied. If `entire enable --force` is ever
-# rerun it will re-wrap the entries - restore these shims afterwards.
-
-# Entire CLI hooks
-if command -v entire >/dev/null 2>&1; then entire hooks git commit-msg "$1" || true; else printf '%s\n' '[entire] Entire CLI is enabled but not installed or not on PATH. Skipping Entire Git hook; continuing. Installation guide: https://docs.entire.io/cli/installation#installation-methods' >&2 || :; fi
+# Layering (2026-08-22): .husky/_/<hook> stays the bare husky shim; the truth
+# gate lives here. Entire's git dispatch is intentionally NOT folded into this
+# file - invoking `entire hooks git <hook>` from a content hook makes Entire
+# self-heal its wrappers over the shim entries, which breaks husky's $0-derived
+# lookup and silently skips this gate (the onyxio "foundry finding"). Entire
+# keeps its own entries for prepare-commit-msg / post-rewrite / post-checkout,
+# where truth claims no hook. If `entire enable --force` is rerun it will
+# re-wrap these entries - restore the bare shims afterwards.
 
 # truth-mirror managed hook
 if command -v truth-mirror >/dev/null 2>&1; then truth-mirror hook-dispatch commit-msg "$@"; else :; fi
