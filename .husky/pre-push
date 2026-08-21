@@ -1,4 +1,13 @@
 #!/bin/sh
+# Husky -> truth-mirror gate (strict). See .husky/commit-msg for rationale.
+_mise_shims="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"
+[ -d "$_mise_shims" ] && PATH="$_mise_shims:$PATH" && export PATH
+
+if ! command -v truth-mirror >/dev/null 2>&1; then
+	echo "pre-push blocked: truth-mirror not resolvable - push denied; run 'mise install' (see mise.toml)" >&2
+	exit 1
+fi
+
 # truth-mirror managed hook
-if command -v truth-mirror >/dev/null 2>&1; then truth-mirror hook-dispatch pre-push "$@"; else :; fi
+truth-mirror hook-dispatch pre-push "$@"
 # truth-mirror hook end
