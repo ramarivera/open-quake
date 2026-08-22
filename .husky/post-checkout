@@ -1,16 +1,21 @@
 #!/bin/sh
-# post-checkout - propagate local-only skills into fresh worktrees.
+# post-checkout - propagate LOCAL-ONLY skills into fresh worktrees.
 #
 # .agents/skills/dark-encyclopedia is deliberately gitignored (blanket
 # .gitignore inside the folder - Ramiro wants it local-only, never
 # distributed), so a new worktree checkout never contains it. Git fires this
-# hook on `git worktree add`; copy the folder from the main working tree when
-# it is missing. Convenience sync, not an enforcement gate: failures warn but
-# never block (exit 0).
+# hook on `git worktree add`; copy ignored skill folders from the main working
+# tree when missing. Tracked skills are NEVER copied - revision ownership is
+# decided solely by the checked-out commit.
+#
+# Policy (recorded in .truth/TRUTH.md): this is BEST-EFFORT convenience, not
+# an enforcement gate. If propagation fails the worktree simply lacks the
+# local skill; checkout still succeeds.
 
 main_tree="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null)")"
-src="$main_tree/.agents/skills"
-dst="$(git rev-parse --show-toplevel)/.agents/skills"
+src_rel=".agents/skills"
+src="$main_tree/$src_rel"
+dst="$(git rev-parse --show-toplevel)/$src_rel"
 
 if [ ! -d "$src" ]; then
 	exit 0
@@ -19,9 +24,23 @@ fi
 mkdir -p "$dst" || exit 0
 for skill_dir in "$src"/*/; do
 	name="$(basename "$skill_dir")"
-	if [ ! -e "$dst/$name" ] && [ "$name" != "*" ]; then
+	[ "$name" = "*" ] && continue
+	# Copy only deliberately local-only skills. A blanket .gitignore INSIDE the
+	# skill folder ignores its contents but not the folder itself, so probe
+	# sentinel files: the skill counts as local-only when git ignores any of
+	# SKILL.md, .gitignore, or README.md within it. Tracked skills stay
+	# revision-owned.
+	local_only=0
+	for sentinel in SKILL.md .gitignore README.md; do
+		if git -C "$main_tree" check-ignore -q -- "$src_rel/$name/$sentinel"; then
+			local_only=1
+			break
+		fi
+	done
+	[ "$local_only" -eq 1 ] || continue
+	if [ ! -e "$dst/$name" ]; then
 		cp -R "$skill_dir" "$dst/$name" ||
-			echo "post-checkout: failed to copy local-only skill '$name' into worktree" >&2
+			echo "post-checkout: failed to copy local-only skill '$name' into worktree (best-effort)" >&2
 	fi
 done
 exit 0
