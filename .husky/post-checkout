@@ -4,8 +4,8 @@
 # .agents/skills/dark-encyclopedia is deliberately gitignored (blanket
 # .gitignore inside the folder - Ramiro wants it local-only, never
 # distributed), so a new worktree checkout never contains it. Git fires this
-# hook on `git worktree add`; copy ignored skill folders from the main working
-# tree when missing. Tracked skills are NEVER copied - revision ownership is
+# hook on `git worktree add`; copy ignored paths from the main working tree
+# when missing. Tracked skills are NEVER copied - revision ownership is
 # decided solely by the checked-out commit.
 #
 # Policy (recorded in .truth/TRUTH.md): this is BEST-EFFORT convenience, not
@@ -25,7 +25,7 @@ mkdir -p "$dst" || exit 0
 for skill_dir in "$src"/*/; do
 	name="$(basename "$skill_dir")"
 	[ "$name" = "*" ] && continue
-	# Copy only genuinely local-only skills. BOTH predicates must hold:
+	# Qualification (BOTH must hold):
 	#   1. no tracked path anywhere beneath the folder (mixed tracked+ignored
 	#      directories stay revision-owned), AND
 	#   2. git check-ignore confirms the folder's SKILL.md is explicitly
@@ -34,9 +34,21 @@ for skill_dir in "$src"/*/; do
 		continue
 	fi
 	git -C "$main_tree" check-ignore -q -- "$src_rel/$name/SKILL.md" || continue
-	if [ ! -e "$dst/$name" ]; then
-		cp -R "$skill_dir" "$dst/$name" ||
-			echo "post-checkout: failed to copy local-only skill '$name' into worktree (best-effort)" >&2
-	fi
+	# Copy ONLY the individual paths git confirms ignored - never the whole
+	# folder - so an ignored SKILL.md cannot smuggle unignored sibling files
+	# (e.g. secrets) into other worktrees.
+	skill_dst="$dst/$name"
+	find "$skill_dir" -type f | while IFS= read -r file; do
+		rel="${file#"$skill_dir"}"
+		rel="${rel#/}"
+		if git -C "$main_tree" check-ignore -q -- "$src_rel/$name/$rel"; then
+			mkdir -p "$skill_dst/$(dirname "$rel")" ||
+				{ echo "post-checkout: cannot create $skill_dst (best-effort)" >&2; continue; }
+			cp "$file" "$skill_dst/$rel" ||
+				echo "post-checkout: failed to copy '$name/$rel' into worktree (best-effort)" >&2
+		else
+			echo "post-checkout: skipped non-ignored file '$name/$rel'" >&2
+		fi
+	done
 done
 exit 0
