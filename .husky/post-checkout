@@ -25,12 +25,15 @@ mkdir -p "$dst" || exit 0
 for skill_dir in "$src"/*/; do
 	name="$(basename "$skill_dir")"
 	[ "$name" = "*" ] && continue
-	# Copy only genuinely local-only skills: a directory with ZERO tracked
-	# files beneath it. Any tracked path (even one mixed among ignored files)
-	# makes the directory revision-owned and it is never copied.
+	# Copy only genuinely local-only skills. BOTH predicates must hold:
+	#   1. no tracked path anywhere beneath the folder (mixed tracked+ignored
+	#      directories stay revision-owned), AND
+	#   2. git check-ignore confirms the folder's SKILL.md is explicitly
+	#      ignored (plain untracked-but-not-ignored folders do not qualify).
 	if [ -n "$(git -C "$main_tree" ls-files -- "$src_rel/$name")" ]; then
 		continue
 	fi
+	git -C "$main_tree" check-ignore -q -- "$src_rel/$name/SKILL.md" || continue
 	if [ ! -e "$dst/$name" ]; then
 		cp -R "$skill_dir" "$dst/$name" ||
 			echo "post-checkout: failed to copy local-only skill '$name' into worktree (best-effort)" >&2
