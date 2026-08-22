@@ -4,23 +4,23 @@
 
 vite v8.2.2 building ssr environment for production...
 transforming...
-✓ 2 modules transformed.
+✓ 4 modules transformed.
 rendering chunks...
-out/main/index.js  0.91 kB
+out/main/index.js  3.48 kB
 
-✓ built in 24ms
+✓ built in 59ms
 vite v8.2.2 building ssr environment for production...
 transforming...
 ✓ 2 modules transformed.
 rendering chunks...
-out/preload/index.mjs  0.16 kB
+out/preload/index.mjs  0.35 kB
 
-✓ built in 5ms
+✓ built in 10ms
 vite v8.2.2 building client environment for production...
 transforming...
-✓ 14 modules transformed.
+✓ 15 modules transformed.
 rendering chunks...
 out/renderer/index.html                  0.23 kB
-out/renderer/assets/index-BLdM-5B7.js  487.85 kB
+out/renderer/assets/index-iwCALbD3.js  491.18 kB
 
-✓ built in 44ms
+✓ built in 87ms
