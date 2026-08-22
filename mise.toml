@@ -1,5 +1,8 @@
 # Vendored toolchain - truth-mirror is built from crates.io at the pinned
 # version and shimmed into PATH by mise, so repo hooks resolve `truth` /
-# `truth-mirror` locally instead of relying on ~/.cargo.
+# `truth-mirror` locally instead of relying on ~/.cargo. Node is pinned for
+# the pnpm workspace (packages/* + apps/desktop).
 [tools]
 "cargo:truth-mirror" = "0.18.1"
+node = "24"
+pnpm = "10"

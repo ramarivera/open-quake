@@ -1,0 +1,14 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+catalog:
+  effect: 3.22.1
+  "@effect/vitest": 0.30.0
+  fast-check: 4.9.0
+  vitest: 4.1.11
+  typescript: 5.9.3
+  turbo: 2.10.11
+  "@biomejs/biome": 2.5.10
+  vite: 8.2.2
+  "@types/node": 24.13.3

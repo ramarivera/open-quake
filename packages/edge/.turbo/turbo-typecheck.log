@@ -1,0 +1,4 @@
+
+> @open-quake/edge@0.0.0 typecheck /Users/ramarivera/dev/open-quake/packages/edge
+> tsc --noEmit
+

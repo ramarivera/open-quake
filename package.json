@@ -2,10 +2,21 @@
   "name": "open-quake",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check packages apps"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "@biomejs/biome": "catalog:",
+    "husky": "^9.1.7",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "electron"]
   }
 }

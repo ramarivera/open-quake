@@ -8,3 +8,4 @@
 - `.husky/post-checkout` local-skill propagation is best-effort convenience, NOT an enforcement gate: if the copy fails, the worktree proceeds without the local-only skill. It copies only individual paths git confirms as ignored (never a whole folder, so unignored siblings cannot leak); tracked skills stay revision-owned.
 - The truth-mirror gate must deny the protected operation when its binary or config is missing; hooks may not fall back to allowing.
 - Never commit secrets, `.env*` contents, or agent session artifacts.
+- `any` is banned everywhere in this repo - no annotations, assertions, generics, or casts (Ramiro, 2026-08-22: "no buts or excuses"). Biome's `noExplicitAny` is an error and `.husky/repo-gates.sh` runs biome as a push gate; if a type genuinely cannot be expressed, stop and surface it instead of reaching for `any`.

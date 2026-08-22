@@ -1,0 +1,4 @@
+
+> @open-quake/protocol@0.0.0 typecheck /Users/ramarivera/dev/open-quake/packages/protocol
+> tsc --noEmit
+
