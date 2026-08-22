@@ -1,7 +1,7 @@
-import type { Display } from "electron"
+import type { Display } from "electron";
 
-export const PANEL_SIZE = { width: 1920, height: 480 } as const
-const PANEL_LABEL = "DK-QUAKE"
+export const PANEL_SIZE = { width: 1920, height: 480 } as const;
+const PANEL_LABEL = "DK-QUAKE";
 
 /**
  * Find the display the QUAKE panel should own: prefer the one advertising the
@@ -11,12 +11,11 @@ export function findPanelDisplay(
 	displays: readonly Display[],
 ): Display | undefined {
 	return (
-		displays.find((d) =>
-			(d.label ?? "").toUpperCase().includes(PANEL_LABEL),
-		) ??
+		displays.find((d) => (d.label ?? "").toUpperCase().includes(PANEL_LABEL)) ??
 		displays.find(
 			(d) =>
-				d.size.width === PANEL_SIZE.width && d.size.height === PANEL_SIZE.height,
+				d.size.width === PANEL_SIZE.width &&
+				d.size.height === PANEL_SIZE.height,
 		)
-	)
+	);
 }

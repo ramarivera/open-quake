@@ -1,17 +1,20 @@
-import { join } from "node:path"
-import { app, BrowserWindow, screen, type Display } from "electron"
-import { findPanelDisplay, PANEL_SIZE } from "./display"
-import { startDeviceBus, type QuakeEvent } from "./deviceBus"
+import { join } from "node:path";
+import { app, BrowserWindow, type Display, screen } from "electron";
+import { type QuakeEvent, startDeviceBus } from "./deviceBus";
+import { findPanelDisplay, PANEL_SIZE } from "./display";
 
-const isDev = !!process.env.ELECTRON_RENDERER_URL
+const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
-function loadSurface(win: BrowserWindow, surface: "management" | "panel"): void {
+function loadSurface(
+	win: BrowserWindow,
+	surface: "management" | "panel",
+): void {
 	if (isDev) {
-		win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?surface=${surface}`)
+		win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?surface=${surface}`);
 	} else {
 		win.loadFile(join(__dirname, "../renderer/index.html"), {
 			query: { surface },
-		})
+		});
 	}
 }
 
@@ -30,9 +33,9 @@ function createPanelWindow(display: Display): BrowserWindow {
 			contextIsolation: true,
 			nodeIntegration: false,
 		},
-	})
-	loadSurface(win, "panel")
-	return win
+	});
+	loadSurface(win, "panel");
+	return win;
 }
 
 function createManagementWindow(): BrowserWindow {
@@ -45,35 +48,35 @@ function createManagementWindow(): BrowserWindow {
 			contextIsolation: true,
 			nodeIntegration: false,
 		},
-	})
-	loadSurface(win, "management")
-	return win
+	});
+	loadSurface(win, "management");
+	return win;
 }
 
 app.whenReady().then(() => {
-	const displays = screen.getAllDisplays()
-	const panelDisplay = findPanelDisplay(displays)
-	const primary = screen.getPrimaryDisplay()
+	const displays = screen.getAllDisplays();
+	const panelDisplay = findPanelDisplay(displays);
+	const primary = screen.getPrimaryDisplay();
 
-	const panelWin = createPanelWindow(panelDisplay ?? primary)
-	const managementWin = createManagementWindow()
+	const panelWin = createPanelWindow(panelDisplay ?? primary);
+	const managementWin = createManagementWindow();
 
-	const bus = startDeviceBus()
+	const bus = startDeviceBus();
 	const forward = (event: QuakeEvent): void => {
 		for (const win of [panelWin, managementWin]) {
-			if (!win.isDestroyed()) win.webContents.send("quake:event", event)
+			if (!win.isDestroyed()) win.webContents.send("quake:event", event);
 		}
-	}
-	bus.on(forward)
+	};
+	bus.on(forward);
 
-	app.on("before-quit", () => bus.stop())
+	app.on("before-quit", () => bus.stop());
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
-			createManagementWindow()
+			createManagementWindow();
 		}
-	})
-})
+	});
+});
 
 app.on("window-all-closed", () => {
-	if (process.platform !== "darwin") app.quit()
-})
+	if (process.platform !== "darwin") app.quit();
+});

@@ -1,23 +1,24 @@
-import { useEffect, useState } from "react"
-import { useQuakeEvents } from "./useQuakeEvents"
+import { useEffect, useState } from "react";
+import { useQuakeEvents } from "./useQuakeEvents";
 
 function useSurface(): "management" | "panel" {
-	const [surface, setSurface] = useState<"management" | "panel">("management")
+	const [surface, setSurface] = useState<"management" | "panel">("management");
 	useEffect(() => {
-		const params = new URLSearchParams(window.location.search)
-		setSurface(params.get("surface") === "panel" ? "panel" : "management")
-	}, [])
-	return surface
+		const params = new URLSearchParams(window.location.search);
+		setSurface(params.get("surface") === "panel" ? "panel" : "management");
+	}, []);
+	return surface;
 }
 
 function PanelSurface(): React.JSX.Element {
-	const { rotations, presses, lastKeepAliveSeq, touchPoints } = useQuakeEvents()
-	const alive = lastKeepAliveSeq !== null
+	const { rotations, presses, lastKeepAliveSeq, touchPoints } =
+		useQuakeEvents();
+	const alive = lastKeepAliveSeq !== null;
 	useEffect(() => {
 		// Keep the window title stable so the OmniWM float rule (titleSubstring
 		// "open-quake panel") keeps matching after the renderer loads.
-		document.title = "open-quake panel"
-	}, [])
+		document.title = "open-quake panel";
+	}, []);
 	return (
 		<div
 			style={{
@@ -38,12 +39,15 @@ function PanelSurface(): React.JSX.Element {
 				value={alive ? `#${lastKeepAliveSeq}` : "waiting"}
 				accent={alive ? "#3fb950" : "#d29922"}
 			/>
-			<Stat label="TOUCH" value={touchPoints.length ? `${touchPoints.length} pt` : "—"} />
+			<Stat
+				label="TOUCH"
+				value={touchPoints.length ? `${touchPoints.length} pt` : "—"}
+			/>
 			<span style={{ marginLeft: "auto", opacity: 0.5, fontSize: 12 }}>
 				mock device source
 			</span>
 		</div>
-	)
+	);
 }
 
 function Stat({
@@ -51,20 +55,24 @@ function Stat({
 	value,
 	accent,
 }: {
-	label: string
-	value: string | number
-	accent?: string
+	label: string;
+	value: string | number;
+	accent?: string;
 }) {
 	return (
 		<div>
-			<div style={{ fontSize: 13, letterSpacing: 2, opacity: 0.6 }}>{label}</div>
-			<div style={{ fontSize: 42, fontWeight: 700, color: accent }}>{value}</div>
+			<div style={{ fontSize: 13, letterSpacing: 2, opacity: 0.6 }}>
+				{label}
+			</div>
+			<div style={{ fontSize: 42, fontWeight: 700, color: accent }}>
+				{value}
+			</div>
 		</div>
-	)
+	);
 }
 
 function ManagementSurface(): React.JSX.Element {
-	const { events, rotations, presses, lastKeepAliveSeq } = useQuakeEvents()
+	const { events, rotations, presses, lastKeepAliveSeq } = useQuakeEvents();
 	return (
 		<div style={{ fontFamily: "system-ui", padding: 24 }}>
 			<h1>open-quake — management</h1>
@@ -80,10 +88,10 @@ function ManagementSurface(): React.JSX.Element {
 				the panel is unplugged).
 			</p>
 		</div>
-	)
+	);
 }
 
 export function App(): React.JSX.Element {
-	const surface = useSurface()
-	return surface === "panel" ? <PanelSurface /> : <ManagementSurface />
+	const surface = useSurface();
+	return surface === "panel" ? <PanelSurface /> : <ManagementSurface />;
 }
