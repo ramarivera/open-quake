@@ -2,3 +2,12 @@ node_modules/
 .DS_Store
 .context/*
 !.context/.gitkeep
+
+# Beads / Dolt runtime files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+
+# Beads tracker state is repo-shared here; counteract the global excludesFile.
+!/.beads/

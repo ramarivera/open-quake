@@ -1,5 +1,7 @@
 #!/bin/sh
-# prepare-commit-msg - Entire-only (Truth Mirror claims no hook here).
+# prepare-commit-msg - Entire + Beads, both best-effort (Truth Mirror claims no
+# hook here).
 
 . "$(dirname "$0")/hook-consumers.sh"
 run_entire_hook prepare-commit-msg "$@" || true
+run_beads_hook prepare-commit-msg "$@" || true

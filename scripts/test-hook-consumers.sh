@@ -38,7 +38,7 @@ bad() {
 # Fake bins: log invocations, exit per FAKE_*_EXIT.
 fx="$scratch/bin"
 mkdir -p "$fx"
-for bin in entire truth-mirror; do
+for bin in entire truth-mirror bd; do
 	{
 		echo '#!/bin/sh'
 		echo 'printf "%s:%s\n" "'"$bin"'" "$*" >> "$HOOK_LOG"'
@@ -74,6 +74,7 @@ status=0
 run_hook || status=$?
 [ "$status" -eq 0 ] && ok "happy path exits 0" || bad "happy path exited $status"
 expect_log "entire:hooks git pre-push origin"
+expect_log "bd:hooks run pre-push origin"
 expect_log "truth-mirror:--state-dir .truth hook-dispatch pre-push origin https://example.test/repo.git"
 first="$(calls | head -n 1)"
 case "$first" in
@@ -127,6 +128,7 @@ else
 	bad "push not rejected on Entire error"
 fi
 expect_log "entire:hooks git pre-push origin"
+expect_log "bd:hooks run pre-push origin"
 expect_log "truth-mirror:--state-dir .truth hook-dispatch pre-push origin https://example.test/repo.git"
 
 # Independent execution + combined rejection: Truth Mirror rejects.
@@ -139,6 +141,7 @@ else
 	bad "push not rejected on Truth Mirror error"
 fi
 expect_log "entire:hooks git pre-push origin"
+expect_log "bd:hooks run pre-push origin"
 expect_log "truth-mirror:--state-dir .truth hook-dispatch pre-push origin https://example.test/repo.git"
 
 # Strict availability: missing sibling must not silently pass.

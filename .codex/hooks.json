@@ -1,65 +1,108 @@
 {
   "hooks": {
-    "PostToolUse": [
+    "PostCompact": [
       {
-        "matcher": null,
         "hooks": [
           {
-            "type": "command",
-            "command": "sh -c 'if ! command -v entire >/dev/null 2>&1; then exit 0; fi; exec entire hooks codex post-tool-use'",
-            "timeout": 30
+            "command": "bd codex-hook PostCompact",
+            "statusMessage": "Scheduling Beads context refresh",
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "manual|auto"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "sh -c 'if ! command -v entire \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec entire hooks codex post-tool-use'",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": null
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "bd codex-hook PreCompact",
+            "statusMessage": "Checking Beads context",
+            "type": "command"
+          }
+        ],
+        "matcher": "manual|auto"
       }
     ],
     "SessionEnd": [
       {
-        "matcher": null,
         "hooks": [
           {
-            "type": "command",
-            "command": "sh -c 'if ! command -v entire >/dev/null 2>&1; then exit 0; fi; exec entire hooks codex session-end'",
-            "timeout": 3
+            "command": "sh -c 'if ! command -v entire \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec entire hooks codex session-end'",
+            "timeout": 3,
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": null
       }
     ],
     "SessionStart": [
       {
-        "matcher": null,
         "hooks": [
           {
-            "type": "command",
-            "command": "sh -c 'if ! command -v entire >/dev/null 2>&1; then printf \"%s\\n\" \"{\\\"systemMessage\\\":\\\"Entire CLI is enabled but not installed or not on PATH. Installation guide: https://docs.entire.io/cli/installation#installation-methods\\\"}\"; exit 0; fi; exec entire hooks codex session-start'",
-            "timeout": 30
+            "command": "sh -c 'if ! command -v entire \u003e/dev/null 2\u003e\u00261; then printf \"%s\\n\" \"{\\\"systemMessage\\\":\\\"Entire CLI is enabled but not installed or not on PATH. Installation guide: https://docs.entire.io/cli/installation#installation-methods\\\"}\"; exit 0; fi; exec entire hooks codex session-start'",
+            "timeout": 30,
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": null
+      },
+      {
+        "hooks": [
+          {
+            "command": "bd codex-hook SessionStart",
+            "statusMessage": "Loading Beads context",
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|resume|clear"
       }
     ],
     "Stop": [
       {
-        "matcher": null,
         "hooks": [
           {
-            "type": "command",
-            "command": "sh -c 'if ! command -v entire >/dev/null 2>&1; then exit 0; fi; exec entire hooks codex stop'",
-            "timeout": 30
+            "command": "sh -c 'if ! command -v entire \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec entire hooks codex stop'",
+            "timeout": 30,
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": null
       }
     ],
     "UserPromptSubmit": [
       {
-        "matcher": null,
         "hooks": [
           {
-            "type": "command",
-            "command": "truth-mirror reinject --agent codex"
+            "command": "truth-mirror reinject --agent codex",
+            "type": "command"
           },
           {
-            "type": "command",
-            "command": "sh -c 'if ! command -v entire >/dev/null 2>&1; then exit 0; fi; exec entire hooks codex user-prompt-submit'",
-            "timeout": 30
+            "command": "sh -c 'if ! command -v entire \u003e/dev/null 2\u003e\u00261; then exit 0; fi; exec entire hooks codex user-prompt-submit'",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": null
+      },
+      {
+        "hooks": [
+          {
+            "command": "bd codex-hook UserPromptSubmit",
+            "statusMessage": "Refreshing Beads context",
+            "type": "command"
           }
         ]
       }

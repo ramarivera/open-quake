@@ -44,10 +44,41 @@ ensure_truth_ready() {
 	return 0
 }
 
+run_beads_hook() {
+	hook_name=$1
+	shift
+
+	if ! command -v bd >/dev/null 2>&1; then
+		echo "[$hook_name] bd binary not found - counting as consumer error." >&2
+		return 1
+	fi
+	_bd_timeout=${BEADS_HOOK_TIMEOUT:-300}
+	_bd_exit=0
+	if command -v timeout >/dev/null 2>&1; then
+		timeout "$_bd_timeout" bd hooks run "$hook_name" "$@" || _bd_exit=$?
+	elif command -v gtimeout >/dev/null 2>&1; then
+		gtimeout "$_bd_timeout" bd hooks run "$hook_name" "$@" || _bd_exit=$?
+	else
+		bd hooks run "$hook_name" "$@" || _bd_exit=$?
+	fi
+	case $_bd_exit in
+	0) return 0 ;;
+	# 3 = database not initialized; skip instead of failing.
+	3) return 0 ;;
+	# 124/142 = timeout wrapper fired; beads is best-effort on latency.
+	124 | 142)
+		echo "[$hook_name] beads timed out after ${_bd_timeout}s - continuing." >&2
+		return 0
+		;;
+	*) return $_bd_exit ;;
+	esac
+}
+
 finish_shared_hook_consumers() {
 	hook_name=$1
 	entire_status=$2
 	truth_status=$3
+	beads_status=${4:-0}
 
 	if [ "$entire_status" -ne 0 ]; then
 		echo "[$hook_name] Entire exited with status $entire_status." >&2
@@ -55,8 +86,11 @@ finish_shared_hook_consumers() {
 	if [ "$truth_status" -ne 0 ]; then
 		echo "[$hook_name] Truth Mirror exited with status $truth_status." >&2
 	fi
+	if [ "$beads_status" -ne 0 ]; then
+		echo "[$hook_name] Beads exited with status $beads_status." >&2
+	fi
 
-	if [ "$entire_status" -ne 0 ] || [ "$truth_status" -ne 0 ]; then
+	if [ "$entire_status" -ne 0 ] || [ "$truth_status" -ne 0 ] || [ "$beads_status" -ne 0 ]; then
 		return 1
 	fi
 	return 0

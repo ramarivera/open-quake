@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "open_quake",
+  "project_id": "4cbc0645-475e-4412-a9b3-e68b9b53561b"
+}

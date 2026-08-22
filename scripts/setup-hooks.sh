@@ -21,6 +21,14 @@ if [ "$(git config --get core.hooksPath)" != ".husky/_" ]; then
 	echo "core.hooksPath -> .husky/_"
 fi
 
+# `bd init` migrates the active hook directory into .beads/hooks and repoints
+# core.hooksPath there (review finding on df4ece5 era). Beads is wired as a
+# consumer inside the content hooks instead - remove its takeover dir.
+if [ -d ".beads/hooks" ]; then
+	rm -rf .beads/hooks
+	echo "removed beads hooks takeover (.beads/hooks)"
+fi
+
 for f in .husky/_/*; do
 	name="$(basename "$f")"
 	case "$name" in

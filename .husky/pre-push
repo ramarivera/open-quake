@@ -1,7 +1,8 @@
 #!/bin/sh
-# pre-push - gates first (immediate exit on error), then Entire + Truth Mirror
-# run sequentially with saved statuses; the push is rejected if either errored.
-# Husky is the sole hook owner; entries in .husky/_ are bare shims.
+# pre-push - gates first (immediate exit on error), then Beads, Entire and
+# Truth Mirror run sequentially with saved statuses; the push is rejected if
+# any consumer errored. Husky is the sole hook owner; entries in .husky/_ are
+# bare shims.
 
 # Repository gates run first with immediate exit on error. Add gates to
 # .husky/repo-gates.sh (sourced below when present); none are configured yet,
@@ -13,11 +14,13 @@ fi
 . "$(dirname "$0")/hook-consumers.sh"
 entire_status=0
 truth_status=0
+beads_status=0
 run_entire_hook pre-push "$@" || entire_status=$?
+run_beads_hook pre-push "$@" || beads_status=$?
 if ensure_truth_ready pre-push; then
 	# Git passes <remote-name> <remote-url>; Truth Mirror gets Git's full args.
 	truth-mirror --state-dir .truth hook-dispatch pre-push "$@" || truth_status=$?
 else
 	truth_status=1
 fi
-finish_shared_hook_consumers pre-push "$entire_status" "$truth_status"
+finish_shared_hook_consumers pre-push "$entire_status" "$truth_status" "$beads_status"
