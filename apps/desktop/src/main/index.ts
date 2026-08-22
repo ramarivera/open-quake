@@ -21,6 +21,7 @@ function createPanelWindow(display: Display): BrowserWindow {
 		y: display.workArea.y,
 		width: Math.min(PANEL_SIZE.width, display.workArea.width),
 		height: Math.min(PANEL_SIZE.height, display.workArea.height),
+		title: "open-quake panel",
 		frame: false,
 		fullscreenable: true,
 		autoHideMenuBar: true,

@@ -13,6 +13,11 @@ function useSurface(): "management" | "panel" {
 function PanelSurface(): React.JSX.Element {
 	const { rotations, presses, lastKeepAliveSeq, touchPoints } = useQuakeEvents()
 	const alive = lastKeepAliveSeq !== null
+	useEffect(() => {
+		// Keep the window title stable so the OmniWM float rule (titleSubstring
+		// "open-quake panel") keeps matching after the renderer loads.
+		document.title = "open-quake panel"
+	}, [])
 	return (
 		<div
 			style={{
