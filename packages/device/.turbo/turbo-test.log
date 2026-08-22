@@ -3,12 +3,12 @@
 > vitest run
 
 
-[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/Users/ramarivera/dev/open-quake/packages/device[39m
+ RUN  v4.1.11 /Users/ramarivera/dev/open-quake/packages/device
 
- [32m✓[39m test/wiring.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 5[2mms[22m[39m
+ ✓ test/wiring.test.ts (1 test) 6ms
 
-[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
-[2m   Start at [22m 19:07:54
-[2m   Duration [22m 456ms[2m (transform 37ms, setup 0ms, import 367ms, tests 5ms, environment 0ms)[22m
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  19:11:12
+   Duration  470ms (transform 29ms, setup 0ms, import 366ms, tests 6ms, environment 0ms)
 

@@ -13,3 +13,4 @@ dist/
 
 # Beads tracker state is repo-shared here; counteract the global excludesFile.
 !/.beads/
+.turbo/
