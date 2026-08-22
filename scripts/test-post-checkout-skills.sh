@@ -1,15 +1,18 @@
 #!/bin/sh
 # Isolated-repository test for .husky/post-checkout local-skill propagation.
 #
-# Builds a scratch git repo with five skill fixtures, adds a worktree, and
-# runs the hook the same way git does (cwd = worktree, hook script resolved
-# from the main working tree). Asserts per fixture:
+# Scenario A - same-revision worktree, hook invoked directly:
 #   ignored-only skill        -> every file copied
 #   partial-ignore skill      -> ignored SKILL.md copied, unignored secret.md NOT
 #   untracked-not-ignored     -> nothing copied (absent entirely)
 #   mixed tracked+ignored     -> tracked file from the revision; the IGNORED
 #                                extra must NOT leak in (no directory copy)
 #   fully tracked             -> revision-owned only (content == committed blob)
+#
+# Scenario B - divergent history, hook invoked with Git's production-style
+# environment (GIT_DIR/GIT_WORK_TREE pointing at an OLDER target revision):
+#   mixed tracked+ignored skill present in main tree but absent from the
+#   target revision -> NOTHING copied into the target.
 #
 # Scratch space lives under /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS per the
 # agent constraint; the script errors out if that volume is unavailable.
@@ -21,10 +24,7 @@ set -eu
 repo_root="$(git rev-parse --show-toplevel)"
 hook="$repo_root/.husky/post-checkout"
 
-# Isolation: drop git-local env vars inherited from the caller before any
-# operation on the synthetic repository (GIT_INDEX_FILE et al. otherwise leak).
-unset $(git rev-parse --local-env-vars) 2>/dev/null || true
-
+# Scratch space per agent constraint.
 scratch_base="/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake"
 [ -d "/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS" ] ||
 	{ echo "FAIL: agents scratch volume unavailable" >&2; exit 1; }
@@ -39,6 +39,7 @@ git init -q
 git config user.email test@example.com
 git config user.name test
 
+# ---------------------------------------------------------------- fixtures --
 mkdir -p .agents/skills/ignored-skill \
 	.agents/skills/partial-skill \
 	.agents/skills/untracked-skill \
@@ -66,53 +67,112 @@ git commit -qm fixtures
 
 cp "$hook" .husky-src-hook.sh
 
+# ------------------------------------------------- Scenario A: same commit --
 git worktree add -q "$scratch/wt" --detach >/dev/null
-cd "$scratch/wt"
 
-# Run the hook exactly as git does: cwd = worktree, script from main tree.
-sh "$main/.husky-src-hook.sh"
+# Run the hook from inside the worktree WITHOUT clearing env first, then with
+# a hostile inherited environment; both must produce identical results.
+for hostile in "" "with-git-env"; do
+	# Reset only propagation output; tracked checkout files must survive.
+	rm -rf "$scratch/wt/.agents/skills/ignored-skill" \
+		"$scratch/wt/.agents/skills/partial-skill"
+	if [ "$hostile" = "with-git-env" ]; then
+		(
+			cd "$scratch/wt"
+			GIT_DIR="$(git rev-parse --absolute-git-dir)" \
+				GIT_INDEX_FILE="$scratch/wt/.git-index-leak" \
+				sh "$main/.husky-src-hook.sh" 2>/dev/null
+		)
+	else
+		(cd "$scratch/wt" && sh "$main/.husky-src-hook.sh" 2>/dev/null)
+	fi
+
+	fail=0
+	check() { # check <present|absent> <path> [expected-content]
+		mode="$1"; path="$2"
+		case "$mode" in
+		present)
+			if [ -e "$path" ]; then echo "ok: $path present"; else
+				echo "FAIL: $path expected present"; fail=1; fi
+			;;
+		absent)
+			if [ ! -e "$path" ]; then echo "ok: $path absent"; else
+				echo "FAIL: $path expected absent"; fail=1; fi
+			;;
+		esac
+	}
+	content_is() {
+		if [ "$(cat "$1" 2>/dev/null)" = "$2" ]; then
+			echo "ok: $1 content matches"
+		else
+			echo "FAIL: $1 content mismatch"; fail=1
+		fi
+	}
+
+	(
+		cd "$scratch/wt"
+		check present ".agents/skills/ignored-skill/SKILL.md"
+		content_is ".agents/skills/ignored-skill/SKILL.md" "ignored"
+		check present ".agents/skills/partial-skill/SKILL.md"
+		content_is ".agents/skills/partial-skill/SKILL.md" "partial"
+		check absent ".agents/skills/partial-skill/secret.md"
+		check absent ".agents/skills/untracked-skill/SKILL.md"
+		check present ".agents/skills/mixed-skill/SKILL.md"
+		content_is ".agents/skills/mixed-skill/SKILL.md" "mixed-tracked"
+		check absent ".agents/skills/mixed-skill/notes.md"
+		check present ".agents/skills/tracked-skill/SKILL.md"
+		content_is ".agents/skills/tracked-skill/SKILL.md" "tracked"
+	)
+
+	if [ "$fail" -eq 0 ]; then
+		echo "ok: scenario A ($hostile) PASS"
+	else
+		echo "FAILED: scenario A ($hostile)" >&2
+		exit 1
+	fi
+done
+
+# ------------- Scenario B: divergent history + production-style hook env ----
+cd "$main"
+git checkout -q -b mainline
+echo v1 >base.txt && git add base.txt && git commit -qm v1
+V1="$(git rev-parse HEAD)"
+
+mkdir -p .agents/skills/divergent-skill
+printf -- 'secret.txt\n' >.agents/skills/divergent-skill/.gitignore
+echo "divergent" >.agents/skills/divergent-skill/SKILL.md
+echo "SECRET" >.agents/skills/divergent-skill/secret.txt
+echo code >.agents/skills/divergent-skill/code.txt
+git add .agents/skills/divergent-skill/code.txt
+git commit -qm v2-mixed
+
+# Older target revision: divergent-skill does not exist there at all.
+git worktree add -q "$scratch/wt-old" "$V1" >/dev/null
+
+# Production-style invocation: git exports GIT_DIR/GIT_WORK_TREE of the TARGET.
+(
+	cd "$scratch/wt-old"
+	GIT_DIR="$(git rev-parse --absolute-git-dir)" \
+		GIT_WORK_TREE="$scratch/wt-old" \
+		sh "$main/.husky-src-hook.sh" 2>/dev/null
+)
 
 fail=0
-expect_present() {
-	if [ -e "$1" ]; then
-		echo "ok: $1 present"
-	else
-		echo "FAIL: $1 expected present"; fail=1
-	fi
-}
-expect_absent() {
-	if [ ! -e "$1" ]; then
-		echo "ok: $1 absent"
-	else
-		echo "FAIL: $1 expected absent"; fail=1
-	fi
-}
-expect_content() {
-	if [ "$(cat "$1")" = "$2" ]; then
-		echo "ok: $1 content matches"
-	else
-		echo "FAIL: $1 content mismatch"; fail=1
-	fi
-}
-
-expect_present ".agents/skills/ignored-skill/SKILL.md"
-expect_content ".agents/skills/ignored-skill/SKILL.md" "ignored"
-
-expect_present ".agents/skills/partial-skill/SKILL.md"
-expect_content ".agents/skills/partial-skill/SKILL.md" "partial"
-expect_absent ".agents/skills/partial-skill/secret.md"
-
-expect_absent ".agents/skills/untracked-skill/SKILL.md"
-
-# Mixed skill: the tracked file arrives from the REVISION; the ignored extra
-# must not leak in via a directory copy.
-expect_present ".agents/skills/mixed-skill/SKILL.md"
-expect_content ".agents/skills/mixed-skill/SKILL.md" "mixed-tracked"
-expect_absent ".agents/skills/mixed-skill/notes.md"
-
-# Fully tracked skill: revision-owned only.
-expect_present ".agents/skills/tracked-skill/SKILL.md"
-expect_content ".agents/skills/tracked-skill/SKILL.md" "tracked"
+(
+	cd "$scratch/wt-old"
+	for p in ".agents/skills/divergent-skill" \
+		".agents/skills/divergent-skill/SKILL.md" \
+		".agents/skills/divergent-skill/secret.txt" \
+		".agents/skills/divergent-skill/code.txt" \
+		".agents/skills/mixed-skill/notes.md"; do
+		if [ ! -e "$p" ]; then
+			echo "ok: $p absent in older target"
+		else
+			echo "FAIL: $p leaked into older target"; fail=1
+		fi
+	done
+	[ -e base.txt ] && echo "ok: base.txt present (v1 checkout intact)"
+)
 
 if [ "$fail" -eq 0 ]; then
 	echo "PASS"

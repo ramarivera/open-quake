@@ -12,10 +12,18 @@
 # an enforcement gate. If propagation fails the worktree simply lacks the
 # local skill; checkout still succeeds.
 
+# First resolve paths using the invoking (target-worktree) Git context.
 main_tree="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null)")"
 src_rel=".agents/skills"
 src="$main_tree/$src_rel"
 dst="$(git rev-parse --show-toplevel)/$src_rel"
+
+# All queries below target the MAIN tree, but git exports GIT_DIR & co.
+# pointing at the newly checked-out worktree. Drop them so ls-files /
+# check-ignore consult the main tree's index and ignore rules, not the
+# target revision's (review finding on c8b08f3).
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
+	GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES 2>/dev/null || true
 
 if [ ! -d "$src" ]; then
 	exit 0
