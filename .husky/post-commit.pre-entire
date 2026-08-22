@@ -1,0 +1,4 @@
+#!/bin/sh
+# Bridge: when Entire wraps the .husky/_ entry, husky h derives the name
+# "post-commit.pre-entire" and lands here; forward to the real content hook.
+exec "$(dirname "$0")/post-commit" "$@"
