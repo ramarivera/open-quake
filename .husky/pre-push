@@ -1,19 +1,23 @@
 #!/bin/sh
-# Husky -> truth-mirror gate (strict). See .husky/commit-msg for rationale.
-_mise_shims="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"
-[ -d "$_mise_shims" ] && PATH="$_mise_shims:$PATH" && export PATH
+# pre-push - gates first (immediate exit on error), then Entire + Truth Mirror
+# run sequentially with saved statuses; the push is rejected if either errored.
+# Husky is the sole hook owner; entries in .husky/_ are bare shims.
 
-if ! command -v truth-mirror >/dev/null 2>&1; then
-	echo "pre-push blocked: truth-mirror not resolvable - push denied; run 'mise install' (see mise.toml)" >&2
-	exit 1
+# Repository gates run first with immediate exit on error. Add gates to
+# .husky/repo-gates.sh (sourced below when present); none are configured yet,
+# so this is currently a no-op.
+if [ -f "$(dirname "$0")/repo-gates.sh" ]; then
+	. "$(dirname "$0")/repo-gates.sh"
 fi
 
-if [ ! -f ".truth/config.toml" ]; then
-	echo "pre-push blocked: .truth/config.toml missing - push denied" >&2
-	exit 1
+. "$(dirname "$0")/hook-consumers.sh"
+entire_status=0
+truth_status=0
+run_entire_hook pre-push "$@" || entire_status=$?
+if ensure_truth_ready pre-push; then
+	# Git passes <remote-name> <remote-url>; Truth Mirror gets Git's full args.
+	truth-mirror --state-dir .truth hook-dispatch pre-push "$@" || truth_status=$?
+else
+	truth_status=1
 fi
-unset TRUTH_MIRROR_STATE_DIR
-
-# truth-mirror managed hook
-truth-mirror --state-dir .truth hook-dispatch pre-push "$@"
-# truth-mirror hook end
+finish_shared_hook_consumers pre-push "$entire_status" "$truth_status"

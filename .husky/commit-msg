@@ -1,28 +1,17 @@
 #!/bin/sh
-# Husky -> truth-mirror gate (strict).
-#
-# open-quake hardening (2026-08-22, adversarial-review findings on ca2eae7 and
-# cf53aee): the upstream-managed body allowed commits when truth-mirror was off
-# PATH or when TRUTH_MIRROR_STATE_DIR pointed at absent state. This hook pins
-# the vendored binary (mise.toml) and the repo-owned state dir, and DENIES the
-# protected operation when either is unavailable, per .truth/TRUTH.md. Keep the
-# managed dispatch line literal so `truth status` recognizes this hook.
+# commit-msg - gates first (immediate exit on error), then Entire + Truth
+# Mirror run sequentially with saved statuses; the commit is rejected if either
+# errored. Husky is the sole hook owner; entries in .husky/_ are bare shims.
 
-# Ensure mise shims are on PATH so the vendored truth-mirror resolves.
-_mise_shims="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"
-[ -d "$_mise_shims" ] && PATH="$_mise_shims:$PATH" && export PATH
+# Repository gates: none configured yet. Add them here with `|| exit 1`.
 
-if ! command -v truth-mirror >/dev/null 2>&1; then
-	echo "commit-msg blocked: truth-mirror not resolvable - run 'mise install' (see mise.toml)" >&2
-	exit 1
+. "$(dirname "$0")/hook-consumers.sh"
+entire_status=0
+truth_status=0
+run_entire_hook commit-msg "$@" || entire_status=$?
+if ensure_truth_ready commit-msg; then
+	truth-mirror --state-dir .truth hook-dispatch commit-msg "$@" || truth_status=$?
+else
+	truth_status=1
 fi
-
-if [ ! -f ".truth/config.toml" ]; then
-	echo "commit-msg blocked: .truth/config.toml missing - commit denied" >&2
-	exit 1
-fi
-unset TRUTH_MIRROR_STATE_DIR
-
-# truth-mirror managed hook
-truth-mirror --state-dir .truth hook-dispatch commit-msg "$@"
-# truth-mirror hook end
+finish_shared_hook_consumers commit-msg "$entire_status" "$truth_status"

@@ -1,0 +1,5 @@
+#!/bin/sh
+# post-rewrite - Entire-only (Truth Mirror claims no hook here).
+
+. "$(dirname "$0")/hook-consumers.sh"
+run_entire_hook post-rewrite "$@" || true

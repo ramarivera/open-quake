@@ -1,19 +1,16 @@
 #!/bin/sh
-# Husky -> truth-mirror gate (strict). See .husky/commit-msg for rationale.
-_mise_shims="${MISE_DATA_DIR:-$HOME/.local/share/mise}/shims"
-[ -d "$_mise_shims" ] && PATH="$_mise_shims:$PATH" && export PATH
+# post-commit - gates first (fail fast), then Entire + Truth Mirror.
+# Husky is the sole hook owner; entries in .husky/_ are bare shims.
 
-if ! command -v truth-mirror >/dev/null 2>&1; then
-	echo "post-commit blocked: truth-mirror not resolvable - review queue was NOT updated; run 'mise install' (see mise.toml)" >&2
-	exit 1
+# Repository gates: none configured yet. Add them here with `|| exit 1`.
+
+. "$(dirname "$0")/hook-consumers.sh"
+entire_status=0
+truth_status=0
+run_entire_hook post-commit "$@" || entire_status=$?
+if ensure_truth_ready post-commit; then
+	truth-mirror --state-dir .truth hook-dispatch post-commit "$@" || truth_status=$?
+else
+	truth_status=1
 fi
-
-if [ ! -f ".truth/config.toml" ]; then
-	echo "post-commit blocked: .truth/config.toml missing - review queue NOT updated" >&2
-	exit 1
-fi
-unset TRUTH_MIRROR_STATE_DIR
-
-# truth-mirror managed hook
-truth-mirror --state-dir .truth hook-dispatch post-commit "$@"
-# truth-mirror hook end
+finish_shared_hook_consumers post-commit "$entire_status" "$truth_status"
