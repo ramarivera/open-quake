@@ -29,7 +29,8 @@ function createPanelWindow(display: Display): BrowserWindow {
 		fullscreenable: true,
 		autoHideMenuBar: true,
 		webPreferences: {
-			preload: join(__dirname, "../preload/index.js"),
+			preload: join(__dirname, "../preload/index.mjs"),
+			sandbox: false,
 			contextIsolation: true,
 			nodeIntegration: false,
 		},
@@ -44,7 +45,8 @@ function createManagementWindow(): BrowserWindow {
 		height: 760,
 		title: "open-quake — management",
 		webPreferences: {
-			preload: join(__dirname, "../preload/index.js"),
+			preload: join(__dirname, "../preload/index.mjs"),
+			sandbox: false,
 			contextIsolation: true,
 			nodeIntegration: false,
 		},
