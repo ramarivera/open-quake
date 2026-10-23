@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import "./media";
 import { app, BrowserWindow, type Display, screen } from "electron";
 import { startDeviceBus } from "./deviceBus";
 import { findPanelDisplay, PANEL_SIZE } from "./display";

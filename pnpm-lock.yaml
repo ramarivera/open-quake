@@ -50,6 +50,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      effect:
+        specifier: 'catalog:'
+        version: 3.22.1
       react:
         specifier: 19.2.8
         version: 19.2.8
