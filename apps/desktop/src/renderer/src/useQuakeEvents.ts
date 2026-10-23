@@ -26,13 +26,19 @@ export function appendQuakeEvent(
 		x: p.x,
 		y: p.y,
 	}));
+	const lastKeepAliveSeq =
+		event.kind === "keepalive"
+			? event.seq
+			: event.kind === "status" && event.state !== "connected"
+				? null
+				: previous.lastKeepAliveSeq;
 	return {
 		events,
 		eventsReceived: previous.eventsReceived + 1,
 		rotations: previous.rotations + (event.kind === "rotate" ? 1 : 0),
-		presses: previous.presses + (event.kind === "press" ? 1 : 0),
-		lastKeepAliveSeq:
-			event.kind === "keepalive" ? event.seq : previous.lastKeepAliveSeq,
+		presses:
+			previous.presses + (event.kind === "press" && event.state !== 0 ? 1 : 0),
+		lastKeepAliveSeq,
 		touchPoints,
 	};
 }

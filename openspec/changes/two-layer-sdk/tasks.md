@@ -18,7 +18,7 @@ deferred to the parent per lane COMMON.md.
 - [x] 2.4 Device: node-hid transport, using usagePage `0xFF60`, usage `0x61`, VID `0x4158`, PID `0x514B` (L2)
 - [x] 2.5 Device: event subscription and keep-alive lifecycle per approved decision (L2)
 - [x] 2.6 Device: plain-JS entry point (L2)
-- [ ] 2.7 Replace the mock source in `apps/desktop/src/main/deviceBus.ts` (parent integration)
+- [x] 2.7 Replace the mock source in `apps/desktop/src/main/deviceBus.ts` with the scoped QuakeDevice stream, HID catalog status events, retry after absence/unplug, and an explicit development mock flag (W1, `open-quake-l86.9`)
 - [x] 2.8 Integrate protocol codecs and errors in the device adapter, declare the default transport dependency, verify custom layers, and regress unknown opcode/command handling
 
 ## 3. Verify and resolve partial evidence
@@ -51,3 +51,82 @@ A temporary local test called native transport enumeration and
 No handle was opened, no command was sent, and DK-Suite was never started.
 Live I/O, timing, detach, matrix and separate touch acceptance remain unchecked
 in task 3.2. The temporary hardware test was removed from the automated suite.
+
+## W1 desktop wiring
+
+`apps/desktop/src/main/deviceBus.ts` consumes one main-owned QuakeDevice layer
+through the existing node-hid adapter. It forwards rotation, raw press state,
+checksummed touch, pong sequence and disconnect events with source `hid`.
+Catalog errors cross IPC as `_tag`, `code` and `category` only. The supervisor
+retries after one second, closing each attempt's scope before another connect.
+The shared connection stays open while either window remains; last-window
+teardown closes it, and reopening waits for that close before reconnecting.
+Electron holds quit until connection finalizers and the runtime have completed.
+Preload requests the current status after subscribing so reloads recover it.
+
+The timer source is available only with `OPEN_QUAKE_MOCK_DEVICE=1` during
+`pnpm --filter @open-quake/desktop dev`. Production defaults to HID even if
+that flag is set. Workspace TypeScript is bundled; native `node-hid@3.4.0`
+stays external so it resolves its own binding. Desktop declares the existing
+catalog/runtime dependencies and its direct native dependency; device package
+exports and code are unchanged.
+
+Evidence: `apps/desktop/src/main/hidDeviceBus.test.ts`, `index.test.ts` and
+`src/preload/index.test.ts` exercise fake HID selection from all four USB
+collections, both-window IPC, absence, unplug, reconnect, discovery/open/read/
+write/close/protocol failures, cause scrubbing, status replay, quit and window
+teardown. `pnpm --filter @open-quake/desktop test:bundle`, after build, executes
+the generated main bundle with Electron and native HID mocked. It checks typed
+absence in both windows, native dependency resolution and awaited shutdown
+without opening hardware. This smoke command uses Node's `registerHooks`,
+available in Node 22.15+ and 23.5+; this lane ran Node 24.18.0.
+
+Hardware verification remains unverified. This lane did not enumerate or open
+physical HID devices or run DK-Suite. The service's four-field filter selects
+`0xFF60/0x61`, rejecting the `0x1/0x80`, `0xC/0x1` and `0x1/0x6` collections.
+Separate unchecked touch-interface handling is still unsupported and unverified;
+the desktop only forwards the checksummed touch events the device layer emits.
+
+W1 verification on 2026-10-23, all exit 0:
+
+- `pnpm install`, existing catalog pins and `node-hid@3.4.0` reused. Existing
+  electron-vite/Vite and Effect Vitest/Vitest peer-version warnings remain.
+- `pnpm run lint`, 73 files, no fixes.
+- `pnpm run typecheck`, 6 successful tasks, 5 cached.
+- `pnpm run test`, 3 successful tasks, 2 cached. Desktop executed 101 tests
+  across 9 files; cached device 36 and protocol 25 results were replayed.
+- `pnpm run build`, desktop main/preload/renderer built with no cache hit.
+- `pnpm --filter @open-quake/desktop test:bundle`, passed with mocked Electron
+  and native HID, no hardware I/O.
+- `openspec validate two-layer-sdk --strict` and
+  `openspec validate panel-window-prototype --strict`, passed.
+- `git diff --check`, passed.
+
+Task 3.2 stays open. Beads status for `open-quake-l86.9` is handed to the parent
+under COMMON.md; this lane did not run `bd` directly.
+
+W1 review-fix round 1 on 2026-10-23: renderer statistics retain raw HID press
+reports but exclude state zero from the press total. Disconnect and error
+statuses clear the previous pong; reconnect remains waiting until a new pong.
+The explicit development mock exposes and replays a connected status with
+source `mock` through the same IPC status contract. The informational startup
+status note requires no code change. GitHub's inline-comment API returned no
+Codex or CodeRabbit findings for this round.
+
+Regression evidence: `apps/desktop/src/renderer/src/useQuakeEvents.test.ts`
+first failed on double-counting and stale keepalive, and
+`apps/desktop/src/main/deviceBus.test.ts` first failed on undefined mock status.
+All now pass. `hidDeviceBus.test.ts` drives fake reports through QuakeDevice,
+the desktop bus and the renderer reducer for press/release and unplug/reconnect.
+`index.test.ts` checks connected mock status delivery and preload status replay
+for both windows. No physical device or live Electron session was exercised.
+
+Review-fix gates, all exit 0: `pnpm install`; `pnpm run lint` (73 files);
+`pnpm run typecheck` (6 successful tasks, 5 cached); `pnpm run test`
+(106 desktop tests executed here, 36 device and 25 protocol tests replayed
+from Turbo cache); `pnpm run build` (desktop built here);
+`pnpm --filter @open-quake/desktop test:bundle` (mocked Electron/HID);
+`openspec validate two-layer-sdk --strict`;
+`openspec validate panel-window-prototype --strict`; `git diff --check`.
+No dependencies were added. Parent should attach this evidence to
+`open-quake-l86.9`; hardware acceptance in task 3.2 remains open.
