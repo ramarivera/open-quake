@@ -14,6 +14,10 @@ import {
 import { Effect, Exit, Layer, Queue, Scope, TestClock } from "effect";
 import { vi } from "vitest";
 import type { QuakeEvent } from "../preload/quake";
+import {
+	appendQuakeEvent,
+	type QuakeEventState,
+} from "../renderer/src/useQuakeEvents";
 import { DEVICE_RECONNECT_MS, startDeviceBus } from "./deviceBus";
 import { createEventForwarder } from "./eventForwarding";
 import { report } from "./test/hid";
@@ -24,14 +28,26 @@ const makeHarness = Effect.gen(function* () {
 	const bus = yield* Scope.extend(startDeviceBus(), scope);
 	const queue = yield* Queue.unbounded<QuakeEvent>();
 	const received: QuakeEvent[] = [];
+	let rendererState: QuakeEventState = {
+		events: [],
+		eventsReceived: 0,
+		rotations: 0,
+		presses: 0,
+		lastKeepAliveSeq: null,
+		touchPoints: [],
+	};
 	bus.on((event) => {
 		received.push(event);
+		rendererState = appendQuakeEvent(rendererState, event);
 		Queue.unsafeOffer(queue, event);
 	});
 	return {
 		bus,
 		next: Queue.take(queue),
 		received,
+		get rendererState() {
+			return rendererState;
+		},
 		close: Scope.close(scope, Exit.void),
 	};
 });
@@ -140,6 +156,8 @@ describe("HID desktop bus", () => {
 					];
 					for (const input of inputs)
 						expect(yield* harness.next).toEqual(input);
+					expect(harness.rendererState.presses).toBe(1);
+					expect(harness.rendererState.lastKeepAliveSeq).toBe(1);
 					expect(panel.webContents.send.mock.calls).toEqual(
 						[connected, ...inputs].map((event) => ["quake:event", event]),
 					);
@@ -179,6 +197,13 @@ describe("HID desktop bus", () => {
 						kind: "rotate",
 						source: "hid",
 					});
+					yield* fake.emit(report(0x55, 0xef));
+					expect(yield* harness.next).toEqual({
+						source: "hid",
+						kind: "keepalive",
+						seq: 1,
+					});
+					expect(harness.rendererState.lastKeepAliveSeq).toBe(1);
 					devices.length = 0;
 					yield* fake.failRead(new Error("token=private-unplug-cause"));
 					expect(yield* harness.next).toEqual({
@@ -187,6 +212,7 @@ describe("HID desktop bus", () => {
 						state: "disconnected",
 						reason: "error",
 					});
+					expect(harness.rendererState.lastKeepAliveSeq).toBeNull();
 					expect(yield* harness.next).toEqual({
 						source: "hid",
 						kind: "status",
@@ -201,6 +227,7 @@ describe("HID desktop bus", () => {
 					yield* TestClock.adjust(15_000);
 					expect(yield* fake.writes).toHaveLength(0);
 					expect(harness.bus.currentStatus()).toEqual(missing);
+					expect(harness.rendererState.lastKeepAliveSeq).toBeNull();
 					devices.push(FAKE_QUAKE_DEVICE);
 					yield* TestClock.adjust(DEVICE_RECONNECT_MS);
 					// Drain absence retries, then wait for the new connection.
@@ -208,6 +235,14 @@ describe("HID desktop bus", () => {
 					while (event.kind === "status" && event.state === "error")
 						event = yield* harness.next;
 					expect(event).toEqual(connected);
+					expect(harness.rendererState.lastKeepAliveSeq).toBeNull();
+					yield* fake.emit(report(0x55, 0xef));
+					expect(yield* harness.next).toEqual({
+						source: "hid",
+						kind: "keepalive",
+						seq: 2,
+					});
+					expect(harness.rendererState.lastKeepAliveSeq).toBe(2);
 					yield* fake.emit(report(3, 2, [1]));
 					expect(yield* harness.next).toEqual({
 						source: "hid",

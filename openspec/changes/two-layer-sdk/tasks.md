@@ -104,3 +104,29 @@ W1 verification on 2026-10-23, all exit 0:
 
 Task 3.2 stays open. Beads status for `open-quake-l86.9` is handed to the parent
 under COMMON.md; this lane did not run `bd` directly.
+
+W1 review-fix round 1 on 2026-10-23: renderer statistics retain raw HID press
+reports but exclude state zero from the press total. Disconnect and error
+statuses clear the previous pong; reconnect remains waiting until a new pong.
+The explicit development mock exposes and replays a connected status with
+source `mock` through the same IPC status contract. The informational startup
+status note requires no code change. GitHub's inline-comment API returned no
+Codex or CodeRabbit findings for this round.
+
+Regression evidence: `apps/desktop/src/renderer/src/useQuakeEvents.test.ts`
+first failed on double-counting and stale keepalive, and
+`apps/desktop/src/main/deviceBus.test.ts` first failed on undefined mock status.
+All now pass. `hidDeviceBus.test.ts` drives fake reports through QuakeDevice,
+the desktop bus and the renderer reducer for press/release and unplug/reconnect.
+`index.test.ts` checks connected mock status delivery and preload status replay
+for both windows. No physical device or live Electron session was exercised.
+
+Review-fix gates, all exit 0: `pnpm install`; `pnpm run lint` (73 files);
+`pnpm run typecheck` (6 successful tasks, 5 cached); `pnpm run test`
+(106 desktop tests executed here, 36 device and 25 protocol tests replayed
+from Turbo cache); `pnpm run build` (desktop built here);
+`pnpm --filter @open-quake/desktop test:bundle` (mocked Electron/HID);
+`openspec validate two-layer-sdk --strict`;
+`openspec validate panel-window-prototype --strict`; `git diff --check`.
+No dependencies were added. Parent should attach this evidence to
+`open-quake-l86.9`; hardware acceptance in task 3.2 remains open.

@@ -9,7 +9,7 @@ export type DeviceStatusError = Pick<
 	DeviceConnectError | DeviceStreamError,
 	"_tag" | "code" | "category"
 >;
-export type DeviceStatusEvent = { source: "hid"; kind: "status" } & (
+export type DeviceStatusEvent = { source: "mock" | "hid"; kind: "status" } & (
 	| { state: "connected" }
 	| {
 			state: "disconnected";

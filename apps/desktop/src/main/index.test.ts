@@ -136,6 +136,13 @@ describe("desktop window lifecycle", () => {
 			frame: false,
 		});
 		expect(management.options.frame).not.toBe(false);
+		for (const window of [panel, management]) {
+			expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
+				source: "mock",
+				kind: "status",
+				state: "connected",
+			});
+		}
 		vi.advanceTimersByTime(1500);
 		for (const window of [panel, management]) {
 			expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
@@ -143,6 +150,21 @@ describe("desktop window lifecycle", () => {
 				kind: "rotate",
 				direction: expect.toBeOneOf([1, -1]),
 			});
+		}
+	});
+
+	it("replays connected mock status when either preload requests it", () => {
+		const handler = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === "quake:status",
+		)?.[1];
+		expect(handler).toBeDefined();
+		for (const window of Object.values(windows())) {
+			window.webContents.send.mockClear();
+			handler?.({ sender: window.webContents });
+			expect(window.webContents.send).toHaveBeenCalledExactlyOnceWith(
+				"quake:event",
+				{ source: "mock", kind: "status", state: "connected" },
+			);
 		}
 	});
 
@@ -164,6 +186,8 @@ describe("desktop window lifecycle", () => {
 
 	it("recreates a destroyed panel on hot-plug and forwards to the replacement", () => {
 		const { panel, management } = windows();
+		panel.webContents.send.mockClear();
+		management.webContents.send.mockClear();
 		panel.destroyed = true;
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
@@ -203,6 +227,8 @@ describe("desktop window lifecycle", () => {
 
 	it("restores both windows on macOS activation and forwards to the new windows", () => {
 		const { panel, management } = windows();
+		panel.webContents.send.mockClear();
+		management.webContents.send.mockClear();
 		panel.destroyed = true;
 		management.destroyed = true;
 		appEvent("activate");

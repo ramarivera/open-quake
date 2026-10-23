@@ -17,9 +17,23 @@ describe("mock device bus", () => {
 		vi.useRealTimers();
 	});
 
+	it("reports a connected mock status and replays it to each subscriber", () => {
+		const status = { source: "mock", kind: "status", state: "connected" };
+		expect(bus.currentStatus()).toEqual(status);
+		const first = vi.fn();
+		bus.on(first);
+		expect(first).toHaveBeenCalledExactlyOnceWith(status);
+		vi.advanceTimersByTime(6000);
+		expect(bus.currentStatus()).toEqual(status);
+		const late = vi.fn();
+		bus.on(late);
+		expect(late).toHaveBeenCalledExactlyOnceWith(status);
+	});
+
 	it("rotates every 1500ms, keeps alive every 3000ms, presses every 6000ms", () => {
 		const listener = vi.fn();
 		bus.on(listener);
+		listener.mockClear();
 		vi.advanceTimersByTime(1499);
 		expect(listener).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(1);
@@ -50,6 +64,7 @@ describe("mock device bus", () => {
 		vi.mocked(Math.random).mockReturnValue(1);
 		const listener = vi.fn();
 		bus.on(listener);
+		listener.mockClear();
 		vi.advanceTimersByTime(3000);
 		expect(listener).toHaveBeenNthCalledWith(1, {
 			source: "mock",
@@ -68,6 +83,8 @@ describe("mock device bus", () => {
 		const remaining = vi.fn();
 		const off = bus.on(removed);
 		bus.on(remaining);
+		removed.mockClear();
+		remaining.mockClear();
 		off();
 		vi.advanceTimersByTime(1500);
 		expect(removed).not.toHaveBeenCalled();
@@ -78,6 +95,7 @@ describe("mock device bus", () => {
 		const subscribe = vi.spyOn(EventEmitter.prototype, "on");
 		const listener = vi.fn();
 		bus.on(listener);
+		listener.mockClear();
 		const emitter: unknown = subscribe.mock.contexts.at(-1);
 		assert(emitter instanceof EventEmitter);
 		expect(emitter.listenerCount("event")).toBe(1);

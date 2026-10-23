@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { QuakeEvent } from "../preload/quake";
+import type { DeviceStatusEvent, QuakeEvent } from "../preload/quake";
 import type { DeviceBus } from "./deviceBus";
 
 /**
@@ -17,6 +17,11 @@ export type MockDeviceBus = DeviceBus & {
 
 export function startMockDeviceBus(): MockDeviceBus {
 	const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
+	const status: DeviceStatusEvent = {
+		source: "mock",
+		kind: "status",
+		state: "connected",
+	};
 	const timers: ReturnType<typeof setInterval>[] = [];
 	let seq = 0;
 	let direction: 1 | -1 = 1;
@@ -51,9 +56,10 @@ export function startMockDeviceBus(): MockDeviceBus {
 	);
 
 	return {
-		currentStatus: () => undefined,
+		currentStatus: () => status,
 		on(listener) {
 			emitter.on("event", listener);
+			listener(status);
 			return () => emitter.off("event", listener);
 		},
 		stop() {
