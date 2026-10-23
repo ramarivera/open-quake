@@ -28,6 +28,16 @@ export const Capabilities = Schema.Struct({
 	stt: CapabilityStatus,
 	tts: CapabilityStatus,
 });
+/** The deterministic mock implements text only; profiles cannot enable modalities. */
+export const MOCK_CAPABILITIES = Object.freeze({
+	text: "supported",
+	tools: "unsupported",
+	images: "unsupported",
+	imageGeneration: "unsupported",
+	videoGeneration: "unsupported",
+	stt: "unsupported",
+	tts: "unsupported",
+} satisfies typeof Capabilities.Type);
 const Finite = Schema.Number.pipe(Schema.finite());
 const Count = Schema.Int.pipe(Schema.nonNegative());
 const Range = Schema.Struct({ min: Finite, max: Finite });

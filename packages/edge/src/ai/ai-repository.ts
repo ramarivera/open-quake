@@ -1,5 +1,9 @@
 import { Effect, Either, Option, Ref } from "effect";
-import type { ProfileId, ProviderProfile } from "./ai-contracts.js";
+import {
+	MOCK_CAPABILITIES,
+	type ProfileId,
+	type ProviderProfile,
+} from "./ai-contracts.js";
 import { AiConfigInvalid } from "./ai-errors.js";
 import { validateProfile } from "./ai-invariants.js";
 
@@ -24,15 +28,7 @@ export const MOCK_PROFILE: ProviderProfile = immutableProfile({
 	modelId: "deterministic-text-v1",
 	auth: "none",
 	authGeneration: 0,
-	capabilities: {
-		text: "supported",
-		tools: "unsupported",
-		images: "unsupported",
-		imageGeneration: "unsupported",
-		videoGeneration: "unsupported",
-		stt: "unsupported",
-		tts: "unsupported",
-	},
+	capabilities: MOCK_CAPABILITIES,
 	sampling: {},
 	samplingLimits: {},
 });

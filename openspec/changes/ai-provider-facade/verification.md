@@ -1,5 +1,68 @@
 # W7 implementation verification
 
+## PR 13 review-fix round 1
+
+Verified on 2026-10-23 against PR head `d148084`. The original implementation
+report below records the earlier baseline.
+
+- Dispatch now selects an available adapter from a map keyed by the selected
+  profile's adapter kind. Mock is always registered; the injected compatible
+  port adds a second entry. Tests consume both profile streams in one service
+  and assert typed `AiUnavailable` / `AI.PROVIDER.UNAVAILABLE` for unregistered
+  compatible and Codex adapters before credential resolution.
+- Mock capabilities are fixed to text only. Saving contradictory declarations
+  fails configuration validation. Request validation also rejects claimed
+  non-text support, including image attachments absent from the requested
+  capability list. Tests cover all six non-text capabilities and the facade's
+  image rejection before dispatch.
+- `decodeAndReduce` is exported by `@open-quake/edge/chat/reducers`. It decodes
+  unknown `ChatChunk` input before reducing and returns a Schema `ParseError`
+  for malformed envelopes or excess fields. `reduceChunk` documents its decoded
+  input precondition. Tests verify valid reduction and rejection without state
+  mutation.
+
+The initial regression run reproduced both provider bugs. Intermediate test
+runs also caught a test import and a missing test-layer dependency; both were
+corrected before the successful final gates.
+
+```text
+pnpm install
+PASS; lockfile up to date; 120 packages reused; prepare completed
+
+pnpm run lint
+PASS; 85 files; no fixes
+
+pnpm run typecheck
+PASS; 6/6 tasks; 4 cached; edge and desktop fresh
+
+pnpm run test
+PASS; 4/4 tasks; 3 cached; edge 27 tests fresh
+cached suites: desktop 93, protocol 25, device 36 tests
+
+pnpm --filter @open-quake/desktop test
+PASS; 8 files; 93 tests fresh, including credential/facade integration
+
+pnpm run build
+PASS; 1/1 task; no cache; desktop main/preload/renderer
+
+openspec validate ai-provider-facade --strict
+PASS
+
+openspec validate ai-chat-core --strict
+PASS
+
+Browser bundle audit using the Vite command below
+PASS; provider contracts 120 modules; chat contracts 121; reducers 122;
+no host/provider imports; decoder export retained
+```
+
+No dependencies were added. Live providers, native Keychain, Codex, hardware,
+and the other integration acceptance items below remain unverified. No `bd`
+command was run. The parent owns Beads synchronization at merge; Beads lives in
+Dolt rather than in-repository files. The task issue handoff below still applies.
+
+## Original implementation evidence
+
 Verified on 2026-10-23 in `lane/ai-provider-facade`, based on `f135eb9`.
 
 ## Delivered scope

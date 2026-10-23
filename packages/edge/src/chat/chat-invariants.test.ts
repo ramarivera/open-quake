@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Option, Schema } from "effect";
+import { Either, Option, Schema } from "effect";
 import * as fc from "fast-check";
 import {
 	ChatChunk,
@@ -8,6 +8,7 @@ import {
 	TurnSnapshot,
 } from "./chat-contracts.js";
 import {
+	decodeAndReduce,
 	emptySession,
 	emptyTurn,
 	reduceChunk,
@@ -45,6 +46,28 @@ const end = (seq: number): Extract<ChatChunk, { type: "end" }> => ({
 });
 
 describe("chat protocol v1", () => {
+	it("decodes wire chunks before reduction and rejects malformed input without changing state", () => {
+		const state = emptyTurn(sessionId, turnId);
+		const chunk = answer(0, "hello");
+		expect(decodeAndReduce(state, Schema.encodeSync(ChatChunk)(chunk))).toEqual(
+			Either.right(reduceChunk(state, chunk)),
+		);
+		for (const malformed of [
+			undefined,
+			{ ...chunk, version: 2 },
+			{ ...chunk, sessionId: "invalid" },
+			{ ...chunk, seq: -1 },
+			{ ...chunk, seq: 0.5 },
+			{ ...chunk, type: "unknown" },
+			{ ...chunk, textDelta: 123 },
+			{ ...chunk, unexpected: true },
+			{ ...end(0), outcome: "unknown" },
+		]) {
+			const result = decodeAndReduce(state, malformed);
+			expect(Either.isLeft(result) && result.left._tag).toBe("ParseError");
+			expect(state).toEqual(emptyTurn(sessionId, turnId));
+		}
+	});
 	it("round-trips events and snapshots with optional usage and stable errors", () => {
 		for (const chunk of [
 			answer(0, "Hello"),

@@ -21,6 +21,7 @@ import {
 	CredentialRef,
 	type InferenceRequest,
 	type NormalizedEvent,
+	ProfileId,
 	type ProviderProfile,
 } from "./ai-contracts.js";
 import { AiCredentials } from "./ai-credentials.js";
@@ -51,7 +52,8 @@ const config = (adapter: string) =>
 	Layer.setConfigProvider(
 		ConfigProvider.fromMap(new Map([["AI_PROVIDER_ADAPTER", adapter]])),
 	);
-const mockLayer = AiProviderService.Default.pipe(
+const mockLayer = AiProviderService.DefaultWithoutDependencies.pipe(
+	Layer.provideMerge(AiRepository.Default),
 	Layer.provide(Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))),
 );
 const compatibleLayer = (
@@ -70,6 +72,105 @@ const compatibleLayer = (
 	);
 
 describe("mock-default provider facade", () => {
+	it.effect(
+		"rejects mock image requests and false capability declarations before dispatch",
+		() =>
+			Effect.gen(function* () {
+				const service = yield* AiProviderService;
+				const saved = yield* Effect.either(
+					(yield* AiRepository).put({
+						...MOCK_PROFILE,
+						capabilities: { ...MOCK_PROFILE.capabilities, images: "supported" },
+					}),
+				);
+				expect(Either.isLeft(saved) && saved.left.code).toBe(
+					"AI.PROVIDER.CONFIG_INVALID",
+				);
+				const generated = yield* Effect.either(
+					service.generate({
+						...request,
+						messages: [
+							{
+								role: "user",
+								content: [{ _tag: "image", url: "https://image.invalid" }],
+							},
+						],
+					}),
+				);
+				expect(
+					Either.isLeft(generated) && [
+						generated.left._tag,
+						generated.left.code,
+						"capability" in generated.left && generated.left.capability,
+					],
+				).toEqual([
+					"AiCapabilityUnsupported",
+					"AI.PROVIDER.CAPABILITY_UNSUPPORTED",
+					"images",
+				]);
+			}).pipe(Effect.provide(mockLayer)),
+	);
+
+	it.effect("dispatches mock and compatible profiles in one service", () => {
+		const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];
+		const selected: ProviderProfile = {
+			...profile,
+			id: Schema.decodeUnknownSync(ProfileId)(
+				"00000000-0000-4000-8000-000000000003",
+			),
+		};
+		return Effect.gen(function* () {
+			const service = yield* AiProviderService;
+			yield* (yield* AiRepository).put(selected);
+			const mock = yield* service.generate(request);
+			const compatible = yield* service.generate({
+				...request,
+				profileId: selected.id,
+			});
+			const mockConsumer = yield* Stream.runCollect(mock.events).pipe(
+				Effect.fork,
+			);
+			const compatibleEvents = yield* Stream.runCollect(compatible.events);
+			yield* TestClock.adjust(40);
+			const mockEvents = Chunk.toReadonlyArray(yield* Fiber.join(mockConsumer));
+			expect(mockEvents).toContainEqual({
+				_tag: "textDelta",
+				textDelta: "Mock ",
+				kind: "generation",
+			});
+			expect(mockEvents.at(-1)).toEqual({ _tag: "completed" });
+			expect(Chunk.toReadonlyArray(compatibleEvents)).toEqual([
+				{ _tag: "textDelta", textDelta: "Compatible.", kind: "generation" },
+				{ _tag: "completed" },
+			]);
+			expect(calls.map((call) => call.profile.id)).toEqual([selected.id]);
+		}).pipe(
+			Effect.provide(
+				compatibleLayer(
+					{
+						open: (input) => {
+							calls.push(input);
+							return Effect.succeed(
+								Stream.fromIterable<NormalizedEvent>([
+									{
+										_tag: "textDelta",
+										textDelta: "Compatible.",
+										kind: "generation",
+									},
+									{ _tag: "completed" },
+								]),
+							);
+						},
+					},
+					{
+						resolve: () => Effect.succeed(Redacted.make(crypto.randomUUID())),
+						revoked: () => Effect.never,
+					},
+				),
+			),
+		);
+	});
+
 	it.effect("streams deterministic generated text on the Effect clock", () =>
 		Effect.gen(function* () {
 			const service = yield* AiProviderService;
@@ -157,7 +258,7 @@ describe("mock-default provider facade", () => {
 	);
 
 	it.effect(
-		"uses only the configured adapter, pins its profile, and aborts on cancellation",
+		"uses the selected profile's adapter, pins its profile, and aborts on cancellation",
 		() => {
 			const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];
 			return Effect.gen(function* () {
@@ -333,67 +434,61 @@ describe("mock-default provider facade", () => {
 	);
 
 	it.effect(
-		"fails closed for missing credentials, unavailable adapters, Codex, and configuration mismatch",
+		"returns the typed unavailable error for unregistered compatible and Codex adapters",
 		() =>
 			Effect.gen(function* () {
-				for (const [candidate, expected] of [
-					[
-						{ ...profile, credentialRef: undefined },
-						"AI.PROVIDER.CONFIG_INVALID",
-					],
-					[profile, "AI.PROVIDER.CONFIG_INVALID"],
-					[
-						{ ...MOCK_PROFILE, adapter: "codex", auth: "codexDevice" },
-						"AI.PROVIDER.UNAVAILABLE",
-					],
+				for (const candidate of [
+					profile,
+					{ ...MOCK_PROFILE, adapter: "codex", auth: "codexDevice" },
 				] as const) {
 					const repository = yield* AiRepository;
-					const put = yield* Effect.either(repository.put(candidate));
-					if (Either.isLeft(put)) {
-						expect(put.left.code).toBe(expected);
-						continue;
-					}
+					yield* repository.put(candidate);
 					const result = yield* Effect.either(
 						(yield* AiProviderService).generate(request),
 					);
-					expect(Either.isLeft(result) && result.left.code).toBe(expected);
+					expect(
+						Either.isLeft(result) && [result.left._tag, result.left.code],
+					).toEqual(["AiUnavailable", "AI.PROVIDER.UNAVAILABLE"]);
 				}
 			}).pipe(
 				Effect.provide(
 					AiProviderService.DefaultWithoutDependencies.pipe(
 						Layer.provideMerge(AiRepository.Default),
-						Layer.provide(config("mock")),
+						Layer.provide(
+							Layer.succeed(AiCredentials, {
+								resolve: () =>
+									Effect.die(
+										"unregistered adapter must not resolve credentials",
+									),
+								revoked: () =>
+									Effect.die("unregistered adapter must not watch credentials"),
+							}),
+						),
 					),
 				),
 			),
 	);
 
 	it.effect(
-		"requires credentials and an installed adapter for explicit compatible configuration",
+		"requires credentials for a registered compatible adapter before dispatch",
 		() =>
 			Effect.gen(function* () {
-				for (const hasCredentials of [false, true]) {
-					const infrastructure = hasCredentials
-						? Layer.succeed(AiCredentials, {
-								resolve: () => Effect.die("no dispatch"),
-								revoked: () => Effect.never,
-							})
-						: Layer.empty;
+				for (const credentialRef of [undefined, profile.credentialRef]) {
 					const layer = AiProviderService.DefaultWithoutDependencies.pipe(
 						Layer.provideMerge(AiRepository.Default),
 						Layer.provide(
-							Layer.mergeAll(config("openai-compatible"), infrastructure),
+							Layer.succeed(AiCompatibleAdapter, {
+								open: () => Effect.die("unauthenticated adapter must not run"),
+							}),
 						),
 					);
 					yield* Effect.gen(function* () {
-						yield* (yield* AiRepository).put(profile);
+						yield* (yield* AiRepository).put({ ...profile, credentialRef });
 						const result = yield* Effect.either(
 							(yield* AiProviderService).generate(request),
 						);
 						expect(Either.isLeft(result) && result.left.code).toBe(
-							hasCredentials
-								? "AI.PROVIDER.UNAVAILABLE"
-								: "AI.PROVIDER.AUTH_REQUIRED",
+							"AI.PROVIDER.AUTH_REQUIRED",
 						);
 					}).pipe(Effect.provide(layer));
 				}

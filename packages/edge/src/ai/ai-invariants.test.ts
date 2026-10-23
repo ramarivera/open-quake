@@ -127,6 +127,43 @@ describe("AI contracts and invariants", () => {
 			}),
 		).toEqual(Either.left({ reason: "capability", capability: "images" }));
 	});
+	it("rejects non-text mock capabilities even when the profile declares support", () => {
+		for (const capability of [
+			"tools",
+			"images",
+			"imageGeneration",
+			"videoGeneration",
+			"stt",
+			"tts",
+		] as const) {
+			const profile: ProviderProfile = {
+				...MOCK_PROFILE,
+				capabilities: {
+					...MOCK_PROFILE.capabilities,
+					[capability]: "supported",
+				},
+			};
+			expect(Either.isLeft(validateProfile(profile))).toBe(true);
+			expect(
+				validateRequest(profile, {
+					...request,
+					requestedCapabilities: [capability],
+				}),
+			).toEqual(Either.left({ reason: "capability", capability }));
+			if (capability === "images")
+				expect(
+					validateRequest(profile, {
+						...request,
+						messages: [
+							{
+								role: "user",
+								content: [{ _tag: "image", url: "https://image.invalid" }],
+							},
+						],
+					}),
+				).toEqual(Either.left({ reason: "capability", capability: "images" }));
+		}
+	});
 	it("enforces explicit endpoint policy and same-origin redirects", () => {
 		for (const endpoint of [
 			"http://example.com",

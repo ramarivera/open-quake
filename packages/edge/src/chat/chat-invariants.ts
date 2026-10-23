@@ -1,12 +1,12 @@
-import { Option } from "effect";
-import type {
+import { Either, Option, type ParseResult, Schema } from "effect";
+import {
 	ChatChunk,
-	Outcome,
-	Session,
-	SessionId,
-	Terminal,
-	TurnId,
-	TurnSnapshot,
+	type Outcome,
+	type Session,
+	type SessionId,
+	type Terminal,
+	type TurnId,
+	type TurnSnapshot,
 } from "./chat-contracts.js";
 
 export interface TurnView extends TurnSnapshot {
@@ -22,7 +22,10 @@ export const emptyTurn = (sessionId: SessionId, turnId: TurnId): TurnView => ({
 	needsSnapshot: false,
 });
 
-/** Total reducer: gaps pause application until an authoritative snapshot arrives. */
+/**
+ * Requires an already decoded ChatChunk. Use decodeAndReduce at transport boundaries.
+ * Gaps pause application until an authoritative snapshot arrives.
+ */
 export function reduceChunk(state: TurnView, chunk: ChatChunk): TurnView {
 	if (
 		chunk.sessionId !== state.sessionId ||
@@ -62,6 +65,16 @@ export function reduceChunk(state: TurnView, chunk: ChatChunk): TurnView {
 			return { ...state, lastSeq: chunk.seq, terminal: Option.some(terminal) };
 		}
 	}
+}
+
+/** Decode untrusted wire input before applying any state transition. */
+export function decodeAndReduce(
+	state: TurnView,
+	input: unknown,
+): Either.Either<TurnView, ParseResult.ParseError> {
+	return Schema.decodeUnknownEither(ChatChunk, { onExcessProperty: "error" })(
+		input,
+	).pipe(Either.map((chunk) => reduceChunk(state, chunk)));
 }
 
 export function restoreSnapshot(

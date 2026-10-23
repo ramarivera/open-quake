@@ -1,16 +1,11 @@
-import {
-	Config,
-	Deferred,
-	Effect,
-	Either,
-	Option,
-	Ref,
-	Schema,
-	Stream,
-} from "effect";
+import { Deferred, Effect, Either, Option, Ref, Schema, Stream } from "effect";
 import { AiCompatibleAdapter } from "./adapters/adapter.js";
 import { mockEvents } from "./adapters/mock.js";
-import { InferenceRequest, NormalizedEvent } from "./ai-contracts.js";
+import {
+	InferenceRequest,
+	NormalizedEvent,
+	type ProviderProfile,
+} from "./ai-contracts.js";
 import { AiCredentials } from "./ai-credentials.js";
 import {
 	AiAuthRequired,
@@ -28,6 +23,12 @@ export interface Generation {
 	readonly events: Stream.Stream<NormalizedEvent, AiError>;
 	readonly cancel: () => Effect.Effect<void>;
 }
+
+type RegisteredAdapter = (input: {
+	readonly profile: ProviderProfile;
+	readonly request: InferenceRequest;
+	readonly signal: AbortSignal;
+}) => Effect.Effect<Stream.Stream<NormalizedEvent, AiError>, AiError>;
 
 /** Require one terminal and stop pulling upstream immediately after it. */
 function normalized(
@@ -71,17 +72,44 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 		dependencies: [AiRepository.Default],
 		effect: Effect.gen(function* () {
 			const repository = yield* AiRepository;
-			const configured = yield* Effect.either(
-				Config.string("AI_PROVIDER_ADAPTER").pipe(Config.withDefault("mock")),
-			);
-			const adapter = yield* Effect.serviceOption(AiCompatibleAdapter);
+			const compatible = yield* Effect.serviceOption(AiCompatibleAdapter);
 			const credentials = yield* Effect.serviceOption(AiCredentials);
+			const adapters = new Map<ProviderProfile["adapter"], RegisteredAdapter>([
+				["mock", () => Effect.succeed(mockEvents())],
+			]);
+			if (Option.isSome(compatible)) {
+				const adapter = compatible.value;
+				adapters.set(
+					"openai-compatible",
+					Effect.fn("AiProviderService.openCompatible")(function* ({
+						profile,
+						request,
+						signal,
+					}: Parameters<RegisteredAdapter>[0]): Effect.fn.Return<
+						Stream.Stream<NormalizedEvent, AiError>,
+						AiError
+					> {
+						if (!profile.credentialRef || Option.isNone(credentials))
+							return yield* new AiAuthRequired();
+						const credential = yield* credentials.value.resolve(
+							profile.credentialRef,
+							profile.authGeneration,
+						);
+						return yield* adapter.open({
+							profile,
+							request,
+							signal,
+							credential,
+							redirectPolicy: "error",
+							maxRetries: 0,
+						});
+					}),
+				);
+			}
 			return {
 				generate: Effect.fn("AiProviderService.generate")(function* (
 					input: unknown,
 				): Effect.fn.Return<Generation, AiError> {
-					if (Either.isLeft(configured))
-						return yield* new AiConfigInvalid(configured.left);
 					const decoded = Schema.decodeUnknownEither(InferenceRequest, {
 						onExcessProperty: "error",
 					})(input);
@@ -95,16 +123,13 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 						return yield* validated.left.reason === "capability"
 							? new AiCapabilityUnsupported(validated.left.capability)
 							: new AiConfigInvalid();
-					if (profile.adapter === "codex") return yield* new AiUnavailable();
-					if (profile.adapter !== configured.right)
-						return yield* new AiConfigInvalid();
+					const adapter = adapters.get(profile.adapter);
+					if (!adapter) return yield* new AiUnavailable();
 					if (
 						profile.adapter === "openai-compatible" &&
 						(!profile.credentialRef || Option.isNone(credentials))
 					)
 						return yield* new AiAuthRequired();
-					if (profile.adapter === "openai-compatible" && Option.isNone(adapter))
-						return yield* new AiUnavailable();
 					const cancelled = yield* Deferred.make<void>();
 					const consumed = yield* Ref.make(false);
 					const controller = new AbortController();
@@ -123,21 +148,10 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 								Effect.sync(() => controller.abort()),
 							);
 							if (controller.signal.aborted) return Stream.empty;
-							if (profile.adapter === "mock") return mockEvents();
-							if (!profile.credentialRef || Option.isNone(credentials))
-								return yield* new AiAuthRequired();
-							if (Option.isNone(adapter)) return yield* new AiUnavailable();
-							const credential = yield* credentials.value.resolve(
-								profile.credentialRef,
-								profile.authGeneration,
-							);
-							const source = yield* adapter.value.open({
+							const source = yield* adapter({
 								profile,
 								request: validated.right,
-								credential,
 								signal: controller.signal,
-								redirectPolicy: "error",
-								maxRetries: 0,
 							});
 							return normalized(source);
 						}),

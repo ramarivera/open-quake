@@ -1,7 +1,8 @@
 import { Either, Option, Schema } from "effect";
 import {
-	type Capability,
+	Capability,
 	InferenceRequest,
+	MOCK_CAPABILITIES,
 	type ProfileSummary,
 	ProviderProfile,
 } from "./ai-contracts.js";
@@ -85,6 +86,14 @@ export function validateProfile(
 	}
 	if (!validSampling(profile.sampling, profile))
 		return Either.left({ reason: "config" });
+	if (
+		profile.adapter === "mock" &&
+		Capability.literals.some(
+			(capability) =>
+				profile.capabilities[capability] !== MOCK_CAPABILITIES[capability],
+		)
+	)
+		return Either.left({ reason: "config" });
 	return Either.right(profile);
 }
 
@@ -139,7 +148,11 @@ export function validateRequest(
 			: []),
 	];
 	for (const capability of capabilities) {
-		if (profile.capabilities[capability] !== "supported")
+		if (
+			profile.capabilities[capability] !== "supported" ||
+			(profile.adapter === "mock" &&
+				MOCK_CAPABILITIES[capability] !== "supported")
+		)
 			return Either.left({ reason: "capability", capability });
 	}
 	return Either.right({

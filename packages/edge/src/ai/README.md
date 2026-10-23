@@ -4,10 +4,14 @@ Import `@open-quake/edge/ai/contracts` in browser code. That entry imports
 only `effect/Schema`. Import `@open-quake/edge/ai` only in host/service code.
 SDK types and credential values are absent from the public Schemas.
 
-`AiProviderService.Default` declares `AiRepository.Default` and reads
-`AI_PROVIDER_ADAPTER` through Effect Config. Its default is `mock`. Use the
-repository's `MOCK_PROFILE.id` for the deterministic mock. Each event takes
-10ms on the Effect Clock. The output is a generation and usage is estimated.
+`AiProviderService.Default` declares `AiRepository.Default` and builds a registry
+of available adapters keyed by profile adapter kind. The registry always includes
+`mock`; providing `AiCompatibleAdapter` adds `openai-compatible`. Each request
+dispatches through its selected profile, so mock and compatible profiles can run
+in one service. Unregistered adapters fail with `AI.PROVIDER.UNAVAILABLE` before
+credential resolution. `AI_PROVIDER_ADAPTER` no longer restricts explicit profile
+selection. Use the repository's `MOCK_PROFILE.id` for the deterministic mock.
+Each event takes 10ms on the Effect Clock. The output is a generation and usage is estimated.
 The repository is volatile metadata storage, not disk persistence.
 
 `generate` validates the profile selection, sampling, and capabilities before
@@ -24,12 +28,15 @@ require HTTPS; HTTP requires an explicit loopback policy. Endpoint credentials,
 queries, and fragments are rejected. `credentialRedirectAllowed` is a pure
 same-origin check; the adapter port requires redirects disabled entirely.
 Unsupported and unverified capabilities fail with the capability identifier.
+Mock capabilities are fixed to text only. Saving different mock capability
+declarations fails validation; request validation also rejects non-text mock
+requests even if a caller passes a profile claiming support.
 Sampling values must fit the profile's declared ranges; absent ranges mean the
 option is unsupported. No implicit provider switch, account, proxy, geo lookup,
 or retry exists.
 
 For compatible profiles, explicitly provide `AiCompatibleAdapter` and
-`AiCredentials` at the root and select `AI_PROVIDER_ADAPTER=openai-compatible`.
+`AiCredentials` at the root, then select a compatible profile by ID.
 There is no installed SDK adapter. The port requires an AbortSignal, redacted
 credential, disabled redirects, and `maxRetries: 0`. Native SDK normalization and
 SDK-specific status extraction belong inside that adapter. Use the catalog

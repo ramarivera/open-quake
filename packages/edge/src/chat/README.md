@@ -10,6 +10,11 @@ numbers starting at zero. `answer` appends text verbatim. `followUp` contains a
 complete suggestion and never changes answer text. `end` carries a terminal
 outcome, optional stable error code, and optional reported/estimated usage.
 
+At transport boundaries, use `decodeAndReduce(state, input)`. It decodes unknown
+input with `ChatChunk`, rejects excess fields, and returns an `Either` containing
+the new state or a Schema `ParseError`. Malformed input never reaches reduction.
+`reduceChunk` requires an already decoded `ChatChunk`.
+
 `emptyTurn` starts at `lastSeq: -1`. `reduceChunk` ignores other identities and
 duplicates. A gap sets `needsSnapshot` and pauses all further application.
 `restoreSnapshot` accepts a matching, non-stale authoritative snapshot, then
