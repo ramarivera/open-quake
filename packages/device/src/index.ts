@@ -1,3 +1,4 @@
+export * as actions from "./actions/index.js";
 export * from "./device-contracts.js";
 export * from "./device-errors.js";
 export * from "./device-service.js";

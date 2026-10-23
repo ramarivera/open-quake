@@ -4,7 +4,7 @@
 
 Give users a consistent function library for configuring QUAKE keys and ensure only validated, available functions execute on explicit input.
 
-These requirements specify the recommendations pending in `design.md`. Later-phase requirements apply only when their capability is enabled.
+These requirements record the recommendations approved by Ramiro on 2026-10-23 in `design.md`. Later-phase requirements apply only when their capability is enabled.
 
 ## ADDED Requirements
 

@@ -58,7 +58,7 @@ Only a committed profile snapshot and explicit normalized activation can execute
 
 Keep hotkeySwitch out of the first-release picker and runtime. Retain two key values and alternate visuals on import as unsupported compatibility data. OperationConfig proves two editable chords; it does not prove alternation, held-key latching, persistent toggle state, reset behavior, or release semantics. A plain two-chord hotkey with knob support is a different function and must not be migrated into hotkeySwitch.
 
-Before enabling it later, inspect the host execution path and test consecutive presses, press/release, profile change, reconnect, app restart, and each alternate visual. Recommend per-profile, in-memory alternation reset on activation only if those checks support it; that behavior remains pending Ramiro and evidence. Implementing a guessed toggle now was rejected.
+Before enabling it later, inspect the host execution path and test consecutive presses, press/release, profile change, reconnect, app restart, and each alternate visual. Per-profile, in-memory alternation reset on activation is the approved recommendation if those checks support it. Enabling that behavior remains gated on future dispatch evidence. Implementing a guessed toggle now was rejected.
 
 ### Approved (Ramiro, 2026-10-23): later functions and artwork
 
@@ -76,6 +76,6 @@ Artwork belongs to local asset references or user imports, with shared rendering
 
 Validate selected imports without running them, normalize only documented aliases/empty sentinels, preserve unknown records, and save into the new local envelope with a backup. No automatic import of account tokens, API keys, or proprietary asset packages. Gate new functions by registry capability so rollback disables execution without losing saved payloads.
 
-## Pending decisions and verification
+## Approval and remaining verification
 
-Ramiro must approve first-release action policies, text's default enter behavior, hotkey token/platform support, and question 10's deferral. Host effects, unsupported media commands, and imported proprietary runtime behavior remain unverified. Later backend registration requires its own scenario evidence before an entry is marked available.
+Approved (Ramiro, 2026-10-23): first-release action policies, text's default no-enter behavior, adapter-declared hotkey token/platform support, and question 10's deferral. hotkeySwitch runtime semantics remain unresolved; approval keeps it inactive rather than authorizing guessed execution. Host effects, unsupported media commands, and imported proprietary runtime behavior remain unverified. Later backend registration requires its own scenario evidence before an entry is marked available.
