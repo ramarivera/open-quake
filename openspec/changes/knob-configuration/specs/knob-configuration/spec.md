@@ -4,7 +4,7 @@
 
 Keep QUAKE knob assignments stable across editing and profile changes, with precise routing for brightness, navigation, and direct voice capture.
 
-This contract implements the proposals pending in `design.md`; it does not assert a verified firmware direction map or brightness scale.
+This contract implements the recommendations approved by Ramiro on 2026-10-23 in `design.md`; it does not assert a verified firmware direction map or brightness scale.
 
 ## ADDED Requirements
 
