@@ -50,3 +50,7 @@ Each new change's `openspec status --change <name> --json` reports all four plan
 - Physical panel transfer/touch, knob hold/release timing, microphone permissions, real playback, live model/provider behavior, gateway compatibility, and Linux behavior are unverified.
 - No npm dependency was added. Future SDK/provider/GT packages require approved exact versions and catalog pins during implementation.
 - Beads was not run by this lane. The parent must create/reconcile the epic/task records in beads-handoff.md and attach verification before closing implementation work.
+
+## Addendum (2026-10-23)
+
+This record describes the original planning lane. Later, `soundboard-playback` was folded into `soundboard-player` and removed. The post-checkout hook edit came in that later PR, not in this lane.

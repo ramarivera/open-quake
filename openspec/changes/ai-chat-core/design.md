@@ -64,7 +64,7 @@ All paths below refer to sibling new change directories under `openspec/changes/
 | 4: title and token count | `ai-chat-core` | Local title/context budget first; auto-summary evidence qualified |
 | 5: STT, TTS, recorder | `voice-stt-tts` | DashScope first; other transports later |
 | 5: knob route | `knob-push-to-talk` | Direct first; agent route later; legacy migration explicit |
-| 5: soundboard | `soundboard-playback` | Separate later capability; section 8 DK-Player UI remains another lane |
+| 5: soundboard | `soundboard-player` | Separate later capability; absorbed `soundboard-playback` (2026-10-23) and owns the section 8 DK-Player UI |
 | 6: installer and init wizard | `agent-runtime` | Replace mandatory installation with optional local runtime enablement |
 | 6: templates/catalog, switching/messages | `agent-runtime` | Later local catalog and isolated sessions |
 | 6: gateway | `agent-runtime` | Compatibility gate; exact protocol unverified |

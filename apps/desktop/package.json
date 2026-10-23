@@ -8,15 +8,20 @@
 		"build": "electron-vite build",
 		"dev": "electron-vite dev",
 		"test": "vitest run",
+		"test:bundle": "node src/main/test/bundle-smoke.mjs",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@open-quake/device": "workspace:*",
 		"@open-quake/edge": "workspace:*",
 		"effect": "catalog:",
+		"node-hid": "3.4.0",
 		"react": "19.2.8",
 		"react-dom": "19.2.8"
 	},
 	"devDependencies": {
+		"@effect/vitest": "catalog:",
+		"@open-quake/protocol": "workspace:*",
 		"@types/react": "19.2.18",
 		"@types/react-dom": "19.2.4",
 		"@vitejs/plugin-react": "6.1.0",
