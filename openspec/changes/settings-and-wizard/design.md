@@ -1,0 +1,108 @@
+# Design
+
+## Context
+
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+
+Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
+
+## Evidence and source paths
+
+Path roots are local-only, read-only research inputs. S means recovered source for the stated behavior, P means partial analysis/dependency evidence, and N means name-only evidence. Source availability does not prove runtime or hardware success. Replacement limits and new failure behavior are proposed, not recovered facts.
+
+- ATLAS = `/Users/ramarivera/dev/open-quake/.agents/skills/dark-encyclopedia/dk-suite-introspeccion`
+- ART = `ATLAS/artifacts`
+- RS = `ART/recovered_sources`
+
+- **S** `RS/webpack:__dk-suite_src_views_Wizard_wizardConstants.js`: eight step IDs and supported locales; source orders OpenClaw install/init before Profiles, unlike the inventory summary.
+- **S** `RS/webpack:__dk-suite_src_views_Wizard_WizardWindow.vue`: one flow with display/profile validation, runtime skip behavior and debug support.
+- **S** `RS/webpack:__dk-suite_src_views_Wizard_steps_WizardStepLocaleRegion.vue`: locale and region selectors.
+- **S** `RS/webpack:__dk-suite_src_main_managers_aiEngineProviderFromGeo.js`: separate speech and AI default seeding.
+- **S** `RS/webpack:__dk-suite_src_main_managers_regionService.logic.js`: region derivation from country metadata.
+- **S** `RS/webpack:__dk-suite_src_views_Setting_GeneralSettings.vue`: locale, openAsHidden, monitor controls and AI provider selection.
+- **S** `RS/webpack:__dk-suite_src_views_Setting_AIConfigSettings.vue`: provider keys, model and speech parameters.
+- **S** `RS/webpack:__dk-suite_src_views_ManagementCenter_utils_ai-config-utils.js`: temperature 0–2 and topP 0–1 validation.
+- **S** `RS/webpack:__dk-suite_src_views_ManagementCenter_utils_ai-provider-defaults.js`: provider base URL/API defaults.
+- **S** `RS/webpack:__dk-suite_src_main_utils_ai-engine-provider-catalog.js`: provider catalog and user-chosen preservation.
+- **S** `RS/webpack:__dk-suite_src_views_Setting_DeviceSettings.vue`: QUAKE/QMK target selection, backlight, lighting and upgrade entry.
+- **S** `RS/webpack:__dk-suite_src_views_Setting_services_QMKLightingService.js`: lighting get/set/save/probe boundaries.
+- **S** `RS/webpack:__dk-suite_src_views_Components_ColorfulScreenSettings.vue`: per-serial wallpaper interval/fill/play settings.
+- **S** `RS/webpack:__dk-suite_src_views_QuakeGuide_QuakeGuideDialog.vue`: usage guide dialog.
+- **S** `RS/webpack:__dk-suite_src_views_QuakeGuide_quakeGuideContent.js`: guide content data.
+- **S** `RS/webpack:__dk-suite_src_views_ARIS-68_Componets_CalibrationAris68.vue`: calibration belongs to an ARIS-68 view, not demonstrated QUAKE calibration.
+- **N** `ART/ipc_channels.txt`: ReportCalibrationData and DoManualCalibration names do not establish a QUAKE command.
+- **S** `RS/webpack:__dk-suite_src_plugins_KeyConfiguration.js`: liveAudioTranslate menu entries are disabled, supporting the question 11 deferral rather than activation from settings.
+
+## Goals / Non-Goals
+
+Goals: give implementers one owned contract, observable failure states and a verification path for this capability.
+
+Non-goals: implementation in this lane, new dependencies, changes to other lanes' artifacts, guessed device opcodes, or claiming unresolved integrations work.
+
+## Package ownership
+
+`packages/edge` settings/wizard contracts, invariants, repositories and conductors; `packages/client` typed settings API; `apps/desktop` OS preference/secret adapters, wizard/settings/guide UI and composition root. `packages/device` owns capability-backed brightness/lighting writes; `packages/protocol` owns verified encodings. AI, wallpaper, profiles, firmware and runtime lanes retain their respective implementation ownership.
+
+Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+
+Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
+
+## Decisions
+
+1. Proposed (pending Ramiro): question 8, recommend QUAKE-only scope. ARIS-68 is a separate keyboard with axle-body/performance/calibration/script/linkage views. Adding it would require a second device identity, protocol and hardware acceptance suite. Keep its views and calibration commands out of QUAKE parity; revisit as a separate product change.
+
+2. Proposed (pending Ramiro): no QUAKE touch/knob calibration write until a QUAKE-specific capability and command contract is recovered and verified. Display unsupported state rather than borrowing ARIS-68 IPC semantics.
+
+3. Proposed (pending Ramiro): local onboarding is Welcome → Locale/region → Display → Profiles → optional OpenClaw install/init → Complete. The recovered source puts runtime steps before Profiles. Prefer immediate local usability and record this deliberate ordering change.
+
+4. Proposed (pending Ramiro): seed locale/provider suggestions once from OS locale and an explicitly selected region. Avoid a network geo lookup; user choices win permanently and unsupported provider suggestions remain unselected.
+
+5. Proposed (pending Ramiro): offer the recovered locale IDs zh, en, es, fr, ko, de, it and ja only when translations exist; use en as replacement fallback. Record launch-at-login and start-hidden separately because openAsHidden proves only hidden-start storage.
+
+6. Proposed (pending Ramiro): question 11 remains deferred in meeting-minutes; settings must not enable a liveAudioTranslate action from disabled menu evidence.
+
+### Data model
+
+Proposed (pending Ramiro): Versioned SettingsSnapshot separates general, locale/region, provider secret references and device-scoped preferences. WizardProgress stores step ID, draft choices, skipped optional capabilities and completion status per OS user/machine installation. Capability status comes from owners, not a settings-only boolean.
+
+### Data flow and lifecycle
+
+Proposed (pending Ramiro): The settings conductor decodes and validates a draft before an atomic repository write, then applies the affected OS or owning-domain operation and reports saved/requested/confirmed status accurately. Wizard completion commits only after required local choices validate. Device changes carry a selected-device generation ID so late responses cannot affect a newly selected unit. Guide text is bundled locally and follows the shared theme/motion contract.
+
+### Failure contract
+
+Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.SETTINGS.INVALID, QUAKE.SETTINGS.PERSIST_FAILED, QUAKE.SETTINGS.OS_APPLY_FAILED, QUAKE.WIZARD.INCOMPLETE and QUAKE.DEVICE.CAPABILITY_UNAVAILABLE. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+
+## Recommended phase and dependencies
+
+Minimum local wizard, locale, AI and device controls support the first-release cut. Expanded settings and guide follow those capabilities; optional runtime steps wait for Later phases item 5. Full firmware UI remains Later phases item 8 in firmware-dfu.
+
+Dependencies are contracts supplied by their owning changes. An unavailable dependency yields an explicit unavailable state; this change does not duplicate its implementation or modify its specs.
+
+### Inventory coverage and decision ownership
+
+- Section 7 monitor tiles, app/window monitoring and gaming mode: `system-monitor-tiles`; desktop clock: `desktop-clock`; global hotkeys/input hooks: `host-input-hooks`.
+- Section 7 HA: `home-assistant-integration`; channels hub: `integration-channels`; plugin server/management: `stream-deck-compat`; camera and printer gateway views: `camera-and-printer-views`.
+- Section 8 recording/history/export: `meeting-minutes`; DK-Player: `soundboard-player`.
+- Section 9 first run, locale/region, general/AI/device settings, local guide and calibration gating: this change. Artwork/templates: `artwork-library`; DFU and firmware: `firmware-dfu`. Wallpaper and QMK transports remain delegated to their existing owners.
+- Question 5 is an evidence gate in camera-and-printer-views. Questions 7 and 12 stay unresolved in stream-deck-compat. Question 8 has the QUAKE-only recommendation here. Question 9 stays catalog-gated in integration-channels. Question 11 stays deferred in meeting-minutes. Question 13 stays delivery-gated in artwork-library.
+
+## Risks / Trade-offs
+
+The inventory conflates openAsHidden with login startup and associates generic calibration IPC with QUAKE. Separate hidden-start/login fields, and require device capabilities before writes. Preserve unknown future settings fields on versioned migrations.
+
+The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
+
+## Migration plan
+
+Create versioned local settings/repository records behind a capability gate. Validate imported shapes before writing and preserve the last valid snapshot on failure. Enable only the verified capability subset after its acceptance scenarios pass. Roll back by disabling the capability and retaining readable user records; destructive native side effects need their own recovery flow.
+
+## Verification and outstanding evidence
+
+Drive the actual wizard/settings client with fake repository, OS and device layers through first-run resume, failed completion save, explicit choices surviving region changes, secret redaction and selected-target races. Confirm delegated wallpaper/monitor/firmware actions hit their real owner. Native launch-at-login behavior, lighting readback and QUAKE calibration remain unverified.
+
+Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+
+## cloud-features-out-of-scope
+
+Inventory section 10 is CLOUD-SKIPPED: account/login/session and multi-account switching, MQTT, DecoKee model proxy/region routing, device-log upload, and agent market/sharing are excluded. The recovered account wizard step is omitted. No section 10 capability specs are created.
