@@ -1,22 +1,37 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
-  "files": {
-    "includes": ["packages/**", "apps/**", "!**/out/**", "!**/dist/**"]
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "tab"
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true,
-      "suspicious": {
-        "noExplicitAny": "error"
-      }
-    }
-  },
-  "assist": {
-    "actions": { "source": { "organizeImports": "on" } }
-  }
+	"$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
+	"files": {
+		"includes": [
+			"packages/**",
+			"apps/**",
+			"!!**/out",
+			"!!**/dist",
+			"!!**/.turbo"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"suspicious": {
+				"noExplicitAny": "error"
+			}
+		}
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	}
 }

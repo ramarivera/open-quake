@@ -44,6 +44,21 @@ ensure_truth_ready() {
 	return 0
 }
 
+# Truth Mirror off-switch (Ramiro 2026-10-23, open-quake-sr1.3): when
+# .truth/config.toml sets `enabled = false`, the Truth Mirror consumer is
+# skipped entirely - no CLAIM gate, no pre-push rejection block, no review
+# enqueue. A missing config still fails closed via ensure_truth_ready.
+truth_disabled() {
+	hook_name=$1
+
+	[ -f ".truth/config.toml" ] || return 1
+	if grep -Eq '^[[:space:]]*enabled[[:space:]]*=[[:space:]]*false' .truth/config.toml; then
+		echo "[$hook_name] Truth Mirror disabled in .truth/config.toml - skipped." >&2
+		return 0
+	fi
+	return 1
+}
+
 run_beads_hook() {
 	hook_name=$1
 	shift

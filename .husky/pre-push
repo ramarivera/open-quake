@@ -17,7 +17,9 @@ truth_status=0
 beads_status=0
 run_entire_hook pre-push "$@" || entire_status=$?
 run_beads_hook pre-push "$@" || beads_status=$?
-if ensure_truth_ready pre-push; then
+if truth_disabled pre-push; then
+	:
+elif ensure_truth_ready pre-push; then
 	# Git passes <remote-name> <remote-url>; Truth Mirror gets Git's full args.
 	truth-mirror --state-dir .truth hook-dispatch pre-push "$@" || truth_status=$?
 else

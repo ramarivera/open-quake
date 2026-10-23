@@ -6,7 +6,9 @@
 #
 # Strict two-pass drives P(undetected lie) down. Reviewer wall clock is reviewer.timeout_secs.
 
-enabled = true
+# Disabled by Ramiro, 2026-10-23 (open-quake-sr1.3). Hooks stay wired; truth-mirror
+# no-ops while this is false. Flip back to true to re-enable.
+enabled = false
 
 default_writer = "omp"
 allow_same_model = false

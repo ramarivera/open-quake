@@ -12,7 +12,9 @@ truth_status=0
 # NOTE: beads has no commit-msg hook (bd hooks list) - consumers are Entire +
 # Truth Mirror only on this hook.
 run_entire_hook commit-msg "$@" || entire_status=$?
-if ensure_truth_ready commit-msg; then
+if truth_disabled commit-msg; then
+	:
+elif ensure_truth_ready commit-msg; then
 	truth-mirror --state-dir .truth hook-dispatch commit-msg "$@" || truth_status=$?
 else
 	truth_status=1

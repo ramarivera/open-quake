@@ -25,7 +25,17 @@ scratch_base="/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake"
 	{ echo "FAIL: agents scratch volume unavailable" >&2; exit 1; }
 mkdir -p "$scratch_base"
 scratch="$(mktemp -d "$scratch_base/hook-consumers.XXXXXX")"
-trap 'rm -rf "$scratch"; rm -f "$repo_root/.husky/repo-gates.sh"' EXIT
+# The test swaps .husky/repo-gates.sh for fakes; park the real (tracked) gate
+# file and put it back on exit so the suite never deletes it.
+gates="$repo_root/.husky/repo-gates.sh"
+gates_backup="$scratch/repo-gates.sh.orig"
+[ -f "$gates" ] && mv "$gates" "$gates_backup"
+restore_gates() {
+	rm -f "$gates"
+	[ -f "$gates_backup" ] && mv "$gates_backup" "$gates"
+	rm -rf "$scratch"
+}
+trap restore_gates EXIT
 
 FAILS="$scratch/failures"
 : >"$FAILS"
@@ -47,6 +57,12 @@ for bin in entire truth-mirror bd; do
 	} >"$fx/$bin"
 	chmod +x "$fx/$bin"
 done
+
+# Hooks read .truth/config.toml relative to cwd; run from a hermetic cwd so the
+# live repo config (which may have Truth Mirror disabled) cannot leak in.
+mkdir -p "$scratch/cwd/.truth"
+printf 'enabled = true\n' >"$scratch/cwd/.truth/config.toml"
+cd "$scratch/cwd" || exit 1
 
 # Keep ensure_truth_ready from prepending real mise shims over our fakes.
 export MISE_DATA_DIR="$scratch/mise"
@@ -189,6 +205,27 @@ fi
 calls | grep -q 'entire:' &&
 	ok "Entire still ran when Truth Mirror was absent" ||
 	bad "Entire did not run when Truth Mirror was absent"
+
+# Off-switch: `enabled = false` skips Truth Mirror entirely (even a rejecting
+# one), while a missing config still fails closed.
+printf 'enabled = false\n' >"$scratch/cwd/.truth/config.toml"
+rm -f "$scratch/calls.log"
+status=0
+FAKE_ENTIRE_EXIT=0 FAKE_TRUTH_MIRROR_EXIT=29 run_hook || status=$?
+[ "$status" -eq 0 ] && ok "disabled Truth Mirror does not reject" ||
+	bad "disabled Truth Mirror still rejected (exit $status)"
+calls | grep -q 'truth-mirror:' &&
+	bad "Truth Mirror ran while disabled" ||
+	ok "Truth Mirror skipped while disabled"
+expect_log "entire:hooks git pre-push origin"
+expect_log "bd:hooks run pre-push origin"
+
+rm -f "$scratch/cwd/.truth/config.toml"
+rm -f "$scratch/calls.log"
+status=0
+FAKE_ENTIRE_EXIT=0 FAKE_TRUTH_MIRROR_EXIT=0 run_hook || status=$?
+[ "$status" -ne 0 ] && ok "missing config still rejects" ||
+	bad "missing config silently passed"
 
 if [ -s "$FAILS" ]; then
 	echo "FAILED" >&2

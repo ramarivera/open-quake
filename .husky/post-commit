@@ -8,7 +8,9 @@
 entire_status=0
 truth_status=0
 run_entire_hook post-commit "$@" || entire_status=$?
-if ensure_truth_ready post-commit; then
+if truth_disabled post-commit; then
+	:
+elif ensure_truth_ready post-commit; then
 	truth-mirror --state-dir .truth hook-dispatch post-commit "$@" || truth_status=$?
 else
 	truth_status=1
