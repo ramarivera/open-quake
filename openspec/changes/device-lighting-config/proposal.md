@@ -23,4 +23,4 @@ None.
 
 ## Impact
 
-`packages/device` will own lighting schemas, capability validation, and the lighting conductor; `apps/desktop` will own settings UI, serial-scoped local preferences, and IPC adapters. `packages/protocol` and `two-layer-sdk` remain the owners of QMK codecs and transport. No per-key LED protocol or probing algorithm is invented here, and no new dependencies are proposed. This change produces planning artifacts only; the parent creates Beads entries.
+`packages/device` owns lighting schemas, capability validation, and the lighting conductor; `apps/desktop` will own settings UI, serial-scoped local preferences, and IPC adapters. `packages/protocol` and `two-layer-sdk` remain the owners of QMK codecs and transport. No per-key LED protocol or probing algorithm is invented here, and no new dependencies are proposed. W5 implements tasks 1.1–1.3, 2.1, and 2.4 against hid-fake; the parent manages Beads entries and remaining integration work.

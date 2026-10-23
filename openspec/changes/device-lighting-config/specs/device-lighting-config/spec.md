@@ -4,7 +4,7 @@
 
 Define later-phase QUAKE lighting settings that apply only verified controls to an identified device and distinguish local preference saves from hardware persistence.
 
-All behavior is later-phase and follows the proposals pending in `design.md`; it does not block the first-release logical grid or static wallpaper work.
+All behavior is later-phase and follows the decisions Approved (Ramiro, 2026-10-23) in `design.md`; it does not block the first-release logical grid or static wallpaper work.
 
 ## ADDED Requirements
 

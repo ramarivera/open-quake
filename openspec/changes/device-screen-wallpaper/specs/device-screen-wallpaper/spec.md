@@ -4,7 +4,7 @@
 
 Define local QUAKE wallpaper and clock rendering, display events, and separately verifiable device resource delivery without claiming desktop preview as hardware proof.
 
-Requirements reflect the pending proposals in `design.md`; later-phase sections apply only when enabled.
+Requirements reflect the recommendations approved by Ramiro on 2026-10-23 in `design.md`; later-phase sections apply only when enabled.
 
 ## ADDED Requirements
 
@@ -70,7 +70,7 @@ A resource push SHALL identify device, profile, page, revision, asset, JPEG form
 
 ### Requirement: Resource assembly and lifecycle isolation
 
-Resource delivery SHALL associate chunks with a device session, transfer, target, and revision, accept only supported JPEG content, and expose the complete new image only after a valid terminal transfer. The proposed desktop reassembly limit SHALL be 8 MiB; device limits SHALL come from verified capabilities and SHALL take precedence if smaller. Disconnect, failure, cancellation, revision change, and completion SHALL release buffers. Old or corrupt chunks SHALL NOT alter a new profile's image. Progress SHALL NOT be called hardware-applied without the verified completion evidence for that firmware.
+Resource delivery SHALL associate chunks with a device session, transfer, target, and revision, accept only supported JPEG content, and expose the complete new image only after a valid terminal transfer. The approved desktop reassembly limit SHALL be 8 MiB; device limits SHALL come from verified capabilities and SHALL take precedence if smaller. Disconnect, failure, cancellation, revision change, and completion SHALL release buffers. Old or corrupt chunks SHALL NOT alter a new profile's image. Progress SHALL NOT be called hardware-applied without the verified completion evidence for that firmware.
 
 #### Scenario: Two successive images
 

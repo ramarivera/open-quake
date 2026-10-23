@@ -144,6 +144,11 @@ The system SHALL retain unsupported imported key records with original identifie
 - **WHEN** an imported page contains a camera key while another cell's title is edited
 - **THEN** the camera record survives save and reload, shows unsupported status, and never starts a camera connection
 
+#### Scenario: Reserved JSON property names in compatibility payloads
+
+- **WHEN** an unsupported imported record contains own `__proto__`, `constructor`, or `prototype` JSON properties, including nested objects and arrays, and another field is edited
+- **THEN** those properties retain their original JSON values through save, snapshot publication, and reload without changing object inheritance or becoming executable
+
 ### Requirement: Later-phase profile CRUD and associations
 
 When multiple-profile support is enabled, the system SHALL support create, rename, deep duplicate, select, and confirmed delete, while retaining at least one profile. Duplicate SHALL allocate new profile/page IDs and independent nested key and knob data. Deleting the active profile SHALL select the first remaining profile and its first page. Optional app associations SHALL contain a stable app identifier and optional device serial; their activation SHALL remain unavailable until the app-monitor capability is installed.

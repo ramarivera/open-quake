@@ -46,3 +46,18 @@ and rename failures and exercises seeding and corruption recovery. Repository
 gate results and the source commit accompany the lane PR. The parent records
 these references on `open-quake-jy0.1` through `open-quake-jy0.5`; this lane does
 not run Beads commands. Hardware mapping and tasks 2–5 remain open.
+
+PR #12 review round 2 adds `profile-json.test.ts` and
+`profile-json-integration.test.ts`. Both JSON Schemas preserve own reserved
+property names in null-prototype records, including compatibility payloads,
+action values, subactions, and knob config. Coverage includes arbitrary JSON,
+snapshot detachment and freezing, unrelated saves through the real desktop
+adapter, fresh-service reload, dispatch exclusion, and typed rejection of
+non-JSON values before writing. Verification after merging `origin/main`
+`b530a61`: `pnpm install`, `pnpm install --frozen-lockfile`, `pnpm run lint`,
+`pnpm run typecheck` (6 tasks), `pnpm run test` (427 passing tests, 2 unchanged
+package suites from Turbo cache), `pnpm run build`,
+`node apps/desktop/src/main/test/bundle-smoke.mjs`, and
+`openspec validate --all` (27 changes) passed. No dependencies were added and
+the lockfile matches main. This strengthens tasks 1.2, 1.4 and 1.5 without
+completing the import workflow in task 2.4 or hardware verification.

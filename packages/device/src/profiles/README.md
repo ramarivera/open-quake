@@ -13,6 +13,14 @@ array is empty. Function-defined values remain JSON data until their registry
 validates them. Knob configuration is retained as JSON for the knob domain to
 validate, with no dispatch in this module.
 
+`ProfileJson` and `ProfileJsonObject` decode and encode JSON objects into
+detached records with null prototypes. Own keys such as `__proto__`,
+`constructor`, and `prototype` remain data at every nesting level, including
+action values, knob config, subactions, and compatibility payloads. They never
+set object inheritance. Unsupported import payloads survive unrelated saves
+and restart without gaining runtime meaning. Non-JSON values still fail
+Schema validation and become `ProfileValidationFailed` at the repository.
+
 `profile-invariants.ts` derives occupancy from anchors and `[width,height]`,
 rejects duplicate anchors, off-grid spans, visible overlaps, and executable
 empty placeholders. Covered placeholders do not claim a second occupied
@@ -99,6 +107,10 @@ Verification lives beside the implementation:
 
 - `profile-contracts.test.ts` covers every common key/title field, nested
   round trips, optional/default behavior, and invalid fixtures.
+- `profile-json.test.ts` property-tests arbitrary JSON and nested reserved
+  keys through both JSON Schemas. `profile-json-integration.test.ts` checks
+  preservation through snapshots, disk and restart, dispatch exclusion, and
+  catalog validation failure before persistence.
 - `profile-invariants.test.ts` uses fast-check through Effect to exercise
   coordinates, spans, anchor uniqueness, overlap, empty cells, and moves/swaps.
 - `profile-service.test.ts` tests concurrent revision-4 saves, delayed and

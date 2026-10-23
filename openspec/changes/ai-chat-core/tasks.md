@@ -1,11 +1,11 @@
 # Tasks
 
-Spec-only deliverable; all build work remains open. Depends on ai-provider-facade and the shared localization/panel contracts. The parent creates one child Beads issue per checkbox.
+W7 implements task 1.2; integration and persistence remain open. Depends on ai-provider-facade and the shared localization/panel contracts. The parent creates one child Beads issue per checkbox.
 
 ## 1. First-release session and stream contracts
 
 - [ ] 1.1 Record decisions on v1 events, concurrency, deadlines, idle retention, repository format, and window staging; verify updated artifacts with `openspec validate ai-chat-core --strict` and document approved/deferred choices.
-- [ ] 1.2 Implement Schema contracts and pure chunk/session reducers; verify identity isolation, contiguous seq, suggestion separation, exactly one terminal, duplicate/gap recovery, and cancellation at each state with unit/property tests, and document protocol v1.
+- [x] 1.2 Implement Schema contracts and pure chunk/session reducers; verify identity isolation, contiguous seq, suggestion separation, exactly one terminal, duplicate/gap recovery, and cancellation at each state with unit/property tests, and document protocol v1.
 - [ ] 1.3 Implement ChatService deadlines, profile snapshots, and bounded fan-out; verify real mock-provider dispatch, 60s/300s boundaries, one-turn busy, late-delta suppression, and slow-subscriber snapshot restoration using a fake clock and real client, and document subscription recovery.
 
 ## 2. First-release history and presentation, macOS

@@ -12,7 +12,7 @@ Non-goal: Do not choose a model catalog, copy DK-Suite engine code, or implement
 
 ## Decisions
 
-Approved (Ramiro, 2026-10-23): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
+Approved (Ramiro, 2026-10-23): all recommendations in this design are approved. Evidence labels still distinguish recovered observations from deliberate replacements. Approval does not establish live integration or hardware verification.
 
 ### Package ownership
 
@@ -64,12 +64,12 @@ Local research root `R` is `/Users/ramarivera/dev/open-quake/.agents/skills/dark
 
 Deliberately replace geo-seeded selection, account credits, MQTT keys, cloud model sync, silent modality stripping, and the twelve-engine switch with explicit local profiles and fail-before-send capability validation. No account login to DecoKee is required. Local configuration does not imply offline external inference.
 
-## Open decisions and verification
+## Approved decisions and verification
 
 - Approved (Ramiro, 2026-10-23): approve package locations above and the Codex helper/custom-provider bridge only after a focused integration spike.
 - Approved (Ramiro, 2026-10-23): macOS Keychain-backed credential storage; Linux Secret Service day 2. If secure storage is unavailable, use an explicitly selected in-memory session, never plaintext fallback.
 - Approved (Ramiro, 2026-10-23): require HTTPS for remote providers, allow HTTP only for explicit loopback profiles, and refuse credential-bearing cross-origin redirects.
-- Approved (Ramiro, 2026-10-23): SDK major version and adapter package set are chosen and pinned during implementation. No dependency is added by this PR.
+- Approved (Ramiro, 2026-10-23): SDK major version and adapter package set are chosen and pinned during implementation after exact-version approval. W7 proposes `ai@7.0.150` and `@ai-sdk/openai-compatible@3.0.77`; neither is installed. Task 1.3 and the real adapter remain deferred.
 
 Use mock SDK/credential/helper Layers and a fake clock. Acceptance must drive a real chat consumer through profile selection, outbound request, stream, cancellation, and safe failure serialization. Live provider compatibility, actual device login, OS credential stores, and Linux behavior are unverified.
 
@@ -82,3 +82,13 @@ Introduce versioned local profiles without changing existing device configuratio
 - SDK/provider protocol drift can invalidate model capabilities. Pin versions and rerun the real-consumer conformance suite before updates.
 - A helper-owned OAuth namespace may not be available in the chosen version. Keep the route unavailable until isolation is established; using the user's unrelated Codex session implicitly is not an accepted substitute.
 - A generic profile can simplify settings but conceal unsupported modalities. Keep explicit per-profile capability evidence rather than presenting twelve untested provider badges.
+
+## W7 implementation boundary
+
+The mock-default facade, profile Schemas/invariants, volatile metadata repository,
+AI catalog, and host Keychain interface are implemented. See
+`packages/edge/src/ai/README.md`,
+`apps/desktop/src/main/credentials/README.md`, and `verification.md`.
+The desktop root, native Keychain binding, settings consumer, real ChatService,
+Vercel SDK adapter, and Codex helper remain unwired. These are integration
+acceptance items, not revoked design approvals.

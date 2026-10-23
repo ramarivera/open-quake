@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Effect, Option, ParseResult, Predicate, Schema } from "effect";
 import { QUAKE_LOGICAL_GRID } from "./profile-grid.js";
 import {
 	isEmptyCell,
@@ -22,13 +22,37 @@ export const ProfileJson: Schema.Schema<ProfileJson> = Schema.suspend(() =>
 		Schema.Boolean,
 		Schema.Null,
 		Schema.Array(ProfileJson),
-		Schema.Record({ key: Schema.String, value: ProfileJson }),
+		ProfileJsonObject,
 	),
 );
-export const ProfileJsonObject = Schema.Record({
-	key: Schema.String,
-	value: ProfileJson,
-});
+const parseJsonObject: ParseResult.DeclarationDecodeUnknown<
+	{ readonly [key: string]: ProfileJson },
+	never
+> = (input, options, ast) => {
+	if (!Predicate.isRecord(input))
+		return ParseResult.fail(new ParseResult.Type(ast, input));
+	return Effect.forEach(Object.entries(input), ([key, value]) =>
+		ParseResult.decodeUnknown(ProfileJson)(value, options).pipe(
+			ParseResult.mapError(
+				(issue) => new ParseResult.Pointer(key, input, issue),
+			),
+			ParseResult.map((decoded) => [key, decoded] as const),
+		),
+	).pipe(
+		Effect.map((entries) => {
+			// fromEntries defines own properties without invoking __proto__ setters.
+			// A null prototype keeps compatibility payloads inert on later reads too.
+			const record = Object.fromEntries(entries);
+			Object.setPrototypeOf(record, null);
+			return record;
+		}),
+	);
+};
+export const ProfileJsonObject = Schema.declare(
+	[],
+	{ decode: () => parseJsonObject, encode: () => parseJsonObject },
+	{ identifier: "ProfileJsonObject" },
+);
 const optional = <A, I>(schema: Schema.Schema<A, I>) =>
 	Schema.optionalWith(schema, { as: "Option", exact: true });
 const StableId = Schema.String.pipe(Schema.minLength(1));

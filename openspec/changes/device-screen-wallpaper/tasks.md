@@ -4,11 +4,11 @@ Parent-owned Beads should mirror one epic and one issue per checkbox in this dir
 
 ## 1. First-release display and wallpaper contracts
 
-- [ ] 1.1 Record Ramiro's decisions on serial-scoped settings, static image/clock release scope, resource bounds, and open question 6's proof gate; verify the record distinguishes desktop rendering from A2 hardware acceptance.
-- [ ] 1.2 Add display/media/resource-request Schemas and pure fill/interval invariants in packages/device; verify every wallpaper field, unit conversion, invalid mode/duration, and unsupported target has acceptance/rejection fixtures.
-- [ ] 1.3 Add the serial-scoped desktop media repository and image decoder/asset-reference adapter; verify local JPEG/PNG acceptance, missing/decode-failed assets, backup/rollback, and independence between two serials; document the media schema.
-- [ ] 1.4 Add shared static wallpaper rendering on the existing 1920x480 panel and management preview; verify contain/cover/center geometry, neutral fallback, theme/reduced-motion compatibility, and that render success does not mark device delivery applied.
-- [ ] 1.5 Add the dkDesktopClock registry entry and shared injected-clock renderer; verify midnight/noon, 12h/24h, one-second updates, and matching preview/panel snapshots without a new firmware event.
+- [x] 1.1 Record Ramiro's decisions on serial-scoped settings, static image/clock release scope, resource bounds, and open question 6's proof gate; verify the record distinguishes desktop rendering from A2 hardware acceptance.
+- [x] 1.2 Add display/media/resource-request Schemas and pure fill/interval invariants in packages/device; verify every wallpaper field, unit conversion, invalid mode/duration, and unsupported target has acceptance/rejection fixtures.
+- [x] 1.3 Add the serial-scoped desktop media repository and image decoder/asset-reference adapter; verify local JPEG/PNG acceptance, missing/decode-failed assets, backup/rollback, and independence between two serials; document the media schema.
+- [x] 1.4 Add shared static wallpaper rendering on the existing 1920x480 panel and management preview; verify contain/cover/center geometry, neutral fallback, theme/reduced-motion compatibility, and that render success does not mark device delivery applied.
+- [x] 1.5 Add the dkDesktopClock registry entry and shared injected-clock renderer; verify midnight/noon, 12h/24h, one-second updates, and matching preview/panel snapshots without a new firmware event.
 
 ## 2. First-release resource coordination and hardware gate
 
