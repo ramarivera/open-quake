@@ -23,4 +23,4 @@ None.
 
 ## Impact
 
-Proposed future owners are `packages/edge/src/ai/`, browser-safe contracts and clients in `packages/client/`, and credential/UI adapters in `apps/desktop/`. Depends on the shared error catalog. Future dependencies include `ai` and the selected Vercel provider adapter; exact versions require implementation-time approval and catalog pins. This change adds specifications only. macOS is day 1; Linux credential and helper integration is day 2.
+Approved owners are `packages/edge/src/ai/`, browser-safe contracts and clients in `packages/client/`, and credential/UI adapters in `apps/desktop/`. Depends on the shared error catalog. Future dependencies include `ai` and the selected Vercel provider adapter; exact versions require implementation-time approval and catalog pins. W7 implements the foundation documented in design.md; integration tasks remain open. macOS is day 1; Linux credential and helper integration is day 2.

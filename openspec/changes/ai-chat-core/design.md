@@ -14,7 +14,7 @@ Non-goal: Do not couple session state to floating-window visibility or design a 
 
 ## Decisions
 
-Approved (Ramiro, 2026-10-23): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
+Approved (Ramiro, 2026-10-23): all recommendations in this design are approved. Evidence labels still distinguish recovered observations from deliberate replacements. Approval does not establish live integration or hardware verification.
 
 ### Chunk protocol v1
 
@@ -83,7 +83,7 @@ Research root `R` is `/Users/ramarivera/dev/open-quake/.agents/skills/dark-encyc
 
 Replace numeric state/IPC leakage, global assistant coupling, the contradictory 100ms expiry, raw file-link activation, and account-credit gating. Extend the recovered chunk names with explicit identity, terminal outcomes, and recovery. These extensions are proposed contracts, not recovered wire parity.
 
-## Open decisions and verification
+## Approved decisions and verification
 
 - Approved (Ramiro, 2026-10-23): approve the event envelope, subscriber limit, one-turn concurrency, local history retention, and 30-minute idle expiry.
 - Approved (Ramiro, 2026-10-23): approve the initial panel markdown subset and staged floating assistant/title generation.
@@ -100,3 +100,11 @@ Introduce versioned history alongside the current mock device event path. No rec
 - Durable event replay would add storage and retention complexity. Snapshot recovery is the proposed first-release alternative, with bounded subscriber queues.
 - Device image transfer and physical touch remain external dependencies. Validate a synthetic panel consumer first and track actual hardware acceptance separately.
 - Unlimited history can grow local storage. Make retention visible and deletion explicit; do not silently send all saved history to a model.
+
+## W7 contract implementation
+
+Task 1.2 is implemented in `packages/edge/src/chat/`. Protocol and reducer
+usage are documented in that directory's README. ChatService dispatch,
+deadlines, fan-out, persistence, RPC/preload, and presentation remain separate
+tasks. The reducer enforces at most one terminal; ChatService must produce
+the terminal for each accepted turn.

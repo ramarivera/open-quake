@@ -13,6 +13,7 @@
 	},
 	"dependencies": {
 		"@open-quake/device": "workspace:*",
+		"@open-quake/edge": "workspace:*",
 		"effect": "catalog:",
 		"node-hid": "3.4.0",
 		"react": "19.2.8",
