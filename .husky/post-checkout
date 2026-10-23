@@ -13,10 +13,13 @@
 # local skill; checkout still succeeds.
 
 # First resolve paths using the invoking (target-worktree) Git context.
-main_tree="$(dirname "$(git rev-parse --git-common-dir 2>/dev/null)")"
+main_tree="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")"
 src_rel=".agents/skills"
 src="$main_tree/$src_rel"
 dst="$(git rev-parse --show-toplevel)/$src_rel"
+
+# Checkouts inside the main tree itself have nothing to propagate.
+[ "$src" = "$dst" ] && exit 0
 
 # All queries below target the MAIN tree, but git exports GIT_DIR & co.
 # pointing at the newly checked-out worktree. Drop them so ls-files /
