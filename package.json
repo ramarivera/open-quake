@@ -17,6 +17,10 @@
     "typescript": "catalog:"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "electron"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "electron",
+      "node-hid"
+    ]
   }
 }
