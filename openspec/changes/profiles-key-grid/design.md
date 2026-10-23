@@ -4,7 +4,7 @@
 
 See `proposal.md` for scope. Inventory input is `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, section 3, First-release cut, Later phases, and Open questions. All recovered-source paths below use `RS` = `/Users/ramarivera/dev/open-quake/.agents/skills/dark-encyclopedia/dk-suite-introspeccion/artifacts/recovered_sources/`.
 
-Evidence tiers describe the input, not hardware verification. S means recovered source, P means partial evidence, and N means names only. New open-quake policies have no recovered parity evidence and are labeled proposed. No hardware was accessed.
+Evidence tiers describe the input, not hardware verification. S means recovered source, P means partial evidence, and N means names only. New open-quake policies have no recovered parity evidence. Ramiro approved all recommendations on 2026-10-23; approval does not establish hardware parity. No hardware was accessed.
 
 ## Goals / Non-Goals
 
@@ -20,7 +20,7 @@ Define one canonical local model shared by the panel, editor, function library, 
 | Logical grid | S | `RS/webpack:__dk-suite_src_views_DKQuake_RemoteSocketClient.vue:18`, maxRow 2/maxCol 8; `convertTo2DArray` parses `[row,col]`; `RS/webpack:__dk-suite_src_views_DKQuake_QuakeScreenView.vue:950` uses the same order | Recommend row,col logical 2x8; inventory's col,row is contradicted by actual consumers |
 | Physical input discrepancy | P | `RS/webpack:__dk-suite_src_main_DeviceControl_Connections_ProtocolUtil.js:60`, case 0x01 scans 15 positions as three rows of five; relationship to the 2x8 panel is unverified | Never equate logical coordinates with physical key IDs |
 | Move, swap, coverage locks | S | `RS/webpack:__dk-suite_src_views_Components_ShortcutGrid.vue`, `handleInternalDrag`, `addNewShortcut`, `_doAddNewShortcut`, `getCoveredCells`, checks basicEditableItems | Validate moves and replacement before committing |
-| Revision propagation | S | `RS/webpack:__dk-suite_src_views_DKQuake_RemoteSocketClient.vue`, `reportDeviceActiveProfile`, `processReceivedData` profile branch, `_configCacheKey`, `invalidateConfigInfoCache` | Cache invalidation on saved profile is required; exact atomic revision policy is proposed |
+| Revision propagation | S | `RS/webpack:__dk-suite_src_views_DKQuake_RemoteSocketClient.vue`, `reportDeviceActiveProfile`, `processReceivedData` profile branch, `_configCacheKey`, `invalidateConfigInfoCache` | Cache invalidation on saved profile is required; atomic revision policy is approved by Ramiro on 2026-10-23 |
 | Pages and deletion | S | `RS/webpack:__dk-suite_src_views_Components_MainScreen.vue`, `getConfigInfo`, `handleDeletePage`, `handleProfileDelete`; page resources are distinct resourceIds and active deletion selects index 0 | Local model needs an explicit adapter, not blind reuse of recovered resourceIds as profile IDs |
 | App-linked properties | S | `RS/webpack:__dk-suite_src_views_Components_ProfileProperties.vue`, `doSetMonitorInfo` stores appIdentifier/appPath/deviceSN under resourceId | Later app-monitor lane owns triggering; this model holds optional association metadata |
 | Change-device IPC | N | `/Users/ramarivera/dev/open-quake/.agents/skills/dark-encyclopedia/dk-suite-introspeccion/artifacts/ipc_channels.txt`, `ChangeDeviceProfile`, `device-menu-profile-change` | Names alone do not establish public wire schemas |
@@ -45,7 +45,7 @@ Accept hardware mapping only after recording press and release for every physica
 
 Use atomic whole-revision saves with expected-revision checks. Draft edits do not affect active dispatch. A successful save increments once and publishes one complete snapshot to panel, management, and device projection. Distinguish local saved state from device delivery state. A failed device send does not discard the local save.
 
-Start with one named editable profile and one empty page; page add/select/remove supports first-release navigation. Clamp previous/next at boundaries, reject explicit out-of-range page requests, and refuse deletion of the last page. Multiple-profile create/rename/duplicate/delete follows later; deleting the active profile selects the first remaining profile and page. Keep the last profile. Later folders are validated links to existing pages in the same profile, with an explicit return-page stack; reject cyclic or missing links. These policies are proposed because the recovered UI does not establish all edge cases.
+Start with one named editable profile and one empty page; page add/select/remove supports first-release navigation. Clamp previous/next at boundaries, reject explicit out-of-range page requests, and refuse deletion of the last page. Multiple-profile create/rename/duplicate/delete follows later; deleting the active profile selects the first remaining profile and page. Keep the last profile. Later folders are validated links to existing pages in the same profile, with an explicit return-page stack; reject cyclic or missing links. Approved (Ramiro, 2026-10-23): these recommendations are the product decisions, including edge cases not established by the recovered UI.
 
 For new edits, reject off-grid spans, duplicate anchors, overlap without explicit replacement, and forbidden edits. Preserve unknown imported functions in a compatibility envelope and show an unsupported tile. Only registered, fully validated actions can execute. New schemas use omitted optional fields in JSON and `Option` in domain code. Legacy null slots and empty action objects normalize at import only; do not turn unknown data into executable actions.
 
@@ -60,6 +60,6 @@ For new edits, reject off-grid spans, duplicate anchors, overlap without explici
 
 Initialize new local data independently of DK-Suite. Import only a user-selected export, retain an untouched backup, report normalization changes, and never overwrite the proprietary store. Validate before atomically replacing a local revision. Roll back to the backup/envelope version on failure. Existing open-quake code has no persisted profile implementation to migrate.
 
-## Pending decisions and verification
+## Approved decisions and remaining verification
 
-Approve the proposed envelope, row,col convention, default profile policy, navigation boundaries, and unknown-field policy before implementation. Requirement scenarios describe these recommendations, not settled product decisions. Hardware mapping and account-free operation on firmware remain unverified; mocks cannot close those gates.
+Approved (Ramiro, 2026-10-23): adopt the recommended version-1 envelope, one-based row,col logical descriptor, one-profile/one-page seed, clamped previous/next with strict explicit page requests, last-page protection, atomic expected-revision saves, and inert preservation of unknown imported fields. The requirement scenarios describe these accepted policies. Hardware mapping and account-free operation on firmware remain unverified; mocks cannot close those gates.

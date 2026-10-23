@@ -4,7 +4,7 @@
 
 Define local profiles and editable QUAKE key grids so saved layouts, panel rendering, and action dispatch use the same validated revision.
 
-This is a proposed implementation contract pending the decisions identified in `design.md`. Sections marked later phase do not expand the first-release cut.
+Approved (Ramiro, 2026-10-23): the recommendations in `design.md` are the implementation contract. Sections marked later phase do not expand the first-release cut.
 
 ## ADDED Requirements
 

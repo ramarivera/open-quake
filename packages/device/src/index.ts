@@ -8,3 +8,4 @@ export {
 	type DeviceSubscriptionError,
 	type QuakeDeviceClient,
 } from "./plain.js";
+export * from "./profiles/index.js";
