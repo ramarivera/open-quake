@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
+import { ThemeSettings } from "./theme/ThemeSettings";
+import {
+	type AppearanceController,
+	useAppearance,
+} from "./theme/useAppearance";
 import { useQuakeEvents } from "./useQuakeEvents";
+import "./styles.css";
 
 function useSurface(): "management" | "panel" {
-	const [surface, setSurface] = useState<"management" | "panel">("management");
-	useEffect(() => {
-		const params = new URLSearchParams(window.location.search);
-		setSurface(params.get("surface") === "panel" ? "panel" : "management");
-	}, []);
+	const [surface] = useState<"management" | "panel">(() =>
+		new URLSearchParams(window.location.search).get("surface") === "panel"
+			? "panel"
+			: "management",
+	);
 	return surface;
 }
 
@@ -15,83 +21,84 @@ function PanelSurface(): React.JSX.Element {
 		useQuakeEvents();
 	const alive = lastKeepAliveSeq !== null;
 	useEffect(() => {
-		// Keep the window title stable so the OmniWM float rule (titleSubstring
-		// "open-quake panel") keeps matching after the renderer loads.
+		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
 	}, []);
 	return (
-		<div
-			style={{
-				width: "100vw",
-				height: "100vh",
-				display: "flex",
-				alignItems: "center",
-				gap: 32,
-				padding: "0 48px",
-				background: "#0b0e14",
-				color: "#e6edf3",
-			}}
-		>
-			<Stat label="ROTATIONS" value={rotations} />
-			<Stat label="PRESSES" value={presses} />
+		<main className="panel" aria-label="Quake device panel">
+			<Stat label="ROTATIONS" value={rotations} animate />
+			<Stat label="PRESSES" value={presses} animate />
 			<Stat
 				label="KEEP-ALIVE"
 				value={alive ? `#${lastKeepAliveSeq}` : "waiting"}
-				accent={alive ? "#3fb950" : "#d29922"}
+				tone={alive ? "success" : "warning"}
 			/>
 			<Stat
 				label="TOUCH"
 				value={touchPoints.length ? `${touchPoints.length} pt` : "—"}
+				animate
 			/>
-			<span style={{ marginLeft: "auto", opacity: 0.5, fontSize: 12 }}>
-				mock device source
-			</span>
-		</div>
+			<span className="panel-source muted">mock device source</span>
+		</main>
 	);
 }
 
 function Stat({
 	label,
 	value,
-	accent,
+	tone,
+	animate = false,
 }: {
 	label: string;
 	value: string | number;
-	accent?: string;
-}) {
+	tone?: "success" | "warning";
+	animate?: boolean;
+}): React.JSX.Element {
 	return (
-		<div>
-			<div style={{ fontSize: 13, letterSpacing: 2, opacity: 0.6 }}>
-				{label}
-			</div>
-			<div style={{ fontSize: 42, fontWeight: 700, color: accent }}>
-				{value}
+		<div className="stat">
+			<div className="stat-label">{label}</div>
+			<div className="stat-value" data-tone={tone}>
+				<span key={value} className={animate ? "stat-change" : undefined}>
+					{value}
+				</span>
 			</div>
 		</div>
 	);
 }
 
-function ManagementSurface(): React.JSX.Element {
+function ManagementSurface({
+	appearance,
+}: {
+	appearance: AppearanceController;
+}): React.JSX.Element {
 	const { events, rotations, presses, lastKeepAliveSeq } = useQuakeEvents();
 	return (
-		<div style={{ fontFamily: "system-ui", padding: 24 }}>
-			<h1>open-quake — management</h1>
-			<p>Prototype: panel window + mock device bus are live.</p>
-			<ul>
-				<li>events received: {events.length}</li>
-				<li>rotations: {rotations}</li>
-				<li>presses: {presses}</li>
-				<li>keep-alive seq: {lastKeepAliveSeq ?? "—"}</li>
-			</ul>
-			<p style={{ color: "#666" }}>
-				The panel window owns the DK-QUAKE display (or a fallback window when
-				the panel is unplugged).
+		<main className="management">
+			<h1>open-quake management</h1>
+			<p className="muted">
+				Prototype: panel window + mock device bus are live.
 			</p>
-		</div>
+			<section className="diagnostics" aria-label="Mock device diagnostics">
+				<Stat label="EVENTS RECEIVED" value={events.length} />
+				<Stat label="ROTATIONS" value={rotations} animate />
+				<Stat label="PRESSES" value={presses} animate />
+				<Stat label="KEEP-ALIVE" value={lastKeepAliveSeq ?? "—"} />
+			</section>
+			<p className="muted">
+				The panel window owns the DK-QUAKE display, or a fallback window when
+				the panel is unplugged.
+			</p>
+			<ThemeSettings controller={appearance} />
+		</main>
 	);
 }
 
 export function App(): React.JSX.Element {
 	const surface = useSurface();
-	return surface === "panel" ? <PanelSurface /> : <ManagementSurface />;
+	const appearance = useAppearance();
+	return surface === "panel" ? (
+		<PanelSurface />
+	) : (
+		<ManagementSurface appearance={appearance} />
+	);
 }

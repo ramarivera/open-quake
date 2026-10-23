@@ -9,7 +9,7 @@ prototype renderer hardcodes colours inline (`App.tsx`).
 
 ## What Changes
 
-- Decide (via grilling) and then implement one theme token system shared by
+- Record five recommendations as "Proposed (pending Ramiro)" and implement one theme token system shared by
   the panel and management surfaces, with dark and light themes plus
   user-custom themes.
 - Define the animation budget for the 1920x480 panel path and how
@@ -24,5 +24,8 @@ prototype renderer hardcodes colours inline (`App.tsx`).
 
 ## Impact
 
-`apps/desktop/src/renderer/**`. Possible new dependency (motion library) needs
-Ramiro's approval. Beads: epic for this change, `open-quake-2qs.7`.
+`apps/desktop/src/renderer/**`, plus desktop package/lockfile test setup using the
+existing Vitest catalog pin. CSS-only motion adds no runtime dependency. The five
+design recommendations and the new desktop Vitest devDependency remain pending
+Ramiro's approval. Beads updates are handed to the parent lane; this lane runs no
+Beads commands. Existing planning ticket: `open-quake-2qs.7`.

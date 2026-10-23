@@ -1,0 +1,141 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+	APPEARANCE_STORAGE_KEY,
+	type Appearance,
+	defaultAppearance,
+	type MotionPreference,
+	parseAppearance,
+	REDUCED_MOTION_QUERY,
+	selectReducedMotion,
+	type ThemeSelection,
+	validateAppearance,
+} from "./appearance";
+import { type CustomTheme, customThemeTokens } from "./customTheme";
+import { themes, toThemeProperties } from "./tokens";
+
+type AppearanceState = { appearance: Appearance; notice: string };
+
+function readStoredAppearance(): AppearanceState {
+	try {
+		const saved = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
+		if (saved === null) return { appearance: defaultAppearance, notice: "" };
+		const appearance = parseAppearance(saved);
+		return appearance
+			? { appearance, notice: "" }
+			: {
+					appearance: defaultAppearance,
+					notice: "Saved appearance was invalid. Defaults restored.",
+				};
+	} catch {
+		return {
+			appearance: defaultAppearance,
+			notice:
+				"Appearance storage is unavailable. Changes apply for this session.",
+		};
+	}
+}
+
+export function useAppearance() {
+	const [{ appearance, notice }, setState] = useState(readStoredAppearance);
+	const current = useRef(appearance);
+	const [systemReduced, setSystemReduced] = useState(
+		() => window.matchMedia(REDUCED_MOTION_QUERY).matches,
+	);
+	const channel = useRef<BroadcastChannel | null>(null);
+	const reducedMotion = selectReducedMotion(appearance.motion, systemReduced);
+
+	useEffect(() => {
+		const query = window.matchMedia(REDUCED_MOTION_QUERY);
+		const update = () => setSystemReduced(query.matches);
+		update();
+		query.addEventListener("change", update);
+		return () => query.removeEventListener("change", update);
+	}, []);
+
+	useLayoutEffect(() => {
+		const custom = appearance.customTheme;
+		const base =
+			appearance.theme === "custom"
+				? (custom?.base ?? "dark")
+				: appearance.theme;
+		const tokens =
+			appearance.theme === "custom" && custom
+				? customThemeTokens(custom)
+				: themes[base];
+		const root = document.documentElement;
+		for (const [property, value] of Object.entries(toThemeProperties(tokens))) {
+			root.style.setProperty(property, value);
+		}
+		root.style.colorScheme = base;
+		root.dataset.theme = appearance.theme;
+		root.dataset.motion = reducedMotion ? "reduce" : "full";
+	}, [appearance, reducedMotion]);
+
+	useEffect(() => {
+		const receive = (next: Appearance | null) => {
+			if (next) {
+				current.current = next;
+				setState({ appearance: next, notice: "" });
+			}
+		};
+		const onStorage = (event: StorageEvent) => {
+			if (event.key !== APPEARANCE_STORAGE_KEY && event.key !== null) return;
+			receive(
+				event.newValue === null
+					? defaultAppearance
+					: parseAppearance(event.newValue),
+			);
+		};
+		window.addEventListener("storage", onStorage);
+		let connection: BroadcastChannel | null = null;
+		try {
+			connection = new BroadcastChannel(APPEARANCE_STORAGE_KEY);
+			connection.onmessage = (event: MessageEvent<unknown>) =>
+				receive(validateAppearance(event.data));
+			channel.current = connection;
+		} catch {
+			// Storage events still synchronize supported renderer origins.
+		}
+		return () => {
+			window.removeEventListener("storage", onStorage);
+			connection?.close();
+			channel.current = null;
+		};
+	}, []);
+
+	const update = (
+		patch: Partial<Pick<Appearance, "theme" | "motion" | "customTheme">>,
+	) => {
+		// File reads are asynchronous; merge into the latest received preference.
+		const next = { ...current.current, ...patch };
+		current.current = next;
+		let message = "";
+		try {
+			window.localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(next));
+		} catch {
+			message =
+				"Appearance could not be saved. Changes apply for this session.";
+		}
+		setState({ appearance: next, notice: message });
+		try {
+			channel.current?.postMessage(next);
+		} catch {
+			// A successful storage write also notifies the other renderer.
+		}
+	};
+
+	return {
+		appearance,
+		notice,
+		reducedMotion,
+		setTheme: (theme: ThemeSelection) => {
+			if (theme === "custom" && !current.current.customTheme) return;
+			update({ theme });
+		},
+		setMotion: (motion: MotionPreference) => update({ motion }),
+		importTheme: (customTheme: CustomTheme) =>
+			update({ theme: "custom", customTheme }),
+	};
+}
+
+export type AppearanceController = ReturnType<typeof useAppearance>;
