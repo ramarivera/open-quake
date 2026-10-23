@@ -9,7 +9,7 @@ The first local-only release needs an editable profile that survives restart and
 - Define the profile, page, and per-key contracts, including empty cells, title fields, artwork references, edit locks, and nested actions.
 - Deliver one editable profile and page navigation first. Add multiple-profile CRUD, folders, and app-driven selection later.
 - Preserve unsupported imported functions without executing them and synchronize saved revisions across both desktop windows.
-- Recommend a logical 2-row by 8-column QUAKE grid pending physical-map verification, answering inventory open question 2.
+- Use the approved logical 2-row by 8-column QUAKE grid while physical-map verification remains pending, answering inventory open question 2.
 
 ## Capabilities
 
@@ -23,4 +23,4 @@ None.
 
 ## Impact
 
-`packages/device` will own Schema contracts, profile invariants, repository interfaces, and the profile conductor. `apps/desktop` will supply local persistence, management editors, panel rendering, and typed IPC adapters. `packages/protocol` remains the pure L1 codec dependency, with no protocol implementation or changes to `two-layer-sdk` in this effort. `key-function-library`, `knob-configuration`, and `device-screen-wallpaper` consume these contracts. No dependency additions are proposed. This PR contains planning artifacts only; parent-owned Beads entries remain to be created.
+`packages/device` will own Schema contracts, profile invariants, repository interfaces, and the profile conductor. `apps/desktop` will supply local persistence, management editors, panel rendering, and typed IPC adapters. `packages/protocol` remains the pure L1 codec dependency, with no protocol implementation or changes to `two-layer-sdk` in this effort. `key-function-library`, `knob-configuration`, and `device-screen-wallpaper` consume these contracts. No dependency additions are proposed. Approved (Ramiro, 2026-10-23): all design recommendations are accepted as the decisions. Tasks 1.1–1.5 implement the contracts, invariants, local repository, and conductor; desktop window integration and physical verification remain separate tasks. The parent maintains Beads execution records.

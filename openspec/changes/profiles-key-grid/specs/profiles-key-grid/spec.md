@@ -4,7 +4,7 @@
 
 Define local profiles and editable QUAKE key grids so saved layouts, panel rendering, and action dispatch use the same validated revision.
 
-This is a proposed implementation contract pending the decisions identified in `design.md`. Sections marked later phase do not expand the first-release cut.
+Approved (Ramiro, 2026-10-23): the recommendations in `design.md` are the implementation contract. Sections marked later phase do not expand the first-release cut.
 
 ## ADDED Requirements
 
@@ -143,6 +143,11 @@ The system SHALL retain unsupported imported key records with original identifie
 
 - **WHEN** an imported page contains a camera key while another cell's title is edited
 - **THEN** the camera record survives save and reload, shows unsupported status, and never starts a camera connection
+
+#### Scenario: Reserved JSON property names in compatibility payloads
+
+- **WHEN** an unsupported imported record contains own `__proto__`, `constructor`, or `prototype` JSON properties, including nested objects and arrays, and another field is edited
+- **THEN** those properties retain their original JSON values through save, snapshot publication, and reload without changing object inheritance or becoming executable
 
 ### Requirement: Later-phase profile CRUD and associations
 
