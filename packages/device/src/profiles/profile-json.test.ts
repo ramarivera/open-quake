@@ -74,6 +74,30 @@ describe("profile JSON records", () => {
 		expect(JSON.stringify(decoded)).not.toContain("draft mutation");
 		expect(Object.getPrototypeOf(input)).toBe(Object.prototype);
 	});
+	it.each([
+		["Date", () => new Date(0)],
+		["Map", () => new Map([["k", 1]])],
+		["Set", () => new Set([1])],
+		[
+			"class instance",
+			() =>
+				new (class Opaque {
+					readonly k = 1;
+				})(),
+		],
+	])("rejects a %s instead of silently decoding it to {}", (_name, make) => {
+		for (const schema of [ProfileJson, ProfileJsonObject]) {
+			expect(Either.isLeft(Schema.decodeUnknownEither(schema)(make()))).toBe(
+				true,
+			);
+			expect(
+				Either.isLeft(
+					Schema.decodeUnknownEither(ProfileJsonObject)({ nested: make() }),
+				),
+			).toBe(true);
+		}
+	});
+
 	it("rejects non-JSON values even inside reserved keys", () => {
 		for (const value of [
 			undefined,

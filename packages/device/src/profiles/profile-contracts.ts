@@ -25,11 +25,18 @@ export const ProfileJson: Schema.Schema<ProfileJson> = Schema.suspend(() =>
 		ProfileJsonObject,
 	),
 );
+const isJsonRecord = (input: unknown): input is Record<string, unknown> => {
+	if (!Predicate.isRecord(input)) return false;
+	const proto = Object.getPrototypeOf(input);
+	return proto === Object.prototype || proto === null;
+};
 const parseJsonObject: ParseResult.DeclarationDecodeUnknown<
 	{ readonly [key: string]: ProfileJson },
 	never
 > = (input, options, ast) => {
-	if (!Predicate.isRecord(input))
+	// Only plain or null-prototype records are JSON. Date/Map/Set/class instances
+	// would enumerate no entries and silently decode to {}.
+	if (!isJsonRecord(input))
 		return ParseResult.fail(new ParseResult.Type(ast, input));
 	return Effect.forEach(Object.entries(input), ([key, value]) =>
 		ParseResult.decodeUnknown(ProfileJson)(value, options).pipe(
