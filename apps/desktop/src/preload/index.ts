@@ -2,6 +2,7 @@ import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
 	type OpenQuakeBridge,
 	QUAKE_EVENT_CHANNEL,
+	QUAKE_STATUS_CHANNEL,
 	type QuakeEvent,
 } from "./quake";
 
@@ -13,6 +14,7 @@ const bridge: OpenQuakeBridge = {
 		const listener = (_: IpcRendererEvent, event: QuakeEvent): void =>
 			cb(event);
 		ipcRenderer.on(QUAKE_EVENT_CHANNEL, listener);
+		ipcRenderer.send(QUAKE_STATUS_CHANNEL);
 		return () => {
 			ipcRenderer.off(QUAKE_EVENT_CHANNEL, listener);
 		};

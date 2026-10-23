@@ -1,65 +1,119 @@
 import { EventEmitter } from "node:events";
-import type { QuakeEvent } from "../preload/quake";
+import { type DeviceEvent, QuakeDevice } from "@open-quake/device";
+import { Effect, Exit, type Scope, Stream } from "effect";
+import type {
+	DeviceStatusError,
+	DeviceStatusEvent,
+	QuakeEvent,
+} from "../preload/quake";
 
 export type { QuakeEvent } from "../preload/quake";
 
-/**
- * Device event bus for the prototype.
- *
- * MOCK SOURCE, clearly labeled: emits synthetic rotation/press/keep-alive
- * events on timers. A real transport can implement the same DeviceBus contract
- * for the panel renderer and management window.
- */
-const KEEPALIVE_INTERVAL_MS = 3000;
-
 export type DeviceBus = {
 	on(listener: (event: QuakeEvent) => void): () => void;
-	stop(): void;
+	currentStatus(): DeviceStatusEvent | undefined;
 };
 
-export function startDeviceBus(): DeviceBus {
-	const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
-	const timers: ReturnType<typeof setInterval>[] = [];
-	let seq = 0;
-	let direction: 1 | -1 = 1;
+export const DEVICE_RECONNECT_MS = 1000;
 
-	timers.push(
-		setInterval(() => {
-			if (Math.random() > 0.8) direction = direction === 1 ? -1 : 1;
-			emitter.emit("event", {
-				source: "mock",
-				kind: "rotate",
-				direction,
-			} satisfies QuakeEvent);
-		}, 1500),
-	);
-	timers.push(
-		setInterval(() => {
-			emitter.emit("event", {
-				source: "mock",
-				kind: "press",
-			} satisfies QuakeEvent);
-		}, 6000),
-	);
-	timers.push(
-		setInterval(() => {
-			seq += 1;
-			emitter.emit("event", {
-				source: "mock",
-				kind: "keepalive",
-				seq,
-			} satisfies QuakeEvent);
-		}, KEEPALIVE_INTERVAL_MS),
-	);
-
-	return {
-		on(listener) {
-			emitter.on("event", listener);
-			return () => emitter.off("event", listener);
-		},
-		stop() {
-			for (const t of timers) clearInterval(t);
-			emitter.removeAllListeners();
-		},
-	};
-}
+/** The caller's scope owns the supervisor and every connection it acquires. */
+export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
+	function* (): Effect.fn.Return<DeviceBus, never, QuakeDevice | Scope.Scope> {
+		const device = yield* QuakeDevice;
+		const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
+		let status: DeviceStatusEvent | undefined;
+		let sequence = 0;
+		yield* Effect.addFinalizer(() =>
+			Effect.sync(() => emitter.removeAllListeners()),
+		);
+		const publish = (event: QuakeEvent): Effect.Effect<void> =>
+			Effect.sync(() => {
+				if (event.kind === "status") status = event;
+				emitter.emit("event", event);
+			});
+		const reportError = (error: DeviceStatusError): Effect.Effect<void> =>
+			publish({
+				source: "hid",
+				kind: "status",
+				state: "error",
+				// Catalog policy marks diagnostic messages as not user-facing.
+				// Never send the Error object, paths, payloads or native cause.
+				error: { _tag: error._tag, code: error.code, category: error.category },
+			});
+		const forward = (event: DeviceEvent): Effect.Effect<void> => {
+			switch (event._tag) {
+				case "KnobRotate":
+					return publish({
+						source: "hid",
+						kind: "rotate",
+						direction: event.delta,
+					});
+				case "KnobPress":
+					return publish({ source: "hid", kind: "press", state: event.state });
+				case "Touch":
+					// Only the device layer's checksummed control envelope is supported.
+					// Opening a separate touch collection remains hardware-unverified.
+					return publish({
+						source: "hid",
+						kind: "touch",
+						points: event.points,
+					});
+				case "KeepAlive":
+					return publish({ source: "hid", kind: "keepalive", seq: ++sequence });
+				case "Disconnect":
+					return publish({
+						source: "hid",
+						kind: "status",
+						state: "disconnected",
+						reason: event.reason,
+					});
+			}
+		};
+		const connectAndForward = Effect.scoped(
+			Effect.gen(function* () {
+				// QuakeDevice filters VID/PID and usagePage/usage, selecting FF60/61
+				// rather than the system, consumer or keyboard HID collections.
+				const connection = yield* device.connect();
+				const events = yield* connection.subscribe();
+				let streamFinished = false;
+				// Explicit disconnect also exposes native close failures on teardown.
+				// On normal termination the stream already carries that same error.
+				yield* Effect.addFinalizer(() =>
+					connection
+						.disconnect()
+						.pipe(
+							Effect.catchTag("QuakeHidCloseFailed", (error) =>
+								streamFinished ? Effect.void : reportError(error),
+							),
+						),
+				);
+				yield* publish({ source: "hid", kind: "status", state: "connected" });
+				yield* Stream.runForEach(events, forward).pipe(
+					Effect.onExit((exit) =>
+						Effect.sync(() => {
+							streamFinished = !Exit.isInterrupted(exit);
+						}),
+					),
+				);
+			}),
+		).pipe(
+			Effect.matchEffect({
+				onSuccess: () => Effect.void,
+				onFailure: reportError,
+			}),
+		);
+		yield* Effect.forever(
+			connectAndForward.pipe(
+				Effect.zipRight(Effect.sleep(DEVICE_RECONNECT_MS)),
+			),
+		).pipe(Effect.forkScoped);
+		return {
+			on(listener) {
+				emitter.on("event", listener);
+				if (status) listener(status);
+				return () => emitter.off("event", listener);
+			},
+			currentStatus: () => status,
+		};
+	},
+);

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type DeviceBus, startDeviceBus } from "./deviceBus";
+import { type MockDeviceBus, startMockDeviceBus } from "./mockDeviceBus";
 
 describe("mock device bus", () => {
-	let bus: DeviceBus;
+	let bus: MockDeviceBus;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.spyOn(Math, "random").mockReturnValue(0);
-		bus = startDeviceBus();
+		bus = startMockDeviceBus();
 	});
 
 	afterEach(() => {

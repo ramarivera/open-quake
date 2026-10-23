@@ -5,6 +5,18 @@ import type {
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeDisplay } from "./test/display";
+import { report } from "./test/hid";
+
+const native = vi.hoisted(() => ({
+	layer: undefined as Layer.Layer<HidTransport> | undefined,
+}));
+vi.mock("@open-quake/device/node-hid", () => ({
+	get NodeHidLive() {
+		if (!native.layer)
+			throw new Error("Tests must inject the fake HID transport");
+		return native.layer;
+	},
+}));
 
 const electron = vi.hoisted(() => {
 	class Window {
@@ -14,7 +26,7 @@ const electron = vi.hoisted(() => {
 		}
 
 		destroyed = false;
-		webContents = { send: vi.fn() };
+		webContents = { send: vi.fn(), isDestroyed: () => this.destroyed };
 		loadURL = vi.fn();
 		loadFile = vi.fn();
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
@@ -38,9 +50,15 @@ const electron = vi.hoisted(() => {
 		BrowserWindow: Window,
 		app: {
 			whenReady: vi.fn(() => Promise.resolve()),
-			on: vi.fn<(event: string, listener: () => void) => void>(),
+			on: vi.fn<
+				(
+					event: string,
+					listener: (event: { preventDefault(): void }) => void,
+				) => void
+			>(),
 			quit: vi.fn(),
 		},
+		ipcMain: { on: vi.fn(), removeListener: vi.fn() },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -60,12 +78,14 @@ function displayEvent(name: string): void {
 	listener?.();
 }
 
-function appEvent(name: string): void {
+function appEvent(name: string) {
 	const listener = electron.app.on.mock.calls.find(
 		([event]) => event === name,
 	)?.[1];
 	expect(listener).toBeDefined();
-	listener?.();
+	const event = { preventDefault: vi.fn() };
+	listener?.(event);
+	return event;
 }
 
 function windows() {
@@ -86,15 +106,23 @@ describe("desktop window lifecycle", () => {
 	beforeEach(async () => {
 		vi.resetModules();
 		vi.useFakeTimers();
+		vi.stubEnv("ELECTRON_RENDERER_URL", "http://localhost:5173");
+		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
+		native.layer = (await Effect.runPromise(makeFakeHidTransport())).layer;
 		electron.BrowserWindow.windows = [];
 		electron.screen.getAllDisplays.mockReturnValue([primary]);
 		electron.screen.getPrimaryDisplay.mockReturnValue(primary);
 		await import("./index");
+		await vi.waitFor(() =>
+			expect(vi.getTimerCount()).toBeGreaterThanOrEqual(3),
+		);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		appEvent("before-quit");
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
 		vi.useRealTimers();
+		vi.unstubAllEnvs();
 	});
 
 	it("starts both surfaces on the primary display without panel hardware", () => {
@@ -187,8 +215,9 @@ describe("desktop window lifecycle", () => {
 		expect(management.webContents.send).not.toHaveBeenCalled();
 	});
 
-	it("unregisters display callbacks and stops the bus before quitting", () => {
+	it("unregisters display callbacks and stops the bus before quitting", async () => {
 		appEvent("before-quit");
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
 		for (const [event, listener] of electron.screen.on.mock.calls) {
 			expect(electron.screen.removeListener).toHaveBeenCalledWith(
 				event,
@@ -196,5 +225,183 @@ describe("desktop window lifecycle", () => {
 			);
 		}
 		expect(vi.getTimerCount()).toBe(0);
+	});
+});
+
+import type { HidTransport } from "@open-quake/device";
+import {
+	type FakeHidTransport,
+	makeFakeHidTransport,
+} from "@open-quake/device/fake";
+import { Deferred, Effect, type Layer } from "effect";
+
+describe("desktop main with the real device service and fake HID", () => {
+	let fake: FakeHidTransport;
+
+	beforeEach(async () => {
+		vi.resetModules();
+		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "");
+		vi.stubEnv("ELECTRON_RENDERER_URL", "http://localhost:5173");
+		fake = await Effect.runPromise(makeFakeHidTransport());
+		native.layer = fake.layer;
+		electron.BrowserWindow.windows = [];
+		const display = makeDisplay();
+		electron.screen.getAllDisplays.mockReturnValue([display]);
+		electron.screen.getPrimaryDisplay.mockReturnValue(display);
+	});
+
+	afterEach(async () => {
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		vi.unstubAllEnvs();
+	});
+
+	async function start(): Promise<void> {
+		await import("./index");
+		await vi.waitFor(() =>
+			expect(windows().panel.webContents.send).toHaveBeenCalledWith(
+				"quake:event",
+				{ source: "hid", kind: "status", state: "connected" },
+			),
+		);
+	}
+
+	it("defaults to HID, forwards to both windows, cleans up unplug and reconnects", async () => {
+		await start();
+		const { panel, management } = windows();
+		await Effect.runPromise(fake.emit(report(3, 1, [1])));
+		for (const window of [panel, management])
+			await vi.waitFor(() =>
+				expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "rotate",
+					direction: 1,
+				}),
+			);
+		await Effect.runPromise(
+			fake.failRead(new Error("token=private-native-cause")),
+		);
+		await vi.waitFor(() =>
+			expect(panel.webContents.send).toHaveBeenCalledWith("quake:event", {
+				source: "hid",
+				kind: "status",
+				state: "error",
+				error: {
+					_tag: "QuakeHidReadFailed",
+					code: "QUAKE.HID.READ_FAILED",
+					category: "dependency",
+				},
+			}),
+		);
+		expect(await Effect.runPromise(fake.closes)).toBe(1);
+		await vi.waitFor(
+			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
+			{ timeout: 3000 },
+		);
+		await Effect.runPromise(fake.emit(report(3, 2, [1])));
+		for (const window of [panel, management])
+			await vi.waitFor(() =>
+				expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "press",
+					state: 1,
+				}),
+			);
+		expect(
+			panel.webContents.send.mock.calls.every(
+				([, event]) => event.source === "hid",
+			),
+		).toBe(true);
+		expect(JSON.stringify(panel.webContents.send.mock.calls)).not.toContain(
+			"private-native-cause",
+		);
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		expect(await Effect.runPromise(fake.closes)).toBe(2);
+	});
+
+	it("keeps one handle for the remaining window, releases it when all windows close, and reacquires on activation", async () => {
+		await start();
+		const { panel, management } = windows();
+		panel.destroyed = true;
+		await Effect.runPromise(fake.emit(report(3, 2, [1])));
+		await vi.waitFor(() =>
+			expect(management.webContents.send).toHaveBeenCalledWith("quake:event", {
+				source: "hid",
+				kind: "press",
+				state: 1,
+			}),
+		);
+		expect(await Effect.runPromise(fake.closes)).toBe(0);
+		management.destroyed = true;
+		appEvent("window-all-closed");
+		await vi.waitFor(async () =>
+			expect(await Effect.runPromise(fake.closes)).toBe(1),
+		);
+		appEvent("activate");
+		await vi.waitFor(async () =>
+			expect(await Effect.runPromise(fake.opens)).toBe(2),
+		);
+		await Effect.runPromise(fake.emit(report(3, 1, [0])));
+		for (const window of electron.BrowserWindow.getAllWindows())
+			await vi.waitFor(() =>
+				expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "rotate",
+					direction: -1,
+				}),
+			);
+	});
+
+	it("replays status after preload subscribes or reloads", async () => {
+		await start();
+		const { panel } = windows();
+		panel.webContents.send.mockClear();
+		const handler = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === "quake:status",
+		)?.[1];
+		expect(handler).toBeDefined();
+		handler?.({ sender: panel.webContents });
+		expect(panel.webContents.send).toHaveBeenCalledExactlyOnceWith(
+			"quake:event",
+			{ source: "hid", kind: "status", state: "connected" },
+		);
+	});
+
+	it("holds quit and rapid window reactivation until native close finishes", async () => {
+		const closing = await Effect.runPromise(Deferred.make<void>());
+		const allowClose = await Effect.runPromise(Deferred.make<void>());
+		const { Layer: Layers } = await import("effect");
+		const { HidTransport: Transport } = await import("@open-quake/device");
+		native.layer = Layers.succeed(Transport, {
+			...fake.transport,
+			open: (info) =>
+				Effect.map(fake.transport.open(info), (handle) => ({
+					...handle,
+					close: () =>
+						Deferred.succeed(closing, undefined).pipe(
+							Effect.zipRight(Deferred.await(allowClose)),
+							Effect.zipRight(handle.close()),
+						),
+				})),
+		});
+		await start();
+		for (const window of electron.BrowserWindow.getAllWindows())
+			window.destroyed = true;
+		appEvent("window-all-closed");
+		appEvent("activate");
+		await Effect.runPromise(Deferred.await(closing));
+		expect(await Effect.runPromise(fake.opens)).toBe(1);
+		const event = appEvent("before-quit");
+		expect(event.preventDefault).toHaveBeenCalledOnce();
+		// Repeated quit requests must still wait for the same cleanup.
+		expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+		electron.app.quit.mockClear();
+		expect(await Effect.runPromise(fake.closes)).toBe(0);
+		await Effect.runPromise(Deferred.succeed(allowClose, undefined));
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+		expect(await Effect.runPromise(fake.closes)).toBe(1);
+		expect(await Effect.runPromise(fake.opens)).toBe(1);
+		expect(appEvent("before-quit").preventDefault).not.toHaveBeenCalled();
 	});
 });
