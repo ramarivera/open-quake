@@ -12,11 +12,11 @@ Non-goal: Do not choose a model catalog, copy DK-Suite engine code, or implement
 
 ## Decisions
 
-Proposed (pending Ramiro): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
+Approved (Ramiro, 2026-10-23): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
 
 ### Package ownership
 
-Proposed (pending Ramiro): use existing `packages/edge/src/ai/` for `ai-contracts`, `ai-invariants`, `ai-repository`, and `ai-service`, with adapter modules beneath it. This avoids introducing another package before a real consumer exists. Expose Schema-only contracts through a browser-safe export; `packages/client/` owns typed consumers. `apps/desktop/src/main/` owns the OS credential-store and optional Codex helper adapters. Renderer settings use redacted profile summaries.
+Approved (Ramiro, 2026-10-23): use existing `packages/edge/src/ai/` for `ai-contracts`, `ai-invariants`, `ai-repository`, and `ai-service`, with adapter modules beneath it. This avoids introducing another package before a real consumer exists. Expose Schema-only contracts through a browser-safe export; `packages/client/` owns typed consumers. `apps/desktop/src/main/` owns the OS credential-store and optional Codex helper adapters. Renderer settings use redacted profile summaries.
 
 `AiProviderService` owns capability checks, Config selection, SDK calls, and SDK-to-domain event normalization. Public methods use named Effect.fn spans and explicit success/error types. Repositories own profile persistence and opaque credential references. The root application composes declared service dependencies as Layers. `@effect/rpc` defines configuration and inference contracts; Electron preload is a thin allowlisted adapter. A future HTTP/SSE edge uses Elysia over the same contracts.
 
@@ -30,9 +30,9 @@ Normalize the SDK stream to text deltas, optional follow-up suggestions, usage, 
 
 Official documentation read on 2026-10-23 establishes a Codex-managed device flow. The documented app-server request is `account/login/start` with `type: chatgptDeviceCode`; its response includes `loginId`, `verificationUrl`, and `userCode`. Completion arrives through `account/login/completed`, cancellation uses `account/login/cancel`, and logout uses `account/logout`. The CLI also documents `codex login --device-auth`.
 
-Proposed (pending Ramiro): use a user-installed, version-checked Codex app-server helper with an application-owned credential namespace. Keep OAuth tokens inside that helper. A custom Vercel AI SDK provider bridge must prove text-only inference, cancellation, capability reporting, no unsolicited host tools, and grant isolation. Login success alone does not make an inference profile ready. Do not extract a bearer token and feed it to an arbitrary OpenAI-compatible endpoint.
+Approved (Ramiro, 2026-10-23): use a user-installed, version-checked Codex app-server helper with an application-owned credential namespace. Keep OAuth tokens inside that helper. A custom Vercel AI SDK provider bridge must prove text-only inference, cancellation, capability reporting, no unsolicited host tools, and grant isolation. Login success alone does not make an inference profile ready. Do not extract a bearer token and feed it to an arbitrary OpenAI-compatible endpoint.
 
-Official docs recommend migration to Sign in with ChatGPT and describe restrictions on app-server authentication. They establish neither approval for a new open-quake integration nor an off-the-shelf Vercel adapter. Proposed (pending Ramiro): validate the supported integration and usage terms before enabling this route; keep its status `unavailable` with a reason if the bridge cannot be established. Retain device-login product intent without substituting another auth product silently. BYO-key operation remains independent.
+Official docs recommend migration to Sign in with ChatGPT and describe restrictions on app-server authentication. They establish neither approval for a new open-quake integration nor an off-the-shelf Vercel adapter. Approved (Ramiro, 2026-10-23): validate the supported integration and usage terms before enabling this route; keep its status `unavailable` with a reason if the bridge cannot be established. Retain device-login product intent without substituting another auth product silently. BYO-key operation remains independent.
 
 Login states are signedOut, starting, awaitingUser, ready, expired, cancelled, and failed. Each attempt has a new ID. The helper owns polling/token refresh. A local ten-minute watchdog bounds an attempt when the helper provides no earlier expiry. Ignore stale completion notifications. Logout invalidates queued requests for that auth generation; active requests terminate with auth revocation, never restart with another credential.
 
@@ -66,10 +66,10 @@ Deliberately replace geo-seeded selection, account credits, MQTT keys, cloud mod
 
 ## Open decisions and verification
 
-- Proposed (pending Ramiro): approve package locations above and the Codex helper/custom-provider bridge only after a focused integration spike.
-- Proposed (pending Ramiro): macOS Keychain-backed credential storage; Linux Secret Service day 2. If secure storage is unavailable, use an explicitly selected in-memory session, never plaintext fallback.
-- Proposed (pending Ramiro): require HTTPS for remote providers, allow HTTP only for explicit loopback profiles, and refuse credential-bearing cross-origin redirects.
-- Proposed (pending Ramiro): SDK major version and adapter package set are chosen and pinned during implementation. No dependency is added by this PR.
+- Approved (Ramiro, 2026-10-23): approve package locations above and the Codex helper/custom-provider bridge only after a focused integration spike.
+- Approved (Ramiro, 2026-10-23): macOS Keychain-backed credential storage; Linux Secret Service day 2. If secure storage is unavailable, use an explicitly selected in-memory session, never plaintext fallback.
+- Approved (Ramiro, 2026-10-23): require HTTPS for remote providers, allow HTTP only for explicit loopback profiles, and refuse credential-bearing cross-origin redirects.
+- Approved (Ramiro, 2026-10-23): SDK major version and adapter package set are chosen and pinned during implementation. No dependency is added by this PR.
 
 Use mock SDK/credential/helper Layers and a fake clock. Acceptance must drive a real chat consumer through profile selection, outbound request, stream, cancellation, and safe failure serialization. Live provider compatibility, actual device login, OS credential stores, and Linux behavior are unverified.
 

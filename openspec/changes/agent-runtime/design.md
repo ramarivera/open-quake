@@ -4,7 +4,7 @@
 
 Agents are later-phase. The first release must run normal chat and direct knob voice with no runtime installation, gateway, agent catalog download, or marketplace account. A persisted agent-route action is visibly unavailable rather than silently mapped to normal chat.
 
-Proposed (pending Ramiro): build an in-process tool-calling loop over the existing Vercel AI SDK provider facade. It reuses ChatService sessions, local storage, capabilities, and error policies. This follows the atlas's suggested replacement path and avoids a mandatory installer for a partially known gateway. An optional user-managed OpenClaw compatibility adapter may follow after protocol research; choosing it is not settled product direction.
+Approved (Ramiro, 2026-10-23): build an in-process tool-calling loop over the existing Vercel AI SDK provider facade. It reuses ChatService sessions, local storage, capabilities, and error policies. This follows the atlas's suggested replacement path and avoids a mandatory installer for a partially known gateway. An optional user-managed OpenClaw compatibility adapter may follow after protocol research; choosing it is not settled product direction.
 
 Alternative considered: bundle OpenClaw plus Node/Python/Git installers and preserve DK-Suite gateway behavior. That adds a large lifecycle and unverified protocol dependency before a basic chat loop is proven. Alternative considered: translate model text into shell commands. Reject this because text is not a validated tool invocation or authorization.
 
@@ -16,11 +16,11 @@ Non-goal: Do not redistribute recovered agent workspaces or make an unknown gate
 
 ## Decisions
 
-Proposed (pending Ramiro): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
+Approved (Ramiro, 2026-10-23): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
 
 ### Package ownership and conductor boundaries
 
-Proposed (pending Ramiro): `packages/edge/src/agents/` holds agent contracts, pure run/tool invariants, repository, AgentService, and an optional gateway adapter. AI calls still use `AiProviderService`; no `@effect/ai` or raw SDK reaches tools/UI. `packages/client/` exposes typed registry/session/connection subscriptions. Desktop main provides optional runtime process and host capability adapters; renderer owns agent picker, confirmation controls, and cards.
+Approved (Ramiro, 2026-10-23): `packages/edge/src/agents/` holds agent contracts, pure run/tool invariants, repository, AgentService, and an optional gateway adapter. AI calls still use `AiProviderService`; no `@effect/ai` or raw SDK reaches tools/UI. `packages/client/` exposes typed registry/session/connection subscriptions. Desktop main provides optional runtime process and host capability adapters; renderer owns agent picker, confirmation controls, and cards.
 
 AgentService declares its dependencies and named Effect.fn methods. Contracts/RPC are Schema-first and errors use shared catalog leaves with private original causes and scrubbed projections. Root Layers choose runtime backend once. A capability registry is the sole binding from tool name to input Schema, permission, autonomy, gate, and Effect. Domain services own actual file/profile/host/HA operations.
 
@@ -36,7 +36,7 @@ Each agent has isolated conversation/session storage keyed by agent ID and revis
 
 Run states are queued, running, awaitingConfirmation, completed, failed, cancelled, timedOut. A tool invocation has runId, toolCallId, capability ID, validated input, status, and result/error. Accumulate argument deltas until a complete structured call is available; Schema-decode before any dispatch. A tool result is returned to the model only once, and only after real execution. User decline returns a typed denied tool result. Tool output is untrusted data and cannot grant access to another capability.
 
-Proposed (pending Ramiro): allow at most 8 model steps and 16 tool calls per run, at most one active host-mutating tool, 30s per tool, 120s waiting for confirmation, and a 300s absolute run deadline from acceptance, including confirmation time. Each provider step has a 60s deadline capped by remaining run time. Whichever deadline expires first wins. AgentService uses the shared conversation/event contracts under an explicit agent execution class; the direct-normal-chat 60s whole-turn handler does not wrap this loop. Intermediate tool/model steps do not emit outward chat end chunks. A single tool may specify a stricter registered timeout. Hitting a budget stops further dispatch and ends with a stable budget/deadline outcome.
+Approved (Ramiro, 2026-10-23): allow at most 8 model steps and 16 tool calls per run, at most one active host-mutating tool, 30s per tool, 120s waiting for confirmation, and a 300s absolute run deadline from acceptance, including confirmation time. Each provider step has a 60s deadline capped by remaining run time. Whichever deadline expires first wins. AgentService uses the shared conversation/event contracts under an explicit agent execution class; the direct-normal-chat 60s whole-turn handler does not wrap this loop. Intermediate tool/model steps do not emit outward chat end chunks. A single tool may specify a stricter registered timeout. Hitting a budget stops further dispatch and ends with a stable budget/deadline outcome.
 
 Read-only tools may run automatically only when explicitly declared auto and enabled by the agent allowlist. Write/sensitive tools require confirmation by default. Never-policy tools are rejected without executing. Confirmation binds runId, toolCallId, capability ID, exact normalized arguments, selected targets, and a nonce. Any changed target or arguments requires a new confirmation; duplicate clicks cannot run a tool twice. A later confirmation after cancellation/expiry is stale.
 
@@ -46,7 +46,7 @@ Cancellation interrupts provider streams and cancellable tools, revokes pending 
 
 Use `ai-chat-core` v1 chunks for answer/followUp/end. A separate typed agent event stream carries run status and tool cards keyed by runId/toolCallId, with ordered per-run event IDs and snapshot recovery. It does not inject new chunk kinds into the chat protocol. Cards show requested capability, safe argument summary, permission status, and actual pending/running/succeeded/failed/denied state. Escape tool output and truncate previews; no command executes from a text card or markdown parser.
 
-Proposed (pending Ramiro): desktop confirmation is the initial control; the panel displays status with a link to the desktop. Add panel approval only after touch identity and deliberate activation are verified by the panel/device lane. Knob dkclaw dispatch passes its pinned agent/model and transcript to this same runtime. Agent switching never resets another agent's device conversation implicitly.
+Approved (Ramiro, 2026-10-23): desktop confirmation is the initial control; the panel displays status with a link to the desktop. Add panel approval only after touch identity and deliberate activation are verified by the panel/device lane. Knob dkclaw dispatch passes its pinned agent/model and transcript to this same runtime. Agent switching never resets another agent's device conversation implicitly.
 
 ### Optional OpenClaw compatibility boundary
 
@@ -67,9 +67,9 @@ Deliberately drop mandatory bundled runtime/installer, cloud marketplace/sharing
 
 ## Open decisions and verification
 
-- Proposed (pending Ramiro): approve in-process runtime as the default replacement and keep OpenClaw compatibility optional and later.
-- Proposed (pending Ramiro): approve step/tool/deadline budgets, explicit enablement, and desktop-only first approval controls.
-- Proposed (pending Ramiro): choose the initial newly authored template catalog and tool allowlists with the owning action domains.
+- Approved (Ramiro, 2026-10-23): approve in-process runtime as the default replacement and keep OpenClaw compatibility optional and later.
+- Approved (Ramiro, 2026-10-23): approve step/tool/deadline budgets, explicit enablement, and desktop-only first approval controls.
+- Approved (Ramiro, 2026-10-23): choose the initial newly authored template catalog and tool allowlists with the owning action domains.
 
 Use a deterministic mock model that emits fragmented tool calls, malformed arguments, repeated IDs, and multi-step results. Drive the real capability consumer to prove execution and refusal, not just Layer provision. Verify switch/reset isolation, late confirmation, timeout, non-cancellable operations, and restart ambiguity. Live gateway protocol, recovered template contents, hardware touch approvals, and Linux runtime integration are unverified.
 

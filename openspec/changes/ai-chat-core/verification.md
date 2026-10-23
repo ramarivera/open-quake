@@ -6,7 +6,7 @@ Verified on 2026-10-23 in branch `lane/specs-ai-voice`. This report covers plann
 
 Seven new changes: ai-provider-facade, ai-chat-core, ai-chat-modes, voice-stt-tts, knob-push-to-talk, agent-runtime, and soundboard-playback. Each contains proposal.md, design.md, tasks.md, a capability spec, and OpenSpec metadata. The chat-core directory also contains this report and the parent Beads handoff. Existing change directories, source files, hooks, dependency manifests, and tracker data were not edited.
 
-The specifications contain 58 SHALL requirements, 77 WHEN/THEN scenarios, and 67 unchecked implementation tasks. Every design marks unsettled decisions as `Proposed (pending Ramiro)` and records package ownership, evidence tiers, deliberate replacements, risks, and migration/rollback.
+The specifications contain 58 SHALL requirements, 77 WHEN/THEN scenarios, and 67 unchecked implementation tasks. Every design marks unsettled decisions as `Approved (Ramiro, 2026-10-23)` and records package ownership, evidence tiers, deliberate replacements, risks, and migration/rollback.
 
 ## Commands and observed results
 

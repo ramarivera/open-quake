@@ -4,7 +4,7 @@
 
 The first release enables normal text chat, local history, streaming management/panel views, and optional speech as a separate caller. `ai-provider-facade` owns inference; this domain owns sessions and turns. It does not own HID encoders, host automation, or runtime tool execution.
 
-Proposed (pending Ramiro): `packages/edge/src/chat/` holds contracts, pure reducer/context invariants, repository, and ChatService. A Schema-only browser export supplies `packages/client/` with typed RPC clients and stream reducers. `apps/desktop/src/main/` provides local storage and window adapters; the renderer owns presentation and GT strings. All public service methods use Effect.fn names, explicit Effect results, declared dependencies, and app-root Layers. `@effect/rpc` is the contract source; preload validates caller, method, input, and subscription identity.
+Approved (Ramiro, 2026-10-23): `packages/edge/src/chat/` holds contracts, pure reducer/context invariants, repository, and ChatService. A Schema-only browser export supplies `packages/client/` with typed RPC clients and stream reducers. `apps/desktop/src/main/` provides local storage and window adapters; the renderer owns presentation and GT strings. All public service methods use Effect.fn names, explicit Effect results, declared dependencies, and app-root Layers. `@effect/rpc` is the contract source; preload validates caller, method, input, and subscription identity.
 
 ## Goals / Non-goals
 
@@ -14,7 +14,7 @@ Non-goal: Do not couple session state to floating-window visibility or design a 
 
 ## Decisions
 
-Proposed (pending Ramiro): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
+Approved (Ramiro, 2026-10-23): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
 
 ### Chunk protocol v1
 
@@ -26,13 +26,13 @@ SDK events are mapped once by ChatService, then fanned out to views. Duplicate s
 
 EMPTY means no active conversation context. ONGOING means a session has accepted input/capture preparation and has not dispatched inference. PROCESSING means inference or turn finalization owns the turn. IDLE means a finished turn retains context for another input. Text acceptance briefly enters ONGOING before PROCESSING. Voice can remain ONGOING until a nonempty final transcript arrives. Cancellation/failure before any exchange returns EMPTY; otherwise it returns IDLE. Explicit close releases active context and enters EMPTY while retaining local history. Clearing history is a separate action. App restart turns unfinished persisted requests into interrupted records and never resumes network requests automatically.
 
-Proposed (pending Ramiro): serialize one active turn per conversation. A second submit returns `CHAT.SESSION.BUSY`, rather than queueing an invisible request. Independent conversations may run concurrently within a configured provider limit. A route/session identifier prevents one device or assistant window from cancelling another conversation.
+Approved (Ramiro, 2026-10-23): serialize one active turn per conversation. A second submit returns `CHAT.SESSION.BUSY`, rather than queueing an invisible request. Independent conversations may run concurrently within a configured provider limit. A route/session identifier prevents one device or assistant window from cancelling another conversation.
 
 ### Deadlines and context
 
-Recovered constants provide 60 seconds ordinary and five minutes long. Proposed (pending Ramiro): treat these as absolute end-to-end turn deadlines measured with a monotonic clock from acceptance. Only explicitly enabled long modes or agent runs may select 300 seconds. Direct normal chat uses 60 seconds, including provider setup. AgentService owns its outward run deadline and reuses the conversation/event contracts without nesting a direct-chat timeout around the whole tool loop. Each deadline aborts upstream work, emits one timedOut end, and excludes partial output from future model context. A timeout is never reset by a delta. Do not adopt the recovered `SESSION_EXPIRE_TIMEOUT: 100` accompanied by a contradictory five-second comment.
+Recovered constants provide 60 seconds ordinary and five minutes long. Approved (Ramiro, 2026-10-23): treat these as absolute end-to-end turn deadlines measured with a monotonic clock from acceptance. Only explicitly enabled long modes or agent runs may select 300 seconds. Direct normal chat uses 60 seconds, including provider setup. AgentService owns its outward run deadline and reuses the conversation/event contracts without nesting a direct-chat timeout around the whole tool loop. Each deadline aborts upstream work, emits one timedOut end, and excludes partial output from future model context. A timeout is never reset by a delta. Do not adopt the recovered `SESSION_EXPIRE_TIMEOUT: 100` accompanied by a contradictory five-second comment.
 
-Proposed (pending Ramiro): retain context until explicit close, clear, or configured idle expiry, default 30 minutes. Idle expiry releases in-memory context, not saved history. The repository atomically records the user turn, partial assistant text/outcome, and final status. Only completed user/assistant pairs enter subsequent context; failed/cancelled partial output stays visible in history with its outcome. Reset or deletion invalidates in-flight title writes and stream updates.
+Approved (Ramiro, 2026-10-23): retain context until explicit close, clear, or configured idle expiry, default 30 minutes. Idle expiry releases in-memory context, not saved history. The repository atomically records the user turn, partial assistant text/outcome, and final status. Only completed user/assistant pairs enter subsequent context; failed/cancelled partial output stays visible in history with its outcome. Reset or deletion invalidates in-flight title writes and stream updates.
 
 Budget prompt tokens before dispatch. Preserve system instructions and the new user input, reserve model output, and remove oldest complete pairs until within the configured model window. If the fixed inputs do not fit, return `CHAT.CONTEXT.TOO_LARGE` before I/O. Label approximate counts as estimates; provider usage remains reported usage. A model-specific tokenizer is optional, so `tiktoken` is not a blanket dependency.
 
@@ -40,11 +40,11 @@ Budget prompt tokens before dispatch. Preserve system instructions and the new u
 
 One assembled turn feeds the management window and the panel from `panel-window-prototype`. Simple markdown supports paragraphs, headings, lists, emphasis, and fenced code as text. Escape raw HTML. Do not execute generated commands, open files, or fetch remote images while rendering. User-activated HTTP(S) links cross a host URL validator. Streaming never steals panel scroll position when the user has scrolled away from the bottom.
 
-Proposed (pending Ramiro): ship management chat and the existing panel first; add an opt-in draggable/resizable assistant window later. Store window geometry locally and clamp restored bounds to connected displays. Voice capture must not require the floating window to be visible.
+Approved (Ramiro, 2026-10-23): ship management chat and the existing panel first; add an opt-in draggable/resizable assistant window later. Store window geometry locally and clamp restored bounds to connected displays. Voice capture must not require the floating window to be visible.
 
 General Translation supplies bundled local en/de strings and source-English fallback. Settings, errors, states, controls, and tool-card chrome are localized without a runtime translation service. Locale changes update both windows; user content and generations remain verbatim. Read `app.getLocale()` only to seed a local preference, never to change provider geography. Coordinate shared GT infrastructure with its owning lane; this change specifies chat consumption only.
 
-Proposed (pending Ramiro): create an immediate local title from the first user message and offer optional model-generated titles later. The cited recovered title helper translates preset labels; it does not establish first-exchange summarization. Generated title failure must not fail or overwrite a renamed conversation.
+Approved (Ramiro, 2026-10-23): create an immediate local title from the first user message and offer optional model-generated titles later. The cited recovered title helper translates preset labels; it does not establish first-exchange summarization. Generated title failure must not fail or overwrite a renamed conversation.
 
 ### Inventory sections 4-6 ownership index
 
@@ -85,9 +85,9 @@ Replace numeric state/IPC leakage, global assistant coupling, the contradictory 
 
 ## Open decisions and verification
 
-- Proposed (pending Ramiro): approve the event envelope, subscriber limit, one-turn concurrency, local history retention, and 30-minute idle expiry.
-- Proposed (pending Ramiro): approve the initial panel markdown subset and staged floating assistant/title generation.
-- Proposed (pending Ramiro): select local repository format during implementation; require atomic finalization and schema-versioned migration regardless of format.
+- Approved (Ramiro, 2026-10-23): approve the event envelope, subscriber limit, one-turn concurrency, local history retention, and 30-minute idle expiry.
+- Approved (Ramiro, 2026-10-23): approve the initial panel markdown subset and staged floating assistant/title generation.
+- Approved (Ramiro, 2026-10-23): select local repository format during implementation; require atomic finalization and schema-versioned migration regardless of format.
 
 Use fake provider/clock/repository Layers plus real preload/client reducers. Test interleaved conversations, cancellation at every state, slow subscribers, timeout boundaries, restart recovery, and locale changes. Hardware display/touch and Linux window behavior remain unverified. Source inspection and OpenSpec validation establish the plan, not functioning chat.
 

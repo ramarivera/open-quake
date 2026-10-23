@@ -4,7 +4,7 @@
 
 Soundboard is later-phase section 5 parity. First-release normal chat and direct voice do not depend on it. The section 8 complete DK-Player profile, meeting recorder, and audio editing/merge workflows remain outside this change. Recovered IPC names for merging do not establish a merge algorithm.
 
-Proposed (pending Ramiro): `packages/edge/src/media/` owns soundboard contracts, playlist/migration invariants, repository, and SoundboardService. Desktop main owns user file selection and existence validation; a desktop audio adapter owns decoding/output. The profile domain registers playAudio. `packages/client/` provides typed status/control clients. AudioOutput from `voice-stt-tts` arbitrates output ownership; sharing its contract must not import AI provider logic into soundboard. Conductors use Effect.fn spans, declared Layers, Schema-first RPC, and catalog errors with scrubbed original causes.
+Approved (Ramiro, 2026-10-23): `packages/edge/src/media/` owns soundboard contracts, playlist/migration invariants, repository, and SoundboardService. Desktop main owns user file selection and existence validation; a desktop audio adapter owns decoding/output. The profile domain registers playAudio. `packages/client/` provides typed status/control clients. AudioOutput from `voice-stt-tts` arbitrates output ownership; sharing its contract must not import AI provider logic into soundboard. Conductors use Effect.fn spans, declared Layers, Schema-first RPC, and catalog errors with scrubbed original causes.
 
 ## Goals / Non-goals
 
@@ -14,25 +14,25 @@ Non-goal: Do not require a model provider, recursively scan folders, or implemen
 
 ## Decisions
 
-Proposed (pending Ramiro): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
+Approved (Ramiro, 2026-10-23): the draft specifications encode the recommendations below. Supplied product direction is fixed; other design choices await acceptance before implementation. Evidence labels describe recovered observations, not approval of the proposed replacements.
 
 ### Configuration and migration
 
-Recovered sound values accept a JSON array of MP3 paths or a single legacy MP3 path. Proposed (pending Ramiro): version 1 stores ordered local file references, a named operation, fadeInMs/fadeOutMs, and volume 0..100. Imports parse explicit files only, keep order, reject malformed JSON/directories, and classify missing/unreadable paths for user repair. Do not recursively scan directories or fetch remote URLs. Resolve user-selected references in the host, not from raw renderer paths.
+Recovered sound values accept a JSON array of MP3 paths or a single legacy MP3 path. Approved (Ramiro, 2026-10-23): version 1 stores ordered local file references, a named operation, fadeInMs/fadeOutMs, and volume 0..100. Imports parse explicit files only, keep order, reject malformed JSON/directories, and classify missing/unreadable paths for user repair. Do not recursively scan directories or fetch remote URLs. Resolve user-selected references in the host, not from raw renderer paths.
 
 Recovered audioAction numeric semantics and the audioFade `0-0` encoding are not proven by the inspected default configuration. Do not assign guessed meanings. Import recognized sound paths and volume; mark unknown action/fade values needsConfiguration. The user chooses a named operation/fade before saving. Repeating migration yields the same result.
 
 ### Playback state and operations
 
-Proposed (pending Ramiro): states are idle, loading, playing, paused, stopped, failed, with playbackId, playlist revision, track index, volume, and fade metadata. Named operations are play, pause, resume, stop, next, previous. Play starts at the first selected track; pause/resume preserves position; stop resets position; next/previous clamp at playlist bounds. Natural end advances once to the next track, or stops at the end. No shuffle or repeat is implied.
+Approved (Ramiro, 2026-10-23): states are idle, loading, playing, paused, stopped, failed, with playbackId, playlist revision, track index, volume, and fade metadata. Named operations are play, pause, resume, stop, next, previous. Play starts at the first selected track; pause/resume preserves position; stop resets position; next/previous clamp at playlist bounds. Natural end advances once to the next track, or stops at the end. No shuffle or repeat is implied.
 
-Volume 0..100 maps to gain 0..1. Apply fade-in on play/resume and fade-out on stop/pause, bounded to 0..10,000ms. Proposed (pending Ramiro): start with linear gain ramps. A new command cancels the old ramp and begins from current gain; no delayed fade callback can affect another playbackId. Zero volume remains a valid playing state. Mute is not an inferred stop.
+Volume 0..100 maps to gain 0..1. Apply fade-in on play/resume and fade-out on stop/pause, bounded to 0..10,000ms. Approved (Ramiro, 2026-10-23): start with linear gain ramps. A new command cancels the old ramp and begins from current gain; no delayed fade callback can affect another playbackId. Zero volume remains a valid playing state. Mute is not an inferred stop.
 
 Loading times out at 10s. The player signals ready/loadError/naturalEnd/stop with matching IDs. A repeated naturalEnd cannot skip two tracks. A rescan checks only the existing explicit file list and does not restart playback. It publishes per-entry availability; a currently playing decoded file may finish, while a removed upcoming file fails visibly before it starts. All unavailable/empty playlists fail before output acquisition.
 
 ### Audio output and concurrency
 
-Soundboard takes one AudioOutput lease. Voice capture stops it immediately, bypassing user fade durations, and blocks new soundboard play until the mic releases. Proposed (pending Ramiro): require explicit play after capture rather than auto-resume. Speech output takes precedence over new soundboard play; report busy rather than mixing unrequested audio. Stopping soundboard must never stop another output owner's TTS.
+Soundboard takes one AudioOutput lease. Voice capture stops it immediately, bypassing user fade durations, and blocks new soundboard play until the mic releases. Approved (Ramiro, 2026-10-23): require explicit play after capture rather than auto-resume. Speech output takes precedence over new soundboard play; report busy rather than mixing unrequested audio. Stopping soundboard must never stop another output owner's TTS.
 
 Catalog errors include `MEDIA.SOUNDBOARD.CONFIG_INVALID`, `MEDIA.SOUNDBOARD.FILE_UNAVAILABLE`, `MEDIA.SOUNDBOARD.LOAD_TIMEOUT`, `MEDIA.SOUNDBOARD.OUTPUT_BUSY`, and `MEDIA.SOUNDBOARD.PLAY_FAILED`. Diagnostics use file IDs and outcome codes, not absolute paths. UI state/error strings use the shared bundled GT messages; file names remain user content.
 
@@ -49,8 +49,8 @@ Replace opaque numeric controls with named actions, silent missing-file filterin
 
 ## Open decisions and verification
 
-- Proposed (pending Ramiro): approve named operations, non-looping playlist behavior, linear fade bounds, and voice/TTS precedence.
-- Proposed (pending Ramiro): MP3 first to match recovered file handling; other codecs need separate capability tests.
+- Approved (Ramiro, 2026-10-23): approve named operations, non-looping playlist behavior, linear fade bounds, and voice/TTS precedence.
+- Approved (Ramiro, 2026-10-23): MP3 first to match recovered file handling; other codecs need separate capability tests.
 
 Use an injected filesystem/player/clock to test action sequences, fade interruption, missing files, stale callbacks, rescan, and shared audio focus through actual profile dispatch. Live codecs, sound-card output, physical device controls, and Linux audio are unverified.
 
