@@ -15,12 +15,13 @@ import {
 	findKnobCapability,
 	KNOB_OWNED_CAPABILITIES,
 	type KnobRegistry,
+	supportsKnobSlot,
 } from "./knob-registry.js";
 import {
 	cloneKnobJson,
 	legacyKnobRoute,
 	migrateKnobVoiceActions,
-} from "./knob-route-invariants.js";
+} from "./knob-voice-migration.js";
 
 export const emptyKnobSlot = (): typeof EmptyKnobSlot.Type => ({
 	childrenName: "",
@@ -103,7 +104,8 @@ export function validateKnobResource(
 	})(input);
 	if (Either.isLeft(decoded))
 		return Either.left(InvalidKnobConfig.fromCause(decoded.left));
-	for (const slot of decoded.right.config.subActions) {
+	for (const name of slotNames) {
+		const slot = decoded.right.config.subActions[KNOB_SLOT_INDEX[name]];
 		if (slot.config.type === "") continue;
 		const assignment = Schema.decodeUnknownEither(KnobFunction)(slot);
 		if (Either.isLeft(assignment))
@@ -114,6 +116,10 @@ export function validateKnobResource(
 		);
 		if (Option.isNone(capability))
 			return Either.left(InvalidKnobConfig.fromCause("unregistered-function"));
+		if (!supportsKnobSlot(capability.value, name))
+			return Either.left(
+				InvalidKnobConfig.fromCause("unsupported-slot-capability"),
+			);
 		const valid = capability.value.validate(assignment.right);
 		if (Either.isLeft(valid)) return Either.left(valid.left);
 	}
@@ -203,12 +209,16 @@ export function migrateKnobResource(
 		if (options.navigationContext && (type === "pageUp" || type === "pageDown"))
 			type = type === "pageUp" ? "previousPage" : "nextPage";
 		let actions = oldConfig.actions;
+		let voiceActive = true;
 		let unknownRoute = false;
 		if (type === "assistant") {
-			const voice = migrateKnobVoiceActions(actions ?? []);
+			const voice = migrateKnobVoiceActions(
+				actions === undefined ? [] : actions,
+			);
 			if (Either.isLeft(voice)) return Either.left(voice.left);
 			actions = [...voice.right.actions];
-			unknownRoute = !voice.right.active;
+			voiceActive = voice.right.active;
+			unknownRoute = voice.right.diagnostics.includes("unknown-route");
 		}
 		const candidate = {
 			childrenName:
@@ -226,8 +236,10 @@ export function migrateKnobResource(
 				? findKnobCapability(registry, type)
 				: Option.none();
 		const valid =
+			voiceActive &&
 			Either.isRight(decoded) &&
 			Option.isSome(capability) &&
+			supportsKnobSlot(capability.value, name) &&
 			Either.isRight(capability.value.validate(decoded.right));
 		if (!valid || unknownRoute) {
 			if (raw !== undefined) inactiveSlots[name] = raw;

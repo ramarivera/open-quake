@@ -33,7 +33,7 @@ Create parent-owned Beads epic and one issue per checkbox, each linking this dir
 ## W4 implementation evidence
 
 - 1.1: approval record reconciled in proposal/design/spec; `openspec validate knob-configuration` passes. Hardware direction, panel target/native range/readback, and hold timing remain unverified.
-- 1.2 and 1.4: `packages/device/src/knob/knob-contracts.ts`, `knob-invariants.ts`, and `knob-route-invariants.ts`; property/fixture evidence in `packages/device/test/knob/knob-contracts.test.ts`. Supported import shapes and compatibility retention are documented in `packages/device/src/knob/README.md`.
+- 1.2 and 1.4: `packages/device/src/knob/knob-contracts.ts`, `knob-invariants.ts`, and `knob-voice-migration.ts`; property/fixture evidence in `packages/device/test/knob/knob-contracts.test.ts`. Supported import shapes and compatibility retention are documented in `packages/device/src/knob/README.md`.
 - 2.1 contract side: `KnobSession`, `KnobEvent`, `KnobSnapshot`, and `KnobDispatchCommand` plus the written normalized integration contract in the module README. The checkbox remains open pending L1/voice adapter agreement and verification. No protocol files changed.
 - 2.2: `packages/device/src/knob/knob-service.ts`, routing invariants, module-local catalog leaves, and registry validation. `packages/device/test/knob/knob-service.test.ts` drives the dispatch callback and proves focused precedence, one route per detent, empty no-op, short-release classification, stale ownership, and scrubbed dependency failures. Ports fail closed until the composition root supplies adapters.
 

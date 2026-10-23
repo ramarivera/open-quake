@@ -17,6 +17,7 @@ import {
 	KnobRouteIncomplete,
 	KnobService,
 	KnobSessionStale,
+	migrateKnobResource,
 } from "../../src/knob/index.js";
 import {
 	brightness,
@@ -38,6 +39,43 @@ const run = (h: ReturnType<typeof harness>, event: unknown) =>
 const hold = { _tag: "HoldStart", session, pressId: press.pressId } as const;
 
 describe("knob conductor dispatch consumer", () => {
+	it.effect(
+		"dispatches valid sibling slots after an unsupported voice import",
+		() =>
+			Effect.gen(function* () {
+				for (const actions of [
+					[{ type: "voiceRoute", value: 42 }],
+					voice().config.actions,
+				]) {
+					const imported = migrateKnobResource({
+						keyCode: "0,1",
+						config: {
+							type: "knob",
+							subActions: [
+								null,
+								{
+									childrenName: "assistant",
+									config: { type: "assistant", actions },
+								},
+								nextPage,
+							],
+						},
+					});
+					expect(Either.isRight(imported)).toBe(true);
+					if (Either.isLeft(imported)) return yield* imported.left;
+					const h = harness(snapshot(imported.right.resource));
+					const result = yield* run(h, rotate());
+					expect(result).toEqual({ dispatched: 1, ignored: 0 });
+					expect(h.commands).toHaveLength(1);
+					expect(h.commands[0]).toMatchObject({
+						route: "right",
+						assignment: nextPage,
+					});
+					yield* run(h, rotate(1, "counterclockwise"));
+					expect(h.commands).toHaveLength(1);
+				}
+			}),
+	);
 	it.effect.prop(
 		"routes each focused detent once, using the selected directional action",
 		[fc.integer({ min: 1, max: 15 }), fc.boolean()],

@@ -3,6 +3,7 @@ import { Either, FastCheck as fc, Option, Schema } from "effect";
 import {
 	emptyKnobSlot,
 	extractLegacyKnob,
+	InvalidKnobConfig,
 	KnobEvent,
 	KnobImport,
 	KnobJson,
@@ -91,6 +92,53 @@ describe("knob contracts", () => {
 			},
 		])
 			expect(Either.isLeft(validateKnobResource(input))).toBe(true);
+	});
+	it("rejects hold-only and press-only functions in directional slots", () => {
+		const pressOnly = registry.map((capability) => ({
+			...capability,
+			rotation: false,
+		}));
+		for (const [assignment, capabilities] of [
+			[voice(), registry],
+			[nextPage, pressOnly],
+		] as const) {
+			expect(
+				Either.isRight(
+					validateKnobResource(
+						knob([assignment, emptyKnobSlot(), emptyKnobSlot()]),
+						capabilities,
+					),
+				),
+			).toBe(true);
+			for (const name of ["left", "right"] as const) {
+				const resource = knob(
+					replaceKnobSlot(
+						knob([emptyKnobSlot(), emptyKnobSlot(), emptyKnobSlot()]).config
+							.subActions,
+						name,
+						assignment,
+					),
+				);
+				const result = validateKnobResource(resource, capabilities);
+				expect(Either.isLeft(result)).toBe(true);
+				if (Either.isLeft(result))
+					expect(result.left).toBeInstanceOf(InvalidKnobConfig);
+			}
+		}
+		const disabled = registry.map((capability) => ({
+			...capability,
+			rotation: false,
+			press: false,
+			hold: false,
+		}));
+		expect(
+			Either.isLeft(
+				validateKnobResource(
+					knob([nextPage, emptyKnobSlot(), emptyKnobSlot()]),
+					disabled,
+				),
+			),
+		).toBe(true);
 	});
 	it.prop(
 		"slot edits preserve both other positions",
@@ -215,6 +263,17 @@ describe("voice migration", () => {
 			),
 		).toBe(true);
 	});
+	it("preserves malformed JSON voice actions as inactive migration data", () => {
+		const source = [{ type: "voiceRoute", value: 42 }];
+		const migrated = right(migrateKnobVoiceActions(source));
+		expect(migrated).toMatchObject({
+			active: false,
+			actions: [],
+			original: source,
+			diagnostics: ["unsupported-actions"],
+		});
+		expect(right(migrateKnobVoiceActions(migrated))).toEqual(migrated);
+	});
 	it("normalizes aliases only on import, and never redirects unknown routes", () => {
 		for (const route of [undefined, "legacy", "assistant", "legacyAssistant"]) {
 			const actions =
@@ -269,6 +328,82 @@ describe("voice migration", () => {
 });
 
 describe("slot import compatibility", () => {
+	it("preserves directional hold-only functions as inactive while importing usable slots", () => {
+		for (const name of ["left", "right"] as const) {
+			const source = knob(
+				replaceKnobSlot(
+					knob([nextPage, emptyKnobSlot(), emptyKnobSlot()]).config.subActions,
+					name,
+					voice(),
+				),
+			);
+			const migrated = right(migrateKnobResource(source));
+			expect(migrated.resource.config.subActions).toEqual([
+				nextPage,
+				emptyKnobSlot(),
+				emptyKnobSlot(),
+			]);
+			expect(migrated.compatibility.inactiveSlots).toEqual({ [name]: voice() });
+			expect(migrated.compatibility.diagnostics).toEqual(["unsupported-slot"]);
+			expect(right(validateKnobResource(migrated.resource))).toEqual(
+				migrated.resource,
+			);
+		}
+	});
+	it("keeps malformed assistant actions inactive without losing other slots or the backup", () => {
+		const malformed: ReadonlyArray<KnobJson> = [
+			42,
+			"invalid",
+			[null],
+			[{ type: "voiceRoute", value: 42 }],
+			[{ type: "directModel" }],
+		];
+		for (const actions of malformed) {
+			const badSlot = {
+				childrenName: "assistant",
+				config: { type: "assistant", actions },
+			};
+			const source = legacy([badSlot, previousPage, nextPage]);
+			const before = JSON.stringify(source);
+			const migrated = right(migrateKnobResource(source));
+			expect(migrated.resource.config.subActions).toEqual([
+				emptyKnobSlot(),
+				previousPage,
+				nextPage,
+			]);
+			expect(migrated.compatibility).toMatchObject({
+				original: source,
+				inactiveSlots: { center: badSlot },
+				diagnostics: ["unsupported-slot"],
+			});
+			expect(JSON.stringify(source)).toBe(before);
+			expect(right(migrateKnobResource(migrated))).toEqual(migrated);
+			expect(
+				right(
+					migrateKnobResource(
+						JSON.parse(JSON.stringify(Schema.encodeSync(KnobImport)(migrated))),
+					),
+				),
+			).toEqual(migrated);
+		}
+	});
+	it("still rejects duplicate voice discriminators, including malformed duplicate values", () => {
+		for (const value of ["dkclaw", 42]) {
+			const badSlot = {
+				childrenName: "assistant",
+				config: {
+					type: "assistant",
+					actions: [
+						{ type: "voiceRoute", value: "direct" },
+						{ type: "voiceRoute", value },
+					],
+				},
+			};
+			expect(
+				Either.isLeft(migrateKnobResource(legacy([badSlot, null, nextPage]))),
+			).toBe(true);
+		}
+	});
 	it.prop(
 		"preserves explicit holes and the original payload without mutation",
 		[fc.boolean(), fc.boolean(), fc.boolean()],

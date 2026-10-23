@@ -12,7 +12,11 @@ export const KnobVoiceMigration = Schema.Struct({
 	active: Schema.Boolean,
 	original: KnobJson,
 	diagnostics: Schema.Array(
-		Schema.Literal("unknown-route", "route-fields-normalized"),
+		Schema.Literal(
+			"unknown-route",
+			"unsupported-actions",
+			"route-fields-normalized",
+		),
 	),
 });
 export type KnobVoiceMigration = typeof KnobVoiceMigration.Type;
@@ -44,22 +48,39 @@ export function migrateKnobVoiceActions(
 ): Either.Either<KnobVoiceMigration, InvalidKnobConfig> {
 	const existing = Schema.decodeUnknownEither(KnobVoiceMigration)(input);
 	if (Either.isRight(existing)) return Either.right(existing.right);
+	const rawJson = Schema.decodeUnknownEither(KnobJson)(input);
+	if (Either.isLeft(rawJson))
+		return Either.left(InvalidKnobConfig.fromCause(rawJson.left));
+	const original = cloneKnobJson(rawJson.right);
+	// Detect duplicate discriminators even when their values or other records are malformed.
+	const types = Array.isArray(input)
+		? input.flatMap((action: unknown) =>
+				typeof action === "object" &&
+				action !== null &&
+				"type" in action &&
+				typeof action.type === "string"
+					? [action.type]
+					: [],
+			)
+		: [];
+	if (new Set(types).size !== types.length)
+		return Either.left(InvalidKnobConfig.fromCause("duplicate-voice-field"));
 	const decoded = Schema.decodeUnknownEither(importedActions)(input);
 	if (Either.isLeft(decoded))
-		return Either.left(InvalidKnobConfig.fromCause(decoded.left));
+		return Either.right({
+			format: "open-quake.knob-voice.v1",
+			active: false,
+			actions: [],
+			original,
+			diagnostics: ["unsupported-actions"],
+		});
 	const source = decoded.right;
-	if (new Set(source.map((a) => a.type)).size !== source.length)
-		return Either.left(InvalidKnobConfig.fromCause("duplicate-voice-field"));
 	const values = new Map(source.map((a) => [a.type, a.value.trim()]));
 	const rawRoute = values.get("voiceRoute") ?? "legacyAssistant";
 	const route =
 		rawRoute === "assistant" || rawRoute === "legacy" || rawRoute === ""
 			? "legacyAssistant"
 			: rawRoute;
-	const rawJson = Schema.decodeUnknownEither(KnobJson)(input);
-	if (Either.isLeft(rawJson))
-		return Either.left(InvalidKnobConfig.fromCause(rawJson.left));
-	const original = cloneKnobJson(rawJson.right);
 	if (route !== "direct" && route !== "dkclaw" && route !== "legacyAssistant") {
 		return Either.right({
 			format: "open-quake.knob-voice.v1",

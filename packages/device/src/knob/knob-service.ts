@@ -8,6 +8,10 @@ import {
 	KnobVoiceActions,
 } from "./knob-contracts.js";
 import {
+	sameKnobSession,
+	selectKnobRotation,
+} from "./knob-dispatch-routing.js";
+import {
 	InvalidKnobConfig,
 	KnobCapabilityUnavailable,
 	KnobDispatchFailed,
@@ -16,11 +20,7 @@ import {
 	KnobSessionStale,
 } from "./knob-errors.js";
 import { findKnobCapability, type KnobRegistry } from "./knob-registry.js";
-import { directKnobRouteReferences } from "./knob-route-invariants.js";
-import {
-	sameKnobSession,
-	selectKnobRotation,
-} from "./knob-routing-invariants.js";
+import { directKnobRouteReferences } from "./knob-voice-migration.js";
 
 /** Infrastructure boundary. The profile lane supplies committed snapshots, never drafts. */
 export interface KnobPorts {

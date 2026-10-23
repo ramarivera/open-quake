@@ -4,7 +4,7 @@ This module implements the contract and routing portions of `openspec/changes/kn
 
 ## Canonical saves
 
-Use `validateKnobResource(value, registry)` for newly authored saves. `KnobResource` checks structure; the validator additionally delegates nonempty slot actions to their registered function validator. The reserved key is `0,1`, the config type is `knob`, and the three slots are center, left, right. Empty slots are `{childrenName:'',config:{type:'',actions:[]}}`. `replaceKnobSlot` changes one position without compacting or mutating the others.
+Use `validateKnobResource(value, registry)` for newly authored saves. `KnobResource` checks structure; the validator additionally delegates nonempty slot actions to their registered function validator and checks slot capabilities. Left and right require rotation support. Center requires rotation, press, or hold support, so hold-only assistant assignments belong at center. The reserved key is `0,1`, the config type is `knob`, and the three slots are center, left, right. Empty slots are `{childrenName:'',config:{type:'',actions:[]}}`. `replaceKnobSlot` changes one position without compacting or mutating the others.
 
 The common title matches the profile specification. It is declared here so this lane does not import or modify the parallel profiles module. Profile saves and duplicate-knob/page-key rejection belong to that module; `extractLegacyKnob` rejects multiple reserved entries in a flat import and returns independently copied unrelated keys.
 
@@ -24,7 +24,7 @@ Supported slot layouts are:
 - Explicit tagged assignments, such as `{slot:'right',childrenName:'nextPage',config:{type:'nextPage',actions:[]}}`. Every nonempty entry must carry a valid unique slot tag.
 - Empty arrays, which produce three empty slots.
 
-A compact two-entry list without reliable slot tags stays entirely inactive in `compatibility.inactiveSlots.compact`. A single unknown preset also stays ambiguous. No guessed left/right assignment is made. Raw unknown slot data and unknown routes remain in compatibility, with empty executable positions. Invalid reserved identity, too many slots, duplicate tags, duplicate reserved knobs, and duplicate voice discriminators reject the import.
+A compact two-entry list without reliable slot tags stays entirely inactive in `compatibility.inactiveSlots.compact`. A single unknown preset also stays ambiguous. No guessed left/right assignment is made. Raw unknown slot data, unsupported slot capabilities, malformed assistant actions, and unknown routes remain in compatibility, with empty executable positions. Other valid slots still import. Invalid reserved identity, too many slots, duplicate tags, duplicate reserved knobs, and duplicate voice discriminators reject the import, including duplicate discriminators with malformed values.
 
 `migrateKnobVoiceActions` splits old model references at the first slash, fills missing or blank route-specific fields, removes model and out-of-route actions, and retains the complete original JSON. Missing route and assistant/legacy aliases normalize to legacyAssistant only during import. Unknown routes stay inactive, without redirection. dkclaw agentId defaults to main. Built-in route locks are metadata; they never override explicit direct settings, including in custom profiles. Both migration functions accept their returned envelope unchanged, so repeated normalization preserves the original backup and diagnostics.
 

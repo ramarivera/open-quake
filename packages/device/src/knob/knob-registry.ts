@@ -2,6 +2,7 @@ import { Either, Option, Schema } from "effect";
 import {
 	type KnobFunction,
 	KnobNavigationActions,
+	type KnobSlotName,
 	KnobVoiceActions,
 	PanelBrightnessActions,
 } from "./knob-contracts.js";
@@ -23,6 +24,13 @@ export const findKnobCapability = (
 	id: string,
 ): Option.Option<KnobCapability> =>
 	Option.fromNullable(registry.find((c) => c.id === id));
+/** Directional slots receive rotation only; center also receives press and hold. */
+export const supportsKnobSlot = (
+	capability: KnobCapability,
+	slot: KnobSlotName,
+): boolean =>
+	capability.rotation ||
+	(slot === "center" && (capability.press || capability.hold));
 const validateOwned = (
 	assignment: KnobFunction,
 ): Either.Either<void, InvalidKnobConfig> => {
