@@ -4,6 +4,7 @@ import type {
 	Rectangle,
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerMedia } from "./media";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
 
@@ -50,6 +51,7 @@ const electron = vi.hoisted(() => {
 		BrowserWindow: Window,
 		app: {
 			whenReady: vi.fn(() => Promise.resolve()),
+			getPath: vi.fn(() => "/tmp/open-quake-window-test"),
 			on: vi.fn<
 				(
 					event: string,
@@ -69,6 +71,10 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./media", async () => {
+	const { Layer } = await import("effect");
+	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
+});
 
 function displayEvent(name: string): void {
 	const listener = electron.screen.on.mock.calls.find(
@@ -127,6 +133,8 @@ describe("desktop window lifecycle", () => {
 
 	it("starts both surfaces on the primary display without panel hardware", () => {
 		const { panel, management } = windows();
+		expect(registerMedia).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
 		expect(panel.options).toMatchObject({
 			x: 0,
 			y: 0,
@@ -232,6 +240,9 @@ describe("desktop window lifecycle", () => {
 		panel.destroyed = true;
 		management.destroyed = true;
 		appEvent("activate");
+		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(
+			electron.BrowserWindow.windows.at(-1),
+		);
 		vi.advanceTimersByTime(1500);
 		expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
 		for (const window of electron.BrowserWindow.getAllWindows()) {

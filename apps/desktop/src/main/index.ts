@@ -7,6 +7,7 @@ import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import { findPanelDisplay, PANEL_SIZE } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -75,6 +76,12 @@ app.whenReady().then(() => {
 		findPanelDisplay(screen.getAllDisplays()) ?? screen.getPrimaryDisplay();
 	let panelWin = createPanelWindow(getPanelDisplay());
 	let managementWin = createManagementWindow();
+	registerMedia(
+		ManagedRuntime.make(
+			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
+		),
+		() => managementWin,
+	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(
 		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),

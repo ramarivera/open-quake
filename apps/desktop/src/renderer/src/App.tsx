@@ -5,6 +5,7 @@ import {
 	useAppearance,
 } from "./theme/useAppearance";
 import { useQuakeEvents } from "./useQuakeEvents";
+import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
 
 function useSurface(): "management" | "panel" {
@@ -17,30 +18,11 @@ function useSurface(): "management" | "panel" {
 }
 
 function PanelSurface(): React.JSX.Element {
-	const { rotations, presses, lastKeepAliveSeq, touchPoints } =
-		useQuakeEvents();
-	const alive = lastKeepAliveSeq !== null;
 	useEffect(() => {
 		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
 	}, []);
-	return (
-		<main className="panel" aria-label="Quake device panel">
-			<Stat label="ROTATIONS" value={rotations} animate />
-			<Stat label="PRESSES" value={presses} animate />
-			<Stat
-				label="KEEP-ALIVE"
-				value={alive ? `#${lastKeepAliveSeq}` : "waiting"}
-				tone={alive ? "success" : "warning"}
-			/>
-			<Stat
-				label="TOUCH"
-				value={touchPoints.length ? `${touchPoints.length} pt` : "—"}
-				animate
-			/>
-			<span className="panel-source muted">mock device source</span>
-		</main>
-	);
+	return <WallpaperPanel />;
 }
 
 function Stat({
@@ -90,6 +72,7 @@ function ManagementSurface({
 				the panel is unplugged.
 			</p>
 			<ThemeSettings controller={appearance} />
+			<WallpaperSettings />
 		</main>
 	);
 }

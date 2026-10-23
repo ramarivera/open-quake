@@ -25,7 +25,9 @@ describe("device preload bridge", () => {
 	});
 
 	it("registers before requesting status, delivers typed events, and unsubscribes", () => {
-		const bridge = electron.contextBridge.exposeInMainWorld.mock.calls[0]?.[1];
+		const bridge = electron.contextBridge.exposeInMainWorld.mock.calls.find(
+			([name]) => name === "openQuake",
+		)?.[1];
 		expect(bridge).toBeDefined();
 		const callback = vi.fn();
 		const unsubscribe = bridge?.onQuakeEvent(callback);

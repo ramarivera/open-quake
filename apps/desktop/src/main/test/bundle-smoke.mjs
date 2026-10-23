@@ -5,6 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const app = new EventEmitter();
 app.whenReady = () => Promise.resolve();
+app.getPath = () => "/nonexistent/open-quake-bundle-smoke";
 let quit = false;
 app.quit = () => {
 	let prevented = false;
@@ -32,6 +33,7 @@ class Window {
 		return false;
 	}
 	on() {}
+	once() {}
 	loadFile() {}
 	setBounds() {}
 }
@@ -44,11 +46,24 @@ const display = {
 screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
 const ipcMain = new EventEmitter();
+ipcMain.handle = () => {};
+ipcMain.removeHandler = () => {};
+// Wallpaper media only touches these on user action; the smoke never triggers one.
+const dialog = {
+	showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }),
+};
+const nativeImage = {
+	createFromBuffer: () => {
+		throw new Error("Bundle smoke must not decode images");
+	},
+};
 globalThis.openQuakeBundleSmoke = {
 	app,
 	BrowserWindow: Window,
 	screen,
 	ipcMain,
+	dialog,
+	nativeImage,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -64,7 +79,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -91,11 +106,14 @@ try {
 	// A dev flag must not select synthetic input in a production launch.
 	process.env.OPEN_QUAKE_MOCK_DEVICE = "1";
 	await import("../../../out/main/index.js");
-	await until(() => events.length >= 2);
+	// Other main-process modules (wallpaper) broadcast too; this check owns device events.
+	const quakeEvents = () =>
+		events.filter(({ channel }) => channel === "quake:event");
+	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
 	assert.equal(nativeResolutions, 1, "Native package must remain external");
 	assert.equal(enumerations, 1);
-	for (const { channel, event } of events) {
+	for (const { channel, event } of quakeEvents()) {
 		assert.equal(channel, "quake:event");
 		assert.deepEqual(event, {
 			source: "hid",
