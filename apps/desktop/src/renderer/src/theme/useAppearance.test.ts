@@ -4,7 +4,7 @@ import {
 	type Appearance,
 	defaultAppearance,
 } from "./appearance";
-import { subscribeAppearance } from "./useAppearance";
+import { persistAppearance, subscribeAppearance } from "./useAppearance";
 
 class StorageChange extends Event {
 	constructor(
@@ -93,5 +93,31 @@ describe("live appearance synchronization", () => {
 		target.dispatchEvent(new StorageChange(APPEARANCE_STORAGE_KEY, null));
 		expect(appearance.theme).toBe("light");
 		expect(TestChannel.instances[0]?.close).toHaveBeenCalledOnce();
+	});
+});
+
+describe("appearance persistence", () => {
+	const next: Appearance = { ...defaultAppearance, theme: "light" };
+
+	it("broadcasts only after a successful storage write", () => {
+		const setItem = vi.fn();
+		const postMessage = vi.fn();
+		expect(persistAppearance(next, { setItem }, { postMessage })).toBe("");
+		expect(setItem).toHaveBeenCalledWith(
+			APPEARANCE_STORAGE_KEY,
+			JSON.stringify(next),
+		);
+		expect(postMessage).toHaveBeenCalledWith(next);
+	});
+
+	it("keeps an unsaved preference session-only and does not broadcast it", () => {
+		const postMessage = vi.fn();
+		const setItem = vi.fn(() => {
+			throw new Error("quota");
+		});
+		expect(persistAppearance(next, { setItem }, { postMessage })).toBe(
+			"Appearance could not be saved. Changes apply for this session.",
+		);
+		expect(postMessage).not.toHaveBeenCalled();
 	});
 });

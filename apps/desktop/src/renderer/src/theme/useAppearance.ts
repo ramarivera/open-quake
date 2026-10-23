@@ -70,6 +70,28 @@ function readStoredAppearance(): AppearanceState {
 	}
 }
 
+/**
+ * Persist a preference, then broadcast it to the other renderer. An unsaved
+ * preference stays session-only in this renderer and is never broadcast.
+ */
+export function persistAppearance(
+	next: Appearance,
+	storage: Pick<Storage, "setItem">,
+	channel: Pick<BroadcastChannel, "postMessage"> | null,
+): string {
+	try {
+		storage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(next));
+	} catch {
+		return "Appearance could not be saved. Changes apply for this session.";
+	}
+	try {
+		channel?.postMessage(next);
+	} catch {
+		// A successful storage write also notifies the other renderer.
+	}
+	return "";
+}
+
 export function useAppearance() {
 	const [{ appearance, notice }, setState] = useState(readStoredAppearance);
 	const current = useRef(appearance);
@@ -124,19 +146,12 @@ export function useAppearance() {
 		// File reads are asynchronous; merge into the latest received preference.
 		const next = { ...current.current, ...patch };
 		current.current = next;
-		let message = "";
-		try {
-			window.localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(next));
-		} catch {
-			message =
-				"Appearance could not be saved. Changes apply for this session.";
-		}
+		const message = persistAppearance(
+			next,
+			window.localStorage,
+			channel.current,
+		);
 		setState({ appearance: next, notice: message });
-		try {
-			channel.current?.postMessage(next);
-		} catch {
-			// A successful storage write also notifies the other renderer.
-		}
 	};
 
 	return {

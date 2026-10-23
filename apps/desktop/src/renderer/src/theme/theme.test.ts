@@ -84,6 +84,12 @@ describe("theme properties", () => {
 			expect(
 				contrast(palette["accent-text"], palette.accent),
 			).toBeGreaterThanOrEqual(4.5);
+			// WCAG 1.4.11: control boundaries (the select border) need 3:1.
+			for (const background of ["background", "surface"] as const) {
+				expect(
+					contrast(palette.border, palette[background]),
+				).toBeGreaterThanOrEqual(3);
+			}
 		},
 	);
 });

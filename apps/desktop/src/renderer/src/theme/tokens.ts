@@ -20,7 +20,7 @@ export const themes = {
 		surface: "#161b24",
 		foreground: "#e6edf3",
 		muted: "#a5b1c2",
-		border: "#46546a",
+		border: "#62708a",
 		accent: "#8cbbff",
 		"accent-text": "#0b0e14",
 		success: "#70d787",
