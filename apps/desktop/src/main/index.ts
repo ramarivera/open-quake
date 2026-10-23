@@ -50,8 +50,11 @@ function createPanelWindow(target: PanelTarget): BrowserWindow {
 		...panelBounds(target.display, target.isPanel),
 		title: PANEL_TITLE,
 		frame: false,
-		// An NSPanel is not a standard window, so tiling managers leave it alone.
-		...(process.platform === "darwin" ? { type: "panel" } : {}),
+		// An NSPanel is not a standard window, so tiling managers leave the strip
+		// alone. The fallback stays a normal window on the current Space.
+		...(target.isPanel && process.platform === "darwin"
+			? { type: "panel" }
+			: {}),
 		resizable: false,
 		enableLargerThanScreen: true,
 		fullscreenable: true,
@@ -66,7 +69,7 @@ function createPanelWindow(target: PanelTarget): BrowserWindow {
 	// OmniWM matches this title even while HTML/navigation titles change.
 	win.on("page-title-updated", (event) => event.preventDefault());
 	placePanel(win, target);
-	loadSurface(win, "panel", panelRotation(target.display));
+	loadSurface(win, "panel", panelRotation(target.display, target.isPanel));
 	return win;
 }
 
@@ -153,10 +156,16 @@ app.whenReady().then(() => {
 		panelTarget = getPanelTarget();
 		if (panelWin.isDestroyed()) {
 			panelWin = createPanelWindow(panelTarget);
+		} else if (panelTarget.isPanel !== previous.isPanel) {
+			// The window type is fixed at creation; swap before closing the old one
+			// so the bus never sees zero windows.
+			const old = panelWin;
+			panelWin = createPanelWindow(panelTarget);
+			old.destroy();
 		} else {
 			placePanel(panelWin, panelTarget);
-			const rotation = panelRotation(panelTarget.display);
-			if (rotation !== panelRotation(previous.display))
+			const rotation = panelRotation(panelTarget.display, panelTarget.isPanel);
+			if (rotation !== panelRotation(previous.display, previous.isPanel))
 				loadSurface(panelWin, "panel", rotation);
 		}
 		startBus();

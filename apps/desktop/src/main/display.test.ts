@@ -46,11 +46,18 @@ describe("findPanelDisplay", () => {
 });
 
 describe("panel geometry", () => {
-	it("rotates the canvas on the native portrait framebuffer only", () => {
-		expect(panelRotation(portrait)).toBe(90);
+	it("rotates the canvas on the strip's native portrait framebuffer only", () => {
+		expect(panelRotation(portrait, true)).toBe(90);
 		expect(
-			panelRotation(makeDisplay({ size: { width: 1920, height: 480 } })),
+			panelRotation(makeDisplay({ size: { width: 1920, height: 480 } }), true),
 		).toBe(0);
+	});
+
+	it("never rotates the landscape fallback window on a portrait monitor", () => {
+		const portraitMonitor = makeDisplay({
+			size: { width: 1080, height: 1920 },
+		});
+		expect(panelRotation(portraitMonitor, false)).toBe(0);
 	});
 
 	it("owns the whole strip, including the menu-bar area", () => {

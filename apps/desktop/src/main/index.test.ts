@@ -32,6 +32,9 @@ const electron = vi.hoisted(() => {
 		loadFile = vi.fn();
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
 		setAlwaysOnTop = vi.fn<(flag: boolean, level?: string) => void>();
+		destroy = vi.fn(() => {
+			this.destroyed = true;
+		});
 		on =
 			vi.fn<
 				(
@@ -179,42 +182,49 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
-	it("moves the existing panel when DK-QUAKE is attached, then falls back on removal", () => {
-		const { panel } = windows();
-		expect(panel.options.type).toBe(
-			process.platform === "darwin" ? "panel" : undefined,
-		);
-		expect(panel.setAlwaysOnTop).toHaveBeenLastCalledWith(
+	it("swaps to a strip panel when DK-QUAKE is attached, then back to a normal fallback", () => {
+		const { panel: fallback } = windows();
+		// A normal window on the current Space, never rotated.
+		expect(fallback.options.type).toBeUndefined();
+		expect(fallback.setAlwaysOnTop).toHaveBeenLastCalledWith(
 			false,
 			"screen-saver",
 		);
-		expect(panel.loadURL).toHaveBeenLastCalledWith(
+		expect(fallback.loadURL).toHaveBeenLastCalledWith(
 			"http://localhost:5173?surface=panel&rotation=0",
 		);
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
+		const strip = electron.BrowserWindow.windows.at(-1);
+		expect(strip).not.toBe(fallback);
+		expect(fallback.destroy).toHaveBeenCalledOnce();
+		expect(strip?.options.type).toBe(
+			process.platform === "darwin" ? "panel" : undefined,
+		);
 		// The whole display, menu-bar area included, with the canvas turned upright.
-		expect(panel.setBounds).toHaveBeenLastCalledWith(panelDisplay.bounds);
-		expect(panel.setAlwaysOnTop).toHaveBeenLastCalledWith(true, "screen-saver");
-		expect(panel.loadURL).toHaveBeenLastCalledWith(
+		expect(strip?.setBounds).toHaveBeenLastCalledWith(panelDisplay.bounds);
+		expect(strip?.setAlwaysOnTop).toHaveBeenLastCalledWith(
+			true,
+			"screen-saver",
+		);
+		expect(strip?.loadURL).toHaveBeenLastCalledWith(
 			"http://localhost:5173?surface=panel&rotation=90",
 		);
 		electron.screen.getAllDisplays.mockReturnValue([primary]);
 		displayEvent("display-removed");
-		expect(panel.setBounds).toHaveBeenLastCalledWith({
+		const restored = electron.BrowserWindow.windows.at(-1);
+		expect(strip?.destroy).toHaveBeenCalledOnce();
+		expect(restored?.options.type).toBeUndefined();
+		expect(restored?.setBounds).toHaveBeenLastCalledWith({
 			x: 0,
 			y: 0,
 			width: 1920,
 			height: 480,
 		});
-		expect(panel.setAlwaysOnTop).toHaveBeenLastCalledWith(
-			false,
-			"screen-saver",
-		);
-		expect(panel.loadURL).toHaveBeenLastCalledWith(
+		expect(restored?.loadURL).toHaveBeenLastCalledWith(
 			"http://localhost:5173?surface=panel&rotation=0",
 		);
-		expect(electron.BrowserWindow.windows).toHaveLength(2);
+		expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
 	});
 
 	it("recreates a destroyed panel on hot-plug and forwards to the replacement", () => {
@@ -239,9 +249,10 @@ describe("desktop window lifecycle", () => {
 	});
 
 	it("follows display moves and reloads only when the strip's rotation changes", () => {
-		const { panel } = windows();
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
+		const panel = electron.BrowserWindow.windows.at(-1);
+		if (!panel) throw new Error("The strip panel must exist");
 		const loads = panel.loadURL.mock.calls.length;
 		const moved = makeDisplay({
 			...panelDisplay,

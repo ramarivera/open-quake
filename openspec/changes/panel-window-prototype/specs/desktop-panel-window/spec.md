@@ -8,22 +8,35 @@ how device events reach every renderer surface.
 
 ### Requirement: Panel display selection
 The app SHALL place the panel window on the display whose label contains
-`DK-QUAKE` case-insensitively, else on a 1920x480 display, else on the primary
-display. Label matches SHALL take precedence over size matches. The window
-SHALL use the selected display's work-area origin and fit within its work
-area, up to 1920x480.
+`DK-QUAKE` case-insensitively, else on a display sized 1920x480 or 480x1920,
+else on the primary display. Label matches SHALL take precedence over size
+matches. On the QUAKE strip the panel SHALL cover the display's full bounds,
+menu-bar area included, as a window tiling managers ignore (an NSPanel on
+macOS) kept above the menu bar. When macOS reports the strip's native portrait
+480x1920 framebuffer, the renderer SHALL rotate its logical 1920x480 canvas by
+90 degrees, as DK-Suite does. Without the strip, the panel SHALL be a normal,
+unrotated window at the primary display's work-area origin, fitting within the
+work area up to 1920x480.
 
 #### Scenario: Labelled display attached
 - **WHEN** a display labelled `DK-QUAKE` is connected
-- **THEN** the panel window opens at that display's work-area origin
+- **THEN** the panel window covers that display's full bounds
+
+#### Scenario: Native portrait strip
+- **WHEN** macOS reports the DK-QUAKE display as 480x1920
+- **THEN** the panel covers the 480x1920 bounds and the renderer rotates the 1920x480 canvas upright
+
+#### Scenario: Portrait primary without the strip
+- **WHEN** no display matches and the primary display is portrait
+- **THEN** the fallback panel is a normal 1920x480-bounded window and its canvas is not rotated
 
 #### Scenario: Mixed-case label and competing size match
 - **WHEN** one display is labelled `dK-qUaKe` and an earlier display has size 1920x480
 - **THEN** the panel window selects the labelled display
 
 #### Scenario: Size match without a matching label
-- **WHEN** no display label contains `DK-QUAKE` and a display has size 1920x480
-- **THEN** the panel window selects the 1920x480 display
+- **WHEN** no display label contains `DK-QUAKE` and a display has size 1920x480 or 480x1920
+- **THEN** the panel window selects that display
 
 #### Scenario: No panel hardware
 - **WHEN** no display matches by label or size
@@ -32,20 +45,22 @@ area, up to 1920x480.
 ### Requirement: Panel follows display topology
 The app SHALL reselect the panel display after Electron `display-added`,
 `display-removed`, and `display-metrics-changed` events. It SHALL move and
-resize the existing panel window, or recreate it if it has been destroyed.
+resize the existing panel window, reload it only when its rotation changes,
+recreate it if it has been destroyed, and replace it when switching between
+the strip and the fallback, creating the new window before closing the old.
 It SHALL remove display listeners before quitting.
 
 #### Scenario: Panel display attached after startup
 - **WHEN** the app starts on the primary display and a DK-QUAKE display is added
-- **THEN** the existing panel window moves to the DK-QUAKE display's work area
+- **THEN** a strip panel window replaces the fallback and covers the DK-QUAKE display's bounds
 
 #### Scenario: Panel display removed
 - **WHEN** the selected DK-QUAKE display is removed and no other display matches
-- **THEN** the panel window moves to the current primary display
+- **THEN** a normal fallback window replaces the strip panel on the current primary display
 
-#### Scenario: Selected display work area changes
-- **WHEN** the selected display's work area becomes 1600x400 at a new origin
-- **THEN** the panel window moves to that origin and resizes to 1600x400
+#### Scenario: Strip moved or rotated
+- **WHEN** the DK-QUAKE display moves to a new origin, or the user rotates it to 1920x480 in System Settings
+- **THEN** the panel follows the new bounds and reloads only if its canvas rotation changed
 
 #### Scenario: Closed panel recreated on topology change
 - **WHEN** the panel window has been destroyed and a display is added or removed

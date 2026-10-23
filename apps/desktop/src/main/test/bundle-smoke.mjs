@@ -37,6 +37,7 @@ class Window {
 	loadFile() {}
 	setBounds() {}
 	setAlwaysOnTop() {}
+	destroy() {}
 }
 const screen = new EventEmitter();
 const display = {

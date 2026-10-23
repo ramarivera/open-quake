@@ -25,9 +25,15 @@ export function findPanelDisplay(
 	);
 }
 
-/** A portrait framebuffer shows the landscape canvas rotated, like DK-Suite. */
-export function panelRotation(display: Display): PanelRotation {
-	return display.size.height > display.size.width ? 90 : 0;
+/**
+ * The strip's portrait framebuffer shows the landscape canvas rotated, like
+ * DK-Suite. A fallback window is always landscape, so it never rotates.
+ */
+export function panelRotation(
+	display: Display,
+	isPanel: boolean,
+): PanelRotation {
+	return isPanel && display.size.height > display.size.width ? 90 : 0;
 }
 
 /**
