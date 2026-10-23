@@ -1,47 +1,55 @@
 import { useEffect, useState } from "react";
-
-type QuakeEvent = {
-	source: "mock" | "hid";
-	kind: "rotate" | "press" | "touch" | "keepalive";
-	direction?: 1 | -1;
-	points?: ReadonlyArray<{ action: number; x: number; y: number }>;
-	seq?: number;
-};
+import type { OpenQuakeBridge, QuakeEvent } from "../../preload/quake";
 
 declare global {
 	interface Window {
-		openQuake?: {
-			onQuakeEvent: (cb: (event: QuakeEvent) => void) => () => void;
-		};
+		openQuake?: OpenQuakeBridge;
 	}
 }
 
-export function useQuakeEvents(): {
+export type QuakeEventState = {
 	events: QuakeEvent[];
+	eventsReceived: number;
 	rotations: number;
 	presses: number;
 	lastKeepAliveSeq: number | null;
 	touchPoints: { x: number; y: number }[];
-} {
-	const [events, setEvents] = useState<QuakeEvent[]>([]);
-	useEffect(() => {
-		const off = window.openQuake?.onQuakeEvent((event) => {
-			setEvents((prev) => [...prev.slice(-99), event]);
-		});
-		return off;
-	}, []);
+};
 
-	let rotations = 0;
-	let presses = 0;
-	let lastKeepAliveSeq: number | null = null;
-	for (const e of events) {
-		if (e.kind === "rotate") rotations += 1;
-		if (e.kind === "press") presses += 1;
-		if (e.kind === "keepalive") lastKeepAliveSeq = e.seq ?? null;
-	}
-	const touchPoints = (events.at(-1)?.points ?? []).map((p) => ({
+export function appendQuakeEvent(
+	previous: QuakeEventState,
+	event: QuakeEvent,
+): QuakeEventState {
+	const events = [...previous.events.slice(-99), event];
+
+	const touchPoints = (event.kind === "touch" ? event.points : []).map((p) => ({
 		x: p.x,
 		y: p.y,
 	}));
-	return { events, rotations, presses, lastKeepAliveSeq, touchPoints };
+	return {
+		events,
+		eventsReceived: previous.eventsReceived + 1,
+		rotations: previous.rotations + (event.kind === "rotate" ? 1 : 0),
+		presses: previous.presses + (event.kind === "press" ? 1 : 0),
+		lastKeepAliveSeq:
+			event.kind === "keepalive" ? event.seq : previous.lastKeepAliveSeq,
+		touchPoints,
+	};
+}
+
+export function useQuakeEvents(): QuakeEventState {
+	const [state, setState] = useState<QuakeEventState>({
+		events: [],
+		eventsReceived: 0,
+		rotations: 0,
+		presses: 0,
+		lastKeepAliveSeq: null,
+		touchPoints: [],
+	});
+	useEffect(() => {
+		return window.openQuake?.onQuakeEvent((event) => {
+			setState((previous) => appendQuakeEvent(previous, event));
+		});
+	}, []);
+	return state;
 }
