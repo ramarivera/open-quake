@@ -1,5 +1,9 @@
 # L6 specification verification
 
+W7 implementation evidence for task 1.2 is in
+`../ai-provider-facade/verification.md`. The report below records the earlier
+specification-only baseline and does not describe the W7 implementation.
+
 Verified on 2026-10-23 in branch `lane/specs-ai-voice`. This report covers planning artifacts only. No implementation, provider login, audio recording, hardware session, or DK-Suite process was started.
 
 ## Scope

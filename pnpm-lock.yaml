@@ -50,6 +50,12 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@open-quake/edge':
+        specifier: workspace:*
+        version: link:../../packages/edge
+      effect:
+        specifier: 'catalog:'
+        version: 3.22.1
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -136,9 +142,18 @@ importers:
         specifier: 'catalog:'
         version: 3.22.1
     devDependencies:
+      '@effect/vitest':
+        specifier: 'catalog:'
+        version: 0.30.0(effect@3.22.1)(vitest@4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)))
+      fast-check:
+        specifier: 'catalog:'
+        version: 4.9.0
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3))
 
   packages/protocol:
     dependencies:

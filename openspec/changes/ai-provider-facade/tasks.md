@@ -1,14 +1,16 @@
 # Tasks
 
-No implementation is completed by this spec-only change. Resolve pending decisions before their dependent work. Each checkbox becomes one child issue under this change's Beads epic; the parent owns that synchronization.
+W7 implements the approved foundation described in verification.md. Integration acceptance remains open where noted. Each checkbox becomes one child issue under this change's Beads epic; the parent owns that synchronization.
 
 ## 1. First-release provider foundation, macOS
 
-- [ ] 1.1 Record Ramiro's decisions on ownership, credential storage, endpoint policy, and SDK version; verify design/spec coherence with `openspec validate ai-provider-facade --strict` and document approved/deferred choices.
-- [ ] 1.2 Define profile/capability/normalized-event Schemas and pure validation; verify round trips, credential-free summaries, unsupported modality rejection, and endpoint/redirect invariants with unit/property tests, and document the contract.
+- [x] 1.1 Record Ramiro's decisions on ownership, credential storage, endpoint policy, and SDK version; verify design/spec coherence with `openspec validate ai-provider-facade --strict` and document approved/deferred choices.
+- [x] 1.2 Define profile/capability/normalized-event Schemas and pure validation; verify round trips, credential-free summaries, unsupported modality rejection, and endpoint/redirect invariants with unit/property tests, and document the contract.
 - [ ] 1.3 Add only approved essential Vercel SDK/provider dependencies with exact shared catalog pins; verify `pnpm install`, lockfile consistency, and dependency documentation.
 - [ ] 1.4 Implement the mock-default Effect facade and compatible BYO-key adapter; verify the real ChatService consumer selects its configured adapter, streams, aborts, and never takes an account/proxy path, and document configuration.
+  - W7: mock facade, cancellation/revocation, and SDK adapter interface implemented and tested. Real SDK adapter and real ChatService acceptance remain open, pending task 1.3. No SDK dependencies installed.
 - [ ] 1.5 Implement macOS credential references and catalog error translation; verify missing/revoked/broken storage, private original causes, scrubbed serialization, and no plaintext fallback through the real settings consumer, and document recovery.
+  - W7: typed Keychain interface, opaque references, host credential service, and catalog translation implemented and tested through the facade. Native Keychain binding and real settings consumer acceptance remain open; W7 does not edit desktop root wiring.
 
 ## 2. First-release Codex route decision and integration
 
