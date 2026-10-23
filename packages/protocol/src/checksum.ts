@@ -45,10 +45,19 @@ export function frameHostCommand(
  * `[0xA3, len, opCode, cmdID, ...sub, checksum]`.
  */
 export function verifyDeviceReport(report: ReadonlyArray<number>): boolean {
-	if (report.length < 5 || report[0] !== FRAME_HEADER) return false;
-	const opCode = report[2];
-	const cmdId = report[3];
-	if (opCode === undefined || cmdId === undefined) return false;
-	const sub = report.slice(4, -1);
-	return report.at(-1) === checksum([opCode, cmdId, ...sub]);
+	if (report.some((byte) => !Number.isInteger(byte) || byte < 0 || byte > 255))
+		return false;
+	const bytes =
+		report.length === 33 && report[0] === 0 ? report.slice(1) : report;
+	if (bytes.length < 5 || bytes[0] !== FRAME_HEADER) return false;
+	const length = bytes[1] ?? 0;
+	if (length < 2) return false;
+	const end = 2 + length;
+	if (bytes.length < end + 1) return false;
+	if (
+		bytes.length !== end + 1 &&
+		(bytes.length !== 32 || bytes.slice(end + 1).some((byte) => byte !== 0))
+	)
+		return false;
+	return bytes[end] === checksum(bytes.slice(2, end));
 }
