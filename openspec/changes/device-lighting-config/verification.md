@@ -39,6 +39,24 @@ Final results on 2026-10-23:
 
 Hardware field support, firmware ranges/effects, v3 menu bindings, per-key RGB, knob-specific transport, and EEPROM persistence after reboot remain unverified. Save success proves only the registered echo/readback contract. Desktop controls and preferences and their integration scenarios remain tasks 2.2, 2.3, and 3.2; hardware acceptance remains task 3.1.
 
+## PR #10 review fix, round 1
+
+Devin's review comment `4362443438` identified unconditional `unsaved` assignments after desired edits and matching readback. Save status now compares desired and confirmed applied values with the explicit saved snapshot after pending edits settle. Resubmitting a saved value and editing away then back both restore `saved` without another Save command. Before any explicit Save, edits retain `unknown`. A failed Save retains `failed` until an explicit successful retry.
+
+`packages/device/test/lighting/lighting-save-status.test.ts` exercises both reported sequences through the real codecs and hid-fake, delayed readback, edits during Save, unknown state, and failed-Save retry. Both reported sequences failed before the fix with `unsaved` instead of `saved`; the unknown-state regression also failed. The invariant property test checks scalar and color snapshots with independent objects and different field ordering.
+
+Final results on 2026-10-23:
+
+- `pnpm install`: exit 0, lockfile unchanged.
+- `pnpm run lint`: exit 0, 80 files checked, no fixes.
+- `pnpm run typecheck`: exit 0, 6 tasks successful, 5 cached; device compiled in this worktree.
+- `pnpm run test`: exit 0, 3 tasks successful, 2 cached; device ran 74 tests in 10 files. Unchanged protocol and desktop suites reused Turbo results for 25 and 87 tests respectively.
+- `pnpm --filter @open-quake/device exec vitest run test/lighting`: exit 0, 38 tests in 5 files.
+- `openspec validate device-lighting-config`: exit 0, valid.
+- `git diff --check`: exit 0.
+
+No desktop files or dependencies changed. Hardware remains unverified. The parent should append this review-fix evidence to task 2.4, `open-quake-da4.7`, under `openspec/changes/device-lighting-config/`. No task scope or completion checkbox changed.
+
 ## Beads handoff
 
 No `bd` commands were run, per the lane brief. Parent updates for OpenSpec path `openspec/changes/device-lighting-config/`:

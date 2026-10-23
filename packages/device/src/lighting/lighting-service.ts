@@ -16,6 +16,7 @@ import {
 } from "./lighting-errors.js";
 import {
 	changeBytes,
+	reconcileSaveStatus,
 	replaceChange,
 	sameChange,
 	sameTarget,
@@ -150,11 +151,13 @@ export class LightingService extends Effect.Service<LightingService>()(
 											);
 										if (!isCurrent(session))
 											return yield* new LightingTargetUnavailable();
-										session.state = {
-											...session.state,
-											applied: replaceChange(session.state.applied, actual),
-											saveStatus: "unsaved",
-										};
+										session.state = reconcileSaveStatus(
+											{
+												...session.state,
+												applied: replaceChange(session.state.applied, actual),
+											},
+											session.pending.size > 0,
+										);
 										return true;
 									}),
 								).pipe(Effect.interruptible),
@@ -283,11 +286,13 @@ export class LightingService extends Effect.Service<LightingService>()(
 				const change = yield* validateChange(session.capabilities, input);
 				if (session.state.status !== "ready" || !isCurrent(session))
 					return yield* new LightingTargetUnavailable();
-				session.state = {
-					...session.state,
-					desired: replaceChange(session.state.desired, change),
-					saveStatus: "unsaved",
-				};
+				session.state = reconcileSaveStatus(
+					{
+						...session.state,
+						desired: replaceChange(session.state.desired, change),
+					},
+					true,
+				);
 				session.failure = Option.none();
 				session.pending.set(change.field, change);
 				yield* startDrain(session);
@@ -345,13 +350,14 @@ export class LightingService extends Effect.Service<LightingService>()(
 									return yield* new LightingSaveFailed("readback-mismatch");
 								if (!isCurrent(session))
 									return yield* new LightingTargetUnavailable();
-								session.state = {
-									...session.state,
-									saved: Option.some(applied),
-									saveStatus: sameValues(session.state.desired, applied)
-										? "saved"
-										: "unsaved",
-								};
+								session.state = reconcileSaveStatus(
+									{
+										...session.state,
+										saved: Option.some(applied),
+										saveStatus: "saved",
+									},
+									session.pending.size > 0,
+								);
 								return session.state;
 							}),
 						),

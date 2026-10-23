@@ -124,7 +124,7 @@ describe("lighting conductor through hid-fake", () => {
 						field: "brightness",
 						value: 50,
 					});
-					expect(applied.saveStatus).toBe("unsaved");
+					expect(applied.saveStatus).toBe("unknown");
 					expect(
 						(yield* fixture.fakeA.writes)
 							.filter((r) => r[1] === 7)

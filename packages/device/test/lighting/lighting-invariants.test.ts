@@ -8,8 +8,10 @@ import {
 	LightingIoFailed,
 	LightingReadFailed,
 	LightingSaveFailed,
+	type LightingState,
 	LightingTargetUnavailable,
 	LightingValueUnsupported,
+	reconcileSaveStatus,
 	validateCapabilities,
 	validateChange,
 } from "../../src/lighting/index.js";
@@ -25,6 +27,35 @@ describe("lighting contracts and invariants", () => {
 					validateChange(capabilities, { field: "brightness", value }),
 				),
 			).toBe(Number.isInteger(value) && value >= 0 && value <= 200);
+		},
+	);
+	it.prop(
+		"recognizes equivalent saved scalar and color snapshots across field order",
+		[
+			FastCheck.integer({ min: 0, max: 200 }),
+			FastCheck.integer({ min: 0, max: 255 }),
+			FastCheck.integer({ min: 0, max: 255 }),
+		],
+		([brightness, hue, saturation]) => {
+			const state: LightingState = {
+				capabilities,
+				status: "ready",
+				desired: [
+					{ field: "color1", value: { hue, saturation } },
+					{ field: "brightness", value: brightness },
+				],
+				applied: [
+					{ field: "brightness", value: brightness },
+					{ field: "color1", value: { hue, saturation } },
+				],
+				saved: Option.some([
+					{ field: "color1", value: { hue, saturation } },
+					{ field: "brightness", value: brightness },
+				]),
+				saveStatus: "unsaved",
+			};
+			expect(reconcileSaveStatus(state, false).saveStatus).toBe("saved");
+			expect(reconcileSaveStatus(state, true).saveStatus).toBe("unsaved");
 		},
 	);
 	it.prop(

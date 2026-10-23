@@ -4,6 +4,7 @@ import {
 	LightingChange,
 	type LightingFieldCapability,
 	type LightingIdentity,
+	type LightingState,
 	type LightingTarget,
 } from "./lighting-contracts.js";
 import {
@@ -110,3 +111,20 @@ export const sameValues = (
 ): boolean =>
 	a.length === b.length &&
 	a.every((v) => b.some((other) => sameChange(v, other)));
+
+export function reconcileSaveStatus(
+	state: LightingState,
+	hasPendingEdits: boolean,
+): LightingState {
+	if (state.saveStatus === "failed") return state;
+	return {
+		...state,
+		saveStatus: Option.isNone(state.saved)
+			? "unknown"
+			: !hasPendingEdits &&
+					sameValues(state.desired, state.applied) &&
+					sameValues(state.saved.value, state.applied)
+				? "saved"
+				: "unsaved",
+	};
+}
