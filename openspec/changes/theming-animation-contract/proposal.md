@@ -26,6 +26,9 @@ prototype renderer hardcodes colours inline (`App.tsx`).
 
 `apps/desktop/src/renderer/**`, plus desktop package/lockfile test setup using the
 existing Vitest catalog pin. CSS-only motion adds no runtime dependency. The five
-design recommendations and the new desktop Vitest devDependency remain pending
-Ramiro's approval. Beads updates are handed to the parent lane; this lane runs no
-Beads commands. Existing planning ticket: `open-quake-2qs.7`.
+design decisions were approved in commit `20e9fd1`. Integration with main reuses
+its shared preload contract and desktop Vitest dependency, widens test discovery
+to include renderer tests, and fixes live corrupt-storage recovery and cumulative
+diagnostic totals. No further dependencies are added. Beads updates are handed to
+the parent lane; this lane runs no Beads commands. Existing planning ticket:
+`open-quake-2qs.7`.

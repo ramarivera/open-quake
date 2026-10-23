@@ -1,12 +1,22 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
+import {
+	type OpenQuakeBridge,
+	QUAKE_EVENT_CHANNEL,
+	type QuakeEvent,
+} from "./quake";
 
 // SDK surface exposed to the renderer lands here (wayfinder ticket
 // open-quake-2qs.5 / open-quake-2qs.6).
-contextBridge.exposeInMainWorld("openQuake", {
+const bridge: OpenQuakeBridge = {
 	version: "0.0.0",
-	onQuakeEvent: (cb: (event: unknown) => void): (() => void) => {
-		const listener = (_: unknown, event: unknown): void => cb(event);
-		ipcRenderer.on("quake:event", listener);
-		return () => ipcRenderer.off("quake:event", listener);
+	onQuakeEvent: (cb): (() => void) => {
+		const listener = (_: IpcRendererEvent, event: QuakeEvent): void =>
+			cb(event);
+		ipcRenderer.on(QUAKE_EVENT_CHANNEL, listener);
+		return () => {
+			ipcRenderer.off(QUAKE_EVENT_CHANNEL, listener);
+		};
 	},
-});
+};
+
+contextBridge.exposeInMainWorld("openQuake", bridge);

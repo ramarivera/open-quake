@@ -71,7 +71,8 @@ function ManagementSurface({
 }: {
 	appearance: AppearanceController;
 }): React.JSX.Element {
-	const { events, rotations, presses, lastKeepAliveSeq } = useQuakeEvents();
+	const { eventsReceived, rotations, presses, lastKeepAliveSeq } =
+		useQuakeEvents();
 	return (
 		<main className="management">
 			<h1>open-quake management</h1>
@@ -79,7 +80,7 @@ function ManagementSurface({
 				Prototype: panel window + mock device bus are live.
 			</p>
 			<section className="diagnostics" aria-label="Mock device diagnostics">
-				<Stat label="EVENTS RECEIVED" value={events.length} />
+				<Stat label="EVENTS RECEIVED" value={eventsReceived} />
 				<Stat label="ROTATIONS" value={rotations} animate />
 				<Stat label="PRESSES" value={presses} animate />
 				<Stat label="KEEP-ALIVE" value={lastKeepAliveSeq ?? "—"} />

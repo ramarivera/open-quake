@@ -15,6 +15,41 @@ import { themes, toThemeProperties } from "./tokens";
 
 type AppearanceState = { appearance: Appearance; notice: string };
 
+export function subscribeAppearance(
+	onChange: (appearance: Appearance, notice: string) => void,
+) {
+	const receive = (next: Appearance | null, notice = "") => {
+		if (next) onChange(next, notice);
+	};
+	const onStorage = (event: StorageEvent) => {
+		if (event.key !== APPEARANCE_STORAGE_KEY && event.key !== null) return;
+		const next =
+			event.newValue === null
+				? defaultAppearance
+				: parseAppearance(event.newValue);
+		receive(
+			next ?? defaultAppearance,
+			next ? "" : "Saved appearance was invalid. Defaults restored.",
+		);
+	};
+	window.addEventListener("storage", onStorage);
+	let channel: BroadcastChannel | null = null;
+	try {
+		channel = new BroadcastChannel(APPEARANCE_STORAGE_KEY);
+		channel.onmessage = (event: MessageEvent<unknown>) =>
+			receive(validateAppearance(event.data));
+	} catch {
+		// Storage events still synchronize supported renderer origins.
+	}
+	return {
+		channel,
+		unsubscribe: () => {
+			window.removeEventListener("storage", onStorage);
+			channel?.close();
+		},
+	};
+}
+
 function readStoredAppearance(): AppearanceState {
 	try {
 		const saved = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
@@ -72,33 +107,13 @@ export function useAppearance() {
 	}, [appearance, reducedMotion]);
 
 	useEffect(() => {
-		const receive = (next: Appearance | null) => {
-			if (next) {
-				current.current = next;
-				setState({ appearance: next, notice: "" });
-			}
-		};
-		const onStorage = (event: StorageEvent) => {
-			if (event.key !== APPEARANCE_STORAGE_KEY && event.key !== null) return;
-			receive(
-				event.newValue === null
-					? defaultAppearance
-					: parseAppearance(event.newValue),
-			);
-		};
-		window.addEventListener("storage", onStorage);
-		let connection: BroadcastChannel | null = null;
-		try {
-			connection = new BroadcastChannel(APPEARANCE_STORAGE_KEY);
-			connection.onmessage = (event: MessageEvent<unknown>) =>
-				receive(validateAppearance(event.data));
-			channel.current = connection;
-		} catch {
-			// Storage events still synchronize supported renderer origins.
-		}
+		const subscription = subscribeAppearance((next, notice) => {
+			current.current = next;
+			setState({ appearance: next, notice });
+		});
+		channel.current = subscription.channel;
 		return () => {
-			window.removeEventListener("storage", onStorage);
-			connection?.close();
+			subscription.unsubscribe();
 			channel.current = null;
 		};
 	}, []);

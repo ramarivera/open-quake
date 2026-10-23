@@ -1,7 +1,7 @@
 # Spec Delta
 
 ## Purpose
-Proposed contract for theming and motion across the panel and management
+Contract for theming and motion across the panel and management
 surfaces. All five design decisions were approved by Ramiro on 2026-10-23.
 
 ## ADDED Requirements
@@ -59,6 +59,14 @@ current session with visible feedback and SHALL NOT expose raw causes.
 - **WHEN** the saved entry is malformed or browser storage is unavailable
 - **THEN** the renderer remains usable and management explains that defaults were restored or preferences could not be saved
 
+#### Scenario: Preferences become invalid while windows are open
+- **WHEN** a storage event supplies malformed or invalid preferences to an already-open renderer
+- **THEN** it restores dark/system defaults and shows safe feedback, matching a newly opened renderer
+
+#### Scenario: Invalid broadcast
+- **WHEN** a BroadcastChannel message contains invalid appearance preferences
+- **THEN** the renderer ignores it and keeps its current appearance
+
 ### Requirement: Product surfaces remain truthful
 The panel SHALL preserve its stable `open-quake panel` title, knob/touch/keep-alive
 statistics, and mock-source indication. Management SHALL retain event diagnostics
@@ -71,6 +79,16 @@ hardware/cloud functions as working controls.
 #### Scenario: Prototype without hardware
 - **WHEN** the existing mock device stream feeds either renderer
 - **THEN** themed statistics remain visible and the UI identifies the source as mock
+
+### Requirement: Cumulative renderer diagnostics
+Rotation, press, and received-event totals SHALL accumulate for the lifetime of
+the renderer subscription. The renderer SHALL retain at most the latest 100
+diagnostic events without decreasing totals or discarding its last keep-alive
+sequence when older events leave the log.
+
+#### Scenario: Diagnostic events evicted
+- **WHEN** a renderer receives more than 100 events, including rotations, presses, and keep-alives
+- **THEN** its log contains only the latest 100 events while totals and the latest keep-alive sequence reflect the entire subscription
 
 ### Requirement: Bounded micro-animations
 Both surfaces SHALL provide CSS-only micro-animations on changed statistics or

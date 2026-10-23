@@ -1,8 +1,8 @@
 # Design
 
-## Open decisions
+## Approved decisions
 
-These recommendations are implemented for review. None records Ramiro's approval.
+Ramiro's approval of these five decisions is recorded in commit `20e9fd1`.
 
 1. **Token carrier: Approved (Ramiro, 2026-10-23).** Use one typed TypeScript palette
    per theme, generating `--quake-*` CSS custom properties on the document root.
@@ -55,12 +55,21 @@ sections 2 and 9. Research files remain outside version control.
 Pure TypeScript validation returns tagged success/rejection results for invalid
 user input. Browser storage/file failures are handled at their renderer boundary
 without displaying or logging raw causes or imported contents. No service layer,
-transport, new error class, or main/preload change is needed.
+transport, new error class, or main/preload change is needed. The renderer imports
+the shared `QuakeEvent` and `OpenQuakeBridge` types from preload.
+
+Live invalid storage updates restore dark/system defaults with the same safe
+notice as startup. Invalid broadcasts remain ignored. The storage/channel
+subscription is shared by the hook and event-driven regression tests. Renderer
+event statistics accumulate across the subscription lifetime while retaining only
+the latest 100 diagnostic events. Eviction cannot decrease totals or discard the
+last keep-alive sequence.
 
 Vitest is already pinned at `4.1.11` in the workspace catalog. Add it to the desktop
-devDependencies with `catalog:` and add a test script. This manifest/lockfile edit
-is the explicit test-setup exception to the renderer-only implementation scope.
-List the new desktop dependency under NEEDS APPROVAL in the PR.
+devDependencies with `catalog:` and add a test script. Main now provides that same
+dependency and test script through PR #1; integration keeps both lanes' intent and
+expands its Vitest include pattern to all `src/**/*.test.ts`. No new dependency is
+needed for the event-driven regression tests.
 
 Unit coverage includes property generation, valid/invalid custom documents,
 stored preference validation, and reduced-motion precedence. Exercise theme

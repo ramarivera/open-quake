@@ -4,7 +4,7 @@
 
 - [x] 1.1 Record recommendations for the five decisions as "Approved (Ramiro, 2026-10-23)" and define the inventory sections 2/9 boundary
 - [x] 1.2 Extend `specs/ui-theming/spec.md` with concrete requirements and scenarios for review
-- [ ] 1.3 Parent: obtain Ramiro's decisions and update `open-quake-2qs.7`; proposals are not approval
+- [ ] 1.3 Parent: sync the decisions approved in `20e9fd1` to `open-quake-2qs.7`
 
 ## 2. Build
 
@@ -44,3 +44,36 @@
   placement remain unverified. DK-Suite was not started.
 
 Beads commands were intentionally left to the parent per the lane brief.
+
+## 4. PR #4 integration and review
+
+- [x] 4.1 Merge `origin/main` without rebasing; keep the shared desktop test script/dependency and include renderer tests in Vitest discovery
+- [x] 4.2 Import the shared preload `QuakeEvent` and `OpenQuakeBridge` contracts in the renderer without explicit `any`
+- [x] 4.3 Restore defaults and safe feedback on invalid live storage events; keep invalid broadcasts ignored; add event-driven regression tests
+- [x] 4.4 Keep cumulative rotation, press, and received-event totals beyond the bounded diagnostic log; add regression tests
+- [x] 4.5 Run frozen install, direct Biome, typecheck, tests, build, and strict all-change OpenSpec validation
+
+### Integration verification
+
+- `pnpm install` and `pnpm install --frozen-lockfile`: exit 0. The lockfile was
+  already consistent with both branches and did not change.
+- `./node_modules/.bin/biome check packages apps`: exit 0, 55 files checked.
+- `pnpm run typecheck`: exit 0, 6 successful tasks, 5 cached.
+- `pnpm run test`: exit 0, 85 desktop tests passed across main and renderer;
+  device's 1 test and protocol's 25 tests replayed from Turbo cache.
+- `pnpm run build`: exit 0, Electron main/preload/renderer bundles built.
+- `openspec validate --all --strict`: exit 0, 28 changes passed.
+- Before the fixes, the targeted regressions produced 3 failures and 6 passes.
+  Afterward all 9 passed. Sources: `theme/useAppearance.test.ts` and
+  `useQuakeEvents.test.ts` under `apps/desktop/src/renderer/src/`.
+- Headless Chromium drove the real management hook through a synthetic preload
+  callback. After 401 events the rendered totals were 401 received, 150 rotations,
+  150 presses, and keep-alive 142, while unit tests verified the 100-event log cap.
+  The panel also retained 150 rotations, 150 presses and keep-alive 42 after 301
+  synthetic events, with its `open-quake panel` title intact.
+- Headless Chromium selected light/reduced motion, then corrupted storage from
+  another same-origin renderer. Existing management and panel renderers restored
+  dark/system, management showed safe feedback, and a fresh renderer agreed.
+  Invalid BroadcastChannel messages left that state intact.
+- Actual Electron IPC/HID, physical panel placement and frame timing remain
+  unverified. DK-Suite was not started.
