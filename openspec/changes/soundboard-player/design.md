@@ -74,3 +74,17 @@ Create versioned local settings/repository records behind a capability gate. Val
 Use the recovered playlist shapes as independently authored fixtures, plus missing/non-MP3/directory cases. Drive a configured key and actual player controls against a fake audio backend and clock; assert gain ramps, session replacement, stop-all and no host-volume API call. Native audio output and physical key/touch behavior remain unverified.
 
 Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+
+## Reconciliation with soundboard-playback (2026-10-23)
+
+Two parallel lanes specced the same feature. `soundboard-playback` was folded into this change and removed, and its epic bead was superseded. Where the two disagreed, these choices apply. Ramiro approved both changes' proposals on 2026-10-23, and this merge chooses between them:
+
+- Concurrency: keep this change's per-key sessions with stopAudio for all, under one soundboard-wide AudioOutput lease (from soundboard-playback). Voice capture preempts every session without fade and nothing auto-resumes.
+- Missing files: per-entry visible status (from soundboard-playback) instead of silent filtering with a warning.
+- Repeat: no repeat or shuffle in this change. The earlier "unless explicitly configured repeat" escape is dropped until a repeat mode has its own requirement.
+- Fade bounds: linear ramps, 0..10,000 ms (from soundboard-playback).
+- First-release boundary, the HTTPS-URL rejection, needsConfiguration for unknown numeric audioAction/audioFade, the 10 s readiness timeout and rescan semantics all come from soundboard-playback.
+
+Carried-over evidence: `ATLAS/artifacts/ipc_channels.txt` (N) names PlayerReady, AudioTrackNaturalEnd, AudioPlaylistAction, RequestPlayAudioPlaylistRescan, AudioPlayStart/Stop/LoadError and get-play-audio-runtime-status. Exact payloads and timing are unverified.
+
+Catalog errors stay in the shared `QUAKE.*` catalog, per the failure contract above. soundboard-playback's `MEDIA.SOUNDBOARD.*` names are dropped, and its two extra cases join the existing `QUAKE.AUDIO` leaves: `QUAKE.AUDIO.CONFIG_INVALID`, `QUAKE.AUDIO.FILE_UNAVAILABLE`, `QUAKE.AUDIO.DECODE_FAILED`, `QUAKE.AUDIO.OUTPUT_FAILED`, `QUAKE.AUDIO.LOAD_TIMEOUT`, `QUAKE.AUDIO.OUTPUT_BUSY`. Diagnostics use file IDs and outcome codes, never absolute paths.
