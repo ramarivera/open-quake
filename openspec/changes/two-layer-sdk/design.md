@@ -8,13 +8,13 @@ devs covered; protocol layer uses Effect Schema only; governing skills are
 
 ## Open decisions
 
-1. **Proposed (pending Ramiro)**: keep `@open-quake/protocol` as the pure
+1. **Approved (Ramiro, 2026-10-23)**: keep `@open-quake/protocol` as the pure
    kernel. Export schemas, `encode*` / `decode*` and `wrap*` / `unwrap*`
    functions returning `Either`, plus discovery constants. Preserve `checksum`,
    `frameHostCommand`, `verifyDeviceReport`, and `FRAME_HEADER`. Use
    `QuakeDevice` for the device conductor. This follows effect-conductor's
    contracts/invariants split without putting a service or runtime in pure code.
-2. **Proposed (pending Ramiro)**: protocol owns catalog-backed
+2. **Approved (Ramiro, 2026-10-23)**: protocol owns catalog-backed
    `ProtocolInputInvalid`, `FrameSizeInvalid`, `FrameChecksumMismatch`,
    `FrameTypeUnsupported`, `ProtocolJsonInvalid`, and `QmkResponseMismatch`
    Schema.TaggedError leaves. Device owns separate discovery/open/read/write/
@@ -23,15 +23,15 @@ devs covered; protocol layer uses Effect Schema only; governing skills are
    The protocol catalog is exported for later composition into a shared kernel;
    no dependency on device errors. This applies open-quake-errors without a
    generic catch-all error or a dependency on an out-of-lane shared package.
-3. **Proposed (pending Ramiro)**: expose an Effect `Stream` backed by a scoped
+3. **Approved (Ramiro, 2026-10-23)**: expose an Effect `Stream` backed by a scoped
    `PubSub` internally, and a callback subscription returning an unsubscribe
    function for plain JS. The conductor owns fan-out, ordering, and scope.
    Callers should not have to manage the internal PubSub.
-4. **Proposed (pending Ramiro)**: the device conductor starts and interrupts
+4. **Approved (Ramiro, 2026-10-23)**: the device conductor starts and interrupts
    the keep-alive fiber with its connection scope. Use the observed 15-second
    interval and stop on disconnect/disposal. Caller scope bounds the connection,
    rather than requiring callers to implement an independent ping timer.
-5. **Proposed (pending Ramiro)**: expose a Promise/callback facade backed by
+5. **Approved (Ramiro, 2026-10-23)**: expose a Promise/callback facade backed by
    one owned `ManagedRuntime`, with explicit asynchronous disposal. Effect users
    use the service/layer directly. Keep the runtime an implementation detail
    of the JS facade so there is one lifecycle and one error translation boundary.

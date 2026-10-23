@@ -5,7 +5,7 @@ L1 owns `packages/protocol/**` and this change's planning artifacts. L2 owns
 
 ## 1. Decide
 
-- [x] 1.1 Document five recommendations in `design.md`, each explicitly "Proposed (pending Ramiro)", grounded in effect-conductor and open-quake-errors
+- [x] 1.1 Document five recommendations in `design.md`, each approved by Ramiro on 2026-10-23, grounded in effect-conductor and open-quake-errors
 - [ ] 1.2 Obtain Ramiro's answers and record the approved decisions on `open-quake-2qs.6` through the parent
 - [x] 1.3 Extend `specs/device-sdk/spec.md` with inventory section 1 protocol requirements and explicit P-tier unknowns; validate with `openspec validate two-layer-sdk`
 
