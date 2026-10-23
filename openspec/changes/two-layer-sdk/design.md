@@ -6,7 +6,7 @@ Settled by the wayfinder map (`open-quake-2qs`): Effect devs first, non-Effect
 devs covered; protocol layer uses Effect Schema only; governing skills are
 `effect-conductor`, `open-quake-errors`, `effect-best-practices`.
 
-## Open decisions
+## Approved decisions
 
 1. **Approved (Ramiro, 2026-10-23)**: keep `@open-quake/protocol` as the pure
    kernel. Export schemas, `encode*` / `decode*` and `wrap*` / `unwrap*`
@@ -36,9 +36,46 @@ devs covered; protocol layer uses Effect Schema only; governing skills are
    use the service/layer directly. Keep the runtime an implementation detail
    of the JS facade so there is one lifecycle and one error translation boundary.
 
-These recommendations are not approved decisions. L1 implements only the
-protocol kernel; L2 owns `packages/device`. Ramiro's decisions and their Beads
-record remain parent follow-up work.
+All five decisions above were approved by Ramiro on 2026-10-23. The parent
+records their Beads status. The integrated device package consumes the protocol
+kernel; it owns transport and event interpretation.
+
+## Device integration
+
+`QuakeDevice.Default` declares `NodeHidLive` in its dependencies. Native code
+loads lazily when discovery or open runs. Custom transports and tests use
+`QuakeDevice.DefaultWithoutDependencies` with their transport layer at the
+application root. `discover()` filters all four kernel-owned identity fields
+without opening handles or starting workers; `connect()` uses the same path.
+
+The adapter uses `wrapShortCommand` and `encodeHidReport` for keep-alives, then
+`decodeHidReport` and `unwrapShortCommand` for incoming control reports. Physical
+size, report ID, body length, padding and checksum validation belong to protocol.
+The conductor and JS facade preserve protocol error identities. Device catalog
+errors translate native discovery/open/read/write/close exceptions only at those
+boundaries; callback and connection configuration failures remain device-owned.
+
+The connection scope owns acquisition, reader and keep-alive workers. The first
+keep-alive follows one positive finite interval, default 15 seconds. Disconnect
+waits for an in-flight native write, stops workers, closes the handle once, and
+broadcasts termination. Active subscribers receive ordered events; late
+subscribers receive termination rather than replayed input.
+
+Checksummed control event mapping supports knob opcode `03` with commands
+`01` and `02`, pong `55/EF`, and the existing synthetic touch envelope `A3/1A`.
+Other valid control commands are ignored, including `55/1A`; payload validation
+only runs after matching the supported opcode and command. Malformed physical
+reports and malformed supported control frames terminate with protocol errors.
+The separate unchecked touch collection, actual touch opcode, and live timing
+remain hardware acceptance work. Synthetic touch fixtures prove only the current
+mapping; they do not establish hardware touch parity.
+
+The JS facade owns one ManagedRuntime, registers its subscription before connect
+resolves, and supports idempotent asynchronous disconnect. Consumers construct a
+new client to reconnect. The `./plain`, `./fake`, and `./node-hid` entry points
+retain the workspace's source-TypeScript export convention; publishing standalone
+compiled JavaScript is separate packaging work. `node-hid@3.4.0` and its native
+build were approved by Ramiro on 2026-10-23.
 
 ## Protocol evidence and limits
 

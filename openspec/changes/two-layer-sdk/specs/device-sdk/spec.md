@@ -140,10 +140,89 @@ without payload bytes, JSON text or raw parser messages.
 - **WHEN** malformed JSON produces a protocol failure
 - **THEN** consumers can branch on its tag/code, recover its private cause, and serialize it without exposing the input text
 
-### Requirement: Non-Effect consumers are supported
-`packages/device` SHALL expose an entry point that a consumer can use without
-importing or running Effect.
+### Requirement: Scoped device connection
+The device conductor SHALL match all four USB identity fields, own each opened
+handle as a scoped resource, and own its read and keep-alive fibers in that
+connection scope. It SHALL stop workers before closing the handle and SHALL
+close each successful acquisition exactly once.
+
+#### Scenario: Scope closes
+- **WHEN** a connected caller closes its scope
+- **THEN** the keep-alive fiber stops and the transport handle closes exactly once
+- **AND** advancing the test clock causes no further writes
+
+#### Scenario: Disconnect during native write
+- **WHEN** disconnect is requested while a keep-alive write is in flight
+- **THEN** the write finishes before the handle closes
+
+#### Scenario: No matching hardware
+- **WHEN** discovery returns no descriptor matching VID `0x4158`, PID `0x514B`, usage page `0xFF60`, and usage `0x61`
+- **THEN** connect fails with `QuakeDeviceNotFound` and opens no handle
+
+### Requirement: Default and custom transport layers
+`QuakeDevice.Default` SHALL declare its native transport dependency. Custom
+transport composition SHALL use `QuakeDevice.DefaultWithoutDependencies` so
+tests and consumers can replace native I/O explicitly. `discover()` SHALL return
+matching control interfaces without opening hardware or starting keep-alives.
+
+#### Scenario: Default layer
+- **WHEN** a consumer provides only `QuakeDevice.Default`
+- **THEN** the service can discover and connect through the native transport
+
+#### Scenario: Read-only discovery
+- **WHEN** enumeration returns the control collection alongside keyboard, consumer, and system collections
+- **THEN** discovery returns only the matching control interface and performs no open or write
+
+### Requirement: Connection keep-alive
+A connection SHALL write a 33-byte report consisting of report ID zero,
+`frameHostCommand(2, [0xEF])`, and zero padding on a configurable positive,
+finite interval. The default SHALL be 15 seconds and the first write SHALL
+occur after the first interval. Encoding SHALL use protocol kernel codecs.
+
+#### Scenario: Configured cadence
+- **WHEN** a connection uses a 1-second interval
+- **THEN** no write occurs before 1 second and three writes exist after 3 seconds
+
+### Requirement: Broadcast typed device events
+The connection SHALL expose an Effect Stream for knob rotation, knob press,
+supported checksummed touch points, keep-alive pongs, and disconnect events.
+It SHALL preserve input ordering for active subscribers, broadcast to each
+subscriber, and replay termination to late subscribers. It SHALL retain upstream
+exception identity privately and expose only scrubbed diagnostics.
+Unchecked reports from a separate touch collection SHALL remain unverified.
+
+#### Scenario: Read fails
+- **WHEN** the transport emits a read failure
+- **THEN** the handle closes, subscribers receive a disconnect event and `QuakeHidReadFailed`, and the keep-alive fiber stops
+
+#### Scenario: Unknown opcode uses the touch command number
+- **WHEN** a valid checksummed report uses opcode `55` and command `1A` without a touch payload
+- **THEN** it produces no event, leaves the connection open, and later knob events and keep-alives continue
+
+### Requirement: Device consumes protocol codecs and failures
+The device adapter SHALL delegate physical report and short-command framing,
+length, padding and checksum validation to `@open-quake/protocol`. It SHALL
+preserve protocol catalog failure identities through the event stream and JS
+facade. Device I/O catalog errors SHALL translate native exceptions at their
+discovery, open, read, write and close boundaries.
+
+#### Scenario: Corrupt control report reaches a subscriber
+- **WHEN** a report carries an invalid checksum
+- **THEN** the connection closes and subscribers receive `FrameChecksumMismatch` with code `QUAKE.PROTOCOL.CHECKSUM_MISMATCH`
+
+#### Scenario: Kernel rejects encoding or decoding
+- **WHEN** a protocol codec returns a catalog error
+- **THEN** the connection closes, preserves the error's original instance and private cause through Effect tracing, and serializes only scrubbed diagnostics
+
+### Requirement: ManagedRuntime JavaScript facade
+The device package SHALL expose a Promise/callback facade that owns its Effect
+runtime, connects without consumer Effect code, registers its event subscription
+before connect resolves, and supports idempotent asynchronous disconnect.
 
 #### Scenario: Plain JS consumer
 - **WHEN** a plain JavaScript program uses the device entry point
 - **THEN** it can connect and receive device events without constructing an Effect runtime itself
+
+#### Scenario: Plain JavaScript subscription
+- **WHEN** a consumer subscribes and awaits connect
+- **THEN** incoming knob events invoke the callback and disconnect releases the connection and runtime
