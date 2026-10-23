@@ -1,0 +1,21 @@
+# Tasks
+
+Spec-only deliverable; all build work remains open. Depends on ai-provider-facade and the shared localization/panel contracts. The parent creates one child Beads issue per checkbox.
+
+## 1. First-release session and stream contracts
+
+- [ ] 1.1 Record decisions on v1 events, concurrency, deadlines, idle retention, repository format, and window staging; verify updated artifacts with `openspec validate ai-chat-core --strict` and document approved/deferred choices.
+- [ ] 1.2 Implement Schema contracts and pure chunk/session reducers; verify identity isolation, contiguous seq, suggestion separation, exactly one terminal, duplicate/gap recovery, and cancellation at each state with unit/property tests, and document protocol v1.
+- [ ] 1.3 Implement ChatService deadlines, profile snapshots, and bounded fan-out; verify real mock-provider dispatch, 60s/300s boundaries, one-turn busy, late-delta suppression, and slow-subscriber snapshot restoration using a fake clock and real client, and document subscription recovery.
+
+## 2. First-release history and presentation, macOS
+
+- [ ] 2.1 Implement local versioned history and context budgeting; verify atomic finalization, restart interruption, deletion races, whole-exchange pruning, over-budget rejection, and usage provenance through the next real outbound request, and document retention/export behavior.
+- [ ] 2.2 Wire Schema-first RPC/preload clients to management and panel chat; verify shared assembled content, inert HTML/file/command handling, user-gesture links, preserved scroll position, and closed-window cleanup, and document the no-hardware demo procedure.
+- [ ] 2.3 Consume the shared General Translation infrastructure with bundled en/de chat strings and local fallback title/rename; verify offline locale switching, missing-key fallback, unchanged user text/provider selection, and stale title callbacks, and document localization ownership.
+- [ ] 2.4 Exercise the full macOS mock-provider chat path and physical panel when available; capture stream/cancel/history/locale evidence, label synthetic versus hardware observations, and leave hardware acceptance open until it is actually run.
+
+## 3. Day 2 and later assistant additions
+
+- [ ] 3.1 Exercise Linux windows, stream cleanup, local persistence, and locale behavior with the same contract suite; document platform gaps and retain failed acceptance items as open work.
+- [ ] 3.2 Add the optional floating assistant and optional generated-title job after approval; verify display-bound restoration, closed-window chat/capture, rename/delete races, and title-failure isolation, and document the opt-in behavior.
