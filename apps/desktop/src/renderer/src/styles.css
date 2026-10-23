@@ -1,9 +1,68 @@
+/*
+ * open-quake design system.
+ *
+ * Contract: the nine `--quake-*` color tokens from theme/tokens.ts, set on the
+ * root element by useAppearance (built-in or imported custom theme). Every
+ * other color below is derived from them, so a custom palette restyles the
+ * whole app without naming each shade.
+ */
 :root {
 	--quake-motion-feedback: none;
 	--quake-motion-control: none;
-	font-family: system-ui, sans-serif;
+	--quake-motion-pulse: none;
+	--quake-motion-press: none;
+
+	/* Derived surfaces and tints. `light-dark` follows the theme's base. */
+	--quake-hairline: color-mix(
+		in srgb,
+		var(--quake-foreground) 10%,
+		transparent
+	);
+	--quake-fill: color-mix(in srgb, var(--quake-foreground) 6%, transparent);
+	--quake-fill-strong: color-mix(
+		in srgb,
+		var(--quake-foreground) 11%,
+		transparent
+	);
+	--quake-raised: light-dark(
+		var(--quake-surface),
+		color-mix(in srgb, var(--quake-surface) 86%, var(--quake-foreground))
+	);
+	--quake-field: light-dark(var(--quake-surface), var(--quake-background));
+	--quake-sidebar: color-mix(
+		in srgb,
+		var(--quake-background) 95%,
+		var(--quake-foreground)
+	);
+	--quake-accent-soft: color-mix(in srgb, var(--quake-accent) 16%, transparent);
+	--quake-success-soft: color-mix(
+		in srgb,
+		var(--quake-success) 15%,
+		transparent
+	);
+	--quake-warning-soft: color-mix(
+		in srgb,
+		var(--quake-warning) 15%,
+		transparent
+	);
+	--quake-shadow: light-dark(
+		0 0.5px 1.5px rgb(0 0 0 / 0.12),
+		0 1px 2px rgb(0 0 0 / 0.4)
+	);
+
+	/* Type: the platform UI face; mono only for codes, serials and JSON. */
+	--font-sans:
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+		sans-serif;
+	--font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+	--radius-control: 6px;
+	--radius-group: 10px;
+
+	font: 13px / 1.45 var(--font-sans);
 	color: var(--quake-foreground);
 	background: var(--quake-background);
+	-webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -14,71 +73,371 @@ body {
 	margin: 0;
 }
 
-h1 {
-	font-size: 26px;
-	margin: 0 0 12px;
+input,
+button,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
 }
 
-h2 {
-	font-size: 20px;
-	margin: 0 0 8px;
+:focus-visible {
+	outline: 2px solid var(--quake-accent);
+	outline-offset: 2px;
 }
 
-p {
-	line-height: 1.5;
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
 
-.muted,
-.stat-label {
-	color: var(--quake-muted);
-}
-
-.panel {
-	width: 100%;
-	min-height: 100dvh;
-	display: flex;
-	align-items: center;
-	gap: 48px;
-	padding: 32px 48px;
-}
-
-.panel-source {
-	margin-left: auto;
+.mono {
+	font-family: var(--font-mono);
 	font-size: 12px;
 }
 
-.stat {
-	min-width: 120px;
+.muted {
+	color: var(--quake-muted);
 }
 
-.stat-label {
+/* Page header */
+
+.page-header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.page-header h1 {
+	margin: 0;
+	font-size: 22px;
+	font-weight: 650;
+	line-height: 1.2;
+	letter-spacing: -0.012em;
+}
+
+.page-description {
+	margin: 4px 0 0;
+	color: var(--quake-muted);
+}
+
+/* Grouped form sections: label left, control right, hairline rows. */
+
+.group {
+	margin-top: 28px;
+}
+
+.group-heading {
+	margin: 0 0 8px;
+	padding: 0 4px;
+}
+
+.group-heading h2 {
+	margin: 0;
 	font-size: 13px;
-	letter-spacing: 2px;
+	font-weight: 600;
 }
 
-.stat-value {
-	font-size: 42px;
-	font-weight: 700;
-	font-variant-numeric: tabular-nums;
+.group-description {
+	margin: 2px 0 0;
+	color: var(--quake-muted);
+	font-size: 12px;
 }
 
-.stat-value[data-tone="success"] {
-	color: var(--quake-success);
+.group-box {
+	background: var(--quake-surface);
+	border: 1px solid var(--quake-hairline);
+	border-radius: var(--radius-group);
+	box-shadow: var(--quake-shadow);
 }
 
-.stat-value[data-tone="warning"] {
-	color: var(--quake-warning);
+.group-box > * + * {
+	border-top: 1px solid var(--quake-hairline);
 }
 
-.stat-change {
+.group-footer {
+	padding: 8px 4px 0;
+	color: var(--quake-muted);
+	font-size: 12px;
+}
+
+.group-footer p {
+	margin: 0;
+}
+
+.row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	min-height: 44px;
+	margin: 0;
+	padding: 8px 14px;
+}
+
+.row[data-align="start"] {
+	align-items: flex-start;
+}
+
+.row-label {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.row-hint {
+	color: var(--quake-muted);
+	font-size: 12px;
+}
+
+.row-control {
+	display: flex;
+	flex: 0 1 auto;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	/* Controls never shrink under the label; the label wraps instead. */
+	min-width: min-content;
+}
+
+.value {
+	color: var(--quake-muted);
+	overflow-wrap: anywhere;
+	text-align: right;
+}
+
+.value.nowrap {
+	white-space: nowrap;
+}
+
+/* Controls */
+
+.button {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 28px;
+	padding: 0 12px;
+	color: var(--quake-foreground);
+	font-weight: 500;
+	white-space: nowrap;
+	background: var(--quake-raised);
+	border: 1px solid var(--quake-border);
+	border-radius: var(--radius-control);
+	box-shadow: var(--quake-shadow);
+	transition: var(--quake-motion-control);
+}
+
+.button:hover:not(:disabled, [data-disabled="true"]) {
+	background: color-mix(
+		in srgb,
+		var(--quake-raised) 90%,
+		var(--quake-foreground)
+	);
+}
+
+.button:active:not(:disabled, [data-disabled="true"]) {
+	background: color-mix(
+		in srgb,
+		var(--quake-raised) 82%,
+		var(--quake-foreground)
+	);
+}
+
+.button:disabled,
+.button[data-disabled="true"] {
+	opacity: 0.45;
+}
+
+.button-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+/* A file input that looks like a push button but keeps its native semantics. */
+.file-button input {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	margin: 0;
+	opacity: 0;
+}
+
+.file-button:has(input:focus-visible) {
+	outline: 2px solid var(--quake-accent);
+	outline-offset: 2px;
+}
+
+.text-field {
+	width: 200px;
+	max-width: 100%;
+	min-height: 28px;
+	padding: 0 8px;
+	color: var(--quake-foreground);
+	background: var(--quake-field);
+	border: 1px solid var(--quake-border);
+	border-radius: var(--radius-control);
+}
+
+.text-field::placeholder {
+	color: var(--quake-muted);
+}
+
+.text-field:disabled {
+	opacity: 0.6;
+}
+
+.segmented {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	background: var(--quake-fill);
+	border: 1px solid var(--quake-border);
+	border-radius: 8px;
+}
+
+.segment {
+	position: relative;
+	display: flex;
+}
+
+.segment input {
+	position: absolute;
+	inset: 0;
+	margin: 0;
+	opacity: 0;
+}
+
+.segment span {
+	display: flex;
+	align-items: center;
+	min-height: 22px;
+	padding: 0 12px;
+	color: var(--quake-muted);
+	font-weight: 500;
+	white-space: nowrap;
+	border-radius: 6px;
+	transition: var(--quake-motion-control);
+}
+
+.segment:hover input:not(:checked, :disabled) + span {
+	color: var(--quake-foreground);
+}
+
+.segment input:checked + span {
+	color: var(--quake-foreground);
+	background: var(--quake-raised);
+	box-shadow: var(--quake-shadow);
+}
+
+.segment input:focus-visible + span {
+	outline: 2px solid var(--quake-accent);
+	outline-offset: 1px;
+}
+
+.segment input:disabled + span {
+	opacity: 0.45;
+}
+
+/* Status */
+
+.status-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	background: var(--quake-muted);
+	border-radius: 50%;
+}
+
+.status-dot[data-tone="connected"] {
+	background: var(--quake-success);
+	box-shadow: 0 0 0 3px var(--quake-success-soft);
+}
+
+.status-dot[data-tone="simulated"] {
+	background: var(--quake-accent);
+	box-shadow: 0 0 0 3px var(--quake-accent-soft);
+}
+
+.status-dot[data-tone="error"] {
+	background: var(--quake-warning);
+}
+
+.status-dot[data-tone="offline"],
+.status-dot[data-tone="unavailable"] {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--quake-muted);
+}
+
+.status-dot[data-tone="checking"] {
+	animation: var(--quake-motion-pulse);
+}
+
+.callout {
+	margin: 0;
+	padding: 8px 12px;
+	color: var(--quake-foreground);
+	font-size: 12px;
+	background: var(--quake-fill);
+	border-radius: 8px;
+}
+
+.callout[data-tone="warning"] {
+	background: var(--quake-warning-soft);
+}
+
+.disclosure {
+	padding: 10px 14px;
+}
+
+.disclosure summary {
+	width: fit-content;
+	color: var(--quake-accent);
+	font-weight: 500;
+}
+
+.disclosure pre {
+	margin: 10px 0 8px;
+	padding: 12px;
+	overflow-x: auto;
+	font: 12px / 1.5 var(--font-mono);
+	background: var(--quake-field);
+	border: 1px solid var(--quake-hairline);
+	border-radius: 8px;
+}
+
+.disclosure p {
+	margin: 0;
+	color: var(--quake-muted);
+	font-size: 12px;
+}
+
+/* Feedback motion. Values are `none` unless motion is allowed (below). */
+
+.value-change {
 	display: inline-block;
 	animation: var(--quake-motion-feedback);
 }
 
-@keyframes stat-reveal {
+@keyframes value-reveal {
 	from {
-		opacity: 0.6;
-		transform: translateY(4px);
+		opacity: 0.55;
+		transform: translateY(3px);
 	}
 	to {
 		opacity: 1;
@@ -86,118 +445,30 @@ p {
 	}
 }
 
-.management {
-	max-width: 1000px;
-	margin: 0 auto;
-	padding: 32px;
-}
-
-.diagnostics {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 24px;
-	margin-top: 24px;
-	padding: 20px;
-	background: var(--quake-surface);
-	border: 1px solid var(--quake-border);
-	border-radius: 8px;
-}
-
-.diagnostics .stat-value {
-	font-size: 30px;
-}
-
-.appearance {
-	border-top: 1px solid var(--quake-border);
-	margin-top: 28px;
-	padding-top: 24px;
-}
-
-.settings-row {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 20px;
-	margin-top: 20px;
-}
-
-.setting {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	max-width: 100%;
-}
-
-select,
-input {
-	font: inherit;
-	max-width: 100%;
-}
-
-select,
-input::file-selector-button {
-	color: var(--quake-foreground);
-	background: var(--quake-surface);
-	border: 1px solid var(--quake-border);
-	border-radius: 5px;
-	padding: 8px 12px;
-}
-
-select {
-	min-width: 200px;
-}
-
-input::file-selector-button {
-	color: var(--quake-accent-text);
-	background: var(--quake-accent);
-	margin-right: 12px;
-	cursor: pointer;
-	transition: var(--quake-motion-control);
-}
-
-input:not(:disabled)::file-selector-button:hover {
-	transform: translateY(-1px);
-}
-
-input:disabled {
-	opacity: 0.6;
-}
-
-:focus-visible {
-	outline: 2px solid var(--quake-accent);
-	outline-offset: 4px;
-}
-
-.notice {
-	color: var(--quake-warning);
-}
-
-summary {
-	color: var(--quake-accent);
-	cursor: pointer;
-}
-
-pre {
-	background: var(--quake-surface);
-	border: 1px solid var(--quake-border);
-	border-radius: 5px;
-	padding: 16px;
-	overflow-x: auto;
-}
-
-@media (max-width: 720px) {
-	.management {
-		padding: 24px 16px;
+@keyframes status-pulse {
+	50% {
+		opacity: 0.35;
 	}
-	.panel {
-		flex-wrap: wrap;
-		gap: 24px;
-		padding: 24px;
+}
+
+@keyframes knob-press {
+	from {
+		opacity: 0.9;
+		transform: scale(0.94);
+	}
+	to {
+		opacity: 0;
+		transform: scale(1.14);
 	}
 }
 
 @media (prefers-reduced-motion: no-preference) {
 	:root[data-motion="full"] {
-		--quake-motion-feedback: stat-reveal 160ms ease-out;
-		--quake-motion-control: transform 120ms ease-out;
+		--quake-motion-feedback: value-reveal 180ms ease-out;
+		--quake-motion-control:
+			transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+			background-color 120ms ease-out;
+		--quake-motion-pulse: status-pulse 1.6s ease-in-out infinite;
+		--quake-motion-press: knob-press 420ms ease-out;
 	}
 }
