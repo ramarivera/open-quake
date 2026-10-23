@@ -1,22 +1,15 @@
 import { EventEmitter } from "node:events";
+import type { QuakeEvent } from "../preload/quake";
+
+export type { QuakeEvent } from "../preload/quake";
 
 /**
  * Device event bus for the prototype.
  *
- * MOCK SOURCE, clearly labeled: emits synthetic knob/touch/keep-alive events
- * on timers. The real node-hid transport replaces `startMockSource` only -
- * consumers (panel renderer, management window) stay identical.
+ * MOCK SOURCE, clearly labeled: emits synthetic rotation/press/keep-alive
+ * events on timers. A real transport can implement the same DeviceBus contract
+ * for the panel renderer and management window.
  */
-export type QuakeEvent =
-	| { source: "mock" | "hid"; kind: "rotate"; direction: 1 | -1 }
-	| { source: "mock" | "hid"; kind: "press" }
-	| {
-			source: "mock" | "hid";
-			kind: "touch";
-			points: ReadonlyArray<{ action: number; x: number; y: number }>;
-	  }
-	| { source: "mock" | "hid"; kind: "keepalive"; seq: number };
-
 const KEEPALIVE_INTERVAL_MS = 3000;
 
 export type DeviceBus = {
@@ -25,15 +18,14 @@ export type DeviceBus = {
 };
 
 export function startDeviceBus(): DeviceBus {
-	const emitter = new EventEmitter();
+	const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
 	const timers: ReturnType<typeof setInterval>[] = [];
 	let seq = 0;
 	let direction: 1 | -1 = 1;
 
 	timers.push(
 		setInterval(() => {
-			direction =
-				Math.random() > 0.8 ? ((direction * -1) as 1 | -1) : direction;
+			if (Math.random() > 0.8) direction = direction === 1 ? -1 : 1;
 			emitter.emit("event", {
 				source: "mock",
 				kind: "rotate",
