@@ -3,8 +3,8 @@ import {
 	fillGeometry,
 	formatClock,
 	PANEL_CANVAS,
-} from "./display";
-import type { WallpaperSnapshot } from "./wallpaper-contracts";
+} from "../../../shared/display";
+import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import "./wallpaper.css";
 
 export function WallpaperCanvas({

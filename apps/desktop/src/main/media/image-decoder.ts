@@ -1,10 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import { nativeImage } from "electron";
-import {
-	DESKTOP_RESOURCE_LIMIT,
-	MediaUnreadable,
-} from "../../renderer/src/wallpaper/display";
+import { DESKTOP_RESOURCE_LIMIT, MediaUnreadable } from "../../shared/display";
 
 export interface DecodedImage {
 	readonly format: "image/jpeg" | "image/png";

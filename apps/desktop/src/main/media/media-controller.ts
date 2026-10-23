@@ -4,11 +4,11 @@ import {
 	defaultClockTile,
 	displayClock,
 	InvalidWallpaper,
-} from "../../renderer/src/wallpaper/display";
+} from "../../shared/display";
 import {
 	WallpaperCommand,
 	type WallpaperSnapshot,
-} from "../../renderer/src/wallpaper/wallpaper-contracts";
+} from "../../shared/wallpaper-contracts";
 import { MediaRepository, type MediaRepositoryError } from "./media-repository";
 
 export interface MediaDesktopEdge {

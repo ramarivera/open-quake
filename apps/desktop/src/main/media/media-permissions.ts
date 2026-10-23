@@ -3,6 +3,7 @@ export function canRequestWallpaper(
 	caller: string,
 	renderer: string,
 	input: unknown,
+	isManagementWindow: boolean,
 ): boolean {
 	try {
 		const url = new URL(caller);
@@ -14,7 +15,7 @@ export function canRequestWallpaper(
 		)
 			return false;
 		return (
-			url.searchParams.get("surface") !== "panel" ||
+			isManagementWindow ||
 			(typeof input === "object" &&
 				input !== null &&
 				"_tag" in input &&

@@ -4,14 +4,14 @@ import { mkdtempSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
 	type WallpaperCommand,
 	WallpaperReply,
 	type WallpaperSnapshot,
-} from "../../renderer/src/wallpaper/wallpaper-contracts";
-import "./index";
+} from "../../shared/wallpaper-contracts";
+import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
@@ -69,12 +69,51 @@ async function smoke(): Promise<void> {
 	};
 	const management = new BrowserWindow(options);
 	const panel = new BrowserWindow(options);
+	let runtimeDisposed = false;
+	const runtime = ManagedRuntime.make(
+		Layer.merge(
+			MediaLive(join(directory, "wallpaper-v1")),
+			Layer.scopedDiscard(
+				Effect.addFinalizer(() =>
+					Effect.sync(() => {
+						runtimeDisposed = true;
+					}),
+				),
+			),
+		),
+	);
+	registerMedia(runtime, () => management);
+	app.once("will-quit", () => {
+		assert(
+			runtimeDisposed,
+			"Media runtime must be disposed before Electron quits",
+		);
+		process.stdout.write("Media runtime disposal before will-quit PASS\n");
+	});
 	await Promise.all([
 		management.loadFile(resolve("out/renderer/index.html")),
 		panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		}),
 	]);
+	// A panel spoofing the management query still has only read permission.
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "management" },
+	});
+	for (const tag of ["select", "import", "configure", "clear", "restore"]) {
+		const reply: unknown = await panel.webContents.executeJavaScript(
+			`window.quakeWallpaper.request(${JSON.stringify({ _tag: tag, serial: "spoofed", revision: 0, fillMode: "contain", hourFormat: "12h" })})`,
+		);
+		assert(Schema.is(WallpaperReply)(reply));
+		assert.equal(
+			reply._tag,
+			"failure",
+			"Spoofed panel mutation must be rejected",
+		);
+	}
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
 	await request(management, { _tag: "select", serial: "smoke-A" });
 	const png = await request(management, {
 		_tag: "import",
@@ -176,7 +215,7 @@ async function smoke(): Promise<void> {
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(
-		"W6 Electron smoke PASS: native PNG/JPEG decoding, isolated serials, real preload/IPC, three fill modes, synchronized one-second clock, light theme/reduced motion, hidden panel/preview. Hardware unverified.\n",
+		"W6 Electron smoke PASS: spoofed panel mutations rejected, native PNG/JPEG decoding, isolated serials, real preload/IPC, three fill modes, synchronized one-second clock, light theme/reduced motion, hidden panel/preview. Hardware unverified.\n",
 	);
 }
 

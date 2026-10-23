@@ -1,9 +1,10 @@
 import { join } from "node:path";
-import "./media";
+import { ManagedRuntime } from "effect";
 import { app, BrowserWindow, type Display, screen } from "electron";
 import { startDeviceBus } from "./deviceBus";
 import { findPanelDisplay, PANEL_SIZE } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { MediaLive, registerMedia } from "./media";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const PANEL_TITLE = "open-quake panel";
@@ -71,6 +72,12 @@ app.whenReady().then(() => {
 		findPanelDisplay(screen.getAllDisplays()) ?? screen.getPrimaryDisplay();
 	let panelWin = createPanelWindow(getPanelDisplay());
 	let managementWin = createManagementWindow();
+	registerMedia(
+		ManagedRuntime.make(
+			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
+		),
+		() => managementWin,
+	);
 	const syncPanelDisplay = (): void => {
 		const display = getPanelDisplay();
 		if (panelWin.isDestroyed()) {

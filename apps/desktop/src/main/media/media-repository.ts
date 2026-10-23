@@ -11,7 +11,7 @@ import {
 	MediaUnreadable,
 	SavedWallpaper,
 	type WallpaperSettings,
-} from "../../renderer/src/wallpaper/display";
+} from "../../shared/display";
 import { ImageDecoder, normalizeLocalSelection } from "./image-decoder";
 import { MediaFiles } from "./media-files";
 
@@ -77,12 +77,52 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					Effect.gen(function* () {
 						const media = saved.settings.displayMediaList[0];
 						if (!media) return Option.none();
-						const bytes = yield* files.readAsset(media.filePath);
+						const bytes = yield* files.readAsset(saved.serial, media.filePath);
 						const decoded = yield* decoder.decode(bytes);
 						if (decoded.format !== media.format)
 							return yield* new MediaUnreadable(undefined);
 						return Option.some(decoded);
 					}),
+			);
+			const saveUnlocked = Effect.fn("MediaRepository.saveUnlocked")(
+				(
+					serial: string,
+					revision: number,
+					settings: WallpaperSettings,
+					clock: DesktopClockTile,
+				): Effect.Effect<SavedWallpaper, MediaRepositoryError> =>
+					Effect.gen(function* () {
+						const { saved: previous } = yield* load(serial);
+						if (previous.revision !== revision)
+							return yield* new InvalidWallpaper(undefined);
+						const next = yield* validate({
+							...previous,
+							settings,
+							clock,
+							revision: revision + 1,
+						});
+						// No unreadable new selection may replace the last readable revision.
+						if (
+							next.settings.displayMediaList[0]?.filePath !==
+							previous.settings.displayMediaList[0]?.filePath
+						)
+							yield* resolve(next);
+						yield* files.writeSettings(previous, next);
+						// Cleanup cannot turn an already committed save into a failed request.
+						yield* files.collectAssets(serial).pipe(
+							Effect.catchTags({
+								InvalidWallpaper: () =>
+									Effect.logWarning(
+										"Wallpaper asset collection skipped: invalid settings",
+									),
+								MediaPersistenceFailed: () =>
+									Effect.logWarning(
+										"Wallpaper asset collection deferred: storage unavailable",
+									),
+							}),
+						);
+						return next;
+					}).pipe(Effect.uninterruptible),
 			);
 			const save = Effect.fn("MediaRepository.save")(
 				(
@@ -91,27 +131,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					settings: WallpaperSettings,
 					clock: DesktopClockTile,
 				): Effect.Effect<SavedWallpaper, MediaRepositoryError> =>
-					lock.withPermits(1)(
-						Effect.gen(function* () {
-							const { saved: previous } = yield* load(serial);
-							if (previous.revision !== revision)
-								return yield* new InvalidWallpaper(undefined);
-							const next = yield* validate({
-								...previous,
-								settings,
-								clock,
-								revision: revision + 1,
-							});
-							// No unreadable new selection may replace the last readable revision.
-							if (
-								next.settings.displayMediaList[0]?.filePath !==
-								previous.settings.displayMediaList[0]?.filePath
-							)
-								yield* resolve(next);
-							yield* files.writeSettings(previous, next);
-							return next;
-						}),
-					),
+					lock.withPermits(1)(saveUnlocked(serial, revision, settings, clock)),
 			);
 			const importLocal = Effect.fn("MediaRepository.importLocal")(
 				(
@@ -122,53 +142,59 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					{ saved: SavedWallpaper; normalizedFileUrl: boolean },
 					MediaRepositoryError
 				> =>
-					Effect.gen(function* () {
-						const { path, normalizedFileUrl } =
-							yield* normalizeLocalSelection(selection);
-						const bytes = yield* files.readLocal(path);
-						const decoded = yield* decoder.decode(bytes);
-						const reference = yield* files.storeAsset(bytes);
-						const { saved: previous } = yield* load(serial);
-						const settings = {
-							...previous.settings,
-							displayMediaList: [
-								{
-									name: basename(path),
-									type: "image" as const,
-									filePath: reference,
-									format: decoded.format,
-									duration: intervalMillis(
-										previous.settings.gapInterval,
-										previous.settings.gapIntervalUnit,
-									),
-								},
-							],
-						};
-						const saved = yield* save(
-							serial,
-							revision,
-							settings,
-							previous.clock,
-						);
-						return { saved, normalizedFileUrl };
-					}),
+					lock.withPermits(1)(
+						Effect.gen(function* () {
+							const { saved: previous } = yield* load(serial);
+							if (previous.revision !== revision)
+								return yield* new InvalidWallpaper(undefined);
+							const { path, normalizedFileUrl } =
+								yield* normalizeLocalSelection(selection);
+							const bytes = yield* files.readLocal(path);
+							const decoded = yield* decoder.decode(bytes);
+							const reference = yield* files.storeAsset(serial, bytes);
+							const settings = {
+								...previous.settings,
+								displayMediaList: [
+									{
+										name: basename(path),
+										type: "image" as const,
+										filePath: reference,
+										format: decoded.format,
+										duration: intervalMillis(
+											previous.settings.gapInterval,
+											previous.settings.gapIntervalUnit,
+										),
+									},
+								],
+							};
+							const saved = yield* saveUnlocked(
+								serial,
+								revision,
+								settings,
+								previous.clock,
+							);
+							return { saved, normalizedFileUrl };
+						}),
+					),
 			);
 			const restore = Effect.fn("MediaRepository.restore")(
 				(
 					serial: string,
 					revision: number,
 				): Effect.Effect<SavedWallpaper, MediaRepositoryError> =>
-					Effect.gen(function* () {
-						const backup = yield* files.readSettings(serial, true);
-						if (Option.isNone(backup))
-							return yield* new InvalidWallpaper(undefined);
-						return yield* save(
-							serial,
-							revision,
-							backup.value.settings,
-							backup.value.clock,
-						);
-					}),
+					lock.withPermits(1)(
+						Effect.gen(function* () {
+							const backup = yield* files.readSettings(serial, true);
+							if (Option.isNone(backup))
+								return yield* new InvalidWallpaper(undefined);
+							return yield* saveUnlocked(
+								serial,
+								revision,
+								backup.value.settings,
+								backup.value.clock,
+							);
+						}),
+					),
 			);
 			return {
 				load,

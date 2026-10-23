@@ -1,12 +1,12 @@
 import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ClockSnapshot } from "./display";
+import { ClockSnapshot } from "../../../shared/display";
 import {
 	type WallpaperBridge,
 	type WallpaperCommand,
 	WallpaperReply,
 	WallpaperSnapshot,
-} from "./wallpaper-contracts";
+} from "../../../shared/wallpaper-contracts";
 
 export function subscribeWallpaper(
 	bridge: WallpaperBridge,

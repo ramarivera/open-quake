@@ -4,7 +4,7 @@ import {
 	WALLPAPER_REQUEST,
 	WALLPAPER_SNAPSHOT,
 	type WallpaperBridge,
-} from "../../renderer/src/wallpaper/wallpaper-contracts";
+} from "../../shared/wallpaper-contracts";
 
 const subscribe = (
 	channel: string,

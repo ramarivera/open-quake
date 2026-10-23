@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { useState } from "react";
-import { FillMode, HourFormat } from "./display";
+import { FillMode, HourFormat } from "../../../shared/display";
 import { useWallpaper } from "./useWallpaper";
 import { WallpaperCanvas } from "./WallpaperCanvas";
 

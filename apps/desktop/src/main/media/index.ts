@@ -1,14 +1,14 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, ManagedRuntime, Option } from "effect";
+import { Effect, Fiber, Layer, type ManagedRuntime, Option } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { MediaUnreadable } from "../../renderer/src/wallpaper/display";
+import { MediaUnreadable } from "../../shared/display";
 import {
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
 	WALLPAPER_SNAPSHOT,
 	type WallpaperReply,
-} from "../../renderer/src/wallpaper/wallpaper-contracts";
+} from "../../shared/wallpaper-contracts";
 import { makeMediaController } from "./media-controller";
 import { MediaRoot } from "./media-files";
 import { canRequestWallpaper } from "./media-permissions";
@@ -23,14 +23,16 @@ function broadcast(channel: string, value: unknown): Effect.Effect<void> {
 	});
 }
 
-app.on("ready", () => {
-	const runtime = ManagedRuntime.make(
-		MediaRepository.Default.pipe(
-			Layer.provide(
-				Layer.succeed(MediaRoot, join(app.getPath("userData"), "wallpaper-v1")),
-			),
-		),
-	);
+export const MediaLive = (root: string): Layer.Layer<MediaRepository> =>
+	MediaRepository.Default.pipe(Layer.provide(Layer.succeed(MediaRoot, root)));
+
+/** Main owns the runtime and identifies its management window independently of URLs. */
+export function registerMedia(
+	runtime: ManagedRuntime.ManagedRuntime<MediaRepository, never>,
+	managementWindow: () => BrowserWindow | undefined,
+	renderer = process.env.ELECTRON_RENDERER_URL ??
+		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+): { dispose: () => Promise<void> } {
 	const controller = runtime.runPromise(
 		makeMediaController({
 			chooseImage: Effect.tryPromise({
@@ -57,12 +59,14 @@ app.on("ready", () => {
 	let clockFiber: Fiber.RuntimeFiber<void> | undefined;
 	let generation = 0;
 	let disposed = false;
-	const stopClock = (): void => {
+	const stopClock = (): Promise<void> => {
 		generation++;
 		if (clockFiber) {
-			void Effect.runPromise(Fiber.interrupt(clockFiber));
+			const fiber = clockFiber;
 			clockFiber = undefined;
+			return runtime.runPromise(Fiber.interrupt(fiber)).then(() => undefined);
 		}
+		return Promise.resolve();
 	};
 	const startClock = async (): Promise<void> => {
 		const current = generation;
@@ -75,14 +79,16 @@ app.on("ready", () => {
 		)
 			clockFiber = runtime.runFork(service.ticks);
 	};
-	const onWindow = (_event: Electron.Event, window: BrowserWindow): void => {
+	const trackWindow = (window: BrowserWindow): void => {
 		void startClock();
 		window.once("closed", () => {
-			if (!BrowserWindow.getAllWindows().length) stopClock();
+			if (!BrowserWindow.getAllWindows().length) void stopClock();
 		});
 	};
+	const onWindow = (_event: Electron.Event, window: BrowserWindow): void =>
+		trackWindow(window);
 	app.on("browser-window-created", onWindow);
-	void startClock();
+	for (const window of BrowserWindow.getAllWindows()) trackWindow(window);
 	ipcMain.handle(
 		WALLPAPER_REQUEST,
 		async (event, input: unknown): Promise<WallpaperReply> => {
@@ -92,10 +98,9 @@ app.on("ready", () => {
 				event.senderFrame !== event.sender.mainFrame ||
 				!canRequestWallpaper(
 					event.sender.getURL(),
-					process.env.ELECTRON_RENDERER_URL ??
-						pathToFileURL(join(import.meta.dirname, "../renderer/index.html"))
-							.href,
+					renderer,
 					input,
+					event.sender === managementWindow()?.webContents,
 				)
 			)
 				return {
@@ -133,11 +138,28 @@ app.on("ready", () => {
 			);
 		},
 	);
-	app.once("before-quit", () => {
+	let shutdown: Promise<void> | undefined;
+	const dispose = (): Promise<void> => {
+		if (shutdown) return shutdown;
+		disposed = true;
 		ipcMain.removeHandler(WALLPAPER_REQUEST);
 		app.removeListener("browser-window-created", onWindow);
-		disposed = true;
-		stopClock();
-		void runtime.dispose();
-	});
-});
+		shutdown = (async () => {
+			await stopClock();
+			await controller;
+			await runtime.dispose();
+			app.removeListener("before-quit", onBeforeQuit);
+		})();
+		return shutdown;
+	};
+	let quitting = false;
+	const onBeforeQuit = (event: Electron.Event): void => {
+		event.preventDefault();
+		if (!quitting) {
+			quitting = true;
+			void dispose().then(() => app.quit());
+		}
+	};
+	app.on("before-quit", onBeforeQuit);
+	return { dispose };
+}

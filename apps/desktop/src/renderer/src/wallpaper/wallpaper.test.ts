@@ -6,14 +6,14 @@ import {
 	type ClockSnapshot,
 	defaultClockTile,
 	defaultWallpaper,
-} from "./display";
-import { subscribeWallpaper } from "./useWallpaper";
-import { WallpaperCanvas } from "./WallpaperCanvas";
+} from "../../../shared/display";
 import {
 	WallpaperCommand,
 	WallpaperReply,
 	type WallpaperSnapshot,
-} from "./wallpaper-contracts";
+} from "../../../shared/wallpaper-contracts";
+import { subscribeWallpaper } from "./useWallpaper";
+import { WallpaperCanvas } from "./WallpaperCanvas";
 
 const snapshot: WallpaperSnapshot = {
 	saved: {

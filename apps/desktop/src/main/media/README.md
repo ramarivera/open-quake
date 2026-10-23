@@ -13,8 +13,10 @@ is interrupted on quit. No firmware clock event is sent.
 The root is `<userData>/wallpaper-v1/`. Settings use
 `settings/<sha256(serial)>.json`, with the last valid revision in
 `settings/<sha256(serial)>.backup.json`. A save validates before IO, writes the
-previous validated settings to the backup, then atomically renames the new
-settings file into place. A failed write retains the current revision. An
+new primary and previous revision into temporary files, commits the primary,
+then rotates the backup. A primary write or rename failure leaves both committed
+files intact. A backup rename failure rolls the primary back from the staged
+previous revision. Temporary files are removed after either outcome. An
 invalid or missing primary can load the validated backup. Updates require the
 current revision, so concurrent saves cannot silently overwrite one another.
 
@@ -40,12 +42,20 @@ decode the content. Extensions and caller-supplied MIME types are insufficient.
 Imports are limited to 8 MiB and 64 million decoded pixels. This is a desktop
 limit and says nothing about device resource limits.
 
-Accepted bytes are copied into `assets/<sha256(bytes)>`; the renderer receives
+Accepted bytes are copied into `assets/<sha256(serial)>/<sha256(bytes)>`; the renderer receives
 a validated image data URL, never a filesystem path. Reads verify the content
 hash. Deleting the original selected file does not remove its managed copy.
 Missing, modified or undecodable managed assets retain their saved selection
 and show the neutral background with instructions to select another image.
 Imports never change DK-Suite storage or copy its bundled artwork.
+
+After a successful settings commit, collection removes only files that neither
+the serial's current revision nor its backup references. Imports, commits,
+restores and collection share the repository lock. Failed commits never collect.
+Cleanup failures defer collection without reporting the committed save as failed.
+The original flat asset directory remains readable; its collection first validates
+all serials' primary and backup settings and retains every referenced hash.
+Invalid settings prevent collection rather than risking another serial's asset.
 
 ## Status and integration
 
@@ -56,7 +66,9 @@ The active serial selection is session-local; each serial's settings persist.
 
 Decoded IPC commands are read/select/import/configure/clear/restore. Only the
 app's renderer document and top-level frame may call the handler. The panel
-can read; management can mutate. Closing a renderer removes both listeners.
+can read; management can mutate. Main supplies the current management window's
+identity, so query parameters cannot grant writes. Closing a renderer removes
+both subscriptions.
 Snapshots contain a versioned saved revision, decoded asset state and host
 clock. Images use the existing theme tokens without decorative animation.
 
@@ -68,7 +80,11 @@ L1 capability agreement and the separate keyed-icon/full-panel hardware gates.
 The desktop adds the existing catalog dependency `effect` 3.22.1. It imports
 the display-only device modules directly so Electron builds bundle workspace
 TypeScript and renderer bundles never import HID adapters. No image dependency
-was added. The main and preload integrations each use one side-effect import.
+was added. Shared IPC Schemas live in `src/shared/`, imported by main, preload
+and renderer. Main creates a runtime from the exported `MediaLive` Layer and
+calls `registerMedia` with a getter for its management window. Registration has
+no import side effects. Clock interruption uses that runtime. The quit handler
+waits for clock interruption and runtime disposal before allowing Electron to quit.
 
 ## Verification
 

@@ -5,13 +5,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Either, Layer, Option } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-	defaultClockTile,
-	defaultWallpaper,
-} from "../../renderer/src/wallpaper/display";
+import { defaultClockTile, defaultWallpaper } from "../../shared/display";
 import { ImageDecoder, normalizeLocalSelection } from "./image-decoder";
 import { makeMediaController } from "./media-controller";
-import { MediaRoot } from "./media-files";
+import { MediaFiles, MediaRoot } from "./media-files";
 import { MediaRepository } from "./media-repository";
 
 const native = vi.hoisted(() => ({ decode: vi.fn() }));
@@ -20,7 +17,12 @@ vi.mock("electron", () => ({
 }));
 vi.mock("node:fs/promises", async (load) => {
 	const actual = await load<typeof import("node:fs/promises")>();
-	return { ...actual, rename: vi.fn(actual.rename) };
+	return {
+		...actual,
+		rename: vi.fn(actual.rename),
+		writeFile: vi.fn(actual.writeFile),
+		unlink: vi.fn(actual.unlink),
+	};
 });
 // Native decoding has its own Electron smoke gate. This fixture isolates IO and rollback.
 const png = Buffer.from(
@@ -34,6 +36,8 @@ describe("desktop media repository and actual disk adapter", () => {
 	let root: string;
 	let imagePath: string;
 	let layer: Layer.Layer<MediaRepository>;
+	const assetsDirectory = (serial: string): string =>
+		join(root, "assets", createHash("sha256").update(serial).digest("hex"));
 	const settingsFile = (serial: string): string =>
 		join(
 			root,
@@ -191,8 +195,13 @@ describe("desktop media repository and actual disk adapter", () => {
 			}).pipe(Effect.provide(layer)),
 		);
 	});
-	it.each(["backup", "primary"])(
-		"retains settings and scrubs the real cause when %s rename fails",
+	it.each([
+		"primary write",
+		"backup write",
+		"primary rename",
+		"backup rename",
+	] as const)(
+		"retains both revisions and restores the prior settings after failed %s",
 		async (failure) => {
 			const actual =
 				await vi.importActual<typeof import("node:fs/promises")>(
@@ -202,18 +211,40 @@ describe("desktop media repository and actual disk adapter", () => {
 				Effect.gen(function* () {
 					const repo = yield* MediaRepository;
 					const first = (yield* repo.importLocal("A", 0, imagePath)).saved;
+					const second = yield* repo.save(
+						"A",
+						1,
+						{ ...first.settings, bgFillMode: "contain" },
+						first.clock,
+					);
+					const backupFile = settingsFile("A").replace(".json", ".backup.json");
+					const primaryBefore = yield* Effect.promise(() =>
+						fs.readFile(settingsFile("A"), "utf8"),
+					);
+					const backupBefore = yield* Effect.promise(() =>
+						fs.readFile(backupFile, "utf8"),
+					);
+					const assetsBefore = yield* Effect.promise(() =>
+						fs.readdir(assetsDirectory("A")),
+					);
 					const cause = Object.assign(new Error("/private/secret-token"), {
 						code: "EACCES",
 					});
-					if (failure === "primary")
-						vi.mocked(fs.rename).mockImplementationOnce(actual.rename);
-					vi.mocked(fs.rename).mockRejectedValueOnce(cause);
+					if (failure.endsWith("write")) {
+						if (failure === "backup write")
+							vi.mocked(fs.writeFile).mockImplementationOnce(actual.writeFile);
+						vi.mocked(fs.writeFile).mockRejectedValueOnce(cause);
+					} else {
+						if (failure === "backup rename")
+							vi.mocked(fs.rename).mockImplementationOnce(actual.rename);
+						vi.mocked(fs.rename).mockRejectedValueOnce(cause);
+					}
 					const result = yield* repo
 						.save(
 							"A",
-							1,
-							{ ...first.settings, bgFillMode: "center" },
-							first.clock,
+							2,
+							{ ...second.settings, bgFillMode: "center" },
+							second.clock,
 						)
 						.pipe(Effect.either);
 					if (Either.isLeft(result)) {
@@ -221,7 +252,19 @@ describe("desktop media repository and actual disk adapter", () => {
 						expect(result.left.originalCause).toBe(cause);
 						expect(JSON.stringify(result.left)).not.toContain("secret-token");
 					} else throw new Error("Write unexpectedly succeeded");
-					expect((yield* repo.load("A")).saved).toEqual(first);
+					expect((yield* repo.load("A")).saved).toEqual(second);
+					expect(
+						yield* Effect.promise(() => fs.readFile(settingsFile("A"), "utf8")),
+					).toBe(primaryBefore);
+					expect(
+						yield* Effect.promise(() => fs.readFile(backupFile, "utf8")),
+					).toBe(backupBefore);
+					expect(
+						yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+					).toEqual(assetsBefore);
+					const restored = yield* repo.restore("A", 2);
+					expect(restored.settings).toEqual(first.settings);
+					expect(restored.revision).toBe(3);
 				}).pipe(Effect.provide(layer)),
 			);
 			expect(
@@ -231,6 +274,169 @@ describe("desktop media repository and actual disk adapter", () => {
 			).toBe(false);
 		},
 	);
+	it("collects only unreferenced assets for the committed serial and preserves its restore point", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const a = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				const b = (yield* repo.importLocal("B", 0, imagePath)).saved;
+				const firstHash = a.settings.displayMediaList[0]?.filePath.slice(6);
+				yield* Effect.promise(() => fs.writeFile(imagePath, jpeg));
+				const second = (yield* repo.importLocal("A", 1, imagePath)).saved;
+				const secondHash =
+					second.settings.displayMediaList[0]?.filePath.slice(6);
+				expect(
+					(yield* Effect.promise(() =>
+						fs.readdir(assetsDirectory("A")),
+					)).sort(),
+				).toEqual([firstHash, secondHash].sort());
+				const cause = new Error("failed settings commit");
+				vi.mocked(fs.rename).mockRejectedValueOnce(cause);
+				expect(
+					Either.isLeft(
+						yield* repo
+							.save("A", 2, defaultWallpaper, second.clock)
+							.pipe(Effect.either),
+					),
+				).toBe(true);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toHaveLength(2);
+				const cleared = yield* repo.save(
+					"A",
+					2,
+					defaultWallpaper,
+					second.clock,
+				);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toEqual([secondHash]);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("B"))),
+				).toEqual([firstHash]);
+				expect(Option.isSome(yield* repo.resolve(b))).toBe(true);
+				const restored = yield* repo.restore("A", cleared.revision);
+				expect(restored.settings).toEqual(second.settings);
+				expect(Option.isSome(yield* repo.resolve(restored))).toBe(true);
+				const clearedAgain = yield* repo.save(
+					"A",
+					restored.revision,
+					defaultWallpaper,
+					restored.clock,
+				);
+				yield* repo.save(
+					"A",
+					clearedAgain.revision,
+					defaultWallpaper,
+					clearedAgain.clock,
+				);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toEqual([]);
+				expect(Option.isSome(yield* repo.resolve(b))).toBe(true);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+	it("reads legacy flat assets and retains every serial's current and backup references", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const a = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				const b = (yield* repo.importLocal("B", 0, imagePath)).saved;
+				const reference = a.settings.displayMediaList[0]?.filePath;
+				if (!reference) throw new Error("Missing imported asset");
+				const globalAsset = join(root, "assets", reference.slice(6));
+				yield* Effect.promise(async () => {
+					await fs.rename(
+						join(assetsDirectory("A"), reference.slice(6)),
+						globalAsset,
+					);
+					await fs.unlink(join(assetsDirectory("B"), reference.slice(6)));
+				});
+				expect(Option.isSome(yield* repo.resolve(b))).toBe(true);
+				const aCleared = yield* repo.save("A", 1, defaultWallpaper, a.clock);
+				yield* repo.save(
+					"A",
+					aCleared.revision,
+					defaultWallpaper,
+					aCleared.clock,
+				);
+				expect(Option.isSome(yield* repo.resolve(b))).toBe(true);
+				const bCleared = yield* repo.save("B", 1, defaultWallpaper, b.clock);
+				expect(Option.isSome(yield* repo.resolve(b))).toBe(true);
+				yield* repo.save(
+					"B",
+					bCleared.revision,
+					defaultWallpaper,
+					bCleared.clock,
+				);
+				expect(
+					yield* Effect.promise(() => fs.readdir(join(root, "assets"))),
+				).not.toContain(reference.slice(6));
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+	it("skips collection when a committed revision cannot be validated", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const first = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				yield* Effect.promise(() => fs.writeFile(imagePath, jpeg));
+				yield* repo.importLocal("A", 1, imagePath);
+				yield* Effect.promise(() =>
+					fs.writeFile(settingsFile("A").replace(".json", ".backup.json"), "{"),
+				);
+				const collection = yield* MediaFiles.collectAssets("A").pipe(
+					Effect.provide(
+						MediaFiles.Default.pipe(
+							Layer.provide(Layer.succeed(MediaRoot, root)),
+						),
+					),
+					Effect.either,
+				);
+				expect(Either.isLeft(collection)).toBe(true);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toHaveLength(2);
+				expect(Option.isSome(yield* repo.resolve(first))).toBe(true);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+	it("keeps a committed save successful when asset cleanup fails and retries later", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const first = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				yield* Effect.promise(() => fs.writeFile(imagePath, jpeg));
+				const second = (yield* repo.importLocal("A", 1, imagePath)).saved;
+				const actual = yield* Effect.promise(() =>
+					vi.importActual<typeof import("node:fs/promises")>(
+						"node:fs/promises",
+					),
+				);
+				// Two temporary-file cleanups precede collection of the retired image.
+				vi.mocked(fs.unlink)
+					.mockImplementationOnce(actual.unlink)
+					.mockImplementationOnce(actual.unlink)
+					.mockRejectedValueOnce(new Error("cleanup unavailable"));
+				const cleared = yield* repo.save(
+					"A",
+					2,
+					defaultWallpaper,
+					second.clock,
+				);
+				expect(cleared.revision).toBe(3);
+				expect((yield* repo.load("A")).saved).toEqual(cleared);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toHaveLength(2);
+				yield* repo.save("A", cleared.revision, defaultWallpaper, first.clock);
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toEqual([]);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
 	it("rejects stale revisions instead of losing a concurrent save", async () => {
 		await Effect.runPromise(
 			Effect.gen(function* () {
@@ -258,7 +464,9 @@ describe("desktop media repository and actual disk adapter", () => {
 				const imported = (yield* repo.importLocal("A", 0, imagePath)).saved;
 				const reference = imported.settings.displayMediaList[0]?.filePath;
 				yield* Effect.promise(() =>
-					fs.unlink(join(root, "assets", reference?.slice(6) ?? "missing")),
+					fs.unlink(
+						join(assetsDirectory("A"), reference?.slice(6) ?? "missing"),
+					),
 				);
 				const published: unknown[] = [];
 				const controller = yield* makeMediaController({
