@@ -87,4 +87,4 @@ Two parallel lanes specced the same feature. `soundboard-playback` was folded in
 
 Carried-over evidence: `ATLAS/artifacts/ipc_channels.txt` (N) names PlayerReady, AudioTrackNaturalEnd, AudioPlaylistAction, RequestPlayAudioPlaylistRescan, AudioPlayStart/Stop/LoadError and get-play-audio-runtime-status. Exact payloads and timing are unverified.
 
-Catalog errors: `MEDIA.SOUNDBOARD.CONFIG_INVALID`, `MEDIA.SOUNDBOARD.FILE_UNAVAILABLE`, `MEDIA.SOUNDBOARD.LOAD_TIMEOUT`, `MEDIA.SOUNDBOARD.OUTPUT_BUSY`, `MEDIA.SOUNDBOARD.PLAY_FAILED`. Diagnostics use file IDs and outcome codes, never absolute paths.
+Catalog errors stay in the shared `QUAKE.*` catalog, per the failure contract above. soundboard-playback's `MEDIA.SOUNDBOARD.*` names are dropped, and its two extra cases join the existing `QUAKE.AUDIO` leaves: `QUAKE.AUDIO.CONFIG_INVALID`, `QUAKE.AUDIO.FILE_UNAVAILABLE`, `QUAKE.AUDIO.DECODE_FAILED`, `QUAKE.AUDIO.OUTPUT_FAILED`, `QUAKE.AUDIO.LOAD_TIMEOUT`, `QUAKE.AUDIO.OUTPUT_BUSY`. Diagnostics use file IDs and outcome codes, never absolute paths.
