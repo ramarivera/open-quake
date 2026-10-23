@@ -21,26 +21,30 @@ locks, and returns a result without changing its input. The editor and the
 other four edit-lock operations remain task 2.2.
 
 `ProfileRepository` is an Effect service over the `ProfileStorage` port.
-`ProfileService` declares the repository and `ProfileFunctionContracts`
-dependencies. Its named methods are `loadProfiles`, `getProfile`,
-`saveProfile`, and `subscribeCommittedProfiles`. Save requests contain
-`expectedRevision` and an encoded `profile` draft without `revision`.
-The repository serializes the revision check, atomic write, and complete
-snapshot publication under one semaphore. The committed revision increments
-once, and failed writes or stale saves publish nothing. Snapshots are detached
+`ProfileService` declares the repository dependency; the repository declares
+`ProfileFunctionContracts`. Its named methods are `loadProfiles`, `getProfile`,
+`saveProfile`, `subscribeCommittedProfiles`, and `subscribeDispatchProfiles`.
+Save requests contain `expectedRevision` and an encoded `profile` draft
+without `revision`.
+The repository serializes the revision check, full draft decoding, function
+validation, atomic write, and complete snapshot publication under one semaphore.
+Only the profile ID and expected revision are decoded before checking the
+stored revision. A stale save returns `ProfileRevisionConflict` even when its
+draft is malformed or its function values are invalid. The committed revision
+increments once, and failed writes or stale saves publish nothing. Snapshots are detached
 and deeply frozen so callers cannot mutate committed dispatch state.
 
 Compose one repository instance per local store in desktop main:
 
 ```ts
-const dependencies = Layer.merge(
-  ProfileRepository.Default.pipe(
-    Layer.provide(desktopProfileStorageLayer(profileFilePath)),
-  ),
-  profileFunctionContractsLayer(functionContracts),
+const repository = ProfileRepository.DefaultWithoutDependencies.pipe(
+  Layer.provide(Layer.merge(
+    desktopProfileStorageLayer(profileFilePath),
+    profileFunctionContractsLayer(functionContracts),
+  )),
 )
 const profiles = ProfileService.DefaultWithoutDependencies.pipe(
-  Layer.provide(dependencies),
+  Layer.provide(repository),
 )
 ```
 
@@ -53,6 +57,10 @@ restores a valid backup when available, or seeds while retaining invalid data.
 Recovery reasons are available on the adapter's `recoveries` collection.
 The repository reports invalid device selections in `repairedSelections` and
 persists their fallback to the first profile and page before publication.
+Selection repair collects own entries in a `Map`. The envelope Schema rejects
+the serial `__proto__` before Effect's record decoder can invoke the plain-object
+prototype setter. `constructor` and `prototype` are valid own serial keys and
+survive repair and encoding.
 An unreadable primary, such as a permission failure, never triggers seeding.
 Atomic rename prevents partially written JSON; power-loss durability and
 multiple independent processes writing the same file are not claimed.
@@ -62,6 +70,27 @@ supplies validators and support declarations through
 `profileFunctionContractsLayer`. New unknown functions are rejected.
 Records marked `compatibility.unsupported:true` remain inert data, including
 their original payloads. Registry availability never executes a function.
+
+`loadProfiles`, `getProfile`, save results, and `subscribeCommittedProfiles`
+retain the complete stored records for editing and rendering. These envelopes
+are not dispatch input. Stored functions can be missing from the current
+registry or fail its current validators without losing their original data.
+Dispatch consumers must use `subscribeDispatchProfiles`, which derives a
+detached, frozen envelope from each complete committed revision. Its page keys
+include only visible, nonempty, supported records accepted by the current
+registry, including function values and support declarations. Unknown types,
+invalid function values, throwing validators, and explicitly unsupported
+compatibility records are excluded. Filtering never writes the projection to
+storage or changes a revision. Knob configuration remains opaque and must be
+validated by its owning domain before execution.
+
+This is the fail-closed boundary for tasks 1.1–1.5. Automatic conversion of
+unknown imports to flagged compatibility records, import diagnostics, and
+normalization of legacy sentinels remain task 2.4. Stored unknown keys cannot
+execute through the dispatch subscription while that task is pending. An
+unrelated save containing an unflagged unknown key still fails validation;
+task 2.4 will provide the import path that preserves it as explicitly inert.
+
 Window IPC, real action dispatch, import normalization, and knob validation
 remain their owning tasks. The desktop adapter imports this module directly
 to keep this lane inside its assigned paths without changing manifests.
@@ -76,6 +105,10 @@ Verification lives beside the implementation:
   failed publication, frozen snapshots, field paths, error identity and cause
   privacy, invalid-selection repair, inert imports, and restart through the
   real desktop adapter.
+- `profile-review.test.ts` checks validation/conflict priority in both save
+  orders and during a pending write, plus stored-key filtering at the dispatch
+  subscription. `profile-repository.test.ts` property-tests reserved serials,
+  own entries, schema rejection, and round trips.
 - The desktop adapter tests use real temporary directories and inject primary
   and backup write/rename failures, corruption, and permission failures.
 

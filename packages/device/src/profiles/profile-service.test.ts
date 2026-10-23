@@ -51,11 +51,13 @@ const validRequest = (revision = 4, name = "Edited") => {
 const serviceLayer = (storage: ProfileStoragePort) =>
 	ProfileService.DefaultWithoutDependencies.pipe(
 		Layer.provide(
-			Layer.merge(
-				ProfileRepository.Default.pipe(
-					Layer.provide(profileStorageLayer(storage)),
+			ProfileRepository.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					Layer.merge(
+						profileStorageLayer(storage),
+						profileFunctionContractsLayer(testFunctionContracts),
+					),
 				),
-				profileFunctionContractsLayer(testFunctionContracts),
 			),
 		),
 	);
@@ -385,6 +387,14 @@ describe("profile conductor", () => {
 					Schema.encodeSync(Profile)(saved.profiles[0]).pages[0]?.keys[0]
 						?.compatibility,
 				).toEqual(unknown.compatibility);
+				const dispatch = yield* service.subscribeDispatchProfiles();
+				const snapshot = yield* Stream.runHead(dispatch);
+				expect(
+					Option.isSome(snapshot) && snapshot.value.profiles[0].revision,
+				).toBe(5);
+				expect(
+					Option.isSome(snapshot) && snapshot.value.profiles[0].pages[0].keys,
+				).toEqual([]);
 				const result = yield* Effect.either(
 					ProfileFunctionContracts.validateProfile(
 						Schema.decodeUnknownSync(Profile)(fixture.profiles[0]),

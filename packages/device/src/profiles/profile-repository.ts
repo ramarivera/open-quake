@@ -11,9 +11,11 @@ import {
 import { profileParseFailure } from "./profile-codec.js";
 import {
 	type EncodedProfileEnvelope,
-	type Profile,
+	Profile,
 	ProfileEnvelope,
+	ProfileRevision,
 	type ProfileSelection,
+	SaveProfileRequest,
 } from "./profile-contracts.js";
 import {
 	ProfileNotFound,
@@ -23,6 +25,7 @@ import {
 	ProfileValidationFailed,
 	ProfileWriteFailed,
 } from "./profile-errors.js";
+import { ProfileFunctionContracts } from "./profile-function-contracts.js";
 import { committedProfileSnapshot } from "./profile-snapshots.js";
 
 /** One desktop main-process owner per store. write must replace the whole envelope atomically. */
@@ -43,30 +46,45 @@ export const repairProfileSelections = (
 ): ProfileLoadResult => {
 	const fallback = envelope.profiles[0];
 	const repairedSelections: string[] = [];
-	const activeByDevice: Record<string, ProfileSelection> = {};
+	const activeByDevice = new Map<string, ProfileSelection>();
 	for (const [serial, selection] of Object.entries(envelope.activeByDevice)) {
 		const profile = envelope.profiles.find(
 			(entry) => entry.id === selection.profileId,
 		);
 		if (profile?.pages.some((page) => page.id === selection.pageId))
-			activeByDevice[serial] = selection;
+			activeByDevice.set(serial, selection);
 		else {
 			repairedSelections.push(serial);
-			activeByDevice[serial] = {
+			activeByDevice.set(serial, {
 				profileId: fallback.id,
 				pageId: fallback.pages[0].id,
-			};
+			});
 		}
 	}
-	return { envelope: { ...envelope, activeByDevice }, repairedSelections };
+	return {
+		envelope: {
+			...envelope,
+			activeByDevice: Object.fromEntries(activeByDevice),
+		},
+		repairedSelections,
+	};
 };
+
+// Only identity is needed before checking the revision. Full draft decoding
+// happens inside the same critical section, after conflicts have won.
+const SaveIdentity = Schema.Struct({
+	expectedRevision: ProfileRevision,
+	profile: Schema.Struct({ id: Profile.fields.id }),
+});
 
 export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 	"@open-quake/device/ProfileRepository",
 	{
 		accessors: true,
+		dependencies: [ProfileFunctionContracts.Default],
 		effect: Effect.gen(function* () {
 			const storage = yield* ProfileStorage;
+			const functions = yield* ProfileFunctionContracts;
 			const mutex = yield* Effect.makeSemaphore(1);
 			const committed = yield* SubscriptionRef.make(
 				Option.none<ProfileEnvelope>(),
@@ -133,13 +151,20 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 			);
 			const save = Effect.fn("ProfileRepository.save")(
 				(
-					profile: Profile,
-					expectedRevision: number,
+					request: unknown,
 				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
 					Effect.gen(function* () {
+						const identity = yield* Schema.decodeUnknown(SaveIdentity)(
+							request,
+						).pipe(
+							Effect.catchTag("ParseError", (cause) =>
+								Effect.fail(profileParseFailure(cause)),
+							),
+						);
+						const { expectedRevision } = identity;
 						const { envelope } = yield* loadUnlocked();
 						const previous = envelope.profiles.find(
-							(entry) => entry.id === profile.id,
+							(entry) => entry.id === identity.profile.id,
 						);
 						if (!previous) return yield* ProfileNotFound.fromCause(undefined);
 						if (previous.revision !== expectedRevision)
@@ -147,10 +172,31 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 								expectedRevision,
 								previous.revision,
 							);
-						if (profile.revision !== expectedRevision + 1)
+						const input = yield* Schema.decodeUnknown(SaveProfileRequest)(
+							request,
+							{
+								onExcessProperty: "error",
+							},
+						).pipe(
+							Effect.catchTag("ParseError", (cause) =>
+								Effect.fail(profileParseFailure(cause)),
+							),
+						);
+						// Loading may suspend. Do not save a different identity if the
+						// caller mutates its request while storage is being read.
+						if (
+							input.profile.id !== identity.profile.id ||
+							input.expectedRevision !== expectedRevision
+						)
 							return yield* ProfileValidationFailed.fromCause(undefined, [
-								["revision"],
+								["profile", "id"],
+								["expectedRevision"],
 							]);
+						const profile = {
+							...input.profile,
+							revision: expectedRevision + 1,
+						};
+						yield* functions.validateProfile(profile);
 						const candidate = yield* committedProfileSnapshot({
 							...envelope,
 							profiles: EffectArray.map(envelope.profiles, (entry) =>
@@ -177,6 +223,10 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 				save,
 				snapshots: committed.changes.pipe(
 					Stream.filterMap((snapshot) => snapshot),
+				),
+				dispatchSnapshots: committed.changes.pipe(
+					Stream.filterMap((snapshot) => snapshot),
+					Stream.mapEffect(functions.dispatchSnapshot),
 				),
 			};
 		}),

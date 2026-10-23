@@ -1,6 +1,12 @@
-import { Effect, Layer, Option } from "effect";
-import type { Profile, ProfileKey } from "./profile-contracts.js";
+import { Effect, Array as EffectArray, Layer, Option } from "effect";
+import { profileParseFailure } from "./profile-codec.js";
+import type {
+	Profile,
+	ProfileEnvelope,
+	ProfileKey,
+} from "./profile-contracts.js";
 import { ProfileValidationFailed } from "./profile-errors.js";
+import { committedProfileSnapshot } from "./profile-snapshots.js";
 
 /** The actions lane supplies validators. This module never dispatches actions. */
 export interface ProfileFunctionContract {
@@ -18,8 +24,8 @@ export const isUnsupportedProfileKey = (key: ProfileKey): boolean =>
 
 const makeValidation = (
 	contracts: ReadonlyMap<string, ProfileFunctionContract>,
-) => ({
-	validateProfile: Effect.fn("ProfileFunctionContracts.validateProfile")(
+) => {
+	const validateProfile = Effect.fn("ProfileFunctionContracts.validateProfile")(
 		(profile: Profile): Effect.Effect<void, ProfileValidationFailed> =>
 			Effect.try({
 				try: () => {
@@ -64,8 +70,49 @@ const makeValidation = (
 						: Effect.fail(ProfileValidationFailed.fromCause(undefined, paths)),
 				),
 			),
-	),
-});
+	);
+	return {
+		validateProfile,
+		/** Editing retains the original data; dispatch only receives validated keys. */
+		dispatchSnapshot: Effect.fn("ProfileFunctionContracts.dispatchSnapshot")(
+			function* (
+				envelope: ProfileEnvelope,
+			): Effect.fn.Return<ProfileEnvelope, ProfileValidationFailed> {
+				const profiles = yield* Effect.forEach(envelope.profiles, (profile) =>
+					Effect.forEach(profile.pages, (page) =>
+						Effect.forEach(page.keys, (key) => {
+							if (
+								key.config.type === "" ||
+								!key.config.display ||
+								isUnsupportedProfileKey(key)
+							)
+								return Effect.succeed(Option.none<ProfileKey>());
+							return validateProfile({
+								...profile,
+								pages: [{ ...page, keys: [key] }],
+							}).pipe(
+								Effect.as(Option.some(key)),
+								Effect.catchTag("ProfileValidationFailed", () =>
+									Effect.succeed(Option.none<ProfileKey>()),
+								),
+							);
+						}).pipe(
+							Effect.map((keys) => ({
+								...page,
+								keys: EffectArray.getSomes(keys),
+							})),
+						),
+					).pipe(Effect.map((pages) => ({ ...profile, pages }))),
+				);
+				return yield* committedProfileSnapshot({ ...envelope, profiles }).pipe(
+					Effect.catchTag("ParseError", (cause) =>
+						Effect.fail(profileParseFailure(cause)),
+					),
+				);
+			},
+		),
+	};
+};
 
 export class ProfileFunctionContracts extends Effect.Service<ProfileFunctionContracts>()(
 	"@open-quake/device/ProfileFunctionContracts",
@@ -80,5 +127,5 @@ export const profileFunctionContractsLayer = (
 ): Layer.Layer<ProfileFunctionContracts> =>
 	Layer.succeed(
 		ProfileFunctionContracts,
-		new ProfileFunctionContracts(makeValidation(contracts)),
+		new ProfileFunctionContracts(makeValidation(new Map(contracts))),
 	);

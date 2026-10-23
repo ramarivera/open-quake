@@ -159,6 +159,12 @@ export const Profile = Schema.Struct({
 	compatibility: optional(ProfileJsonObject),
 });
 export type Profile = typeof Profile.Type;
+export const ProfileDraft = Profile.pipe(Schema.omit("revision"));
+export const SaveProfileRequest = Schema.Struct({
+	expectedRevision: ProfileRevision,
+	profile: ProfileDraft,
+});
+export type SaveProfileRequest = typeof SaveProfileRequest.Encoded;
 export const ProfileSelection = Schema.Struct({
 	profileId: StableId,
 	pageId: StableId,
@@ -173,7 +179,12 @@ export const ProfileEnvelope = Schema.Struct({
 				new Set(profiles.map((profile) => profile.id)).size === profiles.length,
 		),
 	),
-	activeByDevice: Schema.Record({ key: StableId, value: ProfileSelection }),
+	// Effect's Record decoder assigns into a plain object. Reject its prototype
+	// setter even when callers decode without excess-property checking.
+	activeByDevice: Schema.Record({
+		key: StableId.pipe(Schema.filter((serial) => serial !== "__proto__")),
+		value: ProfileSelection,
+	}).annotations({ parseOptions: { onExcessProperty: "error" } }),
 });
 export type ProfileEnvelope = typeof ProfileEnvelope.Type;
 export type EncodedProfileEnvelope = typeof ProfileEnvelope.Encoded;
