@@ -10,7 +10,7 @@ The DK-Player default profile includes audio action, fades and volume. Recovered
 - Specify play/pause/stop, track navigation, volume and fade behavior.
 - Keep playback state in one service shared by key events and desktop controls.
 
-This lane adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
+This is the single soundboard contract; it absorbed the duplicate `soundboard-playback` change on 2026-10-23. It adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
 
 ## Capabilities
 
