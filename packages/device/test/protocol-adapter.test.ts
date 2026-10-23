@@ -1,4 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
+import {
+	FrameChecksumMismatch,
+	FrameSizeInvalid,
+	FrameTypeUnsupported,
+} from "@open-quake/protocol";
 import { Either, FastCheck as fc, Option, Schema } from "effect";
 import {
 	QuakeHidReadFailed,
@@ -7,7 +12,7 @@ import {
 import { decodeReport } from "../src/protocol-adapter.js";
 import { report } from "./reports.js";
 
-describe("internal byte adapter", () => {
+describe("protocol event adapter", () => {
 	it.prop(
 		"decodes every press byte with and without a report ID",
 		[fc.integer({ min: 0, max: 255 }), fc.boolean()],
@@ -18,12 +23,36 @@ describe("internal byte adapter", () => {
 		},
 	);
 	it("ignores unrelated HID traffic and valid unknown control reports", () => {
-		expect(decodeReport(new Uint8Array([1, 2, 3]))).toEqual(
+		expect(decodeReport(new Uint8Array(32))).toEqual(
 			Either.right(Option.none()),
 		);
 		expect(decodeReport(report(0x55, 46, [1, 2, 3, 4]))).toEqual(
 			Either.right(Option.none()),
 		);
+	});
+	it("ignores command 26 from an unrelated opcode", () => {
+		expect(decodeReport(report(0x55, 26))).toEqual(Either.right(Option.none()));
+	});
+	it("preserves kernel checksum errors and rejects nonzero padding and invalid physical reports", () => {
+		const corrupt = report(3, 1, [1]);
+		corrupt[5] = 0;
+		const padding = report(3, 1, [1]);
+		padding[31] = 1;
+		const invalidId = report(3, 1, [1], true);
+		invalidId[0] = 1;
+		for (const [bytes, expected] of [
+			[corrupt, new FrameChecksumMismatch()],
+			[padding, new FrameSizeInvalid(32, 6)],
+			[invalidId, new FrameTypeUnsupported()],
+			[report(3, 1, [1]).slice(0, 6), new FrameSizeInvalid(6, 32, 33)],
+		] as const) {
+			const decoded = decodeReport(bytes);
+			expect(decoded).toEqual(Either.left(expected));
+			if (Either.isLeft(decoded)) {
+				expect(decoded.left).toBeInstanceOf(expected.constructor);
+				expect(JSON.stringify(decoded.left)).not.toContain("subData");
+			}
+		}
 	});
 	it("rejects corrupt, truncated, inconsistent, and undersized reports", () => {
 		const corrupt = report(3, 1, [1]);
@@ -40,7 +69,9 @@ describe("internal byte adapter", () => {
 		]) {
 			const decoded = decodeReport(bytes);
 			expect(Either.isLeft(decoded) && decoded.left.code).toBe(
-				"QUAKE.REPORT.INVALID",
+				bytes === corrupt
+					? "QUAKE.PROTOCOL.CHECKSUM_MISMATCH"
+					: "QUAKE.PROTOCOL.FRAME_SIZE_INVALID",
 			);
 		}
 	});

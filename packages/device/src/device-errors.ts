@@ -44,12 +44,6 @@ export const DeviceErrors = {
 		message: "Closing the HID device failed",
 		policy: dependencyPolicy,
 	},
-	ReportInvalid: {
-		code: "QUAKE.REPORT.INVALID",
-		category: "validation",
-		message: "The device report is invalid",
-		policy: dependencyPolicy,
-	},
 	ConfigInvalid: {
 		code: "QUAKE.CONNECTION.CONFIG_INVALID",
 		category: "validation",
@@ -195,14 +189,6 @@ export class QuakeHidCloseFailed extends Schema.TaggedError<QuakeHidCloseFailed>
 	constructor(cause: unknown) {
 		super(props(DeviceErrors.CloseFailed, cause));
 		retain(this, cause);
-	}
-}
-export class QuakeReportInvalid extends Schema.TaggedError<QuakeReportInvalid>()(
-	"QuakeReportInvalid",
-	fields(DeviceErrors.ReportInvalid),
-) {
-	constructor() {
-		super(props(DeviceErrors.ReportInvalid, undefined));
 	}
 }
 export class QuakeConnectionConfigInvalid extends Schema.TaggedError<QuakeConnectionConfigInvalid>()(

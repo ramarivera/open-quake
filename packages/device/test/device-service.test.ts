@@ -18,11 +18,40 @@ import {
 	type HidDeviceInfo,
 	HidTransport,
 	QuakeDevice,
-	QuakeDeviceLive,
 } from "../src/index.js";
 import { report } from "./reports.js";
 
 describe("QuakeDevice conductor", () => {
+	it.scoped(
+		"keeps reading and writing after an unknown opcode with command 26",
+		() =>
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHidTransport();
+				yield* Effect.gen(function* () {
+					const connection = yield* (yield* QuakeDevice).connect();
+					const events = yield* connection.subscribe();
+					const consumer = yield* Stream.runCollect(
+						events.pipe(Stream.take(1)),
+					).pipe(Effect.either, Effect.forkScoped);
+					yield* fake.emit(report(0x55, 26));
+					yield* fake.emit(report(3, 2, [1]));
+					const result = yield* Fiber.join(consumer);
+					expect(
+						Either.isRight(result) && Chunk.toReadonlyArray(result.right),
+					).toEqual([{ _tag: "KnobPress", state: 1 }]);
+					yield* TestClock.adjust(15_000);
+					expect(yield* fake.closes).toBe(0);
+					expect(yield* fake.writes).toHaveLength(1);
+					yield* connection.disconnect();
+				}).pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
+				);
+			}),
+	);
 	it.scoped(
 		"sends 33-byte keep-alives on the configured cadence, then stops and closes exactly once",
 		() =>
@@ -59,7 +88,11 @@ describe("QuakeDevice conductor", () => {
 					expect(yield* fake.writes).toHaveLength(3);
 					expect(yield* fake.closes).toBe(1);
 				}).pipe(
-					Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))),
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
 				);
 			}),
 	);
@@ -79,7 +112,11 @@ describe("QuakeDevice conductor", () => {
 					yield* TestClock.adjust(30_000);
 					expect(yield* fake.writes).toHaveLength(1);
 				}).pipe(
-					Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))),
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
 				);
 			}),
 	);
@@ -126,7 +163,11 @@ describe("QuakeDevice conductor", () => {
 					expect(Chunk.toReadonlyArray(yield* Fiber.join(a))).toEqual(expected);
 					expect(Chunk.toReadonlyArray(yield* Fiber.join(b))).toEqual(expected);
 				}).pipe(
-					Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))),
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
 				);
 			}),
 	);
@@ -143,7 +184,11 @@ describe("QuakeDevice conductor", () => {
 				const result = yield* Effect.gen(function* () {
 					return yield* Effect.either((yield* QuakeDevice).connect());
 				}).pipe(
-					Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))),
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
 				);
 				expect(Either.isLeft(result) && result.left._tag).toBe(
 					"QuakeDeviceNotFound",
@@ -172,7 +217,13 @@ describe("QuakeDevice conductor", () => {
 						"QuakeConnectionConfigInvalid",
 					);
 				}
-			}).pipe(Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))));
+			}).pipe(
+				Effect.provide(
+					QuakeDevice.DefaultWithoutDependencies.pipe(
+						Layer.provide(fake.layer),
+					),
+				),
+			);
 			expect(yield* fake.opens).toBe(0);
 		}),
 	);
@@ -210,7 +261,13 @@ describe("QuakeDevice conductor", () => {
 					yield* Fiber.join(disconnecting);
 					expect(yield* fake.closes).toBe(1);
 					expect(yield* fake.writes).toHaveLength(1);
-				}).pipe(Effect.provide(QuakeDeviceLive.pipe(Layer.provide(transport))));
+				}).pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(transport),
+						),
+					),
+				);
 			}),
 	);
 	it.scoped(
@@ -242,7 +299,13 @@ describe("QuakeDevice conductor", () => {
 					expect(yield* fake.closes).toBe(1);
 					yield* TestClock.adjust(30_000);
 					expect(yield* fake.writes).toHaveLength(0);
-				}).pipe(Effect.provide(QuakeDeviceLive.pipe(Layer.provide(transport))));
+				}).pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(transport),
+						),
+					),
+				);
 			}),
 	);
 	it.scoped(
@@ -260,11 +323,15 @@ describe("QuakeDevice conductor", () => {
 					yield* fake.emit(report(3, 1));
 					const result = yield* Fiber.join(consumer);
 					expect(Either.isLeft(result) && result.left._tag).toBe(
-						"QuakeReportInvalid",
+						"FrameSizeInvalid",
 					);
 					expect(yield* fake.closes).toBe(1);
 				}).pipe(
-					Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))),
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
 				);
 			}),
 	);
@@ -319,7 +386,11 @@ describe("QuakeDevice conductor", () => {
 						),
 					).toBe(kind !== "end");
 				}).pipe(
-					Effect.provide(QuakeDeviceLive.pipe(Layer.provide(fake.layer))),
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
 				);
 			}),
 		);

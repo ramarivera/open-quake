@@ -7,21 +7,222 @@ every open-quake consumer uses to talk to a QUAKE device.
 ## ADDED Requirements
 
 ### Requirement: Protocol layer is pure
-`packages/protocol` SHALL perform no I/O; its encode/decode functions SHALL
-be deterministic functions of their inputs.
+`packages/protocol` SHALL perform no I/O. Its deterministic plain functions
+SHALL return typed `Either` failures for invalid inputs, and its Effect Schema
+codecs SHALL describe the same byte layouts without requiring an Effect runtime.
+Existing `checksum`, `frameHostCommand`, `verifyDeviceReport`, and `FRAME_HEADER`
+exports SHALL remain usable by the existing device consumer.
 
 #### Scenario: Host command framing
 - **WHEN** a host command with flag `f` and payload `p` is framed
 - **THEN** the result is `[0xA3, len(p)+1, f, ...p, (f + sum(p)) % 0xFF]`
 
 #### Scenario: Corrupt device report
-- **WHEN** a device report's trailing checksum does not match
+- **WHEN** a device report's declared body checksum does not match
 - **THEN** verification reports it invalid without throwing
 
-### Requirement: Non-Effect consumers are supported
-`packages/device` SHALL expose an entry point that a consumer can use without
-importing or running Effect.
+### Requirement: Discovery constants identify the inventory device
+The kernel SHALL export usagePage `0xFF60`, usage `0x61`, vendor ID `0x4158`,
+and product ID `0x514B`, and a pure predicate matching all four fields.
+
+#### Scenario: Filter unrelated HID collections
+- **WHEN** a descriptor differs in any of the four identity fields
+- **THEN** the predicate rejects it without enumerating or opening hardware
+
+### Requirement: Physical HID reports have explicit framing
+The kernel SHALL encode host reports as exactly 33 bytes with report ID `0x00`
+and a 32-byte zero-padded body. It SHALL decode 32-byte reads or 33-byte reports
+with ID zero, reject other sizes/IDs, and reject an oversized single-report body.
+Logical frame codecs SHALL use declared lengths and exclude report padding.
+Transport fragmentation SHALL remain outside this kernel contract.
+
+#### Scenario: Pack a short command
+- **WHEN** a compact command fits within 32 bytes
+- **THEN** report encoding prepends zero and pads to exactly 33 bytes
+
+#### Scenario: Oversized logical frame
+- **WHEN** a logical JSON or resource frame exceeds 32 bytes
+- **THEN** its logical codec succeeds within its length limit and single-report packing returns a typed size failure
+
+### Requirement: JSON frames round-trip both directions
+The kernel SHALL wrap and unwrap `0xA1` JSON frames as
+`[A1, lengthHi, lengthLo, ...UTF8(JSON), checksum]`, with big-endian byte length
+and checksum over JSON bytes only. It SHALL reject malformed UTF-8, invalid JSON,
+non-JSON values, truncated lengths and corrupted checksums. JSON values SHALL
+follow standard JSON serialization semantics, including normalization of negative
+zero to zero. Round-trip identity SHALL apply to values in that canonical form.
+
+#### Scenario: Unicode config or event
+- **WHEN** a JSON value containing Unicode is encoded then decoded
+- **THEN** the original JSON value is recovered and length counts UTF-8 bytes
+
+### Requirement: Resource envelope support is partial
+The kernel SHALL wrap and unwrap `0xA2` envelopes as
+`[A2, lengthHi, lengthLo, opcode, ...metadata5, sequence, ...payload, checksum]`.
+Length SHALL count seven metadata/control bytes plus payload; checksum SHALL
+cover that body. It SHALL preserve unknown opcodes, all five metadata bytes,
+sequence and opaque payload, without claiming resource interpretation.
+Opcode 2 metadata SHALL expose resource type, row, column and two reserved bytes;
+opcode 1 SHALL expose a prefix and four-byte big-endian identifier.
+JPEG encoding, key-to-icon mapping, image chunking, acknowledgments, sequence
+rollover and transfer timing SHALL remain explicitly unverified P-tier behavior.
+
+#### Scenario: Opaque resource round-trip
+- **WHEN** an envelope contains reserved metadata or an unknown opcode
+- **THEN** decoding and re-encoding preserves those bytes exactly
+
+#### Scenario: Padded resource report
+- **WHEN** an A2 frame occupies part of a zero-padded HID report
+- **THEN** resource payload ends at its declared checksum and excludes padding
+
+### Requirement: Short commands have exact lengths and checksums
+The kernel SHALL wrap and unwrap `0xA3` frames as
+`[A3, bodyLength, opcode, cmdID, ...subData, checksum]`, where bodyLength counts
+opcode, cmdID and subData, excludes checksum, and fits in one byte. Checksum
+SHALL be the byte sum modulo `0xFF`, not modulo `0x100`.
+
+#### Scenario: Keep-alive known vector
+- **WHEN** query flag 2 and command `EF` are wrapped
+- **THEN** the compact bytes are `[A3,02,02,EF,F1]`
+
+#### Scenario: Malformed declared length
+- **WHEN** a frame declares an incomplete body or carries unexplained trailing bytes
+- **THEN** decoding returns a typed failure even if a trailing byte matches a checksum
+
+### Requirement: DFU has a confirmed command
+The kernel SHALL expose a DFU command constructor for opcode `01`, cmdID `2F`,
+subData `[03]`, producing `[A3,03,01,2F,03,33]` before report padding.
+The broader opcode catalog SHALL remain partial: unknown opcode/cmdID bytes
+SHALL survive generic round-trips without inferred behavior.
+
+#### Scenario: Encode DFU without hardware
+- **WHEN** a consumer requests the confirmed DFU short command
+- **THEN** the encoder returns the known vector without rebooting or opening a device
+
+### Requirement: Key matrix presses use recovered offsets
+The kernel SHALL decode type `01` matrix reports with three reserved bytes and
+15 state bytes at offsets 4..18. The first state equal to `01` SHALL map to
+row `floor(index/5)+1`, column `(index%5)+1`, keyCode `row,column`, and keyAction
+zero. It SHALL expose the states and preserve remaining report bytes.
+It SHALL NOT invent a release event or a physical layout from an empty matrix.
+
+#### Scenario: Last matrix cell pressed
+- **WHEN** only state index 14 is one
+- **THEN** the first press is key `3,5`
+
+#### Scenario: No press
+- **WHEN** no matrix state equals one
+- **THEN** decoding returns no press and no synthetic release
+
+### Requirement: QMK raw commands are distinct from matrix events
+The kernel SHALL encode QMK command `01` for protocol version, `07` for
+backlight set, `08` for backlight get and `09` for save, including optional save
+channel. It SHALL validate response prefixes, decode the version as big-endian,
+extract the requested backlight value length and reject truncated responses.
+Response decoding SHALL use the originating command so command `01` is not
+mistaken for an unsolicited matrix report.
+
+#### Scenario: Protocol version response
+- **WHEN** a version request receives body `[01,12,34,...padding]`
+- **THEN** the decoded version is `0x1234`
+
+#### Scenario: Backlight response belongs to another selector
+- **WHEN** a backlight get response echoes a different selector
+- **THEN** decoding returns `QmkResponseMismatch`
+
+### Requirement: Protocol failures use catalog identities
+Protocol failures SHALL be `Schema.TaggedError` leaves with stable catalog
+code, category, message and policy. Errors caused by parsing SHALL retain the
+original cause non-enumerably and serialize only bounded fixed diagnostics,
+without payload bytes, JSON text or raw parser messages.
+
+#### Scenario: JSON parsing failure contains sensitive text
+- **WHEN** malformed JSON produces a protocol failure
+- **THEN** consumers can branch on its tag/code, recover its private cause, and serialize it without exposing the input text
+
+### Requirement: Scoped device connection
+The device conductor SHALL match all four USB identity fields, own each opened
+handle as a scoped resource, and own its read and keep-alive fibers in that
+connection scope. It SHALL stop workers before closing the handle and SHALL
+close each successful acquisition exactly once.
+
+#### Scenario: Scope closes
+- **WHEN** a connected caller closes its scope
+- **THEN** the keep-alive fiber stops and the transport handle closes exactly once
+- **AND** advancing the test clock causes no further writes
+
+#### Scenario: Disconnect during native write
+- **WHEN** disconnect is requested while a keep-alive write is in flight
+- **THEN** the write finishes before the handle closes
+
+#### Scenario: No matching hardware
+- **WHEN** discovery returns no descriptor matching VID `0x4158`, PID `0x514B`, usage page `0xFF60`, and usage `0x61`
+- **THEN** connect fails with `QuakeDeviceNotFound` and opens no handle
+
+### Requirement: Default and custom transport layers
+`QuakeDevice.Default` SHALL declare its native transport dependency. Custom
+transport composition SHALL use `QuakeDevice.DefaultWithoutDependencies` so
+tests and consumers can replace native I/O explicitly. `discover()` SHALL return
+matching control interfaces without opening hardware or starting keep-alives.
+
+#### Scenario: Default layer
+- **WHEN** a consumer provides only `QuakeDevice.Default`
+- **THEN** the service can discover and connect through the native transport
+
+#### Scenario: Read-only discovery
+- **WHEN** enumeration returns the control collection alongside keyboard, consumer, and system collections
+- **THEN** discovery returns only the matching control interface and performs no open or write
+
+### Requirement: Connection keep-alive
+A connection SHALL write a 33-byte report consisting of report ID zero,
+`frameHostCommand(2, [0xEF])`, and zero padding on a configurable positive,
+finite interval. The default SHALL be 15 seconds and the first write SHALL
+occur after the first interval. Encoding SHALL use protocol kernel codecs.
+
+#### Scenario: Configured cadence
+- **WHEN** a connection uses a 1-second interval
+- **THEN** no write occurs before 1 second and three writes exist after 3 seconds
+
+### Requirement: Broadcast typed device events
+The connection SHALL expose an Effect Stream for knob rotation, knob press,
+supported checksummed touch points, keep-alive pongs, and disconnect events.
+It SHALL preserve input ordering for active subscribers, broadcast to each
+subscriber, and replay termination to late subscribers. It SHALL retain upstream
+exception identity privately and expose only scrubbed diagnostics.
+Unchecked reports from a separate touch collection SHALL remain unverified.
+
+#### Scenario: Read fails
+- **WHEN** the transport emits a read failure
+- **THEN** the handle closes, subscribers receive a disconnect event and `QuakeHidReadFailed`, and the keep-alive fiber stops
+
+#### Scenario: Unknown opcode uses the touch command number
+- **WHEN** a valid checksummed report uses opcode `55` and command `1A` without a touch payload
+- **THEN** it produces no event, leaves the connection open, and later knob events and keep-alives continue
+
+### Requirement: Device consumes protocol codecs and failures
+The device adapter SHALL delegate physical report and short-command framing,
+length, padding and checksum validation to `@open-quake/protocol`. It SHALL
+preserve protocol catalog failure identities through the event stream and JS
+facade. Device I/O catalog errors SHALL translate native exceptions at their
+discovery, open, read, write and close boundaries.
+
+#### Scenario: Corrupt control report reaches a subscriber
+- **WHEN** a report carries an invalid checksum
+- **THEN** the connection closes and subscribers receive `FrameChecksumMismatch` with code `QUAKE.PROTOCOL.CHECKSUM_MISMATCH`
+
+#### Scenario: Kernel rejects encoding or decoding
+- **WHEN** a protocol codec returns a catalog error
+- **THEN** the connection closes, preserves the error's original instance and private cause through Effect tracing, and serializes only scrubbed diagnostics
+
+### Requirement: ManagedRuntime JavaScript facade
+The device package SHALL expose a Promise/callback facade that owns its Effect
+runtime, connects without consumer Effect code, registers its event subscription
+before connect resolves, and supports idempotent asynchronous disconnect.
 
 #### Scenario: Plain JS consumer
 - **WHEN** a plain JavaScript program uses the device entry point
 - **THEN** it can connect and receive device events without constructing an Effect runtime itself
+
+#### Scenario: Plain JavaScript subscription
+- **WHEN** a consumer subscribes and awaits connect
+- **THEN** incoming knob events invoke the callback and disconnect releases the connection and runtime

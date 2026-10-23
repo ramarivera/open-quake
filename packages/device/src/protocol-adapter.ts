@@ -1,43 +1,34 @@
-/** Temporary byte adapter. Replace with L1 codecs without changing the conductor. */
+/** Map protocol-decoded commands to device events. Framing belongs to the kernel. */
 import {
+	decodeHidReport,
+	encodeHidReport,
 	FRAME_HEADER,
-	frameHostCommand,
-	verifyDeviceReport,
+	FrameSizeInvalid,
+	type ProtocolError,
+	unwrapShortCommand,
+	wrapShortCommand,
 } from "@open-quake/protocol";
 import { Either, Option } from "effect";
 import type { DeviceEvent } from "./device-contracts.js";
-import { QuakeReportInvalid } from "./device-errors.js";
 
-export const keepAliveFrame = (): Uint8Array => frameHostCommand(2, [0xef]);
-export const keepAliveReport = (): Uint8Array => {
-	const report = new Uint8Array(33);
-	report.set(keepAliveFrame(), 1);
-	return report;
-};
+export const keepAliveFrame = (): Either.Either<Uint8Array, ProtocolError> =>
+	wrapShortCommand({ opCode: 2, cmdId: 0xef, subData: [] });
+export const keepAliveReport = (): Either.Either<Uint8Array, ProtocolError> =>
+	keepAliveFrame().pipe(Either.flatMap(encodeHidReport));
 
 export function decodeReport(
 	input: Uint8Array,
-): Either.Either<Option.Option<DeviceEvent>, QuakeReportInvalid> {
-	const bytes =
-		input[0] === 0 && input[1] === FRAME_HEADER ? input.subarray(1) : input;
-	if (bytes[0] !== FRAME_HEADER) return Either.right(Option.none());
-	const length = bytes[1] ?? 0;
-	// The recovered host parser counts body bytes, excluding header/length/checksum.
-	const frame = Array.from(bytes.subarray(0, length + 3));
-	if (
-		length < 2 ||
-		length > 29 ||
-		frame.length !== length + 3 ||
-		!verifyDeviceReport(frame)
-	) {
-		return Either.left(new QuakeReportInvalid());
-	}
-	const opcode = frame[2];
-	const command = frame[3];
-	const sub = frame.slice(4, -1);
+): Either.Either<Option.Option<DeviceEvent>, ProtocolError> {
+	const physical = decodeHidReport(input);
+	if (Either.isLeft(physical)) return Either.left(physical.left);
+	if (physical.right[0] !== FRAME_HEADER) return Either.right(Option.none());
+	const decoded = unwrapShortCommand(physical.right);
+	if (Either.isLeft(decoded)) return Either.left(decoded.left);
+	const { opCode: opcode, cmdId: command, subData: sub } = decoded.right;
 	const value = sub[0];
 	if (opcode === 3 && (command === 1 || command === 2)) {
-		if (value === undefined) return Either.left(new QuakeReportInvalid());
+		if (value === undefined)
+			return Either.left(new FrameSizeInvalid(sub.length, 1));
 		return Either.right(
 			Option.some(
 				command === 1
@@ -48,9 +39,13 @@ export function decodeReport(
 	}
 	if (opcode === 0x55 && command === 0xef)
 		return Either.right(Option.some({ _tag: "KeepAlive" }));
-	if (command === 26) {
+	// This is the existing synthetic checksummed touch envelope. The separate
+	// unchecked touch collection still needs hardware evidence before support.
+	if (opcode === 0xa3 && command === 26) {
 		if (value === undefined || sub.length !== 1 + 5 * value)
-			return Either.left(new QuakeReportInvalid());
+			return Either.left(
+				new FrameSizeInvalid(sub.length, 1 + 5 * (value ?? 0)),
+			);
 		const points = Array.from({ length: value }, (_, index) => {
 			const offset = 1 + index * 5;
 			return {

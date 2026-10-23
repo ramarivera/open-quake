@@ -98,7 +98,12 @@ export function createQuakeDevice(
 					QuakeHidReadFailed: notifyListeners,
 					QuakeHidWriteFailed: notifyListeners,
 					QuakeHidCloseFailed: notifyListeners,
-					QuakeReportInvalid: notifyListeners,
+					ProtocolInputInvalid: notifyListeners,
+					FrameSizeInvalid: notifyListeners,
+					FrameChecksumMismatch: notifyListeners,
+					FrameTypeUnsupported: notifyListeners,
+					ProtocolJsonInvalid: notifyListeners,
+					QmkResponseMismatch: notifyListeners,
 				}),
 				Effect.forkScoped,
 			);
@@ -111,7 +116,11 @@ export function createQuakeDevice(
 		}),
 	);
 	const runtime = ManagedRuntime.make(
-		session.pipe(Layer.provide(QuakeDevice.Default), Layer.provide(transport)),
+		session.pipe(
+			Layer.provide(
+				QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(transport)),
+			),
+		),
 	);
 	const run = async <A, E>(
 		effect: Effect.Effect<A, E, Session>,

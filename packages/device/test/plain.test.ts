@@ -1,10 +1,37 @@
 import { describe, expect, it } from "@effect/vitest";
+import { FrameChecksumMismatch } from "@open-quake/protocol";
 import { Effect } from "effect";
 import { makeFakeHidTransport } from "../src/hid-fake.js";
 import { createQuakeDevice } from "../src/plain.js";
 import { report } from "./reports.js";
 
 describe("plain JS facade", () => {
+	it("delivers the kernel failure to the error callback after disconnect", async () => {
+		const fake = await Effect.runPromise(makeFakeHidTransport());
+		const client = createQuakeDevice({}, fake.layer);
+		const seen: string[] = [];
+		let onError: ((error: unknown) => void) | undefined;
+		const failed = new Promise<unknown>((resolve) => {
+			onError = resolve;
+		});
+		client.subscribe(
+			(event) => seen.push(event._tag),
+			(error) => onError?.(error),
+		);
+		try {
+			await client.connect();
+			const corrupt = report(3, 1, [1]);
+			corrupt[5] = 0;
+			await Effect.runPromise(fake.emit(corrupt));
+			const error = await failed;
+			expect(error).toBeInstanceOf(FrameChecksumMismatch);
+			expect(error).toMatchObject({ code: "QUAKE.PROTOCOL.CHECKSUM_MISMATCH" });
+			expect(seen).toEqual(["Disconnect"]);
+			expect(await Effect.runPromise(fake.closes)).toBe(1);
+		} finally {
+			await client.disconnect();
+		}
+	});
 	it("connects, receives callbacks, unsubscribes, and closes without Effect in the client flow", async () => {
 		const fake = await Effect.runPromise(makeFakeHidTransport());
 		const client = createQuakeDevice({}, fake.layer);

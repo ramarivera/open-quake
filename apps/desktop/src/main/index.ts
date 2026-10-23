@@ -1,9 +1,20 @@
 import { join } from "node:path";
 import { app, BrowserWindow, type Display, screen } from "electron";
-import { type QuakeEvent, startDeviceBus } from "./deviceBus";
+import { startDeviceBus } from "./deviceBus";
 import { findPanelDisplay, PANEL_SIZE } from "./display";
+import { createEventForwarder } from "./eventForwarding";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+const PANEL_TITLE = "open-quake panel";
+
+function panelBounds(display: Display) {
+	return {
+		x: display.workArea.x,
+		y: display.workArea.y,
+		width: Math.min(PANEL_SIZE.width, display.workArea.width),
+		height: Math.min(PANEL_SIZE.height, display.workArea.height),
+	};
+}
 
 function loadSurface(
 	win: BrowserWindow,
@@ -20,11 +31,8 @@ function loadSurface(
 
 function createPanelWindow(display: Display): BrowserWindow {
 	const win = new BrowserWindow({
-		x: display.workArea.x,
-		y: display.workArea.y,
-		width: Math.min(PANEL_SIZE.width, display.workArea.width),
-		height: Math.min(PANEL_SIZE.height, display.workArea.height),
-		title: "open-quake panel",
+		...panelBounds(display),
+		title: PANEL_TITLE,
 		frame: false,
 		fullscreenable: true,
 		autoHideMenuBar: true,
@@ -35,6 +43,8 @@ function createPanelWindow(display: Display): BrowserWindow {
 			nodeIntegration: false,
 		},
 	});
+	// OmniWM matches this title even while HTML/navigation titles change.
+	win.on("page-title-updated", (event) => event.preventDefault());
 	loadSurface(win, "panel");
 	return win;
 }
@@ -56,25 +66,35 @@ function createManagementWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-	const displays = screen.getAllDisplays();
-	const panelDisplay = findPanelDisplay(displays);
-	const primary = screen.getPrimaryDisplay();
-
-	const panelWin = createPanelWindow(panelDisplay ?? primary);
-	const managementWin = createManagementWindow();
-
-	const bus = startDeviceBus();
-	const forward = (event: QuakeEvent): void => {
-		for (const win of [panelWin, managementWin]) {
-			if (!win.isDestroyed()) win.webContents.send("quake:event", event);
+	const getPanelDisplay = (): Display =>
+		findPanelDisplay(screen.getAllDisplays()) ?? screen.getPrimaryDisplay();
+	let panelWin = createPanelWindow(getPanelDisplay());
+	let managementWin = createManagementWindow();
+	const syncPanelDisplay = (): void => {
+		const display = getPanelDisplay();
+		if (panelWin.isDestroyed()) {
+			panelWin = createPanelWindow(display);
+		} else {
+			panelWin.setBounds(panelBounds(display));
 		}
 	};
-	bus.on(forward);
+	screen.on("display-added", syncPanelDisplay);
+	screen.on("display-removed", syncPanelDisplay);
+	screen.on("display-metrics-changed", syncPanelDisplay);
 
-	app.on("before-quit", () => bus.stop());
+	const bus = startDeviceBus();
+	bus.on(createEventForwarder(() => [panelWin, managementWin]));
+
+	app.on("before-quit", () => {
+		screen.removeListener("display-added", syncPanelDisplay);
+		screen.removeListener("display-removed", syncPanelDisplay);
+		screen.removeListener("display-metrics-changed", syncPanelDisplay);
+		bus.stop();
+	});
 	app.on("activate", () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
-			createManagementWindow();
+			syncPanelDisplay();
+			managementWin = createManagementWindow();
 		}
 	});
 });

@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it } from "@effect/vitest";
-import { Effect, Either, Fiber, Layer, Stream } from "effect";
+import { Effect, Either, Fiber, Stream } from "effect";
 import { vi } from "vitest";
 import { QuakeDevice } from "../src/device-service.js";
 import { FAKE_QUAKE_DEVICE } from "../src/hid-fake.js";
@@ -28,6 +28,31 @@ beforeEach(() => {
 });
 
 describe("node-hid boundary, native API mocked", () => {
+	it.effect(
+		"discovers only the control interface without opening hardware",
+		() =>
+			Effect.gen(function* () {
+				mocks.discover.mockResolvedValue([
+					{ ...FAKE_QUAKE_DEVICE, path: "system", usagePage: 1, usage: 0x80 },
+					{ ...FAKE_QUAKE_DEVICE, path: "consumer", usagePage: 0xc, usage: 1 },
+					{ ...FAKE_QUAKE_DEVICE, path: "keyboard", usagePage: 1, usage: 6 },
+					FAKE_QUAKE_DEVICE,
+				]);
+				const devices = yield* (yield* QuakeDevice).discover();
+				expect(devices).toEqual([FAKE_QUAKE_DEVICE]);
+				expect(mocks.open).not.toHaveBeenCalled();
+				expect(handle.write).not.toHaveBeenCalled();
+			}).pipe(Effect.provide(QuakeDevice.Default)),
+	);
+	it.scoped("provides the native transport through QuakeDevice.Default", () =>
+		Effect.gen(function* () {
+			const connection = yield* (yield* QuakeDevice).connect();
+			expect(mocks.discover).toHaveBeenCalledTimes(1);
+			expect(mocks.open).toHaveBeenCalledWith("fake:quake");
+			yield* connection.disconnect();
+			expect(handle.close).toHaveBeenCalledTimes(1);
+		}).pipe(Effect.provide(QuakeDevice.Default)),
+	);
 	it("registers input before connect resolves and detaches listeners on close", async () => {
 		const client = createQuakeDevice();
 		const seen: string[] = [];
@@ -161,9 +186,7 @@ describe("node-hid boundary, native API mocked", () => {
 					);
 					expect(JSON.stringify(result)).not.toContain("token=secret");
 					expect(Either.isLeft(yield* Fiber.join(consumer))).toBe(true);
-				}).pipe(
-					Effect.provide(QuakeDevice.Default.pipe(Layer.provide(NodeHidLive))),
-				);
+				}).pipe(Effect.provide(QuakeDevice.Default));
 			}),
 	);
 });

@@ -1,11 +1,7 @@
+import { isQuakeInterface } from "@open-quake/protocol";
 import { Schema } from "effect";
 
-export const QUAKE_IDENTITY = {
-	vendorId: 0x4158,
-	productId: 0x514b,
-	usagePage: 0xff60,
-	usage: 0x61,
-} as const;
+export { QUAKE_IDENTITY } from "@open-quake/protocol";
 export const DEFAULT_KEEP_ALIVE_MS = 15_000;
 
 export const HidDeviceInfo = Schema.Struct({
@@ -43,7 +39,4 @@ export interface ConnectOptions {
 }
 
 export const isQuakeDevice = (info: HidDeviceInfo): boolean =>
-	info.vendorId === QUAKE_IDENTITY.vendorId &&
-	info.productId === QUAKE_IDENTITY.productId &&
-	info.usagePage === QUAKE_IDENTITY.usagePage &&
-	info.usage === QUAKE_IDENTITY.usage;
+	isQuakeInterface(info);

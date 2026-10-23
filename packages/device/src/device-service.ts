@@ -1,3 +1,4 @@
+import type { ProtocolError } from "@open-quake/protocol";
 import {
 	Deferred,
 	Effect,
@@ -25,9 +26,9 @@ import {
 	type QuakeHidOpenFailed,
 	type QuakeHidReadFailed,
 	type QuakeHidWriteFailed,
-	type QuakeReportInvalid,
 } from "./device-errors.js";
 import { HidTransport } from "./hid-transport.js";
+import { NodeHidLive } from "./node-hid.js";
 import {
 	decodeReport,
 	keepAliveFrame,
@@ -38,7 +39,7 @@ export type DeviceStreamError =
 	| QuakeHidReadFailed
 	| QuakeHidWriteFailed
 	| QuakeHidCloseFailed
-	| QuakeReportInvalid;
+	| ProtocolError;
 export type DeviceConnectError =
 	| QuakeHidDiscoveryFailed
 	| QuakeDeviceNotFound
@@ -67,17 +68,26 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 	"@open-quake/device/QuakeDevice",
 	{
 		accessors: true,
+		dependencies: [NodeHidLive],
 		effect: Effect.gen(function* () {
-			// HidTransport is supplied at the application root, as infrastructure.
 			const transport = yield* HidTransport;
+			const discover = Effect.fn("QuakeDevice.discover")(
+				(): Effect.Effect<
+					ReadonlyArray<HidDeviceInfo>,
+					QuakeHidDiscoveryFailed
+				> =>
+					Effect.map(transport.discover(), (devices) =>
+						devices.filter(isQuakeDevice),
+					),
+			);
 			const connect = Effect.fn("QuakeDevice.connect")(function* (
 				options: ConnectOptions = {},
 			): Effect.fn.Return<QuakeConnection, DeviceConnectError, Scope.Scope> {
 				const interval = options.keepAliveIntervalMs ?? DEFAULT_KEEP_ALIVE_MS;
 				if (!Number.isFinite(interval) || interval <= 0)
 					return yield* new QuakeConnectionConfigInvalid();
-				const devices = yield* transport.discover();
-				const info = devices.find(isQuakeDevice);
+				const devices = yield* discover();
+				const info = devices[0];
 				if (!info) return yield* new QuakeDeviceNotFound();
 				const events =
 					yield* PubSub.unbounded<Take.Take<DeviceEvent, DeviceStreamError>>();
@@ -121,11 +131,17 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						yield* Effect.forever(
 							Effect.sleep(interval).pipe(
 								Effect.zipRight(
-									handle.write(keepAliveReport()).pipe(Effect.uninterruptible),
+									Effect.suspend(keepAliveReport).pipe(
+										Effect.flatMap(handle.write),
+										Effect.uninterruptible,
+									),
 								),
 							),
 						).pipe(
-							Effect.catchTag("QuakeHidWriteFailed", fail),
+							Effect.matchEffect({
+								onFailure: fail,
+								onSuccess: () => Effect.void,
+							}),
 							Effect.forkScoped,
 						);
 						yield* Deferred.succeed(ready, undefined);
@@ -205,6 +221,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				};
 			});
 			return {
+				discover,
 				connect,
 				disconnect: Effect.fn("QuakeDevice.disconnect")(
 					(
@@ -213,7 +230,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						connection.disconnect(),
 				),
 				// Compatibility with the original skeleton's unpadded protocol vector.
-				keepAlivePing: Effect.sync(keepAliveFrame),
+				keepAlivePing: Effect.suspend(keepAliveFrame),
 			};
 		}),
 	},

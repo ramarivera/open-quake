@@ -15,6 +15,9 @@ closed with evidence.
   `window.openQuake.onQuakeEvent`.
 - The event source stays a clearly labelled mock (`source: "mock"`) until the
   node-hid transport lands under `two-layer-sdk`.
+- Harden the prototype with display hot-plug relocation/recreation, a stable
+  panel title enforced by main, shared main/preload event types, and unit tests
+  for display selection, event forwarding, mock lifecycle, and window wiring.
 - Close the ticket once the slice is exercised against real hardware or the
   remaining gaps are filed.
 
@@ -27,5 +30,8 @@ closed with evidence.
 
 ## Impact
 
-`apps/desktop/src/main/{index,display,deviceBus}.ts`, `apps/desktop/src/preload/index.ts`,
-`apps/desktop/src/renderer/src/*`. Beads: epic for this change, `open-quake-2qs.5`.
+`apps/desktop/src/main/**`, `apps/desktop/src/preload/**`, desktop test config,
+`apps/desktop/package.json`, and its workspace lockfile entry. Vitest uses the
+existing catalog pin, 4.1.11. The renderer is unchanged in this close-out lane;
+it can adopt the exported event and bridge types separately. Beads: epic for
+this change, `open-quake-2qs.5`; live-run and hardware evidence remain pending.
