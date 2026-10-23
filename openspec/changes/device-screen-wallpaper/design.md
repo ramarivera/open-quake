@@ -28,7 +28,7 @@ Keep panel rendering, local wallpaper settings, and device resource delivery ind
 
 ## Decisions
 
-### Proposed (pending Ramiro): ownership and two rendering paths
+### Approved (Ramiro, 2026-10-23): ownership and two rendering paths
 
 `packages/device` owns display-contracts, display-invariants, display-service, and the resource transfer coordinator built over L1's device service. `apps/desktop` owns local media repository, image decode/encode/composition adapters, clock source, and shared panel/preview components. Store validated serial-scoped settings in main; publish complete versioned display snapshots through decoded IPC. Renderer code has no raw HID access. The panel consumes `panel-window-prototype` placement and `theming-animation-contract` tokens/motion behavior without redefining those specs.
 
@@ -36,13 +36,13 @@ Use Effect services with declared dependencies, named methods and explicit error
 
 Keep two statuses: desktop render revision and device resource delivery. A renderer can show a full wallpaper while an A2 transfer is unavailable. That must remain visible in the management status, because the inventory requires actual resource push as first-release acceptance. A successful preview never marks it hardware-applied.
 
-### Proposed (pending Ramiro): wallpaper schema and release phases
+### Approved (Ramiro, 2026-10-23): wallpaper schema and release phases
 
 First release accepts local JPEG/PNG images, persists settings per serial, renders one static image with contain/cover/center, and shows a basic clock. Keep a schema capable of later playlists: isTransparent, bgFillMode, gapInterval, gapIntervalUnit, playMode, displayMediaList entries with name/type/filePath/duration/format. An empty installation uses an app-owned neutral background, not recovered proprietary files. Use an asset reference resolved by main rather than a renderer-writable arbitrary file URL. Imported file URLs normalize through that adapter with a diagnostic.
 
 Later add transparency, image/video lists and sequential/random scheduling. Preserve source timing units and video minimum, but require actual decoder support rather than treating a .mov/.mkv extension as sufficient. Pause/dispose inactive media and timers on mode switch, profile/device change, window closure, or replacement. Random selection excludes the current item when another playable item exists; source's ten-retry algorithm can repeat, so this stricter behavior is proposed. No requirement transfers MP4 bytes over A2.
 
-### Proposed (pending Ramiro): open question 6, resource scope and proof gate
+### Approved (Ramiro, 2026-10-23): open question 6, resource scope and proof gate
 
 Agree a typed request with L1: `{deviceId,profileId,pageId,revision,assetId,format:'jpeg',target}`. Target is either a verified logical key or an explicitly verified full-panel resource target. Media adapters supply encoded bytes; the coordinator owns cancellation, bounded buffers, transfer identity, and delivery state; L1 owns framing, chunk segmentation, sequence/checksum encoding, transport scheduling, and acknowledgments. Do not assign a made-up key code such as 0,0 for wallpaper.
 
@@ -50,13 +50,13 @@ Recovered source supports opcode 2, resource type 0 and terminal sequence 0 as a
 
 First-release hardware gate: record firmware/device identity, exact input file hash, image encoding and dimensions, target/key mapping, L1 framing fixture reference, actual chunk order/sizes, timing, response/ack observations, and visible display result. Use a nonproprietary checkerboard with labeled corners, then a second different image to detect old-buffer reuse. Verify one keyed icon and the actual wallpaper target/path separately. Validate interruption/reconnect and oversized-resource rejection without assuming an ack. If full-panel A2 wallpaper is unsupported, report the failed hypothesis to Ramiro; first-release item 3 remains blocked until its scope is explicitly revised. Do not silently replace it with panel-window success.
 
-### Proposed (pending Ramiro): clock and later display events
+### Approved (Ramiro, 2026-10-23): clock and later display events
 
 Clock reads the injected host clock, defaults to local 24h, refreshes at least once per second, and supports 12h with AM/PM. It uses a registered dkDesktopClock tile; no invented firmware clock message. Overlay events carry device ID, profile/page revision, and keyCode, and only affect their matching visible tile. The shared renderer handles countdown, alert, and progress; meeting/audio/AI state events are handed to their runtime owners and remain unsupported when those runtimes are absent.
 
 Preserve user-visible countdown semantics from DisplayEvent: ms formatted HH:MM:SS, natural completion retains zero, alarm type 2 does not add an alarm icon, the first user click clears zero and the next starts again. Replace the source's 120-ms positive-event suppression heuristic with an explicit activation identity agreed with the timer domain. Proposed progress policy clamps 0..100, negative hides, changed intermediate value expires in 5s, 100 expires in 1s, repeated identical value does not extend expiry. Newer events cancel stale expiry tasks. Alerts 0 clear, 1 invalid expires in 2s, 2 alarm suppresses icon, 3 success remains until clear/replacement. Overlay hit-testing never intercepts touch input.
 
-### Proposed (pending Ramiro): binding and remote socket scope
+### Approved (Ramiro, 2026-10-23): binding and remote socket scope
 
 First release reuses existing single-panel placement. Later binding selects a detected display for a device serial and persists only a confirmed association. A missing display leaves an unbound state; it cannot take over an unrelated monitor silently. Arbitrary app capture and LAN remote access remain out of scope until behavior is recovered. If a compatibility socket is later needed, verify its server before defining a handshake; this design documents the recovered localhost URL only.
 

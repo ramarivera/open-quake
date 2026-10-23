@@ -24,19 +24,19 @@ Define persistence and routing across profile changes, then expose a small voice
 
 ## Decisions
 
-### Proposed (pending Ramiro): conductor and adapter boundaries
+### Approved (Ramiro, 2026-10-23): conductor and adapter boundaries
 
 `packages/device` owns knob-contracts, knob-invariants, knob-service, and a repository dependency shared with profiles. Declare dependencies and named `Effect.fn` methods with explicit error types. `apps/desktop` supplies the editor, decoded IPC, brightness adapter, and voice capability adapter at the app root. Use shared error-catalog leaves for InvalidKnobConfig, KnobCapabilityUnavailable, KnobRouteIncomplete, and KnobDispatchFailed with scrubbed diagnostics and private original causes. Rendering never performs raw HID or OS I/O.
 
 `packages/protocol` remains L1's pure codec. Consume normalized `rotate(direction,detents)`, `press`, `holdStart`, `release`, and disconnect events with device/session identity. The exact event schema and hold classifier are integration contracts to agree with L1 and the voice lane, not a new wire requirement here. One normalized detent maps to one selected action; the host adapter reports capability ranges. No guessed opcodes or hold-time constant is specified.
 
-### Proposed (pending Ramiro): stable canonical slots and profile snapshots
+### Approved (Ramiro, 2026-10-23): stable canonical slots and profile snapshots
 
 Keep `config.type:'knob'`, reserved `keyCode:'0,1'`, and exactly three subActions positions. Empty positions have an explicit empty-entry object; never compact. Slots are `{childrenName,config:{type,title?,icon?,actions,...validated function fields}}`; nonempty slot validators come from the registry. Keep a profile-level knob instead of duplicating it across pages. A legacy flat import extracts its knob entry, preserving original metadata.
 
 Save expected revisions through the profile conductor. On selection change, read the new committed knob snapshot and cancel active work from the old profile. Do not carry UI slot objects or last-profile actions into the new profile. The alternative, a global shared knob object, contradicts recovered per-profile resources and can route speech to the wrong agent.
 
-### Proposed (pending Ramiro): rotation, brightness, and navigation
+### Approved (Ramiro, 2026-10-23): rotation, brightness, and navigation
 
 Priority is an explicitly focused visible key with supportKnob and two validated directional actions; otherwise the matching left/right profile slot; otherwise a center function that declares rotation support. Empty or unsupported slots do nothing and report unavailable where appropriate. Left means normalized counterclockwise and right means clockwise; L1 proves the physical direction mapping. Press is center only. When short press and hold share the center, delay short-press dispatch until release is classified short; raw press cannot preempt a later voice hold. Selecting a center brightness mode does not cause brightness changes on press.
 
@@ -44,13 +44,13 @@ Use canonical `panelBrightness` with one `stepPercent` action, initially 5. Coun
 
 Navigation slots reference canonical previousPage, nextPage, and goToPage from the profile contract. Legacy pageUp/pageDown aliases normalize only in navigation context. There is no wrapping; page boundaries follow `profiles-key-grid`.
 
-### Proposed (pending Ramiro): voice configuration and lane handoff
+### Approved (Ramiro, 2026-10-23): voice configuration and lane handoff
 
 New voice assignments use explicit direct route with required provider/model references. Credentials remain in the provider configuration owned by the AI lane, never in profile actions. A normalized holdStart invokes voice capture once with `{deviceId,profileId,revision,route,providerId,modelId}`. Release ends that same capture. The voice lane owns hold classification, mic permissions, recorder outcomes, transcription, streaming, and speech output. Disconnect/profile change cancels capture and prevents a late release from starting anything in a new profile.
 
 The recovered route field sets are preserved below. Legacy migration splits `provider/model` at the first slash, fills only missing route-specific fields, removes the old model action, then strips actions not allowed for the explicit route. Route absent or legacy/assistant aliases normalize to legacyAssistant for imported data only. Unknown route values are diagnosed rather than silently enabling a legacy service. Built-in route locks are preserved as compatibility metadata, not enforced against new custom profiles. dkclaw and legacyAssistant remain unavailable without their later runtimes; do not redirect them to direct automatically.
 
-### Proposed (pending Ramiro): import ambiguity
+### Approved (Ramiro, 2026-10-23): import ambiguity
 
 Known center-only recovered presets occupy slot 0. Three-position exports with explicit holes preserve their positions. A compact two-entry array without reliable slot metadata cannot prove whether its second item was left or right; retain it as unsupported compatibility data and ask for explicit slot assignment in the editor. Do not reproduce the recovered filter(Boolean) save defect.
 

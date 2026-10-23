@@ -38,7 +38,7 @@ Additional source evidence:
 
 ## Decisions
 
-### Proposed (pending Ramiro): one registry and platform adapters
+### Approved (Ramiro, 2026-10-23): one registry and platform adapters
 
 `packages/device` owns action-contracts, action-invariants, and an action-service `Effect.Service`. Each registry entry declares stable ID, legacy names/config-type aliases, submenu, action Schema, supportKnob/supportTouchEffect, alternate-state support, default editable fields, release availability, permission, autonomy, and required adapter capability. Default autonomy is never; explicit configured user input can invoke an available action through the conductor. Agent-facing permission policy is a future consumer, not a dialog added to every key press.
 
@@ -46,7 +46,7 @@ Additional source evidence:
 
 Methods use named `Effect.fn`, explicit success/error types, and catalog-derived errors. Proposed error identities include InvalidKeyAction, KeyFunctionUnavailable, HostActionFailed, and ArtworkLoadFailed, each with a distinct stable code and handling policy. Scrub text, URLs, app paths, and imported action values from diagnostics; retain original causes privately. Register contracts before future RPC handlers and derive client methods from them.
 
-### Proposed (pending Ramiro): first-release payloads and dispatch
+### Approved (Ramiro, 2026-10-23): first-release payloads and dispatch
 
 The spec fixes exact leaf action records. New hotkeys use plus-separated lowercase key names with a finite platform-supported token set; the adapter exposes its supported keys. Preserve left/right modifier distinctions where supported. Reject empty chords and capture placeholders. Text defaults to no implicit enter in new open-quake keys, even though recovered defaults include enter. This avoids accidental submission and remains explicitly editable. It is a product recommendation, not a recovered default.
 
@@ -54,13 +54,13 @@ Normalize the recovered skipForward type defect only when childrenName skipForwa
 
 Only a committed profile snapshot and explicit normalized activation can execute a host action. Catalog browsing, preview rendering, drag/drop, import, and save do not execute. A normal tile press executes once, release performs cleanup only, and hardware repeats need their own event contract. Do not guess repeat or long-press semantics from gap/pressTime names.
 
-### Proposed (pending Ramiro): open question 10, hotkeySwitch scope
+### Approved (Ramiro, 2026-10-23): open question 10, hotkeySwitch scope
 
 Keep hotkeySwitch out of the first-release picker and runtime. Retain two key values and alternate visuals on import as unsupported compatibility data. OperationConfig proves two editable chords; it does not prove alternation, held-key latching, persistent toggle state, reset behavior, or release semantics. A plain two-chord hotkey with knob support is a different function and must not be migrated into hotkeySwitch.
 
 Before enabling it later, inspect the host execution path and test consecutive presses, press/release, profile change, reconnect, app restart, and each alternate visual. Recommend per-profile, in-memory alternation reset on activation only if those checks support it; that behavior remains pending Ramiro and evidence. Implementing a guessed toggle now was rejected.
 
-### Proposed (pending Ramiro): later functions and artwork
+### Approved (Ramiro, 2026-10-23): later functions and artwork
 
 Keep unavailable catalog entries visible with a phase/dependency reason or in a later-functions filter. They cannot be assigned as executable until schemas and adapters exist. Implement multiActions later as an ordered, non-recursive list of validated leaf actions and delays, stop on the first failure, and never replay after reconnect. Delay values are nonnegative integer milliseconds. Deeper macro recursion and repeat timing require a separate decision.
 

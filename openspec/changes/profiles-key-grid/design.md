@@ -27,7 +27,7 @@ Define one canonical local model shared by the panel, editor, function library, 
 
 ## Decisions
 
-### Proposed (pending Ramiro): ownership and local model
+### Approved (Ramiro, 2026-10-23): ownership and local model
 
 Put `profile-contracts`, `profile-invariants`, `profile-repository`, and `profile-service` in `packages/device`. The repository interface stays platform-neutral; `apps/desktop` supplies local storage and composes its Layer once in main. Use an `Effect.Service` conductor with declared dependencies, named `Effect.fn` methods, explicit success/error types, and the shared error catalog. Renderer mutations cross a Schema-decoded preload boundary. Future edge/client consumers derive from contract-first RPC if exposed; no new network API is required now.
 
@@ -35,13 +35,13 @@ The alternative, keeping schema and rules inside React, would let preview and ha
 
 Canonical storage is a versioned local envelope: `schemaVersion:1`, `profiles`, and `activeByDevice`. A profile has a stable opaque `id`, a display `name`, monotonic nonnegative `revision`, `pages`, and one profile-scoped `knob`. A page has a stable `id` and flat `keys`; its array position supplies the one-based page number. Selection is `{profileId,pageId}` per serial. Legacy `resourceId`, `version`, `configIdx`, and per-page resource links live in explicit compatibility metadata. They are not assumed to equal new IDs or wire fields. See the spec for each field and absence policy.
 
-### Proposed (pending Ramiro): open question 2, mapping scope
+### Approved (Ramiro, 2026-10-23): open question 2, mapping scope
 
 Ship a QUAKE logical layout descriptor with two rows, eight columns, one-based `row,col`, and reserved knob code `0,1`. Keep physical mapping as a separately versioned L1/device capability keyed by hardware/firmware identity. A normalized event identifies its origin as logical touch or mapped physical input. Until L1 supplies a verified mapping, allow editor and panel interactions but report physical activation as unavailable. Do not transpose coordinates to match the inventory sentence or force the recovered 3x5 scan onto 2x8 cells.
 
 Accept hardware mapping only after recording press and release for every physical control, knob directions and hold/release, corners of the touch grid, coordinate origin, and firmware version. Attach the evidence path to the mapping. This is a first-release physical-input gate, not an inferred geometry claim. A universal hardcoded matrix was considered and rejected because the recovered sources disagree.
 
-### Proposed (pending Ramiro): persistence, navigation, and editing
+### Approved (Ramiro, 2026-10-23): persistence, navigation, and editing
 
 Use atomic whole-revision saves with expected-revision checks. Draft edits do not affect active dispatch. A successful save increments once and publishes one complete snapshot to panel, management, and device projection. Distinguish local saved state from device delivery state. A failed device send does not discard the local save.
 

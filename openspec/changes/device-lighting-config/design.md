@@ -22,7 +22,7 @@ Expose only supported device lighting controls and distinguish saved preferences
 
 ## Decisions
 
-### Proposed (pending Ramiro): capability-driven later scope
+### Approved (Ramiro, 2026-10-23): capability-driven later scope
 
 Implement after first-release profile/grid, screen/clock, and knob brightness work. `packages/device` owns lighting-contracts, lighting-invariants, lighting-service, and interfaces for verified target capabilities and transport. `apps/desktop` supplies serial-scoped preference persistence, settings UI, and decoded IPC. `packages/protocol` / `two-layer-sdk` owns QMK get/set/save codecs and wire IDs. Do not change the existing L1 proposal or put raw commands into a renderer.
 
@@ -30,11 +30,11 @@ Use one Effect conductor, declared dependencies, named `Effect.fn` methods, expl
 
 A capability snapshot identifies device serial, session, protocol version, supported writable/readable fields, ranges, effect IDs, and binding evidence. UI controls derive from it. Brightness, effect speed, hue, and saturation use byte values 0..255 only when that range is confirmed for the field. Effect IDs come from the device's verified list, not a universal hardcoded list. Expose color1 as hue/saturation; optional color2 requires a distinct capability. Hex is an editor representation, not the wire model. Per-key RGB stays unsupported by default.
 
-### Proposed (pending Ramiro): targeting and no speculative probes
+### Approved (Ramiro, 2026-10-23): targeting and no speculative probes
 
 Select an identified QUAKE serial/session, then request capabilities/readback before enabling controls. A HID path is a session locator, not durable identity. On detach or target change cancel pending writes, discard stale readback, and resolve the serial to a fresh path. Cached QMK v3 bindings must match firmware/protocol identity and carry verified evidence; a version number alone does not authorize speculative writes. Unknown bindings render unavailable. The alternative, probing arbitrary menu IDs automatically, risks changing unrelated settings and is not justified by the source available here.
 
-### Proposed (pending Ramiro): desired, applied, and saved states
+### Approved (Ramiro, 2026-10-23): desired, applied, and saved states
 
 Keep desired UI values, last applied/read-back values, and nonvolatile save state distinct. Changing a setting applies only to the selected target through a validated field adapter. On failure retain the desired edit and show the prior known applied value; do not report success. An explicit Save requests the verified nonvolatile operation and reports saved only on the target's qualified completion/readback contract. Reconnect reads actual state before replay is considered; no automatic blind batch replay.
 
