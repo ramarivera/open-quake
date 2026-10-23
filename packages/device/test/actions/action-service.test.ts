@@ -244,6 +244,7 @@ describe("action conductor via committed snapshots and fake host consumers", () 
 			"InvalidKeyAction",
 		],
 		["open", config("open", "", "path"), "InvalidKeyAction"],
+		["open", config("open", "./private-Editor", "path"), "InvalidKeyAction"],
 		["unregistered-private-value", {}, "KeyFunctionUnavailable"],
 		["hotkeySwitch", switchFixture.config, "KeyFunctionUnavailable"],
 		["nextPage", { type: "nextPage", actions: [] }, "KeyFunctionUnavailable"],
@@ -356,6 +357,46 @@ describe("action conductor via committed snapshots and fake host consumers", () 
 					),
 				);
 				expect(h.calls).toHaveLength(1);
+			});
+		},
+	);
+	it.effect(
+		"remembers a release whose snapshot read finishes before the preceding press",
+		() => {
+			const h = harness();
+			return Effect.gen(function* () {
+				const started = yield* Deferred.make<void>();
+				const finish = yield* Deferred.make<void>();
+				let reads = 0;
+				yield* Effect.gen(function* () {
+					const service = yield* ActionService;
+					const first = yield* service.activate(press).pipe(Effect.fork);
+					yield* Deferred.await(started);
+					expect(
+						yield* service.activate({ ...press, kind: "release", sequence: 2 }),
+					).toBe("ignored");
+					expect(h.calls).toEqual([]);
+					yield* Deferred.succeed(finish, undefined);
+					const firstResult = yield* Fiber.join(first);
+					expect(yield* service.activate({ ...press, sequence: 3 })).toBe(
+						"executed",
+					);
+					expect(firstResult).toBe("ignored");
+					expect(h.calls).toEqual([["website", "https://example.org"]]);
+				}).pipe(
+					Effect.provide(
+						h.layer(h.adapters, {
+							readCommitted: () =>
+								Effect.gen(function* () {
+									if (++reads === 1) {
+										yield* Deferred.succeed(started, undefined);
+										yield* Deferred.await(finish);
+									}
+									return Option.some(h.snapshot);
+								}),
+						}),
+					),
+				);
 			});
 		},
 	);

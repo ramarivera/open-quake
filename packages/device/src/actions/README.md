@@ -32,6 +32,13 @@ An atomic chord adapter must release modifiers on success, failure and
 interruption. Text inserts exact content. The conductor checks optional enter
 support before inserting and sends it only after insertion succeeds.
 
+Open-app targets must be absolute POSIX paths, drive-qualified Windows paths,
+UNC paths with a server and share, or selected references such as
+`app:org.example.Editor`. The `app:` identifier contains dot-separated nonempty
+ASCII alphanumeric/hyphen segments. Relative paths, including home-directory
+shorthand, cannot validate as executable. Host support and application existence
+remain adapter checks at launch time.
+
 The profile source returns only committed active snapshots, with the device's
 current connection session. Normalized events identify that same profile, page
 and revision. Sequence numbers increase per device/control within a session,
@@ -41,6 +48,9 @@ entry point here. Missing, hidden and stale keys do nothing. Each control stays
 held until release; duplicate presses, repeats and holds never execute. An old
 revision's release may clear held state but cannot execute an action. Reconnect
 uses a new session, so old-session events cannot replay against it.
+An unmatched release retains its sequence number. If its snapshot read finishes
+before an older press, that press stays stale and the next genuine press can
+execute.
 
 Profile navigation, panelBrightness, assistant direct voice and dkDesktopClock
 are integration descriptors. Their schemas match the owning change's action

@@ -117,10 +117,23 @@ export const TextConfig = Schema.Struct({
 		),
 	),
 });
+/** Absolute POSIX/drive/UNC path or a selected app:<bundle-id> reference. */
+export const ApplicationReference = Nonblank.pipe(
+	Schema.filter(
+		(value) =>
+			value.startsWith("/") ||
+			/^[a-z]:[\\/]/i.test(value) ||
+			/^\\\\[^\\]+\\[^\\]+(?:\\|$)/.test(value) ||
+			/^app:[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i.test(value),
+	),
+);
 export const OpenAppConfig = Schema.Struct({
 	type: Schema.Literal("open"),
 	actions: Schema.Tuple(
-		Schema.Struct({ type: Schema.Literal("path"), value: Nonblank }),
+		Schema.Struct({
+			type: Schema.Literal("path"),
+			value: ApplicationReference,
+		}),
 	),
 });
 export const MediaCommand = Schema.Literal(

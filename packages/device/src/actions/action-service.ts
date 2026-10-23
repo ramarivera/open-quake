@@ -159,8 +159,8 @@ export class ActionService extends Effect.Service<ActionService>()(
 						const identity = JSON.stringify([event.deviceId, event.keyCode]);
 						const previous = current.get(identity);
 						const sameSession = previous?.sessionId === event.sessionId;
-						if (event.kind === "release" && !sameSession)
-							return [false, current];
+						// Keep unmatched releases so an older pending snapshot read cannot
+						// restore held state after this control has already been released.
 						if (sameSession && event.sequence <= previous.sequence)
 							return [false, current];
 						const held = sameSession && previous.held;

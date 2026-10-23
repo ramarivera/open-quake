@@ -79,10 +79,6 @@ describe("action registry and executable contracts", () => {
 				accepted("website", "https://example.org/path?q=1", "url"),
 			),
 		).toBe(true);
-		expect(Either.isLeft(accepted("open", "  ", "path"))).toBe(true);
-		expect(
-			Either.isRight(accepted("open", "app:org.example.Editor", "path")),
-		).toBe(true);
 		expect(
 			Either.isLeft(
 				valid("text", [
@@ -138,6 +134,34 @@ describe("action registry and executable contracts", () => {
 				),
 			),
 		).toBe(true);
+	});
+
+	it("accepts absolute application paths and selected references, rejecting relative targets", () => {
+		for (const value of [
+			"/Applications/Independent Fixture.app",
+			"/usr/bin/editor",
+			"C:\\Program Files\\Editor\\Editor.exe",
+			"C:/Program Files/Editor/Editor.exe",
+			"\\\\server\\apps\\Editor.exe",
+			"app:org.example.Editor",
+		])
+			expect(Either.isRight(accepted("open", value, "path")), value).toBe(true);
+		for (const value of [
+			"",
+			"  ",
+			"./Editor",
+			"../Editor",
+			"Editor",
+			"~/Applications/Editor.app",
+			"C:Editor.exe",
+			"\\Editor.exe",
+			"app:",
+			"app:org..Editor",
+			"app:org.example/Editor",
+			"app:org.example.Editor --flag",
+			"/Applications/Editor.app\0",
+		])
+			expect(Either.isLeft(accepted("open", value, "path")), value).toBe(true);
 	});
 
 	it("validates profile, knob and clock integration payloads without dispatch", () => {

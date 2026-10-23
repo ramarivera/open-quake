@@ -12,6 +12,34 @@ import {
 import { config, harness, press } from "./action-harness.js";
 
 describe("catalog failures through the real action consumer", () => {
+	it("round trips validation and unavailability errors without retaining wire payloads as causes", () => {
+		const original = Object.assign(new Error("private-input"), {
+			code: "EACCES",
+		});
+		const invalid = new InvalidKeyAction("config.actions", original);
+		const encodedInvalid = Schema.encodeSync(InvalidKeyAction)(invalid);
+		const decodedInvalid =
+			Schema.decodeUnknownSync(InvalidKeyAction)(encodedInvalid);
+		expect(decodedInvalid).toBeInstanceOf(InvalidKeyAction);
+		expect(Schema.encodeSync(InvalidKeyAction)(decodedInvalid)).toEqual(
+			encodedInvalid,
+		);
+		expect(decodedInvalid.originalCause).toBeUndefined();
+		expect(invalid.originalCause).toBe(original);
+		const unavailable = new KeyFunctionUnavailable("adapter-missing");
+		const encodedUnavailable = Schema.encodeSync(KeyFunctionUnavailable)(
+			unavailable,
+		);
+		const decodedUnavailable = Schema.decodeUnknownSync(KeyFunctionUnavailable)(
+			encodedUnavailable,
+		);
+		expect(decodedUnavailable).toBeInstanceOf(KeyFunctionUnavailable);
+		expect(
+			Schema.encodeSync(KeyFunctionUnavailable)(decodedUnavailable),
+		).toEqual(encodedUnavailable);
+		expect(decodedUnavailable.originalCause).toBeUndefined();
+	});
+
 	for (const ErrorClass of [
 		ActionPermissionDenied,
 		ActionApplicationMissing,

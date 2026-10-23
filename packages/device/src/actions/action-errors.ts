@@ -92,37 +92,76 @@ export const ActionField = Schema.Literal(
 	"config.supportKnob",
 	"activation",
 );
+const invalidKeyActionFields = {
+	...fields(ActionErrors.InvalidKeyAction),
+	field: ActionField,
+};
 export class InvalidKeyAction extends Schema.TaggedError<InvalidKeyAction>()(
 	"InvalidKeyAction",
-	{
-		...fields(ActionErrors.InvalidKeyAction),
-		field: ActionField,
-	},
+	invalidKeyActionFields,
 ) {
 	declare readonly originalCause: unknown;
-	constructor(field: typeof ActionField.Type, cause: unknown = undefined) {
-		super({ ...props(ActionErrors.InvalidKeyAction, cause), field });
-		retain(this, cause);
+	constructor(field: typeof ActionField.Type, cause?: unknown);
+	constructor(
+		properties: Schema.Struct.Constructor<typeof invalidKeyActionFields>,
+		options?: Schema.MakeOptions,
+	);
+	constructor(
+		input:
+			| typeof ActionField.Type
+			| Schema.Struct.Constructor<typeof invalidKeyActionFields>,
+		causeOrOptions?: unknown,
+	) {
+		const local = typeof input === "string";
+		super(
+			local
+				? {
+						...props(ActionErrors.InvalidKeyAction, causeOrOptions),
+						field: input,
+					}
+				: input,
+			local ? undefined : (causeOrOptions as Schema.MakeOptions | undefined),
+		);
+		retain(this, local ? causeOrOptions : undefined);
 	}
 }
+const keyFunctionUnavailableFields = {
+	...fields(ActionErrors.KeyFunctionUnavailable),
+	reason: Schema.Literal(
+		"unknown-function",
+		"unresolved",
+		"owning-runtime",
+		"adapter-missing",
+		"unsupported-token",
+		"unsupported-command",
+		"knob-routing",
+	),
+};
 export class KeyFunctionUnavailable extends Schema.TaggedError<KeyFunctionUnavailable>()(
 	"KeyFunctionUnavailable",
-	{
-		...fields(ActionErrors.KeyFunctionUnavailable),
-		reason: Schema.Literal(
-			"unknown-function",
-			"unresolved",
-			"owning-runtime",
-			"adapter-missing",
-			"unsupported-token",
-			"unsupported-command",
-			"knob-routing",
-		),
-	},
+	keyFunctionUnavailableFields,
 ) {
 	declare readonly originalCause: unknown;
-	constructor(reason: KeyFunctionUnavailable["reason"]) {
-		super({ ...props(ActionErrors.KeyFunctionUnavailable, undefined), reason });
+	constructor(reason: KeyFunctionUnavailable["reason"]);
+	constructor(
+		properties: Schema.Struct.Constructor<typeof keyFunctionUnavailableFields>,
+		options?: Schema.MakeOptions,
+	);
+	constructor(
+		input:
+			| KeyFunctionUnavailable["reason"]
+			| Schema.Struct.Constructor<typeof keyFunctionUnavailableFields>,
+		options?: Schema.MakeOptions,
+	) {
+		super(
+			typeof input === "string"
+				? {
+						...props(ActionErrors.KeyFunctionUnavailable, undefined),
+						reason: input,
+					}
+				: input,
+			options,
+		);
 		retain(this, undefined);
 	}
 }
