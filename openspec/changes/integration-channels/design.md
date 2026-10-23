@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -29,29 +29,29 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` channel contracts, setup state machine, adapter registry and conductor; `packages/client` typed catalog/setup events; `apps/desktop` setup drawer, QR display and secret-store adapter. The OpenClaw lane owns runtime installation and channel providers. No new device/protocol behavior.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): question 9 remains open. Feishu/Lark and bot-token form branches are observed, but they are not an authoritative catalog. Ship only adapters with their own verified contract; an empty catalog is a supported state.
+1. Approved (Ramiro, 2026-10-23): question 9 remains open. Feishu/Lark and bot-token form branches are observed, but they are not an authoritative catalog. Ship only adapters with their own verified contract; an empty catalog is a supported state.
 
-2. Proposed (pending Ramiro): keep the hub independent of runtime installation. Runtime absence yields unavailable setup rather than an implicit install.
+2. Approved (Ramiro, 2026-10-23): keep the hub independent of runtime installation. Runtime absence yields unavailable setup rather than an implicit install.
 
-3. Proposed (pending Ramiro): setup sessions expire after five minutes unless the adapter supplies an earlier expiry; ignore progress from cancelled/replaced session IDs.
+3. Approved (Ramiro, 2026-10-23): setup sessions expire after five minutes unless the adapter supplies an earlier expiry; ignore progress from cancelled/replaced session IDs.
 
 ### Data model
 
-Proposed (pending Ramiro): ChannelDescriptor carries ID, label, setup type, field schemas, runtime requirement and availability. SetupSession carries channel ID, unique session ID, deadline and state. ChannelConfig stores enabled flag and secret references; runtime status stays distinct from saved configuration.
+Approved (Ramiro, 2026-10-23): ChannelDescriptor carries ID, label, setup type, field schemas, runtime requirement and availability. SetupSession carries channel ID, unique session ID, deadline and state. ChannelConfig stores enabled flag and secret references; runtime status stays distinct from saved configuration.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): The runtime/provider lane supplies adapters into a registry, not a hard-coded recovered catalog. The hub queries descriptors and live status through the channel conductor. Setup validates descriptor fields, creates a session and streams correlated progress to the drawer. Closing/removal cancels session scope; save does not imply connection verification.
+Approved (Ramiro, 2026-10-23): The runtime/provider lane supplies adapters into a registry, not a hard-coded recovered catalog. The hub queries descriptors and live status through the channel conductor. Setup validates descriptor fields, creates a session and streams correlated progress to the drawer. Closing/removal cancels session scope; save does not imply connection verification.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.CHANNEL.UNAVAILABLE, QUAKE.CHANNEL.SETUP_INVALID, QUAKE.CHANNEL.SESSION_EXPIRED and QUAKE.CHANNEL.REMOVAL_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.CHANNEL.UNAVAILABLE, QUAKE.CHANNEL.SETUP_INVALID, QUAKE.CHANNEL.SESSION_EXPIRED and QUAKE.CHANNEL.REMOVAL_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

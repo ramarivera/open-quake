@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -30,29 +30,29 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` monitoring contracts, invariants, collector interfaces and conductor; `packages/client` typed subscription API; `apps/desktop` native collectors and tile/settings views. `packages/device` consumes existing display delivery; `packages/protocol` gains no monitoring opcodes.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): use a 1 Hz metric default with a validated 0.2–10 Hz range, coalesce active-window queries, and keep at most one sample request in flight per collector. These are replacement-client budgets, not measured DK-Suite metric rates.
+1. Approved (Ramiro, 2026-10-23): use a 1 Hz metric default with a validated 0.2–10 Hz range, coalesce active-window queries, and keep at most one sample request in flight per collector. These are replacement-client budgets, not measured DK-Suite metric rates.
 
-2. Proposed (pending Ramiro): gaming mode overlays saved monitoring settings and restores them on exit; it does not rewrite profiles or infer game detection from arbitrary foreground apps.
+2. Approved (Ramiro, 2026-10-23): gaming mode overlays saved monitoring settings and restores them on exit; it does not rewrite profiles or infer game detection from arbitrary foreground apps.
 
-3. Proposed (pending Ramiro): unsupported collectors remain visible as unavailable. ActiveWindowService proves window discovery, not implementations of every metric named by the inventory.
+3. Approved (Ramiro, 2026-10-23): unsupported collectors remain visible as unavailable. ActiveWindowService proves window discovery, not implementations of every metric named by the inventory.
 
 ### Data model
 
-Proposed (pending Ramiro): MonitoringConfig stores masterEnabled, metric IDs, collector method, sample rate, app monitor settings and separate game overrides. MetricSample stores metric ID, collectedAt, unit and an availability-tagged value. ForegroundWindow contains only required window/app identity, not captured screen content.
+Approved (Ramiro, 2026-10-23): MonitoringConfig stores masterEnabled, metric IDs, collector method, sample rate, app monitor settings and separate game overrides. MetricSample stores metric ID, collectedAt, unit and an availability-tagged value. ForegroundWindow contains only required window/app identity, not captured screen content.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): An enabled settings capability starts a scoped monitoring conductor. Host collectors return normalized samples through contracts; the conductor marks stale values using an injected clock and fans out one snapshot stream. Gaming mode overlays the saved normal config; leaving it reads the latest normal snapshot. Foreground-window requests use one query lock and cache, separate from metric collection.
+Approved (Ramiro, 2026-10-23): An enabled settings capability starts a scoped monitoring conductor. Host collectors return normalized samples through contracts; the conductor marks stale values using an injected clock and fans out one snapshot stream. Gaming mode overlays the saved normal config; leaving it reads the latest normal snapshot. Foreground-window requests use one query lock and cache, separate from metric collection.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.MONITOR.PERMISSION_DENIED, QUAKE.MONITOR.COLLECTION_FAILED and QUAKE.MONITOR.CONFIG_INVALID. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.MONITOR.PERMISSION_DENIED, QUAKE.MONITOR.COLLECTION_FAILED and QUAKE.MONITOR.CONFIG_INVALID. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

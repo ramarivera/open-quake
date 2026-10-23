@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -30,31 +30,31 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/protocol` pure DFU encoding and UF2 validation; `packages/device` selected-device DFU lifecycle; `packages/edge` firmware workflow and catalog errors; `packages/client` typed update API; `apps/desktop` file/volume/bookmark adapters and update UI. `packages/cli` can reuse explicit inspect/DFU actions without owning flash logic.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): never write firmware automatically. User selects image and boot volume, reviews decoded target/size and explicitly starts the update. The raw research image is not bundled by this change.
+1. Approved (Ramiro, 2026-10-23): never write firmware automatically. User selects image and boot volume, reviews decoded target/size and explicitly starts the update. The raw research image is not bundled by this change.
 
-2. Proposed (pending Ramiro): accept standard RP2040 UF2 by default; support the recovered first-header UF2 newline variant only through a narrowly tested compatibility mode, not a permissive magic check.
+2. Approved (Ramiro, 2026-10-23): accept standard RP2040 UF2 by default; support the recovered first-header UF2 newline variant only through a narrowly tested compatibility mode, not a permissive magic check.
 
-3. Proposed (pending Ramiro): retain bookmark as a hint, re-resolve and validate the boot volume every time, and require explicit selection if multiple candidates exist.
+3. Approved (Ramiro, 2026-10-23): retain bookmark as a hint, re-resolve and validate the boot volume every time, and require explicit selection if multiple candidates exist.
 
-4. Proposed (pending Ramiro): define success as reconnected selected device with verified expected firmware identity; otherwise report written/unverified or needs-recovery. A copied file or vanished volume is insufficient.
+4. Approved (Ramiro, 2026-10-23): define success as reconnected selected device with verified expected firmware identity; otherwise report written/unverified or needs-recovery. A copied file or vanished volume is insufficient.
 
 ### Data model
 
-Proposed (pending Ramiro): FirmwareImageInfo carries validated block metadata, family, bounded target ranges, content fingerprint and optional expected firmware identity. UpdateSession binds selected device identity, image fingerprint, chosen volume identity and terminal/interrupted state. The image itself and OS volume bookmark remain outside public status.
+Approved (Ramiro, 2026-10-23): FirmwareImageInfo carries validated block metadata, family, bounded target ranges, content fingerprint and optional expected firmware identity. UpdateSession binds selected device identity, image fingerprint, chosen volume identity and terminal/interrupted state. The image itself and OS volume bookmark remain outside public status.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): Pure protocol functions validate UF2 and encode the known short-command intent through the SDK framing contract. The device service serializes DFU with other hardware work and pauses conflicting writes. The firmware conductor waits for a selected verified boot volume, revalidates it, obtains final explicit write confirmation and invokes the filesystem adapter. Reconnect verification matches the intended target and expected firmware identity before completed status.
+Approved (Ramiro, 2026-10-23): Pure protocol functions validate UF2 and encode the known short-command intent through the SDK framing contract. The device service serializes DFU with other hardware work and pauses conflicting writes. The firmware conductor waits for a selected verified boot volume, revalidates it, obtains final explicit write confirmation and invokes the filesystem adapter. Reconnect verification matches the intended target and expected firmware identity before completed status.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.FIRMWARE.IMAGE_INVALID, QUAKE.FIRMWARE.TARGET_MISMATCH, QUAKE.FIRMWARE.VOLUME_INVALID, QUAKE.FIRMWARE.WRITE_FAILED and QUAKE.FIRMWARE.VERIFICATION_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.FIRMWARE.IMAGE_INVALID, QUAKE.FIRMWARE.TARGET_MISMATCH, QUAKE.FIRMWARE.VOLUME_INVALID, QUAKE.FIRMWARE.WRITE_FAILED and QUAKE.FIRMWARE.VERIFICATION_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

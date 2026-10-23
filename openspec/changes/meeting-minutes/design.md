@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -32,31 +32,31 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` meeting contracts, repository, lifecycle invariants and conductor; `packages/client` typed meeting API; `apps/desktop` capture/permission, local files, export adapters and history/capture UI. AI/speech lanes own provider facades; panel animation consumes meeting state through existing display delivery.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): one user-visible capture session at a time. Microphone is required; system audio is optional and requires an explicit choice of available source.
+1. Approved (Ramiro, 2026-10-23): one user-visible capture session at a time. Microphone is required; system audio is optional and requires an explicit choice of available source.
 
-2. Proposed (pending Ramiro): preserve transcript when summarization fails, and retry only the failed stage. Provider output is labeled generated and is editable/exportable without being represented as a verbatim transcript.
+2. Approved (Ramiro, 2026-10-23): preserve transcript when summarization fails, and retry only the failed stage. Provider output is labeled generated and is editable/exportable without being represented as a verbatim transcript.
 
-3. Proposed (pending Ramiro): question 11, liveAudioTranslate, stays deferred. A commented-out menu and name evidence do not justify continuous translation capture in this recorder.
+3. Approved (Ramiro, 2026-10-23): question 11, liveAudioTranslate, stays deferred. A commented-out menu and name evidence do not justify continuous translation capture in this recorder.
 
-4. Proposed (pending Ramiro): keep finalized recordings locally until the user deletes the meeting; partial buffers are removed after cancel. DOCX conversion library choice waits for output fixture evaluation.
+4. Approved (Ramiro, 2026-10-23): keep finalized recordings locally until the user deletes the meeting; partial buffers are removed after cancel. DOCX conversion library choice waits for output fixture evaluation.
 
 ### Data model
 
-Proposed (pending Ramiro): MeetingRecord carries stable ID, title, timestamps/duration, capture source metadata, stage state, local audio/transcript/minutes resource references and failure stage. A session generation identifies callbacks; finalized chunks have ordered unique IDs. Generated minutes carry provider/model provenance distinct from transcript text.
+Approved (Ramiro, 2026-10-23): MeetingRecord carries stable ID, title, timestamps/duration, capture source metadata, stage state, local audio/transcript/minutes resource references and failure stage. A session generation identifies callbacks; finalized chunks have ordered unique IDs. Generated minutes carry provider/model provenance distinct from transcript text.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): Explicit start acquires selected capture sources in desktop adapters; the meeting conductor owns the lifecycle. Stop closes tracks and finalizes chunks once, then speech and AI facades process stages. The repository commits transcript before generation. Retry restarts only a failed stage. History and panel status use the same meeting state, while export reads a selected saved artifact and writes a user-selected file.
+Approved (Ramiro, 2026-10-23): Explicit start acquires selected capture sources in desktop adapters; the meeting conductor owns the lifecycle. Stop closes tracks and finalizes chunks once, then speech and AI facades process stages. The repository commits transcript before generation. Retry restarts only a failed stage. History and panel status use the same meeting state, while export reads a selected saved artifact and writes a user-selected file.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.MEETING.CAPTURE_DENIED, QUAKE.MEETING.SOURCE_LOST, QUAKE.MEETING.TRANSCRIPTION_FAILED, QUAKE.MEETING.GENERATION_FAILED and QUAKE.MEETING.EXPORT_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.MEETING.CAPTURE_DENIED, QUAKE.MEETING.SOURCE_LOST, QUAKE.MEETING.TRANSCRIPTION_FAILED, QUAKE.MEETING.GENERATION_FAILED and QUAKE.MEETING.EXPORT_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

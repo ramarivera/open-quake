@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -29,29 +29,29 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` soundboard contracts, playlist/fade invariants, repository and conductor; `packages/client` typed controls/events; `apps/desktop` audio backend, file picker and player UI. Profile services own grid configuration; device/protocol packages reuse existing normalized key/display behavior.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): initial playback is one active session per DK-Player key, with repeated play replacing that key's session; distinct keys may overlap. stopAudio stops all sessions and restores no OS volume.
+1. Approved (Ramiro, 2026-10-23): initial playback is one active session per DK-Player key, with repeated play replacing that key's session; distinct keys may overlap. stopAudio stops all sessions and restores no OS volume.
 
-2. Proposed (pending Ramiro): preserve source playlist order, use per-session volume 0–100, and define fade durations in milliseconds. Decode legacy numeric actions at the import boundary only after fixture mapping.
+2. Approved (Ramiro, 2026-10-23): preserve source playlist order, use per-session volume 0–100, and define fade durations in milliseconds. Decode legacy numeric actions at the import boundary only after fixture mapping.
 
-3. Proposed (pending Ramiro): MP3 is the initial verified input subset. No directory scanning, streaming URLs or codec expansion is implied by a path string.
+3. Approved (Ramiro, 2026-10-23): MP3 is the initial verified input subset. No directory scanning, streaming URLs or codec expansion is implied by a path string.
 
 ### Data model
 
-Proposed (pending Ramiro): SoundKeyConfig stores ordered managed local file references, typed playback action, volume 0–100 and fadeInMs/fadeOutMs. PlaybackSession is keyed by profile/key identity and contains track index, position, generation ID and idle/playing/paused/stopped/failed state. Legacy sound-value decoding is kept at import boundaries.
+Approved (Ramiro, 2026-10-23): SoundKeyConfig stores ordered managed local file references, typed playback action, volume 0–100 and fadeInMs/fadeOutMs. PlaybackSession is keyed by profile/key identity and contains track index, position, generation ID and idle/playing/paused/stopped/failed state. Legacy sound-value decoding is kept at import boundaries.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): The profile owner saves normalized key settings. The player conductor validates files and sends commands to an injected audio backend, publishing one state stream for panel and desktop. Repeat play replaces only that key's generation; late callbacks from the old session are discarded. Global stopAudio enumerates active sessions once.
+Approved (Ramiro, 2026-10-23): The profile owner saves normalized key settings. The player conductor validates files and sends commands to an injected audio backend, publishing one state stream for panel and desktop. Repeat play replaces only that key's generation; late callbacks from the old session are discarded. Global stopAudio enumerates active sessions once.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.AUDIO.CONFIG_INVALID, QUAKE.AUDIO.FILE_UNAVAILABLE, QUAKE.AUDIO.DECODE_FAILED and QUAKE.AUDIO.OUTPUT_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.AUDIO.CONFIG_INVALID, QUAKE.AUDIO.FILE_UNAVAILABLE, QUAKE.AUDIO.DECODE_FAILED and QUAKE.AUDIO.OUTPUT_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

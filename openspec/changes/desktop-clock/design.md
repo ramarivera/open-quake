@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -27,27 +27,27 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` clock configuration and formatting invariants; `packages/client` clock settings contract; `apps/desktop` clock rendering and scheduling. Existing profile/display services own layout and delivery; `packages/protocol` and `packages/device` need no new command.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): use host local time and system timezone with 24h as the default, matching the recovered component; remote timezone selection is deferred.
+1. Approved (Ramiro, 2026-10-23): use host local time and system timezone with 24h as the default, matching the recovered component; remote timezone selection is deferred.
 
-2. Proposed (pending Ramiro): share one clock schedule per visible desktop session and recompute from wall-clock time on resume, rather than accumulating elapsed ticks.
+2. Approved (Ramiro, 2026-10-23): share one clock schedule per visible desktop session and recompute from wall-clock time on resume, rather than accumulating elapsed ticks.
 
 ### Data model
 
-Proposed (pending Ramiro): ClockConfig belongs to its profile key and contains hourFormat as 12h or 24h. ClockSnapshot contains host-local date, hour, minute and optional meridiem, computed from an injected instant and timezone.
+Approved (Ramiro, 2026-10-23): ClockConfig belongs to its profile key and contains hourFormat as 12h or 24h. ClockSnapshot contains host-local date, hour, minute and optional meridiem, computed from an injected instant and timezone.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): The profile owner persists configuration; pure clock invariants compute labels. Desktop owns one cancellable schedule for visible consumers and refreshes immediately after activation/resume/timezone changes. Panel and management render the same snapshot under the shared theme/motion contract.
+Approved (Ramiro, 2026-10-23): The profile owner persists configuration; pure clock invariants compute labels. Desktop owns one cancellable schedule for visible consumers and refreshes immediately after activation/resume/timezone changes. Panel and management render the same snapshot under the shared theme/motion contract.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.CLOCK.CONFIG_INVALID and QUAKE.CLOCK.SCHEDULE_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.CLOCK.CONFIG_INVALID and QUAKE.CLOCK.SCHEDULE_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

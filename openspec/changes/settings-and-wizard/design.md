@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -43,35 +43,35 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` settings/wizard contracts, invariants, repositories and conductors; `packages/client` typed settings API; `apps/desktop` OS preference/secret adapters, wizard/settings/guide UI and composition root. `packages/device` owns capability-backed brightness/lighting writes; `packages/protocol` owns verified encodings. AI, wallpaper, profiles, firmware and runtime lanes retain their respective implementation ownership.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): question 8, recommend QUAKE-only scope. ARIS-68 is a separate keyboard with axle-body/performance/calibration/script/linkage views. Adding it would require a second device identity, protocol and hardware acceptance suite. Keep its views and calibration commands out of QUAKE parity; revisit as a separate product change.
+1. Approved (Ramiro, 2026-10-23): question 8, recommend QUAKE-only scope. ARIS-68 is a separate keyboard with axle-body/performance/calibration/script/linkage views. Adding it would require a second device identity, protocol and hardware acceptance suite. Keep its views and calibration commands out of QUAKE parity; revisit as a separate product change.
 
-2. Proposed (pending Ramiro): no QUAKE touch/knob calibration write until a QUAKE-specific capability and command contract is recovered and verified. Display unsupported state rather than borrowing ARIS-68 IPC semantics.
+2. Approved (Ramiro, 2026-10-23): no QUAKE touch/knob calibration write until a QUAKE-specific capability and command contract is recovered and verified. Display unsupported state rather than borrowing ARIS-68 IPC semantics.
 
-3. Proposed (pending Ramiro): local onboarding is Welcome → Locale/region → Display → Profiles → optional OpenClaw install/init → Complete. The recovered source puts runtime steps before Profiles. Prefer immediate local usability and record this deliberate ordering change.
+3. Approved (Ramiro, 2026-10-23): local onboarding is Welcome → Locale/region → Display → Profiles → optional OpenClaw install/init → Complete. The recovered source puts runtime steps before Profiles. Prefer immediate local usability and record this deliberate ordering change.
 
-4. Proposed (pending Ramiro): seed locale/provider suggestions once from OS locale and an explicitly selected region. Avoid a network geo lookup; user choices win permanently and unsupported provider suggestions remain unselected.
+4. Approved (Ramiro, 2026-10-23): seed locale/provider suggestions once from OS locale and an explicitly selected region. Avoid a network geo lookup; user choices win permanently and unsupported provider suggestions remain unselected.
 
-5. Proposed (pending Ramiro): offer the recovered locale IDs zh, en, es, fr, ko, de, it and ja only when translations exist; use en as replacement fallback. Record launch-at-login and start-hidden separately because openAsHidden proves only hidden-start storage.
+5. Approved (Ramiro, 2026-10-23): offer the recovered locale IDs zh, en, es, fr, ko, de, it and ja only when translations exist; use en as replacement fallback. Record launch-at-login and start-hidden separately because openAsHidden proves only hidden-start storage.
 
-6. Proposed (pending Ramiro): question 11 remains deferred in meeting-minutes; settings must not enable a liveAudioTranslate action from disabled menu evidence.
+6. Approved (Ramiro, 2026-10-23): question 11 remains deferred in meeting-minutes; settings must not enable a liveAudioTranslate action from disabled menu evidence.
 
 ### Data model
 
-Proposed (pending Ramiro): Versioned SettingsSnapshot separates general, locale/region, provider secret references and device-scoped preferences. WizardProgress stores step ID, draft choices, skipped optional capabilities and completion status per OS user/machine installation. Capability status comes from owners, not a settings-only boolean.
+Approved (Ramiro, 2026-10-23): Versioned SettingsSnapshot separates general, locale/region, provider secret references and device-scoped preferences. WizardProgress stores step ID, draft choices, skipped optional capabilities and completion status per OS user/machine installation. Capability status comes from owners, not a settings-only boolean.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): The settings conductor decodes and validates a draft before an atomic repository write, then applies the affected OS or owning-domain operation and reports saved/requested/confirmed status accurately. Wizard completion commits only after required local choices validate. Device changes carry a selected-device generation ID so late responses cannot affect a newly selected unit. Guide text is bundled locally and follows the shared theme/motion contract.
+Approved (Ramiro, 2026-10-23): The settings conductor decodes and validates a draft before an atomic repository write, then applies the affected OS or owning-domain operation and reports saved/requested/confirmed status accurately. Wizard completion commits only after required local choices validate. Device changes carry a selected-device generation ID so late responses cannot affect a newly selected unit. Guide text is bundled locally and follows the shared theme/motion contract.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.SETTINGS.INVALID, QUAKE.SETTINGS.PERSIST_FAILED, QUAKE.SETTINGS.OS_APPLY_FAILED, QUAKE.WIZARD.INCOMPLETE and QUAKE.DEVICE.CAPABILITY_UNAVAILABLE. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.SETTINGS.INVALID, QUAKE.SETTINGS.PERSIST_FAILED, QUAKE.SETTINGS.OS_APPLY_FAILED, QUAKE.WIZARD.INCOMPLETE and QUAKE.DEVICE.CAPABILITY_UNAVAILABLE. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

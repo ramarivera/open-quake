@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -31,29 +31,29 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` artwork contracts, metadata repository and validation conductor; `packages/client` typed library API; `apps/desktop` file import/preview adapters, icon picker and templates UI. Profile and wallpaper services consume resource IDs; `packages/device` owns delivery and `packages/protocol` pure framing, with no new payload inference here.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): question 13 remains open. Emoji package notification is not evidence that generated output is a ready-to-send 0xA2 resource. Persist a local image reference; no physical-send claim until the display/protocol lane proves its conversion.
+1. Approved (Ramiro, 2026-10-23): question 13 remains open. Emoji package notification is not evidence that generated output is a ready-to-send 0xA2 resource. Persist a local image reference; no physical-send claim until the display/protocol lane proves its conversion.
 
-2. Proposed (pending Ramiro): initial local imports accept decoded PNG/JPEG and sanitized static SVG; cap files at 20 MiB and raster dimensions at 8192 per axis. These are replacement limits, not recovered constants.
+2. Approved (Ramiro, 2026-10-23): initial local imports accept decoded PNG/JPEG and sanitized static SVG; cap files at 20 MiB and raster dimensions at 8192 per axis. These are replacement limits, not recovered constants.
 
-3. Proposed (pending Ramiro): built-in metadata is immutable; imported artwork is copied to application storage and addressed by stable ID. Referenced resources require replacement/unlink before deletion.
+3. Approved (Ramiro, 2026-10-23): built-in metadata is immutable; imported artwork is copied to application storage and addressed by stable ID. Referenced resources require replacement/unlink before deletion.
 
 ### Data model
 
-Proposed (pending Ramiro): ArtworkRecord stores stable ID, kind, name, provenance, managed file reference, checksum and validated dimensions/type. Built-in references are immutable. Assignment lives in profile/wallpaper configuration and stores artwork ID, while delivery status belongs to the display owner.
+Approved (Ramiro, 2026-10-23): ArtworkRecord stores stable ID, kind, name, provenance, managed file reference, checksum and validated dimensions/type. Built-in references are immutable. Assignment lives in profile/wallpaper configuration and stores artwork ID, while delivery status belongs to the display owner.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): Desktop selects files; an artwork conductor validates/decode-checks, sanitizes SVG, copies accepted files to managed storage and commits metadata only after a successful copy. Batch results report each item. The picker returns the selected ID and explicit target identity to its owner. Deletion checks references before removing metadata/file. Emoji generation can register an image through this same import contract but cannot declare transport completion.
+Approved (Ramiro, 2026-10-23): Desktop selects files; an artwork conductor validates/decode-checks, sanitizes SVG, copies accepted files to managed storage and commits metadata only after a successful copy. Batch results report each item. The picker returns the selected ID and explicit target identity to its owner. Deletion checks references before removing metadata/file. Emoji generation can register an image through this same import contract but cannot declare transport completion.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.ARTWORK.INVALID, QUAKE.ARTWORK.LIMIT_EXCEEDED, QUAKE.ARTWORK.NAME_CONFLICT, QUAKE.ARTWORK.IN_USE and QUAKE.ARTWORK.FILE_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.ARTWORK.INVALID, QUAKE.ARTWORK.LIMIT_EXCEEDED, QUAKE.ARTWORK.NAME_CONFLICT, QUAKE.ARTWORK.IN_USE and QUAKE.ARTWORK.FILE_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

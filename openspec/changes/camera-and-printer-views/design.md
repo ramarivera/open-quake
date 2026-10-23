@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -31,29 +31,29 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` camera/printer contracts, gateway repository interface and feed conductors; `packages/client` typed status/frame APIs; `apps/desktop` local gateway process adapter and panel renderers. Existing display services deliver composed output; protocol/device packages gain no guessed opcodes.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): question 5 blocks a production gateway adapter. Record start/stop, readiness, framing, auth and shutdown fixtures before enabling it; never run the opaque binary merely to display placeholders.
+1. Approved (Ramiro, 2026-10-23): question 5 blocks a production gateway adapter. Record start/stop, readiness, framing, auth and shutdown fixtures before enabling it; never run the opaque binary merely to display placeholders.
 
-2. Proposed (pending Ramiro): begin with read-only printer telemetry and camera frames. Pan/tilt remains unavailable unless an adapter advertises a verified control contract.
+2. Approved (Ramiro, 2026-10-23): begin with read-only printer telemetry and camera frames. Pan/tilt remains unavailable unless an adapter advertises a verified control contract.
 
-3. Proposed (pending Ramiro): bound streams to one in-flight frame and 10 fps maximum; mark printer status stale after ten seconds without a valid sample. These are replacement budgets.
+3. Approved (Ramiro, 2026-10-23): bound streams to one in-flight frame and 10 fps maximum; mark printer status stale after ten seconds without a valid sample. These are replacement budgets.
 
 ### Data model
 
-Proposed (pending Ramiro): GatewayState separates stopped/starting/ready/failed. CameraConfig stores endpoint/credential references and adapter ID; Frame carries sequence, timestamp and bounded decoded image. PrinterSnapshot stores timestamp, normalized state and optional progress/layers/temperatures/remaining/job fields, keeping absent values distinct from zero.
+Approved (Ramiro, 2026-10-23): GatewayState separates stopped/starting/ready/failed. CameraConfig stores endpoint/credential references and adapter ID; Frame carries sequence, timestamp and bounded decoded image. PrinterSnapshot stores timestamp, normalized state and optional progress/layers/temperatures/remaining/job fields, keeping absent values distinct from zero.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): A verified gateway adapter owns process readiness, feed subscriptions and shutdown. Feed conductors translate adapter payloads into client contracts; desktop panel renderers consume only normalized frames/status. Subscribers acquire/release streams by active view. Backpressure drops obsolete camera frames; clock-based health marks printer snapshots stale.
+Approved (Ramiro, 2026-10-23): A verified gateway adapter owns process readiness, feed subscriptions and shutdown. Feed conductors translate adapter payloads into client contracts; desktop panel renderers consume only normalized frames/status. Subscribers acquire/release streams by active view. Backpressure drops obsolete camera frames; clock-based health marks printer snapshots stale.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.GATEWAY.UNVERIFIED, QUAKE.GATEWAY.START_FAILED, QUAKE.CAMERA.STREAM_FAILED, QUAKE.CAMERA.CONTROL_UNSUPPORTED and QUAKE.PRINTER.STATUS_INVALID. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.GATEWAY.UNVERIFIED, QUAKE.GATEWAY.START_FAILED, QUAKE.CAMERA.STREAM_FAILED, QUAKE.CAMERA.CONTROL_UNSUPPORTED and QUAKE.PRINTER.STATUS_INVALID. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 

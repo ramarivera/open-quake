@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Proposed (pending Ramiro)" awaits a decision. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -29,29 +29,29 @@ Non-goals: implementation in this lane, new dependencies, changes to other lanes
 
 `packages/edge` plugin contracts, repository, compatibility conductor and third-party WS/page adapters; `packages/client` typed management API; `apps/desktop` archive selection, plugin UI and explicit process-launch adapter. Protocol/device packages receive only existing normalized actions. No native plugin dependency is chosen by this proposal.
 
-Proposed (pending Ramiro): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
+Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
 
 Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
 
 ## Decisions
 
-1. Proposed (pending Ramiro): do not claim general Elgato compatibility until a real fixture covers manifest, registration, key down/up, context, settings and feedback. Unsupported APIs fail explicitly.
+1. Approved (Ramiro, 2026-10-23): do not claim general Elgato compatibility until a real fixture covers manifest, registration, key down/up, context, settings and feedback. Unsupported APIs fail explicitly.
 
-2. Proposed (pending Ramiro): questions 7 and 12 remain unresolved. RemoteSocketClient uses WSServerPort, not the inventory's presumed HardwareWSServerPort. This supports a local client hypothesis but proves no server binding or LAN handshake. viaPluginPort alone does not establish VIA interoperability.
+2. Approved (Ramiro, 2026-10-23): questions 7 and 12 remain unresolved. RemoteSocketClient uses WSServerPort, not the inventory's presumed HardwareWSServerPort. This supports a local client hypothesis but proves no server binding or LAN handshake. viaPluginPort alone does not establish VIA interoperability.
 
-3. Proposed (pending Ramiro): select an available loopback port and report it; conflicts fail without killing another process. Launch plugin executables only after an explicit local enable action; arbitrary-code plugins are not represented as sandboxed.
+3. Approved (Ramiro, 2026-10-23): select an available loopback port and report it; conflicts fail without killing another process. Launch plugin executables only after an explicit local enable action; arbitrary-code plugins are not represented as sandboxed.
 
 ### Data model
 
-Proposed (pending Ramiro): PluginRecord stores manifest identity, installation location reference, version, enabled flag and visible flag. CompatibilityDescriptor versions supported APIs and fixture evidence. RuntimeSession binds plugin ID, launch credential and allowed action contexts. Public status omits launch credentials and executable paths.
+Approved (Ramiro, 2026-10-23): PluginRecord stores manifest identity, installation location reference, version, enabled flag and visible flag. CompatibilityDescriptor versions supported APIs and fixture evidence. RuntimeSession binds plugin ID, launch credential and allowed action contexts. Public status omits launch credentials and executable paths.
 
 ### Data flow and lifecycle
 
-Proposed (pending Ramiro): Inventory operations go through a plugin repository and manifest validator. After compatibility evidence and explicit enablement, desktop launches the adapter/process, passes a private launch credential and advertised loopback port, and registers owned contexts. Third-party protocol messages are decoded at the WS boundary before dispatching typed internal actions; settings/image feedback returns only to its registered context.
+Approved (Ramiro, 2026-10-23): Inventory operations go through a plugin repository and manifest validator. After compatibility evidence and explicit enablement, desktop launches the adapter/process, passes a private launch credential and advertised loopback port, and registers owned contexts. Third-party protocol messages are decoded at the WS boundary before dispatching typed internal actions; settings/image feedback returns only to its registered context.
 
 ### Failure contract
 
-Proposed (pending Ramiro): use operation-specific catalog leaves, initially QUAKE.PLUGIN.MANIFEST_INVALID, QUAKE.PLUGIN.COMPAT_UNVERIFIED, QUAKE.PLUGIN.PORT_CONFLICT, QUAKE.PLUGIN.REGISTRATION_REJECTED and QUAKE.PLUGIN.CONTEXT_REJECTED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.PLUGIN.MANIFEST_INVALID, QUAKE.PLUGIN.COMPAT_UNVERIFIED, QUAKE.PLUGIN.PORT_CONFLICT, QUAKE.PLUGIN.REGISTRATION_REJECTED and QUAKE.PLUGIN.CONTEXT_REJECTED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
 
 ## Recommended phase and dependencies
 
