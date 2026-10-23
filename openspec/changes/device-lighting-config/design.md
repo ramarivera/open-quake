@@ -48,8 +48,30 @@ The serial-scoped knobLedAlwaysOn boolean is a local preference with default tru
 
 ## Migration plan
 
-Import only the known serial-scoped boolean and validated settings through a user-selected export. Preserve unsupported values inertly; never replay them on connect. Back up local preferences before a schema update and restore on validation failure. No DK-Suite store is modified and no EEPROM writes occur in this spec-only change.
+Import only the known serial-scoped boolean and validated settings through a user-selected export. Preserve unsupported values inertly; never replay them on connect. Back up local preferences before a schema update and restore on validation failure. No DK-Suite store is modified. W5 verification uses hid-fake; hardware EEPROM behavior remains unverified.
 
-## Pending decisions and verification
+## Approved decisions and remaining verification
 
-Approve later-phase placement, capability-gated controls, explicit Save, target identity rules, and separation of the knob preference from applied hardware state. Actual supported QMK fields, value ranges, v3 bindings, per-key RGB, knob LED transport, and persistence after reboot remain unverified. No new dependencies are proposed.
+Approved (Ramiro, 2026-10-23): all recommendations above, including later-phase placement, capability-gated controls, explicit Save, target identity rules, and separation of the knob preference from applied hardware state. Actual supported QMK fields, value ranges, v3 bindings, per-key RGB, knob LED transport, and persistence after reboot remain unverified. No new dependencies are proposed.
+
+## L1 lighting contract
+
+Read-only inputs: `/Users/ramarivera/dev/open-quake/.context/decokee-quake-fw/docs/PROTOCOL.md`, its superseding `REVERSE_ENGINEERING.md` command table, recovered `QMKLightingService.js` and `DeviceSettings.vue` cited above, and `packages/protocol/src/qmk.ts`.
+
+The firmware reference describes A3 panel brightness, not a global RGB setter. Its superseding reference says the ring uses the QMK RGB-matrix secondary channel. Never substitute A3 commands 2, 5, 6, or the factory RGB reset for this lighting contract.
+
+| Field | Recovered legacy value IDs | Codec payload | Qualification required |
+|---|---|---|---|
+| brightness | backlight 0x09 or RGBLight 0x80 | one byte | explicit firmware-scoped integer range within 0..255 |
+| effect | backlight 0x0a or RGBLight 0x81 | one byte | explicit firmware-scoped effect ID list, no universal list |
+| effectSpeed | backlight 0x0b or RGBLight 0x82 | one byte | explicit firmware-scoped integer range within 0..255 |
+| color1 | backlight 0x0c or RGBLight 0x83 | hue, saturation | independently qualified hue/saturation byte ranges |
+| color2 | backlight 0x0d | hue, saturation | separate capability and qualified hue/saturation ranges |
+
+These are candidate IDs from recovered source, not claims of support on QUAKE hardware. The device module has no default hardware capabilities. An injected session registry must resolve a selected serial/session to its current private HID locator and a capability snapshot. Every field and Save operation carries evidence matching the selected firmware and protocol identity. Read-only fields are allowed; write-only fields are unavailable because this implementation requires readback. Duplicate fields or wire bindings, mismatched evidence, malformed ranges, and unsupported IDs fail before opening HID.
+
+`packages/protocol` already owns legacy QMK command 8 get, command 7 set, and command 9 save. Get completes only on a matching decoded response of the requested length and validated field value. Set completes on a matching echo followed by matching actual-value readback; an echo alone is insufficient. Save is explicit, waits for pending edits, then requires a matching save echo and readback of the applied snapshot. This reports completion of the qualified save contract, not proof of persistence across reboot. Initial reads do not establish saved state. No automatic Save, retries, or reconnect replay occurs.
+
+Recovered source treats protocol versions >=11 as v3. L1 has no qualified v3 channel/command-byte get/set codec or firmware binding registry. Those sessions expose an unavailable capability snapshot and perform no lighting probes or writes. Follow-up for the parent: add L1 v3 menu codecs and firmware-qualified bindings with get/set/save completion evidence before exposing v3 fields. Per-key RGB and knob-specific transport remain unavailable.
+
+The conductor keeps desired values, confirmed applied values, and an optional explicitly saved snapshot. It retains one pending latest value per field and serializes requests. A transport failure leaves desired edits intact; Save failure leaves applied values intact and unsaved. Session changes, detach, cancellation, and response timeout invalidate pending work. Reconnect requires selection of the new session and actual reads. The protocol has no request sequence ID, so abandoning a sent request invalidates its connection rather than reusing it for another matching request.

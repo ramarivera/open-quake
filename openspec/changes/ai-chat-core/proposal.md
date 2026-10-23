@@ -23,4 +23,4 @@ None.
 
 ## Impact
 
-Depends on `ai-provider-facade`. Proposed future ownership is `packages/edge/src/chat/`, `packages/client/`, and `apps/desktop/`. Panel rendering integrates with `panel-window-prototype` without changing that change. Future GT dependencies are `gt-react` and the `gt` development CLI, subject to exact-version approval and coordination with the localization lane. This change adds specifications only. macOS first, Linux second; physical device rendering remains unverified.
+Depends on `ai-provider-facade`. Approved ownership is `packages/edge/src/chat/`, `packages/client/`, and `apps/desktop/`. Panel rendering integrates with `panel-window-prototype` without changing that change. Future GT dependencies are `gt-react` and the `gt` development CLI, subject to exact-version approval and coordination with the localization lane. W7 implements the foundation documented in design.md; integration tasks remain open. macOS first, Linux second; physical device rendering remains unverified.

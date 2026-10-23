@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { QuakeEvent } from "../../preload/quake";
+import type { DeviceStatusEvent, QuakeEvent } from "../../preload/quake";
 import { appendQuakeEvent, type QuakeEventState } from "./useQuakeEvents";
 
 function initialState(): QuakeEventState {
@@ -14,6 +14,61 @@ function initialState(): QuakeEventState {
 }
 
 describe("renderer event statistics", () => {
+	it("counts one HID press/release cycle once while retaining both reports", () => {
+		const down: QuakeEvent = { source: "hid", kind: "press", state: 1 };
+		const up: QuakeEvent = { source: "hid", kind: "press", state: 0 };
+		const pressed = appendQuakeEvent(initialState(), down);
+		expect(pressed.presses).toBe(1);
+		const released = appendQuakeEvent(pressed, up);
+		expect(released.presses).toBe(1);
+		expect(released.events).toEqual([down, up]);
+		expect(released.eventsReceived).toBe(2);
+		expect(appendQuakeEvent(initialState(), up).presses).toBe(0);
+		expect(
+			appendQuakeEvent(released, { source: "mock", kind: "press" }).presses,
+		).toBe(2);
+	});
+
+	it.each<DeviceStatusEvent>([
+		{ source: "hid", kind: "status", state: "disconnected", reason: "error" },
+		{
+			source: "hid",
+			kind: "status",
+			state: "error",
+			error: {
+				_tag: "QuakeDeviceNotFound",
+				code: "QUAKE.DEVICE.NOT_FOUND",
+				category: "unavailable",
+			},
+		},
+	])(
+		"invalidates the last pong on $state and waits for a new pong after reconnect",
+		(status) => {
+			const alive = appendQuakeEvent(initialState(), {
+				source: "hid",
+				kind: "keepalive",
+				seq: 1,
+			});
+			expect(alive.lastKeepAliveSeq).toBe(1);
+			const stale = appendQuakeEvent(alive, status);
+			expect(stale.lastKeepAliveSeq).toBeNull();
+			const reconnected = appendQuakeEvent(stale, {
+				source: "hid",
+				kind: "status",
+				state: "connected",
+			});
+			expect(reconnected.lastKeepAliveSeq).toBeNull();
+			expect(
+				appendQuakeEvent(reconnected, {
+					source: "hid",
+					kind: "keepalive",
+					seq: 2,
+				}).lastKeepAliveSeq,
+			).toBe(2);
+			expect(alive.lastKeepAliveSeq).toBe(1);
+		},
+	);
+
 	it("keeps cumulative counters and keep-alive after events leave the bounded log", () => {
 		let state = initialState();
 		const send = (event: QuakeEvent) => {
