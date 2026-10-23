@@ -1,4 +1,0 @@
-
-> @open-quake/client@0.0.0 typecheck /Users/ramarivera/dev/open-quake/packages/client
-> tsc --noEmit
-
