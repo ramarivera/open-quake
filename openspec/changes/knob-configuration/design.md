@@ -19,7 +19,7 @@ Define persistence and routing across profile changes, then expose a small voice
 | Built-in route locks | S | Same source, BUILTIN_WHEEL_PROFILE_RESOURCE_IDS, fixedKnobVoiceRouteForProfile: 1-0..1-7 legacyAssistant, 1-8/DKClaw dkclaw; custom profiles unlocked | Compatibility metadata only; new local profiles should not inherit unavailable cloud/runtime routes |
 | Voice route schema | S | `RS/webpack:__dk-suite_src_utils_knobVoiceActionSchema.js`, KNOB_ACTION_TYPES_BY_ROUTE, normalizeRoute, applyLegacyModelMigration, resolveKnobVoiceRouteConfigFromActions | direct, dkclaw, legacyAssistant have distinct allowed fields and model migration rules |
 | Knob palette | P | `RS/webpack:__dk-suite_src_plugins_KeyConfiguration.js:3298`, KNOB_MENU_SIDEBAR: center brightness/assistant/HA/hotkey/media/goToPage; previous/next aliases pageUp/pageDown | Config shape is recovered; rotation direction, brightness target, and timing are not proven by those labels |
-| Focused knob | P | `RS/webpack:__dk-suite_src_views_DKQuake_QuakeScreenView.vue`, checkFocusKeyValid requires supportKnob; `RS/webpack:__dk-suite_src_views_Components_config_OperationConfig.vue`, handleSupportKnobChange maintains two ordered key actions | Separate focused-key control from profile knob slots; precedence is a proposed policy |
+| Focused knob | P | `RS/webpack:__dk-suite_src_views_DKQuake_QuakeScreenView.vue`, checkFocusKeyValid requires supportKnob; `RS/webpack:__dk-suite_src_views_Components_config_OperationConfig.vue`, handleSupportKnobChange maintains two ordered key actions | Separate focused-key control from profile knob slots; precedence follows the approved policy |
 | Direct-route UI | S | `RS/webpack:__dk-suite_src_views_Components_config_KnobVoiceChatConfig.vue` and `RS/webpack:__dk-suite_src_utils_Constants.js`, KNOB_VOICE_KEY_CODE | Voice config belongs to reserved knob; source does not fix a hold threshold for this design |
 
 ## Decisions
@@ -40,7 +40,7 @@ Save expected revisions through the profile conductor. On selection change, read
 
 Priority is an explicitly focused visible key with supportKnob and two validated directional actions; otherwise the matching left/right profile slot; otherwise a center function that declares rotation support. Empty or unsupported slots do nothing and report unavailable where appropriate. Left means normalized counterclockwise and right means clockwise; L1 proves the physical direction mapping. Press is center only. When short press and hold share the center, delay short-press dispatch until release is classified short; raw press cannot preempt a later voice hold. Selecting a center brightness mode does not cause brightness changes on press.
 
-Use canonical `panelBrightness` with one `stepPercent` action, initially 5. Counterclockwise subtracts and clockwise adds, clamped to a verified adapter's 0..100 logical range. This is a proposed normalized API, not a firmware scale. Recovered luminance and brightness labels are ambiguous, so do not automatically map either to panel, host screen, or RGB brightness. Before first-release activation, L1/desktop must identify the actual panel brightness mechanism and document conversion/readback. If unavailable, keep the setting editable but report capability unavailable. `device-lighting-config` owns RGB separately.
+Use canonical `panelBrightness` with one `stepPercent` action, initially 5. Counterclockwise subtracts and clockwise adds, clamped to a verified adapter's 0..100 logical range. This approved normalized API does not establish a firmware scale. Recovered luminance and brightness labels are ambiguous, so do not automatically map either to panel, host screen, or RGB brightness. Before first-release activation, L1/desktop must identify the actual panel brightness mechanism and document conversion/readback. If unavailable, keep the setting editable but report capability unavailable. `device-lighting-config` owns RGB separately.
 
 Navigation slots reference canonical previousPage, nextPage, and goToPage from the profile contract. Legacy pageUp/pageDown aliases normalize only in navigation context. There is no wrapping; page boundaries follow `profiles-key-grid`.
 
@@ -64,6 +64,8 @@ Known center-only recovered presets occupy slot 0. Three-position exports with e
 
 Extract a legacy reserved entry into profile.knob, decode known aliases, normalize explicit routes, and preserve unsupported slots/routes without dispatch. Publish one profile revision. Roll back to the untouched import on failure. No existing application persistence is modified by these planning artifacts.
 
-## Pending decisions and verification
+## Approval and remaining verification
 
-Approve slot sentinels, routing precedence, normalized panel brightness and its 5-point step, direct-route defaults, and ambiguous-import handling. Coordinate the holdStart contract with the voice lane before implementation. Actual physical direction, press/hold/release, device account independence, brightness scale, and hardware readback are unverified.
+Approved (Ramiro, 2026-10-23): all recommendations previously marked Proposed (pending Ramiro), including slot sentinels, routing precedence, normalized panel brightness and its 5-point step, direct-route defaults, and ambiguous-import handling. Approval settles product policy; the normalized percentage API does not establish a firmware scale.
+
+The module's normalized event contract is documented in `packages/device/src/knob/README.md`. L1 and voice integration remains to be verified. Actual physical direction, press/hold/release, device account independence, panel target, brightness scale, and hardware readback are unverified.
