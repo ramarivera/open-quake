@@ -46,6 +46,10 @@ interface PressState {
 	readonly pressId: string;
 	readonly held: boolean;
 }
+interface CompletedPresses {
+	readonly session: KnobSession;
+	readonly pressIds: Set<string>;
+}
 export class KnobService extends Effect.Service<KnobService>()(
 	"@open-quake/device/KnobService",
 	{
@@ -56,13 +60,13 @@ export class KnobService extends Effect.Service<KnobService>()(
 			// Serialize the state transition and callback, including concurrent duplicate releases.
 			const semaphore = yield* Effect.makeSemaphore(1);
 			const pressed = new Map<string, PressState>();
-			const disconnected = new Map<string, KnobSession>();
-			const completed = new Map<string, PressState>();
+			const disconnected = new Map<string, ReadonlyArray<KnobSession>>();
+			const completed = new Map<string, CompletedPresses>();
 			const read = Effect.fn("KnobService.readSnapshot")(function* (
 				session: KnobSession,
 			): Effect.fn.Return<KnobSnapshot, KnobError> {
 				const ended = disconnected.get(session.deviceId);
-				if (ended && sameKnobSession(ended, session))
+				if (ended?.some((entry) => sameKnobSession(entry, session)))
 					return yield* KnobSessionStale.fromCause();
 				const raw = yield* Effect.tryPromise({
 					try: () => ports.readSnapshot(session.deviceId),
@@ -135,23 +139,41 @@ export class KnobService extends Effect.Service<KnobService>()(
 					}
 					return { dispatched, ignored };
 				}
-				const snapshot = yield* read(event.session);
+				const old = pressed.get(event.session.deviceId);
 				if (event._tag === "Disconnect") {
-					disconnected.set(event.session.deviceId, event.session);
-					pressed.delete(event.session.deviceId);
+					// Session invalidation must not depend on snapshot availability.
+					const ended = disconnected.get(event.session.deviceId) ?? [];
+					if (!ended.some((entry) => sameKnobSession(entry, event.session)))
+						disconnected.set(event.session.deviceId, [...ended, event.session]);
+					if (old && sameKnobSession(old.session, event.session))
+						pressed.delete(event.session.deviceId);
 					return { dispatched: 0, ignored: 1 };
 				}
-				const old = pressed.get(event.session.deviceId);
 				const matches =
 					old &&
 					sameKnobSession(old.session, event.session) &&
 					old.pressId === event.pressId;
+				// Commit lifecycle transitions before fallible IO, including interruption.
+				if (event._tag === "Release" && matches) {
+					const last = completed.get(event.session.deviceId);
+					if (last && sameKnobSession(last.session, event.session))
+						last.pressIds.add(event.pressId);
+					else
+						completed.set(event.session.deviceId, {
+							session: event.session,
+							pressIds: new Set([event.pressId]),
+						});
+					pressed.delete(event.session.deviceId);
+				}
+				if (event._tag === "HoldStart" && matches && !old.held)
+					pressed.set(event.session.deviceId, { ...old, held: true });
+				const snapshot = yield* read(event.session);
 				if (event._tag === "Press") {
 					const last = completed.get(event.session.deviceId);
 					if (
 						last &&
 						sameKnobSession(last.session, event.session) &&
-						last.pressId === event.pressId
+						last.pressIds.has(event.pressId)
 					)
 						return { dispatched: 0, ignored: 1 };
 					if (!old || !sameKnobSession(old.session, event.session))
@@ -164,7 +186,6 @@ export class KnobService extends Effect.Service<KnobService>()(
 				}
 				if (event._tag === "HoldStart") {
 					if (!matches || old.held) return { dispatched: 0, ignored: 1 };
-					pressed.set(event.session.deviceId, { ...old, held: true });
 					const center = Option.isSome(snapshot.knob)
 						? Schema.decodeUnknownEither(KnobFunction)(
 								snapshot.knob.value.config.subActions[0],
@@ -191,8 +212,6 @@ export class KnobService extends Effect.Service<KnobService>()(
 					return yield* KnobCapabilityUnavailable.fromCause();
 				}
 				if (!matches) return { dispatched: 0, ignored: 1 };
-				completed.set(event.session.deviceId, old);
-				pressed.delete(event.session.deviceId);
 				if (
 					old.held ||
 					event.classification !== "short" ||
