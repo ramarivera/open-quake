@@ -4,12 +4,12 @@
 
 These recommendations are implemented for review. None records Ramiro's approval.
 
-1. **Token carrier: Proposed (pending Ramiro).** Use one typed TypeScript palette
+1. **Token carrier: Approved (Ramiro, 2026-10-23).** Use one typed TypeScript palette
    per theme, generating `--quake-*` CSS custom properties on the document root.
    Semantic tokens cover backgrounds, surfaces, text, borders, accent, accent text,
    success, and warning. CSS consumes these properties on both windows. Keep
    renderer appearance independent of Effect services and main/preload IPC.
-2. **User-custom format/storage: Proposed (pending Ramiro).** Import a version-1
+2. **User-custom format/storage: Approved (Ramiro, 2026-10-23).** Import a version-1
    JSON document with `name`, `base` (`dark` or `light`), and a nonempty `colors`
    object containing semantic token overrides. Accept only known keys and opaque
    six-digit hex colors; reject CSS expressions, URLs, unknown versions, and files
@@ -18,16 +18,16 @@ These recommendations are implemented for review. None records Ramiro's approval
    `open-quake.appearance.v1`. Sync windows through storage events and a renderer
    BroadcastChannel. Revalidate stored and received data. Storage failure leaves
    the current session usable and reports that preferences were not saved.
-3. **Panel animation budget: Proposed (pending Ramiro).** Target 60 Hz, 16.7 ms per
+3. **Panel animation budget: Approved (Ramiro, 2026-10-23).** Target 60 Hz, 16.7 ms per
    frame at 1920x480. Permit only finite opacity/transform feedback, up to 160 ms
    and 4 px travel, on changed statistics and management interactions. No looping
    pulses, layout animations, blur, image animation, or JavaScript animation loop.
    Keep-alive updates do not animate. Theme changes apply immediately. This is a
    design budget, not a measured hardware performance claim.
-4. **Motion implementation: Proposed (pending Ramiro).** Use CSS transitions and
+4. **Motion implementation: Approved (Ramiro, 2026-10-23).** Use CSS transitions and
    keyframes. The existing surfaces need only short value and control feedback;
    a motion library would add runtime and approval cost without a current need.
-5. **Reduced motion: Proposed (pending Ramiro).** Follow the live OS setting and
+5. **Reduced motion: Approved (Ramiro, 2026-10-23).** Follow the live OS setting and
    offer an in-app "Reduce motion" override. Either request suppresses all
    nonessential animation/transition on both windows, including already running
    animations. There is no override that defeats the OS preference. Persist and

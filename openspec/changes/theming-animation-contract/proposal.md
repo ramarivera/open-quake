@@ -9,7 +9,7 @@ prototype renderer hardcodes colours inline (`App.tsx`).
 
 ## What Changes
 
-- Record five recommendations as "Proposed (pending Ramiro)" and implement one theme token system shared by
+- Record five recommendations (approved by Ramiro, 2026-10-23) and implement one theme token system shared by
   the panel and management surfaces, with dark and light themes plus
   user-custom themes.
 - Define the animation budget for the 1920x480 panel path and how

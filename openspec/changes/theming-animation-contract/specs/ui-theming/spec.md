@@ -2,7 +2,7 @@
 
 ## Purpose
 Proposed contract for theming and motion across the panel and management
-surfaces. All five design decisions remain Proposed (pending Ramiro).
+surfaces. All five design decisions were approved by Ramiro on 2026-10-23.
 
 ## ADDED Requirements
 

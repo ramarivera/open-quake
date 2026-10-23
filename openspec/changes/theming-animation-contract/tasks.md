@@ -2,7 +2,7 @@
 
 ## 1. Decide
 
-- [x] 1.1 Record recommendations for the five decisions as "Proposed (pending Ramiro)" and define the inventory sections 2/9 boundary
+- [x] 1.1 Record recommendations for the five decisions as "Approved (Ramiro, 2026-10-23)" and define the inventory sections 2/9 boundary
 - [x] 1.2 Extend `specs/ui-theming/spec.md` with concrete requirements and scenarios for review
 - [ ] 1.3 Parent: obtain Ramiro's decisions and update `open-quake-2qs.7`; proposals are not approval
 
