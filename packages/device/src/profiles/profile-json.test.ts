@@ -86,16 +86,17 @@ describe("profile JSON records", () => {
 				})(),
 		],
 	])("rejects a %s instead of silently decoding it to {}", (_name, make) => {
-		for (const schema of [ProfileJson, ProfileJsonObject]) {
-			expect(Either.isLeft(Schema.decodeUnknownEither(schema)(make()))).toBe(
-				true,
-			);
-			expect(
-				Either.isLeft(
-					Schema.decodeUnknownEither(ProfileJsonObject)({ nested: make() }),
-				),
-			).toBe(true);
-		}
+		expect(Either.isLeft(Schema.decodeUnknownEither(ProfileJson)(make()))).toBe(
+			true,
+		);
+		expect(
+			Either.isLeft(Schema.decodeUnknownEither(ProfileJsonObject)(make())),
+		).toBe(true);
+		expect(
+			Either.isLeft(
+				Schema.decodeUnknownEither(ProfileJsonObject)({ nested: make() }),
+			),
+		).toBe(true);
 	});
 
 	it("rejects non-JSON values even inside reserved keys", () => {
