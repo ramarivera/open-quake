@@ -73,6 +73,10 @@ Management SHALL expose a USB and HDMI diagnostic with the recovered quakeDiagno
 - **WHEN** the user re-detects
 - **THEN** the action disables during the check, failures remain retryable, and both passing enables device settings automatically
 
+#### Scenario: Diagnostic integrates with management navigation
+- **WHEN** the user opens Connection from the sidebar or Overview and both checks finish passing
+- **THEN** management enters Screen automatically, preview remains reachable without hardware, and connection updates continue on other pages
+
 ### Requirement: Display prompts and explicit host consent
 The app SHALL detect mirroring and portrait orientation, using displayMode English strings. Portrait SHALL persist 2500 ms and be ignored within 6000 ms of landscape. Later SHALL snooze prompts for ten minutes. macOS arrangement remediation SHALL require explicit consent describing a CoreGraphics call to make QUAKE non-primary, disable mirroring if requested, and move it to the far right. No host change SHALL occur before consent or in mock mode. Windows SHALL open display settings; DisplaySwitch /extend is a future platform-gated consent action. Sources: MAIN-056-058, SETTINGS-087-089.
 

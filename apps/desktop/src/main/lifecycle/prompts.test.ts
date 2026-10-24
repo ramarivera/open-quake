@@ -29,7 +29,7 @@ describe("display prompts", () => {
 		"confirms portrait for 2.5 seconds and Later suppresses it for ten minutes",
 		() =>
 			Effect.gen(function* () {
-				const prompt = vi.fn(() => Effect.succeed(1));
+				const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(1));
 				const service = yield* makeDisplayPrompts(edges({ prompt }));
 				yield* service.check(portrait, false);
 				yield* TestClock.adjust(2499);
@@ -38,6 +38,9 @@ describe("display prompts", () => {
 				yield* TestClock.adjust(1);
 				yield* service.check(portrait, false);
 				expect(prompt).toHaveBeenCalledOnce();
+				expect(prompt.mock.calls[0]?.[0]).toMatchObject({
+					buttons: [strings.displayMode.orientationLater],
+				});
 				yield* TestClock.adjust(599_999);
 				yield* service.check(portrait, false);
 				expect(prompt).toHaveBeenCalledOnce();

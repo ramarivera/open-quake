@@ -7,6 +7,13 @@ Delivered in [PR #21](https://github.com/ramarivera/open-quake/pull/21), linked
 to the T3 thread. Implementation commit:
 `9a04fbbfc57749cfae4c2a419e17b30a64bbd215`.
 
+Final integration incorporates `origin/main` at `dbc35c3`, preserving PR #18's
+management redesign and PR #19's spec corrections. Diagnostics live on a
+Connection page reached from the sidebar or Overview. The subscription stays
+active across navigation; a completed passing check enters Screen automatically.
+Platform capabilities hide unavailable settings/layout actions, and mock mode
+does not offer native layout repair.
+
 ## Scope and audit evidence
 
 The implementation covers these parts of the local DK-Suite 0.4.95 audits:
@@ -24,7 +31,8 @@ The implementation covers these parts of the local DK-Suite 0.4.95 audits:
   SETTINGS-086: mount/read and connection-driven checks, USB/HDMI readiness,
   resolution mismatch, diagnostic copy, troubleshooting, Re-detect and
   accessible responsive states. The combined check switches the existing
-  settings region between preview and device mode. Full first-run routing,
+  settings mode between preview and device and enters Screen on success from
+  Connection. Full first-run routing,
   wizard signaling and serial normalization remain in their owning lanes.
 - MAIN-060, SETTINGS-085: control-HID and display recovery after lock/wake.
   Separate touch-HID recovery and knob-light policy remain in their lanes.
@@ -67,18 +75,19 @@ All commands exited zero after the final code changes:
 
 | Command | Result |
 | --- | --- |
-| `pnpm biome check packages apps` | Passed, 195 files |
+| `pnpm biome check packages apps` | Passed, 202 files |
 | `pnpm typecheck` | Passed, six tasks |
-| `pnpm test` | Passed, 546 tests: protocol 25, edge 27, device 302, desktop 192 |
+| `pnpm test` | Passed, 556 tests: protocol 25, edge 27, device 302, desktop 202 |
 | `pnpm build` | Passed |
 | `pnpm --filter @open-quake/desktop test:bundle` | Passed, native HID replaced with hermetic IO |
-| `openspec validate --all --strict` | Passed, 28 changes |
+| `openspec validate --all --strict` | Passed, 29 changes |
 | `git diff --check` | Passed |
 
 The native media smoke was rebuilt and run with `OPEN_QUAKE_MOCK_DEVICE=1`,
 `ELECTRON_RUN_AS_NODE` unset and scratch TMPDIR. It exercised the production
 preload/IPC, diagnostic read and Re-detect, disabled/loading state,
-resolution mismatch, ready/settings transition and rejected panel mutation.
+resolution mismatch, automatic Connection-to-Screen navigation, readiness
+across pages and rejected panel mutation.
 Existing wallpaper/theme/motion checks and runtime disposal also passed.
 The Electron process exited and no lane smoke processes remained.
 

@@ -36,10 +36,14 @@ export function DiagnosticView({
 	status,
 	notice,
 	run,
+	displaySettingsAvailable = false,
+	layoutRepairAvailable = false,
 }: {
 	status: ConnectionDiagnostic | undefined;
 	notice: string;
 	run: (action: LifecycleCommand["action"]) => void;
+	displaySettingsAvailable?: boolean;
+	layoutRepairAvailable?: boolean;
 }): React.JSX.Element {
 	const [expanded, setExpanded] = useState<"usb" | "hdmi">("usb");
 	useEffect(() => {
@@ -52,7 +56,7 @@ export function DiagnosticView({
 		<section className="connection-check" aria-labelledby="connection-title">
 			<header>
 				<p className="connection-eyebrow">{text.eyebrow}</p>
-				<h2 id="connection-title">{text.title}</h2>
+				<h1 id="connection-title">{text.title}</h1>
 				<p className="muted">{text.subtitle}</p>
 			</header>
 			{status?.mock && (
@@ -129,10 +133,12 @@ export function DiagnosticView({
 				>
 					{checking ? text.action.checking : text.action.recheck}
 				</button>
-				<button type="button" onClick={() => run("display-settings")}>
-					{strings.displayMode.openDisplaySettings}
-				</button>
-				{status?.hdmi === "pass" && (
+				{displaySettingsAvailable && (
+					<button type="button" onClick={() => run("display-settings")}>
+						{strings.displayMode.openDisplaySettings}
+					</button>
+				)}
+				{layoutRepairAvailable && !status?.mock && status?.hdmi === "pass" && (
 					<button
 						type="button"
 						disabled={checking}
@@ -147,7 +153,8 @@ export function DiagnosticView({
 			</p>
 			{!ready && (
 				<p className="muted">
-					Desktop preview is available below while you check the connections.
+					Desktop preview is available from Screen while you check the
+					connections.
 				</p>
 			)}
 		</section>
@@ -222,12 +229,23 @@ export function ConnectionCheck({
 		return off;
 	}, [run]);
 	useEffect(() => {
-		onReady?.(status?.usb === "pass" && status.hdmi === "pass");
+		onReady?.(
+			!!status &&
+				!status.checking &&
+				status.usb === "pass" &&
+				status.hdmi === "pass",
+		);
 	}, [status, onReady]);
 	return (
 		<DiagnosticView
 			status={status}
 			notice={notice}
+			displaySettingsAvailable={
+				window.quakeLifecycle?.displaySettingsAvailable ?? false
+			}
+			layoutRepairAvailable={
+				window.quakeLifecycle?.layoutRepairAvailable ?? false
+			}
 			run={(action) => {
 				void run(action);
 			}}

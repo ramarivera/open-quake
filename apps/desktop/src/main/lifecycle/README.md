@@ -31,7 +31,9 @@ Windows uses the allowlisted `ms-settings:display` deep link. The planned native
 adapter is `DisplaySwitch.exe /extend`, behind `process.platform === "win32"`
 and the same consent step. Native Windows enumeration and this action remain
 future work as authorized by the lane brief. Linux exposes orientation guidance;
-it has no assumed desktop-specific settings command.
+it has no assumed desktop-specific settings command. Preload exposes the fixed
+platform capabilities so the diagnostic only offers supported actions. Native
+layout repair is also hidden in mock mode.
 
 A read-only `/usr/sbin/system_profiler SPDisplaysDataType -json` probe also detects
 a DK-QUAKE hidden from Electron by mirroring on first launch. That prompt opens

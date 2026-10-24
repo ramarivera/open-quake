@@ -1,13 +1,24 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionCheck } from "./ConnectionDiagnostic";
+import { describeConnection } from "./management/connection";
+import { OverviewPage } from "./management/OverviewPage";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
 	useAppearance,
 } from "./theme/useAppearance";
+import { StatusDot } from "./ui/Form";
+import {
+	AppearanceIcon,
+	ConnectionIcon,
+	DeviceIcon,
+	ScreenIcon,
+} from "./ui/icons";
 import { useQuakeEvents } from "./useQuakeEvents";
+import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
+import "./management/management.css";
 
 function useSurface(): "management" | "panel" {
 	const [surface] = useState<"management" | "panel">(() =>
@@ -26,61 +37,125 @@ function PanelSurface(): React.JSX.Element {
 	return <WallpaperPanel />;
 }
 
-function Stat({
-	label,
-	value,
-	tone,
-	animate = false,
-}: {
-	label: string;
-	value: string | number;
-	tone?: "success" | "warning";
-	animate?: boolean;
-}): React.JSX.Element {
-	return (
-		<div className="stat">
-			<div className="stat-label">{label}</div>
-			<div className="stat-value" data-tone={tone}>
-				<span key={value} className={animate ? "stat-change" : undefined}>
-					{value}
-				</span>
-			</div>
-		</div>
-	);
-}
+type Page = "overview" | "connection" | "screen" | "appearance";
+
+type NavItem = {
+	readonly id: Page;
+	readonly label: string;
+	readonly Icon: () => React.JSX.Element;
+};
+
+// Device areas (keys, knob, lighting, assistant) join the first section as
+// they get wired; app-wide preferences stay in the second.
+const sections: ReadonlyArray<{
+	readonly title: string;
+	readonly items: ReadonlyArray<NavItem>;
+}> = [
+	{
+		title: "Device",
+		items: [
+			{ id: "overview", label: "Overview", Icon: DeviceIcon },
+			{ id: "connection", label: "Connection", Icon: ConnectionIcon },
+			{ id: "screen", label: "Screen", Icon: ScreenIcon },
+		],
+	},
+	{
+		title: "App",
+		items: [{ id: "appearance", label: "Appearance", Icon: AppearanceIcon }],
+	},
+];
 
 function ManagementSurface({
 	appearance,
 }: {
 	appearance: AppearanceController;
 }): React.JSX.Element {
+	const quake = useQuakeEvents();
+	// One wallpaper subscription feeds both the overview preview and the editor.
+	const wallpaper = useWallpaper();
+	const [page, setPage] = useState<Page>("overview");
 	const [deviceReady, setDeviceReady] = useState(false);
-	const { eventsReceived, rotations, presses, lastKeepAliveSeq } =
-		useQuakeEvents();
+	const onReady = useCallback((ready: boolean): void => {
+		setDeviceReady(ready);
+		if (ready)
+			setPage((current) => (current === "connection" ? "screen" : current));
+	}, []);
+	const content = useRef<HTMLElement>(null);
+	const bridge = window.openQuake;
+	const connection = describeConnection(quake.connection, bridge !== undefined);
+	const open = (next: Page): void => {
+		setPage(next);
+		content.current?.scrollTo({ top: 0 });
+	};
 	return (
-		<main className="management">
-			<h1>open-quake management</h1>
-			<p className="muted">Manage your QUAKE connection and desktop preview.</p>
-			<ConnectionCheck onReady={setDeviceReady} />
-			<section className="diagnostics" aria-label="Device input diagnostics">
-				<Stat label="EVENTS RECEIVED" value={eventsReceived} />
-				<Stat label="ROTATIONS" value={rotations} animate />
-				<Stat label="PRESSES" value={presses} animate />
-				<Stat label="KEEP-ALIVE" value={lastKeepAliveSeq ?? "—"} />
-			</section>
-			<p className="muted">
-				The panel follows the QUAKE display. Development builds also offer a
-				desktop preview when the strip is unplugged.
-			</p>
-			<section
-				aria-label={deviceReady ? "Device settings" : "Desktop preview"}
+		<div className="app-shell">
+			<aside className="sidebar">
+				<div className="sidebar-device" data-tone={connection.tone}>
+					<span className="sidebar-device-glyph">
+						<DeviceIcon />
+						<StatusDot tone={connection.tone} />
+					</span>
+					<span className="sidebar-device-text">
+						<span className="sidebar-device-name">QUAKE</span>
+						{/* Announces connection changes from any page. */}
+						<span className="sidebar-device-status" role="status">
+							{connection.label}
+						</span>
+					</span>
+				</div>
+				<nav className="nav" aria-label="Sections">
+					{sections.map((section) => (
+						<div key={section.title} className="nav-section">
+							<h2 className="nav-heading">{section.title}</h2>
+							<ul className="nav-list">
+								{section.items.map(({ id, label, Icon }) => (
+									<li key={id}>
+										<button
+											type="button"
+											className="nav-item"
+											aria-current={page === id ? "page" : undefined}
+											title={label}
+											onClick={() => open(id)}
+										>
+											<Icon />
+											<span className="nav-label">{label}</span>
+										</button>
+									</li>
+								))}
+							</ul>
+						</div>
+					))}
+				</nav>
+				<p className="sidebar-footer">
+					open-quake{bridge ? ` ${bridge.version}` : ""}
+				</p>
+			</aside>
+			<main
+				className="content"
+				ref={content}
 				data-session={deviceReady ? "device" : "preview"}
 			>
-				<h2>{deviceReady ? "Device settings" : "Desktop preview"}</h2>
-				<ThemeSettings controller={appearance} />
-				<WallpaperSettings />
-			</section>
-		</main>
+				<div className="content-inner">
+					{/* Keep the diagnostic subscription alive while navigating pages. */}
+					<div hidden={page !== "connection"}>
+						<ConnectionCheck onReady={onReady} />
+					</div>
+					{page === "overview" ? (
+						<OverviewPage
+							quake={quake}
+							connection={connection}
+							snapshot={wallpaper.snapshot}
+							onOpenScreen={() => open("screen")}
+							onOpenConnection={() => open("connection")}
+						/>
+					) : page === "screen" ? (
+						<WallpaperSettings wallpaper={wallpaper} />
+					) : page === "appearance" ? (
+						<ThemeSettings controller={appearance} />
+					) : null}
+				</div>
+			</main>
+		</div>
 	);
 }
 

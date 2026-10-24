@@ -4,8 +4,8 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 
 ## 1. Protocol and image evidence
 
-- [ ] 1.1 Resolve UF2 compatibility/target provenance/recovery proposals and document exact DFU framing with the SDK owner; verify no duplicate framing implementation and no guessed flash range.
-- [ ] 1.2 Implement pure image/target validators and documented DFU encoding fixture in protocol; verify family/magic/count/range/overlap rejection and a narrowly scoped newline-header compatibility fixture.
+- [ ] 1.1 Confirm standard UF2 magic and target provenance/recovery proposals (`SETTINGS-047/048`) and document exact DFU framing with the SDK owner; verify no duplicate framing implementation and no guessed flash range.
+- [ ] 1.2 Implement pure image/target validators and documented DFU encoding fixture in protocol; verify family/magic/count/range/overlap rejection and standard newline magic acceptance and null-terminated magic rejection fixtures (`SETTINGS-048`).
 
 ## 2. Update lifecycle and adapters
 

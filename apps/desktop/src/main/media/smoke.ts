@@ -214,6 +214,10 @@ async function smoke(): Promise<void> {
 	management.setSize(1100, 1000);
 	// Exercise the production diagnostic preload/handler/controller with synthetic topology.
 	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
+	);
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	await management.webContents.executeJavaScript(
 		"document.querySelector('.connection-check').scrollIntoView(); null;",
 	);
 	await new Promise<void>((done) => setTimeout(done, 100));
@@ -301,16 +305,27 @@ async function smoke(): Promise<void> {
 	];
 	await lifecycleRuntime.runPromise(lifecycle.topology());
 	await new Promise<void>((done) => setTimeout(done, 100));
-	assert(
-		(
-			await management.webContents.executeJavaScript("document.body.innerText")
-		).includes("both connections are normal"),
-	);
 	assert.equal(
 		await management.webContents.executeJavaScript(
 			"document.querySelector('[data-session]').getAttribute('data-session')",
 		),
 		"device",
+	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Screen"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Passing the connection check must enter Screen automatically",
+	);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
+	);
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("both connections are normal"),
 	);
 	if (artifacts)
 		await writeFile(
@@ -318,14 +333,18 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	await management.webContents.executeJavaScript(
-		`(() => { const selects = document.querySelectorAll('.appearance select'); const theme = selects[0]; const motion = selects[1]; theme.value = 'light'; theme.dispatchEvent(new Event('change', { bubbles: true })); motion.value = 'reduce'; motion.dispatchEvent(new Event('change', { bubbles: true })); })()`,
+		`(() => { document.querySelector('.nav-item[title="Appearance"]').click(); null; })()`,
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	await management.webContents.executeJavaScript(
+		`(() => { document.querySelector('input[type="radio"][value="light"]').click(); document.querySelector('input[type="radio"][value="reduce"]').click(); document.querySelector('.nav-item[title="Overview"]').click(); null; })()`,
 	);
 	await new Promise<void>((done) => setTimeout(done, 100));
 	for (const window of [management, panel]) {
 		const appearance: unknown = await window.webContents.executeJavaScript(
 			`(() => { const background = document.querySelector('.wallpaper-neutral'); return { fill: getComputedStyle(background).fill, animations: document.querySelector('.wallpaper-canvas').getAnimations({ subtree: true }).length }; })()`,
 		);
-		assert.deepEqual(appearance, { fill: "rgb(245, 247, 250)", animations: 0 });
+		assert.deepEqual(appearance, { fill: "rgb(244, 244, 246)", animations: 0 });
 	}
 	if (artifacts) {
 		await mkdir(artifacts, { recursive: true });
@@ -335,8 +354,9 @@ async function smoke(): Promise<void> {
 		);
 		management.setSize(1100, 1000);
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.wallpaper-settings').scrollIntoView(); null;",
+			`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
 		);
+		await new Promise<void>((done) => setTimeout(done, 100));
 		await writeFile(
 			join(artifacts, "management.png"),
 			(await management.webContents.capturePage()).toPNG(),
@@ -344,8 +364,9 @@ async function smoke(): Promise<void> {
 		management.setSize(390, 844);
 		await new Promise<void>((done) => setTimeout(done, 100));
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.wallpaper-settings').scrollIntoView(); null;",
+			`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
 		);
+		await new Promise<void>((done) => setTimeout(done, 100));
 		const overflow: unknown = await management.webContents.executeJavaScript(
 			"document.documentElement.scrollWidth > innerWidth",
 		);

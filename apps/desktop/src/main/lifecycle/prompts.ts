@@ -170,18 +170,22 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 				: edges.platform === "win32"
 					? text.orientationDetailWin32
 					: text.orientationDetail;
+		const canOpenSettings =
+			edges.platform === "darwin" || edges.platform === "win32";
 		yield* edges
 			.prompt({
 				title: text.orientationTitle,
 				message: text.orientationMessage,
 				detail,
-				buttons: [text.openDisplaySettings, text.orientationLater],
+				buttons: canOpenSettings
+					? [text.openDisplaySettings, text.orientationLater]
+					: [text.orientationLater],
 				defaultId: 0,
-				cancelId: 1,
+				cancelId: canOpenSettings ? 1 : 0,
 			})
 			.pipe(
 				Effect.flatMap((response) =>
-					response === 0
+					response === 0 && canOpenSettings
 						? edges.openSettings().pipe(
 								Effect.tap(() =>
 									Effect.sync(() => {

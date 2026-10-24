@@ -37,6 +37,8 @@ export const LifecycleReply = Schema.Union(
 );
 export type LifecycleReply = typeof LifecycleReply.Type;
 export interface LifecycleBridge {
+	readonly displaySettingsAvailable: boolean;
+	readonly layoutRepairAvailable: boolean;
 	request(command: LifecycleCommand): Promise<LifecycleReply>;
 	onStatus(listener: (status: ConnectionDiagnostic) => void): () => void;
 }

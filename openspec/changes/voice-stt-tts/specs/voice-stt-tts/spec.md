@@ -8,7 +8,7 @@ Provide independent recognition and synthesis with correlated capture, bounded p
 
 ### Requirement: Independent speech adapters
 
-The system SHALL expose STT and TTS through injected Effect services with independent profile selection, typed events/errors, Config, named spans, and mock-default tests. First release SHALL provide BYO-key DashScope STT and HTTP/SSE TTS without a DecoKee account or region lookup. Unsupported speech transports SHALL remain unavailable until conformance verification, even if chat supports the same provider.
+The system SHALL expose STT and TTS through injected Effect services with independent profile selection, typed events/errors, Config, named spans, and mock-default tests. First release SHALL provide BYO-key DashScope STT and HTTP/SSE TTS plus an independently selected OpenAI TTS adapter without a DecoKee account or geolocation lookup. Evidence: `AI-094`, `AI-101`, `AI-105`, `AI-108`. Unsupported speech transports SHALL remain unavailable until conformance verification, even if chat supports the same provider.
 
 #### Scenario: Text chat works without TTS
 - **WHEN** the selected TTS profile is missing or synthesis fails
@@ -44,7 +44,7 @@ First-release capture SHALL deliver mono signed 16-bit little-endian headerless 
 
 ### Requirement: DashScope realtime recognition protocol
 
-The DashScope STT adapter SHALL send one run-task on an authenticated inference WebSocket with a unique task ID, streaming duplex, audio/asr/recognition, explicit model, pcm format, and sample rate. It SHALL await matching task-started before binary PCM, send one finish-task after the final nonempty frame, and finish only on matching task-finished. Task-failed, premature close, malformed frames, and deadline SHALL yield one failed terminal outcome. Provisional text SHALL replace provisional text; finalized segments SHALL appear once under a verified segment/finality rule.
+The DashScope STT adapter SHALL default to `qwen-audio-3.1-asr-flash-streaming` on the explicitly configured workspace host `wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/inference` or `wss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/inference`. It SHALL authenticate with a region-matching key and send one run-task on that inference WebSocket with a unique task ID, streaming duplex, audio/asr/recognition, explicit model, pcm format, and sample rate. It SHALL await matching task-started before binary PCM, send one finish-task after the final nonempty frame, and finish only on matching task-finished. Task-failed, premature close, malformed frames, and deadline SHALL yield one failed terminal outcome. Provisional text SHALL replace provisional text; finalized segments SHALL appear once under a verified segment/finality rule. `AI-094` records the audited 0.4.95 model `qwen-audio-3.0-asr-flash-streaming`; the current default comes from [Model Studio ASR models](https://www.alibabacloud.com/help/en/model-studio/asr-model) and [client events](https://www.alibabacloud.com/help/en/model-studio/qwen-audio-asr-streaming-client-events), accessed 2026-10-24. Workspace hosts follow the [connection guide](https://www.alibabacloud.com/help/en/model-studio/qwen-audio-asr-streaming-websocket-api), accessed 2026-10-24.
 
 #### Scenario: Provisional sentence revised
 - **WHEN** one segment produces provisional `turn`, provisional `turn left`, then final `turn left`
@@ -56,7 +56,7 @@ The DashScope STT adapter SHALL send one run-task on an authenticated inference 
 
 ### Requirement: DashScope HTTP synthesis protocol
 
-First-release TTS SHALL use the configured HTTP multimodal-generation endpoint with explicit model/text/voice and SSE enabled. It SHALL parse complete SSE records across fragmented input, decode output.audio.data in order, and require a verified codec/rate/channel descriptor before playback. Unknown audio format SHALL fail with `VOICE.TTS.FORMAT_UNSUPPORTED`. Truncated records or provider errors SHALL not become successful synthesis.
+DashScope TTS SHALL use `/api/v1/services/audio/tts/SpeechSynthesizer` on the configured HTTPS workspace host `{WorkspaceId}.cn-beijing.maas.aliyuncs.com` or `{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com`, a region-matching key, model `qwen-audio-3.1-tts-flash`, and a model-compatible explicit voice. The body SHALL include `input.text`, `input.voice`, `input.format=pcm`, `input.sample_rate=24000`; headers SHALL include bearer authorization and `X-DashScope-SSE: enable`. Evidence: `AI-101`, `AI-108`; [Model Studio HTTP API](https://www.alibabacloud.com/help/en/model-studio/qwen-audio-tts-http-api), accessed 2026-10-24. It SHALL combine all data lines within each complete SSE event before parsing JSON, handle fragmented input, decode output.audio.data in order, and require output.finish_reason=stop before successful synthesis. It SHALL require a verified codec/rate/channel descriptor before playback. Unknown audio format SHALL fail with `VOICE.TTS.FORMAT_UNSUPPORTED`. Truncated records or provider errors SHALL not become successful synthesis.
 
 #### Scenario: SSE record split across chunks
 - **WHEN** a JSON/base64 audio record is divided across several network chunks
@@ -92,7 +92,7 @@ A later OpenAI Realtime adapter SHALL open exactly one provider session per capt
 
 ### Requirement: Live translation and locale separation
 
-Live audio translation SHALL remain disabled in first release. A later enabled route SHALL require explicit source and target language, retain paired original transcript/translated generation, and use only an explicitly configured speech/provider profile. GT UI locale changes SHALL not change spoken-language routing or call a translation cloud service.
+The shipped Meet AI live audio translation route SHALL be available when its configured adapter is qualified, require explicit user start and source and target language, retain paired original transcript/translated generation, and use only an explicitly configured speech/provider profile. GT UI locale changes SHALL not change spoken-language routing or call a translation cloud service. Evidence: `AI-136`, `AI-292`, `AI-327`; commented library entries do not disable the 0.4.95 default-profile route.
 
 #### Scenario: German UI with English capture
 - **WHEN** the user switches UI locale to de while capture language is en
@@ -105,3 +105,24 @@ Every capture/utterance SHALL emit one terminal outcome keyed by its ID, clean u
 #### Scenario: Provider includes transcript in an error
 - **WHEN** a provider failure carries raw text/audio or credentials in its cause
 - **THEN** the service retains the original cause privately and serializes only the scrubbed diagnostic projection
+
+### Requirement: Independent OpenAI synthesis adapter
+
+The system SHALL provide an explicitly selected facade-owned OpenAI TTS adapter using `POST https://api.openai.com/v1/audio/speech`, with model, voice, language instructions and response audio descriptor in the TTS profile. The audited compatibility profile SHALL encode model `gpt-4o-mini-tts`, voice `marin`, calm medium-speed speech instructions for the selected language, and `response_format=wav` (`AI-105`). It SHALL obey the shared deadlines, output lease, cancellation and natural playback completion requirements. TTS failure SHALL preserve readable chat text and SHALL NOT silently select DashScope. Unsupported or retired model/voice pairs SHALL be unavailable.
+
+The [official OpenAI TTS guide](https://developers.openai.com/api/docs/guides/text-to-speech), accessed 2026-10-24, schedules `gpt-4o-mini-tts` shutdown for 2027-01-06. That profile SHALL be disabled at shutdown. A replacement Realtime model SHALL NOT be sent to `/audio/speech`; replacement transport enablement SHALL require independent conformance verification and explicit profile migration.
+
+#### Scenario: OpenAI synthesis without OpenAI STT
+
+- **WHEN** the user chooses a qualified OpenAI TTS profile while recognition uses DashScope
+- **THEN** the answer uses the OpenAI synthesis adapter without opening a Realtime/STT session or changing the recognition profile
+
+#### Scenario: Cancel OpenAI speech
+
+- **WHEN** the user cancels while OpenAI synthesis or WAV playback is pending
+- **THEN** the request and queued output stop, late audio is discarded, and the chat answer remains readable
+
+#### Scenario: Retired synthesis profile
+
+- **WHEN** the compatibility model reaches its documented shutdown date
+- **THEN** the profile reports unavailable and no request with a replacement Realtime model is sent to the Speech API
