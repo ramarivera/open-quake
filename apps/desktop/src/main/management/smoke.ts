@@ -773,7 +773,9 @@ async function smoke() {
 			),
 		);
 
-		const iconData = nativeImage.createFromBuffer(copied).toDataURL();
+		const iconData = nativeImage
+			.createFromBitmap(Buffer.from(rgba), { width: 96, height: 96 })
+			.toDataURL();
 		await Effect.runPromise(
 			iconStore(join(directory, "key-library-v1.json")).write([
 				{
