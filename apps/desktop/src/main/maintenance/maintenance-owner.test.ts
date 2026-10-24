@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, ManagedRuntime } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
+import { MaintenanceShutdownFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { clearOwnedData } from "./backup-store";
 import { registerMaintenance } from "./index";
 
@@ -127,8 +128,22 @@ for (const state of ["malformed", "unreadable"] as const) {
 			await expect(owner.ready).rejects.toMatchObject({
 				name: expect.stringContaining("FirmwarePersistenceFailed"),
 			});
+			const readyFailure: unknown = await owner.ready.catch(
+				(cause: unknown) => cause,
+			);
 			const first = owner.dispose();
-			await expect(first).rejects.toBeDefined();
+			const shutdownFailure: unknown = await first.catch(
+				(cause: unknown) => cause,
+			);
+			expect(shutdownFailure).toBeInstanceOf(MaintenanceShutdownFailed);
+			if (!(shutdownFailure instanceof MaintenanceShutdownFailed))
+				throw new Error("Missing shutdown error identity");
+			expect(shutdownFailure.code).toBe("QUAKE.SETTINGS.SHUTDOWN_FAILED");
+			expect(shutdownFailure.originalCause).toBeInstanceOf(AggregateError);
+			if (!(shutdownFailure.originalCause instanceof AggregateError))
+				throw new Error("Missing shutdown causes");
+			expect(shutdownFailure.originalCause.errors).toContain(readyFailure);
+			expect(JSON.stringify(shutdownFailure)).not.toContain(root);
 			expect(dispose).toHaveBeenCalledOnce();
 			await expect(runtime.value.runPromise(Effect.void)).rejects.toBeDefined();
 			expect(owner.dispose()).toBe(first);

@@ -16,6 +16,7 @@ import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { BackupFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { ClockLive, ClockStore } from "../clock/clock-store";
 import { readBackup } from "./backup-archive";
 import { exportBackup, prepareRestore } from "./backup-store";
@@ -176,9 +177,18 @@ for (const failure of [
 					],
 				}),
 			);
-			await expect(exportBackup(root)).rejects.toMatchObject({
-				code: "QUAKE.BACKUP.FAILED",
-			});
+			const error: unknown = await exportBackup(root).catch(
+				(cause: unknown) => cause,
+			);
+			expect(error).toBeInstanceOf(BackupFailed);
+			if (!(error instanceof BackupFailed))
+				throw new Error("Missing backup failure identity");
+			expect(error.code).toBe("QUAKE.BACKUP.FAILED");
+			expect(JSON.stringify(error)).not.toContain(scratch);
+			if (failure === "unreadable")
+				expect(error.originalCause).toMatchObject({ code: "EACCES" });
+			if (failure === "missing")
+				expect(error.originalCause).toMatchObject({ code: "ENOENT" });
 		} finally {
 			await rm(scratch, { recursive: true, force: true });
 		}
