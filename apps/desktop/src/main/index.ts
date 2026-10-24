@@ -18,6 +18,7 @@ import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import { hardwarePreferencesLive } from "./hardware/preferences";
 import { MediaLive, registerMedia } from "./media";
 import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
+import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 registerClockScheme();
@@ -104,6 +105,12 @@ app.whenReady().then(() => {
 	let panelTarget = getPanelTarget();
 	let panelWin = createPanelWindow(panelTarget);
 	let managementWin = createManagementWindow();
+	const weatherMedia = registerWeatherMedia(
+		ManagedRuntime.make(
+			weatherMediaLive(app.getPath("userData"), process.platform),
+		),
+		() => managementWin,
+	);
 	registerMedia(
 		ManagedRuntime.make(
 			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
@@ -231,6 +238,7 @@ app.whenReady().then(() => {
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 		disposeHardware();
 		void stopBus().then(async () => {
+			await weatherMedia.dispose();
 			await runtime.dispose();
 			quitFinished = true;
 			app.quit();

@@ -3,6 +3,7 @@ import "../main/clock/preload";
 import "../main/media/preload";
 import "../main/hardware/preload";
 import "../main/profiles/preload";
+import "../main/weather-media/preload";
 import {
 	type OpenQuakeBridge,
 	QUAKE_EVENT_CHANNEL,

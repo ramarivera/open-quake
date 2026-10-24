@@ -86,6 +86,13 @@ vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
 });
+vi.mock("./weather-media", async () => {
+	const { Layer } = await import("effect");
+	return {
+		weatherMediaLive: vi.fn(() => Layer.empty),
+		registerWeatherMedia: vi.fn(() => ({ dispose: async () => undefined })),
+	};
+});
 vi.mock("./clock", async () => {
 	const { Layer } = await import("effect");
 	return {

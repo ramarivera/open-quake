@@ -31,6 +31,11 @@ import {
 	stripFixtureEnvelope,
 	vividProfile,
 } from "../test/strip-fixtures";
+import { WeatherMediaController } from "../weather-media/controller";
+import { registerWeatherMedia } from "../weather-media/index";
+import { weatherSettingsLive } from "../weather-media/settings-repository";
+import { systemMediaStub } from "../weather-media/system-media";
+import { WeatherNetwork } from "../weather-media/weather-network";
 import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
@@ -109,6 +114,27 @@ async function smoke(): Promise<void> {
 	};
 	const management = new BrowserWindow(options);
 	const panel = new BrowserWindow(options);
+	let weatherRequests = 0;
+	const weatherMedia = registerWeatherMedia(
+		ManagedRuntime.make(
+			WeatherMediaController.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						weatherSettingsLive(directory),
+						systemMediaStub(process.platform),
+						Layer.succeed(WeatherNetwork, {
+							json: () =>
+								Effect.sync(() => {
+									weatherRequests++;
+									return {};
+								}),
+						}),
+					),
+				),
+			),
+		),
+		() => management,
+	);
 	let runtimeDisposed = false;
 	const runtime = ManagedRuntime.make(
 		Layer.merge(
@@ -461,6 +487,12 @@ async function smoke(): Promise<void> {
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
 	unregisterHardware();
+	assert.equal(
+		weatherRequests,
+		0,
+		"disabled weather never requests network IO",
+	);
+	await weatherMedia.dispose();
 	await profiles.dispose();
 	await clock.dispose();
 	management.destroy();

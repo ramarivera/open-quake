@@ -1,0 +1,85 @@
+# Spec delta
+
+## Purpose
+
+Show verified-city weather and one consistent system-media session on the clock and DK-Player, with explicit privacy choices and unavailable states.
+
+## ADDED Requirements
+
+### Requirement: Weather consent and city verification
+
+Weather SHALL default to disabled, manual city entry and Celsius. IP lookup SHALL default to off and require an explained opt-in setting naming the third-party IP location services. Disabled weather or an empty manual city SHALL cause no network requests. After 600 ms idle, city verification SHALL reject fewer than two letters or symbol/digit-only inputs, search open-meteo with a 12 s deadline, and show checking, matched name/country, not-found, network or timeout. A changed city SHALL immediately invalidate the saved location and older responses SHALL NOT replace the new query. Saved coordinates SHALL only be used when sourceCity matches the current input. Evidence: WIDGETS-045/050/051/052 and approved GAP-MAP decision 15.
+
+#### Scenario: Empty manual city
+
+- **WHEN** weather is enabled without a city and IP lookup is off
+- **THEN** the card keeps its placeholders, the UI offers manual city entry, and no geolocation or forecast request runs
+
+#### Scenario: City changes during verification
+
+- **WHEN** Berlin is still being verified when the user types Paris
+- **THEN** the saved Berlin location is cleared immediately and its late response cannot restore it
+
+### Requirement: Weather providers and cache
+
+Network access SHALL go through a typed main-process adapter with replaceable test fakes. The default SHALL geocode through open-meteo and fetch current temperature/WMO code and daily high/low with timezone=auto and forecast_days=3, with 10 s HTTP deadlines and rejected redirects. Forecast failure SHALL try wttr.in for the verified location, converting its codes to WMO. A matching city/provider/locale cache SHALL last 30 min; forecast failure SHALL retain matching cached data marked stale, and a different city SHALL never inherit it. Celsius and Fahrenheit SHALL round only after conversion. An optional HTTP(S) forecast URL SHALL reach the provider through the same adapter, contain no URL credentials, and replace the standard forecast parameters. Invalid URLs SHALL be rejected without changing saved settings. Evidence: WIDGETS-042/043/044/046/050/052. The custom-URL forwarding bug described in AUDIT_WIDGETS F3 SHALL NOT be copied.
+
+#### Scenario: Primary forecast fails
+
+- **WHEN** open-meteo fails and wttr.in returns current weather and today's range
+- **THEN** the card shows the fallback data with the corresponding WMO icon and requested units
+
+#### Scenario: Both forecasts fail after cache expiry
+
+- **WHEN** both providers fail for a city with cached data older than 30 min
+- **THEN** that city's cached values remain visible with a stale indicator
+
+### Requirement: Weather refresh and card
+
+The card SHALL occupy 564×153 design pixels with a radius of 32, an 88 px icon badge, 50 px temperature, 19 px city/description and TODAY H/L column as recovered in AUDIT_WIDGETS §3.1. WMO codes SHALL use the eight recovered groups and a generic-cloud fallback. Loading and failure SHALL retain temperature/range placeholders `--`, mark aria-busy during loading and show recovered error strings. Refresh SHALL start 800 ms after mounting, repeat every 30 min while visible, debounce configuration refresh by 50 ms and coalesce in-flight requests into one follow-up using the newest configuration. IP lookup failure SHALL retry once after 120 s. Hidden/unmounted views SHALL release their timers and listeners. Strings SHALL use the eight recovered locales; unknown weather text SHALL NOT fall back to English for another locale. Evidence: WIDGETS-040/041/047/048/049.
+
+#### Scenario: Hidden card
+
+- **WHEN** 30 min passes while the view is hidden
+- **THEN** no forecast refresh starts until the view is visible
+
+### Requirement: Shared media intent and native boundary
+
+Clock and DK-Player SHALL read one typed system-session snapshot with revision, source app, title, artist, safe cover URL, playing status, duration, position, transport capabilities and stable failure code. Controls SHALL serialize and refresh live state before deciding toggle direction, gate play/pause/previous/next by capability, and refresh state after accepted or rejected controls. macOS SHALL report MEDIAREMOTE_UNAVAILABLE in this PR and SHALL NOT launch a process or pretend to control media. The reviewed MediaRemote helper is approved as a separate follow-up in open-quake-lih.7.1.6. Windows SHALL report SMTC_UNAVAILABLE behind its platform check until its native implementation exists. Other platforms SHALL report UNSUPPORTED_PLATFORM. No dependency SHALL be added by this change. Evidence: WIDGETS-054/111/113/117, KNOB-096/098. Spotify Web API/login/lyrics are excluded by approved decision 12; an OS session from a Spotify app is still system media.
+
+#### Scenario: Stub platform
+
+- **WHEN** the app reads or controls media through an unimplemented native adapter
+- **THEN** it returns a stable unavailable result, disables controls and starts no helper or player
+
+#### Scenario: Stale play snapshot
+
+- **WHEN** two toggle intents arrive while the native state is changing
+- **THEN** each intent resolves against a fresh session in sequence rather than inverting a renderer snapshot
+
+### Requirement: Clock music card
+
+The card SHALL be 564 px wide with 22×24 px padding, radius 32, a 108 px cover with gradient-note fallback, ellipsized title/artist, 54 px previous/next and 70 px play/pause controls. It SHALL render idle, playing, paused and unavailable states. Unavailable SHALL use opacity .55, disabled controls and `Music unavailable`; control rejection SHALL show that tip for 1.8 s. Broken covers SHALL fall back. Effective strip sub-touch and pointer/keyboard controls SHALL dispatch one intent. Disabled cards SHALL render nothing in their clock slots. Evidence: WIDGETS-053/054/055, KNOB-089.
+
+#### Scenario: Clock and player agree
+
+- **WHEN** the native session changes to paused
+- **THEN** both visible consumers show the same title and paused transport state
+
+### Requirement: DK-Player turntable and guide
+
+The system-mode playAudio tile SHALL use the recovered 1920×480 geometry: platter at 355,50 sized 415×416; source pill 1511,49 sized 300×76; play/stop at 1561,140 sized 200; previous at 1420,180 and next at 1782,180 sized 120. It SHALL show source app or `System Media`, safe album cover or red label, title on SVG arcs, cyan play/stop and disabled capability states. Playing SHALL rotate the disc counterclockwise once per 10 s. The needle SHALL rest at 25° and use 12−27×progress while playing, with 1600 ms updates and 900 ms track changes; unknown duration SHALL sweep over a 60 s loop. Motion reduction SHALL stop loops. The no-session guide SHALL use the recovered title/subtitle, a centered 780×160 toast, a 4.5 s lifetime, 3 s session-loss suppression, 1.5 s re-show guard and immediate dismissal when a session appears. The source indicator SHALL not launch an application. System errors SHALL show the recovered hints. Evidence: WIDGETS-112/114/117/118, KNOB-088/089/091/092/093/094/095/097/098/099. Local file playback remains governed by soundboard-player, including KNOB-090, and SHALL NOT be claimed by this system-mode renderer.
+
+#### Scenario: Track change gap
+
+- **WHEN** a session disappears and returns within 3 s
+- **THEN** the guide does not interrupt playback
+
+### Requirement: Knob ownership and test safety
+
+The DK-Player SHALL expose a 380×88 overlay insertion point at 1471,355 and readable session/transport state for the knob lane. It SHALL NOT create another volume owner or send volume commands. Unit and native mock smokes SHALL use typed weather/media fakes, never contact providers, never open HID and never bind a server. Evidence: WIDGETS-115 and KNOB-075..080 ownership in PR #24.
+
+#### Scenario: Knob overlay supplied
+
+- **WHEN** the knob lane supplies its volume overlay
+- **THEN** it renders in the recovered location while this lane only controls the media transport

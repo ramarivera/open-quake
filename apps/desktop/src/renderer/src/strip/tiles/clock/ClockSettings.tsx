@@ -16,6 +16,11 @@ import { CLOCK_STRINGS, normalizeClockLocale } from "./clockStrings";
 import { probeVideoDuration } from "./probeVideo";
 import { mediaOf, themeOf, useClockSettings } from "./useClockSettings";
 import "./clockSettings.css";
+import {
+	ClockMusicSlot,
+	ClockWeatherSlot,
+} from "../../../weather-media/ClockCards";
+import { useWeatherMedia } from "../../../weather-media/hooks";
 
 function usePreviewWidth(
 	ref: React.RefObject<HTMLElement | null>,
@@ -50,6 +55,7 @@ export function ClockSettings({
 	hourFormat: HourFormat;
 }): React.JSX.Element {
 	const { snapshot, available, request, selectTheme } = useClockSettings();
+	const enrichment = useWeatherMedia();
 	const ids = useId();
 	const strings =
 		CLOCK_STRINGS[
@@ -131,6 +137,16 @@ export function ClockSettings({
 							showSeconds={snapshot.showSeconds}
 							media={mediaOf(snapshot)}
 							onThemeSelect={selectTheme}
+							weather={
+								enrichment.snapshot?.settings.enabled ? (
+									<ClockWeatherSlot />
+								) : undefined
+							}
+							nowPlaying={
+								enrichment.snapshot?.settings.musicEnabled ? (
+									<ClockMusicSlot />
+								) : undefined
+							}
 						/>
 					) : null}
 				</div>

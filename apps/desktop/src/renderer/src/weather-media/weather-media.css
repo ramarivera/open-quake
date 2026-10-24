@@ -1,0 +1,522 @@
+.oq-weather-card,
+.oq-music-card {
+	position: relative;
+	display: flex;
+	align-items: center;
+	width: 564px;
+	box-sizing: border-box;
+	border-radius: 32px;
+	background: var(--glass-bg-strong, #222a);
+	border: 1px solid var(--glass-border, #fff3);
+	box-shadow:
+		var(--glass-hl, inset 0 1px #fff3),
+		0 22px 56px #0003;
+	backdrop-filter: var(--glass-blur, blur(26px));
+	color: #fffffff7;
+}
+.oq-weather-card {
+	height: 153px;
+	padding: 0 34px;
+	gap: 20px;
+}
+.oq-weather-badge {
+	flex: 0 0 88px;
+	height: 88px;
+	border-radius: 26px;
+	display: grid;
+	place-items: center;
+	background: linear-gradient(#ffffff4d, #ffffff14);
+	box-shadow: inset 0 1px #fff5;
+}
+.oq-weather-badge svg {
+	width: 44px;
+	height: 44px;
+}
+.oq-weather-text {
+	min-width: 0;
+	flex: 1;
+}
+.oq-weather-city {
+	font-size: 19px;
+	font-weight: 600;
+	max-width: 220px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+.oq-weather-main {
+	display: flex;
+	flex-direction: column;
+}
+.oq-weather-temp {
+	font-size: 50px;
+	font-weight: 200;
+	line-height: 1.05;
+	font-variant-numeric: tabular-nums;
+}
+.oq-weather-temp sup {
+	font-size: 0.5em;
+}
+.oq-weather-desc {
+	font-size: 19px;
+	font-weight: 450;
+	color: #ffffffad;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.oq-weather-desc[data-error="true"] {
+	color: rgba(255, 190, 160, 0.92);
+}
+.oq-weather-range {
+	flex: 0 0 auto;
+	padding-left: 26px;
+	border-left: 1px solid #ffffff24;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+.oq-weather-range > span {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	color: #ffffff61;
+}
+.oq-weather-range > div {
+	font-size: 21px;
+	color: #ffffffd1;
+}
+.oq-weather-range > div:last-child {
+	color: #ffffff9e;
+}
+.oq-weather-meta {
+	position: absolute;
+	right: 25px;
+	bottom: 8px;
+	font-size: 10px;
+	color: #fff9;
+}
+.oq-music-card {
+	padding: 22px 24px;
+	gap: 14px;
+	min-height: 153px;
+}
+.oq-music-card[data-state="unavailable"] {
+	opacity: 0.55;
+}
+.oq-music-cover {
+	flex: 0 0 108px;
+	height: 108px;
+	border-radius: 24px;
+	overflow: hidden;
+	background: linear-gradient(135deg, #2b3a8f, #7b2f9e, #e0457b);
+	display: grid;
+	place-items: center;
+	font-size: 54px;
+}
+.oq-music-cover img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.oq-music-meta {
+	min-width: 0;
+	flex: 1;
+	max-width: 158px;
+}
+.oq-music-meta > div {
+	font-size: 20px;
+	font-weight: 600;
+}
+.oq-music-meta > span {
+	font-size: 16px;
+	color: #fff9;
+	display: block;
+	margin-top: 8px;
+}
+.oq-music-meta > * {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.oq-music-controls {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-left: auto;
+}
+.oq-music-controls button {
+	border-radius: 50%;
+	width: 54px;
+	height: 54px;
+	flex-shrink: 0;
+	border: 1px solid #ffffff24;
+	background: #ffffff17;
+	color: white;
+	display: grid;
+	place-items: center;
+	padding: 15px;
+	cursor: pointer;
+	transition: transform 100ms ease-out;
+}
+.oq-music-controls button.oq-music-play {
+	width: 70px;
+	height: 70px;
+	background: #ffffffeb;
+	color: #1a1a1f;
+	padding: 22px;
+}
+.oq-music-controls button:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+.oq-music-controls svg {
+	width: 100%;
+	height: 100%;
+	fill: currentColor;
+}
+.oq-music-controls button.is-pressed,
+.oq-music-controls button:active {
+	transform: scale(0.9);
+}
+.oq-music-tip {
+	position: absolute;
+	bottom: 7px;
+	right: 24px;
+	font-size: 13px;
+	color: #f0c97a;
+}
+.oq-music-controls button:focus-visible,
+.oq-player button:focus-visible {
+	outline: 3px solid #00ffff;
+	outline-offset: 4px;
+}
+.oq-player {
+	position: relative;
+	overflow: hidden;
+	color: #f0f0f0;
+	font-family: Inter, Arial, sans-serif;
+	background: #111110;
+}
+.oq-player-stage {
+	position: absolute;
+	width: 1920px;
+	height: 480px;
+	transform-origin: 0 0;
+	overflow: hidden;
+	background: linear-gradient(
+		110deg,
+		#181817 0%,
+		#34312b 38%,
+		#181817 70%,
+		#0d0d0e
+	);
+}
+.oq-player-deck {
+	position: absolute;
+	left: 52px;
+	top: 23px;
+	width: 1290px;
+	height: 500px;
+	border-radius: 28px;
+	transform: rotate(-4deg);
+	border: 2px solid #48473c;
+	background:
+		repeating-linear-gradient(0deg, #0000 0 2px, #ffffff03 2px 3px),
+		linear-gradient(95deg, #1a1a17, #35342a, #171714);
+	box-shadow:
+		0 5px 30px #000,
+		inset 0 2px #fff2;
+}
+.oq-player-ambient {
+	position: absolute;
+	inset: 0 521px 0 0;
+	background: conic-gradient(
+		from 190deg at 562.5px 258px,
+		#0000,
+		#ffc80040,
+		#0000 42%,
+		#ffc80018,
+		#0000
+	);
+	opacity: 0.4;
+	filter: blur(24px);
+	pointer-events: none;
+}
+.oq-player-platter {
+	position: absolute;
+	left: 355px;
+	top: 50px;
+	width: 415px;
+	height: 416px;
+	border-radius: 50%;
+	box-shadow:
+		0 12px 30px #000b,
+		0 0 0 13px #080809,
+		0 0 0 16px #52514b;
+	animation: oq-disc-spin 10s linear infinite;
+	animation-play-state: paused;
+}
+.oq-player-platter[data-playing="true"] {
+	animation-play-state: running;
+}
+.oq-player-grooves {
+	position: absolute;
+	inset: -38px;
+	border-radius: 50%;
+	background: repeating-radial-gradient(
+		circle,
+		#111 0 2px,
+		#2a2926 3px,
+		#151514 4px 5px
+	);
+}
+.oq-player-disc {
+	position: relative;
+	width: 415px;
+	height: 416px;
+}
+.oq-player-disc text {
+	font-size: 20px;
+	font-weight: 300;
+	opacity: 0.85;
+	letter-spacing: 10px;
+}
+.oq-player-cover-probe {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+.oq-player-arm {
+	position: absolute;
+	inset: 0;
+	width: 1920px;
+	height: 480px;
+	pointer-events: none;
+	filter: drop-shadow(7px 7px 4px #0008);
+}
+.oq-player-arm g {
+	transform-origin: 1270px 803px;
+	transition: transform 1600ms linear;
+}
+.oq-player-source {
+	position: absolute;
+	left: 1511px;
+	top: 49px;
+	width: 300px;
+	height: 76px;
+	border-radius: 24px;
+	border: 2px solid #232326;
+	box-sizing: border-box;
+	background: conic-gradient(#2a2a2c, #1c1c1e, #2a2a2c);
+	box-shadow:
+		inset 0 2px 3px #ffffff14,
+		inset 0 -2px 4px #000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	font-size: 30px;
+	opacity: 0.45;
+}
+.oq-player-source span {
+	font-size: 18px;
+	font-weight: 700;
+	max-width: 235px;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+}
+.oq-player-source[data-active="true"] {
+	opacity: 1;
+	border: 3px solid #fa243c;
+	box-shadow:
+		0 0 22px #fa243c33,
+		inset 0 2px 3px #fff2;
+}
+.oq-player-error {
+	position: absolute;
+	top: 26px;
+	left: 1395px;
+	width: 520px;
+	text-align: center;
+	font-size: 13px;
+	color: #f0c97a;
+	letter-spacing: 0.5px;
+}
+.oq-player button {
+	position: absolute;
+	border-radius: 50%;
+	border: 2px solid #44443c;
+	background: conic-gradient(#33332d, #131312, #35352f, #141413, #33332d);
+	box-shadow:
+		0 7px 10px #0008,
+		inset 0 2px 3px #fff2,
+		inset 0 -2px 3px #000;
+	color: #00ffff;
+	display: grid;
+	place-items: center;
+	padding: 35px;
+	cursor: pointer;
+	transition: transform 100ms ease-out;
+}
+.oq-player button svg {
+	width: 100%;
+	height: 100%;
+	fill: currentColor;
+	filter: drop-shadow(0 0 5px #00ffff44);
+}
+.oq-player button:disabled {
+	color: #171716;
+	cursor: default;
+}
+.oq-player button.is-pressed,
+.oq-player button:active {
+	transform: scale(0.9);
+}
+.oq-player button.oq-player-main {
+	left: 1561px;
+	top: 140px;
+	width: 200px;
+	height: 200px;
+	padding: 58px;
+	border-width: 3.6px;
+}
+.oq-player button.oq-player-previous {
+	left: 1420px;
+	top: 180px;
+	width: 120px;
+	height: 120px;
+}
+.oq-player button.oq-player-next {
+	left: 1782px;
+	top: 180px;
+	width: 120px;
+	height: 120px;
+}
+.oq-player-volume-slot {
+	position: absolute;
+	left: 1471px;
+	top: 355px;
+	width: 380px;
+	height: 88px;
+}
+.oq-player-guide {
+	position: absolute;
+	left: 570px;
+	top: 160px;
+	width: 780px;
+	height: 160px;
+	box-sizing: border-box;
+	border-radius: 32px;
+	border: 1px solid #ffffff1f;
+	background: linear-gradient(#222, #141414);
+	box-shadow:
+		0 24px 48px #000c,
+		0 0 20px #00ffff26,
+		inset 0 1px #00ffff0d;
+	padding: 0 48px;
+	display: flex;
+	gap: 32px;
+	align-items: center;
+	animation: oq-guide-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+	pointer-events: none;
+}
+.oq-player-guide > div {
+	flex: 0 0 96px;
+	height: 96px;
+	border-radius: 16px;
+	background: #2a2a2c;
+	display: grid;
+	place-items: center;
+	font-size: 48px;
+	color: #00ffff;
+}
+.oq-player-guide section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+.oq-player-guide strong {
+	font-size: 38px;
+	font-weight: 600;
+	line-height: 1.2;
+	letter-spacing: -0.01em;
+}
+.oq-player-guide span {
+	font-size: 24px;
+	line-height: 1.3;
+	color: #fff9;
+}
+.oq-player-unknown-sweep {
+	animation: oq-needle-sweep 60s linear infinite;
+}
+@keyframes oq-disc-spin {
+	to {
+		transform: rotate(-360deg);
+	}
+}
+@keyframes oq-needle-sweep {
+	from {
+		transform: rotate(12deg);
+	}
+	to {
+		transform: rotate(-15deg);
+	}
+}
+@keyframes oq-guide-in {
+	from {
+		transform: translateY(16px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+.oq-player[data-motion="reduce"] *,
+.oq-clock[data-motion="reduce"] .oq-music-controls button {
+	animation: none;
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.oq-player *,
+	.oq-music-controls button {
+		animation: none;
+		transition: none;
+	}
+}
+.weather-settings {
+	margin-top: 24px;
+}
+.weather-settings input[type="text"],
+.weather-settings input[type="url"] {
+	width: min(100%, 400px);
+}
+.weather-verification {
+	font-size: 13px;
+	color: var(--text-secondary);
+	margin: 8px 0 0;
+}
+.weather-verification[data-error="true"] {
+	color: var(--status-warning, #b57435);
+}
+.weather-consent {
+	font-size: 13px;
+	color: var(--text-secondary);
+	max-width: 58ch;
+	line-height: 1.5;
+}
+
+.oq-player-guide[data-visible="false"] {
+	animation: oq-guide-out 0.5s ease-in forwards;
+}
+@keyframes oq-guide-out {
+	to {
+		transform: translateY(-10px);
+		opacity: 0;
+	}
+}
