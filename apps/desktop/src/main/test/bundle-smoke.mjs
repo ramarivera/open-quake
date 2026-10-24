@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 const directory = mkdtempSync(join(tmpdir(), "open-quake-bundle-"));
 const mockMode = process.argv.includes("--mock");
 const app = new EventEmitter();
+app.isPackaged = true;
+app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
 let quit = false;
@@ -42,12 +44,16 @@ class Window {
 	on() {}
 	once() {}
 	loadFile() {}
+	hide() {}
+	showInactive() {}
 	setBounds() {}
 	setAlwaysOnTop() {}
 	destroy() {}
 }
 const screen = new EventEmitter();
 const display = {
+	id: 1,
+	scaleFactor: 1,
 	label: "Primary",
 	size: { width: 1920, height: 1080 },
 	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
@@ -67,6 +73,7 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+const shell = { openExternal: () => Promise.resolve() };
 // The clock registers its media scheme before ready and a handler after.
 const schemes = [];
 const protocol = {
@@ -81,8 +88,9 @@ const net = {
 };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
-	app,
 	powerMonitor,
+	shell,
+	app,
 	BrowserWindow: Window,
 	screen,
 	ipcMain,
@@ -106,7 +114,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, powerMonitor, BrowserWindow, screen, ipcMain, dialog, nativeImage, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

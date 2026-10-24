@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { ManagedRuntime, Schema } from "effect";
+import { pathToFileURL } from "node:url";
+import { Effect, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
 import { KnobReply } from "../../shared/knob-contracts";
 import {
@@ -13,6 +14,8 @@ import {
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerKnob } from "../knob";
 import { knobProfileBinding } from "../knob/profile-binding";
+import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
+import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { nativeForegroundApp } from "./foreground-app";
 import { registerProfiles } from "./index";
@@ -43,6 +46,7 @@ async function smoke(): Promise<void> {
 	let managementDebug: BrowserWindow | undefined;
 	let profiles: ReturnType<typeof registerProfiles> | undefined;
 	let knob: ReturnType<typeof registerKnob> | undefined;
+	let disposeLifecycle = async (): Promise<void> => {};
 	let media: ReturnType<typeof registerMedia> | undefined;
 	let clock: ReturnType<typeof registerClock> | undefined;
 	try {
@@ -72,6 +76,35 @@ async function smoke(): Promise<void> {
 		const management = new BrowserWindow(options),
 			panel = new BrowserWindow({ ...options, width: 960, height: 240 });
 		managementDebug = management;
+		const lifecycleRuntime = ManagedRuntime.make(
+			DeviceLifecycle.Default({
+				mock: true,
+				development: true,
+				displays: () => [],
+				watch: () => () => {},
+				panel: () => {},
+				bus: () => undefined,
+				notify: () => {},
+				prompts: {
+					platform: process.platform,
+					mock: true,
+					displays: () => [],
+					primaryId: () => 1,
+					prompt: () => Effect.die("Smoke must never prompt"),
+					native: () => Effect.die("Smoke must never arrange displays"),
+					openSettings: () => Effect.void,
+				},
+			}),
+		);
+		const removeLifecycle = registerLifecycle(
+			lifecycleRuntime,
+			() => management,
+			pathToFileURL(resolve("out/renderer/index.html")).href,
+		);
+		disposeLifecycle = async () => {
+			removeLifecycle();
+			await lifecycleRuntime.dispose();
+		};
 		const deliveries: string[] = [];
 		profiles = registerProfiles(
 			() => management,
@@ -361,6 +394,7 @@ async function smoke(): Promise<void> {
 			}
 		});
 	} finally {
+		await disposeLifecycle();
 		await knob?.dispose();
 		await profiles?.dispose();
 		await media?.dispose();

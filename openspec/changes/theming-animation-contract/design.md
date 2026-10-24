@@ -87,4 +87,3 @@ Reduced motion still suppresses strip motion; a pressed tile keeps its glow
 without scaling. The strip's tile palette is DK's fixed device palette, held
 in one typed object, because the strip is a dark hardware display regardless
 of the app theme. See `openspec/changes/strip-key-grid/design.md`.
-
