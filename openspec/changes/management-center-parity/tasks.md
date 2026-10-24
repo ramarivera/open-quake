@@ -20,20 +20,20 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 ## 4. Agent workbench
 
-- [ ] 4.1 Agents domain: catalog, key rules, protected `main`, workspace templates, skills, and atomic moves with distinct failures (CENTER-049–053, 057–060). Bead `open-quake-lih.17.1.10`.
-- [ ] 4.2 Model routing: role invariants, provider defaults, per-agent inheritance and write-only credentials (CENTER-065–068, 070). Bead `open-quake-lih.17.1.11`.
-- [ ] 4.3 Runtime controller over `AgentRuntimePort` with 10 s and 5 s bounds and a reachable Error state, plus DK-Claw sync with preflight, revision-checked save, device step and rollback (CENTER-020–028, 045, 046, 103). Bead `open-quake-lih.17.1.12`.
-- [ ] 4.4 Agents IPC and preload with sender checks and consumer tests. Bead `open-quake-lih.17.1.13`.
-- [ ] 4.5 Agents page: four tabs, runtime indicator and offline panel, roster, wizard, skill management, AI Config tables and DK-Claw slots. Bead `open-quake-lih.17.1.14`.
+- [x] 4.1 Agents domain: catalog, key rules, protected `main`, workspace templates, skills, and atomic moves with distinct failures (CENTER-049–053, 057–060). Bead `open-quake-lih.17.1.10`.
+- [x] 4.2 Model routing: role invariants, provider defaults, per-agent inheritance and write-only credentials (CENTER-065–068, 070). Bead `open-quake-lih.17.1.11`.
+- [x] 4.3 Runtime controller over `AgentRuntimePort` with 10 s and 5 s bounds and a reachable Error state, plus DK-Claw sync with preflight, revision-checked save, device step and rollback (CENTER-020–028, 045, 046, 103). Bead `open-quake-lih.17.1.12`.
+- [x] 4.4 Agents IPC and preload with sender checks and consumer tests. Bead `open-quake-lih.17.1.13`.
+- [x] 4.5 Agents page: four tabs, runtime indicator and offline panel, roster, wizard, skill management, AI Config tables and DK-Claw slots. Bead `open-quake-lih.17.1.14`.
 
 ## 5. Integrations
 
-- [ ] 5.1 Channels domain: catalog fixture, setup validation per type, secret references, QR sessions, pairing approval and a fake runtime adapter, with IPC (CENTER-072–079). Bead `open-quake-lih.17.1.15`.
-- [ ] 5.2 Channels UI: hub, cards, setup drawer, QR panel and pairing step. Bead `open-quake-lih.17.1.16`.
-- [ ] 5.3 Shortcuts domain: Schema decoding without eval, chord rules, conflict detection, libraries and profile sync, with IPC (CENTER-093–096). Bead `open-quake-lih.17.1.17`.
-- [ ] 5.4 Shortcuts page: generator, table and library aside. Bead `open-quake-lih.17.1.18`.
-- [ ] 5.5 Home Assistant domain: origin and token handling, scoped certificate consent, entities, areas, services, allowlist, key display and live state, with IPC (CENTER-098–102). Bead `open-quake-lih.17.1.19`.
-- [ ] 5.6 Home Assistant page and the strip's live-state tile. Bead `open-quake-lih.17.1.20`.
+- [x] 5.1 Channels domain: catalog fixture, setup validation per type, secret references, QR sessions, pairing approval and a fake runtime adapter, with IPC (CENTER-072–079). Bead `open-quake-lih.17.1.15`.
+- [x] 5.2 Channels UI: hub, cards, setup drawer, QR panel and pairing step. Bead `open-quake-lih.17.1.16`.
+- [x] 5.3 Shortcuts domain: Schema decoding without eval, chord rules, conflict detection, libraries and profile sync, with IPC (CENTER-093–096). Bead `open-quake-lih.17.1.17`.
+- [x] 5.4 Shortcuts page: generator, table and library aside. Bead `open-quake-lih.17.1.18`.
+- [x] 5.5 Home Assistant domain: origin and token handling, scoped certificate consent, entities, areas, services, allowlist, key display and live state, with IPC (CENTER-098–102). Bead `open-quake-lih.17.1.19`.
+- [x] 5.6 Home Assistant page and the strip's live-state tile. Bead `open-quake-lih.17.1.20`.
 
 ## 6. Verification and delivery
 

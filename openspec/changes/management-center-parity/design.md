@@ -91,7 +91,7 @@ The strip has no folder navigation yet (cluster 9). "Add to main screen" and "Sy
 
 ### 10. Home Assistant transport
 
-Requests run through a dedicated Electron session partition per origin (`persist:home-assistant`) using `session.fetch`. A `setCertificateVerifyProc` on that partition accepts a failing certificate only when its host matches the configured origin and its fingerprint equals the consented one. The default session is untouched, so other HTTPS requests keep normal verification. Areas come from the REST template endpoint (`areas()`, `area_entities()`), entities from `/api/states`, and services from `/api/services`. Live state polls `/api/states/<id>` for subscribed entities every 2 s while the strip shows them. DK pushes over a WebSocket, but polling keeps every request inside the scoped TLS session; the cost is up to 2 s latency.
+Requests use a dedicated Node HTTPS agent for each HA origin. Its TLS connection verifies normal trust first. A failing certificate is accepted only when its SHA-256 fingerprint and exact origin match an explicit saved consent. The socket reaches the HTTP client only after this check, so the bearer token is never sent before trust succeeds. Other HTTPS requests keep normal verification. Areas come from the REST template endpoint (`areas()`, `area_entities()`), entities from `/api/states`, and services from `/api/services`. Live state polls `/api/states/<id>` for subscribed entities every 2 s while the strip shows them. DK pushes over a WebSocket, but polling keeps every request inside the origin-scoped TLS transport; the cost is up to 2 s latency.
 
 ## Risks / Trade-offs
 
@@ -102,7 +102,7 @@ Requests run through a dedicated Electron session partition per origin (`persist
 
 ## Migration plan
 
-Appearance migrates from version 1 to version 2 in memory (Decision 3). The new stores are versioned JSON under `userData`: `emoji-v1/`, `agents-v1/`, `shortcuts-v1/`, `channels-v1/` and `home-assistant-v1/`. Each write is atomic: temporary file then rename, with the last valid copy kept. Secrets go to the system keychain through `apps/desktop/src/main/credentials`. Rolling back means deleting a store; nothing else depends on it.
+Appearance migrates from version 1 to version 2 in memory (Decision 3). The new stores are versioned JSON under `userData`: `emoji-v1/`, `agents-v1/` and `integrations-v1/`. Emoji uses a validated primary and backup plus immutable hashed assets. Agents commit a generation pointer for the catalog and workspace Markdown together. Integration JSON files use a temporary file and atomic rename. Secrets use Electron safeStorage encryption backed by the OS credential store; unavailable encryption and Linux basic_text are refused. Public replies contain a mask or availability flag. Saved strip keys retain asset references after package removal, so assets are retained rather than collected automatically.
 
 ## Verification
 
