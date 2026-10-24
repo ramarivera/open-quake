@@ -179,13 +179,14 @@ Evidence is under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/device-lifecycle/review-fix-1/`.
 Logs: `biome.log`, `typecheck.log`, `test.log`, `build.log`, `bundle.log`,
 `openspec.log`, `native-smoke-build.log`, `native-smoke.log`. Screenshots are
-in `screenshots/`; diagnostic-layout-failed, diagnostic-narrow, panel-quick
-and panel-touch-complete were inspected visually. Electron exited and no
+in `screenshots/`; diagnostic-layout-failed and panel-touch-complete were inspected after the
+final integration; diagnostic-narrow and panel-quick were also inspected during
+the first integration. Electron exited and no
 lane smoke processes remained.
 
 Tracking: review tasks are `open-quake-lih.11.1.5` through `.9`, corresponding
-to tasks 4.1 through 4.5. Tasks 4.1 through 4.4 are complete; final push and
-review-thread delivery remain in 4.5. Cluster `open-quake-lih.11` stays open
+to tasks 4.1 through 4.5. All five review tasks are complete. The epic is closed with source, gate,
+push and review-thread evidence. Cluster `open-quake-lih.11` stays open
 for the lead until PR #21 merges.
 
 Disagreements: none with the three findings. The shared lane brief says not
@@ -194,3 +195,22 @@ round authorizes replying to and resolving exactly these three. No hardware
 was opened, no firmware was flashed, no dependency was added and no hook was
 bypassed. Native CoreGraphics effects and physical device behavior remain
 unverified.
+
+### Review delivery
+
+Implementation and main integration were pushed as
+`0172be03e9bb0c0a218df42554d07ee8bbebe5ee` on `lane/device-lifecycle`.
+GitHub reports PR #21 open, clean and mergeable. Normal commit and push hooks
+ran; the pre-push Biome gate passed. Truth Mirror's existing disabled policy
+was left unchanged.
+
+Each connector thread received an attributed `addPullRequestReviewThreadReply`
+naming fix commit `e485357b5f8fba31a24a9a7b45e8d899ff89469b`, followed by
+`resolveReviewThread`. A fresh GraphQL read confirmed all three resolved:
+
+- Reconnect: [reply](https://github.com/ramarivera/open-quake/pull/21#discussion_r4366611495), thread `PRRT_kwDOUADXpM6v26Kb`.
+- Second instance: [reply](https://github.com/ramarivera/open-quake/pull/21#discussion_r4366611623), thread `PRRT_kwDOUADXpM6v26Kf`.
+- Layout prompts: [reply](https://github.com/ramarivera/open-quake/pull/21#discussion_r4366611702), thread `PRRT_kwDOUADXpM6v26Kh`.
+
+The scratch `thread-resolutions.json` and `push.log` retain delivery evidence.
+PR #21 has not been merged.
