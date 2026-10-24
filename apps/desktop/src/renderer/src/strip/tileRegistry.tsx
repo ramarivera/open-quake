@@ -1,4 +1,5 @@
 import type { HourFormat } from "../../../shared/display";
+import { EmojiTile } from "../management/emoji/EmojiTile";
 import type { StripTile } from "./geometry";
 import { ClockTile } from "./tiles/clock/ClockTile";
 import { useClockNow } from "./tiles/clock/clockHooks";
@@ -8,6 +9,7 @@ import {
 	useClockSettings,
 } from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
+import { HomeAssistantTile } from "./tiles/home-assistant/HomeAssistantTile";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
 import { useMonitor } from "./tiles/monitor/useMonitor";
 import { previewSnapshot } from "./tiles/monitor/view-model";
@@ -96,6 +98,8 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map([
 		["dkDesktopClock", ClockSlot],
 		["systemMonitorPanel", MonitorSlot],
+		["emoji", EmojiTile],
+		["homeAssistant", HomeAssistantTile],
 	]);
 
 export const stripTileFor = (type: string): StripTileComponent =>

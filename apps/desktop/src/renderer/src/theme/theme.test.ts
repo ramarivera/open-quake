@@ -104,7 +104,7 @@ describe("custom theme validation", () => {
 			...themes.light,
 			...custom.colors,
 		});
-		expect(themes.light.accent).toBe("#b4480b");
+		expect(themes.light.accent).toBe("#0369a1");
 	});
 
 	it("accepts a complete palette without dropping tokens", () => {
@@ -234,7 +234,7 @@ describe("appearance persistence boundary", () => {
 	it.each([
 		null,
 		{},
-		{ ...defaultAppearance, version: 2 },
+		{ ...defaultAppearance, version: 3 },
 		{ ...defaultAppearance, theme: "sepia" },
 		{ ...defaultAppearance, theme: "custom" },
 		{ ...defaultAppearance, motion: "full" },

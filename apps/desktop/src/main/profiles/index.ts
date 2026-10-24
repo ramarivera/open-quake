@@ -45,6 +45,7 @@ import {
 	type ProfileReply,
 	ProfileRequest,
 } from "../../shared/profile-manager";
+import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { makeForegroundProbe } from "./foreground-app";
 import {
 	canonicalProfileAppPath,
@@ -112,8 +113,9 @@ export function registerProfiles(
 			ProfileSwitching.DefaultWithoutDependencies,
 		).pipe(
 			Layer.provideMerge(
-				ProfileRepository.Default.pipe(
+				ProfileRepository.DefaultWithoutDependencies.pipe(
 					Layer.provide(profileStorageLayer(storage)),
+					Layer.provide(ManagementProfileContractsLive),
 				),
 			),
 			Layer.provide(

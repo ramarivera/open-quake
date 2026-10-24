@@ -6,7 +6,7 @@ import { registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-bundle-"));
 const mockMode = process.argv.includes("--mock");
@@ -34,16 +34,23 @@ class Window {
 	constructor() {
 		Window.windows.push(this);
 	}
+	url = "";
 	webContents = {
 		send: (channel, event) => events.push({ channel, event }),
 		isDestroyed: () => false,
+		getURL: () => this.url,
 	};
 	isDestroyed() {
 		return false;
 	}
 	on() {}
 	once() {}
-	loadFile() {}
+	loadFile(path) {
+		this.url = pathToFileURL(path).href;
+	}
+	loadURL(url) {
+		this.url = url;
+	}
 	hide() {}
 	showInactive() {}
 	setBounds() {}
@@ -86,9 +93,13 @@ const net = {
 		throw new Error("Bundle smoke must not serve clock media");
 	},
 };
+const nativeTheme = { themeSource: "system" };
+const safeStorage = { isEncryptionAvailable: () => false };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
 	powerMonitor,
+	nativeTheme,
+	safeStorage,
 	shell,
 	app,
 	BrowserWindow: Window,
@@ -114,7 +125,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, nativeTheme, safeStorage } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

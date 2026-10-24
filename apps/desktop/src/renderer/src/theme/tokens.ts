@@ -18,32 +18,42 @@ export const themeTokenNames = [
 
 export type ThemeToken = (typeof themeTokenNames)[number];
 export type ThemeTokens = Readonly<Record<ThemeToken, string>>;
-export type BuiltinTheme = "dark" | "light";
+export type BuiltinTheme = "dark" | "light" | "grey";
 
-// Graphite neutrals with one warm signal color. `border` is reserved for
-// control boundaries, so it keeps 3:1 against both background and surface.
+// CENTER-004 fallbacks and MGMT-434 installed CSS, read without launching DK-Suite.
 export const themes = {
 	dark: {
-		background: "#18181b",
-		surface: "#232327",
+		background: "#0a0a0b",
+		surface: "#131316",
 		foreground: "#f4f4f5",
 		muted: "#a8a8b0",
 		border: "#75757e",
-		accent: "#ff9a4d",
-		"accent-text": "#1f1206",
-		success: "#5ad68a",
-		warning: "#f5c451",
+		accent: "#ffffff",
+		"accent-text": "#0b0b0d",
+		success: "#4ade80",
+		warning: "#f5b547",
+	},
+	grey: {
+		background: "#282828",
+		surface: "#2f2f2f",
+		foreground: "#f0f0f0",
+		muted: "#a8a8a8",
+		border: "#8a8a8a",
+		accent: "#5a5a5a",
+		"accent-text": "#fafafa",
+		success: "#10b981",
+		warning: "#f5b547",
 	},
 	light: {
-		background: "#f4f4f6",
+		background: "#f6f4f0",
 		surface: "#ffffff",
-		foreground: "#1d1d21",
-		muted: "#5f5f68",
-		border: "#85858e",
-		accent: "#b4480b",
+		foreground: "#211e1a",
+		muted: "#6e6960",
+		border: "#858078",
+		accent: "#0369a1",
 		"accent-text": "#ffffff",
-		success: "#1c7a3e",
-		warning: "#8a5a00",
+		success: "#18733a",
+		warning: "#885500",
 	},
 } as const satisfies Record<BuiltinTheme, ThemeTokens>;
 

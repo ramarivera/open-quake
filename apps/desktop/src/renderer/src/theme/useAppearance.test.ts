@@ -48,7 +48,7 @@ describe("live appearance synchronization", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it.each(["{", JSON.stringify({ ...defaultAppearance, version: 2 })])(
+	it.each(["{", JSON.stringify({ ...defaultAppearance, version: 3 })])(
 		"restores defaults and safe feedback in an open renderer for invalid storage %s",
 		(value) => {
 			target.dispatchEvent(new StorageChange(APPEARANCE_STORAGE_KEY, value));

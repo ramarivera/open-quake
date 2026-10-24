@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	BrowserWindowConstructorOptions,
 	Display,
@@ -65,7 +67,7 @@ const electron = vi.hoisted(() => {
 			requestSingleInstanceLock: vi.fn(() => true),
 			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
-			getPath: vi.fn(() => "/tmp/open-quake-window-test"),
+			getPath: vi.fn(() => join(tmpdir(), "open-quake-window-test")),
 			on: vi.fn<
 				(
 					event: string,
@@ -80,6 +82,8 @@ const electron = vi.hoisted(() => {
 			handle: vi.fn(),
 			removeHandler: vi.fn(),
 		},
+		nativeTheme: { themeSource: "system" },
+		safeStorage: { isEncryptionAvailable: () => false },
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
 		shell: { openExternal: vi.fn() },
@@ -93,6 +97,15 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./agents", () => ({
+	registerAgents: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
+vi.mock("./integrations", () => ({
+	registerIntegrations: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
+vi.mock("./emoji", () => ({
+	registerEmoji: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
 vi.mock("./profiles", () => ({
 	registerProfiles: vi.fn(() => ({
 		runtime: { runFork: vi.fn(), runPromise: vi.fn() },
