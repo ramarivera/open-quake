@@ -197,6 +197,16 @@ The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatib
 - **WHEN** the clock references selected external images or videos and its backup is restored into a different installation after the originals are removed
 - **THEN** only those referenced files are archived within bounded file/archive limits, restored clock consumers use managed copies, and missing, unreadable or symlink references fail export without claiming a complete backup
 
+#### Scenario: Export exceeds a cumulative budget
+
+- **WHEN** retained nested import trees or explicitly selected external clock media would exceed the shared raw read byte/count budget
+- **THEN** export fails through BackupFailed before reading the first disallowed file or subsequent files; normalized/replaced/deduplicated entries and generated projection/index additions also remain within shared retained archive limits, and boundary-sized exports succeed
+
+#### Scenario: Native app-linked profile restore
+
+- **WHEN** a same-platform app-linked native profile is exported, reset and imported, including a profile deduplicated against an existing profile or assigned a collision-free ID
+- **THEN** the app link targets the actual final profile and automatic switching can select it; existing destination links and manager settings win conflicts, unrelated transient source manager state is not imported, dangling or incompatible-platform links are skipped, and repeated import is idempotent
+
 ### Requirement: Clear data with optional bounded backup
 
 The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a 520px confirmation. Backup SHALL stop waiting after 60000ms; failure SHALL require a second confirmation. Writers SHALL stop before clearing only app-owned data and exiting. Evidence: SETTINGS-016.

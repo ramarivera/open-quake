@@ -246,3 +246,12 @@ Scoped bookmarks register their idempotent release immediately, release on hint
 or start failure, and release when copying finishes rather than waiting through
 version polling. Disposal releases outstanding access exactly once. The final
 native reset confirmation states the already-selected backup mode.
+
+
+### PR 32 round 5
+
+Export applies the archive writer's shared numeric limits before each raw file read and retained entry insertion. `backup-budget.ts` separately tracks cumulative raw work and the retained archive map. JSON normalization never refunds raw work; replacing a retained path subtracts its previous bytes, and projected assets deduplicate by content. Managed files and explicitly selected external clock assets share `backup-read.ts` no-follow descriptor reads, with pre-allocation size checks, bounded growth detection and guaranteed descriptor closure. Projection entries are inserted directly into the budgeted map, including the final index replacement. An over-budget export returns the existing catalog BackupFailed response.
+
+Native profile restore maps each source profile ID to its added or content-deduplicated final ID. `backup-profile-links.ts` imports only same-platform persistent app associations using the manager contracts and switching path normalization. Existing destination profile associations and overlapping app/device identities win. Distinct device scopes and distinct app paths remain distinct. Dangling source targets and cross-platform app links are skipped. Destination manager settings, active selections and approvals stay authoritative; source transient/default/approval state is not imported. Reimport does not append links or bump revision again.
+
+Regressions use small shared limits, inspect real filesystem reads, test concurrent growth and retained content deduplication, exercise the actual typed maintenance export reply, and drive a linked native export/reset/restore through ProfileSwitching.probe. Hardware and packaged/legacy acceptance remain separate.

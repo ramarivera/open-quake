@@ -22,12 +22,14 @@ import { MonitorRecord } from "../../shared/monitor-contracts";
 import { ClockRecord } from "../clock/clock-store";
 import { appearanceRecord } from "./appearance-backup";
 import { readBackup, writeBackup } from "./backup-archive";
+import { BackupFiles, BackupReadBudget } from "./backup-budget";
 import {
 	backupProjection,
 	mergeBackup,
 	withoutCredentials,
 } from "./backup-merge";
 import { backupPaths } from "./backup-paths";
+import { readBackupFile } from "./backup-read";
 import { archiveClockMedia } from "./clock-backup";
 
 function validateNative(relative: string, data: Uint8Array): void {
@@ -75,8 +77,12 @@ async function assertOwnedDestination(
 	}
 	if ((await lstat(root)).isSymbolicLink()) throw new BackupInvalid();
 }
-async function readManaged(root: string): Promise<Map<string, Uint8Array>> {
-	const files = new Map<string, Uint8Array>();
+async function readManaged(
+	root: string,
+	budget: BackupReadBudget,
+	signal?: AbortSignal,
+): Promise<BackupFiles> {
+	const files = new BackupFiles();
 	async function collect(relative: string): Promise<void> {
 		if (/\.(pending|tmp)$/.test(relative)) return;
 		if (relative === "monitor-v1/settings.json.new") return;
@@ -85,18 +91,20 @@ async function readManaged(root: string): Promise<Map<string, Uint8Array>> {
 		if (!info) return;
 		if (info.isSymbolicLink()) throw new BackupInvalid();
 		if (info.isDirectory()) {
-			for (const name of await readdir(path))
+			for (const name of (await readdir(path)).sort())
 				await collect(`${relative}/${name}`);
 		} else if (info.isFile()) {
-			if (info.size > 32 * 1024 * 1024) throw new BackupInvalid();
-			let bytes = await readFile(path);
+			const entry = `open-quake/${relative}`;
+			let bytes = await readBackupFile(path, budget, signal, (size) =>
+				files.check(entry, size),
+			);
 			validateNative(relative, bytes);
 			if (relative.endsWith(".json"))
 				bytes = Buffer.from(
 					JSON.stringify(
 						withoutCredentials(
 							Schema.decodeUnknownSync(ProfileJson)(
-								JSON.parse(bytes.toString("utf8")),
+								JSON.parse(Buffer.from(bytes).toString("utf8")),
 							),
 						),
 					),
@@ -112,8 +120,9 @@ export async function exportBackup(
 	signal?: AbortSignal,
 	appearance?: string,
 ): Promise<Uint8Array> {
-	const files = await readManaged(root);
-	await archiveClockMedia(files, root, signal);
+	const budget = new BackupReadBudget();
+	const files = await readManaged(root, budget, signal);
+	await archiveClockMedia(files, root, budget, signal);
 	if (appearance !== undefined)
 		files.set(
 			"open-quake/appearance.json",
@@ -121,7 +130,7 @@ export async function exportBackup(
 		);
 	const profileBytes = files.get("open-quake/profiles-v1.json");
 	if (!profileBytes) throw new BackupInvalid();
-	const projection = backupProjection(
+	backupProjection(
 		JSON.parse(Buffer.from(profileBytes).toString("utf8")),
 		`${root}/resources/default`,
 		process.platform,
@@ -135,8 +144,8 @@ export async function exportBackup(
 				source: `${root}/${name.slice("open-quake/".length)}`,
 				bytes,
 			})),
+		files,
 	);
-	for (const [path, bytes] of projection) files.set(path, bytes);
 	files.set(
 		"export_index.json",
 		Buffer.from(

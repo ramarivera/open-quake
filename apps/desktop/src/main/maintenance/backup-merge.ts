@@ -19,6 +19,7 @@ import {
 	safeArchivePath,
 } from "./backup-archive";
 import { backupPaths } from "./backup-paths";
+import { mergeProfileLinks } from "./backup-profile-links";
 import { hashBytes } from "./firmware-files";
 
 const Resource = Schema.Struct({
@@ -128,6 +129,7 @@ export function mergeBackup(
 			),
 		);
 		const profiles = [...envelope.profiles];
+		const profileIds = new Map<string, string>();
 		let skipped = 0;
 		let added = 0;
 		for (const profile of imported.profiles) {
@@ -135,18 +137,16 @@ export function mergeBackup(
 			const fingerprint = hashBytes(
 				Buffer.from(stable({ pages: encoded.pages, knob: encoded.knob })),
 			);
-			if (
-				profiles.some((p) => {
-					const existing = Schema.encodeSync(Profile)(p);
-					return (
-						hashBytes(
-							Buffer.from(
-								stable({ pages: existing.pages, knob: existing.knob }),
-							),
-						) === fingerprint
-					);
-				})
-			) {
+			const duplicate = profiles.find((p) => {
+				const existing = Schema.encodeSync(Profile)(p);
+				return (
+					hashBytes(
+						Buffer.from(stable({ pages: existing.pages, knob: existing.knob })),
+					) === fingerprint
+				);
+			});
+			if (duplicate) {
+				profileIds.set(profile.id, duplicate.id);
 				skipped++;
 				continue;
 			}
@@ -157,11 +157,18 @@ export function mergeBackup(
 			profiles.push(
 				Schema.decodeUnknownSync(Profile)({ ...encoded, id, revision: 0 }),
 			);
+			profileIds.set(profile.id, id);
 			added++;
 		}
 		return {
 			envelope: encodeProfileEnvelope({
 				...envelope,
+				manager: mergeProfileLinks(
+					envelope,
+					imported,
+					profileIds,
+					index.originalPlatform,
+				),
 				profiles: Schema.decodeUnknownSync(ProfileEnvelope)({
 					...encodeProfileEnvelope(envelope),
 					profiles: profiles.map((p) => Schema.encodeSync(Profile)(p)),
@@ -443,9 +450,9 @@ export function backupProjection(
 		readonly source: string;
 		readonly bytes: Uint8Array;
 	}[] = [],
+	files: Map<string, Uint8Array> = new Map(),
 ): Map<string, Uint8Array> {
 	const current = Schema.decodeUnknownSync(ProfileEnvelope)(envelope);
-	const files = new Map<string, Uint8Array>();
 	const jsonBytes = (value: unknown) => Buffer.from(JSON.stringify(value));
 	const assetPaths = new Map<string, string>();
 	const resourceRows = assets.map(({ source, bytes }) => {
