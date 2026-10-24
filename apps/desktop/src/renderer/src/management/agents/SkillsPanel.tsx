@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { sanitizeAgentId } from "../../../../../../../packages/edge/src/agents/agents-invariants";
+import { skillFolderName } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import type { AgentView, Skill } from "../../../../shared/agents";
 import { AgentDialog, ConfirmDialog, format } from "./Dialog";
 import strings from "./strings.json";
@@ -29,7 +29,12 @@ function SkillEditor({
 		const reply = await request({ type: "draft-skill", name, prompt });
 		setBusy(false);
 		if (reply._tag === "success") setContent(reply.draft);
-		else setError(`${reply.message} · ${reply.code}`);
+		else
+			setError(
+				reply.code === "AGENT.SKILL.CONFLICT"
+					? t.skillConflict
+					: `${reply.message} · ${reply.code}`,
+			);
 	};
 	return (
 		<AgentDialog
@@ -45,7 +50,14 @@ function SkillEditor({
 					void request({
 						type: "save-skill",
 						create: !skill,
-						folder: skill?.folder ?? sanitizeAgentId(name.replaceAll(" ", "-")),
+						folder:
+							skill?.folder ??
+							skillFolderName(
+								name,
+								view.skills
+									.filter((item) => item.owner === "")
+									.map((item) => item.folder),
+							),
 						owner: skill?.owner ?? "",
 						name,
 						content,
@@ -53,7 +65,12 @@ function SkillEditor({
 					}).then((reply) => {
 						setBusy(false);
 						if (reply._tag === "success") onClose();
-						else setError(`${reply.message} · ${reply.code}`);
+						else
+							setError(
+								reply.code === "AGENT.SKILL.CONFLICT"
+									? t.skillConflict
+									: `${reply.message} · ${reply.code}`,
+							);
 					});
 				}}
 			>

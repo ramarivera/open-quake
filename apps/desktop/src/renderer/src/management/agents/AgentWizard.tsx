@@ -11,6 +11,7 @@ import {
 import { AgentDialog } from "./Dialog";
 import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
+import { saveWorkspaceFiles } from "./workspace-save";
 
 const t = strings.clawAgentManagement;
 export function AgentWizard({
@@ -31,6 +32,7 @@ export function AgentWizard({
 	const [files, setFiles] = useState<Readonly<Record<string, string>>>(
 		agent?.files ?? {},
 	);
+	const [savedFiles, setSavedFiles] = useState(agent?.files ?? {});
 	const [active, setActive] = useState(
 		Object.keys(agent?.files ?? {})[0] ?? "IDENTITY.md",
 	);
@@ -50,31 +52,34 @@ export function AgentWizard({
 		setBusy(true);
 		setError("");
 		try {
+			if (kind === "save") {
+				const rejected = await saveWorkspaceFiles({
+					id,
+					files,
+					saved: savedFiles,
+					revision: view.revision,
+					request,
+					onSaved: (file, content) =>
+						setSavedFiles((current) => ({ ...current, [file]: content })),
+				});
+				if (rejected) setError(`${rejected.message} · ${rejected.code}`);
+				else onClose();
+				return;
+			}
 			const reply = await request(
 				kind === "next"
 					? { type: "create", id, name, emoji }
-					: kind === "draft"
-						? { type: "draft-agent", id, prompt, revision: view.revision }
-						: {
-								type: "save-file",
-								id,
-								file: active,
-								content: files[active] ?? "",
-								revision: view.revision,
-							},
+					: { type: "draft-agent", id, prompt, revision: view.revision },
 			);
 			if (reply._tag === "rejected") {
 				setError(`${reply.message} · ${reply.code}`);
-				return;
-			}
-			if (kind === "save") {
-				onClose();
 				return;
 			}
 			const current = reply.view.agents.find((a) => a.id === id);
 			if (current) {
 				setCreated(true);
 				setFiles(current.files);
+				setSavedFiles(current.files);
 				setActive(Object.keys(current.files)[0] ?? "IDENTITY.md");
 			}
 		} finally {
@@ -186,6 +191,7 @@ export function AgentWizard({
 							{active}
 							<textarea
 								rows={14}
+								disabled={busy}
 								value={files[active] ?? ""}
 								onChange={(event) =>
 									setFiles({ ...files, [active]: event.target.value })

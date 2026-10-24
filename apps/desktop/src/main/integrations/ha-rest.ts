@@ -18,13 +18,32 @@ import {
 	type ServiceField,
 } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
 
-const RawField = Schema.Struct({
-	name: Schema.optional(Schema.String),
-	required: Schema.optional(Schema.Boolean),
-	selector: Schema.optional(
-		Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-	),
-});
+interface RawField {
+	readonly name?: string | undefined;
+	readonly required?: boolean | undefined;
+	readonly selector?: Readonly<Record<string, unknown>> | undefined;
+	readonly fields?: Readonly<Record<string, RawField>> | undefined;
+}
+const RawField: Schema.Schema<RawField> = Schema.suspend(() =>
+	Schema.Struct({
+		name: Schema.optional(Schema.String),
+		required: Schema.optional(Schema.Boolean),
+		selector: Schema.optional(
+			Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+		),
+		fields: Schema.optional(
+			Schema.Record({ key: Schema.String, value: RawField }),
+		),
+	}),
+);
+const leafFields = (
+	fields: Readonly<Record<string, RawField>>,
+): readonly (readonly [string, RawField])[] =>
+	Object.entries(fields).flatMap(([name, field]) =>
+		field.fields === undefined
+			? [[name, field] as const]
+			: leafFields(field.fields),
+	);
 const RawServices = Schema.Array(
 	Schema.Struct({
 		domain: Schema.String,
@@ -60,41 +79,39 @@ export function decodeHaServices(input: unknown): readonly HaService[] {
 			domain: group.domain,
 			service,
 			name: detail.name ?? service,
-			fields: Object.entries(detail.fields ?? {}).map(
-				([name, f]): ServiceField => {
-					const selector = f.selector ?? {};
-					const number = Schema.decodeUnknownEither(numberSelector)(
-						selector.number,
-					);
-					const select = Schema.decodeUnknownEither(selectSelector)(
-						selector.select,
-					);
-					return {
-						name,
-						label: f.name ?? name,
-						required: f.required ?? false,
-						type:
-							selector.number !== undefined
-								? "number"
-								: selector.boolean !== undefined
-									? "boolean"
-									: selector.select !== undefined
-										? "select"
-										: "text",
-						min: number._tag === "Right" ? (number.right.min ?? 0) : 0,
-						max:
-							number._tag === "Right"
-								? (number.right.max ?? Number.MAX_SAFE_INTEGER)
-								: Number.MAX_SAFE_INTEGER,
-						options:
-							select._tag === "Right"
-								? select.right.options.map((o) =>
-										typeof o === "string" ? o : o.value,
-									)
-								: [],
-					};
-				},
-			),
+			fields: leafFields(detail.fields ?? {}).map(([name, f]): ServiceField => {
+				const selector = f.selector ?? {};
+				const number = Schema.decodeUnknownEither(numberSelector)(
+					selector.number,
+				);
+				const select = Schema.decodeUnknownEither(selectSelector)(
+					selector.select,
+				);
+				return {
+					name,
+					label: f.name ?? name,
+					required: f.required ?? false,
+					type:
+						selector.number !== undefined
+							? "number"
+							: selector.boolean !== undefined
+								? "boolean"
+								: selector.select !== undefined
+									? "select"
+									: "text",
+					min: number._tag === "Right" ? (number.right.min ?? 0) : 0,
+					max:
+						number._tag === "Right"
+							? (number.right.max ?? Number.MAX_SAFE_INTEGER)
+							: Number.MAX_SAFE_INTEGER,
+					options:
+						select._tag === "Right"
+							? select.right.options.map((o) =>
+									typeof o === "string" ? o : o.value,
+								)
+							: [],
+				};
+			}),
 		})),
 	);
 }

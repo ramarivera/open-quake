@@ -64,7 +64,7 @@ export const requiredServiceData = (
 							: "",
 			]),
 	);
-export function validateHaKey(
+export function validateHaAction(
 	key: HaKey,
 	entities: readonly Entity[],
 	services: readonly HaService[],
@@ -102,7 +102,18 @@ export function validateHaKey(
 		)
 	)
 		throw new InputRejected(undefined, "service_data");
-	const displayable = new Set(["state", ...Object.keys(entity.attributes)]);
+}
+export function validateHaKey(
+	key: HaKey,
+	entities: readonly Entity[],
+	services: readonly HaService[],
+): void {
+	validateHaAction(key, entities, services);
+	const entity = entities.find((e) => e.entity_id === key.entity_id);
+	const displayable = new Set([
+		"state",
+		...Object.keys(entity?.attributes ?? {}),
+	]);
 	if (
 		key.custom_display_detail.some((f) => !displayable.has(f.displayItemKey)) ||
 		new Set(key.custom_display_detail.map((f) => f.displayItemKey)).size !==

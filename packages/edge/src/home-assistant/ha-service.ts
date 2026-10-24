@@ -27,7 +27,12 @@ import {
 	type HaTarget,
 	type Json,
 } from "./ha-contracts.js";
-import { defaultAllowlist, haOrigin, validateHaKey } from "./ha-invariants.js";
+import {
+	defaultAllowlist,
+	haOrigin,
+	validateHaAction,
+	validateHaKey,
+} from "./ha-invariants.js";
 export interface HaPortShape {
 	readonly store: JsonStore;
 	readonly vault: CredentialVault;
@@ -295,7 +300,7 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 							if (!active || state !== "Connected")
 								return yield* Effect.fail(new HaNetworkFailed());
 							yield* Effect.try({
-								try: () => validateHaKey(key, entities, services),
+								try: () => validateHaAction(key, entities, services),
 								catch: (c) =>
 									c instanceof InputRejected ? c : new InputRejected(c),
 							});

@@ -27,11 +27,15 @@ The Core › Agents page SHALL have four tabs: "Agent sessions", "Agent manageme
 - **THEN** the list shows the no-results state with Clear search
 
 ### Requirement: Two-step agent creation
-"Create agent" SHALL open a two-step wizard. Step 1 ("Basic Info") SHALL take an agent ID, a display name and one of the 20 emoji presets (default 🤖). The ID SHALL be validated live against `^[a-z][a-z0-9-]*$`, at most 48 characters, not `main`, and unique; input SHALL be sanitised by dropping characters outside `[a-zA-Z0-9-]`, lowercasing and truncating to 48. "Next" SHALL create the agent and its workspace from open-quake-authored templates (`IDENTITY.md`, `SOUL.md`, `AGENTS.md`) and move to step 2 with no way back. Step 2 ("Role Config") SHALL offer a persona prompt with "Generate config", which drafts the workspace Markdown through the AI drafting adapter, and a tabbed editor for the workspace `*.md` files. "Save Agent" SHALL save the active file and close. Editing an existing agent SHALL open step 2 directly. Source: CENTER-050, CENTER-057, CENTER-058.
+"Create agent" SHALL open a two-step wizard. Step 1 ("Basic Info") SHALL take an agent ID, a display name and one of the 20 emoji presets (default 🤖). The ID SHALL be validated live against `^[a-z][a-z0-9-]*$`, at most 48 characters, not `main`, and unique; input SHALL be sanitised by dropping characters outside `[a-zA-Z0-9-]`, lowercasing and truncating to 48. "Next" SHALL create the agent and its workspace from open-quake-authored templates (`IDENTITY.md`, `SOUL.md`, `AGENTS.md`) and move to step 2 with no way back. Step 2 ("Role Config") SHALL offer a persona prompt with "Generate config", which drafts the workspace Markdown through the AI drafting adapter, and a tabbed editor for the workspace `*.md` files. "Save Agent" SHALL save every dirty file in order using each successful reply's revision and close only after all edits persist. A partial failure SHALL keep the dialog open with remaining edits intact; retry SHALL skip files already saved. Editing an existing agent SHALL open step 2 directly. Source: CENTER-050, CENTER-057, CENTER-058.
 
 #### Scenario: Reserved ID
 - **WHEN** the user types `main` as the agent ID
 - **THEN** step 1 shows the reserved-ID error and Next is disabled
+
+#### Scenario: Several workspace tabs edited
+- **WHEN** the user edits IDENTITY.md, SOUL.md and AGENTS.md and presses Save Agent
+- **THEN** all three files survive a reload; if a later file fails to save, earlier successful saves remain and the other edits stay available for retry
 
 #### Scenario: AI drafting unavailable
 - **WHEN** no AI drafting adapter is configured and the user presses Generate config
@@ -39,6 +43,10 @@ The Core › Agents page SHALL have four tabs: "Agent sessions", "Agent manageme
 
 ### Requirement: Skill library and equipping
 Skills SHALL be folders holding a `SKILL.md` with `name` and `description` front matter, stored either in the shared library or in one agent's workspace. "Skill management" SHALL list every skill with search (name, folder, description, agent) and a location pill ("Public library" or the agent's name). A shared skill SHALL offer "Equip to agent", which lists agents other than `main` and its current owner. An agent skill SHALL offer "Move back to common". Moves SHALL be atomic and SHALL fail with distinct reasons: a skill of that folder name already at the target (conflict), an invalid workspace, a source that moved meanwhile, or an incomplete copy, which is rolled back. Creating or editing a skill SHALL take a name, an optional description prompt with "Generate skill" through the AI drafting adapter, and an 18-row Markdown editor; name and content are required. Deleting a skill SHALL ask for confirmation. Source: CENTER-052, CENTER-053, CENTER-060.
+
+#### Scenario: Skill name has no ASCII prefix
+- **WHEN** the user creates a skill named `3D tools` or `网页搜索`
+- **THEN** its folder satisfies the folder contract, its original display name remains intact and existing folders receive distinct collision suffixes
 
 #### Scenario: Equip a shared skill
 - **WHEN** the user equips the shared skill `web-search` to agent `researcher`
@@ -58,6 +66,18 @@ Skills SHALL be folders holding a `SKILL.md` with `name` and `description` front
 - The default scope keeps at least one row, and deletion asks for confirmation.
 
 Credentials SHALL be write-only: rows show "Available" or "Missing" and never return a stored key. "Agents Config" SHALL list agents with a Custom or Inherited badge and a "Use default config" toggle. Turning it off copies the default rows into the agent's scope; turning it on returns to inheritance. Resolution SHALL return the Default row followed by Fallback rows in table order. Source: CENTER-065, CENTER-066, CENTER-067, CENTER-068, CENTER-070.
+
+#### Scenario: Credential reference released
+- **WHEN** rotation, deletion or inheritance removes a credential reference from its last model scope
+- **THEN** the secret is retired only after a successful durable commit; a failed commit preserves live references and cleanup failures produce scrubbed diagnostics with pending retries
+
+#### Scenario: Snapshot credential availability
+- **WHEN** repeated views include several scopes sharing a credential reference
+- **THEN** availability reads share a bounded boolean cache that expires within 30 seconds and invalidates on store and removal, without returning stored secrets
+
+#### Scenario: Global inheritance or placeholder provider URL
+- **WHEN** a command attempts inheritance on the default scope or saves a provider URL containing template placeholders
+- **THEN** the service rejects it before model persistence or credential writes
 
 #### Scenario: Second default
 - **WHEN** row B is set to Default while row A is Default
