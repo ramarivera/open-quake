@@ -23,6 +23,7 @@ import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
 import "./management/management.css";
+import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
 
 function useSurface(): "management" | "panel" {
 	const [surface] = useState<"management" | "panel">(() =>
@@ -41,7 +42,13 @@ function PanelSurface(): React.JSX.Element {
 	return <StripPanel />;
 }
 
-type Page = "overview" | "connection" | "screen" | "controls" | "appearance";
+type Page =
+	| "overview"
+	| "profiles"
+	| "connection"
+	| "screen"
+	| "controls"
+	| "appearance";
 
 type NavItem = {
 	readonly id: Page;
@@ -59,6 +66,7 @@ const sections: ReadonlyArray<{
 		title: "Device",
 		items: [
 			{ id: "overview", label: "Overview", Icon: DeviceIcon },
+			{ id: "profiles", label: "Knob Profile", Icon: DeviceIcon },
 			{ id: "connection", label: "Connection", Icon: ConnectionIcon },
 			{ id: "screen", label: "Screen", Icon: ScreenIcon },
 			{ id: "controls", label: "Controls", Icon: ControlsIcon },
@@ -157,6 +165,8 @@ function ManagementSurface({
 							onOpenScreen={() => open("screen")}
 							onOpenConnection={() => open("connection")}
 						/>
+					) : page === "profiles" ? (
+						<ProfilesManager />
 					) : page === "screen" ? (
 						<>
 							<WallpaperSettings wallpaper={wallpaper} />
@@ -180,6 +190,10 @@ function ManagementSurface({
 export function App(): React.JSX.Element {
 	const surface = useSurface();
 	const appearance = useAppearance();
+	if (
+		new URLSearchParams(location.search).get("surface") === "profile-thumbnail"
+	)
+		return <ProfileThumbnail />;
 	return surface === "panel" ? (
 		<PanelSurface />
 	) : (

@@ -5,7 +5,7 @@ import type {
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerMedia } from "./media";
-import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
+import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
 
@@ -93,6 +93,16 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./profiles", () => ({
+	registerProfiles: vi.fn(() => ({
+		runtime: { runFork: vi.fn(), runPromise: vi.fn() },
+		select: vi.fn(),
+		connect: vi.fn(async () => {}),
+		disconnect: vi.fn(async () => {}),
+		dispose: vi.fn(async () => {}),
+	})),
+}));
+
 vi.mock("./lifecycle/native-display", async (original) => {
 	const actual = await original<typeof import("./lifecycle/native-display")>();
 	const { Effect } = await import("effect");
@@ -216,7 +226,7 @@ describe("desktop window lifecycle", () => {
 		expect(registerMedia).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
 		expect(registerProfiles).toHaveBeenCalledOnce();
-		expect(desktopProfilesLive).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerProfiles).mock.calls[0]?.[0]()).toBe(management);
 		expect(panel.options).toMatchObject({
 			x: 0,
 			y: 0,
@@ -429,6 +439,27 @@ describe("desktop window lifecycle", () => {
 		}
 		expect(panel.webContents.send).not.toHaveBeenCalled();
 		expect(management.webContents.send).not.toHaveBeenCalled();
+	});
+	it("disconnects the old mock profile session before reopening initializes it again", async () => {
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		if (!profiles) throw new Error("Missing profile registration");
+		await vi.waitFor(() =>
+			expect(profiles.connect).toHaveBeenCalledWith("desktop-preview"),
+		);
+		for (const win of Object.values(windows())) win.destroy();
+		appEvent("window-all-closed");
+		appEvent("activate");
+		await vi.waitFor(() =>
+			expect(profiles.disconnect).toHaveBeenCalledExactlyOnceWith(
+				"desktop-preview",
+			),
+		);
+		await vi.waitFor(() => expect(profiles.connect).toHaveBeenCalledTimes(2));
+		expect(
+			vi.mocked(profiles.disconnect).mock.invocationCallOrder[0],
+		).toBeLessThan(
+			vi.mocked(profiles.connect).mock.invocationCallOrder[1] ?? 0,
+		);
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {
