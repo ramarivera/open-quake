@@ -155,7 +155,7 @@ Settings SHALL route wallpaper interval/fill/play controls, monitoring, artwork 
 
 ### Requirement: Compatible authenticated backups
 
-The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatible with DK-Suite's account-derived format, preserving export_index.json and account_config.json. Import SHALL authenticate before mutation, reject traversal/symlinks/duplicates/oversized archives, skip built-in and deleted resources, deduplicate configurations, renumber new profiles and remap resource IDs and original-platform paths. Only app-owned data SHALL be exported; credentials SHALL be excluded. Evidence: SETTINGS-014.
+The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatible with DK-Suite's account-derived format, preserving export_index.json and account_config.json. Import SHALL authenticate before mutation, reject traversal/symlinks/duplicates/oversized archives, skip built-in and deleted resources, deduplicate configurations, renumber new profiles and remap resource IDs and original-platform paths. Only app-owned data and explicitly referenced clock media SHALL be exported; credentials SHALL be excluded. Evidence: SETTINGS-014.
 
 #### Scenario: Legacy import
 
@@ -192,6 +192,11 @@ The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatib
 - **WHEN** restore cannot complete after stopping app writers
 - **THEN** main reports a scrubbed failure and exits even if management windows are gone; merge validation runs before shutdown and repeats against stopped data before commit
 
+#### Scenario: Portable clock media
+
+- **WHEN** the clock references selected external images or videos and its backup is restored into a different installation after the originals are removed
+- **THEN** only those referenced files are archived within bounded file/archive limits, restored clock consumers use managed copies, and missing, unreadable or symlink references fail export without claiming a complete backup
+
 ### Requirement: Clear data with optional bounded backup
 
 The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a 520px confirmation. Backup SHALL stop waiting after 60000ms; failure SHALL require a second confirmation. Writers SHALL stop before clearing only app-owned data and exiting. Evidence: SETTINGS-016.
@@ -205,6 +210,16 @@ The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a
 
 - **WHEN** backup succeeds or clearing without backup is explicitly confirmed
 - **THEN** writers stop, app-owned data is cleared and the application exits
+
+#### Scenario: Reset fails after shutdown begins
+
+- **WHEN** stopping writers or staging, renaming or deleting reset data fails after reset is confirmed
+- **THEN** main reports only the catalog failure code and fixed recovery guidance and guarantees process exit even if reporting fails, without clearing data after writer shutdown failure
+
+#### Scenario: Initialization failure during quit
+
+- **WHEN** maintenance initialization fails on malformed or unreadable firmware session data
+- **THEN** the failure stays visible, runtime disposal and scoped resource release still complete, and the awaited application quit chain stops writers and exits
 
 ### Requirement: Live macOS permission dashboard
 

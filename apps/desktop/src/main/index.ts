@@ -15,6 +15,7 @@ import {
 } from "electron";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
+import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
@@ -519,9 +520,23 @@ if (!app.requestSingleInstanceLock()) {
 			event.preventDefault();
 			if (quitting) return;
 			quitting = true;
+			const reportFailure = (cause: unknown): void => {
+				const error =
+					cause instanceof MaintenanceShutdownFailed
+						? cause
+						: new MaintenanceShutdownFailed(cause);
+				Effect.runSync(
+					Effect.logError("Application shutdown failed", {
+						code: error.code,
+						diagnosticCause: error.diagnosticCause,
+					}),
+				);
+			};
 			void maintenance
 				.dispose()
+				.catch(reportFailure)
 				.then(() => stopWriters())
+				.catch(reportFailure)
 				.then(() => {
 					quitFinished = true;
 					app.quit();

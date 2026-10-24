@@ -28,6 +28,7 @@ import {
 	withoutCredentials,
 } from "./backup-merge";
 import { backupPaths } from "./backup-paths";
+import { archiveClockMedia } from "./clock-backup";
 
 function validateNative(relative: string, data: Uint8Array): void {
 	if (!relative.endsWith(".json")) return;
@@ -112,6 +113,7 @@ export async function exportBackup(
 	appearance?: string,
 ): Promise<Uint8Array> {
 	const files = await readManaged(root);
+	await archiveClockMedia(files, root, signal);
 	if (appearance !== undefined)
 		files.set(
 			"open-quake/appearance.json",

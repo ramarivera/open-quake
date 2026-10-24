@@ -175,3 +175,27 @@ The combined smoke also registers the merged voice surface, binds its knob
 voice owner, checks Hello through the real preload, and disposes knob before
 voice. Main shutdown coverage holds voice disposal open and proves quit waits
 for it after monitor and knob disposal, while profiles remain alive.
+
+
+PR #32 round 3 archives only the image/video slots consumed by ClockStore,
+including explicitly selected files outside userData. Copies use content hashes
+under clock-v1/assets, and restored paths point into the new installation.
+Missing, unreadable, oversized, non-media and symlink references reject export.
+The file reader bounds allocation and rejects changes during reading; archive
+size and entry limits still apply. Original selections remain untouched.
+
+Confirmed reset delegates shutdown, clear, main-owned failure reporting and exit
+together. Stop failure prevents clear; clear rename/delete failures retain data
+where rollback succeeds. Reporting failure cannot prevent exit. Backup timeout
+and both cancellation gates precede shutdown. Initialization failure remains
+observable through ready and scrubbed logs. Maintenance disposal still releases
+its runtime and scoped resources exactly once, then returns a catalog failure;
+main records it and awaits the remaining writer shutdown before completing quit.
+
+Round-3 regressions exercise actual ClockStore stage/commit/read/mediaPath across
+an export and restore after deleting the original synthetic files, reset failures
+through the production adapter and real synthetic-root rename/delete rollback,
+and the combined before-quit chain with malformed/unreadable firmware sessions.
+The native maintenance smoke additionally loads restored image bytes through the
+production clock media protocol and captures clock-restored.png. Hardware and
+packaged acceptance remain open.

@@ -487,12 +487,13 @@ describe("owned app update schedule", () => {
 	);
 });
 describe("clear data", () => {
-	it.scoped("failed writer shutdown preserves data", () => {
-		let cleared = false;
-		return Effect.gen(function* () {
+	it.scoped("propagates the main-owned reset failure", () =>
+		Effect.gen(function* () {
 			const reset = yield* DataReset;
-			expect((yield* reset.run(false).pipe(Effect.either))._tag).toBe("Left");
-			expect(cleared).toBe(false);
+			const result = yield* reset.run(false).pipe(Effect.either);
+			expect(result._tag).toBe("Left");
+			if (result._tag === "Left")
+				expect(result.left.code).toBe("QUAKE.SETTINGS.RESET_FAILED");
 		}).pipe(
 			Effect.provide(
 				DataReset.Default.pipe(
@@ -500,17 +501,13 @@ describe("clear data", () => {
 						Layer.succeed(ResetPort, {
 							backup: () => Effect.succeed(true),
 							confirmFailure: () => Effect.succeed(false),
-							stopWriters: () => Effect.fail(new ResetFailed()),
-							clearAndQuit: () =>
-								Effect.sync(() => {
-									cleared = true;
-								}),
+							resetAndQuit: () => Effect.fail(new ResetFailed()),
 						}),
 					),
 				),
 			),
-		);
-	});
+		),
+	);
 	it.scoped(
 		"backup deadline interrupts backup and decline preserves data",
 		() =>
@@ -532,13 +529,9 @@ describe("clear data", () => {
 									calls.push("confirm");
 									return false;
 								}),
-							stopWriters: () =>
+							resetAndQuit: () =>
 								Effect.sync(() => {
-									calls.push("stop");
-								}),
-							clearAndQuit: () =>
-								Effect.sync(() => {
-									calls.push("clear");
+									calls.push("reset");
 								}),
 						}),
 					),
@@ -552,7 +545,7 @@ describe("clear data", () => {
 				}).pipe(Effect.provide(layer));
 			}),
 	);
-	it.scoped("explicit failure override stops writers before clearing", () => {
+	it.scoped("explicit failure override starts the main-owned reset", () => {
 		const calls: string[] = [];
 		const layer = DataReset.Default.pipe(
 			Layer.provide(
@@ -563,13 +556,9 @@ describe("clear data", () => {
 							calls.push("confirm");
 							return true;
 						}),
-					stopWriters: () =>
+					resetAndQuit: () =>
 						Effect.sync(() => {
-							calls.push("stop");
-						}),
-					clearAndQuit: () =>
-						Effect.sync(() => {
-							calls.push("clear");
+							calls.push("reset");
 						}),
 				}),
 			),
@@ -577,7 +566,7 @@ describe("clear data", () => {
 		return Effect.gen(function* () {
 			const s = yield* DataReset;
 			expect(yield* s.run(true)).toBe(true);
-			expect(calls).toEqual(["confirm", "stop", "clear"]);
+			expect(calls).toEqual(["confirm", "reset"]);
 		}).pipe(Effect.provide(layer));
 	});
 

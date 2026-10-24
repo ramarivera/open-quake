@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HardwareControls } from "@open-quake/device";
-import { Effect, Exit, ManagedRuntime, Schema, Scope } from "effect";
+import { Effect, Exit, ManagedRuntime, Option, Schema, Scope } from "effect";
 import {
 	app,
 	BaseWindow,
 	BrowserWindow,
 	dialog,
 	type MessageBoxOptions,
+	nativeImage,
 	shell,
 } from "electron";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
@@ -26,6 +27,7 @@ import { MonitorReply, MonitorSnapshot } from "../../shared/monitor-contracts";
 import { ProfileReplySchema } from "../../shared/profile-manager";
 import { VoiceSurfaceReply } from "../../shared/voice-surface";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { ClockStore } from "../clock/clock-store";
 import { registerHardware } from "../hardware";
 import { startMockHardwareBus } from "../hardware/bus";
 import { registerKnob } from "../knob";
@@ -37,6 +39,7 @@ import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { referenceArchive, referenceDecode } from "./archive-fixtures";
+import { prepareRestore } from "./backup-store";
 import { hashBytes } from "./firmware-files";
 import { registerMaintenance } from "./index";
 
@@ -142,11 +145,25 @@ async function smoke() {
 		() => main,
 	);
 	cleanup.push(() => media.dispose());
-	const clock = registerClock(
-		ManagedRuntime.make(ClockLive(directory)),
-		() => main,
+	const clockRuntime = ManagedRuntime.make(ClockLive(directory));
+	const clock = registerClock(clockRuntime, () => main);
+	let originalClockActive = true;
+	cleanup.push(() =>
+		originalClockActive ? clock.dispose() : Promise.resolve(),
 	);
-	cleanup.push(() => clock.dispose());
+	const externalClock = await mkdtemp(join(tmpdir(), "oq-clock-selected-"));
+	cleanup.push(() => rm(externalClock, { recursive: true, force: true }));
+	const selectedClockImage = join(externalClock, "synthetic-clock.png");
+	const selectedClockBytes = nativeImage
+		.createFromBitmap(Buffer.alloc(64 * 64 * 4, 0x7f), {
+			width: 64,
+			height: 64,
+		})
+		.toPNG();
+	await writeFile(selectedClockImage, selectedClockBytes);
+	await clockRuntime.runPromise(
+		ClockStore.stageMedia("season", selectedClockImage),
+	);
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 	const profiles = registerProfiles(() => main, renderer);
 	cleanup.push(() => profiles.dispose());
@@ -678,6 +695,52 @@ async function smoke() {
 		"Invalid imports must keep combined owners available",
 	);
 	await request({ action: "read" });
+
+	// Restore the actual exported clock into another installation, then serve it through the production protocol.
+	const restoredRoot = join(directory, "restored-clock-installation");
+	await mkdir(restoredRoot);
+	await writeFile(
+		join(restoredRoot, "profiles-v1.json"),
+		await readFile(join(directory, "profiles-v1.json")),
+	);
+	const restoredBackup = await prepareRestore(await readFile(backup), backup);
+	await restoredBackup.validate(restoredRoot);
+	await restoredBackup.commit(restoredRoot);
+	await rm(externalClock, { recursive: true, force: true });
+	await clock.dispose();
+	originalClockActive = false;
+	const restoredClockRuntime = ManagedRuntime.make(ClockLive(restoredRoot));
+	const restoredClock = registerClock(restoredClockRuntime, () => main);
+	cleanup.push(() => restoredClock.dispose());
+	const mediaPath = await restoredClockRuntime.runPromise(
+		ClockStore.mediaPath({ theme: "season" }),
+	);
+	assert(Option.isSome(mediaPath));
+	assert(mediaPath.value.startsWith(`${restoredRoot}/clock-v1/assets/`));
+	assert.deepEqual(await readFile(mediaPath.value), selectedClockBytes);
+	await main.loadFile(resolve("out/renderer/index.html"));
+	await settle(400);
+	await main.webContents.executeJavaScript(
+		"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Screen').click()",
+	);
+	await settle(500);
+	assert(
+		await main.webContents.executeJavaScript(
+			"(() => { const image = document.querySelector('.clock-theme-card[data-theme=season] img'); return image?.currentSrc.startsWith('oq-clock-media://theme/season') && image.naturalWidth === 64; })()",
+		),
+		"Restored image must load through the real clock protocol after the original is removed",
+	);
+	await main.webContents.executeJavaScript(
+		"document.querySelector('.clock-settings').scrollIntoView()",
+	);
+	await settle();
+	await writeFile(
+		join(artifacts, "clock-restored.png"),
+		(await main.webContents.capturePage()).toPNG(),
+	);
+	process.stdout.write(
+		"Portable external clock media restored through production protocol PASS\n",
+	);
 
 	process.stdout.write(
 		"Maintenance native smoke PASS: combined production voice/monitor/profile/lifecycle/hardware/knob/clock/media/maintenance owners, real preload/IPC, monitor save and panel-only collection/disposal, spoofed-window rejection, AES export independently decoded, confirmed backup replacement, actual appearance restore/export, invalid merge rejected before shutdown, four-step firmware dialog, fake scratch-volume write, confirmed recovery without live HID, closed-dialog continuation, intended-serial version re-read, native koffi load, permissions/disabled feed, dark/light/narrow screenshots. Hardware unverified.\n",

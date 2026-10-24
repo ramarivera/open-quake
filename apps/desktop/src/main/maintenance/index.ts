@@ -13,6 +13,7 @@ import {
 	FirmwarePersistenceFailed,
 	FirmwareTargetMismatch,
 	FirmwareUnavailable,
+	MaintenanceShutdownFailed,
 	ResetFailed,
 	RestoreFailed,
 } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
@@ -51,6 +52,7 @@ import {
 	type PermissionChecks,
 	permissionRows,
 } from "./permissions";
+import { resetAndExit } from "./reset-exit";
 import { restoreAndExit } from "./restore-exit";
 import { windowsDfuDiscovery } from "./volume-discovery";
 
@@ -295,18 +297,18 @@ export function registerMaintenance(options: MaintenanceOptions) {
 									confirm("Backup failed. Continue to clear data and exit?"),
 								catch: (cause) => new ResetFailed(cause),
 							}),
-						stopWriters: () =>
+						resetAndQuit: () =>
 							Effect.tryPromise({
-								try: options.stopWriters,
-								catch: (cause) => new ResetFailed(cause),
-							}),
-						clearAndQuit: () =>
-							Effect.tryPromise({
-								try: async () => {
-									await clearOwnedData(root);
-									exit();
-								},
-								catch: (cause) => new ResetFailed(cause),
+								try: () =>
+									resetAndExit({
+										stop: options.stopWriters,
+										clear: () => clearOwnedData(root),
+										report: (message) =>
+											dialog.showMessageBox({ message, buttons: ["Close"] }),
+										exit,
+									}),
+								catch: (cause) =>
+									cause instanceof ResetFailed ? cause : new ResetFailed(cause),
 							}),
 					}),
 				),
@@ -320,6 +322,17 @@ export function registerMaintenance(options: MaintenanceOptions) {
 			yield* DataReset;
 		}),
 	);
+	// Observe initialization immediately, while retaining the rejecting promise for callers and disposal.
+	void ready.catch((cause) => {
+		const error = new FirmwarePersistenceFailed(cause);
+		Effect.runSync(
+			Effect.logError("Maintenance initialization failed", {
+				code: error.code,
+				diagnosticCause: error.diagnosticCause,
+			}),
+		);
+	});
+
 	const view = Effect.fn("DesktopMaintenance.view")(
 		function* (): Effect.fn.Return<
 			MaintenanceView,
@@ -359,6 +372,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 	const request = async (
 		input: MaintenanceCommand,
 	): Promise<MaintenanceReply> => {
+		if (disposed) return { ok: false, code: "QUAKE.SETTINGS.STOPPING" };
 		await ready;
 		if (disposed) return { ok: false, code: "QUAKE.SETTINGS.STOPPING" };
 		const mutation = ![
@@ -614,15 +628,37 @@ export function registerMaintenance(options: MaintenanceOptions) {
 			return request(input);
 		},
 	);
+	let disposal: Promise<void> | undefined;
 	return {
 		request,
 		ready,
-		dispose: async () => {
+		dispose: (): Promise<void> => {
+			if (disposal) return disposal;
 			disposed = true;
 			ipcMain.removeHandler(MAINTENANCE_CHANNEL);
-			await ready;
-			await runtime.dispose();
-			for (const release of bookmarkReleases.splice(0)) release();
+			disposal = (async () => {
+				const failures: unknown[] = [];
+				try {
+					await ready;
+				} catch (cause) {
+					failures.push(cause);
+				}
+				try {
+					await runtime.dispose();
+				} catch (cause) {
+					failures.push(cause);
+				}
+				for (const release of bookmarkReleases.splice(0)) {
+					try {
+						release();
+					} catch (cause) {
+						failures.push(cause);
+					}
+				}
+				if (failures.length)
+					throw new MaintenanceShutdownFailed(new AggregateError(failures));
+			})();
+			return disposal;
 		},
 		pending: () => pendingOperations,
 	};

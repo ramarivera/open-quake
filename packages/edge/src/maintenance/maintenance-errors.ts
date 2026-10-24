@@ -1,6 +1,12 @@
 import { Schema } from "effect";
 
 export const MaintenanceErrors = {
+	MaintenanceShutdownFailed: {
+		code: "QUAKE.SETTINGS.SHUTDOWN_FAILED",
+		category: "dependency",
+		message: "Maintenance shutdown could not complete normally",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
 	FirmwareImageInvalid: {
 		code: "QUAKE.FIRMWARE.IMAGE_INVALID",
 		category: "dependency",
@@ -105,6 +111,16 @@ const retain = (target: object, cause: unknown): void => {
 		enumerable: false,
 	});
 };
+export class MaintenanceShutdownFailed extends Schema.TaggedError<MaintenanceShutdownFailed>()(
+	"MaintenanceShutdownFailed",
+	fields(MaintenanceErrors.MaintenanceShutdownFailed),
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown) {
+		super(props(MaintenanceErrors.MaintenanceShutdownFailed));
+		retain(this, cause);
+	}
+}
 export class FirmwareImageInvalid extends Schema.TaggedError<FirmwareImageInvalid>()(
 	"FirmwareImageInvalid",
 	fields(MaintenanceErrors.FirmwareImageInvalid),
@@ -246,6 +262,7 @@ export class AppUpdateFailed extends Schema.TaggedError<AppUpdateFailed>()(
 	}
 }
 export type MaintenanceError =
+	| MaintenanceShutdownFailed
 	| FirmwareImageInvalid
 	| FirmwareTargetMismatch
 	| FirmwareVolumeInvalid

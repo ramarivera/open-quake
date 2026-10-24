@@ -5,8 +5,8 @@ export class ResetPort extends Context.Tag("ResetPort")<
 	{
 		backup: () => Effect.Effect<boolean, BackupFailed>;
 		confirmFailure: () => Effect.Effect<boolean, ResetFailed>;
-		stopWriters: () => Effect.Effect<void, ResetFailed>;
-		clearAndQuit: () => Effect.Effect<void, ResetFailed>;
+		/** Main owns shutdown, clear, failure reporting and guaranteed exit together. */
+		resetAndQuit: () => Effect.Effect<void, ResetFailed>;
 	}
 >() {}
 export class DataReset extends Effect.Service<DataReset>()("DataReset", {
@@ -30,8 +30,7 @@ export class DataReset extends Effect.Service<DataReset>()("DataReset", {
 						);
 						if (!ok && !(yield* port.confirmFailure())) return false;
 					}
-					yield* port.stopWriters();
-					yield* port.clearAndQuit();
+					yield* port.resetAndQuit();
 					return true;
 				}).pipe(
 					Effect.ensuring(
