@@ -1,0 +1,20 @@
+/* The QUAKE strip's native framebuffer is portrait (480x1920) but mounted
+ * landscape. Main passes ?rotation=90 so the logical 1920x480 canvas is turned
+ * upright inside the portrait window, as DK-Suite does. Surfaces must size
+ * themselves with 100% rather than viewport units to stay inside #root. */
+html[data-surface="panel"],
+html[data-surface="panel"] body,
+html[data-surface="panel"] #root {
+	margin: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+html[data-surface="panel"][data-rotation="90"] #root {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 100vh;
+	height: 100vw;
+	transform: translate(-50%, -50%) rotate(90deg);
+}
