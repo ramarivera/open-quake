@@ -14,3 +14,12 @@
 - [x] 2.6 Cancel knob registration work during integrated shutdown and regress pending profile reads/refreshes without changing the bundle gate deadline. Bead: open-quake-lih.15.1.11.
 - [x] 2.7 Accept disabled thinking for DeepSeek Auto classification without provider reasoning options, retain enabled-control rejection, and regress the facade path. Bead: open-quake-lih.15.1.12. Additional thread PRRT_kwDOUADXpM6v33e1.
 - [x] 2.8 Fit Auto classification's token budget to the profile, omit unsupported overrides, and regress smaller/absent limits through dispatch. Bead: open-quake-lih.15.1.13. Additional thread PRRT_kwDOUADXpM6v36me.
+
+## 3. Lead acceptance
+
+- [x] 3.1 Inspect source and review dispositions, independently run all six gates with uncached tests, reconcile shared speech acceptance tracking, and verify merge readiness against the reviewed head. Bead: open-quake-lih.15.1.14.
+
+- [ ] 3.2 Accept production speech and Auto consumer integration after owning lanes bind desktop transcripts, audio output, conversation-scoped follow-up routes and target dispatch. Qualify live speech with authorized calls and preserve physical acceptance under the shared hardware checklist. Shared speech tasks remain open. Bead: open-quake-lih.15.1.15.
+
+Lead verification: [lead-acceptance.md](lead-acceptance.md). Implementation and
+mock verification do not close production/live acceptance task 3.2.

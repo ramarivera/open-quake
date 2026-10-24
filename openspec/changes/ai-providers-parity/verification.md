@@ -3,6 +3,10 @@
 PR #27 round-one corrections, final gate results and current acceptance limits
 are recorded in verification-round-1.md. The original lane evidence follows.
 
+Lead acceptance and the current shared tracker reconciliation are recorded in
+[lead-acceptance.md](lead-acceptance.md). The epic, production/live acceptance
+and shared OpenAI TTS acceptance bead remain open.
+
 Source roots and intentional differences are in design.md and
 packages/edge/src/ai/README.md. Tests drive AiProviderService through selected
 profiles to fake HTTP/WebSocket, transcript callbacks and the player lease.
