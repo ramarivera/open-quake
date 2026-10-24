@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -66,7 +67,7 @@ const settle = (ms = 200) => new Promise<void>((done) => setTimeout(done, ms));
 app.on("window-all-closed", () => {});
 registerClockScheme();
 async function smoke() {
-	const paths = await smokeScratchPaths({
+	const paths = smokeScratchPaths({
 		scratch: process.env.OPEN_QUAKE_SMOKE_SCRATCH,
 		temporary: process.env.TMPDIR,
 		artifacts: artifactInput,
@@ -74,7 +75,7 @@ async function smoke() {
 		home: homedir(),
 	});
 	artifacts = paths.artifacts;
-	directory = await mkdtemp(join(paths.temporary, "oq-maintenance-smoke-"));
+	directory = mkdtempSync(join(paths.temporary, "oq-maintenance-smoke-"));
 	process.stdout.write(`Native runtime: ${JSON.stringify(process.versions)}\n`);
 	app.setPath("userData", directory);
 	await mkdir(artifacts, { recursive: true });

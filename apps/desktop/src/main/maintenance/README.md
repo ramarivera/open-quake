@@ -217,6 +217,8 @@ smoke. Its runner requires OPEN_QUAKE_SMOKE_SCRATCH and TMPDIR as absolute
 existing directories; temporary files and artifact destinations must stay within
 the explicit root, including resolved symlinks. Filesystem/home roots and overlap
 with Electron's original userData are rejected before fixtures are created.
+Validation and temporary-userData setup run synchronously before the first await,
+so Electron helpers start with the owned scratch data path.
 Host verification continues to use owned ExtSSD scratch. Portable validation and
 escape/userData rejection are exercised with synthetic directories.
 
@@ -239,6 +241,7 @@ export and confirmed reset remain accessible. Remaining initialization failures
 return a typed catalog reply, and genuine runtime failure still exercises awaited
 disposal and combined application quit. Started session saves finish before
 worker disposal returns, avoiding writes after the fixture/writer owner is stopped.
+In-flight native copy is awaited during disposal before scoped access is released.
 Scoped bookmarks register their idempotent release immediately, release on hint
 or start failure, and release when copying finishes rather than waiting through
 version polling. Disposal releases outstanding access exactly once. The final

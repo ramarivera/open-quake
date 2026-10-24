@@ -249,6 +249,8 @@ export function registerMaintenance(options: MaintenanceOptions) {
 						volumes: files.discover,
 						copy: (image, volume, progress) =>
 							files.copy(image, volume, progress).pipe(
+								// A native copy cannot be cancelled safely; await it before releasing access.
+								Effect.uninterruptible,
 								Effect.tap(() =>
 									Effect.sync(() => {
 										if (mock) mockVersion = image.version;

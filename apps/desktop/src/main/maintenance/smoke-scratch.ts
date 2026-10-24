@@ -1,4 +1,4 @@
-import { realpath, stat } from "node:fs/promises";
+import { realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const inside = (root: string, path: string) => {
@@ -10,9 +10,9 @@ const inside = (root: string, path: string) => {
 			!isAbsolute(part))
 	);
 };
-async function canonical(path: string): Promise<string> {
+function canonical(path: string): string {
 	try {
-		return await realpath(path);
+		return realpathSync(path);
 	} catch (cause) {
 		if (
 			!(
@@ -25,18 +25,18 @@ async function canonical(path: string): Promise<string> {
 			throw cause;
 		const parent = dirname(path);
 		if (parent === path) throw cause;
-		return join(await canonical(parent), relative(parent, path));
+		return join(canonical(parent), relative(parent, path));
 	}
 }
 
 /** Validate before creating fixtures or changing Electron's userData path. */
-export async function smokeScratchPaths(input: {
+export function smokeScratchPaths(input: {
 	readonly scratch: string | undefined;
 	readonly temporary: string | undefined;
 	readonly artifacts: string;
 	readonly userData: string;
 	readonly home: string;
-}): Promise<{ scratch: string; temporary: string; artifacts: string }> {
+}): { scratch: string; temporary: string; artifacts: string } {
 	const { scratch, temporary, artifacts } = input;
 	if (
 		!scratch ||
@@ -46,14 +46,14 @@ export async function smokeScratchPaths(input: {
 		throw new Error(
 			"Explicit absolute OPEN_QUAKE_SMOKE_SCRATCH, TMPDIR and artifact paths required",
 		);
-	const root = await realpath(scratch);
-	const temp = await realpath(temporary);
-	const output = await canonical(resolve(artifacts));
-	const userData = await canonical(resolve(input.userData));
-	const home = await realpath(input.home);
+	const root = realpathSync(scratch);
+	const temp = realpathSync(temporary);
+	const output = canonical(resolve(artifacts));
+	const userData = canonical(resolve(input.userData));
+	const home = realpathSync(input.home);
 	if (
-		!(await stat(root)).isDirectory() ||
-		!(await stat(temp)).isDirectory() ||
+		!statSync(root).isDirectory() ||
+		!statSync(temp).isDirectory() ||
 		inside(root, home) ||
 		inside(root, userData) ||
 		inside(userData, root) ||

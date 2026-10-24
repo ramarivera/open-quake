@@ -36,7 +36,7 @@ it("accepts portable explicitly owned scratch and rejects missing opt-in, escape
 			{ userData: root },
 			{ userData: join(scratch, "real-data") },
 		])
-			await expect(
+			await expect(async () =>
 				smokeScratchPaths({ ...base, ...invalid }),
 			).rejects.toBeDefined();
 	} finally {

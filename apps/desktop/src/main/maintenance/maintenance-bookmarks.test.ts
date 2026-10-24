@@ -41,6 +41,7 @@ for (const stage of [
 	"copy-failure",
 	"copied",
 	"dispose",
+	"disposing-copy",
 ] as const) {
 	it(`releases scoped bookmark exactly once at ${stage}`, async () => {
 		const root = await realpath(
@@ -56,19 +57,26 @@ for (const stage of [
 			trusted: true,
 		};
 		const release = vi.fn();
-		native.app.startAccessingSecurityScopedResource.mockReturnValueOnce(
-			release,
-		);
+		native.app.startAccessingSecurityScopedResource
+			.mockReset()
+			.mockReturnValue(release);
 		native.dialog.showOpenDialog.mockResolvedValue({
 			canceled: false,
 			filePaths: [volume],
 			bookmarks: ["synthetic-bookmark"],
 		});
+		let finishCopy = () => {};
+		const inFlight = new Promise<void>((resolve) => {
+			finishCopy = resolve;
+		});
 		const copy = vi.fn(() =>
-			stage === "copy-failure"
-				? Effect.fail(new FirmwareWriteFailed())
-				: Effect.void,
+			stage === "disposing-copy"
+				? Effect.promise(() => inFlight)
+				: stage === "copy-failure"
+					? Effect.fail(new FirmwareWriteFailed())
+					: Effect.void,
 		);
+
 		vi.spyOn(files, "firmwareFiles").mockReturnValueOnce({
 			inspect: () => Effect.succeed(image),
 			selected: () => Effect.succeed(image),
@@ -119,7 +127,12 @@ for (const stage of [
 					view: { firmware: { state: "ready_to_write" } },
 				}),
 			);
-			if (stage === "copy-failure" || stage === "copied" || stage === "dispose")
+			if (
+				stage === "copy-failure" ||
+				stage === "copied" ||
+				stage === "dispose" ||
+				stage === "disposing-copy"
+			)
 				vi.useFakeTimers();
 			const reply = await owner.request({
 				action: "firmware-write",
@@ -135,6 +148,17 @@ for (const stage of [
 				if (stage !== "dispose") {
 					await vi.advanceTimersByTimeAsync(2500);
 					await vi.waitFor(() => expect(copy).toHaveBeenCalledOnce());
+					if (stage === "disposing-copy") {
+						let disposed = false;
+						const disposal = owner.dispose().then(() => {
+							disposed = true;
+						});
+						await vi.advanceTimersByTimeAsync(10);
+						expect(disposed).toBe(false);
+						expect(release).not.toHaveBeenCalled();
+						finishCopy();
+						await disposal;
+					}
 					// Release follows copy, before a renderer poll or verification timeout.
 					expect(release).toHaveBeenCalledOnce();
 				}
@@ -144,6 +168,7 @@ for (const stage of [
 			expect(release).toHaveBeenCalledOnce();
 			if (stage === "dispose") expect(copy).not.toHaveBeenCalled();
 		} finally {
+			finishCopy();
 			await owner.dispose();
 			await rm(root, { recursive: true, force: true });
 		}
