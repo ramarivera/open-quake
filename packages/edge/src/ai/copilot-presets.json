@@ -1,0 +1,110 @@
+[
+	{
+		"key": "contentWriter",
+		"roleId": 128,
+		"controls": {
+			"thinking": true,
+			"webSearch": true
+		},
+		"names": {
+			"ko": "카피",
+			"fr": "Rédaction",
+			"es": "Redacción",
+			"ja": "文案",
+			"zh": "文案",
+			"en": "Content Writer",
+			"it": "Copy",
+			"de": "Texter"
+		}
+	},
+	{
+		"key": "translate",
+		"roleId": 6,
+		"controls": {
+			"thinking": false,
+			"webSearch": true
+		},
+		"names": {
+			"ko": "번역",
+			"fr": "Traduire",
+			"es": "Traducir",
+			"ja": "翻訳",
+			"zh": "翻译",
+			"en": "Translate",
+			"it": "Traduci",
+			"de": "Übersetzen"
+		}
+	},
+	{
+		"key": "term",
+		"roleId": 8,
+		"controls": {
+			"thinking": false,
+			"webSearch": true
+		},
+		"names": {
+			"ko": "단어",
+			"fr": "Terme",
+			"es": "Término",
+			"ja": "用語",
+			"zh": "单词",
+			"en": "Term",
+			"it": "Termine",
+			"de": "Begriff"
+		}
+	},
+	{
+		"key": "math",
+		"roleId": 93,
+		"controls": {
+			"thinking": false,
+			"webSearch": true
+		},
+		"names": {
+			"ko": "수학",
+			"fr": "Maths",
+			"es": "Mates",
+			"ja": "計算",
+			"zh": "数学",
+			"en": "Math",
+			"it": "Mate",
+			"de": "Mathe"
+		}
+	},
+	{
+		"key": "search",
+		"roleId": 129,
+		"controls": {
+			"thinking": false,
+			"webSearch": true
+		},
+		"names": {
+			"ko": "검색",
+			"fr": "Recherche",
+			"es": "Búsqueda",
+			"ja": "検索",
+			"zh": "搜索",
+			"en": "Search",
+			"it": "Ricerca",
+			"de": "Suche"
+		}
+	},
+	{
+		"key": "compliance",
+		"roleId": 84,
+		"controls": {
+			"thinking": false,
+			"webSearch": true
+		},
+		"names": {
+			"ko": "컴플라이언스",
+			"fr": "Conformité",
+			"es": "Cumplimiento",
+			"ja": "コンプラ",
+			"zh": "合规",
+			"en": "Compliance",
+			"it": "Compliance",
+			"de": "Compliance"
+		}
+	}
+]
