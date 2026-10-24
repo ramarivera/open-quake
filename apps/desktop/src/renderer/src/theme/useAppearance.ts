@@ -52,15 +52,21 @@ export function subscribeAppearance(
 	};
 }
 
-function readStoredAppearance(): AppearanceState {
+export function readStoredAppearance(): AppearanceState {
 	try {
+		const current = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
 		const saved =
-			window.localStorage.getItem(APPEARANCE_STORAGE_KEY) ??
-			window.localStorage.getItem(LEGACY_APPEARANCE_STORAGE_KEY);
+			current ?? window.localStorage.getItem(LEGACY_APPEARANCE_STORAGE_KEY);
 		if (saved === null) return { appearance: defaultAppearance, notice: "" };
 		const appearance = parseAppearance(saved);
 		return appearance
-			? { appearance, notice: "" }
+			? {
+					appearance,
+					notice:
+						current === null
+							? persistAppearance(appearance, window.localStorage, null)
+							: "",
+				}
 			: {
 					appearance: defaultAppearance,
 					notice: "Saved appearance was invalid. Defaults restored.",

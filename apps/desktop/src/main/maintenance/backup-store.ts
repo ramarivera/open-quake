@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
 	cp,
 	lstat,
@@ -16,6 +16,7 @@ import {
 	ProfileEnvelope,
 	ProfileJson,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { EmojiStore } from "../../../../../packages/edge/src/emoji/emoji-contracts.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { SavedWallpaper } from "../../shared/display";
 import { MonitorRecord } from "../../shared/monitor-contracts";
@@ -33,6 +34,21 @@ import { readBackupFile } from "./backup-read";
 import { archiveClockMedia } from "./clock-backup";
 
 function validateNative(relative: string, data: Uint8Array): void {
+	if (relative.startsWith("emoji-v1/assets/")) {
+		const hash = relative.slice("emoji-v1/assets/".length);
+		if (
+			!/^[a-f0-9]{64}$/.test(hash) ||
+			createHash("sha256").update(data).digest("hex") !== hash
+		)
+			throw new BackupInvalid();
+		return;
+	}
+	if (
+		relative.startsWith("emoji-v1/") &&
+		relative !== "emoji-v1/library.json" &&
+		relative !== "emoji-v1/library.backup.json"
+	)
+		throw new BackupInvalid();
 	if (!relative.endsWith(".json")) return;
 	const value: unknown = JSON.parse(Buffer.from(data).toString("utf8"));
 	Schema.decodeUnknownSync(ProfileJson)(value);
@@ -54,6 +70,11 @@ function validateNative(relative: string, data: Uint8Array): void {
 		Schema.decodeUnknownSync(MonitorRecord)(value);
 	else if (relative === "appearance.json")
 		appearanceRecord(Buffer.from(data).toString("utf8"));
+	else if (
+		relative === "emoji-v1/library.json" ||
+		relative === "emoji-v1/library.backup.json"
+	)
+		Schema.decodeUnknownSync(EmojiStore, { onExcessProperty: "error" })(value);
 }
 export const managedData = [
 	"profiles-v1.json",
@@ -62,6 +83,9 @@ export const managedData = [
 	"clock-v1",
 	"monitor-v1",
 	"appearance.json",
+	"emoji-v1/library.json",
+	"emoji-v1/library.backup.json",
+	"emoji-v1/assets",
 	"backup-resources-v1",
 	"backup-legacy",
 ] as const;
@@ -86,6 +110,8 @@ async function readManaged(
 	async function collect(relative: string): Promise<void> {
 		if (/\.(pending|tmp)$/.test(relative)) return;
 		if (relative === "monitor-v1/settings.json.new") return;
+		if (relative.startsWith("emoji-v1/assets/") && relative.endsWith(".part"))
+			return;
 		const path = join(root, relative);
 		const info = await lstat(path).catch(() => undefined);
 		if (!info) return;

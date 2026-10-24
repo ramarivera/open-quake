@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -96,6 +96,89 @@ async function setup(
 	};
 }
 describe("emoji desktop controller", () => {
+	it("imports a long GIF filename with a bounded derived name", async () => {
+		const f = await setup();
+		try {
+			const name = "synthetic-motion-filename-longer-than-thirty-characters";
+			const path = join(f.root, `${name}.gif`);
+			await writeFile(path, gif());
+			vi.mocked(dialog.showOpenDialog).mockResolvedValue({
+				canceled: false,
+				filePaths: [path],
+			});
+			const reply = await f.runtime.runPromise(
+				f.controller.request({ type: "import-gif" }),
+			);
+			expect(reply._tag).toBe("ready");
+			expect((await f.files.read())?.items[0]?.name).toBe(name.slice(0, 30));
+		} finally {
+			await f.close();
+		}
+	});
+	it.each([undefined, "", "   "])(
+		"bounds the static-derived generation name for blank input %s",
+		async (name) => {
+			const f = await setup({ generate: async () => gif() });
+			try {
+				const assetName =
+					"synthetic-static-filename-longer-than-thirty-characters.png";
+				await f.runtime.runPromise(
+					Effect.flatMap(EmojiRepository, (repository) =>
+						repository.transact((state) =>
+							Effect.succeed({
+								...state,
+								staticAssets: [
+									{ hash: f.hash, name: assetName, format: "image/png" },
+								],
+							}),
+						),
+					),
+				);
+				const reply = await f.runtime.runPromise(
+					f.controller.request({
+						type: "generate",
+						assetId: f.hash,
+						prompt: "Wave",
+						...(name === undefined ? {} : { name }),
+					}),
+				);
+				expect(reply).toMatchObject({
+					_tag: "generated",
+					name: assetName.slice(0, 30),
+				});
+			} finally {
+				await f.close();
+			}
+		},
+	);
+	it("rejects explicit overlong names in generation and result creation", async () => {
+		const f = await setup({ generate: async () => gif() });
+		try {
+			for (const input of [
+				{
+					type: "generate" as const,
+					assetId: f.hash,
+					prompt: "Wave",
+					name: "x".repeat(31),
+				},
+				{
+					type: "create-result" as const,
+					base64: Buffer.from(gif()).toString("base64"),
+					name: "x".repeat(31),
+				},
+			]) {
+				const reply = await f.runtime.runPromise(
+					Effect.either(f.controller.request(input)),
+				);
+				expect(reply._tag).toBe("Left");
+				if (reply._tag === "Left")
+					expect(reply.left.code).toBe("QUAKE.EMOJI.INVALID");
+			}
+			expect((await f.files.read())?.items).toEqual([]);
+		} finally {
+			await f.close();
+		}
+	});
 	it("returns explicit unavailable generation and retains the library", async () => {
 		const f = await setup();
 		try {

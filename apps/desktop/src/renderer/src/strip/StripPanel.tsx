@@ -22,7 +22,7 @@ import { StripScreen, StripViewport, useStripLayout } from "./StripScreen";
 import { selectStripPage } from "./selection";
 import { useStripSettings } from "./stripSettings";
 import type { StripKeyEvent } from "./touch-controller";
-import { useStripProfiles } from "./useStripProfiles";
+import { type StripProfiles, useStripProfiles } from "./useStripProfiles";
 
 type HoldKind = GridVoiceInput["kind"];
 
@@ -100,6 +100,7 @@ export function StripPanel(): React.JSX.Element {
 				profileId: string;
 				pageId: string;
 				emojiKeys: readonly string[];
+				generation: symbol;
 		  }
 		| undefined
 	>(undefined);
@@ -110,17 +111,26 @@ export function StripPanel(): React.JSX.Element {
 	}, []);
 	const { snapshot } = useWallpaper();
 	const feedback = usePanelFeedback(useQuakeEvents());
-	const profiles = useStripProfiles();
-	if (profiles._tag === "ready") {
-		const current = selectStripPage(profiles.envelope, snapshot?.saved.serial);
-		emojiSelection.current = {
-			profileId: current.profile.id,
-			pageId: current.page.id,
-			emojiKeys: current.page.keys
-				.filter((key) => key.config.type === "emoji")
-				.map((key) => key.keyCode),
-		};
-	} else emojiSelection.current = undefined;
+	const observeSelection = (next: StripProfiles): void => {
+		if (next._tag === "ready") {
+			const current = selectStripPage(next.envelope, snapshot?.saved.serial);
+			const previous = emojiSelection.current;
+			emojiSelection.current = {
+				profileId: current.profile.id,
+				pageId: current.page.id,
+				generation:
+					previous?.profileId === current.profile.id &&
+					previous.pageId === current.page.id
+						? previous.generation
+						: Symbol(),
+				emojiKeys: current.page.keys
+					.filter((key) => key.config.type === "emoji")
+					.map((key) => key.keyCode),
+			};
+		} else emojiSelection.current = undefined;
+	};
+	const profiles = useStripProfiles(observeSelection);
+	observeSelection(profiles);
 	const { settings } = useStripSettings();
 	const serial = snapshot?.saved.serial;
 	const stripLayout = useStripLayout(profiles, serial);
@@ -139,6 +149,10 @@ export function StripPanel(): React.JSX.Element {
 	useEffect(() => {
 		const root = document.getElementById("root");
 		const timers = new Set<ReturnType<typeof setTimeout>>();
+		const heldEmoji = new Map<
+			string,
+			NonNullable<typeof emojiSelection.current>
+		>();
 		let disposed = false;
 		const invalid = (keyCode: string): void => {
 			if (disposed || !root) return;
@@ -166,13 +180,25 @@ export function StripPanel(): React.JSX.Element {
 					holdKey.current(event);
 					const action = meetingTouchAction(event, layout.current);
 					if (action) void meetingRequest({ _tag: "action", action });
-					if (event.keyAction !== 1 || !event.voiceTouchEnd) return;
 					const current = emojiSelection.current;
-					if (!current?.emojiKeys.includes(event.keyCode)) return;
+					if (event.keyAction === 0) {
+						if (current?.emojiKeys.includes(event.keyCode))
+							heldEmoji.set(event.keyCode, current);
+						else heldEmoji.delete(event.keyCode);
+						return;
+					}
+					const owner = heldEmoji.get(event.keyCode);
+					heldEmoji.delete(event.keyCode);
+					if (
+						!event.voiceTouchEnd ||
+						!owner ||
+						owner.generation !== current?.generation
+					)
+						return;
 					void window.quakeEmoji
 						?.press({
-							profileId: current.profileId,
-							pageId: current.pageId,
+							profileId: owner.profileId,
+							pageId: owner.pageId,
 							keyCode: event.keyCode,
 							keyAction: event.keyAction,
 						})

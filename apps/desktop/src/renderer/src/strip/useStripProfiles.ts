@@ -1,5 +1,5 @@
 import { Either, Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	ProfileSnapshotReply,
 	type ProfilesBridge,
@@ -42,12 +42,20 @@ export function subscribeStripProfiles(
 	};
 }
 
-export function useStripProfiles(): StripProfiles {
+export function useStripProfiles(
+	onSnapshot?: (next: StripProfiles) => void,
+): StripProfiles {
+	const observer = useRef(onSnapshot);
+	observer.current = onSnapshot;
 	const [profiles, setProfiles] = useState<StripProfiles>({ _tag: "loading" });
 	useEffect(() => {
 		const bridge = window.quakeProfiles;
 		if (!bridge) return;
-		return subscribeStripProfiles(bridge, setProfiles);
+		return subscribeStripProfiles(bridge, (next) => {
+			// Observe each committed snapshot before React can batch multiple selections.
+			observer.current?.(next);
+			setProfiles(next);
+		});
 	}, []);
 	return profiles;
 }

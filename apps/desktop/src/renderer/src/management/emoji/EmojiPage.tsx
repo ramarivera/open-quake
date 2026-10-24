@@ -168,7 +168,7 @@ export function EmojiPage(): React.JSX.Element {
 			const rendered = await captionGif(bytes, initialCaption);
 			const next = await run({
 				type: "create-result",
-				name: title || staticAsset?.name || "Emoji",
+				name: title || staticAsset?.name.slice(0, 30) || "Emoji",
 				base64: base64(bytes),
 				renderedBase64: base64(rendered),
 				caption: initialCaption,

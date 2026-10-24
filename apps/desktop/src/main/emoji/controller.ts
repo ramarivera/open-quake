@@ -187,7 +187,12 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 							return yield* new EmojiInvalid("Choose an image under 8 MiB.");
 						const bytes = yield* io(() => readFile(path));
 						if (input.type === "import-gif") {
-							yield* addGif(bytes, basename(path).replace(/\.[^.]+$/, ""));
+							yield* addGif(
+								bytes,
+								basename(path)
+									.replace(/\.[^.]+$/, "")
+									.slice(0, 30),
+							);
 							added++;
 						} else {
 							const decoded = yield* imageDecoder

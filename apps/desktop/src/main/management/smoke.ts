@@ -8,9 +8,25 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
-import { app, BrowserWindow, dialog, nativeImage, nativeTheme } from "electron";
+import {
+	app,
+	BrowserWindow,
+	dialog,
+	nativeImage,
+	nativeTheme,
+	shell,
+} from "electron";
+import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { QUAKE_EVENT_CHANNEL, type QuakeEvent } from "../../preload/quake";
 import { managementActivation } from "../../renderer/src/management/navigation";
+import {
+	APPEARANCE_STORAGE_KEY,
+	defaultAppearance,
+	LEGACY_APPEARANCE_STORAGE_KEY,
+	parseAppearance,
+} from "../../renderer/src/theme/appearance";
 import { AgentReply } from "../../shared/agents";
 import { EmojiReply } from "../../shared/emoji";
 import { encodeGif } from "../../shared/gif";
@@ -19,12 +35,15 @@ import { MANAGEMENT_ACTIVATE } from "../../shared/management";
 import { registerAgents } from "../agents";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerEmoji } from "../emoji";
+import { proveEmojiRestore } from "../emoji/backup-proof";
+import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
 import { registerIntegrations } from "../integrations";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
+import { prepareRestore } from "../maintenance/backup-store";
 import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
@@ -46,6 +65,9 @@ assert.equal(
 registerClockScheme();
 const settle = (ms = 180) => new Promise<void>((done) => setTimeout(done, ms));
 const directory = mkdtempSync(join(tmpdir(), "oq-management-smoke-"));
+const backupFile = join(directory, "synthetic-native-backup.zip");
+dialog.showSaveDialog = async () => ({ canceled: false, filePath: backupFile });
+shell.showItemInFolder = () => {};
 app.setPath("userData", directory);
 let selectedFile: string | undefined;
 dialog.showOpenDialog = async () => ({
@@ -331,6 +353,78 @@ async function smoke() {
 			panel.loadURL(`${renderer}?surface=panel`),
 		]);
 		await settle(500);
+		for (const [query, page, agentTab] of [
+			["page=meetings", "meetings", undefined],
+			["page=meetings&activeTab=emoji", "emoji", undefined],
+			["page=meetings&activeTab=openclaw-ai", "agents", "ai"],
+			["page=meetings&activeTab=unknown", "overview", undefined],
+			["page=unknown", "overview", undefined],
+		] as const) {
+			await win.loadURL(`${renderer}?${query}`);
+			await waitFor(
+				`document.querySelector('.content-inner')?.dataset.page === ${JSON.stringify(page)}`,
+			);
+			if (agentTab)
+				await waitFor(
+					`document.querySelector('#agents-tab-${agentTab}')?.getAttribute('aria-selected') === 'true'`,
+				);
+		}
+		// Upgrade without editing preferences, then export through the actual maintenance consumer.
+		const legacy = {
+			version: 1,
+			theme: "custom",
+			customTheme: {
+				version: 1,
+				name: "Synthetic palette",
+				base: "light",
+				colors: { background: "#eae5df", accent: "#335577" },
+			},
+			motion: "reduce",
+		};
+		const migrated = parseAppearance(JSON.stringify(legacy));
+		assert(migrated);
+		await js(
+			`localStorage.removeItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)});localStorage.setItem(${JSON.stringify(LEGACY_APPEARANCE_STORAGE_KEY)},${JSON.stringify(JSON.stringify(legacy))});null;`,
+		);
+		await win.loadURL(renderer);
+		await waitFor("document.documentElement.dataset.theme === 'custom'");
+		assert.equal((await maintenance.request({ action: "export" })).ok, true);
+		const appearanceRoot = join(directory, "oq-fixture-appearance-restored");
+		await mkdir(appearanceRoot);
+		await writeFile(
+			join(appearanceRoot, "profiles-v1.json"),
+			await readFile(join(directory, "profiles-v1.json")),
+		);
+		const appearanceRestore = await prepareRestore(
+			await readFile(backupFile),
+			"synthetic.zip",
+		);
+		await appearanceRestore.validate(appearanceRoot);
+		await appearanceRestore.commit(appearanceRoot);
+		assert.deepEqual(
+			JSON.parse(
+				await readFile(join(appearanceRoot, "appearance.json"), "utf8"),
+			),
+			migrated,
+		);
+		await writeFile(
+			join(directory, "appearance.json"),
+			await readFile(join(appearanceRoot, "appearance.json")),
+		);
+		await js("localStorage.clear();null;");
+		await win.loadURL(renderer);
+		await waitFor(
+			`localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)}) === ${JSON.stringify(JSON.stringify(migrated))}`,
+		);
+		await waitFor(
+			"document.documentElement.dataset.theme === 'custom' && document.documentElement.dataset.motion === 'reduce'",
+		);
+		await capture("legacy-appearance-restored-before-edits");
+		await js(
+			`localStorage.setItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)},${JSON.stringify(JSON.stringify(defaultAppearance))});localStorage.removeItem(${JSON.stringify(LEGACY_APPEARANCE_STORAGE_KEY)});null;`,
+		);
+		await win.loadURL(renderer);
+		await settle(400);
 		assert.equal(
 			await js(
 				"document.querySelector('.mc-runtime-dot')?.getAttribute('aria-label')",
@@ -407,7 +501,10 @@ async function smoke() {
 			],
 		});
 		generatedBytes = Uint8Array.from(bytes);
-		selectedFile = join(directory, "hello.png");
+		selectedFile = join(
+			directory,
+			"synthetic-static-filename-longer-than-thirty-characters.png",
+		);
 		await writeFile(
 			selectedFile,
 			nativeImage
@@ -476,6 +573,36 @@ async function smoke() {
 		assert.equal(
 			createHash("sha256").update(copied).digest("hex"),
 			em.store.items[0]?.rendered,
+		);
+		assert.equal((await maintenance.request({ action: "export" })).ok, true);
+		const renderedItem = em.store.items[0],
+			staticAsset = em.store.staticAssets[0];
+		assert(renderedItem && staticAsset);
+		const sourceFiles = emojiFiles(join(directory, "emoji-v1"));
+		const backupProof = await proveEmojiRestore(
+			await readFile(backupFile),
+			join(directory, "oq-fixture-emoji-restored"),
+			{
+				itemId: renderedItem.id,
+				original: renderedItem.original,
+				rendered: renderedItem.rendered,
+				originalBytes: await sourceFiles.get(renderedItem.original),
+				renderedBytes: await sourceFiles.get(renderedItem.rendered),
+				staticHash: staticAsset.hash,
+				staticBytes: await sourceFiles.get(staticAsset.hash),
+			},
+		);
+		await writeFile(
+			join(artifacts, "backup-restore-proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					...backupProof,
+					legacyAppearanceBeforeEdits: migrated,
+				},
+				null,
+				2,
+			),
 		);
 		// Panel receives only pinned current-page bytes, without private library metadata.
 		const publicAsset = await panel.webContents.executeJavaScript(
@@ -565,6 +692,188 @@ async function smoke() {
 			kind: "status",
 			state: "connected",
 		} satisfies QuakeEvent);
+		// A down-time owner must survive neither a page/profile switch nor an away-and-back switch.
+		const pageId = `${profileId}-page`,
+			otherPageId = `${profileId}-other`;
+		await profiles.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) =>
+				repo.transact((envelope) => {
+					const source = envelope.profiles.find((p) => p.id === profileId);
+					assert(source);
+					const encoded = Schema.encodeSync(Profile)(source),
+						first = encoded.pages[0];
+					assert(first);
+					const otherPage = {
+						...first,
+						id: otherPageId,
+						keys: first.keys.map((key) => ({
+							...key,
+							config: {
+								...key.config,
+								title: { ...key.config.title, text: "Other page" },
+							},
+						})),
+					};
+					const updated = Schema.decodeUnknownSync(Profile)({
+						...encoded,
+						pages: [...encoded.pages, otherPage],
+					});
+					const alternate = Schema.decodeUnknownSync(Profile)({
+						...encoded,
+						id: "synthetic-other",
+						name: "Other",
+						pages: [{ ...otherPage, id: "synthetic-other-page" }],
+					});
+					return Effect.succeed({
+						...envelope,
+						profiles: [
+							envelope.profiles[0],
+							...envelope.profiles
+								.slice(1)
+								.map((p) => (p.id === profileId ? updated : p)),
+							alternate,
+						],
+					});
+				}),
+			),
+		);
+		const panelJs = (code: string) => panel.webContents.executeJavaScript(code);
+		const selectPage = async (
+			targetProfile: string,
+			targetPage: string,
+			title: string,
+		) => {
+			await profiles.runtime.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					profileId: targetProfile,
+					pageId: targetPage,
+				}),
+			);
+			const deadline = Date.now() + 4000;
+			while (
+				!(await panelJs(
+					`document.querySelector('[data-key-code="1,1"]')?.textContent.includes(${JSON.stringify(title)})`,
+				))
+			) {
+				assert(Date.now() < deadline);
+				await settle(10);
+			}
+			await panelJs(
+				"new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+			);
+		};
+		await emot({
+			type: "command",
+			command: { type: "settings", appMatch: false, apps: [], globalMode: 2 },
+		});
+		const cancelledCases: string[] = [];
+		for (const target of [
+			[profileId, otherPageId, "page"],
+			["synthetic-other", "synthetic-other-page", "profile"],
+		] as const) {
+			for (const back of [false, true]) {
+				await selectPage(profileId, pageId, "Hello");
+				const before = copiedFiles.length;
+				touch(1);
+				await settle(30);
+				await selectPage(target[0], target[1], "Other page");
+				if (back) await selectPage(profileId, pageId, "Hello");
+				touch(0);
+				await settle(250);
+				assert.equal(
+					copiedFiles.length,
+					before,
+					`Held touch must cancel after ${target[2]} switch, back=${back}`,
+				);
+				cancelledCases.push(`${target[2]}-held-back-${back}`);
+			}
+		}
+		await selectPage(profileId, pageId, "Hello");
+		const beforeBatched = copiedFiles.length;
+		touch(1);
+		await settle(30);
+		await profiles.runtime.runPromise(
+			Effect.gen(function* () {
+				yield* ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					profileId,
+					pageId: otherPageId,
+				});
+				yield* ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					profileId,
+					pageId,
+				});
+			}),
+		);
+		await settle(60);
+		touch(0);
+		await settle(250);
+		assert.equal(
+			copiedFiles.length,
+			beforeBatched,
+			"Rapid away-and-back snapshots must cancel before React batches them",
+		);
+		cancelledCases.push("rapid-away-back");
+		await panelJs(
+			"window.__releaseQueue=[];window.__holdRelease=false;window.__nativeSetTimeout=window.setTimeout.bind(window);window.setTimeout=(callback,delay,...args)=>{if(window.__holdRelease&&delay===10){const id=window.__nativeSetTimeout(()=>{},60000);window.__releaseQueue.push(()=>{clearTimeout(id);callback(...args)});return id}return window.__nativeSetTimeout(callback,delay,...args)};null;",
+		);
+		for (const back of [false, true]) {
+			await selectPage(profileId, pageId, "Hello");
+			const before = copiedFiles.length;
+			touch(1);
+			await settle(30);
+			await panelJs("window.__holdRelease=true;null;");
+			touch(0);
+			await settle(20);
+			assert.equal(await panelJs("window.__releaseQueue.length"), 1);
+			await panelJs("window.__holdRelease=false;null;");
+			await selectPage(profileId, otherPageId, "Other page");
+			if (back) await selectPage(profileId, pageId, "Hello");
+			await panelJs(
+				"window.__releaseQueue.splice(0).forEach(run=>run());null;",
+			);
+			await settle(250);
+			assert.equal(
+				copiedFiles.length,
+				before,
+				`Delayed release must cancel, back=${back}`,
+			);
+			cancelledCases.push(`delayed-back-${back}`);
+		}
+		await panelJs("window.setTimeout=window.__nativeSetTimeout;null;");
+		await selectPage(profileId, pageId, "Hello");
+		await emot({
+			type: "command",
+			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
+		});
+		const beforeNormal = copiedFiles.length;
+		touch(1);
+		await settle(30);
+		touch(0);
+		await settle(250);
+		assert.equal(
+			copiedFiles.length,
+			beforeNormal + 1,
+			"Subsequent ordinary touch must still copy",
+		);
+		await writeFile(
+			join(artifacts, "touch-ownership-proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					rawFrames: true,
+					mountedPanelAndIpc: true,
+					cancelledCases,
+					subsequentTouchCopied: true,
+					modeDuringCancellation: 2,
+					realClipboardOrKeyboard: false,
+				},
+				null,
+				2,
+			),
+		);
 		const libraries = await integration({
 			type: "shortcuts.save",
 			library: {
@@ -625,6 +934,74 @@ async function smoke() {
 				still.original !== still.rendered,
 		);
 		await capture("grey-emoji-still-metadata");
+		const beforeBlank = em.store.items.length;
+		await js(
+			"(()=>{const input=document.querySelector('.emoji-fields input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));})();null;",
+		);
+		await js(
+			"Array.from(document.querySelectorAll('.emoji-actions button')).find(b=>b.textContent.trim()==='Use static image').click();null;",
+		);
+		for (let attempts = 0; ; attempts++) {
+			em = await emot({ type: "read" });
+			if (em.store.items.length > beforeBlank) break;
+			assert(attempts < 80, "Blank-name still did not persist");
+			await settle(50);
+		}
+		const derivedName = em.store.staticAssets[0]?.name.slice(0, 30);
+		assert.equal(em.store.items.at(-1)?.name, derivedName);
+		const motionFallback = await request("quakeEmoji", {
+			type: "generate",
+			assetId: em.store.staticAssets[0]?.hash,
+			prompt: "Wave",
+			name: "   ",
+		});
+		assert(
+			Schema.is(EmojiReply)(motionFallback) &&
+				motionFallback._tag === "generated",
+		);
+		assert.equal(motionFallback.name, derivedName);
+		const longName = "synthetic-motion-filename-longer-than-thirty-characters";
+		selectedFile = join(directory, `${longName}.gif`);
+		await writeFile(selectedFile, bytes);
+		const gifReply = await emot({ type: "import-gif" });
+		selectedFile = undefined;
+		assert.equal(gifReply.store.items.at(-1)?.name, longName.slice(0, 30));
+		for (const input of [
+			{
+				type: "generate",
+				assetId: em.store.staticAssets[0]?.hash,
+				prompt: "Wave",
+				name: "x".repeat(31),
+			},
+			{
+				type: "create-result",
+				base64: Buffer.from(bytes).toString("base64"),
+				name: "x".repeat(31),
+			},
+		]) {
+			const rejected = await request("quakeEmoji", input);
+			assert(
+				Schema.is(EmojiReply)(rejected) &&
+					rejected._tag === "failure" &&
+					rejected.code === "QUAKE.EMOJI.INVALID",
+			);
+		}
+		await capture("grey-emoji-derived-names");
+		await writeFile(
+			join(artifacts, "naming-proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					longGifImport: true,
+					mountedBlankStaticName: true,
+					blankGeneratedName: true,
+					explicitLongNamesRejected: true,
+					generationFallbackAlreadyNormalized: true,
+				},
+				null,
+				2,
+			),
+		);
 		await integration({
 			type: "shortcuts.sync",
 			id: libraries.libraries[0].id,

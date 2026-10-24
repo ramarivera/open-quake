@@ -130,16 +130,18 @@ function ManagementSurface({
 	const maintenance = useMaintenance();
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
+	const [initialActivation] = useState(() => {
+		const query = new URLSearchParams(location.search);
+		// activeTab owns precedence, including an unknown value. page is the legacy fallback.
+		return managementActivation(
+			query.get("activeTab") ?? query.get("page") ?? "overview",
+		);
+	});
 	const [agentTab, setAgentTab] = useState<AgentsTab>(
-		() =>
-			managementActivation(
-				new URLSearchParams(location.search).get("activeTab") ?? "",
-			)?.agentTab ?? "sessions",
+		() => initialActivation?.agentTab ?? "sessions",
 	);
 	const [page, setPage] = useState<Page>(() => {
-		const active = managementActivation(
-			new URLSearchParams(location.search).get("activeTab") ?? "overview",
-		);
+		const active = initialActivation;
 		return (
 			sections.flatMap((s) => s.items).find((item) => item.id === active?.page)
 				?.id ?? "overview"
