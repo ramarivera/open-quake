@@ -272,7 +272,11 @@ async function main() {
 		assert.equal(executions, 2);
 		await assert.rejects(integrations.executeHa(key));
 		assert.equal(executions, 2);
-		await profiles.runPromise(ProfileManager.command({ type: "create" }));
+		await profiles.runPromise(
+			Effect.flatMap(ProfileManager, (manager) =>
+				manager.command({ type: "create" }),
+			),
+		);
 		const haTargets = await request(management, { type: "ha.targets" });
 		assert(haTargets.type === "targets" && haTargets.targets[0]);
 		const haTarget = haTargets.targets[0];
