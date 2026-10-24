@@ -1,27 +1,19 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
-	PROFILE_PROGRESS,
-	PROFILE_REQUEST,
-	PROFILE_SELECTION,
-	PROFILE_SNAPSHOT,
-	type ProfileBridge,
-} from "../../shared/profile-manager";
+	PROFILES_READ,
+	PROFILES_SNAPSHOT,
+	type ProfilesBridge,
+} from "../../shared/profile-snapshot-contracts";
 
-const subscribe = <T>(
-	channel: string,
-	callback: (value: T) => void,
-): (() => void) => {
-	const listener = (_event: IpcRendererEvent, value: T): void =>
-		callback(value);
-	ipcRenderer.on(channel, listener);
-	return () => {
-		ipcRenderer.off(channel, listener);
-	};
-};
-const bridge: ProfileBridge = {
-	request: (command) => ipcRenderer.invoke(PROFILE_REQUEST, command),
-	onSnapshot: (callback) => subscribe(PROFILE_SNAPSHOT, callback),
-	onSelection: (callback) => subscribe(PROFILE_SELECTION, callback),
-	onProgress: (callback) => subscribe(PROFILE_PROGRESS, callback),
+const bridge: ProfilesBridge = {
+	read: () => ipcRenderer.invoke(PROFILES_READ),
+	onSnapshot: (callback) => {
+		const listener = (_event: IpcRendererEvent, value: unknown): void =>
+			callback(value);
+		ipcRenderer.on(PROFILES_SNAPSHOT, listener);
+		return () => {
+			ipcRenderer.off(PROFILES_SNAPSHOT, listener);
+		};
+	},
 };
 contextBridge.exposeInMainWorld("quakeProfiles", bridge);

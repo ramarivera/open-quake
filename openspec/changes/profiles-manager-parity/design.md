@@ -14,5 +14,7 @@ Thumbnails capture the current canonical profile through a hidden renderer windo
 
 Implementation evidence and source findings are in `apps/desktop/src/main/profiles/README.md`. Thumbnail cache keys include full content and locale so catalog updates also invalidate them. The baseline bus has no serial identity/profile transport. `registerProfiles(management, renderer?, deliver?)` exposes optional async delivery plus connect/disconnect methods; mock composition exercises the complete desktop path. Real serial/twin filtering and hardware acceptance remain task 1.6 / `open-quake-lih.9.1.6`. Keep this change and its epic open until that integration has evidence.
 
+Integration with merged management/strip lanes retains `<userData>/profiles-v1.json` and shares one repository/runtime with the strip's read-only IPC. The manager has its own preload name and snapshot channel, and a Knob Profile sidebar page. Previews and captures consume the strip lane's `StripScreen`/`StripViewport`; no span or geometry rules change.
+
 ## Safety adaptations
 Decision 12 excludes vendor account, Spotify and NSFW/jailbreak presets. MGMT-341 vendor links become project links. Decision 15 turns automatic IP weather lookup off. Shell keys ship with first-run native confirmation per decision 13. Hardware runs are forbidden in this lane; mock mode must also work in built Electron applications.

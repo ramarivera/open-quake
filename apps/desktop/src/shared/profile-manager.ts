@@ -8,7 +8,7 @@ import {
 	ProfileLocale,
 } from "../../../../packages/device/src/profiles/profile-manager-contracts.js";
 export const PROFILE_REQUEST = "profiles:request";
-export const PROFILE_SNAPSHOT = "profiles:snapshot";
+export const PROFILE_SNAPSHOT = "profiles:manager-snapshot";
 export const PROFILE_SELECTION = "profiles:selection";
 export const PROFILE_PROGRESS = "profiles:thumbnail-progress";
 export const ProfileRequest = Schema.Union(
@@ -72,7 +72,7 @@ export interface ProfileBridge {
 }
 declare global {
 	interface Window {
-		quakeProfiles: ProfileBridge;
+		quakeProfileManager: ProfileBridge;
 	}
 }
 

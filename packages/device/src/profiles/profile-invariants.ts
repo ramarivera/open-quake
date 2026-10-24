@@ -1,11 +1,14 @@
 import { Option } from "effect";
 import type { ProfileKey } from "./profile-contracts.js";
+import {
+	effectiveSpan,
+	type Footprint,
+	footprintAt,
+	footprintCells,
+	type LogicalCell,
+} from "./profile-footprint.js";
 import { QUAKE_LOGICAL_GRID } from "./profile-grid.js";
 
-export interface LogicalCell {
-	readonly row: number;
-	readonly column: number;
-}
 export interface LayoutIssue {
 	readonly reason:
 		| "coordinate"
@@ -44,27 +47,17 @@ export const isEmptyCell = (key: ProfileKey): boolean =>
 	key.config.size[1] === 1 &&
 	!key.config.supportKnob;
 
-export const occupiedCells = (key: ProfileKey): readonly string[] => {
-	const anchor = parseProfileCoordinate(key.keyCode);
-	const [width, height] = key.config.size;
-	if (
-		Option.isNone(anchor) ||
-		!Number.isInteger(width) ||
-		!Number.isInteger(height) ||
-		width < 1 ||
-		height < 1 ||
-		anchor.value.column + width - 1 > QUAKE_LOGICAL_GRID.columns ||
-		anchor.value.row + height - 1 > QUAKE_LOGICAL_GRID.rows
-	)
-		return [];
-	return Array.from({ length: height }, (_, row) =>
-		Array.from(
-			{ length: width },
-			(_, column) =>
-				`${anchor.value.row + row},${anchor.value.column + column}`,
-		),
-	).flat();
-};
+/** Shared by occupancy, the strip renderer, its preview and hit-testing. */
+export const keyFootprint = (key: ProfileKey): Option.Option<Footprint> =>
+	Option.flatMap(parseProfileCoordinate(key.keyCode), (anchor) =>
+		footprintAt(anchor, effectiveSpan(key.config.type, key.config.size)),
+	);
+
+export const occupiedCells = (key: ProfileKey): readonly string[] =>
+	Option.match(keyFootprint(key), {
+		onNone: () => [],
+		onSome: footprintCells,
+	});
 
 export const layoutIssues = (
 	keys: readonly ProfileKey[],

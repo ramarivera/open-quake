@@ -4,13 +4,24 @@ import { mkdtempSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
+import type { EncodedProfileEnvelope } from "../../shared/profiles";
 import {
 	type WallpaperCommand,
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import {
+	clockProfile,
+	meetAiProfile,
+	quickProfile,
+	spansProfile,
+	stripFixtureEnvelope,
+	vividProfile,
+} from "../test/strip-fixtures";
 import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
@@ -35,6 +46,24 @@ async function request(
 	if (reply._tag !== "success") throw new Error("Wallpaper request failed");
 	return reply.snapshot;
 }
+
+/** Serves one fixture envelope; re-registering swaps the active profile. */
+function serveProfiles(
+	envelope: EncodedProfileEnvelope,
+): ReturnType<typeof registerProfiles> {
+	return registerProfiles(
+		ManagedRuntime.make(
+			ProfilesLive({
+				read: async () => structuredClone(envelope),
+				write: async () => undefined,
+			}),
+		),
+		pathToFileURL(resolve("out/renderer/index.html")).href,
+	);
+}
+
+const settle = (ms = 400): Promise<void> =>
+	new Promise<void>((done) => setTimeout(done, ms));
 
 async function smoke(): Promise<void> {
 	await app.whenReady();
@@ -83,6 +112,7 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	let profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
 	app.once("will-quit", () => {
 		assert(
 			runtimeDisposed,
@@ -159,8 +189,31 @@ async function smoke(): Promise<void> {
 	);
 	assert(Array.isArray(ticks) && ticks.length >= 2);
 	assert.deepEqual(ticks, panelTicks);
+	// The panel draws the active page's key grid on black, not the wallpaper.
+	await panel.webContents.reload();
+	await settle();
+	const strip: unknown = await panel.webContents.executeJavaScript(
+		`(() => { const screen = document.querySelector('.strip-screen'); return { theme: document.querySelector('.strip-grid')?.dataset.theme, tiles: document.querySelectorAll('.strip-slot[data-state="tile"]').length, empty: document.querySelectorAll('.strip-slot[data-state="empty"]').length, wallpaper: !!document.querySelector('.strip-wallpaper'), background: getComputedStyle(screen).backgroundColor, width: screen.getBoundingClientRect().width }; })()`,
+	);
+	assert.deepEqual(strip, {
+		theme: "commonBaseTheme",
+		tiles: 12,
+		empty: 4,
+		wallpaper: false,
+		background: "rgb(0, 0, 0)",
+		width: 1920,
+	});
+	// The Screen page previews the vivid screen's wallpaper with the same strip.
+	await management.webContents.executeJavaScript(
+		`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
+	);
+	await settle(100);
+	await management.webContents.executeJavaScript(
+		`(() => { document.querySelector('input[type="radio"][value="vivid"]').click(); null; })()`,
+	);
+	await settle(100);
 	const canvas = await management.webContents.executeJavaScript(
-		`(() => { const canvas = document.querySelector('.wallpaper-canvas'); const image = canvas?.querySelector('image'); return { viewBox: canvas?.getAttribute('viewBox'), width: image?.getAttribute('width'), height: image?.getAttribute('height') }; })()`,
+		`(() => { const canvas = document.querySelector('.strip-wallpaper .wallpaper-canvas'); const image = canvas?.querySelector('image'); return { viewBox: canvas?.getAttribute('viewBox'), width: image?.getAttribute('width'), height: image?.getAttribute('height') }; })()`,
 	);
 	assert.deepEqual(canvas, {
 		viewBox: "0 0 1920 480",
@@ -174,26 +227,80 @@ async function smoke(): Promise<void> {
 		typeof errors === "string" && !errors.includes("service is unavailable"),
 	);
 	const artifacts = process.argv[2];
+	if (artifacts) await mkdir(artifacts, { recursive: true });
+	// Built-in-like profiles on the panel, swapped through the read-only channel.
+	const fixtures = [
+		["quick", quickProfile, "commonBaseTheme"],
+		["meetai", meetAiProfile, "meetingAssistantTheme"],
+		["spans", spansProfile, "commonBaseTheme"],
+		["clock", clockProfile, "commonBaseTheme"],
+		["vivid", vividProfile, undefined],
+	] as const;
+	for (const [name, profile, theme] of fixtures) {
+		await profiles.dispose();
+		profiles = serveProfiles(stripFixtureEnvelope(profile, "smoke-A"));
+		await panel.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "panel" },
+		});
+		await settle();
+		const shown: unknown = await panel.webContents.executeJavaScript(
+			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.strip-clock-placeholder') }))()`,
+		);
+		assert.deepEqual(shown, {
+			theme,
+			vivid: theme === undefined ? "true" : "false",
+			clock: name === "clock",
+		});
+		if (artifacts)
+			await writeFile(
+				join(artifacts, `panel-${name}.png`),
+				(await panel.webContents.capturePage()).toPNG(),
+			);
+	}
+	await profiles.dispose();
+	profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
+	await management.webContents.reload();
+	await settle();
+	if (artifacts) {
+		management.setSize(1100, 900);
+		await settle(200);
+		await writeFile(
+			join(artifacts, "management-overview.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	}
 	await management.webContents.executeJavaScript(
-		`(() => { const selects = document.querySelectorAll('.appearance select'); const theme = selects[0]; const motion = selects[1]; theme.value = 'light'; theme.dispatchEvent(new Event('change', { bubbles: true })); motion.value = 'reduce'; motion.dispatchEvent(new Event('change', { bubbles: true })); })()`,
+		`(() => { document.querySelector('.nav-item[title="Appearance"]').click(); null; })()`,
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	await management.webContents.executeJavaScript(
+		`(() => { document.querySelector('input[type="radio"][value="light"]').click(); document.querySelector('input[type="radio"][value="reduce"]').click(); document.querySelector('.nav-item[title="Overview"]').click(); null; })()`,
 	);
 	await new Promise<void>((done) => setTimeout(done, 100));
 	for (const window of [management, panel]) {
 		const appearance: unknown = await window.webContents.executeJavaScript(
-			`(() => { const background = document.querySelector('.wallpaper-neutral'); return { fill: getComputedStyle(background).fill, animations: document.querySelector('.wallpaper-canvas').getAnimations({ subtree: true }).length }; })()`,
+			`(() => { const strip = document.querySelector('.strip-screen'); return { token: getComputedStyle(document.documentElement).getPropertyValue('--quake-background').trim(), strip: getComputedStyle(strip).backgroundColor, animations: document.getAnimations().length }; })()`,
 		);
-		assert.deepEqual(appearance, { fill: "rgb(245, 247, 250)", animations: 0 });
+		// The light theme reaches both windows; the strip keeps DK's black.
+		assert.deepEqual(appearance, {
+			token: "#f4f4f6",
+			strip: "rgb(0, 0, 0)",
+			animations: 0,
+		});
 	}
 	if (artifacts) {
-		await mkdir(artifacts, { recursive: true });
 		await writeFile(
 			join(artifacts, "panel.png"),
 			(await panel.webContents.capturePage()).toPNG(),
 		);
 		management.setSize(1100, 1000);
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.wallpaper-settings').scrollIntoView(); null;",
+			`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
 		);
+		await new Promise<void>((done) => setTimeout(done, 100));
 		await writeFile(
 			join(artifacts, "management.png"),
 			(await management.webContents.capturePage()).toPNG(),
@@ -201,8 +308,9 @@ async function smoke(): Promise<void> {
 		management.setSize(390, 844);
 		await new Promise<void>((done) => setTimeout(done, 100));
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.wallpaper-settings').scrollIntoView(); null;",
+			`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
 		);
+		await new Promise<void>((done) => setTimeout(done, 100));
 		const overflow: unknown = await management.webContents.executeJavaScript(
 			"document.documentElement.scrollWidth > innerWidth",
 		);
@@ -212,10 +320,11 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	await profiles.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(
-		"W6 Electron smoke PASS: spoofed panel mutations rejected, native PNG/JPEG decoding, isolated serials, real preload/IPC, three fill modes, synchronized one-second clock, light theme/reduced motion, hidden panel/preview. Hardware unverified.\n",
+		"W6 Electron smoke PASS: spoofed panel mutations rejected, native PNG/JPEG decoding, isolated serials, real preload/IPC, three fill modes, synchronized one-second clock, light theme/reduced motion, hidden panel/preview, strip key grid for five built-in-like profiles. Hardware unverified.\n",
 	);
 }
 

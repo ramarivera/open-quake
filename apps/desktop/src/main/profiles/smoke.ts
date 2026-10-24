@@ -25,7 +25,7 @@ async function smoke(): Promise<void> {
 	const request = async (win: BrowserWindow, command: ProfileRequest) =>
 		Schema.decodeUnknownSync(ProfileReplySchema)(
 			await win.webContents.executeJavaScript(
-				`window.quakeProfiles.request(${JSON.stringify(command)})`,
+				`window.quakeProfileManager.request(${JSON.stringify(command)})`,
 			),
 		);
 	const ready = async (win: BrowserWindow, selector: string): Promise<void> => {
@@ -82,6 +82,10 @@ async function smoke(): Promise<void> {
 			}),
 		]);
 		process.stdout.write("profiles smoke: windows loaded\n");
+		await management.webContents.executeJavaScript(
+			"Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Knob Profile')).click()",
+		);
+		await ready(management, ".profiles-manager");
 		const first = await request(management, { type: "read", locale: "en" });
 		assert.equal(first._tag, "success");
 		if (first._tag !== "success") throw new Error("read failed");
@@ -104,6 +108,13 @@ async function smoke(): Promise<void> {
 			query: { surface: "panel" },
 		});
 		await profiles.connect("desktop-preview", "1-2");
+		await ready(panel, '.strip-slot[data-state="tile"]');
+		assert.equal(
+			await panel.webContents.executeJavaScript(
+				"document.querySelectorAll('.strip-slot[data-state=tile]').length",
+			),
+			16,
+		);
 		await ready(management, "button");
 		await management.webContents.executeJavaScript(
 			"Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Add Item').click()",
@@ -119,12 +130,26 @@ async function smoke(): Promise<void> {
 		assert.equal(created._tag, "success");
 		if (created._tag !== "success") throw new Error("create failed");
 		assert(created.view.envelope.profiles.some((p) => p.name === "My apps"));
-		await ready(panel, '[data-profile-ready="custom-1"]');
+		await ready(panel, '.strip-screen[data-profiles="ready"]');
+		const panelRead = await panel.webContents.executeJavaScript(
+			"window.quakeProfiles.read()",
+		);
+		assert.equal(
+			panelRead.envelope.activeByDevice["desktop-preview"].profileId,
+			"custom-1",
+		);
 		assert(deliveries.includes("desktop-preview:custom-1"));
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		});
-		await ready(panel, '[data-profile-ready="custom-1"]');
+		await ready(panel, '.strip-screen[data-profiles="ready"]');
+		const reloaded = await panel.webContents.executeJavaScript(
+			"window.quakeProfiles.read()",
+		);
+		assert.equal(
+			reloaded.envelope.activeByDevice["desktop-preview"].profileId,
+			"custom-1",
+		);
 		process.stdout.write("profiles smoke: UI create and rename passed\n");
 		const thumbnail = await request(management, {
 			type: "thumbnail",

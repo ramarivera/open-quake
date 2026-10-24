@@ -35,7 +35,7 @@ command requires approval again. Renderer requests cannot supply shell text.
 | MGMT-313–324, 345 | Serialized CRUD, weighted names, deep copy, visibility, 30 visible profiles, stable deletion anchor and thumbnails. Manager/repository tests cover failures and concurrent key saves. The hidden vendor copy action is available through IPC with localized Copy suffixes. |
 | MGMT-326–327, 329–337 | Plain profile properties, installed-app selection, Other picker, connected-device scope, startup singleton and confirmation. Recovered labels are used; this page is ready for the design lane. App icons and vendor dialog styling are deferred. |
 | MGMT-091, 333–334; MAIN-079, 084 | Immediate polling, 3000/2000 ms intervals, 500 ms cache, native deadlines, normalized LCS >=0.79, 300 ms per-device debounce and first-connect default protection. Effect TestClock exercises switching and disposal. Native macOS identity/app-list reads are included in the smoke. |
-| MGMT-430–434 | Real hidden-window captures, content/locale cache keys, per-row update, batch progress and cancellation. Captures show the current plain profile preview. |
+| MGMT-430–434 | Real hidden-window captures, content/locale cache keys, per-row update, batch progress and cancellation. Captures use the strip lane's renderer. |
 | MAIN-085 | Integration contract only. Lifecycle must supply logical serials and exclude the Quake-HID twin. Hardware delivery remains unverified. |
 
 Additional source locations are
@@ -49,8 +49,10 @@ the source UTF-16 weighting.
 
 ## Composition and integration
 
-`ProfileManager` and `ProfileSwitching` share one `ProfileRepository` and its
-mutex. The optional manager metadata is backward-compatible with PR #12.
+`ProfileService`, `ProfileManager` and `ProfileSwitching` share one
+`ProfileRepository` and its mutex. The optional manager metadata is
+backward-compatible with PR #12. The canonical file remains
+`<userData>/profiles-v1.json`; cached captures use `profiles/thumbnails/`.
 Transactions persist the complete envelope before publishing frozen,
 detached snapshots. Existing user profiles survive catalog installation.
 Fresh desktop storage installs the catalog without the old empty seed.
@@ -72,11 +74,15 @@ mock mode. Real discovery does not fabricate a serial. Without a delivery
 callback, selection is persisted and published to the desktop panel only.
 `ProfileSwitchingPort` is also exported for direct Effect composition.
 
-Selected-profile previews replay persisted selection on mount and filter live
-events by the `serial` query parameter, defaulting to `desktop-preview`.
-Thumbnails are PNG captures of the built renderer, keyed by canonical content
-and locale. They contain labels and source sizes; this lane does not implement
-the specialized clock, monitor, meeting or AI widgets.
+The strip lane's existing read-only `quakeProfiles` bridge replays the same
+repository's snapshots on mount and updates on every committed selection.
+The manager uses `quakeProfileManager` and a separate snapshot channel. The
+read-only registration borrows the shared runtime; the manager owns disposal.
+The management sidebar adds Knob Profile without replacing the new shell.
+Thumbnails and profile previews use `StripScreen` and `StripViewport`, so the
+strip lane owns all geometry and widget rendering. PNG cache keys include
+canonical content and locale. This lane adds no specialized clock, monitor,
+meeting or AI widget implementations.
 
 Only the main-owned management window's top-level renderer frame can mutate,
 capture, choose apps or execute a shell key. Matching renderer documents may

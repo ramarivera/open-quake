@@ -7,8 +7,8 @@ The first-release voice loop needs independent STT and TTS adapters with reliabl
 ## What Changes
 
 - Define a capture/transcription state machine, typed phase failures, bounded audio flow, and playback ownership.
-- Ship BYO-key Qwen DashScope realtime STT and HTTP/SSE TTS first, using the recovered active routes.
-- Define later Qwen realtime TTS, OpenAI transcription/realtime, XFY, Azure, and live translation adapter gates.
+- Ship BYO-key DashScope streaming STT and HTTP/SSE TTS against current Model Studio routes (`AI-094`, `AI-101`, `AI-108`), plus an independently selected OpenAI TTS adapter (`AI-105`).
+- Define later Qwen realtime TTS, OpenAI transcription/realtime, XFY and Azure adapter gates, and the shipped Meet AI live translation contract (`AI-136/292`).
 - Adopt injected clocks/transports/recorders, terminal-event idempotence, privacy-scrubbed diagnostics, and mock-default verification.
 
 ## Capabilities

@@ -8,7 +8,7 @@ Meeting capture and browsable history are recovered, but capture, processing, an
 
 - Define explicit microphone/system-audio capture sessions and terminal states.
 - Persist local history, transcript and generated minutes separately.
-- Support retry, deletion and DOCX export through provider and file adapters.
+- Support retry, deletion, Markdown summary and plain-text transcript exports (`AI-315`), and the shipped live translation route (`AI-136`, `AI-292`).
 
 This lane adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
 

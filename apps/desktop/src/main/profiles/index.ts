@@ -3,7 +3,15 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { Effect, Fiber, Layer, ManagedRuntime, Option, Schema } from "effect";
+import {
+	Effect,
+	Fiber,
+	Layer,
+	ManagedRuntime,
+	Option,
+	Schema,
+	Stream,
+} from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
@@ -24,6 +32,7 @@ import {
 	ProfileRepository,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
 	ProfileSwitching,
 	ProfileSwitchingPort,
@@ -43,7 +52,7 @@ import {
 	makeProfileController,
 	profileThumbnailKey,
 } from "./profile-controller";
-
+import { registerProfiles as registerProfileSnapshots } from "./profile-ipc";
 import { profileRequestAllowed } from "./profile-permissions";
 export function registerProfiles(
 	management: () => BrowserWindow | undefined,
@@ -58,7 +67,9 @@ export function registerProfiles(
 				? "win32"
 				: "linux";
 	const root = join(app.getPath("userData"), "profiles");
-	const data = createDesktopProfileStorage(join(root, "profiles-v1.json"));
+	const data = createDesktopProfileStorage(
+		join(app.getPath("userData"), "profiles-v1.json"),
+	);
 	const storage = {
 		...data,
 		read: async (): Promise<unknown> => {
@@ -83,10 +94,12 @@ export function registerProfiles(
 	};
 	const broadcast = (channel: string, value: unknown): void => {
 		for (const win of BrowserWindow.getAllWindows())
-			if (!win.isDestroyed()) win.webContents.send(channel, value);
+			if (!win.isDestroyed() && !win.webContents.isDestroyed())
+				win.webContents.send(channel, value);
 	};
 	const runtime = ManagedRuntime.make(
 		Layer.mergeAll(
+			ProfileService.DefaultWithoutDependencies,
 			ProfileManager.DefaultWithoutDependencies,
 			ProfileSwitching.DefaultWithoutDependencies,
 		).pipe(
@@ -118,6 +131,7 @@ export function registerProfiles(
 			),
 		),
 	);
+	const snapshots = registerProfileSnapshots(runtime, renderer, false);
 	const captureWindows = new Set<BrowserWindow>();
 	const thumbnailPath = (profile: Profile, locale: ProfileLocale): string =>
 		join(root, "thumbnails", `${profileThumbnailKey(profile, locale)}.png`);
@@ -171,7 +185,7 @@ export function registerProfiles(
 			return image.toDataURL();
 		} finally {
 			captureWindows.delete(window);
-			window.destroy();
+			if (!window.isDestroyed()) window.destroy();
 		}
 	};
 	const run = promisify(execFile);
@@ -242,6 +256,23 @@ export function registerProfiles(
 			yield* (yield* ProfileSwitching).poll;
 		}),
 	);
+	const managerUpdates = runtime.runFork(
+		Effect.gen(function* () {
+			const service = yield* Effect.promise(() => controller);
+			const repository = yield* ProfileRepository;
+			yield* Stream.runForEach(repository.snapshots, () =>
+				service.publish().pipe(
+					Effect.matchEffect({
+						onSuccess: () => Effect.void,
+						onFailure: (error) =>
+							Effect.logWarning("Publishing profiles manager snapshot failed", {
+								code: error.code,
+							}),
+					}),
+				),
+			);
+		}),
+	);
 	let disposed = false;
 	const pending = new Set<Promise<unknown>>();
 	ipcMain.handle(
@@ -305,7 +336,9 @@ export function registerProfiles(
 			ipcMain.removeHandler(PROFILE_REQUEST);
 			for (const window of captureWindows) window.destroy();
 			await Promise.allSettled([...pending]);
+			await snapshots.dispose();
 			await runtime.runPromise(Fiber.interrupt(monitor));
+			await runtime.runPromise(Fiber.interrupt(managerUpdates));
 			await runtime.dispose();
 		},
 	};

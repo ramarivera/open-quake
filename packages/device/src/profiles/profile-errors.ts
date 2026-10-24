@@ -74,13 +74,28 @@ const DiagnosticCause: Schema.Schema<ReturnType<typeof toSafeDiagnosticCause>> =
 		}),
 	);
 type Entry = (typeof ProfileErrors)[keyof typeof ProfileErrors];
-const fields = <const E extends Entry>(entry: E) => ({
+const fields = <const E extends Entry>(
+	entry: E,
+): {
+	code: Schema.Literal<[E["code"]]>;
+	category: Schema.Literal<[E["category"]]>;
+	message: Schema.Literal<[E["message"]]>;
+	diagnosticCause: typeof DiagnosticCause;
+} => ({
 	code: Schema.Literal(entry.code),
 	category: Schema.Literal(entry.category),
 	message: Schema.Literal(entry.message),
 	diagnosticCause: DiagnosticCause,
 });
-const props = <const E extends Entry>(entry: E, cause: unknown) => ({
+const props = <const E extends Entry>(
+	entry: E,
+	cause: unknown,
+): {
+	code: E["code"];
+	category: E["category"];
+	message: E["message"];
+	diagnosticCause: ReturnType<typeof toSafeDiagnosticCause>;
+} => ({
 	code: entry.code,
 	category: entry.category,
 	message: entry.message,

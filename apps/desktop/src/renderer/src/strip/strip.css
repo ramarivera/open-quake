@@ -1,0 +1,204 @@
+/*
+ * The QUAKE strip. Values are DK-Suite 0.4.95's (QuakeShortCutView.vue,
+ * UnitControl.vue); colours come from palette.ts as --strip-* properties.
+ * Everything is laid out in fixed canvas pixels; StripViewport scales it.
+ */
+.strip-viewport {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+.strip-viewport-stage {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform-origin: center;
+}
+.strip-screen {
+	position: relative;
+	overflow: hidden;
+	background: var(--strip-canvas);
+	font-family: var(--strip-font);
+	-webkit-font-smoothing: antialiased;
+	user-select: none;
+}
+.strip-wallpaper {
+	position: absolute;
+	inset: 0;
+}
+.strip-wallpaper .wallpaper-canvas,
+.strip-wallpaper .wallpaper-neutral {
+	background: var(--strip-canvas);
+	fill: var(--strip-canvas);
+}
+.strip-grid {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	background: var(--strip-canvas);
+}
+
+/* Slots: every cell's rounded 4 % plate (QSC getCellStyle). */
+.strip-slot {
+	position: absolute;
+	box-sizing: border-box;
+	background-color: var(--strip-slot);
+}
+.strip-slot[data-state="empty"] {
+	opacity: 0.7;
+	border: 2px dashed var(--strip-empty-border);
+}
+.strip-slot[data-state="empty"]:hover {
+	border-color: var(--strip-empty-hover-border);
+}
+.strip-screen[data-dashed="false"] .strip-slot[data-state="empty"] {
+	border: none;
+}
+.strip-slot[data-pressed="true"] {
+	box-shadow: 0 0 25px var(--strip-press-glow);
+}
+
+/* DK strip motion (parity decision 3): 0.3 s ease, pressed slots scale to 0.8. */
+@media (prefers-reduced-motion: no-preference) {
+	:root[data-motion="full"] .strip-slot {
+		transition:
+			transform 0.3s ease,
+			box-shadow 0.3s ease,
+			background-color 0.3s ease;
+	}
+	:root[data-motion="full"]
+		.strip-slot[data-pressed="true"][data-press-scale="true"] {
+		transform: scale(0.8);
+	}
+}
+
+/* Generic icon-and-title tile (UnitControl .subBox). */
+.strip-tile {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+}
+.strip-tile-layer {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+.strip-tile-inset {
+	position: absolute;
+	border-radius: inherit;
+	overflow: hidden;
+}
+/* The common-base ::before that replaces the unitBg glass: a 2 px accent ring. */
+.strip-tile-ring {
+	position: absolute;
+	inset: 0;
+	padding: 2px;
+	border-radius: inherit;
+	background: linear-gradient(
+		135deg,
+		rgba(var(--strip-accent-rgb), 0.4) 0%,
+		rgba(var(--strip-accent-rgb), 0.3) 25%,
+		rgba(var(--strip-accent-rgb), 0.15) 50%,
+		rgba(var(--strip-accent-rgb), var(--strip-ring-75)) 75%,
+		rgba(var(--strip-accent-rgb), var(--strip-ring-100)) 100%
+	);
+	mask:
+		linear-gradient(#fff 0 0) content-box,
+		linear-gradient(#fff 0 0);
+	mask-composite: exclude;
+	pointer-events: none;
+}
+.strip-tile-icon {
+	position: relative;
+	z-index: 2;
+	flex: none;
+}
+.strip-tile-icon img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	-webkit-user-drag: none;
+}
+.strip-tile-title {
+	position: absolute;
+	left: 50%;
+	z-index: 2;
+	margin: 0;
+	transform: translateX(-50%);
+	overflow: hidden;
+	white-space: nowrap;
+	line-height: normal;
+	text-align: center;
+}
+
+/* Stand-in for strip-clock's ClockTile. */
+.strip-clock-placeholder {
+	display: block;
+	background: var(--strip-canvas);
+}
+.strip-clock-placeholder-time {
+	fill: var(--strip-title);
+	font-size: 200px;
+	font-weight: 300;
+	font-variant-numeric: tabular-nums;
+	text-anchor: middle;
+	dominant-baseline: central;
+}
+.strip-clock-placeholder-meridiem {
+	font-size: 72px;
+}
+
+/* Status overlays use the app theme (ui-theming). */
+.strip-status {
+	position: absolute;
+	top: 152px;
+	left: 560px;
+	z-index: 20;
+	box-sizing: border-box;
+	width: 800px;
+	height: 176px;
+	padding: 36px 48px;
+	background: var(--quake-surface);
+	border: 3px solid var(--quake-warning);
+	border-radius: 32px;
+}
+.strip-status p {
+	margin: 0;
+}
+.strip-status-title {
+	color: var(--quake-warning);
+	font-size: 52px;
+	font-weight: 650;
+}
+.strip-status-code {
+	margin-top: 12px;
+	color: var(--quake-muted);
+	font-size: 30px;
+	font-variant-numeric: tabular-nums;
+}
+.strip-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+}
+
+/* No scrolling or selection on the device window; it sizes to #root. */
+.strip-panel {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: var(--strip-canvas, #000000);
+	user-select: none;
+}

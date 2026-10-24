@@ -6,7 +6,7 @@ import {
 	profileText,
 } from "../../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
-	Profile,
+	type Profile,
 	ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
@@ -16,10 +16,10 @@ import {
 	weightedNameLength,
 } from "../../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import type {
-	ProfileDelivery,
 	ProfileRequest,
 	ProfileView,
 } from "../../../shared/profile-manager";
+import { StripScreen, StripViewport } from "../strip/StripScreen";
 import "./profiles.css";
 
 const decode = (view: ProfileView): ProfileEnvelope =>
@@ -36,20 +36,20 @@ export function ProfilePreview({
 			role="img"
 			aria-label={profile.name}
 		>
-			{profile.pages[0].keys
-				.filter((k) => k.config.display && k.config.type !== "")
-				.map((key) => (
-					<div
-						key={key.keyCode}
-						className="profile-preview-key"
-						style={{
-							gridColumn: `${key.keyCode.split(",")[1]} / span ${key.config.size[0]}`,
-							gridRow: `${key.keyCode.split(",")[0]} / span ${key.config.size[1]}`,
-						}}
-					>
-						<span>{key.config.title.text || key.config.type}</span>
-					</div>
-				))}
+			<StripViewport>
+				<StripScreen
+					profiles={{
+						_tag: "ready",
+						envelope: {
+							schemaVersion: 1,
+							profiles: [profile],
+							activeByDevice: {},
+							manager: Option.none(),
+						},
+					}}
+					showEmptyGridDashedBorder={false}
+				/>
+			</StripViewport>
 		</div>
 	);
 }
@@ -60,7 +60,7 @@ export function ProfileThumbnail(): React.JSX.Element {
 		const locale = Schema.decodeUnknownSync(ProfileLocale)(
 			query.get("locale") ?? "en",
 		);
-		void window.quakeProfiles
+		void window.quakeProfileManager
 			.request({ type: "read", locale, preview: true })
 			.then((reply) => {
 				if (reply._tag === "success")
@@ -72,42 +72,6 @@ export function ProfileThumbnail(): React.JSX.Element {
 			});
 	}, []);
 	return profile ? <ProfilePreview profile={profile} /> : <p>No preview</p>;
-}
-export function SelectedProfile(): React.JSX.Element | null {
-	const [selection, setSelection] = useState<ProfileDelivery>();
-	useEffect(() => {
-		if (!window.quakeProfiles) return;
-		const serial =
-			new URLSearchParams(location.search).get("serial") ?? "desktop-preview";
-		let live = false;
-		const off = window.quakeProfiles.onSelection((next) => {
-			if (next.serial === serial) {
-				live = true;
-				setSelection(next);
-			}
-		});
-		void window.quakeProfiles
-			.request({ type: "read", locale: "en", preview: true })
-			.then((reply) => {
-				if (live || reply._tag !== "success") return;
-				const selected = reply.view.envelope.activeByDevice[serial];
-				const profile = reply.view.envelope.profiles.find(
-					(p) => p.id === selected?.profileId,
-				);
-				if (profile) setSelection({ serial, profile, hardware: "unverified" });
-			});
-		return () => {
-			live = true;
-			off();
-		};
-	}, []);
-	return selection ? (
-		<section className="selected-profile" aria-label="Selected profile">
-			<ProfilePreview
-				profile={Schema.decodeUnknownSync(Profile)(selection.profile)}
-			/>
-		</section>
-	) : null;
 }
 function ProfileNameInput({
 	name,
@@ -145,22 +109,24 @@ export function ProfilesManager(): React.JSX.Element {
 	const [status, setStatus] = useState("");
 	const [deviceChoice, setDeviceChoice] = useState({ id: "", serial: "" });
 	useEffect(() => {
-		if (!window.quakeProfiles) return;
-		const off = window.quakeProfiles.onSnapshot(setView);
-		const progress = window.quakeProfiles.onProgress((p) =>
+		if (!window.quakeProfileManager) return;
+		const off = window.quakeProfileManager.onSnapshot(setView);
+		const progress = window.quakeProfileManager.onProgress((p) =>
 			setView((v) => (v ? { ...v, progress: p } : v)),
 		);
-		void window.quakeProfiles.request({ type: "read", locale }).then((r) => {
-			if (r._tag === "success") setView(r.view);
-			else setStatus(r.reason);
-		});
+		void window.quakeProfileManager
+			.request({ type: "read", locale })
+			.then((r) => {
+				if (r._tag === "success") setView(r.view);
+				else setStatus(r.reason);
+			});
 		return () => {
 			off();
 			progress();
 		};
 	}, [locale]);
 	const request = async (command: ProfileRequest): Promise<boolean> => {
-		const reply = await window.quakeProfiles.request(command);
+		const reply = await window.quakeProfileManager.request(command);
 		if (reply._tag === "success") {
 			setView(reply.view);
 			setStatus("");

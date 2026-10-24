@@ -32,7 +32,7 @@
 }
 .profile-columns {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
 	gap: 20px;
 }
 .profile-columns ul {
@@ -41,6 +41,7 @@
 }
 .profile-row {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 8px;
 	align-items: center;
 	margin-block: 8px;
@@ -74,42 +75,13 @@
 }
 .profile-preview {
 	flex-basis: 100%;
-}
-.profile-preview {
-	display: grid;
-	grid-template-columns: repeat(8, minmax(0, 1fr));
-	grid-template-rows: repeat(2, minmax(0, 1fr));
-	gap: 6px;
 	aspect-ratio: 4;
-	background: #161a20;
-	padding: 6px;
-	box-sizing: border-box;
 	width: 100%;
-	color: #fff;
-}
-.profile-settings h4,
-.profile-settings p,
-.profile-settings .profile-preview-key {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	text-align: center;
-	font: 14px system-ui;
-	background: #303743;
-	border-radius: 8px;
 	overflow: hidden;
+	background: var(--quake-surface);
 }
 .profile-no-preview {
 	color: #999;
-}
-.selected-profile {
-	position: absolute;
-	inset: 0;
-	z-index: 1;
-	background: #151a20;
-}
-body:has([data-profile-ready]) .profile-preview {
-	max-height: 100vh;
 }
 .profile-batch progress {
 	height: 4px;
