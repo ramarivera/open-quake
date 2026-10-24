@@ -43,4 +43,4 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 ## 7. Review fixes
 
-- [ ] 7.1 Integrate current main into PR33, address all module review findings with transactional deletion, preserved secrets, DK-Claw cleanup, reserved model scope, correct shortcut selection, disconnected catalog cleanup, transport consent and trusted AI/renderer boundaries. Verify concurrency, rollback and secret-scrub production paths with six fresh gates and native mock evidence. Bead `open-quake-lih.17.1.24`.
+- [x] 7.1 Integrate current main into PR33, address all module review findings with transactional deletion, preserved secrets, DK-Claw cleanup, reserved model scope, correct shortcut selection, disconnected catalog cleanup, transport consent and trusted AI/renderer boundaries. Verify concurrency, rollback and secret-scrub production paths with six fresh gates and native mock evidence. Bead `open-quake-lih.17.1.24`.
