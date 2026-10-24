@@ -1,0 +1,65 @@
+{
+	"displayMode": {
+		"title": "Display mode",
+		"message": "Switch to Extended Display",
+		"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+		"switch": "Switch",
+		"disconnect": "Disconnect",
+		"orientationTitle": "Adjust Quake orientation",
+		"orientationMessage": "Please set Quake to landscape",
+		"orientationDetail": "Open display settings and set Quake to landscape.",
+		"orientationDetailDarwin": "Open System Settings \u2192 Displays and set Quake Rotation to 270\u00b0.",
+		"orientationDetailWin32": "Open Settings \u2192 System \u2192 Display and set Quake Orientation to Landscape.",
+		"openDisplaySettings": "Open Display Settings",
+		"orientationLater": "Later"
+	},
+	"quakeDiagnostic": {
+		"eyebrow": "QUAKE DEVICE CHECK",
+		"title": "Detect QUAKE Device Connection",
+		"subtitle": "Both USB and HDMI must be connected properly before entering device settings",
+		"troubleshootingTitle": "Troubleshoot in order",
+		"check": {
+			"checking": "Checking\u2026",
+			"passDetails": "Connection is stable, no action needed",
+			"usb": {
+				"label": "USB Control Connection",
+				"pass": "Connected",
+				"fail": "No USB device detected",
+				"steps": {
+					"1": "Make sure you're using a USB cable that supports data transfer",
+					"2": "Connect QUAKE directly to a computer USB port and temporarily remove the USB Hub",
+					"3": "Try a different USB port on your computer and reconnect QUAKE"
+				}
+			},
+			"hdmi": {
+				"label": "HDMI Monitor Connection",
+				"pass": "Display detected",
+				"fail": "No HDMI monitor detected",
+				"steps": {
+					"1": "Check the connection status of the Mini HDMI port on the left side of QUAKE",
+					"2": "Try a different HDMI port or HDMI adapter on your computer",
+					"3": "Confirm the second display is recognized in system display settings and resolution is 1920x480"
+				},
+				"failResolution": "Display detected, but resolution is incorrect (current {width}x{height}, expected 1920x480)",
+				"resolutionSteps": {
+					"1": "Open Windows Settings \u2192 System \u2192 Display and select the DK-QUAKE screen",
+					"2": "Set the display resolution to 1920x480",
+					"3": "If 1920x480 is not listed, reconnect the QUAKE HDMI cable and re-detect"
+				}
+			}
+		},
+		"action": {
+			"recheck": "Re-detect",
+			"checking": "Checking\u2026",
+			"support": "Contact Support"
+		},
+		"fullGuide": "Need full installation guide?",
+		"toast": {
+			"recheckStart": "Re-detecting USB and HDMI\u2026",
+			"recheckDone": "Detection complete, {completed}/2 checks passed",
+			"allPass": "Detection complete, both connections are normal",
+			"checkError": "Detection error, please try again later"
+		},
+		"supportNotReady": "Support link coming soon, please try again later"
+	}
+}

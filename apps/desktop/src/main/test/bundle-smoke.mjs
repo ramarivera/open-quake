@@ -9,6 +9,8 @@ import { registerHooks } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
 
 const app = new EventEmitter();
+app.isPackaged = true;
+app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => "/nonexistent/open-quake-bundle-smoke";
 let quit = false;
@@ -40,12 +42,16 @@ class Window {
 	on() {}
 	once() {}
 	loadFile() {}
+	hide() {}
+	showInactive() {}
 	setBounds() {}
 	setAlwaysOnTop() {}
 	destroy() {}
 }
 const screen = new EventEmitter();
 const display = {
+	id: 1,
+	scaleFactor: 1,
 	label: "Primary",
 	size: { width: 1920, height: 1080 },
 	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
@@ -65,6 +71,7 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+const shell = { openExternal: () => Promise.resolve() };
 // The clock registers its media scheme before ready and a handler after.
 const schemes = [];
 const protocol = {
@@ -78,20 +85,16 @@ const net = {
 	},
 };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
-// The voice surface only touches these on a renderer request; the smoke sends none.
+// The voice surface writes the clipboard only on a renderer request; the smoke sends none.
 const clipboard = {
 	writeText: () => {
 		throw new Error("Bundle smoke must not write the clipboard");
 	},
 };
-const shell = {
-	openExternal: () => {
-		throw new Error("Bundle smoke must not open links");
-	},
-};
 globalThis.openQuakeBundleSmoke = {
-	app,
 	powerMonitor,
+	shell,
+	app,
 	BrowserWindow: Window,
 	screen,
 	ipcMain,
@@ -101,7 +104,6 @@ globalThis.openQuakeBundleSmoke = {
 	net,
 	session,
 	clipboard,
-	shell,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -117,7 +119,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, powerMonitor, BrowserWindow, screen, ipcMain, dialog, nativeImage, protocol, net, session, clipboard, shell } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, clipboard } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

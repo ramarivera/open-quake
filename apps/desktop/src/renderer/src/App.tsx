@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ConnectionCheck } from "./ConnectionDiagnostic";
 import { HardwareSettings } from "./hardware/HardwareSettings";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
@@ -12,6 +13,7 @@ import {
 import { StatusDot } from "./ui/Form";
 import {
 	AppearanceIcon,
+	ConnectionIcon,
 	ControlsIcon,
 	DeviceIcon,
 	ScreenIcon,
@@ -39,7 +41,7 @@ function PanelSurface(): React.JSX.Element {
 	return <StripPanel />;
 }
 
-type Page = "overview" | "screen" | "controls" | "appearance";
+type Page = "overview" | "connection" | "screen" | "controls" | "appearance";
 
 type NavItem = {
 	readonly id: Page;
@@ -57,6 +59,7 @@ const sections: ReadonlyArray<{
 		title: "Device",
 		items: [
 			{ id: "overview", label: "Overview", Icon: DeviceIcon },
+			{ id: "connection", label: "Connection", Icon: ConnectionIcon },
 			{ id: "screen", label: "Screen", Icon: ScreenIcon },
 			{ id: "controls", label: "Controls", Icon: ControlsIcon },
 		],
@@ -76,6 +79,16 @@ function ManagementSurface({
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
 	const [page, setPage] = useState<Page>("overview");
+	const [deviceReady, setDeviceReady] = useState(false);
+	const wasReady = useRef(false);
+	const onReady = useCallback((ready: boolean): void => {
+		setDeviceReady(ready);
+		if (ready)
+			setPage((current) => (current === "connection" ? "screen" : current));
+		else if (wasReady.current)
+			setPage((current) => (current === "screen" ? "connection" : current));
+		wasReady.current = ready;
+	}, []);
 	const content = useRef<HTMLElement>(null);
 	const bridge = window.openQuake;
 	const connection = describeConnection(quake.connection, bridge !== undefined);
@@ -126,14 +139,23 @@ function ManagementSurface({
 					open-quake{bridge ? ` ${bridge.version}` : ""}
 				</p>
 			</aside>
-			<main className="content" ref={content}>
+			<main
+				className="content"
+				ref={content}
+				data-session={deviceReady ? "device" : "preview"}
+			>
 				<div className="content-inner">
+					{/* Keep the diagnostic subscription alive while navigating pages. */}
+					<div hidden={page !== "connection"}>
+						<ConnectionCheck onReady={onReady} />
+					</div>
 					{page === "overview" ? (
 						<OverviewPage
 							quake={quake}
 							connection={connection}
 							snapshot={wallpaper.snapshot}
 							onOpenScreen={() => open("screen")}
+							onOpenConnection={() => open("connection")}
 						/>
 					) : page === "screen" ? (
 						<>
@@ -146,9 +168,9 @@ function ManagementSurface({
 						</>
 					) : page === "controls" ? (
 						<HardwareSettings />
-					) : (
+					) : page === "appearance" ? (
 						<ThemeSettings controller={appearance} />
-					)}
+					) : null}
 				</div>
 			</main>
 		</div>
