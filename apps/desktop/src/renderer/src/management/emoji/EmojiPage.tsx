@@ -10,6 +10,7 @@ import { weightedLength } from "../../../../../../../packages/edge/src/emoji/emo
 import type { EmojiReply, EmojiRequest } from "../../../../shared/emoji";
 import { PageHeader } from "../../ui/Form";
 import { captionGif, stillImageGif } from "./caption";
+import { EmojiImage, useEmojiAsset } from "./EmojiImage";
 import "./emoji.css";
 
 type Ready = Extract<EmojiReply, { _tag: "ready" }>;
@@ -71,6 +72,8 @@ export function EmojiPage(): React.JSX.Element {
 		id: string;
 		name: string;
 	} | null>(null);
+	const staticSource = useEmojiAsset(staticHash);
+	const editingSource = useEmojiAsset(editing?.original ?? "");
 	const mounted = useRef(true);
 	const run = useCallback(
 		async (input: EmojiRequest): Promise<Ready | undefined> => {
@@ -159,7 +162,7 @@ export function EmojiPage(): React.JSX.Element {
 			setSelected(next.store.drafts.filter((id) => !previous.includes(id)));
 	};
 	const makeStill = async (): Promise<void> => {
-		const url = view?.assets[staticHash];
+		const url = staticSource;
 		if (!url) return;
 		setBusy(true);
 		try {
@@ -250,7 +253,7 @@ export function EmojiPage(): React.JSX.Element {
 										key={asset.hash}
 										onClick={() => setStaticHash(asset.hash)}
 									>
-										<img src={view.assets[asset.hash]} alt={asset.name} />
+										<EmojiImage hash={asset.hash} alt={asset.name} />
 									</button>
 								))}
 							</div>
@@ -276,8 +279,8 @@ export function EmojiPage(): React.JSX.Element {
 						</div>
 						<div className="emoji-composer">
 							<div className="emoji-original">
-								{view?.assets[staticHash] ? (
-									<img src={view.assets[staticHash]} alt="Original" />
+								{staticSource ? (
+									<img src={staticSource} alt="Original" />
 								) : (
 									<span>Add an image first</span>
 								)}
@@ -355,7 +358,7 @@ export function EmojiPage(): React.JSX.Element {
 									<button
 										className="mc-button"
 										type="button"
-										disabled={busy || !staticHash}
+										disabled={busy || !staticSource}
 										onClick={() => void makeStill()}
 									>
 										Use static image
@@ -401,7 +404,7 @@ export function EmojiPage(): React.JSX.Element {
 												)
 											}
 										>
-											<img src={view.assets[item.rendered]} alt={item.name} />
+											<EmojiImage hash={item.rendered} alt={item.name} />
 											<span>{item.name}</span>
 										</button>
 									) : null;
@@ -554,10 +557,7 @@ export function EmojiPage(): React.JSX.Element {
 												title={`Edit ${item.name}`}
 												onClick={() => setEditing(item)}
 											>
-												<img
-													src={view?.assets[item.rendered]}
-													alt={item.name}
-												/>
+												<EmojiImage hash={item.rendered} alt={item.name} />
 											</button>
 											<button
 												type="button"
@@ -623,7 +623,7 @@ export function EmojiPage(): React.JSX.Element {
 			{editing && view ? (
 				<CaptionDialog
 					item={editing}
-					source={view.assets[editing.original] ?? ""}
+					source={editingSource}
 					close={() => setEditing(null)}
 					save={async (settings, bytes) => {
 						const next = await run({
@@ -723,6 +723,7 @@ function CaptionDialog({
 }): React.JSX.Element {
 	const [settings, setSettings] = useState(item.caption);
 	const [preview, setPreview] = useState(source);
+	useEffect(() => setPreview(source), [source]);
 	const [message, setMessage] = useState("");
 	const [busy, setBusy] = useState(false);
 	const render = async (commit: boolean): Promise<void> => {
@@ -740,7 +741,7 @@ function CaptionDialog({
 	return (
 		<Modal title={`Edit ${item.name}`} close={close}>
 			<div className="emoji-caption-layout">
-				<img src={preview} alt="Caption preview" />
+				<img src={preview || undefined} alt="Caption preview" />
 				<div>
 					<label className="mc-field">
 						Caption Text (Optional)
@@ -817,7 +818,7 @@ function CaptionDialog({
 			<div className="emoji-actions">
 				<button
 					className="mc-button"
-					disabled={busy}
+					disabled={busy || !source}
 					type="button"
 					onClick={() => void render(false)}
 				>
@@ -826,7 +827,7 @@ function CaptionDialog({
 				<button
 					className="mc-button"
 					data-primary
-					disabled={busy}
+					disabled={busy || !source}
 					type="button"
 					onClick={() => void render(true)}
 				>

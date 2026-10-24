@@ -109,9 +109,13 @@ export function emojiFiles(root: string) {
 			throw new RangeError("Changed asset");
 		return bytes;
 	};
+	const verifiedGifs = new Set<string>();
 	const clipboardPath = async (hash: string): Promise<string> => {
 		const bytes = await get(hash);
-		decodeGif(bytes);
+		if (!verifiedGifs.has(hash)) {
+			decodeGif(bytes);
+			verifiedGifs.add(hash);
+		}
 		const directory = join(root, "clipboard");
 		await mkdir(directory, { recursive: true });
 		const destination = join(directory, `${hash}.gif`);

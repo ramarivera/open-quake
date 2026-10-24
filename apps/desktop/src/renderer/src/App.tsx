@@ -7,7 +7,7 @@ import {
 	SettingsPage,
 } from "./maintenance/SettingsPage";
 import { useMaintenance } from "./maintenance/useMaintenance";
-import { AgentsPage, type AgentsTab } from "./management/agents";
+import { AgentsPage } from "./management/agents";
 import { runtimeStatusLabel } from "./management/agents/RuntimeIndicator";
 import { useAgents } from "./management/agents/useAgents";
 import { describeConnection } from "./management/connection";
@@ -137,9 +137,11 @@ function ManagementSurface({
 			query.get("activeTab") ?? query.get("page") ?? "overview",
 		);
 	});
-	const [agentTab, setAgentTab] = useState<AgentsTab>(
-		() => initialActivation?.agentTab ?? "sessions",
-	);
+	const [agentActivation, setAgentActivation] = useState(() => ({
+		tab: initialActivation?.agentTab ?? "sessions",
+		sequence: 0,
+	}));
+	const sidebarDrag = useRef<{ pointer: number; width: number } | null>(null);
 	const [page, setPage] = useState<Page>(() => {
 		const active = initialActivation;
 		return (
@@ -156,7 +158,13 @@ function ManagementSurface({
 					.find((item) => item.id === next?.page);
 				if (item) {
 					setPage(item.id);
-					if (next?.agentTab) setAgentTab(next.agentTab);
+					if (next?.agentTab) {
+						const tab = next.agentTab;
+						setAgentActivation((previous) => ({
+							tab,
+							sequence: previous.sequence + 1,
+						}));
+					}
 					content.current?.scrollTo({ top: 0 });
 				} else {
 					console.warn("Unknown Management Center tab activation ignored");
@@ -264,19 +272,46 @@ function ManagementSurface({
 						}
 					}}
 					onPointerDown={(event) => {
+						if (event.button !== 0) return;
 						const target = event.currentTarget;
+						sidebarDrag.current = {
+							pointer: event.pointerId,
+							width: appearance.appearance.sidebarWidth ?? 218,
+						};
 						target.setPointerCapture(event.pointerId);
 						document.body.dataset.resizing = "true";
 					}}
 					onPointerMove={(event) => {
-						if (event.currentTarget.hasPointerCapture(event.pointerId))
-							appearance.setSidebarWidth(event.clientX);
+						if (
+							sidebarDrag.current?.pointer === event.pointerId &&
+							event.currentTarget.hasPointerCapture(event.pointerId)
+						) {
+							const width = Math.max(120, Math.min(360, event.clientX));
+							sidebarDrag.current.width = width;
+							document.documentElement.style.setProperty(
+								"--mc-sidebar-width",
+								`${width}px`,
+							);
+							event.currentTarget.setAttribute("aria-valuenow", String(width));
+						}
 					}}
 					onPointerUp={(event) => {
+						if (sidebarDrag.current?.pointer !== event.pointerId) return;
+						sidebarDrag.current = null;
+						appearance.setSidebarWidth(event.clientX);
 						event.currentTarget.releasePointerCapture(event.pointerId);
 						delete document.body.dataset.resizing;
 					}}
-					onLostPointerCapture={() => {
+					onLostPointerCapture={(event) => {
+						if (sidebarDrag.current) {
+							sidebarDrag.current = null;
+							const width = appearance.appearance.sidebarWidth ?? 218;
+							document.documentElement.style.setProperty(
+								"--mc-sidebar-width",
+								`${width}px`,
+							);
+							event.currentTarget.setAttribute("aria-valuenow", String(width));
+						}
 						delete document.body.dataset.resizing;
 					}}
 				/>
@@ -316,7 +351,10 @@ function ManagementSurface({
 						) : page === "controls" ? (
 							<HardwareSettings />
 						) : page === "agents" ? (
-							<AgentsPage initialTab={agentTab}>
+							<AgentsPage
+								initialTab={agentActivation.tab}
+								activation={agentActivation}
+							>
 								<ChannelsPage />
 							</AgentsPage>
 						) : page === "emoji" ? (

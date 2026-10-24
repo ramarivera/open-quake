@@ -39,7 +39,7 @@ Emoji fixes are in `bf5916d187f8a24552cef18a5bac5f9d489ca001`.
 | `PRRT_kwDOUADXpM6v4IeO` | Content-addressed bytes publish atomically as a verified private `.gif` file before the clipboard port runs. File, clipboard-adapter and registration regressions use synthetic ports; native proof verifies filename and matching hash. |
 | `PRRT_kwDOUADXpM6v4IeP` | Empty slots retain coordinates; additions fill the first vacancy and capacity counts occupied slots. Service and placement regressions cover the saved layout. |
 | `PRRT_kwDOUADXpM6v4IeR` | Package-link persistence participates in profile activation compensation. Regressions inject linkage and selection failures, preserve unrelated edits, reject conflicting revisions and refresh committed selections. |
-| `PRRT_kwDOUADXpM6v4Hk8` | Genuine messaging-app GIF paste acceptance remains open as `open-quake-lih.17.1.26`, OpenSpec task7.3. Mock file-reference proof cannot establish animation or receiving-app filename classification on macOS/Windows. |
+| `PRRT_kwDOUADXpM6v4Hk8` | Genuine messaging-app GIF paste acceptance remains open as `open-quake-lih.17.1.26`, OpenSpec task 7.3. Mock file-reference proof cannot establish animation or receiving-app filename classification on macOS/Windows. |
 
 Relevant regressions are in desktop `main/emoji/{controller,files,clipboard,
 registration,profile-placement}.test.ts`, the native management smoke,
@@ -130,7 +130,7 @@ was performed. Native proof does not establish packaged-app acceptance.
   the full production renderer/preload were already built by the passing
   bundle gate. Final native runs passed.
 
-Only implementation tasks `.25` and `.30`, OpenSpec7.2 and7.7, close with
+Only implementation tasks `.25` and `.30`, OpenSpec 7.2 and 7.7, close with
 this proof. Epic `open-quake-lih.17.1`, physical acceptance `.23`, and real-app
 paste acceptance `.26` remain open. No paid review was requested. Automatic
 included review after pushing is pending/unverified at implementation

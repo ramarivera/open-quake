@@ -12,6 +12,7 @@ import {
 	app,
 	BrowserWindow,
 	dialog,
+	ipcMain,
 	nativeImage,
 	nativeTheme,
 	shell,
@@ -28,10 +29,10 @@ import {
 	parseAppearance,
 } from "../../renderer/src/theme/appearance";
 import { AgentReply } from "../../shared/agents";
-import { EmojiReply } from "../../shared/emoji";
+import { EMOJI_REQUEST, EmojiReply } from "../../shared/emoji";
 import { encodeGif } from "../../shared/gif";
 import { IntegrationReply } from "../../shared/integrations";
-import { MANAGEMENT_ACTIVATE } from "../../shared/management";
+import { MANAGEMENT_ACTIVATE, MANAGEMENT_THEME } from "../../shared/management";
 import { registerAgents } from "../agents";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerEmoji } from "../emoji";
@@ -142,6 +143,26 @@ async function smoke() {
 	} as const;
 	const win = new BrowserWindow(options),
 		panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
+	const calls = { themes: 0, assets: [] as string[] };
+	const handle = ipcMain.handle.bind(ipcMain);
+	ipcMain.handle = (channel, listener) =>
+		handle(channel, (event, ...args: unknown[]) => {
+			if (event.sender === win.webContents) {
+				if (channel === MANAGEMENT_THEME) calls.themes++;
+				const input = args[0];
+				if (
+					channel === EMOJI_REQUEST &&
+					typeof input === "object" &&
+					input !== null &&
+					"type" in input &&
+					input.type === "asset" &&
+					"hash" in input &&
+					typeof input.hash === "string"
+				)
+					calls.assets.push(input.hash);
+			}
+			return listener(event, ...args);
+		});
 	const errors: string[] = [];
 	win.webContents.on("console-message", (_event, level, message) => {
 		if (level === 3) errors.push(message);
@@ -277,6 +298,7 @@ async function smoke() {
 		() => win,
 		true,
 	);
+	ipcMain.handle = handle;
 	const js = (code: string) => win.webContents.executeJavaScript(code);
 	const request = async (bridge: string, input: unknown) =>
 		js(`window.${bridge}.request(${JSON.stringify(input)})`);
@@ -431,6 +453,18 @@ async function smoke() {
 				"document.querySelector('.mc-runtime-dot')?.getAttribute('aria-label')",
 			),
 			"No agent runtime is installed",
+		);
+		await activate("openclaw-ai");
+		await js("document.querySelector('#agents-tab-sessions').click();null;");
+		await waitFor(
+			"document.querySelector('#agents-tab-sessions')?.getAttribute('aria-selected') === 'true'",
+		);
+		await activate("openclaw-ai");
+		assert.equal(
+			await js(
+				"document.querySelector('#agents-tab-ai')?.getAttribute('aria-selected')",
+			),
+			"true",
 		);
 		let view = await agent({
 			type: "create",
@@ -1196,6 +1230,7 @@ async function smoke() {
 		await js(
 			"document.querySelector('input[name=mc-theme][value=grey]').click();null;",
 		);
+		const themesBeforeScale = calls.themes;
 		for (const scale of ["small", "medium", "large"]) {
 			await js(
 				`document.querySelector('input[name=mc-font][value=${scale}]').click();null;`,
@@ -1207,6 +1242,12 @@ async function smoke() {
 		}
 		await js(
 			"document.querySelector('input[name=mc-font][value=small]').click();document.querySelector('button[title=\"UI Settings\"]').click();null;",
+		);
+		await settle();
+		assert.equal(
+			calls.themes,
+			themesBeforeScale,
+			"Font changes must not rewrite native theme",
 		);
 		await activate("emoji");
 		win.setContentSize(820, 960);
@@ -1224,6 +1265,91 @@ async function smoke() {
 		);
 		win.setContentSize(1320, 960);
 		await settle();
+		await js(`window.__reviewWrites = 0; window.__reviewPointer = 0;
+			window.__reviewSetItem = Storage.prototype.setItem;
+			Storage.prototype.setItem = function(key, value) { if (key === ${JSON.stringify(APPEARANCE_STORAGE_KEY)}) window.__reviewWrites++; return window.__reviewSetItem.call(this,key,value); };
+			document.querySelector('.mc-resizer').addEventListener('pointerdown', event => window.__reviewPointer = event.pointerId);null;`);
+		const dragThemes = calls.themes;
+		const resizer = await js(
+			"JSON.stringify(document.querySelector('.mc-resizer').getBoundingClientRect().toJSON())",
+		);
+		const bounds: { x: number; y: number; width: number } = JSON.parse(resizer);
+		const startX = Math.round(bounds.x + bounds.width / 2),
+			dragY = Math.round(bounds.y + 100);
+		win.webContents.sendInputEvent({ type: "mouseMove", x: startX, y: dragY });
+		win.webContents.sendInputEvent({
+			type: "mouseDown",
+			button: "left",
+			clickCount: 1,
+			x: startX,
+			y: dragY,
+		});
+		for (const x of [250, 275, 300]) {
+			win.webContents.sendInputEvent({ type: "mouseMove", x, y: dragY });
+			await settle(30);
+		}
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"300px",
+		);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			0,
+			"No storage writes during drag",
+		);
+		assert.equal(calls.themes, dragThemes, "No theme IPC during drag");
+		win.webContents.sendInputEvent({
+			type: "mouseUp",
+			button: "left",
+			clickCount: 1,
+			x: 300,
+			y: dragY,
+		});
+		await settle();
+		assert.equal(
+			await js("window.__reviewWrites"),
+			1,
+			"One persisted width on release",
+		);
+		assert.equal(
+			calls.themes,
+			dragThemes,
+			"Width must not rewrite native theme",
+		);
+		win.webContents.sendInputEvent({
+			type: "mouseDown",
+			button: "left",
+			clickCount: 1,
+			x: 300,
+			y: dragY,
+		});
+		win.webContents.sendInputEvent({ type: "mouseMove", x: 330, y: dragY });
+		await settle();
+		await js(
+			"document.querySelector('.mc-resizer').releasePointerCapture(window.__reviewPointer);null;",
+		);
+		await settle();
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"300px",
+		);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			1,
+			"Canceled drag never persists",
+		);
+		win.webContents.sendInputEvent({
+			type: "mouseUp",
+			button: "left",
+			clickCount: 1,
+			x: 330,
+			y: dragY,
+		});
+		await js("Storage.prototype.setItem = window.__reviewSetItem;null;");
 		const widthBefore = await js(
 			"document.querySelector('.sidebar').getBoundingClientRect().width",
 		);
@@ -1254,6 +1380,57 @@ async function smoke() {
 			),
 			false,
 		);
+		// A tall gallery must not hydrate assets below the viewport at page activation.
+		for (let index = 0; index < 42; index++) {
+			selectedFile = join(directory, `synthetic-lazy-${index}.png`);
+			await writeFile(
+				selectedFile,
+				nativeImage
+					.createFromBitmap(Buffer.from([index + 1, 80, 120, 255]), {
+						width: 1,
+						height: 1,
+					})
+					.toPNG(),
+			);
+			await emot({ type: "import-static" });
+		}
+		selectedFile = undefined;
+		await win.loadURL(`${renderer}?activeTab=emoji`);
+		await waitFor(
+			"document.querySelectorAll('.emoji-assets img').length >= 42",
+		);
+		await settle(400);
+		const lastImage = ".emoji-assets button:last-child img";
+		assert.equal(
+			await js(
+				`Boolean(document.querySelector('${lastImage}')?.getAttribute('src'))`,
+			),
+			false,
+			"Offscreen gallery image must not fetch bytes",
+		);
+		await js(`document.querySelector('${lastImage}').scrollIntoView();null;`);
+		await waitFor(
+			`document.querySelector('${lastImage}')?.src.startsWith('data:image/png') && document.querySelector('${lastImage}').naturalWidth > 0`,
+		);
+		const assetsBeforeMetadata = calls.assets.length;
+		await emot({
+			type: "command",
+			command: { type: "rename-package", id: "daily", name: "Daily" },
+		});
+		await emot({
+			type: "command",
+			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
+		});
+		await settle();
+		assert.equal(
+			calls.assets.length,
+			assetsBeforeMetadata,
+			"Metadata commands must not refetch gallery bytes",
+		);
+		await capture("lazy-gallery-visible-assets");
+		process.stdout.write(
+			"Management review regressions PASS: lazy assets, repeated alias, drag commit/cancel, native theme dedupe.\n",
+		);
 		assert.equal(weatherRequests, 0, "Disabled weather never uses network IO");
 		assert.deepEqual(errors, []);
 		const captures = await Promise.all(
@@ -1273,6 +1450,7 @@ async function smoke() {
 					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
 					mock: true,
 					nativeAppPasteVerified: false,
+					lazyAssetsAndShellRegressionsVerified: true,
 					clipboardGifFilenameVerified: true,
 					captionOriginalAndMetadataVerified: true,
 					panelIsolationVerified: true,

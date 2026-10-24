@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Effect, Option } from "effect";
+import { Cause, Effect, Option, Runtime } from "effect";
 import { type BrowserWindow, dialog } from "electron";
 import {
 	defaultCaption,
@@ -64,24 +64,7 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 			apps: readonly { name: string; path: string; identifier: string }[] = [],
 		): Effect.fn.Return<EmojiReply, EmojiLibraryFailed> {
 			const store = yield* repository.read();
-			const hashes = [
-				...new Set([
-					...store.staticAssets.map((asset) => asset.hash),
-					...store.items.flatMap((item) => [item.original, item.rendered]),
-				]),
-			];
-			const assets: Record<string, string> = {};
-			for (const hash of hashes) {
-				const bytes = yield* io(() => port.files.get(hash)).pipe(Effect.option);
-				if (Option.isSome(bytes)) {
-					const format =
-						store.staticAssets.find((asset) => asset.hash === hash)?.format ??
-						"image/gif";
-					assets[hash] =
-						`data:${format};base64,${bytes.value.toString("base64")}`;
-				}
-			}
-			return { _tag: "ready", store, assets, notice, apps };
+			return { _tag: "ready", store, assets: {}, notice, apps };
 		});
 		const addGif = Effect.fn("EmojiDesktop.addGif")(function* (
 			bytes: Uint8Array,
@@ -286,11 +269,14 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 				case "asset": {
 					const state = yield* repository.read();
 					const bytes = yield* io(() => port.files.get(input.hash));
+					const format =
+						state.staticAssets.find((asset) => asset.hash === input.hash)
+							?.format ?? "image/gif";
 					return {
 						_tag: "ready",
 						store: state,
 						assets: {
-							[input.hash]: `data:image/gif;base64,${bytes.toString("base64")}`,
+							[input.hash]: `data:${format};base64,${bytes.toString("base64")}`,
 						},
 						notice: "",
 						apps: [],
@@ -339,23 +325,37 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 				}
 				case "place": {
 					const state = yield* repository.read();
-					yield* io(() =>
-						port.place(input.id, state, (profileId) =>
-							Effect.runPromise(
-								repository.transact((current) =>
-									current.packages.some((pack) => pack.id === input.id)
-										? Effect.succeed({
-												...current,
-												revision: current.revision + 1,
-												packages: current.packages.map((pack) =>
-													pack.id === input.id ? { ...pack, profileId } : pack,
-												),
-											})
-										: Effect.fail(new EmojiInvalid("Package not found.")),
-								),
-							).then(() => undefined),
-						),
-					);
+					yield* Effect.tryPromise({
+						try: () =>
+							port.place(input.id, state, (profileId) =>
+								Effect.runPromise(
+									repository.transact((current) =>
+										current.packages.some((pack) => pack.id === input.id)
+											? Effect.succeed({
+													...current,
+													revision: current.revision + 1,
+													packages: current.packages.map((pack) =>
+														pack.id === input.id
+															? { ...pack, profileId }
+															: pack,
+													),
+												})
+											: Effect.fail(new EmojiInvalid("Package not found.")),
+									),
+								).then(() => undefined),
+							),
+						catch: (cause) => {
+							const error = Runtime.isFiberFailure(cause)
+								? Option.getOrElse(
+										Cause.failureOption(cause[Runtime.FiberFailureCauseId]),
+										() => cause,
+									)
+								: cause;
+							return error instanceof EmojiInvalid
+								? error
+								: new EmojiLibraryFailed(cause);
+						},
+					});
 					return yield* snapshot("Added to Quake main settings screen");
 				}
 				case "export": {

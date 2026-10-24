@@ -351,11 +351,13 @@ function PanelSettings({
 }
 export interface AgentsPageProps {
 	readonly initialTab?: AgentsTab;
+	readonly activation?: { readonly tab: AgentsTab; readonly sequence: number };
 	readonly children?: ReactNode;
 	readonly bridge?: AgentsBridge;
 }
 export function AgentsPage({
 	initialTab = "sessions",
+	activation,
 	children,
 	bridge,
 }: AgentsPageProps) {
@@ -363,7 +365,10 @@ export function AgentsPage({
 		bridge ?? window.quakeAgents,
 	);
 	const [tab, setTab] = useState<AgentsTab>(initialTab);
-	useEffect(() => setTab(initialTab), [initialTab]);
+	useEffect(
+		() => setTab(activation?.tab ?? initialTab),
+		[initialTab, activation],
+	);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
 		{ id: "agents", label: strings.clawControlPanel.agentsTab },

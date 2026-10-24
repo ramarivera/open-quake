@@ -13,9 +13,14 @@ import {
 	EmojiRepository,
 	emojiStorageLayer,
 } from "../../../../../packages/edge/src/emoji/emoji-repository";
+import * as gifCodec from "../../shared/gif";
 import { tinyFixture } from "../../shared/gif/fixtures";
 import { emojiFiles } from "./files";
 
+vi.mock("../../shared/gif", async (load) => {
+	const actual = await load<typeof import("../../shared/gif")>();
+	return { ...actual, decodeGif: vi.fn(actual.decodeGif) };
+});
 vi.mock("node:fs/promises", async (load) => {
 	const actual = await load<typeof import("node:fs/promises")>();
 	return {
@@ -304,6 +309,19 @@ describe("immutable content-addressed emoji assets", () => {
 });
 
 describe("verified GIF clipboard publication", () => {
+	it("decodes an immutable GIF only once but rechecks source and published bytes on every copy", async () => {
+		const files = emojiFiles(root);
+		await files.put(gif);
+		const decode = vi.mocked(gifCodec.decodeGif);
+		decode.mockClear();
+		await files.clipboardPath(hash);
+		await files.clipboardPath(hash);
+		expect(decode).toHaveBeenCalledTimes(1);
+		await realFs.writeFile(files.assetPath(hash), "changed source");
+		await expect(files.clipboardPath(hash)).rejects.toThrow("Changed asset");
+		expect(decode).toHaveBeenCalledTimes(1);
+	});
+
 	it("publishes a .gif once for concurrent copies and rejects tampering", async () => {
 		const files = emojiFiles(root);
 		await files.put(gif);
