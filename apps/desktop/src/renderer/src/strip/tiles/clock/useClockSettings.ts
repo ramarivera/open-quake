@@ -51,6 +51,8 @@ export function newest(
 export interface ClockSettings {
 	readonly snapshot: ClockSnapshot | undefined;
 	readonly available: boolean;
+	/** The first read has answered (or failed); render defaults if no snapshot. */
+	readonly ready: boolean;
 	readonly request: (command: ClockCommand) => Promise<ClockReply | undefined>;
 	readonly selectTheme: (themeId: ThemeId) => Promise<ClockThemeResult>;
 }
@@ -61,11 +63,17 @@ export function useClockSettings(
 		: window.quakeClock,
 ): ClockSettings {
 	const [snapshot, setSnapshot] = useState<ClockSnapshot>();
+	const [settled, setSettled] = useState(false);
 	const mounted = useRef(true);
 	const request = useCallback(
 		async (command: ClockCommand): Promise<ClockReply | undefined> => {
 			if (!bridge) return undefined;
-			const reply: unknown = await bridge.request(command);
+			let reply: unknown;
+			try {
+				reply = await bridge.request(command);
+			} catch {
+				return undefined;
+			}
 			if (!Schema.is(ClockReply)(reply)) return undefined;
 			if (reply._tag === "success" && mounted.current)
 				setSnapshot((current) => newest(current, reply.snapshot));
@@ -80,7 +88,9 @@ export function useClockSettings(
 			if (Schema.is(ClockSnapshot)(value))
 				setSnapshot((current) => newest(current, value));
 		});
-		void request({ _tag: "read" });
+		void request({ _tag: "read" }).finally(() => {
+			if (mounted.current) setSettled(true);
+		});
 		return () => {
 			mounted.current = false;
 			off();
@@ -99,5 +109,11 @@ export function useClockSettings(
 		},
 		[bridge, request, snapshot?.keyCode],
 	);
-	return { snapshot, available: !!bridge, request, selectTheme };
+	return {
+		snapshot,
+		available: !!bridge,
+		ready: !bridge || snapshot !== undefined || settled,
+		request,
+		selectTheme,
+	};
 }

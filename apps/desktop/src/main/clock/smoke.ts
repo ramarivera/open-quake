@@ -10,6 +10,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
@@ -19,6 +20,8 @@ import {
 } from "../../shared/clock-contracts";
 import { THEME_IDS } from "../../shared/clock-style";
 import { MediaLive, registerMedia } from "../media";
+import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
 import { ClockLive, registerClock, registerClockScheme } from "./index";
 
 registerClockScheme();
@@ -149,12 +152,28 @@ async function smoke(): Promise<void> {
 			ManagedRuntime.make(ClockLive(base)),
 			() => management,
 		);
+		// The strip renders the active profile; serve DK-Suite's clock profile.
+		const envelope = stripFixtureEnvelope(clockProfile);
+		const profiles = registerProfiles(
+			ManagedRuntime.make(
+				ProfilesLive({
+					read: async () => structuredClone(envelope),
+					write: async () => undefined,
+				}),
+			),
+			pathToFileURL(resolve("out/renderer/index.html")).href,
+		);
 		await Promise.all([
 			management.loadFile(resolve("out/renderer/index.html")),
 			panel.loadFile(resolve("out/renderer/index.html"), {
 				query: { surface: "panel" },
 			}),
 		]);
+		await waitFor(
+			management,
+			`(() => { const b = [...document.querySelectorAll('.nav-item')].find((n) => n.textContent.includes('Screen')); b?.click(); return !!b; })()`,
+			"management Screen page",
+		);
 		await waitFor(
 			panel,
 			`!!document.querySelector('.oq-clock')`,
@@ -394,7 +413,7 @@ async function smoke(): Promise<void> {
 		picked = videoPath;
 		await evaluate(
 			management,
-			`document.querySelector('.clock-theme-card[data-theme="aurora"] .clock-theme-actions button').click()`,
+			`document.querySelector('.clock-theme-card[data-theme="aurora"] .button-row button').click()`,
 		);
 		await waitFor(
 			panel,
@@ -439,7 +458,7 @@ async function smoke(): Promise<void> {
 		picked = shortPath;
 		await evaluate(
 			management,
-			`document.querySelector('.clock-theme-card[data-theme="tactical"] .clock-theme-actions button').click()`,
+			`document.querySelector('.clock-theme-card[data-theme="tactical"] .button-row button').click()`,
 		);
 		await waitFor(
 			management,
@@ -497,6 +516,7 @@ async function smoke(): Promise<void> {
 		management.destroy();
 		panel.destroy();
 		await clock.dispose();
+		await profiles.dispose();
 		await media.dispose();
 		process.stdout.write(
 			"Clock Electron smoke PASS: DK geometry, 2×380 ms minute flip, reduced motion, five themes, strip ◀/▶ save + rollback, None, 12h + seconds, custom image/video over oq-clock-media, broken-media fallback, missing-file marker. Hardware unverified.\n",

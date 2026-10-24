@@ -18,35 +18,6 @@
 .wallpaper-neutral {
 	fill: var(--quake-background);
 }
-.wallpaper-scrim stop {
-	stop-color: var(--quake-background);
-}
-.wallpaper-clock-group {
-	font-family: system-ui, sans-serif;
-	font-variant-numeric: tabular-nums;
-}
-.wallpaper-clock {
-	fill: var(--quake-foreground);
-	font-size: 300px;
-	font-weight: 600;
-	letter-spacing: -0.03em;
-	text-anchor: end;
-}
-.wallpaper-clock-seconds {
-	fill: var(--quake-accent);
-	font-size: 120px;
-	font-weight: 600;
-}
-.wallpaper-clock-meridiem {
-	fill: var(--quake-muted);
-	font-size: 88px;
-	font-weight: 600;
-}
-.wallpaper-panel {
-	width: 100%;
-	height: 100%;
-	background: var(--quake-background);
-}
 .wallpaper-serial,
 .wallpaper-actions {
 	display: flex;

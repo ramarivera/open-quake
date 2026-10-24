@@ -1,3 +1,9 @@
+/**
+ * The semantic color contract. Each token becomes a `--quake-<token>` custom
+ * property and is the only thing a custom theme may override. Surfaces,
+ * hairlines and tints are derived from these in styles.css, so an imported
+ * palette stays coherent without naming every shade.
+ */
 export const themeTokenNames = [
 	"background",
 	"surface",
@@ -14,28 +20,30 @@ export type ThemeToken = (typeof themeTokenNames)[number];
 export type ThemeTokens = Readonly<Record<ThemeToken, string>>;
 export type BuiltinTheme = "dark" | "light";
 
+// Graphite neutrals with one warm signal color. `border` is reserved for
+// control boundaries, so it keeps 3:1 against both background and surface.
 export const themes = {
 	dark: {
-		background: "#0b0e14",
-		surface: "#161b24",
-		foreground: "#e6edf3",
-		muted: "#a5b1c2",
-		border: "#62708a",
-		accent: "#8cbbff",
-		"accent-text": "#0b0e14",
-		success: "#70d787",
-		warning: "#e8bd58",
+		background: "#18181b",
+		surface: "#232327",
+		foreground: "#f4f4f5",
+		muted: "#a8a8b0",
+		border: "#75757e",
+		accent: "#ff9a4d",
+		"accent-text": "#1f1206",
+		success: "#5ad68a",
+		warning: "#f5c451",
 	},
 	light: {
-		background: "#f5f7fa",
+		background: "#f4f4f6",
 		surface: "#ffffff",
-		foreground: "#182230",
-		muted: "#526174",
-		border: "#718096",
-		accent: "#174ea6",
+		foreground: "#1d1d21",
+		muted: "#5f5f68",
+		border: "#85858e",
+		accent: "#b4480b",
 		"accent-text": "#ffffff",
-		success: "#216e39",
-		warning: "#805900",
+		success: "#1c7a3e",
+		warning: "#8a5a00",
 	},
 } as const satisfies Record<BuiltinTheme, ThemeTokens>;
 

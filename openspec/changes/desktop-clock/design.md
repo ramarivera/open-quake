@@ -24,7 +24,7 @@ Recovered sources this design copies from:
 
 Goals: the clock renders like DK-Suite 0.4.95 on the strip, pixel for pixel in layout, type and material. It keeps the behaviour DK-Suite gets right and fixes what it gets wrong (frozen PC preview, file paths in URLs).
 
-Non-goals: weather and now-playing cards (`open-quake-lih.7`); the tile registry and grid (`open-quake-lih.2`); the profile catalog and editor revert model (`open-quake-lih.8`, `open-quake-lih.9`); touch frame decoding (`open-quake-lih.3`).
+Non-goals: weather and now-playing cards (`open-quake-lih.7`); the grid itself (`open-quake-lih.2`, which leaves this lane only the `dkDesktopClock` registry entry); the profile catalog and editor revert model (`open-quake-lih.8`, `open-quake-lih.9`); touch frame decoding (`open-quake-lih.3`).
 
 ## Decisions
 
@@ -85,7 +85,7 @@ type ClockTileProps = {
 
 - `backdrop-filter` over a full-strip image costs GPU time. DK ships the same 26 px blur. Only the flipping card animates, and only for 760 ms a minute.
 - Procedural art will not match DK's painterly AI images stroke for stroke. Composition, palette and mood follow DK's notes; users can still choose any image.
-- The temporary panel mount always shows the clock until lih.2 renders the active profile. That matches today's behaviour, where the panel shows only a clock.
+- Strip tiles normally read everything from the host context. The clock reads its own store, because profile keys do not carry `clockStyle` yet, and runs its own boundary-aligned ticker, seeded from the host clock, so the flip lands on the minute rather than up to a second late on main's one-second stream.
 
 ## Verification
 

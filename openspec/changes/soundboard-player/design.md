@@ -35,9 +35,9 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 ## Decisions
 
-1. Approved (Ramiro, 2026-10-23): initial playback is one active session per DK-Player key, with repeated play replacing that key's session; distinct keys may overlap. stopAudio stops all sessions and restores no OS volume.
+1. Approved (Ramiro, 2026-10-23): initial playback is one active session per DK-Player key, with explicit play replacing that key's current playback; PLAY_ADD creates additional identified instances (`KNOB-082`), and distinct keys may overlap. stopAudio stops all sessions and restores no OS volume.
 
-2. Approved (Ramiro, 2026-10-23): preserve source playlist order, use per-session volume 0–100, and define fade durations in milliseconds. Decode legacy numeric actions at the import boundary only after fixture mapping.
+2. Approved (Ramiro, 2026-10-23): preserve source playlist order, use per-session volume 0–100, and define fade durations in milliseconds. Decode the recovered action values 0..6 and fade strings `<type>-<ms>` at the import boundary (`KNOB-082/083`), with fixtures for every value.
 
 3. Approved (Ramiro, 2026-10-23): MP3 is the initial verified input subset. No directory scanning, streaming URLs or codec expansion is implied by a path string.
 
@@ -47,7 +47,7 @@ Approved (Ramiro, 2026-10-23): SoundKeyConfig stores ordered managed local file 
 
 ### Data flow and lifecycle
 
-Approved (Ramiro, 2026-10-23): The profile owner saves normalized key settings. The player conductor validates files and sends commands to an injected audio backend, publishing one state stream for panel and desktop. Repeat play replaces only that key's generation; late callbacks from the old session are discarded. Global stopAudio enumerates active sessions once.
+Approved (Ramiro, 2026-10-23): The profile owner saves normalized key settings. The player conductor validates files and sends commands to an injected audio backend, publishing one state stream for panel and desktop. Explicit play replaces only that key's playback generation; PLAY_ADD retains independently identified instances. Late callbacks from stopped/replaced generations are discarded. Playlist navigation and natural end wrap indefinitely, skipping unavailable files with a bounded scan (`KNOB-086`). Global stopAudio enumerates active sessions once.
 
 ### Failure contract
 
@@ -81,9 +81,9 @@ Two parallel lanes specced the same feature. `soundboard-playback` was folded in
 
 - Concurrency: keep this change's per-key sessions with stopAudio for all, under one soundboard-wide AudioOutput lease (from soundboard-playback). Voice capture preempts every session without fade and nothing auto-resumes.
 - Missing files: per-entry visible status (from soundboard-playback) instead of silent filtering with a warning.
-- Repeat: no repeat or shuffle in this change. The earlier "unless explicitly configured repeat" escape is dropped until a repeat mode has its own requirement.
+- Repeat: superseded by the 0.4.95 audit correction (`KNOB-086`). Playlists wrap indefinitely in source order and previous/next wrap too. No shuffle is implied. Keep visible missing-file status while skipping unavailable entries; stop when none are available.
 - Fade bounds: linear ramps, 0..10,000 ms (from soundboard-playback).
-- First-release boundary, the HTTPS-URL rejection, needsConfiguration for unknown numeric audioAction/audioFade, the 10 s readiness timeout and rescan semantics all come from soundboard-playback.
+- First-release boundary, the HTTPS-URL rejection, needsConfiguration for controls outside recovered audioAction 0..6 / audioFade types 0..3 or malformed fade strings, the 10 s readiness timeout and rescan semantics all come from soundboard-playback.
 
 Carried-over evidence: `ATLAS/artifacts/ipc_channels.txt` (N) names PlayerReady, AudioTrackNaturalEnd, AudioPlaylistAction, RequestPlayAudioPlaylistRescan, AudioPlayStart/Stop/LoadError and get-play-audio-runtime-status. Exact payloads and timing are unverified.
 

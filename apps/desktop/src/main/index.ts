@@ -15,6 +15,7 @@ import {
 import { createEventForwarder } from "./eventForwarding";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
+import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 registerClockScheme();
@@ -110,6 +111,10 @@ app.whenReady().then(() => {
 	registerClock(
 		ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 		() => managementWin,
+	);
+	// Read-only committed profiles for the strip and its preview.
+	registerProfiles(
+		ManagedRuntime.make(desktopProfilesLive(app.getPath("userData"))),
 	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(

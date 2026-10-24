@@ -223,12 +223,17 @@ Management SHALL offer a Desktop clock section with: Theme background (segmented
 
 ### Requirement: Clock profile configuration
 
-The DK-Desktop-Clock profile SHALL hold one `dkDesktopClock` key at `1,1` rendered full-strip (8×2), with `supportKnob` and `supportTouchEffect` false, an empty title and icon, and title, grid, icon, delete and drag editing disabled. Its default actions SHALL be `hourFormat: '24h'` and `clockStyle: { background: { mode: 'theme', themeId: 'season', themes: {} }, musicEnabled }`. Until the profile renderer lands, the panel SHALL show this profile's clock full-strip. Covers WIDGETS-020, WIDGETS-021.
+The DK-Desktop-Clock profile SHALL hold one `dkDesktopClock` key at `1,1` rendered full-strip (8×2), with `supportKnob` and `supportTouchEffect` false, an empty title and icon, and title, grid, icon, delete and drag editing disabled. Its default actions SHALL be `hourFormat: '24h'` and `clockStyle: { background: { mode: 'theme', themeId: 'season', themes: {} }, musicEnabled }`. The strip tile registry SHALL render a `dkDesktopClock` key as this clock over the key's full-strip box. Covers WIDGETS-020, WIDGETS-021.
 
 #### Scenario: Panel shows the clock profile
 
-- **WHEN** the app starts with the clock profile active
-- **THEN** the strip shows the full-strip clock with the season theme
+- **WHEN** the active profile is the DK-Desktop-Clock profile
+- **THEN** the strip shows the full-strip clock with the saved theme, season by default
+
+#### Scenario: Clock store unavailable
+
+- **WHEN** the clock store cannot be reached
+- **THEN** the strip still shows the clock with DK-Suite's defaults instead of an empty tile
 
 #### Scenario: Invalid stored format
 

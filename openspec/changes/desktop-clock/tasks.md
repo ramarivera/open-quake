@@ -17,8 +17,8 @@ Each numbered task has one Beads issue under the `desktop-clock` epic `open-quak
 ## 3. Persistence and hosts
 
 - [x] 3.1 Main-process clock store (`clock-v1/clock.json`), catalog error leaves, IPC read/set-theme/configure with panel and management permissions, and the `oq-clock-media` protocol; tests for patching, revisions, write failure and media resolution (WIDGETS-034/038/059). Evidence: `clock-store.test.ts`, `clock-ipc.test.ts`, and the bundle smoke asserting the scheme registration.
-- [x] 3.2 Management Desktop clock settings: clock format, Theme/None, theme cards with badges and missing-file marker, change/restore background with video duration check, seconds switch, live preview (WIDGETS-056/058/059/060). Evidence: the native smoke management captures and its short-video refusal step.
-- [x] 3.3 Temporary panel mount: the panel shows the clock full-strip as the DK-Desktop-Clock profile until the strip grid renders profiles (WIDGETS-020/021). Evidence: `App.tsx` `PanelSurface`; the native smoke ran against the real panel surface.
+- [x] 3.2 Management Desktop clock settings on the Screen page (hour format stays in its Clock group): Theme/None, theme cards with badges and missing-file marker, change/restore background with video duration check, seconds switch, live preview (WIDGETS-056/058/059/060). Evidence: the native smoke management captures and its short-video refusal step.
+- [x] 3.3 Strip integration: `dkDesktopClock` renders `ClockTile` through the strip tile registry, replacing strip-grid's `ClockPlaceholder`, with defaults when the clock store is unreachable (WIDGETS-020/021). Evidence: `strip.test.ts` clock cases. The clock smoke serves the DK-Desktop-Clock fixture profile to the real panel surface. The media smoke's `panel-clock` capture runs through the same registry.
 
 ## 4. Acceptance
 

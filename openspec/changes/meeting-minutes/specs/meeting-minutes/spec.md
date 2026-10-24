@@ -62,14 +62,19 @@ History SHALL list local meeting ID, title, capture time/duration and stage stat
 - **WHEN** the user confirms deletion of a meeting
 - **THEN** active processing is cancelled and its local record/audio/transcript/minutes are deleted, with partial deletion failure reported
 
-### Requirement: DOCX export
+### Requirement: Markdown and plain-text export
 
-The system SHALL export a selected available transcript or generated minutes to a user-selected DOCX file, preserve title and readable paragraphs, escape embedded markup, and report file/conversion errors without damaging history.
+The system SHALL export available generated minutes as raw UTF-8 Markdown to `<safe-title>-summary.md` and a transcript as UTF-8 plain text to `<safe-title>-transcript.txt`, using a user-selected destination. Filename characters `\ / : * ? " < > |` SHALL become `-`. The system SHALL report file errors without damaging history. Evidence: `AI-315`.
 
 #### Scenario: Export generated minutes
 
 - **WHEN** a completed meeting's minutes are exported
-- **THEN** the DOCX opens with the meeting title and generated-minutes label followed by the minutes text
+- **THEN** the `.md` file contains the saved Markdown without HTML or document conversion and its sanitized filename ends in `-summary.md`
+
+#### Scenario: Export transcript
+
+- **WHEN** the transcript tab is exported for a meeting titled `Review/Plan`
+- **THEN** `Review-Plan-transcript.txt` contains the plain transcript in UTF-8
 
 #### Scenario: Cancel or fail export
 
@@ -89,3 +94,12 @@ The system SHALL send audio/text only to the provider explicitly configured for 
 
 - **WHEN** a user cancels while recording
 - **THEN** capture stops, transient buffers are removed and no processing provider is called
+
+### Requirement: Shipped live translation route
+
+The system SHALL expose the Meet AI live translation toggle and display, require explicit system-audio capture and language/provider configuration through `voice-stt-tts`, and stop translation when the meeting ends. The commented-out key-library entries SHALL NOT disable the shipped profile route. Translation display history SHALL be bounded rather than copying DK-Suite's unbounded-text bug. Evidence: `AI-136`, `AI-292`, `AI-327`, `AI-338`.
+
+#### Scenario: Meet AI translation is available
+
+- **WHEN** the user selects the shipped Meet AI profile and explicitly starts translation with an available configured adapter
+- **THEN** translation starts despite the library entries being commented out, and meeting end releases the translation capture
