@@ -235,3 +235,48 @@ per the lead's instruction, superseding the earlier handoff's closure note.
 Physical hardware remains unverified and was never opened. No new dependency,
 firmware operation, DK-Suite launch or hook bypass was used. PR #22 remains
 unmerged.
+
+## PR #22 strip-touch merge round, 2026-10-24
+
+Merged origin/main at 969d165, containing strip-touch PR #20, onto the reviewed
+hardware head 66887b4. The three conflicts preserve both implementations:
+
+- deviceBus.ts retains main's vendor-touch forwarding, explicit disconnect
+  finalizer and stream-exit tracking. Hardware attachment, current session,
+  internal HardwareReply handling and connect-time refresh remain intact.
+  The stale comment about unsupported separate touch input is replaced with
+  main's description of the bound vendor stream. Biome formats the function.
+- device-service.ts retains main's touch source, readiness and connection
+  controls alongside hardware sending. The review fix still rejects writes
+  after shutdown starts and drains started native writes before handle close.
+- media/smoke.ts retains main's complete synthetic touch, grid gap, span swap
+  and dynamic sub-touch checks, plus hardware registration and unregistration
+  after the touch section.
+
+All required gates passed on the combined code:
+
+- pnpm biome check packages apps, 255 files.
+- pnpm typecheck, six successful tasks.
+- pnpm test, 655 tests: protocol 47, device 345, desktop 236, edge 27.
+- pnpm build.
+- pnpm --filter @open-quake/desktop test:bundle, both default and mock paths.
+- openspec validate --all --strict, 31 changes.
+- Native media smoke, including raw synthetic touch through the production
+  preload and mounted panel, profile span swap and runtime disposal.
+- Native hardware smoke, including firmware query, LED lock policy, mic,
+  brightness, coalesced volume changes, persistence and polling recovery.
+- git diff --check.
+
+Both native runs used OPEN_QUAKE_MOCK_DEVICE=1 with ELECTRON_RUN_AS_NODE unset
+and TMPDIR under lane scratch. Both exited successfully; a process check found
+no remaining owned Electron process or DK-Suite. Chromium cache-directory
+diagnostics appeared during the hardware smoke without assertion failures.
+
+Evidence is under
+/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/hw-controls/merge-969d165/.
+Gate logs are gate-{biome,typecheck,test,build,bundle,openspec}.log. Native logs
+are {media,hardware}-smoke-{build,run}.log. Screenshots are in media-native/
+and native/. Bead open-quake-lih.12.1.7 tracks OpenSpec task 1.7. Cluster
+open-quake-lih.12 remains open until the lead merges PR #22. No additional
+behavior or audit coverage is introduced; physical hardware remains unverified
+and was never opened.

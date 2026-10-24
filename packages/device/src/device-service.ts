@@ -40,6 +40,8 @@ import {
 	keepAliveReport,
 } from "./protocol-adapter.js";
 
+import { startTouchSource } from "./touch/touch-source.js";
+
 export type DeviceStreamError =
 	| QuakeHidReadFailed
 	| QuakeHidWriteFailed
@@ -73,6 +75,14 @@ export interface QuakeConnection {
 		Scope.Scope
 	>;
 	readonly disconnect: () => Effect.Effect<void, QuakeHidCloseFailed>;
+	readonly touch: {
+		readonly setCaptureActive: (active: boolean) => Effect.Effect<void>;
+		readonly setLocked: (locked: boolean) => Effect.Effect<void>;
+		readonly wake: () => Effect.Effect<void>;
+		readonly health: Effect.Effect<
+			import("./touch/touch-contracts.js").TouchHealth
+		>;
+	};
 }
 
 export class QuakeDevice extends Effect.Service<QuakeDevice>()(
@@ -105,6 +115,10 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				yield* Effect.addFinalizer(() => PubSub.shutdown(events));
 				let sendHardware: QuakeConnection["sendHardware"] = () =>
 					Effect.fail(new QuakeConnectionClosed());
+				const touchReady =
+					yield* Deferred.make<
+						Effect.Effect.Success<ReturnType<typeof startTouchSource>>
+					>();
 				const ready = yield* Deferred.make<void, QuakeHidOpenFailed>();
 				const stopped = yield* Deferred.make<Termination>();
 				const finished = yield* Deferred.make<Termination>();
@@ -150,6 +164,13 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 									}).pipe(Effect.uninterruptible),
 								),
 						);
+						const touch = yield* startTouchSource(transport, (points) =>
+							PubSub.publish(
+								events,
+								Take.of<DeviceEvent>({ _tag: "Touch", points }),
+							).pipe(Effect.asVoid),
+						);
+						yield* Deferred.succeed(touchReady, touch);
 						// toPull acquires the incoming stream and its listeners before we signal ready.
 						const pull = yield* Stream.toPull(handle.reports);
 						yield* Stream.runForEach(
@@ -250,6 +271,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 					},
 				);
 				return {
+					touch: yield* Deferred.await(touchReady),
 					info,
 					sendHardware: (command) => sendHardware(command),
 					events: Stream.unwrapScoped(subscribe()),

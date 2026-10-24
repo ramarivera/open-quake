@@ -83,8 +83,11 @@ export function StripScreen({
 	showEmptyGridDashedBorder,
 	pressedKeyCode,
 	children,
+	onLayout,
 }: {
 	profiles: StripProfiles;
+	/** Reports the layout actually painted for the panel input adapter. */
+	onLayout?: (layout: StripLayout | undefined) => void;
 	wallpaper?: WallpaperSnapshot | undefined;
 	/** "vivid" previews the wallpaper the vivid screen page shows. */
 	view?: "active" | "vivid";
@@ -100,6 +103,10 @@ export function StripScreen({
 		return stripLayout(profile, page);
 	}, [profiles, serial]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
+	useLayoutEffect(() => {
+		onLayout?.(vivid ? undefined : layout);
+		return () => onLayout?.(undefined);
+	}, [layout, vivid, onLayout]);
 	const now = wallpaper ? new Date(wallpaper.clock.epochMillis) : undefined;
 	const hourFormat = wallpaper?.saved.clock.actions[0].value ?? "24h";
 	return (

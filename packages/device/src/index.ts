@@ -14,3 +14,5 @@ export {
 	type QuakeDeviceClient,
 } from "./plain.js";
 export * from "./profiles/index.js";
+
+export * from "./touch/index.js";

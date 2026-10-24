@@ -190,3 +190,26 @@ describe("node-hid boundary, native API mocked", () => {
 			}),
 	);
 });
+
+it.scoped(
+	"uses non-exclusive macOS opening for vendor touch without writes",
+	() =>
+		Effect.gen(function* () {
+			const transport = yield* HidTransport;
+			const connection = yield* transport.open({
+				path: "fake:touch",
+				vendorId: 0x0712,
+				productId: 0x0010,
+				usagePage: 0xff73,
+				usage: 0x71,
+			});
+			if (process.platform === "darwin")
+				expect(mocks.open).toHaveBeenCalledWith("fake:touch", {
+					nonExclusive: true,
+				});
+			else expect(mocks.open).toHaveBeenCalledWith("fake:touch");
+			expect(handle.write).not.toHaveBeenCalled();
+			yield* connection.close();
+			expect(handle.close).toHaveBeenCalledTimes(1);
+		}).pipe(Effect.provide(NodeHidLive)),
+);
