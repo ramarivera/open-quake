@@ -5,6 +5,8 @@ import {
 	createPanelKeyDispatcher,
 	type PanelKeyTarget,
 } from "../keys/panel-key-dispatch";
+import { meetingTouchAction } from "../meetings/touch-action";
+import { meetingRequest } from "../meetings/useMeetings";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { useQuakeEvents } from "../useQuakeEvents";
@@ -84,7 +86,8 @@ function useHoldInput(
 	return useCallback(
 		(event: StripKeyEvent): void => {
 			if (event.keyAction === 0) input(event.keyCode, "down");
-			else if (event.voiceTouchEnd) input(event.keyCode, "touchEnd");
+			else
+				input(event.keyCode, event.voiceTouchEnd ? "touchEnd" : "touchCancel");
 		},
 		[input],
 	);
@@ -138,6 +141,8 @@ export function StripPanel(): React.JSX.Element {
 					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
 					dispatch.key(event);
 					holdKey.current(event);
+					const action = meetingTouchAction(event, layout.current);
+					if (action) void meetingRequest({ _tag: "action", action });
 				},
 				(direction) => {
 					dispatch.cancel();

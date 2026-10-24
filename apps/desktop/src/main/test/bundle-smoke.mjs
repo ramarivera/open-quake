@@ -99,8 +99,21 @@ const net = {
 		throw new Error("Bundle smoke must not serve clock media");
 	},
 };
+const desktopCapturer = {
+	getSources: () => {
+		throw new Error("Bundle smoke must never capture screens");
+	},
+};
+const systemPreferences = {
+	askForMediaAccess: () => {
+		throw new Error("Bundle smoke must never request audio access");
+	},
+	getMediaAccessStatus: () => "denied",
+};
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
+	desktopCapturer,
+	systemPreferences,
 	powerMonitor,
 	shell,
 	app,
@@ -112,7 +125,6 @@ globalThis.openQuakeBundleSmoke = {
 	protocol,
 	net,
 	session,
-	systemPreferences: {},
 	clipboard,
 };
 let nativeResolutions = 0;
@@ -129,7 +141,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, systemPreferences, clipboard } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -162,7 +174,11 @@ try {
 		events.filter(({ channel }) => channel === "quake:event");
 	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
-	for (const channel of ["maintenance:request", "voice:request"])
+	for (const channel of [
+		"maintenance:request",
+		"voice:request",
+		"meetings:request",
+	])
 		assert(requests.has(channel), `Missing request owner: ${channel}`);
 	assert.equal(
 		nativeResolutions,
@@ -197,7 +213,11 @@ try {
 	}
 	app.quit();
 	await until(() => quit);
-	for (const channel of ["maintenance:request", "voice:request"])
+	for (const channel of [
+		"maintenance:request",
+		"voice:request",
+		"meetings:request",
+	])
 		assert(!requests.has(channel), `Request owner survived quit: ${channel}`);
 	assert.equal(screen.listenerCount("display-added"), 0);
 	assert.equal(ipcMain.listenerCount("quake:status"), 0);

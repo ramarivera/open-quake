@@ -1,0 +1,267 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect, Option, Schema } from "effect";
+import { beforeEach, expect, it, vi } from "vitest";
+import { MeetingStore } from "../../../../../packages/edge/src/meetings/meeting-contracts";
+import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
+import {
+	CAPTURE_CHUNK,
+	MEETING_REQUEST,
+	MeetingReply,
+} from "../../shared/meeting-bridge";
+
+const ipc = vi.hoisted(() => ({
+	handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
+	handle: vi.fn(),
+	removeHandler: vi.fn(),
+	on: vi.fn(),
+	removeListener: vi.fn(),
+	app: { on: vi.fn(), removeListener: vi.fn(), quit: vi.fn() },
+}));
+const capture = vi.hoisted(() => ({
+	id: "",
+	written: vi.fn(),
+	stopped: vi.fn(),
+	lost: (_id: string) => {},
+	wait: (): Promise<void> => Promise.resolve(),
+}));
+vi.mock("electron", () => ({
+	app: ipc.app,
+	ipcMain: ipc,
+	BrowserWindow: { getAllWindows: () => [], fromWebContents: () => ({}) },
+	dialog: {},
+	shell: {},
+}));
+vi.mock("./capture-port", () => ({
+	createCapturePort: (options: { onLost: (id: string) => void }) => {
+		capture.lost = options.onLost;
+		return {
+			port: {
+				mic: () => Effect.succeed(Option.none()),
+				start: (id: string) =>
+					Effect.sync(() => {
+						capture.id = id;
+					}),
+				drain: () => Effect.void,
+				stop: () =>
+					Effect.sync(() => {
+						capture.stopped();
+					}),
+				cancel: () =>
+					Effect.promise(async () => {
+						await ipc.handlers.get("meetings:chunk")?.(
+							{},
+							{
+								id: capture.id,
+								track: "mic",
+								segment: 0,
+								bytes: new Uint8Array([1, 2, 3]),
+							},
+						);
+					}),
+				startTranslation: () => Effect.void,
+				stopTranslation: () => Effect.void,
+			},
+			accepts: (event: { command?: boolean }) => !event.command,
+			active: () => true,
+			files: {
+				write: () =>
+					Effect.promise(async () => {
+						capture.written();
+						await capture.wait();
+					}),
+			},
+			dispose: () => {},
+		};
+	},
+}));
+
+import { registerMeetings } from "./index";
+
+beforeEach(() => {
+	ipc.handlers.clear();
+	capture.wait = () => Promise.resolve();
+	ipc.handle.mockImplementation(
+		(name: string, handler: (...args: unknown[]) => Promise<unknown>) => {
+			ipc.handlers.set(name, handler);
+		},
+	);
+	ipc.removeHandler.mockImplementation((name: string) => {
+		ipc.handlers.delete(name);
+	});
+});
+
+it("keeps audio IPC registered until shutdown has drained the last dataavailable write", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-quit-"));
+	const meetings = registerMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+	});
+	try {
+		await meetings.ready;
+		await meetings.runtime.runPromise(MeetingService.action("meetingMinutes"));
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(true);
+		await meetings.dispose();
+		expect(capture.written).toHaveBeenCalledOnce();
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(false);
+	} finally {
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("keeps its quit veto installed while final chunk IO is still pending", async () => {
+	let release = () => {};
+	capture.wait = () =>
+		new Promise<void>((resolve) => {
+			release = resolve;
+		});
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-veto-"));
+	const meetings = registerMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+	});
+	try {
+		await meetings.ready;
+		await meetings.runtime.runPromise(MeetingService.action("meetingMinutes"));
+		const quit = ipc.app.on.mock.calls.find(
+			(call) => call[0] === "before-quit",
+		)?.[1];
+		if (typeof quit !== "function") throw new Error("Missing quit listener");
+		const disposal = meetings.dispose();
+		await vi.waitFor(() => expect(capture.written).toHaveBeenCalledOnce());
+		expect(ipc.app.removeListener).not.toHaveBeenCalledWith(
+			"before-quit",
+			quit,
+		);
+		const preventDefault = vi.fn();
+		quit({ preventDefault });
+		expect(preventDefault).toHaveBeenCalledOnce();
+		expect(meetings.dispose()).toBe(disposal);
+		expect(ipc.app.quit).not.toHaveBeenCalled();
+		release();
+		await disposal;
+		expect(ipc.app.removeListener).toHaveBeenCalledWith("before-quit", quit);
+	} finally {
+		release();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("clears standalone translating state and stops the provider after capture loss", async () => {
+	const { mockMeetingAdapter } = await import("./index");
+	const stop = vi.fn();
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-translation-"));
+	const meetings = registerMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+		adapter: {
+			...mockMeetingAdapter,
+			stopTranslation: () => Effect.sync(stop),
+		},
+	});
+	try {
+		await meetings.ready;
+		await meetings.runtime.runPromise(
+			MeetingService.action("liveAudioTranslate"),
+		);
+		expect(
+			(await meetings.runtime.runPromise(MeetingService.snapshot()))
+				.translating,
+		).toBe(true);
+		capture.lost("00000000-0000-4000-8000-000000000000");
+		await vi.waitFor(async () =>
+			expect(
+				(await meetings.runtime.runPromise(MeetingService.snapshot()))
+					.translating,
+			).toBe(false),
+		);
+		expect(stop).toHaveBeenCalledOnce();
+		expect(
+			(await meetings.runtime.runPromise(MeetingService.snapshot())).notice,
+		).toContain("source or provider is unavailable");
+	} finally {
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("keeps cancel and source loss coherent across concurrent production IPC requests", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-cancel-ipc-"));
+	const renderer = "file:///synthetic-meetings/index.html";
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	let release = () => {};
+	let entered = () => {};
+	const writing = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const waiting = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	capture.wait = async () => {
+		entered();
+		await waiting;
+	};
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		await meetings.ready;
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing production meeting IPC");
+		const started = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "action", action: "meetingMinutes" }),
+		);
+		if (started._tag !== "ready" || !started.snapshot.records[0])
+			throw new Error("Missing recording");
+		const id = started.snapshot.records[0].id;
+		const cancelling = handler(event, { _tag: "cancel", id });
+		await writing;
+		capture.lost(id);
+		// Reads proceed while cancel awaits final chunk IO: IPC has no request lock.
+		const reading = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "read" }),
+		);
+		expect(reading._tag === "ready" && reading.snapshot.records[0]?.state).toBe(
+			"recording",
+		);
+		expect(capture.stopped).not.toHaveBeenCalled();
+		release();
+		const cancelled = Schema.decodeUnknownSync(MeetingReply)(await cancelling);
+		expect(
+			cancelled._tag === "ready" && cancelled.snapshot.records[0]?.state,
+		).toBe("cancelled");
+		await meetings.runtime.runPromise(MeetingService.sourceLost(id));
+		const durable = JSON.parse(
+			await readFile(join(root, "meetings-v1/history.json"), "utf8"),
+		) as unknown;
+		const stored = Schema.decodeUnknownSync(MeetingStore)(durable);
+		expect(stored.records[0]?.state).toBe("cancelled");
+		expect(capture.stopped).not.toHaveBeenCalled();
+		const deleted = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "delete", id, confirmed: true }),
+		);
+		expect(deleted._tag).toBe("ready");
+		await meetings.runtime.runPromise(MeetingService.sourceLost(id));
+		expect(
+			(await meetings.runtime.runPromise(MeetingService.snapshot())).records,
+		).toEqual([]);
+	} finally {
+		release();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});

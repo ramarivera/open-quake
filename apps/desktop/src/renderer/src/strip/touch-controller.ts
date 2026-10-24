@@ -198,11 +198,10 @@ export function createStripTouchController<Layout>(options: {
 			disposed = true;
 			for (const [keyCode, cancel] of releases) {
 				cancel();
-				options.onKey({ keyCode, keyAction: 1, voiceTouchEnd: true });
+				options.onKey({ keyCode, keyAction: 1 });
 			}
 			releases.clear();
-			if (held)
-				options.onKey({ keyCode: held, keyAction: 1, voiceTouchEnd: true });
+			if (held) options.onKey({ keyCode: held, keyAction: 1 });
 			held = undefined;
 			if (sub) {
 				emitSub(sub, sub.last, "end");
