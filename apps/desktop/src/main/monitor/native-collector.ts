@@ -38,6 +38,7 @@ type Result = Omit<MetricSample, "id" | "collectedAt">;
 export function nativeCollector(
 	platform: NodeJS.Platform = process.platform,
 	run: typeof command = command,
+	interfaces: typeof networkInterfaces = networkInterfaces,
 ): MetricCollector {
 	let previousCpu: { idle: number; total: number } | undefined;
 	let previousNetwork:
@@ -110,8 +111,12 @@ export function nativeCollector(
 					),
 				};
 			case "network": {
-				const iface = Object.entries(networkInterfaces()).find(([, entries]) =>
-					entries?.some((entry) => !entry.internal && entry.family === "IPv4"),
+				const iface = Object.entries(interfaces()).find(([, entries]) =>
+					entries?.some(
+						(entry) =>
+							!entry.internal &&
+							(entry.family === "IPv4" || entry.family === "IPv6"),
+					),
 				)?.[0];
 				if (!iface) return { state: "unavailable", values: {} };
 				const counters = parseNetworkCounters(

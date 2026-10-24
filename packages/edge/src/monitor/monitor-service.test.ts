@@ -10,10 +10,96 @@ import {
 	TestClock,
 } from "effect";
 import fc from "fast-check";
-import { type MonitorSnapshot, SampleRate } from "./monitor-contracts.js";
+import {
+	type MetricSample,
+	type MonitorSnapshot,
+	SampleRate,
+} from "./monitor-contracts.js";
 import { MonitorCollector, MonitorService } from "./monitor-service.js";
 
 describe("monitor sampling", () => {
+	it.scoped(
+		"retains successful readings and their age across failed attempts, then recovers",
+		() =>
+			Effect.gen(function* () {
+				const latest = yield* Ref.make<MonitorSnapshot>({
+					sampledAt: 0,
+					samples: [],
+				});
+				const attempt = yield* Ref.make(0);
+				const failuresAllowed = yield* Deferred.make<void>();
+				const started = yield* Deferred.make<void>();
+				const failures: readonly MetricSample["state"][] = [
+					"error",
+					"permission-denied",
+					"unavailable",
+				];
+				const layer = MonitorService.Default.pipe(
+					Layer.provide(
+						Layer.succeed(MonitorCollector, {
+							collect: (id) =>
+								id === "cpu"
+									? Effect.gen(function* () {
+											const n = yield* Ref.updateAndGet(attempt, (n) => n + 1);
+											if (n === 1) yield* Deferred.succeed(started, undefined);
+											if (n > 1) yield* Deferred.await(failuresAllowed);
+											return {
+												state:
+													n === 1 || n >= 5
+														? ("available" as const)
+														: (failures[n - 2] ?? "error"),
+												values:
+													n === 1 ? { load: 37 } : n >= 5 ? { load: 51 } : {},
+											};
+										})
+									: Effect.succeed({
+											state: "permission-denied" as const,
+											values: {},
+										}),
+						}),
+					),
+				);
+				const fiber = yield* MonitorService.watch(1).pipe(
+					Effect.flatMap((stream) =>
+						Stream.runForEach(stream, (value) => Ref.set(latest, value)),
+					),
+					Effect.provide(layer),
+					Effect.forkScoped,
+				);
+				yield* Deferred.await(started);
+				yield* TestClock.adjust(2000);
+				const original = (yield* Ref.get(latest)).samples.find(
+					(s) => s.id === "cpu",
+				);
+				expect(original).toMatchObject({
+					state: "available",
+					values: { load: 37 },
+				});
+				yield* Deferred.succeed(failuresAllowed, undefined);
+				yield* TestClock.adjust(2000);
+				const stale = (yield* Ref.get(latest)).samples.find(
+					(s) => s.id === "cpu",
+				);
+				expect(stale).toMatchObject({
+					state: "stale",
+					collectedAt: original?.collectedAt,
+					values: { load: 37 },
+				});
+				expect(
+					(yield* Ref.get(latest)).samples.find((s) => s.id === "memory"),
+				).toMatchObject({ state: "permission-denied", values: {} });
+				yield* TestClock.adjust(3000);
+				const recovered = (yield* Ref.get(latest)).samples.find(
+					(s) => s.id === "cpu",
+				);
+				expect(recovered).toMatchObject({
+					state: "available",
+					values: { load: 51 },
+				});
+				expect(recovered?.collectedAt).toBeGreaterThanOrEqual(5000);
+				yield* Fiber.interrupt(fiber);
+			}),
+	);
 	it("accepts only finite configured rates in range", () => {
 		fc.assert(
 			fc.property(

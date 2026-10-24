@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { parsePower } from "../../../../../main/monitor/native-parsers";
 import {
 	defaults,
 	emptySnapshot,
@@ -22,6 +23,8 @@ describe("source-backed monitor readouts", () => {
 		expect(bare(undefined)).toBe("--");
 		expect(bare(0)).toBe("0");
 		expect(percent(120)).toBe("100%");
+		expect(percent(undefined)).toBe("--");
+		expect(percent(0)).toBe("0%");
 		expect(size(1024 ** 4)).toBe("1 TB");
 		expect(temperature(52, "fahrenheit")).toBe("126");
 		for (const n of [0, -1, 151, undefined])
@@ -59,6 +62,7 @@ describe("source-backed monitor readouts", () => {
 			expect(initial).toContain("Unavailable");
 			expect(initial).not.toContain(">0<");
 			expect(initial).not.toContain(">100<");
+			expect(initial).not.toMatch(/--(?:<small>|%|°C|°F|MB\/s)/);
 			const fixture = previewSnapshot();
 			const html = renderToStaticMarkup(
 				createElement(MonitorPanel, {
@@ -87,13 +91,68 @@ describe("source-backed monitor readouts", () => {
 				snapshot: {
 					...snapshot,
 					samples: snapshot.samples.map((s) =>
-						s.id === "power" ? { ...s, values: { hasBattery: false } } : s,
+						s.id === "power"
+							? { ...s, values: parsePower("Now drawing from 'AC Power'\n") }
+							: s,
 					),
 				},
 			}),
 		);
 		expect(html).toContain("AC Power");
 		expect(html).not.toContain(">100<");
+		expect(html).toContain(
+			'data-testid="sys-monitor-value-battery-percent">--</div>',
+		);
 		expect(sampleOf(snapshot, "cpu").values.load).toBe(37);
+	});
+	it.each([
+		["AC Power", "charging", "Charging", "AC Power"],
+		["AC Power", "charged", "Charged", "AC Power"],
+		["AC Power", "AC attached; not charging", "Not charging", "AC Power"],
+		["Battery Power", "discharging", "Discharging", "Battery Power"],
+	])(
+		"renders native source %s and status %s independently in every style",
+		(source, native, status, supply) => {
+			const fixture = previewSnapshot();
+			const power = parsePower(
+				`Now drawing from '${source}'\n -InternalBattery-0 (id=1) 87%; ${native}; 0:00 remaining`,
+			);
+			for (const styleId of STYLES) {
+				const html = renderToStaticMarkup(
+					createElement(MonitorPanel, {
+						settings: { ...defaults(), styleId },
+						snapshot: {
+							...fixture,
+							samples: fixture.samples.map((s) =>
+								s.id === "power" ? { ...s, values: power } : s,
+							),
+						},
+					}),
+				);
+				expect(html).toContain(
+					`data-testid="sys-monitor-battery-status">${status}</b>`,
+				);
+				expect(html).toContain(
+					`data-testid="sys-monitor-power-source">${supply === "Battery Power" && styleId === "cyber" ? "ON_BATTERY" : supply}</b>`,
+				);
+			}
+		},
+	);
+	it("omits units for absent disk usage and keeps measured zero", () => {
+		const sample = {
+			id: "disk",
+			state: "available",
+			collectedAt: 1,
+			values: {
+				disks: [
+					{ name: "Unknown" },
+					{ name: "Empty", usedPercent: 0, size: 0 },
+				],
+			},
+		} as const;
+		expect(diskView(sample).rows.map((row) => row.summary)).toEqual([
+			"-- / --",
+			"0% / 0 GB",
+		]);
 	});
 });

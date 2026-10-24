@@ -179,6 +179,7 @@ if (!app.requestSingleInstanceLock()) {
 		const monitor = registerMonitor(
 			app.getPath("userData"),
 			() => managementWin,
+			() => panelWin,
 		);
 		const profileUpdates = profiles.runtime.runFork(
 			ProfileService.subscribeCommittedProfiles().pipe(

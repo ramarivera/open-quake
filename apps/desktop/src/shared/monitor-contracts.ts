@@ -63,7 +63,9 @@ export const SettingsView = Schema.Struct({
 });
 export type SettingsView = typeof SettingsView.Type;
 export const MonitorCommand = Schema.Union(
-	Schema.TaggedStruct("read", {}),
+	Schema.TaggedStruct("read", {
+		styleId: Schema.optionalWith(StyleId, { exact: true }),
+	}),
 	Schema.TaggedStruct("save", {
 		revision: Schema.NonNegativeInt,
 		settings: MonitorSettings,

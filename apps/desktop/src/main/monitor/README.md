@@ -11,8 +11,8 @@ Bluetooth collector or monitoring override is implemented by this lane.
 
 `packages/edge/src/monitor` owns metric schemas, module IDs and scoped workers.
 Each module has one sequential worker. Slow requests cannot overlap or block
-other modules. The stream retains a value as stale after three configured
-intervals. Unmount, disable and shutdown interrupt workers. Rates are 0.2–10 Hz,
+other modules. Failed attempts preserve the last successful values and timestamp;
+the stream labels them stale after three configured intervals without recovery. Unmount, disable and shutdown interrupt workers. Rates are 0.2–10 Hz,
 default 1 Hz. Sampling starts only for a registered live panel window.
 
 The native adapter uses Node os for CPU load deltas and total/free memory. On
@@ -23,6 +23,8 @@ Non-macOS hosts expose CPU and memory; other modules remain unsupported.
 Memory is os total minus free, not a claim about macOS memory pressure. Process
 counts come from states, without process names or command lines. Network rates
 need two counter samples and reset on interface change or counter rollback.
+External IPv4 and IPv6 interfaces both qualify. Power source and battery state
+are independent, so charged or idle laptops on AC never claim to be discharging.
 
 The local `monitor-v1/settings.json` stores revision and validated settings.
 Atomic rename and revision checks preserve the previous record on write failure
@@ -32,13 +34,16 @@ paths or fabricate asset IDs. Images decode through nativeImage and normalize
 to PNG, limited to 8 MiB input and 64 million pixels. Videos decode in an isolated
 hidden sandboxed window, require ≥2 s duration, and time out after 6 s. Video
 inputs are limited to 32 MiB. The decoder window closes in every outcome. Selected
-bytes cross the bridge as data URLs; no path is exposed. Media selection is
+bytes cross the bridge as data URLs for only the active custom style; other
+styles remain metadata until management explicitly previews them. Sampling
+restarts use metadata without loading media. No path is exposed. Media selection is
 staged until Save. Unreferenced staged assets are retained locally for now.
 Built-in textures are original CSS artwork, not redistributed vendor images.
 
 Unavailable values stay `--` at startup and on unsupported hosts. A confirmed
 absent battery shows AC Power and no percentage or charging bolt. Per-field
-absence remains distinct from a measured zero. The disk list uses smDiskList
+absence remains distinct from a measured zero. Unavailable readouts omit numeric
+units, including analog temperatures, ticker rates and disk percentages. The disk list uses smDiskList
 with the shared gesture recognizer and fling runner. No native touch reader is
 added here.
 
@@ -54,7 +59,9 @@ env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 \
 ```
 
 It drives real preload IPC, draft/Save controls, all five layouts, contrast,
-missing images, video duration/playback, picker cancellation, window permissions,
+missing images, video duration/playback, lazy saved-style previews, picker
+cancellation and main-owned window permissions. Thumbnails, including spoofed
+panel URLs, cannot read, subscribe or receive settings broadcasts. It also checks
 disable/window-close cleanup and raw mock touch through the mounted disk list.
 It writes five `panel-<style>-1920x480.png` captures and samples the actual
 macOS command adapter. Windows/Linux native commands, physical QUAKE placement,

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either } from "effect";
-import { defaults } from "../../shared/monitor-contracts";
+import {
+	defaults,
+	type MediaSlot,
+	type MonitorRecord,
+	STYLES,
+	type StyleId,
+} from "../../shared/monitor-contracts";
 import { MonitorCollectionFailed } from "../../shared/monitor-errors";
 import { type MonitorStorage, MonitorStore } from "./monitor-store";
 
@@ -12,6 +18,59 @@ const storage = (overrides: Partial<MonitorStorage> = {}): MonitorStorage => ({
 	...overrides,
 });
 describe("monitor settings", () => {
+	it.effect(
+		"loads only the active or explicitly previewed style, preserving all saved slots",
+		() => {
+			const media: Partial<Record<StyleId, MediaSlot>> = {};
+			for (const [index, style] of STYLES.entries())
+				media[style] = {
+					id: String(index).repeat(32),
+					kind: "video",
+					name: `${style}.webm`,
+				};
+			const record: MonitorRecord = {
+				revision: 7,
+				settings: { ...defaults(), background: "custom", media },
+			};
+			const reads: string[] = [];
+			return Effect.gen(function* () {
+				const store = yield* MonitorStore;
+				const active = yield* store.read();
+				expect(Object.keys(active.media)).toEqual(["glass"]);
+				expect(reads).toEqual(["0".repeat(32)]);
+				expect(active.media.glass?.url.length).toBeLessThan(45 * 1024 ** 2);
+				expect(active.settings.media).toEqual(media);
+				yield* store.configuration();
+				expect(reads).toHaveLength(1);
+				const draft = yield* store.read("cyber");
+				expect(Object.keys(draft.media)).toEqual(["cyber"]);
+				expect(draft.settings.styleId).toBe("glass");
+				expect(reads).toEqual(["0".repeat(32), "1".repeat(32)]);
+				const saved = yield* store.save(7, {
+					...record.settings,
+					background: "none",
+				});
+				expect(saved.media).toEqual({});
+				expect(saved.settings.media).toEqual(media);
+				expect(reads).toHaveLength(2);
+			}).pipe(
+				Effect.provide(
+					MonitorStore.Default(
+						storage({
+							load: async () => record,
+							getMedia: async (slot) => {
+								reads.push(slot.id);
+								return {
+									bytes: new Uint8Array(32 * 1024 ** 2),
+									mime: "video/webm",
+								};
+							},
+						}),
+					),
+				),
+			);
+		},
+	);
 	it.effect(
 		"recovers invalid settings and clears the recovery notice after a successful save",
 		() =>
@@ -100,6 +159,7 @@ describe("monitor settings", () => {
 			expect((yield* store.read()).settings.media.glass).toBeUndefined();
 			const result = yield* store.save(0, {
 				...defaults(),
+				background: "custom",
 				media: { glass: media.slot },
 			});
 			expect(result.media.glass?.available).toBe(true);

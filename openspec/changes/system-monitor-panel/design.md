@@ -17,4 +17,12 @@ Disk rows declare `smDiskList` and move support. The existing mounted recognizer
 
 ## Scope and limits
 
-This lane implements the seven panel modules and the collector subset needed for them, leaving foreground-window monitoring, Bluetooth and monitoring override tasks in system-monitor-tiles open. No hardware is opened. Native mock screenshots prove Electron rendering and bridge behavior, not physical device parity. No new dependencies are allowed.
+This lane implements the seven panel modules and the collector subset needed for them, leaving foreground-window monitoring, Bluetooth and monitoring override tasks in system-monitor-tiles open. No hardware is opened. Native mock screenshots prove Electron rendering and bridge behavior, not physical device parity. This implementation needs no new dependency; exact-pinned dependencies with rationale are approved for parity work.
+
+## Review round 1 corrections
+
+Power source and battery state are independent optional facts. Preserve macOS's AC/Battery source and charging/discharging/charged/not-charging state through the metric contract. The recovered model infers source from presence and status from a boolean; this correction extends approved decision 4's truthful-value policy, WIDGETS-077/083. Unknown values carry no numeric unit in any style.
+
+Keep the last successful metric separate from failed attempts. Errors do not replace its values or timestamp; its age alone controls the three-interval stale label. Recovery replaces the retained sample. Accept either external IPv4 or IPv6 addresses for link counters.
+
+Settings transport loads only the active custom style's media. An explicit management-only style read supports draft previews of other saved styles. Hidden style slots remain metadata until requested, and sampling restarts read metadata without expanding media. Main checks the actual panel and management WebContents identities as well as the renderer URL and top frame. Only the current panel can subscribe; no thumbnail receives settings broadcasts or live metrics.

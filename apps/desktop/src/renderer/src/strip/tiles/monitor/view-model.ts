@@ -11,7 +11,10 @@ export const pct = (n: number | undefined): number | undefined =>
 	finite(n) ? Math.max(0, Math.min(100, n)) : undefined;
 export const bare = (n: number | undefined): string =>
 	finite(n) ? String(Math.round(n)) : "--";
-export const percent = (n: number | undefined): string => `${bare(pct(n))}%`;
+export const withUnit = (value: string, unit: string): string =>
+	value === "--" ? value : `${value}${unit}`;
+export const percent = (n: number | undefined): string =>
+	withUnit(bare(pct(n)), "%");
 export const size = (bytes: number | undefined): string =>
 	!finite(bytes) || bytes < 0
 		? "--"
@@ -94,7 +97,12 @@ export function previewSnapshot(): MonitorSnapshot {
 			up: 1.8 * 1024 ** 2,
 			down: 12.4 * 1024 ** 2,
 		},
-		power: { hasBattery: true, charging: false, percent: 87 },
+		power: {
+			hasBattery: true,
+			source: "battery",
+			batteryState: "discharging",
+			percent: 87,
+		},
 	};
 	return {
 		sampledAt: 1,

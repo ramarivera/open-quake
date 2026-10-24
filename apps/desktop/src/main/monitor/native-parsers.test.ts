@@ -1,5 +1,6 @@
+import type { NetworkInterfaceInfo } from "node:os";
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { nativeCollector } from "./native-collector";
 import {
 	parseDisks,
@@ -9,6 +10,7 @@ import {
 } from "./native-parsers";
 
 describe("platform collection boundaries", () => {
+	afterEach(() => vi.restoreAllMocks());
 	it("parses APFS data/external mounts without double counting system volumes", () => {
 		expect(
 			parseDisks(
@@ -22,13 +24,95 @@ describe("platform collection boundaries", () => {
 	it("never manufactures battery charge for AC desktops", () => {
 		expect(parsePower("Now drawing from 'AC Power'\n")).toEqual({
 			hasBattery: false,
+			source: "ac",
 		});
 		expect(
 			parsePower(
 				"Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1) 87%; discharging; 4:12 remaining",
 			),
-		).toEqual({ hasBattery: true, percent: 87, charging: false });
+		).toEqual({
+			hasBattery: true,
+			percent: 87,
+			source: "battery",
+			batteryState: "discharging",
+		});
 		expect(parsePower("invalid")).toEqual({});
+	});
+	it.each([
+		["charging", "charging"],
+		["charged", "charged"],
+		["AC attached; not charging", "not-charging"],
+	])(
+		"retains AC source independently of battery state %s",
+		(native, batteryState) => {
+			expect(
+				parsePower(
+					`Now drawing from 'AC Power'\n -InternalBattery-0 (id=1) 100%; ${native}; 0:00 remaining`,
+				),
+			).toEqual({
+				hasBattery: true,
+				source: "ac",
+				percent: 100,
+				batteryState,
+			});
+		},
+	);
+	it("does not invent battery status or accept out-of-range capacity", () => {
+		expect(
+			parsePower(
+				"Now drawing from 'AC Power'\n -InternalBattery-0 (id=1) 255%; unknown;",
+			),
+		).toEqual({ hasBattery: true, source: "ac" });
+	});
+	it("samples link counters on an IPv6-only external interface", async () => {
+		const interfaces = (): NodeJS.Dict<NetworkInterfaceInfo[]> => ({
+			lo0: [
+				{
+					address: "::1",
+					netmask: "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+					family: "IPv6",
+					mac: "00:00:00:00:00:00",
+					internal: true,
+					cidr: "::1/128",
+					scopeid: 0,
+				},
+			],
+			en0: [
+				{
+					address: "2001:db8::1",
+					netmask: "ffff:ffff:ffff:ffff::",
+					family: "IPv6",
+					mac: "aa:bb:cc:dd:ee:ff",
+					internal: false,
+					cidr: "2001:db8::1/64",
+					scopeid: 0,
+				},
+			],
+		});
+		const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+		const run = vi
+			.fn()
+			.mockResolvedValueOnce(
+				"Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll\nen0 1500 <Link#6> aa 5 0 1024 3 0 2048 0",
+			)
+			.mockResolvedValueOnce(
+				"Name Mtu Network Address Ipkts Ierrs Ibytes Opkts Oerrs Obytes Coll\nen0 1500 <Link#6> aa 5 0 4096 3 0 4096 0",
+			);
+		const collector = nativeCollector("darwin", run, interfaces);
+		expect(await Effect.runPromise(collector.collect("network"))).toEqual({
+			state: "available",
+			values: { iface: "en0" },
+		});
+		now.mockReturnValue(2000);
+		expect(await Effect.runPromise(collector.collect("network"))).toEqual({
+			state: "available",
+			values: { iface: "en0", up: 2048, down: 3072 },
+		});
+		expect(run).toHaveBeenCalledWith(
+			"/usr/sbin/netstat",
+			["-ibn"],
+			expect.any(AbortSignal),
+		);
 	});
 	it("parses process state and link counters without IP row duplication", () => {
 		expect(parseProcesses("R\nS+\nU\nI\nZ")).toEqual({

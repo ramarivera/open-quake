@@ -57,6 +57,9 @@ export const labels = {
 	acPower: "AC Power",
 	charging: "Charging",
 	discharging: "Discharging",
+	// Truthful states absent from the recovered sysMonitor locale, WIDGETS-077/083.
+	charged: "Charged",
+	notCharging: "Not charging",
 	systemCore: "System Core",
 	systemPerformance: "System Performance",
 	cpuGpuActivity: "CPU & GPU Activity",

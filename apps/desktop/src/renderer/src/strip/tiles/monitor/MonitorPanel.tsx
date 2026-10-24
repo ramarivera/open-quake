@@ -15,10 +15,12 @@ import {
 	diskView,
 	memoryPercent,
 	pct,
+	percent,
 	rate,
 	sampleOf,
 	size,
 	temperature,
+	withUnit,
 } from "./view-model";
 import "./monitor.css";
 
@@ -52,7 +54,7 @@ const Value = ({
 }): React.JSX.Element => (
 	<div className="monitor-value" data-testid={`sys-monitor-value-${id}`}>
 		{value}
-		<small>{unit}</small>
+		{value === "--" ? null : <small>{unit}</small>}
 	</div>
 );
 function Status({
@@ -289,17 +291,19 @@ function Network({ sample }: { sample: MetricSample }): React.JSX.Element {
 function Power({ sample }: { sample: MetricSample }): React.JSX.Element {
 	const v = sample.values;
 	const style = useContext(PanelStyle);
-	const known = v.hasBattery !== undefined;
 	const hasBattery = v.hasBattery === true;
-	const status = !known
-		? "Unavailable"
-		: !hasBattery
+	const status =
+		v.hasBattery === false && v.source === "ac"
 			? l.acPower
-			: v.charging === undefined
-				? "Unavailable"
-				: v.charging
-					? l.charging
-					: l.discharging;
+			: v.batteryState === "charging"
+				? l.charging
+				: v.batteryState === "discharging"
+					? l.discharging
+					: v.batteryState === "charged"
+						? l.charged
+						: v.batteryState === "not-charging"
+							? l.notCharging
+							: "Unavailable";
 	return (
 		<div
 			className="monitor-power"
@@ -335,10 +339,10 @@ function Power({ sample }: { sample: MetricSample }): React.JSX.Element {
 				<span>{l.powerState}</span>
 				<b data-testid="sys-monitor-battery-status">{status}</b>
 				<span>{l.supplyMode}</span>
-				<b>
-					{!known
+				<b data-testid="sys-monitor-power-source">
+					{v.source === undefined
 						? "--"
-						: hasBattery
+						: v.source === "battery"
 							? style === "cyber"
 								? "ON_BATTERY"
 								: l.batteryPower
@@ -400,7 +404,10 @@ function Analog({
 				>
 					{memory
 						? size(v.used)
-						: `${temperature(v.temperature, unit)}${unit === "celsius" ? "°C" : "°F"}`}
+						: withUnit(
+								temperature(v.temperature, unit),
+								unit === "celsius" ? "°C" : "°F",
+							)}
 				</b>
 				{memory ? (
 					<small>
@@ -477,7 +484,7 @@ function Canvas({
 			return (
 				<>
 					<div className="monitor-ticker">
-						{`${l.systemStatus} // CPU ${bare(cpu.values.load)}% // GPU ${bare(gpu.values.load)}% // MEM ${bare(memoryPercent(mem.values))}% // NET ${rate(net.values.up)}MB/s`}
+						{`${l.systemStatus} // CPU ${percent(cpu.values.load)} // GPU ${percent(gpu.values.load)} // MEM ${percent(memoryPercent(mem.values))} // NET ${withUnit(rate(net.values.up), "MB/s")}`}
 					</div>
 					<div className="monitor-layout">
 						<Card>

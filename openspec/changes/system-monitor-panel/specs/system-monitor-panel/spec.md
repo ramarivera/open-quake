@@ -32,6 +32,11 @@ Management SHALL offer Built-in, None and Custom backgrounds with one image/vide
 - **WHEN** a selected file disappears or cannot decode
 - **THEN** the panel uses its built-in background and management reports the missing file without losing the saved slot
 
+#### Scenario: Multiple saved style backgrounds
+
+- **WHEN** all five styles have saved videos
+- **THEN** settings reads and broadcasts include bytes only for the active custom background, not the other four; management loads a different saved style's media only when previewing it, without changing the committed panel
+
 ### Requirement: Truthful values and formatting
 
 The panel SHALL use timestamped availability states from system-monitor-tiles and SHALL show unavailable values as `--` from startup. Confirmed no-battery SHALL show AC Power with no fabricated percentage or charging bolt. Temperatures outside (0,150] Celsius SHALL be unavailable; valid temperatures SHALL convert to Fahrenheit when selected. Disks SHALL retain all rows up to eight, otherwise show eight sorted by usage and an English overflow summary. A successful empty disk list SHALL show No disk detected. Evidence: WIDGETS-075–077, 083, 091–092; approved decision 4 overrides vendor startup zeros and fake battery.
@@ -40,6 +45,16 @@ The panel SHALL use timestamped availability states from system-monitor-tiles an
 
 - **WHEN** collection has not returned or GPU collection is unsupported
 - **THEN** the affected readouts show `--` and an explicit unavailable state while supported modules continue
+
+#### Scenario: Missing measurement units
+
+- **WHEN** a readout is unavailable, including a confirmed absent battery, analog temperature, ticker rate or disk usage
+- **THEN** the value is `--` with no appended numeric unit; a measured zero retains its unit
+
+#### Scenario: Laptop on AC power
+
+- **WHEN** the platform reports AC power with an internal battery charging, charged or not charging
+- **THEN** Supply Mode shows AC Power and Power State preserves the reported battery state, never inferring Discharging from battery presence
 
 #### Scenario: Overflow disk list
 
@@ -59,6 +74,21 @@ The system SHALL reuse system-monitor-tiles rate bounds 0.2–10 Hz with persist
 
 - **WHEN** 0 Hz or 11 Hz is saved
 - **THEN** validation rejects the change and the last committed configuration remains active
+
+#### Scenario: Failed collection after success
+
+- **WHEN** a valid sample is followed by errors, permission failures or unavailable attempts
+- **THEN** the last successful values and timestamp remain, become stale after three intervals, and are replaced only on a successful recovery; a module that has never succeeded retains its explicit failure state
+
+#### Scenario: IPv6-only external interface
+
+- **WHEN** a macOS external interface has IPv6 addresses and no IPv4 address
+- **THEN** its link row supplies byte counters and rates without requiring an IPv4 address
+
+#### Scenario: Non-panel window requests metrics
+
+- **WHEN** management, a profile thumbnail, a spoofed panel URL or a child frame requests a live subscription
+- **THEN** main rejects it and starts no collectors; only the main-owned panel's top frame may subscribe, and settings broadcasts go only to the main-owned management and panel documents
 
 ### Requirement: Disk list touch scrolling
 

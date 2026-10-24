@@ -28,6 +28,7 @@ import { selectMedia } from "./native-media";
 export function registerMonitor(
 	root: string,
 	management: () => BrowserWindow | undefined,
+	panel: () => BrowserWindow | undefined,
 	collector: MetricCollector = nativeCollector(),
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
@@ -41,6 +42,11 @@ export function registerMonitor(
 		),
 	);
 	const watchers = new Map<Electron.WebContents, () => void>();
+	const trusted = (contents: Electron.WebContents): boolean =>
+		!contents.isDestroyed() &&
+		(contents === management()?.webContents ||
+			contents === panel()?.webContents) &&
+		canRequestClock(contents.getURL(), renderer, { _tag: "read" }, false);
 	let running: Fiber.RuntimeFiber<void> | undefined;
 	let transition = Promise.resolve(),
 		generation = 0,
@@ -51,15 +57,16 @@ export function registerMonitor(
 		if (fiber) await runtime.runPromise(Fiber.interrupt(fiber));
 	};
 	const broadcastSettings = (view: SettingsView): void => {
-		for (const win of BrowserWindow.getAllWindows())
-			if (!win.isDestroyed()) win.webContents.send(MONITOR_SETTINGS, view);
+		for (const win of new Set([management(), panel()]))
+			if (win && !win.isDestroyed() && trusted(win.webContents))
+				win.webContents.send(MONITOR_SETTINGS, view);
 	};
 	const restart = (): Promise<void> => {
 		const requested = ++generation;
 		transition = transition.then(async () => {
 			await stop();
 			if (disposed || requested !== generation) return;
-			const view = await runtime.runPromise(MonitorStore.read());
+			const view = await runtime.runPromise(MonitorStore.configuration());
 			if (
 				disposed ||
 				requested !== generation ||
@@ -73,7 +80,7 @@ export function registerMonitor(
 						Stream.runForEach(stream, (snapshot) =>
 							Effect.sync(() => {
 								for (const contents of watchers.keys())
-									if (!contents.isDestroyed())
+									if (contents === panel()?.webContents && trusted(contents))
 										contents.send(MONITOR_METRICS, snapshot);
 							}),
 						),
@@ -95,6 +102,7 @@ export function registerMonitor(
 			if (
 				decoded._tag === "None" ||
 				disposed ||
+				!trusted(event.sender) ||
 				!BrowserWindow.fromWebContents(event.sender) ||
 				event.senderFrame !== event.sender.mainFrame ||
 				!canRequestClock(
@@ -109,9 +117,16 @@ export function registerMonitor(
 				isManagement = event.sender === management()?.webContents;
 			if (command._tag !== "read" && command._tag !== "watch" && !isManagement)
 				return reject();
+			if (
+				command._tag === "read" &&
+				command.styleId !== undefined &&
+				!isManagement
+			)
+				return reject();
 			if (command._tag === "watch") {
 				// Main-owned window identity controls live collection. PC previews cannot subscribe.
-				if (isManagement) return reject();
+				if (event.sender !== panel()?.webContents || isManagement)
+					return reject();
 				if (command.active && !watchers.has(event.sender)) {
 					const remove = (): void => {
 						watchers.get(event.sender)?.();
@@ -138,7 +153,10 @@ export function registerMonitor(
 				const store = yield* MonitorStore;
 				switch (command._tag) {
 					case "read":
-						return { _tag: "success", view: yield* store.read() } as const;
+						return {
+							_tag: "success",
+							view: yield* store.read(command.styleId),
+						} as const;
 					case "save":
 						return {
 							_tag: "success",

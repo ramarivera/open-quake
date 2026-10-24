@@ -38,7 +38,11 @@ export const MetricValues = Schema.Struct({
 	up: optionalNumber,
 	down: optionalNumber,
 	hasBattery: Schema.optionalWith(Schema.Boolean, { exact: true }),
-	charging: Schema.optionalWith(Schema.Boolean, { exact: true }),
+	source: Schema.optionalWith(Schema.Literal("ac", "battery"), { exact: true }),
+	batteryState: Schema.optionalWith(
+		Schema.Literal("charging", "discharging", "charged", "not-charging"),
+		{ exact: true },
+	),
 	percent: optionalNumber,
 });
 export type MetricValues = typeof MetricValues.Type;

@@ -5,7 +5,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, ManagedRuntime, Schema } from "effect";
-import { app, BrowserWindow, dialog, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import { SYNTHETIC_TOUCH_EMPTY } from "../../../../../packages/device/src/touch/touch-fixtures";
 import { previewSnapshot } from "../../renderer/src/strip/tiles/monitor/view-model";
 import {
@@ -15,6 +15,7 @@ import {
 	type SettingsView,
 	STYLES,
 } from "../../shared/monitor-contracts";
+import { PROFILE_REQUEST } from "../../shared/profile-manager";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
@@ -144,6 +145,7 @@ async function smoke(): Promise<void> {
 				height: 1000,
 			}),
 			panel = new BrowserWindow(options);
+		const thumbnail = new BrowserWindow(options);
 		const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 		const media = registerMedia(
 			ManagedRuntime.make(MediaLive(join(base, "wallpaper-v1"))),
@@ -207,11 +209,17 @@ async function smoke(): Promise<void> {
 			),
 			renderer,
 		);
+		// Only the legacy profile fixture is served here; thumbnail-manager data is unavailable.
+		ipcMain.handle(PROFILE_REQUEST, () => ({
+			_tag: "rejected",
+			reason: "monitor-smoke-fixture",
+		}));
 		let samples = 0;
 		const fixture = previewSnapshot();
 		const monitor = registerMonitor(
 			base,
 			() => management,
+			() => panel,
 			{
 				collect: (id) =>
 					Effect.sync(() => {
@@ -244,10 +252,11 @@ async function smoke(): Promise<void> {
 			await monitor.dispose();
 			removeLifecycle();
 			await lifecycleRuntime.dispose();
-			for (const window of [management, panel])
+			for (const window of [management, panel, thumbnail])
 				if (!window.isDestroyed()) window.destroy();
 			await knob.dispose();
 			await profiles.dispose();
+			ipcMain.removeHandler(PROFILE_REQUEST);
 			await clock.dispose();
 			await media.dispose();
 		};
@@ -274,6 +283,35 @@ async function smoke(): Promise<void> {
 			`document.querySelector('.monitor-settings [data-monitor-style="glass"]')?.disabled === false`,
 		);
 		assert.equal(samples, 0, "PC preview must not collect");
+		await thumbnail.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "profile-thumbnail" },
+		});
+		await evaluate(
+			thumbnail,
+			`window.monitorLeaks = 0; window.quakeMonitor.onSettings(() => window.monitorLeaks++); window.quakeMonitor.onMetrics(() => window.monitorLeaks++); void 0;`,
+		);
+		for (const command of [
+			{ _tag: "read" },
+			{ _tag: "watch", active: true },
+		] as const)
+			assert.equal(
+				(await request(thumbnail, command))._tag,
+				"failure",
+				"profile thumbnails must have no monitor access",
+			);
+		await thumbnail.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "panel" },
+		});
+		await evaluate(
+			thumbnail,
+			`window.monitorLeaks = 0; window.quakeMonitor.onSettings(() => window.monitorLeaks++); window.quakeMonitor.onMetrics(() => window.monitorLeaks++); void 0;`,
+		);
+		assert.equal(
+			(await request(thumbnail, { _tag: "watch", active: true }))._tag,
+			"failure",
+			"a spoofed panel URL must not grant subscription",
+		);
+		assert.equal(samples, 0, "unowned windows must not start collectors");
 		assert.equal(
 			(await request(management, { _tag: "watch", active: true }))._tag,
 			"failure",
@@ -345,6 +383,16 @@ async function smoke(): Promise<void> {
 			);
 			previous = style;
 		}
+		assert.equal(
+			await evaluate(thumbnail, "window.monitorLeaks"),
+			0,
+			"thumbnails must receive neither metrics nor settings broadcasts",
+		);
+		assert.equal(
+			(await request(panel, { _tag: "read", styleId: "cyber" }))._tag,
+			"failure",
+			"only management may read another style's background",
+		);
 		assert.equal(
 			(
 				await request(panel, {
@@ -505,6 +553,47 @@ async function smoke(): Promise<void> {
 			panel,
 			`(() => {const v=document.querySelector('video.monitor-background'); return !!v && v.readyState >= 2 && !v.paused && v.muted && v.loop;})()`,
 		);
+		// Persist all five slots, then preview a different saved style without Save.
+		const oneStyle = await read(management);
+		const savedStyles = { ...oneStyle.settings.media };
+		for (const style of STYLES) savedStyles[style] = stagedVideo.slot;
+		const multiStyle = await request(management, {
+			_tag: "save",
+			revision: oneStyle.revision,
+			settings: { ...oneStyle.settings, media: savedStyles },
+		});
+		assert(multiStyle._tag === "success");
+		assert.deepEqual(Object.keys(multiStyle.view.media), ["glass"]);
+		const otherStyle = await request(management, {
+			_tag: "read",
+			styleId: "cyber",
+		});
+		assert(otherStyle._tag === "success");
+		assert.deepEqual(Object.keys(otherStyle.view.media), ["cyber"]);
+		assert.equal(otherStyle.view.settings.styleId, "glass");
+		await evaluate(
+			management,
+			`document.querySelector('[data-monitor-style="cyber"]').click()`,
+		);
+		await until(
+			management,
+			`(() => {const p=document.querySelector('.monitor-settings .oq-monitor[data-style="cyber"]'); const v=p?.querySelector('video.monitor-background'); return !!v && v.readyState >= 2;})()`,
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				`document.querySelector('.oq-monitor').dataset.style`,
+			),
+			"glass",
+		);
+		await evaluate(
+			management,
+			`[...document.querySelectorAll('.monitor-save button')].find(b => b.textContent === 'Revert').click()`,
+		);
+		await until(
+			management,
+			`document.querySelector('.monitor-settings .oq-monitor')?.dataset.style === 'glass'`,
+		);
 		const short = join(base, "short.webm");
 		await writeFile(short, await recordVideo(management, 500));
 		dialog.showOpenDialog = async () => ({
@@ -597,7 +686,7 @@ async function smoke(): Promise<void> {
 		}
 		assert.deepEqual(errors, []);
 		process.stdout.write(
-			"Monitor native smoke PASS: five styles at 1920x480, draft/Save, fixture isolation, permissions, native disk drag, image fallback, video playback/duration/cancel, disable and window-close cleanup. No device opened.\n",
+			"Monitor native smoke PASS: five styles at 1920x480, draft/Save, fixture isolation, main-owned permissions, thumbnail/spoof rejection with no broadcasts, lazy multi-style saved video previews, native disk drag, image fallback, video playback/duration/cancel, disable and window-close cleanup. No device opened.\n",
 		);
 	} finally {
 		await dispose?.();

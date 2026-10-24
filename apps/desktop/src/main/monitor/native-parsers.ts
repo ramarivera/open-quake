@@ -38,13 +38,30 @@ export function parseProcesses(output: string): MetricValues {
 	};
 }
 export function parsePower(output: string): MetricValues {
-	if (!/Now drawing from/.test(output)) return {};
-	if (!/InternalBattery|\bBattery-/.test(output)) return { hasBattery: false };
+	const source = /^Now drawing from '(AC Power|Battery Power)'/m.exec(
+		output,
+	)?.[1];
+	if (!source) return {};
+	const supply = source === "AC Power" ? "ac" : "battery";
+	if (!/InternalBattery|\bBattery-/.test(output))
+		return supply === "ac"
+			? { source: supply, hasBattery: false }
+			: { source: supply };
 	const percent = /\b(\d+)%;/.exec(output)?.[1];
+	const state = /;\s*(charging|discharging|charged|not charging)\b/.exec(
+		output,
+	)?.[1];
 	return {
 		hasBattery: true,
-		...(percent ? { percent: Number(percent) } : {}),
-		charging: /; charging;/.test(output),
+		source: supply,
+		...(percent !== undefined && Number(percent) <= 100
+			? { percent: Number(percent) }
+			: {}),
+		...(state === "not charging"
+			? { batteryState: "not-charging" as const }
+			: state === "charging" || state === "discharging" || state === "charged"
+				? { batteryState: state }
+				: {}),
 	};
 }
 export function parseNetworkCounters(

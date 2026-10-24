@@ -30,6 +30,34 @@ export function MonitorSettings(): React.JSX.Element {
 			setMedia(view.media);
 		}
 	}, [view, dirty]);
+	const selectedId = draft.media[draft.styleId]?.id;
+	useEffect(() => {
+		const bridge = window.quakeMonitor;
+		if (!bridge || draft.background !== "custom" || !selectedId) return;
+		let active = true;
+		const styleId = draft.styleId;
+		void bridge
+			.request({ _tag: "read", styleId })
+			.then((reply) => {
+				if (
+					active &&
+					Schema.is(MonitorReply)(reply) &&
+					reply._tag === "success" &&
+					reply.view.revision === revision &&
+					reply.view.settings.media[styleId]?.id === selectedId
+				) {
+					const loaded = reply.view.media[styleId];
+					if (loaded)
+						setMedia((current) => ({ ...current, [styleId]: loaded }));
+				}
+			})
+			.catch(() => {
+				if (active) setError("Monitor settings are unavailable");
+			});
+		return () => {
+			active = false;
+		};
+	}, [draft.background, draft.styleId, selectedId, revision]);
 	const change = (next: Settings): void => {
 		setDraft(next);
 		setDirty(true);

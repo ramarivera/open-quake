@@ -142,7 +142,11 @@ async function smoke(): Promise<void> {
 		ManagedRuntime.make(ClockLive(directory)),
 		() => management,
 	);
-	const monitor = registerMonitor(directory, () => management);
+	const monitor = registerMonitor(
+		directory,
+		() => management,
+		() => panel,
+	);
 	const unregisterHardware = registerHardware(
 		() => undefined,
 		() => management,

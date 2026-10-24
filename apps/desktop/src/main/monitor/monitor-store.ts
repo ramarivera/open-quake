@@ -62,19 +62,25 @@ export class MonitorStore extends Effect.Service<MonitorStore>()(
 							Effect.succeed({ kind: slot.kind, url: "", available: false }),
 						),
 					);
-				const read = Effect.fn("MonitorStore.read")(
-					function* (): Effect.fn.Return<SettingsView> {
-						const current = record;
-						const media: Partial<Record<StyleId, MediaView>> = {};
-						for (const style of STYLES) {
-							const slot = current.settings.media[style];
-							if (slot) media[style] = yield* mediaView(slot);
-						}
-						return { ...current, media, recovered };
-					},
-				);
+				const read = Effect.fn("MonitorStore.read")(function* (
+					styleId?: StyleId,
+				): Effect.fn.Return<SettingsView> {
+					const current = record;
+					const media: Partial<Record<StyleId, MediaView>> = {};
+					const style =
+						styleId ??
+						(current.settings.background === "custom"
+							? current.settings.styleId
+							: undefined);
+					const slot = style && current.settings.media[style];
+					if (style && slot) media[style] = yield* mediaView(slot);
+					return { ...current, media, recovered };
+				});
 				return {
 					read,
+					configuration: Effect.fn("MonitorStore.configuration")(
+						(): Effect.Effect<MonitorRecord> => Effect.sync(() => record),
+					),
 					save: Effect.fn("MonitorStore.save")(function* (
 						revision: number,
 						input: MonitorSettings,

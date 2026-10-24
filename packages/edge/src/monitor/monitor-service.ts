@@ -15,6 +15,10 @@ export class MonitorCollector extends Context.Tag("MonitorCollector")<
 	MonitorCollector,
 	MetricCollector
 >() {}
+interface CollectionState {
+	readonly attempt: MetricSample;
+	readonly valid?: MetricSample;
+}
 /** One sequential worker per module. Slow modules cannot overlap or stall others. */
 export class MonitorService extends Effect.Service<MonitorService>()(
 	"MonitorService",
@@ -27,15 +31,21 @@ export class MonitorService extends Effect.Service<MonitorService>()(
 					hz: number,
 				): Effect.fn.Return<Stream.Stream<MonitorSnapshot>> {
 					const interval = 1000 / hz;
-					const state = yield* Ref.make(new Map<ModuleId, MetricSample>());
+					const state = yield* Ref.make(new Map<ModuleId, CollectionState>());
 					const worker = (id: ModuleId) =>
 						Effect.forever(
 							Effect.gen(function* () {
 								const result = yield* collector.collect(id);
 								const collectedAt = yield* Clock.currentTimeMillis;
-								yield* Ref.update(state, (old) =>
-									new Map(old).set(id, { id, ...result, collectedAt }),
-								);
+								yield* Ref.update(state, (old) => {
+									const attempt = { id, ...result, collectedAt };
+									const valid =
+										result.state === "available" ? attempt : old.get(id)?.valid;
+									return new Map(old).set(id, {
+										attempt,
+										...(valid ? { valid } : {}),
+									});
+								});
 								yield* Effect.sleep(interval);
 							}),
 						);
@@ -49,18 +59,23 @@ export class MonitorService extends Effect.Service<MonitorService>()(
 									return {
 										sampledAt: now,
 										samples: MODULES.map((id) => {
-											const sample = current.get(id);
-											if (!sample)
+											const entry = current.get(id);
+											if (!entry)
 												return {
 													id,
 													state: "unavailable" as const,
 													collectedAt: 0,
 													values: {},
 												};
-											return sample.state === "available" &&
-												now - sample.collectedAt >= interval * 3
-												? { ...sample, state: "stale" as const }
-												: sample;
+											const sample = entry.valid ?? entry.attempt;
+											return {
+												...sample,
+												state:
+													entry.valid &&
+													now - sample.collectedAt >= interval * 3
+														? ("stale" as const)
+														: entry.attempt.state,
+											};
 										}),
 									};
 								}),
