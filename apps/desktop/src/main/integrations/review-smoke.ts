@@ -21,6 +21,7 @@ import {
 	ProfileSwitchingPort,
 } from "../../../../../packages/device/src/profiles/profile-switching-service";
 import { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import { AgentReply } from "../../shared/agents";
 import {
 	IntegrationReply,
 	type IntegrationRequest,
@@ -318,11 +319,56 @@ async function main() {
 		assert(libraries.type === "libraries" && libraries.libraries.length === 2);
 		assert.equal(libraries.libraries[0]?.app, "Figma");
 		await capture("base-shortcuts-existing");
+		const paging = await request(management, {
+			type: "shortcuts.save",
+			library: {
+				id: "",
+				name: "Paging",
+				app: "Figma",
+				createdAt: "",
+				rows: Array.from({ length: 17 }, (_, i) => ({
+					id: `page-row-${i}`,
+					name: `Key ${i}`,
+					app: "Figma",
+					chord: "control+c",
+				})),
+			},
+		});
+		assert(paging.type === "libraries");
+		const pagingLibrary = paging.libraries.find(
+			(library) => library.name === "Paging",
+		);
+		assert(pagingLibrary);
+		await request(management, { type: "shortcuts.sync", id: pagingLibrary.id });
+		const pagingProfile = `shortcuts-${pagingLibrary.id}`;
+		await profiles.runPromise(
+			ProfileService.selectProfile({
+				deviceId: "desktop-preview",
+				profileId: pagingProfile,
+				pageId: `${pagingProfile}-2`,
+			}),
+		);
+		await request(management, {
+			type: "shortcuts.save",
+			library: { ...pagingLibrary, rows: pagingLibrary.rows.slice(0, 16) },
+		});
+		await request(management, { type: "shortcuts.sync", id: pagingLibrary.id });
+		assert.equal(
+			(await profiles.runPromise(ProfileService.loadProfiles())).envelope
+				.activeByDevice["desktop-preview"]?.pageId,
+			`${pagingProfile}-1`,
+		);
+		const constructorAgent = Schema.decodeUnknownSync(AgentReply)(
+			await management.webContents.executeJavaScript(
+				"window.quakeAgents.request({type:'create',id:'constructor',name:'Prototype ID',emoji:''})",
+			),
+		);
+		assert.equal(constructorAgent._tag, "success");
 		await management.webContents.executeJavaScript(
 			`document.querySelector('[data-page="agents"]').click()`,
 		);
 		await wait(
-			`document.querySelector('[aria-label="Agents"]') && document.body.innerText.includes('Main') && !document.body.innerText.includes('Loading Agent configuration')`,
+			`document.querySelector('[aria-label="Agents"]') && document.body.innerText.includes('Main') && !document.body.innerText.includes('Loading Agent configuration') && document.body.innerText.includes('Prototype ID')`,
 		);
 		await capture("base-agents");
 		await request(management, {
@@ -358,6 +404,7 @@ async function main() {
 					ownership: true,
 					allowlist: true,
 					awaitableShutdown: true,
+					modelScopeAndShortcutRepair: true,
 					captures,
 				},
 				null,

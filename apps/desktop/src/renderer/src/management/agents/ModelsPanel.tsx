@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { ConfirmDialog } from "./Dialog";
@@ -41,7 +42,7 @@ function ModelTable({
 			type: "save-model",
 			scope,
 			row: input,
-			secret: secrets[row.id] ?? "",
+			secret: Object.hasOwn(secrets, row.id) ? (secrets[row.id] ?? "") : "",
 			revision: view.revision,
 		});
 		if (reply._tag === "success")
@@ -177,7 +178,11 @@ function ModelTable({
 												? t.authOverridePlaceholder
 												: t.authSavePlaceholder
 										}
-										value={secrets[row.id] ?? ""}
+										value={
+											Object.hasOwn(secrets, row.id)
+												? (secrets[row.id] ?? "")
+												: ""
+										}
 										onChange={(event) =>
 											setSecrets({ ...secrets, [row.id]: event.target.value })
 										}
@@ -335,13 +340,15 @@ export function ModelsPanel({
 						<summary>
 							{agent.emoji} {agent.name} <code>{agent.id}</code>{" "}
 							<span className="mc-badge">
-								{view.models[agent.id] ? t.customConfig : t.inherited}
+								{ownModelRows(view.models, agent.id)
+									? t.customConfig
+									: t.inherited}
 							</span>
 						</summary>
 						<label className="mc-field">
 							<input
 								type="checkbox"
-								checked={!view.models[agent.id]}
+								checked={!ownModelRows(view.models, agent.id)}
 								disabled={busy}
 								onChange={(event) =>
 									void request({
@@ -354,11 +361,11 @@ export function ModelsPanel({
 							/>
 							{t.useDefaultConfig}
 						</label>
-						{view.models[agent.id] ? (
+						{ownModelRows(view.models, agent.id) ? (
 							<ModelTable
 								key={`${agent.id}-${view.revision}`}
 								scope={agent.id}
-								rows={view.models[agent.id] ?? []}
+								rows={ownModelRows(view.models, agent.id) ?? []}
 								view={view}
 								request={request}
 								busy={busy}
