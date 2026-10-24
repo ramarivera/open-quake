@@ -6,23 +6,36 @@ const PANEL_LABEL = "DK-QUAKE";
 /** Degrees the renderer rotates its logical 1920x480 canvas by. */
 export type PanelRotation = 0 | 90;
 
-const isPanelShaped = ({ width, height }: Display["size"]): boolean =>
-	(width === PANEL_SIZE.width && height === PANEL_SIZE.height) ||
-	(width === PANEL_SIZE.height && height === PANEL_SIZE.width);
+export const physicalSize = (display: Display): Display["size"] => ({
+	width: Math.round(display.size.width * display.scaleFactor),
+	height: Math.round(display.size.height * display.scaleFactor),
+});
+
+export const isPanelShaped = (display: Display): boolean => {
+	const { width, height } = physicalSize(display);
+	return [
+		[1920, 480],
+		[480, 1920],
+	].some(
+		([w = 0, h = 0]) => Math.abs(width - w) < 10 && Math.abs(height - h) < 10,
+	);
+};
+export const isPanelCandidate = (display: Display): boolean =>
+	isPanelShaped(display) || display.label.toUpperCase().includes(PANEL_LABEL);
 
 /**
- * Find the display the QUAKE panel should own: prefer the one advertising the
- * DK-QUAKE label, else a 1920x480-shaped display in either orientation, else
- * undefined (no hardware). macOS reports the strip's native framebuffer as
- * 480x1920 unless the user rotated it in System Settings.
+ * Pick a unique physical-size candidate, then a unique DK-QUAKE label.
+ * Multiple size matches require screen-off pairing. macOS reports the strip's
+ * native framebuffer as 480x1920 unless the user rotated it in System Settings.
  */
 export function findPanelDisplay(
 	displays: readonly Display[],
 ): Display | undefined {
-	return (
-		displays.find((d) => (d.label ?? "").toUpperCase().includes(PANEL_LABEL)) ??
-		displays.find((d) => isPanelShaped(d.size))
-	);
+	const sized = displays.filter(isPanelShaped);
+	if (sized.length === 1) return sized[0];
+	if (sized.length > 1) return undefined;
+	const labelled = displays.filter(isPanelCandidate);
+	return labelled.length === 1 ? labelled[0] : undefined;
 }
 
 /**

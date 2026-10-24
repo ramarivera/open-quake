@@ -2,6 +2,7 @@
 import {
 	decodeHardwareReply,
 	decodeHidReport,
+	encodeHardwareCommand,
 	encodeHidReport,
 	FRAME_HEADER,
 	FrameSizeInvalid,
@@ -16,6 +17,11 @@ export const keepAliveFrame = (): Either.Either<Uint8Array, ProtocolError> =>
 	wrapShortCommand({ opCode: 2, cmdId: 0xef, subData: [] });
 export const keepAliveReport = (): Either.Either<Uint8Array, ProtocolError> =>
 	keepAliveFrame().pipe(Either.flatMap(encodeHidReport));
+
+export const screenPowerReport = (
+	on: boolean,
+): Either.Either<Uint8Array, ProtocolError> =>
+	encodeHardwareCommand({ _tag: "ScreenPower", on });
 
 export function decodeReport(
 	input: Uint8Array,

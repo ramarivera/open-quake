@@ -64,11 +64,13 @@ export function OverviewPage({
 	connection,
 	snapshot,
 	onOpenScreen,
+	onOpenConnection,
 }: {
 	quake: QuakeEventsView;
 	connection: ConnectionSummary;
 	snapshot: WallpaperSnapshot | undefined;
 	onOpenScreen: () => void;
+	onOpenConnection: () => void;
 }): React.JSX.Element {
 	const activity = recentActivity(
 		quake.events,
@@ -95,7 +97,14 @@ export function OverviewPage({
 				</div>
 			</section>
 
-			<Group title="Connection">
+			<Group
+				title="Connection"
+				footer={
+					<button type="button" className="button" onClick={onOpenConnection}>
+						Check USB and HDMI…
+					</button>
+				}
+			>
 				<Row label="Link">
 					<span className="value">{connection.link ?? "—"}</span>
 				</Row>

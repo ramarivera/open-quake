@@ -11,10 +11,10 @@ const portrait = makeDisplay({
 });
 
 describe("findPanelDisplay", () => {
-	it("prefers a label containing DK-QUAKE over an earlier size match", () => {
+	it("prefers physical size over an unrelated labelled resolution mismatch", () => {
 		const sizeMatch = makeDisplay({ size: { width: 1920, height: 480 } });
 		const labelled = makeDisplay({ id: 2, label: "Display DK-QUAKE USB" });
-		expect(findPanelDisplay([sizeMatch, labelled])).toBe(labelled);
+		expect(findPanelDisplay([sizeMatch, labelled])).toBe(sizeMatch);
 	});
 
 	it("matches the display label case-insensitively", () => {
@@ -33,6 +33,27 @@ describe("findPanelDisplay", () => {
 		},
 	);
 
+	it("matches physical pixels and rejects the strict ten-pixel boundary", () => {
+		expect(
+			findPanelDisplay([
+				makeDisplay({ size: { width: 960, height: 240 }, scaleFactor: 2 }),
+			]),
+		).toBeDefined();
+		expect(
+			findPanelDisplay([makeDisplay({ size: { width: 1911, height: 489 } })]),
+		).toBeDefined();
+		expect(
+			findPanelDisplay([makeDisplay({ size: { width: 1910, height: 480 } })]),
+		).toBeUndefined();
+	});
+	it("leaves multiple matching strips ambiguous", () => {
+		expect(
+			findPanelDisplay([
+				portrait,
+				makeDisplay({ size: { width: 1920, height: 480 } }),
+			]),
+		).toBeUndefined();
+	});
 	it("returns undefined when neither label nor both dimensions match", () => {
 		expect(
 			findPanelDisplay([

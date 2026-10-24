@@ -75,4 +75,3 @@ otherwise `config.size`, with the start clamped to `min(column, 9 − width)` an
 `min(row, 3 − height)`. DK-Suite imports with edge spans therefore load instead
 of failing. The strip, the preview and hit-testing use the same function. See
 `openspec/changes/strip-key-grid/design.md`.
-
