@@ -95,3 +95,25 @@ were declined for the boundaries above. Reply evidence:
 Review-round beads open-quake-lih.15.1.6–11 are closed with source and gate
 evidence, and the ai-providers-parity epic is closed again. PR #27 remains open;
 no merge was performed. No PR watcher was started.
+
+## Final main integration
+
+The final fetch found PR #30 had advanced origin/main to bdf8ca8 after the
+initial integration. Merge 38bf8c1aa4f42824503f7c793c12314e96514849 includes
+that monitor panel change without conflicts and retains the AI review fixes.
+The epic and verification bead were reopened for this integration. All six
+gates were rerun on the combined source, then the beads were closed again:
+
+- pnpm biome check packages apps: 425 files, no fixes.
+- pnpm typecheck: 6 successful tasks, 4 cached.
+- pnpm test: 4 successful tasks, 2 cached; protocol 47, device 388,
+  edge 70, desktop 441 tests, 946 total.
+- pnpm build: successful, uncached.
+- env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter
+  @open-quake/desktop test:bundle: both default absence and explicit mock
+  passed, including awaited shutdown with no hardware I/O.
+- openspec validate --all --strict: 36 passed, zero failed.
+
+Logs use the *-integrated.log filenames in the scratch directory above.
+There is still no renderer diff relative to origin/main, so the native UI
+screenshot gate does not apply. No paid live calls or device access occurred.
