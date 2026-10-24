@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, TestClock } from "effect";
+import { Effect, Fiber, TestClock } from "effect";
 import { vi } from "vitest";
 import strings from "../../shared/lifecycle-strings.json";
 import { makeDisplay } from "../test/display";
@@ -192,6 +192,66 @@ describe("display prompts", () => {
 		}),
 	);
 
+	it.scoped(
+		"snoozes automatic layout prompts for ten minutes from a failed repair while allowing explicit retry",
+		() =>
+			Effect.gen(function* () {
+				const error = new DisplayOperationFailed(
+					new Error("private native failure"),
+				);
+				const landscape = makeDisplay({
+					id: 2,
+					size: { width: 1920, height: 480 },
+				});
+				const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(0));
+				const native = vi.fn<PromptEdges["native"]>((action) =>
+					action === "probe"
+						? Effect.succeed("mirrored")
+						: Effect.sleep(2000).pipe(Effect.zipRight(Effect.fail(error))),
+				);
+				const service = yield* makeDisplayPrompts(
+					edges({ platform: "darwin", prompt, native }),
+				);
+				const failed = yield* service
+					.check(landscape, false)
+					.pipe(Effect.flip, Effect.forkScoped);
+				yield* TestClock.adjust(2000);
+				const failure = yield* Fiber.join(failed);
+				expect(failure._tag).toBe("DisplayOperationFailed");
+				expect(failure.code).toBe(error.code);
+				expect(failure.originalCause).toBe(error.originalCause);
+				yield* TestClock.adjust(1000);
+				yield* service.check(landscape, false);
+				yield* TestClock.adjust(598_999);
+				yield* service.check(landscape, false);
+				expect(prompt).toHaveBeenCalledOnce();
+				expect(native.mock.calls.map(([action]) => action)).toEqual([
+					"probe",
+					"fix",
+				]);
+				// Cooldown starts when the two-second native attempt failed.
+				native.mockImplementation((action) =>
+					Effect.succeed(action === "probe" ? "mirrored" : "applied"),
+				);
+				yield* TestClock.adjust(1);
+				yield* service.check(landscape, false);
+				expect(prompt).toHaveBeenCalledTimes(2);
+				prompt.mockImplementation(() => Effect.succeed(1));
+				yield* service.repair(landscape);
+				yield* service.check(landscape, false);
+				expect(prompt).toHaveBeenCalledTimes(3);
+				prompt.mockImplementation(() => Effect.succeed(0));
+				yield* service.repair(landscape);
+				expect(prompt).toHaveBeenCalledTimes(4);
+				expect(native.mock.calls.map(([action]) => action)).toEqual([
+					"probe",
+					"fix",
+					"probe",
+					"fix",
+					"fix",
+				]);
+			}),
+	);
 	it("moves a primary strip to the right while preserving other relative origins", () => {
 		const secondary = makeDisplay({
 			id: 3,

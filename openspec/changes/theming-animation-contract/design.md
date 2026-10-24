@@ -76,3 +76,14 @@ stored preference validation, and reduced-motion precedence. Exercise theme
 switching, import errors, persistence, live synchronization, and both surfaces in
 a browser. Physical-panel placement and 60 Hz frame timing require hardware
 verification and remain unverified.
+
+## Amendment: strip motion and palette (strip-key-grid, 2026-10-24)
+
+Approved parity decision 3 (Ramiro, 2026-10-23) puts DK-Suite's strip motion on
+the strip: a 0.3 s press scale to 0.8 with a white glow, and DK's recovered
+loops and crossfades for later widgets. Decision 3 above (160 ms, 4 px, no
+loops) still governs the management window and the panel's status overlays.
+Reduced motion still suppresses strip motion; a pressed tile keeps its glow
+without scaling. The strip's tile palette is DK's fixed device palette, held
+in one typed object, because the strip is a dark hardware display regardless
+of the app theme. See `openspec/changes/strip-key-grid/design.md`.

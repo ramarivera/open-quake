@@ -51,7 +51,8 @@ export function DiagnosticView({
 			setExpanded(status.usb === "fail" ? "usb" : "hdmi");
 	}, [status]);
 	const checking = !status || status.checking;
-	const ready = status?.usb === "pass" && status.hdmi === "pass";
+	const ready =
+		status?.usb === "pass" && status.hdmi === "pass" && status.issue === "none";
 	return (
 		<section className="connection-check" aria-labelledby="connection-title">
 			<header>
@@ -59,6 +60,13 @@ export function DiagnosticView({
 				<h1 id="connection-title">{text.title}</h1>
 				<p className="muted">{text.subtitle}</p>
 			</header>
+			{status?.issue === "native-failed" && (
+				<p role="alert">
+					Quake display arrangement failed. Automatic layout prompts are paused
+					for 10 minutes. Open Display Settings to adjust the layout, or try
+					Arrange Quake display again.
+				</p>
+			)}
 			{status?.mock && (
 				<p className="muted">
 					Desktop preview uses a simulated USB connection.
@@ -233,7 +241,8 @@ export function ConnectionCheck({
 			!!status &&
 				!status.checking &&
 				status.usb === "pass" &&
-				status.hdmi === "pass",
+				status.hdmi === "pass" &&
+				status.issue === "none",
 		);
 	}, [status, onReady]);
 	return (

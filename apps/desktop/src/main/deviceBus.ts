@@ -43,6 +43,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 				yield* connectionNow.disconnect().pipe(Effect.ignore);
 			retry = 0;
 			selectedPath = undefined;
+			exhaustedPresence = undefined;
 			if (!connectionNow) yield* Deferred.succeed(reset, undefined);
 		});
 		yield* Effect.addFinalizer(() =>
@@ -152,18 +153,20 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 				yield* Effect.raceFirst(Effect.sleep(ms), Deferred.await(reset));
 				if (yield* Deferred.isDone(reset)) reset = yield* Deferred.make<void>();
 			});
+		const scanPresence = device.discover().pipe(
+			Effect.map((devices) =>
+				devices
+					.map((info) => info.path)
+					.sort()
+					.join("\n"),
+			),
+			Effect.orElseSucceed(() => ""),
+		);
 		yield* Effect.forever(
 			Effect.gen(function* () {
 				if (retry >= 5) {
-					const devices = yield* device
-						.discover()
-						.pipe(Effect.orElseSucceed(() => []));
-					const presence = devices
-						.map((info) => info.path)
-						.sort()
-						.join("\n");
-					if (exhaustedPresence === undefined) exhaustedPresence = presence;
-					else if (presence !== exhaustedPresence) {
+					const presence = yield* scanPresence;
+					if (presence !== exhaustedPresence) {
 						retry = 0;
 						selectedPath = undefined;
 						exhaustedPresence = undefined;
@@ -174,6 +177,9 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 					}
 				}
 				yield* connectAndForward;
+				// Remember the exhausted burst before its final delay, so arrivals
+				// during that wait trigger a new burst on the first passive scan.
+				if (retry === 4) exhaustedPresence = yield* scanPresence;
 				const delay = Math.min(1000 + 2000 * retry++, 30_000);
 				yield* wait(delay);
 			}),

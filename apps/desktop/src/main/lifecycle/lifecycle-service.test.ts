@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, TestClock } from "effect";
 import type { Display } from "electron";
+import { vi } from "vitest";
+import type { ConnectionDiagnostic } from "../../shared/lifecycle-contracts";
 import { makeDisplay } from "../test/display";
 import { DeviceLifecycle } from "./lifecycle-service";
+import { DisplayOperationFailed } from "./native-display";
 
 const primary = makeDisplay();
 const strip = makeDisplay({
@@ -56,6 +59,65 @@ const withLifecycle = (
 		);
 	});
 describe("desktop lifecycle", () => {
+	it.scoped(
+		"publishes a safe layout failure, keeps polling through cooldown and clears it after explicit repair",
+		() =>
+			Effect.gen(function* () {
+				const error = new DisplayOperationFailed(
+					new Error("token=secret /private/native"),
+				);
+				const notices: ConnectionDiagnostic[] = [];
+				const prompt = vi.fn(() => Effect.succeed(0));
+				let broken = true;
+				yield* Effect.gen(function* () {
+					const service = yield* DeviceLifecycle;
+					yield* TestClock.adjust(1000);
+					expect(service.status().issue).toBe("native-failed");
+					expect(notices.at(-1)?.issue).toBe("native-failed");
+					expect(JSON.stringify(notices)).not.toContain("secret");
+					expect(JSON.stringify(notices)).not.toContain("/private/native");
+					yield* TestClock.adjust(599_999);
+					expect(prompt).toHaveBeenCalledOnce();
+					yield* TestClock.adjust(1);
+					expect(prompt).toHaveBeenCalledTimes(2);
+					const failure = yield* Effect.flip(service.repair());
+					expect(failure._tag).toBe("DisplayOperationFailed");
+					expect(failure.code).toBe(error.code);
+					expect(failure.originalCause).toBe(error.originalCause);
+					broken = false;
+					yield* service.repair();
+					expect(prompt).toHaveBeenCalledTimes(4);
+					expect(service.status().issue).toBe("none");
+					expect(notices.at(-1)?.issue).toBe("none");
+				}).pipe(
+					Effect.provide(
+						DeviceLifecycle.Default({
+							development: false,
+							mock: true,
+							displays: () => [primary, strip],
+							watch: () => () => {},
+							bus: () => undefined,
+							panel: () => {},
+							notify: (status) => notices.push(status),
+							prompts: {
+								platform: "darwin",
+								mock: false,
+								displays: () => [primary, strip],
+								primaryId: () => primary.id,
+								prompt,
+								openSettings: () => Effect.void,
+								native: (action) =>
+									action === "probe"
+										? Effect.succeed("mirrored")
+										: broken
+											? Effect.fail(error)
+											: Effect.succeed("applied"),
+							},
+						}),
+					),
+				);
+			}),
+	);
 	it.scoped(
 		"keeps HDMI failed after pairing times out, then admits settings after a successful retry",
 		() =>

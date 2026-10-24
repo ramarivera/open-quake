@@ -35,6 +35,20 @@ describe("connection diagnostic page", () => {
 		expect(html).toContain("simulated USB");
 		expect(html).toContain("Detection complete, both connections are normal");
 	});
+	it("explains a failed layout repair and its automatic prompt cooldown", () => {
+		const html = render({
+			...status,
+			usb: "pass",
+			hdmi: "pass",
+			issue: "native-failed",
+		});
+		expect(html).toContain('role="alert"');
+		expect(html).toContain("Quake display arrangement failed");
+		expect(html).toContain("10 minutes");
+		expect(html).toContain("Open Display Settings");
+		expect(html).toContain("Arrange Quake display again");
+		expect(html).not.toContain("both connections are normal");
+	});
 	it("uses physical dimensions in the recovered resolution error", () => {
 		expect(
 			hdmiMessage({

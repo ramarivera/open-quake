@@ -2,14 +2,6 @@
  * The panel is a hardware strip read from about 60 cm at a low angle:
  * large figures, theme tokens only, and no pointer affordances.
  */
-/*
- * No scrolling or text selection on the strip. The device window may rotate
- * #root, so the panel sizes to its container, never to viewport units.
- */
-.wallpaper-panel {
-	overflow: hidden;
-	user-select: none;
-}
 .panel-knob {
 	opacity: 0;
 }

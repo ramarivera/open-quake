@@ -5,6 +5,7 @@ import type {
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerMedia } from "./media";
+import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
 
@@ -105,6 +106,13 @@ vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
 });
+vi.mock("./profiles/profile-ipc", async () => {
+	const { Layer } = await import("effect");
+	return {
+		desktopProfilesLive: vi.fn(() => Layer.empty),
+		registerProfiles: vi.fn(),
+	};
+});
 
 function displayEvent(name: string): void {
 	const listeners = electron.screen.on.mock.calls.filter(
@@ -167,6 +175,8 @@ describe("desktop window lifecycle", () => {
 		const { panel, management } = windows();
 		expect(registerMedia).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
+		expect(registerProfiles).toHaveBeenCalledOnce();
+		expect(desktopProfilesLive).toHaveBeenCalledOnce();
 		expect(panel.options).toMatchObject({
 			x: 0,
 			y: 0,
@@ -541,38 +551,61 @@ describe("desktop main with the real device service and fake HID", () => {
 		expect(panel.destroy).not.toHaveBeenCalled();
 	});
 
-	it("keeps one handle for the remaining window, releases it when all windows close, and reacquires on activation", async () => {
-		await start();
-		const { panel, management } = windows();
-		panel.destroyed = true;
-		await Effect.runPromise(fake.emit(report(3, 2, [1])));
-		await vi.waitFor(() =>
-			expect(management.webContents.send).toHaveBeenCalledWith("quake:event", {
-				source: "hid",
-				kind: "press",
-				state: 1,
-			}),
-		);
-		expect(await Effect.runPromise(fake.closes)).toBe(0);
-		management.destroyed = true;
-		appEvent("window-all-closed");
-		await vi.waitFor(async () =>
-			expect(await Effect.runPromise(fake.closes)).toBe(1),
-		);
-		appEvent("activate");
-		await vi.waitFor(async () =>
-			expect(await Effect.runPromise(fake.opens)).toBe(2),
-		);
-		await Effect.runPromise(fake.emit(report(3, 1, [0])));
-		for (const window of electron.BrowserWindow.getAllWindows())
+	it.each(["activate", "second-instance"])(
+		"restarts the bus and unlocks lifecycle recovery on %s after all windows close",
+		async (event) => {
+			await start();
+			const { panel, management } = windows();
+			panel.destroyed = true;
+			await Effect.runPromise(fake.emit(report(3, 2, [1])));
 			await vi.waitFor(() =>
-				expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
-					source: "hid",
-					kind: "rotate",
-					direction: -1,
-				}),
+				expect(management.webContents.send).toHaveBeenCalledWith(
+					"quake:event",
+					{
+						source: "hid",
+						kind: "press",
+						state: 1,
+					},
+				),
 			);
-	});
+			expect(await Effect.runPromise(fake.closes)).toBe(0);
+			management.destroyed = true;
+			appEvent("window-all-closed");
+			await vi.waitFor(async () =>
+				expect(await Effect.runPromise(fake.closes)).toBe(1),
+			);
+			appEvent(event);
+			await vi.waitFor(async () =>
+				expect(await Effect.runPromise(fake.opens)).toBe(2),
+			);
+			const reopened = electron.BrowserWindow.getAllWindows().find(
+				(window) => window.options.title === "open-quake — management",
+			);
+			if (!reopened) throw new Error("Management must reopen");
+			expect(reopened).not.toBe(management);
+			if (event === "second-instance") {
+				expect(reopened.show).toHaveBeenCalledOnce();
+				expect(reopened.focus).toHaveBeenCalledOnce();
+			}
+			await Effect.runPromise(fake.emit(report(3, 1, [0])));
+			for (const window of electron.BrowserWindow.getAllWindows())
+				await vi.waitFor(() =>
+					expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
+						source: "hid",
+						kind: "rotate",
+						direction: -1,
+					}),
+				);
+			await vi.waitFor(
+				() =>
+					expect(reopened.webContents.send).toHaveBeenCalledWith(
+						"quake:diagnostic",
+						expect.objectContaining({ checking: true }),
+					),
+				{ timeout: 4000 },
+			);
+		},
+	);
 
 	it("replays status after preload subscribes or reloads", async () => {
 		await start();
@@ -589,42 +622,45 @@ describe("desktop main with the real device service and fake HID", () => {
 		);
 	});
 
-	it("holds quit and rapid window reactivation until native close finishes", async () => {
-		const closing = await Effect.runPromise(Deferred.make<void>());
-		const allowClose = await Effect.runPromise(Deferred.make<void>());
-		const { Layer: Layers } = await import("effect");
-		const { HidTransport: Transport } = await import("@open-quake/device");
-		native.layer = Layers.succeed(Transport, {
-			...fake.transport,
-			open: (info) =>
-				Effect.map(fake.transport.open(info), (handle) => ({
-					...handle,
-					close: () =>
-						Deferred.succeed(closing, undefined).pipe(
-							Effect.zipRight(Deferred.await(allowClose)),
-							Effect.zipRight(handle.close()),
-						),
-				})),
-		});
-		await start();
-		for (const window of electron.BrowserWindow.getAllWindows())
-			window.destroyed = true;
-		appEvent("window-all-closed");
-		appEvent("activate");
-		await Effect.runPromise(Deferred.await(closing));
-		expect(await Effect.runPromise(fake.opens)).toBe(1);
-		const event = appEvent("before-quit");
-		expect(event.preventDefault).toHaveBeenCalledOnce();
-		// Repeated quit requests must still wait for the same cleanup.
-		expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
-		electron.app.quit.mockClear();
-		expect(await Effect.runPromise(fake.closes)).toBe(0);
-		await Effect.runPromise(Deferred.succeed(allowClose, undefined));
-		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
-		expect(await Effect.runPromise(fake.closes)).toBe(1);
-		expect(await Effect.runPromise(fake.opens)).toBe(1);
-		expect(appEvent("before-quit").preventDefault).not.toHaveBeenCalled();
-	});
+	it.each(["activate", "second-instance"])(
+		"holds quit and rapid %s reopening until native close finishes",
+		async (reopenEvent) => {
+			const closing = await Effect.runPromise(Deferred.make<void>());
+			const allowClose = await Effect.runPromise(Deferred.make<void>());
+			const { Layer: Layers } = await import("effect");
+			const { HidTransport: Transport } = await import("@open-quake/device");
+			native.layer = Layers.succeed(Transport, {
+				...fake.transport,
+				open: (info) =>
+					Effect.map(fake.transport.open(info), (handle) => ({
+						...handle,
+						close: () =>
+							Deferred.succeed(closing, undefined).pipe(
+								Effect.zipRight(Deferred.await(allowClose)),
+								Effect.zipRight(handle.close()),
+							),
+					})),
+			});
+			await start();
+			for (const window of electron.BrowserWindow.getAllWindows())
+				window.destroyed = true;
+			appEvent("window-all-closed");
+			appEvent(reopenEvent);
+			await Effect.runPromise(Deferred.await(closing));
+			expect(await Effect.runPromise(fake.opens)).toBe(1);
+			const event = appEvent("before-quit");
+			expect(event.preventDefault).toHaveBeenCalledOnce();
+			// Repeated quit requests must still wait for the same cleanup.
+			expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+			electron.app.quit.mockClear();
+			expect(await Effect.runPromise(fake.closes)).toBe(0);
+			await Effect.runPromise(Deferred.succeed(allowClose, undefined));
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+			expect(await Effect.runPromise(fake.closes)).toBe(1);
+			expect(await Effect.runPromise(fake.opens)).toBe(1);
+			expect(appEvent("before-quit").preventDefault).not.toHaveBeenCalled();
+		},
+	);
 });
 
 describe("single-instance startup and release policy", () => {

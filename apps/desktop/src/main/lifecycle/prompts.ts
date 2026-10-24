@@ -3,6 +3,8 @@ import type { Display } from "electron";
 import strings from "../../shared/lifecycle-strings.json";
 import { type DisplayOperationFailed, farRightOrigins } from "./native-display";
 
+const LATER_MS = 600_000;
+
 export interface PromptRequest {
 	readonly title: string;
 	readonly message: string;
@@ -36,10 +38,10 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 		check: (
 			display: Display | undefined,
 			locked: boolean,
-		) => Effect.Effect<void>;
+		) => Effect.Effect<boolean, DisplayOperationFailed>;
 		repair: (
 			display: Display | undefined,
-		) => Effect.Effect<void, DisplayOperationFailed>;
+		) => Effect.Effect<boolean, DisplayOperationFailed>;
 	},
 	never,
 	Scope.Scope
@@ -59,10 +61,11 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 	const repair = Effect.fn("DisplayPrompts.repair")(function* (
 		display: Display | undefined,
 		mirrored = false,
-	): Effect.fn.Return<void, DisplayOperationFailed> {
-		if (!display || edges.mock || edges.platform !== "darwin" || busy) return;
+	): Effect.fn.Return<boolean, DisplayOperationFailed> {
+		if (!display || edges.mock || edges.platform !== "darwin" || busy)
+			return false;
 		busy = true;
-		yield* Effect.gen(function* () {
+		return yield* Effect.gen(function* () {
 			const response = yield* edges.prompt({
 				title: text.title,
 				message: mirrored ? text.message : "Move Quake to the far right",
@@ -74,8 +77,18 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 				cancelId: 1,
 			});
 			if (response === 0) yield* edges.native("fix", display);
-			else layoutLater = (yield* Clock.currentTimeMillis) + 600_000;
+			else layoutLater = (yield* Clock.currentTimeMillis) + LATER_MS;
+			return response === 0;
 		}).pipe(
+			Effect.tapError(() =>
+				Clock.currentTimeMillis.pipe(
+					Effect.tap((now) =>
+						Effect.sync(() => {
+							layoutLater = now + LATER_MS;
+						}),
+					),
+				),
+			),
 			Effect.ensuring(
 				Effect.sync(() => {
 					busy = false;
@@ -86,8 +99,8 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 	const check = Effect.fn("DisplayPrompts.check")(function* (
 		display: Display | undefined,
 		locked: boolean,
-	): Effect.fn.Return<void> {
-		if (locked || edges.mock || busy) return;
+	): Effect.fn.Return<boolean, DisplayOperationFailed> {
+		if (locked || edges.mock || busy) return false;
 		const now = yield* Clock.currentTimeMillis;
 		if (!display) {
 			if (
@@ -96,14 +109,14 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 				now < layoutLater ||
 				now < hiddenProbeAfter
 			)
-				return;
+				return false;
 			hiddenProbeAfter = now + 10_000;
 			if (
 				!(yield* edges
 					.hiddenMirroring()
 					.pipe(Effect.orElseSucceed(() => false)))
 			)
-				return;
+				return false;
 			busy = true;
 			yield* edges
 				.prompt({
@@ -121,12 +134,12 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 					Effect.ensuring(
 						Effect.sync(() => {
 							busy = false;
-							layoutLater = now + 600_000;
+							layoutLater = now + LATER_MS;
 						}),
 					),
 					Effect.ignore,
 				);
-			return;
+			return false;
 		}
 		if (edges.platform === "darwin" && now >= layoutLater) {
 			const mode = yield* edges
@@ -145,24 +158,23 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 						display.bounds.y !== target.y ||
 						display.id === edges.primaryId()))
 			) {
-				yield* repair(display, mode === "mirrored").pipe(Effect.ignore);
-				return;
+				return yield* repair(display, mode === "mirrored");
 			}
 		}
 		if (display.size.height <= display.size.width) {
 			verticalSince = undefined;
 			landscapeAt = now;
 			orientationShown = false;
-			return;
+			return false;
 		}
-		if (now - landscapeAt < 6000) return;
+		if (now - landscapeAt < 6000) return false;
 		verticalSince ??= now;
 		if (
 			now - verticalSince < 2500 ||
 			orientationShown ||
 			now < orientationLater
 		)
-			return;
+			return false;
 		busy = true;
 		const detail =
 			edges.platform === "darwin"
@@ -196,7 +208,7 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 						: Clock.currentTimeMillis.pipe(
 								Effect.tap((at) =>
 									Effect.sync(() => {
-										orientationLater = at + 600_000;
+										orientationLater = at + LATER_MS;
 									}),
 								),
 								Effect.asVoid,
@@ -209,6 +221,7 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 				),
 				Effect.ignore,
 			);
+		return false;
 	});
 	return { check, repair };
 });

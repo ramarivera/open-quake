@@ -75,6 +75,17 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					);
 					edges.notify(status());
 				};
+				const reportRepairFailure = Effect.sync(() => {
+					issue = "native-failed";
+					sync();
+				});
+				const clearRepairFailure = (repaired: boolean): Effect.Effect<void> =>
+					Effect.sync(() => {
+						if (repaired && issue === "native-failed") {
+							issue = "none";
+							sync();
+						}
+					});
 				const redetect = Effect.fn("DeviceLifecycle.redetect")(function* (
 					refresh = true,
 				): Effect.fn.Return<ConnectionDiagnostic> {
@@ -175,7 +186,13 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 				yield* Effect.forever(
 					Effect.sleep(1000).pipe(
 						Effect.zipRight(
-							Effect.suspend(() => prompts.check(current(), locked)),
+							Effect.suspend(() => prompts.check(current(), locked)).pipe(
+								Effect.tap(clearRepairFailure),
+								Effect.catchTag(
+									"DisplayOperationFailed",
+									() => reportRepairFailure,
+								),
+							),
 						),
 					),
 				).pipe(Effect.forkScoped);
@@ -186,7 +203,12 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					topology,
 					lock,
 					wake,
-					repair: () => prompts.repair(current()),
+					repair: () =>
+						prompts.repair(current()).pipe(
+							Effect.tap(clearRepairFailure),
+							Effect.tapError(() => reportRepairFailure),
+							Effect.asVoid,
+						),
 					openSettings: edges.prompts.openSettings,
 				};
 			}),

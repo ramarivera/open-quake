@@ -17,6 +17,10 @@ The app MUST acquire its single-instance lock before windows or device access. A
 - **WHEN** a second-instance event arrives
 - **THEN** the existing management window is restored if minimized, shown, and focused
 
+#### Scenario: Second launch after all windows closed
+- **WHEN** all windows have closed on macOS and a second-instance event reopens management
+- **THEN** the existing instance restarts the device bus after the old owner closes, unlocks the lifecycle and schedules the same wake recovery as activate
+
 ### Requirement: Screen pairing transaction
 The app SHALL serialize discovery, observe display disappearance before sending opcode 1 command [04,00], identify the unique removed QUAKE candidate, send [04,01], and bind when that display returns or a unique matching replacement appears. It SHALL restore screen power on timeout, interruption and failure. A transaction SHALL time out after 30 seconds and leave unresolved displays hidden rather than guess. Locked sessions SHALL defer discovery. Sources: MAIN-024, MAIN-042, MAIN-045, MAIN-050, MAIN-053, SETTINGS-083.
 
@@ -46,6 +50,10 @@ The device SHALL count transient EIO errors within a rolling ten-second window a
 #### Scenario: Non-EIO failure
 - **WHEN** the transport reports a non-EIO read error
 - **THEN** the handle closes immediately and only safe catalog identity crosses IPC
+
+#### Scenario: Device arrives during the final reconnect delay
+- **WHEN** startup has no device through the fifth failed attempt at 16 seconds and a device arrives during the following nine-second wait
+- **THEN** the first passive scan compares with presence observed before that wait and starts a new connection burst without another topology change or explicit recovery
 
 ### Requirement: Disconnect grace and wake recovery
 The panel SHALL hide immediately on display or USB loss and preserve the existing strip window for a 3000 ms USB disconnect grace. A return within grace SHALL reuse it. Lock SHALL defer heavy display recovery; unlock and resume SHALL reset backoff and schedule recovery after 2500 ms. All work and listeners SHALL stop on quit. Sources: MAIN-011, MAIN-012, MAIN-060, SETTINGS-079, SETTINGS-085.
@@ -87,3 +95,7 @@ The app SHALL detect mirroring and portrait orientation, using displayMode Engli
 #### Scenario: Mirrored or misplaced strip
 - **WHEN** a strip is mirrored or needs macOS arrangement repair
 - **THEN** the app offers a consent dialog describing the proposed operation, and declining or Later makes no native call
+
+#### Scenario: Consented layout repair fails
+- **WHEN** an accepted automatic layout repair fails at the native boundary
+- **THEN** management receives a safe native-failed diagnostic with recovery text and automatic layout consent prompts snooze for ten minutes from failure, while an explicit repair remains available and preserves the catalog failure identity

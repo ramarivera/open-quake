@@ -302,6 +302,36 @@ describe("HID desktop bus", () => {
 				}).pipe(Effect.provide(withTransport(layer)));
 			}),
 	);
+	it.scoped(
+		"connects on the first passive scan when a device arrives during the final nine-second wait",
+		() =>
+			Effect.gen(function* () {
+				const devices: HidDeviceInfo[] = [];
+				const fake = yield* makeFakeHidTransport(devices);
+				yield* Effect.gen(function* () {
+					const harness = yield* makeHarness;
+					expect(yield* harness.next).toEqual(missing);
+					for (const delay of [1000, 3000, 5000, 7000]) {
+						yield* TestClock.adjust(delay);
+						expect(yield* harness.next).toEqual(missing);
+					}
+					// Five attempts have failed at t=16 s. Plug in halfway through
+					// the final wait and leave the path unchanged afterward.
+					expect(harness.received).toHaveLength(5);
+					yield* TestClock.adjust(4500);
+					devices.push(FAKE_QUAKE_DEVICE);
+					yield* TestClock.adjust(4499);
+					expect(yield* fake.opens).toBe(0);
+					expect(harness.bus.currentStatus()).toEqual(missing);
+					yield* TestClock.adjust(1);
+					expect(harness.bus.currentStatus()).toEqual(connected);
+					expect(yield* fake.opens).toBe(1);
+					expect(yield* harness.next).toEqual(connected);
+					yield* harness.close;
+					expect(yield* fake.closes).toBe(1);
+				}).pipe(Effect.provide(withTransport(fake.layer)));
+			}),
+	);
 	it.scoped("resets reconnect delay after thirty stable seconds", () =>
 		Effect.gen(function* () {
 			const fake = yield* makeFakeHidTransport();

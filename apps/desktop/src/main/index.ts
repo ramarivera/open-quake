@@ -33,6 +33,7 @@ import {
 import { registerLifecycle } from "./lifecycle/registration";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
+import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
 const PANEL_TITLE = "open-quake panel";
@@ -126,6 +127,8 @@ if (!app.requestSingleInstanceLock()) {
 		let panelWin = createPanelWindow(panelTarget);
 		let managementWin = createManagementWindow();
 		const focusManagement = (): void => {
+			if (quitting) return;
+			reopenWindows();
 			if (managementWin.isDestroyed()) managementWin = createManagementWindow();
 			if (managementWin.isMinimized()) managementWin.restore();
 			managementWin.show();
@@ -137,6 +140,10 @@ if (!app.requestSingleInstanceLock()) {
 				MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 			),
 			() => managementWin,
+		);
+		// Read-only committed profiles for the strip and its preview.
+		registerProfiles(
+			ManagedRuntime.make(desktopProfilesLive(app.getPath("userData"))),
 		);
 		// One service layer for the main process. Only this Electron boundary runs it.
 		const runtime = ManagedRuntime.make(
@@ -370,15 +377,20 @@ if (!app.requestSingleInstanceLock()) {
 				app.quit();
 			});
 		});
-		app.on("activate", () => {
+		const reopenWindows = (): void => {
 			if (quitting) return;
 			if (BrowserWindow.getAllWindows().length === 0) {
 				syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
-				onWake();
 				managementWin = createManagementWindow();
 				startBus();
+				// stopBus locks the lifecycle before releasing the old owner.
+				// Unlock only after that stop completes, including rapid reopening.
+				void stopping.then(() => {
+					if (!quitting && BrowserWindow.getAllWindows().length > 0) onWake();
+				});
 			}
-		});
+		};
+		app.on("activate", reopenWindows);
 		app.on("window-all-closed", () => {
 			void stopBus();
 			if (process.platform !== "darwin") app.quit();
