@@ -5,6 +5,7 @@ import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { StripPanel } from "./strip/StripPanel";
 import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
+import { MonitorSettings } from "./strip/tiles/monitor/MonitorSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -175,6 +176,7 @@ function ManagementSurface({
 									wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
 								}
 							/>
+							<MonitorSettings />
 						</>
 					) : page === "controls" ? (
 						<HardwareSettings />
