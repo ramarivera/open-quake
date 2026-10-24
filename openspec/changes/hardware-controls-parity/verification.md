@@ -158,3 +158,80 @@ runtime code. Cluster open-quake-lih.12, epic open-quake-lih.12.1, tasks
 open-quake-lih.12.1.1 through .5 and lighting task open-quake-da4.6 are closed
 with source and mock-verification evidence. The PR is not merged and no
 review threads were resolved.
+
+
+## PR #22 review round 1, 2026-10-24
+
+Merged origin/main at 2ac4a2f, including strip-grid PR #23, in merge commit
+a5612eb. Startup retains profile registration and the mock hardware bus;
+preload exposes both bridges; the media smoke registers and disposes both
+integrations.
+
+Review fixes:
+
+- Hardware writes hold a connection-owned permit until the native write
+  settles. Teardown stops accepting writes and drains that permit before
+  closing the handle. Tests cover cancellation followed by explicit disconnect
+  and scope close. Ordinary reply waits remain cancellable, with the existing
+  protection against reusing a late acknowledgment.
+- Preference flushes serialize within HardwareControls and finish each started
+  atomic write before a replacement debounce or teardown flush can proceed.
+  Tests hold the real desktop adapter's rename for A, submit B, and assert the
+  final JSON contains B, both after debounce and teardown. Both tests first
+  failed with 32 on disk instead of the expected 128.
+- The volume range keeps the desired value locally and coalesces queued
+  adjustments during an active mutation. It stays enabled while the session
+  is available. Native smoke holds the first configure request, drives
+  53/60/70/80, sees position 80 before the reply, checks exactly two configure
+  requests, and verifies only the final volume 112 produces the preview.
+- A ready polling response clears transient request errors. The native smoke
+  injects a failed refresh and proves the alert disappears on the next ready
+  poll without another mutation. This check failed before the renderer fix.
+- Preview replacement finishes each started buzzer exchange before cancelling
+  subsequent tone steps. A delayed-ack regression proves the session remains
+  usable, while a separate regression proves ordinary reply waits still cancel.
+- Device keyboard usages 47/48 use ActionService's canonical leftbracket and
+  rightbracket tokens. Tests execute committed actions through the real action
+  consumer and assert exact press/release reports without host injection.
+
+The serial-display security finding is declined. Showing the connected
+serial in this local management window is intended, as in DK-Suite and the
+existing per-serial Screen settings. Inspected node-hid discovery, hardware
+session, desktop bus, renderer forwarding, IPC registration/controller and
+preference adapter. Serial use stays in local memory, the authorized local
+management IPC response, and local JSON with SHA-256 filenames. Hardware log
+sites emit catalog codes only; diagnostic projection excludes user strings.
+No network sink receives the serial in these paths.
+
+All six lane gates passed on the integrated code:
+
+- pnpm biome check packages apps, 234 files.
+- pnpm typecheck, six tasks.
+- pnpm test, 616 tests: protocol 47, device 324, desktop 218, edge 27.
+- pnpm build.
+- pnpm --filter @open-quake/desktop test:bundle.
+- openspec validate --all --strict, 30 changes.
+
+The hardware and media native smokes both passed with
+OPEN_QUAKE_MOCK_DEVICE=1, ELECTRON_RUN_AS_NODE unset, and lane scratch as
+TMPDIR. Hardware screenshots under review-1-native cover dark, light, narrow
+and offline controls. Media screenshots under review-1-media cover the strip
+profiles and management views. Inspected hardware dark/light/narrow/offline,
+media panel and narrow Screen images. The media smoke also verifies runtime
+disposal before quit. No owned Electron smoke process remained afterward.
+Chromium emitted cache-directory diagnostics during the hardware smoke;
+all assertions passed and it exited successfully.
+
+Evidence root remains
+/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/hw-controls/.
+Logs for this round are review-1-gate-{biome,typecheck,tests,build,bundle,specs}.log,
+review-1-hardware-smoke-{build,run}.log, and
+review-1-media-smoke-{build,run}.log. Failing-before-fix evidence is in
+review-1-red-device.log, review-1-red-preferences.log and review-1-native-red.log.
+
+Bead open-quake-lih.12.1.6 tracks this review implementation. The epic was
+reopened for it. Cluster open-quake-lih.12 remains open until PR #22 merges,
+per the lead's instruction, superseding the earlier handoff's closure note.
+Physical hardware remains unverified and was never opened. No new dependency,
+firmware operation, DK-Suite launch or hook bypass was used. PR #22 remains
+unmerged.

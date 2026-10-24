@@ -53,6 +53,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 			const store = yield* HardwarePreferencesStore;
 			// This is app-lifetime state. It deliberately is not persisted per serial.
 			const inputMode = yield* Ref.make<InputMode>("device");
+			const preferenceLock = yield* Effect.makeSemaphore(1);
 			const create = Effect.fn("HardwareControls.create")(function* (
 				connection: QuakeConnection,
 				identity: { readonly serial: string; readonly session: string },
@@ -239,9 +240,11 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										yield* send({
 											_tag: "Buzzer",
 											level: level === 0 ? 0 : volume,
-										});
+										}).pipe(Effect.uninterruptible);
 										yield* Effect.sleep(duration);
-										yield* send({ _tag: "Buzzer", level: 0 });
+										yield* send({ _tag: "Buzzer", level: 0 }).pipe(
+											Effect.uninterruptible,
+										);
 										yield* Effect.sleep(10);
 									}
 								}),
@@ -253,13 +256,16 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 							),
 				);
 				const flush = Effect.fn("HardwareControls.flush")(
-					function* (): Effect.fn.Return<void, HardwarePreferencesFailed> {
-						if (!dirty) return;
-						const savingPreferences = preferences;
-						yield* store.write(identity.serial, savingPreferences);
-						if (preferences === savingPreferences) dirty = false;
-						backgroundError = Option.none();
-					},
+					(): Effect.Effect<void, HardwarePreferencesFailed> =>
+						preferenceLock.withPermits(1)(
+							Effect.gen(function* () {
+								if (!dirty) return;
+								const savingPreferences = preferences;
+								yield* store.write(identity.serial, savingPreferences);
+								if (preferences === savingPreferences) dirty = false;
+								backgroundError = Option.none();
+							}).pipe(Effect.uninterruptible),
+						),
 				);
 				yield* Effect.addFinalizer(() =>
 					Effect.gen(function* () {

@@ -25,3 +25,9 @@ Golden full HID reports, strict invalid command/reply cases, codec properties, r
 The host method sendTriggerKeyBoard and firmware input/report.c:442..510 agree on action/modifier/usage ordering and actions 0/1/2. The reconstruction loops i<7 despite an eight-byte modifier list; the host table sends right_command=128. Keep all eight wire bits and leave physical right-command behavior for lead qualification.
 
 Firmware protocol/quake_protocol.c:140..144 claims uStack_44=0x900055 but reconstructs bytes as 55,90,00. Little-endian 0x900055 is 55,00,90, which agrees with the host handler. The reconstructed C assignments transpose cmd/sub. The typed successful ack follows demonstrated host semantics 55/00/[90].
+
+## Review round 1 concurrency boundaries
+
+Connection teardown stops new hardware writes and drains started native writes before closing the handle. Only native writes resist cancellation; ordinary reply waits remain interruptible. Preview replacement waits for each started buzzer exchange to consume its ack before cancelling the remaining tone steps.
+
+Preference flushes serialize and finish each started atomic store write before another snapshot can commit. Replaced debounces coalesce to the latest preferences, including teardown. The renderer holds desired volume locally and coalesces queued changes while leaving the range enabled whenever the session is available. Successful ready polling clears transient request errors. Device serial display remains intentional inside the local management window, with no logging or network transport.

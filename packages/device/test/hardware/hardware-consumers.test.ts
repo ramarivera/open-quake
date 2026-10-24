@@ -68,6 +68,40 @@ describe("hardware consumers and failure cleanup", () => {
 				expect(yield* fake.writes).toHaveLength(2);
 			}),
 	);
+	for (const [token, usage] of [
+		["leftbracket", 47],
+		["rightbracket", 48],
+	] as const) {
+		it.scoped(
+			`dispatches canonical ${token} through committed ActionService`,
+			() =>
+				Effect.gen(function* () {
+					const { fake, session } = yield* setup();
+					const h = harness("hotkey", {
+						type: "hotkey",
+						supportKnob: false,
+						actions: [{ type: "key", value: `control+${token}` }],
+					});
+					const keyboard = hardwareKeyboardAdapter(
+						session,
+						h.adapters.keyboard,
+					);
+					const actions = yield* ActionService.pipe(
+						Effect.provide(
+							h.layer({ ...h.adapters, keyboard: Option.some(keyboard) }),
+						),
+					);
+					const running = yield* actions.activate(press).pipe(Effect.fork);
+					yield* TestClock.adjust(50);
+					expect(yield* Fiber.join(running)).toBe("executed");
+					expect((yield* fake.writes).map((b) => [...b.slice(3, 8)])).toEqual([
+						[1, 16, 1, 1, usage],
+						[1, 16, 0, 1, usage],
+					]);
+					expect(h.calls).toEqual([]);
+				}),
+		);
+	}
 	it.scoped(
 		"releases keyboard even if the press ack is lost, then refuses reuse",
 		() =>

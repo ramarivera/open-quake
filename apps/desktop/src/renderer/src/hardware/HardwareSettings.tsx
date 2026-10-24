@@ -19,6 +19,14 @@ export function HardwareSettings(): React.JSX.Element {
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
+	const [desiredVolume, setDesiredVolume] = useState<{
+		session: string;
+		volume: number;
+	}>();
+	const queuedVolume = useRef<{ session: string; volume: number } | undefined>(
+		undefined,
+	);
+	const currentSnapshot = useRef<HardwareSnapshot | undefined>(undefined);
 	const sequence = useRef(0);
 	const pending = useRef(false);
 	const mounted = useRef(true);
@@ -39,15 +47,19 @@ export function HardwareSettings(): React.JSX.Element {
 			}
 			const reply = decoded.right;
 			if (reply._tag === "ready") {
+				currentSnapshot.current = reply.snapshot;
 				setSnapshot(reply.snapshot);
 				setMock(reply.mock);
-			} else if (reply._tag === "offline") setSnapshot(undefined);
-			else
+				setError("");
+			} else if (reply._tag === "offline") {
+				currentSnapshot.current = undefined;
+				setSnapshot(undefined);
+			} else
 				setError(
 					`Device control failed (${reply.code}). Reconnect the device and try again.`,
 				);
 		} catch {
-			if (mounted.current)
+			if (mounted.current && id === sequence.current)
 				setError("Device controls could not be reached. Try again.");
 		} finally {
 			if (mounted.current && id === sequence.current) setLoading(false);
@@ -62,6 +74,7 @@ export function HardwareSettings(): React.JSX.Element {
 		return () => {
 			mounted.current = false;
 			sequence.current++;
+			queuedVolume.current = undefined;
 			clearInterval(timer);
 		};
 	}, [request]);
@@ -70,13 +83,44 @@ export function HardwareSettings(): React.JSX.Element {
 		pending.current = true;
 		setBusy(true);
 		setError("");
-		await request(input);
+		let command = input;
+		while (mounted.current) {
+			await request(command);
+			const queued = queuedVolume.current;
+			queuedVolume.current = undefined;
+			const current = currentSnapshot.current;
+			if (!queued || !current?.available || queued.session !== current.session)
+				break;
+			command = {
+				_tag: "configure",
+				session: current.session,
+				preferences: { ...current.preferences, alertVolume: queued.volume },
+			};
+		}
 		pending.current = false;
-		if (mounted.current) setBusy(false);
+		if (mounted.current) {
+			setDesiredVolume(undefined);
+			setBusy(false);
+		}
 	};
 	const prefs = snapshot?.preferences;
-	const volume = prefs?.alertVolume ?? 84;
 	const session = snapshot?.session ?? "";
+	const volume =
+		desiredVolume?.session === session
+			? desiredVolume.volume
+			: (prefs?.alertVolume ?? 84);
+	const changeVolume = (position: number): void => {
+		if (!snapshot?.available) return;
+		const next = { session, volume: sliderToVolume(position) };
+		setDesiredVolume(next);
+		if (pending.current) queuedVolume.current = next;
+		else
+			void change({
+				_tag: "configure",
+				session,
+				preferences: { ...snapshot.preferences, alertVolume: next.volume },
+			});
+	};
 	const disabled = busy || !snapshot?.available;
 	const configure = (preferences: NonNullable<typeof prefs>) =>
 		change({ _tag: "configure", session, preferences });
@@ -200,16 +244,10 @@ export function HardwareSettings(): React.JSX.Element {
 							min="0"
 							max="96"
 							step="1"
-							disabled={disabled}
+							disabled={!snapshot?.available}
 							value={volumeToSlider(volume)}
 							aria-valuetext={volume === 0 ? "Silent" : String(volume)}
-							onChange={(e) => {
-								if (prefs)
-									void configure({
-										...prefs,
-										alertVolume: sliderToVolume(Number(e.target.value)),
-									});
-							}}
+							onChange={(e) => changeVolume(Number(e.target.value))}
 						/>
 						<output htmlFor="alert-volume">
 							{volume === 0 ? "X" : volume}

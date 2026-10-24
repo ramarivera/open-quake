@@ -8,6 +8,10 @@ The protocol SHALL encode opcode 1 commands 0x02 buzzer [0 or 32..128], 0x03 mic
 - **WHEN** each typed command is encoded and independently constructed replies are decoded
 - **THEN** exact golden bytes, checksum and padding match; malformed known payloads and invalid values fail with catalog errors; unrelated commands remain ignored
 
+#### Scenario: Started writes finish before connection close
+- **WHEN** disconnect or scope teardown begins during a native hardware write
+- **THEN** teardown waits for that write before closing the handle, refuses new writes, and ordinary acknowledgment waits remain cancellable
+
 ### Requirement: Device keyboard route
 
 Hotkeys SHALL default to device keyboard dispatch on each app launch, without persisting this mode. Explicit host mode SHALL use the supplied host adapter. Device mode SHALL encode one USB usage and the combined HID modifier bits, reject unsupported tokens and multiple ordinary keys before writing, and SHALL NOT silently use host injection. Atomic chords SHALL release after 50 ms and on cancellation. Monitoring's unrelated override SHALL be called monitoring override. Evidence MAIN-026,096.
@@ -32,6 +36,14 @@ Per serial defaults SHALL be buzzer enabled, alert volume 84 and LED always-on t
 - **WHEN** the volume changes repeatedly within 300 ms
 - **THEN** only the latest nonzero preview runs and persistence records the latest serial preference
 
+#### Scenario: Slow preference save cannot overwrite a newer setting
+- **WHEN** save A has started and setting B arrives before A completes
+- **THEN** A finishes before the latest snapshot is committed, and the persisted preferences end with B even on teardown
+
+#### Scenario: Replacing a preview during acknowledgment
+- **WHEN** another preference change cancels a preview while its buzzer command awaits acknowledgment
+- **THEN** the started exchange consumes its acknowledgment before cancellation silences playback, and the connected session remains usable
+
 ### Requirement: LED lock and settings
 
 The Device settings SHALL show Firmware Version, Knob LED stays on, and Device Alert Volume using locale-en.json strings verbatim. Volume SHALL show the mapped value or X at zero; firmware SHALL show -- until a reply. OS lock SHALL send op1 cmd0x06 [0] and unlock [1] only for serials whose LED stays-on preference is false; true SHALL send nothing. UI SHALL expose disconnected, pending and failure states and prevent stale sessions from mutating a replacement device. Screen power SHALL be an explicit typed command available to the lifecycle owner. Evidence MAIN-018,024,025, SETTINGS-021,022,085.
@@ -39,3 +51,7 @@ The Device settings SHALL show Firmware Version, Knob LED stays on, and Device A
 #### Scenario: Serial-specific lock policy
 - **WHEN** lock and unlock run for one serial with the preference false and another with it true
 - **THEN** only the former receives LED off/on bytes and their preferences remain separate
+
+#### Scenario: Continuous volume adjustment and polling recovery
+- **WHEN** the user drags through several volume positions while a request is pending, then polling recovers from a transient failure
+- **THEN** the range stays enabled for the available session, shows the latest desired position, coalesces requests, previews the final value after 300 ms, and clears the transient failure message

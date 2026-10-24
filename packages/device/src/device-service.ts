@@ -117,21 +117,39 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 					stop("error", Option.some(error));
 				const lifetime = Effect.scoped(
 					Effect.gen(function* () {
+						const hardwareWriteLock = yield* Effect.makeSemaphore(1);
+						let acceptingWrites = true;
 						const handle = yield* Effect.acquireRelease(
 							transport.open(info),
-							(handle) => Deferred.complete(closed, handle.close()),
+							(handle) =>
+								Effect.sync(() => {
+									acceptingWrites = false;
+								}).pipe(
+									Effect.zipRight(
+										hardwareWriteLock.withPermits(1)(
+											Deferred.complete(closed, handle.close()),
+										),
+									),
+								),
 						);
-						sendHardware = Effect.fn("QuakeConnection.sendHardware")(function* (
-							command: HardwareCommand,
-						) {
-							if (
-								Option.isSome(yield* Deferred.poll(stopped)) ||
-								Option.isSome(yield* Deferred.poll(finished))
-							)
-								return yield* new QuakeConnectionClosed();
-							const bytes = yield* encodeHardwareCommand(command);
-							yield* handle.write(bytes);
-						});
+						sendHardware = Effect.fn("QuakeConnection.sendHardware")(
+							(
+								command: HardwareCommand,
+							): ReturnType<QuakeConnection["sendHardware"]> =>
+								hardwareWriteLock.withPermits(1)(
+									Effect.gen(function* () {
+										if (
+											!acceptingWrites ||
+											Option.isSome(yield* Deferred.poll(stopped)) ||
+											Option.isSome(yield* Deferred.poll(finished))
+										)
+											return yield* new QuakeConnectionClosed();
+										const bytes = yield* encodeHardwareCommand(command);
+										// Native promises cannot be cancelled. Teardown drains this lock.
+										yield* handle.write(bytes);
+									}).pipe(Effect.uninterruptible),
+								),
+						);
 						// toPull acquires the incoming stream and its listeners before we signal ready.
 						const pull = yield* Stream.toPull(handle.reports);
 						yield* Stream.runForEach(

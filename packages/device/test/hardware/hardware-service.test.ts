@@ -127,6 +127,65 @@ describe("hardware controls over actual device connection with fake transport", 
 			}),
 	);
 	it.scoped(
+		"keeps ordinary reply waits cancellable and refuses late ack reuse",
+		() =>
+			Effect.gen(function* () {
+				const { fake, session } = yield* setup({ onCommand: () => [] });
+				const sending = yield* session
+					.send({ _tag: "KnobLed", on: false })
+					.pipe(Effect.fork);
+				yield* settle;
+				yield* Fiber.interrupt(sending);
+				yield* fake.emit(fakeHardwareReply(0, [0x90]));
+				expect((yield* session.snapshot()).available).toBe(false);
+				expect(
+					Either.isLeft(
+						yield* session.send({ _tag: "Mic", on: false }).pipe(Effect.either),
+					),
+				).toBe(true);
+				expect(yield* fake.writes).toHaveLength(1);
+			}),
+	);
+	it.scoped(
+		"replaces preview at an acknowledgment boundary without poisoning the session",
+		() =>
+			Effect.gen(function* () {
+				const { fake, session } = yield* setup({
+					onCommand: (c) =>
+						c.cmdId === 2 && c.subData[0] !== 0
+							? []
+							: [fakeHardwareReply(0, [0x90])],
+				});
+				yield* session.configure({
+					...defaultHardwarePreferences,
+					alertVolume: 50,
+				});
+				yield* TestClock.adjust(300);
+				const replacing = yield* session
+					.configure({ ...defaultHardwarePreferences, alertVolume: 100 })
+					.pipe(Effect.fork);
+				yield* settle;
+				yield* fake.emit(fakeHardwareReply(0, [0x90]));
+				yield* Fiber.join(replacing);
+				expect((yield* session.snapshot()).available).toBe(true);
+				yield* session.send({ _tag: "KnobLed", on: true });
+				yield* TestClock.adjust(299);
+				expect(yield* commands(fake)).toEqual([
+					[1, 2, 50],
+					[1, 2, 0],
+					[1, 6, 1],
+				]);
+				yield* TestClock.adjust(1);
+				expect((yield* commands(fake)).at(-1)).toEqual([1, 2, 100]);
+				yield* fake.emit(fakeHardwareReply(0, [0x90]));
+				yield* settle;
+				yield* session.configure({
+					...defaultHardwarePreferences,
+					alertVolume: 0,
+				});
+			}),
+	);
+	it.scoped(
 		"serial LED policy sends off/on only when stays-on is false; closed sessions cannot write",
 		() =>
 			Effect.gen(function* () {
