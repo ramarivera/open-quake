@@ -98,4 +98,4 @@ The app SHALL detect mirroring and portrait orientation, using displayMode Engli
 
 #### Scenario: Consented layout repair fails
 - **WHEN** an accepted automatic layout repair fails at the native boundary
-- **THEN** management receives a safe native-failed diagnostic with recovery text and automatic layout consent prompts snooze for ten minutes from failure, while an explicit repair remains available and preserves the catalog failure identity
+- **THEN** management keeps the diagnostic visible instead of entering Screen, receives a safe native-failed diagnostic with recovery text and automatic layout consent prompts snooze for ten minutes from failure, while an explicit repair remains available and preserves the catalog failure identity

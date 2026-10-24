@@ -15,8 +15,8 @@
 
 ## 4. PR #21 review-fix round 1
 
-- [ ] 4.1 Merge origin/main and preserve StripPanel, profile snapshot IPC, lifecycle behavior and both native smoke flows.
-- [ ] 4.2 Preserve failed-attempt presence across the last reconnect delay; prove arrival between 16 s and 25 s connects on the first passive scan with TestClock.
-- [ ] 4.3 Share activate and second-instance reopening recovery; prove closing all windows releases the owner and a second launch restarts it and unlocks recovery.
-- [ ] 4.4 Apply the ten-minute Later cooldown after failed layout repair, publish safe diagnostic text and test automatic polling plus explicit retry.
+- [x] 4.1 Merge origin/main and preserve StripPanel, profile snapshot IPC, lifecycle behavior and both native smoke flows.
+- [x] 4.2 Preserve failed-attempt presence across the last reconnect delay; prove arrival between 16 s and 25 s connects on the first passive scan with TestClock.
+- [x] 4.3 Share activate and second-instance reopening recovery; prove closing all windows releases the owner and a second launch restarts it and unlocks recovery.
+- [x] 4.4 Apply the ten-minute Later cooldown after failed layout repair, publish safe diagnostic text and test automatic polling plus explicit retry.
 - [ ] 4.5 Run all lane gates and native mock smoke, inspect screenshots, sync beads, commit/push, reply to and resolve the three threads with fix evidence. Do not merge PR #21.

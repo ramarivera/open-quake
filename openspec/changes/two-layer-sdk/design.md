@@ -66,9 +66,10 @@ Checksummed control event mapping supports knob opcode `03` with commands
 Other valid control commands are ignored, including `55/1A`; payload validation
 only runs after matching the supported opcode and command. Malformed physical
 reports and malformed supported control frames terminate with protocol errors.
-The separate unchecked touch collection, actual touch opcode, and live timing
-remain hardware acceptance work. Synthetic touch fixtures prove only the current
-mapping; they do not establish hardware touch parity.
+`strip-touch-input` adds source-derived vendor parsing and a scoped reader for
+0712:0010 FF73/71. The original control fixtures remain compatibility tests.
+Physical report framing and live timing still require hardware acceptance;
+synthetic fixtures do not establish hardware parity.
 
 The JS facade owns one ManagedRuntime, registers its subscription before connect
 resolves, and supports idempotent asynchronous disconnect. Consumers construct a

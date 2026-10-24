@@ -37,6 +37,8 @@ import {
 } from "./protocol-adapter.js";
 import { recoverHidReads } from "./read-recovery.js";
 
+import { startTouchSource } from "./touch/touch-source.js";
+
 export type DeviceStreamError =
 	| QuakeHidReadFailed
 	| QuakeHidWriteFailed
@@ -67,6 +69,14 @@ export interface QuakeConnection {
 	readonly setScreenPower: (
 		on: boolean,
 	) => Effect.Effect<void, QuakeHidWriteFailed | ProtocolError>;
+	readonly touch: {
+		readonly setCaptureActive: (active: boolean) => Effect.Effect<void>;
+		readonly setLocked: (locked: boolean) => Effect.Effect<void>;
+		readonly wake: () => Effect.Effect<void>;
+		readonly health: Effect.Effect<
+			import("./touch/touch-contracts.js").TouchHealth
+		>;
+	};
 }
 
 export class QuakeDevice extends Effect.Service<QuakeDevice>()(
@@ -99,6 +109,10 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				const events =
 					yield* PubSub.unbounded<Take.Take<DeviceEvent, DeviceStreamError>>();
 				yield* Effect.addFinalizer(() => PubSub.shutdown(events));
+				const touchReady =
+					yield* Deferred.make<
+						Effect.Effect.Success<ReturnType<typeof startTouchSource>>
+					>();
 				const ready = yield* Deferred.make<void, QuakeHidOpenFailed>();
 				const stopped = yield* Deferred.make<Termination>();
 				const finished = yield* Deferred.make<Termination>();
@@ -129,6 +143,13 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 							discover().pipe(Effect.ignore),
 							fail,
 						);
+						const touch = yield* startTouchSource(transport, (points) =>
+							PubSub.publish(
+								events,
+								Take.of<DeviceEvent>({ _tag: "Touch", points }),
+							).pipe(Effect.asVoid),
+						);
+						yield* Deferred.succeed(touchReady, touch);
 						// toPull acquires the incoming stream and its listeners before we signal ready.
 						const pull = yield* Stream.toPull(reports);
 						yield* Stream.runForEach(
@@ -231,6 +252,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 					},
 				);
 				return {
+					touch: yield* Deferred.await(touchReady),
 					info,
 					setScreenPower: (on) => Effect.suspend(() => writeScreen(on)),
 					events: Stream.unwrapScoped(subscribe()),

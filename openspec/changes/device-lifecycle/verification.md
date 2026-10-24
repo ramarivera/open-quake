@@ -129,3 +129,68 @@ and actual CoreGraphics layout effects. Consent behavior and proposed
 coordinates are tested with mocks, which cannot prove those host effects.
 Windows native enumeration and `DisplaySwitch.exe /extend` remain future
 platform-gated, consent-based work as authorized in the lane scope.
+
+## PR #21 review-fix round 1
+
+Fix commit: `e485357b5f8fba31a24a9a7b45e8d899ff89469b`.
+All three connector findings were confirmed against the code and fixed.
+
+- Reconnect presence is captured before the final backoff wait. The TestClock
+  regression starts absent, observes five failures by 16 seconds, attaches at
+  20.5 seconds, and connects at 25 seconds on the first passive scan.
+- Second-instance reopening shares activate's panel/bus startup and lifecycle
+  wake. Unlock waits for old-owner teardown. Main entrypoint tests drive both
+  events with fake HID, prove resumed input and diagnostic recovery, and hold
+  rapid reopening/quit behind a blocked native close.
+- A failed consented layout repair uses the ten-minute Later interval from
+  failure time. Automatic polling reports only native-failed diagnostics and
+  continues after failure; explicit repair stays available and success clears
+  the notice. Tests cover delayed failure, the exact cooldown boundary, safe
+  error identity, retained private cause and the real one-second service poll.
+  Diagnostic markup and native smoke prove the explanation stays visible
+  instead of triggering the passing-check redirect into Screen.
+
+Main was first merged at `2ac4a2ff3867e0fd5bc1e9c878278bf8af9b9753`
+for PR #23. Main then advanced with PR #20 during this round; the final
+integration includes `969d165ad5896f2a4dac8d1fca2a327dc13c5161`.
+Conflict resolutions preserve StripPanel, profile snapshot IPC, lifecycle IPC,
+control-HID recovery/screen power, separately scoped vendor touch input,
+panel-only touch forwarding, explicit mock mode in packaged builds and both
+native smoke flows. The release fallback remains hidden by default.
+
+All final code gates passed after that integration:
+
+- `pnpm biome check packages apps`: 246 files, no fixes.
+- `pnpm typecheck`: all six tasks passed.
+- `pnpm test`: 647 tests passed, protocol 25, edge 27, device 325, desktop 270.
+- `pnpm build`: passed.
+- `pnpm --filter @open-quake/desktop test:bundle`: default and explicit mock
+  modes passed; mock mode resolved/enumerated no native HID.
+- `openspec validate --all --strict`: 31 changes passed.
+- `git diff --check`: passed.
+- The lane's native smoke build and Electron run passed with
+  `OPEN_QUAKE_MOCK_DEVICE=1`, `ELECTRON_RUN_AS_NODE` unset and a scratch TMPDIR.
+  It exercises diagnostics, the visible repair-failure notice, five strip
+  profile fixtures, synthetic vendor touch through the real mounted panel,
+  gesture feedback, native image decoding, preload/IPC authorization, themes,
+  reduced motion, narrow layout and runtime disposal before quit.
+
+Evidence is under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/device-lifecycle/review-fix-1/`.
+Logs: `biome.log`, `typecheck.log`, `test.log`, `build.log`, `bundle.log`,
+`openspec.log`, `native-smoke-build.log`, `native-smoke.log`. Screenshots are
+in `screenshots/`; diagnostic-layout-failed, diagnostic-narrow, panel-quick
+and panel-touch-complete were inspected visually. Electron exited and no
+lane smoke processes remained.
+
+Tracking: review tasks are `open-quake-lih.11.1.5` through `.9`, corresponding
+to tasks 4.1 through 4.5. Tasks 4.1 through 4.4 are complete; final push and
+review-thread delivery remain in 4.5. Cluster `open-quake-lih.11` stays open
+for the lead until PR #21 merges.
+
+Disagreements: none with the three findings. The shared lane brief says not
+to resolve review threads; the user's explicit instruction for this review
+round authorizes replying to and resolving exactly these three. No hardware
+was opened, no firmware was flashed, no dependency was added and no hook was
+bypassed. Native CoreGraphics effects and physical device behavior remain
+unverified.

@@ -14,6 +14,7 @@ export const HidDeviceInfo = Schema.Struct({
 export type HidDeviceInfo = typeof HidDeviceInfo.Type;
 
 export const TouchPoint = Schema.Struct({
+	touchId: Schema.optionalWith(Schema.String, { exact: true }),
 	action: Schema.Number,
 	x: Schema.Number,
 	y: Schema.Number,

@@ -149,7 +149,7 @@ if (!app.requestSingleInstanceLock()) {
 		const runtime = ManagedRuntime.make(
 			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
 		);
-		const mock = !app.isPackaged && process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+		const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 		const source = mock
 			? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
 					Effect.sync(() => bus.stop()),
@@ -272,10 +272,10 @@ if (!app.requestSingleInstanceLock()) {
 					Effect.scoped(
 						Effect.gen(function* () {
 							bus = yield* source;
-							const forward = createEventForwarder(() => [
-								panelWin,
-								managementWin,
-							]);
+							const forward = createEventForwarder(
+								() => [panelWin, managementWin],
+								() => [panelWin],
+							);
 							bus.on((event) => {
 								forward(event);
 								if (event.kind === "status")

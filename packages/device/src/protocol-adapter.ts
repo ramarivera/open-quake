@@ -46,8 +46,8 @@ export function decodeReport(
 	}
 	if (opcode === 0x55 && command === 0xef)
 		return Either.right(Option.some({ _tag: "KeepAlive" }));
-	// This is the existing synthetic checksummed touch envelope. The separate
-	// unchecked touch collection still needs hardware evidence before support.
+	// Legacy synthetic checksummed touch envelope, retained for compatibility.
+	// Real vendor input uses touch/ on its own separately selected HID handle.
 	if (opcode === 0xa3 && command === 26) {
 		if (value === undefined || sub.length !== 1 + 5 * value)
 			return Either.left(
