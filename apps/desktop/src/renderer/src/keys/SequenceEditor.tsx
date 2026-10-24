@@ -33,7 +33,7 @@ const Step = Schema.Struct({
 /** Preserve unknown imported fields when a supported editor field changes. */
 export const changeSequenceStep = (
 	step: typeof ProfileJsonObject.Type,
-	patch: (typeof Step.Type)["config"],
+	patch: Partial<(typeof Step.Type)["config"]>,
 ): typeof ProfileJsonObject.Type => {
 	const original =
 		typeof step.config === "object" &&
@@ -46,6 +46,27 @@ export const changeSequenceStep = (
 		config: { ...original, ...patch },
 	});
 };
+/** A Value edit changes only the first action's value, including retained imports. */
+export const changeSequenceValue = (
+	step: typeof ProfileJsonObject.Type,
+	value: string,
+): typeof ProfileJsonObject.Type => {
+	const { config } = Schema.decodeUnknownSync(Step)(step, {
+		onExcessProperty: "preserve",
+	});
+	const first = config.actions[0];
+	return changeSequenceStep(step, {
+		...config,
+		actions: [
+			{
+				...first,
+				type: first?.type ?? "key",
+				value: config.type === "delay" ? Number(value) : value,
+			},
+			...config.actions.slice(1),
+		],
+	});
+};
 export function SequenceEditor({
 	value,
 	onChange,
@@ -53,7 +74,10 @@ export function SequenceEditor({
 	value: readonly (typeof ProfileJsonObject.Type)[];
 	onChange: (value: readonly (typeof ProfileJsonObject.Type)[]) => void;
 }): React.JSX.Element {
-	const change = (index: number, config: (typeof Step.Type)["config"]): void =>
+	const change = (
+		index: number,
+		config: Partial<(typeof Step.Type)["config"]>,
+	): void =>
 		onChange(
 			value.map((step, i) =>
 				i === index ? changeSequenceStep(step, config) : step,
@@ -118,18 +142,13 @@ export function SequenceEditor({
 								type={config.type === "delay" ? "number" : "text"}
 								value={config.actions[0]?.value ?? ""}
 								onChange={(e) =>
-									change(index, {
-										...config,
-										actions: [
-											{
-												type: config.actions[0]?.type ?? "key",
-												value:
-													config.type === "delay"
-														? Number(e.target.value)
-														: e.target.value,
-											},
-										],
-									})
+									onChange(
+										value.map((step, i) =>
+											i === index
+												? changeSequenceValue(step, e.target.value)
+												: step,
+										),
+									)
 								}
 							/>
 						</label>
@@ -140,9 +159,7 @@ export function SequenceEditor({
 								min={0}
 								max={60000}
 								value={config.gap ?? 100}
-								onChange={(e) =>
-									change(index, { ...config, gap: Number(e.target.value) })
-								}
+								onChange={(e) => change(index, { gap: Number(e.target.value) })}
 							/>
 						</label>
 						<button

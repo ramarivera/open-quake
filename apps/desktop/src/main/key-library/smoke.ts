@@ -20,12 +20,17 @@ import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
 import { MediaLive, registerMedia } from "../media";
+import { registerMeetings } from "../meetings";
 import { registerProfiles } from "../profiles";
 import { iconZip } from "../test/icon-pack-fixtures";
 import { smokeFont } from "../test/smoke-font";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { playKeyAlarm } from "./alarm";
 import { resetKeysOnLinkLoss } from "./device-status";
+import {
+	interceptEditorRequests,
+	verifyEditorTransactions,
+} from "./smoke-editor";
 
 registerClockScheme();
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
@@ -123,7 +128,9 @@ dialog.showOpenDialog = async () => ({
 async function smoke(): Promise<void> {
 	let failed = false;
 	await mkdir(scratch, { recursive: true });
-	const directory = await mkdtemp(join(scratch, "keys-native-"));
+	const directory = await mkdtemp(
+		join(process.env.OPEN_QUAKE_SMOKE_SCRATCH ?? scratch, "keys-native-"),
+	);
 	app.setPath("userData", directory);
 	let profiles: ReturnType<typeof registerProfiles> | undefined,
 		media: ReturnType<typeof registerMedia> | undefined,
@@ -131,9 +138,11 @@ async function smoke(): Promise<void> {
 	let knob: ReturnType<typeof registerKnob> | undefined;
 	let voice: ReturnType<typeof registerVoiceSurface> | undefined;
 	let maintenance: ReturnType<typeof registerMaintenance> | undefined;
+	let meetings: ReturnType<typeof registerMeetings> | undefined;
 	let disposeLifecycle = async () => {},
 		removeHardware = () => {};
 	let management: BrowserWindow | undefined;
+	let delays: ReturnType<typeof interceptEditorRequests> | undefined;
 	try {
 		await app.whenReady();
 		const options = {
@@ -156,6 +165,7 @@ async function smoke(): Promise<void> {
 					process.stderr.write(`renderer: ${details.message}\n`);
 			});
 		const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
+		delays = interceptEditorRequests();
 		profiles = registerProfiles(
 			() => manager,
 			renderer,
@@ -164,6 +174,7 @@ async function smoke(): Promise<void> {
 			() => undefined,
 			() => panel,
 		);
+		delays.restore();
 		voice = registerVoiceSurface({
 			mock: true,
 			tones: createToneRecorder(),
@@ -171,6 +182,11 @@ async function smoke(): Promise<void> {
 			panel: () => panel,
 			management: () => manager,
 			renderer,
+		});
+		meetings = registerMeetings({
+			userData: directory,
+			mock: true,
+			hardware: () => undefined,
 		});
 		maintenance = registerMaintenance({
 			root: directory,
@@ -286,6 +302,20 @@ async function smoke(): Promise<void> {
 			),
 		);
 		await button(manager, "Keys");
+		await ready(manager, "document.querySelector('#keys-profile')");
+		await verifyEditorTransactions({
+			manager,
+			profiles,
+			scratch,
+			delays,
+			evalIn,
+			ready,
+			click,
+			button,
+			input,
+			select,
+			snapshot,
+		});
 		await ready(manager, "document.querySelector('#keys-profile')");
 		await select(manager, "#keys-profile", custom.id);
 		await click(manager, ".keys-cells button:first-child");
@@ -702,8 +732,10 @@ async function smoke(): Promise<void> {
 			);
 		}
 	} finally {
+		delays?.releaseAll();
 		removeHardware();
 		await disposeLifecycle();
+		await meetings?.dispose();
 		await maintenance?.dispose();
 		await voice?.dispose();
 		await knob?.dispose();
