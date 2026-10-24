@@ -20,7 +20,9 @@ import {
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerHardware } from "../hardware";
+import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { startMockDeviceBus } from "../mockDeviceBus";
@@ -36,8 +38,15 @@ import {
 } from "../test/strip-fixtures";
 import { MediaLive, registerMedia } from "./index";
 
+assert.equal(
+	process.env.OPEN_QUAKE_MOCK_DEVICE,
+	"1",
+	"Native smoke requires mock device mode",
+);
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
+// The clock tile reads its own store, as in the app.
+registerClockScheme();
 const pngPath = join(directory, "checkerboard.png");
 const jpegPath = join(directory, "second.jpg");
 let selectedPath = pngPath;
@@ -110,6 +119,10 @@ async function smoke(): Promise<void> {
 	};
 	const management = new BrowserWindow(options);
 	const panel = new BrowserWindow(options);
+	const knob = registerKnob(
+		() => panel,
+		() => [management, panel],
+	);
 	let runtimeDisposed = false;
 	const runtime = ManagedRuntime.make(
 		Layer.merge(
@@ -124,6 +137,10 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	const clock = registerClock(
+		ManagedRuntime.make(ClockLive(directory)),
+		() => management,
+	);
 	const unregisterHardware = registerHardware(
 		() => undefined,
 		() => management,
@@ -494,7 +511,7 @@ async function smoke(): Promise<void> {
 		});
 		await settle();
 		const shown: unknown = await panel.webContents.executeJavaScript(
-			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.strip-clock-placeholder') }))()`,
+			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.oq-clock') }))()`,
 		);
 		assert.deepEqual(shown, {
 			theme,
@@ -570,6 +587,7 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	await knob.dispose();
 	// Exercise the mounted panel adapter via the real preload/event IPC.
 	await panel.webContents.executeJavaScript(`(() => {
 		window.__stripKeys = [];
@@ -694,6 +712,7 @@ async function smoke(): Promise<void> {
 	removeLifecycle();
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
+	await clock.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

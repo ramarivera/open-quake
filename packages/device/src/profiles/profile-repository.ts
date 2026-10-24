@@ -16,6 +16,7 @@ import {
 	ProfileRevision,
 	type ProfileSelection,
 	SaveProfileRequest,
+	SelectProfileRequest,
 } from "./profile-contracts.js";
 import {
 	ProfileNotFound,
@@ -213,7 +214,47 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 								["activeByDevice"],
 							]);
 						yield* write(candidate);
-						// This is the sole publication point. No draft or failed write reaches subscribers.
+						// No draft or failed write reaches subscribers.
+						yield* SubscriptionRef.set(committed, Option.some(candidate));
+						return candidate;
+					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
+			);
+			const select = Effect.fn("ProfileRepository.select")(
+				(
+					request: unknown,
+				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
+					Effect.gen(function* () {
+						const input = yield* Schema.decodeUnknown(SelectProfileRequest)(
+							request,
+							{ onExcessProperty: "error" },
+						).pipe(
+							Effect.catchTag("ParseError", (cause) =>
+								Effect.fail(profileParseFailure(cause)),
+							),
+						);
+						const { envelope } = yield* loadUnlocked();
+						const profile = envelope.profiles.find(
+							(entry) => entry.id === input.profileId,
+						);
+						const page = input.pageId
+							? profile?.pages.find((entry) => entry.id === input.pageId)
+							: profile?.pages[0];
+						if (!profile || !page)
+							return yield* ProfileNotFound.fromCause(undefined);
+						const previous = envelope.activeByDevice[input.deviceId];
+						if (
+							previous?.profileId === profile.id &&
+							previous.pageId === page.id
+						)
+							return envelope;
+						const candidate = {
+							...envelope,
+							activeByDevice: {
+								...envelope.activeByDevice,
+								[input.deviceId]: { profileId: profile.id, pageId: page.id },
+							},
+						};
+						yield* write(candidate);
 						yield* SubscriptionRef.set(committed, Option.some(candidate));
 						return candidate;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
@@ -221,6 +262,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 			return {
 				load,
 				save,
+				select,
 				snapshots: committed.changes.pipe(
 					Stream.filterMap((snapshot) => snapshot),
 				),

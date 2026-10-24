@@ -31,3 +31,7 @@
 - [x] 6.2 Recreate/show/focus management on activate independently of a surviving hidden fallback panel; preserve close-before-reopen lifecycle recovery. Verify destroyed, hidden and minimized management. Bead: open-quake-lih.11.1.12.
 - [x] 6.3 Skip screen blanking without display candidates; retain changed candidate topology during discovery and retry after completion without self-triggered blanking loops. Verify USB-before-HDMI and late HDMI during an active transaction with TestClock. Bead: open-quake-lih.11.1.13.
 - [x] 6.4 Run all six lane gates and media/lifecycle/hardware native mock smokes, inspect screenshots, sync evidence and beads, commit/push and reply to/resolve the three authorized connector threads naming the fix commit. Do not merge PR #21 or redirect hooks. Bead: open-quake-lih.11.1.14.
+
+## 7. PR #21 clock and knob merge round
+
+- [x] 7.1 Merge origin/main at 129ceb5 into head 0ae18bd, preserving lifecycle startup/recovery and hidden release fallback plus clock scheme/registration, knob bus/profile binding, both test mocks and all preload/smoke APIs. Run all six lane gates and media, hardware, knob, clock and lifecycle native mock smokes; commit through existing hooks and push without merging PR #21. Bead: open-quake-lih.11.1.15.

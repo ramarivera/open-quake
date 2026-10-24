@@ -140,23 +140,6 @@
 	text-align: center;
 }
 
-/* Stand-in for strip-clock's ClockTile. */
-.strip-clock-placeholder {
-	display: block;
-	background: var(--strip-canvas);
-}
-.strip-clock-placeholder-time {
-	fill: var(--strip-title);
-	font-size: 200px;
-	font-weight: 300;
-	font-variant-numeric: tabular-nums;
-	text-anchor: middle;
-	dominant-baseline: central;
-}
-.strip-clock-placeholder-meridiem {
-	font-size: 72px;
-}
-
 /* Status overlays use the app theme (ui-theming). */
 .strip-status {
 	position: absolute;

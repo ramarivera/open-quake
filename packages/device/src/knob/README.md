@@ -1,6 +1,17 @@
 # Knob contracts and conductor
 
-This module implements the contract and routing portions of `openspec/changes/knob-configuration`. It performs no HID, OS brightness, profile persistence, microphone, or voice runtime IO. Physical direction, panel target/native scale/readback, and press/hold timing remain unverified.
+This module retains configuration/import compatibility from `knob-configuration`.
+The physical input controller is now [KnobModel](./model/README.md), specified by
+`knob-model-parity`. Firmware classifies 1 short, 2 double, 5 hold start and 255
+release; rotation byte 1 increases. These codes are confirmed in recovered
+background.js; real hardware direction and driver targets remain unverified.
+The domain performs IO through explicit ports, never by importing HID or AI.
+
+Idle physical rotation selects a profile through player-volume/picker/ring
+precedence after a supported focused tile. Saved directional and center slots
+remain configuration data and never execute on idle physical rotation.
+The production desktop composes the shared ProfileService selection consumer;
+voice lifecycle stays owned by knob-push-to-talk.
 
 ## Canonical saves
 
@@ -30,9 +41,9 @@ A compact two-entry list without reliable slot tags stays entirely inactive in `
 
 pageUp/pageDown aliases normalize only with `{navigationContext:true}`. The caller must establish navigation context from the import, rather than infer it globally from a type string. Imported malformed titles reject root validation or make the affected slot inactive.
 
-## Normalized integration contract, W4 contract side
+## Legacy W4 integration contract
 
-`KnobEvent` defines these decoded host events. This is an integration contract, not a protocol opcode map. `packages/protocol` is unchanged.
+`KnobEvent` retains the older logical Press/HoldStart/Release API for compatibility. It is not the physical firmware event path. New adapters use KnobModel and the firmware classifications above; no host classifier invents short/double/hold thresholds.
 
 Every event carries `session:{deviceId,sessionId,profileId,revision}`. IDs are nonblank stable strings; revision is a nonnegative safe integer identifying committed data. The composition root allocates a fresh sessionId on reconnect and profile selection, including switching away and back. It never relabels queued old events with the new selection. A save publishes its new revision atomically. Events for an older revision are stale and must be replaced by fresh normalized input, never replayed.
 
@@ -50,7 +61,7 @@ Provide `KnobDispatchPorts` to `KnobService.DefaultWithoutDependencies` at the a
 
 Snapshots contain session, optional knob, and optional focused control. Omit absent JSON fields; Schema decodes them to Option. A focused control supplies visible, supportKnob, keyCode, and exactly two directional assignments. The action lane expands its ordered two-chord hotkey into two individually validated assignments: index 0 counterclockwise, index 1 clockwise. That expansion does not represent hotkeySwitch.
 
-For each detent the conductor chooses a visible, supported, validated focus first, then the matching nonempty profile slot, then a center with declared rotation support. An invalid focused control cannot gain priority. A selected route that is invalid or unavailable fails without trying another route. Empty selections do nothing. Press/release use center only; panelBrightness is rotation-only. Configuration and snapshot reads do not execute actions. Dispatch is serialized, and a failed side effect is never retried automatically.
+For each detent this legacy conductor chooses only a visible, supported, validated focus. Idle detents fall through to KnobModel profile selection; saved directional and center slots are inert. An invalid focused control cannot gain priority. A selected route that is invalid or unavailable fails without trying another route. Empty selections do nothing. Press/release use center only; panelBrightness is rotation-only. Configuration and snapshot reads do not execute actions. Dispatch is serialized, and a failed side effect is never retried automatically.
 
 The dispatch callback MUST atomically compare all four session fields against current committed selection immediately before IO. This closes the race between snapshot read and adapter invocation. It must honor device/profile/revision ownership, enforce capability availability, execute exactly one operation, and reject stale commands with KnobSessionStale. The conductor re-reads before each detent and stops a batch on failure; completed earlier detents cannot be rolled back.
 

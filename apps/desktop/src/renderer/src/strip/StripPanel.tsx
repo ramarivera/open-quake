@@ -5,6 +5,7 @@ import { useQuakeEvents } from "../useQuakeEvents";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import type { StripLayout } from "./geometry";
 import { mountStripTouch } from "./mount-strip-touch";
+import { KnobPanelLayer } from "./overlays/knob/KnobPanelLayer";
 import { StripScreen, StripViewport } from "./StripScreen";
 import { useStripSettings } from "./stripSettings";
 import { useStripProfiles } from "./useStripProfiles";
@@ -48,6 +49,7 @@ export function StripPanel(): React.JSX.Element {
 					showEmptyGridDashedBorder={settings.showEmptyGridDashedBorder}
 				>
 					<PanelFeedbackLayer view={feedback} />
+					<KnobPanelLayer />
 				</StripScreen>
 			</StripViewport>
 		</main>

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
-import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
+import { Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
 import {
 	app,
 	BrowserWindow,
@@ -13,8 +13,10 @@ import {
 	screen,
 	shell,
 } from "electron";
+import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
+import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import {
 	findPanelDisplay,
@@ -26,6 +28,8 @@ import { createEventForwarder } from "./eventForwarding";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import { hardwarePreferencesLive } from "./hardware/preferences";
+import { registerKnob } from "./knob";
+import { knobProfileBinding } from "./knob/profile-binding";
 import { DeviceLifecycle } from "./lifecycle/lifecycle-service";
 import {
 	callDisplayTool,
@@ -38,6 +42,7 @@ import { MediaLive, registerMedia } from "./media";
 import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
+registerClockScheme();
 const PANEL_TITLE = "open-quake panel";
 
 interface PanelTarget {
@@ -128,6 +133,18 @@ if (!app.requestSingleInstanceLock()) {
 		let panelTarget = getPanelTarget();
 		let panelWin = createPanelWindow(panelTarget);
 		let managementWin = createManagementWindow();
+		const profilesRuntime = ManagedRuntime.make(
+			desktopProfilesLive(app.getPath("userData")),
+		);
+		let bus: DeviceBus | undefined;
+		const knob = registerKnob(
+			() => panelWin,
+			() => [panelWin, managementWin],
+			{
+				profiles: knobProfileBinding(profilesRuntime),
+				hardware: () => bus?.hardware?.(),
+			},
+		);
 		const focusManagement = (): void => {
 			if (quitting) return;
 			reopenWindows();
@@ -143,9 +160,20 @@ if (!app.requestSingleInstanceLock()) {
 			),
 			() => managementWin,
 		);
+		registerClock(
+			ManagedRuntime.make(ClockLive(app.getPath("userData"))),
+			() => managementWin,
+		);
 		// Read-only committed profiles for the strip and its preview.
-		registerProfiles(
-			ManagedRuntime.make(desktopProfilesLive(app.getPath("userData"))),
+		registerProfiles(profilesRuntime);
+		profilesRuntime.runFork(
+			ProfileService.subscribeCommittedProfiles().pipe(
+				Effect.flatMap((snapshots) =>
+					Stream.runForEach(snapshots, () =>
+						Effect.promise(() => knob.refresh()),
+					),
+				),
+			),
 		);
 		// One service layer for the main process. Only this Electron boundary runs it.
 		const runtime = ManagedRuntime.make(
@@ -169,7 +197,6 @@ if (!app.requestSingleInstanceLock()) {
 						attachHardware(controls, connection),
 					);
 				});
-		let bus: DeviceBus | undefined;
 		const disposeHardware = registerHardware(
 			() => bus?.hardware?.(),
 			() => managementWin,
@@ -304,6 +331,7 @@ if (!app.requestSingleInstanceLock()) {
 										lifecycleRuntime.runPromise(service.onStatus(event)),
 									);
 							});
+							bus.on(knob.onDevice);
 							yield* Effect.never;
 						}),
 					),
@@ -394,6 +422,7 @@ if (!app.requestSingleInstanceLock()) {
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 			void stopBus().then(async () => {
 				await lifecycleRuntime.dispose();
+				await knob.dispose();
 				await runtime.dispose();
 				quitFinished = true;
 				app.quit();

@@ -1,9 +1,8 @@
-import { Either, Option, Schema } from "effect";
-import {
-	type KnobDispatchCommand,
-	KnobFunction,
-	type KnobSession,
-	type KnobSnapshot,
+import { Either, Option } from "effect";
+import type {
+	KnobDispatchCommand,
+	KnobSession,
+	KnobSnapshot,
 } from "./knob-contracts.js";
 import { findKnobCapability, type KnobRegistry } from "./knob-registry.js";
 
@@ -43,30 +42,6 @@ export function selectKnobRotation(
 				direction,
 			});
 	}
-	if (Option.isNone(snapshot.knob) || !snapshot.knob.value.config.display)
-		return Option.none();
-	const slots = snapshot.knob.value.config.subActions;
-	const directional = Schema.decodeUnknownEither(KnobFunction)(
-		slots[index + 1],
-	);
-	if (Either.isRight(directional))
-		return Option.some({
-			session: snapshot.session,
-			route: index === 0 ? "left" : "right",
-			assignment: directional.right,
-			activation: "rotate",
-			direction,
-		});
-	const center = Schema.decodeUnknownEither(KnobFunction)(slots[0]);
-	if (Either.isLeft(center)) return Option.none();
-	const capability = findKnobCapability(registry, center.right.config.type);
-	return Option.isSome(capability) && capability.value.rotation
-		? Option.some({
-				session: snapshot.session,
-				route: "center",
-				assignment: center.right,
-				activation: "rotate",
-				direction,
-			})
-		: Option.none();
+	// Idle rotation belongs to KnobModel profile selection. Saved slots are inert.
+	return Option.none();
 }

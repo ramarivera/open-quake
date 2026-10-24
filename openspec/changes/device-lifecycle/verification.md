@@ -409,3 +409,81 @@ containing that fix SHA:
 Delivery evidence is retained in scratch `commit.log`, `push.log`,
 `threads-before.json`, `thread-resolutions.json` and `threads-after.json`.
 Cluster `open-quake-lih.11` remains lead-owned until merge. PR #21 was not merged.
+
+
+## PR #21 clock and knob merge round 2
+
+On 2026-10-24, merged `origin/main` at `129ceb5` into lifecycle head
+`0ae18bd975bbd609074f91a65334b6b6b48af377`. Main contributes PR #25's clock
+and PR #24's knob model. This round changes no feature behavior beyond combining
+the two parents. Task 7.1 maps to `open-quake-lih.11.1.15`.
+
+Five conflict resolutions:
+
+- `apps/desktop/src/main/index.ts`: retained lifecycle's single-instance guard
+  around `app.whenReady`, focus/second-instance handling, packaged-aware `isDev`,
+  hidden release fallback, DeviceLifecycle runtime, native display prompts,
+  lock/unlock/resume recovery and teardown. Registered `registerClockScheme()` at
+  module load before readiness. Inside the guard, retained `ClockLive` and
+  `registerClock`, the shared profiles runtime, `knobProfileBinding`, hardware
+  binding, committed profile notifications through `ProfileService`/`Stream`,
+  `bus.on(knob.onDevice)` alongside lifecycle forwarding and awaited knob disposal.
+- `apps/desktop/src/main/index.test.ts`: kept native-display and knob mocks,
+  plus main's clock mocks and real in-memory profile-service fixture.
+- `apps/desktop/src/main/media/smoke.ts`: kept lifecycle diagnostics, permission,
+  readiness-loss, timeout/retry and navigation checks; combined clock scheme,
+  clock store/IPC, knob setup, `.oq-clock` assertion and both sides' disposal.
+- `apps/desktop/src/main/test/bundle-smoke.mjs`: retained packaged/single-instance,
+  powerMonitor and shell mocks with awaited lifecycle teardown. Added main's
+  protocol/net/session mocks and clock-scheme assertion. Both default and mock
+  bundle modes passed without hardware I/O.
+- `apps/desktop/src/preload/index.ts`: retained lifecycle, hardware, media,
+  profiles and device bridges, and added clock and knob preload imports.
+
+All six lane gates passed on the resolved source:
+
+- `pnpm biome check packages apps`: 337 files, no fixes.
+- `pnpm typecheck`: six successful tasks.
+- `pnpm test --force`: 823 tests, protocol 47, edge 27, device 363,
+  desktop 386; all four test tasks ran without cache.
+- `pnpm build`: production main, preload and renderer passed.
+- `pnpm --filter @open-quake/desktop test:bundle`: default HID and explicit mock
+  modes passed. Native HID was substituted in default mode, and mock mode had
+  zero native resolutions/enumerations.
+- `openspec validate --all --strict`: 33 changes passed.
+
+`pnpm install` and `git diff --check` passed. All five native mock runs exited
+zero: media, hardware, knob, clock and lifecycle. Media and lifecycle use the
+same documented media smoke entrypoint and ran separately. All Electron runs
+used `OPEN_QUAKE_MOCK_DEVICE=1`, `env -u ELECTRON_RUN_AS_NODE`, and scratch
+TMPDIR; clock also used scratch `OPEN_QUAKE_SCRATCH`. No started Electron process
+remained after the runs, and no DK-Suite process was present.
+
+Media/lifecycle exercised production preload/IPC, diagnostic states and readiness
+navigation, image decoding, profile grids and synthetic vendor touch. Hardware
+exercised mocked firmware, LED lock policy, mic, brightness and volume controls.
+Knob exercised profile selectors, rotated pointer/touch paging, command permissions,
+focus/volume dispatch and error notices. Clock exercised geometry, compositor flip
+timing, themes, save rollback, seconds, custom image/video, media authorization
+and invalid/missing-media fallback. The isolated knob fixture logged a missing
+`quake:lifecycle` handler when its management renderer mounted; its assertions
+passed. Lifecycle IPC was covered by the combined media/lifecycle runs.
+Hardware emitted nonfatal Chromium cache warnings during temporary-profile cleanup.
+
+Inspected screenshots: `lifecycle/diagnostic-layout-failed.png`,
+`media/panel-touch-complete.png`, `hardware/hardware-narrow.png`,
+`knob/thumbnail-picker.png`, and `clock/clock-aurora-custom-video.png`.
+
+Logs, the reproducible native runner and screenshots are under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/device-lifecycle/merge-clock-knob-round-2/`.
+The hardware runner requires its original lane directory; originals are at
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/hw-controls/pr21-clock-knob-merge-round-2/`,
+with copies under this round's `hardware/` evidence directory.
+
+A fresh read before commit found six resolved review threads and zero unresolved,
+with no further pages. No review threads were changed. No new audit coverage,
+dependency, native hardware access or firmware operation was introduced. Physical
+QUAKE behavior and native host display effects remain lead-owned and unverified.
+The existing `.husky/_` hook path was preserved. PR #21 remains open for the lead;
+this work does not merge it. Commit/push delivery evidence is recorded on bead
+`open-quake-lih.11.1.15` after checking the remote head.
