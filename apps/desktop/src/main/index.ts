@@ -148,6 +148,7 @@ if (!app.requestSingleInstanceLock()) {
 			rendererURL,
 			undefined,
 			managementURL.href,
+			() => bus?.hardware?.(),
 		);
 		const knob = registerKnob(
 			() => panelWin,

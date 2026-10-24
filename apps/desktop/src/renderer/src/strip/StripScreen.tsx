@@ -1,5 +1,9 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Option, Schema } from "effect";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import { useKeyRuntime } from "../keys/useKeyRuntime";
 import { WallpaperCanvas } from "../wallpaper/WallpaperCanvas";
 import "./css-properties";
 import { STRIP_CANVAS, type StripLayout, stripLayout } from "./geometry";
@@ -84,8 +88,10 @@ export function StripScreen({
 	pressedKeyCode,
 	children,
 	onLayout,
+	previewSerial,
 }: {
 	profiles: StripProfiles;
+	previewSerial?: string;
 	/** Reports the layout actually painted for the panel input adapter. */
 	onLayout?: (layout: StripLayout | undefined) => void;
 	wallpaper?: WallpaperSnapshot | undefined;
@@ -96,12 +102,58 @@ export function StripScreen({
 	/** Overlays in canvas coordinates, drawn above the grid. */
 	children?: React.ReactNode;
 }): React.JSX.Element {
-	const serial = wallpaper?.saved.serial;
+	const runtimeStates = useKeyRuntime();
+	const serial = previewSerial ?? wallpaper?.saved.serial;
+	const [locale, setLocale] = useState<ProfileLocale>("en");
+	useEffect(() => {
+		const update = (): void => {
+			const decoded = Schema.decodeUnknownEither(ProfileLocale)(
+				localStorage.getItem("open-quake-key-locale") ?? "en",
+			);
+			if (decoded._tag === "Right") setLocale(decoded.right);
+		};
+		update();
+		window.addEventListener("storage", update);
+		window.addEventListener("key-locale", update);
+		return () => {
+			window.removeEventListener("storage", update);
+			window.removeEventListener("key-locale", update);
+		};
+	}, []);
 	const layout = useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);
-		return stripLayout(profile, page);
-	}, [profiles, serial]);
+		return stripLayout(profile, {
+			...page,
+			keys: page.keys.map((key) => {
+				const state = runtimeStates.get(
+					JSON.stringify([
+						serial ?? "desktop-preview",
+						profile.id,
+						page.id,
+						key.keyCode,
+					]),
+				);
+				const translated = localizedKey(key, locale);
+				return state?.alternate === 1
+					? {
+							...translated,
+							config: {
+								...translated.config,
+								icon: Option.getOrElse(
+									translated.config.alterIcon,
+									() => translated.config.icon,
+								),
+								title: Option.getOrElse(
+									translated.config.alterTitle,
+									() => translated.config.title,
+								),
+							},
+						}
+					: translated;
+			}),
+		});
+	}, [profiles, serial, locale, runtimeStates]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
 	useLayoutEffect(() => {
 		onLayout?.(vivid ? undefined : layout);
@@ -135,6 +187,77 @@ export function StripScreen({
 					<p className="strip-status-title">Profiles unavailable</p>
 					<p className="strip-status-code">{profiles.code}</p>
 				</div>
+			) : null}
+			{layout && !vivid ? (
+				<svg
+					className="strip-overlay"
+					viewBox="0 0 1920 480"
+					aria-label="Key progress"
+				>
+					{layout.tiles.map((tile) => {
+						const selection =
+							profiles._tag === "ready"
+								? selectStripPage(profiles.envelope, serial)
+								: undefined;
+						const state = selection
+							? runtimeStates.get(
+									JSON.stringify([
+										serial ?? "desktop-preview",
+										selection.profile.id,
+										selection.page.id,
+										tile.keyCode,
+									]),
+								)
+							: undefined;
+						if (!state) return null;
+						return (
+							<g key={tile.keyCode} pointerEvents="none">
+								{state.countdown !== undefined && state.countdown >= 0 ? (
+									<text
+										x={tile.slot.x + tile.slot.width / 2}
+										y={tile.slot.y + tile.slot.height * 0.65}
+										textAnchor="middle"
+										fill="white"
+										fontSize={32}
+									>
+										{Math.ceil(state.countdown / 1000)}
+									</text>
+								) : null}
+								{state.progress !== undefined && state.progress < 100 ? (
+									<rect
+										x={tile.slot.x + 16}
+										y={tile.slot.y + tile.slot.height - 26}
+										width={((tile.slot.width - 32) * state.progress) / 100}
+										height={8}
+										fill="#409eff"
+									/>
+								) : null}
+								{state.alert === 2 ? (
+									<text
+										x={tile.slot.x + tile.slot.width / 2}
+										y={tile.slot.y + tile.slot.height * 0.65}
+										textAnchor="middle"
+										fill="#ffbd66"
+										fontSize={32}
+									>
+										Alarm
+									</text>
+								) : null}
+								{state.alert === 1 ? (
+									<text
+										x={tile.slot.x + tile.slot.width / 2}
+										y={tile.slot.y + tile.slot.height * 0.65}
+										textAnchor="middle"
+										fill="#ff6b6b"
+										fontSize={24}
+									>
+										Invalid operation
+									</text>
+								) : null}
+							</g>
+						);
+					})}
+				</svg>
 			) : null}
 			{children ? (
 				<svg

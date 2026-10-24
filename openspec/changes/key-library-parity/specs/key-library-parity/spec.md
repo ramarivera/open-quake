@@ -25,14 +25,18 @@ Delete SHALL remove the selected deletable key only when focus is outside editab
 - **THEN** the selected key remains present
 
 ### Requirement: Localized titles with explicit user origin
-Built-in key titles SHALL resolve using the recovered eight locales and the existing profile catalog. User-edited text including empty text SHALL survive locale switches. New title input SHALL stop at weight 20, counting U+4E00 through U+9FA5 as two and other UTF-16 units as one. Source: MGMT-099, MGMT-100, MGMT-120, MGMT-258, MGMT-259, MGMT-383.
+Built-in key titles SHALL resolve using the recovered eight locales and the existing profile catalog. User-edited text including empty text SHALL survive locale switches. New title input SHALL stop at weight 20, counting U+4E00 through U+9FA5 as two and other UTF-16 units as one. Nonempty edits SHALL enable display, move the title to top and clear B/I/U style. Advanced style settings SHALL support bot/mid/top, size 6–18, B/I/U, color, and reset to true/bot/8/#FFFFFF/bold|italic|underline for either state. Source: MGMT-099, MGMT-100, MGMT-120, MGMT-258 through MGMT-261, MGMT-383.
 
 #### Scenario: Locale and custom text
 - **WHEN** a built-in key changes locale before and after a user edits its title
 - **THEN** its default translates before the edit and the custom title remains after the edit
 
+#### Scenario: Title style edits
+- **WHEN** a nonempty title is entered and then its advanced style is changed or reset
+- **THEN** auto-style applies first, subsequent style changes remain drafts, and reset preserves text and user origin
+
 ### Requirement: Icon library and safe packs
-The Icon Library SHALL offer Material Design Icons from the approved 7.4.47 set, local icons and installed packs, search names/tags/metadata after 500 ms, zoom from 40 to 120 px in steps of 8 with default 72, and append visible pages on scroll. Stream Deck manifest.json plus icons.json and iconfont.json plus symbol definitions SHALL import from ZIP without executing scripts. In-use icons and packs SHALL resist deletion, including draft and alternate references. TTF-only iconfont packs SHALL report an unsupported-format result pending dependency approval. Sources: MGMT-414 through MGMT-426.
+The Icon Library SHALL offer Material Design Icons from the approved 7.4.47 set, local icons and installed packs, search names/tags/metadata after 500 ms, zoom from 40 to 120 px in steps of 8 with default 72, and append visible pages on scroll. Stream Deck manifest.json plus icons.json and iconfont.json plus symbol definitions SHALL import from ZIP without executing scripts. In-use icons and packs SHALL resist deletion, including draft and alternate references. TTF-only iconfont packs SHALL render through the native font decoder without executing pack code. Sources: MGMT-414 through MGMT-426.
 
 #### Scenario: Search, zoom and selection
 - **WHEN** a user searches an MDI tag, changes zoom and selects an icon for a key

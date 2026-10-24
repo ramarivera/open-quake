@@ -10,6 +10,8 @@ import {
 	type TouchTile,
 } from "./touch-controller";
 import type { Rect } from "./touch-geometry";
+import { normalizeTouch } from "./touch-geometry";
+import { createGestureRecognizer } from "./touch-gestures";
 
 /** Grid owns tile hits; DOM observation supplies only in-tile sub-targets. */
 export function mountStripTouch(
@@ -18,6 +20,8 @@ export function mountStripTouch(
 	rotation: number,
 	layout: () => StripLayout | undefined,
 	onKey?: (event: StripKeyEvent) => void,
+	onSlide?: (direction: 0 | 1 | 2 | 3) => void,
+	onCancel?: () => void,
 ): () => void {
 	const logicalBounds = (element: Element): Rect => {
 		const box = element.getBoundingClientRect(),
@@ -162,12 +166,66 @@ export function mountStripTouch(
 			return () => clearTimeout(timer);
 		},
 	});
-	const off = bridge.onQuakeEvent(controller.event);
+	let gestureActive = false,
+		gestureStarted = false,
+		dx = 0,
+		dy = 0;
+	const gesture = createGestureRecognizer({
+		width: 1920,
+		height: 480,
+		onMove: (move) => {
+			dx += move.dx;
+			dy += move.dy;
+			if (Math.hypot(dx, dy) > 16) onCancel?.();
+		},
+		onEnd: (event) =>
+			onSlide?.(
+				event.axis === "horizontal"
+					? event.dx > 0
+						? 0
+						: 1
+					: event.dy > 0
+						? 2
+						: 3,
+			),
+	});
+	const off = bridge.onQuakeEvent((event) => {
+		if (event.kind === "touch" && event.points[0]) {
+			const first = event.points[0],
+				point = normalizeTouch(first, { width: 1920, height: 480, rotation });
+			if (first.action !== 0) {
+				if (!gestureStarted) {
+					gestureStarted = true;
+					dx = 0;
+					dy = 0;
+					const current = layout();
+					const tile = current ? tileAt(point, current) : undefined;
+					gestureActive =
+						root.dataset.stripOverlay !== "true" &&
+						!tile?.hasTouchableSubElements;
+				}
+				if (gestureActive) gesture.point(point, performance.now());
+			} else {
+				if (gestureActive) gesture.end(point, performance.now());
+				gestureActive = false;
+				gestureStarted = false;
+			}
+		} else if (event.kind === "status" && event.state !== "connected") {
+			onCancel?.();
+			gesture.cancel();
+			gestureActive = false;
+			gestureStarted = false;
+		}
+		if (root.dataset.stripOverlay === "true") onCancel?.();
+		controller.event(event);
+	});
 	return () => {
+		onCancel?.();
 		off();
 		resize.disconnect();
 		mutation.disconnect();
 		registries.clear();
+		gesture.cancel();
 		controller.dispose();
 	};
 }

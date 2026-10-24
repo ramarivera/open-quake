@@ -27,4 +27,4 @@ None.
 
 ## Approval
 
-Approved (Ramiro, 2026-10-23): all design recommendations, including first-release payloads, no implicit text-enter, adapter-declared supported hotkey tokens, narrow import normalization, and keeping hotkeySwitch unresolved and inactive. Approval does not establish host or hardware execution evidence.
+Approved (Ramiro, 2026-10-23): all design recommendations, including first-release payloads, no implicit text-enter, adapter-declared supported hotkey tokens, narrow import normalization, and keeping hotkeySwitch unresolved and inactive. The key-library-parity lane and MAIN-067 supersede the hotkeySwitch deferral on 2026-10-24. Host and hardware delivery remain separate verification claims.

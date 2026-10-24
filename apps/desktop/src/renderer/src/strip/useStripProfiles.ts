@@ -4,7 +4,7 @@ import {
 	ProfileSnapshotReply,
 	type ProfilesBridge,
 } from "../../../shared/profile-snapshot-contracts";
-import type { ProfileEnvelope } from "../../../shared/profiles";
+import { ProfileEnvelope } from "../../../shared/profiles";
 
 export type StripProfiles =
 	| { readonly _tag: "loading" }
@@ -47,7 +47,18 @@ export function useStripProfiles(): StripProfiles {
 	useEffect(() => {
 		const bridge = window.quakeProfiles;
 		if (!bridge) return;
-		return subscribeStripProfiles(bridge, setProfiles);
+		const off = subscribeStripProfiles(bridge, setProfiles);
+		const preview = window.quakeKeyLibrary?.onPreview((snapshot) => {
+			const decoded = Schema.decodeUnknownEither(ProfileEnvelope)(
+				snapshot.envelope,
+			);
+			if (Either.isRight(decoded))
+				setProfiles({ _tag: "ready", envelope: decoded.right });
+		});
+		return () => {
+			off();
+			preview?.();
+		};
 	}, []);
 	return profiles;
 }

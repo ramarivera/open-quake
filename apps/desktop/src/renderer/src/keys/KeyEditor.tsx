@@ -1,0 +1,631 @@
+import { Array as EffectArray, Option, Schema } from "effect";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	ACTION_REGISTRY,
+	createActionDraft,
+} from "../../../../../../packages/device/src/actions/action-registry.js";
+import {
+	editKeyTitle,
+	type KeyTarget,
+	keyEditable,
+	keyText,
+	keyTitle,
+	localizedKey,
+	resetKeyIcons,
+	titleWeight,
+} from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import {
+	builtinProfiles,
+	profileLabel,
+} from "../../../../../../packages/device/src/profiles/profile-catalog.js";
+import {
+	createEmptyProfileKey,
+	ProfileEnvelope,
+	ProfileKey,
+} from "../../../../../../packages/device/src/profiles/profile-contracts.js";
+import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
+import { stripLayout, tileAt } from "../strip/geometry";
+import { StripScreen, StripViewport } from "../strip/StripScreen";
+import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
+import { Group, PageHeader, Row } from "../ui/Form";
+import { useWallpaper } from "../wallpaper/useWallpaper";
+import { editableFocus } from "./editor-input";
+import { IconLibrary } from "./IconLibrary";
+import { KeyTitleSettings } from "./KeyTitleSettings";
+import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
+import "./keys.css";
+
+type Selection = { readonly target: KeyTarget; readonly key: ProfileKey };
+export function KeyEditor(): React.JSX.Element {
+	const {
+		snapshot: wallpaper,
+		request: configureWallpaper,
+		busy: clockBusy,
+		notice: clockNotice,
+	} = useWallpaper();
+	const serial = wallpaper?.saved.serial ?? "desktop-preview";
+	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
+		[profileId, setProfileId] = useState(""),
+		[pageId, setPageId] = useState(""),
+		[locale, setLocale] = useState<ProfileLocale>("en"),
+		[selection, setSelection] = useState<Selection>(),
+		[icons, setIcons] = useState(false),
+		[alternate, setAlternate] = useState(false),
+		[status, setStatus] = useState("");
+	const epoch = useRef(0);
+	const current = useRef<Selection | undefined>(undefined),
+		host = useRef<HTMLElement>(null);
+	const accept = useCallback(
+		(encoded: typeof ProfileEnvelope.Encoded) =>
+			setEnvelope(Schema.decodeUnknownSync(ProfileEnvelope)(encoded)),
+		[],
+	);
+	const read = useCallback(async (): Promise<void> => {
+		const reply = await window.quakeKeyLibrary.request({
+			type: "read",
+			locale,
+		});
+		if (reply._tag === "success" && reply.envelope) accept(reply.envelope);
+		else if (reply._tag === "rejected") setStatus(reply.reason);
+	}, [accept, locale]);
+	useEffect(() => {
+		localStorage.setItem("open-quake-key-locale", locale);
+		window.dispatchEvent(new Event("key-locale"));
+	}, [locale]);
+	const revert = useCallback(async (): Promise<void> => {
+		const old = current.current;
+		epoch.current++;
+		current.current = undefined;
+		setSelection(undefined);
+		setIcons(false);
+		setAlternate(false);
+		if (old)
+			await window.quakeKeyLibrary.request({
+				type: "revert",
+				token: old.target.token,
+			});
+	}, []);
+	useEffect(() => {
+		void read();
+	}, [read]);
+	useEffect(() => {
+		const off = window.quakeKeyLibrary.onPreview((snapshot) =>
+			accept(snapshot.envelope),
+		);
+		return () => {
+			off();
+			const old = current.current;
+			if (old)
+				void window.quakeKeyLibrary.request({
+					type: "revert",
+					token: old.target.token,
+				});
+		};
+	}, [accept]);
+	const profile =
+		envelope?.profiles.find((p) => p.id === profileId) ?? envelope?.profiles[0];
+	const page = profile?.pages.find((p) => p.id === pageId) ?? profile?.pages[0];
+	const update = async (key: ProfileKey, token?: string): Promise<void> => {
+		const old = current.current;
+		if (!old || (token && old.target.token !== token)) return;
+		const next = { ...old, key };
+		current.current = next;
+		setSelection(next);
+		setStatus("");
+		const reply = await window.quakeKeyLibrary.request({
+			type: "preview",
+			target: next.target,
+			key: Schema.encodeSync(ProfileKey)(key),
+		});
+		if (
+			reply._tag === "rejected" &&
+			current.current?.target.token === next.target.token
+		)
+			setStatus(reply.reason);
+	};
+	const selectPage = async (
+		nextProfile: string,
+		nextPage: string,
+	): Promise<void> => {
+		const ticket = epoch.current + 1;
+		await revert();
+		if (epoch.current !== ticket) return;
+		const reply = await window.quakeKeyLibrary.request({
+			type: "select",
+			deviceId: serial,
+			profileId: nextProfile,
+			pageId: nextPage,
+		});
+		if (epoch.current !== ticket) return;
+		if (reply._tag === "rejected") {
+			setStatus(reply.reason);
+			return;
+		}
+		setProfileId(nextProfile);
+		setPageId(nextPage);
+		if (reply.envelope) accept(reply.envelope);
+	};
+	const choose = async (keyCode: string): Promise<void> => {
+		const ticket = epoch.current + 1;
+		await revert();
+		if (!profile || !page || epoch.current !== ticket) return;
+		const selected = await window.quakeKeyLibrary.request({
+			type: "select",
+			deviceId: serial,
+			profileId: profile.id,
+			pageId: page.id,
+		});
+		if (selected._tag === "rejected" || epoch.current !== ticket) return;
+		// Re-read committed data after reverting before establishing the next target.
+		const reply = await window.quakeKeyLibrary.request({
+			type: "read",
+			locale,
+		});
+		if (reply._tag !== "success" || !reply.envelope || epoch.current !== ticket)
+			return;
+		const env = Schema.decodeUnknownSync(ProfileEnvelope)(reply.envelope),
+			p = env.profiles.find((p) => p.id === profile.id),
+			pg = p?.pages.find((pg) => pg.id === page.id);
+		if (!p || !pg) return;
+		accept(reply.envelope);
+		const key = withSequenceIds(
+			pg.keys.find((k) => k.keyCode === keyCode) ??
+				createEmptyProfileKey(keyCode),
+		);
+		const next = {
+			key,
+			target: {
+				token: crypto.randomUUID(),
+				profileId: p.id,
+				pageId: pg.id,
+				keyCode,
+				revision: p.revision,
+			},
+		};
+		current.current = next;
+		setSelection(next);
+	};
+	const save = async (): Promise<void> => {
+		const old = current.current;
+		if (!old) return;
+		const preview = await window.quakeKeyLibrary.request({
+			type: "preview",
+			target: old.target,
+			key: Schema.encodeSync(ProfileKey)(old.key),
+		});
+		if (preview._tag === "rejected") {
+			setStatus(preview.reason);
+			return;
+		}
+		const reply = await window.quakeKeyLibrary.request({
+			type: "save",
+			token: old.target.token,
+		});
+		if (reply._tag === "rejected") {
+			setStatus(reply.reason);
+			return;
+		}
+		if (current.current?.target.token !== old.target.token) return;
+		if (reply.envelope) {
+			accept(reply.envelope);
+			const p = reply.envelope.profiles.find(
+				(p) => p.id === old.target.profileId,
+			);
+			const next = {
+				...old,
+				target: { ...old.target, revision: p?.revision ?? old.target.revision },
+			};
+			current.current = next;
+			setSelection(next);
+		}
+		setIcons(false);
+		setStatus(keyText("savedSuccessfully", locale));
+	};
+	const remove = useCallback(async (): Promise<void> => {
+		const old = current.current;
+		if (!old || !keyEditable(old.key, "allowDelete")) return;
+		const reply = await window.quakeKeyLibrary.request({
+			type: "delete",
+			target: old.target,
+		});
+		if (reply._tag === "rejected") setStatus(reply.reason);
+		else {
+			if (reply.envelope) accept(reply.envelope);
+			current.current = undefined;
+			setSelection(undefined);
+			setIcons(false);
+		}
+	}, [accept]);
+	useEffect(() => {
+		const keyup = (event: KeyboardEvent): void => {
+			if (
+				event.key === "Delete" &&
+				!event.isComposing &&
+				!editableFocus(document.activeElement) &&
+				!editableFocus(event.target instanceof Element ? event.target : null)
+			) {
+				event.preventDefault();
+				void remove();
+			}
+		};
+		const away = (event: PointerEvent): void => {
+			if (event.target instanceof Node && !host.current?.contains(event.target))
+				void revert();
+		};
+		window.addEventListener("keyup", keyup);
+		document.addEventListener("pointerdown", away);
+		return () => {
+			window.removeEventListener("keyup", keyup);
+			document.removeEventListener("pointerdown", away);
+		};
+	}, [remove, revert]);
+	if (!envelope || !profile || !page)
+		return <p role="status">{status || "Loading profiles…"}</p>;
+	const previewProfile = {
+		...profile,
+		pages: EffectArray.map(profile.pages, (p) => ({
+			...p,
+			keys: p.keys.map((k) => localizedKey(k, locale)),
+		})),
+	};
+	const previewEnvelope = {
+		...envelope,
+		profiles: [previewProfile] as const,
+		activeByDevice: {
+			"editor-preview": { profileId: profile.id, pageId: page.id },
+		},
+	};
+	const key = selection?.key;
+	const changeActions = (index: number, value: string): void => {
+		if (!key) return;
+		void update({
+			...key,
+			config: {
+				...key.config,
+				actions: key.config.actions.map((a, i) =>
+					i === index
+						? {
+								...a,
+								value:
+									typeof a.value === "number" ||
+									a.type === "time" ||
+									a.type === "page"
+										? Number(value)
+										: value,
+							}
+						: a,
+				),
+			},
+		});
+	};
+	const resetIcon = (): void => {
+		if (!key) return;
+		const platform = navigator.platform.includes("Mac") ? "darwin" : "win32";
+		const original = builtinProfiles(platform)
+			.find((p) => p.id === profile.id)
+			?.pages.filter((p) => p.id === page.id)
+			.flatMap((p) => p.keys)
+			.find((k) => k.keyCode === key.keyCode);
+		void update(resetKeyIcons(key, original));
+		setAlternate(false);
+	};
+	return (
+		<section className="key-editor" ref={host}>
+			<PageHeader title="Keys" />
+			<Group title="Configuration">
+				<Row label="Profile" htmlFor="keys-profile">
+					<select
+						id="keys-profile"
+						value={profile.id}
+						onChange={(e) => {
+							const next = envelope.profiles.find(
+								(p) => p.id === e.target.value,
+							);
+							if (next) void selectPage(next.id, next.pages[0].id);
+						}}
+					>
+						{envelope.profiles.map((p) => (
+							<option key={p.id} value={p.id}>
+								{profileLabel(p, locale)}
+							</option>
+						))}
+					</select>
+				</Row>
+				<Row label={keyText("pageNumber", locale)} htmlFor="keys-page">
+					<select
+						id="keys-page"
+						value={page.id}
+						onChange={(e) => {
+							void selectPage(profile.id, e.target.value);
+						}}
+					>
+						{profile.pages.map((p, i) => (
+							<option key={p.id} value={p.id}>
+								{i + 1}
+							</option>
+						))}
+					</select>
+				</Row>
+				<Row label="Language" htmlFor="keys-language">
+					<select
+						id="keys-language"
+						value={locale}
+						onChange={(e) =>
+							setLocale(Schema.decodeUnknownSync(ProfileLocale)(e.target.value))
+						}
+					>
+						{["en", "zh", "de", "es", "fr", "it", "ja", "ko"].map((l) => (
+							<option key={l}>{l}</option>
+						))}
+					</select>
+				</Row>
+			</Group>
+			<fieldset
+				className="keys-preview"
+				onKeyDown={(event) => {
+					if (event.key === "Escape") void revert();
+				}}
+				aria-label="Key grid preview"
+				onClick={(event) => {
+					const frame = event.currentTarget.getBoundingClientRect();
+					const point = {
+						x: ((event.clientX - frame.left) * 1920) / frame.width,
+						y: ((event.clientY - frame.top) * 480) / frame.height,
+					};
+					const layout = stripLayout(profile, page),
+						tile = tileAt(point, layout);
+					const cell =
+						tile?.keyCode ??
+						layout.cells.find(
+							(c) =>
+								point.x >= c.rect.x &&
+								point.x < c.rect.x + c.rect.width &&
+								point.y >= c.rect.y &&
+								point.y < c.rect.y + c.rect.height,
+						)?.keyCode;
+					if (cell) void choose(cell);
+				}}
+			>
+				<StripViewport>
+					<StripScreen
+						previewSerial="editor-preview"
+						profiles={{ _tag: "ready", envelope: previewEnvelope }}
+						showEmptyGridDashedBorder
+					/>
+				</StripViewport>
+			</fieldset>
+			<fieldset className="keys-cells" aria-label="Select key">
+				{Array.from(
+					{ length: 16 },
+					(_, i) => `${Math.floor(i / 8) + 1},${(i % 8) + 1}`,
+				).map((code) => (
+					<button
+						type="button"
+						key={code}
+						aria-pressed={key?.keyCode === code}
+						onClick={() => void choose(code)}
+					>
+						{code}
+					</button>
+				))}
+			</fieldset>
+			{key ? (
+				<Group
+					title={keyTitle(key, locale) || key.config.type || "Select Function"}
+				>
+					<Row label="Function" htmlFor="key-function">
+						<select
+							id="key-function"
+							disabled={!keyEditable(key, "allowDelete")}
+							value={key.config.type}
+							onChange={(e) => {
+								const entry = ACTION_REGISTRY.find(
+									(a) => a.id === e.target.value,
+								);
+								if (!entry) return;
+								const raw = Schema.encodeSync(ProfileKey)(key);
+								const next = Schema.decodeUnknownSync(ProfileKey)({
+									...raw,
+									childrenName: entry.id,
+									config: {
+										...raw.config,
+										...createActionDraft(entry.id),
+										supportKnob: false,
+										supportTouchEffect: entry.supportTouchEffect,
+									},
+								});
+								void update(next);
+							}}
+						>
+							<option value={key.config.type}>
+								{key.config.type || "Select Function"}
+							</option>
+							{ACTION_REGISTRY.filter((a) => a.id !== key.config.type).map(
+								(a) => (
+									<option key={a.id} value={a.id}>
+										{keyText(a.id, locale)}
+									</option>
+								),
+							)}
+						</select>
+					</Row>
+					<Row label={keyText("title", locale)} htmlFor="key-title">
+						<input
+							id="key-title"
+							disabled={!keyEditable(key, "title")}
+							value={keyTitle(key, locale, alternate)}
+							onChange={(e) =>
+								void update(editKeyTitle(key, e.target.value, alternate))
+							}
+						/>
+						<small
+							data-warning={titleWeight(keyTitle(key, locale, alternate)) > 16}
+						>
+							{titleWeight(keyTitle(key, locale, alternate))}/20
+						</small>
+					</Row>
+					<KeyTitleSettings
+						keyValue={key}
+						alternate={alternate}
+						locale={locale}
+						onChange={(next) => void update(next)}
+					/>
+					{key.config.type === "hotkeySwitch" && (
+						<Row label="State">
+							<button
+								type="button"
+								aria-pressed={!alternate}
+								onClick={() => setAlternate(false)}
+							>
+								1
+							</button>
+							<button
+								type="button"
+								aria-pressed={alternate}
+								onClick={() => setAlternate(true)}
+							>
+								2
+							</button>
+						</Row>
+					)}
+					<Row label={keyText("selectDecoKeeIcon", locale)}>
+						<button
+							type="button"
+							disabled={!keyEditable(key, "icon")}
+							onClick={() => setIcons((value) => !value)}
+						>
+							{keyText("iconLib.title", locale)}
+						</button>
+						<button
+							type="button"
+							disabled={!keyEditable(key, "icon")}
+							onClick={resetIcon}
+						>
+							Reset to default
+						</button>
+					</Row>
+					{key.config.type === "dkDesktopClock" && (
+						<Row
+							label={keyText("settings.clockHourFormat", locale)}
+							htmlFor="key-clock-format"
+						>
+							<select
+								id="key-clock-format"
+								disabled={!wallpaper || clockBusy}
+								value={wallpaper?.saved.clock.actions[0].value ?? "24h"}
+								onChange={(event) => {
+									if (wallpaper)
+										void configureWallpaper({
+											_tag: "configure",
+											serial: wallpaper.saved.serial,
+											revision: wallpaper.saved.revision,
+											fillMode: wallpaper.saved.settings.bgFillMode,
+											hourFormat: event.target.value === "12h" ? "12h" : "24h",
+										});
+								}}
+							>
+								<option value="24h">
+									{keyText("settings.clockHourFormat24h", locale)}
+								</option>
+								<option value="12h">
+									{keyText("settings.clockHourFormat12h", locale)}
+								</option>
+							</select>
+							{clockNotice && <span role="status">{clockNotice}</span>}
+						</Row>
+					)}
+
+					{key.config.actions
+						.filter(() => key.config.type !== "dkDesktopClock")
+						.map((action, index) => (
+							<Row
+								key={`${action.type}:${action.type === "key" ? (index === 0 ? "primary" : "alternate") : "setting"}`}
+								label={
+									action.type === "key"
+										? index === 0
+											? keyText("hotKey1", locale)
+											: keyText("hotKey2", locale)
+										: action.type
+								}
+								htmlFor={`key-action-${index}`}
+							>
+								<input
+									id={`key-action-${index}`}
+									type={
+										action.type === "time" || action.type === "page"
+											? "number"
+											: "text"
+									}
+									value={
+										typeof action.value === "string" ||
+										typeof action.value === "number"
+											? action.value
+											: JSON.stringify(action.value)
+									}
+									onChange={(e) => changeActions(index, e.target.value)}
+								/>
+							</Row>
+						))}
+					{key.config.type === "multiActions" && (
+						<SequenceEditor
+							value={Option.getOrElse(key.config.subActions, () => [])}
+							onChange={(value) =>
+								void update({
+									...key,
+									config: { ...key.config, subActions: Option.some(value) },
+								})
+							}
+						/>
+					)}
+					<Row label="">
+						<button
+							type="button"
+							className="button-primary"
+							onClick={() => void save()}
+						>
+							{keyText("save", locale)}
+						</button>
+						<button type="button" onClick={() => void revert()}>
+							{keyText("cancel", locale)}
+						</button>
+						<button
+							type="button"
+							disabled={!keyEditable(key, "allowDelete")}
+							onClick={() => void remove()}
+						>
+							Delete
+						</button>
+					</Row>
+				</Group>
+			) : (
+				<p>Select a key to edit.</p>
+			)}
+			{icons && key && (
+				<IconLibrary
+					key={selection?.target.token}
+					onClose={() => setIcons(false)}
+					onSelect={(data) =>
+						void update(
+							{
+								...key,
+								config: {
+									...key.config,
+									...(alternate
+										? { alterIcon: Option.some(data) }
+										: { icon: data }),
+								},
+							},
+							selection?.target.token,
+						)
+					}
+				/>
+			)}
+			{key?.config.type === "dkDesktopClock" && (
+				<ClockSettings
+					hourFormat={wallpaper?.saved.clock.actions[0].value ?? "24h"}
+				/>
+			)}
+			{status && <p role="status">{status}</p>}
+		</section>
+	);
+}

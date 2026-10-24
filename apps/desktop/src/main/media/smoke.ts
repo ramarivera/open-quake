@@ -8,11 +8,19 @@ import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import type { Display } from "electron";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
+import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
+import {
+	ProfileRepository,
+	profileStorageLayer,
+} from "../../../../../packages/device/src/profiles/profile-repository.js";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
 	SYNTHETIC_TOUCH_DOWN,
 	SYNTHETIC_TOUCH_EMPTY,
 	SYNTHETIC_TOUCH_MOVE,
 } from "../../../../../packages/device/src/touch/touch-fixtures";
+import { KEY_RUNTIME } from "../../shared/key-library";
 import { PROFILES_SNAPSHOT } from "../../shared/profile-snapshot-contracts";
 import type { EncodedProfileEnvelope } from "../../shared/profiles";
 import {
@@ -22,12 +30,14 @@ import {
 } from "../../shared/wallpaper-contracts";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerHardware } from "../hardware";
+import { registerKeyLibrary } from "../key-library/registration";
+import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
-import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { registerProfiles } from "../profiles/profile-ipc";
 import { makeDisplay } from "../test/display";
 import {
 	clockProfile,
@@ -69,19 +79,49 @@ async function request(
 	return reply.snapshot;
 }
 
-/** Serves one fixture envelope; re-registering swaps the active profile. */
-function serveProfiles(
-	envelope: EncodedProfileEnvelope,
-): ReturnType<typeof registerProfiles> {
-	return registerProfiles(
-		ManagedRuntime.make(
-			ProfilesLive({
-				read: async () => structuredClone(envelope),
-				write: async () => undefined,
-			}),
+let managementWindow: BrowserWindow | undefined;
+/** Serves one committed fixture to both snapshot and key-runtime consumers. */
+function serveProfiles(envelope: EncodedProfileEnvelope): {
+	dispose: () => Promise<void>;
+} {
+	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
+	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
+		Layer.provideMerge(
+			ProfileRepository.Default.pipe(
+				Layer.provide(
+					profileStorageLayer({
+						read: async () => structuredClone(envelope),
+						write: async () => undefined,
+					}),
+				),
+			),
 		),
-		pathToFileURL(resolve("out/renderer/index.html")).href,
 	);
+	const runtime = ManagedRuntime.make(
+		Layer.mergeAll(
+			KeyEditing.DefaultWithoutDependencies,
+			KeyRuntime.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					desktopKeyRuntimePort(
+						() => undefined,
+						(state) => {
+							for (const win of BrowserWindow.getAllWindows())
+								win.webContents.send(KEY_RUNTIME, state);
+						},
+					),
+				),
+			),
+		).pipe(Layer.provideMerge(profiles)),
+	);
+	const snapshots = registerProfiles(runtime, renderer, false);
+	const keys = registerKeyLibrary(runtime, () => managementWindow, renderer);
+	return {
+		dispose: async () => {
+			await keys.dispose();
+			await snapshots.dispose();
+			await runtime.dispose();
+		},
+	};
 }
 
 const settle = (ms = 400): Promise<void> =>
@@ -119,6 +159,7 @@ async function smoke(): Promise<void> {
 		},
 	};
 	const management = new BrowserWindow(options);
+	managementWindow = management;
 	const panel = new BrowserWindow(options);
 	const knob = registerKnob(
 		() => panel,

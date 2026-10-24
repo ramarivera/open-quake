@@ -1,3 +1,5 @@
+Current scope: key-library-parity supersedes the historical hotkeySwitch deferral below using MAIN-067. See its verification.md for alternation, timer and sequencing evidence.
+
 # W3 verification, 2026-10-23
 
 Tasks 1.1 through 1.4 are implemented on `lane/key-function-library`. Tasks 2.x,

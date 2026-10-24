@@ -24,7 +24,7 @@ Every row below is S for catalog structure in `RS/webpack:__dk-suite_src_plugins
 | decoKeeAI: clawbot, aiChat, aiChatView, ClawBotView, ClawBotInput, VoiceBot | Config types include clawbot, aiChat, aiChatView, quakeBot, quakeBotInput, audioBot | Later AI and DKClaw domains; basic first-release direct knob voice config belongs to voice lane |
 | deviceControl: cameraView, cameraControlView, printerStatusView | Camera actions include MJPEG/RTSP/proxy and printer association fields | Later integration domains; no first-release network activity |
 | system: cmd, cpuInfo, gpuInfo, memInfo, diskInfo, processInfo, networkInfo, bluetoothInfo, powerInfo | cmd carries text; monitor tiles carry no initial actions | Later shell/monitor domains, not inferred from icon names |
-| shortcut: hotkeySwitch | Commented catalog entries at lines 530-565 and 1674-1709; two key actions and alternate artwork | Unresolved, retained inactive; see question 10 below |
+| shortcut: hotkeySwitch | Commented catalog entries at lines 530-565 and 1674-1709; two key actions and alternate artwork | Enabled by key-library-parity using MAIN-067; first chord then alternating presses |
 
 Additional source evidence:
 
@@ -54,11 +54,9 @@ Normalize the recovered skipForward type defect only when childrenName skipForwa
 
 Only a committed profile snapshot and explicit normalized activation can execute a host action. Catalog browsing, preview rendering, drag/drop, import, and save do not execute. A normal tile press executes once, release performs cleanup only, and hardware repeats need their own event contract. Do not guess repeat or long-press semantics from gap/pressTime names.
 
-### Approved (Ramiro, 2026-10-23): open question 10, hotkeySwitch scope
+### Resolved (Ramiro, 2026-10-24): open question 10, hotkeySwitch scope
 
-Keep hotkeySwitch out of the first-release picker and runtime. Retain two key values and alternate visuals on import as unsupported compatibility data. OperationConfig proves two editable chords; it does not prove alternation, held-key latching, persistent toggle state, reset behavior, or release semantics. A plain two-chord hotkey with knob support is a different function and must not be migrated into hotkeySwitch.
-
-Before enabling it later, inspect the host execution path and test consecutive presses, press/release, profile change, reconnect, app restart, and each alternate visual. Per-profile, in-memory alternation reset on activation is the approved recommendation if those checks support it. Enabling that behavior remains gated on future dispatch evidence. Implementing a guessed toggle now was rejected.
+MAIN-067 and recovered background.js establish exactly two key actions, first press chord[0], next press chord[1], with alternate artwork. The key-library lane is authorized to enable that behavior. State is session-local and scoped by device/profile/page/key, survives unrelated revisions and profile navigation, and resets on disconnect or application disposal. Held presses and releases do not dispatch extra chords. This remains distinct from knob directional hotkeys. See openspec/changes/key-library-parity and packages/device/test/actions/key-runtime.test.ts plus action-service.test.ts.
 
 ### Approved (Ramiro, 2026-10-23): later functions and artwork
 
@@ -78,4 +76,4 @@ Validate selected imports without running them, normalize only documented aliase
 
 ## Approval and remaining verification
 
-Approved (Ramiro, 2026-10-23): first-release action policies, text's default no-enter behavior, adapter-declared hotkey token/platform support, and question 10's deferral. hotkeySwitch runtime semantics remain unresolved; approval keeps it inactive rather than authorizing guessed execution. Host effects, unsupported media commands, and imported proprietary runtime behavior remain unverified. Later backend registration requires its own scenario evidence before an entry is marked available.
+Approved (Ramiro, 2026-10-23): first-release action policies, text's default no-enter behavior, adapter-declared hotkey token/platform support, and question 10's initial deferral. The 2026-10-24 key-library scope and MAIN-067 supersede that deferral with verified alternation. Host effects, unsupported media commands, and imported proprietary runtime behavior remain unverified. Later backend registration requires its own scenario evidence before an entry is marked available.

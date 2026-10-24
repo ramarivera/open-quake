@@ -73,6 +73,14 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+const clipboard = new Proxy(
+	{},
+	{
+		get() {
+			throw new Error("Bundle smoke must not access the clipboard");
+		},
+	},
+);
 const shell = { openExternal: () => Promise.resolve() };
 // The clock registers its media scheme before ready and a handler after.
 const schemes = [];
@@ -89,6 +97,7 @@ const net = {
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
 	powerMonitor,
+	clipboard,
 	shell,
 	app,
 	BrowserWindow: Window,
@@ -114,7 +123,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, clipboard, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

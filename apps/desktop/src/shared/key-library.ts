@@ -1,0 +1,105 @@
+import { Schema } from "effect";
+import {
+	ProfileEnvelope,
+	ProfileKey,
+} from "../../../../packages/device/src/profiles/profile-contracts.js";
+import { ProfileLocale } from "../../../../packages/device/src/profiles/profile-manager-contracts.js";
+
+export const KEY_REQUEST = "keys:request",
+	KEY_PREVIEW = "keys:preview",
+	KEY_RUNTIME = "keys:runtime";
+export const KeyTarget = Schema.Struct({
+	token: Schema.String.pipe(Schema.minLength(1)),
+	profileId: Schema.String,
+	pageId: Schema.String,
+	keyCode: Schema.String,
+	revision: Schema.Int.pipe(Schema.nonNegative()),
+});
+export const KeyRequest = Schema.Union(
+	Schema.Struct({
+		type: Schema.Literal("select"),
+		deviceId: Schema.String,
+		profileId: Schema.String,
+		pageId: Schema.String,
+	}),
+	Schema.Struct({ type: Schema.Literal("read"), locale: ProfileLocale }),
+	Schema.Struct({
+		type: Schema.Literal("preview"),
+		target: KeyTarget,
+		key: Schema.encodedSchema(ProfileKey),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("save", "revert"),
+		token: Schema.String,
+	}),
+	Schema.Struct({ type: Schema.Literal("delete"), target: KeyTarget }),
+	Schema.Struct({
+		type: Schema.Literal("icons", "import-pack", "import-icon"),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("remove-pack", "remove-icon"),
+		id: Schema.String,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("activate"),
+		deviceId: Schema.String,
+		keyCode: Schema.String,
+		kind: Schema.Literal("press", "release"),
+		profileId: Schema.String,
+		pageId: Schema.String,
+		revision: Schema.Int.pipe(Schema.nonNegative()),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("navigate"),
+		deviceId: Schema.String,
+		direction: Schema.Literal(0, 1, 2, 3),
+	}),
+);
+export type KeyRequest = typeof KeyRequest.Type;
+export const LibraryIcon = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	tags: Schema.Array(Schema.String),
+	data: Schema.String,
+});
+export const LibraryPack = Schema.Struct({
+	id: Schema.String,
+	name: Schema.String,
+	icons: Schema.Array(LibraryIcon),
+});
+export type LibraryPack = typeof LibraryPack.Type;
+export const KeyRuntimeState = Schema.Struct({
+	deviceId: Schema.String,
+	profileId: Schema.String,
+	pageId: Schema.String,
+	keyCode: Schema.String,
+	alternate: Schema.optional(Schema.Literal(0, 1)),
+	countdown: Schema.optional(Schema.Number),
+	progress: Schema.optional(Schema.Number),
+	alert: Schema.optional(Schema.Literal(0, 1, 2, 3)),
+});
+export type KeyRuntimeState = typeof KeyRuntimeState.Type;
+export const KeyReply = Schema.Union(
+	Schema.Struct({
+		_tag: Schema.Literal("success"),
+		envelope: Schema.optional(Schema.encodedSchema(ProfileEnvelope)),
+		packs: Schema.optional(Schema.Array(LibraryPack)),
+		states: Schema.optional(Schema.Array(KeyRuntimeState)),
+	}),
+	Schema.Struct({ _tag: Schema.Literal("rejected"), reason: Schema.String }),
+);
+export type KeyReply = typeof KeyReply.Type;
+export const KeyPreview = Schema.Struct({
+	envelope: Schema.encodedSchema(ProfileEnvelope),
+});
+export type KeyPreview = typeof KeyPreview.Type;
+export interface KeyLibraryBridge {
+	request: (request: KeyRequest) => Promise<KeyReply>;
+	onPreview: (callback: (preview: KeyPreview) => void) => () => void;
+	onRuntime: (callback: (state: KeyRuntimeState) => void) => () => void;
+}
+declare global {
+	interface Window {
+		quakeKeyLibrary: KeyLibraryBridge;
+	}
+}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionCheck } from "./ConnectionDiagnostic";
 import { HardwareSettings } from "./hardware/HardwareSettings";
+import { KeyEditor } from "./keys/KeyEditor";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { StripPanel } from "./strip/StripPanel";
@@ -46,6 +47,7 @@ function PanelSurface(): React.JSX.Element {
 type Page =
 	| "overview"
 	| "profiles"
+	| "keys"
 	| "connection"
 	| "screen"
 	| "controls"
@@ -68,6 +70,7 @@ const sections: ReadonlyArray<{
 		items: [
 			{ id: "overview", label: "Overview", Icon: DeviceIcon },
 			{ id: "profiles", label: "Knob Profile", Icon: DeviceIcon },
+			{ id: "keys", label: "Keys", Icon: ControlsIcon },
 			{ id: "connection", label: "Connection", Icon: ConnectionIcon },
 			{ id: "screen", label: "Screen", Icon: ScreenIcon },
 			{ id: "controls", label: "Controls", Icon: ControlsIcon },
@@ -166,6 +169,8 @@ function ManagementSurface({
 							onOpenScreen={() => open("screen")}
 							onOpenConnection={() => open("connection")}
 						/>
+					) : page === "keys" ? (
+						<KeyEditor />
 					) : page === "profiles" ? (
 						<ProfilesManager />
 					) : page === "screen" ? (

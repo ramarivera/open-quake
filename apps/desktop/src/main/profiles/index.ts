@@ -12,6 +12,9 @@ import {
 	Stream,
 } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
+import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	encodeProfileEnvelope,
@@ -37,6 +40,7 @@ import {
 	ProfileSwitching,
 	ProfileSwitchingPort,
 } from "../../../../../packages/device/src/profiles/profile-switching-service.js";
+import { KEY_RUNTIME } from "../../shared/key-library";
 import {
 	PROFILE_PROGRESS,
 	PROFILE_REQUEST,
@@ -45,6 +49,8 @@ import {
 	type ProfileReply,
 	ProfileRequest,
 } from "../../shared/profile-manager";
+import { registerKeyLibrary } from "../key-library/registration";
+import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { makeForegroundProbe } from "./foreground-app";
 import {
 	canonicalProfileAppPath,
@@ -67,6 +73,7 @@ export function registerProfiles(
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
 	managementURL = renderer,
+	hardware: () => HardwareSession | undefined = () => undefined,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -105,39 +112,55 @@ export function registerProfiles(
 			if (!win.isDestroyed() && !win.webContents.isDestroyed())
 				win.webContents.send(channel, value);
 	};
-	const runtime = ManagedRuntime.make(
-		Layer.mergeAll(
-			ProfileService.DefaultWithoutDependencies,
-			ProfileManager.DefaultWithoutDependencies,
-			ProfileSwitching.DefaultWithoutDependencies,
-		).pipe(
-			Layer.provideMerge(
-				ProfileRepository.Default.pipe(
-					Layer.provide(profileStorageLayer(storage)),
-				),
-			),
-			Layer.provide(
-				Layer.succeed(ProfileSwitchingPort, {
-					platform,
-					foreground:
-						process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
-							? () => Effect.succeed(Option.none())
-							: makeForegroundProbe(platform),
-					push: (serial, profile) =>
-						Effect.tryPromise({
-							try: async () => {
-								await deliver?.(serial, profile);
-								broadcast(PROFILE_SELECTION, {
-									serial,
-									profile: Schema.encodeSync(Profile)(profile),
-									hardware: "unverified",
-								});
-							},
-							catch: ProfileDeliveryFailed.fromCause,
-						}),
-				}),
+	const profileLive = Layer.mergeAll(
+		ProfileService.DefaultWithoutDependencies,
+		ProfileManager.DefaultWithoutDependencies,
+		ProfileSwitching.DefaultWithoutDependencies,
+	).pipe(
+		Layer.provideMerge(
+			ProfileRepository.Default.pipe(
+				Layer.provide(profileStorageLayer(storage)),
 			),
 		),
+		Layer.provide(
+			Layer.succeed(ProfileSwitchingPort, {
+				platform,
+				foreground:
+					process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+						? () => Effect.succeed(Option.none())
+						: makeForegroundProbe(platform),
+				push: (serial, profile) =>
+					Effect.tryPromise({
+						try: async () => {
+							await deliver?.(serial, profile);
+							broadcast(PROFILE_SELECTION, {
+								serial,
+								profile: Schema.encodeSync(Profile)(profile),
+								hardware: "unverified",
+							});
+						},
+						catch: ProfileDeliveryFailed.fromCause,
+					}),
+			}),
+		),
+	);
+	const runtime = ManagedRuntime.make(
+		Layer.mergeAll(
+			KeyEditing.DefaultWithoutDependencies,
+			KeyRuntime.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					desktopKeyRuntimePort(hardware, (state) =>
+						broadcast(KEY_RUNTIME, state),
+					),
+				),
+			),
+		).pipe(Layer.provideMerge(profileLive)),
+	);
+	const keyLibrary = registerKeyLibrary(
+		runtime,
+		management,
+		renderer,
+		managementURL,
 	);
 	const snapshots = registerProfileSnapshots(runtime, renderer, false);
 	const captureWindows = new Set<BrowserWindow>();
@@ -321,6 +344,7 @@ export function registerProfiles(
 	const disconnect = (serial: string): Promise<void> =>
 		runtime.runPromise(
 			Effect.gen(function* () {
+				yield* KeyRuntime.reset(serial);
 				yield* (yield* ProfileSwitching).disconnect(serial);
 			}),
 		);
@@ -351,6 +375,7 @@ export function registerProfiles(
 			ipcMain.removeHandler(PROFILE_REQUEST);
 			for (const window of captureWindows) window.destroy();
 			await Promise.allSettled([...pending]);
+			await keyLibrary.dispose();
 			await snapshots.dispose();
 			await runtime.runPromise(Fiber.interrupt(monitor));
 			await runtime.runPromise(Fiber.interrupt(managerUpdates));
