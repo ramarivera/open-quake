@@ -4,10 +4,16 @@ import { ClockReply } from "../../shared/clock-contracts";
 import { ClockPersistenceFailed } from "../../shared/clock-errors";
 import {
 	canRequestClock,
+	canRequestClockMedia,
 	handleClockCommand,
 	parseMediaUrl,
 } from "./clock-ipc";
-import { ClockFiles, ClockRoot, ClockStore } from "./clock-store";
+import {
+	ClockFiles,
+	ClockRoot,
+	ClockStore,
+	ClockVideoProbe,
+} from "./clock-store";
 
 const RENDERER = "file:///Applications/open-quake.app/out/renderer/index.html";
 
@@ -33,6 +39,19 @@ describe("clock bridge permissions", () => {
 		expect(
 			canRequestClock(panel, RENDERER, { _tag: "chooseMedia" }, true),
 		).toBe(true);
+	});
+
+	it("limits media reads to app document subresources", () => {
+		expect(canRequestClockMedia(RENDERER, RENDERER, "media")).toBe(true);
+		expect(canRequestClockMedia(RENDERER, RENDERER, "image")).toBe(true);
+		for (const caller of [
+			"https://evil.example/",
+			"data:text/html,evil",
+			"file:///other.html",
+		])
+			expect(canRequestClockMedia(caller, RENDERER, "media")).toBe(false);
+		expect(canRequestClockMedia(RENDERER, RENDERER, "mainFrame")).toBe(false);
+		expect(canRequestClockMedia(RENDERER, RENDERER, "subFrame")).toBe(false);
 	});
 
 	it("rejects other documents and garbage", () => {
@@ -88,7 +107,10 @@ describe("clock command handling", () => {
 	const state = { failWrites: false };
 	const layer = ClockStore.Default.pipe(
 		Layer.provide(
-			Layer.merge(
+			Layer.mergeAll(
+				Layer.succeed(ClockVideoProbe, {
+					duration: () => Effect.succeed(1500),
+				}),
 				Layer.succeed(ClockRoot, "/root"),
 				Layer.succeed(ClockFiles, {
 					read: (path) => Effect.succeed(Option.fromNullable(files.get(path))),
@@ -173,7 +195,7 @@ describe("clock command handling", () => {
 		expect(reply.url).toBe(`oq-clock-media://candidate/${reply.token}`);
 		expect(reply.name).toBe("clip.mp4");
 		expect(
-			await run({ _tag: "commitMedia", token: reply.token, durationMs: 1500 }),
+			await run({ _tag: "commitMedia", token: reply.token, durationMs: 5000 }),
 		).toEqual({
 			_tag: "failure",
 			code: "QUAKE.CLOCK.MEDIA_TOO_SHORT",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	CLOCK_LOCALES,
 	CLOCK_STRINGS,
@@ -101,6 +101,19 @@ describe("boundary scheduling (WIDGETS-029/030)", () => {
 	it("waits for the next minute when seconds are hidden", () => {
 		expect(msUntilNextTick(at(10, 7, 42, 300), false)).toBe(17_700);
 		expect(msUntilNextTick(at(23, 59, 59, 999), false)).toBe(1);
+	});
+
+	it("keeps positive delays in New York's repeated fall-back hour", () => {
+		vi.stubEnv("TZ", "America/New_York");
+		try {
+			const now = new Date("2026-11-01T06:15:30Z");
+			expect(now.getHours()).toBe(1);
+			expect(now.getTimezoneOffset()).toBe(300);
+			expect(msUntilNextTick(now, false)).toBe(30_000);
+			expect(msUntilNextTick(now, true)).toBe(1000);
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 
 	it("waits for the next second when seconds are shown", () => {

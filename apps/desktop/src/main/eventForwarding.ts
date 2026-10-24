@@ -10,9 +10,12 @@ type EventWindow = {
 /** Read windows per event so replacements also receive the device stream. */
 export function createEventForwarder(
 	getWindows: () => readonly EventWindow[],
+	getTouchWindows: () => readonly EventWindow[] = getWindows,
 ): (event: QuakeEvent) => void {
 	return (event) => {
-		for (const window of getWindows()) {
+		for (const window of event.kind === "touch"
+			? getTouchWindows()
+			: getWindows()) {
 			if (!window.isDestroyed()) {
 				window.webContents.send(QUAKE_EVENT_CHANNEL, event);
 			}

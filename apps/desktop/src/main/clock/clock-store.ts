@@ -88,6 +88,17 @@ export const defaultClockRecord: ClockRecord = {
 
 export class ClockRoot extends Context.Tag("ClockRoot")<ClockRoot, string>() {}
 
+/** Main owns this decoder; management's duration is only a UI hint. */
+export interface ClockVideoDecoder {
+	readonly duration: (
+		token: string,
+	) => Effect.Effect<number, ClockMediaUnusable>;
+}
+export class ClockVideoProbe extends Context.Tag("ClockVideoProbe")<
+	ClockVideoProbe,
+	ClockVideoDecoder
+>() {}
+
 /** File IO for the store, replaceable in tests. */
 export class ClockFiles extends Context.Tag("ClockFiles")<
 	ClockFiles,
@@ -128,7 +139,9 @@ export const ClockFilesLive = Layer.succeed(ClockFiles, {
 					await writeFile(temp, text, "utf8");
 					await rename(temp, path);
 				} finally {
-					await rm(temp, { force: true });
+					// Rename is the commit point. Cleanup must not turn a committed
+					// save into a failure or replace the original write error.
+					await rm(temp, { force: true }).catch(() => undefined);
 				}
 			},
 			catch: (cause) => ClockPersistenceFailed.fromCause(cause),
@@ -237,15 +250,19 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 	effect: Effect.gen(function* () {
 		const root = yield* ClockRoot;
 		const files = yield* ClockFiles;
+		const videoProbe = yield* ClockVideoProbe;
 		const file = join(root, "clock-v1", "clock.json");
 		const lock = yield* Effect.makeSemaphore(1);
 		const candidates = new Map<
 			string,
-			{ themeId: ThemeId; path: string; kind: MediaKind }
+			{ themeId: ThemeId; path: string; kind: MediaKind; probing: boolean }
 		>();
 
 		const load = Effect.fn("ClockStore.load")(function* () {
-			const text = yield* files.read(file);
+			const result = yield* files.read(file).pipe(Effect.either);
+			if (Either.isLeft(result))
+				return { record: defaultClockRecord, recovered: true };
+			const text = result.right;
 			if (Option.isNone(text))
 				return { record: defaultClockRecord, recovered: false };
 			const decoded = yield* Effect.try({
@@ -253,7 +270,9 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 				catch: (cause) => ClockConfigInvalid.fromCause(cause),
 			}).pipe(
 				Effect.flatMap((input) =>
-					Schema.decodeUnknown(ClockRecord)(input).pipe(
+					Schema.decodeUnknown(ClockRecord, { onExcessProperty: "preserve" })(
+						input,
+					).pipe(
 						Effect.mapError((cause) => ClockConfigInvalid.fromCause(cause)),
 					),
 				),
@@ -302,7 +321,7 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 
 		const save = (record: ClockRecord, keys: readonly ClockKey[]) => {
 			const next: ClockRecord = {
-				version: 1,
+				...record,
 				revision: record.revision + 1,
 				keys,
 			};
@@ -384,7 +403,7 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 			}
 			const token = randomBytes(16).toString("hex");
 			candidates.clear();
-			candidates.set(token, { themeId, path, kind });
+			candidates.set(token, { themeId, path, kind, probing: false });
 			const candidate: MediaCandidate = {
 				token,
 				themeId,
@@ -395,11 +414,17 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 
 		const commitMedia = Effect.fn("ClockStore.commitMedia")(function* (
 			token: string,
-			durationMs: number,
+			_durationHintMs: number,
 		) {
 			const candidate = candidates.get(token);
-			if (!candidate) return yield* ClockMediaUnusable.fromCause(undefined);
-			candidates.delete(token);
+			if (!candidate || candidate.probing)
+				return yield* ClockMediaUnusable.fromCause(undefined);
+			candidate.probing = true;
+			const durationMs = yield* videoProbe
+				.duration(token)
+				.pipe(Effect.ensuring(Effect.sync(() => candidates.delete(token))));
+			if (!Number.isFinite(durationMs) || durationMs <= 0)
+				return yield* ClockMediaUnusable.fromCause(undefined);
 			if (!(durationMs >= MIN_VIDEO_MS))
 				return yield* ClockMediaTooShort.fromCause(undefined);
 			return yield* commitSlot(candidate.themeId, {
@@ -444,7 +469,16 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 	}),
 }) {}
 
-export const ClockLive = (root: string): Layer.Layer<ClockStore> =>
+export const ClockLive = (
+	root: string,
+	decoder: ClockVideoDecoder,
+): Layer.Layer<ClockStore> =>
 	ClockStore.Default.pipe(
-		Layer.provide(Layer.merge(Layer.succeed(ClockRoot, root), ClockFilesLive)),
+		Layer.provide(
+			Layer.mergeAll(
+				Layer.succeed(ClockRoot, root),
+				ClockFilesLive,
+				Layer.succeed(ClockVideoProbe, decoder),
+			),
+		),
 	);

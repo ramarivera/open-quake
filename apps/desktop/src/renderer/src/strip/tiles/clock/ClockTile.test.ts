@@ -108,6 +108,21 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 		expect(html).toContain('aria-label="Next theme"');
 	});
 
+	it("exposes one complete accessible time and hides decorative halves", () => {
+		for (const [props, label] of [
+			[{}, "10:07"],
+			[{ hourFormat: "12h" }, "10:07 AM"],
+			[{ hourFormat: "12h", showSeconds: true }, "10:07:42 AM"],
+			[{ hourFormat: "12h", now: new Date(2025, 8, 4, 22, 7, 42) }, "10:07 PM"],
+		] satisfies ReadonlyArray<readonly [Partial<ClockTileProps>, string]>) {
+			const html = render(props);
+			expect(count(html, 'role="img"')).toBe(1);
+			expect(html).toContain(`aria-label="${label}"`);
+			expect(count(html, 'class="oq-flip" aria-hidden="true"')).toBe(3);
+			expect(html).toContain('data-flip="rest" aria-hidden="true"');
+		}
+	});
+
 	it("places supplied cards in order and nothing else", () => {
 		const html = render({
 			weather: createElement("i", null, "w"),

@@ -149,7 +149,7 @@ export function resolveBackground(
 		: { kind: "builtin", themeId };
 }
 
-/** ◀/▶ order with wrap; `none` (null) starts from season. */
+/** ◀/▶ order with wrap; None uses season as the base, as DK does. */
 export function cycleTheme(current: ThemeId | null, delta: 1 | -1): ThemeId {
 	const index = THEME_IDS.indexOf(current ?? DEFAULT_THEME);
 	const next = (index + delta + THEME_IDS.length) % THEME_IDS.length;
@@ -207,9 +207,20 @@ export function isClockKey(key: ClockKey): boolean {
 function withTheme(action: ClockAction, themeId: ThemeId): ClockAction {
 	const value = isRecord(action.value) ? action.value : {};
 	const background = isRecord(value.background) ? value.background : {};
+	const legacy =
+		background.mode !== "theme" &&
+		background.themeId === undefined &&
+		background.themes === undefined;
+	const migrated = legacy
+		? { ...background, ...normalizeClockStyle(value).background }
+		: background;
+	const { source: _source, ...modern } = migrated;
 	return {
 		...action,
-		value: { ...value, background: { ...background, mode: "theme", themeId } },
+		value: {
+			...value,
+			background: { ...(legacy ? modern : background), mode: "theme", themeId },
+		},
 	};
 }
 

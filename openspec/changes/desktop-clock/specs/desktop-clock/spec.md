@@ -162,7 +162,7 @@ A scrim SHALL sit above the background: left rgba(0,0,0,.38)→transparent over 
 
 ### Requirement: On-device theme switcher
 
-The rail SHALL end with a theme nav: ◀ button 54 px, theme name 132 px, ▶ button 54 px, 18 px gaps. Buttons SHALL be round glass with 20 px chevrons. The name SHALL be 17 px, letter-spacing .08em and ellipsised. ◀/▶ SHALL cycle the five themes with wrap, and from `none` SHALL start from season. Pressing SHALL scale to .94 with brightness 1.18 and an inner shadow within 90 ms, then spring back over 260 ms (`cubic-bezier(.34,1.56,.64,1)`). The action SHALL fire exactly once, on click or on an effective `quake-sub-touch-end`. Buttons SHALL carry DK-Suite's sub-touch attributes. Covers WIDGETS-037, WIDGETS-039.
+The rail SHALL end with a theme nav: ◀ button 54 px, theme name 132 px, ▶ button 54 px, 18 px gaps. Buttons SHALL be round glass with 20 px chevrons. The name SHALL be 17 px, letter-spacing .08em and ellipsised. ◀/▶ SHALL cycle the five themes with wrap, and from `none` SHALL use season as the cycle base (▶ selects cyber, ◀ selects aurora, matching `dkDesktopClock.vue:329-333`). Pressing SHALL scale to .94 with brightness 1.18 and an inner shadow within 90 ms, then spring back over 260 ms (`cubic-bezier(.34,1.56,.64,1)`). The action SHALL fire exactly once, on click or on an effective `quake-sub-touch-end`. Buttons SHALL carry DK-Suite's sub-touch attributes. Covers WIDGETS-037, WIDGETS-039.
 
 #### Scenario: Wrap
 
@@ -239,3 +239,33 @@ The DK-Desktop-Clock profile SHALL hold one `dkDesktopClock` key at `1,1` render
 
 - **WHEN** a stored clock record has an unknown `hourFormat` or a malformed `clockStyle`
 - **THEN** the record is normalized to defaults for the bad field and the other fields keep their values
+
+### Requirement: Safe clock updates and rendering
+
+Clock saves SHALL preserve unknown metadata and legacy media, report committed saves accurately, and recover unreadable settings. Main SHALL authorize media by the requesting app frame and independently decode video duration. Time rendering SHALL remain accessible and boundary timers SHALL stay positive across DST fall-back. Covers WIDGETS-019/029/034/038/059/060/062.
+
+#### Scenario: Review regression boundaries
+
+- **WHEN** a clock change saves keys with unrelated metadata or a legacy image/video background
+- **THEN** metadata at key, config and action levels survives and legacy custom media remains in the season slot before the theme patch is applied
+
+#### Scenario: Unreadable settings and committed saves
+
+- **WHEN** saved settings cannot be read
+- **THEN** management receives recovered defaults and can attempt a new save
+- **WHEN** a settings rename succeeds but temporary-file cleanup fails
+- **THEN** the save succeeds and the theme does not roll back
+
+#### Scenario: Private media and trusted duration
+
+- **WHEN** a page outside the app renderer requests saved clock media
+- **THEN** it cannot read that media even after an app window navigates to it
+- **WHEN** management supplies a forged video duration
+- **THEN** the main-owned decoder independently probes the candidate with a six-second timeout and rejects short or unusable media without saving
+
+#### Scenario: Accessible time and repeated DST hour
+
+- **WHEN** a clock renders with optional seconds and AM/PM
+- **THEN** it exposes one formatted accessible time and hides decorative digit copies
+- **WHEN** local time repeats during DST fall-back
+- **THEN** every next boundary delay is positive and the clock avoids a tight timer loop

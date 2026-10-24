@@ -26,7 +26,7 @@ function useMinuteFlip(digit: number, reducedMotion: boolean): FlipState {
 
 function Card({ digit }: { digit: number }): React.JSX.Element {
 	return (
-		<div className="oq-flip">
+		<div className="oq-flip" aria-hidden="true">
 			<div className="oq-flip-upper">
 				<span className="oq-flip-digit">{digit}</span>
 			</div>
@@ -48,10 +48,14 @@ export function FlipClock({
 }): React.JSX.Element {
 	const flip = useMinuteFlip(digits.minuteOnes, reducedMotion);
 	const phase = flip.phase === "rest" ? "" : ` ${flip.phase}`;
+	const time = `${digits.hourTens}${digits.hourOnes}:${digits.minuteTens}${digits.minuteOnes}`;
+	const label = `${time}${showSeconds ? `:${digits.seconds}` : ""}${digits.meridiem ? ` ${digits.meridiem}` : ""}`;
 	return (
 		<div
 			className="oq-flip-clock"
-			data-time={`${digits.hourTens}${digits.hourOnes}:${digits.minuteTens}${digits.minuteOnes}`}
+			data-time={time}
+			role="img"
+			aria-label={label}
 		>
 			<Card digit={digits.hourTens} />
 			<Card digit={digits.hourOnes} />
@@ -60,7 +64,7 @@ export function FlipClock({
 				<i />
 			</div>
 			<Card digit={digits.minuteTens} />
-			<div className="oq-flip" data-flip={flip.phase}>
+			<div className="oq-flip" data-flip={flip.phase} aria-hidden="true">
 				<div className={`oq-flip-upper${phase}`}>
 					<span className="oq-flip-digit">{flip.upper}</span>
 				</div>
@@ -69,7 +73,7 @@ export function FlipClock({
 				</div>
 			</div>
 			{digits.meridiem || showSeconds ? (
-				<div className="oq-flip-side">
+				<div className="oq-flip-side" aria-hidden="true">
 					{digits.meridiem ? (
 						<span className="oq-flip-pill">{digits.meridiem}</span>
 					) : null}

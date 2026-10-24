@@ -90,3 +90,14 @@ type ClockTileProps = {
 ## Verification
 
 Unit tests cover the contract (normalisation, migration, resolve, patch reasons, cycle order), labels (12h/24h, midnight/noon, locale dates, weekday tables), the boundary scheduler and the flip sequencer under fake timers (380 + 380 ms, restart, reduced motion, disposal). They also cover the theme-preview controller (optimistic select, rollback on `ok:false` and on rejection, no stale rollback, clear on persisted change), static rendering of the tile at 1920×480 and scaled, the store (patch, revision, atomic write failure, invalid file) and media URL resolution. The native Electron smoke renders all five themes, None, seconds and 12h at 1920×480 with screenshots, exercises the panel ◀/▶ save path and a forced save failure, and checks the 5 s fallback with a missing custom file. Hardware (the strip itself, touch on the buttons) stays unverified until the lead runs it on the QUAKE.
+
+
+## PR #25 review round 1
+
+Main now includes strip-touch from PR #20. The existing `dkDesktopClock` sub-target flag and the clock buttons' `data-quake-sub-touch` attributes connect directly through the merged registry. The clock native smoke sends synthetic raw touch frames through the mock bus, preload and mounted registry and checks one revision per button tap. Physical touch remains lead-owned.
+
+Settings decode with excess-property preservation at every level before a narrow mutation. Legacy backgrounds migrate into their season slot before theme changes. A successful rename commits a save even if temporary-file cleanup fails, and a failed read projects recovered defaults.
+
+The clock protocol uses Electron webRequest's browser-owned requesting frame identity to authorize subresources from the exact app document. Top-level protocol navigation and media from unrelated documents are denied. Video commits ignore management's duration hint and use an isolated hidden main-owned decoder window without a preload or app bridge, with a six-second timeout. The shared video probe handles WebM without a finite metadata duration by seeking to the end. Native checks cover valid media access followed by denial after navigation and rejection of a forged duration for a real short WebM.
+
+Theme cycling from None intentionally matches `recovered_sources/src/views/Components/dkDesktopClock.vue:329-333`: season is the base, so next chooses cyber and previous chooses aurora. The review suggestion to select season on next was declined against that source.

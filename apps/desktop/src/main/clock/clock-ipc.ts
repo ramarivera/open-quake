@@ -48,6 +48,19 @@ export type ClockMediaTarget =
 	| { readonly theme: string }
 	| { readonly candidate: string };
 
+/** Only subresource requests from the app document may read selected files. */
+export function canRequestClockMedia(
+	caller: string,
+	renderer: string,
+	resourceType: string,
+): boolean {
+	return (
+		resourceType !== "mainFrame" &&
+		resourceType !== "subFrame" &&
+		canRequestClock(caller, renderer, { _tag: "read" }, false)
+	);
+}
+
 /** `oq-clock-media://theme/<id>?r=<rev>` or `oq-clock-media://candidate/<token>`. */
 export function parseMediaUrl(input: string): ClockMediaTarget | null {
 	try {

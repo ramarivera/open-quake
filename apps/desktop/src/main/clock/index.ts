@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, type ManagedRuntime, Option } from "effect";
-import { BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
+import {
+	BrowserWindow,
+	dialog,
+	ipcMain,
+	net,
+	protocol,
+	session,
+} from "electron";
 import {
 	CLOCK_MEDIA_SCHEME,
 	CLOCK_REQUEST,
@@ -11,12 +18,15 @@ import {
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "../../shared/clock-style";
 import {
 	canRequestClock,
+	canRequestClockMedia,
 	handleClockCommand,
 	parseMediaUrl,
 } from "./clock-ipc";
-import { ClockStore } from "./clock-store";
+import { ClockStore, ClockLive as clockLayer } from "./clock-store";
+import { isClockVideoProbe, probeClockVideo } from "./native-video-probe";
 
-export { ClockLive } from "./clock-store";
+export const ClockLive = (root: string) =>
+	clockLayer(root, { duration: probeClockVideo });
 
 /**
  * Must run before `app.whenReady()`: media elements need a standard, secure,
@@ -105,6 +115,26 @@ export function registerClock(
 	);
 	// Serves a theme's saved file (or a staged candidate) by id. Unknown ids
 	// and unset slots are 404; the renderer never names a path.
+	// The protocol Request omits Electron's frame identity. Authorize using
+	// webRequest's browser-owned initiator before the protocol reads a file.
+	session.defaultSession.webRequest.onBeforeRequest(
+		{ urls: [`${CLOCK_MEDIA_SCHEME}://*/*`] },
+		(details, callback) => {
+			const contents = details.webContents;
+			const allowed =
+				contents &&
+				!contents.isDestroyed() &&
+				BrowserWindow.fromWebContents(contents) &&
+				details.frame === contents.mainFrame &&
+				(canRequestClockMedia(
+					details.frame.url,
+					renderer,
+					details.resourceType,
+				) ||
+					(isClockVideoProbe(contents) && details.resourceType === "media"));
+			callback({ cancel: !allowed });
+		},
+	);
 	protocol.handle(CLOCK_MEDIA_SCHEME, async (request) => {
 		const target = parseMediaUrl(request.url);
 		if (!target) return new Response(null, { status: 404 });
@@ -121,6 +151,7 @@ export function registerClock(
 	return {
 		dispose: async () => {
 			ipcMain.removeHandler(CLOCK_REQUEST);
+			session.defaultSession.webRequest.onBeforeRequest(null);
 			protocol.unhandle(CLOCK_MEDIA_SCHEME);
 			await runtime.dispose();
 		},

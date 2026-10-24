@@ -58,8 +58,7 @@ export function dateLabel(now: Date, locale: ClockLocale): string {
  * seconds are shown, the next second. Never negative.
  */
 export function msUntilNextTick(now: Date, seconds: boolean): number {
-	const next = new Date(now.getTime());
-	if (seconds) next.setMilliseconds(1000);
-	else next.setSeconds(60, 0);
-	return Math.max(0, next.getTime() - now.getTime());
+	return seconds
+		? 1000 - now.getMilliseconds()
+		: 60_000 - now.getSeconds() * 1000 - now.getMilliseconds();
 }

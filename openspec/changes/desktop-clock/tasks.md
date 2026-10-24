@@ -24,3 +24,7 @@ Each numbered task has one Beads issue under the `desktop-clock` epic `open-quak
 
 - [x] 4.1 Gates (biome, typecheck, tests, build, bundle smoke, `openspec validate --all --strict`) and a native Electron smoke with `OPEN_QUAKE_MOCK_DEVICE=1`. It captures 1920×480 screenshots of all five themes, None, 12h with seconds, a forced save rollback and the 5 s fallback. Hardware stays unverified.
 - [ ] 4.2 On the QUAKE (lead-owned hardware): the panel shows the clock full-strip on the strip, all five themes render, and ◀/▶ by touch switch and persist the theme once the touch lane dispatches `quake-sub-touch-*`. Capture with `screencapture -D 2` and get Ramiro's confirmation for the touch steps.
+
+## 5. Review fixes
+
+- [ ] 5.1 Merge main strip-touch integration, exercise theme buttons through the sub-touch registry, verify the ten PR #25 review threads, preserve unknown key metadata and legacy media, recover unreadable settings, keep post-commit cleanup failures from reverting saved themes, secure custom-media access, validate video duration independently of management, avoid DST timer loops, reuse the management wallpaper snapshot and expose one accessible time label. Run all six lane gates and both mock native smokes before pushing. Covers WIDGETS-019/029/034/037/038/059/060/062. Bead: `open-quake-lih.6.1.12`.

@@ -1,8 +1,16 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Either, Layer, ManagedRuntime, Option } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	ClockConfigInvalid,
 	ClockMediaTooShort,
@@ -14,8 +22,11 @@ import {
 	ClockFilesLive,
 	ClockRoot,
 	ClockStore,
+	ClockVideoProbe,
 	defaultClockRecord,
 } from "./clock-store";
+
+vi.mock("node:fs/promises", { spy: true });
 
 const FILE = "/root/clock-v1/clock.json";
 
@@ -23,9 +34,22 @@ const FILE = "/root/clock-v1/clock.json";
 function memory(initial: Record<string, string> = {}) {
 	const files = new Map(Object.entries(initial));
 	const existing = new Set<string>();
-	const state = { failWrites: false, writes: 0 };
+	const state = {
+		failWrites: false,
+		failReads: false,
+		writes: 0,
+		durationMs: 2000,
+		probeFails: false,
+	};
 	const layer = Layer.succeed(ClockFiles, {
-		read: (path) => Effect.succeed(Option.fromNullable(files.get(path))),
+		read: (path) =>
+			state.failReads
+				? Effect.fail(
+						ClockPersistenceFailed.fromCause(
+							Object.assign(new Error("read"), { code: "EACCES" }),
+						),
+					)
+				: Effect.succeed(Option.fromNullable(files.get(path))),
 		writeAtomic: (path, text) =>
 			state.failWrites
 				? Effect.fail(
@@ -44,7 +68,18 @@ function memory(initial: Record<string, string> = {}) {
 	// One store per fixture, as main builds it once: staged candidates live in it.
 	const runtime = ManagedRuntime.make(
 		ClockStore.Default.pipe(
-			Layer.provide(Layer.merge(Layer.succeed(ClockRoot, "/root"), layer)),
+			Layer.provide(
+				Layer.mergeAll(
+					Layer.succeed(ClockRoot, "/root"),
+					layer,
+					Layer.succeed(ClockVideoProbe, {
+						duration: () =>
+							state.probeFails
+								? Effect.fail(ClockMediaUnusable.fromCause(undefined))
+								: Effect.succeed(state.durationMs),
+					}),
+				),
+			),
 		),
 	);
 	const run = <A, E>(effect: Effect.Effect<A, E, ClockStore>): Promise<A> =>
@@ -133,6 +168,132 @@ describe("clock store (WIDGETS-020/021/038)", () => {
 		const again = await m.run(ClockStore.setTheme("1,1", "cyber"));
 		expect(again).toMatchObject({ ok: true, snapshot: { revision: 8 } });
 		expect(m.state.writes).toBe(1);
+	});
+
+	it("preserves metadata at every decoded level when saving", async () => {
+		const record = {
+			version: 1,
+			revision: 7,
+			extension: { keep: "root" },
+			keys: [
+				{
+					keyCode: "2,2",
+					title: "other",
+					config: {
+						type: "cpu",
+						size: [2, 1],
+						actions: [{ type: "custom", value: 3, stamp: 4 }],
+					},
+				},
+				{
+					keyCode: "1,1",
+					title: "clock",
+					icon: "keep",
+					config: {
+						type: "dkDesktopClock",
+						supportTouchEffect: false,
+						actions: [
+							{
+								type: "clockStyle",
+								stamp: 5,
+								value: {
+									background: { mode: "theme", themeId: "season", themes: {} },
+									extension: 6,
+								},
+							},
+						],
+					},
+				},
+			],
+		};
+		const m = memory({ [FILE]: JSON.stringify(record) });
+		expect(await m.run(ClockStore.setTheme("1,1", "cyber"))).toMatchObject({
+			ok: true,
+		});
+		expect(m.stored()).toEqual({
+			...record,
+			revision: 8,
+			keys: [
+				record.keys[0],
+				{
+					...record.keys[1],
+					config: {
+						...record.keys[1]?.config,
+						actions: [
+							{
+								type: "clockStyle",
+								stamp: 5,
+								value: {
+									background: { mode: "theme", themeId: "cyber", themes: {} },
+									extension: 6,
+								},
+							},
+						],
+					},
+				},
+			],
+		});
+	});
+
+	it("returns recovered defaults on a file read failure and allows saving", async () => {
+		const m = memory();
+		m.state.failReads = true;
+		expect(await m.run(ClockStore.read())).toMatchObject({
+			recovered: true,
+			themeId: "season",
+		});
+		expect(await m.run(ClockStore.setTheme("1,1", "cyber"))).toMatchObject({
+			ok: true,
+			snapshot: { themeId: "cyber" },
+		});
+	});
+
+	it.each(["image", "video"])(
+		"migrates a legacy %s before switching themes",
+		async (kind) => {
+			const path = kind === "image" ? "/m/pic.png" : "/v/rain.mp4";
+			const m = memory({ [FILE]: v04({ mode: kind, source: path }) });
+			await m.run(ClockStore.setTheme("1,1", "cyber"));
+			const back = await m.run(ClockStore.setTheme("1,1", "season"));
+			expect(back).toMatchObject({
+				ok: true,
+				snapshot: { media: { season: { kind } } },
+			});
+			expect(await m.run(ClockStore.mediaPath({ theme: "season" }))).toEqual(
+				Option.some(path),
+			);
+		},
+	);
+
+	it("rejects failed and nonfinite trusted probes without saving", async () => {
+		const m = memory();
+		m.existing.add("/m/loop.mov");
+		for (const durationMs of [Number.NaN, Number.POSITIVE_INFINITY, 0]) {
+			m.state.durationMs = durationMs;
+			const staged = await m.run(
+				ClockStore.stageMedia("aurora", "/m/loop.mov"),
+			);
+			if (staged._tag !== "candidate") throw new Error("expected candidate");
+			const result = await m.run(
+				Effect.either(ClockStore.commitMedia(staged.candidate.token, 5000)),
+			);
+			expect(Either.isLeft(result) && result.left.code).toBe(
+				"QUAKE.CLOCK.MEDIA_UNUSABLE",
+			);
+		}
+		m.state.probeFails = true;
+		const staged = await m.run(ClockStore.stageMedia("aurora", "/m/loop.mov"));
+		if (staged._tag !== "candidate") throw new Error("expected candidate");
+		const result = await m.run(
+			Effect.either(ClockStore.commitMedia(staged.candidate.token, 5000)),
+		);
+		expect(Either.isLeft(result) && result.left.code).toBe(
+			"QUAKE.CLOCK.MEDIA_UNUSABLE",
+		);
+		expect(
+			await m.run(ClockStore.mediaPath({ candidate: staged.candidate.token })),
+		).toEqual(Option.none());
+		expect(m.state.writes).toBe(0);
 	});
 
 	it("answers DK-Suite's reasons and keeps the file on failure", async () => {
@@ -254,8 +415,9 @@ describe("clock store (WIDGETS-020/021/038)", () => {
 		m.existing.add("/m/short.mp4");
 		const staged = await m.run(ClockStore.stageMedia("anime", "/m/short.mp4"));
 		if (staged._tag !== "candidate") throw new Error("expected a candidate");
+		m.state.durationMs = 1999;
 		const short = await m.run(
-			Effect.either(ClockStore.commitMedia(staged.candidate.token, 1999)),
+			Effect.either(ClockStore.commitMedia(staged.candidate.token, 5000)),
 		);
 		expect(Either.isLeft(short) && short.left).toBeInstanceOf(
 			ClockMediaTooShort,
@@ -335,7 +497,14 @@ describe("clock files on disk", () => {
 		ManagedRuntime.make(
 			ClockStore.Default.pipe(
 				Layer.provide(
-					Layer.merge(Layer.succeed(ClockRoot, directory), ClockFilesLive),
+					Layer.mergeAll(
+						Layer.succeed(ClockRoot, directory),
+						ClockFilesLive,
+						Layer.succeed(ClockVideoProbe, {
+							duration: () =>
+								Effect.fail(ClockMediaUnusable.fromCause(undefined)),
+						}),
+					),
 				),
 			),
 		).runPromise(effect);
@@ -349,6 +518,39 @@ describe("clock files on disk", () => {
 		);
 		expect(saved).toMatchObject({ version: 1, revision: 1 });
 		expect((await run(ClockStore.read())).themeId).toBe("tactical");
+	});
+
+	it("recovers defaults when the real settings path is unreadable", async () => {
+		await mkdir(join(directory, "clock-v1", "clock.json"), { recursive: true });
+		expect(await run(ClockStore.read())).toMatchObject({
+			recovered: true,
+			themeId: "season",
+		});
+	});
+
+	it("keeps a successful rename committed when cleanup fails", async () => {
+		vi.mocked(rm).mockRejectedValueOnce(
+			Object.assign(new Error("cleanup"), { code: "EACCES" }),
+		);
+		expect(await run(ClockStore.setTheme("1,1", "cyber"))).toMatchObject({
+			ok: true,
+			snapshot: { themeId: "cyber" },
+		});
+		expect((await run(ClockStore.read())).themeId).toBe("cyber");
+	});
+
+	it("keeps the original rename failure when cleanup also fails", async () => {
+		vi.mocked(rename).mockRejectedValueOnce(
+			Object.assign(new Error("rename"), { code: "ENOSPC" }),
+		);
+		vi.mocked(rm).mockRejectedValueOnce(
+			Object.assign(new Error("cleanup"), { code: "EACCES" }),
+		);
+		expect(await run(ClockStore.setTheme("1,1", "cyber"))).toEqual({
+			ok: false,
+			reason: "write-failed",
+		});
+		expect((await run(ClockStore.read())).themeId).toBe("season");
 	});
 
 	it("reports real availability of custom files", async () => {

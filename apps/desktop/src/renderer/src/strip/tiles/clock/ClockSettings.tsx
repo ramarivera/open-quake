@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ClockCommand } from "../../../../../shared/clock-contracts";
 import { THEME_IDS } from "../../../../../shared/clock-style";
+import type { HourFormat } from "../../../../../shared/display";
 import {
 	Callout,
 	Group,
@@ -8,7 +9,6 @@ import {
 	Segmented,
 	type SegmentOption,
 } from "../../../ui/Form";
-import { useWallpaper } from "../../../wallpaper/useWallpaper";
 import { themeArtUrl } from "./art";
 import { ClockTile } from "./ClockTile";
 import { useClockNow } from "./clockHooks";
@@ -44,9 +44,12 @@ const secondsOptions: ReadonlyArray<SegmentOption<"off" | "on">> = [
  * change saves at once and reaches the strip through the snapshot broadcast
  * (WIDGETS-056/058/059). Hour format stays in the Clock group above.
  */
-export function ClockSettings(): React.JSX.Element {
+export function ClockSettings({
+	hourFormat,
+}: {
+	hourFormat: HourFormat;
+}): React.JSX.Element {
 	const { snapshot, available, request, selectTheme } = useClockSettings();
-	const { snapshot: wallpaper } = useWallpaper();
 	const ids = useId();
 	const strings =
 		CLOCK_STRINGS[
@@ -124,7 +127,7 @@ export function ClockSettings(): React.JSX.Element {
 							heightPx={width / 4}
 							now={now}
 							theme={themeOf(snapshot)}
-							hourFormat={wallpaper?.saved.clock.actions[0].value ?? "24h"}
+							hourFormat={hourFormat}
 							showSeconds={snapshot.showSeconds}
 							media={mediaOf(snapshot)}
 							onThemeSelect={selectTheme}

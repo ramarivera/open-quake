@@ -12,14 +12,17 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ManagedRuntime, Schema } from "effect";
-import { app, BrowserWindow, dialog, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import { SYNTHETIC_TOUCH_EMPTY } from "../../../../../packages/device/src/touch/touch-fixtures";
 import {
 	type ClockCommand,
 	ClockReply,
 	type ClockSnapshot,
 } from "../../shared/clock-contracts";
 import { THEME_IDS } from "../../shared/clock-style";
+import { WALLPAPER_REQUEST } from "../../shared/wallpaper-contracts";
 import { MediaLive, registerMedia } from "../media";
+import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
 import { ClockLive, registerClock, registerClockScheme } from "./index";
@@ -144,10 +147,26 @@ async function smoke(): Promise<void> {
 		};
 		const management = new BrowserWindow(options);
 		const panel = new BrowserWindow(options);
+		let wallpaperReads = 0;
+		const originalHandle = ipcMain.handle.bind(ipcMain);
+		ipcMain.handle = (channel, listener): void =>
+			originalHandle(channel, (event, input: unknown) => {
+				if (
+					channel === WALLPAPER_REQUEST &&
+					event.sender === management.webContents &&
+					typeof input === "object" &&
+					input !== null &&
+					"_tag" in input &&
+					input._tag === "read"
+				)
+					wallpaperReads++;
+				return listener(event, input);
+			});
 		const media = registerMedia(
 			ManagedRuntime.make(MediaLive(join(base, "wallpaper-v1"))),
 			() => management,
 		);
+		ipcMain.handle = originalHandle;
 		const clock = registerClock(
 			ManagedRuntime.make(ClockLive(base)),
 			() => management,
@@ -171,6 +190,13 @@ async function smoke(): Promise<void> {
 		]);
 		await waitFor(
 			management,
+			`!!document.querySelector('.device-overview') || !!document.querySelector('.nav-item')`,
+			"management mounted",
+		);
+		await sleep(150);
+		const readsBeforeScreen = wallpaperReads;
+		await waitFor(
+			management,
 			`(() => { const b = [...document.querySelectorAll('.nav-item')].find((n) => n.textContent.includes('Screen')); b?.click(); return !!b; })()`,
 			"management Screen page",
 		);
@@ -179,6 +205,18 @@ async function smoke(): Promise<void> {
 			`!!document.querySelector('.oq-clock')`,
 			"panel clock",
 		);
+
+		await waitFor(
+			management,
+			`!!document.querySelector('.clock-settings .oq-clock')`,
+			"clock settings preview",
+		);
+		assert.equal(
+			wallpaperReads,
+			readsBeforeScreen,
+			"Screen reuses the parent's wallpaper subscription",
+		);
+		process.stdout.write("shared wallpaper snapshot PASS\n");
 
 		// Defaults: season, minutes only, DK geometry with no cards.
 		const initial = await snapshotOf(panel);
@@ -287,6 +325,59 @@ async function smoke(): Promise<void> {
 		);
 		assert.equal((await snapshotOf(panel)).themeId, "season");
 		process.stdout.write("strip theme switch PASS\n");
+
+		// Real mounted sub-touch registry, with parser/tracker and preload IPC.
+		const mockTouch = startMockDeviceBus();
+		const offTouch = mockTouch.on((event) => {
+			if (event.kind === "touch") panel.webContents.send("quake:event", event);
+		});
+		try {
+			for (const [direction, expected] of [
+				["next", "cyber"],
+				["prev", "season"],
+			] as const) {
+				const center = await evaluate(
+					panel,
+					`(() => { const r = document.querySelector('[data-quake-sub-touch="clock-theme-${direction}"]').getBoundingClientRect(); return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]; })()`,
+				);
+				assert(
+					Array.isArray(center) &&
+						typeof center[0] === "number" &&
+						typeof center[1] === "number",
+				);
+				const [x, y] = center;
+				const beforeTouch = await snapshotOf(panel);
+				const rawY = 480 - y;
+				mockTouch.emitTouchReport(
+					new Uint8Array([
+						0xa3,
+						0,
+						0,
+						0x1a,
+						1,
+						1,
+						rawY & 0xff,
+						rawY >> 8,
+						x & 0xff,
+						x >> 8,
+					]),
+				);
+				mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+				await waitFor(panel, themeIs(expected), `sub-touch ${direction}`);
+				await sleep(100);
+				const saved = await snapshotOf(panel);
+				assert.equal(saved.themeId, expected);
+				assert.equal(
+					saved.revision,
+					beforeTouch.revision + 1,
+					"one save per effective tap",
+				);
+			}
+		} finally {
+			offTouch();
+			mockTouch.stop();
+		}
+		process.stdout.write("clock sub-touch navigation PASS\n");
 
 		// Save failure: the preview shows, then rolls back.
 		const dir = join(base, "clock-v1");
@@ -469,6 +560,23 @@ async function smoke(): Promise<void> {
 		assert.equal((await snapshotOf(panel)).media.tactical, undefined);
 		process.stdout.write("short video refused PASS\n");
 
+		// The management bridge cannot forge a longer duration for that file.
+		const stagedShort = await request(management, {
+			_tag: "chooseMedia",
+			themeId: "tactical",
+		});
+		assert(stagedShort._tag === "candidate");
+		const forgedDuration = await request(management, {
+			_tag: "commitMedia",
+			token: stagedShort.token,
+			durationMs: 60_000,
+		});
+		assert.equal(forgedDuration._tag, "failure");
+		if (forgedDuration._tag === "failure")
+			assert.equal(forgedDuration.code, "QUAKE.CLOCK.MEDIA_TOO_SHORT");
+		assert.equal((await snapshotOf(panel)).media.tactical, undefined);
+		process.stdout.write("forged video duration refused PASS\n");
+
 		// Missing file: management marks the slot, the strip shows built-in art.
 		await rm(imagePath);
 		const missing = await snapshotOf(management);
@@ -513,6 +621,26 @@ async function smoke(): Promise<void> {
 			);
 			await capture(management, "management-clock-narrow");
 		}
+		// A formerly trusted window loses media access after navigating away.
+		await writeFile(
+			imagePath,
+			nativeImage.createFromBitmap(pixels, { width: 960, height: 240 }).toPNG(),
+		);
+		picked = imagePath;
+		await request(management, { _tag: "chooseMedia", themeId: "cyber" });
+		const probeUrl = (await snapshotOf(panel)).media.cyber?.url;
+		assert(probeUrl);
+		const imageProbe = `new Promise(resolve => { const image = new Image(); image.onload = () => resolve(image.naturalWidth); image.onerror = () => resolve("blocked"); image.src = ${JSON.stringify(probeUrl)}; })`;
+		assert.equal(
+			await evaluate(panel, imageProbe),
+			960,
+			"app can read the same valid media URL",
+		);
+		await panel.loadURL("data:text/html,<title>Unrelated document</title>");
+		const mediaAfterNavigation = await evaluate(panel, imageProbe);
+		assert.equal(mediaAfterNavigation, "blocked");
+		process.stdout.write("media denied after navigation PASS\n");
+
 		management.destroy();
 		panel.destroy();
 		await clock.dispose();
