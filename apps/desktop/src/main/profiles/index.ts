@@ -168,6 +168,7 @@ export function registerProfiles(
 	);
 	const snapshots = registerProfileSnapshots(runtime, renderer, false);
 	const captureWindows = new Set<BrowserWindow>();
+	const captureProfiles = new Map<Electron.WebContents, Profile>();
 	const thumbnailPath = (profile: Profile, locale: ProfileLocale): string =>
 		join(root, "thumbnails", `${profileThumbnailKey(profile, locale)}.png`);
 	const cachedThumbnail = async (
@@ -202,6 +203,7 @@ export function registerProfiles(
 			},
 		});
 		captureWindows.add(window);
+		captureProfiles.set(window.webContents, profile);
 		try {
 			const url = new URL(renderer);
 			url.searchParams.set("surface", "profile-thumbnail");
@@ -209,7 +211,7 @@ export function registerProfiles(
 			url.searchParams.set("locale", locale);
 			await window.loadURL(url.href);
 			await window.webContents.executeJavaScript(
-				`new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");if(preview&&stage&&(!${profile.pages.some((page) => page.keys.some((key) => key.config.type === "dkDesktopClock"))}||preview.querySelector(".oq-clock"))&&Math.abs(stage.getBoundingClientRect().width-preview.clientWidth)<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})`,
+				`new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");const emojis=Array.from(preview?.querySelectorAll("[data-emoji-asset-state]")??[]);const emojiReady=emojis.length===${profile.pages[0].keys.filter((key) => key.config.type === "emoji" && key.config.display).length}&&emojis.every(el=>el.dataset.emojiAssetState==="ready"&&Array.from(el.querySelectorAll("img")).some(img=>img.complete&&img.naturalWidth>0));if(preview&&stage&&emojiReady&&(!${profile.pages.some((page) => page.keys.some((key) => key.config.type === "dkDesktopClock"))}||preview.querySelector(".oq-clock"))&&Math.abs(stage.getBoundingClientRect().width-preview.clientWidth)<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})`,
 			);
 			const image = await window.webContents.capturePage();
 			if (image.isEmpty())
@@ -219,6 +221,7 @@ export function registerProfiles(
 			await writeFile(thumbnailPath(profile, locale), png, { mode: 0o600 });
 			return image.toDataURL();
 		} finally {
+			captureProfiles.delete(window.webContents);
 			captureWindows.delete(window);
 			if (!window.isDestroyed()) window.destroy();
 		}
@@ -354,6 +357,8 @@ export function registerProfiles(
 		);
 	return {
 		runtime,
+		thumbnailProfile: (sender: Electron.WebContents): Profile | undefined =>
+			captureProfiles.get(sender),
 		/** Shared knob mutations use the manager's visibility, anchor and delivery rules. */
 		select: (id: string): Promise<ProfileEnvelope> =>
 			runtime.runPromise(
@@ -396,6 +401,7 @@ export function registerProfiles(
 			if (disposed) return;
 			disposed = true;
 			ipcMain.removeHandler(PROFILE_REQUEST);
+			captureProfiles.clear();
 			for (const window of captureWindows) window.destroy();
 			await Promise.allSettled([...pending]);
 			await keyLibrary.dispose();

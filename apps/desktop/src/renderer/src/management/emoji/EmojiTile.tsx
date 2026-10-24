@@ -23,15 +23,20 @@ export function EmojiTile(props: StripTileProps): React.JSX.Element {
 		};
 	}, [hash]);
 	return (
-		<GenericTile
-			{...props}
-			tile={{
-				...props.tile,
-				key: {
-					...props.tile.key,
-					config: { ...props.tile.key.config, icon: source },
-				},
-			}}
-		/>
+		<div
+			data-emoji-asset-state={source ? "ready" : "loading"}
+			style={{ display: "contents" }}
+		>
+			<GenericTile
+				{...props}
+				tile={{
+					...props.tile,
+					key: {
+						...props.tile.key,
+						config: { ...props.tile.key.config, icon: source },
+					},
+				}}
+			/>
+		</div>
 	);
 }

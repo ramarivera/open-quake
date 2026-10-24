@@ -35,6 +35,7 @@ import { MANAGEMENT_ACTIVATE } from "../../shared/management";
 import { registerAgents } from "../agents";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerEmoji } from "../emoji";
+import { proveEmojiMerge } from "../emoji/backup-merge-proof";
 import { proveEmojiRestore } from "../emoji/backup-proof";
 import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
@@ -574,6 +575,48 @@ async function smoke() {
 			createHash("sha256").update(copied).digest("hex"),
 			em.store.items[0]?.rendered,
 		);
+		const thumbnailReply = await win.webContents.executeJavaScript(
+			`window.quakeProfileManager.request({type:"thumbnail",id:${JSON.stringify(profileId)},locale:"en"})`,
+		);
+		assert(thumbnailReply._tag === "success");
+		const thumbnail = thumbnailReply.view.thumbnails[profileId];
+		assert(
+			typeof thumbnail === "string" &&
+				thumbnail.startsWith("data:image/png;base64,"),
+		);
+		const thumbnailImage = nativeImage.createFromDataURL(thumbnail);
+		assert(!thumbnailImage.isEmpty());
+		await writeFile(
+			join(artifacts, "emoji-profile-thumbnail.png"),
+			thumbnailImage.toPNG(),
+		);
+		const bitmap = thumbnailImage.toBitmap();
+		let colored = 0;
+		for (let i = 0; i < bitmap.length; i += 4)
+			if (
+				(bitmap[i + 2] ?? 0) > 120 &&
+				(bitmap[i + 1] ?? 0) > 70 &&
+				(bitmap[i] ?? 255) < 110
+			)
+				colored++;
+		assert(
+			colored > 20,
+			"Captured thumbnail must contain the yellow emoji artwork",
+		);
+		await writeFile(
+			join(artifacts, "emoji-thumbnail-proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					productionCapture: true,
+					coloredPixels: colored,
+					imageReady: true,
+				},
+				null,
+				2,
+			),
+		);
+
 		assert.equal((await maintenance.request({ action: "export" })).ok, true);
 		const renderedItem = em.store.items[0],
 			staticAsset = em.store.staticAssets[0];
@@ -592,12 +635,17 @@ async function smoke() {
 				staticBytes: await sourceFiles.get(staticAsset.hash),
 			},
 		);
+		const populatedRestore = await proveEmojiMerge(
+			await readFile(backupFile),
+			join(directory, "oq-fixture-emoji-populated"),
+		);
 		await writeFile(
 			join(artifacts, "backup-restore-proof.json"),
 			JSON.stringify(
 				{
 					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
 					...backupProof,
+					populatedRestore,
 					legacyAppearanceBeforeEdits: migrated,
 				},
 				null,

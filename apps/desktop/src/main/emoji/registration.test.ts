@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	Profile,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service";
@@ -165,6 +166,8 @@ async function setup(
 	const management = windowStub();
 	const panel = windowStub();
 	const stranger = windowStub();
+	const thumbnail = windowStub();
+	let captureEnabled = true;
 	let serial = "desktop-preview";
 	vi.mocked(ipcMain.handle).mockClear();
 	const registered = registerEmoji({
@@ -176,6 +179,11 @@ async function setup(
 			select: async () =>
 				(await runtime.runPromise(ProfileService.loadProfiles())).envelope,
 			refresh: async () => {},
+			thumbnailProfile: (sender) =>
+				captureEnabled && sender === thumbnail.webContents
+					? disk.profiles[0] &&
+						Schema.decodeUnknownSync(Profile)(disk.profiles[0])
+					: undefined,
 		},
 		bus: () => undefined,
 		renderer: "file:///synthetic/index.html",
@@ -205,8 +213,21 @@ async function setup(
 		management,
 		panel,
 		stranger,
-		request: (window: BrowserWindow, input: unknown): Promise<EmojiReply> =>
-			requestHandler(eventFor(window), input),
+		thumbnail,
+		revokeCapture: () => {
+			captureEnabled = false;
+		},
+		request: (
+			window: BrowserWindow,
+			input: unknown,
+			subframe = false,
+		): Promise<EmojiReply> =>
+			requestHandler(
+				subframe
+					? { ...eventFor(window), senderFrame: null }
+					: eventFor(window),
+				input,
+			),
 		press: (
 			window: BrowserWindow,
 			profileId = profile.id,
@@ -281,6 +302,37 @@ describe("production emoji IPC boundaries", () => {
 			await f.close();
 		}
 	});
+	it("gives registered thumbnail windows only their captured profile assets and revokes that capability", async () => {
+		const f = await setup();
+		try {
+			expect(
+				await f.request(f.thumbnail, { type: "asset", hash: f.hash }),
+			).toMatchObject({ _tag: "ready", store: emptyEmojiStore });
+			for (const input of [
+				{ type: "read" },
+				{ type: "asset", hash: f.privateHash },
+				{
+					type: "command",
+					command: { type: "create-package", id: "bad", name: "Bad" },
+				},
+			])
+				expect(await f.request(f.thumbnail, input)).toMatchObject({
+					_tag: "failure",
+					code: "QUAKE.EMOJI.REQUEST_DENIED",
+				});
+			expect(
+				await f.request(f.thumbnail, { type: "asset", hash: f.hash }, true),
+			).toMatchObject({ _tag: "failure" });
+			expect(await f.press(f.thumbnail)).toEqual({ _tag: "invalid" });
+			f.revokeCapture();
+			expect(
+				await f.request(f.thumbnail, { type: "asset", hash: f.hash }),
+			).toMatchObject({ _tag: "failure" });
+		} finally {
+			await f.close();
+		}
+	});
+
 	it("uses the panel selection for device input, rejects stale profiles and awaits an in-flight copy on disposal", async () => {
 		let release: (() => void) | undefined;
 		let started: (() => void) | undefined;

@@ -32,6 +32,7 @@ import {
 import { backupPaths } from "./backup-paths";
 import { readBackupFile } from "./backup-read";
 import { archiveClockMedia } from "./clock-backup";
+import { prepareEmojiBackupMerge } from "./emoji-backup-merge";
 
 function validateNative(relative: string, data: Uint8Array): void {
 	if (relative.startsWith("emoji-v1/assets/")) {
@@ -216,7 +217,13 @@ export async function prepareRestore(
 		const known = new Set(
 			await readdir(join(root, "backup-resources-v1")).catch(() => []),
 		);
-		mergeBackup(files, current, root, known);
+		await assertOwnedDestination(root, join(root, "emoji-v1/library.json"));
+		await assertOwnedDestination(
+			root,
+			join(root, "emoji-v1/library.backup.json"),
+		);
+		const emoji = await prepareEmojiBackupMerge(files, root);
+		mergeBackup(emoji.files, current, root, known);
 	};
 	return {
 		validate,
@@ -230,7 +237,14 @@ export async function prepareRestore(
 			const known = new Set(
 				await readdir(join(root, "backup-resources-v1")).catch(() => []),
 			);
-			const result = mergeBackup(files, current, root, known);
+			await assertOwnedDestination(root, join(root, "emoji-v1/library.json"));
+			await assertOwnedDestination(
+				root,
+				join(root, "emoji-v1/library.backup.json"),
+			);
+			const emoji = await prepareEmojiBackupMerge(files, root);
+			const result = mergeBackup(emoji.files, current, root, known);
+			const mergedEmoji = emoji.finish(result.profileIds);
 			const portable = backupPaths(files, root);
 			const stage = join(dirname(root), `.open-quake-restore-${randomUUID()}`);
 			const rollback = `${stage}.previous`;
@@ -247,7 +261,9 @@ export async function prepareRestore(
 				for (const [path, data] of files) {
 					if (
 						!path.startsWith("open-quake/") ||
-						path === "open-quake/profiles-v1.json"
+						path === "open-quake/profiles-v1.json" ||
+						path === "open-quake/emoji-v1/library.json" ||
+						path === "open-quake/emoji-v1/library.backup.json"
 					)
 						continue;
 					const relative = path.slice("open-quake/".length);
@@ -284,6 +300,16 @@ export async function prepareRestore(
 					await assertOwnedDestination(stage, destination);
 					await mkdir(dirname(destination), { recursive: true });
 					await writeFile(destination, data, { mode: 0o600 });
+				}
+				if (mergedEmoji) {
+					for (const name of ["library.json", "library.backup.json"]) {
+						const destination = join(stage, "emoji-v1", name);
+						await assertOwnedDestination(stage, destination);
+						await mkdir(dirname(destination), { recursive: true });
+						await writeFile(destination, JSON.stringify(mergedEmoji), {
+							mode: 0o600,
+						});
+					}
 				}
 				Schema.decodeUnknownSync(ProfileEnvelope)(result.envelope);
 				await writeFile(

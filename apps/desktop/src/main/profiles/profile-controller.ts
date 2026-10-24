@@ -53,7 +53,13 @@ export const profileThumbnailKey = (
 	locale: ProfileLocale,
 ): string =>
 	createHash("sha256")
-		.update(JSON.stringify([locale, Schema.encodeSync(Profile)(profile)]))
+		.update(
+			JSON.stringify([
+				"emoji-assets-v2",
+				locale,
+				Schema.encodeSync(Profile)(profile),
+			]),
+		)
 		.digest("hex");
 /** Main boundary supplies only native operations; all commands use repository transactions. */
 export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
