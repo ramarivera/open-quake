@@ -62,3 +62,84 @@ The tests consume the real facade stream, injected adapter port, and host
 credential service. They do not prove a Vercel SDK integration, ChatService,
 settings/preload UI, local disk persistence, a native Keychain binding, a live
 provider, Codex authentication, Linux, or physical hardware.
+
+
+## Cluster 14 provider and speech routes
+
+`AiProviderService.generate` accepts `modelRole`, per-key `controls` and a `persona`.
+Profiles optionally select `provider`, `models` and default `controls`; existing
+version-1 profiles keep their daily model. Non-daily roles require an explicit
+model. The facade resolves the role, injects the retained system prompt, checks
+capabilities and prepares `providerOptions` before resolving credentials. The
+SDK port must consume those options. No SDK dependency was added in this lane;
+the existing real-chat SDK integration task remains open.
+
+Provider behavior comes from AI-008 and AI-030–033. OpenAI uses
+`max_completion_tokens`, rejects temperature/top-p and supports the recovered
+reasoning/search combinations for gpt-5.1 and gpt-5.1-mini. Qwen forwards
+thinking/search controls. Kimi k2.5 fixes temperature 0.6/top-p 0.95 and disables
+thinking; k2.6 fixes temperature 1/top-p 0.95. Conflicts fail rather than being
+overwritten. Unknown Kimi models remain unverified. DeepSeek rejects images;
+this version does not claim verified native search or reasoning control for it.
+The request contract does not yet contain tool-call history, so the recovered
+Kimi/DeepSeek reasoning_content tool-call patch cannot be reached here.
+`ai-provider-quirks.ts` is the executable table. Recovered defaults are evidence,
+not current live model qualification or silent cross-provider fallbacks.
+
+`AiVoiceService.submit` accepts explicit modes or `auto`. Auto uses the routing
+model with at most 2048 output tokens and a 300-second deadline. A bounded,
+strict JSON decoder accepts only the recovered categories plus agents,
+shortcuts and meetings from decision lih.22. The source HA example has invalid
+JSON; our prompt fixes it. Search suggestions are gated by the saved profile
+control. Home Assistant must be explicitly enabled, including follow-ups.
+Pass the returned route back as `sessionRoute` for subsequent Auto turns. Route
+state belongs to the caller. `AiVoiceTargets` is the small owning-lane port for
+chat/agents/HA/shortcut/meeting/action consumers and grants no execution rights.
+There is no complete ChatService or these integration handlers in this checkout.
+Desktop key editor and voice-press bindings remain the responsibility of those
+consumer lanes; no renderer was changed here.
+
+`ROLE_PRESETS` ships 126 recovered prompts with verbatim names for en/zh/ja/ko/
+de/fr/es/it. Decision 12 excludes IDs 65, 122, 124 and 125: escape-box, DAN and
+the two sexual roleplay presets. IDs remain stable; custom input uses roleId -1
+and a bounded customPrompt. `COPILOT_PRESETS` preserves the six role IDs,
+translated key names and thinking/search defaults. Preset instructions are sent
+as text to the selected provider and never executed on the host.
+
+`AiProviderService.synthesize`, `createSpeech` and `recognize` delegate to
+`AiSpeechService`. Speech selection is independent of chat and accepts a
+Schema-validated `TtsProfile` or `SttProfile`. Inject `AiCredentials` and
+`SpeechHttp`/`SpeechWebSocket`/`SpeechOutput` at the root. `SpeechFetchLive` is an
+explicit fetch binding; default Layers have no network provider. WebSocket
+connect is a host port because browser WebSocket cannot add bearer headers.
+The port must cancel partial acquisitions on its AbortSignal and translate
+close/error into a failed receive. This lane introduces no socket dependency.
+
+DashScope uses the corrected PR #19 workspace hosts in Beijing or Singapore,
+ASR `qwen-audio-3.1-asr-flash-streaming`, and TTS
+`qwen-audio-3.1-tts-flash`/`longanlingxin_v3.1`. SSE accepts fragmented and
+multiline data records, requires stop, and rejects errors/truncation. PCM is
+24kHz/mono/s16le. Recognition waits for the matching task ID, replaces partials,
+deduplicates finalized segments by begin_time, and returns final text only on
+task-finished. The synthetic fixture encodes this finality rule; current live
+workspace availability and finality semantics have not been probed.
+
+OpenAI uses `/v1/audio/speech`, `gpt-4o-mini-tts`, explicit voice/instructions and
+WAV. RIFF chunks, PCM codec, sample rate, channels, block alignment and duration
+are verified before playback. The compatibility profile is disabled at
+2027-01-06 UTC. Realtime replacement models cannot reach this endpoint.
+
+The player consumer serializes utterances behind one lease, waits for readiness
+and natural drain, and stops on cancel, revocation, failure or timeout. Capture
+cancels pending speech, calls host output suspension and holds the same lease;
+completion does not resume old output. Synthesis is bounded to 30 seconds,
+readiness to 10 seconds, and playback to duration plus 10 seconds capped at 120
+seconds. Player and WebSocket ports own partially acquired native resources and
+must honor interruption. Host microphone/resampling, native playback, answer
+batching and hardware behavior are separate open voice-stt-tts tasks.
+
+Run `pnpm --filter @open-quake/edge test`. Fixtures use fake HTTP/WebSocket and
+Effect TestClock only. Tests exercise the facade, transcript and player
+consumers, cancellation before readiness, late audio, error identity/privacy,
+retirement, routing, locales and unsupported control rejection. No paid request,
+microphone, real device, DK-Suite process or hardware acceptance is involved.

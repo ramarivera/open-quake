@@ -54,6 +54,9 @@ export function profileSummary(profile: ProviderProfile): ProfileSummary {
 		modelId: profile.modelId,
 		auth: profile.auth,
 		capabilities: profile.capabilities,
+		...(profile.provider === undefined ? {} : { provider: profile.provider }),
+		...(profile.models === undefined ? {} : { models: profile.models }),
+		...(profile.controls === undefined ? {} : { controls: profile.controls }),
 	};
 }
 
@@ -140,6 +143,15 @@ export function validateRequest(
 		return Either.left({ reason: "config" });
 	const capabilities: ReadonlyArray<Capability> = [
 		"text",
+		...(request.modelRole === "vision"
+			? ["images" as const]
+			: request.modelRole === "image"
+				? ["imageGeneration" as const]
+				: request.modelRole === "video"
+					? ["videoGeneration" as const]
+					: request.modelRole === "tts"
+						? ["tts" as const]
+						: []),
 		...request.requestedCapabilities,
 		...(request.messages.some((message) =>
 			message.content.some((part) => part._tag === "image"),

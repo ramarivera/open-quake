@@ -16,7 +16,7 @@ No live capture/provider behavior is verified by this spec PR. The parent create
 - [ ] 2.4 Wire ordered answer-segment TTS to ChatService; verify punctuation/200-char/2s flushes, 4,000-character overflow preserving text, ignored followUp speech, cancellation, and text-only continuation through the actual chat consumer, and document synthesis controls.
 - [ ] 2.5 Exercise an authorized macOS mic-to-STT-to-chat-to-TTS loop when credentials/audio are available; retain timing/format evidence without raw content or secrets, and mark physical audio/device acceptance unverified until exercised.
 
-- [ ] 2.6 Add the independent OpenAI TTS adapter (`AI-105`) with explicit model/voice/instructions/WAV descriptor, cancellation and output ownership; verify it through the actual player consumer, including text-only failure and late cancelled audio. Document the 2027-01-06 Speech API model shutdown, gate unavailable profiles, and verify any replacement transport separately before enabling it. Bead: `open-quake-c5w.13`.
+- [x] 2.6 Add the independent OpenAI TTS adapter (`AI-105`) with explicit model/voice/instructions/WAV descriptor, cancellation and output ownership; verify it through the actual player consumer, including text-only failure and late cancelled audio. Document the 2027-01-06 Speech API model shutdown, gate unavailable profiles, and verify any replacement transport separately before enabling it. Bead: `open-quake-c5w.13`.
 
 ## 3. Day 2 and later speech routes
 
@@ -24,3 +24,10 @@ No live capture/provider behavior is verified by this spec PR. The parent create
 - [ ] 3.2 Add a separate OpenAI Realtime/transcription adapter after current API verification; verify one session/update/ack, no event_id dependency, nonempty single commit, cancellation and no nutrition tool execution through real consumers, and document versioned protocol evidence.
 - [ ] 3.3 Add optional Qwen realtime TTS, Azure, or XFY only after adapter-specific evidence; verify readiness, codec, usage, and playback-terminal conformance per route, and document unsupported capabilities.
 - [ ] 3.4 Add the shipped opt-in Meet AI live translation route (`AI-136/292/327`); verify explicit language pairs, original/translated provenance, target TTS, and GT locale independence through the voice UI and bounded display history (`AI-338`), and document the shipped-profile evidence despite commented library entries.
+
+
+Cluster 14 implementation evidence for 2.6: packages/edge/src/ai/speech/
+speech-service.test.ts drives AiProviderService.createSpeech to fake HTTP and
+the actual owned player consumer, including natural drain, text-only errors,
+cancellation, late audio, deadlines and retirement. See ai-providers-parity/
+verification.md. No live/hardware acceptance is claimed; 1.2, 2.3–2.5 stay open.
