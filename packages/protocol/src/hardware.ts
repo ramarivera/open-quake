@@ -3,7 +3,11 @@ import { type ShortCommand, validate } from "./contracts.js";
 import type { ProtocolError } from "./errors.js";
 import { ProtocolInputInvalid } from "./errors.js";
 import { decodeHidReport, encodeHidReport } from "./framing.js";
-import { unwrapShortCommand, wrapShortCommand } from "./short-command.js";
+import {
+	dfuCommand,
+	unwrapShortCommand,
+	wrapShortCommand,
+} from "./short-command.js";
 
 export const AlertVolume = Schema.Union(
 	Schema.Literal(0),
@@ -11,6 +15,7 @@ export const AlertVolume = Schema.Union(
 );
 export const PanelLuminance = Schema.Int.pipe(Schema.between(25, 255));
 export const HardwareCommand = Schema.Union(
+	Schema.TaggedStruct("Dfu", {}),
 	Schema.TaggedStruct("Buzzer", { level: AlertVolume }),
 	Schema.TaggedStruct("Mic", { on: Schema.Boolean }),
 	Schema.TaggedStruct("ScreenPower", { on: Schema.Boolean }),
@@ -44,6 +49,8 @@ export const queryId = { mic: 3, luminance: 5, version: 0x2e } as const;
 /** MAIN-018..026: flag/set and query semantics recovered from background.js. */
 export function hardwareShortCommand(command: HardwareCommand): ShortCommand {
 	switch (command._tag) {
+		case "Dfu":
+			return dfuCommand();
 		case "Query":
 			return { opCode: 2, cmdId: queryId[command.feature], subData: [] };
 		case "Buzzer":
