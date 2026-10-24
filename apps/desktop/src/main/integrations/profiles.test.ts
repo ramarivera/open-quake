@@ -1,9 +1,25 @@
-import { Effect, Layer, ManagedRuntime, Option, Schema, Stream } from "effect";
+import {
+	Cause,
+	Effect,
+	Layer,
+	ManagedRuntime,
+	Option,
+	Runtime,
+	Schema,
+	Stream,
+} from "effect";
 import { describe, expect, it } from "vitest";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	type ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
+import {
+	applyManagerCommand,
+	installProfileCatalog,
+	PROFILE_LIMIT,
+	visibleProfiles,
+} from "../../../../../packages/device/src/profiles/profile-manager-invariants";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -33,8 +49,8 @@ const library = (count: number): ShortcutLibrary => ({
 		chord: "control+c",
 	})),
 });
-function setup() {
-	let data = encodeProfileEnvelope(createInitialProfileEnvelope());
+function setup(initial: ProfileEnvelope = createInitialProfileEnvelope()) {
+	let data = encodeProfileEnvelope(initial);
 	let fail = false;
 	const storage = {
 		read: async () => data,
@@ -63,6 +79,47 @@ function setup() {
 	};
 }
 describe("integration placement through the shared ProfileService repository", () => {
+	it("allows hidden built-ins beyond the visible profile limit and enforces the remaining capacity", async () => {
+		let initial = installProfileCatalog(
+			createInitialProfileEnvelope(),
+			"darwin",
+		);
+		while (initial.profiles.length < PROFILE_LIMIT) {
+			const result = applyManagerCommand(initial, { type: "create" });
+			if (result._tag !== "updated") throw new TypeError("Unexpected capacity");
+			initial = result.envelope;
+		}
+		expect(visibleProfiles(initial)).toHaveLength(PROFILE_LIMIT - 1);
+		const f = setup(initial);
+		try {
+			const id = await f.adapter.sync(library(1));
+			const { envelope } = await f.runtime.runPromise(
+				ProfileService.loadProfiles(),
+			);
+			expect(envelope.profiles).toHaveLength(PROFILE_LIMIT + 1);
+			expect(visibleProfiles(envelope)).toHaveLength(PROFILE_LIMIT);
+			expect(applyManagerCommand(envelope, { type: "create" })._tag).toBe(
+				"rejected",
+			);
+			const before = f.read();
+			const failure: unknown = await f.adapter
+				.sync({ ...library(1), id: "second", name: "Second" })
+				.then(
+					() => null,
+					(error: unknown) => error,
+				);
+			expect(
+				Runtime.isFiberFailure(failure) &&
+					Option.getOrUndefined(
+						Cause.failureOption(failure[Runtime.FiberFailureCauseId]),
+					),
+			).toMatchObject({ code: "INTEGRATION.INPUT.REJECTED" });
+			expect(f.read()).toEqual(before);
+			expect(await f.adapter.sync(library(2))).toBe(id);
+		} finally {
+			await f.runtime.dispose();
+		}
+	});
 	it("writes 17 keys in row-major pages and updates the same library profile", async () => {
 		const f = setup();
 		try {

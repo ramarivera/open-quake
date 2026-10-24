@@ -166,6 +166,7 @@ export async function openHaRest(
 	const request = (
 		path: string,
 		body?: Readonly<Record<string, Json>>,
+		missingEntityId?: string,
 	): Promise<unknown> =>
 		new Promise((resolve, reject) => {
 			if (closed) {
@@ -190,6 +191,15 @@ export async function openHaRest(
 					},
 				},
 				(response) => {
+					if (response.statusCode === 404 && missingEntityId !== undefined) {
+						response.resume();
+						resolve({
+							entity_id: missingEntityId,
+							state: "unavailable",
+							attributes: {},
+						});
+						return;
+					}
 					if (response.statusCode === 401 || response.statusCode === 403) {
 						response.resume();
 						reject(new HaAuthenticationFailed());
@@ -270,7 +280,11 @@ export async function openHaRest(
 			Promise.all(
 				ids.map(async (id) => {
 					const entity = Schema.decodeUnknownSync(Entity)(
-						await request(`/api/states/${encodeURIComponent(id)}`),
+						await request(
+							`/api/states/${encodeURIComponent(id)}`,
+							undefined,
+							id,
+						),
 					);
 					return { ...entity, area: areaByEntity.get(id) ?? "Other" };
 				}),

@@ -5,9 +5,16 @@ import { mkdir } from "node:fs/promises";
 import * as http from "node:http";
 import * as https from "node:https";
 import { join } from "node:path";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
 import { HaCertificateRejected } from "../../../../../packages/edge/src/channels/integration-errors";
+import { EMPTY_HA_STORE } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import {
+	HaPorts,
+	HomeAssistantService,
+} from "../../../../../packages/edge/src/home-assistant/ha-service";
 import { openHaRest } from "./ha-rest";
+import { fakeVault, memoryStore } from "./test-fixtures";
 
 const scratch =
 	"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center";
@@ -100,6 +107,99 @@ async function certificate() {
 	};
 }
 describe("real HA HTTP/TLS sessions", () => {
+	it("isolates missing entity states without disconnecting healthy polling or actions", async () => {
+		const calls: string[] = [];
+		let failure = 404;
+		const normal = handler(calls, "Bearer synthetic-token");
+		const url = await origin(
+			http.createServer((request, response) => {
+				if (request.url === "/api/states/light.missing") {
+					response.writeHead(failure);
+					response.end("{}");
+				} else normal(request, response);
+			}),
+			"http",
+		);
+		const runtime = ManagedRuntime.make(
+			HomeAssistantService.Default.pipe(
+				Layer.provide(
+					Layer.succeed(HaPorts, {
+						store: memoryStore(EMPTY_HA_STORE).port,
+						vault: fakeVault().port,
+						open: openHaRest,
+						place: async () => {},
+					}),
+				),
+			),
+		);
+		try {
+			await runtime.runPromise(
+				HomeAssistantService.connect(url, "synthetic-token", true),
+			);
+			await runtime.runPromise(
+				HomeAssistantService.setVisible(["light.missing", "light.desk"]),
+			);
+			const live = await runtime.runPromise(HomeAssistantService.poll());
+			expect(live).toMatchObject({
+				connected: true,
+				states: [
+					{ entity_id: "light.missing", state: "unavailable", attributes: {} },
+					{ entity_id: "light.desk", state: "off", area: "Study" },
+				],
+			});
+			expect(
+				(await runtime.runPromise(HomeAssistantService.snapshot())).state,
+			).toBe("Connected");
+			await runtime.runPromise(
+				HomeAssistantService.execute(
+					{
+						entity_id: "light.desk",
+						service: "turn_on",
+						service_data: { brightness: 12 },
+						custom_display_type: "default",
+						custom_display_settings: { fontSize: 40 },
+						custom_display_detail: [],
+					},
+					false,
+				),
+			);
+			expect(calls).toContain("/api/services/light/turn_on");
+			failure = 500;
+			expect(
+				await runtime.runPromise(HomeAssistantService.poll().pipe(Effect.flip)),
+			).toMatchObject({ code: "HA.NETWORK.FAILED" });
+			expect(
+				(await runtime.runPromise(HomeAssistantService.snapshot())).state,
+			).toBe("Failed");
+		} finally {
+			await runtime.runPromise(HomeAssistantService.dispose());
+			await runtime.dispose();
+		}
+	});
+
+	it("does not treat authentication failures on a state endpoint as a missing entity", async () => {
+		const normal = handler([], "Bearer synthetic-token");
+		const url = await origin(
+			http.createServer((request, response) => {
+				if (request.url === "/api/states/light.denied") {
+					response.writeHead(403);
+					response.end("{}");
+				} else normal(request, response);
+			}),
+			"http",
+		);
+		const connection = await openHaRest(url, "synthetic-token", [], true);
+		try {
+			await expect(
+				connection.states(["light.desk", "light.denied"]),
+			).rejects.toMatchObject({ code: "HA.AUTH.FAILED" });
+			await expect(
+				connection.execute("missing", "service", {}),
+			).rejects.toMatchObject({ code: "HA.NETWORK.FAILED" });
+		} finally {
+			connection.close();
+		}
+	});
 	it("sends no request or bearer token to HTTP without explicit connection consent", async () => {
 		const calls: string[] = [];
 		const url = await origin(

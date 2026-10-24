@@ -327,15 +327,12 @@ export function HomeAssistantPage() {
 										<select
 											id={`ha-field-${field.name}`}
 											value={String(key.service_data[field.name] ?? "")}
-											onChange={(event) =>
-												setKey({
-													...key,
-													service_data: {
-														...key.service_data,
-														[field.name]: event.target.value,
-													},
-												})
-											}
+											onChange={(event) => {
+												const data = { ...key.service_data };
+												if (event.target.value === "") delete data[field.name];
+												else data[field.name] = event.target.value;
+												setKey({ ...key, service_data: data });
+											}}
 										>
 											<option value="">Not set</option>
 											{field.options.map((option) => (
