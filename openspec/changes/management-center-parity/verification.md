@@ -31,6 +31,8 @@ All commands run from the lane worktree. Scratch and `TMPDIR` use `/Volumes/ExtS
 | `pnpm --filter @open-quake/desktop test:bundle` | Passed, hermetic default-discovery and explicit mock modes, no hardware I/O | `bundle-current.log` |
 | `openspec validate --all --strict` | Passed, 36 items | `openspec-current.log` |
 
+These figures and the 60-capture native result below describe the initial integration. Later verification supersedes those counts. See [round one](verification-review-round-1-late.md), [round two](verification-review-round-2-top.md) and [round three](verification-review-round-3-top.md), which records 1,649 tests across 176 files, 39 strict OpenSpec items and 65 management captures.
+
 The module branch also passed all six gates independently before its PR was opened; its logs use the `base-` prefix.
 
 ## Native mock acceptance

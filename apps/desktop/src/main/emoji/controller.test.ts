@@ -96,6 +96,109 @@ async function setup(
 	};
 }
 describe("emoji desktop controller", () => {
+	it("keeps read, rename and settings replies metadata-only; fetches one typed asset on demand", async () => {
+		const f = await setup();
+		try {
+			const get = vi.spyOn(f.files, "get");
+			const commands = [
+				{ type: "create-package" as const, id: "pack", name: "Pack" },
+				{ type: "rename-package" as const, id: "pack", name: "Renamed" },
+				{
+					type: "settings" as const,
+					appMatch: false,
+					apps: [],
+					globalMode: 0 as const,
+				},
+			];
+			const read = await f.runtime.runPromise(
+				f.controller.request({ type: "read" }),
+			);
+			expect(read).toMatchObject({ _tag: "ready", assets: {} });
+			for (const command of commands) {
+				expect(
+					await f.runtime.runPromise(
+						f.controller.request({ type: "command", command }),
+					),
+				).toMatchObject({ _tag: "ready", assets: {} });
+			}
+			expect(get).not.toHaveBeenCalled();
+			const asset = await f.runtime.runPromise(
+				f.controller.request({ type: "asset", hash: f.hash }),
+			);
+			expect(asset).toMatchObject({
+				_tag: "ready",
+				assets: { [f.hash]: "data:image/png;base64,AQID" },
+			});
+			expect(get.mock.calls).toEqual([[f.hash]]);
+		} finally {
+			await f.close();
+		}
+	});
+	it("preserves actionable invalid placement failures from the real profile transaction", async () => {
+		const profiles = ManagedRuntime.make(
+			ProfileRepository.Default.pipe(
+				Layer.provide(
+					profileStorageLayer({
+						read: async () =>
+							encodeProfileEnvelope(createInitialProfileEnvelope()),
+						write: async () => {
+							throw Error("Validation must precede writing");
+						},
+					}),
+				),
+			),
+		);
+		const f = await setup(
+			undefined,
+			placeEmojiPackage({ runtime: profiles, select: async () => {} }),
+		);
+		try {
+			const created = await f.runtime.runPromise(
+				f.controller.request({
+					type: "create-result",
+					name: "Hi",
+					base64: Buffer.from(gif()).toString("base64"),
+				}),
+			);
+			if (created._tag !== "ready" || !created.store.drafts[0])
+				throw Error("Expected draft");
+			await f.runtime.runPromise(
+				f.controller.request({
+					type: "command",
+					command: {
+						type: "create-package",
+						id: "long",
+						name: "Long package name",
+					},
+				}),
+			);
+			await f.runtime.runPromise(
+				f.controller.request({
+					type: "command",
+					command: {
+						type: "add-drafts",
+						packageId: "long",
+						ids: [created.store.drafts[0]],
+					},
+				}),
+			);
+			const result = await f.runtime.runPromise(
+				Effect.either(f.controller.request({ type: "place", id: "long" })),
+			);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: {
+					code: "QUAKE.EMOJI.INVALID",
+					reason:
+						"Use a unique package name of at most 10 weighted units before adding it to the screen.",
+				},
+			});
+		} finally {
+			await f.close();
+			await profiles.dispose();
+		}
+	});
+
 	it("imports a long GIF filename with a bounded derived name", async () => {
 		const f = await setup();
 		try {

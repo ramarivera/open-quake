@@ -109,6 +109,7 @@ export function useAppearance() {
 		() => window.matchMedia(REDUCED_MOTION_QUERY).matches,
 	);
 	const channel = useRef<BroadcastChannel | null>(null);
+	const lastNativeTheme = useRef("");
 	const reducedMotion = selectReducedMotion(appearance.motion, systemReduced);
 
 	useEffect(() => {
@@ -139,12 +140,17 @@ export function useAppearance() {
 			"--mc-sidebar-width",
 			`${appearance.sidebarWidth ?? 218}px`,
 		);
-		void window.quakeManagement?.setTheme({
-			base: base === "light" ? "light" : "dark",
+		const payload = {
+			base: base === "light" ? ("light" as const) : ("dark" as const),
 			background: tokens.background,
 			titlebar: base === "dark" ? "#0e1015" : tokens.background,
 			symbol: tokens.foreground,
-		});
+		};
+		const encoded = JSON.stringify(payload);
+		if (lastNativeTheme.current !== encoded) {
+			lastNativeTheme.current = encoded;
+			void window.quakeManagement?.setTheme(payload);
+		}
 		root.dataset.theme = appearance.theme;
 		root.dataset.motion = reducedMotion ? "reduce" : "full";
 	}, [appearance, reducedMotion]);

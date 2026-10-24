@@ -5,15 +5,19 @@ The application root composes management appearance, agents, integrations and em
 Build the app, then build and run this harness sequentially with Electron:
 
 ```sh
+# Choose an existing absolute directory with no symlinks in its path.
+export OQ_SMOKE_SCRATCH=/absolute/path/to/scratch
 pnpm build
-TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center \
+TMPDIR="$OQ_SMOKE_SCRATCH" \
   pnpm --filter @open-quake/desktop exec electron-vite build \
   --config src/main/management/smoke.config.ts
 env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 \
-  TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center \
+  TMPDIR="$OQ_SMOKE_SCRATCH" \
   pnpm --filter @open-quake/desktop exec electron out/management-smoke/smoke.js \
-  /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center/screenshots
+  "$OQ_SMOKE_SCRATCH/screenshots"
 ```
+
+Backup path guards reject symlinks, including the macOS `/tmp` alias. Use the real directory path for `OQ_SMOKE_SCRATCH`.
 
 Do not run multiple electron-vite config builds in the same checkout concurrently; they share a temporary config module. Also run the existing `main/media/README.md` smoke after renderer changes.
 
