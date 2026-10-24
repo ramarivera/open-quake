@@ -1,10 +1,18 @@
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mediaSession } from "../../../main/weather-media/test-fixtures";
+import {
+	forecastFixture,
+	mediaSession,
+	weatherSettings,
+} from "../../../main/weather-media/test-fixtures";
+import { WeatherNetwork } from "../../../main/weather-media/weather-network";
+import { WeatherService } from "../../../main/weather-media/weather-service";
 import {
 	type CityResult,
 	DEFAULT_WEATHER_SETTINGS,
+	WEATHER_REFRESH_MS,
 	type WeatherMediaSnapshot,
 	type WeatherResult,
 } from "../../../shared/weather-media-contracts";
@@ -24,6 +32,69 @@ const initial: WeatherMediaSnapshot = {
 afterEach(() => vi.useRealTimers());
 
 describe("visible refresh and query sequencing", () => {
+	it("refreshes the real service at expiry after delayed forecasts and an early cache hit", async () => {
+		vi.useFakeTimers();
+		const network = vi.fn(() =>
+			Effect.promise(
+				() =>
+					new Promise<unknown>((resolve) =>
+						setTimeout(() => resolve(forecastFixture), 1200),
+					),
+			),
+		);
+		const runtime = ManagedRuntime.make(
+			WeatherService.Default.pipe(
+				Layer.provide(
+					Layer.succeed(WeatherNetwork, {
+						json: () => Effect.suspend(network),
+					}),
+				),
+			),
+		);
+		const load = () =>
+			runtime.runPromise(WeatherService.fetchWeather(weatherSettings, "en"));
+		const publish = vi.fn();
+		const refresh = new WeatherRefresh(
+			load,
+			publish,
+			() => true,
+			() => false,
+		);
+		try {
+			await vi.advanceTimersByTimeAsync(800);
+			expect(network).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(1200);
+			expect(publish).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					_tag: "ready",
+					refreshAfterMs: WEATHER_REFRESH_MS,
+				}),
+			);
+			// Visibility causes a cache hit 51 ms before expiry. It must keep that expiry.
+			await vi.advanceTimersByTimeAsync(WEATHER_REFRESH_MS - 101);
+			refresh.visibilityChanged();
+			await vi.advanceTimersByTimeAsync(50);
+			expect(network).toHaveBeenCalledTimes(1);
+			expect(publish).toHaveBeenLastCalledWith(
+				expect.objectContaining({ _tag: "ready", refreshAfterMs: 51 }),
+			);
+			await vi.advanceTimersByTimeAsync(50);
+			expect(network).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(network).toHaveBeenCalledTimes(2);
+			await vi.advanceTimersByTimeAsync(1200);
+			expect(publish).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					_tag: "ready",
+					refreshAfterMs: WEATHER_REFRESH_MS,
+				}),
+			);
+		} finally {
+			refresh.dispose();
+			await runtime.dispose();
+		}
+		expect(vi.getTimerCount()).toBe(0);
+	});
 	it("starts at 800ms, skips hidden intervals, refreshes on visibility, coalesces config changes and disposes", async () => {
 		vi.useFakeTimers();
 		let visible = true;
@@ -130,6 +201,41 @@ describe("visible refresh and query sequencing", () => {
 		await vi.advanceTimersByTimeAsync(600);
 		expect(search).toHaveBeenCalledTimes(2);
 	});
+	it("settles only the final city with its result and commits clearing or invalid input after idle", async () => {
+		vi.useFakeTimers();
+		const result: CityResult = {
+			_tag: "matched",
+			location: weatherSettings.location ?? {
+				lat: 0,
+				lon: 0,
+				name: "Berlin",
+				country: "DE",
+				sourceCity: "Berlin",
+			},
+		};
+		const search = vi.fn(async () => result);
+		const settled = vi.fn();
+		const verifier = new CityVerifier(search, vi.fn(), settled);
+		for (const query of ["B", "Be", "Ber", "Berlin"]) {
+			verifier.update(query);
+			await vi.advanceTimersByTimeAsync(150);
+			expect(search).not.toHaveBeenCalled();
+			expect(settled).not.toHaveBeenCalled();
+		}
+		await vi.advanceTimersByTimeAsync(450);
+		expect(search).toHaveBeenCalledExactlyOnceWith("Berlin");
+		expect(settled).toHaveBeenCalledExactlyOnceWith("Berlin", result);
+		verifier.update("");
+		await vi.advanceTimersByTimeAsync(599);
+		expect(settled).toHaveBeenCalledTimes(1);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(settled).toHaveBeenLastCalledWith("", null);
+		verifier.update("42!");
+		await vi.advanceTimersByTimeAsync(600);
+		expect(settled).toHaveBeenLastCalledWith("42!", { _tag: "not-found" });
+		expect(search).toHaveBeenCalledTimes(1);
+		verifier.dispose();
+	});
 });
 
 it("guide hides at 4.5s, suppresses track-change gaps, dismisses on session and cleans timers", async () => {
@@ -215,6 +321,20 @@ describe("real card render states", () => {
 		expect(html).toContain("--");
 		expect(html).toContain("TODAY");
 		expect(html).toContain('data-weather-icon="default"');
+	});
+	it("provider outages show Weather unavailable while keeping the valid city and placeholders", () => {
+		const html = renderToStaticMarkup(
+			createElement(ClockWeatherCard, {
+				city: "Berlin",
+				unit: "celsius",
+				state: { kind: "error", reason: "unavailable" },
+			}),
+		);
+		expect(html).toContain("Weather unavailable");
+		expect(html).toContain("Berlin");
+		expect(html).toContain("--");
+		expect(html).not.toContain("Try entering city");
+		expect(html).not.toContain("City not found");
 	});
 	for (const status of ["playing", "paused", "idle", "unavailable"]) {
 		it(`clock and player render ${status} from the same snapshot`, () => {

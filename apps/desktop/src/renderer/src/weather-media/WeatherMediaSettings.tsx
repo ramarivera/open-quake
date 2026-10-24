@@ -43,9 +43,12 @@ function SettingsFields({
 				return reply?._tag === "city" ? reply.result : { _tag: "network" };
 			},
 			setStatus,
-			(result) => {
+			(query, result) => {
 				void client
-					.configure({ location: result.location })
+					.configure({
+						city: query,
+						location: result?._tag === "matched" ? result.location : null,
+					})
 					.then((ok) => setFailure(!ok));
 			},
 		);
@@ -100,7 +103,8 @@ function SettingsFields({
 							onChange={(event) => {
 								const query = event.currentTarget.value;
 								setCity(query);
-								save({ city: query, location: null });
+								if (client.getSnapshot()?.settings.location)
+									save({ location: null });
 								verifier.current?.update(query);
 							}}
 						/>

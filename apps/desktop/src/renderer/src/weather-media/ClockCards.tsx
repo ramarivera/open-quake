@@ -70,7 +70,7 @@ export function ClockWeatherCard({
 		state.kind === "error"
 			? state.reason === "city-not-found"
 				? strings.weatherCityNotFound
-				: strings.weatherFailedHint
+				: strings.weatherUnavailable
 			: ready?.description || "—";
 	return (
 		<div

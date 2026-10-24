@@ -70,7 +70,10 @@ export const WeatherData = Schema.Struct({
 export type WeatherData = typeof WeatherData.Type;
 export const WeatherResult = Schema.Union(
 	Schema.TaggedStruct("empty", {}),
-	Schema.TaggedStruct("ready", { data: WeatherData }),
+	Schema.TaggedStruct("ready", {
+		data: WeatherData,
+		refreshAfterMs: Schema.Finite.pipe(Schema.nonNegative()),
+	}),
 	Schema.TaggedStruct("error", {
 		reason: Schema.Literal("city-not-found", "unavailable"),
 	}),

@@ -11,6 +11,7 @@ import {
 	type WeatherMediaCommand,
 	WeatherMediaReply,
 } from "../../shared/weather-media-contracts";
+import { WeatherNetworkFailed } from "../../shared/weather-media-errors";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
@@ -39,12 +40,9 @@ assert.equal(
 	"1",
 	"native smoke requires mock-device mode",
 );
-const artifacts = process.argv[2] ?? "";
-assert(
-	artifacts?.startsWith(
-		"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/weather-media/",
-	),
-);
+const artifactsArgument = process.argv[2] ?? "";
+assert(artifactsArgument.trim(), "pass a non-empty artifacts directory");
+const artifacts = resolve(artifactsArgument);
 registerClockScheme();
 mkdirSync(artifacts, { recursive: true });
 const base = mkdtempSync(join(artifacts, "native-user-data-"));
@@ -103,6 +101,7 @@ async function smoke(): Promise<void> {
 	const panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 	const networkCalls: string[] = [];
+	let outage = false;
 	const actions: NativeMediaAction[] = [];
 	let native: NativeMediaState = { session: mediaSession, error: null };
 	const runtime = ManagedRuntime.make(
@@ -112,11 +111,15 @@ async function smoke(): Promise<void> {
 					weatherSettingsLive(base),
 					Layer.succeed(WeatherNetwork, {
 						json: (url) =>
-							Effect.sync(() => {
+							Effect.suspend(() => {
 								networkCalls.push(url);
-								return url.includes("geocoding")
-									? cityFixture
-									: forecastFixture;
+								if (outage)
+									return Effect.fail(
+										WeatherNetworkFailed.fromCause("fake provider outage"),
+									);
+								return Effect.succeed(
+									url.includes("geocoding") ? cityFixture : forecastFixture,
+								);
 							}),
 					}),
 					Layer.succeed(SystemMediaAdapter, {
@@ -269,14 +272,62 @@ async function smoke(): Promise<void> {
 			"!!document.querySelector('[aria-label=\"City\"]')",
 			"weather settings",
 		);
-		await evaluate(
-			management,
-			`(() => { const input = document.querySelector('[aria-label="City"]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, 'Berlin, DE'); input.dispatchEvent(new Event('input', {bubbles:true})); input.scrollIntoView({block:'center'}); })()`,
-		);
+		const beforeTyping = networkCalls.length;
+		for (const query of ["B", "Be", "Ber", "Berlin, DE"]) {
+			await evaluate(
+				management,
+				`(() => { const input = document.querySelector('[aria-label="City"]'); const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; setter.call(input, ${JSON.stringify(query)}); input.dispatchEvent(new Event('input', {bubbles:true})); input.scrollIntoView({block:'center'}); })()`,
+			);
+			await sleep(150);
+			const current = await request(management, { _tag: "read" });
+			assert.equal(current._tag, "snapshot");
+			if (current._tag === "snapshot") {
+				assert.equal(
+					current.snapshot.settings.city,
+					"Berlin",
+					"draft city is not persisted",
+				);
+				assert.equal(
+					current.snapshot.settings.location,
+					null,
+					"old coordinates clear immediately",
+				);
+			}
+		}
 		await waitFor(
 			management,
 			"document.querySelector('.weather-settings')?.textContent.includes('Weather for Berlin')",
 			"city verification through settings",
+		);
+		await waitFor(
+			management,
+			"document.querySelector('[aria-label=\"City\"]')?.value === 'Berlin, DE'",
+			"draft stays responsive",
+		);
+		await waitFor(
+			management,
+			"window.quakeWeatherMedia.request({_tag:'read'}).then(reply => reply._tag === 'snapshot' && reply.snapshot.settings.city === 'Berlin, DE' && reply.snapshot.settings.location?.sourceCity === 'Berlin, DE')",
+			"settled city persisted with coordinates",
+		);
+		const settled = await request(management, { _tag: "read" });
+		assert.equal(settled._tag, "snapshot");
+		if (settled._tag === "snapshot") {
+			assert.equal(settled.snapshot.settings.city, "Berlin, DE");
+			assert.equal(
+				settled.snapshot.settings.location?.sourceCity,
+				"Berlin, DE",
+			);
+		}
+		assert(
+			networkCalls
+				.slice(beforeTyping)
+				.every(
+					(url) =>
+						!["B", "Be", "Ber"].includes(
+							new URL(url).searchParams.get("name") ?? "",
+						),
+				),
+			"draft prefixes never reach providers",
 		);
 		await capture(management, "weather-settings-manual-city");
 		await evaluate(
@@ -291,6 +342,31 @@ async function smoke(): Promise<void> {
 			false,
 		);
 		await capture(management, "weather-settings-ip-consent");
+		outage = true;
+		await request(management, {
+			_tag: "configure",
+			settings: {
+				...weatherSettings,
+				musicEnabled: true,
+				forecastUrl: "https://offline.example/forecast",
+			},
+		});
+		await waitFor(
+			panel,
+			"document.querySelector('.oq-weather-desc')?.textContent === 'Weather unavailable'",
+			"provider outage keeps a distinct error",
+		);
+		await capture(panel, "clock-weather-unavailable");
+		outage = false;
+		await request(management, {
+			_tag: "configure",
+			settings: { ...weatherSettings, musicEnabled: true },
+		});
+		await waitFor(
+			panel,
+			"document.querySelector('.oq-weather-temp')?.textContent.includes('12')",
+			"weather recovers after outage",
+		);
 		const denied = await request(panel, {
 			_tag: "configure",
 			settings: { ...weatherSettings, ipLookup: true },

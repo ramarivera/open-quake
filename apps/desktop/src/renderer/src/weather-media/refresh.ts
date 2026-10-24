@@ -6,8 +6,6 @@ import {
 /** Visible subscription edge, independent of React and testable with a clock. */
 export class WeatherRefresh {
 	private debounce: ReturnType<typeof setTimeout> | undefined;
-	private interval: ReturnType<typeof setInterval> | undefined;
-	private retry: ReturnType<typeof setTimeout> | undefined;
 	private running = false;
 	private pending = false;
 	private disposed = false;
@@ -20,14 +18,10 @@ export class WeatherRefresh {
 		private readonly auto: () => boolean,
 	) {
 		this.schedule(800);
-		this.interval = setInterval(() => {
-			if (this.visible()) this.schedule(0);
-		}, WEATHER_REFRESH_MS);
 	}
 	changed(): void {
 		this.version++;
 		this.retried = false;
-		clearTimeout(this.retry);
 		this.schedule(50);
 	}
 	visibilityChanged(): void {
@@ -53,10 +47,13 @@ export class WeatherRefresh {
 		if (this.disposed) return;
 		if (version === this.version) {
 			this.publish(result);
+			let next =
+				result._tag === "ready" ? result.refreshAfterMs : WEATHER_REFRESH_MS;
 			if (result._tag === "error" && this.auto() && !this.retried) {
 				this.retried = true;
-				this.retry = setTimeout(() => void this.fetch(), 120_000);
+				next = 120_000;
 			}
+			this.schedule(next);
 		}
 		if (this.pending || version !== this.version) {
 			this.pending = false;
@@ -67,7 +64,5 @@ export class WeatherRefresh {
 		this.disposed = true;
 		this.version++;
 		clearTimeout(this.debounce);
-		clearInterval(this.interval);
-		clearTimeout(this.retry);
 	}
 }

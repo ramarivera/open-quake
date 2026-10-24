@@ -23,7 +23,10 @@ sessions and does not satisfy the generic system-media contract.
 - `WeatherService` owns provider selection and a 30 min Celsius cache. The
   cache key includes location, city, provider URL, consent and locale. Unit
   changes convert the same source values before rounding. A refresh failure
-  can retain only matching cached data. No stale city coordinates are reused.
+  can retain only matching cached data. Ready replies include the remaining
+  cache lifetime so visible cards schedule at expiry, including cache hits.
+  IP lookup retains validated coordinates for both forecast providers instead
+  of geocoding an ambiguous city name. No stale city coordinates are reused.
 - `WeatherSettingsRepository` atomically saves `weather-media-v1/settings.json`
   under Electron userData. Settings are global while per-profile editing is
   owned by other lanes. Invalid/unreadable files load safe disabled defaults.
@@ -41,7 +44,9 @@ sessions and does not satisfy the generic system-media contract.
   Settings and city verification additionally require main's management-window
   identity. Panel can read forecasts and control the shared session.
 - The renderer owns visible refresh timing, city verification sequencing and
-  transient tips. Native mock smoke exercises production IPC/preload/renderers
+  transient tips. City edits invalidate coordinates immediately; only the
+  latest query is saved after 600 ms idle and verification, together with its
+  matched coordinates. Native mock smoke exercises production IPC/preload/renderers
   with injected fake IO. It cannot prove native media control works.
 
 ## Rendering and knob integration
@@ -68,12 +73,14 @@ provide, so showing that text would be misleading.
 
 Tests use recording fakes and Effect TestClock. No live HTTP, OS media calls,
 HID or local servers are used. Run all six lane gates from the repo root,
-then the README media smoke and this focused smoke. Keep TMPDIR and captures
-inside the lane scratch folder:
+then the README media smoke and this focused smoke. Pass any non-empty
+artifacts directory. During parity lane work, set TMPDIR and the artifacts
+argument to the lane scratch folder required by LANE-BRIEF.md. Other checkouts
+can use a build-output directory:
 
 ```sh
 pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/weather-media/smoke.config.ts
-env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/weather-media-smoke/smoke.js /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/weather-media/native-smoke
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/weather-media-smoke/smoke.js out/weather-media-smoke/artifacts
 ```
 
 The focused smoke checks disabled-card zero-network behavior, manual-city

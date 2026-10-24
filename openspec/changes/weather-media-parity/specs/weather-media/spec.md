@@ -20,6 +20,21 @@ Weather SHALL default to disabled, manual city entry and Celsius. IP lookup SHAL
 - **WHEN** Berlin is still being verified when the user types Paris
 - **THEN** the saved Berlin location is cleared immediately and its late response cannot restore it
 
+#### Scenario: Typing a manual city
+
+- **WHEN** the user types city prefixes less than 600 ms apart
+- **THEN** the input updates immediately and clears the saved location, but only the latest settled query is persisted with its verification result; intermediate prefixes cause no geocoding or forecast requests
+
+#### Scenario: Japanese and explicit-country queries
+
+- **WHEN** a Japanese user searches for 東京 or 東京, JP, or an English user searches for London, UK
+- **THEN** Japanese queries retain the Japanese locale without a China restriction and UK matches GB; an explicit country always filters candidates, including in Chinese UI
+
+#### Scenario: Ambiguous city from IP lookup
+
+- **WHEN** opted-in IP lookup identifies Paris in the United States
+- **THEN** both forecast providers use the validated IP coordinates instead of selecting another Paris through a worldwide name search; missing or invalid coordinates fail over to the other IP provider
+
 ### Requirement: Weather providers and cache
 
 Network access SHALL go through a typed main-process adapter with replaceable test fakes. The default SHALL geocode through open-meteo and fetch current temperature/WMO code and daily high/low with timezone=auto and forecast_days=3, with 10 s HTTP deadlines and rejected redirects. Forecast failure SHALL try wttr.in for the verified location, converting its codes to WMO. A matching city/provider/locale cache SHALL last 30 min; forecast failure SHALL retain matching cached data marked stale, and a different city SHALL never inherit it. Celsius and Fahrenheit SHALL round only after conversion. An optional HTTP(S) forecast URL SHALL reach the provider through the same adapter, contain no URL credentials, and replace the standard forecast parameters. Invalid URLs SHALL be rejected without changing saved settings. Evidence: WIDGETS-042/043/044/046/050/052. The custom-URL forwarding bug described in AUDIT_WIDGETS F3 SHALL NOT be copied.
@@ -42,6 +57,21 @@ The card SHALL occupy 564×153 design pixels with a radius of 32, an 88 px icon 
 
 - **WHEN** 30 min passes while the view is hidden
 - **THEN** no forecast refresh starts until the view is visible
+
+#### Scenario: Refresh after a slow load or cache hit
+
+- **WHEN** a forecast finishes after the initial mount delay, or another visible card reads an existing cache entry
+- **THEN** its next refresh uses the remaining cache lifetime returned by main, measured from response completion, so a cache hit cannot postpone the provider refresh by another 30 minutes
+
+#### Scenario: Provider outage without cached data
+
+- **WHEN** a valid city has no cached data and both forecast providers fail
+- **THEN** the clock shows the recovered Weather unavailable string, while city-not-found keeps its distinct message
+
+#### Scenario: Portable mock smoke artifacts
+
+- **WHEN** a developer runs the focused native mock smoke with an arbitrary non-empty artifacts directory
+- **THEN** the smoke creates that directory and isolates and cleans its user data there without requiring a machine-specific volume path
 
 ### Requirement: Shared media intent and native boundary
 

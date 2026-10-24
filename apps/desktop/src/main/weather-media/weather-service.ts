@@ -72,7 +72,10 @@ const WttrResponse = Schema.Struct({
 	),
 });
 const IpResponse = Schema.Struct({
-	city: Schema.String,
+	city: Schema.NonEmptyString.pipe(Schema.maxLength(200)),
+	country: Schema.String.pipe(Schema.maxLength(200)),
+	latitude: Schema.Finite.pipe(Schema.between(-90, 90)),
+	longitude: Schema.Finite.pipe(Schema.between(-180, 180)),
 	success: Schema.optional(Schema.Boolean),
 });
 const decode = <A, I>(
@@ -123,24 +126,26 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 					.split(",")
 					.map((part) => part.trim());
 				const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
+				const chineseQuery = locale === "zh" && /\p{Script=Han}/u.test(name);
 				url.search = new URLSearchParams({
 					name,
 					count: "50",
-					language: /\p{Script=Han}/u.test(query) ? "zh" : locale,
+					language: locale,
 					format: "json",
 				}).toString();
-				if (/\p{Script=Han}/u.test(query))
+				if (chineseQuery && !country)
 					url.searchParams.set("country_code", "CN");
 				const response = yield* network
 					.json(url.href)
 					.pipe(Effect.flatMap((value) => decode(GeoResponse, value)));
 				const normalized = name.toLocaleLowerCase();
+				const wanted = country.toLocaleLowerCase();
+				const countryCode = wanted === "uk" ? "gb" : wanted;
 				const candidates = (response.results ?? []).filter(
 					(item) =>
 						!country ||
-						item.country?.toLocaleLowerCase() === country.toLocaleLowerCase() ||
-						item.country_code?.toLocaleLowerCase() ===
-							country.toLocaleLowerCase(),
+						item.country?.toLocaleLowerCase() === wanted ||
+						item.country_code?.toLocaleLowerCase() === countryCode,
 				);
 				const score = (item: (typeof candidates)[number]): number =>
 					(item.name.toLocaleLowerCase() === normalized
@@ -202,7 +207,13 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 								? Effect.fail(
 										WeatherResponseInvalid.fromCause("IP city missing"),
 									)
-								: Effect.succeed(data.city),
+								: Effect.succeed<WeatherLocation>({
+										lat: data.latitude,
+										lon: data.longitude,
+										name: data.city.trim(),
+										country: data.country,
+										sourceCity: data.city.trim(),
+									}),
 						),
 					);
 				return yield* lookup("https://ipapi.co/json/", 8000).pipe(
@@ -244,7 +255,7 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 					);
 				const fallback = network
 					.json(
-						`https://wttr.in/${encodeURIComponent(`${location.name},${location.country}`)}?format=j1&lang=${locale}`,
+						`https://wttr.in/${location.lat},${location.lon}?format=j1&lang=${locale}`,
 					)
 					.pipe(
 						Effect.flatMap((value) => decode(WttrResponse, value)),
@@ -306,14 +317,15 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 								return {
 									_tag: "ready",
 									data: weatherIn(cached.data, settings.unit),
+									refreshAfterMs: WEATHER_REFRESH_MS - (now - cached.at),
 								} satisfies WeatherResult;
 							const load: Effect.Effect<WeatherResult, WeatherFetchError> =
 								Effect.gen(function* () {
-									const city = settings.city.trim() || (yield* autoCity());
-									const result: CityResult =
-										matchingLocation(settings) && settings.location
+									const result: CityResult = !settings.city.trim()
+										? { _tag: "matched", location: yield* autoCity() }
+										: matchingLocation(settings) && settings.location
 											? { _tag: "matched", location: settings.location }
-											: yield* search(city, locale);
+											: yield* search(settings.city.trim(), locale);
 									if (result._tag !== "matched") {
 										cached = undefined;
 										return {
@@ -330,12 +342,14 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 									return {
 										_tag: "ready",
 										data: weatherIn(data, settings.unit),
+										refreshAfterMs: WEATHER_REFRESH_MS,
 									} satisfies WeatherResult;
 								});
 							const unavailable = (): WeatherResult =>
 								cached?.key === key
 									? {
 											_tag: "ready",
+											refreshAfterMs: WEATHER_REFRESH_MS,
 											data: weatherIn(
 												{ ...cached.data, stale: true },
 												settings.unit,

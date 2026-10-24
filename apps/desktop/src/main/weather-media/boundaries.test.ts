@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rename, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Either, Layer, ManagedRuntime, Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -141,13 +142,7 @@ describe("IO and authorization boundaries", () => {
 		);
 	});
 	it("persists atomically, keeps old disk and controller state after a failed rename", async () => {
-		const root = await mkdtemp(
-			join(
-				process.env.TMPDIR ??
-					"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/weather-media/",
-				"weather-store-",
-			),
-		);
+		const root = await mkdtemp(join(tmpdir(), "weather-store-"));
 		const runtime = ManagedRuntime.make(
 			WeatherMediaController.Default.pipe(
 				Layer.provide(
