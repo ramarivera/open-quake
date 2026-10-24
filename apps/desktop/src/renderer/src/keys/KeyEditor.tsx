@@ -32,6 +32,7 @@ import { useWallpaper } from "../wallpaper/useWallpaper";
 import { editableFocus } from "./editor-input";
 import { IconLibrary } from "./IconLibrary";
 import { KeyTitleSettings } from "./KeyTitleSettings";
+import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
@@ -47,7 +48,7 @@ export function KeyEditor(): React.JSX.Element {
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
 		[profileId, setProfileId] = useState(""),
 		[pageId, setPageId] = useState(""),
-		[locale, setLocale] = useState<ProfileLocale>("en"),
+		[locale, setLocale] = useState<ProfileLocale>(storedKeyLocale),
 		[selection, setSelection] = useState<Selection>(),
 		[icons, setIcons] = useState(false),
 		[alternate, setAlternate] = useState(false),
@@ -71,7 +72,7 @@ export function KeyEditor(): React.JSX.Element {
 		else if (reply._tag === "rejected") setStatus(reply.reason);
 	}, [accept, locale]);
 	useEffect(() => {
-		localStorage.setItem("open-quake-key-locale", locale);
+		localStorage.setItem(KEY_LOCALE_STORAGE, locale);
 		window.dispatchEvent(new Event("key-locale"));
 	}, [locale]);
 	const revert = useCallback(async (): Promise<void> => {

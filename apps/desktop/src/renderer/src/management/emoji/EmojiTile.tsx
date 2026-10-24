@@ -22,9 +22,12 @@ export function EmojiTile(props: StripTileProps): React.JSX.Element {
 			active = false;
 		};
 	}, [hash]);
+	const icon = props.tile.key.config.icon.startsWith("emoji:")
+		? source
+		: props.tile.key.config.icon;
 	return (
 		<div
-			data-emoji-asset-state={source ? "ready" : "loading"}
+			data-emoji-asset-state={icon ? "ready" : hash ? "loading" : "empty"}
 			style={{ display: "contents" }}
 		>
 			<GenericTile
@@ -33,7 +36,7 @@ export function EmojiTile(props: StripTileProps): React.JSX.Element {
 					...props.tile,
 					key: {
 						...props.tile.key,
-						config: { ...props.tile.key.config, icon: source },
+						config: { ...props.tile.key.config, icon },
 					},
 				}}
 			/>

@@ -342,7 +342,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									...base,
 									progress: Math.floor(((i + 1) / steps.length) * 100),
 								});
-								yield* Effect.sleep(config.gap ?? 100);
+								if (i < steps.length - 1)
+									yield* Effect.sleep(config.gap ?? 100);
 							}
 						});
 					}

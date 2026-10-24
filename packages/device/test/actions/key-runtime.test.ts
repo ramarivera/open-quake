@@ -369,3 +369,72 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+for (const finalGap of [undefined, 60000])
+	it.effect(
+		`completes sequence without a final ${finalGap ?? "default"} gap and accepts the next tap`,
+		() => {
+			const f = fixture({
+				type: "multiActions",
+				actions: [],
+				subActions: [
+					{
+						config: {
+							type: "hotkey",
+							actions: [{ type: "key", value: "a" }],
+							gap: 1500,
+						},
+					},
+					{
+						config: {
+							type: "hotkey",
+							actions: [{ type: "key", value: "b" }],
+							...(finalGap === undefined ? {} : { gap: finalGap }),
+						},
+					},
+				],
+			});
+			return Effect.gen(function* () {
+				yield* press;
+				yield* TestClock.adjust(0);
+				expect(f.calls).toHaveLength(1);
+				yield* TestClock.adjust(1499);
+				expect(f.calls).toHaveLength(1);
+				yield* TestClock.adjust(1);
+				expect(f.calls).toHaveLength(2);
+				expect(f.feedback.at(-1)?.progress).toBe(100);
+				yield* press;
+				yield* TestClock.adjust(0);
+				expect(f.calls).toHaveLength(3);
+				expect(f.feedback.at(-1)?.progress).toBe(50);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+it.effect(
+	"honors an explicit final delay but finishes without its following gap",
+	() => {
+		const f = fixture({
+			type: "multiActions",
+			actions: [],
+			subActions: [
+				{
+					config: {
+						type: "delay",
+						actions: [{ type: "time", value: 2000 }],
+						gap: 60000,
+					},
+				},
+			],
+		});
+		return Effect.gen(function* () {
+			yield* press;
+			yield* TestClock.adjust(1999);
+			expect(f.feedback.at(-1)?.progress).toBe(0);
+			yield* TestClock.adjust(1);
+			expect(f.feedback.at(-1)?.progress).toBe(100);
+			yield* press;
+			yield* TestClock.adjust(0);
+			expect(f.feedback.at(-1)?.progress).toBe(0);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

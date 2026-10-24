@@ -31,6 +31,7 @@ import {
 	interceptEditorRequests,
 	verifyEditorTransactions,
 } from "./smoke-editor";
+import { verifyFinalReview } from "./smoke-final-review";
 import { verifyReviewEditor } from "./smoke-review";
 
 registerClockScheme();
@@ -323,6 +324,8 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		await verifyFinalReview(harness, panel);
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "final-review") return;
 		await verifyReviewEditor(harness, process.env.OPEN_QUAKE_KEY_REVIEW_PROBE);
 		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE) return;
 		await verifyEditorTransactions(harness);

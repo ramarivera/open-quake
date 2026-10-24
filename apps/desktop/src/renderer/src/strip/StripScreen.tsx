@@ -1,8 +1,8 @@
-import { Option, Schema } from "effect";
+import { Option } from "effect";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
-import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import { storedKeyLocale } from "../keys/key-locale";
 import { useKeyRuntime } from "../keys/useKeyRuntime";
 import { WallpaperCanvas } from "../wallpaper/WallpaperCanvas";
 import "./css-properties";
@@ -23,14 +23,6 @@ import type { StripProfiles } from "./useStripProfiles";
 import "./strip.css";
 
 const palette = stripPaletteProperties();
-
-const storedKeyLocale = (): ProfileLocale => {
-	if (typeof localStorage === "undefined") return "en";
-	const decoded = Schema.decodeUnknownEither(ProfileLocale)(
-		localStorage.getItem("open-quake-key-locale") ?? "en",
-	);
-	return decoded._tag === "Right" ? decoded.right : "en";
-};
 
 function StripGrid({
 	layout,
@@ -237,7 +229,7 @@ export function StripScreen({
 				);
 				const translated =
 					titles === "provided" ? key : localizedKey(key, locale);
-				return state?.alternate === 1
+				return key.config.type === "hotkeySwitch" && state?.alternate === 1
 					? {
 							...translated,
 							config: {
