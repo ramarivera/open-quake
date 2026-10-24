@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { OpenQuakeBridge, QuakeEvent } from "../../preload/quake";
+import type {
+	DeviceStatusEvent,
+	OpenQuakeBridge,
+	QuakeEvent,
+} from "../../preload/quake";
 
 declare global {
 	interface Window {
@@ -14,6 +18,27 @@ export type QuakeEventState = {
 	presses: number;
 	lastKeepAliveSeq: number | null;
 	touchPoints: { x: number; y: number }[];
+};
+
+/** Link state that must outlive the bounded event log. */
+export type DeviceLinkState = {
+	/** Latest status report; null until the device service sends one. */
+	connection: DeviceStatusEvent | null;
+	/** Net knob detents (+1 per step one way, -1 the other) since launch. */
+	knobSteps: number;
+};
+
+export type QuakeEventsView = QuakeEventState & DeviceLinkState;
+
+export const initialQuakeEvents: QuakeEventsView = {
+	events: [],
+	eventsReceived: 0,
+	rotations: 0,
+	presses: 0,
+	lastKeepAliveSeq: null,
+	touchPoints: [],
+	connection: null,
+	knobSteps: 0,
 };
 
 export function appendQuakeEvent(
@@ -43,18 +68,25 @@ export function appendQuakeEvent(
 	};
 }
 
-export function useQuakeEvents(): QuakeEventState {
-	const [state, setState] = useState<QuakeEventState>({
-		events: [],
-		eventsReceived: 0,
-		rotations: 0,
-		presses: 0,
-		lastKeepAliveSeq: null,
-		touchPoints: [],
-	});
+export function appendLinkEvent(
+	previous: DeviceLinkState,
+	event: QuakeEvent,
+): DeviceLinkState {
+	return {
+		connection: event.kind === "status" ? event : previous.connection,
+		knobSteps:
+			previous.knobSteps + (event.kind === "rotate" ? event.direction : 0),
+	};
+}
+
+export function useQuakeEvents(): QuakeEventsView {
+	const [state, setState] = useState<QuakeEventsView>(initialQuakeEvents);
 	useEffect(() => {
 		return window.openQuake?.onQuakeEvent((event) => {
-			setState((previous) => appendQuakeEvent(previous, event));
+			setState((previous) => ({
+				...appendQuakeEvent(previous, event),
+				...appendLinkEvent(previous, event),
+			}));
 		});
 	}, []);
 	return state;
