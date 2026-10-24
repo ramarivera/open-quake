@@ -72,5 +72,8 @@ lead-only probe was written but never executed.
 Epic `open-quake-lih.3.1` is a child of cluster `open-quake-lih.3`.
 Task mapping: 1.1 → `.3.1.1`, 1.2 → `.3.1.2`, 2.1 → `.3.1.3`,
 2.2 → `.3.1.4`, 3.1 → `.3.1.5`, 3.2 → `.3.1.6` under prefix `open-quake-lih`.
-Implementation tasks close with the source/tests above. Delivery remains open
-until the PR is created; its status is tracked in tasks.md and Beads.
+All six task beads, the epic and cluster are closed with source/test evidence.
+PR: https://github.com/ramarivera/open-quake/pull/20 against main.
+Implementation commit: `3629150`; delivery metadata is recorded in a follow-up
+commit. The branch is pushed, the PR is linked to the T3 thread and remains
+unmerged. Hardware limitations above are retained in the closure evidence.

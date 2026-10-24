@@ -13,4 +13,4 @@
 ## 3. Integration and delivery
 
 - [x] 3.1 Feed synthetic raw frames in mock mode and add the opt-in guarded capture script; verify mock delivery and script guards without opening hardware.
-- [ ] 3.2 Run all lane gates and native mock smoke, record evidence and unverified hardware findings, synchronize beads, commit, push and open the PR.
+- [x] 3.2 Run all lane gates and native mock smoke, record evidence and unverified hardware findings, synchronize beads, commit, push and open the PR.
