@@ -3,6 +3,7 @@ import { HardwareSettings } from "./hardware/HardwareSettings";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { StripPanel } from "./strip/StripPanel";
+import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -135,7 +136,14 @@ function ManagementSurface({
 							onOpenScreen={() => open("screen")}
 						/>
 					) : page === "screen" ? (
-						<WallpaperSettings wallpaper={wallpaper} />
+						<>
+							<WallpaperSettings wallpaper={wallpaper} />
+							<ClockSettings
+								hourFormat={
+									wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
+								}
+							/>
+						</>
 					) : page === "controls" ? (
 						<HardwareSettings />
 					) : (

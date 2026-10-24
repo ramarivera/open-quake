@@ -19,6 +19,7 @@ import {
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerHardware } from "../hardware";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
@@ -34,6 +35,8 @@ import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
+// The clock tile reads its own store, as in the app.
+registerClockScheme();
 const pngPath = join(directory, "checkerboard.png");
 const jpegPath = join(directory, "second.jpg");
 let selectedPath = pngPath;
@@ -120,6 +123,10 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	const clock = registerClock(
+		ManagedRuntime.make(ClockLive(directory)),
+		() => management,
+	);
 	const unregisterHardware = registerHardware(
 		() => undefined,
 		() => management,
@@ -257,7 +264,7 @@ async function smoke(): Promise<void> {
 		});
 		await settle();
 		const shown: unknown = await panel.webContents.executeJavaScript(
-			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.strip-clock-placeholder') }))()`,
+			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.oq-clock') }))()`,
 		);
 		assert.deepEqual(shown, {
 			theme,
@@ -455,6 +462,7 @@ async function smoke(): Promise<void> {
 	);
 	unregisterHardware();
 	await profiles.dispose();
+	await clock.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

@@ -86,6 +86,14 @@ vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
 });
+vi.mock("./clock", async () => {
+	const { Layer } = await import("effect");
+	return {
+		ClockLive: vi.fn(() => Layer.empty),
+		registerClock: vi.fn(),
+		registerClockScheme: vi.fn(),
+	};
+});
 vi.mock("./profiles/profile-ipc", async () => {
 	const { Layer } = await import("effect");
 	return {

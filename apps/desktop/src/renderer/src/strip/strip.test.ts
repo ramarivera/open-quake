@@ -28,7 +28,6 @@ import {
 	truncateTitle,
 } from "./tileMetrics";
 import { stripTileFor, stripTileRegistry } from "./tileRegistry";
-import { ClockPlaceholder } from "./tiles/ClockPlaceholder";
 import { GenericTile } from "./tiles/GenericTile";
 import { type StripProfiles, subscribeStripProfiles } from "./useStripProfiles";
 
@@ -145,8 +144,13 @@ describe("strip screen", () => {
 			wallpaper,
 			showEmptyGridDashedBorder: true,
 		});
-		expect(markup).toContain('viewBox="0 0 1920 480"');
-		expect(markup).toMatch(/data-time="\d\d:\d\d:\d\d"/);
+		const host = new Date(wallpaper.clock.epochMillis);
+		const hhmm = [host.getHours(), host.getMinutes()]
+			.map((n) => String(n).padStart(2, "0"))
+			.join(":");
+		expect(markup).toContain('class="oq-clock" data-theme="season"');
+		expect(markup).toContain("width:1920px;height:480px");
+		expect(markup).toContain(`data-time="${hhmm}"`);
 		expect(count(markup, 'data-state="tile"')).toBe(1);
 	});
 
@@ -308,25 +312,24 @@ describe("tile registry", () => {
 		expect(stripTileFor("dkDesktopClock")).not.toBe(GenericTile);
 	});
 
-	it("keeps the first-release clock formats in the placeholder", () => {
-		const midnight = new Date(2026, 9, 24, 0, 0, 0);
-		const at = (hourFormat: "24h" | "12h", now = midnight) =>
-			renderToStaticMarkup(
-				createElement(ClockPlaceholder, {
-					widthPx: 1920,
-					heightPx: 480,
-					now,
-					theme: "season",
-					hourFormat,
-				}),
-			);
-		expect(at("24h")).toContain('data-time="00:00:00"');
-		expect(at("12h")).toContain('data-time="12:00:00 AM"');
-		expect(at("12h", new Date(2026, 9, 24, 12, 0, 5))).toContain(
-			'data-time="12:00:05 PM"',
-		);
-		expect(at("24h")).toContain('viewBox="0 0 1920 480"');
-		expect(at("24h")).toContain('data-theme="season"');
+	it("draws the clock with the wallpaper session's hour format", () => {
+		const at = (value: "24h" | "12h") =>
+			render({
+				profiles: ready(clockProfile),
+				wallpaper: {
+					...wallpaper,
+					saved: {
+						...wallpaper.saved,
+						clock: {
+							...wallpaper.saved.clock,
+							actions: [{ type: "hourFormat", value }],
+						},
+					},
+				},
+				showEmptyGridDashedBorder: true,
+			});
+		expect(at("24h")).not.toContain("oq-flip-pill");
+		expect(at("12h")).toMatch(/<span class="oq-flip-pill">(AM|PM)<\/span>/);
 	});
 });
 
