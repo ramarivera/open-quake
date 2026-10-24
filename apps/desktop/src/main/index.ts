@@ -46,6 +46,7 @@ import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
+import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
 const rendererURL =
@@ -143,6 +144,12 @@ if (!app.requestSingleInstanceLock()) {
 		let panelTarget = getPanelTarget();
 		let panelWin = createPanelWindow(panelTarget);
 		let managementWin = createManagementWindow();
+		const weatherMedia = registerWeatherMedia(
+			ManagedRuntime.make(
+				weatherMediaLive(app.getPath("userData"), process.platform),
+			),
+			() => managementWin,
+		);
 		let bus: DeviceBus | undefined;
 		// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
 		// play through hardware-controls; the mock bus answers them without HID.
@@ -494,6 +501,7 @@ if (!app.requestSingleInstanceLock()) {
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 			shutdown = (async () => {
 				await stopBus();
+				await weatherMedia.dispose();
 				await meetings.dispose();
 				await monitor.dispose();
 				await lifecycleRuntime.dispose();
