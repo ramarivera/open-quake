@@ -41,8 +41,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 				let issue: ConnectionDiagnostic["issue"] = "none";
 				let loss = Option.none<Fiber.RuntimeFiber<void, never>>();
 				let recovery = Option.none<Fiber.RuntimeFiber<void, never>>();
-				let pairing =
-					Option.none<Fiber.RuntimeFiber<ConnectionDiagnostic, never>>();
+				let pairing = Option.none<Fiber.RuntimeFiber<void, never>>();
 				const current = (): Display | undefined => {
 					const binding = bound;
 					if (Option.isSome(binding))
@@ -103,44 +102,49 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 				const redetect = Effect.fn("DeviceLifecycle.redetect")(function* (
 					refresh = true,
 				): Effect.fn.Return<ConnectionDiagnostic> {
-					if (locked || checking) return status();
-					checking = true;
-					sync();
-					const fiber = yield* Effect.gen(function* () {
-						if (refresh) yield* edges.bus()?.recover?.() ?? Effect.void;
-						if (!edges.mock && connected) {
-							while (true) {
-								topologyPending = false;
-								const before = candidateTopology();
-								const result = yield* discovery.run();
-								bound = result.display;
-								issue = result.issue;
-								// Retain arrivals during the transaction, but ignore our own
-								// off/on edges when they restore the same candidate set.
-								if (
-									!topologyPending ||
-									locked ||
-									!connected ||
-									current() ||
-									before === candidateTopology() ||
-									!edges.displays().some(isPanelCandidate)
-								)
-									break;
-							}
-						}
-						return status();
-					}).pipe(
-						Effect.ensuring(
-							Effect.sync(() => {
+					return yield* Effect.uninterruptibleMask((restore) =>
+						Effect.gen(function* () {
+							if (locked || checking) return status();
+							checking = true;
+							const fiber = yield* restore(
+								Effect.gen(function* () {
+									if (locked) return;
+									sync();
+									if (refresh) yield* edges.bus()?.recover?.() ?? Effect.void;
+									if (!edges.mock && connected) {
+										while (true) {
+											topologyPending = false;
+											const before = candidateTopology();
+											const result = yield* discovery.run();
+											bound = result.display;
+											issue = result.issue;
+											// Retain arrivals during the transaction, but ignore our own
+											// off/on edges when they restore the same candidate set.
+											if (
+												!topologyPending ||
+												locked ||
+												!connected ||
+												current() ||
+												before === candidateTopology() ||
+												!edges.displays().some(isPanelCandidate)
+											)
+												break;
+										}
+									}
+								}),
+							).pipe(Effect.forkIn(scope));
+							pairing = Option.some(fiber);
+							// Disconnect can interrupt a fork before its first instruction.
+							// A runtime observer also releases that never-started reservation.
+							fiber.addObserver(() => {
 								checking = false;
 								sync();
-							}),
-						),
-						Effect.map(() => status()),
-						Effect.forkIn(scope),
+							});
+							return yield* restore(Fiber.join(fiber)).pipe(
+								Effect.map(() => status()),
+							);
+						}),
 					);
-					pairing = Option.some(fiber);
-					return yield* Fiber.join(fiber);
 				});
 				const startPairing = redetect(false).pipe(
 					Effect.forkIn(scope),

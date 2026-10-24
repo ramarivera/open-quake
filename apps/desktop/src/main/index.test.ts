@@ -765,6 +765,43 @@ describe("desktop main with the real device service and fake HID", () => {
 		expect(profiles?.disconnect).toHaveBeenCalledTimes(2);
 	});
 
+	it("settles discovery and restores the known strip after resume reopens HID", async () => {
+		const primary = makeDisplay();
+		const strip = makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 480, height: 1920 },
+			bounds: { x: -480, y: 0, width: 480, height: 1920 },
+		});
+		electron.screen.getAllDisplays.mockReturnValue([primary, strip]);
+		await start();
+		const { panel, management } = windows();
+		await vi.waitFor(() => expect(panel.showInactive).toHaveBeenCalled());
+		panel.showInactive.mockClear();
+		const resume: (() => void) | undefined =
+			electron.powerMonitor.on.mock.calls.find(
+				([event]) => event === "resume",
+			)?.[1];
+		expect(resume).toBeDefined();
+		resume?.();
+		await vi.waitFor(
+			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
+			{ timeout: 7000 },
+		);
+		await vi.waitFor(() => {
+			const diagnostic = management.webContents.send.mock.calls
+				.filter(([channel]) => channel === "quake:diagnostic")
+				.at(-1)?.[1];
+			expect(diagnostic).toMatchObject({
+				usb: "pass",
+				hdmi: "pass",
+				checking: false,
+				issue: "none",
+			});
+			expect(panel.showInactive).toHaveBeenCalled();
+		});
+	}, 12000);
+
 	it("defaults to HID, forwards to both windows, cleans up unplug and reconnects", async () => {
 		await start();
 		const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;

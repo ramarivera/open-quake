@@ -33,6 +33,10 @@ When exactly one candidate has both the exact DK-QUAKE label and the physical 19
 - **THEN** the panel binds that display without screen-power writes and without waiting for a disappearance event
 - **AND** missing labels, mismatched dimensions and multiple candidates still require the blanking transaction
 
+#### Scenario: Disconnect interrupts a pending discovery fork
+- **WHEN** resume reopens HID and its disconnect event cancels a discovery fiber before that fiber starts
+- **THEN** the checking reservation is released and the reconnected device can complete discovery and restore its panel
+
 #### Scenario: Blanking identifies the strip
 - **WHEN** two candidate displays exist and only one disappears during blanking
 - **THEN** discovery powers the screen back on and binds the returning candidate rather than the first label or size hit
