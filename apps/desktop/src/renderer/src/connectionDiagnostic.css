@@ -1,0 +1,107 @@
+.connection-check {
+	max-width: 760px;
+	margin-block: 28px;
+}
+.connection-eyebrow {
+	color: var(--quake-accent);
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+}
+.connection-check h2 {
+	font-size: clamp(24px, 3vw, 34px);
+	margin-block: 10px;
+}
+.connection-checks {
+	border: 1px solid var(--quake-border);
+	border-radius: 10px;
+	overflow: hidden;
+	background: var(--quake-surface);
+}
+.connection-checks > section + section {
+	border-top: 1px solid var(--quake-border);
+}
+.connection-summary {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	width: 100%;
+	padding: 24px;
+	text-align: left;
+	color: var(--quake-foreground);
+	background: none;
+	border: 0;
+	cursor: pointer;
+}
+.connection-summary > span:nth-child(2) {
+	flex: 1;
+	min-width: 0;
+}
+.connection-summary strong,
+.connection-state {
+	display: block;
+}
+.connection-state {
+	margin-top: 8px;
+	line-height: 1.5;
+	color: var(--quake-warning);
+}
+.connection-state[data-pass="true"] {
+	color: var(--quake-success);
+}
+.connection-port {
+	min-width: 56px;
+	font-size: 12px;
+	padding: 14px 6px;
+	text-align: center;
+	border: 1px solid currentColor;
+	border-radius: 8px;
+}
+.connection-details {
+	padding: 0 24px 20px 110px;
+	line-height: 1.65;
+}
+.connection-details h3 {
+	font-size: 15px;
+}
+.connection-details ol {
+	padding-left: 20px;
+}
+.connection-details li + li {
+	margin-top: 12px;
+}
+.connection-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin-top: 20px;
+}
+.connection-actions button {
+	padding: 12px 18px;
+	min-height: 44px;
+	border: 1px solid var(--quake-accent);
+	border-radius: 7px;
+	color: var(--quake-accent);
+	background: transparent;
+	cursor: pointer;
+}
+.connection-actions button:disabled {
+	opacity: 0.65;
+	cursor: wait;
+}
+.connection-check button:focus-visible {
+	outline: 3px solid var(--quake-accent);
+	outline-offset: -3px;
+}
+@media (max-width: 620px) {
+	.connection-summary {
+		padding: 16px;
+		gap: 12px;
+	}
+	.connection-port {
+		min-width: 42px;
+	}
+	.connection-details {
+		padding: 0 16px 16px;
+	}
+}

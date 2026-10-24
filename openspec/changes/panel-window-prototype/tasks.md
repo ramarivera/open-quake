@@ -10,7 +10,7 @@
 
 - [ ] 2.1 Run `pnpm --filter @open-quake/desktop dev` and capture both surfaces receiving mock events
 - [ ] 2.2 Verify panel placement on the real DK-QUAKE display (terminate DK-Suite afterwards per TRUTH.md)
-- [x] 2.3 Add unit tests for `findPanelDisplay` (label match, case-insensitive label, label priority, size match, none)
+- [x] 2.3 Add unit tests for `findPanelDisplay` (physical-pixel size priority and strict tolerance, case-insensitive label fallback, ambiguity, none)
 - [ ] 2.4 File follow-ups for gaps found, then close `open-quake-2qs.5`
 - [x] 2.5 Extract event forwarding and test delivery to both windows, skipping destroyed windows, and delivery to replacements
 - [x] 2.6 Test mock bus cadence, unsubscribe, and `stop()` timer/listener cleanup with fake timers

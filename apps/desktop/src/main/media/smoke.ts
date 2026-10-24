@@ -4,13 +4,18 @@ import { mkdtempSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import type { Display } from "electron";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
 	type WallpaperCommand,
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
+import { registerLifecycle } from "../lifecycle/registration";
+import { makeDisplay } from "../test/display";
 import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
@@ -83,6 +88,38 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	let mockDisplays: readonly Display[] = [];
+	const lifecycleRuntime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: true,
+			displays: () => mockDisplays,
+			watch: () => () => {},
+			panel: () => {},
+			bus: () => ({
+				on: () => () => {},
+				currentStatus: () => undefined,
+				recover: () => Effect.sleep(100),
+			}),
+			notify: (status) =>
+				management.webContents.send("quake:diagnostic", status),
+			prompts: {
+				platform: process.platform,
+				mock: true,
+				displays: () => mockDisplays,
+				primaryId: () => 1,
+				prompt: () => Effect.die("Smoke must never prompt"),
+				native: () => Effect.die("Smoke must never call native display APIs"),
+				openSettings: () => Effect.void,
+			},
+		}),
+	);
+	const lifecycle = await lifecycleRuntime.runPromise(DeviceLifecycle);
+	const removeLifecycle = registerLifecycle(
+		lifecycleRuntime,
+		() => management,
+		pathToFileURL(resolve("out/renderer/index.html")).href,
+	);
 	app.once("will-quit", () => {
 		assert(
 			runtimeDisposed,
@@ -174,6 +211,112 @@ async function smoke(): Promise<void> {
 		typeof errors === "string" && !errors.includes("service is unavailable"),
 	);
 	const artifacts = process.argv[2];
+	management.setSize(1100, 1000);
+	// Exercise the production diagnostic preload/handler/controller with synthetic topology.
+	await management.webContents.executeJavaScript(
+		"document.querySelector('.connection-check').scrollIntoView(); null;",
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("No USB device detected"),
+	);
+	if (artifacts) {
+		await mkdir(artifacts, { recursive: true });
+		await writeFile(
+			join(artifacts, "diagnostic-disconnected.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	}
+	await management.webContents.executeJavaScript(
+		"document.querySelector('.connection-actions button').click(); null;",
+	);
+	await new Promise<void>((done) => setTimeout(done, 30));
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.connection-actions button').disabled",
+		),
+		true,
+	);
+	await new Promise<void>((done) => setTimeout(done, 150));
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.connection-actions button').disabled",
+		),
+		false,
+	);
+	const rejected: unknown = await panel.webContents.executeJavaScript(
+		"window.quakeLifecycle.request({action:'redetect'})",
+	);
+	assert.deepEqual(rejected, {
+		ok: false,
+		code: "DESKTOP.LIFECYCLE.FORBIDDEN",
+	});
+	mockDisplays = [
+		makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1024, height: 768 },
+		}),
+	];
+	await lifecycleRuntime.runPromise(
+		lifecycle.onStatus({ source: "mock", kind: "status", state: "connected" }),
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("current 1024x768"),
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-resolution.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	if (artifacts) {
+		management.setSize(390, 844);
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.connection-check').scrollIntoView(); null;",
+		);
+		await new Promise<void>((done) => setTimeout(done, 100));
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				"document.documentElement.scrollWidth > innerWidth",
+			),
+			false,
+		);
+		await writeFile(
+			join(artifacts, "diagnostic-narrow.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+		management.setSize(1100, 1000);
+	}
+	mockDisplays = [
+		makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1920, height: 480 },
+		}),
+	];
+	await lifecycleRuntime.runPromise(lifecycle.topology());
+	await new Promise<void>((done) => setTimeout(done, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("both connections are normal"),
+	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			"document.querySelector('[data-session]').getAttribute('data-session')",
+		),
+		"device",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-ready.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
 	await management.webContents.executeJavaScript(
 		`(() => { const selects = document.querySelectorAll('.appearance select'); const theme = selects[0]; const motion = selects[1]; theme.value = 'light'; theme.dispatchEvent(new Event('change', { bubbles: true })); motion.value = 'reduce'; motion.dispatchEvent(new Event('change', { bubbles: true })); })()`,
 	);
@@ -212,6 +355,8 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	removeLifecycle();
+	await lifecycleRuntime.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

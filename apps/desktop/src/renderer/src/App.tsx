@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ConnectionCheck } from "./ConnectionDiagnostic";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -53,26 +54,32 @@ function ManagementSurface({
 }: {
 	appearance: AppearanceController;
 }): React.JSX.Element {
+	const [deviceReady, setDeviceReady] = useState(false);
 	const { eventsReceived, rotations, presses, lastKeepAliveSeq } =
 		useQuakeEvents();
 	return (
 		<main className="management">
 			<h1>open-quake management</h1>
-			<p className="muted">
-				Prototype: panel window + mock device bus are live.
-			</p>
-			<section className="diagnostics" aria-label="Mock device diagnostics">
+			<p className="muted">Manage your QUAKE connection and desktop preview.</p>
+			<ConnectionCheck onReady={setDeviceReady} />
+			<section className="diagnostics" aria-label="Device input diagnostics">
 				<Stat label="EVENTS RECEIVED" value={eventsReceived} />
 				<Stat label="ROTATIONS" value={rotations} animate />
 				<Stat label="PRESSES" value={presses} animate />
 				<Stat label="KEEP-ALIVE" value={lastKeepAliveSeq ?? "—"} />
 			</section>
 			<p className="muted">
-				The panel window owns the DK-QUAKE display, or a fallback window when
-				the panel is unplugged.
+				The panel follows the QUAKE display. Development builds also offer a
+				desktop preview when the strip is unplugged.
 			</p>
-			<ThemeSettings controller={appearance} />
-			<WallpaperSettings />
+			<section
+				aria-label={deviceReady ? "Device settings" : "Desktop preview"}
+				data-session={deviceReady ? "device" : "preview"}
+			>
+				<h2>{deviceReady ? "Device settings" : "Desktop preview"}</h2>
+				<ThemeSettings controller={appearance} />
+				<WallpaperSettings />
+			</section>
 		</main>
 	);
 }

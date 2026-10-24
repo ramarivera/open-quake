@@ -4,6 +4,8 @@ import { registerHooks } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
 
 const app = new EventEmitter();
+app.isPackaged = true;
+app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => "/nonexistent/open-quake-bundle-smoke";
 let quit = false;
@@ -35,12 +37,16 @@ class Window {
 	on() {}
 	once() {}
 	loadFile() {}
+	hide() {}
+	showInactive() {}
 	setBounds() {}
 	setAlwaysOnTop() {}
 	destroy() {}
 }
 const screen = new EventEmitter();
 const display = {
+	id: 1,
+	scaleFactor: 1,
 	label: "Primary",
 	size: { width: 1920, height: 1080 },
 	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
@@ -59,7 +65,11 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+const powerMonitor = new EventEmitter();
+const shell = { openExternal: () => Promise.resolve() };
 globalThis.openQuakeBundleSmoke = {
+	powerMonitor,
+	shell,
 	app,
 	BrowserWindow: Window,
 	screen,
@@ -81,7 +91,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

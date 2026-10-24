@@ -16,6 +16,13 @@ export const keepAliveFrame = (): Either.Either<Uint8Array, ProtocolError> =>
 export const keepAliveReport = (): Either.Either<Uint8Array, ProtocolError> =>
 	keepAliveFrame().pipe(Either.flatMap(encodeHidReport));
 
+export const screenPowerReport = (
+	on: boolean,
+): Either.Either<Uint8Array, ProtocolError> =>
+	wrapShortCommand({ opCode: 1, cmdId: 4, subData: [on ? 1 : 0] }).pipe(
+		Either.flatMap(encodeHidReport),
+	);
+
 export function decodeReport(
 	input: Uint8Array,
 ): Either.Either<Option.Option<DeviceEvent>, ProtocolError> {

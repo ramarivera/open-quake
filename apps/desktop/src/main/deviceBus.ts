@@ -1,6 +1,12 @@
 import { EventEmitter } from "node:events";
-import { type DeviceEvent, QuakeDevice } from "@open-quake/device";
-import { Effect, Exit, type Scope, Stream } from "effect";
+import {
+	type DeviceEvent,
+	type DeviceStreamError,
+	type QuakeConnection,
+	QuakeDevice,
+	QuakeDeviceNotFound,
+} from "@open-quake/device";
+import { Clock, Deferred, Effect, Exit, type Scope, Stream } from "effect";
 import type {
 	DeviceStatusError,
 	DeviceStatusEvent,
@@ -12,6 +18,8 @@ export type { QuakeEvent } from "../preload/quake";
 export type DeviceBus = {
 	on(listener: (event: QuakeEvent) => void): () => void;
 	currentStatus(): DeviceStatusEvent | undefined;
+	setScreenPower?: (on: boolean) => Effect.Effect<boolean, DeviceStreamError>;
+	recover?: (reopen?: boolean) => Effect.Effect<void>;
 };
 
 export const DEVICE_RECONNECT_MS = 1000;
@@ -23,6 +31,20 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 		const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
 		let status: DeviceStatusEvent | undefined;
 		let sequence = 0;
+		let connectionNow: QuakeConnection | undefined;
+		let retry = 0;
+		let selectedPath: string | undefined;
+		let exhaustedPresence: string | undefined;
+		let reset = yield* Deferred.make<void>();
+		const resetBackoff = Effect.fn("DesktopDeviceBus.recover")(function* (
+			reopen = false,
+		): Effect.fn.Return<void> {
+			if (reopen && connectionNow)
+				yield* connectionNow.disconnect().pipe(Effect.ignore);
+			retry = 0;
+			selectedPath = undefined;
+			if (!connectionNow) yield* Deferred.succeed(reset, undefined);
+		});
 		yield* Effect.addFinalizer(() =>
 			Effect.sync(() => emitter.removeAllListeners()),
 		);
@@ -73,7 +95,24 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 			Effect.gen(function* () {
 				// QuakeDevice filters VID/PID and usagePage/usage, selecting FF60/61
 				// rather than the system, consumer or keyboard HID collections.
-				const connection = yield* device.connect();
+				if (selectedPath) {
+					const present = yield* device.discover();
+					if (!present.some((info) => info.path === selectedPath)) {
+						selectedPath = undefined;
+						return yield* new QuakeDeviceNotFound();
+					}
+				}
+				const connection = yield* device.connect(
+					selectedPath ? { path: selectedPath } : {},
+				);
+				connectionNow = connection;
+				selectedPath = connection.info.path;
+				const openedAt = yield* Clock.currentTimeMillis;
+				yield* Effect.addFinalizer(() =>
+					Effect.sync(() => {
+						connectionNow = undefined;
+					}),
+				);
 				const events = yield* connection.subscribe();
 				let streamFinished = false;
 				// Explicit disconnect also exposes native close failures on teardown.
@@ -90,11 +129,17 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 				yield* publish({ source: "hid", kind: "status", state: "connected" });
 				yield* Stream.runForEach(events, forward).pipe(
 					Effect.onExit((exit) =>
-						Effect.sync(() => {
-							streamFinished = !Exit.isInterrupted(exit);
-						}),
+						Clock.currentTimeMillis.pipe(
+							Effect.flatMap((now) =>
+								Effect.sync(() => {
+									if (now - openedAt >= 30_000) retry = 0;
+									streamFinished = !Exit.isInterrupted(exit);
+								}),
+							),
+						),
 					),
 				);
+				if ((yield* Clock.currentTimeMillis) - openedAt >= 30_000) retry = 0;
 			}),
 		).pipe(
 			Effect.matchEffect({
@@ -102,10 +147,36 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 				onFailure: reportError,
 			}),
 		);
+		const wait = (ms: number) =>
+			Effect.gen(function* () {
+				yield* Effect.raceFirst(Effect.sleep(ms), Deferred.await(reset));
+				if (yield* Deferred.isDone(reset)) reset = yield* Deferred.make<void>();
+			});
 		yield* Effect.forever(
-			connectAndForward.pipe(
-				Effect.zipRight(Effect.sleep(DEVICE_RECONNECT_MS)),
-			),
+			Effect.gen(function* () {
+				if (retry >= 5) {
+					const devices = yield* device
+						.discover()
+						.pipe(Effect.orElseSucceed(() => []));
+					const presence = devices
+						.map((info) => info.path)
+						.sort()
+						.join("\n");
+					if (exhaustedPresence === undefined) exhaustedPresence = presence;
+					else if (presence !== exhaustedPresence) {
+						retry = 0;
+						selectedPath = undefined;
+						exhaustedPresence = undefined;
+					}
+					if (retry >= 5) {
+						yield* wait(5000);
+						return;
+					}
+				}
+				yield* connectAndForward;
+				const delay = Math.min(1000 + 2000 * retry++, 30_000);
+				yield* wait(delay);
+			}),
 		).pipe(Effect.forkScoped);
 		return {
 			on(listener) {
@@ -114,6 +185,13 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 				return () => emitter.off("event", listener);
 			},
 			currentStatus: () => status,
+			recover: resetBackoff,
+			setScreenPower: (on) =>
+				Effect.suspend(() =>
+					connectionNow
+						? connectionNow.setScreenPower(on).pipe(Effect.as(true))
+						: Effect.succeed(false),
+				),
 		};
 	},
 );

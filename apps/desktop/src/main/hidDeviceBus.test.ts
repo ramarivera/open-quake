@@ -229,7 +229,8 @@ describe("HID desktop bus", () => {
 					expect(harness.bus.currentStatus()).toEqual(missing);
 					expect(harness.rendererState.lastKeepAliveSeq).toBeNull();
 					devices.push(FAKE_QUAKE_DEVICE);
-					yield* TestClock.adjust(DEVICE_RECONNECT_MS);
+					yield* harness.bus.recover?.() ?? Effect.void;
+					yield* TestClock.adjust(0);
 					// Drain absence retries, then wait for the new connection.
 					let event = yield* harness.next;
 					while (event.kind === "status" && event.state === "error")
@@ -261,6 +262,67 @@ describe("HID desktop bus", () => {
 					);
 				}).pipe(Effect.provide(withTransport(fake.layer)));
 			}),
+	);
+
+	it.scoped(
+		"backs off for five failed opens, then scans passively until explicit recovery",
+		() =>
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHidTransport();
+				let attempts = 0;
+				let broken = true;
+				const layer = Layer.succeed(HidTransport, {
+					...fake.transport,
+					open: (info) => {
+						attempts++;
+						return broken
+							? Effect.fail(new QuakeHidOpenFailed(new Error("private")))
+							: fake.transport.open(info);
+					},
+				});
+				yield* Effect.gen(function* () {
+					const h = yield* makeHarness;
+					yield* h.next;
+					expect(attempts).toBe(1);
+					for (const delay of [1000, 3000, 5000, 7000]) {
+						yield* TestClock.adjust(delay - 1);
+						const before = attempts;
+						yield* TestClock.adjust(1);
+						yield* h.next;
+						expect(attempts).toBe(before + 1);
+					}
+					expect(attempts).toBe(5);
+					yield* TestClock.adjust(60_000);
+					expect(attempts).toBe(5);
+					broken = false;
+					yield* h.bus.recover?.() ?? Effect.void;
+					yield* TestClock.adjust(0);
+					expect(yield* h.next).toEqual(connected);
+					expect(attempts).toBe(6);
+				}).pipe(Effect.provide(withTransport(layer)));
+			}),
+	);
+	it.scoped("resets reconnect delay after thirty stable seconds", () =>
+		Effect.gen(function* () {
+			const fake = yield* makeFakeHidTransport();
+			yield* Effect.gen(function* () {
+				const h = yield* makeHarness;
+				yield* h.next;
+				yield* fake.failRead(new Error("disconnect"));
+				yield* h.next;
+				yield* h.next;
+				yield* TestClock.adjust(1000);
+				expect(yield* h.next).toEqual(connected);
+				yield* TestClock.adjust(30_000);
+				yield* fake.failRead(new Error("disconnect"));
+				yield* h.next;
+				yield* h.next;
+				yield* TestClock.adjust(999);
+				expect(yield* fake.opens).toBe(2);
+				yield* TestClock.adjust(1);
+				expect(yield* h.next).toEqual(connected);
+			}).pipe(Effect.provide(withTransport(fake.layer)));
+		}),
 	);
 
 	for (const failure of ["discovery", "open"] as const) {
