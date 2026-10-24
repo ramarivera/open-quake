@@ -1276,18 +1276,31 @@ async function smoke() {
 		const bounds: { x: number; y: number; width: number } = JSON.parse(resizer);
 		const startX = Math.round(bounds.x + bounds.width / 2),
 			dragY = Math.round(bounds.y + 100);
-		win.webContents.sendInputEvent({ type: "mouseMove", x: startX, y: dragY });
-		win.webContents.sendInputEvent({
-			type: "mouseDown",
-			button: "left",
-			clickCount: 1,
-			x: startX,
-			y: dragY,
-		});
-		for (const x of [250, 275, 300]) {
-			win.webContents.sendInputEvent({ type: "mouseMove", x, y: dragY });
+		// CDP delivers trusted mouse input to hidden Chromium without taking OS focus.
+		win.webContents.debugger.attach("1.3");
+		const mouse = async (type: string, x: number, buttons: number) => {
+			await win.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
+				type,
+				x,
+				y: dragY,
+				button: type === "mouseMoved" ? "none" : "left",
+				buttons,
+				clickCount: type === "mouseMoved" ? 0 : 1,
+			});
 			await settle(30);
-		}
+		};
+		assert.equal(
+			await js(`document.elementFromPoint(${startX},${dragY})?.className`),
+			"mc-resizer",
+		);
+		await mouse("mouseMoved", startX, 0);
+		await mouse("mousePressed", startX, 1);
+		assert.equal(
+			await js("document.body.dataset.resizing"),
+			"true",
+			"Trusted mouse input must start the drag",
+		);
+		for (const x of [250, 275, 300]) await mouse("mouseMoved", x, 1);
 		assert.equal(
 			await js(
 				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
@@ -1300,13 +1313,7 @@ async function smoke() {
 			"No storage writes during drag",
 		);
 		assert.equal(calls.themes, dragThemes, "No theme IPC during drag");
-		win.webContents.sendInputEvent({
-			type: "mouseUp",
-			button: "left",
-			clickCount: 1,
-			x: 300,
-			y: dragY,
-		});
+		await mouse("mouseReleased", 300, 0);
 		await settle();
 		assert.equal(
 			await js("window.__reviewWrites"),
@@ -1318,18 +1325,12 @@ async function smoke() {
 			dragThemes,
 			"Width must not rewrite native theme",
 		);
-		win.webContents.sendInputEvent({
-			type: "mouseDown",
-			button: "left",
-			clickCount: 1,
-			x: 300,
-			y: dragY,
-		});
-		win.webContents.sendInputEvent({ type: "mouseMove", x: 330, y: dragY });
-		await settle();
+		await mouse("mousePressed", 303, 1);
+		await mouse("mouseMoved", 330, 1);
 		await js(
 			"document.querySelector('.mc-resizer').releasePointerCapture(window.__reviewPointer);null;",
 		);
+		await mouse("mouseMoved", 330, 1);
 		await settle();
 		assert.equal(
 			await js(
@@ -1342,13 +1343,8 @@ async function smoke() {
 			1,
 			"Canceled drag never persists",
 		);
-		win.webContents.sendInputEvent({
-			type: "mouseUp",
-			button: "left",
-			clickCount: 1,
-			x: 330,
-			y: dragY,
-		});
+		await mouse("mouseReleased", 330, 0);
+		win.webContents.debugger.detach();
 		await js("Storage.prototype.setItem = window.__reviewSetItem;null;");
 		const widthBefore = await js(
 			"document.querySelector('.sidebar').getBoundingClientRect().width",
@@ -1411,6 +1407,9 @@ async function smoke() {
 		await js(`document.querySelector('${lastImage}').scrollIntoView();null;`);
 		await waitFor(
 			`document.querySelector('${lastImage}')?.src.startsWith('data:image/png') && document.querySelector('${lastImage}').naturalWidth > 0`,
+		);
+		await waitFor(
+			"!document.querySelector('.emoji-assets button:first-child img')?.getAttribute('src')",
 		);
 		const assetsBeforeMetadata = calls.assets.length;
 		await emot({
