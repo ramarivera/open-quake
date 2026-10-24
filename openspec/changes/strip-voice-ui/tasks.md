@@ -15,7 +15,7 @@ per numbered item below (`open-quake-lih.5.1.1` … `open-quake-lih.5.1.11`).
 
 ## 3. Desktop main
 
-- [x] 3.1 Add `main/voice/`: the `voice:surface` broadcast, the decoded `voice:input` channel with the app-renderer guard, link opening, copy, file pick and focus, the tone recorder port, and the scripted mock runtime (TestClock tests); the preload bridge; one registration call in `main/index.ts`. (`open-quake-lih.5.1.5`)
+- [x] 3.1 Add `main/voice/`: the `voice:surface` broadcast, the decoded `voice:request` channel with the app-renderer guard, link opening, copy, file pick and focus, tones through hardware-controls' `playTone` (plus a recorder), the knob model's voice binding, and the scripted mock runtime (TestClock tests); the preload bridge; one registration call in `main/index.ts`. (`open-quake-lih.5.1.5`)
 
 ## 4. Strip renderer
 
