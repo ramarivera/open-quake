@@ -253,3 +253,18 @@ Evidence: AI-263-264, AI-280-294, AI-299-317, AI-338. These strengthen local pri
 - **WHEN** private meeting content replaces an existing readable file or audio conversion runs
 - **THEN** resulting files are private from creation, managed audio never follows a directory
   symlink or traversal ID, and export replacement never follows a destination symlink
+
+#### Scenario: Cancellation or deletion races source loss
+
+- **WHEN** cancellation or cascading deletion overlaps recording finalization or a delayed source-loss callback
+- **THEN** capture transitions serialize, each recording finalizes at most once, cancelled records remain cancelled and deleted records remain absent; shutdown still progresses without holding capture locks over provider calls
+
+#### Scenario: Recording startup delay and unrelated failure
+
+- **WHEN** recording capture waits for permission or fails while standalone translation is already active
+- **THEN** successful recording timestamps exclude the startup wait and a failed recording request preserves the existing translation stream
+
+#### Scenario: Cancelled native touch
+
+- **WHEN** link loss or layout teardown cancels a held MeetAI key
+- **THEN** the synthetic release clears visual state without dispatching a meeting action

@@ -175,3 +175,28 @@ Turbo gates use `--env-mode=loose` so owned ExtSSD temporary paths and mock flag
 reach child processes; workers remain bounded at two and Turbo concurrency at one.
 The meetings smoke logs Chromium temporary-cache and macOS process-policy errors;
 assertions pass. The combined smoke has no warning/error lines.
+
+Cancellation and cascading deletion now share the capture-transition semaphore with
+start/stop, source loss, suspend and recovery finalization. Delayed loss for absent,
+cancelled, processing or completed records is ignored. Genuine loss queued behind
+stop/suspend still reports on the affected main/side task. Provider results cannot
+overwrite cancelled records or recreate deleted records. ASR and summary requests
+run outside the capture lock; provider translation cleanup has a two-second deadline
+so shutdown can progress. Recording timestamps are sampled after capture readiness,
+excluding permission/window startup delays. A failed recording request preserves an
+independent live translation. Cancelled native touch releases, including teardown,
+clear pressed state without dispatching a MeetAI action.
+
+PR #31 cancellation review proof: 1310 uncached tests, all six fresh gates with
+`--env-mode=loose`, both bundle modes, 37/37 strict OpenSpec items and sequential
+meetings/combined native mocks passed. The production request handler regression
+allows a read while cancellation awaits final chunk IO, then proves delayed loss
+cannot finalize cancelled audio or restore deleted history. New races cover both
+orders, main/side records, recovery, ASR/summary completion and hung translation
+cleanup. Native IPC confirms cancelled/deleted state, cancelled Start touch makes
+no record, and fractional recovery still measures 250.125 ms and submits 250 ms
+once. All 33 captures have SHA-256 hashes; four were inspected. Native meetings
+logged four Chromium temporary-cache errors; assertions passed, combined smoke
+logged no errors/warnings, and owned Electron/process groups were gone. Evidence:
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings/review-round-2/`.
+No physical, live-provider or packaged acceptance is closed by this round.

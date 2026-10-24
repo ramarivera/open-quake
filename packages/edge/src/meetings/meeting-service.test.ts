@@ -64,6 +64,11 @@ function setup(recoveredDuration = 2500) {
 		stopDelay = 0;
 	let failStop: string | undefined;
 	let nextSave: Effect.Effect<void> = Effect.void;
+	let nextStop: Effect.Effect<void> = Effect.void;
+	let nextStart: Effect.Effect<void> = Effect.void;
+	let nextSubmit: Effect.Effect<void> = Effect.void;
+	let nextSummary: Effect.Effect<void> = Effect.void;
+	let translationStop: Effect.Effect<void> = Effect.void;
 	const storage: MeetingStorage = {
 		load: () => Effect.succeed(stored),
 		save: (next) =>
@@ -95,7 +100,7 @@ function setup(recoveredDuration = 2500) {
 		start: (id, _, parent) =>
 			Effect.sync(() => {
 				calls.push(`start:${parent ? "side" : "main"}:${id}`);
-			}),
+			}).pipe(Effect.zipRight(Effect.suspend(() => nextStart))),
 		drain: (id) =>
 			Effect.sync(() => {
 				calls.push(`drain:${id}`);
@@ -105,6 +110,7 @@ function setup(recoveredDuration = 2500) {
 			Effect.sync(() => {
 				calls.push(`stop:${id}`);
 			}).pipe(
+				Effect.zipRight(Effect.suspend(() => nextStop)),
 				Effect.zipRight(
 					Effect.suspend(() =>
 						id === failStop
@@ -116,6 +122,11 @@ function setup(recoveredDuration = 2500) {
 					Effect.suspend(() =>
 						stopDelay > 0 ? Effect.sleep(stopDelay) : Effect.void,
 					),
+				),
+				Effect.tap(() =>
+					Effect.sync(() => {
+						calls.push(`stopped:${id}`);
+					}),
 				),
 			),
 		cancel: (id) =>
@@ -140,7 +151,7 @@ function setup(recoveredDuration = 2500) {
 			Effect.sync(() => {
 				requests.push(request);
 				return "task";
-			}),
+			}).pipe(Effect.zipLeft(Effect.suspend(() => nextSubmit))),
 		poll: () =>
 			Effect.sync(() => {
 				calls.push("poll");
@@ -153,7 +164,7 @@ function setup(recoveredDuration = 2500) {
 				calls.push(`cancel-task:${id}`);
 			}),
 		translate: () => Effect.succeed([]),
-		stopTranslation: () => Effect.void,
+		stopTranslation: () => Effect.suspend(() => translationStop),
 	};
 	const ai = AiProviderService.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(AiRepository.Default),
@@ -167,7 +178,7 @@ function setup(recoveredDuration = 2500) {
 				Layer.succeed(AiCompatibleAdapter, {
 					open: (input) => {
 						prompts.push(input);
-						return failSummary
+						const opened = failSummary
 							? Effect.fail(new AiUnavailable(new Error("private prompt")))
 							: Effect.succeed(
 									Stream.fromIterable<NormalizedEvent>([
@@ -179,6 +190,9 @@ function setup(recoveredDuration = 2500) {
 										{ _tag: "completed" },
 									]),
 								);
+						return opened.pipe(
+							Effect.zipLeft(Effect.suspend(() => nextSummary)),
+						);
 					},
 				}),
 			),
@@ -207,6 +221,21 @@ function setup(recoveredDuration = 2500) {
 		saved: () => stored,
 		pauseSave: (wait: Effect.Effect<void>) => {
 			nextSave = wait;
+		},
+		pauseStop: (wait: Effect.Effect<void>) => {
+			nextStop = wait;
+		},
+		pauseStart: (wait: Effect.Effect<void>) => {
+			nextStart = wait;
+		},
+		pauseSummary: (wait: Effect.Effect<void>) => {
+			nextSummary = wait;
+		},
+		pauseTranslationStop: (wait: Effect.Effect<void>) => {
+			translationStop = wait;
+		},
+		pauseSubmit: (wait: Effect.Effect<void>) => {
+			nextSubmit = wait;
 		},
 		failStop: (id: string) => {
 			failStop = id;
@@ -247,6 +276,276 @@ const recordOnce = Effect.gen(function* () {
 });
 
 describe("meeting conductor consumers", () => {
+	for (const operation of ["cancel", "delete"] as const) {
+		for (const target of ["main", "side"] as const) {
+			it.effect(
+				`preserves ${operation} of ${target} before delayed source loss`,
+				() => {
+					const f = setup();
+					return Effect.gen(function* () {
+						yield* configure;
+						const main = (yield* MeetingService.action("meetingMinutes"))
+							.records[0];
+						const side = (yield* MeetingService.action("tempMeetingMinutes"))
+							.records[0];
+						if (!main || !side) return yield* Effect.die("Missing records");
+						const id = target === "main" ? main.id : side.id;
+						yield* TestClock.adjust(5000);
+						const entered = yield* Deferred.make<void>();
+						const release = yield* Deferred.make<void>();
+						f.pauseSave(
+							Deferred.succeed(entered, undefined).pipe(
+								Effect.zipRight(Deferred.await(release)),
+							),
+						);
+						const intentional = yield* Effect.fork(
+							MeetingService[operation](id),
+						);
+						yield* Deferred.await(entered);
+						const losing = yield* Effect.fork(MeetingService.sourceLost(id));
+						yield* TestClock.adjust(0);
+						yield* Deferred.succeed(release, undefined);
+						yield* Fiber.join(intentional);
+						yield* Fiber.join(losing);
+						// A second delayed callback must remain harmless after the commit too.
+						yield* MeetingService.sourceLost(id);
+						const durable = yield* Schema.decodeUnknown(MeetingStore)(
+							f.saved(),
+						);
+						const affected = target === "main" ? [main.id, side.id] : [side.id];
+						for (const affectedId of affected) {
+							expect(
+								f.calls.filter((c) => c === `stop:${affectedId}`),
+							).toHaveLength(0);
+							expect(
+								f.calls.filter((c) => c === `drain:${affectedId}`),
+							).toHaveLength(0);
+							const record = durable.records.find((r) => r.id === affectedId);
+							if (operation === "delete") expect(record).toBeUndefined();
+							else expect(record?.state).toBe("cancelled");
+						}
+						if (target === "side")
+							expect(durable.records.find((r) => r.id === main.id)?.state).toBe(
+								"recording",
+							);
+						expect(f.requests).toHaveLength(0);
+						expect(f.prompts).toHaveLength(0);
+						yield* MeetingService.shutdown();
+					}).pipe(Effect.provide(f.layer));
+				},
+			);
+		}
+		it.effect(
+			`waits for source-loss finalization before ${operation} and shutdown`,
+			() => {
+				const f = setup();
+				return Effect.gen(function* () {
+					yield* configure;
+					const main = (yield* MeetingService.action("meetingMinutes"))
+						.records[0];
+					if (!main) return yield* Effect.die("Missing record");
+					yield* TestClock.adjust(5000);
+					const entered = yield* Deferred.make<void>();
+					const release = yield* Deferred.make<void>();
+					f.pauseStop(
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(release)),
+						),
+					);
+					const losing = yield* Effect.fork(MeetingService.sourceLost(main.id));
+					yield* Deferred.await(entered);
+					const intentional = yield* Effect.fork(
+						MeetingService[operation](main.id),
+					);
+					const shutdown = yield* Effect.fork(MeetingService.suspend());
+					yield* TestClock.adjust(0);
+					expect(f.calls).not.toContain(`cancel:${main.id}`);
+					expect(f.calls).not.toContain("delete:1");
+					yield* Deferred.succeed(release, undefined);
+					yield* Fiber.join(losing);
+					yield* Fiber.join(intentional);
+					yield* Fiber.join(shutdown);
+					yield* MeetingService.sourceLost(main.id);
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					expect(f.calls.filter((c) => c === `stop:${main.id}`)).toHaveLength(
+						1,
+					);
+					expect(f.calls.indexOf(`cancel:${main.id}`)).toBeGreaterThan(
+						f.calls.indexOf(`stopped:${main.id}`),
+					);
+					if (operation === "delete") expect(durable.records).toEqual([]);
+					else expect(durable.records[0]?.state).toBe("cancelled");
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+		it.effect(
+			`serializes recovery finalization with ${operation} and delayed loss`,
+			() => {
+				const f = setup();
+				return Effect.gen(function* () {
+					const id = yield* recordOnce;
+					yield* (yield* MeetingRepository).update((records) =>
+						records.map((r) => ({
+							...r,
+							state: "interrupted",
+							audio: "interrupted",
+							endedAt: Option.none(),
+						})),
+					);
+					const entered = yield* Deferred.make<void>();
+					const release = yield* Deferred.make<void>();
+					f.pauseStop(
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(release)),
+						),
+					);
+					const recovery = yield* Effect.fork(
+						Effect.either(MeetingService.process(id)),
+					);
+					yield* Deferred.await(entered);
+					const intentional = yield* Effect.fork(MeetingService[operation](id));
+					const losing = yield* Effect.fork(MeetingService.sourceLost(id));
+					yield* TestClock.adjust(0);
+					expect(f.calls).not.toContain(`cancel:${id}`);
+					yield* Deferred.succeed(release, undefined);
+					yield* Fiber.join(recovery);
+					yield* Fiber.join(intentional);
+					yield* Fiber.join(losing);
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					if (operation === "delete") expect(durable.records).toEqual([]);
+					else expect(durable.records[0]?.state).toBe("cancelled");
+					// One original stop and one recovery, never a third finalization from loss.
+					expect(f.calls.filter((c) => c === `stop:${id}`)).toHaveLength(2);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+		it.effect(
+			`allows ${operation} and shutdown during ASR without stale completion`,
+			() => {
+				const f = setup();
+				return Effect.gen(function* () {
+					const id = yield* recordOnce;
+					const entered = yield* Deferred.make<void>();
+					const release = yield* Deferred.make<void>();
+					f.pauseSubmit(
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(release)),
+						),
+					);
+					const processing = yield* Effect.fork(
+						Effect.either(MeetingService.process(id)),
+					);
+					yield* Deferred.await(entered);
+					yield* MeetingService[operation](id);
+					yield* MeetingService.suspend();
+					yield* Deferred.succeed(release, undefined);
+					yield* Fiber.join(processing);
+					yield* MeetingService.sourceLost(id);
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					if (operation === "delete") expect(durable.records).toEqual([]);
+					else expect(durable.records[0]?.state).toBe("cancelled");
+					expect(f.prompts).toHaveLength(0);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+		it.effect(
+			`allows ${operation} and shutdown during summary without stale completion`,
+			() => {
+				const f = setup();
+				return Effect.gen(function* () {
+					const id = yield* recordOnce;
+					const entered = yield* Deferred.make<void>();
+					const release = yield* Deferred.make<void>();
+					f.pauseSummary(
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(release)),
+						),
+					);
+					const processing = yield* Effect.fork(
+						Effect.either(MeetingService.process(id)),
+					);
+					yield* Deferred.await(entered);
+					yield* MeetingService[operation](id);
+					yield* MeetingService.suspend();
+					yield* Deferred.succeed(release, undefined);
+					yield* Fiber.join(processing);
+					yield* MeetingService.sourceLost(id);
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					if (operation === "delete") expect(durable.records).toEqual([]);
+					else expect(durable.records[0]?.state).toBe("cancelled");
+					expect(f.prompts).toHaveLength(1);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
+	it.effect(
+		"bounds hung provider translation cleanup so cancellation and shutdown progress",
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				yield* configure;
+				const main = (yield* MeetingService.action("meetingMinutes"))
+					.records[0];
+				if (!main) return yield* Effect.die("Missing record");
+				yield* MeetingService.action("liveAudioTranslate");
+				f.pauseTranslationStop(Effect.never);
+				const cancelling = yield* Effect.fork(MeetingService.cancel(main.id));
+				yield* TestClock.adjust(2000);
+				yield* Fiber.join(cancelling);
+				const shutdown = yield* Effect.fork(MeetingService.shutdown());
+				yield* TestClock.adjust(2000);
+				yield* Fiber.join(shutdown);
+				expect((yield* MeetingService.snapshot()).records[0]?.state).toBe(
+					"cancelled",
+				);
+				expect((yield* MeetingService.snapshot()).translating).toBe(false);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect("ignores stale source loss after completed processing", () => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.process(id);
+			const before = f.saved();
+			yield* MeetingService.sourceLost(id);
+			expect(f.saved()).toEqual(before);
+		}).pipe(Effect.provide(f.layer));
+	});
+	it.effect(
+		"anchors main and side marks to capture readiness after delayed startup",
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				yield* configure;
+				f.pauseStart(Effect.sleep(20000));
+				const starting = yield* Effect.fork(
+					MeetingService.action("meetingMinutes"),
+				);
+				yield* TestClock.adjust(20000);
+				const main = (yield* Fiber.join(starting)).records[0];
+				if (!main) return yield* Effect.die("Missing main");
+				expect(main.startedAt).toBe(20000);
+				yield* TestClock.adjust(5000);
+				const marked = yield* MeetingService.action("meetingRecordMark");
+				expect(marked.records[0]?.marks[0]?.startMs).toBe(5000);
+				const startingSide = yield* Effect.fork(
+					MeetingService.action("tempMeetingMinutes"),
+				);
+				yield* TestClock.adjust(20000);
+				const side = (yield* Fiber.join(startingSide)).records[0];
+				expect(side?.startedAt).toBe(45000);
+				yield* TestClock.adjust(5000);
+				const stopped = yield* MeetingService.action("meetingMinutes");
+				expect(stopped.records.find((r) => r.id === main.id)?.endedAt).toEqual(
+					Option.some(50000),
+				);
+				expect(stopped.records.find((r) => r.id === side?.id)?.endedAt).toEqual(
+					Option.some(50000),
+				);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
 	for (const first of [
 		"main-loss",
 		"side-loss",

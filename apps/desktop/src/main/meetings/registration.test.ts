@@ -1,10 +1,15 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Option } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { beforeEach, expect, it, vi } from "vitest";
+import { MeetingStore } from "../../../../../packages/edge/src/meetings/meeting-contracts";
 import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
-import { CAPTURE_CHUNK } from "../../shared/meeting-bridge";
+import {
+	CAPTURE_CHUNK,
+	MEETING_REQUEST,
+	MeetingReply,
+} from "../../shared/meeting-bridge";
 
 const ipc = vi.hoisted(() => ({
 	handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
@@ -17,13 +22,14 @@ const ipc = vi.hoisted(() => ({
 const capture = vi.hoisted(() => ({
 	id: "",
 	written: vi.fn(),
+	stopped: vi.fn(),
 	lost: (_id: string) => {},
 	wait: (): Promise<void> => Promise.resolve(),
 }));
 vi.mock("electron", () => ({
 	app: ipc.app,
 	ipcMain: ipc,
-	BrowserWindow: { getAllWindows: () => [] },
+	BrowserWindow: { getAllWindows: () => [], fromWebContents: () => ({}) },
 	dialog: {},
 	shell: {},
 }));
@@ -38,7 +44,10 @@ vi.mock("./capture-port", () => ({
 						capture.id = id;
 					}),
 				drain: () => Effect.void,
-				stop: () => Effect.void,
+				stop: () =>
+					Effect.sync(() => {
+						capture.stopped();
+					}),
 				cancel: () =>
 					Effect.promise(async () => {
 						await ipc.handlers.get("meetings:chunk")?.(
@@ -54,7 +63,7 @@ vi.mock("./capture-port", () => ({
 				startTranslation: () => Effect.void,
 				stopTranslation: () => Effect.void,
 			},
-			accepts: () => true,
+			accepts: (event: { command?: boolean }) => !event.command,
 			active: () => true,
 			files: {
 				write: () =>
@@ -177,6 +186,81 @@ it("clears standalone translating state and stops the provider after capture los
 			(await meetings.runtime.runPromise(MeetingService.snapshot())).notice,
 		).toContain("source or provider is unavailable");
 	} finally {
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("keeps cancel and source loss coherent across concurrent production IPC requests", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-cancel-ipc-"));
+	const renderer = "file:///synthetic-meetings/index.html";
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	let release = () => {};
+	let entered = () => {};
+	const writing = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const waiting = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	capture.wait = async () => {
+		entered();
+		await waiting;
+	};
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		await meetings.ready;
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing production meeting IPC");
+		const started = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "action", action: "meetingMinutes" }),
+		);
+		if (started._tag !== "ready" || !started.snapshot.records[0])
+			throw new Error("Missing recording");
+		const id = started.snapshot.records[0].id;
+		const cancelling = handler(event, { _tag: "cancel", id });
+		await writing;
+		capture.lost(id);
+		// Reads proceed while cancel awaits final chunk IO: IPC has no request lock.
+		const reading = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "read" }),
+		);
+		expect(reading._tag === "ready" && reading.snapshot.records[0]?.state).toBe(
+			"recording",
+		);
+		expect(capture.stopped).not.toHaveBeenCalled();
+		release();
+		const cancelled = Schema.decodeUnknownSync(MeetingReply)(await cancelling);
+		expect(
+			cancelled._tag === "ready" && cancelled.snapshot.records[0]?.state,
+		).toBe("cancelled");
+		await meetings.runtime.runPromise(MeetingService.sourceLost(id));
+		const durable = JSON.parse(
+			await readFile(join(root, "meetings-v1/history.json"), "utf8"),
+		) as unknown;
+		const stored = Schema.decodeUnknownSync(MeetingStore)(durable);
+		expect(stored.records[0]?.state).toBe("cancelled");
+		expect(capture.stopped).not.toHaveBeenCalled();
+		const deleted = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "delete", id, confirmed: true }),
+		);
+		expect(deleted._tag).toBe("ready");
+		await meetings.runtime.runPromise(MeetingService.sourceLost(id));
+		expect(
+			(await meetings.runtime.runPromise(MeetingService.snapshot())).records,
+		).toEqual([]);
+	} finally {
+		release();
 		await meetings.dispose();
 		await rm(root, { recursive: true, force: true });
 	}

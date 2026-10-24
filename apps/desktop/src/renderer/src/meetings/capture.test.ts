@@ -186,4 +186,78 @@ describe("real meeting recorder consumer with fake media devices", () => {
 		expect(f.stream.track.stop).toHaveBeenCalledTimes(1);
 		f.capture.dispose();
 	});
+	it("preserves standalone translation when a separate recording request fails", async () => {
+		const f = setup();
+		const close = vi.fn(async () => {});
+		const node = {
+			port: { onmessage: (_event: MessageEvent<unknown>) => {} },
+			connect: vi.fn(),
+		};
+		vi.stubGlobal("MediaStream", AudioStream);
+		vi.stubGlobal(
+			"AudioContext",
+			class {
+				close = close;
+				audioWorklet = { addModule: vi.fn(async () => {}) };
+				createMediaStreamSource = () => ({ connect: vi.fn() });
+				resume = async () => {};
+				destination = {};
+			},
+		);
+		vi.stubGlobal(
+			"AudioWorkletNode",
+			class {
+				port = node.port;
+				connect = node.connect;
+			},
+		);
+		try {
+			await f.capture.handle(request("translate", "translation"));
+			f.media.getUserMedia.mockRejectedValueOnce(
+				new Error("Unavailable selected microphone"),
+			);
+			await f.capture.handle(request("start", "main"));
+			expect(f.bridge.captureReply).toHaveBeenLastCalledWith(
+				expect.objectContaining({ success: false }),
+			);
+			expect(close).not.toHaveBeenCalled();
+			expect(f.system.track.stop).not.toHaveBeenCalled();
+			node.port.onmessage({
+				data: new ArrayBuffer(8),
+			} as MessageEvent<unknown>);
+			await f.capture.handle(request("stopTranslation", "translation"));
+			expect(f.bridge.pcm).toHaveBeenCalledOnce();
+			expect(close).toHaveBeenCalledOnce();
+			expect(f.system.track.stop).toHaveBeenCalledOnce();
+		} finally {
+			f.capture.dispose();
+		}
+	});
+	it("releases translation resources when translation initialization fails", async () => {
+		const f = setup();
+		const close = vi.fn(async () => {});
+		vi.stubGlobal("MediaStream", AudioStream);
+		vi.stubGlobal(
+			"AudioContext",
+			class {
+				close = close;
+				audioWorklet = {
+					addModule: vi.fn(async () => {
+						throw new Error("Worklet unavailable");
+					}),
+				};
+				createMediaStreamSource = () => ({ connect: vi.fn() });
+			},
+		);
+		try {
+			await f.capture.handle(request("translate", "translation"));
+			expect(f.bridge.captureReply).toHaveBeenLastCalledWith(
+				expect.objectContaining({ success: false }),
+			);
+			expect(close).toHaveBeenCalledOnce();
+			expect(f.system.track.stop).toHaveBeenCalledOnce();
+		} finally {
+			f.capture.dispose();
+		}
+	});
 });

@@ -1,7 +1,7 @@
-import { Either, Option, Schema } from "effect";
+import { Option } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MeetingAction } from "../../../shared/meeting-bridge";
 import type { GridVoiceInput } from "../../../shared/voice-surface";
+import { meetingTouchAction } from "../meetings/touch-action";
 import { meetingRequest } from "../meetings/useMeetings";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
@@ -82,7 +82,8 @@ function useHoldInput(
 	return useCallback(
 		(event: StripKeyEvent): void => {
 			if (event.keyAction === 0) input(event.keyCode, "down");
-			else if (event.voiceTouchEnd) input(event.keyCode, "touchEnd");
+			else
+				input(event.keyCode, event.voiceTouchEnd ? "touchEnd" : "touchCancel");
 		},
 		[input],
 	);
@@ -130,18 +131,8 @@ export function StripPanel(): React.JSX.Element {
 				(event) => {
 					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
 					holdKey.current(event);
-					if (event.keyAction !== 1) return;
-					const tile = layout.current?.tiles.find(
-						(tile) => tile.keyCode === event.keyCode,
-					);
-					if (
-						!tile ||
-						(tile.type === "mic" && tile.cellTheme !== "meetingAssistantTheme")
-					)
-						return;
-					const action = Schema.decodeUnknownEither(MeetingAction)(tile.type);
-					if (Either.isRight(action))
-						void meetingRequest({ _tag: "action", action: action.right });
+					const action = meetingTouchAction(event, layout.current);
+					if (action) void meetingRequest({ _tag: "action", action });
 				},
 			);
 	}, []);

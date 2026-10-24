@@ -246,7 +246,7 @@ export function createMeetingCapture(
 				await perform(request);
 				bridge.captureReply({ requestId: request.requestId, success: true });
 			} catch {
-				await stopTranslation();
+				if (request.operation === "translate") await stopTranslation();
 				bridge.captureReply({ requestId: request.requestId, success: false });
 			}
 		},

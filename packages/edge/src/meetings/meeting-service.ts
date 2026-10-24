@@ -77,6 +77,16 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						)
 						.pipe(Effect.zipRight(publish())),
 			);
+			// Provider work can finish after cancellation; it must not overwrite intent.
+			const patchWork = (
+				id: MeetingId,
+				transform: (record: MeetingRecord) => MeetingRecord,
+			) =>
+				patch(id, (record) =>
+					record.state === "cancelled" || record.state === "recording"
+						? record
+						: transform(record),
+				);
 			const find = Effect.fn("MeetingService.find")(function* (
 				id: MeetingId,
 			): Effect.fn.Return<MeetingRecord, MeetingError> {
@@ -91,7 +101,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			const stopTranslation = Effect.fn("MeetingService.stopTranslation")(
 				function* (): Effect.fn.Return<void> {
 					yield* capture.stopTranslation();
-					yield* provider.stopTranslation();
+					// A hung provider cleanup must not keep capture/shutdown locked.
+					yield* provider
+						.stopTranslation()
+						.pipe(Effect.timeoutOption("2 seconds"));
 					yield* Ref.update(ephemeral, (state) => ({
 						...state,
 						translating: false,
@@ -101,10 +114,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			const start = Effect.fn("MeetingService.start")(function* (
 				parent: MeetingRecord | undefined,
 			): Effect.fn.Return<void, MeetingError> {
-				const now = yield* Clock.currentTimeMillis;
 				const currentConfig = parent?.config ?? (yield* Ref.get(config));
 				const id = MeetingId.make(crypto.randomUUID());
 				yield* capture.start(id, currentConfig, parent?.id);
+				const now = yield* Clock.currentTimeMillis;
 				const record: MeetingRecord = {
 					id,
 					parentId: Option.fromNullable(parent?.id),
@@ -333,21 +346,31 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				id: MeetingId,
 				template: TemplateId,
 			): Effect.fn.Return<void, MeetingError> {
-				const record = yield* find(id);
-				if (!record.transcript.length) return yield* meetingError("Invalid");
-				yield* patch(id, (r) => ({
-					...r,
-					state: "processing",
-					summary: "processing",
-					errorCode: Option.none(),
-				}));
+				const record = yield* lock.withPermits(1)(
+					Effect.gen(function* () {
+						const current = yield* find(id);
+						if (
+							current.state === "cancelled" ||
+							current.state === "recording" ||
+							!current.transcript.length
+						)
+							return yield* meetingError("Invalid");
+						yield* patchWork(id, (r) => ({
+							...r,
+							state: "processing",
+							summary: "processing",
+							errorCode: Option.none(),
+						}));
+						return current;
+					}),
+				);
 				const minutes = yield* provider.summarize(
 					record.config,
 					record.transcript,
 					template,
 				);
 				const generatedAt = yield* Clock.currentTimeMillis;
-				yield* patch(id, (r) => ({
+				yield* patchWork(id, (r) => ({
 					...r,
 					minutes,
 					template,
@@ -364,7 +387,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				}));
 			});
 			const failed = (id: MeetingId, error: MeetingError) =>
-				patch(id, (r) => ({
+				patchWork(id, (r) => ({
 					...r,
 					state: "failed",
 					errorCode: Option.some(error.code),
@@ -425,36 +448,46 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				process: Effect.fn("MeetingService.process")(
 					(id: MeetingId): Effect.Effect<void, MeetingError> =>
 						Effect.gen(function* () {
-							let record = yield* find(id);
-							if (record.state === "recording" || record.state === "cancelled")
-								return yield* meetingError("Invalid");
-							if (record.audio !== "complete") {
-								yield* capture.stop(id);
-								yield* patch(id, (r) => ({ ...r, audio: "complete" }));
-							}
-							if (Option.isNone(record.endedAt)) {
-								const elapsed = yield* capture.duration(id);
-								if (!Number.isFinite(elapsed) || elapsed < 0)
-									return yield* meetingError("CaptureFailed");
-								yield* patch(id, (r) => ({
-									...r,
-									endedAt: Option.some(r.startedAt + Math.round(elapsed)),
-								}));
-								record = yield* find(id);
-							}
+							const record = yield* lock.withPermits(1)(
+								Effect.gen(function* () {
+									let record = yield* find(id);
+									if (
+										record.state === "recording" ||
+										record.state === "cancelled"
+									)
+										return yield* meetingError("Invalid");
+									if (record.audio !== "complete") {
+										yield* capture.stop(id);
+										yield* patchWork(id, (r) => ({ ...r, audio: "complete" }));
+									}
+									if (Option.isNone(record.endedAt)) {
+										const elapsed = yield* capture.duration(id);
+										if (!Number.isFinite(elapsed) || elapsed < 0)
+											return yield* meetingError("CaptureFailed");
+										yield* patchWork(id, (r) => ({
+											...r,
+											endedAt: Option.some(r.startedAt + Math.round(elapsed)),
+										}));
+										record = yield* find(id);
+									}
+									if (!record.transcript.length) {
+										yield* patchWork(id, (r) => ({
+											...r,
+											state: "processing",
+											transcription: "processing",
+											errorCode: Option.none(),
+										}));
+									}
+									return record;
+								}),
+							);
 							if (!record.transcript.length) {
-								yield* patch(id, (r) => ({
-									...r,
-									state: "processing",
-									transcription: "processing",
-									errorCode: Option.none(),
-								}));
 								const transcript = yield* provider.transcribe(
 									record.config,
 									id,
 									duration(record, yield* Clock.currentTimeMillis),
 								);
-								yield* patch(id, (r) => ({
+								yield* patchWork(id, (r) => ({
 									...r,
 									transcript,
 									transcription: "complete",
@@ -464,7 +497,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						}).pipe(
 							Effect.tapError((error) => failed(id, error)),
 							Effect.onInterrupt(() =>
-								patch(id, (r) => ({
+								patchWork(id, (r) => ({
 									...r,
 									state: "interrupted",
 									transcription:
@@ -557,7 +590,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					)
 						yield* stopTranslation();
 					yield* publish();
-				}),
+				}, lock.withPermits(1)),
 				delete: Effect.fn("MeetingService.delete")(function* (
 					id: MeetingId,
 				): Effect.fn.Return<void, MeetingError> {
@@ -574,7 +607,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						yield* stopTranslation();
 					yield* repo.remove(records.map((r) => r.id));
 					yield* publish();
-				}),
+				}, lock.withPermits(1)),
 				translationLost: Effect.fn("MeetingService.translationLost")(() =>
 					stopTranslation().pipe(
 						Effect.zipRight(
@@ -587,7 +620,17 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				sourceLost: Effect.fn("MeetingService.sourceLost")(function* (
 					id: MeetingId,
 				): Effect.fn.Return<void, MeetingError> {
-					const record = yield* find(id);
+					const record = (yield* repo.list()).find(
+						(record) => record.id === id,
+					);
+					// Queued callbacks may outlive explicit cancellation/deletion or processing.
+					if (
+						!record ||
+						record.state === "cancelled" ||
+						record.state === "completed" ||
+						record.state === "processing"
+					)
+						return;
 					if (record.state === "recording") yield* stop(record);
 					yield* patch(id, (r) => ({
 						...r,

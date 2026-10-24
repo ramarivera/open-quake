@@ -329,7 +329,12 @@ async function smoke(): Promise<void> {
 		await panel.webContents.executeJavaScript(
 			"window.__meetingNativeKeys=[];document.getElementById('root').addEventListener('quake-strip-key',event=>window.__meetingNativeKeys.push(event.detail));null;",
 		);
-		const nativeKey = async (action: string) => {
+		const nativeKey = async (action: string, cancelled = false) => {
+			const before = Schema.decodeUnknownSync(Schema.Int)(
+				await panel.webContents.executeJavaScript(
+					"window.__meetingNativeKeys.length",
+				),
+			);
 			const point = await panel.webContents.executeJavaScript(
 				`(() => {const b=document.querySelector('[data-meeting-action="${action}"]').getBoundingClientRect();return {x:b.x+b.width/2,y:480-b.y-b.height/2,keyCode:document.querySelector('[data-meeting-action="${action}"]').closest('[data-key-code]').dataset.keyCode};})()`,
 			);
@@ -340,17 +345,27 @@ async function smoke(): Promise<void> {
 					keyCode: Schema.String,
 				}),
 			)(point);
-			for (const state of [1, 0])
+			for (const state of cancelled ? [1] : [1, 0])
 				panel.webContents.send("quake:event", {
 					source: "mock",
 					kind: "touch",
 					points: [{ x: decoded.x, y: decoded.y, action: state }],
 				});
+			if (cancelled)
+				panel.webContents.send("quake:event", {
+					source: "mock",
+					kind: "status",
+					state: "disconnected",
+					reason: "synthetic-cancel",
+				});
 			await wait(
 				panel,
-				`window.__meetingNativeKeys.at(-1)?.keyCode === ${JSON.stringify(decoded.keyCode)} && window.__meetingNativeKeys.at(-1)?.keyAction === 1`,
+				`window.__meetingNativeKeys.length >= ${before + 2} && window.__meetingNativeKeys.at(-1)?.keyCode === ${JSON.stringify(decoded.keyCode)} && window.__meetingNativeKeys.at(-1)?.keyAction === 1 && !!window.__meetingNativeKeys.at(-1)?.voiceTouchEnd === ${!cancelled}`,
 			);
 		};
+		await nativeKey("meetingMinutes", true);
+		assert.equal((await request(panel, { _tag: "read" })).records.length, 0);
+		await capture(panel, "meetings-cancelled-touch");
 		const beforeMic = (await request(panel, { _tag: "read" })).mic;
 		await nativeKey("mic");
 		await wait(
@@ -574,6 +589,54 @@ async function smoke(): Promise<void> {
 			reloaded.records.find((r) => r.id === id)?.appliedTemplate._tag,
 			"Some",
 		);
+		// Concurrent user IPC and the production source-loss service callback share state.
+		const intentional = (
+			await request(management, { _tag: "action", action: "meetingMinutes" })
+		).records[0];
+		assert(intentional);
+		await Promise.all([
+			request(management, { _tag: "cancel", id: intentional.id }),
+			meetings.runtime.runPromise(MeetingService.sourceLost(intentional.id)),
+		]);
+		await meetings.runtime.runPromise(
+			MeetingService.sourceLost(intentional.id),
+		);
+		const cancelledState = (
+			await request(management, { _tag: "read" })
+		).records.find((r) => r.id === intentional.id)?.state;
+		assert.equal(cancelledState, "cancelled");
+		await capture(management, "meetings-cancellation-ipc");
+		await request(management, {
+			_tag: "delete",
+			id: intentional.id,
+			confirmed: true,
+		});
+		await meetings.runtime.runPromise(
+			MeetingService.sourceLost(intentional.id),
+		);
+		const deletionRetained = (
+			await request(management, { _tag: "read" })
+		).records.every((r) => r.id !== intentional.id);
+		assert(deletionRetained);
+		const durableIntent = Schema.decodeUnknownSync(MeetingStore)(
+			JSON.parse(
+				await readFile(join(directory, "meetings-v1/history.json"), "utf8"),
+			),
+		);
+		assert(durableIntent.records.every((r) => r.id !== intentional.id));
+		await writeFile(
+			join(scratch, "cancellation-ipc.json"),
+			JSON.stringify(
+				{
+					cancelledState,
+					deletionRetained,
+					durableDeletion: true,
+					cancelledTouchStarts: 0,
+				},
+				null,
+				2,
+			),
+		);
 		// Exercise retry IPC with actual retained synthetic audio, FFmpeg and durable
 		// history. No capture is started; only the recovery file path uses live I/O.
 		await management.loadURL(
@@ -683,7 +746,7 @@ async function smoke(): Promise<void> {
 		await capture(management, "meetings-fractional-recovery");
 		assert.deepEqual(errors, []);
 		process.stdout.write(
-			"Meetings native smoke PASS: shipped MeetAI; five native touch action keys; manual processing; private outputs; fractional FFmpeg duration recovered through retry IPC and durable history; shared maintenance/voice/monitor owners; cooldown; marks/side; real touch toolbar; translation; processing/success/failure; saved regeneration/restart; UTF-8 exports/cancel/failure; untrusted IPC; narrow/light/reduced motion; actual 48kHz mono MP3 mix/concat.\n",
+			"Meetings native smoke PASS: shipped MeetAI; five native touch action keys; cancelled touch rejection; cancellation/deletion with stale loss through concurrent IPC; manual processing; private outputs; fractional FFmpeg duration recovered through retry IPC and durable history; shared maintenance/voice/monitor owners; cooldown; marks/side; real touch toolbar; translation; processing/success/failure; saved regeneration/restart; UTF-8 exports/cancel/failure; untrusted IPC; narrow/light/reduced motion; actual 48kHz mono MP3 mix/concat.\n",
 		);
 	} catch (cause) {
 		exitCode = 1;
