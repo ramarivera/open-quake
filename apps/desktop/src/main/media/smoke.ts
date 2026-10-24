@@ -20,6 +20,7 @@ import {
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { registerHardware } from "../hardware";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { startMockDeviceBus } from "../mockDeviceBus";
@@ -123,6 +124,11 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	const unregisterHardware = registerHardware(
+		() => undefined,
+		() => management,
+		true,
+	);
 	let mockDisplays: readonly Display[] = [];
 	const lifecycleRuntime = ManagedRuntime.make(
 		DeviceLifecycle.Default({
@@ -632,6 +638,7 @@ async function smoke(): Promise<void> {
 	process.stdout.write(
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
+	unregisterHardware();
 	removeLifecycle();
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();

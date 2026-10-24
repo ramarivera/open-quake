@@ -20,3 +20,7 @@
 - [x] 4.3 Share activate and second-instance reopening recovery; prove closing all windows releases the owner and a second launch restarts it and unlocks recovery.
 - [x] 4.4 Apply the ten-minute Later cooldown after failed layout repair, publish safe diagnostic text and test automatic polling plus explicit retry.
 - [x] 4.5 Run all lane gates and native mock smoke, inspect screenshots, sync beads, commit/push, reply to and resolve the three threads with fix evidence. Do not merge PR #21.
+
+## 5. PR #21 hardware-controls merge round
+
+- [x] 5.1 Merge origin/main at 4f736cf, preserving hardware sessions and controls, typed screen-power discovery, lifecycle recovery and diagnostics, touch binding and StripPanel. Run all six lane gates plus media, hardware and lifecycle native mock smoke coverage, then commit and push without merging PR #21. Bead: open-quake-lih.11.1.10.

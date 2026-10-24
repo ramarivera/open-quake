@@ -214,3 +214,97 @@ naming fix commit `e485357b5f8fba31a24a9a7b45e8d899ff89469b`, followed by
 
 The scratch `thread-resolutions.json` and `push.log` retain delivery evidence.
 PR #21 has not been merged.
+
+## PR #21 hardware-controls merge round
+
+Inputs: lifecycle head `f4fb66602c9aaeb9efd356fe490e65aa5bb78c47` and
+`origin/main` at `4f736cf`, the merge of PR #22. This round only integrates
+those branches and updates their verification fixtures and delivery evidence.
+PR #21 remains open for the lead to merge.
+
+### Conflict resolutions
+
+- `apps/desktop/src/main/deviceBus.ts`: attach and refresh hardware sessions
+  within each connection scope, clear them on teardown, and leave hardware
+  replies to their session subscriber. Preserve lifecycle screen-power access,
+  explicit recovery, selected-path checks, reconnect backoff and the
+  late-arrival presence snapshot before the final retry delay.
+- `apps/desktop/src/main/index.ts`: compose hardware preferences and controls
+  with the existing runtime, use the hardware mock bus in explicit mock mode,
+  and register/dispose hardware IPC alongside lifecycle IPC. Preserve the
+  single-instance lock, shared second-instance/activate reopening path,
+  close-before-reopen ordering, wake handling and release fallback policy.
+- `apps/desktop/src/main/index.test.ts`: retain lifecycle dialog/shell mocks
+  and every late-arrival, second-instance and shutdown regression. Keep
+  main's stronger startup wait for an actual connected event.
+- `apps/desktop/src/main/media/smoke.ts`: retain both hardware registration
+  and lifecycle fixtures, including their cleanup. Preserve the diagnostic,
+  repair-failure notice, media and touch integration checks.
+- `apps/desktop/src/main/test/bundle-smoke.mjs`: share one power-monitor
+  emitter, retain lifecycle window/app/shell mocks and test default plus
+  packaged explicit mock mode without native device access.
+- `apps/desktop/src/preload/index.ts`: load both lifecycle and hardware APIs,
+  alongside the existing media, profile and event APIs.
+- `apps/desktop/src/renderer/src/App.tsx`: retain Connection diagnostics and
+  its persistent subscription, readiness/navigation behavior, Controls with
+  HardwareSettings, and the existing appearance and screen pages.
+- `packages/device/src/device-service.ts`: retain EIO recovery and selected
+  path connections, plus typed hardware writes and their in-flight drain
+  before close. Screen blanking delegates to typed `ScreenPower` through
+  that same lock. Keepalive uses that lock too, preserving serialized writes.
+  The lifecycle wrapper retains its existing write-failed error identity
+  after close; `sendHardware` retains its connection-closed identity.
+
+Two supporting integration edits accompany the conflict resolutions.
+`packages/device/src/protocol-adapter.ts` delegates its compatibility
+screen-power encoder to the typed command and retains HardwareReply decoding.
+The dedicated hardware smoke registers/disposes mock lifecycle IPC because
+ConnectionCheck now stays mounted while Controls is open. It never calls
+native display operations.
+
+Main's touch binding, touch modules, event forwarding and StripPanel files
+are unchanged relative to `4f736cf`. No hook files or hook configuration were
+changed. `core.hooksPath` stays `.husky/_`.
+
+### Verification
+
+All six lane gates passed on the resolved source:
+
+- `pnpm biome check packages apps`: 272 files, no fixes.
+- `pnpm typecheck --force`: six successful tasks, cache bypassed.
+- `pnpm test --force`: 697 tests, protocol 47, edge 27, device 348,
+  desktop 275; cache bypassed.
+- `pnpm build`: production main, preload and renderer build passed.
+- `pnpm --filter @open-quake/desktop test:bundle`: both default and explicit
+  mock modes passed; the explicit mock loaded/enumerated no native HID.
+- `openspec validate --all --strict`: 32 changes passed.
+
+`git diff --check` also passed. Media and lifecycle native checks share the
+existing media smoke entrypoint; it was run twice into separate `media/` and
+`lifecycle/` artifact directories. Both passed the diagnostic read/Re-detect,
+loading, resolution, readiness redirect, repair-failure notice, panel
+permission, image/media, strip profile and synthetic vendor-touch checks.
+The dedicated hardware native smoke passed firmware queries, LED lock policy,
+mic, brightness, volume coalescing/persistence, polling recovery, and
+light/dark/narrow/offline controls. Its isolated fixture now serves lifecycle
+IPC through the production registration. Chromium emitted scratch cache
+startup warnings; the process exited zero and all smoke assertions passed.
+
+Every Electron invocation used `OPEN_QUAKE_MOCK_DEVICE=1`, a lane scratch
+TMPDIR and `env -u ELECTRON_RUN_AS_NODE`. All started Electron processes exited.
+Screenshots inspected after the merge: diagnostic-layout-failed,
+panel-touch-complete, and hardware-narrow. Both Connection and Controls remain
+in the management navigation. Hardware effects remain unverified.
+
+Logs and screenshots are under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/device-lifecycle/merge-round-2/`.
+Logs are `biome.log`, `typecheck.log`, `test.log`, `build.log`, `bundle.log`,
+`openspec.log`, `media-smoke-build.log`, `media-smoke.log`,
+`hardware-smoke-build.log`, `hardware-smoke.log`, and `lifecycle-smoke.log`.
+Screenshots are in `media/`, `lifecycle/` and `hardware/`. The hardware runner
+requires its original screenshot directory under the hardware lane; originals
+are at `hw-controls/pr21-merge-round-2/`, with copies in this lane's evidence.
+
+OpenSpec task 5.1 maps to `open-quake-lih.11.1.10`. The cluster
+`open-quake-lih.11` stays open for the lead until PR #21 merges. No new audit
+coverage, dependency, firmware operation or real device access was introduced.

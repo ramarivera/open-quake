@@ -160,7 +160,10 @@ describe("desktop window lifecycle", () => {
 		electron.screen.getPrimaryDisplay.mockReturnValue(primary);
 		await import("./index");
 		await vi.waitFor(() =>
-			expect(vi.getTimerCount()).toBeGreaterThanOrEqual(3),
+			expect(windows().management.webContents.send).toHaveBeenCalledWith(
+				"quake:event",
+				{ source: "mock", kind: "status", state: "connected" },
+			),
 		);
 	});
 

@@ -44,11 +44,11 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 ### Data model
 
-Approved (Ramiro, 2026-10-23): MonitoringConfig stores masterEnabled, metric IDs, collector method, sample rate, app monitor settings and separate game overrides. MetricSample stores metric ID, collectedAt, unit and an availability-tagged value. ForegroundWindow contains only required window/app identity, not captured screen content.
+Approved (Ramiro, 2026-10-23): MonitoringConfig stores masterEnabled, metric IDs, collector method, sample rate, app monitor settings and separate monitoring overrides. MetricSample stores metric ID, collectedAt, unit and an availability-tagged value. ForegroundWindow contains only required window/app identity, not captured screen content.
 
 ### Data flow and lifecycle
 
-Approved (Ramiro, 2026-10-23): An enabled settings capability starts a scoped monitoring conductor. Host collectors return normalized samples through contracts; the conductor marks stale values using an injected clock and fans out one snapshot stream. Gaming mode overlays the saved normal config; leaving it reads the latest normal snapshot. Foreground-window requests use one query lock and cache, separate from metric collection.
+Approved (Ramiro, 2026-10-23): An enabled settings capability starts a scoped monitoring conductor. Host collectors return normalized samples through contracts; the conductor marks stale values using an injected clock and fans out one snapshot stream. The monitoring override overlays the saved normal config; leaving it reads the latest normal snapshot. Foreground-window requests use one query lock and cache, separate from metric collection.
 
 ### Failure contract
 

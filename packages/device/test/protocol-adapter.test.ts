@@ -26,7 +26,7 @@ describe("protocol event adapter", () => {
 		expect(decodeReport(new Uint8Array(32))).toEqual(
 			Either.right(Option.none()),
 		);
-		expect(decodeReport(report(0x55, 46, [1, 2, 3, 4]))).toEqual(
+		expect(decodeReport(report(0x55, 0x40, [1, 2, 3, 4]))).toEqual(
 			Either.right(Option.none()),
 		);
 	});

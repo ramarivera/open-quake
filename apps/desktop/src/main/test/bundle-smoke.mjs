@@ -58,6 +58,7 @@ const display = {
 };
 screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
+const powerMonitor = new EventEmitter();
 const ipcMain = new EventEmitter();
 ipcMain.handle = () => {};
 ipcMain.removeHandler = () => {};
@@ -70,7 +71,6 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
-const powerMonitor = new EventEmitter();
 const shell = { openExternal: () => Promise.resolve() };
 globalThis.openQuakeBundleSmoke = {
 	powerMonitor,
