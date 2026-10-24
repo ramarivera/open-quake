@@ -21,20 +21,25 @@ function mergeIcons(
 	incoming: readonly IconAsset[],
 ) {
 	const icons = [...current];
+	const fingerprint = (icon: IconAsset) =>
+		createHash("sha256")
+			.update(JSON.stringify([icon.name, icon.tags, icon.data]))
+			.digest("hex");
+	const ids = new Set(current.map((icon) => icon.id));
+	const contents = new Set(current.map(fingerprint));
 	for (const icon of incoming) {
-		const content = JSON.stringify([icon.name, icon.tags, icon.data]);
-		const same = (value: IconAsset) =>
-			JSON.stringify([value.name, value.tags, value.data]) === content;
-		if (icons.some(same)) continue;
+		const content = fingerprint(icon);
+		if (contents.has(content)) continue;
 		let id = icon.id;
-		if (icons.some((value) => value.id === id && !same(value))) {
-			const base = `import-${createHash("sha256").update(content).digest("hex")}`;
+		if (ids.has(id)) {
+			const base = `import-${content}`;
 			id = base;
 			let suffix = 1;
-			while (icons.some((value) => value.id === id && !same(value)))
-				id = `${base}-${suffix++}`;
+			while (ids.has(id)) id = `${base}-${suffix++}`;
 		}
-		if (!icons.some((value) => value.id === id)) icons.push({ ...icon, id });
+		icons.push({ ...icon, id });
+		ids.add(id);
+		contents.add(content);
 	}
 	return icons;
 }
