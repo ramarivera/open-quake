@@ -321,7 +321,9 @@ async function main() {
 		await management.webContents.executeJavaScript(
 			`document.querySelector('[data-page="agents"]').click()`,
 		);
-		await wait(`document.body.innerText.includes('Main')`);
+		await wait(
+			`document.querySelector('[aria-label="Agents"]') && document.body.innerText.includes('Main') && !document.body.innerText.includes('Loading Agent configuration')`,
+		);
 		await capture("base-agents");
 		await request(management, {
 			type: "ha.connect",
