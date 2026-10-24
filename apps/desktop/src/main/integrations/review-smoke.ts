@@ -91,6 +91,7 @@ async function main() {
 			height: 850,
 			show: false,
 			webPreferences: {
+				backgroundThrottling: false,
 				preload: join(smokeDirectory, "../management-review-preload/index.mjs"),
 				sandbox: false,
 				contextIsolation: true,
@@ -174,6 +175,10 @@ async function main() {
 		);
 	const captures: { file: string; sha256: string }[] = [];
 	const capture = async (name: string) => {
+		await management.webContents.executeJavaScript(
+			"document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))",
+		);
+		await new Promise((resolve) => setTimeout(resolve, 80));
 		const bytes = (await management.webContents.capturePage()).toPNG();
 		const file = join(scratch, `${name}.png`);
 		await writeFile(file, bytes);
@@ -268,7 +273,9 @@ async function main() {
 		await management.webContents.executeJavaScript(
 			`document.querySelector('[data-page="ha"]').click()`,
 		);
-		await wait(`document.body.innerText.includes('Disconnected')`);
+		await wait(
+			`document.querySelector('h1')?.textContent === 'Home Assistant' && document.body.innerText.includes('Disconnected')`,
+		);
 		await wait(
 			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
 		);
