@@ -466,6 +466,68 @@ async function smoke() {
 			),
 			"true",
 		);
+		// Hidden Chromium does not retain platform pointer capture. Model that DOM
+		// boundary explicitly while exercising production React handlers and IPC.
+		await js(`window.__reviewWrites = 0;
+			window.__reviewSetItem = Storage.prototype.setItem;
+			Storage.prototype.setItem = function(key, value) { if (key === ${JSON.stringify(APPEARANCE_STORAGE_KEY)}) window.__reviewWrites++; return window.__reviewSetItem.call(this,key,value); };
+			{const resizer=document.querySelector('.mc-resizer');let captured;
+			resizer.setPointerCapture=id=>{captured=id};
+			resizer.hasPointerCapture=id=>captured===id;
+			resizer.releasePointerCapture=id=>{captured=undefined;resizer.dispatchEvent(new PointerEvent('lostpointercapture',{pointerId:id,bubbles:true}));};}null;`);
+		const dragThemes = calls.themes;
+		const pointer = async (type: string, x: number) => {
+			await js(
+				`document.querySelector('.mc-resizer').dispatchEvent(new PointerEvent(${JSON.stringify(type)},{pointerId:77,button:0,clientX:${x},bubbles:true}));null;`,
+			);
+			await settle(30);
+		};
+		await pointer("pointerdown", 218);
+		for (const x of [250, 275, 300]) await pointer("pointermove", x);
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"300px",
+		);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			0,
+			"No storage writes during drag",
+		);
+		assert.equal(calls.themes, dragThemes, "No theme IPC during drag");
+		await pointer("pointerup", 300);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			1,
+			"One persisted width on release",
+		);
+		assert.equal(
+			calls.themes,
+			dragThemes,
+			"Width must not rewrite native theme",
+		);
+		await pointer("pointerdown", 300);
+		await pointer("pointermove", 330);
+		await js(
+			"document.querySelector('.mc-resizer').releasePointerCapture(77);null;",
+		);
+		await settle();
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"300px",
+		);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			1,
+			"Canceled drag never persists",
+		);
+		await js(`Storage.prototype.setItem = window.__reviewSetItem;
+			{const resizer=document.querySelector('.mc-resizer');
+			delete resizer.setPointerCapture;delete resizer.hasPointerCapture;delete resizer.releasePointerCapture;}null;`);
+
 		let view = await agent({
 			type: "create",
 			id: "writer",
@@ -1265,87 +1327,7 @@ async function smoke() {
 		);
 		win.setContentSize(1320, 960);
 		await settle();
-		await js(`window.__reviewWrites = 0; window.__reviewPointer = 0;
-			window.__reviewSetItem = Storage.prototype.setItem;
-			Storage.prototype.setItem = function(key, value) { if (key === ${JSON.stringify(APPEARANCE_STORAGE_KEY)}) window.__reviewWrites++; return window.__reviewSetItem.call(this,key,value); };
-			document.querySelector('.mc-resizer').addEventListener('pointerdown', event => window.__reviewPointer = event.pointerId);null;`);
-		const dragThemes = calls.themes;
-		const resizer = await js(
-			"JSON.stringify(document.querySelector('.mc-resizer').getBoundingClientRect().toJSON())",
-		);
-		const bounds: { x: number; y: number; width: number } = JSON.parse(resizer);
-		const startX = Math.round(bounds.x + bounds.width / 2),
-			dragY = Math.round(bounds.y + 100);
-		// CDP delivers trusted mouse input to hidden Chromium without taking OS focus.
-		win.webContents.debugger.attach("1.3");
-		const mouse = async (type: string, x: number, buttons: number) => {
-			await win.webContents.debugger.sendCommand("Input.dispatchMouseEvent", {
-				type,
-				x,
-				y: dragY,
-				button: type === "mouseMoved" ? "none" : "left",
-				buttons,
-				clickCount: type === "mouseMoved" ? 0 : 1,
-			});
-			await settle(30);
-		};
-		assert.equal(
-			await js(`document.elementFromPoint(${startX},${dragY})?.className`),
-			"mc-resizer",
-		);
-		await mouse("mouseMoved", startX, 0);
-		await mouse("mousePressed", startX, 1);
-		assert.equal(
-			await js("document.body.dataset.resizing"),
-			"true",
-			"Trusted mouse input must start the drag",
-		);
-		for (const x of [250, 275, 300]) await mouse("mouseMoved", x, 1);
-		assert.equal(
-			await js(
-				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
-			),
-			"300px",
-		);
-		assert.equal(
-			await js("window.__reviewWrites"),
-			0,
-			"No storage writes during drag",
-		);
-		assert.equal(calls.themes, dragThemes, "No theme IPC during drag");
-		await mouse("mouseReleased", 300, 0);
-		await settle();
-		assert.equal(
-			await js("window.__reviewWrites"),
-			1,
-			"One persisted width on release",
-		);
-		assert.equal(
-			calls.themes,
-			dragThemes,
-			"Width must not rewrite native theme",
-		);
-		await mouse("mousePressed", 303, 1);
-		await mouse("mouseMoved", 330, 1);
-		await js(
-			"document.querySelector('.mc-resizer').releasePointerCapture(window.__reviewPointer);null;",
-		);
-		await mouse("mouseMoved", 330, 1);
-		await settle();
-		assert.equal(
-			await js(
-				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
-			),
-			"300px",
-		);
-		assert.equal(
-			await js("window.__reviewWrites"),
-			1,
-			"Canceled drag never persists",
-		);
-		await mouse("mouseReleased", 330, 0);
-		win.webContents.debugger.detach();
-		await js("Storage.prototype.setItem = window.__reviewSetItem;null;");
+
 		const widthBefore = await js(
 			"document.querySelector('.sidebar').getBoundingClientRect().width",
 		);
@@ -1450,6 +1432,8 @@ async function smoke() {
 					mock: true,
 					nativeAppPasteVerified: false,
 					lazyAssetsAndShellRegressionsVerified: true,
+					sidebarPointerCaptureModeled: true,
+					nativePointerCaptureVerified: false,
 					clipboardGifFilenameVerified: true,
 					captionOriginalAndMetadataVerified: true,
 					panelIsolationVerified: true,
