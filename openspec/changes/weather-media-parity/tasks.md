@@ -21,6 +21,10 @@ Each numbered task has a child bead under `open-quake-lih.7.1` referencing this 
 
 - [x] 4.1 Address PR #29 round 1's nine threads with regressions for expiry-relative refresh, portable fixtures and smoke artifacts, IP coordinates, Japanese and UK city lookup, outage text and debounced city persistence. Revalidate all six gates and both native mock smokes, push fixes and reply with attribution before resolving. Bead: `open-quake-lih.7.1.7`.
 
+## 5. Main integration
+
+- [ ] 5.1 Merge current origin/main normally, preserve all weather/media features and shared main/preload registration with awaitable shutdown, fix integration defects with production-path failure/race regressions, inspect fresh PR feedback, and run six fresh forced/uncached gates plus sequential native media and combined mock proofs. Retain logs/capture hashes in `weather-media/integration-round-1` under parity scratch. Keep native/device/package acceptance open. Bead: `open-quake-lih.7.1.8`.
+
 ## Verification evidence
 
 All six lane gates passed on 2026-10-24. Root tests report 907 passing tests, including 445 desktop tests. Focused weather/media tests cover real conductors with injected IO, Effect TestClock cache/deadline behavior, city sequencing, rejected writes, controls, schemas and renderer state. Both native Electron mock smokes passed with production preload/IPC/renderers and no local server or device access. Captures include the clock with both cards, city verification and IP consent, and DK-Player playing, paused, idle/guide, unavailable, navigation-disabled, pause-disabled and unknown-duration states. The existing media smoke also covers narrow layout, light theme, reduced motion and strip touch routing.

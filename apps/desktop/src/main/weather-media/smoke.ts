@@ -17,8 +17,11 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
+import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
+import { waitForVoice } from "../voice/smoke-wait";
 import { WeatherMediaController } from "./controller";
 import { registerWeatherMedia } from "./index";
 import { weatherSettingsLive } from "./settings-repository";
@@ -143,6 +146,23 @@ async function smoke(): Promise<void> {
 		() => management,
 		renderer,
 	);
+	const voice = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "weather-media-smoke",
+		panel: () => panel,
+		management: () => management,
+		renderer,
+	});
+	const monitor = registerMonitor(
+		base,
+		() => management,
+		() => panel,
+		{
+			collect: () => Effect.die("Disabled monitor must not collect host data"),
+		},
+		renderer,
+	);
 	const knob = registerKnob(
 		() => panel,
 		() => [management, panel],
@@ -211,6 +231,15 @@ async function smoke(): Promise<void> {
 				query: { surface: "panel" },
 			}),
 		]);
+		await waitForVoice(panel, 5000);
+		assert.equal(
+			await evaluate(
+				management,
+				"window.quakeMonitor.request({_tag:'read'}).then(reply => reply._tag === 'success' && !reply.view.settings.enabled)",
+			),
+			true,
+			"monitor reads coexist with weather/media on the shared preload",
+		);
 		await waitFor(
 			panel,
 			"!!document.querySelector('.oq-clock')",
@@ -495,7 +524,9 @@ async function smoke(): Promise<void> {
 		management.destroy();
 		panel.destroy();
 		await registration.dispose();
+		await monitor.dispose();
 		await knob.dispose();
+		await voice.dispose();
 		removeLifecycle();
 		await lifecycleRuntime.dispose();
 		await clock.dispose();

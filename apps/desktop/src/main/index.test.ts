@@ -5,9 +5,12 @@ import type {
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerMedia } from "./media";
+import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
+import { registerVoiceSurface } from "./voice";
+import { registerWeatherMedia } from "./weather-media";
 
 const native = vi.hoisted(() => ({
 	layer: undefined as Layer.Layer<HidTransport> | undefined,
@@ -127,9 +130,14 @@ vi.mock("./weather-media", async () => {
 	const { Layer } = await import("effect");
 	return {
 		weatherMediaLive: vi.fn(() => Layer.empty),
-		registerWeatherMedia: vi.fn(() => ({ dispose: async () => undefined })),
+		registerWeatherMedia: vi.fn(() => ({
+			dispose: vi.fn(async () => undefined),
+		})),
 	};
 });
+vi.mock("./monitor", () => ({
+	registerMonitor: vi.fn(() => ({ dispose: vi.fn(async () => undefined) })),
+}));
 vi.mock("./clock", async () => {
 	const { Layer } = await import("effect");
 	return {
@@ -153,6 +161,19 @@ vi.mock("./profiles/profile-ipc", async () => {
 			}),
 		),
 		registerProfiles: vi.fn(),
+	};
+});
+vi.mock("./voice", async () => {
+	const { Effect } = await import("effect");
+	return {
+		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
+		toneSinks: vi.fn(() => ({ play: vi.fn() })),
+		registerVoiceSurface: vi.fn(() => ({
+			onDevice: vi.fn(async () => undefined),
+			publish: vi.fn(async () => undefined),
+			knobVoice: vi.fn(() => Effect.void),
+			dispose: vi.fn(async () => undefined),
+		})),
 	};
 });
 
@@ -222,6 +243,17 @@ describe("desktop window lifecycle", () => {
 		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
 		expect(registerProfiles).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerProfiles).mock.calls[0]?.[0]()).toBe(management);
+		expect(registerWeatherMedia).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerWeatherMedia).mock.calls[0]?.[1]()).toBe(
+			management,
+		);
+		expect(registerMonitor).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerMonitor).mock.calls[0]?.[1]()).toBe(management);
+		expect(vi.mocked(registerMonitor).mock.calls[0]?.[2]()).toBe(panel);
+		expect(registerVoiceSurface).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerVoiceSurface).mock.calls[0]?.[0].panel()).toBe(
+			panel,
+		);
 		expect(panel.options).toMatchObject({
 			x: 0,
 			y: 0,
@@ -455,6 +487,42 @@ describe("desktop window lifecycle", () => {
 		).toBeLessThan(
 			vi.mocked(profiles.connect).mock.invocationCallOrder[1] ?? 0,
 		);
+	});
+
+	it("awaits weather/media and monitor disposal through repeated quit requests", async () => {
+		const weather = vi.mocked(registerWeatherMedia).mock.results[0]?.value;
+		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
+		const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;
+		if (!weather || !monitor || !voice)
+			throw new Error("Shared owners must register");
+		let finishWeather = () => {};
+		let finishMonitor = () => {};
+		const weatherClosed = new Promise<void>((resolve) => {
+			finishWeather = resolve;
+		});
+		const monitorClosed = new Promise<void>((resolve) => {
+			finishMonitor = resolve;
+		});
+		vi.mocked(weather.dispose).mockImplementationOnce(() => weatherClosed);
+		vi.mocked(monitor.dispose).mockImplementationOnce(() => monitorClosed);
+		try {
+			expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+			await vi.waitFor(() => expect(weather.dispose).toHaveBeenCalledOnce());
+			expect(monitor.dispose).not.toHaveBeenCalled();
+			expect(electron.app.quit).not.toHaveBeenCalled();
+			expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+			finishWeather();
+			await vi.waitFor(() => expect(monitor.dispose).toHaveBeenCalledOnce());
+			expect(electron.app.quit).not.toHaveBeenCalled();
+			finishMonitor();
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+			expect(voice.dispose).toHaveBeenCalledOnce();
+			expect(weather.dispose).toHaveBeenCalledOnce();
+			expect(monitor.dispose).toHaveBeenCalledOnce();
+		} finally {
+			finishWeather();
+			finishMonitor();
+		}
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {

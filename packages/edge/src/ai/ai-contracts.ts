@@ -1,4 +1,11 @@
 import * as Schema from "effect/Schema";
+import {
+	GenerationControls,
+	ModelRole,
+	ModelRoles,
+	ProviderKind,
+	RoleSelection,
+} from "./ai-workflow-contracts.js";
 
 export const ProfileId = Schema.UUID.pipe(Schema.brand("AiProfileId"));
 export type ProfileId = typeof ProfileId.Type;
@@ -53,6 +60,9 @@ export const ProviderProfile = Schema.Struct({
 	baseUrl: Schema.NonEmptyTrimmedString,
 	endpointPolicy: Schema.Literal("remote", "loopback"),
 	modelId: Schema.NonEmptyTrimmedString,
+	provider: Schema.optional(ProviderKind),
+	models: Schema.optional(ModelRoles),
+	controls: Schema.optional(GenerationControls),
 	auth: Schema.Literal("none", "apiKey", "codexDevice"),
 	credentialRef: Schema.optional(CredentialRef),
 	authGeneration: Count,
@@ -72,10 +82,16 @@ export const ProfileSummary = Schema.Struct({
 	modelId: Schema.String,
 	auth: ProviderProfile.fields.auth,
 	capabilities: Capabilities,
+	provider: ProviderProfile.fields.provider,
+	models: ProviderProfile.fields.models,
+	controls: ProviderProfile.fields.controls,
 });
 export type ProfileSummary = typeof ProfileSummary.Type;
 export const InferenceRequest = Schema.Struct({
 	profileId: ProfileId,
+	modelRole: Schema.optional(ModelRole),
+	persona: Schema.optional(RoleSelection),
+	controls: Schema.optional(GenerationControls),
 	messages: Schema.Array(
 		Schema.Struct({
 			role: Schema.Literal("system", "user", "assistant"),

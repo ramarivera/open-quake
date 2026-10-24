@@ -1,0 +1,119 @@
+/* ClawBotInput (QuakeBotInputIconView.vue). */
+.clawbot-input {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: rgba(28, 28, 30, 0.65);
+	backdrop-filter: blur(40px) saturate(180%);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+	color: #ffffff;
+	font-family:
+		-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+		sans-serif;
+}
+.clawbot-input-header {
+	flex-shrink: 0;
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.clawbot-input-icon {
+	display: flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	background: linear-gradient(135deg, #ff9500 0%, #ffb340 100%);
+}
+.clawbot-input-title {
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.clawbot-input-body {
+	position: relative;
+	flex: 1;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+.clawbot-input-box {
+	flex: 1;
+	box-sizing: border-box;
+	width: 100%;
+	resize: none;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	outline: none;
+	background: rgba(255, 255, 255, 0.06);
+	color: #ffffff;
+	font: inherit;
+	line-height: 1.6;
+}
+.clawbot-input-box::placeholder {
+	color: rgba(255, 255, 255, 0.35);
+}
+.clawbot-input-box:focus {
+	border-color: rgba(255, 149, 0, 0.5);
+	box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.1);
+}
+.clawbot-input-actions {
+	display: flex;
+	flex: none;
+}
+.clawbot-input-button {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	background: rgba(255, 255, 255, 0.05);
+	color: rgba(255, 255, 255, 0.7);
+	font: inherit;
+	font-weight: 500;
+	cursor: pointer;
+}
+.clawbot-input-button:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.1);
+	border-color: rgba(255, 149, 0, 0.4);
+}
+.clawbot-input-button:active:not(:disabled) {
+	background: rgba(255, 255, 255, 0.18);
+	border-color: rgba(255, 149, 0, 0.6);
+	transform: scale(0.97);
+}
+.clawbot-input-button:disabled {
+	cursor: default;
+}
+.clawbot-input-warning {
+	position: absolute;
+	left: 50%;
+	z-index: 5;
+	box-sizing: border-box;
+	transform: translateX(-50%);
+	border: 1px solid rgba(255, 179, 64, 0.5);
+	background: linear-gradient(
+		135deg,
+		rgba(92, 58, 8, 0.92),
+		rgba(60, 36, 4, 0.92)
+	);
+	backdrop-filter: blur(8px);
+	color: #fff3d6;
+	text-align: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+	:root[data-motion="full"] .clawbot-input-warning {
+		animation: clawbot-input-warning 0.18s ease-out;
+	}
+}
+@keyframes clawbot-input-warning {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 6px);
+	}
+}

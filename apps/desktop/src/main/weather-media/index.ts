@@ -47,8 +47,21 @@ export function registerWeatherMedia(
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 ): { dispose: () => Promise<void> } {
+	let disposed = false;
+	let shutdown: Promise<void> | undefined;
+	const pending = new Set<Promise<unknown>>();
+	const track = <A>(operation: Promise<A>): Promise<A> => {
+		pending.add(operation);
+		void operation.then(
+			() => pending.delete(operation),
+			() => pending.delete(operation),
+		);
+		return operation;
+	};
 	const broadcast = async (): Promise<void> => {
+		if (disposed) return;
 		const snapshot = await runtime.runPromise(WeatherMediaController.read());
+		if (disposed) return;
 		for (const window of BrowserWindow.getAllWindows())
 			if (!window.isDestroyed() && !window.webContents.isDestroyed())
 				window.webContents.send(WEATHER_MEDIA_CHANGED, snapshot);
@@ -57,6 +70,7 @@ export function registerWeatherMedia(
 		WEATHER_MEDIA_REQUEST,
 		async (event, input: unknown): Promise<WeatherMediaReply> => {
 			if (
+				disposed ||
 				!BrowserWindow.fromWebContents(event.sender) ||
 				event.senderFrame !== event.sender.mainFrame ||
 				!canRequestWeatherMedia(
@@ -72,35 +86,50 @@ export function registerWeatherMedia(
 					code: "QUAKE.WEATHER.REQUEST_INVALID",
 					message: "Weather/media request was rejected",
 				};
-			const reply = await runtime.runPromise(
-				WeatherMediaController.request(input),
+			return track(
+				(async () => {
+					const reply = await runtime.runPromise(
+						WeatherMediaController.request(input),
+					);
+					if (input._tag === "configure" || input._tag === "media")
+						await broadcast();
+					return reply;
+				})(),
 			);
-			if (input._tag === "configure" || input._tag === "media")
-				await broadcast();
-			return reply;
 		},
 	);
 	// The stub is side-effect-free. A future approved adapter shares this poller.
 	let polling: Promise<void> | undefined;
 	const timer = setInterval(() => {
 		if (
+			disposed ||
 			polling ||
 			!BrowserWindow.getAllWindows().some(
 				(window) => !window.isDestroyed() && window.isVisible(),
 			)
 		)
 			return;
-		polling = broadcast();
-		void polling.finally(() => {
-			polling = undefined;
-		});
+		polling = track(broadcast());
+		void polling.then(
+			() => {
+				polling = undefined;
+			},
+			() => {
+				polling = undefined;
+			},
+		);
 	}, 1500);
 	return {
-		dispose: async () => {
+		dispose: () => {
+			if (shutdown) return shutdown;
+			disposed = true;
 			clearInterval(timer);
 			ipcMain.removeHandler(WEATHER_MEDIA_REQUEST);
-			await polling;
-			await runtime.dispose();
+			shutdown = (async () => {
+				await Promise.allSettled([...pending]);
+				await runtime.dispose();
+			})();
+			return shutdown;
 		},
 	};
 }

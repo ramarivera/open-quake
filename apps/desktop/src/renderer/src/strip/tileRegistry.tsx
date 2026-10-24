@@ -3,6 +3,10 @@ import { ClockMusicSlot, ClockWeatherSlot } from "../weather-media/ClockCards";
 import { rendererWeatherLocale, useWeatherMedia } from "../weather-media/hooks";
 import { PlayerCard } from "../weather-media/PlayerCard";
 import type { StripTile } from "./geometry";
+import type { StripVoiceContext } from "./overlays/voice/voice-context";
+import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
+import { ClawBotTile } from "./tiles/clawBot/ClawBotTile";
+import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
 import { ClockTile } from "./tiles/clock/ClockTile";
 import { useClockNow } from "./tiles/clock/clockHooks";
 import {
@@ -11,6 +15,10 @@ import {
 	useClockSettings,
 } from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
+import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
+import { useMonitor } from "./tiles/monitor/useMonitor";
+import { previewSnapshot } from "./tiles/monitor/view-model";
+import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
 /**
  * Everything a registered tile may read; tiles never fetch their own data.
@@ -21,6 +29,8 @@ export interface StripTileContext {
 	readonly now: Date | undefined;
 	/** The wallpaper session's saved clock format. */
 	readonly hourFormat: HourFormat;
+	/** Voice and chat state for the AI tiles (strip-voice-ui). */
+	readonly voice: StripVoiceContext;
 }
 export interface StripTileProps {
 	readonly tile: StripTile;
@@ -95,11 +105,49 @@ function PlayerSlot({
 	) : null;
 }
 
+function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
+	const live =
+		new URLSearchParams(window.location.search).get("surface") === "panel";
+	const monitor = useMonitor(live);
+	return (
+		<div
+			style={{
+				width: tile.box.width,
+				height: tile.box.height,
+				overflow: "hidden",
+			}}
+		>
+			<div
+				style={{
+					width: 1920,
+					height: 480,
+					transformOrigin: "0 0",
+					transform: `scale(${tile.box.width / 1920}, ${tile.box.height / 480})`,
+				}}
+			>
+				<MonitorPanel
+					settings={monitor.settings}
+					snapshot={live ? monitor.snapshot : previewSnapshot()}
+					media={monitor.view?.media[monitor.settings.styleId]}
+					preview={!live}
+				/>
+			</div>
+		</div>
+	);
+}
+
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map([
 		["dkDesktopClock", ClockSlot],
 		["playAudio", PlayerSlot],
+		// strip-voice-ui: AI Copilot 5×2, ClawBotView 4×2, ClawBotInput 2×2, AI keys.
+		["aiChatView", AiCopilotTile],
+		["quakeBot", ClawBotTile],
+		["quakeBotInput", ClawBotInputTile],
+		["aiChat", VoiceKeyTile],
+		["clawbot", VoiceKeyTile],
+		["systemMonitorPanel", MonitorSlot],
 	]);
 
 export const stripTileFor = (type: string): StripTileComponent =>

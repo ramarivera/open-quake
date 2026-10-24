@@ -1,0 +1,181 @@
+import { Option } from "effect";
+import { useEffect, useRef, useState } from "react";
+import "../../css-properties";
+import { type StripStringKey, stripText } from "../../overlays/voice/strings";
+import { useSubTouchTap } from "../../overlays/voice/sub-touch";
+import type { StripTileProps } from "../../tileRegistry";
+import { checkSend, inputScale } from "./input-state";
+import "./clawBotInput.css";
+
+const WARNING_MS = 1800;
+
+/**
+ * ClawBotInput (`quakeBotInput`, 2×2; QBI, strip-voice-ui "ClawBotInput").
+ * "Open WebChat" is omitted: it puts the gateway token in a URL (AI-186).
+ */
+export function ClawBotInputTile({
+	tile,
+	context,
+}: StripTileProps): React.JSX.Element {
+	const voice = context.voice;
+	const { width, height } = tile.box;
+	const s = inputScale(width, height);
+	const state = voice.view.input;
+	const interactive = voice.surface === "panel";
+	const [text, setText] = useState("");
+	const [warning, setWarning] = useState<StripStringKey | undefined>();
+	const box = useRef<HTMLTextAreaElement>(null);
+	const send = useRef<HTMLButtonElement>(null);
+	const attach = useRef<HTMLButtonElement>(null);
+	// Voice partials and finals overwrite the box (QBI:371-462).
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the revision marks new voice text.
+	useEffect(() => {
+		if (state.revision > 0) setText(state.voice.text);
+	}, [state.revision]);
+	useEffect(() => {
+		if (!warning) return;
+		const timer = setTimeout(() => setWarning(undefined), WARNING_MS);
+		return () => clearTimeout(timer);
+	}, [warning]);
+	const onSend = (): void => {
+		const check = checkSend(state, text);
+		if (check._tag === "warn") setWarning(check.key);
+		if (check._tag !== "send") return;
+		void voice
+			.request({
+				_tag: "SendText",
+				keyCode: check.keyCode,
+				agentId: check.agentId,
+				message: check.message,
+			})
+			.then((reply) => {
+				if (reply._tag === "ok")
+					setText((current) => (current === text ? "" : current));
+			})
+			.catch(() => undefined);
+	};
+	const onAttach = (): void => {
+		void voice.request({ _tag: "PickFiles" }).then((reply) => {
+			if (reply._tag === "files" && reply.paths.length > 0)
+				setText((value) =>
+					[value.trimEnd(), ...reply.paths].filter(Boolean).join("\n"),
+				);
+		});
+	};
+	// A tap on the strip focuses the strip window first (QBI:598-653).
+	const onFocusRequest = (): void => {
+		void voice.request({ _tag: "FocusPanel" }).then(() => box.current?.focus());
+	};
+	useSubTouchTap(send, onSend);
+	useSubTouchTap(attach, onAttach);
+	useSubTouchTap(box, onFocusRequest);
+	const agent = Option.getOrElse(state.agentName, () => "");
+	return (
+		<div
+			className="clawbot-input"
+			style={{ width, height, borderRadius: tile.tileRadius || 24 }}
+		>
+			<div
+				className="clawbot-input-header"
+				style={{ height: 52 * s, padding: `0 ${18 * s}px`, gap: 10 * s }}
+			>
+				<span
+					className="clawbot-input-icon"
+					style={{
+						width: 28 * s,
+						height: 28 * s,
+						borderRadius: 8 * s,
+						fontSize: 15 * s,
+					}}
+				>
+					✏️
+				</span>
+				<span className="clawbot-input-title" style={{ fontSize: 15 * s }}>
+					{stripText(voice.locale, "quakeBotInputIconView.title")}
+					{agent === "" ? "" : ` · ${agent}`}
+				</span>
+			</div>
+			<div
+				className="clawbot-input-body"
+				style={{
+					padding: `${18 * s}px ${12 * s}px ${15 * s}px`,
+					marginTop: -8 * s,
+					gap: 10 * s,
+				}}
+			>
+				<textarea
+					ref={box}
+					className="clawbot-input-box"
+					rows={6}
+					value={text}
+					readOnly={!interactive}
+					placeholder={
+						interactive
+							? stripText(voice.locale, "quakeBotInputIconView.placeholder")
+							: undefined
+					}
+					data-quake-sub-touch="quakeBotInputTextarea"
+					onChange={(event) => setText(event.target.value)}
+					style={{
+						minHeight: 120 * s,
+						borderRadius: 16 * s,
+						padding: `${16 * s}px ${20 * s}px`,
+						fontSize: 16 * s,
+					}}
+				/>
+				<div className="clawbot-input-actions" style={{ gap: 12 * s }}>
+					{(
+						[
+							[
+								send,
+								"📤",
+								"quakeBotInputIconView.quickActions.send.label",
+								onSend,
+							],
+							[
+								attach,
+								"📎",
+								"quakeBotInputIconView.quickActions.fileAttach.label",
+								onAttach,
+							],
+						] as const
+					).map(([ref, icon, label, action]) => (
+						<button
+							key={label}
+							ref={ref}
+							type="button"
+							className="clawbot-input-button"
+							data-quake-sub-touch={label}
+							disabled={!interactive}
+							onClick={action}
+							style={{
+								minHeight: 48 * s,
+								borderRadius: 20 * s,
+								fontSize: 14 * s,
+								gap: 6 * s,
+							}}
+						>
+							<span aria-hidden="true">{icon}</span>
+							{stripText(voice.locale, label)}
+						</button>
+					))}
+				</div>
+			</div>
+			{warning ? (
+				<div
+					className="clawbot-input-warning"
+					role="alert"
+					style={{
+						top: 8 * s,
+						maxWidth: 300 * s,
+						fontSize: 15 * s,
+						padding: `${8 * s}px ${14 * s}px`,
+						borderRadius: 12 * s,
+					}}
+				>
+					{stripText(voice.locale, warning)}
+				</div>
+			) : null}
+		</div>
+	);
+}

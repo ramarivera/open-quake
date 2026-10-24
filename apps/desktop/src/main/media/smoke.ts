@@ -26,6 +26,7 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { startMockDeviceBus } from "../mockDeviceBus";
+import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { makeDisplay } from "../test/display";
 import {
@@ -36,6 +37,8 @@ import {
 	stripFixtureEnvelope,
 	vividProfile,
 } from "../test/strip-fixtures";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
+import { waitForVoice } from "../voice/smoke-wait";
 import { WeatherMediaController } from "../weather-media/controller";
 import { registerWeatherMedia } from "../weather-media/index";
 import { weatherSettingsLive } from "../weather-media/settings-repository";
@@ -145,6 +148,14 @@ async function smoke(): Promise<void> {
 		),
 		() => management,
 	);
+	const voice = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "smoke-A",
+		panel: () => panel,
+		management: () => management,
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+	});
 	const knob = registerKnob(
 		() => panel,
 		() => [management, panel],
@@ -166,6 +177,11 @@ async function smoke(): Promise<void> {
 	const clock = registerClock(
 		ManagedRuntime.make(ClockLive(directory)),
 		() => management,
+	);
+	const monitor = registerMonitor(
+		directory,
+		() => management,
+		() => panel,
 	);
 	const unregisterHardware = registerHardware(
 		() => undefined,
@@ -689,14 +705,20 @@ async function smoke(): Promise<void> {
 	await panel.webContents.executeJavaScript(`(() => {
 		window.__subTouch = [];
 		const tile = document.querySelector('[data-state="tile"][data-key-code="2,8"]');
+		// ClawBot now has production sub-targets. Isolate this synthetic registry probe.
+		for (const target of tile.querySelectorAll('[data-quake-sub-touch]')) target.removeAttribute('data-quake-sub-touch');
 		const scroll = document.createElement('div');
 		scroll.dataset.quakeSubTouch = 'scroll'; scroll.dataset.supportQuakeMove = 'true';
 		scroll.style.cssText = 'position:absolute;inset:0'; tile.appendChild(scroll);
 		for (const phase of ['start', 'end']) scroll.addEventListener('quake-sub-touch-' + phase, e => window.__subTouch.push(e.detail));
 	})()`);
+	await settle(50);
 	mockTouch.emitTouchReport(touchAt(1800, 360));
 	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
-	await settle(30);
+	await waitForVoice(
+		panel,
+		"window.__subTouch.at(-1)?.subElementId === 'scroll'",
+	);
 	assert.equal(
 		await panel.webContents.executeJavaScript(
 			"window.__subTouch.at(-1)?.subElementId",
@@ -712,7 +734,7 @@ async function smoke(): Promise<void> {
 	await settle(30); // Deliver the real MutationObserver callback.
 	mockTouch.emitTouchReport(touchAt(1800, 360));
 	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
-	await settle(30);
+	await waitForVoice(panel, "window.__subTouch.length >= 4");
 	assert.deepEqual(
 		await panel.webContents.executeJavaScript(
 			`window.__subTouch.map(({subElementId, phase, confirmedTap}) => ({subElementId, phase, confirmedTap}))`,
@@ -745,6 +767,8 @@ async function smoke(): Promise<void> {
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
 	await clock.dispose();
+	await voice.dispose();
+	await monitor.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(
