@@ -44,10 +44,12 @@ export function registerKnobRuntime(
 	let stream: Fiber.RuntimeFiber<void> | undefined;
 	let disposed = false;
 	let pending = Promise.resolve();
+	const lifetime = new AbortController();
+	const run = <A, E>(effect: Effect.Effect<A, E, KnobModel>): Promise<A> =>
+		runtime.runPromise(effect, { signal: lifetime.signal });
 	const initialize = (): Promise<void> => {
-		initialized ??= runtime
-			.runPromise(load.pipe(Effect.flatMap(KnobModel.configure)))
-			.then(() => {
+		initialized ??= run(load.pipe(Effect.flatMap(KnobModel.configure))).then(
+			() => {
 				if (!disposed)
 					stream = runtime.runFork(
 						Effect.gen(function* () {
@@ -61,7 +63,8 @@ export function registerKnobRuntime(
 							);
 						}),
 					);
-			});
+			},
+		);
 		return initialized;
 	};
 	ipcMain.handle(
@@ -82,7 +85,9 @@ export function registerKnobRuntime(
 			const command = Schema.decodeUnknownSync(KnobRequest)(input);
 			try {
 				await initialize();
-				return await runtime.runPromise(
+				if (disposed)
+					return { _tag: "failure", code: "QUAKE.KNOB.DISPATCH_FAILED" };
+				return await run(
 					Effect.gen(function* () {
 						if (command._tag !== "Read") yield* KnobModel.dispatch(command);
 						return {
@@ -117,7 +122,8 @@ export function registerKnobRuntime(
 				.then(async () => {
 					if (disposed) return;
 					await initialize();
-					await runtime.runPromise(
+					if (disposed) return;
+					await run(
 						Effect.gen(function* () {
 							const { context } = yield* KnobModel.snapshot();
 							const sessionId = context.session.sessionId;
@@ -155,13 +161,14 @@ export function registerKnobRuntime(
 		async refresh(): Promise<void> {
 			if (disposed) return;
 			await initialize();
-			await runtime.runPromise(
-				load.pipe(Effect.flatMap(KnobModel.synchronize)),
-			);
+			if (disposed) return;
+			await run(load.pipe(Effect.flatMap(KnobModel.synchronize)));
 		},
 		async dispose(): Promise<void> {
 			disposed = true;
 			ipcMain.removeHandler(KNOB_REQUEST);
+			// Interrupt registration-owned loads/dispatches before draining the queue.
+			lifetime.abort();
 			await pending;
 			if (stream) await runtime.runPromise(Fiber.interrupt(stream));
 			await runtime.dispose();

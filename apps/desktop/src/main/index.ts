@@ -41,7 +41,9 @@ import {
 import { registerLifecycle } from "./lifecycle/registration";
 import { MediaLive, registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
+import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
+import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
 const rendererURL =
@@ -140,6 +142,28 @@ if (!app.requestSingleInstanceLock()) {
 		let panelWin = createPanelWindow(panelTarget);
 		let managementWin = createManagementWindow();
 		let bus: DeviceBus | undefined;
+		// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
+		// play through hardware-controls; the mock bus answers them without HID.
+		const voice = registerVoiceSurface({
+			mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
+			tones: toneSinks(createToneRecorder(), {
+				play: (_serial, tone) => {
+					const hardware = bus?.hardware?.();
+					if (hardware)
+						runtime.runFork(
+							hardware.playTone(tone).pipe(
+								Effect.tapError((error) =>
+									Effect.logWarning("Voice tone failed", error.code),
+								),
+								Effect.ignore,
+							),
+						);
+				},
+			}),
+			serial: () => "quake",
+			panel: () => panelWin,
+			management: () => managementWin,
+		});
 		const managementURL = new URL(rendererURL);
 		managementURL.searchParams.set("surface", "management");
 		managementURL.searchParams.set("rotation", "0");
@@ -155,6 +179,7 @@ if (!app.requestSingleInstanceLock()) {
 			{
 				profiles: knobProfileBinding(profiles.runtime, profiles.select),
 				hardware: () => bus?.hardware?.(),
+				voice: voice.knobVoice,
 			},
 		);
 		const focusManagement = (): void => {
@@ -175,6 +200,11 @@ if (!app.requestSingleInstanceLock()) {
 		registerClock(
 			ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 			() => managementWin,
+		);
+		const monitor = registerMonitor(
+			app.getPath("userData"),
+			() => managementWin,
+			() => panelWin,
 		);
 		const profileUpdates = profiles.runtime.runFork(
 			ProfileService.subscribeCommittedProfiles().pipe(
@@ -349,6 +379,9 @@ if (!app.requestSingleInstanceLock()) {
 								() => [panelWin],
 							);
 							bus.on((event) => {
+								// Gate new holds synchronously and cancel in main before
+								// renderer touch teardown can synthesize a normal release.
+								void voice.onDevice(event);
 								forward(event);
 								if (event.kind === "status") {
 									void lifecycle.then((service) =>
@@ -377,6 +410,12 @@ if (!app.requestSingleInstanceLock()) {
 			running = undefined;
 			if (fiber) {
 				stopping = stopping.then(async () => {
+					await voice.onDevice({
+						source: mock ? "mock" : "hid",
+						kind: "status",
+						state: "disconnected",
+						reason: "scope-closed",
+					});
 					if (mock) await profiles.disconnect("desktop-preview");
 					await lifecycle.then((service) =>
 						lifecycleRuntime.runPromise(service.lock()),
@@ -454,9 +493,11 @@ if (!app.requestSingleInstanceLock()) {
 			disposeHardware();
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 			void stopBus().then(async () => {
+				await monitor.dispose();
 				await lifecycleRuntime.dispose();
 				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));
 				await knob.dispose();
+				await voice.dispose();
 				await profiles.dispose();
 				await runtime.dispose();
 				quitFinished = true;

@@ -1,6 +1,6 @@
 # Tasks
 
-These are future implementation tasks. This lane creates specs only; no checkbox is complete. The parent creates one epic for this change and one issue per numbered task, using each task's text as its description and this OpenSpec path as its reference. Do not close implementation issues on planning-only evidence.
+The system-monitor-panel change implements a seven-module collection/panel subset. These broader tasks also require app/window monitoring, Bluetooth and monitoring override, so no checkbox is complete. The parent creates one epic for this change and one issue per numbered task, using each task's text as its description and this OpenSpec path as its reference. Do not close implementation issues on planning-only evidence.
 
 ## 1. Contracts and evidence
 

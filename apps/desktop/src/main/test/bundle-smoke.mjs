@@ -98,6 +98,12 @@ const systemPreferences = {
 	getMediaAccessStatus: () => "denied",
 };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
+// The voice surface writes the clipboard only on a renderer request; the smoke sends none.
+const clipboard = {
+	writeText: () => {
+		throw new Error("Bundle smoke must not write the clipboard");
+	},
+};
 globalThis.openQuakeBundleSmoke = {
 	desktopCapturer,
 	systemPreferences,
@@ -112,6 +118,7 @@ globalThis.openQuakeBundleSmoke = {
 	protocol,
 	net,
 	session,
+	clipboard,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -127,7 +134,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

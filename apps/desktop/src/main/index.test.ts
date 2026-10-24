@@ -151,6 +151,19 @@ vi.mock("./profiles/profile-ipc", async () => {
 		registerProfiles: vi.fn(),
 	};
 });
+vi.mock("./voice", async () => {
+	const { Effect } = await import("effect");
+	return {
+		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
+		toneSinks: vi.fn(() => ({ play: vi.fn() })),
+		registerVoiceSurface: vi.fn(() => ({
+			onDevice: vi.fn(async () => undefined),
+			publish: vi.fn(async () => undefined),
+			knobVoice: vi.fn(() => Effect.void),
+			dispose: vi.fn(async () => undefined),
+		})),
+	};
+});
 
 function displayEvent(name: string): void {
 	const listeners = electron.screen.on.mock.calls.filter(

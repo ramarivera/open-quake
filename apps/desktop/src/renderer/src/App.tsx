@@ -7,6 +7,7 @@ import { CaptureHost } from "./meetings/CaptureHost";
 import { MeetingHistory } from "./meetings/MeetingHistory";
 import { StripPanel } from "./strip/StripPanel";
 import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
+import { MonitorSettings } from "./strip/tiles/monitor/MonitorSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -185,6 +186,7 @@ function ManagementSurface({
 									wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
 								}
 							/>
+							<MonitorSettings />
 						</>
 					) : page === "meetings" ? (
 						<MeetingHistory />

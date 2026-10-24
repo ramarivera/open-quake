@@ -55,6 +55,25 @@ function fixture(tile?: TouchTile) {
 describe("strip touch consumer", () => {
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
+	it("link loss cancels held and delayed key ups without a voice touch end", () => {
+		for (const lifted of [false, true]) {
+			const { controller, keys } = fixture();
+			controller.event(touch(20, 20));
+			if (lifted) controller.event(touch(20, 20, 0));
+			controller.event({
+				source: "mock",
+				kind: "status",
+				state: "disconnected",
+				reason: "transport-ended",
+			});
+			vi.runAllTimers();
+			expect(keys).toEqual([
+				{ keyCode: "1,1", keyAction: 0 },
+				{ keyCode: "1,1", keyAction: 1 },
+			]);
+			controller.dispose();
+		}
+	});
 	it("holds the original key across slide-off and other tiles, releases anywhere after 10ms", () => {
 		const { controller, keys } = fixture();
 		controller.event(touch(20, 20));
