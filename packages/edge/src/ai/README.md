@@ -86,6 +86,14 @@ Kimi/DeepSeek reasoning_content tool-call patch cannot be reached here.
 `ai-provider-quirks.ts` is the executable table. Recovered defaults are evidence,
 not current live model qualification or silent cross-provider fallbacks.
 
+Mandatory Kimi sampling supplies missing ranges only on the prepared profile
+snapshot, after validating caller values. Explicit ranges still constrain the
+mandatory values. The saved profile remains unchanged. DeepSeek also rejects
+the vision role with text-only messages, even when a profile advertises images.
+Routing-role controls come from the request independently of profile defaults;
+Auto disables thinking and search without inheriting daily reasoning effort.
+Daily and deepThink requests retain the profile's configured controls.
+
 `AiVoiceService.submit` accepts explicit modes or `auto`. Auto uses the routing
 model with at most 2048 output tokens and a 300-second deadline. A bounded,
 strict JSON decoder accepts only the recovered categories plus agents,
@@ -98,6 +106,9 @@ chat/agents/HA/shortcut/meeting/action consumers and grants no execution rights.
 There is no complete ChatService or these integration handlers in this checkout.
 Desktop key editor and voice-press bindings remain the responsibility of those
 consumer lanes; no renderer was changed here.
+The caller must bind that route to its own conversation identity and clear it
+when starting a new conversation. This service does not accept a conversation
+identifier or maintain a shared session registry.
 
 `ROLE_PRESETS` ships 126 recovered prompts with verbatim names for en/zh/ja/ko/
 de/fr/es/it. Decision 12 excludes IDs 65, 122, 124 and 125: escape-box, DAN and
@@ -137,6 +148,10 @@ readiness to 10 seconds, and playback to duration plus 10 seconds capped at 120
 seconds. Player and WebSocket ports own partially acquired native resources and
 must honor interruption. Host microphone/resampling, native playback, answer
 batching and hardware behavior are separate open voice-stt-tts tasks.
+Recognition allows 10 seconds for run-task plus readiness, limits PCM sends
+to the remaining 60-second capture budget, and allows 15 seconds for
+finish-task plus the final response. Timeout closes and aborts the socket and
+releases the shared speech lease so subsequent capture and playback can run.
 
 Run `pnpm --filter @open-quake/edge test`. Fixtures use fake HTTP/WebSocket and
 Effect TestClock only. Tests exercise the facade, transcript and player

@@ -72,8 +72,14 @@ export function prepareWorkflow(
 	const modelId =
 		profile.models?.[role] ?? (role === "daily" ? profile.modelId : undefined);
 	if (!modelId) return Either.left(new AiConfigInvalid());
-	const controls = { ...profile.controls, ...request.controls };
+	// Classification has independent controls; daily defaults must not enable
+	// reasoning or search on a separately selected routing model.
+	const controls =
+		role === "routing"
+			? { ...request.controls }
+			: { ...profile.controls, ...request.controls };
 	const sampling = { ...request.sampling };
+	let samplingLimits = profile.samplingLimits;
 	const provider = profile.provider ?? "generic";
 	const options: {
 		-readonly [K in keyof ProviderOptions]: ProviderOptions[K];
@@ -124,10 +130,21 @@ export function prepareWorkflow(
 			return invalid();
 		sampling.temperature = temperature;
 		sampling.topP = 0.95;
+		// Caller sampling was validated before preparation. Supply constraints for
+		// mandatory provider values on this snapshot, retaining explicit limits.
+		samplingLimits = {
+			...samplingLimits,
+			temperature: samplingLimits.temperature ?? {
+				min: temperature,
+				max: temperature,
+			},
+			topP: samplingLimits.topP ?? { min: 0.95, max: 0.95 },
+		};
 		if (modelId === "kimi-k2.5" || controls.thinking !== undefined)
 			options.thinking = { type: controls.thinking ? "enabled" : "disabled" };
 	} else if (provider === "deepseek") {
 		if (
+			role === "vision" ||
 			request.requestedCapabilities.includes("images") ||
 			request.messages.some((m) => m.content.some((p) => p._tag === "image"))
 		)
@@ -145,7 +162,7 @@ export function prepareWorkflow(
 	)
 		return invalid();
 	return Either.right({
-		profile: { ...profile, modelId },
+		profile: { ...profile, modelId, samplingLimits },
 		request: { ...request, sampling, controls },
 		providerOptions: options,
 	});

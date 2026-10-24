@@ -56,6 +56,7 @@ export class SpeechPhaseTimeout extends Schema.TaggedError<SpeechPhaseTimeout>()
 		phase: Schema.Literal(
 			"connect",
 			"configure",
+			"capture",
 			"final",
 			"synthesis",
 			"playerReady",

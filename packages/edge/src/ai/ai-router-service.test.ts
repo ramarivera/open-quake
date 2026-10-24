@@ -16,6 +16,7 @@ import {
 	AiVoiceTargets,
 	type VoiceDispatch,
 } from "./ai-router-service.js";
+import { AiProviderService } from "./ai-service.js";
 import { workflowLayer, workflowProfile } from "./ai-test-fixtures.js";
 
 const request: VoiceRequest = {
@@ -46,6 +47,88 @@ const decision = (action: string, extraData = "") =>
 	});
 
 describe("Auto key mode", () => {
+	it.effect(
+		"classifies independently of daily reasoning and preserves daily/deepThink effort",
+		() =>
+			Effect.gen(function* () {
+				for (const reasoningEffort of ["medium", "high"] as const) {
+					for (const routing of ["gpt-5-mini", "gpt-5.1-mini", "gpt-5.1"]) {
+						const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];
+						const dispatches: VoiceDispatch[] = [];
+						yield* Effect.gen(function* () {
+							const repository = yield* AiRepository;
+							const profile = {
+								...workflowProfile,
+								provider: "openai" as const,
+								models: { daily: "gpt-5.1", deepThink: "gpt-5.1", routing },
+								controls: { thinking: true, reasoningEffort, webSearch: true },
+							};
+							yield* repository.put(profile);
+							expect(
+								(yield* (yield* AiVoiceService).submit(request)).route,
+							).toBe("normal");
+							expect(dispatches).toHaveLength(1);
+							expect(calls[0]?.profile.modelId).toBe(routing);
+							expect(calls[0]?.request.controls).toEqual({
+								thinking: false,
+								webSearch: false,
+							});
+							expect(calls[0]?.providerOptions).toEqual({
+								max_completion_tokens: 2048,
+								...(routing === "gpt-5-mini"
+									? {}
+									: { reasoning_effort: "low" }),
+							});
+							const providers = yield* AiProviderService;
+							for (const modelRole of ["daily", "deepThink"] as const) {
+								const generation = yield* providers.generate({
+									profileId: profile.id,
+									modelRole,
+									messages: [
+										{
+											role: "user",
+											content: [{ _tag: "text", text: "hello" }],
+										},
+									],
+									sampling: {},
+									requestedCapabilities: [],
+								});
+								yield* Stream.runDrain(generation.events);
+								expect(calls.at(-1)?.providerOptions).toEqual({
+									reasoning_effort: reasoningEffort,
+									web_search_options: { search_context_size: "medium" },
+								});
+							}
+							const stored = yield* repository.get(profile.id);
+							expect(Option.isSome(stored) && stored.value.controls).toEqual(
+								profile.controls,
+							);
+						}).pipe(
+							Effect.provide(
+								layer(
+									{
+										open: (input) => {
+											calls.push(input);
+											return Effect.succeed(
+												Stream.fromIterable([
+													{
+														_tag: "textDelta",
+														textDelta: decision("standardChat"),
+														kind: "generation",
+													},
+													{ _tag: "completed" },
+												]),
+											);
+										},
+									},
+									dispatches,
+								),
+							),
+						);
+					}
+				}
+			}),
+	);
 	it.effect(
 		"routes every recovered category and agent/shortcut/meeting extensions via the facade",
 		() =>

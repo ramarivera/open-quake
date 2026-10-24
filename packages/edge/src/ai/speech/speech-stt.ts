@@ -1,4 +1,4 @@
-import { Deferred, Effect, Fiber, Schema, Stream } from "effect";
+import { Clock, Deferred, Effect, Fiber, Schema, Stream } from "effect";
 import { type AiError, AiProtocolInvalid } from "../ai-errors.js";
 import type { SttProfile } from "./speech-contracts.js";
 import { SpeechPhaseTimeout } from "./speech-errors.js";
@@ -65,7 +65,6 @@ export function recognizeSocket(
 			);
 			const taskId = crypto.randomUUID().replaceAll("-", "");
 			const ready = yield* Deferred.make<void, AiError>();
-			const stopped = yield* Deferred.make<void>();
 			const result = yield* Deferred.make<
 				string,
 				AiError | SpeechPhaseTimeout
@@ -79,23 +78,6 @@ export function recognizeSocket(
 					.sort(([a], [b]) => a - b)
 					.map(([, value]) => value)
 					.join("");
-			yield* socket.send(
-				JSON.stringify({
-					header: { action: "run-task", task_id: taskId, streaming: "duplex" },
-					payload: {
-						task_group: "audio",
-						task: "asr",
-						function: "recognition",
-						model: profile.model,
-						parameters: {
-							format: "pcm",
-							sample_rate: 24000,
-							punctuation_prediction_enabled: true,
-						},
-						input: {},
-					},
-				}),
-			);
 			const reader = Effect.gen(function* () {
 				while (true) {
 					const event = yield* socket.receive.pipe(
@@ -145,56 +127,86 @@ export function recognizeSocket(
 				}
 			});
 			const sender = Effect.gen(function* () {
-				yield* Deferred.await(ready).pipe(
-					Effect.timeoutFail({
-						duration: "10 seconds",
-						onTimeout: () => new SpeechPhaseTimeout("configure"),
-					}),
-				);
+				yield* socket
+					.send(
+						JSON.stringify({
+							header: {
+								action: "run-task",
+								task_id: taskId,
+								streaming: "duplex",
+							},
+							payload: {
+								task_group: "audio",
+								task: "asr",
+								function: "recognition",
+								model: profile.model,
+								parameters: {
+									format: "pcm",
+									sample_rate: 24000,
+									punctuation_prediction_enabled: true,
+								},
+								input: {},
+							},
+						}),
+					)
+					.pipe(
+						Effect.zipRight(Deferred.await(ready)),
+						Effect.timeoutFail({
+							duration: "10 seconds",
+							onTimeout: () => new SpeechPhaseTimeout("configure"),
+						}),
+					);
 				let count = 0;
+				const captureDeadline = (yield* Clock.currentTimeMillis) + 60000;
 				yield* Stream.runForEach(
 					frames.pipe(Stream.interruptAfter("60 seconds")),
-					(bytes) => {
-						if (!bytes.length || bytes.length > 960 || bytes.length % 2)
-							return Effect.fail(new AiProtocolInvalid());
-						count++;
-						return socket.send(bytes);
-					},
+					(bytes) =>
+						Effect.gen(function* () {
+							if (!bytes.length || bytes.length > 960 || bytes.length % 2)
+								return yield* new AiProtocolInvalid();
+							count++;
+							const remaining =
+								captureDeadline - (yield* Clock.currentTimeMillis);
+							return yield* socket.send(bytes).pipe(
+								Effect.timeoutFail({
+									duration: Math.max(0, remaining),
+									onTimeout: () => new SpeechPhaseTimeout("capture"),
+								}),
+							);
+						}),
 				);
-				if (!count) {
-					yield* Deferred.succeed(result, "");
-					return;
-				}
+				if (!count) return "";
 				finishing = true;
-				yield* socket.send(
-					JSON.stringify({
-						header: {
-							action: "finish-task",
-							task_id: taskId,
-							streaming: "duplex",
-						},
-						payload: { input: {} },
-					}),
-				);
-				yield* Deferred.succeed(stopped, undefined);
+				return yield* socket
+					.send(
+						JSON.stringify({
+							header: {
+								action: "finish-task",
+								task_id: taskId,
+								streaming: "duplex",
+							},
+							payload: { input: {} },
+						}),
+					)
+					.pipe(
+						Effect.zipRight(Deferred.await(result)),
+						Effect.timeoutFail({
+							duration: "15 seconds",
+							onTimeout: () => new SpeechPhaseTimeout("final"),
+						}),
+					);
 			});
 			const readerFiber = yield* reader.pipe(
 				Effect.catchAll((error) => Deferred.fail(result, error)),
 				Effect.forkScoped,
 			);
-			const senderFiber = yield* sender.pipe(
-				Effect.catchAll((error) => Deferred.fail(result, error)),
-				Effect.forkScoped,
-			);
 			const final = yield* Effect.raceFirst(
-				Deferred.await(result),
-				Deferred.await(stopped).pipe(
-					Effect.zipRight(Effect.sleep("15 seconds")),
-					Effect.zipRight(Effect.fail(new SpeechPhaseTimeout("final"))),
-				),
+				sender,
+				// Reader failures interrupt a blocked send. Success still waits for
+				// finish-task to complete within the same final-phase deadline.
+				Deferred.await(result).pipe(Effect.zipRight(Effect.never)),
 			);
 			yield* Fiber.interrupt(readerFiber);
-			yield* Fiber.interrupt(senderFiber);
 			return final;
 		}),
 	);

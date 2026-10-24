@@ -1,5 +1,8 @@
 # Verification
 
+PR #27 round-one corrections, final gate results and current acceptance limits
+are recorded in verification-round-1.md. The original lane evidence follows.
+
 Source roots and intentional differences are in design.md and
 packages/edge/src/ai/README.md. Tests drive AiProviderService through selected
 profiles to fake HTTP/WebSocket, transcript callbacks and the player lease.

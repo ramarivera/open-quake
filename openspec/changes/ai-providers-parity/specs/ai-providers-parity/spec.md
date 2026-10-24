@@ -11,8 +11,18 @@ Profiles SHALL select independent routing, daily, deepThink, vision, image, vide
 - **THEN** classification uses the routing model and chat uses daily without mutating the saved profile
 
 #### Scenario: DeepSeek vision or conflicting Kimi sampling
-- **WHEN** the request includes images for DeepSeek or sampling that conflicts with the selected Kimi profile
+- **WHEN** the request selects the vision role or includes images for DeepSeek, even if the profile advertises image support, or sampling that conflicts with the selected Kimi profile
 - **THEN** the facade rejects it before credentials or adapter invocation
+
+#### Scenario: Kimi mandatory sampling without caller ranges
+- **WHEN** a valid Kimi profile omits temperature and top-p ranges and the request omits those values
+- **THEN** generation sends the selected model's mandatory sampling without changing the saved profile
+- **AND** explicitly supplied sampling and declared ranges remain validated
+
+#### Scenario: Independent classification controls
+- **WHEN** daily or deep-thinking generation enables medium or high reasoning effort and Auto selects a separate routing model
+- **THEN** classification uses its explicit routing controls without inheriting daily controls
+- **AND** daily and deep-thinking requests retain the configured reasoning effort
 
 ### Requirement: Corrected independent speech protocols
 
@@ -27,6 +37,16 @@ Facade-owned speech SHALL implement the corrected voice-stt-tts contracts using 
 - **THEN** owned requests and output stop, late audio is ignored and readable text remains
 - **WHEN** synthesis finishes before playback drains
 - **THEN** completion waits for natural drain with a bounded playback deadline
+
+#### Scenario: Stalled recognition sends
+- **WHEN** run-task, a PCM frame or finish-task stalls in the injected WebSocket transport
+- **THEN** a bounded phase deadline fails with VOICE.CAPTURE.PHASE_TIMEOUT, closes and aborts the socket, suppresses late transcripts and releases capture and playback ownership
+- **AND** configure includes run-task plus readiness within 10 seconds, capture sends remain within 60 seconds, and final includes finish-task plus task-finished within 15 seconds
+
+#### Scenario: Integrated desktop shutdown during profile initialization
+- **WHEN** the desktop quits while knob registration is waiting on a profile read or refresh
+- **THEN** registration cancels its owned operations before waiting for its queue and cannot start work on the disposed runtime
+- **AND** the built application passes its existing bounded mock shutdown gate
 
 #### Scenario: Retired OpenAI profile
 - **WHEN** time reaches 2027-01-06 UTC

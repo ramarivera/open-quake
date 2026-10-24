@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either, Option, Stream } from "effect";
 import * as fc from "fast-check";
 import type { CompatibleAdapter } from "./adapters/adapter.js";
+import { validateProfile } from "./ai-invariants.js";
 import { prepareWorkflow } from "./ai-provider-quirks.js";
 import { AiRepository } from "./ai-repository.js";
 import {
@@ -19,6 +20,132 @@ import {
 } from "./ai-test-fixtures.js";
 
 describe("profile workflows", () => {
+	it.effect(
+		"dispatches mandatory Kimi sampling without caller sampling ranges",
+		() => {
+			const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];
+			return Effect.gen(function* () {
+				const repository = yield* AiRepository;
+				const service = yield* AiProviderService;
+				for (const [model, temperature] of [
+					["kimi-k2.5", 0.6],
+					["kimi-k2.6", 1],
+				] as const) {
+					const profile = {
+						...workflowProfile,
+						provider: "kimi" as const,
+						models: { daily: model },
+						samplingLimits: { maxOutputTokens: 4096 },
+					};
+					expect(Either.isRight(validateProfile(profile))).toBe(true);
+					yield* repository.put(profile);
+					const generation = yield* service.generate(workflowRequest);
+					yield* Stream.runDrain(generation.events);
+					expect(calls.at(-1)?.profile.modelId).toBe(model);
+					expect(calls.at(-1)?.request.sampling).toEqual({
+						temperature,
+						topP: 0.95,
+					});
+					expect(calls.at(-1)?.providerOptions).toEqual(
+						model === "kimi-k2.5" ? { thinking: { type: "disabled" } } : {},
+					);
+					const stored = yield* repository.get(profile.id);
+					expect(Option.isSome(stored) && stored.value.samplingLimits).toEqual(
+						profile.samplingLimits,
+					);
+				}
+				expect(calls).toHaveLength(2);
+			}).pipe(
+				Effect.provide(
+					workflowLayer({
+						open: (input) => {
+							calls.push(input);
+							return Effect.succeed(Stream.succeed({ _tag: "completed" }));
+						},
+					}),
+				),
+			);
+		},
+	);
+	it.effect(
+		"retains explicit Kimi sampling and range restrictions before credentials",
+		() =>
+			Effect.gen(function* () {
+				const repository = yield* AiRepository;
+				const service = yield* AiProviderService;
+				for (const samplingLimits of [
+					workflowProfile.samplingLimits,
+					{ temperature: { min: 0.7, max: 1 }, topP: { min: 0, max: 1 } },
+					{ temperature: { min: 0, max: 1 }, topP: { min: 0, max: 0.9 } },
+				]) {
+					yield* repository.put({
+						...workflowProfile,
+						provider: "kimi",
+						models: { daily: "kimi-k2.5" },
+						samplingLimits,
+					});
+					const result = yield* Effect.either(
+						service.generate({
+							...workflowRequest,
+							sampling:
+								samplingLimits === workflowProfile.samplingLimits
+									? { temperature: 0.2 }
+									: {},
+						}),
+					);
+					expect(Either.isLeft(result) && result.left.code).toBe(
+						"AI.PROVIDER.CONFIG_INVALID",
+					);
+				}
+			}).pipe(
+				Effect.provide(
+					workflowLayer(
+						{
+							open: () => Effect.die("must not dispatch conflicting sampling"),
+						},
+						{
+							resolve: () => Effect.die("must not resolve credentials"),
+							revoked: () => Effect.never,
+						},
+					),
+				),
+			),
+	);
+	it.effect(
+		"rejects a DeepSeek vision role despite advertised image support",
+		() =>
+			Effect.gen(function* () {
+				yield* (yield* AiRepository).put({
+					...workflowProfile,
+					provider: "deepseek",
+					capabilities: {
+						...workflowProfile.capabilities,
+						images: "supported",
+					},
+				});
+				const result = yield* Effect.either(
+					(yield* AiProviderService).generate({
+						...workflowRequest,
+						modelRole: "vision",
+					}),
+				);
+				expect(Either.isLeft(result) && result.left).toMatchObject({
+					_tag: "AiCapabilityUnsupported",
+					code: "AI.PROVIDER.CAPABILITY_UNSUPPORTED",
+					capability: "images",
+				});
+			}).pipe(
+				Effect.provide(
+					workflowLayer(
+						{ open: () => Effect.die("must not dispatch DeepSeek vision") },
+						{
+							resolve: () => Effect.die("must not resolve credentials"),
+							revoked: () => Effect.never,
+						},
+					),
+				),
+			),
+	);
 	it.effect(
 		"selects daily and routing models through the facade, pinning snapshots and role prompts",
 		() => {
