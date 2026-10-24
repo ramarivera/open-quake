@@ -15,6 +15,7 @@ app.isPackaged = true;
 app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
+app.getVersion = () => "0.0.0";
 let quit = false;
 app.quit = () => {
 	let prevented = false;
@@ -62,8 +63,12 @@ screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
 const powerMonitor = new EventEmitter();
 const ipcMain = new EventEmitter();
-ipcMain.handle = () => {};
-ipcMain.removeHandler = () => {};
+const requests = new Map();
+ipcMain.handle = (channel, handler) => {
+	assert(!requests.has(channel), `Duplicate request owner: ${channel}`);
+	requests.set(channel, handler);
+};
+ipcMain.removeHandler = (channel) => requests.delete(channel);
 // Wallpaper media only touches these on user action; the smoke never triggers one.
 const dialog = {
 	showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }),
@@ -87,6 +92,12 @@ const net = {
 	},
 };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
+// The voice surface writes the clipboard only on a renderer request; the smoke sends none.
+const clipboard = {
+	writeText: () => {
+		throw new Error("Bundle smoke must not write the clipboard");
+	},
+};
 globalThis.openQuakeBundleSmoke = {
 	powerMonitor,
 	shell,
@@ -99,6 +110,8 @@ globalThis.openQuakeBundleSmoke = {
 	protocol,
 	net,
 	session,
+	systemPreferences: {},
+	clipboard,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -114,7 +127,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, systemPreferences, clipboard } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -147,6 +160,8 @@ try {
 		events.filter(({ channel }) => channel === "quake:event");
 	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
+	for (const channel of ["maintenance:request", "voice:request"])
+		assert(requests.has(channel), `Missing request owner: ${channel}`);
 	assert.equal(
 		nativeResolutions,
 		mockMode ? 0 : 1,
@@ -180,6 +195,8 @@ try {
 	}
 	app.quit();
 	await until(() => quit);
+	for (const channel of ["maintenance:request", "voice:request"])
+		assert(!requests.has(channel), `Request owner survived quit: ${channel}`);
 	assert.equal(screen.listenerCount("display-added"), 0);
 	assert.equal(ipcMain.listenerCount("quake:status"), 0);
 	console.info(

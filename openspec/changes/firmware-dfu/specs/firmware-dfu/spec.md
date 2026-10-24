@@ -22,7 +22,7 @@ The system SHALL enter DFU only for the explicitly selected supported QUAKE devi
 
 #### Scenario: Command without boot volume
 
-- **WHEN** DFU command is sent but no bootloader is detected within 30 seconds
+- **WHEN** DFU command is sent but no bootloader is detected within 90 seconds
 - **THEN** status reports awaiting-bootloader timeout and offers recovery guidance without resending automatically
 
 ### Requirement: Validated local firmware images
@@ -61,11 +61,21 @@ The system SHALL validate a user-selected RP2040 boot volume immediately before 
 #### Scenario: Multiple boot volumes
 
 - **WHEN** two compatible bootloader volumes are mounted
-- **THEN** the UI asks the user to choose one and does not select the first automatically
+- **THEN** the UI shows each recognizable drive letter or mount path, asks the user to choose one, repeats the selected drive identity and intended serial in write confirmation, and does not select the first automatically
 
 ### Requirement: Exclusive write lifecycle
 
 The firmware workflow SHALL expose validating, awaiting-bootloader, ready-to-write, writing, written-unverified, verifying, completed, failed and needs-recovery states. It SHALL require explicit write confirmation and SHALL NOT offer a false rollback once writing has started.
+
+#### Scenario: Session persistence fails
+
+- **WHEN** saving the initial start, recovery or write transition fails
+- **THEN** memory retains the last committed state, no worker or copy starts, and the same action can be retried after storage recovers
+
+#### Scenario: Worker persistence fails
+
+- **WHEN** saving a worker transition fails, including after copying
+- **THEN** the session reaches failed or needs-recovery even if saving that terminal state also fails, and never retries a copy automatically
 
 #### Scenario: Write fails partway
 
@@ -109,3 +119,57 @@ Failures SHALL identify the stage and stable reason without exposing user file p
 
 - **WHEN** a user opens recovery guidance after a write failure
 - **THEN** instructions are available locally and no firmware operation starts until a new explicit update is confirmed
+
+#### Scenario: Bootloader without a live firmware session
+
+- **WHEN** the user selects a trusted local image, enters the intended device serial and confirms recovery for a device already in its bootloader
+- **THEN** discovery and explicit volume selection work without a normal HID/version session or another DFU command, writing still requires separate confirmation and full image/mount revalidation, and success still requires a fresh expected-version read from that exact serial
+
+### Requirement: Manual version row and recoverable four-step dialog
+
+The system SHALL show the selected serial's version from the typed [2E] query, unknown as `--`, and an Upgrade action only for a newer trusted local image. It SHALL never auto-enter DFU. The 520px dialog SHALL show Enter download mode, Wait for USB drive, Write firmware, Verify version using recovered English strings. Closing SHALL leave the main-owned session running; Settings SHALL reconcile every 1000ms and restore the session. A closed terminal dialog SHALL produce a 6000ms toast. Terminal snapshots SHALL expire after 600000ms. Evidence: SETTINGS-020, SETTINGS-034 through SETTINGS-046.
+
+#### Scenario: Close while upgrading
+
+- **WHEN** the dialog closes during volume discovery or copying
+- **THEN** the operation continues, the row shows Upgrading…, and reopening restores its progress
+
+#### Scenario: Re-read completion
+
+- **WHEN** copying finishes
+- **THEN** the intended serial is queried every 2000ms with a 3000ms query limit for up to 90000ms; only the expected version completes the update
+
+### Requirement: Conservative volume and copy adapters
+
+Discovery SHALL poll at 500ms for 90000ms and recognize QUAKE DFU on supported platforms. It SHALL validate mount identity and bootloader evidence, settle for 2500ms, and revalidate immediately before an exclusive write. Multiple volumes SHALL require explicit selection. A source image SHALL be rehashed against the trusted descriptor immediately before copying. Partial copy SHALL require recovery with no automatic retries or alternate-volume copy. A macOS user-selected security bookmark SHALL be treated only as a hint. Evidence: SETTINGS-039, SETTINGS-040, SETTINGS-045, SETTINGS-047, SETTINGS-048. Deliberate safety difference: do not reproduce overwriting copy fallbacks or automatic retry after a potentially partial flash.
+
+#### Scenario: Replaced volume or image
+
+- **WHEN** a selected volume identity or inspected image changes before final confirmation
+- **THEN** no file is written and fresh inspection is required
+
+#### Scenario: Restart after entry
+
+- **WHEN** a persisted nonterminal record is loaded
+- **THEN** the application reports needs-recovery and performs no DFU or write operation
+
+
+#### Scenario: Bounded descriptor source
+
+- **WHEN** an image path becomes a symlink, a non-file, or grows beyond the size bound during inspection or copy
+- **THEN** one no-follow opened descriptor supplies metadata and bounded bytes, the handle is closed, and no untrusted image is copied
+
+#### Scenario: Transient discovery failure
+
+- **WHEN** an optional Windows discovery probe times out or returns malformed data
+- **THEN** that poll reports no optional candidates and polling can recover, while copy still requires successful fresh target validation
+
+#### Scenario: Parent replaced before destination open
+
+- **WHEN** a volume path changes between validation and exclusive destination open
+- **THEN** opened-file device, resolved containment and parent identity are checked before writing, a changed target is rejected without firmware bytes, and cleanup never deletes an unrelated replacement
+
+#### Scenario: Generic DFU send
+
+- **WHEN** a caller submits DFU through generic hardware send
+- **THEN** it is rejected before I/O without poisoning the session, and only the locked enterDfu transition can send DFU without waiting for an acknowledgement

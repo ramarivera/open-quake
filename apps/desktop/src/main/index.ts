@@ -15,6 +15,7 @@ import {
 } from "electron";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
+import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
@@ -39,9 +40,11 @@ import {
 	probeHiddenMirroring,
 } from "./lifecycle/native-display";
 import { registerLifecycle } from "./lifecycle/registration";
+import { registerMaintenance } from "./maintenance";
 import { MediaLive, registerMedia } from "./media";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
+import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
 const rendererURL =
@@ -140,6 +143,28 @@ if (!app.requestSingleInstanceLock()) {
 		let panelWin = createPanelWindow(panelTarget);
 		let managementWin = createManagementWindow();
 		let bus: DeviceBus | undefined;
+		// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
+		// play through hardware-controls; the mock bus answers them without HID.
+		const voice = registerVoiceSurface({
+			mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
+			tones: toneSinks(createToneRecorder(), {
+				play: (_serial, tone) => {
+					const hardware = bus?.hardware?.();
+					if (hardware)
+						runtime.runFork(
+							hardware.playTone(tone).pipe(
+								Effect.tapError((error) =>
+									Effect.logWarning("Voice tone failed", error.code),
+								),
+								Effect.ignore,
+							),
+						);
+				},
+			}),
+			serial: () => "quake",
+			panel: () => panelWin,
+			management: () => managementWin,
+		});
 		const managementURL = new URL(rendererURL);
 		managementURL.searchParams.set("surface", "management");
 		managementURL.searchParams.set("rotation", "0");
@@ -155,6 +180,7 @@ if (!app.requestSingleInstanceLock()) {
 			{
 				profiles: knobProfileBinding(profiles.runtime, profiles.select),
 				hardware: () => bus?.hardware?.(),
+				voice: voice.knobVoice,
 			},
 		);
 		const focusManagement = (): void => {
@@ -166,13 +192,13 @@ if (!app.requestSingleInstanceLock()) {
 			managementWin.focus();
 		};
 		app.on("second-instance", focusManagement);
-		registerMedia(
+		const media = registerMedia(
 			ManagedRuntime.make(
 				MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 			),
 			() => managementWin,
 		);
-		registerClock(
+		const clock = registerClock(
 			ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 			() => managementWin,
 		);
@@ -349,6 +375,9 @@ if (!app.requestSingleInstanceLock()) {
 								() => [panelWin],
 							);
 							bus.on((event) => {
+								// Gate new holds synchronously and cancel in main before
+								// renderer touch teardown can synthesize a normal release.
+								void voice.onDevice(event);
 								forward(event);
 								if (event.kind === "status") {
 									void lifecycle.then((service) =>
@@ -377,6 +406,12 @@ if (!app.requestSingleInstanceLock()) {
 			running = undefined;
 			if (fiber) {
 				stopping = stopping.then(async () => {
+					await voice.onDevice({
+						source: mock ? "mock" : "hid",
+						kind: "status",
+						state: "disconnected",
+						reason: "scope-closed",
+					});
 					if (mock) await profiles.disconnect("desktop-preview");
 					await lifecycle.then((service) =>
 						lifecycleRuntime.runPromise(service.lock()),
@@ -437,11 +472,9 @@ if (!app.requestSingleInstanceLock()) {
 		};
 		ipcMain.on(QUAKE_STATUS_CHANNEL, sendStatus);
 
-		app.on("before-quit", (event) => {
-			if (quitFinished) return;
-			// Electron does not await async listeners. Keep it alive for HID finalizers.
-			event.preventDefault();
-			if (quitting) return;
+		let shutdown: Promise<void> | undefined;
+		const stopWriters = (closeWindows = false): Promise<void> => {
+			if (shutdown) return shutdown;
 			quitting = true;
 			screen.removeListener("display-added", topologyChanged);
 			screen.removeListener("display-removed", topologyChanged);
@@ -453,17 +486,63 @@ if (!app.requestSingleInstanceLock()) {
 			removeLifecycle();
 			disposeHardware();
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
-			void stopBus().then(async () => {
+			shutdown = (async () => {
+				await stopBus();
 				await monitor.dispose();
 				await lifecycleRuntime.dispose();
 				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));
 				await knob.dispose();
+				await voice.dispose();
 				await profiles.dispose();
+				await clock.dispose();
+				await media.dispose();
 				await runtime.dispose();
-				quitFinished = true;
-				app.quit();
-			});
+				if (closeWindows) {
+					if (!managementWin.isDestroyed()) {
+						managementWin.webContents.session.flushStorageData();
+						managementWin.destroy();
+					}
+					if (!panelWin.isDestroyed()) panelWin.destroy();
+				}
+			})();
+			return shutdown;
+		};
+		const maintenance = registerMaintenance({
+			root: app.getPath("userData"),
+			mock,
+			renderer: rendererURL,
+			hardware: () => bus?.hardware?.(),
+			management: () => managementWin,
+			stopWriters: () => stopWriters(true),
 		});
+		app.on("before-quit", (event) => {
+			if (quitFinished) return;
+			event.preventDefault();
+			if (quitting) return;
+			quitting = true;
+			const reportFailure = (cause: unknown): void => {
+				const error =
+					cause instanceof MaintenanceShutdownFailed
+						? cause
+						: new MaintenanceShutdownFailed(cause);
+				Effect.runSync(
+					Effect.logError("Application shutdown failed", {
+						code: error.code,
+						diagnosticCause: error.diagnosticCause,
+					}),
+				);
+			};
+			void maintenance
+				.dispose()
+				.catch(reportFailure)
+				.then(() => stopWriters())
+				.catch(reportFailure)
+				.then(() => {
+					quitFinished = true;
+					app.quit();
+				});
+		});
+
 		const reopenWindows = (): void => {
 			if (quitting) return;
 			if (managementWin.isDestroyed()) {

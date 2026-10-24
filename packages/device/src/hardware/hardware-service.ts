@@ -61,6 +61,8 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				{
 					readonly snapshot: () => Effect.Effect<HardwareSnapshot>;
 					readonly refresh: () => Effect.Effect<void, HardwareError>;
+					readonly readVersion: () => Effect.Effect<string, HardwareError>;
+					readonly enterDfu: () => Effect.Effect<void, HardwareError>;
 					readonly toggleMic: () => Effect.Effect<void, HardwareError>;
 					readonly stepBrightness: (
 						direction: -1 | 1,
@@ -99,6 +101,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				let luminance: number | undefined;
 				let firmware: HardwareSnapshot["firmware"];
 				let active = true;
+				let firmwareLocked = false;
 				let poisoned = false;
 				let dirty = false;
 				let errorCode: string | undefined;
@@ -116,7 +119,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				let saving: Option.Option<Fiber.RuntimeFiber<void, never>> =
 					Option.none();
 				const ensureActive = (): Effect.Effect<void, HardwareUnavailable> =>
-					active && !poisoned
+					active && !poisoned && !firmwareLocked
 						? Effect.void
 						: Effect.fail(new HardwareUnavailable());
 				const rawWrite = (
@@ -210,7 +213,10 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					);
 				const send = Effect.fn("HardwareControls.send")(
 					(command: HardwareCommand): Effect.Effect<void, HardwareError> =>
-						exchange(command).pipe(
+						(command._tag === "Dfu"
+							? Effect.fail(new HardwareCommandRejected())
+							: exchange(command)
+						).pipe(
 							Effect.tapError((error) =>
 								Effect.sync(() => {
 									errorCode = error.code;
@@ -280,11 +286,52 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					}),
 				);
 				return {
+					readVersion: Effect.fn("HardwareControls.readVersion")(
+						(): Effect.Effect<string, HardwareError> =>
+							mutationLock.withPermits(1)(
+								Effect.gen(function* () {
+									const reply = yield* exchange({
+										_tag: "Query",
+										feature: "version",
+									});
+									if (reply._tag !== "FirmwareVersion")
+										return yield* new HardwareUnavailable();
+									firmware = {
+										deviceName: reply.deviceName,
+										major: reply.major,
+										minor: reply.minor,
+										patch: reply.patch,
+									};
+									return `${reply.major}.${reply.minor}.${reply.patch}`;
+								}),
+							),
+					),
+					enterDfu: Effect.fn("HardwareControls.enterDfu")(
+						(): Effect.Effect<void, HardwareError> =>
+							mutationLock.withPermits(1)(
+								Effect.gen(function* () {
+									yield* ensureActive();
+									if (Option.isSome(preview))
+										yield* Fiber.interrupt(preview.value);
+									if (Option.isSome(saving))
+										yield* Fiber.interrupt(saving.value);
+									yield* flush();
+									yield* wireLock.withPermits(1)(
+										Effect.gen(function* () {
+											yield* ensureActive();
+											firmwareLocked = true;
+											// DFU drops the connection; it has no hardware ack exchange.
+											yield* rawWrite({ _tag: "Dfu" });
+										}),
+									);
+								}),
+							),
+					),
 					snapshot: Effect.fn("HardwareControls.snapshot")(
 						function* (): Effect.fn.Return<HardwareSnapshot> {
 							return {
 								...identity,
-								available: active && !poisoned,
+								available: active && !poisoned && !firmwareLocked,
 								preferenceStatus: Option.isSome(backgroundError)
 									? "failed"
 									: dirty

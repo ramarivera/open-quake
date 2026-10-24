@@ -1,3 +1,4 @@
+import "../main/maintenance/preload";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import "../main/clock/preload";
 import "../main/monitor/preload";
@@ -6,6 +7,7 @@ import "./lifecycle";
 import "../main/knob/preload";
 import "../main/hardware/preload";
 import "../main/profiles/preload";
+import "../main/voice/preload";
 import "../main/profiles/manager-preload";
 import {
 	type OpenQuakeBridge,
