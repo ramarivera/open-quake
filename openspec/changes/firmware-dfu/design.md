@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. Every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the acceptance contract; implementation evidence and remaining physical gates are listed below.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -24,7 +24,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 
 Goals: give implementers one owned contract, observable failure states and a verification path for this capability.
 
-Non-goals: implementation in this lane, new dependencies, changes to other lanes' artifacts, guessed device opcodes, or claiming unresolved integrations work.
+Non-goals: automatic firmware updates, changes to other lanes' artifacts, guessed device opcodes, or claims of physical acceptance.
 
 ## Package ownership
 
@@ -66,7 +66,7 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 RP2040 family ID does not alone prove QUAKE-compatible board/pin layout; require a trusted QUAKE image provenance/target descriptor and declared writable flash range before write enablement. UF2 metadata is partial evidence. The standard newline magic does not relax board provenance or range checks.
 
-The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
+The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. Pinned runtime dependencies for this lane are documented below and in the maintenance README; Ramiro approved parity dependencies on 2026-10-24.
 
 ## Migration plan
 
@@ -76,10 +76,14 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 Use independently generated UF2 fixtures for standard newline acceptance, null-terminated magic rejection, and magic/family/block/address failures. Drive the real update dialog/client through fake HID, volumes, copy and reconnect events; assert cancel writes nothing and copy alone never completes. Validate exact outgoing DFU report bytes against the SDK contract. DFU timing, BOOTSEL volume identity, flashing and version readback remain hardware-unverified.
 
-Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+Implementation closure requires scenario evidence and parent-managed Beads updates. Only implemented and verified lane tasks are checked in tasks.md; physical acceptance remains open. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
 
 ## 0.4.95 audit correction
 
 `SETTINGS-039/048` identify the vendor bootloader volume as `QUAKE DFU`. `SETTINGS-047/048` and direct inspection of `v0.4.95/app-resources/firmware/QUAKE_01.00.21_NEW.uf2` block 0 show app start `0x12000`, family `0x1aa143c7`, and standard magic. The image payload ends at `0x6E7FF`; this is observed image extent, not proof of the whole board's writable flash range. The 72 KiB offset is consistent with a vendor bootloader reserved below the app.
 
 [Microsoft UF2 file format](https://github.com/microsoft/uf2#file-format), accessed 2026-10-24, specifies the newline in magicStart0. Source for volume discovery is `v0.4.95/app-resources/background.js`, `_waitForQuakeDfuVolume` and `QUAKE DFU` literals. Mount identity, flashing and readback remain hardware-unverified.
+
+## settings-firmware implementation, 2026-10-24
+
+SETTINGS-020 and SETTINGS-034..048 govern the manual four-step flow. Preserve both explicit DFU and final write confirmation. Use the existing protocol dfuCommand encoder and selected hardware session. Trusted release descriptors are compiled in and bind SHA-256, board QUAKE, version and the observed payload bounds 0x12000..0x6e7ff. This range authorizes only that fingerprint, never other RP2040 images. No vendor image is bundled. OS adapters live in desktop; pure validation lives in protocol; conductor/ports live in edge. Schema-decoded IPC follows the existing desktop transport pattern. Persist only a scrubbed session record, never image paths or bookmarks in status. Writes are exclusive and single-attempt because a partial copy may already flash. Fake volumes are directories inside lane scratch. Automated checks never enter real DFU or write real volumes.

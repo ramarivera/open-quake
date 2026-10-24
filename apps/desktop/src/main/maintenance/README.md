@@ -1,0 +1,257 @@
+# Desktop maintenance
+
+Settings provides manual firmware updates, encrypted backup/restore, clear-data
+and exit, five macOS permission checks, and an app-update state machine. The
+main process owns operations; closing a dialog never cancels a firmware write.
+Schemas live in `packages/edge/src/maintenance/contracts.ts`. Desktop uses the
+existing authenticated preload/IPC pattern. Hardware writes stay in device;
+UF2 inspection stays pure in protocol. Each boundary returns catalog errors
+with private causes and scrubbed diagnostics.
+
+## Firmware
+
+SETTINGS-020 and SETTINGS-034..048 are implemented with these deliberate limits:
+
+- The user selects a local UF2. No vendor binary is bundled or downloaded.
+- Every block needs the exact standard UF2 magics, RP2040 family, consistent
+  block numbering/counts and non-overlapping aligned payloads. A compiled
+  trusted descriptor must also bind SHA-256, QUAKE board, version and range.
+  The audited 1.0.21 descriptor covers `0x12000..0x6e7ff` only for its known hash.
+- Separate native confirmations guard DFU and writing. Selection races reject
+  before DFU. Device commands, previews and keepalive stop after DFU.
+- Discovery recognizes `QUAKE DFU` with QUAKE bootloader metadata and mount
+  identity. Multiple candidates require a choice showing the drive letter or full mount path;
+  native write confirmation repeats the chosen path and intended serial. macOS asks for scoped access;
+  remembered bookmarks never authorize a copy. Windows label lookup is cached
+  for 5s and refreshed before writing.
+- Discovery polls every 500ms for 90s. Writing settles 2500ms and revalidates
+  image/mount before one exclusive copy. There are no overwrite fallback tools
+  or automatic retries after a possible partial flash.
+- Completion requires a fresh typed [2E] query of the intended serial, every
+  2s with a 3s query limit for 90s. Copying or a vanished drive cannot succeed.
+- A scrubbed persisted nonterminal session becomes `needs_recovery` on restart.
+  Terminal snapshots expire after 10 minutes. The four-step 520px dialog uses
+  recovered English strings and honors reduced motion. A new document restores
+  an active dialog; closing it keeps the operation alive and terminal toasts
+  last 6s.
+
+After interruption or write failure, manually enter the intended device's known
+bootloader and inspect the trusted image again. Bootloader recovery requires its
+exact serial and a native confirmation before discovery, followed by a separate
+write confirmation and all image/mount revalidation. It needs no live normal HID
+session and sends no DFU command. Only that serial's expected version readback
+can finish recovery. No rollback is offered. Do not disconnect power during copy.
+Bootloader metadata, actual firmware writing and reconnection still require
+supervised physical acceptance by the hardware owner.
+
+## Backup, restore and reset
+
+SETTINGS-014 uses authenticated WinZip AES-256 ZIP with deflate level 9,
+`export_index.json`, an encrypted `<account>_config.json`, and the legacy
+`app/assets/resources.conf` projection. `backup-archive.ts` documents the static
+app-format password derivation without embedding a plain full password constant.
+It provides compatibility, not a user-secret security boundary. Never log it.
+`account-config.ts` implements electron-store 7/conf 9's inner AES-CBC envelope.
+
+`@zip.js/zip.js@2.24.0` is pinned because Node crypto/zlib do not provide bounded
+ZIP metadata parsing, WinZip AES framing or authenticated archive handling.
+Node crypto supplies the inner account encryption and independent fixtures;
+Node zlib supplies independent ZIP fixture compression.
+
+Imports authenticate all entries before mutation and reject unsafe paths,
+Windows aliases/streams, symlinks, duplicates, overlapping ZIP data and size
+limit violations. Limits are 128 MiB compressed, 256 MiB uncompressed, 32 MiB per
+entry and 8192 entries. They skip deleted/built-in resources and unchanged
+complete ordered profiles, retaining repeated pages and including resolved
+referenced asset content in their identity, merge unique profiles, remap IDs, preserve knob data and profile names,
+and materialize referenced archived files. Paths are rebased across platforms;
+missing archived paths reject the merge. Raster icons become inline images.
+Unknown profile actions remain inert under the profile compatibility contract.
+Content-based legacy asset directories preserve retained profiles when another
+backup reuses a path with different bytes. Native profile IDs are checked for
+collisions independently from content deduplication.
+
+Native managed settings are included under `open-quake/`; credentials, account
+sessions and transient files are excluded. Import clones userData to a sibling
+staging directory and switches roots with rollback after writers stop. Only
+allowlisted managed names can be restored; symlink destinations are rejected.
+Monitor settings and custom media under `monitor-v1` are included. Its record
+uses the monitor owner's Schema; its incomplete `settings.json.new` is excluded.
+Successful import exits so cached writers cannot overwrite restored state.
+Merge validation runs before shutdown and repeats after writers stop. A failure
+after shutdown begins is reported by main, which then exits with failure status.
+Export reads the actual renderer appearance localStorage through its owned
+window and validates it with the appearance parser. Restore stages that record
+for the real appearance hook, then removes it only after localStorage persistence
+is acknowledged. Theme choice, custom colors and motion preference all travel.
+Confirmed backup replacement uses a temporary sibling and atomic rename, keeping
+the previous archive intact on export/write failure. The staged file is synced
+before rename; POSIX parent-directory sync must also succeed before export reports
+success. A directory-sync failure can leave the new archive installed but still
+reports backup failure and requires the reset failure confirmation. Node/libuv
+on Darwin attempts F_FULLFSYNC with documented fallbacks; this is an OS sync
+contract, not hardware power-loss verification. No native dependency is added.
+Format interoperability is proved with independent fixtures, not a real user's
+DK-Suite backup or a DK-Suite process.
+
+Reset offers backup first with a 60s deadline. Backup cancellation/failure needs
+a second confirmation. Writer shutdown must succeed before removing the captured
+app-owned userData root and exiting. No path is supplied by the renderer.
+
+## Permissions and app updates
+
+SETTINGS-015 refreshes Accessibility, Input Monitoring, Microphone, Screen
+Recording and System Audio Recording on focus and every 2s. Status reads never
+request permission. Fixed privacy deep links open only on a user action.
+`koffi@3.3.3` is pinned for in-process CoreGraphics Input Monitoring and private
+TCC System Audio preflight, which Electron does not expose. Missing APIs remain
+unknown; registration is never interpreted as a grant. Native loading passed
+under Electron 43.4.1; actual permission attribution and packaged signing remain
+acceptance work. Only fixed paths/signatures load; IPC cannot choose a library.
+
+SETTINGS-049/050 uses an owned `AppUpdatePort`, disabled in production. No real
+endpoint or vendor OTA feed is wired. Fake-feed TestClock tests exercise the
+5s first check and 12h cadence, single-flight background download, manual checks,
+defer, install and disposal. Before enabling a release adapter, define a signed
+or pinned open-quake manifest binding app id, semantic version, platform,
+architecture, HTTPS artifact URL, byte length and SHA-256. The adapter must verify
+those bytes before install and implement packaged installer handling. Scheduling
+and state are implemented; real release publishing and installation are not.
+
+## Verification
+
+All hardware/file adapters in tests are fake. Set TMPDIR to lane scratch before
+checks that create fixtures. Never select a real boot volume or enable real HID
+for a test or smoke run.
+
+```sh
+# Explicitly choose an owned disposable directory, outside real app userData.
+# Use /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/... on Ramiro's host.
+export OPEN_QUAKE_SMOKE_SCRATCH=/absolute/owned/open-quake-smoke
+mkdir -p "$OPEN_QUAKE_SMOKE_SCRATCH/tmp"
+export TMPDIR="$OPEN_QUAKE_SMOKE_SCRATCH/tmp"
+pnpm biome check packages apps
+TURBO_ENV_MODE=loose pnpm exec turbo run typecheck --force --concurrency=2
+TURBO_ENV_MODE=loose pnpm exec turbo run test --force --concurrency=1 -- --maxWorkers=2
+pnpm exec turbo run build --force --concurrency=1
+pnpm --filter @open-quake/desktop test:bundle
+openspec validate --all --strict
+pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/maintenance/smoke.config.ts
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/maintenance-smoke/smoke.js "$OPEN_QUAKE_SMOKE_SCRATCH/maintenance"
+```
+
+The native smoke checks real preload/IPC, window spoof rejection, independently
+decoded AES export, cancelled DFU/write confirmations, restored and closed
+dialogs, a synthetic UF2 copy into scratch, intended-version re-read, native FFI
+symbol loading and dark/light/narrow screenshots. It registers the production
+maintenance, monitor, clock, media, profile, lifecycle, hardware and knob owners
+together, using mock hardware, synthetic metrics and non-prompting display ports.
+It checks profile/lifecycle reads, monitor save and panel-only metric delivery,
+subscription shutdown, monitor archive inclusion, combined clock/monitor controls
+and awaited disposal. `combined-screen-monitor.png` captures the integrated
+Screen page. The main lifecycle tests also check monitor ownership and disposal
+before quit; the shared shutdown promise stops monitor before reset or restore.
+The smoke also drives the recovery serial field and confirmation cancellation,
+verifies offline firmware stays unknown, waits for the real dialog's ready state,
+and proves copy alone cannot complete recovery. `firmware-recovery-ready.png`
+and `firmware-recovery-success.png` capture that path. Appearance restoration,
+confirmed archive replacement and invalid-import preflight use the actual IPC
+and renderer consumers. Post-shutdown failure/exit and collision regressions
+have deterministic unit coverage in this directory.
+The smoke has a 45s deadline and
+removes its userData directory/disposes all runtimes before exiting. The original
+media smoke in `../media/README.md` is also required for renderer changes.
+
+Source inputs are local-only under
+`/Users/ramarivera/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95/`:
+`audit/AUDIT_SETTINGS.md`, recovered settings/firmware components and English
+locales; `app-resources/background.js` at bytes 6595513/6603890 for ZIP,
+6471708 for encrypted account/profile merging, and 364307 for permission checks.
+No research binaries or recovered application code are bundled.
+
+PR #32 round 2 adds deterministic profile/page and referenced-content regressions,
+initial and worker persistence-failure coverage, and fake Windows drive discovery.
+The combined native mock presents two scratch drives, checks their mounted button
+labels, clicks one and verifies its path and intended serial in the native
+confirmation before cancelling. Firmware drive paths wrap inside the dialog.
+The fingerprint also retains legacy-only configuration fields while current
+editable values take precedence. Recovery smoke waits for mounted ready controls
+instead of a fixed delay. Its cleanup keeps Electron alive until the explicit
+exit code is set, so failed assertions cannot exit successfully after window
+closure. The round-2 evidence includes an injected failure proving exit code 1.
+
+The combined smoke also registers the merged voice surface, binds its knob
+voice owner, checks Hello through the real preload, and disposes knob before
+voice. Main shutdown coverage holds voice disposal open and proves quit waits
+for it after monitor and knob disposal, while profiles remain alive.
+
+
+PR #32 round 3 archives only the image/video slots consumed by ClockStore,
+including explicitly selected files outside userData. Copies use content hashes
+under clock-v1/assets, and restored paths point into the new installation.
+Missing, unreadable, oversized, non-media and symlink references reject export.
+The file reader bounds allocation and rejects changes during reading; archive
+size and entry limits still apply. Original selections remain untouched.
+
+Confirmed reset delegates shutdown, clear, main-owned failure reporting and exit
+together. Stop failure prevents clear; clear rename/delete failures retain data
+where rollback succeeds. Reporting failure cannot prevent exit. Backup timeout
+and both cancellation gates precede shutdown. Genuine runtime initialization failure remains
+observable through ready and scrubbed logs; recoverable session-file failures now
+preserve evidence and leave maintenance available. Maintenance disposal still releases
+its runtime and scoped resources exactly once, then returns a catalog failure;
+main records it and awaits the remaining writer shutdown before completing quit.
+
+Round-3 regressions exercise actual ClockStore stage/commit/read/mediaPath across
+an export and restore after deleting the original synthetic files, reset failures
+through the production adapter and real synthetic-root rename/delete rollback,
+and the combined before-quit chain with malformed/unreadable firmware sessions
+and a genuinely rejected runtime initialization.
+The native maintenance smoke additionally loads restored image bytes through the
+production clock media protocol and captures clock-restored.png. Hardware and
+packaged acceptance remain open.
+
+
+PR #32 round 4 removes host-specific required directory names from the maintenance
+smoke. Its runner requires OPEN_QUAKE_SMOKE_SCRATCH and TMPDIR as absolute
+existing directories; temporary files and artifact destinations must stay within
+the explicit root, including resolved symlinks. Filesystem/home roots and overlap
+with Electron's original userData are rejected before fixtures are created.
+Validation and temporary-userData setup run synchronously before the first await,
+so Electron helpers start with the owned scratch data path.
+Host verification continues to use owned ExtSSD scratch. Portable validation and
+escape/userData rejection are exercised with synthetic directories.
+
+Firmware inspection and copy read one no-follow descriptor each, allocate at
+most the inspected length plus one byte within 16 MiB, and reject growth or
+metadata changes. Final copy still checks the trusted fingerprint. Optional
+Windows probe errors yield an empty discovery poll and retry; copy's fresh live
+probe remains fail-closed. After exclusive destination open, the descriptor's
+device, destination identity, resolved containment and parent device/inode must
+match before payload writes. Node has no openat/unlinkat; concurrent path changes
+cannot be made race-free. A rejected creation may leave an empty file, which is
+retained to avoid deleting an unrelated replacement through a raced pathname.
+Generic hardware send rejects DFU; only enterDfu owns its locked no-ack transition.
+
+Malformed, schema-invalid and unreadable session records are preserved under
+unique .recovery-* names, with scrubbed catalog warnings and an empty nonflashing
+session. If preservation fails, the original stays untouched and explicit session
+saves remain blocked until preservation can succeed. Settings, permissions,
+export and confirmed reset remain accessible. Remaining initialization failures
+return a typed catalog reply, and genuine runtime failure still exercises awaited
+disposal and combined application quit. Started session saves finish before
+worker disposal returns, avoiding writes after the fixture/writer owner is stopped.
+In-flight native copy is awaited during disposal before scoped access is released.
+Scoped bookmarks register their idempotent release immediately, release on hint
+or start failure, and release when copying finishes rather than waiting through
+version polling. Disposal releases outstanding access exactly once. The final
+native reset confirmation states the already-selected backup mode.
+
+
+### PR 32 round 5
+
+Export applies the archive writer's shared numeric limits before each raw file read and retained entry insertion. `backup-budget.ts` separately tracks cumulative raw work and the retained archive map. JSON normalization never refunds raw work; replacing a retained path subtracts its previous bytes, and projected assets deduplicate by content. Managed files and explicitly selected external clock assets share `backup-read.ts` no-follow descriptor reads, with pre-allocation size checks, bounded growth detection and guaranteed descriptor closure. Projection entries are inserted directly into the budgeted map, including the final index replacement. An over-budget export returns the existing catalog BackupFailed response.
+
+Native profile restore maps each source profile ID to its added or content-deduplicated final ID. `backup-profile-links.ts` imports only same-platform persistent app associations using the manager contracts and switching path normalization. Existing destination profile associations and overlapping app/device identities win. Distinct device scopes and distinct app paths remain distinct. Dangling source targets and cross-platform app links are skipped. Destination manager settings, active selections and approvals stay authoritative; source transient/default/approval state is not imported. Reimport does not append links or bump revision again.
+
+Regressions use small shared limits, inspect real filesystem reads, test concurrent growth and retained content deduplication, exercise the actual typed maintenance export reply, and drive a linked native export/reset/restore through ProfileSwitching.probe. Hardware and packaged/legacy acceptance remain separate.

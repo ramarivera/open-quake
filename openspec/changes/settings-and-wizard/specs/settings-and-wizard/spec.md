@@ -152,3 +152,139 @@ Settings SHALL route wallpaper interval/fill/play controls, monitoring, artwork 
 
 - **WHEN** firmware support has not passed its verification gate
 - **THEN** settings show an unavailable update action and start no DFU operation
+
+### Requirement: Compatible authenticated backups
+
+The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatible with DK-Suite's account-derived format, preserving export_index.json and account_config.json. Import SHALL authenticate before mutation, reject traversal/symlinks/duplicates/oversized archives, skip built-in and deleted resources, deduplicate configurations, renumber new profiles and remap resource IDs and original-platform paths. Only app-owned data and explicitly referenced clock media SHALL be exported; credentials SHALL be excluded. Evidence: SETTINGS-014.
+
+#### Scenario: Legacy import
+
+- **WHEN** a valid independently generated DK-Suite archive is selected
+- **THEN** its resources and profiles are merged once with imported/skipped counts and cross-platform paths rewritten
+
+#### Scenario: Invalid archive
+
+- **WHEN** an archive has failed authentication, invalid index or unsafe paths
+- **THEN** existing data remains intact and no extracted path escapes staging
+
+#### Scenario: Merge into edited imports
+
+- **WHEN** a native profile was edited after import or another backup reuses a legacy asset path with different bytes
+- **THEN** imported profiles receive collision-free IDs and content-based asset destinations while retained profiles and their assets remain intact
+
+#### Scenario: Complete multi-page identity
+
+- **WHEN** an imported legacy profile contains a retained page, repeated identical pages or a later changed page
+- **THEN** import deduplicates only complete profiles, preserves every page in order, and imports changed complete profiles without truncation
+
+#### Scenario: Referenced content changes
+
+- **WHEN** another archive retains resource IDs, raw configuration and archive-relative paths but changes referenced file, folder or registered image bytes
+- **THEN** the changed resolved profile, including legacy-only configuration fields, is imported with distinct content-addressed assets, retained assets remain intact, and unchanged reimports deduplicate
+
+#### Scenario: Appearance and confirmed replacement
+
+- **WHEN** a backup is exported to an existing destination confirmed in the native save dialog
+- **THEN** export reads the validated actual appearance localStorage record including custom theme and motion, replaces the destination atomically, and restore delivers that record to the real appearance consumer with a persistence acknowledgement
+
+#### Scenario: Restore fails after shutdown begins
+
+- **WHEN** restore cannot complete after stopping app writers
+- **THEN** main reports a scrubbed failure and exits even if management windows are gone; merge validation runs before shutdown and repeats against stopped data before commit
+
+#### Scenario: Portable clock media
+
+- **WHEN** the clock references selected external images or videos and its backup is restored into a different installation after the originals are removed
+- **THEN** only those referenced files are archived within bounded file/archive limits, restored clock consumers use managed copies, and missing, unreadable or symlink references fail export without claiming a complete backup
+
+#### Scenario: Export exceeds a cumulative budget
+
+- **WHEN** retained nested import trees or explicitly selected external clock media would exceed the shared raw read byte/count budget
+- **THEN** export fails through BackupFailed before reading the first disallowed file or subsequent files; normalized/replaced/deduplicated entries and generated projection/index additions also remain within shared retained archive limits, and boundary-sized exports succeed
+
+#### Scenario: Native app-linked profile restore
+
+- **WHEN** a same-platform app-linked native profile is exported, reset and imported, including a profile deduplicated against an existing profile or assigned a collision-free ID
+- **THEN** the app link targets the actual final profile and automatic switching can select it; existing destination links and manager settings win conflicts, unrelated transient source manager state is not imported, dangling or incompatible-platform links are skipped, and repeated import is idempotent
+
+### Requirement: Clear data with optional bounded backup
+
+The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a 520px confirmation. Backup SHALL stop waiting after 60000ms; failure SHALL require a second confirmation. Writers SHALL stop before clearing only app-owned data and exiting. Evidence: SETTINGS-016.
+
+#### Scenario: Backup timeout declined
+
+- **WHEN** backup times out and the second confirmation is declined
+- **THEN** no data is deleted and the app stays running
+
+#### Scenario: Confirmed reset
+
+- **WHEN** backup succeeds or clearing without backup is explicitly confirmed
+- **THEN** writers stop, app-owned data is cleared and the application exits
+
+#### Scenario: Reset fails after shutdown begins
+
+- **WHEN** stopping writers or staging, renaming or deleting reset data fails after reset is confirmed
+- **THEN** main reports only the catalog failure code and fixed recovery guidance and guarantees process exit even if reporting fails, without clearing data after writer shutdown failure
+
+#### Scenario: Initialization failure during quit
+
+- **WHEN** maintenance runtime initialization fails after session-load recovery
+- **THEN** the failure stays visible, runtime disposal and scoped resource release still complete, and the awaited application quit chain stops writers and exits
+
+### Requirement: Live macOS permission dashboard
+
+The system SHALL display Accessibility, Input Monitoring, Microphone, Screen Recording and System Audio Recording on macOS, refresh on mount/focus/every 2000ms, and expose their fixed System Settings privacy deep links. A missing API or failed probe SHALL be unknown rather than granted. Status reads SHALL not request permission. Evidence: SETTINGS-015.
+
+#### Scenario: Permission changes externally
+
+- **WHEN** a permission is changed in System Settings
+- **THEN** focus or the next poll updates its live status
+
+#### Scenario: Unavailable system-audio probe
+
+- **WHEN** the private preflight API is unavailable
+- **THEN** System Audio Recording shows unknown and its settings action remains usable
+
+### Requirement: App-owned self-update scheduling
+
+The system SHALL check at 5000ms after launch and every 12 hours, support manual Check Update, and download background updates before offering installation. Checks/downloads SHALL be single-flight and failures recoverable. Production SHALL use a disabled open-quake feed until an owned release manifest and artifact trust policy exist; tests SHALL inject a fake feed and installer. No vendor feed SHALL be called. Evidence: SETTINGS-049, SETTINGS-050.
+
+#### Scenario: Background update
+
+- **WHEN** the fake feed reports a newer matching-platform release
+- **THEN** the main-owned state progresses checking, downloading, ready, and installation requires an explicit user action
+
+#### Scenario: Quit or duplicate check
+
+- **WHEN** another check arrives during download or the app quits
+- **THEN** no duplicate transfer starts and disposal interrupts scheduled work
+
+
+### Requirement: Maintenance safety at filesystem and IPC boundaries
+
+Backup completion SHALL sync the staged file before rename and the parent directory on POSIX before reporting success. Session-load corruption or read failure SHALL preserve evidence, emit scrubbed diagnostics and permit nonflashing settings/export/reset access. Remaining initialization rejection SHALL return a catalog MaintenanceReply failure and retain awaited disposal. Security-scoped access SHALL release exactly once on hint/write failure, terminal completion or disposal. Smoke runs SHALL explicitly opt into a portable owned scratch root, with containment and real-userData rejection.
+
+#### Scenario: Backup sync fails
+
+- **WHEN** staging sync or directory sync fails during backup-before-reset
+- **THEN** backup reports failure, reset requires the existing fresh failure confirmation, and no automatic data clear occurs
+
+#### Scenario: Unreadable or malformed session
+
+- **WHEN** persisted firmware session data cannot be parsed or read
+- **THEN** settings, permissions and export remain accessible, reset retains its confirmations, no automatic firmware operation starts, and original evidence is preserved
+
+#### Scenario: Bookmark setup fails
+
+- **WHEN** scoped bookmark access succeeds but persisting its hint or starting the firmware write fails
+- **THEN** the access is released once immediately and subsequent requests or disposal do not release it again
+
+#### Scenario: Reset backup choice
+
+- **WHEN** the user chooses backup-and-continue or continue-without-backup
+- **THEN** the native final confirmation states that exact choice and cancellation starts neither backup nor clear
+
+#### Scenario: Portable smoke scratch
+
+- **WHEN** a mock smoke supplies an absolute explicit scratch root with contained temporary and artifact paths
+- **THEN** it can run without author-specific directory names, while absent opt-in, escaping paths and real-userData overlap are rejected
