@@ -98,6 +98,12 @@ vi.mock("electron", () => ({
 		static fromWebContents = () => true;
 	},
 }));
+const appIcons = vi.hoisted(() => ({
+	load: vi.fn<() => Promise<{ id: string; name: string; icons: [] }>>(),
+}));
+vi.mock("./application-icons", () => ({
+	applicationIconLibrary: () => appIcons.load,
+}));
 const directories: string[] = [];
 afterEach(async () => {
 	electron.windows.length = 0;
@@ -105,6 +111,7 @@ afterEach(async () => {
 		"/nonexistent/key-registration-synthetic",
 	);
 	electron.dialog.showOpenDialog.mockReset();
+	appIcons.load.mockReset();
 	for (const dir of directories.splice(0))
 		await rm(dir, { recursive: true, force: true });
 });
@@ -263,7 +270,7 @@ function fixture(
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const key = {
 		...empty,
-		childrenName: "timer",
+		childrenName: typeof config.type === "string" ? config.type : "timer",
 		config: {
 			...empty.config,
 			type: "timer",
@@ -373,6 +380,16 @@ function fixture(
 		impostor,
 		request,
 		activation,
+		openPicker: () => {
+			void request(manager, {
+				type: "open-icons",
+				token: `fixture-${electron.nextId()}`,
+				locale: "en",
+			});
+			const child = BrowserWindow.getAllWindows().at(-1);
+			if (!child) throw new Error("Missing picker");
+			return child;
+		},
 		published,
 	};
 }
@@ -456,23 +473,26 @@ it("deletes only local collection entries through IPC and preserves the installe
 			canceled: false,
 			filePaths: [files.packPath],
 		});
-		const installed = await f.request(f.manager, { type: "import-pack" });
+		const installed = await f.request(f.openPicker(), { type: "import-pack" });
 		if (installed._tag !== "success" || !installed.packs?.[0])
 			throw new Error("Pack import failed");
 		const pack = installed.packs[0],
 			id = pack.icons[0]?.id;
 		assertId(id);
 		expect(
-			await f.request(f.manager, { type: "remove-icon", id }),
+			await f.request(f.openPicker(), { type: "remove-icon", id }),
 		).toMatchObject({ _tag: "rejected" });
 		electron.dialog.showOpenDialog.mockResolvedValue({
 			canceled: false,
 			filePaths: [files.localPath],
 		});
-		const local = await f.request(f.manager, { type: "import-icon" });
+		const local = await f.request(f.openPicker(), { type: "import-icon" });
 		if (local._tag !== "success") throw new Error("Local import failed");
 		expect(local.packs?.find((p) => p.id === "local")?.icons[0]?.id).toBe(id);
-		const removed = await f.request(f.manager, { type: "remove-icon", id });
+		const removed = await f.request(f.openPicker(), {
+			type: "remove-icon",
+			id,
+		});
 		expect(removed).toMatchObject({ _tag: "success" });
 		const restarted = await Effect.runPromise(
 			iconStore(join(files.directory, "key-library-v1.json")).read(),
@@ -483,7 +503,9 @@ it("deletes only local collection entries through IPC and preserves the installe
 			canceled: false,
 			filePaths: [files.packPath],
 		});
-		expect(await f.request(f.manager, { type: "import-pack" })).toMatchObject({
+		expect(
+			await f.request(f.openPicker(), { type: "import-pack" }),
+		).toMatchObject({
 			_tag: "success",
 			packs: expect.arrayContaining([pack]),
 		});
@@ -503,7 +525,7 @@ it("protects local icons referenced by alternate drafts and committed keys", asy
 			canceled: false,
 			filePaths: [files.localPath],
 		});
-		const imported = await f.request(f.manager, { type: "import-icon" });
+		const imported = await f.request(f.openPicker(), { type: "import-icon" });
 		if (imported._tag !== "success") throw new Error("Local import failed");
 		const icon = imported.packs?.find((p) => p.id === "local")?.icons[0];
 		if (!icon) throw new Error("Missing local icon");
@@ -519,7 +541,7 @@ it("protects local icons referenced by alternate drafts and committed keys", asy
 			await f.request(f.manager, { type: "preview", target, key }),
 		).toMatchObject({ _tag: "success" });
 		expect(
-			await f.request(f.manager, { type: "remove-icon", id: icon.id }),
+			await f.request(f.openPicker(), { type: "remove-icon", id: icon.id }),
 		).toMatchObject({
 			_tag: "rejected",
 			reason: "This icon is currently in use and cannot be deleted.",
@@ -528,7 +550,7 @@ it("protects local icons referenced by alternate drafts and committed keys", asy
 			await f.request(f.manager, { type: "save", token: target.token }),
 		).toMatchObject({ _tag: "success" });
 		expect(
-			await f.request(f.manager, { type: "remove-icon", id: icon.id }),
+			await f.request(f.openPicker(), { type: "remove-icon", id: icon.id }),
 		).toMatchObject({
 			_tag: "rejected",
 			reason: "This icon is currently in use and cannot be deleted.",
@@ -581,7 +603,7 @@ it("cancels a sequence and navigates through the panel while an import chooser i
 		await f.request(f.panel, f.activation);
 		await started.promise;
 		await f.request(f.panel, { ...f.activation, kind: "release" });
-		importing = f.request(f.manager, { type: "import-icon" });
+		importing = f.request(f.openPicker(), { type: "import-icon" });
 		await entered.promise;
 		const cancel = f.request(f.panel, f.activation);
 		expect(
@@ -629,15 +651,22 @@ it.each(["navigation", "shutdown"])(
 			entered.resolve();
 			return chooser.promise;
 		});
-		const importing = f.request(f.manager, { type: "import-icon" });
+		const importing = f.request(f.openPicker(), { type: "import-icon" });
 		let disposing: Promise<void> | undefined;
 		try {
 			await entered.promise;
-			if (mode === "navigation")
+			if (mode === "navigation") {
 				vi.spyOn(f.manager.webContents, "getURL").mockReturnValue(
 					"https://foreign.invalid",
 				);
-			else disposing = f.registration.dispose();
+				f.manager.webContents.emit(
+					"did-start-navigation",
+					{},
+					"https://foreign.invalid",
+					false,
+					true,
+				);
+			} else disposing = f.registration.dispose();
 			chooser.resolve({ canceled: false, filePaths: [files.localPath] });
 			expect(await importing).toEqual({
 				_tag: "rejected",
@@ -719,6 +748,95 @@ it("rechecks panel authority after waiting for a prior request", async () => {
 	} finally {
 		unblock?.();
 		f.pauseRead(undefined);
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it("keeps panel activation and navigation responsive while app artwork is pending and rejects a closed picker's result", async () => {
+	const entered = barrier<void>(),
+		scan = barrier<{ id: string; name: string; icons: [] }>();
+	appIcons.load.mockImplementation(() => {
+		entered.resolve();
+		return scan.promise;
+	});
+	let calls = 0;
+	const f = fixture(
+		{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+		() =>
+			Effect.sync(() => {
+				calls++;
+			}),
+	);
+	let scanning: Promise<KeyReply> | undefined;
+	try {
+		const opened = f.request(f.manager, {
+			type: "open-icons",
+			token: "scan",
+			locale: "en",
+		});
+		const child = BrowserWindow.getAllWindows().at(-1);
+		if (!child) throw new Error("Missing picker");
+		scanning = f.request(child, { type: "application-icons" });
+		await entered.promise;
+		expect(
+			await Promise.race([
+				f.request(f.panel, f.activation),
+				new Promise((resolve) => setTimeout(() => resolve("blocked"), 400)),
+			]),
+		).toEqual({ _tag: "success" });
+		await vi.waitFor(() => expect(calls).toBe(1));
+		expect(
+			await Promise.race([
+				f.request(f.panel, {
+					type: "navigate",
+					deviceId: "device",
+					direction: 1,
+				}),
+				new Promise((resolve) => setTimeout(() => resolve("blocked"), 400)),
+			]),
+		).toEqual({ _tag: "success" });
+		await f.request(f.manager, { type: "cancel-icons", token: "scan" });
+		await opened;
+		scan.resolve({ id: "applications", name: "Applications", icons: [] });
+		expect(await scanning).toEqual({
+			_tag: "rejected",
+			reason: "unauthorized",
+		});
+	} finally {
+		scan.resolve({ id: "applications", name: "Applications", icons: [] });
+		await scanning;
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+it("rejects management icon storage mutations with and without an owned picker", async () => {
+	const f = fixture();
+	try {
+		for (const open of [false, true]) {
+			if (open)
+				void f.request(f.manager, {
+					type: "open-icons",
+					token: "mutations",
+					locale: "en",
+				});
+			for (const type of [
+				"import-pack",
+				"import-icon",
+				"remove-pack",
+				"remove-icon",
+			]) {
+				const command = type.startsWith("remove")
+					? { type, id: "missing" }
+					: { type };
+				expect(await f.request(f.manager, command)).toEqual({
+					_tag: "rejected",
+					reason: "unauthorized",
+				});
+			}
+		}
+		expect(electron.dialog.showOpenDialog).not.toHaveBeenCalled();
+	} finally {
 		await f.registration.dispose();
 		await f.runtime.dispose();
 	}

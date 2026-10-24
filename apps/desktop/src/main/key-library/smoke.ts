@@ -57,6 +57,16 @@ const request = async (win: BrowserWindow, command: KeyRequest) =>
 			`window.quakeKeyLibrary.request(${JSON.stringify(command)})`,
 		),
 	);
+const iconRequest = async (manager: BrowserWindow, command: KeyRequest) => {
+	const token = `smoke-import-${Date.now()}`;
+	const pending = request(manager, { type: "open-icons", token, locale: "en" });
+	try {
+		return await request(await iconPicker(manager), command);
+	} finally {
+		await request(manager, { type: "cancel-icons", token });
+		await pending;
+	}
+};
 const click = async (win: BrowserWindow, selector: string): Promise<void> => {
 	await ready(win, `document.querySelector(${JSON.stringify(selector)})`);
 	await evalIn(
@@ -523,7 +533,7 @@ async function smoke(): Promise<void> {
 			]),
 		);
 		process.stdout.write("keys smoke: stream deck import\n");
-		const imported = await request(manager, { type: "import-pack" });
+		const imported = await iconRequest(manager, { type: "import-pack" });
 		assert(imported._tag === "success" && imported.packs?.length);
 		if (imported._tag !== "success" || !imported.packs?.[0])
 			throw new Error("Pack import failed");
@@ -556,7 +566,7 @@ async function smoke(): Promise<void> {
 		);
 
 		assert.equal(
-			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
+			(await iconRequest(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"rejected",
 		);
 		await button(manager, "Save");
@@ -577,7 +587,7 @@ async function smoke(): Promise<void> {
 		);
 		await snapshot(manager, "rasterized-pack-saved");
 		assert.equal(
-			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
+			(await iconRequest(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"rejected",
 		);
 		await request(manager, {
@@ -587,7 +597,7 @@ async function smoke(): Promise<void> {
 		});
 		await request(manager, { type: "save", token: target.token });
 		assert.equal(
-			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
+			(await iconRequest(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"success",
 		);
 		// Real Chromium font decode/rasterization from a local system font; no copied font asset.
@@ -609,7 +619,7 @@ async function smoke(): Promise<void> {
 			]),
 		);
 		process.stdout.write("keys smoke: native font\n");
-		const font = await request(manager, { type: "import-pack" });
+		const font = await iconRequest(manager, { type: "import-pack" });
 		assert(
 			font._tag === "success" &&
 				font.packs?.some(

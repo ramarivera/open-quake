@@ -120,6 +120,12 @@ export function registerKeyLibrary<R>(
 		)
 			return false;
 		if (
+			["import-pack", "import-icon", "remove-pack", "remove-icon"].includes(
+				command.type,
+			)
+		)
+			return picker.owns(event);
+		if (
 			event.sender === management()?.webContents &&
 			event.sender.getURL() === new URL(managementURL).href
 		)
@@ -188,6 +194,20 @@ export function registerKeyLibrary<R>(
 					command.token,
 					command.data,
 					command.source,
+				);
+			// Host scans cannot reserve the live key/profile request semaphore.
+			if (command.type === "application-icons")
+				return track(
+					applicationIcons().then(
+						(pack): KeyReply =>
+							authorized(event, command)
+								? { _tag: "success", packs: [pack] }
+								: { _tag: "rejected", reason: "unauthorized" },
+						(cause: unknown): KeyReply => ({
+							_tag: "rejected",
+							reason: new IconImportFailed(cause).code,
+						}),
+					),
 				);
 			const preparation = Effect.gen(function* (): Effect.fn.Return<
 				PreparedImport,
@@ -316,16 +336,6 @@ export function registerKeyLibrary<R>(
 							return { _tag: "success" };
 						case "icons":
 							return { _tag: "success", packs: yield* store.read() };
-						case "application-icons":
-							return {
-								_tag: "success",
-								packs: [
-									yield* Effect.tryPromise({
-										try: applicationIcons,
-										catch: (cause) => new IconImportFailed(cause),
-									}),
-								],
-							};
 						case "import-icon":
 						case "import-pack": {
 							if (prepared) {

@@ -45,7 +45,7 @@ const defaults: Readonly<Record<string, string>> = {
 const cache = new Map<string, string>();
 export const keyArtwork = (icon: string, type: string): string => {
 	if (isInlineIcon(icon)) return icon;
-	if (!type || type === "empty") return "";
+	if (!icon || !type || type === "empty") return "";
 	let data = cache.get(type);
 	if (!data) {
 		const svg = (defaults[type] ?? unknown).replace(

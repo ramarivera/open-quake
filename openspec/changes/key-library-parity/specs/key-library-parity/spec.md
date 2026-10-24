@@ -124,3 +124,14 @@ Selected artwork SHALL be rasterized to a 170×170 PNG through inert image decod
 #### Scenario: Portable application and fallback artwork
 - **WHEN** a user selects an installed application's icon or resets an unavailable legacy resource
 - **THEN** the saved key retains portable inline artwork without depending on a proprietary resource pack or an installed application on the restore host
+
+
+#### Scenario: Picker scan and mutation isolation
+- **WHEN** installed application artwork extraction is pending
+- **THEN** live panel activation and navigation remain responsive, and a closed or replaced picker cannot receive the late scan result
+- **AND** only the current owned picker can import or remove icons; the management window can open or cancel the picker but cannot bypass it to mutate icon storage
+
+#### Scenario: Intentionally blank artwork
+- **WHEN** a configured generic key has an empty icon string
+- **THEN** the editor, strip and thumbnails preserve its blank artwork
+- **AND** semantic fallback applies to unavailable nonempty resource references while inline custom artwork remains unchanged
