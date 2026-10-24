@@ -6,3 +6,7 @@ declare module "virtual:mdi-icons" {
 	}[];
 	export default icons;
 }
+declare module "*.svg?raw" {
+	const svg: string;
+	export default svg;
+}

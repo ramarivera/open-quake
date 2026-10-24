@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, ManagedRuntime, Schema } from "effect";
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
 	createEmptyProfileKey,
 	Profile,
@@ -32,15 +32,23 @@ import {
 	verifyEditorTransactions,
 } from "./smoke-editor";
 import { verifyFinalReview } from "./smoke-final-review";
+import { verifyIconReview } from "./smoke-icon-review";
 import { verifyReviewEditor } from "./smoke-review";
 
 registerClockScheme();
+// Retain explicit failure status while the final owned window is disposed.
+app.on("window-all-closed", () => {});
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
 const scratchArg = process.argv[2];
 assert(scratchArg, "Provide an absolute scratch directory");
 const scratch = resolve(scratchArg);
 const sleep = (ms = 120): Promise<void> =>
 	new Promise((done) => setTimeout(done, ms));
+const waitForClosed = async (win: BrowserWindow): Promise<void> => {
+	const deadline = Date.now() + 8000;
+	while (!win.isDestroyed() && Date.now() < deadline) await sleep(20);
+	assert(win.isDestroyed(), "Owned icon picker did not close within 8 seconds");
+};
 const evalIn = (win: BrowserWindow, source: string): Promise<unknown> =>
 	win.webContents.executeJavaScript(source);
 const ready = async (win: BrowserWindow, expression: string): Promise<void> => {
@@ -55,6 +63,16 @@ const request = async (win: BrowserWindow, command: KeyRequest) =>
 			`window.quakeKeyLibrary.request(${JSON.stringify(command)})`,
 		),
 	);
+const iconRequest = async (manager: BrowserWindow, command: KeyRequest) => {
+	const token = `smoke-import-${Date.now()}`;
+	const pending = request(manager, { type: "open-icons", token, locale: "en" });
+	try {
+		return await request(await iconPicker(manager), command);
+	} finally {
+		await request(manager, { type: "cancel-icons", token });
+		await pending;
+	}
+};
 const click = async (win: BrowserWindow, selector: string): Promise<void> => {
 	await ready(win, `document.querySelector(${JSON.stringify(selector)})`);
 	await evalIn(
@@ -105,6 +123,29 @@ const snapshot = async (win: BrowserWindow, name: string): Promise<void> => {
 		join(scratch, `${name}.png`),
 		(await win.webContents.capturePage()).toPNG(),
 	);
+};
+const iconPicker = async (manager: BrowserWindow): Promise<BrowserWindow> => {
+	const end = Date.now() + 12000;
+	while (Date.now() < end) {
+		const child = BrowserWindow.getAllWindows().find(
+			(win) =>
+				win.getParentWindow() === manager &&
+				new URL(win.webContents.getURL() || "about:blank").searchParams.get(
+					"surface",
+				) === "icons",
+		);
+		if (child) {
+			assert.deepEqual(child.getMinimumSize(), [600, 550]);
+			assert.equal(child.isResizable(), true);
+			await ready(
+				child,
+				"document.querySelector('.icon-library-body[aria-busy=false]') && document.querySelectorAll('.icon-library-cell').length === 10 * Math.max(1, Math.floor(innerWidth / (72 + 12)))",
+			);
+			return child;
+		}
+		await sleep(25);
+	}
+	throw new Error("Owned native icon picker did not open");
 };
 const key = (code: string, type: string, actions: unknown[], extra = {}) => {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code));
@@ -266,10 +307,20 @@ async function smoke(): Promise<void> {
 				{
 					id: "one",
 					keys: [
-						key("1,1", "hotkeySwitch", [
-							{ type: "key", value: "control+a" },
-							{ type: "key", value: "control+b" },
-						]),
+						key(
+							"1,1",
+							"hotkeySwitch",
+							[
+								{ type: "key", value: "control+a" },
+								{ type: "key", value: "control+b" },
+							],
+							{
+								compatibility: {
+									defaultIcon: "resource:missing/999999",
+									defaultAlterIcon: "resource:missing/888888",
+								},
+							},
+						),
 						key("1,2", "timer", [
 							{ type: "time", value: 1800 },
 							{ type: "sound", value: "" },
@@ -313,6 +364,7 @@ async function smoke(): Promise<void> {
 		await ready(manager, "document.querySelector('#keys-profile')");
 		const harness = {
 			manager,
+			iconPicker,
 			profiles,
 			scratch,
 			delays,
@@ -324,6 +376,16 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		await verifyIconReview(
+			harness,
+			directory,
+			(path) => {
+				selectedPath = path;
+			},
+			process.env.OPEN_QUAKE_KEY_REVIEW_PROBE,
+		);
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE?.startsWith("icon-review"))
+			return;
 		await verifyFinalReview(harness, panel);
 		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "final-review") return;
 		await verifyReviewEditor(harness, process.env.OPEN_QUAKE_KEY_REVIEW_PROBE);
@@ -400,33 +462,72 @@ async function smoke(): Promise<void> {
 		// Full bundled MDI catalog, search debounce, zoom and target-bound selection.
 		process.stdout.write("keys smoke: icon library\n");
 		await button(manager, "Icon Library");
-		await ready(
-			manager,
-			"document.querySelectorAll('.icon-library-cell').length===120",
+		const chooser = await iconPicker(manager);
+		assert.equal(
+			(
+				await request(chooser, {
+					type: "pick-icon",
+					token:
+						new URL(chooser.webContents.getURL()).searchParams.get("token") ??
+						"",
+					data: (await evalIn(
+						chooser,
+						"(()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=10;return canvas.toDataURL()})()",
+					)) as string,
+				})
+			)._tag,
+			"rejected",
+			"picker must reject native-decodable images with incorrect dimensions",
 		);
-		await input(manager, "#icon-search", "alarm");
+		assert.equal(
+			(
+				await request(chooser, {
+					type: "navigate",
+					deviceId: "mock",
+					direction: 0,
+				})
+			)._tag,
+			"rejected",
+		);
+		await snapshot(chooser, "icon-library-default");
+		await input(chooser, "#icon-search", "alarm");
 		await sleep(650);
 		assert(
 			await evalIn(
-				manager,
+				chooser,
 				"document.querySelectorAll('.icon-library-cell').length>0",
 			),
 		);
-		await click(manager, 'button[aria-label="Zoom in"]');
+		await click(chooser, 'button[aria-label="Zoom in"]');
 		assert.equal(
 			await evalIn(
-				manager,
-				"document.querySelector('input[aria-label=\"Icon size\"]').value",
+				chooser,
+				`document.querySelector('input[aria-label="Icon size"]').value`,
 			),
 			"80",
 		);
-		await click(manager, ".icon-library-cell button");
-		await evalIn(
+		await snapshot(chooser, "mdi-search-zoom");
+		await click(chooser, ".icon-library-cell button");
+		await ready(
 			manager,
-			'document.querySelector(".key-icon-library").scrollIntoView({block:"start"});true',
+			"Array.from(document.querySelectorAll('.keys-preview img')).some(image => image.src.startsWith('data:image/png;base64,'))",
 		);
-		await snapshot(manager, "mdi-search-zoom");
 		await button(manager, "Save");
+		await ready(
+			manager,
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
+		);
+		const savedIcon = await request(manager, { type: "read", locale: "en" });
+		assert(savedIcon._tag === "success");
+		const savedKey = savedIcon.envelope?.profiles
+			.find((p) => p.id === custom.id)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(savedKey);
+		assert(savedKey.config.icon.startsWith("data:image/png;base64,"));
+		assert.deepEqual(
+			nativeImage.createFromDataURL(savedKey.config.icon).getSize(),
+			{ width: 170, height: 170 },
+		);
 		// Import picker -> archive parser -> local store -> rendered group.
 		const svg =
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M0 0h24v24z"/></svg>';
@@ -448,11 +549,12 @@ async function smoke(): Promise<void> {
 			]),
 		);
 		process.stdout.write("keys smoke: stream deck import\n");
-		const imported = await request(manager, { type: "import-pack" });
+		const imported = await iconRequest(manager, { type: "import-pack" });
 		assert(imported._tag === "success" && imported.packs?.length);
 		if (imported._tag !== "success" || !imported.packs?.[0])
 			throw new Error("Pack import failed");
-		const pack = imported.packs[0];
+		const pack = imported.packs.find((pack) => pack.name === "Shapes smoke");
+		assert(pack);
 		process.stdout.write("keys smoke: pack references\n");
 		const read = await request(manager, { type: "read", locale: "en" });
 		assert(read._tag === "success" && read.envelope);
@@ -469,26 +571,40 @@ async function smoke(): Promise<void> {
 		};
 		const existing = p.pages[0].keys.find((k) => k.keyCode === "1,1");
 		assert(existing);
-		assert.equal(
-			(
-				await request(manager, {
-					type: "preview",
-					target,
-					key: {
-						...existing,
-						config: { ...existing.config, icon: pack.icons[0]?.data ?? "" },
-					},
-				})
-			)._tag,
-			"success",
+
+		await button(manager, "Icon Library");
+		const packChooser = await iconPicker(manager);
+		await click(packChooser, 'button[aria-label="Shapes smoke"]');
+		await click(packChooser, ".icon-library-cell button");
+		await ready(
+			manager,
+			"document.querySelector('.keys-preview img')?.getAttribute('src') !== " +
+				JSON.stringify(existing.config.icon),
 		);
+
 		assert.equal(
-			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
+			(await iconRequest(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"rejected",
 		);
-		await request(manager, { type: "save", token: target.token });
+		await button(manager, "Save");
+		await ready(
+			manager,
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
+		);
+		const packed = await request(manager, { type: "read", locale: "en" });
+		assert(packed._tag === "success");
+		const packedKey = packed.envelope?.profiles
+			.find((profile) => profile.id === p.id)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(packedKey);
+		assert(packedKey.config.icon.startsWith("data:image/png;base64,"));
 		assert.equal(
-			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
+			packedKey.config.compatibility?.iconSource,
+			pack.icons[0]?.data,
+		);
+		await snapshot(manager, "rasterized-pack-saved");
+		assert.equal(
+			(await iconRequest(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"rejected",
 		);
 		await request(manager, {
@@ -498,7 +614,7 @@ async function smoke(): Promise<void> {
 		});
 		await request(manager, { type: "save", token: target.token });
 		assert.equal(
-			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
+			(await iconRequest(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"success",
 		);
 		// Real Chromium font decode/rasterization from a local system font; no copied font asset.
@@ -520,7 +636,7 @@ async function smoke(): Promise<void> {
 			]),
 		);
 		process.stdout.write("keys smoke: native font\n");
-		const font = await request(manager, { type: "import-pack" });
+		const font = await iconRequest(manager, { type: "import-pack" });
 		assert(
 			font._tag === "success" &&
 				font.packs?.some(
@@ -677,21 +793,76 @@ async function smoke(): Promise<void> {
 		await click(manager, ".keys-cells button:first-child");
 		process.stdout.write("keys smoke: icon library\n");
 		await button(manager, "Icon Library");
-		await evalIn(
-			manager,
-			'document.querySelector(".key-icon-library").scrollIntoView({block:"start"});true',
+		const resizedChooser = await iconPicker(manager);
+		await snapshot(resizedChooser, "icon-library");
+		assert(
+			await evalIn(
+				resizedChooser,
+				"document.documentElement.scrollWidth<=innerWidth && document.documentElement.scrollHeight<=innerHeight",
+			),
 		);
+		const initialCount = await evalIn(
+			resizedChooser,
+			"document.querySelectorAll('.icon-library-cell').length",
+		);
+		await evalIn(
+			resizedChooser,
+			"document.querySelector('.icon-library-grid').scrollTop=100000;true",
+		);
+		await sleep();
+		assert.notEqual(
+			await evalIn(
+				resizedChooser,
+				"document.querySelectorAll('.icon-library-cell').length",
+			),
+			initialCount,
+		);
+		resizedChooser.setContentSize(900, 650);
+		await ready(
+			resizedChooser,
+			"document.querySelectorAll('.icon-library-cell').length === 10 * Math.floor(innerWidth / 84)",
+		);
+		await snapshot(resizedChooser, "icon-library-wide");
+		await click(resizedChooser, 'button[aria-label="Installed applications"]');
+		await ready(
+			resizedChooser,
+			"Array.from(document.querySelectorAll('.icon-library-cell img')).some(image => image.complete && image.naturalWidth > 0)",
+		);
+		await snapshot(resizedChooser, "installed-application-artwork");
+		await click(resizedChooser, ".icon-library-cell button");
+		await waitForClosed(resizedChooser);
+		await button(manager, "Save");
 		await ready(
 			manager,
-			"document.querySelectorAll('.icon-library-cell').length===120",
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
 		);
-		await snapshot(manager, "icon-library");
+		await button(manager, "Icon Library");
+		const cancelledChooser = await iconPicker(manager);
+		await select(manager, "#key-function", "text");
+		await waitForClosed(cancelledChooser);
+		await click(manager, 'button[aria-label="Reset icon to default"]');
+		await ready(
+			manager,
+			`(()=>{const image=document.querySelector('.keys-preview [data-key-code="1,1"] img');return image?.src.startsWith('data:image/svg+xml,') && image.complete && image.naturalWidth>0})()`,
+		);
+		await snapshot(manager, "semantic-fallback-preview");
+		await input(manager, "#key-action-0", "Quiet fallback");
+		await button(manager, "Save");
+		await ready(
+			manager,
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
+		);
+		const fallback = await request(manager, { type: "read", locale: "en" });
+		assert(fallback._tag === "success");
+		const fallbackKey = fallback.envelope?.profiles
+			.find((p) => p.id === custom.id)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(fallbackKey?.config.icon.startsWith("data:image/svg+xml,"));
 		manager.setContentSize(680, 1000);
 		await sleep();
 		assert(
 			await evalIn(manager, "document.documentElement.scrollWidth<=innerWidth"),
 		);
-		await snapshot(manager, "icon-library-narrow");
 		await evalIn(
 			manager,
 			'document.querySelector(".key-editor").scrollIntoView({block:"start"});true',

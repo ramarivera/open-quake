@@ -20,6 +20,7 @@ import {
 	KeyRequest,
 } from "../../shared/key-library";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { applicationIconLibrary } from "./application-icons";
 import { renderFontIcons } from "./font-renderer";
 import { IconImportFailed, type IconStorageFailed } from "./icon-errors";
 import {
@@ -28,6 +29,7 @@ import {
 	parseIconPack,
 	svgData,
 } from "./icon-packs";
+import { createIconPicker } from "./icon-picker";
 import { iconStore } from "./icon-store";
 
 type PreparedImport =
@@ -41,7 +43,20 @@ const imageData = (bytes: Buffer): string => {
 		size = image.getSize();
 	if (image.isEmpty() || size.width * size.height > 16000000)
 		throw new Error("Invalid image");
-	return image.toDataURL();
+	const data = image.toDataURL();
+	if (data.length <= 8 * 1024 * 1024) return data;
+	// Compressed files can expand beyond the picker source contract. Bound the
+	// stored raster as well as its input bytes, preserving the original ratio.
+	const scale = Math.min(1024 / size.width, 1024 / size.height, 1);
+	const normalized = image
+		.resize({
+			width: Math.max(1, Math.round(size.width * scale)),
+			height: Math.max(1, Math.round(size.height * scale)),
+			quality: "best",
+		})
+		.toDataURL();
+	if (normalized.length > 8 * 1024 * 1024) throw new Error("Image too large");
+	return normalized;
 };
 export function registerKeyLibrary<R>(
 	runtime: ManagedRuntime.ManagedRuntime<
@@ -54,6 +69,8 @@ export function registerKeyLibrary<R>(
 	panelWindow: () => BrowserWindow | undefined = () => undefined,
 ) {
 	const store = iconStore(join(app.getPath("userData"), "key-library-v1.json"));
+	const picker = createIconPicker(management, renderer);
+	const applicationIcons = applicationIconLibrary();
 	const lock = runtime.runSync(Effect.makeSemaphore(1));
 	const publish = Effect.gen(function* () {
 		const envelope = yield* KeyEditing.read();
@@ -90,6 +107,7 @@ export function registerKeyLibrary<R>(
 		}
 	};
 	const clearDraft = (): void => {
+		picker.cancel();
 		if (!disposed)
 			void track(
 				runtime.runPromise(
@@ -115,11 +133,28 @@ export function registerKeyLibrary<R>(
 		)
 			return false;
 		if (
+			["import-pack", "import-icon", "remove-pack", "remove-icon"].includes(
+				command.type,
+			)
+		)
+			return picker.owns(event);
+		if (
 			event.sender === management()?.webContents &&
 			event.sender.getURL() === new URL(managementURL).href
 		)
 			return true;
 		if (command.type === "read") return true;
+		if (picker.owns(event))
+			return [
+				"icons",
+				"application-icons",
+				"import-pack",
+				"import-icon",
+				"remove-pack",
+				"remove-icon",
+				"pick-icon",
+				"cancel-icons",
+			].includes(command.type);
 		return (
 			(command.type === "activate" || command.type === "navigate") &&
 			event.sender === panelWindow()?.webContents &&
@@ -157,15 +192,47 @@ export function registerKeyLibrary<R>(
 					sender.removeListener("destroyed", clearDraft);
 				});
 			}
+			// The chooser awaits another renderer; it cannot hold the request lock.
+			if (command.type === "open-icons")
+				return privileged
+					? track(picker.open(command.token, command.locale))
+					: { _tag: "rejected", reason: "unauthorized" };
+			if (command.type === "cancel-icons") {
+				picker.cancel(command.token);
+				return { _tag: "success" };
+			}
+			if (command.type === "pick-icon")
+				return picker.choose(
+					event,
+					command.token,
+					command.data,
+					command.source,
+				);
+			// Host scans cannot reserve the live key/profile request semaphore.
+			if (command.type === "application-icons")
+				return track(
+					applicationIcons().then(
+						(pack): KeyReply =>
+							authorized(event, command)
+								? { _tag: "success", packs: [pack] }
+								: { _tag: "rejected", reason: "unauthorized" },
+						(cause: unknown): KeyReply => ({
+							_tag: "rejected",
+							reason: new IconImportFailed(cause).code,
+						}),
+					),
+				);
 			const preparation = Effect.gen(function* (): Effect.fn.Return<
 				PreparedImport,
 				IconImportFailed
 			> {
 				if (command.type !== "import-icon" && command.type !== "import-pack")
 					return undefined;
+				const owner = BrowserWindow.fromWebContents(event.sender);
+				if (!owner) return undefined;
 				const result = yield* Effect.tryPromise({
 					try: () =>
-						dialog.showOpenDialog({
+						dialog.showOpenDialog(owner, {
 							title:
 								command.type === "import-pack"
 									? "Import Icon"
@@ -372,6 +439,7 @@ export function registerKeyLibrary<R>(
 	return {
 		dispose: async () => {
 			disposed = true;
+			picker.cancel();
 			ipcMain.removeHandler(KEY_REQUEST);
 			for (const cleanup of owners.values()) cleanup();
 			owners.clear();

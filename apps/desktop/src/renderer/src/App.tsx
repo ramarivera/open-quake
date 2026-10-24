@@ -49,6 +49,7 @@ import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperSettings } from "./wallpaper/WallpaperViews";
 import { WeatherMediaSettings } from "./weather-media/WeatherMediaSettings";
 import "./styles.css";
+import { IconPickerSurface } from "./keys/IconPicker";
 import "./management/management.css";
 import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
 
@@ -409,6 +410,8 @@ function ManagementSurface({
 }
 
 export function App(): React.JSX.Element {
+	if (new URLSearchParams(window.location.search).get("surface") === "icons")
+		return <IconPickerSurface />;
 	if (
 		new URLSearchParams(window.location.search).get("surface") ===
 		"meeting-capture"

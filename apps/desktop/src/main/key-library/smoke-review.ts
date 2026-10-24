@@ -201,11 +201,11 @@ export async function verifyReviewEditor(
 		await click(win, ".key-title-settings summary");
 		await select(win, "#key-title-position", "mid");
 		await button(win, "Icon Library");
-		await click(win, ".icon-library-cell button");
+		await click(await h.iconPicker(win), ".icon-library-cell button");
 		await save();
 		const cosmetic = await saved("1,1");
 		assert.equal(cosmetic.config.title.pos, "mid");
-		assert.match(cosmetic.config.icon, /^data:image\/svg/);
+		assert.match(cosmetic.config.icon, /^data:image\/png;base64,/);
 		assert.equal(Option.getOrThrow(cosmetic.compatibility).unsupported, true);
 		await execute("1,1");
 		assert.deepEqual(calls, []);
@@ -271,7 +271,7 @@ export async function verifyReviewEditor(
 		await input(win, "#key-title-size", "14");
 		await click(win, 'button[aria-label="italic"]');
 		await button(win, "Icon Library");
-		await click(win, ".icon-library-cell button");
+		await click(await h.iconPicker(win), ".icon-library-cell button");
 		await ready(
 			win,
 			`document.querySelector(${JSON.stringify(title("1,2"))})?.textContent === 'Alt'`,
@@ -383,7 +383,7 @@ export async function verifyReviewEditor(
 		await click(win, ".key-title-settings summary");
 		await select(win, "#key-title-position", "mid");
 		await button(win, "Icon Library");
-		await click(win, ".icon-library-cell button");
+		await click(await h.iconPicker(win), ".icon-library-cell button");
 		await save();
 		const single = await saved("1,3");
 		assert.equal(

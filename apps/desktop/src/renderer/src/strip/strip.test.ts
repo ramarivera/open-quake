@@ -350,6 +350,48 @@ describe("generic tile", () => {
 		expect(markup).toContain('<img src="data:image/svg+xml,');
 	});
 
+	it.each(["", "resource:missing/999999", "data:image/png;base64,AA=="])(
+		"preserves generic artwork intent for %s",
+		(icon) => {
+			const envelope = decode(stripFixtureEnvelope());
+			const { profile, page } = selectStripPage(envelope, undefined);
+			const key = page.keys.find((entry) => entry.keyCode === "2,1");
+			expect(key).toBeDefined();
+			if (!key) return;
+			const markup = renderToStaticMarkup(
+				createElement(GenericTile, {
+					tile: {
+						keyCode: "2,1",
+						key: { ...key, config: { ...key.config, icon } },
+						type: key.config.type,
+						footprint: { row: 2, column: 1, width: 1, height: 1 },
+						slot: { x: 10, y: 250, width: 220, height: 220 },
+						slotRadius: 48,
+						box: { x: 10, y: 250, width: 220, height: 220 },
+						tileRadius: 48,
+						cellTheme: "commonBaseTheme",
+						fullBleed: false,
+						zIndex: 0,
+						supportTouchEffect: true,
+						hasTouchableSubElements: false,
+						pressFeedback: true,
+						pressScale: true,
+					},
+					context: {
+						now: undefined,
+						hourFormat: "24h",
+						voice: previewVoiceContext,
+					},
+				}),
+			);
+			expect(profile.name).toBe("Quick");
+			if (!icon) expect(markup).not.toContain("<img");
+			else if (icon.startsWith("resource:"))
+				expect(markup).toContain('<img src="data:image/svg+xml,');
+			else expect(markup).toContain('src="data:image/png;base64,AA=="');
+		},
+	);
+
 	it("loads only inline image data", () => {
 		expect(isInlineIcon("data:image/png;base64,AA==")).toBe(true);
 		expect(isInlineIcon("data:image/svg+xml,%3Csvg")).toBe(true);

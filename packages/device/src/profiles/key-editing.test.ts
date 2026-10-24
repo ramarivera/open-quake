@@ -365,3 +365,55 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it("preserves imported source identity independently for reset states without defaults", () => {
+	const key = createEmptyProfileKey("1,1");
+	const imported = {
+		...key,
+		config: {
+			...key.config,
+			icon: "portable-primary",
+			alterIcon: Option.some("portable-alternate"),
+			compatibility: Option.some({
+				iconSource: "pack-primary",
+				alternateIconSource: "pack-alternate",
+			}),
+		},
+	};
+	expect(resetKeyIcons(imported)).toEqual(imported);
+	const partial = resetKeyIcons({
+		...imported,
+		config: {
+			...imported.config,
+			compatibility: Option.some({
+				iconSource: "pack-primary",
+				alternateIconSource: "pack-alternate",
+				defaultIcon: "",
+			}),
+		},
+	});
+	expect(partial.config.icon).toBe("");
+	expect(partial.config.alterIcon).toEqual(imported.config.alterIcon);
+	const metadata = Option.getOrThrow(partial.config.compatibility);
+	expect(metadata.iconSource).toBe("");
+	expect(metadata.alternateIconSource).toBe("pack-alternate");
+	expect(iconInUse(partial, new Set(["pack-alternate"]))).toBe(true);
+	const alternate = resetKeyIcons({
+		...imported,
+		config: {
+			...imported.config,
+			compatibility: Option.some({
+				iconSource: "pack-primary",
+				alternateIconSource: "pack-alternate",
+				defaultAlterIcon: "alternate-default",
+			}),
+		},
+	});
+	expect(alternate.config.icon).toBe("portable-primary");
+	expect(Option.getOrThrow(alternate.config.compatibility).iconSource).toBe(
+		"pack-primary",
+	);
+	expect(
+		Option.getOrThrow(alternate.config.compatibility).alternateIconSource,
+	).toBe("alternate-default");
+});

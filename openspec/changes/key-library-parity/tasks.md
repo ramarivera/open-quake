@@ -25,7 +25,7 @@
 ## 6. Deferred acceptance and exact vendor presentation
 
 - [ ] 6.1 Lead-only physical acceptance: verify real shortcut/text effects, audible alarms, resource delivery and reconnect on the single QUAKE owner. This lane is restricted to mocks.
-- [ ] 6.2 Reconcile the remaining icon presentation and resource fallback differences with the Management Center/artwork lanes: picker window shape, exact paging/progress/palette, proprietary resource-table resets and extracted app artwork. See verification.md for the precise partial rows; do not copy unsafe SVG execution or bundle proprietary packs.
+- [ ] 6.2 Reconcile the remaining icon presentation and resource fallback differences with the Management Center/artwork lanes: picker window shape, exact paging/progress/palette, proprietary resource-table resets and extracted app artwork. See verification.md and verification-icon-presentation.md. Source 12d42ab now covers the owned picker, viewport batches, progress/palette, local application extraction, portable PNGs and semantic fallback, with six fresh gates and complete native fixtures. Exact proprietary resource artwork remains unclaimed; do not copy unsafe SVG execution or bundle proprietary packs.
 
 ## 7. Review integration
 
@@ -49,8 +49,14 @@
 
 ## 8. Lead acceptance
 
-- [ ] 8.1 Run quiet live-device acceptance on this Mac using a single QUAKE owner and isolated test data. Verify actual shortcut/text receipt, resource delivery and software reconnect; preserve user clipboard/state and retain exact evidence. User excludes audible tests for now and requests Home Assistant last. Full physical 6.1 remains open while alarms or physical reconnection remain unverified. Bead `open-quake-lih.10.2.20`.
+- [ ] 8.1 Run quiet live-device acceptance on this Mac using a single QUAKE owner and isolated test data. Verify actual shortcut/text receipt, resource delivery and software reconnect; preserve user clipboard/state and retain exact evidence. User excludes audible tests for now and requests Home Assistant last. Full physical 6.1 remains open while alarms or physical reconnection remain unverified. Bead `open-quake-lih.10.2.20`. Quiet startup/reopen and native app-icon selection → Save → real-device profile selection pass at 12d42ab. GUI lock still prevents physical pixels, shortcut receipt and messaging-app proof; see verification-icon-presentation.md.
 
 - [x] 8.2 Repair real-device profile enrollment and unambiguous DK-QUAKE display startup found by quiet acceptance. Own profile connection lifetime with the native HID scope, preserve ambiguity handling, release display-discovery reservations even when a resume/disconnect race cancels the fiber before it starts, add red/green consumer tests and repeat quiet live proof. Bead `open-quake-lih.10.2.21`; related device-lifecycle requirement updated together. Evidence: `verification-quiet-startup.md`; source `451f108`.
 
 - [x] 8.3 Enroll profiles independently of optional hardware preference loading. Preserve scoped disconnect cleanup and typed hardware failure reporting. Verify corrupt-preference startup and teardown through the actual main/fake-HID consumer. PR36 review follow-up; bead `open-quake-lih.10.2.22`. Evidence: `verification-quiet-startup.md`; tested source `d6aa21e`.
+
+- [x] 8.4 Address PR37 review findings: keep installed application scans outside the live key request lock, preserve intentionally blank artwork, and restrict icon mutations to the owned picker. Verify registered IPC concurrency/authority and rendered blank/resource behavior, six fresh gates and sequential native consumers. Bead `open-quake-lih.10.2.23`. Evidence: verification-icon-review-round-1.md; tested source `1fdd5ec`; 1,780 tests, four sequential native fixtures and quiet live icon delivery pass.
+
+- [x] 8.5 Fix PR37 reset source identity per artwork state, fill underflowing picker viewports on resize/load/zoom/search/group changes, and normalize accepted raster imports before storage. Prove reset → Save → deletion protection and native high-detail import → selection → Save; run fresh gates and sequential native consumers. Bead `open-quake-lih.10.2.24`. Evidence: verification-icon-review-round-2.md; tested source `90fb862`; six gates, 1,781 tests, four sequential native fixtures and quiet live reset/source proof pass.
+
+- [x] 8.6 Replace native picker closure timing assumptions with bounded destruction checks after selection and function replacement. Verify the full Keys fixture and focused lint/types; production behavior remains the verified round-two source. Bead `open-quake-lih.10.2.25`. Evidence: verification-icon-review-round-2.md and closure-followup/verification.json; complete native Keys, types, lint and strict change validation pass.

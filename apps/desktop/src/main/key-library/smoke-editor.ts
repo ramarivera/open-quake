@@ -92,6 +92,7 @@ export function interceptEditorRequests() {
 
 export type Harness = {
 	manager: BrowserWindow;
+	iconPicker: (manager: BrowserWindow) => Promise<BrowserWindow>;
 	profiles: ReturnType<typeof registerProfiles>;
 	scratch: string;
 	delays: ReturnType<typeof interceptEditorRequests>;

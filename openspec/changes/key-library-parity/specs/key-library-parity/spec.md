@@ -106,3 +106,46 @@ Page up/down SHALL wrap and goToPage SHALL clamp. Strip slide 0/1 SHALL select p
 #### Scenario: Navigation bounds
 - **WHEN** next page executes on the last page or previous page on the first
 - **THEN** selection wraps to the first or last page respectively
+
+### Requirement: Native icon picker and portable artwork
+The icon picker SHALL open as an owned, resizable 600×550 child window with matching minimum dimensions. It SHALL keep search outside the loading overlay, use the recovered dark palette, and append ten rows per page using max(1, floor(viewport width / (icon size + 12))) columns. Loading stages SHALL reflect completed operations rather than fabricated elapsed progress. Management transitions SHALL remain at most 160 ms.
+
+Selected artwork SHALL be rasterized to a 170×170 PNG through inert image decoding. Installed application artwork SHALL be extracted locally through the operating system and SHALL not be redistributed as a bundled pack. Unavailable proprietary resource references SHALL use an explicit open-source semantic fallback, preserving inline custom images and known defaults.
+
+#### Scenario: Owned picker cancellation
+- **WHEN** the editor changes key, profile, page, function, alternate state or navigates away while a picker or import is pending
+- **THEN** the obsolete picker closes and cannot update the newer draft or commit a late import
+- **AND** the child can list, import, remove and select icons but cannot activate keys, edit profiles or issue other management mutations
+
+#### Scenario: Picker resize and selection
+- **WHEN** the picker opens, resizes, searches or changes zoom
+- **THEN** its ten-row batches follow the viewport formula, search stays usable while loading, and selecting artwork updates only the current draft with a decoded 170×170 PNG
+
+#### Scenario: Portable application and fallback artwork
+- **WHEN** a user selects an installed application's icon or resets an unavailable legacy resource
+- **THEN** the saved key retains portable inline artwork without depending on a proprietary resource pack or an installed application on the restore host
+
+
+#### Scenario: Picker scan and mutation isolation
+- **WHEN** installed application artwork extraction is pending
+- **THEN** live panel activation and navigation remain responsive, and a closed or replaced picker cannot receive the late scan result
+- **AND** only the current owned picker can import or remove icons; the management window can open or cancel the picker but cannot bypass it to mutate icon storage
+
+#### Scenario: Intentionally blank artwork
+- **WHEN** a configured generic key has an empty icon string
+- **THEN** the editor, strip and thumbnails preserve its blank artwork
+- **AND** semantic fallback applies to unavailable nonempty resource references while inline custom artwork remains unchanged
+
+#### Scenario: Reset without a default
+- **WHEN** an imported key has no default artwork for either state and its icons are reset
+- **THEN** each state without a default retains its artwork and original source identity through Save, preserving in-use pack protection
+- **AND** resetting a state with a default updates only that state's artwork source
+
+#### Scenario: Underfilled icon viewport
+- **WHEN** the picker loads or its height, width, zoom, search or group changes and the current batch does not overflow
+- **THEN** it appends complete ten-row batches until scrolling is possible or the selected group is exhausted
+
+#### Scenario: Compressed raster expansion
+- **WHEN** a raster import passes file and pixel limits but its decoded PNG exceeds the selection source limit
+- **THEN** the import normalizes the image before storage, preserving aspect ratio and producing a selectable source
+- **AND** selection and Save retain portable 170×170 artwork and source identity

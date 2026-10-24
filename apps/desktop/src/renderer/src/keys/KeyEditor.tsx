@@ -30,8 +30,9 @@ import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { editableFocus } from "./editor-input";
-import { IconLibrary } from "./IconLibrary";
+import { NativeIconPicker } from "./IconPicker";
 import { KeyTitleSettings } from "./KeyTitleSettings";
+import { keyArtwork } from "./key-artwork";
 import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
@@ -362,7 +363,18 @@ export function KeyEditor(): React.JSX.Element {
 			?.pages.filter((p) => p.id === page.id)
 			.flatMap((p) => p.keys)
 			.find((k) => k.keyCode === key.keyCode);
-		void update(resetKeyIcons(key, original));
+		const reset = resetKeyIcons(key, original);
+		void update({
+			...reset,
+			config: {
+				...reset.config,
+				icon: keyArtwork(reset.config.icon, reset.config.type),
+				alterIcon: Option.map(reset.config.alterIcon, (icon) =>
+					keyArtwork(icon, reset.config.type),
+				),
+			},
+		});
+		setIcons(false);
 		setAlternate(false);
 	};
 	return (
@@ -510,6 +522,7 @@ export function KeyEditor(): React.JSX.Element {
 											supportTouchEffect: entry.supportTouchEffect,
 										},
 									});
+									setIcons(false);
 									setAlternate(false);
 									void update(next);
 								}}
@@ -554,14 +567,20 @@ export function KeyEditor(): React.JSX.Element {
 								<button
 									type="button"
 									aria-pressed={!alternate}
-									onClick={() => setAlternate(false)}
+									onClick={() => {
+										setIcons(false);
+										setAlternate(false);
+									}}
 								>
 									1
 								</button>
 								<button
 									type="button"
 									aria-pressed={alternate}
-									onClick={() => setAlternate(true)}
+									onClick={() => {
+										setIcons(false);
+										setAlternate(true);
+									}}
 								>
 									2
 								</button>
@@ -578,6 +597,7 @@ export function KeyEditor(): React.JSX.Element {
 							<button
 								type="button"
 								disabled={!keyEditable(key, "icon")}
+								aria-label="Reset icon to default"
 								onClick={resetIcon}
 							>
 								Reset to default
@@ -680,24 +700,40 @@ export function KeyEditor(): React.JSX.Element {
 				) : (
 					<p>Select a key to edit.</p>
 				)}
-				{icons && key && (
-					<IconLibrary
-						key={selection?.target.token}
-						onClose={() => setIcons(false)}
-						onSelect={(data) =>
+				{icons && key && selection && (
+					<NativeIconPicker
+						key={`${selection.target.token}:${alternate}:${key.config.type}`}
+						token={selection.target.token}
+						locale={locale}
+						onClose={(reason) => {
+							setIcons(false);
+							if (reason) setStatus(reason);
+						}}
+						onSelect={(data, source) => {
+							const active = current.current;
+							if (!active || active.target.token !== selection.target.token)
+								return;
 							void update(
 								{
-									...key,
+									...active.key,
 									config: {
-										...key.config,
+										...active.key.config,
+										compatibility: Option.some({
+											...Option.getOrElse(
+												active.key.config.compatibility,
+												() => ({}),
+											),
+											[alternate ? "alternateIconSource" : "iconSource"]:
+												source ?? data,
+										}),
 										...(alternate
 											? { alterIcon: Option.some(data) }
 											: { icon: data }),
 									},
 								},
-								selection?.target.token,
-							)
-						}
+								active.target.token,
+							);
+						}}
 					/>
 				)}
 				{key?.config.type === "dkDesktopClock" && (
