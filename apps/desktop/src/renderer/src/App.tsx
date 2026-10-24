@@ -1,19 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ConnectionCheck } from "./ConnectionDiagnostic";
+import { HardwareSettings } from "./hardware/HardwareSettings";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { StripPanel } from "./strip/StripPanel";
+import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
 	useAppearance,
 } from "./theme/useAppearance";
 import { StatusDot } from "./ui/Form";
-import { AppearanceIcon, DeviceIcon, ScreenIcon } from "./ui/icons";
+import {
+	AppearanceIcon,
+	ConnectionIcon,
+	ControlsIcon,
+	DeviceIcon,
+	ScreenIcon,
+} from "./ui/icons";
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
 import "./management/management.css";
+import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
 
 function useSurface(): "management" | "panel" {
 	const [surface] = useState<"management" | "panel">(() =>
@@ -32,7 +42,13 @@ function PanelSurface(): React.JSX.Element {
 	return <StripPanel />;
 }
 
-type Page = "overview" | "screen" | "appearance";
+type Page =
+	| "overview"
+	| "profiles"
+	| "connection"
+	| "screen"
+	| "controls"
+	| "appearance";
 
 type NavItem = {
 	readonly id: Page;
@@ -50,7 +66,10 @@ const sections: ReadonlyArray<{
 		title: "Device",
 		items: [
 			{ id: "overview", label: "Overview", Icon: DeviceIcon },
+			{ id: "profiles", label: "Knob Profile", Icon: DeviceIcon },
+			{ id: "connection", label: "Connection", Icon: ConnectionIcon },
 			{ id: "screen", label: "Screen", Icon: ScreenIcon },
+			{ id: "controls", label: "Controls", Icon: ControlsIcon },
 		],
 	},
 	{
@@ -68,6 +87,16 @@ function ManagementSurface({
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
 	const [page, setPage] = useState<Page>("overview");
+	const [deviceReady, setDeviceReady] = useState(false);
+	const wasReady = useRef(false);
+	const onReady = useCallback((ready: boolean): void => {
+		setDeviceReady(ready);
+		if (ready)
+			setPage((current) => (current === "connection" ? "screen" : current));
+		else if (wasReady.current)
+			setPage((current) => (current === "screen" ? "connection" : current));
+		wasReady.current = ready;
+	}, []);
 	const content = useRef<HTMLElement>(null);
 	const bridge = window.openQuake;
 	const connection = describeConnection(quake.connection, bridge !== undefined);
@@ -118,20 +147,40 @@ function ManagementSurface({
 					open-quake{bridge ? ` ${bridge.version}` : ""}
 				</p>
 			</aside>
-			<main className="content" ref={content}>
+			<main
+				className="content"
+				ref={content}
+				data-session={deviceReady ? "device" : "preview"}
+			>
 				<div className="content-inner">
+					{/* Keep the diagnostic subscription alive while navigating pages. */}
+					<div hidden={page !== "connection"}>
+						<ConnectionCheck onReady={onReady} />
+					</div>
 					{page === "overview" ? (
 						<OverviewPage
 							quake={quake}
 							connection={connection}
 							snapshot={wallpaper.snapshot}
 							onOpenScreen={() => open("screen")}
+							onOpenConnection={() => open("connection")}
 						/>
+					) : page === "profiles" ? (
+						<ProfilesManager />
 					) : page === "screen" ? (
-						<WallpaperSettings wallpaper={wallpaper} />
-					) : (
+						<>
+							<WallpaperSettings wallpaper={wallpaper} />
+							<ClockSettings
+								hourFormat={
+									wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
+								}
+							/>
+						</>
+					) : page === "controls" ? (
+						<HardwareSettings />
+					) : page === "appearance" ? (
 						<ThemeSettings controller={appearance} />
-					)}
+					) : null}
 				</div>
 			</main>
 		</div>
@@ -141,6 +190,10 @@ function ManagementSurface({
 export function App(): React.JSX.Element {
 	const surface = useSurface();
 	const appearance = useAppearance();
+	if (
+		new URLSearchParams(location.search).get("surface") === "profile-thumbnail"
+	)
+		return <ProfileThumbnail />;
 	return surface === "panel" ? (
 		<PanelSurface />
 	) : (

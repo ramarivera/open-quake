@@ -90,10 +90,9 @@ management preview (`ui/DeviceScreen.tsx`) both render `StripScreen` on a fixed
 
 ## Seams for other lanes
 
-- **strip-clock:** replace `ClockPlaceholder` in `tileRegistry.tsx` with
-  `ClockTile` from `tiles/clock/`. It receives `{ widthPx, heightPx, now, theme }`
-  (1920×480 on the strip). `theme` is `"season"` until the clock reads it from
-  the key.
+- **strip-clock:** done. `ClockSlot` renders `tiles/clock/ClockTile`
+  (`openspec/changes/desktop-clock`) with the clock store's theme, media and
+  seconds option, ticking on minute boundaries from the host clock.
 - **strip-touch:** call `tileAt(normalizedPoint, layout)`. It returns the visible
   tile whose rendered slot contains the point, with `keyCode`,
   `supportTouchEffect`, `hasTouchableSubElements` and `pressFeedback`, or

@@ -40,6 +40,14 @@ export function ScreenIcon(): React.JSX.Element {
 	);
 }
 
+export function ConnectionIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="M5 1.5v3m6-3v3M3.5 4.5h9v2a4.5 4.5 0 0 1-9 0Zm4.5 6.5v3.5" />
+		</Icon>
+	);
+}
+
 export function AppearanceIcon(): React.JSX.Element {
 	return (
 		<Icon>
@@ -49,6 +57,17 @@ export function AppearanceIcon(): React.JSX.Element {
 				fill="currentColor"
 				stroke="none"
 			/>
+		</Icon>
+	);
+}
+
+export function ControlsIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="M2 4h5m3 0h4M2 8h1m3 0h8M2 12h7m3 0h2" />
+			<circle cx="8.5" cy="4" r="1.5" />
+			<circle cx="4.5" cy="8" r="1.5" />
+			<circle cx="10.5" cy="12" r="1.5" />
 		</Icon>
 	);
 }

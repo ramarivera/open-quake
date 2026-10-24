@@ -38,7 +38,7 @@ Save expected revisions through the profile conductor. On selection change, read
 
 ### Approved (Ramiro, 2026-10-23): rotation, brightness, and navigation
 
-Priority is an explicitly focused visible key with supportKnob and two validated directional actions; otherwise the matching left/right profile slot; otherwise a center function that declares rotation support. Empty or unsupported slots do nothing and report unavailable where appropriate. Left means normalized counterclockwise and right means clockwise; L1 proves the physical direction mapping. Press is center only. When short press and hold share the center, delay short-press dispatch until release is classified short; raw press cannot preempt a later voice hold. Selecting a center brightness mode does not cause brightness changes on press.
+Superseded by approved GAP-MAP decision 1, 2026-10-23: physical rotation routes focused visible supportKnob tile, available armed player volume, thumbnail picker, then FunctionWheel. Stored left/right and center rotation assignments remain editable compatibility data and never execute from idle rotation. Physical short press interrupts voice or confirms a picker; double jumps to Colorful Screen; 5/255 enter/leave PTT with a correlated generation. See knob-model-parity for audit rows, source evidence and timing. No host gesture threshold is used.
 
 Use canonical `panelBrightness` with one `stepPercent` action, initially 5. Counterclockwise subtracts and clockwise adds, clamped to a verified adapter's 0..100 logical range. This approved normalized API does not establish a firmware scale. Recovered luminance and brightness labels are ambiguous, so do not automatically map either to panel, host screen, or RGB brightness. Before first-release activation, L1/desktop must identify the actual panel brightness mechanism and document conversion/readback. If unavailable, keep the setting editable but report capability unavailable. `device-lighting-config` owns RGB separately.
 
@@ -66,6 +66,6 @@ Extract a legacy reserved entry into profile.knob, decode known aliases, normali
 
 ## Approval and remaining verification
 
-Approved (Ramiro, 2026-10-23): all recommendations previously marked Proposed (pending Ramiro), including slot sentinels, routing precedence, normalized panel brightness and its 5-point step, direct-route defaults, and ambiguous-import handling. Approval settles product policy; the normalized percentage API does not establish a firmware scale.
+Approved (Ramiro, 2026-10-23): all recommendations previously marked Proposed (pending Ramiro), including slot sentinels, routing precedence, normalized panel brightness and its 5-point step, direct-route defaults, and ambiguous-import handling. GAP-MAP decision 1 supersedes the earlier idle slot precedence. Approval settles product policy; the normalized percentage API does not establish a firmware scale.
 
 The module's normalized event contract is documented in `packages/device/src/knob/README.md`. L1 and voice integration remains to be verified. Actual physical direction, press/hold/release, device account independence, panel target, brightness scale, and hardware readback are unverified.

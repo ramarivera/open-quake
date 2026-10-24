@@ -7,64 +7,42 @@ how device events reach every renderer surface.
 ## ADDED Requirements
 
 ### Requirement: Panel display selection
-The app SHALL place the panel window on the display whose label contains
-`DK-QUAKE` case-insensitively, else on a display sized 1920x480 or 480x1920,
-else on the primary display. Label matches SHALL take precedence over size
-matches. On the QUAKE strip the panel SHALL cover the display's full bounds,
-menu-bar area included, as a window tiling managers ignore (an NSPanel on
-macOS) kept above the menu bar. When macOS reports the strip's native portrait
-480x1920 framebuffer, the renderer SHALL rotate its logical 1920x480 canvas by
-90 degrees, as DK-Suite does. Without the strip, the panel SHALL be a normal,
-unrotated window at the primary display's work-area origin, fitting within the
-work area up to 1920x480.
+The app SHALL prefer a confirmed screen-off/on binding, then a unique physical size match, then a unique case-insensitive DK-QUAKE label. Physical pixels SHALL be rounded logical size times scaleFactor, with both dimensions strictly less than 10 pixels from 1920x480 or 480x1920. Ambiguous candidates SHALL remain unbound pending discovery. The strip SHALL use full bounds, above the menu bar, with a stable frameless panel and a logical 1920x480 canvas rotated 90 degrees for portrait. A fallback SHALL fit the primary work area up to 1920x480, remain unrotated, and be visible only in development by default. Sources: MAIN-042, MAIN-050, MAIN-052; approved GAP-MAP decision 7; open-quake-l86.13.
 
-#### Scenario: Labelled display attached
-- **WHEN** a display labelled `DK-QUAKE` is connected
-- **THEN** the panel window covers that display's full bounds
+#### Scenario: Scaled strip display
+- **WHEN** logical size is 960x240 at scaleFactor 2
+- **THEN** it is a physical 1920x480 strip candidate and covers its full logical bounds
 
 #### Scenario: Native portrait strip
-- **WHEN** macOS reports the DK-QUAKE display as 480x1920
-- **THEN** the panel covers the 480x1920 bounds and the renderer rotates the 1920x480 canvas upright
+- **WHEN** the strip reports 480x1920 physical pixels
+- **THEN** the panel canvas rotates 90 degrees
 
-#### Scenario: Portrait primary without the strip
-- **WHEN** no display matches and the primary display is portrait
-- **THEN** the fallback panel is a normal 1920x480-bounded window and its canvas is not rotated
-
-#### Scenario: Mixed-case label and competing size match
-- **WHEN** one display is labelled `dK-qUaKe` and an earlier display has size 1920x480
-- **THEN** the panel window selects the labelled display
-
-#### Scenario: Size match without a matching label
-- **WHEN** no display label contains `DK-QUAKE` and a display has size 1920x480 or 480x1920
-- **THEN** the panel window selects that display
+#### Scenario: Tolerance boundary
+- **WHEN** a dimension differs by exactly ten physical pixels
+- **THEN** size matching rejects it, while a label may still identify a resolution mismatch
 
 #### Scenario: No panel hardware
-- **WHEN** no display matches by label or size
-- **THEN** the panel window opens on the primary display
+- **WHEN** no display matches
+- **THEN** development can show the primary fallback and release hides it by default
 
 ### Requirement: Panel follows display topology
-The app SHALL reselect the panel display after Electron `display-added`,
-`display-removed`, and `display-metrics-changed` events. It SHALL move and
-resize the existing panel window, reload it only when its rotation changes,
-recreate it if it has been destroyed, and replace it when switching between
-the strip and the fallback, creating the new window before closing the old.
-It SHALL remove display listeners before quitting.
+The app SHALL observe add/remove/metrics changes, hide immediately when its bound display disappears, and reuse its existing window during the 3000 ms USB disconnect grace. It SHALL relocate on bounds changes, reload only on rotation changes, recreate destroyed windows, and remove listeners and interrupt recovery on quit. Release SHALL keep an absent strip hidden; development SHALL offer the primary fallback after grace. Sources: MAIN-011, MAIN-012, MAIN-045, MAIN-050, MAIN-053, MAIN-060.
 
-#### Scenario: Panel display attached after startup
-- **WHEN** the app starts on the primary display and a DK-QUAKE display is added
-- **THEN** a strip panel window replaces the fallback and covers the DK-QUAKE display's bounds
+#### Scenario: Brief disconnect
+- **WHEN** the device returns within 3000 ms
+- **THEN** the existing strip window is reused
 
 #### Scenario: Panel display removed
-- **WHEN** the selected DK-QUAKE display is removed and no other display matches
-- **THEN** a normal fallback window replaces the strip panel on the current primary display
+- **WHEN** the selected strip disappears
+- **THEN** its panel hides immediately and a release build does not show it on the primary display
 
 #### Scenario: Strip moved or rotated
-- **WHEN** the DK-QUAKE display moves to a new origin, or the user rotates it to 1920x480 in System Settings
-- **THEN** the panel follows the new bounds and reloads only if its canvas rotation changed
+- **WHEN** strip bounds or orientation change
+- **THEN** the panel follows and reloads only if canvas rotation changed
 
-#### Scenario: Closed panel recreated on topology change
-- **WHEN** the panel window has been destroyed and a display is added or removed
-- **THEN** a new panel window opens on the selected display and receives subsequent device events
+#### Scenario: Closed panel recreated
+- **WHEN** topology changes after the panel was destroyed
+- **THEN** a new panel receives subsequent device events
 
 ### Requirement: Stable panel window title
 The panel window title SHALL remain `open-quake panel` after the renderer

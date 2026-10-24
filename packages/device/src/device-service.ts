@@ -1,4 +1,8 @@
-import type { ProtocolError } from "@open-quake/protocol";
+import {
+	encodeHardwareCommand,
+	type HardwareCommand,
+	type ProtocolError,
+} from "@open-quake/protocol";
 import {
 	Deferred,
 	Effect,
@@ -19,13 +23,14 @@ import {
 	isQuakeDevice,
 } from "./device-contracts.js";
 import {
+	QuakeConnectionClosed,
 	QuakeConnectionConfigInvalid,
 	QuakeDeviceNotFound,
 	type QuakeHidCloseFailed,
 	type QuakeHidDiscoveryFailed,
 	type QuakeHidOpenFailed,
 	type QuakeHidReadFailed,
-	type QuakeHidWriteFailed,
+	QuakeHidWriteFailed,
 } from "./device-errors.js";
 import { HidTransport } from "./hid-transport.js";
 import { NodeHidLive } from "./node-hid.js";
@@ -34,6 +39,7 @@ import {
 	keepAliveFrame,
 	keepAliveReport,
 } from "./protocol-adapter.js";
+import { recoverHidReads } from "./read-recovery.js";
 
 import { startTouchSource } from "./touch/touch-source.js";
 
@@ -55,6 +61,12 @@ interface Termination {
 
 export interface QuakeConnection {
 	readonly info: HidDeviceInfo;
+	readonly sendHardware: (
+		command: HardwareCommand,
+	) => Effect.Effect<
+		void,
+		ProtocolError | QuakeHidWriteFailed | QuakeConnectionClosed
+	>;
 	/** Broadcast stream. Input events are not replayed; termination is replayed. */
 	readonly events: Stream.Stream<DeviceEvent, DeviceStreamError>;
 	/** Acquire a subscription before generating input, without scheduler races. */
@@ -64,6 +76,9 @@ export interface QuakeConnection {
 		Scope.Scope
 	>;
 	readonly disconnect: () => Effect.Effect<void, QuakeHidCloseFailed>;
+	readonly setScreenPower: (
+		on: boolean,
+	) => Effect.Effect<void, QuakeHidWriteFailed | ProtocolError>;
 	readonly touch: {
 		readonly setCaptureActive: (active: boolean) => Effect.Effect<void>;
 		readonly setLocked: (locked: boolean) => Effect.Effect<void>;
@@ -97,11 +112,15 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				if (!Number.isFinite(interval) || interval <= 0)
 					return yield* new QuakeConnectionConfigInvalid();
 				const devices = yield* discover();
-				const info = devices[0];
+				const info = options.path
+					? devices.find((device) => device.path === options.path)
+					: devices[0];
 				if (!info) return yield* new QuakeDeviceNotFound();
 				const events =
 					yield* PubSub.unbounded<Take.Take<DeviceEvent, DeviceStreamError>>();
 				yield* Effect.addFinalizer(() => PubSub.shutdown(events));
+				let sendHardware: QuakeConnection["sendHardware"] = () =>
+					Effect.fail(new QuakeConnectionClosed());
 				const touchReady =
 					yield* Deferred.make<
 						Effect.Effect.Success<ReturnType<typeof startTouchSource>>
@@ -118,9 +137,45 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 					stop("error", Option.some(error));
 				const lifetime = Effect.scoped(
 					Effect.gen(function* () {
+						const hardwareWriteLock = yield* Effect.makeSemaphore(1);
+						let acceptingWrites = true;
 						const handle = yield* Effect.acquireRelease(
 							transport.open(info),
-							(handle) => Deferred.complete(closed, handle.close()),
+							(handle) =>
+								Effect.sync(() => {
+									acceptingWrites = false;
+								}).pipe(
+									Effect.zipRight(
+										hardwareWriteLock.withPermits(1)(
+											Deferred.complete(closed, handle.close()),
+										),
+									),
+								),
+						);
+						sendHardware = Effect.fn("QuakeConnection.sendHardware")(
+							(
+								command: HardwareCommand,
+							): ReturnType<QuakeConnection["sendHardware"]> =>
+								hardwareWriteLock.withPermits(1)(
+									Effect.gen(function* () {
+										if (
+											!acceptingWrites ||
+											Option.isSome(yield* Deferred.poll(stopped)) ||
+											Option.isSome(yield* Deferred.poll(finished))
+										)
+											return yield* new QuakeConnectionClosed();
+										const bytes = yield* encodeHardwareCommand(command);
+										// Native promises cannot be cancelled. Teardown drains this lock.
+										yield* handle.write(bytes);
+									}).pipe(Effect.uninterruptible),
+								),
+						);
+						const write = (report: Uint8Array) =>
+							hardwareWriteLock.withPermits(1)(handle.write(report));
+						const reports = yield* recoverHidReads(
+							handle.reports,
+							discover().pipe(Effect.ignore),
+							fail,
 						);
 						const touch = yield* startTouchSource(transport, (points) =>
 							PubSub.publish(
@@ -130,7 +185,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						);
 						yield* Deferred.succeed(touchReady, touch);
 						// toPull acquires the incoming stream and its listeners before we signal ready.
-						const pull = yield* Stream.toPull(handle.reports);
+						const pull = yield* Stream.toPull(reports);
 						yield* Stream.runForEach(
 							Stream.repeatEffectChunkOption(pull),
 							(report) => {
@@ -153,7 +208,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 							Effect.sleep(interval).pipe(
 								Effect.zipRight(
 									Effect.suspend(keepAliveReport).pipe(
-										Effect.flatMap(handle.write),
+										Effect.flatMap(write),
 										Effect.uninterruptible,
 									),
 								),
@@ -231,6 +286,15 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				return {
 					touch: yield* Deferred.await(touchReady),
 					info,
+					sendHardware: (command) => sendHardware(command),
+					setScreenPower: (on) =>
+						Effect.suspend(() =>
+							sendHardware({ _tag: "ScreenPower", on }),
+						).pipe(
+							Effect.catchTag("QuakeConnectionClosed", (cause) =>
+								Effect.fail(new QuakeHidWriteFailed(cause)),
+							),
+						),
 					events: Stream.unwrapScoped(subscribe()),
 					subscribe,
 					disconnect: Effect.fn("QuakeConnection.disconnect")(

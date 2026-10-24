@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import type { Display } from "electron";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
 	SYNTHETIC_TOUCH_DOWN,
@@ -19,8 +20,14 @@ import {
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { registerHardware } from "../hardware";
+import { registerKnob } from "../knob";
+import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
+import { registerLifecycle } from "../lifecycle/registration";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { makeDisplay } from "../test/display";
 import {
 	clockProfile,
 	meetAiProfile,
@@ -31,8 +38,15 @@ import {
 } from "../test/strip-fixtures";
 import { MediaLive, registerMedia } from "./index";
 
+assert.equal(
+	process.env.OPEN_QUAKE_MOCK_DEVICE,
+	"1",
+	"Native smoke requires mock device mode",
+);
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
+// The clock tile reads its own store, as in the app.
+registerClockScheme();
 const pngPath = join(directory, "checkerboard.png");
 const jpegPath = join(directory, "second.jpg");
 let selectedPath = pngPath;
@@ -105,6 +119,10 @@ async function smoke(): Promise<void> {
 	};
 	const management = new BrowserWindow(options);
 	const panel = new BrowserWindow(options);
+	const knob = registerKnob(
+		() => panel,
+		() => [management, panel],
+	);
 	let runtimeDisposed = false;
 	const runtime = ManagedRuntime.make(
 		Layer.merge(
@@ -119,6 +137,47 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	const clock = registerClock(
+		ManagedRuntime.make(ClockLive(directory)),
+		() => management,
+	);
+	const unregisterHardware = registerHardware(
+		() => undefined,
+		() => management,
+		true,
+	);
+	let mockDisplays: readonly Display[] = [];
+	const lifecycleRuntime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: true,
+			displays: () => mockDisplays,
+			watch: () => () => {},
+			panel: () => {},
+			bus: () => ({
+				on: () => () => {},
+				currentStatus: () => undefined,
+				recover: () => Effect.sleep(100),
+			}),
+			notify: (status) =>
+				management.webContents.send("quake:diagnostic", status),
+			prompts: {
+				platform: process.platform,
+				mock: true,
+				displays: () => mockDisplays,
+				primaryId: () => 1,
+				prompt: () => Effect.die("Smoke must never prompt"),
+				native: () => Effect.die("Smoke must never call native display APIs"),
+				openSettings: () => Effect.void,
+			},
+		}),
+	);
+	const lifecycle = await lifecycleRuntime.runPromise(DeviceLifecycle);
+	const removeLifecycle = registerLifecycle(
+		lifecycleRuntime,
+		() => management,
+		pathToFileURL(resolve("out/renderer/index.html")).href,
+	);
 	let profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
 	app.once("will-quit", () => {
 		assert(
@@ -235,6 +294,207 @@ async function smoke(): Promise<void> {
 	);
 	const artifacts = process.argv[2];
 	if (artifacts) await mkdir(artifacts, { recursive: true });
+	management.setSize(1100, 1000);
+	// Exercise the production diagnostic preload/handler/controller with synthetic topology.
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
+	);
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	await management.webContents.executeJavaScript(
+		"document.querySelector('.connection-check').scrollIntoView(); null;",
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("No USB device detected"),
+	);
+	if (artifacts) {
+		await mkdir(artifacts, { recursive: true });
+		await writeFile(
+			join(artifacts, "diagnostic-disconnected.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	}
+	await management.webContents.executeJavaScript(
+		"document.querySelector('.connection-actions button').click(); null;",
+	);
+	await new Promise<void>((done) => setTimeout(done, 30));
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.connection-actions button').disabled",
+		),
+		true,
+	);
+	await new Promise<void>((done) => setTimeout(done, 150));
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.connection-actions button').disabled",
+		),
+		false,
+	);
+	const rejected: unknown = await panel.webContents.executeJavaScript(
+		"window.quakeLifecycle.request({action:'redetect'})",
+	);
+	assert.deepEqual(rejected, {
+		ok: false,
+		code: "DESKTOP.LIFECYCLE.FORBIDDEN",
+	});
+	mockDisplays = [
+		makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1024, height: 768 },
+		}),
+	];
+	await lifecycleRuntime.runPromise(
+		lifecycle.onStatus({ source: "mock", kind: "status", state: "connected" }),
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("current 1024x768"),
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-resolution.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	if (artifacts) {
+		management.setSize(390, 844);
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.connection-check').scrollIntoView(); null;",
+		);
+		await new Promise<void>((done) => setTimeout(done, 100));
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				"document.documentElement.scrollWidth > innerWidth",
+			),
+			false,
+		);
+		await writeFile(
+			join(artifacts, "diagnostic-narrow.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+		management.setSize(1100, 1000);
+	}
+	mockDisplays = [
+		makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1920, height: 480 },
+		}),
+	];
+	await lifecycleRuntime.runPromise(lifecycle.topology());
+	await new Promise<void>((done) => setTimeout(done, 100));
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			"document.querySelector('[data-session]').getAttribute('data-session')",
+		),
+		"device",
+	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Screen"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Passing the connection check must enter Screen automatically",
+	);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
+	);
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("both connections are normal"),
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-ready.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	// Readiness loss must return from Screen to diagnostics through the mounted subscriber.
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Screen"]').click(); null;`,
+	);
+	await settle(100);
+	management.webContents.send("quake:diagnostic", {
+		...lifecycle.status(),
+		checking: true,
+	});
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Connection"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"A pending pairing must return Screen to Connection",
+	);
+	const timedOut = {
+		...lifecycle.status(),
+		hdmi: "fail",
+		checking: false,
+		issue: "timeout",
+	};
+	management.webContents.send("quake:diagnostic", timedOut);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Connection"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Pairing timeout must keep diagnostics visible",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-pairing-timeout.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Screen"]').click(); null;`,
+	);
+	await settle(100);
+	management.webContents.send("quake:diagnostic", timedOut);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Screen"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Deliberate offline Screen preview must remain available on repeated failed status",
+	);
+	await lifecycleRuntime.runPromise(lifecycle.topology());
+	await settle(100);
+	management.webContents.send("quake:diagnostic", {
+		...lifecycle.status(),
+		issue: "native-failed",
+	});
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Connection"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Readiness loss while on Screen must return to Connection",
+	);
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("Quake display arrangement failed"),
+	);
+	assert(
+		(
+			await management.webContents.executeJavaScript("document.body.innerText")
+		).includes("10 minutes"),
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-layout-failed.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await lifecycleRuntime.runPromise(lifecycle.topology());
 	// Built-in-like profiles on the panel, swapped through the read-only channel.
 	const fixtures = [
 		["quick", quickProfile, "commonBaseTheme"],
@@ -251,7 +511,7 @@ async function smoke(): Promise<void> {
 		});
 		await settle();
 		const shown: unknown = await panel.webContents.executeJavaScript(
-			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.strip-clock-placeholder') }))()`,
+			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.oq-clock') }))()`,
 		);
 		assert.deepEqual(shown, {
 			theme,
@@ -327,6 +587,7 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	await knob.dispose();
 	// Exercise the mounted panel adapter via the real preload/event IPC.
 	await panel.webContents.executeJavaScript(`(() => {
 		window.__stripKeys = [];
@@ -447,7 +708,11 @@ async function smoke(): Promise<void> {
 	process.stdout.write(
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
+	unregisterHardware();
+	removeLifecycle();
+	await lifecycleRuntime.dispose();
 	await profiles.dispose();
+	await clock.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

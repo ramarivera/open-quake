@@ -5,6 +5,7 @@ import {
 	layoutIssues,
 	parseProfileCoordinate,
 } from "./profile-invariants.js";
+import { ProfileManagerState } from "./profile-manager-contracts.js";
 
 export { QUAKE_LOGICAL_GRID } from "./profile-grid.js";
 
@@ -196,6 +197,11 @@ export const SaveProfileRequest = Schema.Struct({
 	profile: ProfileDraft,
 });
 export type SaveProfileRequest = typeof SaveProfileRequest.Encoded;
+export const SelectProfileRequest = Schema.Struct({
+	deviceId: StableId.pipe(Schema.filter((serial) => serial !== "__proto__")),
+	profileId: StableId,
+	pageId: Schema.optional(StableId),
+});
 export const ProfileSelection = Schema.Struct({
 	profileId: StableId,
 	pageId: StableId,
@@ -204,6 +210,7 @@ export type ProfileSelection = typeof ProfileSelection.Type;
 /** Reference repair is explicit in the repository, not a lossy Schema transform. */
 export const ProfileEnvelope = Schema.Struct({
 	schemaVersion: Schema.Literal(1),
+	manager: optional(ProfileManagerState),
 	profiles: Schema.NonEmptyArray(Profile).pipe(
 		Schema.filter(
 			(profiles) =>

@@ -67,10 +67,11 @@ function broadcast(reply: ProfileSnapshotReply): void {
  * loads and answers; every committed snapshot is then pushed. Editing
  * commands belong to profiles-key-grid task 2.1 and the profile manager.
  */
-export function registerProfiles(
-	runtime: ManagedRuntime.ManagedRuntime<ProfileService, never>,
+export function registerProfiles<R>(
+	runtime: ManagedRuntime.ManagedRuntime<R | ProfileService, never>,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+	owned = true,
 ): { dispose: () => Promise<void> } {
 	const load = ProfileService.loadProfiles().pipe(
 		Effect.map(({ envelope }) => ready(envelope)),
@@ -105,9 +106,9 @@ export function registerProfiles(
 		if (shutdown) return shutdown;
 		ipcMain.removeHandler(PROFILES_READ);
 		app.removeListener("before-quit", onBeforeQuit);
-		shutdown = runtime
-			.runPromise(Fiber.interrupt(published))
-			.then(() => runtime.dispose());
+		shutdown = runtime.runPromise(Fiber.interrupt(published)).then(async () => {
+			if (owned) await runtime.dispose();
+		});
 		return shutdown;
 	};
 	let quitting = false;
@@ -118,6 +119,6 @@ export function registerProfiles(
 			void dispose().then(() => app.quit());
 		}
 	};
-	app.on("before-quit", onBeforeQuit);
+	if (owned) app.on("before-quit", onBeforeQuit);
 	return { dispose };
 }
