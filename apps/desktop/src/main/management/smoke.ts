@@ -846,23 +846,31 @@ async function smoke() {
 		const inlineBitmap = nativeImage
 			.createFromDataURL(inlineThumbnail.view.thumbnails[profileId])
 			.toBitmap();
-		let inlineColored = 0;
-		for (let i = 0; i < inlineBitmap.length; i += 4)
-			if (
-				(inlineBitmap[i + 2] ?? 0) > 120 &&
-				(inlineBitmap[i + 1] ?? 0) > 70 &&
-				(inlineBitmap[i] ?? 255) < 110
-			)
-				inlineColored++;
-		assert(
-			inlineColored > 20,
-			"Inline legacy emoji artwork must survive thumbnail generation",
-		);
 		await writeFile(
 			join(artifacts, "emoji-inline-profile-thumbnail.png"),
 			nativeImage
 				.createFromDataURL(inlineThumbnail.view.thumbnails[profileId])
 				.toPNG(),
+		);
+		const expectedColor = nativeImage
+			.createFromDataURL(inlineData)
+			.toBitmap()
+			.subarray(0, 3);
+		let inlineColored = 0;
+		for (let i = 0; i < inlineBitmap.length; i += 4)
+			if (
+				[0, 1, 2].every(
+					(channel) =>
+						Math.abs(
+							(inlineBitmap[i + channel] ?? -255) -
+								(expectedColor[channel] ?? 255),
+						) < 5,
+				)
+			)
+				inlineColored++;
+		assert(
+			inlineColored > 20,
+			"Inline legacy emoji artwork must survive thumbnail generation",
 		);
 		await setIcon(`emoji:${em.store.items[0]?.rendered}`);
 		console.log(
