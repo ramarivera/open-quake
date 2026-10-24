@@ -12,4 +12,6 @@
 
 ## 4. Acceptance
 
-- [ ] 4.1 Run scenario tests, all six repository gates, native media smoke and five 1920×480 mock panel screenshots. Record platform/hardware limits and open a PR. Bead open-quake-lih.8.1.4.
+- [x] 4.1 Run scenario tests, all six repository gates, native media smoke and five 1920×480 mock panel screenshots. Record platform/hardware limits and open a PR. Bead open-quake-lih.8.1.4.
+
+Acceptance evidence: [verification.md](verification.md). PR #30 is open; physical hardware remains unverified.
