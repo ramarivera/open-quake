@@ -31,7 +31,7 @@ per numbered item below (`open-quake-lih.5.1.1` … `open-quake-lih.5.1.11`).
 
 ## 6. PR review
 
-- [ ] 6.1 Merge main and address PR #28 review round 1 with regressions, full gates and voice/knob/media native mock smokes; reply to and resolve the seven threads, push without merging. (`open-quake-lih.5.1.12`)
+- [x] 6.1 Merge main and address PR #28 review round 1 with regressions, full gates and voice/knob/media native mock smokes; reply to and resolve the seven threads, push without merging. (`open-quake-lih.5.1.12`)
 
 ## Verification evidence
 
@@ -63,3 +63,9 @@ main at `cef6ee0` (touch #20, hardware #22, knob #24, clock #25, lifecycle #21):
 Not verified: real buzzer output, real microphone levels (no capture adapter
 calls the meter yet), knob holds and touch on the device, and rendering on the
 physical strip.
+
+PR #28 review round 1 completed in `2d8867e`: seven confirmed threads
+covering six defects, all replied to and resolved. Main reconciliation is
+`d8267d3` with `origin/main` at `19d7240`. Full gates and the voice, knob and
+media native mock smokes pass. See [review-round-1.md](review-round-1.md)
+for per-thread outcomes, regression coverage, commands and artifact paths.
