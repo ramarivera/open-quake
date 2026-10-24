@@ -109,7 +109,7 @@ app.whenReady().then(() => {
 	const runtime = ManagedRuntime.make(
 		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
 	);
-	const mock = isDev && process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+	const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 	const source = mock
 		? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
 				Effect.sync(() => bus.stop()),
@@ -131,7 +131,12 @@ app.whenReady().then(() => {
 				Effect.scoped(
 					Effect.gen(function* () {
 						bus = yield* source;
-						bus.on(createEventForwarder(() => [panelWin, managementWin]));
+						bus.on(
+							createEventForwarder(
+								() => [panelWin, managementWin],
+								() => [panelWin],
+							),
+						);
 						yield* Effect.never;
 					}),
 				),

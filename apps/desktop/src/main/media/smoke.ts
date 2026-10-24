@@ -7,10 +7,16 @@ import { join, resolve } from "node:path";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
+	SYNTHETIC_TOUCH_DOWN,
+	SYNTHETIC_TOUCH_EMPTY,
+	SYNTHETIC_TOUCH_MOVE,
+} from "../../../../../packages/device/src/touch/touch-fixtures";
+import {
 	type WallpaperCommand,
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { startMockDeviceBus } from "../mockDeviceBus";
 import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
@@ -212,6 +218,33 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	// Exercise the mounted panel adapter via the real preload/event IPC.
+	await panel.webContents.executeJavaScript(`(() => {
+		window.__stripKeys = [];
+		const root = document.getElementById('root');
+		root.addEventListener('quake-strip-key', e => window.__stripKeys.push(e.detail));
+		const tile = document.createElement('div'); tile.dataset.stripKey = '1,1';
+		tile.style.cssText = 'position:absolute;left:10px;top:10px;width:220px;height:220px'; root.appendChild(tile);
+	})()`);
+	const mockTouch = startMockDeviceBus();
+	const offTouch = mockTouch.on((event) => {
+		if (event.kind === "touch") panel.webContents.send("quake:event", event);
+	});
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_DOWN);
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_MOVE);
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+	await new Promise<void>((done) => setTimeout(done, 60));
+	const keys: unknown =
+		await panel.webContents.executeJavaScript("window.__stripKeys");
+	offTouch();
+	mockTouch.stop();
+	assert.deepEqual(keys, [
+		{ keyCode: "1,1", keyAction: 0 },
+		{ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true },
+	]);
+	process.stdout.write(
+		"Strip touch smoke PASS: raw synthetic frames -> parser/tracker -> main bus -> preload IPC -> mounted panel -> down/up, no hardware.\n",
+	);
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

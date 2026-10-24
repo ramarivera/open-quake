@@ -26,7 +26,12 @@ export type QuakeEvent =
 	| {
 			source: "mock" | "hid";
 			kind: "touch";
-			points: ReadonlyArray<{ action: number; x: number; y: number }>;
+			points: ReadonlyArray<{
+				touchId?: string;
+				action: number;
+				x: number;
+				y: number;
+			}>;
 	  }
 	| { source: "mock" | "hid"; kind: "keepalive"; seq: number };
 

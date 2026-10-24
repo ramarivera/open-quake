@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { mountStripTouch } from "./strip/mount-strip-touch";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -21,6 +22,15 @@ function PanelSurface(): React.JSX.Element {
 	useEffect(() => {
 		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
+		const root = document.getElementById("root");
+		if (root && window.openQuake)
+			return mountStripTouch(
+				root,
+				window.openQuake,
+				Number(
+					new URLSearchParams(window.location.search).get("rotation") ?? 0,
+				),
+			);
 	}, []);
 	return <WallpaperPanel />;
 }
