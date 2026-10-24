@@ -218,7 +218,7 @@ The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a
 
 #### Scenario: Initialization failure during quit
 
-- **WHEN** maintenance initialization fails on malformed or unreadable firmware session data
+- **WHEN** maintenance runtime initialization fails after session-load recovery
 - **THEN** the failure stays visible, runtime disposal and scoped resource release still complete, and the awaited application quit chain stops writers and exits
 
 ### Requirement: Live macOS permission dashboard
@@ -248,3 +248,33 @@ The system SHALL check at 5000ms after launch and every 12 hours, support manual
 
 - **WHEN** another check arrives during download or the app quits
 - **THEN** no duplicate transfer starts and disposal interrupts scheduled work
+
+
+### Requirement: Maintenance safety at filesystem and IPC boundaries
+
+Backup completion SHALL sync the staged file before rename and the parent directory on POSIX before reporting success. Session-load corruption or read failure SHALL preserve evidence, emit scrubbed diagnostics and permit nonflashing settings/export/reset access. Remaining initialization rejection SHALL return a catalog MaintenanceReply failure and retain awaited disposal. Security-scoped access SHALL release exactly once on hint/write failure, terminal completion or disposal. Smoke runs SHALL explicitly opt into a portable owned scratch root, with containment and real-userData rejection.
+
+#### Scenario: Backup sync fails
+
+- **WHEN** staging sync or directory sync fails during backup-before-reset
+- **THEN** backup reports failure, reset requires the existing fresh failure confirmation, and no automatic data clear occurs
+
+#### Scenario: Unreadable or malformed session
+
+- **WHEN** persisted firmware session data cannot be parsed or read
+- **THEN** settings, permissions and export remain accessible, reset retains its confirmations, no automatic firmware operation starts, and original evidence is preserved
+
+#### Scenario: Bookmark setup fails
+
+- **WHEN** scoped bookmark access succeeds but persisting its hint or starting the firmware write fails
+- **THEN** the access is released once immediately and subsequent requests or disposal do not release it again
+
+#### Scenario: Reset backup choice
+
+- **WHEN** the user chooses backup-and-continue or continue-without-backup
+- **THEN** the native final confirmation states that exact choice and cancellation starts neither backup nor clear
+
+#### Scenario: Portable smoke scratch
+
+- **WHEN** a mock smoke supplies an absolute explicit scratch root with contained temporary and artifact paths
+- **THEN** it can run without author-specific directory names, while absent opt-in, escaping paths and real-userData overlap are rejected

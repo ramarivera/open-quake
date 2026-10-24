@@ -71,6 +71,42 @@ interface VolumeRecord {
 	readonly id: string;
 	readonly label: string;
 }
+
+/** One descriptor, at most the inspected length plus one byte, even under growth. */
+async function readFirmware(path: string): Promise<Buffer> {
+	const file = await open(
+		path,
+		constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+	);
+	try {
+		const before = await file.stat();
+		if (!before.isFile() || before.size > 16 * 1024 * 1024)
+			throw new FirmwareImageInvalid();
+		const bytes = Buffer.alloc(before.size + 1);
+		let offset = 0;
+		while (offset < bytes.length) {
+			const { bytesRead } = await file.read({
+				buffer: bytes,
+				offset,
+				length: bytes.length - offset,
+				position: offset,
+			});
+			if (!bytesRead) break;
+			offset += bytesRead;
+		}
+		const after = await file.stat();
+		if (
+			offset !== before.size ||
+			after.size !== before.size ||
+			after.mtimeMs !== before.mtimeMs ||
+			after.ctimeMs !== before.ctimeMs
+		)
+			throw new FirmwareImageInvalid();
+		return bytes.subarray(0, offset);
+	} finally {
+		await file.close();
+	}
+}
 /** No caller supplies a destination path. Discovered identities are revalidated before exclusive copy. */
 export function firmwareFiles(
 	roots: readonly string[],
@@ -85,15 +121,12 @@ export function firmwareFiles(
 	): Effect.Effect<FirmwareImage, FirmwareImageInvalid> =>
 		Effect.tryPromise({
 			try: async () => {
-				const metadata = await lstat(path);
-				if (
-					!metadata.isFile() ||
-					metadata.isSymbolicLink() ||
-					metadata.size > 16 * 1024 * 1024
-				)
-					throw new FirmwareImageInvalid();
-				const next = validateFirmware(await readFile(path), path, descriptors);
-				imagePath = await realpath(path);
+				const next = validateFirmware(
+					await readFirmware(path),
+					path,
+					descriptors,
+				);
+				imagePath = resolve(path);
 				image = next;
 				return next;
 			},
@@ -159,7 +192,9 @@ export function firmwareFiles(
 			Effect.tryPromise({
 				try: async () => {
 					const found: FirmwareVolume[] = [];
-					for (const path of additional ? await additional() : []) {
+					for (const path of additional
+						? await additional().catch(() => [])
+						: []) {
 						const record = await volumeRecord(path).catch(() => undefined);
 						if (record) {
 							known.set(record.id, record);
@@ -203,7 +238,7 @@ export function firmwareFiles(
 						live.inode !== record.inode
 					)
 						throw new FirmwareVolumeInvalid();
-					const bytes = await readFile(imagePath);
+					const bytes = await readFirmware(imagePath);
 					const checked = validateFirmware(
 						bytes,
 						selected.fileName,
@@ -222,6 +257,25 @@ export function firmwareFiles(
 						0o600,
 					);
 					try {
+						const opened = await output.stat();
+						const parent = await lstat(record.path);
+						const target = await lstat(destination);
+						if (
+							!opened.isFile() ||
+							opened.dev !== record.device ||
+							!parent.isDirectory() ||
+							parent.isSymbolicLink() ||
+							parent.dev !== record.device ||
+							parent.ino !== record.inode ||
+							target.isSymbolicLink() ||
+							target.dev !== opened.dev ||
+							target.ino !== opened.ino ||
+							(await realpath(destination)) !== destination ||
+							(await realpath(record.path)) !== record.path
+						)
+							throw new FirmwareVolumeInvalid();
+						// Node has no openat/unlinkat. Keep rejected creations empty rather than
+						// unlinking a pathname that could now identify somebody else's file.
 						let offset = 0;
 						while (offset < bytes.length) {
 							const result = await output.write(

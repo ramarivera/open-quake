@@ -47,6 +47,41 @@ const settle = TestClock.adjust(0);
 
 describe("hardware controls over actual device connection with fake transport", () => {
 	it.scoped(
+		"generic DFU is rejected without a write or poisoning, while enterDfu still owns the transition",
+		() =>
+			Effect.gen(function* () {
+				const { fake, session } = yield* setup({
+					onCommand: (command) =>
+						command.cmdId === 0x2f
+							? []
+							: [
+									fakeHardwareReply(
+										command.opCode === 2 ? command.cmdId : 0,
+										command.opCode === 2 ? [1, 1, 0, 21] : [0x90],
+									),
+								],
+				});
+				const before = yield* fake.writes;
+				const sending = yield* session
+					.send({ _tag: "Dfu" })
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(3000);
+				const result = yield* Fiber.join(sending);
+				expect(Either.isLeft(result) && result.left.code).toBe(
+					"QUAKE.HARDWARE.COMMAND_REJECTED",
+				);
+				expect(yield* fake.writes).toEqual(before);
+				expect((yield* session.snapshot()).available).toBe(true);
+				expect(yield* session.readVersion()).toBe("1.0.21");
+				yield* session.enterDfu();
+				expect((yield* commands(fake)).filter((b) => b[1] === 0x2f)).toEqual([
+					[1, 0x2f, 3],
+				]);
+				expect((yield* session.snapshot()).available).toBe(false);
+			}),
+	);
+
+	it.scoped(
 		"DFU uses one known command on fake HID and blocks conflicting hardware writes",
 		() =>
 			Effect.gen(function* () {

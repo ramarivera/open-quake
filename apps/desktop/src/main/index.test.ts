@@ -486,17 +486,26 @@ describe("desktop window lifecycle", () => {
 		);
 	});
 
-	for (const state of ["malformed", "unreadable"] as const) {
+	for (const state of ["malformed", "unreadable", "runtime-failure"] as const) {
 		it(`completes awaited combined quit after ${state} maintenance initialization`, async () => {
 			const root = await mkdtemp(join(tmpdir(), "combined-quit-"));
 			const actual =
 				await vi.importActual<typeof import("./maintenance")>("./maintenance");
+			const sessions = await import("./maintenance/firmware-session");
 			if (state === "malformed")
 				await writeFile(
 					join(root, "firmware-session-v1.json"),
 					"{synthetic-invalid",
 				);
-			else await mkdir(join(root, "firmware-session-v1.json"));
+			else if (state === "unreadable")
+				await mkdir(join(root, "firmware-session-v1.json"));
+			else
+				vi.spyOn(sessions, "firmwareSessionStore").mockReturnValueOnce({
+					load: async () => {
+						throw new Error("synthetic runtime failure");
+					},
+					save: async () => {},
+				});
 			const real = actual.registerMaintenance({
 				root,
 				mock: true,
@@ -522,7 +531,9 @@ describe("desktop window lifecycle", () => {
 					}),
 			);
 			try {
-				await expect(real.ready).rejects.toBeDefined();
+				if (state === "runtime-failure")
+					await expect(real.ready).rejects.toBeDefined();
+				else await expect(real.ready).resolves.toBeUndefined();
 				expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
 				await vi.waitFor(() => expect(voice.dispose).toHaveBeenCalledOnce());
 				expect(monitor.dispose).toHaveBeenCalledOnce();

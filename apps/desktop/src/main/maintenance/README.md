@@ -85,7 +85,12 @@ window and validates it with the appearance parser. Restore stages that record
 for the real appearance hook, then removes it only after localStorage persistence
 is acknowledged. Theme choice, custom colors and motion preference all travel.
 Confirmed backup replacement uses a temporary sibling and atomic rename, keeping
-the previous archive intact on export/write failure.
+the previous archive intact on export/write failure. The staged file is synced
+before rename; POSIX parent-directory sync must also succeed before export reports
+success. A directory-sync failure can leave the new archive installed but still
+reports backup failure and requires the reset failure confirmation. Node/libuv
+on Darwin attempts F_FULLFSYNC with documented fallbacks; this is an OS sync
+contract, not hardware power-loss verification. No native dependency is added.
 Format interoperability is proved with independent fixtures, not a real user's
 DK-Suite backup or a DK-Suite process.
 
@@ -120,15 +125,19 @@ checks that create fixtures. Never select a real boot volume or enable real HID
 for a test or smoke run.
 
 ```sh
-export TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/settings-firmware
+# Explicitly choose an owned disposable directory, outside real app userData.
+# Use /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/... on Ramiro's host.
+export OPEN_QUAKE_SMOKE_SCRATCH=/absolute/owned/open-quake-smoke
+mkdir -p "$OPEN_QUAKE_SMOKE_SCRATCH/tmp"
+export TMPDIR="$OPEN_QUAKE_SMOKE_SCRATCH/tmp"
 pnpm biome check packages apps
 TURBO_ENV_MODE=loose pnpm exec turbo run typecheck --force --concurrency=2
 TURBO_ENV_MODE=loose pnpm exec turbo run test --force --concurrency=1 -- --maxWorkers=2
-pnpm build
+pnpm exec turbo run build --force --concurrency=1
 pnpm --filter @open-quake/desktop test:bundle
 openspec validate --all --strict
 pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/maintenance/smoke.config.ts
-env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/maintenance-smoke/smoke.js "$TMPDIR"
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/maintenance-smoke/smoke.js "$OPEN_QUAKE_SMOKE_SCRATCH/maintenance"
 ```
 
 The native smoke checks real preload/IPC, window spoof rejection, independently
@@ -187,15 +196,50 @@ size and entry limits still apply. Original selections remain untouched.
 Confirmed reset delegates shutdown, clear, main-owned failure reporting and exit
 together. Stop failure prevents clear; clear rename/delete failures retain data
 where rollback succeeds. Reporting failure cannot prevent exit. Backup timeout
-and both cancellation gates precede shutdown. Initialization failure remains
-observable through ready and scrubbed logs. Maintenance disposal still releases
+and both cancellation gates precede shutdown. Genuine runtime initialization failure remains
+observable through ready and scrubbed logs; recoverable session-file failures now
+preserve evidence and leave maintenance available. Maintenance disposal still releases
 its runtime and scoped resources exactly once, then returns a catalog failure;
 main records it and awaits the remaining writer shutdown before completing quit.
 
 Round-3 regressions exercise actual ClockStore stage/commit/read/mediaPath across
 an export and restore after deleting the original synthetic files, reset failures
 through the production adapter and real synthetic-root rename/delete rollback,
-and the combined before-quit chain with malformed/unreadable firmware sessions.
+and the combined before-quit chain with malformed/unreadable firmware sessions
+and a genuinely rejected runtime initialization.
 The native maintenance smoke additionally loads restored image bytes through the
 production clock media protocol and captures clock-restored.png. Hardware and
 packaged acceptance remain open.
+
+
+PR #32 round 4 removes host-specific required directory names from the maintenance
+smoke. Its runner requires OPEN_QUAKE_SMOKE_SCRATCH and TMPDIR as absolute
+existing directories; temporary files and artifact destinations must stay within
+the explicit root, including resolved symlinks. Filesystem/home roots and overlap
+with Electron's original userData are rejected before fixtures are created.
+Host verification continues to use owned ExtSSD scratch. Portable validation and
+escape/userData rejection are exercised with synthetic directories.
+
+Firmware inspection and copy read one no-follow descriptor each, allocate at
+most the inspected length plus one byte within 16 MiB, and reject growth or
+metadata changes. Final copy still checks the trusted fingerprint. Optional
+Windows probe errors yield an empty discovery poll and retry; copy's fresh live
+probe remains fail-closed. After exclusive destination open, the descriptor's
+device, destination identity, resolved containment and parent device/inode must
+match before payload writes. Node has no openat/unlinkat; concurrent path changes
+cannot be made race-free. A rejected creation may leave an empty file, which is
+retained to avoid deleting an unrelated replacement through a raced pathname.
+Generic hardware send rejects DFU; only enterDfu owns its locked no-ack transition.
+
+Malformed, schema-invalid and unreadable session records are preserved under
+unique .recovery-* names, with scrubbed catalog warnings and an empty nonflashing
+session. If preservation fails, the original stays untouched and explicit session
+saves remain blocked until preservation can succeed. Settings, permissions,
+export and confirmed reset remain accessible. Remaining initialization failures
+return a typed catalog reply, and genuine runtime failure still exercises awaited
+disposal and combined application quit. Started session saves finish before
+worker disposal returns, avoiding writes after the fixture/writer owner is stopped.
+Scoped bookmarks register their idempotent release immediately, release on hint
+or start failure, and release when copying finishes rather than waiting through
+version polling. Disposal releases outstanding access exactly once. The final
+native reset confirmation states the already-selected backup mode.

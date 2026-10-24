@@ -1,9 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, ManagedRuntime } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
-import { MaintenanceShutdownFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { clearOwnedData } from "./backup-store";
 import { registerMaintenance } from "./index";
 
@@ -103,60 +108,81 @@ it("cancelled reset starts neither shutdown nor clear", async () => {
 });
 
 for (const state of ["malformed", "unreadable"] as const) {
-	it(`disposes its runtime once after ${state} firmware initialization failure`, async () => {
-		const root = await mkdtemp(join(tmpdir(), "maintenance-init-"));
-		if (state === "malformed")
-			await writeFile(
-				join(root, "firmware-session-v1.json"),
-				"{invalid synthetic",
-			);
-		else await mkdir(join(root, "firmware-session-v1.json"));
-		const make = vi.spyOn(ManagedRuntime, "make");
+	it(`recovers ${state} firmware data without flashing and permits read, permission and reset`, async () => {
+		const root = await mkdtemp(join(tmpdir(), "maintenance-recovery-"));
+		const path = join(root, "firmware-session-v1.json");
+		if (state === "malformed") await writeFile(path, "{invalid synthetic");
+		else await mkdir(path);
+		const stop = vi.fn(async () => {});
+		const exit = vi.fn();
 		const owner = registerMaintenance({
 			root,
 			mock: true,
 			renderer: "https://app.invalid",
 			hardware: () => undefined,
 			management: () => undefined,
-			stopWriters: async () => {},
+			stopWriters: stop,
+			exit,
 		});
-		const runtime = make.mock.results[0];
-		if (runtime?.type !== "return")
-			throw new Error("Missing maintenance runtime");
-		const dispose = vi.spyOn(runtime.value, "dispose");
 		try {
-			await expect(owner.ready).rejects.toMatchObject({
-				name: expect.stringContaining("FirmwarePersistenceFailed"),
+			await expect(owner.ready).resolves.toBeUndefined();
+			expect(await owner.request({ action: "read" })).toMatchObject({
+				ok: true,
+				view: { firmware: { state: "idle" } },
 			});
-			const readyFailure: unknown = await owner.ready.catch(
-				(cause: unknown) => cause,
+			expect(
+				await owner.request({ action: "permission", key: "accessibility" }),
+			).toMatchObject({ ok: true });
+			const retained = (await readdir(root)).find((name) =>
+				name.startsWith("firmware-session-v1.json.recovery-"),
 			);
-			const first = owner.dispose();
-			const shutdownFailure: unknown = await first.catch(
-				(cause: unknown) => cause,
-			);
-			expect(shutdownFailure).toBeInstanceOf(MaintenanceShutdownFailed);
-			if (!(shutdownFailure instanceof MaintenanceShutdownFailed))
-				throw new Error("Missing shutdown error identity");
-			expect(shutdownFailure.code).toBe("QUAKE.SETTINGS.SHUTDOWN_FAILED");
-			expect(shutdownFailure.originalCause).toBeInstanceOf(AggregateError);
-			if (!(shutdownFailure.originalCause instanceof AggregateError))
-				throw new Error("Missing shutdown causes");
-			expect(shutdownFailure.originalCause.errors).toContain(readyFailure);
-			expect(JSON.stringify(shutdownFailure)).not.toContain(root);
-			expect(dispose).toHaveBeenCalledOnce();
-			await expect(runtime.value.runPromise(Effect.void)).rejects.toBeDefined();
-			expect(owner.dispose()).toBe(first);
-			await expect(first).rejects.toBeDefined();
-			expect(native.ipcMain.removeHandler).toHaveBeenCalledExactlyOnceWith(
-				"maintenance:request",
-			);
-			await expect(owner.request({ action: "read" })).resolves.toMatchObject({
-				ok: false,
-				code: "QUAKE.SETTINGS.STOPPING",
-			});
+			expect(retained).toBeDefined();
+			if (state === "malformed" && retained)
+				expect(await readFile(join(root, retained), "utf8")).toBe(
+					"{invalid synthetic",
+				);
+			expect(
+				await owner.request({ action: "reset", backup: false }),
+			).toMatchObject({ ok: true });
+			expect(stop).toHaveBeenCalledOnce();
+			expect(exit).toHaveBeenCalledExactlyOnceWith(0);
 		} finally {
 			await owner.dispose().catch(() => undefined);
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+}
+
+for (const backup of [false, true]) {
+	it(`states the chosen reset backup mode and honors final cancellation: ${backup}`, async () => {
+		const root = await mkdtemp(join(tmpdir(), "reset-choice-"));
+		const stop = vi.fn(async () => {});
+		native.dialog.showMessageBox.mockResolvedValueOnce({ response: 0 });
+		const owner = registerMaintenance({
+			root,
+			mock: true,
+			renderer: "https://app.invalid",
+			hardware: () => undefined,
+			management: () => undefined,
+			stopWriters: stop,
+		});
+		try {
+			await owner.ready;
+			expect(await owner.request({ action: "reset", backup })).toMatchObject({
+				ok: true,
+			});
+			expect(native.dialog.showMessageBox).toHaveBeenCalledWith(
+				expect.objectContaining({
+					message: backup
+						? "Back up, then clear all data and exit?"
+						: "Clear all data and exit without a backup?",
+					detail: expect.stringContaining("cannot be undone"),
+				}),
+			);
+			expect(stop).not.toHaveBeenCalled();
+			expect(clearOwnedData).not.toHaveBeenCalled();
+		} finally {
+			await owner.dispose();
 			await rm(root, { recursive: true, force: true });
 		}
 	});

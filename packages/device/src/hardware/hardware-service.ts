@@ -213,7 +213,10 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					);
 				const send = Effect.fn("HardwareControls.send")(
 					(command: HardwareCommand): Effect.Effect<void, HardwareError> =>
-						exchange(command).pipe(
+						(command._tag === "Dfu"
+							? Effect.fail(new HardwareCommandRejected())
+							: exchange(command)
+						).pipe(
 							Effect.tapError((error) =>
 								Effect.sync(() => {
 									errorCode = error.code;

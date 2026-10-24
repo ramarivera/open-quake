@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HardwareControls } from "@open-quake/device";
@@ -42,18 +42,17 @@ import { referenceArchive, referenceDecode } from "./archive-fixtures";
 import { prepareRestore } from "./backup-store";
 import { hashBytes } from "./firmware-files";
 import { registerMaintenance } from "./index";
+import { smokeScratchPaths } from "./smoke-scratch";
 
 assert.equal(
 	process.env.OPEN_QUAKE_MOCK_DEVICE,
 	"1",
 	"Smoke requires mock device mode",
 );
-const scratch = process.env.TMPDIR;
-assert(scratch?.includes("SCRATCHPADS_FOR_AGENTS"), "Scratch TMPDIR required");
-const artifacts = Schema.decodeUnknownSync(Schema.NonEmptyString)(
+const artifactInput = Schema.decodeUnknownSync(Schema.NonEmptyString)(
 	process.argv[2],
 );
-assert(artifacts.startsWith("/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/"));
+let artifacts = "";
 let directory = "";
 let window: BrowserWindow | undefined;
 let panel: BrowserWindow | undefined;
@@ -67,7 +66,16 @@ const settle = (ms = 200) => new Promise<void>((done) => setTimeout(done, ms));
 app.on("window-all-closed", () => {});
 registerClockScheme();
 async function smoke() {
-	directory = await mkdtemp(join(tmpdir(), "oq-maintenance-smoke-"));
+	const paths = await smokeScratchPaths({
+		scratch: process.env.OPEN_QUAKE_SMOKE_SCRATCH,
+		temporary: process.env.TMPDIR,
+		artifacts: artifactInput,
+		userData: app.getPath("userData"),
+		home: homedir(),
+	});
+	artifacts = paths.artifacts;
+	directory = await mkdtemp(join(paths.temporary, "oq-maintenance-smoke-"));
+	process.stdout.write(`Native runtime: ${JSON.stringify(process.versions)}\n`);
 	app.setPath("userData", directory);
 	await mkdir(artifacts, { recursive: true });
 	await writeFile(
@@ -151,7 +159,9 @@ async function smoke() {
 	cleanup.push(() =>
 		originalClockActive ? clock.dispose() : Promise.resolve(),
 	);
-	const externalClock = await mkdtemp(join(tmpdir(), "oq-clock-selected-"));
+	const externalClock = await mkdtemp(
+		join(paths.temporary, "oq-clock-selected-"),
+	);
 	cleanup.push(() => rm(externalClock, { recursive: true, force: true }));
 	const selectedClockImage = join(externalClock, "synthetic-clock.png");
 	const selectedClockBytes = nativeImage
@@ -236,6 +246,10 @@ async function smoke() {
 		renderer,
 	);
 	cleanup.push(() => monitor.dispose());
+	await writeFile(
+		join(directory, "firmware-session-v1.json"),
+		"{synthetic-corrupt-session",
+	);
 	const maintenance = registerMaintenance({
 		root: directory,
 		mock: true,

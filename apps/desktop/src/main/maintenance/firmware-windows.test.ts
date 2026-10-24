@@ -30,6 +30,19 @@ vi.mock("node:fs/promises", async (original) => ({
 }));
 
 describe("synthetic Windows boot drives", () => {
+	it("treats failed optional probes as empty polls and recovers later", async () => {
+		const probe = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("PowerShell timeout"))
+			.mockRejectedValueOnce(new SyntaxError("invalid discovery JSON"))
+			.mockResolvedValue(["E:\\"]);
+		const files = firmwareFiles([], [], probe);
+		expect(await Effect.runPromise(files.discover())).toEqual([]);
+		expect(await Effect.runPromise(files.discover())).toEqual([]);
+		expect(await Effect.runPromise(files.discover())).toHaveLength(1);
+		expect(probe).toHaveBeenLastCalledWith(true);
+	});
+
 	it("carries recognizable drive letters from discovery to distinct volume choices", async () => {
 		const paths = windowsDfuPaths(
 			["E:", "F:"].map((DeviceID) => ({

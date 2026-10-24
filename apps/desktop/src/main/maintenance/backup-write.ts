@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { rename, rm, writeFile } from "node:fs/promises";
+import { open, rename, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 /** The native save dialog already confirmed this destination, including replacement. */
@@ -14,9 +14,23 @@ export async function replaceBackup(
 	);
 	try {
 		signal?.throwIfAborted();
-		await writeFile(staged, bytes, { flag: "wx", mode: 0o600, signal });
+		const file = await open(staged, "wx", 0o600);
+		try {
+			await file.writeFile(bytes, { signal });
+			await file.sync();
+		} finally {
+			await file.close();
+		}
 		signal?.throwIfAborted();
 		await rename(staged, path);
+		if (process.platform !== "win32") {
+			const parent = await open(dirname(path), "r");
+			try {
+				await parent.sync();
+			} finally {
+				await parent.close();
+			}
+		}
 	} finally {
 		await rm(staged, { force: true });
 	}

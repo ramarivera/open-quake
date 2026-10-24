@@ -152,3 +152,24 @@ Discovery SHALL poll at 500ms for 90000ms and recognize QUAKE DFU on supported p
 
 - **WHEN** a persisted nonterminal record is loaded
 - **THEN** the application reports needs-recovery and performs no DFU or write operation
+
+
+#### Scenario: Bounded descriptor source
+
+- **WHEN** an image path becomes a symlink, a non-file, or grows beyond the size bound during inspection or copy
+- **THEN** one no-follow opened descriptor supplies metadata and bounded bytes, the handle is closed, and no untrusted image is copied
+
+#### Scenario: Transient discovery failure
+
+- **WHEN** an optional Windows discovery probe times out or returns malformed data
+- **THEN** that poll reports no optional candidates and polling can recover, while copy still requires successful fresh target validation
+
+#### Scenario: Parent replaced before destination open
+
+- **WHEN** a volume path changes between validation and exclusive destination open
+- **THEN** opened-file device, resolved containment and parent identity are checked before writing, a changed target is rejected without firmware bytes, and cleanup never deletes an unrelated replacement
+
+#### Scenario: Generic DFU send
+
+- **WHEN** a caller submits DFU through generic hardware send
+- **THEN** it is rejected before I/O without poisoning the session, and only the locked enterDfu transition can send DFU without waiting for an acknowledgement

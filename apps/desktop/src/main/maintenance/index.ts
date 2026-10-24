@@ -1,7 +1,7 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { app, type BrowserWindow, dialog, ipcMain, shell } from "electron";
 import {
 	FirmwarePort,
@@ -46,6 +46,7 @@ import {
 	firmwareFiles,
 	type TrustedFirmware,
 } from "./firmware-files";
+import { firmwareSessionStore } from "./firmware-session";
 import {
 	nativePermissionChecks,
 	openPermission,
@@ -109,6 +110,18 @@ export function registerMaintenance(options: MaintenanceOptions) {
 	let pendingOperations = 0;
 	let disposed = false;
 	let mockVersion = "1.0.19";
+	const sessions = firmwareSessionStore(join(root, "firmware-session-v1.json"));
+	const bookmarkReleases = new Set<() => void>();
+	const releaseBookmarks = () => {
+		for (const release of [...bookmarkReleases]) release();
+	};
+	const trackBookmark = (release: () => void) => {
+		const stop = () => {
+			if (bookmarkReleases.delete(stop)) release();
+		};
+		bookmarkReleases.add(stop);
+		return stop;
+	};
 	const version = (serial: string) =>
 		Effect.gen(function* () {
 			const current = options.hardware();
@@ -241,36 +254,18 @@ export function registerMaintenance(options: MaintenanceOptions) {
 										if (mock) mockVersion = image.version;
 									}),
 								),
+								Effect.ensuring(Effect.sync(releaseBookmarks)),
 							),
 						load: () =>
 							Effect.tryPromise({
-								try: async () => {
-									try {
-										return JSON.parse(
-											await readFile(
-												join(root, "firmware-session-v1.json"),
-												"utf8",
-											),
-										);
-									} catch (cause) {
-										if (
-											cause &&
-											typeof cause === "object" &&
-											"code" in cause &&
-											cause.code === "ENOENT"
-										)
-											return undefined;
-										throw cause;
-									}
-								},
+								try: sessions.load,
 								catch: (cause) => new FirmwarePersistenceFailed(cause),
 							}),
 						save: (snapshot) =>
 							Effect.tryPromise({
-								try: () =>
-									atomicJson(join(root, "firmware-session-v1.json"), snapshot),
+								try: () => sessions.save(snapshot),
 								catch: (cause) => new FirmwarePersistenceFailed(cause),
-							}),
+							}).pipe(Effect.uninterruptible),
 					}),
 				),
 			),
@@ -373,7 +368,11 @@ export function registerMaintenance(options: MaintenanceOptions) {
 		input: MaintenanceCommand,
 	): Promise<MaintenanceReply> => {
 		if (disposed) return { ok: false, code: "QUAKE.SETTINGS.STOPPING" };
-		await ready;
+		try {
+			await ready;
+		} catch {
+			return { ok: false, code: new FirmwarePersistenceFailed().code };
+		}
 		if (disposed) return { ok: false, code: "QUAKE.SETTINGS.STOPPING" };
 		const mutation = ![
 			"read",
@@ -475,36 +474,42 @@ export function registerMaintenance(options: MaintenanceOptions) {
 							)
 								break;
 							let stopAccess: (() => void) | undefined;
-							if (!mock && process.platform === "darwin") {
-								const selected = yield* io(() =>
-									dialog.showOpenDialog({
-										title: "Select the QUAKE DFU drive",
-										properties: ["openDirectory"],
-										securityScopedBookmarks: true,
-										defaultPath: path,
-									}),
-								);
-								if (selected.canceled || !selected.filePaths[0]) break;
-								if (
-									(yield* io(() => realpath(selected.filePaths[0] ?? ""))) !==
-									path
-								)
-									return yield* new FirmwareTargetMismatch();
-								const bookmark = selected.bookmarks?.[0];
-								if (bookmark) {
-									const release =
-										app.startAccessingSecurityScopedResource(bookmark);
-									stopAccess = () => release();
-									yield* io(() =>
-										atomicJson(join(root, "firmware-volume-hint-v1.json"), {
-											bookmark,
+							yield* Effect.gen(function* () {
+								if (!mock && process.platform === "darwin") {
+									const selected = yield* io(() =>
+										dialog.showOpenDialog({
+											title: "Select the QUAKE DFU drive",
+											properties: ["openDirectory"],
+											securityScopedBookmarks: true,
+											defaultPath: path,
 										}),
 									);
+									if (selected.canceled || !selected.filePaths[0]) return;
+									if (
+										(yield* io(() => realpath(selected.filePaths[0] ?? ""))) !==
+										path
+									)
+										return yield* new FirmwareTargetMismatch();
+									const bookmark = selected.bookmarks?.[0];
+									if (bookmark) {
+										const release =
+											app.startAccessingSecurityScopedResource(bookmark);
+										stopAccess = trackBookmark(() => release());
+										yield* io(() =>
+											atomicJson(join(root, "firmware-volume-hint-v1.json"), {
+												bookmark,
+											}),
+										);
+									}
 								}
-							}
-							// Keep any scoped access alive until the main-owned session reaches a terminal state.
-							if (stopAccess) bookmarkReleases.push(stopAccess);
-							yield* firmware.write(input.volumeId);
+								yield* firmware.write(input.volumeId);
+							}).pipe(
+								Effect.onExit((result) =>
+									Exit.isFailure(result)
+										? Effect.sync(() => stopAccess?.())
+										: Effect.void,
+								),
+							);
 							break;
 						}
 						case "firmware-close":
@@ -562,7 +567,10 @@ export function registerMaintenance(options: MaintenanceOptions) {
 							if (
 								yield* io(() =>
 									confirm(
-										"This will clear all data since initialization and cannot be undone. Backup before continuing?",
+										input.backup
+											? "Back up, then clear all data and exit?"
+											: "Clear all data and exit without a backup?",
+										"This will clear all data since initialization and cannot be undone.",
 									),
 								)
 							) {
@@ -589,8 +597,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 							break;
 					}
 					const next = yield* view();
-					if (!runningFirmware(next.firmware))
-						for (const release of bookmarkReleases.splice(0)) release();
+					if (!runningFirmware(next.firmware)) releaseBookmarks();
 					return {
 						ok: true,
 						view: next,
@@ -610,7 +617,6 @@ export function registerMaintenance(options: MaintenanceOptions) {
 			if (mutation) mutating = false;
 		}
 	};
-	const bookmarkReleases: (() => void)[] = [];
 	ipcMain.handle(
 		MAINTENANCE_CHANNEL,
 		(event, input: unknown): Promise<MaintenanceReply> | MaintenanceReply => {
@@ -648,7 +654,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 				} catch (cause) {
 					failures.push(cause);
 				}
-				for (const release of bookmarkReleases.splice(0)) {
+				for (const release of [...bookmarkReleases]) {
 					try {
 						release();
 					} catch (cause) {
