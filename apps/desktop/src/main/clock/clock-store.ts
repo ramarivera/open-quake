@@ -258,7 +258,20 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 			{ themeId: ThemeId; path: string; kind: MediaKind; probing: boolean }
 		>();
 
+		// Highest revision this process has seen. A recovered or deleted file falls
+		// back to defaults at revision 0; windows holding a newer snapshot must
+		// still accept later saves, so revisions never go backwards in-process.
+		let highWater = 0;
+		const monotonic = <T extends { record: ClockRecord }>(loaded: T): T => {
+			highWater = Math.max(highWater, loaded.record.revision);
+			return { ...loaded, record: { ...loaded.record, revision: highWater } };
+		};
+
 		const load = Effect.fn("ClockStore.load")(function* () {
+			return monotonic(yield* loadFile());
+		});
+
+		const loadFile = Effect.fn("ClockStore.loadFile")(function* () {
 			const result = yield* files.read(file).pipe(Effect.either);
 			if (Either.isLeft(result))
 				return { record: defaultClockRecord, recovered: true };
@@ -322,12 +335,19 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 		const save = (record: ClockRecord, keys: readonly ClockKey[]) => {
 			const next: ClockRecord = {
 				...record,
-				revision: record.revision + 1,
+				revision: Math.max(record.revision, highWater) + 1,
 				keys,
 			};
 			return files
 				.writeAtomic(file, `${JSON.stringify(next, null, "\t")}\n`)
-				.pipe(Effect.as(next));
+				.pipe(
+					Effect.tap(() =>
+						Effect.sync(() => {
+							highWater = Math.max(highWater, next.revision);
+						}),
+					),
+					Effect.as(next),
+				);
 		};
 
 		const mutate = (

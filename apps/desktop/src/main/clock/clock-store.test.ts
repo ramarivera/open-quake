@@ -248,6 +248,22 @@ describe("clock store (WIDGETS-020/021/038)", () => {
 		});
 	});
 
+	it("keeps revisions increasing when the settings file is deleted or corrupted", async () => {
+		const m = memory();
+		await m.run(ClockStore.setTheme("1,1", "cyber"));
+		const saved = await m.run(ClockStore.setTheme("1,1", "anime"));
+		const high = saved.ok ? saved.snapshot.revision : -1;
+		expect(high).toBeGreaterThan(0);
+		m.files.delete(FILE);
+		const recovered = await m.run(ClockStore.read());
+		expect(recovered.revision).toBeGreaterThanOrEqual(high);
+		const after = await m.run(ClockStore.setTheme("1,1", "aurora"));
+		expect(after).toMatchObject({ ok: true, snapshot: { themeId: "aurora" } });
+		expect(after.ok && after.snapshot.revision).toBeGreaterThan(high);
+		m.files.set(FILE, "{not json");
+		expect((await m.run(ClockStore.read())).revision).toBeGreaterThan(high);
+	});
+
 	it.each(["image", "video"])(
 		"migrates a legacy %s before switching themes",
 		async (kind) => {
