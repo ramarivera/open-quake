@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
+	Deferred,
 	Effect,
 	Either,
 	Fiber,
@@ -51,7 +52,7 @@ const selected = {
 	modelId: "qwen3.6-flash",
 	credentialRef: CredentialRef.make("00000000-0000-4000-8000-000000000002"),
 } satisfies typeof MOCK_PROFILE;
-function setup() {
+function setup(recoveredDuration = 2500) {
 	const calls: string[] = [],
 		requests: MeetingAsrRequest[] = [],
 		prompts: Parameters<CompatibleAdapter["open"]>[0][] = [];
@@ -62,19 +63,22 @@ function setup() {
 		failDelete = false,
 		stopDelay = 0;
 	let failStop: string | undefined;
+	let nextSave: Effect.Effect<void> = Effect.void;
 	const storage: MeetingStorage = {
 		load: () => Effect.succeed(stored),
 		save: (next) =>
-			Effect.suspend(() => {
+			Effect.gen(function* () {
+				const wait = nextSave;
+				nextSave = Effect.void;
+				yield* wait;
 				if (failSave)
-					return Effect.fail(
+					return yield* Effect.fail(
 						meetingError(
 							"StorageFailed",
 							new Error("private transcript sk-secret"),
 						),
 					);
 				stored = next;
-				return Effect.void;
 			}),
 		remove: (next, ids) =>
 			storage.deleteAudio(ids).pipe(Effect.zipRight(storage.save(next))),
@@ -96,7 +100,7 @@ function setup() {
 			Effect.sync(() => {
 				calls.push(`drain:${id}`);
 			}),
-		duration: () => Effect.succeed(2500),
+		duration: () => Effect.succeed(recoveredDuration),
 		stop: (id) =>
 			Effect.sync(() => {
 				calls.push(`stop:${id}`);
@@ -201,6 +205,9 @@ function setup() {
 		requests,
 		prompts,
 		saved: () => stored,
+		pauseSave: (wait: Effect.Effect<void>) => {
+			nextSave = wait;
+		},
 		failStop: (id: string) => {
 			failStop = id;
 		},
@@ -240,6 +247,97 @@ const recordOnce = Effect.gen(function* () {
 });
 
 describe("meeting conductor consumers", () => {
+	for (const first of [
+		"main-loss",
+		"side-loss",
+		"main-stop",
+		"suspend",
+	] as const) {
+		it.effect(
+			`serializes source loss after a pending ${first} history write`,
+			() => {
+				const f = setup();
+				return Effect.gen(function* () {
+					yield* configure;
+					const main = (yield* MeetingService.action("meetingMinutes"))
+						.records[0];
+					const side = (yield* MeetingService.action("tempMeetingMinutes"))
+						.records[0];
+					if (!main || !side) return yield* Effect.die("Missing records");
+					yield* TestClock.adjust(5000);
+					const entered = yield* Deferred.make<void>();
+					const release = yield* Deferred.make<void>();
+					f.pauseSave(
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(release)),
+						),
+					);
+					const transition =
+						first === "suspend"
+							? MeetingService.suspend()
+							: first === "main-stop"
+								? MeetingService.action("meetingMinutes")
+								: MeetingService.sourceLost(
+										first === "side-loss" ? side.id : main.id,
+									);
+					const stopping = yield* Effect.fork(transition);
+					yield* Deferred.await(entered);
+					const lostId =
+						first === "side-loss" || first === "suspend" ? main.id : side.id;
+					const losing = yield* Effect.fork(MeetingService.sourceLost(lostId));
+					// Let the second callback run while history still exposes recording state.
+					yield* TestClock.adjust(0);
+					yield* Deferred.succeed(release, undefined);
+					yield* Fiber.join(stopping);
+					yield* Fiber.join(losing);
+					for (const id of [main.id, side.id]) {
+						expect(
+							f.calls.filter((call) => call === `stop:${id}`),
+						).toHaveLength(first === "suspend" ? 0 : 1);
+						expect(
+							f.calls.filter((call) => call === `drain:${id}`),
+						).toHaveLength(first === "suspend" ? 0 : 1);
+					}
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					const lost = durable.records.find((record) => record.id === lostId);
+					expect(lost?.state).toBe("failed");
+					expect(lost?.errorCode).toEqual(
+						Option.some("QUAKE.MEETING.SOURCE_LOST"),
+					);
+					expect(
+						durable.records.every((record) => Option.isSome(record.endedAt)),
+					).toBe(true);
+					expect(f.requests).toHaveLength(0);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
+
+	for (const elapsed of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+		it.effect(
+			`rejects unusable recovered duration ${elapsed} before ASR`,
+			() => {
+				const f = setup(elapsed);
+				return Effect.gen(function* () {
+					const id = yield* recordOnce;
+					yield* (yield* MeetingRepository).update((records) =>
+						records.map((record) => ({
+							...record,
+							state: "interrupted",
+							endedAt: Option.none(),
+						})),
+					);
+					const result = yield* Effect.either(MeetingService.process(id));
+					expect(Either.isLeft(result) && result.left.code).toBe(
+						"QUAKE.MEETING.CAPTURE_FAILED",
+					);
+					expect(f.requests).toHaveLength(0);
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					expect(durable.records[0]?.endedAt).toEqual(Option.none());
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
 	it.effect(
 		"drains all recorders before conversion and finalizes main despite side failure",
 		() => {
@@ -287,34 +385,39 @@ describe("meeting conductor consumers", () => {
 			}).pipe(Effect.provide(f.layer));
 		},
 	);
-	it.effect(
-		"recovers legacy interrupted duration from audio before ASR",
-		() => {
-			const f = setup();
-			return Effect.gen(function* () {
-				const id = yield* recordOnce;
-				yield* (yield* MeetingRepository).update((records) =>
-					records.map((r) => ({
-						...r,
-						state: "interrupted",
-						audio: "interrupted",
-						endedAt: Option.none(),
-					})),
-				);
-				yield* TestClock.adjust(86400000);
-				yield* MeetingService.process(id);
-				expect(f.requests[0]?.durationMs).toBe(2500);
-				const record = (yield* MeetingService.snapshot()).records[0];
-				expect(record?.endedAt).toEqual(
-					Option.some((record?.startedAt ?? 0) + 2500),
-				);
-				yield* TestClock.adjust(86400000);
-				expect((yield* MeetingService.snapshot()).records[0]?.endedAt).toEqual(
-					record?.endedAt,
-				);
-			}).pipe(Effect.provide(f.layer));
-		},
-	);
+	for (const elapsed of [2500, 2500.499, 2500.501, 0.1]) {
+		it.effect(
+			`recovers interrupted duration ${elapsed} as integer milliseconds before ASR`,
+			() => {
+				const f = setup(elapsed);
+				return Effect.gen(function* () {
+					const id = yield* recordOnce;
+					yield* (yield* MeetingRepository).update((records) =>
+						records.map((r) => ({
+							...r,
+							state: "interrupted",
+							audio: "interrupted",
+							endedAt: Option.none(),
+						})),
+					);
+					yield* TestClock.adjust(86400000);
+					yield* MeetingService.process(id);
+					expect(f.requests[0]?.durationMs).toBe(Math.round(elapsed));
+					const record = (yield* MeetingService.snapshot()).records[0];
+					expect(record?.endedAt).toEqual(
+						Option.some((record?.startedAt ?? 0) + Math.round(elapsed)),
+					);
+					const durable = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					expect(durable.records[0]?.endedAt).toEqual(record?.endedAt);
+					expect(durable.records[0]?.state).toBe("completed");
+					yield* TestClock.adjust(86400000);
+					expect(
+						(yield* MeetingService.snapshot()).records[0]?.endedAt,
+					).toEqual(record?.endedAt);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
 
 	it.effect(
 		"enforces independent cooldowns, shared side capture, ordered marks and stop once",

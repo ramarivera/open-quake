@@ -21,7 +21,9 @@ import { Profile } from "../../../../../packages/device/src/profiles/profile-con
 import type { MeetingAdapter } from "../../../../../packages/edge/src/ai/meeting-adapter";
 import {
 	type MeetingCommand,
+	MeetingId,
 	MeetingReply,
+	MeetingStore,
 } from "../../../../../packages/edge/src/meetings/meeting-contracts";
 import { meetingError } from "../../../../../packages/edge/src/meetings/meeting-errors";
 import { exportArtifact } from "../../../../../packages/edge/src/meetings/meeting-invariants";
@@ -31,12 +33,16 @@ import { startMockHardwareBus } from "../hardware/bus";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
+import { registerMaintenance } from "../maintenance";
 import { MediaLive, registerMedia } from "../media";
+import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { reportSmokeFailure } from "../profiles/smoke-failure";
 import { stripFixtureEnvelope } from "../test/strip-fixtures";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { audioFiles } from "./audio-files";
 import { mockMeetingAdapter, registerMeetings } from "./index";
+import { meetingStorage } from "./storage";
 
 app.on("window-all-closed", () => {});
 
@@ -71,6 +77,9 @@ async function smoke(): Promise<void> {
 	let profiles: ReturnType<typeof registerProfiles> | undefined;
 	let media: ReturnType<typeof registerMedia> | undefined;
 	let knob: ReturnType<typeof registerKnob> | undefined;
+	let voice: ReturnType<typeof registerVoiceSurface> | undefined;
+	let maintenance: ReturnType<typeof registerMaintenance> | undefined;
+	let monitor: ReturnType<typeof registerMonitor> | undefined;
 	let unregisterHardware = () => {};
 	let disposeLifecycle = async () => {};
 	let exitCode = 0;
@@ -116,7 +125,7 @@ async function smoke(): Promise<void> {
 			"-f",
 			"lavfi",
 			"-i",
-			"sine=frequency=440:duration=0.25",
+			"sine=frequency=440:sample_rate=48000:duration=0.25013",
 			"-c:a",
 			"libopus",
 			"-y",
@@ -198,6 +207,31 @@ async function smoke(): Promise<void> {
 		};
 		const management = new BrowserWindow(options);
 		const panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
+		maintenance = registerMaintenance({
+			root: directory,
+			mock: true,
+			renderer,
+			hardware: () => undefined,
+			management: () => management,
+			stopWriters: async () => {},
+		});
+		voice = registerVoiceSurface({
+			mock: true,
+			tones: createToneRecorder(),
+			serial: () => "meeting-smoke",
+			panel: () => panel,
+			management: () => management,
+			renderer,
+		});
+		monitor = registerMonitor(
+			directory,
+			() => management,
+			() => panel,
+			{
+				collect: () => Effect.succeed({ state: "unavailable", values: {} }),
+			},
+			renderer,
+		);
 		for (const win of [management, panel])
 			win.webContents.on("console-message", (event) => {
 				const message = event.message;
@@ -540,9 +574,116 @@ async function smoke(): Promise<void> {
 			reloaded.records.find((r) => r.id === id)?.appliedTemplate._tag,
 			"Some",
 		);
+		// Exercise retry IPC with actual retained synthetic audio, FFmpeg and durable
+		// history. No capture is started; only the recovery file path uses live I/O.
+		await management.loadURL(
+			"data:text/html,<p>Preparing synthetic recovery</p>",
+		);
+		await meetings.dispose();
+		const root = join(directory, "meetings-v1");
+		const storage = meetingStorage(root);
+		const history = Schema.decodeUnknownSync(MeetingStore)(
+			await Effect.runPromise(storage.load()),
+		);
+		const recoveryId = MeetingId.make(crypto.randomUUID());
+		const recoveredFiles = audioFiles(root, "ffmpeg");
+		await Effect.runPromise(
+			recoveredFiles.write({
+				id: recoveryId,
+				segment: 0,
+				track: "mic",
+				bytes: new Uint8Array(await readFile(synthetic)),
+			}),
+		);
+		await Effect.runPromise(
+			storage.save(
+				Schema.encodeSync(MeetingStore)({
+					version: 1,
+					records: [
+						{
+							...saved,
+							id: recoveryId,
+							title: "Synthetic interrupted recovery",
+							startedAt: 100000,
+							endedAt: Option.none(),
+							parentId: Option.none(),
+							state: "interrupted",
+							audio: "interrupted",
+							transcription: "pending",
+							summary: "pending",
+							transcript: [],
+							minutes: "",
+							marks: [],
+						},
+						...history.records,
+					],
+				}),
+			),
+		);
+		let submittedDuration: number | undefined;
+		let recoverySubmissions = 0;
+		meetings = registerMeetings({
+			userData: directory,
+			hardware: () => undefined,
+			mock: false,
+			renderer,
+			adapter: {
+				...mockMeetingAdapter,
+				submit: (request) => {
+					recoverySubmissions++;
+					submittedDuration = request.durationMs;
+					return mockMeetingAdapter.submit(request);
+				},
+			},
+		});
+		await management.loadURL(`${renderer}?page=meetings`);
+		await request(management, { _tag: "retry", id: recoveryId });
+		await management.webContents.executeJavaScript(`new Promise((resolve,reject)=>{
+			const deadline=Date.now()+12000;
+			const check=async()=>{try {
+				const reply=await window.quakeMeetings.request({_tag:'read'});
+				if(reply._tag==='ready' && reply.snapshot.records.find(r=>r.id===${JSON.stringify(recoveryId)})?.state==='completed') return resolve(true);
+				if(Date.now()>deadline) return reject(new Error('Synthetic recovery timeout'));
+				setTimeout(check,20);
+			} catch(error) {reject(error)}};check();})`);
+		const measured = await Effect.runPromise(
+			recoveredFiles.duration(recoveryId),
+		);
+		assert(
+			!Number.isInteger(measured),
+			"Synthetic sample must reproduce fractional milliseconds",
+		);
+		assert.equal(submittedDuration, Math.round(measured));
+		assert.equal(recoverySubmissions, 1);
+		const recovered = Schema.decodeUnknownSync(MeetingStore)(
+			await Effect.runPromise(storage.load()),
+		).records.find((record) => record.id === recoveryId);
+		assert(recovered, "Recovered history record must exist");
+		assert.equal(recovered.state, "completed");
+		assert.deepEqual(
+			recovered?.endedAt,
+			Option.some(100000 + Math.round(measured)),
+		);
+		await writeFile(
+			join(scratch, "fractional-recovery.json"),
+			JSON.stringify(
+				{
+					measuredDurationMs: measured,
+					submittedDurationMs: submittedDuration,
+					recoverySubmissions,
+					durableCompleted: recovered?.state === "completed",
+					durableEndIsInteger:
+						Option.isSome(recovered.endedAt) &&
+						Number.isInteger(recovered.endedAt.value),
+				},
+				null,
+				2,
+			),
+		);
+		await capture(management, "meetings-fractional-recovery");
 		assert.deepEqual(errors, []);
 		process.stdout.write(
-			"Meetings native smoke PASS: shipped MeetAI; five native touch action keys; manual processing; private outputs; finite audio duration; cooldown; marks/side; real touch toolbar; translation; processing/success/failure; saved regeneration/restart; UTF-8 exports/cancel/failure; untrusted IPC; narrow/light/reduced motion; actual 48kHz mono MP3 mix/concat.\n",
+			"Meetings native smoke PASS: shipped MeetAI; five native touch action keys; manual processing; private outputs; fractional FFmpeg duration recovered through retry IPC and durable history; shared maintenance/voice/monitor owners; cooldown; marks/side; real touch toolbar; translation; processing/success/failure; saved regeneration/restart; UTF-8 exports/cancel/failure; untrusted IPC; narrow/light/reduced motion; actual 48kHz mono MP3 mix/concat.\n",
 		);
 	} catch (cause) {
 		exitCode = 1;
@@ -560,8 +701,11 @@ async function smoke(): Promise<void> {
 				}
 		});
 	} finally {
+		await maintenance?.dispose();
 		for (const win of BrowserWindow.getAllWindows()) win.destroy();
 		await meetings?.dispose();
+		await voice?.dispose();
+		await monitor?.dispose();
 		await Effect.runPromise(Scope.close(hardwareScope, Exit.void));
 		await hardwareRuntime.dispose();
 		await disposeLifecycle();

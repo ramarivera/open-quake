@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionCheck } from "./ConnectionDiagnostic";
 import { HardwareSettings } from "./hardware/HardwareSettings";
+import {
+	AppUpdateDialog,
+	FirmwareDialog,
+	SettingsPage,
+} from "./maintenance/SettingsPage";
+import { useMaintenance } from "./maintenance/useMaintenance";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { CaptureHost } from "./meetings/CaptureHost";
@@ -52,7 +58,8 @@ type Page =
 	| "screen"
 	| "controls"
 	| "appearance"
-	| "meetings";
+	| "meetings"
+	| "settings";
 
 type NavItem = {
 	readonly id: Page;
@@ -81,6 +88,7 @@ const sections: ReadonlyArray<{
 		items: [
 			{ id: "meetings", label: "Meeting", Icon: DeviceIcon },
 			{ id: "appearance", label: "Appearance", Icon: AppearanceIcon },
+			{ id: "settings", label: "Settings", Icon: ControlsIcon },
 		],
 	},
 ];
@@ -91,6 +99,7 @@ function ManagementSurface({
 	appearance: AppearanceController;
 }): React.JSX.Element {
 	const quake = useQuakeEvents();
+	const maintenance = useMaintenance();
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
 	const [page, setPage] = useState<Page>(
@@ -192,11 +201,20 @@ function ManagementSurface({
 						<MeetingHistory />
 					) : page === "controls" ? (
 						<HardwareSettings />
+					) : page === "settings" ? (
+						<SettingsPage controller={maintenance} />
 					) : page === "appearance" ? (
 						<ThemeSettings controller={appearance} />
 					) : null}
 				</div>
 			</main>
+			<FirmwareDialog controller={maintenance} />
+			<AppUpdateDialog controller={maintenance} />
+			{maintenance.toast ? (
+				<div role="status" className="maintenance-toast">
+					{maintenance.toast}
+				</div>
+			) : null}
 		</div>
 	);
 }

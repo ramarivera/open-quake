@@ -154,3 +154,24 @@ Physical QUAKE/touch/Mic behavior, OS permission dialogs, actual system loopback
 hours of continuous real capture and live provider integrations remain
 unverified. Follow-up: `open-quake-lih.16.1`; the parent parity cluster remains
 open for that acceptance. Native mock screenshots do not close those checks.
+
+PR #31 integration review includes main `639924d7f6ca1e79f9b72dc14905502d9ae3f277`
+and preserves the shared maintenance, voice, monitor and preload owners. Shared
+writer shutdown now awaits meeting disposal before closing windows. Recovery
+rounds fractional audio durations to integer milliseconds before history commit;
+source-loss callbacks share the capture-transition semaphore. Deterministic
+stalled-save tests cover main/side loss, explicit stop and suspend. The seven
+new behavioral cases fail against the original implementation and pass with
+the fix. Invalid durations still fail before provider submission.
+
+Fresh verification: all six gates, 1291 tests (desktop 655, device 390, protocol
+60, edge 186), strict OpenSpec 37/37, and sequential native meetings plus combined
+media/profile/voice/monitor mock smokes. Both smokes register and await maintenance
+and meetings owners. Retained synthetic audio measured 250.125 ms through FFmpeg;
+retry over the production preload IPC submitted 250 ms once and saved a completed
+integer end time. No microphone, live provider or hardware call was made.
+Evidence and capture hashes: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings/review-round-1/`.
+Turbo gates use `--env-mode=loose` so owned ExtSSD temporary paths and mock flags
+reach child processes; workers remain bounded at two and Turbo concurrency at one.
+The meetings smoke logs Chromium temporary-cache and macOS process-policy errors;
+assertions pass. The combined smoke has no warning/error lines.

@@ -438,7 +438,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									return yield* meetingError("CaptureFailed");
 								yield* patch(id, (r) => ({
 									...r,
-									endedAt: Option.some(r.startedAt + elapsed),
+									endedAt: Option.some(r.startedAt + Math.round(elapsed)),
 								}));
 								record = yield* find(id);
 							}
@@ -594,7 +594,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						state: "failed",
 						errorCode: Option.some("QUAKE.MEETING.SOURCE_LOST"),
 					}));
-				}),
+				}, lock.withPermits(1)),
 				suspend: suspendCapture,
 				shutdown: Effect.fn("MeetingService.shutdown")(() =>
 					suspendCapture().pipe(Effect.zipRight(PubSub.shutdown(changes))),
