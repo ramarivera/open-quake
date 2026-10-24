@@ -326,6 +326,12 @@ async function main() {
 			?.keys.find((k) => k.keyCode === haTarget.keyCode);
 		assert(optionalKey);
 		assert.deepEqual(keyHaConfig(optionalKey)?.service_data, { brightness: 0 });
+		await management.webContents.executeJavaScript(
+			`document.querySelector('#ha-field-effect').scrollIntoView({block:'center'})`,
+		);
+		await wait(
+			`(()=>{const rect=document.querySelector('#ha-field-effect').getBoundingClientRect();return rect.top>=0 && rect.bottom<=innerHeight})()`,
+		);
 		await capture("base-ha-optional-cleared");
 		await request(management, {
 			type: "ha.revoke",
@@ -340,6 +346,7 @@ async function main() {
 		await wait(
 			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
 		);
+		await management.webContents.executeJavaScript("window.scrollTo(0,0)");
 		await capture("base-ha-revoked");
 		const raw = await readFile(
 			join(app.getPath("userData"), "integrations-v1/channels.json"),
