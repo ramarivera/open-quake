@@ -10,6 +10,8 @@ import { validateProfile } from "./ai-invariants.js";
 function immutableProfile(profile: ProviderProfile): ProviderProfile {
 	Object.freeze(profile.capabilities);
 	Object.freeze(profile.sampling);
+	if (profile.models) Object.freeze(profile.models);
+	if (profile.controls) Object.freeze(profile.controls);
 	for (const range of [
 		profile.samplingLimits.temperature,
 		profile.samplingLimits.topP,

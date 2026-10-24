@@ -39,7 +39,7 @@ per numbered item below (`open-quake-lih.5.1.1` … `open-quake-lih.5.1.11`).
 
 - [x] 6.4 Address all nine PR #28 second-round threads: selection-only taps, disconnect cancellation, transcript replacement, capture ownership, committed renderer key maps, rejected IPC promises, history rendering cost, code fences and concurrent knob/grid starts; add regressions, run six gates and voice/knob/media/monitor native mock smokes, then reply to and resolve handled threads. (`open-quake-lih.5.1.15`)
 
-- [ ] 6.5 Diagnose the overlapping idle Copilot hint with mounted glyph/Range geometry against recovered DK spacing (AI-196); restore legible English and locale text with appropriate wrapping while preserving the 100 ms highlight, reduced motion, orb, state and tile geometry. Preserve missing/blank ClawBot assistant IDs through input selection (AI-184), with mounted warning/no-SendText regressions. Add a native geometry regression, run six gates and voice/knob/media/monitor native mock smokes, inspect fresh captures and record round-three evidence. (`open-quake-lih.5.1.16`)
+- [ ] 6.5 Diagnose the overlapping idle Copilot hint with mounted glyph/Range geometry against recovered DK spacing (AI-196); restore legible English and locale text with appropriate wrapping while preserving the 100 ms highlight, reduced motion, orb, state and tile geometry. Preserve missing/blank ClawBot assistant IDs through input selection (AI-184), with mounted warning/no-SendText regressions. Reconcile AI providers main `9e3dd4f`, retaining voice and knob shutdown ownership. Add a native geometry regression, run six gates and voice/knob/media/monitor native mock smokes, inspect fresh captures and record round-three evidence. (`open-quake-lih.5.1.16`)
 
 ## Verification evidence
 
