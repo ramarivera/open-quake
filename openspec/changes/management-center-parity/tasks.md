@@ -45,7 +45,7 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 - [x] 7.1 Integrate current main into PR33, address all module review findings with transactional deletion, preserved secrets, DK-Claw cleanup, reserved model scope, correct shortcut selection, disconnected catalog cleanup, transport consent and trusted AI/renderer boundaries. Verify concurrency, rollback and secret-scrub production paths with six fresh gates and native mock evidence. Bead `open-quake-lih.17.1.24`.
 
-- [ ] 7.2 Integrate reviewed PR33 into PR34, preserve shared desktop owners and awaitable shutdown, and fix emoji committed-selection authorization, GIF publication, caption/source metadata, export collisions, empty slots and package-link rollback with production IPC/data regressions, six fresh gates and native mock captures. Bead `open-quake-lih.17.1.25`.
+- [x] 7.2 Integrate reviewed PR33 into PR34, preserve shared desktop owners and awaitable shutdown, and fix emoji committed-selection authorization, GIF publication, caption/source metadata, export collisions, empty slots and package-link rollback with production IPC/data regressions, six fresh gates and native mock captures. Bead `open-quake-lih.17.1.25`.
 - [ ] 7.3 Parent-owned genuine native-application GIF paste acceptance on macOS and Windows, including animation and attachment filename classification. Mock clipboard proof cannot close this task or physical acceptance `.23`. Bead `open-quake-lih.17.1.26`.
 - [x] 7.4 Integrate meetings main into the PR33 base using a normal merge, preserve shared main/preload ownership and awaitable shutdown, and refresh all six gates plus synthetic native module proof before merging the updated base into PR34. Bead `open-quake-lih.17.1.27`.
 
@@ -53,5 +53,5 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 - [x] 7.6 Integrate weather/media main into the base with a normal merge, retain all shared owners and successful-release routing, refresh six gates and native mock proof, then merge the verified base into the top. Bead `open-quake-lih.17.1.29`.
 
-- [ ] 7.7 Align default appearance v2 serialization with validated records, preserve restored appearance acknowledgement and validation protections, and prove canonical roundtrip plus final gates. Bead `open-quake-lih.17.1.30`.
+- [x] 7.7 Align default appearance v2 serialization with validated records, preserve restored appearance acknowledgement and validation protections, and prove canonical roundtrip plus final gates. Bead `open-quake-lih.17.1.30`.
 - [x] 7.8 Correct final PR33 feedback on trusted direct-key HA execution, preserving unsaved model rows across saves, and serial-scoped DK-Claw delivery/rollback. Add actual consumer regressions and native mock proof, refresh six gates and merge the verified base normally into PR34. Bead `open-quake-lih.17.1.31`.
