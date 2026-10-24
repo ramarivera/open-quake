@@ -3,6 +3,8 @@ import {
 	APPEARANCE_STORAGE_KEY,
 	type Appearance,
 	defaultAppearance,
+	type FontScale,
+	LEGACY_APPEARANCE_STORAGE_KEY,
 	type MotionPreference,
 	parseAppearance,
 	REDUCED_MOTION_QUERY,
@@ -50,13 +52,21 @@ export function subscribeAppearance(
 	};
 }
 
-function readStoredAppearance(): AppearanceState {
+export function readStoredAppearance(): AppearanceState {
 	try {
-		const saved = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
+		const current = window.localStorage.getItem(APPEARANCE_STORAGE_KEY);
+		const saved =
+			current ?? window.localStorage.getItem(LEGACY_APPEARANCE_STORAGE_KEY);
 		if (saved === null) return { appearance: defaultAppearance, notice: "" };
 		const appearance = parseAppearance(saved);
 		return appearance
-			? { appearance, notice: "" }
+			? {
+					appearance,
+					notice:
+						current === null
+							? persistAppearance(appearance, window.localStorage, null)
+							: "",
+				}
 			: {
 					appearance: defaultAppearance,
 					notice: "Saved appearance was invalid. Defaults restored.",
@@ -123,7 +133,18 @@ export function useAppearance() {
 		for (const [property, value] of Object.entries(toThemeProperties(tokens))) {
 			root.style.setProperty(property, value);
 		}
-		root.style.colorScheme = base;
+		root.style.colorScheme = base === "light" ? "light" : "dark";
+		root.dataset.fontScale = appearance.fontScale;
+		root.style.setProperty(
+			"--mc-sidebar-width",
+			`${appearance.sidebarWidth ?? 218}px`,
+		);
+		void window.quakeManagement?.setTheme({
+			base: base === "light" ? "light" : "dark",
+			background: tokens.background,
+			titlebar: base === "dark" ? "#0e1015" : tokens.background,
+			symbol: tokens.foreground,
+		});
 		root.dataset.theme = appearance.theme;
 		root.dataset.motion = reducedMotion ? "reduce" : "full";
 	}, [appearance, reducedMotion]);
@@ -182,7 +203,12 @@ export function useAppearance() {
 	}, []);
 
 	const update = (
-		patch: Partial<Pick<Appearance, "theme" | "motion" | "customTheme">>,
+		patch: Partial<
+			Pick<
+				Appearance,
+				"theme" | "motion" | "customTheme" | "fontScale" | "sidebarWidth"
+			>
+		>,
 	) => {
 		// File reads are asynchronous; merge into the latest received preference.
 		const next = { ...current.current, ...patch };
@@ -199,6 +225,9 @@ export function useAppearance() {
 		appearance,
 		notice,
 		reducedMotion,
+		setFontScale: (fontScale: FontScale) => update({ fontScale }),
+		setSidebarWidth: (sidebarWidth: number) =>
+			update({ sidebarWidth: Math.max(120, Math.min(360, sidebarWidth)) }),
 		setTheme: (theme: ThemeSelection) => {
 			if (theme === "custom" && !current.current.customTheme) return;
 			update({ theme });

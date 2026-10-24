@@ -1,5 +1,5 @@
 import { Either, Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	ProfileSnapshotReply,
 	type ProfilesBridge,
@@ -42,18 +42,26 @@ export function subscribeStripProfiles(
 	};
 }
 
-export function useStripProfiles(): StripProfiles {
+export function useStripProfiles(
+	onSnapshot?: (next: StripProfiles) => void,
+): StripProfiles {
+	const observer = useRef(onSnapshot);
+	observer.current = onSnapshot;
 	const [profiles, setProfiles] = useState<StripProfiles>({ _tag: "loading" });
 	useEffect(() => {
 		const bridge = window.quakeProfiles;
 		if (!bridge) return;
-		const off = subscribeStripProfiles(bridge, setProfiles);
+		const update = (next: StripProfiles): void => {
+			observer.current?.(next);
+			setProfiles(next);
+		};
+		const off = subscribeStripProfiles(bridge, update);
 		const preview = window.quakeKeyLibrary?.onPreview((snapshot) => {
 			const decoded = Schema.decodeUnknownEither(ProfileEnvelope)(
 				snapshot.envelope,
 			);
 			if (Either.isRight(decoded))
-				setProfiles({ _tag: "ready", envelope: decoded.right });
+				update({ _tag: "ready", envelope: decoded.right });
 		});
 		return () => {
 			off();

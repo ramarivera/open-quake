@@ -74,7 +74,7 @@ const electron = vi.hoisted(() => {
 			requestSingleInstanceLock: vi.fn(() => true),
 			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
-			getPath: vi.fn(() => "/tmp/open-quake-window-test"),
+			getPath: vi.fn(() => join(tmpdir(), "open-quake-window-test")),
 			getVersion: () => "0.0.0",
 			on: vi.fn<
 				(
@@ -90,6 +90,8 @@ const electron = vi.hoisted(() => {
 			handle: vi.fn(),
 			removeHandler: vi.fn(),
 		},
+		nativeTheme: { themeSource: "system" },
+		safeStorage: { isEncryptionAvailable: () => false },
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
 		shell: { openExternal: vi.fn() },
@@ -103,6 +105,15 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./agents", () => ({
+	registerAgents: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
+vi.mock("./integrations", () => ({
+	registerIntegrations: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
+vi.mock("./emoji", () => ({
+	registerEmoji: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
 vi.mock("./maintenance", () => ({
 	registerMaintenance: vi.fn(() => ({
 		dispose: vi.fn(async () => {}),

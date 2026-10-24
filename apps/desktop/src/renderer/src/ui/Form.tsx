@@ -14,6 +14,7 @@ export function PageHeader({
 	return (
 		<header className="page-header">
 			<div>
+				<span className="mc-page-kicker">Management Center</span>
 				<h1>{title}</h1>
 				{description ? <p className="page-description">{description}</p> : null}
 			</div>

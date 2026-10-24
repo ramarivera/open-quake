@@ -307,3 +307,23 @@ export interface CommittedActionSnapshot {
 		readonly config: unknown;
 	}>;
 }
+
+/** CENTER-018/090. The emoji runtime resolves this reference from committed profiles. */
+export const EmojiConfig = Schema.Struct({
+	type: Schema.Literal("emoji"),
+	supportKnob: Schema.optionalWith(Schema.Literal(false), { exact: true }),
+	actions: Schema.Tuple(
+		Schema.Struct({
+			type: Schema.Literal("emojiAction"),
+			value: Schema.Literal(0, 1, 2),
+		}),
+		Schema.Struct({
+			type: Schema.Literal("emojiConfig"),
+			value: Schema.Struct({
+				packageId: Nonblank,
+				emojiId: Nonblank,
+				hash: Schema.String.pipe(Schema.pattern(/^[a-f0-9]{64}$/)),
+			}),
+		}),
+	),
+});

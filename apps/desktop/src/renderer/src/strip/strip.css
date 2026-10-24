@@ -185,3 +185,8 @@
 	background: var(--strip-canvas, #000000);
 	user-select: none;
 }
+
+.strip-slot[data-invalid="true"] {
+	outline: 3px solid #f87171;
+	outline-offset: -3px;
+}

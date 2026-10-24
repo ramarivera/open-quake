@@ -71,3 +71,35 @@ export function ControlsIcon(): React.JSX.Element {
 		</Icon>
 	);
 }
+
+export function AgentIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<rect x="4" y="4" width="8" height="8" rx="1.5" />
+			<path d="M6 1v3m4-3v3M6 12v3m4-3v3M1 6h3m-3 4h3m8-4h3m-3 4h3" />
+			<path d="M6.5 6.5h3v3h-3z" />
+		</Icon>
+	);
+}
+export function EmojiIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<circle cx="8" cy="8" r="6.2" />
+			<path d="M5 9.5c1.5 2 4.5 2 6 0M5.5 5.5h.01m5 0h.01" />
+		</Icon>
+	);
+}
+export function ShortcutIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="m3 13 8-8 2 2-8 8Zm8-12v2m3 1h2M3 2v3M1.5 3.5h3M8 1v1" />
+		</Icon>
+	);
+}
+export function HomeIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="m1 7 7-6 7 6M3 6v8h10V6M6 14V9h4v5" />
+		</Icon>
+	);
+}

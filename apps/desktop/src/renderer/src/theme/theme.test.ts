@@ -104,7 +104,7 @@ describe("custom theme validation", () => {
 			...themes.light,
 			...custom.colors,
 		});
-		expect(themes.light.accent).toBe("#b4480b");
+		expect(themes.light.accent).toBe("#0369a1");
 	});
 
 	it("accepts a complete palette without dropping tokens", () => {
@@ -234,7 +234,7 @@ describe("appearance persistence boundary", () => {
 	it.each([
 		null,
 		{},
-		{ ...defaultAppearance, version: 2 },
+		{ ...defaultAppearance, version: 3 },
 		{ ...defaultAppearance, theme: "sepia" },
 		{ ...defaultAppearance, theme: "custom" },
 		{ ...defaultAppearance, motion: "full" },
@@ -263,4 +263,16 @@ describe("reduced-motion selection", () => {
 			expect(selectReducedMotion(preference, system)).toBe(expected);
 		},
 	);
+});
+
+// Maintenance restoration acknowledges the validated serialized representation.
+it("keeps default-derived v2 records byte-stable through validation", () => {
+	for (const record of [
+		defaultAppearance,
+		{ ...defaultAppearance, theme: "light", motion: "reduce" },
+		{ ...defaultAppearance, fontScale: "large", sidebarWidth: 280 },
+	]) {
+		const serialized = JSON.stringify(record);
+		expect(JSON.stringify(parseAppearance(serialized))).toBe(serialized);
+	}
 });

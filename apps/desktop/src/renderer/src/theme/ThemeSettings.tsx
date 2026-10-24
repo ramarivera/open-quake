@@ -71,6 +71,7 @@ export function ThemeSettings({
 		tokens: ThemeTokens | null;
 	}> = [
 		{ value: "dark", label: "Dark", tokens: themes.dark },
+		{ value: "grey", label: "Grey", tokens: themes.grey },
 		{ value: "light", label: "Light", tokens: themes.light },
 		{
 			value: "custom",

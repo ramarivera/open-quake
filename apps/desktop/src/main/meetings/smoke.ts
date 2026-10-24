@@ -28,15 +28,21 @@ import {
 import { meetingError } from "../../../../../packages/edge/src/meetings/meeting-errors";
 import { exportArtifact } from "../../../../../packages/edge/src/meetings/meeting-invariants";
 import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
+import {
+	APPEARANCE_STORAGE_KEY,
+	defaultAppearance,
+} from "../../renderer/src/theme/appearance";
+import { registerAgents } from "../agents";
 import { registerHardware } from "../hardware";
 import { startMockHardwareBus } from "../hardware/bus";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
+import { registerManagementAppearance } from "../management/appearance";
 import { MediaLive, registerMedia } from "../media";
 import { registerMonitor } from "../monitor";
-import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { registerProfiles } from "../profiles";
 import { reportSmokeFailure } from "../profiles/smoke-failure";
 import { stripFixtureEnvelope } from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
@@ -80,6 +86,8 @@ async function smoke(): Promise<void> {
 	let voice: ReturnType<typeof registerVoiceSurface> | undefined;
 	let maintenance: ReturnType<typeof registerMaintenance> | undefined;
 	let monitor: ReturnType<typeof registerMonitor> | undefined;
+	let agents: ReturnType<typeof registerAgents> | undefined;
+	let disposeAppearance = () => {};
 	let unregisterHardware = () => {};
 	let disposeLifecycle = async () => {};
 	let exitCode = 0;
@@ -207,6 +215,11 @@ async function smoke(): Promise<void> {
 		};
 		const management = new BrowserWindow(options);
 		const panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
+		disposeAppearance = registerManagementAppearance(
+			() => management,
+			directory,
+			renderer,
+		);
 		maintenance = registerMaintenance({
 			root: directory,
 			mock: true,
@@ -291,15 +304,16 @@ async function smoke(): Promise<void> {
 			Schema.encodeSync(Profile)(profile),
 			"meeting-smoke",
 		);
-		profiles = registerProfiles(
-			ManagedRuntime.make(
-				ProfilesLive({
-					read: async () => structuredClone(envelope),
-					write: async () => {},
-				}),
-			),
-			renderer,
+		await writeFile(
+			join(directory, "profiles-v1.json"),
+			JSON.stringify(envelope),
 		);
+		profiles = registerProfiles(() => management, renderer);
+		agents = registerAgents({
+			management: () => management,
+			renderer,
+			profiles: profiles.runtime,
+		});
 		media = registerMedia(
 			ManagedRuntime.make(MediaLive(join(directory, "wallpaper-v1"))),
 			() => management,
@@ -504,7 +518,7 @@ async function smoke(): Promise<void> {
 		management.setContentSize(1440, 1000);
 		nativeTheme.themeSource = "light";
 		await management.webContents.executeJavaScript(
-			"new BroadcastChannel('open-quake.appearance.v1').postMessage({version:1,theme:'light',motion:'reduce',customTheme:null}); null;",
+			`new BroadcastChannel(${JSON.stringify(APPEARANCE_STORAGE_KEY)}).postMessage(${JSON.stringify({ ...defaultAppearance, theme: "light", motion: "reduce" })}); null;`,
 		);
 		await wait(
 			management,
@@ -513,7 +527,7 @@ async function smoke(): Promise<void> {
 		await capture(management, "meetings-history-light");
 		await capture(panel, "meetings-reduced-motion");
 		await management.webContents.executeJavaScript(
-			"new BroadcastChannel('open-quake.appearance.v1').postMessage({version:1,theme:'dark',motion:'system',customTheme:null});null;",
+			`new BroadcastChannel(${JSON.stringify(APPEARANCE_STORAGE_KEY)}).postMessage(${JSON.stringify({ ...defaultAppearance, theme: "dark", motion: "system" })}); null;`,
 		);
 		nativeTheme.themeSource = "dark";
 		// Process an offline manual recording through the visible history action.
@@ -765,6 +779,8 @@ async function smoke(): Promise<void> {
 		});
 	} finally {
 		await maintenance?.dispose();
+		disposeAppearance();
+		await agents?.dispose();
 		for (const win of BrowserWindow.getAllWindows()) win.destroy();
 		await meetings?.dispose();
 		await voice?.dispose();

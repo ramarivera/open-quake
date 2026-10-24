@@ -32,7 +32,7 @@ export function registerMedia(
 	managementWindow: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
-): { dispose: () => Promise<void> } {
+): { dispose: () => Promise<void>; selectionSerial: () => Promise<string> } {
 	const controller = runtime.runPromise(
 		makeMediaController({
 			chooseImage: Effect.tryPromise({
@@ -161,5 +161,9 @@ export function registerMedia(
 		}
 	};
 	app.on("before-quit", onBeforeQuit);
-	return { dispose };
+	return {
+		dispose,
+		selectionSerial: async () =>
+			runtime.runPromise((await controller).selectionSerial),
+	};
 }

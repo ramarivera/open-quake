@@ -51,6 +51,7 @@ import {
 } from "../../shared/profile-manager";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
+import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { makeForegroundProbe } from "./foreground-app";
 import {
 	canonicalProfileAppPath,
@@ -119,8 +120,9 @@ export function registerProfiles(
 		ProfileSwitching.DefaultWithoutDependencies,
 	).pipe(
 		Layer.provideMerge(
-			ProfileRepository.Default.pipe(
+			ProfileRepository.DefaultWithoutDependencies.pipe(
 				Layer.provide(profileStorageLayer(storage)),
+				Layer.provide(ManagementProfileContractsLive),
 			),
 		),
 		Layer.provide(
@@ -369,6 +371,24 @@ export function registerProfiles(
 					),
 				),
 			),
+		/** Republish committed state after a compensating cross-store transaction. */
+		refresh: (): Promise<void> =>
+			runtime
+				.runPromise(
+					Effect.gen(function* () {
+						const envelope = yield* ProfileManager.read();
+						const switching = yield* ProfileSwitching;
+						for (const serial of yield* switching.connectedSerials()) {
+							const selection = envelope.activeByDevice[serial];
+							const profile = envelope.profiles.find(
+								(profile) => profile.id === selection?.profileId,
+							);
+							if (profile) yield* switching.deliver(serial, profile);
+						}
+						yield* (yield* controller).publish();
+					}),
+				)
+				.then(() => undefined),
 		connect,
 		disconnect,
 		resetKeys: () => runtime.runPromise(KeyRuntime.reset()),

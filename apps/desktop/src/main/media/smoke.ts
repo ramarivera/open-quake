@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import type { Display } from "electron";
-import { app, BrowserWindow, dialog, nativeImage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
@@ -20,6 +20,7 @@ import {
 	SYNTHETIC_TOUCH_EMPTY,
 	SYNTHETIC_TOUCH_MOVE,
 } from "../../../../../packages/device/src/touch/touch-fixtures";
+import { AGENTS_REQUEST, type AgentReply } from "../../shared/agents";
 import { KEY_RUNTIME } from "../../shared/key-library";
 import { PROFILES_SNAPSHOT } from "../../shared/profile-snapshot-contracts";
 import type { EncodedProfileEnvelope } from "../../shared/profiles";
@@ -36,6 +37,7 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
+import { registerManagementAppearance } from "../management/appearance";
 import { registerMeetings } from "../meetings";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
@@ -170,6 +172,21 @@ async function smoke(): Promise<void> {
 	const management = new BrowserWindow(options);
 	managementWindow = management;
 	const panel = new BrowserWindow(options);
+	// This media-only fixture has no agent service; the management smoke owns it.
+	ipcMain.handle(
+		AGENTS_REQUEST,
+		(): AgentReply => ({
+			_tag: "rejected",
+			code: "AGENT.IPC.UNAVAILABLE",
+			message: "Agent service is outside the media smoke fixture",
+		}),
+	);
+	const removeAppearance = registerManagementAppearance(
+		() => management,
+		directory,
+		pathToFileURL(resolve("out/renderer/index.html")).href,
+	);
+
 	let weatherRequests = 0;
 	const weatherMedia = registerWeatherMedia(
 		ManagedRuntime.make(
@@ -662,7 +679,7 @@ async function smoke(): Promise<void> {
 		);
 		// The light theme reaches both windows; the strip keeps DK's black.
 		assert.deepEqual(appearance, {
-			token: "#f4f4f6",
+			token: "#f6f4f0",
 			strip: "rgb(0, 0, 0)",
 			animations: 0,
 		});
@@ -824,6 +841,8 @@ async function smoke(): Promise<void> {
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
 	unregisterHardware();
+	ipcMain.removeHandler(AGENTS_REQUEST);
+	removeAppearance();
 	assert.equal(
 		weatherRequests,
 		0,

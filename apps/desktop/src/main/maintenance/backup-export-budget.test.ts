@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -69,18 +70,32 @@ afterEach(async () => {
 for (const tree of [
 	"backup-legacy/deep/retained",
 	"backup-resources-v1/deep/retained",
+	"emoji-v1/assets",
 ]) {
 	for (const budget of ["bytes", "entries"]) {
 		it(`stops before the first disallowed ${budget} read in ${tree}`, async () => {
 			await mkdir(join(root, tree), { recursive: true });
-			for (const name of ["a.bin", "b.bin", "c.bin"])
-				await writeFile(join(root, tree, name), "12345678");
+			const entries = ["12345678", "23456789", "34567890"]
+				.map((bytes, index) => ({
+					bytes,
+					name:
+						tree === "emoji-v1/assets"
+							? createHash("sha256").update(bytes).digest("hex")
+							: `${index}.bin`,
+				}))
+				.sort((a, b) => a.name.localeCompare(b.name));
+			for (const { name, bytes } of entries)
+				await writeFile(join(root, tree, name), bytes);
 			if (budget === "bytes") state.limits.total = profileBytes.length + 8;
 			else state.limits.entries = 2;
 			await expect(exportBackup(root)).rejects.toBeInstanceOf(BackupFailed);
-			expect(state.reads).toContain(join(root, tree, "a.bin"));
-			expect(state.reads).not.toContain(join(root, tree, "b.bin"));
-			expect(state.reads).not.toContain(join(root, tree, "c.bin"));
+			expect(state.reads).toContain(join(root, tree, entries[0]?.name ?? ""));
+			expect(state.reads).not.toContain(
+				join(root, tree, entries[1]?.name ?? ""),
+			);
+			expect(state.reads).not.toContain(
+				join(root, tree, entries[2]?.name ?? ""),
+			);
 			expect(writeBackup).not.toHaveBeenCalled();
 		});
 	}
