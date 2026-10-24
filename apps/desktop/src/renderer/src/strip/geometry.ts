@@ -183,6 +183,7 @@ const FULL_BLEED_TYPES: ReadonlySet<string> = new Set([
 ]);
 /** shouldShowShortcutPressFx (QSC:1702-1708). */
 const NO_PRESS_FEEDBACK_TYPES: ReadonlySet<string> = new Set([
+	"liveAudioTranslateDisplay",
 	"aiChatView",
 	"cameraView",
 	"cameraControlView",
@@ -190,6 +191,7 @@ const NO_PRESS_FEEDBACK_TYPES: ReadonlySet<string> = new Set([
 ]);
 /** fetchAllCurrentButtonAttributes overrides (QSC:3054-3112). */
 const SUB_TOUCH_TYPES: ReadonlySet<string> = new Set([
+	"liveAudioTranslateDisplay",
 	"quakeBot",
 	"quakeBotInput",
 	"systemMonitorPanel",
@@ -280,7 +282,9 @@ function placeTile(
 		zIndex: fullBleed ? 1 : area(footprint) > 1 ? 10 : 0,
 		supportTouchEffect: NO_TOUCH_EFFECT_TYPES.has(type)
 			? false
-			: key.config.supportTouchEffect,
+			: MEETING_ASSISTANT_TYPES.has(type) ||
+				(type === "mic" && meetingPage) ||
+				key.config.supportTouchEffect,
 		hasTouchableSubElements:
 			SUB_TOUCH_TYPES.has(type) || hasSubElementsFlag(key),
 		pressFeedback: !NO_PRESS_FEEDBACK_TYPES.has(type),

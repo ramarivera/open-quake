@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerKnob } from "./knob";
 import { registerMaintenance } from "./maintenance";
 import { registerMedia } from "./media";
+import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
@@ -129,6 +130,9 @@ vi.mock("./lifecycle/native-display", async (original) => {
 		probeHiddenMirroring: vi.fn(() => Effect.succeed(false)),
 	};
 });
+vi.mock("./meetings", () => ({
+	registerMeetings: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
 vi.mock("./knob", () => ({
 	registerKnob: vi.fn(() => ({
 		onDevice: () => {},
@@ -554,6 +558,31 @@ describe("desktop window lifecycle", () => {
 			}
 		});
 	}
+
+	it("awaits meeting recorder disposal before shared writers and quit", async () => {
+		const meetings = vi.mocked(registerMeetings).mock.results[0]?.value;
+		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
+		if (!meetings || !monitor) throw new Error("Missing shared owner");
+		let release = () => {};
+		vi.mocked(meetings.dispose).mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				}),
+		);
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(meetings.dispose).toHaveBeenCalledOnce());
+		try {
+			expect(monitor.dispose).not.toHaveBeenCalled();
+			expect(electron.app.quit).not.toHaveBeenCalled();
+			appEvent("before-quit");
+			expect(meetings.dispose).toHaveBeenCalledOnce();
+		} finally {
+			release();
+		}
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+		expect(monitor.dispose).toHaveBeenCalledOnce();
+	});
 
 	it("awaits voice disposal after knob and monitor before releasing quit", async () => {
 		const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;

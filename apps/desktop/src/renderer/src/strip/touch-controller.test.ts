@@ -1,5 +1,8 @@
 import { FastCheck } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { meetingTouchAction } from "../meetings/touch-action";
+import { stripLayout, tileAt } from "./geometry";
 import { createSubTouchRegistry } from "./sub-touch-registry";
 import {
 	createStripTouchController,
@@ -53,6 +56,19 @@ function fixture(tile?: TouchTile) {
 describe("strip touch consumer", () => {
 	beforeEach(() => vi.useFakeTimers());
 	afterEach(() => vi.useRealTimers());
+	it("disposal cancels held and pending releases without successful activation", () => {
+		for (const lifted of [false, true]) {
+			const f = fixture();
+			f.controller.event(touch(20, 20));
+			if (lifted) f.controller.event(touch(20, 20, 0));
+			f.controller.dispose();
+			vi.runAllTimers();
+			expect(f.keys).toEqual([
+				{ keyCode: "1,1", keyAction: 0 },
+				{ keyCode: "1,1", keyAction: 1 },
+			]);
+		}
+	});
 	it("link loss cancels held and delayed key ups without a voice touch end", () => {
 		for (const lifted of [false, true]) {
 			const { controller, keys } = fixture();
@@ -292,4 +308,64 @@ it("discovers a new clickable over a known scroller after invalidation, retainin
 	registry.invalidate();
 	expect(registry.resolve(point, 1001)?.id).toBe("next-button");
 	expect(registry.targets()).toHaveLength(3);
+});
+
+it("activates all five shipped MeetAI keys through native touch without profile flags", () => {
+	vi.useFakeTimers();
+	try {
+		const profile = builtinProfiles("darwin", "en").find((p) => p.id === "1-1");
+		if (!profile?.pages[0]) throw new Error("Missing shipped MeetAI");
+		const layout = stripLayout(profile, profile.pages[0]);
+		const actions = [
+			"meetingMinutes",
+			"tempMeetingMinutes",
+			"meetingRecordMark",
+			"liveAudioTranslate",
+			"mic",
+		];
+		const keys: StripKeyEvent[] = [];
+		const dispatched: string[] = [];
+		const controller = createStripTouchController({
+			view: () => ({ width: 1920, height: 480, rotation: 0 }),
+			layout: () => layout,
+			tileAt,
+			onKey: (event) => {
+				keys.push(event);
+				const action = meetingTouchAction(event, layout);
+				if (action) dispatched.push(action);
+			},
+			onSubTouch: () => {},
+			overlay: { active: () => false, point: () => {} },
+			now: () => Date.now(),
+			schedule: (action, delay) => {
+				const timer = setTimeout(action, delay);
+				return () => clearTimeout(timer);
+			},
+		});
+		for (const action of actions) {
+			const tile = layout.tiles.find((t) => t.type === action);
+			if (!tile) throw new Error(`Missing ${action}`);
+			controller.event(touch(tile.box.x + 30, tile.box.y + 30));
+			controller.event({
+				source: "mock",
+				kind: "status",
+				state: "disconnected",
+				reason: "transport-ended",
+			});
+			expect(dispatched).not.toContain(action);
+			controller.event(touch(tile.box.x + 30, tile.box.y + 30));
+			controller.event(touch(tile.box.x + 30, tile.box.y + 30, 0));
+			vi.advanceTimersByTime(10);
+			expect(
+				keys.filter(
+					(k) =>
+						k.keyCode === tile.keyCode && k.keyAction === 1 && k.voiceTouchEnd,
+				),
+			).toHaveLength(1);
+		}
+		expect(dispatched).toEqual(actions);
+		controller.dispose();
+	} finally {
+		vi.useRealTimers();
+	}
 });

@@ -1,0 +1,139 @@
+import { Option } from "effect";
+import { useEffect, useState } from "react";
+import type { MeetingRecord } from "../../../../../shared/meeting-bridge";
+import { MeetingGlyph } from "./MeetingGlyph";
+
+export function MeetingAnimation({
+	record,
+}: {
+	record: MeetingRecord | undefined;
+}): React.JSX.Element {
+	const [celebrate, setCelebrate] = useState(false);
+	const panel =
+		new URLSearchParams(
+			typeof window === "undefined" ? "" : window.location.search,
+		).get("surface") === "panel";
+	const completedAt =
+		record && Option.isSome(record.provenance)
+			? record.provenance.value.generatedAt
+			: 0;
+	useEffect(() => {
+		if (!panel || !completedAt || Date.now() - completedAt >= 5000) {
+			setCelebrate(false);
+			return;
+		}
+		setCelebrate(true);
+		const timer = setTimeout(
+			() => setCelebrate(false),
+			Math.max(0, 5000 - (Date.now() - completedAt)),
+		);
+		return () => clearTimeout(timer);
+	}, [completedAt, panel]);
+	const state =
+		record?.state === "recording"
+			? "recording"
+			: record?.state === "processing"
+				? "processing"
+				: record?.state === "failed" || record?.state === "interrupted"
+					? "failure"
+					: record?.state === "completed"
+						? "success"
+						: "idle";
+	const label =
+		state === "recording"
+			? "Start Recording"
+			: state === "processing"
+				? "Parsing completed, generating minutes"
+				: state === "failure"
+					? "Processing failed"
+					: state === "success"
+						? "Minutes generation completed"
+						: "Main meeting is off";
+	return (
+		<div
+			className="meeting-animation"
+			data-animation={state}
+			data-celebrate={celebrate}
+		>
+			{state === "recording" || state === "idle" ? (
+				<div className="meeting-orbit">
+					<MeetingGlyph kind="mic" />
+					<i />
+					<i />
+					<i />
+				</div>
+			) : state === "success" ? (
+				<svg
+					className="meeting-success"
+					viewBox="0 0 100 100"
+					aria-hidden="true"
+				>
+					<circle cx="50" cy="50" r="40" />
+					<path d="m28 50 15 15 30-32" />
+				</svg>
+			) : (
+				<svg className="meeting-gears" viewBox="0 0 180 120" aria-hidden="true">
+					<g className="meeting-gear">
+						<circle cx="62" cy="60" r="35" />
+						{Array.from({ length: 16 }, (_, i) => i * 22.5).map((angle) => (
+							<path
+								key={angle}
+								transform={`rotate(${angle} 62 60)`}
+								d="M55 14h14v14H55Z"
+							/>
+						))}
+						<circle cx="62" cy="60" r="11" />
+					</g>
+					<g className="meeting-gear small">
+						<circle cx="132" cy="75" r="24" />
+						{Array.from({ length: 12 }, (_, i) => i * 30).map((angle) => (
+							<path
+								key={angle}
+								transform={`rotate(${angle} 132 75)`}
+								d="M127 42h10v12h-10Z"
+							/>
+						))}
+						<circle cx="132" cy="75" r="7" />
+					</g>
+					{state === "failure" ? (
+						<path
+							className="meeting-crack"
+							d="m63 15-9 23 18 13-19 20 16 14-7 20"
+						/>
+					) : null}
+				</svg>
+			)}
+			<p>{label}</p>
+			{celebrate ? (
+				<svg
+					className="meeting-fireworks"
+					viewBox="0 0 900 320"
+					aria-hidden="true"
+				>
+					{Array.from({ length: 35 }, (_, index) => ({
+						x: 40 + ((index * 127) % 820),
+						y: 20 + ((index * 73) % 260),
+						delay: (index % 7) * 0.15,
+					})).map((burst) => (
+						<g
+							key={burst.x}
+							className="meeting-firework"
+							style={{
+								animationDelay: `${burst.delay}s`,
+								transformOrigin: `${burst.x}px ${burst.y}px`,
+							}}
+						>
+							{Array.from({ length: 8 }, (_, ray) => ray * 45).map((angle) => (
+								<path
+									key={angle}
+									transform={`translate(${burst.x} ${burst.y}) rotate(${angle})`}
+									d="M0 8v14"
+								/>
+							))}
+						</g>
+					))}
+				</svg>
+			) : null}
+		</div>
+	);
+}

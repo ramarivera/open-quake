@@ -10,7 +10,7 @@ Meeting capture and browsable history are recovered, but capture, processing, an
 - Persist local history, transcript and generated minutes separately.
 - Support retry, deletion, Markdown summary and plain-text transcript exports (`AI-315`), and the shipped live translation route (`AI-136`, `AI-292`).
 
-This lane adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
+Implement the 0.4.95 meeting workspace and strip controls from GAP-MAP cluster 15. The profiles lane owns the MeetAI catalog. This change supplies its registered tiles and actions.
 
 ## Capabilities
 
@@ -28,4 +28,4 @@ None. Existing in-flight SDK, profile, display, AI and theme contracts remain ow
 
 Recommended phase: Later phases item 3, soundboard/DK-Player and meeting minutes, after speech and chat provider interfaces. Physical trigger parity still requires device verification.
 
-Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. No npm dependency is added in this spec-only change.
+Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. No new dependency is added.
