@@ -1,4 +1,11 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	truncate,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime } from "effect";
@@ -33,7 +40,12 @@ import { placeEmojiPackage } from "./profile-placement";
 
 vi.mock("electron", () => ({
 	dialog: { showOpenDialog: vi.fn() },
-	nativeImage: {},
+	nativeImage: {
+		createFromBuffer: () => ({
+			getSize: () => ({ width: 1, height: 1 }),
+			isEmpty: () => false,
+		}),
+	},
 }));
 const gif = (delay = 120, red = 255) =>
 	encodeGif({
@@ -607,3 +619,74 @@ describe("emoji desktop controller", () => {
 		}
 	});
 });
+
+for (const type of ["import-gif", "import-static"] as const) {
+	for (const failure of ["corrupt", "oversized", "missing"] as const) {
+		it(`returns committed ${type} progress when a later file is ${failure}`, async () => {
+			const f = await setup();
+			try {
+				const first = join(f.root, "first"),
+					second = join(f.root, "second"),
+					last = join(f.root, "last");
+				const valid =
+					type === "import-gif"
+						? gif()
+						: Buffer.from(
+								"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE5cAAAAASUVORK5CYII=",
+								"base64",
+							);
+				await writeFile(first, valid);
+				await writeFile(last, valid);
+				if (failure !== "missing") await writeFile(second, "corrupt");
+				if (failure === "oversized")
+					await truncate(second, 8 * 1024 * 1024 + 1);
+				vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+					canceled: false,
+					filePaths: [first, second, last],
+				});
+				const reply = await f.runtime.runPromise(
+					f.controller.request({ type }),
+				);
+				expect(reply._tag).toBe("ready");
+				if (reply._tag !== "ready") throw new Error("Missing partial snapshot");
+				expect(reply.notice).toContain(
+					"1 imported before an error. Remaining files were not imported.",
+				);
+				expect(reply.notice).not.toContain(f.root);
+				if (type === "import-gif") {
+					expect(reply.store.items.map((item) => item.name)).toEqual(["first"]);
+					expect(reply.store.drafts).toEqual([reply.store.items[0]?.id]);
+				} else
+					expect(reply.store.staticAssets.map((asset) => asset.name)).toEqual([
+						"Source",
+						"first",
+					]);
+				const persisted = await f.files.read();
+				expect(persisted).toEqual(reply.store);
+				expect(
+					await f.runtime.runPromise(f.controller.request({ type: "read" })),
+				).toMatchObject({ store: reply.store });
+			} finally {
+				await f.close();
+			}
+		});
+	}
+	it(`still rejects ${type} when the first file fails without a partial commit`, async () => {
+		const f = await setup();
+		try {
+			const path = join(f.root, "invalid");
+			await writeFile(path, "corrupt");
+			const before = await f.files.read();
+			vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+				canceled: false,
+				filePaths: [path],
+			});
+			await expect(
+				f.runtime.runPromise(f.controller.request({ type })),
+			).rejects.toBeDefined();
+			expect(await f.files.read()).toEqual(before);
+		} finally {
+			await f.close();
+		}
+	});
+}
