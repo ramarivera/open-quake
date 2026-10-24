@@ -1,16 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
 	KnobModelSnapshot,
 	KnobRequest,
 	MenuProfile,
 } from "../../../../../shared/knob-contracts";
-import {
-	cardRect,
-	type PickerTarget,
-	pickerLayout,
-	pickerTarget,
-	sameTarget,
-} from "./geometry";
+import { cardRect, pickerLayout } from "./geometry";
+import { mountPickerTouch } from "./picker-touch";
 
 export function ProfilePicker({
 	snapshot,
@@ -24,59 +19,42 @@ export function ProfilePicker({
 	const { context, selector } = snapshot;
 	const sessionId = context.session.sessionId;
 	const layout = pickerLayout(entries.length);
-	const down = useRef<PickerTarget | undefined>(undefined);
-	const cancelled = useRef(false);
+	const picker = useRef<HTMLDivElement>(null);
+	const currentEntries = useRef(entries);
+	currentEntries.current = entries;
 	const [pressed, setPressed] = useState(-1);
 	const focus = cardRect(entries.length, selector.index % 15);
 	const current = context.profiles.find(
 		(p) => p.id === context.session.profileId,
 	);
-	const target = (event: React.PointerEvent<HTMLDivElement>): PickerTarget => {
-		const bounds = event.currentTarget.getBoundingClientRect();
-		return pickerTarget(
+	useEffect(() => {
+		const root = document.getElementById("root");
+		if (!root || !picker.current) return;
+		return mountPickerTouch(
+			root,
+			picker.current,
 			entries.length,
 			selector.page,
-			((event.clientX - bounds.left) * 1920) / bounds.width,
-			((event.clientY - bounds.top) * 480) / bounds.height,
+			(target) => {
+				if (target.kind === "card") {
+					const profile = currentEntries.current[target.index];
+					if (profile)
+						void request({ _tag: "Select", sessionId, profileId: profile.id });
+				} else if (target.kind === "page")
+					void request({ _tag: "Page", sessionId, delta: target.delta });
+				else void request({ _tag: "Dismiss", sessionId });
+			},
+			setPressed,
 		);
-	};
+	}, [entries.length, selector.page, sessionId, request]);
 	return (
 		<div
+			ref={picker}
 			className="knob-picker"
 			role="dialog"
 			aria-modal="true"
 			aria-label="Switch profile"
 			data-testid="profile-picker"
-			onPointerDown={(event) => {
-				down.current = target(event);
-				cancelled.current = false;
-				setPressed(down.current.kind === "card" ? down.current.index : -1);
-				event.currentTarget.setPointerCapture(event.pointerId);
-			}}
-			onPointerMove={(event) => {
-				if (down.current && !sameTarget(down.current, target(event))) {
-					cancelled.current = true;
-					setPressed(-1);
-				}
-			}}
-			onPointerCancel={() => {
-				down.current = undefined;
-				setPressed(-1);
-			}}
-			onPointerUp={(event) => {
-				const start = down.current;
-				down.current = undefined;
-				setPressed(-1);
-				if (!start || cancelled.current || !sameTarget(start, target(event)))
-					return;
-				if (start.kind === "card") {
-					const profile = entries[start.index];
-					if (profile)
-						void request({ _tag: "Select", sessionId, profileId: profile.id });
-				} else if (start.kind === "page")
-					void request({ _tag: "Page", sessionId, delta: start.delta });
-				else void request({ _tag: "Dismiss", sessionId });
-			}}
 			onKeyDown={(event) => {
 				if (event.key === "Escape")
 					void request({ _tag: "Dismiss", sessionId });

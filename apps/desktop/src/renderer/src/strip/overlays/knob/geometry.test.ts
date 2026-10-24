@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { clientToLogical } from "../../touch-geometry";
 import { cardRect, pickerLayout, pickerTarget, sameTarget } from "./geometry";
 
 describe("recovered thumbnail picker geometry", () => {
@@ -50,5 +51,23 @@ describe("recovered thumbnail picker geometry", () => {
 				pickerTarget(17, 0, 0, 0),
 			),
 		).toBe(false);
+	});
+});
+
+it("inverts rotation 90 and viewport scaling before picker arrow/card hits", () => {
+	const bounds = { x: 40, y: 60, width: 240, height: 960 };
+	const logical = (x: number, y: number) =>
+		clientToLogical({ x, y }, bounds, 90);
+	expect(pickerTarget(17, 0, logical(160, 970).x, logical(160, 970).y)).toEqual(
+		{ kind: "page", delta: 1 },
+	);
+	const card = cardRect(17, 0);
+	const point = logical(
+		40 + (480 - card.y - card.height / 2) / 2,
+		60 + (card.x + card.width / 2) / 2,
+	);
+	expect(pickerTarget(17, 0, point.x, point.y)).toEqual({
+		kind: "card",
+		index: 0,
 	});
 });

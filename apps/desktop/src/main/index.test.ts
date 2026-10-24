@@ -65,7 +65,13 @@ const electron = vi.hoisted(() => {
 			>(),
 			quit: vi.fn(),
 		},
-		ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+		ipcMain: {
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			handle: vi.fn(),
+			removeHandler: vi.fn(),
+		},
+		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -151,7 +157,10 @@ describe("desktop window lifecycle", () => {
 		electron.screen.getPrimaryDisplay.mockReturnValue(primary);
 		await import("./index");
 		await vi.waitFor(() =>
-			expect(vi.getTimerCount()).toBeGreaterThanOrEqual(3),
+			expect(windows().management.webContents.send).toHaveBeenCalledWith(
+				"quake:event",
+				{ source: "mock", kind: "status", state: "connected" },
+			),
 		);
 	});
 

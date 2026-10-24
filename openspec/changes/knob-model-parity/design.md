@@ -6,7 +6,7 @@ The desktop has strip-grid profile delivery, wallpaper and device-event forwardi
 
 ## Decisions
 
-Use an Effect.Service in the device knob domain, Schema commands/state and Effect Clock deadlines. One semaphore serializes inputs and timer commits; scoped timer fibers are interrupted on close, reconfiguration and disposal. Main publishes authoritative snapshots. Renderer owns only geometry, pointer hit testing and bounded visual coalescing. No timers that commit profiles live in React.
+Use an Effect.Service in the device knob domain, Schema commands/state and Effect Clock deadlines. One semaphore serializes inputs and timer commits; scoped timer fibers are interrupted on close, reconfiguration and disposal. Main publishes authoritative snapshots. Renderer uses the shared strip touch overlay channel for physical touch and inverse panel coordinates for pointer input, plus bounded visual coalescing. No timers that commit profiles live in React.
 
 KnobModelPorts is the smallest composition interface: committed profile selection, focused tile actions, correlated voice events, volume read/write and thumbnail warming. Desktop shares the strip lane's committed ProfileService runtime; isolated adapters may use the existing storage adapter. Pending other lane runtimes fail with catalog capability-unavailable, never silently execute a different route. Injected native smoke adapters prove complete input-to-profile and volume/voice dispatch chains without hardware.
 
@@ -16,12 +16,12 @@ Sources: v0.4.95/recovered_sources/src/views/DKQuake/QuakeScreenView.vue:919-142
 
 ## UI contract
 
-Render in strip/overlays/knob and compose inside the existing rotated panel canvas. Picker is subordinate to the ring visually, with current violet border and a moving white focus ring. Retain the recovered card ratio and locale strings. Use the strip-grid lane's overlay mount and layout without replacing its base layout. Dial and volume are exported tile components for that lane's mount point as well as the panel's current profile view.
+Render in strip/overlays/knob and compose inside the existing rotated panel canvas. Picker and FunctionWheel are mutually exclusive, with current violet border and a moving white focus ring. Retain the recovered card ratio and locale strings. Use the strip-grid lane's overlay mount and layout without replacing its base layout. Dial and volume are exported tile components for that lane's mount point as well as the panel's current profile view.
 
 ## Risks / Trade-offs
 
 - No real device access is authorized. Physical direction, touch orientation and driver behavior remain hardware-unverified.
-- Brightness and hotkey/voice runtimes belong to other lanes. Their ports must be composed explicitly; unsupported hosts report unavailable.
+- Monitor brightness and hotkey/voice runtimes belong to other lanes. Device-screen luminance uses the current hardware session; unsupported controls report unavailable with a warning and error tone.
 - Thumbnail capture is profile-manager-owned. Consume ready managed thumbnails; missing files remain ring fallback. No external thumbnail URLs.
 
 ## Migration
@@ -38,10 +38,13 @@ ring after its own commit. Selection failure preserves the published envelope.
 The default device identity remains desktop-preview until discovery supplies
 one. The raw storage adapter remains for isolated consumers.
 
-The adapter provides native macOS volume and reports unavailable for unqualified
-brightness, hotkey and voice runtimes. Thumbnail capture and external volume
+The adapter provides native macOS volume and composes the current hardware
+session for typed screen luminance and AI_ERROR [[90,200]] feedback at Device
+Alert Volume. It reports unavailable for unqualified monitor brightness, hotkey
+and voice runtimes. Thumbnail capture and external volume
 observation producers remain owning-lane work. Ready local PNGs require native
-decoding. Physical controller touch normalization remains uncomposed. See the
+decoding. Picker touch now uses the shared normalized strip overlay route;
+physical focus/volume acquisition remains uncomposed. See the
 desktop knob README for the exact handoff and mock verification.
 
 Volume desired state is synchronous per detent; scoped native writes drain the

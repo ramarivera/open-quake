@@ -17,9 +17,15 @@ page/revision state while preserving a selector after its own commit.
 The current serial is `desktop-preview`; device discovery still needs to supply
 a device identity. A raw-storage adapter remains available for isolated consumers.
 Native macOS volume supports player mode and focused volume tiles. No native
-volume write runs in tests or smoke. Brightness, hotkey and voice ports fail with
-the knob catalog's unavailable error until their owners supply
-`DesktopKnobBindings`. Other platforms need a volume binding.
+volume write runs in tests or smoke. Focused screen luminance uses the current
+hardware session's `stepBrightness`, which sends typed `Luminance` commands in
+26/255 steps with minimum 25. Monitor brightness, hotkey and voice ports report
+unavailable until their owners supply `DesktopKnobBindings`. Other platforms
+need a volume binding. Physical failures publish the catalog code through the
+model notice stream and render a warning. The current hardware session plays
+its `error` tone, AI_ERROR [[90,200]], at Device Alert Volume; disabled or zero
+volume remains silent. Alert failures cannot overwrite or recursively alert the
+original failure.
 
 Thumbnail capture belongs to profile-manager. This consumer reads only
 `<userData>/profile-thumbnails/<sha256(profileId)>.png`, limits the file to 1 MB,
@@ -31,11 +37,12 @@ profile has no thumbnail and therefore uses the FunctionWheel.
 Renderer overlays live entirely in `strip/overlays/knob/` and mount inside the
 existing strip canvas. `KnobDial` and `VolumeCapsule` are exported for the strip
 grid owner. Pass its actual tile dimensions and read-only state when composing.
-`KnobPanelLayer` mounts in StripPanel and uses the actual strip layout for tile bounds. Tapping an unsupported grid tile clears focus. Physical
-controller touch normalization belongs to its input owner; DOM pointer events
-already implement card selection, drag-off cancellation, blank dismissal and
-paging. A touch consumer should dispatch the same restricted Page/Select/Dismiss
-commands after logical 1920 by 480 hit testing with `pickerTarget`.
+`KnobPanelLayer` mounts in StripPanel and uses the actual strip layout for tile bounds. Tapping an unsupported grid tile clears focus. The picker consumes
+`mountStripTouch`'s normalized `quake-strip-overlay-touch` route and owns touch
+while open, preventing underlying grid actions. Pointer input uses the inverse
+root rotation and scale before the same card/page gesture consumer. The picker
+and FunctionWheel never render together. Physical focus/volume acquisition
+outside the picker remains owning-lane work.
 
 ## Native verification
 
@@ -50,6 +57,8 @@ env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 TMPDIR=/Volumes/ExtSSD/SCRA
 
 This drives the production DeviceBus consumer, domain, IPC, preload and renderer
 with mock action/voice/volume ports. It verifies native pointer paging/dismissal,
+rotation=90 pointer and physical-touch paging/card selection without grid
+leakage, exclusive selector rendering, physical-failure warning publication,
 panel identity permissions, press arbitration and focus/volume dispatch, and
 checks the production thumbnail reader against valid and truncated PNGs using
 Electron decoding. Captures include ring, picker, page 2, volume and tile dial.

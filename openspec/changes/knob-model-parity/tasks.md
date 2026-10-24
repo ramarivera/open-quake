@@ -18,7 +18,11 @@
 
 ## 5. Owning-lane composition
 
-- [ ] 5.1 Compose active hardware identity, thumbnail production, external-volume observations, focused brightness/hotkey actions, knob-push-to-talk runtime and normalized physical touch when their transports are available; verify actual consumers. Tracked by open-quake-lih.4.2. This baseline exposes the ports and fails unavailable runtimes closed.
+- [ ] 5.1 Compose active hardware identity, thumbnail production, external-volume observations, focused monitor-brightness/hotkey actions, knob-push-to-talk runtime and physical focus/volume acquisition when their transports are available; verify actual consumers. Tracked by open-quake-lih.4.2. Screen luminance and picker physical touch are composed in task 6.1. Other unavailable runtimes report catalog warnings and request the error tone.
+
+## 6. Review round 1
+
+- [x] 6.1 Merge touch/hardware main, fix rotated picker input and exclusive selectors, compose luminance/volume and publish physical failures with the error buzzer; verify all gates and native mock smokes. Bead open-quake-lih.4.1.5. Delivery is PR #24; reply to both verified review threads with the fix commit after push.
 
 ## Evidence
 
@@ -30,3 +34,5 @@
 - 4.1: all six lane gates and both native mock Electron smokes passed. PR: https://github.com/ramarivera/open-quake/pull/24. Captures and gate logs: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/knob-model/. Open task 5.1 tracks owning-lane integration; it does not claim hardware verification.
 
 - Main integration: merged strip-grid/management changes; shared ProfileService selection and committed notifications now drive knob, panel and preview. Native smoke asserts both windows update after a knob commit and unsupported grid taps clear focus.
+
+- 6.1: merged origin/main 4f736cf, preserving strip grid, geometry.tileAt/sub-touch routing and hardware controls. Rotation=90 pointer and physical picker inputs, exclusive selectors, sanitized physical-failure warnings and hardware error tones are verified. All six gates and three native mock smokes pass. Detailed evidence: verification-round-1.md. Screen luminance is composed; monitor brightness/hotkey/voice and the other task 5.1 integrations remain open.

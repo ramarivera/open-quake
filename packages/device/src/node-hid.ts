@@ -31,6 +31,9 @@ export const NodeHidLive = Layer.succeed(
 								? [
 										{
 											path: device.path,
+											...(device.serialNumber
+												? { serialNumber: device.serialNumber }
+												: {}),
 											vendorId: device.vendorId,
 											productId: device.productId,
 											usagePage: device.usagePage,
@@ -48,7 +51,12 @@ export const NodeHidLive = Layer.succeed(
 			info: HidDeviceInfo,
 		): Effect.fn.Return<HidConnection, QuakeHidOpenFailed> {
 			const handle = yield* Effect.tryPromise({
-				try: async () => (await loadHid()).HIDAsync.open(info.path),
+				try: async () => {
+					const hid = await loadHid();
+					return process.platform === "darwin" && info.usagePage === 0xff73
+						? hid.HIDAsync.open(info.path, { nonExclusive: true })
+						: hid.HIDAsync.open(info.path);
+				},
 				catch: (cause) => new QuakeHidOpenFailed(cause),
 			});
 			const closed = yield* Ref.make(false);

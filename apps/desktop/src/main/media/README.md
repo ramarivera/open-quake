@@ -120,3 +120,8 @@ noon, one-second updates and clock disposal using Effect TestClock.
 
 Real panel placement, USB transfers, firmware targets and resource acknowledgments
 remain unverified. No fake transport or renderer result closes those gates.
+
+The smoke also injects source-derived raw vendor touch frames into the mock bus
+and asserts the real preload/IPC and mounted panel emit one key down and one up.
+For parity lanes, set `OPEN_QUAKE_MOCK_DEVICE=1` and `TMPDIR` to the lane scratch
+directory, and use `env -u ELECTRON_RUN_AS_NODE` for the Electron invocation.

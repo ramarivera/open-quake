@@ -54,3 +54,19 @@ describe("event forwarding", () => {
 		);
 	});
 });
+
+it("delivers touch only to the current owning panel", () => {
+	const panel = makeWindow(),
+		management = makeWindow();
+	const forward = createEventForwarder(
+		() => [panel, management],
+		() => [panel],
+	);
+	forward({
+		source: "hid",
+		kind: "touch",
+		points: [{ touchId: "touch-1", action: 1, x: 120, y: 360 }],
+	});
+	expect(panel.webContents.send).toHaveBeenCalledTimes(1);
+	expect(management.webContents.send).not.toHaveBeenCalled();
+});

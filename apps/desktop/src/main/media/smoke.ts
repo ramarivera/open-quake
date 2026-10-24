@@ -7,13 +7,21 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, nativeImage } from "electron";
+import {
+	SYNTHETIC_TOUCH_DOWN,
+	SYNTHETIC_TOUCH_EMPTY,
+	SYNTHETIC_TOUCH_MOVE,
+} from "../../../../../packages/device/src/touch/touch-fixtures";
+import { PROFILES_SNAPSHOT } from "../../shared/profile-snapshot-contracts";
 import type { EncodedProfileEnvelope } from "../../shared/profiles";
 import {
 	type WallpaperCommand,
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { registerHardware } from "../hardware";
 import { registerKnob } from "../knob";
+import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import {
 	clockProfile,
@@ -122,6 +130,11 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	const unregisterHardware = registerHardware(
+		() => undefined,
+		() => management,
+		true,
+	);
 	let profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
 	app.once("will-quit", () => {
 		assert(
@@ -331,6 +344,127 @@ async function smoke(): Promise<void> {
 		);
 	}
 	await knob.dispose();
+	// Exercise the mounted panel adapter via the real preload/event IPC.
+	await panel.webContents.executeJavaScript(`(() => {
+		window.__stripKeys = [];
+		const root = document.getElementById('root');
+		root.addEventListener('quake-strip-key', e => window.__stripKeys.push(e.detail));
+	})()`);
+	const mockTouch = startMockDeviceBus();
+	const offTouch = mockTouch.on((event) => {
+		if (event.kind === "touch") panel.webContents.send("quake:event", event);
+	});
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_DOWN);
+	await settle(30);
+	assert.equal(
+		await panel.webContents.executeJavaScript(
+			`document.querySelector('[data-state="tile"][data-key-code="1,1"]').dataset.pressed`,
+		),
+		"true",
+		"Touch presses the tile returned by strip geometry",
+	);
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_MOVE);
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+	await new Promise<void>((done) => setTimeout(done, 60));
+	const keys: unknown =
+		await panel.webContents.executeJavaScript("window.__stripKeys");
+	assert.deepEqual(keys, [
+		{ keyCode: "1,1", keyAction: 0 },
+		{ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true },
+	]);
+	process.stdout.write(
+		"Strip touch smoke PASS: raw synthetic frames -> parser/tracker -> main bus -> preload IPC -> mounted panel -> down/up, no hardware.\n",
+	);
+	const touchAt = (x: number, y: number): Uint8Array => {
+		const rawY = 480 - y;
+		return new Uint8Array([
+			0xa3,
+			0,
+			0,
+			0x1a,
+			1,
+			1,
+			rawY & 0xff,
+			rawY >> 8,
+			x & 0xff,
+			x >> 8,
+		]);
+	};
+	mockTouch.emitTouchReport(touchAt(240, 120)); // Gap between 1,1 and 1,2.
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+	await settle(30);
+	assert.deepEqual(
+		await panel.webContents.executeJavaScript("window.__stripKeys"),
+		keys,
+		"Grid gaps never emit ordinary key events",
+	);
+	// Swap the committed profile through the production preload subscription.
+	// Its inward-growing span must replace the previous ordinary key hit.
+	panel.webContents.send(PROFILES_SNAPSHOT, {
+		_tag: "ready",
+		envelope: stripFixtureEnvelope(spansProfile, "smoke-A"),
+	});
+	await settle(30);
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_DOWN);
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+	await settle(30);
+	assert.deepEqual(
+		await panel.webContents.executeJavaScript("window.__stripKeys.slice(-2)"),
+		[
+			{ keyCode: "2,1", keyAction: 0 },
+			{ keyCode: "2,1", keyAction: 1, voiceTouchEnd: true },
+		],
+	);
+	// Establish a registry with a scroller, then add a clickable child over it.
+	await panel.webContents.executeJavaScript(`(() => {
+		window.__subTouch = [];
+		const tile = document.querySelector('[data-state="tile"][data-key-code="2,8"]');
+		const scroll = document.createElement('div');
+		scroll.dataset.quakeSubTouch = 'scroll'; scroll.dataset.supportQuakeMove = 'true';
+		scroll.style.cssText = 'position:absolute;inset:0'; tile.appendChild(scroll);
+		for (const phase of ['start', 'end']) scroll.addEventListener('quake-sub-touch-' + phase, e => window.__subTouch.push(e.detail));
+	})()`);
+	mockTouch.emitTouchReport(touchAt(1800, 360));
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+	await settle(30);
+	assert.equal(
+		await panel.webContents.executeJavaScript(
+			"window.__subTouch.at(-1)?.subElementId",
+		),
+		"scroll",
+	);
+	await panel.webContents.executeJavaScript(`(() => {
+		const scroll = document.querySelector('[data-quake-sub-touch="scroll"]');
+		const button = document.createElement('button'); button.dataset.quakeSubTouch = 'new-button';
+		button.style.cssText = 'position:absolute;inset:0'; scroll.appendChild(button);
+		for (const phase of ['start', 'end']) button.addEventListener('quake-sub-touch-' + phase, e => window.__subTouch.push(e.detail));
+	})()`);
+	await settle(30); // Deliver the real MutationObserver callback.
+	mockTouch.emitTouchReport(touchAt(1800, 360));
+	mockTouch.emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+	await settle(30);
+	assert.deepEqual(
+		await panel.webContents.executeJavaScript(
+			`window.__subTouch.map(({subElementId, phase, confirmedTap}) => ({subElementId, phase, confirmedTap}))`,
+		),
+		[
+			{ subElementId: "scroll", phase: "start", confirmedTap: false },
+			{ subElementId: "scroll", phase: "end", confirmedTap: false },
+			{ subElementId: "new-button", phase: "start", confirmedTap: false },
+			{ subElementId: "new-button", phase: "end", confirmedTap: true },
+		],
+	);
+	offTouch();
+	mockTouch.stop();
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "panel-touch-complete.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
+	process.stdout.write(
+		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
+	);
+	unregisterHardware();
 	await profiles.dispose();
 	management.destroy();
 	panel.destroy();

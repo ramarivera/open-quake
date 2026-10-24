@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { QuakeDevice } from "@open-quake/device";
+import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
 import { Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
 import { app, BrowserWindow, type Display, ipcMain, screen } from "electron";
@@ -13,10 +13,12 @@ import {
 	panelRotation,
 } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { registerHardware } from "./hardware";
+import { attachHardware, startMockHardwareBus } from "./hardware/bus";
+import { hardwarePreferencesLive } from "./hardware/preferences";
 import { registerKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
 import { MediaLive, registerMedia } from "./media";
-import { startMockDeviceBus } from "./mockDeviceBus";
 import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -106,10 +108,14 @@ app.whenReady().then(() => {
 	const profilesRuntime = ManagedRuntime.make(
 		desktopProfilesLive(app.getPath("userData")),
 	);
+	let bus: DeviceBus | undefined;
 	const knob = registerKnob(
 		() => panelWin,
 		() => [panelWin, managementWin],
-		{ profiles: knobProfileBinding(profilesRuntime) },
+		{
+			profiles: knobProfileBinding(profilesRuntime),
+			hardware: () => bus?.hardware?.(),
+		},
 	);
 	registerMedia(
 		ManagedRuntime.make(
@@ -130,16 +136,32 @@ app.whenReady().then(() => {
 	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(
-		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+		Layer.merge(
+			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+			HardwareControls.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					hardwarePreferencesLive(join(app.getPath("userData"), "hardware-v1")),
+				),
+			),
+		),
 	);
-	const mock = isDev && process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+	const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 	const source = mock
-		? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
-				Effect.sync(() => bus.stop()),
-			)
-		: startDeviceBus();
-	let bus: DeviceBus | undefined;
-	let running: Fiber.RuntimeFiber<void, never> | undefined;
+		? startMockHardwareBus()
+		: Effect.gen(function* () {
+				const controls = yield* HardwareControls;
+				return yield* startDeviceBus((connection) =>
+					attachHardware(controls, connection),
+				);
+			});
+	const disposeHardware = registerHardware(
+		() => bus?.hardware?.(),
+		() => managementWin,
+		mock,
+	);
+	let running:
+		| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
+		| undefined;
 	let stopping = Promise.resolve();
 	let generation = 0;
 	let quitting = false;
@@ -154,7 +176,12 @@ app.whenReady().then(() => {
 				Effect.scoped(
 					Effect.gen(function* () {
 						bus = yield* source;
-						bus.on(createEventForwarder(() => [panelWin, managementWin]));
+						bus.on(
+							createEventForwarder(
+								() => [panelWin, managementWin],
+								() => [panelWin],
+							),
+						);
 						bus.on(knob.onDevice);
 						yield* Effect.never;
 					}),
@@ -218,6 +245,7 @@ app.whenReady().then(() => {
 		screen.removeListener("display-removed", syncPanelDisplay);
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
+		disposeHardware();
 		void stopBus().then(async () => {
 			await knob.dispose();
 			await runtime.dispose();

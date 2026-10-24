@@ -116,7 +116,7 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 						request={request}
 					/>
 				) : null}
-				{selector.ringVisible && entries.length ? (
+				{selector.mode === "ring" && selector.ringVisible && entries.length ? (
 					<FunctionWheel
 						entries={entries}
 						index={selector.index}

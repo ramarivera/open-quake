@@ -33,6 +33,9 @@ export interface DesktopKnobBindings {
 		) => Effect.Effect<ProfileEnvelope, KnobError>;
 	};
 	readonly voice?: (input: KnobVoiceInput) => Effect.Effect<void, KnobError>;
+	readonly hardware?: () =>
+		| import("@open-quake/device").HardwareSession
+		| undefined;
 	readonly focusedTurn?: KnobModelPort["focusedTurn"];
 	readonly readVolume?: KnobModelPort["readVolume"];
 	readonly writeVolume?: KnobModelPort["writeVolume"];
@@ -198,7 +201,25 @@ export function desktopKnobAdapters(
 			script(
 				`set volume output volume ${reading.level} output muted ${reading.muted ? "true" : "false"}`,
 			).pipe(Effect.asVoid));
+	const withHardware = (
+		action: (
+			session: import("@open-quake/device").HardwareSession,
+		) => Effect.Effect<void, import("@open-quake/device").HardwareError>,
+	): Effect.Effect<void, KnobError> =>
+		Effect.suspend((): Effect.Effect<void, KnobError> => {
+			const session = bindings.hardware?.();
+			return session
+				? action(session).pipe(
+						Effect.matchEffect({
+							onFailure: (cause) =>
+								Effect.fail(KnobDispatchFailed.fromCause(cause)),
+							onSuccess: () => Effect.void,
+						}),
+					)
+				: unavailable;
+		});
 	const ports: KnobModelPort = {
+		alert: () => withHardware((session) => session.playTone("error")),
 		selectProfile: (profileId) =>
 			Effect.gen(function* () {
 				const envelope = yield* read;
@@ -242,7 +263,9 @@ export function desktopKnobAdapters(
 								return writeVolume({ level, muted: level === 0 });
 							}),
 						)
-					: unavailable),
+					: key.kind === "luminance"
+						? withHardware((session) => session.stepBrightness(delta))
+						: unavailable),
 		readVolume,
 		writeVolume,
 		warmThumbnails,

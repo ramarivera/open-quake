@@ -141,9 +141,9 @@ export function registerKnobRuntime(
 							else if (event.kind === "status" && event.state === "connected")
 								yield* load.pipe(Effect.flatMap(KnobModel.configure));
 						}).pipe(
-							Effect.match({
-								onFailure: () => undefined,
-								onSuccess: () => undefined,
+							Effect.matchEffect({
+								onFailure: (error) => Effect.logWarning(error.code),
+								onSuccess: () => Effect.void,
 							}),
 						),
 					);

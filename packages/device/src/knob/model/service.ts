@@ -101,7 +101,18 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 				yield* stop("hide");
 			});
 			const report = (error: KnobError): Effect.Effect<void> =>
-				emit({ notice: error.code });
+				Effect.gen(function* () {
+					if (error._tag === "KnobSessionStale") return;
+					yield* emit({ notice: error.code });
+					if (ports.alert)
+						yield* ports.alert(error.code).pipe(
+							Effect.matchEffect({
+								onFailure: (failure) => Effect.logWarning(failure.code),
+								onSuccess: () => Effect.void,
+							}),
+							Effect.forkIn(scope),
+						);
+				});
 			const quiet = (
 				effect: Effect.Effect<void, KnobError>,
 			): Effect.Effect<void> =>
@@ -153,8 +164,8 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 												pendingVolume = Option.none();
 												yield* emit({
 													volume: { ...state.volume, phase: "unavailable" },
-													notice: error.code,
 												});
+												yield* report(error);
 											}),
 										),
 									onSuccess: () => Effect.void,
@@ -354,12 +365,12 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						if (now - lastProbe >= KNOB_TIMING.volumeProbe) {
 							const result = yield* Effect.either(ports.readVolume);
 							lastProbe = now;
-							if (result._tag === "Left")
+							if (result._tag === "Left") {
 								yield* emit({
 									volume: { ...state.volume, phase: "unavailable" },
-									notice: result.left.code,
 								});
-							else if (now - lastTurn >= KNOB_TIMING.volumeGuard)
+								yield* report(result.left);
+							} else if (now - lastTurn >= KNOB_TIMING.volumeGuard)
 								yield* emit({ volume: { ...result.right, phase: "active" } });
 						}
 						if (state.volume.phase === "active") {
@@ -395,7 +406,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							index,
 							page: Math.floor(index / 15),
 							progress: 0,
-							ringVisible: true,
+							ringVisible: !picker,
 							direction: delta,
 						},
 						notice: "",
@@ -434,11 +445,12 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 								});
 							yield* emit({ volume: { ...state.volume, phase: "activating" } });
 							const reading = yield* Effect.either(ports.readVolume);
-							if (reading._tag === "Left")
-								return yield* emit({
+							if (reading._tag === "Left") {
+								yield* emit({
 									volume: { ...state.volume, phase: "unavailable" },
-									notice: reading.left.code,
 								});
+								return yield* report(reading.left);
+							}
 							lastProbe = yield* Clock.currentTimeMillis;
 							yield* stopSelection;
 							return yield* emit({
@@ -476,7 +488,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 									index: page * 15,
 									page,
 									progress: 0,
-									ringVisible: true,
+									ringVisible: false,
 								},
 							});
 							return yield* arm(true);
@@ -606,7 +618,11 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							Effect.catchTag("ParseError", (cause) =>
 								Effect.fail(InvalidKnobConfig.fromCause(cause)),
 							),
-							Effect.flatMap((event) => mutex.withPermits(1)(handle(event))),
+							Effect.flatMap((event) =>
+								mutex.withPermits(1)(
+									handle(event).pipe(Effect.tapError(report)),
+								),
+							),
 						),
 				),
 				snapshot: Effect.fn("KnobModel.snapshot")(

@@ -7,6 +7,10 @@ import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { Effect, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
+import {
+	KnobCapabilityUnavailable,
+	KnobDispatchFailed,
+} from "../../../../../packages/device/src/knob/knob-errors.js";
 import type {
 	KnobModelContext,
 	KnobVoiceInput,
@@ -15,6 +19,8 @@ import type {
 import type { KnobModelPort } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import { QUAKE_EVENT_CHANNEL } from "../../preload/quake";
+import { cardRect } from "../../renderer/src/strip/overlays/knob/geometry";
 import { encodeProfileEnvelope, ProfileEnvelope } from "../../shared/profiles";
 import { MediaLive, registerMedia } from "../media";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
@@ -56,6 +62,7 @@ async function smoke(): Promise<void> {
 		useContentSize: true,
 		width: 1920,
 		height: 480,
+		enableLargerThanScreen: true,
 		webPreferences: {
 			preload: resolve("out/preload/index.mjs"),
 			sandbox: false,
@@ -107,6 +114,8 @@ async function smoke(): Promise<void> {
 	const selected: string[] = [];
 	const voice: KnobVoiceInput[] = [];
 	const focused: number[] = [];
+	let failActions = false;
+	const alerts: string[] = [];
 	const volumes: VolumeReading[] = [];
 	let profileEnvelope = encodeProfileEnvelope(
 		Schema.decodeUnknownSync(ProfileEnvelope)({
@@ -172,14 +181,24 @@ async function smoke(): Promise<void> {
 				};
 				return context;
 			}),
+		alert: (code) =>
+			Effect.sync(() => {
+				alerts.push(code);
+			}),
 		voice: (input) =>
-			Effect.sync(() => {
-				voice.push(input);
-			}),
+			failActions
+				? Effect.fail(KnobCapabilityUnavailable.fromCause())
+				: Effect.sync(() => {
+						voice.push(input);
+					}),
 		focusedTurn: (_key, delta) =>
-			Effect.sync(() => {
-				focused.push(delta);
-			}),
+			failActions
+				? Effect.fail(
+						KnobDispatchFailed.fromCause(new Error("private-native-payload")),
+					)
+				: Effect.sync(() => {
+						focused.push(delta);
+					}),
 		readVolume: Effect.succeed({ level: 50, muted: false }),
 		writeVolume: (volume) =>
 			Effect.sync(() => {
@@ -322,6 +341,11 @@ async function smoke(): Promise<void> {
 			() => exists('[data-testid="profile-picker"]'),
 			"thumbnail picker",
 		);
+		assert.equal(
+			await exists('[data-testid="function-wheel"]'),
+			false,
+			"Ready picker must never render the FunctionWheel",
+		);
 		await screenshot("thumbnail-picker.png");
 		const spoof: unknown = await management.webContents.executeJavaScript(
 			`window.quakeKnob.request({_tag:'Page',sessionId:${JSON.stringify(context.session.sessionId)},delta:1})`,
@@ -392,9 +416,94 @@ async function smoke(): Promise<void> {
 			async () => (await model()).focus._tag === "none",
 			"unsupported grid tile clears focus",
 		);
+		// Native portrait framebuffer: inverse pointer transform plus the merged physical overlay route.
+		panel.setContentSize(480, 1920);
+		await panel.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "panel", rotation: "90" },
+		});
+		await runtime.runPromise(KnobModel.configure(context));
+		await send({ _tag: "Rotate", delta: 1 });
+		await until(
+			() => exists('[data-testid="profile-picker"]'),
+			"portrait picker",
+		);
+		assert.equal(await exists('[data-testid="function-wheel"]'), false);
+		await panel.webContents.executeJavaScript(`(() => {
+			window.__pickerGridKeys = [];
+			document.getElementById('root').addEventListener('quake-strip-key', e => window.__pickerGridKeys.push(e.detail));
+		})()`);
+		click(240, 1820);
+		await until(
+			async () => (await model()).selector.page === 1,
+			"rotation 90 native pointer page arrow",
+		);
+		await screenshot("thumbnail-picker-rotation-90.png");
+		const physical = async (x: number, y: number): Promise<void> => {
+			for (const action of [1, 0]) {
+				panel.webContents.send(QUAKE_EVENT_CHANNEL, {
+					source: "mock",
+					kind: "touch",
+					points: [{ touchId: "picker", action, x: 1920 - x, y }],
+				});
+				await delay(25);
+			}
+		};
+		await physical(100, 240);
+		await until(
+			async () => (await model()).selector.page === 0,
+			"portrait physical touch previous page",
+		);
+		await until(
+			async () =>
+				panel.webContents.executeJavaScript(
+					"document.querySelector('.knob-overlay-root')?.dataset.page === '0'",
+				),
+			"portrait page 0 rendered",
+		);
+		const card = cardRect(context.profiles.length, 0);
+		await physical(card.x + card.width / 2, card.y + card.height / 2);
+		await until(
+			async () => selected.at(-1) === "p0",
+			"physical picker card selects profile",
+		);
+		assert.deepEqual(
+			await panel.webContents.executeJavaScript("window.__pickerGridKeys"),
+			[],
+			"Picker must own touch instead of dispatching underlying grid keys",
+		);
+		// A physical action has no IPC reply: its catalog notice must reach the rendered warning.
+		failActions = true;
+		await runtime.runPromise(
+			KnobModel.dispatch({
+				_tag: "TapTile",
+				sessionId: context.session.sessionId,
+				keyCode: "1,1",
+			}),
+		);
+		registration.onDevice({ source: "mock", kind: "rotate", direction: 1 });
+		await until(
+			async () => (await model()).notice === "QUAKE.KNOB.DISPATCH_FAILED",
+			"physical focused failure notice",
+		);
+		await until(
+			async () =>
+				panel.webContents.executeJavaScript(
+					"document.querySelector('.knob-notice')?.textContent.includes('unavailable') === true",
+				),
+			"physical failure warning toast",
+		);
+		assert(!JSON.stringify(await model()).includes("private-native-payload"));
+		registration.onDevice({ source: "mock", kind: "press", state: 5 });
+		await until(
+			async () =>
+				(await model()).notice === "QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+			"physical hold unavailable notice",
+		);
+		await until(async () => alerts.length === 2, "physical failure alerts");
+		await screenshot("physical-error-warning.png");
 		assert.deepEqual(errors, []);
 		process.stdout.write(
-			`Knob native smoke PASS: ring, picker, paging, panel-only commands, gesture arbitration, volume and focus. Screenshots: ${output}\n`,
+			`Knob native smoke PASS: exclusive ring/picker, rotation=90 pointer and physical-touch paging/card selection, panel-only commands, gesture arbitration, volume/focus and physical-error warnings. Screenshots: ${output}\n`,
 		);
 	} finally {
 		panel.destroy();

@@ -1,4 +1,4 @@
-import { isQuakeInterface } from "@open-quake/protocol";
+import { HardwareReply, isQuakeInterface } from "@open-quake/protocol";
 import { Schema } from "effect";
 
 export { QUAKE_IDENTITY } from "@open-quake/protocol";
@@ -6,6 +6,7 @@ export const DEFAULT_KEEP_ALIVE_MS = 15_000;
 
 export const HidDeviceInfo = Schema.Struct({
 	path: Schema.String,
+	serialNumber: Schema.optional(Schema.String),
 	vendorId: Schema.Number,
 	productId: Schema.Number,
 	usagePage: Schema.Number,
@@ -14,11 +15,13 @@ export const HidDeviceInfo = Schema.Struct({
 export type HidDeviceInfo = typeof HidDeviceInfo.Type;
 
 export const TouchPoint = Schema.Struct({
+	touchId: Schema.optionalWith(Schema.String, { exact: true }),
 	action: Schema.Number,
 	x: Schema.Number,
 	y: Schema.Number,
 });
 export const DeviceEvent = Schema.Union(
+	Schema.TaggedStruct("HardwareReply", { reply: HardwareReply }),
 	Schema.TaggedStruct("KnobRotate", { delta: Schema.Literal(-1, 1) }),
 	Schema.TaggedStruct("KnobPress", { state: Schema.Number }),
 	Schema.TaggedStruct("Touch", { points: Schema.Array(TouchPoint) }),

@@ -1,5 +1,6 @@
 /** Map protocol-decoded commands to device events. Framing belongs to the kernel. */
 import {
+	decodeHardwareReply,
 	decodeHidReport,
 	encodeHidReport,
 	FRAME_HEADER,
@@ -24,6 +25,12 @@ export function decodeReport(
 	if (physical.right[0] !== FRAME_HEADER) return Either.right(Option.none());
 	const decoded = unwrapShortCommand(physical.right);
 	if (Either.isLeft(decoded)) return Either.left(decoded.left);
+	const hardware = decodeHardwareReply(decoded.right);
+	if (Either.isLeft(hardware)) return Either.left(hardware.left);
+	if (Option.isSome(hardware.right))
+		return Either.right(
+			Option.some({ _tag: "HardwareReply", reply: hardware.right.value }),
+		);
 	const { opCode: opcode, cmdId: command, subData: sub } = decoded.right;
 	const value = sub[0];
 	if (opcode === 3 && (command === 1 || command === 2)) {
@@ -39,8 +46,8 @@ export function decodeReport(
 	}
 	if (opcode === 0x55 && command === 0xef)
 		return Either.right(Option.some({ _tag: "KeepAlive" }));
-	// This is the existing synthetic checksummed touch envelope. The separate
-	// unchecked touch collection still needs hardware evidence before support.
+	// Legacy synthetic checksummed touch envelope, retained for compatibility.
+	// Real vendor input uses touch/ on its own separately selected HID handle.
 	if (opcode === 0xa3 && command === 26) {
 		if (value === undefined || sub.length !== 1 + 5 * value)
 			return Either.left(

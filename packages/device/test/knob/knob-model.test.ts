@@ -99,6 +99,63 @@ const send = (input: object) =>
 	KnobModel.dispatch({ sessionId: "s1", ...input });
 
 describe("knob model uses the real domain ports", () => {
+	it.effect("uses exactly one selector for warm and cold thumbnails", () => {
+		const h = harness();
+		return Effect.gen(function* () {
+			yield* KnobModel.configure(modelContext());
+			yield* send({ _tag: "Rotate", delta: 1 });
+			expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+				mode: "picker",
+				ringVisible: false,
+			});
+			yield* KnobModel.configure(modelContext(false));
+			yield* send({ _tag: "Rotate", delta: 1 });
+			expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+				mode: "ring",
+				ringVisible: true,
+			});
+		}).pipe(Effect.provide(h.layer));
+	});
+	it.effect(
+		"publishes catalog-only failures for focused controls and voice, preserving the original failure even when alerting fails",
+		() => {
+			const failure = KnobCapabilityUnavailable.fromCause(
+				new Error("private-native-payload"),
+			);
+			const alerts: string[] = [];
+			const h = harness(modelContext(), {
+				focusedTurn: () => Effect.fail(failure),
+				voice: () => Effect.fail(failure),
+				alert: (code) =>
+					Effect.sync(() => {
+						alerts.push(code);
+					}).pipe(Effect.zipRight(Effect.fail(KnobDispatchFailed.fromCause()))),
+			});
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(modelContext());
+				for (const keyCode of ["1,1", "1,2", "1,3", "1,4"]) {
+					yield* send({ _tag: "TapTile", keyCode });
+					const result = yield* send({ _tag: "Rotate", delta: 1 }).pipe(
+						Effect.either,
+					);
+					expect(result).toMatchObject({
+						_tag: "Left",
+						left: { code: failure.code },
+					});
+					const snapshot = yield* KnobModel.snapshot();
+					expect(snapshot.notice).toBe(failure.code);
+					expect(JSON.stringify(snapshot)).not.toContain(
+						"private-native-payload",
+					);
+				}
+				yield* send({ _tag: "Key", code: 5 }).pipe(Effect.either);
+				yield* TestClock.adjust(1);
+				expect((yield* KnobModel.snapshot()).notice).toBe(failure.code);
+				expect(alerts).toEqual(Array(5).fill(failure.code));
+				expect(h.selections).toEqual([]);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
 	it.effect(
 		"picker commits exactly 5 seconds after the last input and keeps every delta",
 		() => {

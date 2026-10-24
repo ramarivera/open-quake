@@ -1,5 +1,16 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, ManagedRuntime, Option, Schema, Stream } from "effect";
+import { HardwareControls, QuakeDevice } from "@open-quake/device";
+import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
+import {
+	Effect,
+	Layer,
+	ManagedRuntime,
+	Option,
+	Schema,
+	Stream,
+	TestClock,
+} from "effect";
+import { KnobModelPorts } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import {
 	type EncodedProfileEnvelope,
@@ -33,6 +44,117 @@ const source = (): EncodedProfileEnvelope => ({
 });
 
 describe("desktop knob integration", () => {
+	it.scoped(
+		"routes focused screen luminance, volume and failure tones through available production adapters",
+		() =>
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHardwareTransport();
+				const device = yield* QuakeDevice.pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
+				);
+				const connection = yield* device.connect();
+				const controls = yield* HardwareControls.pipe(
+					Effect.provide(HardwareControls.Default),
+				);
+				const hardware = yield* controls.create(connection, {
+					serial: "mock-quake",
+					session: "hardware-1",
+				});
+				yield* hardware.refresh();
+				yield* hardware.configure({
+					...(yield* hardware.snapshot()).preferences,
+					alertVolume: 64,
+				});
+				const volumes: number[] = [];
+				const adapter = desktopKnobAdapters(
+					"/unused",
+					{
+						hardware: () => hardware,
+						readVolume: Effect.succeed({ level: 50, muted: false }),
+						writeVolume: (reading) =>
+							Effect.sync(() => {
+								volumes.push(reading.level);
+							}),
+					},
+					{ read: async () => source(), write: async () => undefined },
+				);
+				yield* TestClock.adjust(1000);
+				yield* Effect.gen(function* () {
+					const model = yield* KnobModel;
+					const context = yield* adapter.load;
+					yield* model.configure({
+						...context,
+						keys: [
+							{
+								keyCode: "1,1",
+								kind: "luminance",
+								visible: true,
+								supportKnob: true,
+							},
+							{ keyCode: "1,2", kind: "vol", visible: true, supportKnob: true },
+							{
+								keyCode: "1,3",
+								kind: "hotkey",
+								visible: true,
+								supportKnob: true,
+							},
+						],
+					});
+					const send = (input: object) =>
+						model.dispatch({ sessionId: context.session.sessionId, ...input });
+					yield* send({ _tag: "TapTile", keyCode: "1,1" });
+					yield* send({ _tag: "Rotate", delta: -1 });
+					expect((yield* hardware.snapshot()).luminance).toBe(229);
+					expect([...((yield* fake.writes).at(-1) ?? [])].slice(3, 6)).toEqual([
+						1, 5, 229,
+					]);
+					yield* send({ _tag: "TapTile", keyCode: "1,2" });
+					yield* send({ _tag: "Rotate", delta: 1 });
+					expect(volumes).toEqual([51]);
+					expect((yield* model.snapshot()).notice).toBe("");
+					yield* send({ _tag: "TapTile", keyCode: "1,3" });
+					yield* send({ _tag: "Rotate", delta: 1 }).pipe(Effect.either);
+					yield* TestClock.adjust(0);
+					expect([...((yield* fake.writes).at(-1) ?? [])].slice(3, 6)).toEqual([
+						1, 2, 64,
+					]);
+					yield* TestClock.adjust(199);
+					expect([...((yield* fake.writes).at(-1) ?? [])].slice(3, 6)).toEqual([
+						1, 2, 64,
+					]);
+					yield* TestClock.adjust(1);
+					expect((yield* model.snapshot()).notice).toBe(
+						"QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+					);
+					const commands = (yield* fake.writes).map((bytes) =>
+						[...bytes].slice(3, 6),
+					);
+					expect(commands.slice(-2)).toEqual([
+						[1, 2, 64],
+						[1, 2, 0],
+					]);
+					const before = commands.length;
+					yield* hardware.configure({
+						...(yield* hardware.snapshot()).preferences,
+						buzzerEnabled: false,
+					});
+					yield* send({ _tag: "Key", code: 5 }).pipe(Effect.either);
+					yield* TestClock.adjust(200);
+					expect(yield* fake.writes).toHaveLength(before);
+				}).pipe(
+					Effect.provide(
+						KnobModel.DefaultWithoutDependencies.pipe(
+							Layer.provide(Layer.succeed(KnobModelPorts, adapter.ports)),
+						),
+					),
+				);
+			}),
+	);
+
 	it.effect(
 		"commits actual local profile selection and passes voice generations without slot dispatch",
 		() =>

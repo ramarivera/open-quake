@@ -22,7 +22,7 @@ The system SHALL consume source-confirmed press codes 1 short, 2 double, 5 hold 
 
 ### Requirement: Idle profile selectors
 
-Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. The picker SHALL use only ready thumbnails in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent and hide after 3000 ms; picker ring feedback SHALL hide after 1200 ms. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
+Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. The picker SHALL use only ready thumbnails in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent and hide after 3000 ms; the ring SHALL NOT render while the picker is open. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
 
 #### Scenario: Deadline restarts
 
@@ -41,7 +41,17 @@ Selectors SHALL render within the strip logical 1920 by 480 canvas. The ring SHA
 #### Scenario: Page arrow
 
 - **WHEN** the next arrow is tapped with more than 15 profiles
-- **THEN** page 2 appears, its first card is focused, and the ring and deadline match that focus
+- **THEN** page 2 appears, its first card is focused, and the deadline matches that focus
+
+#### Scenario: Portrait picker input
+
+- **WHEN** the panel uses rotation 90 and the user taps a card or page arrow
+- **THEN** pointer coordinates are transformed into the logical canvas and normalized physical touch uses the shared strip overlay route; both select the same target without activating a grid tile
+
+#### Scenario: One selector at a time
+
+- **WHEN** ready thumbnails open the picker
+- **THEN** no FunctionWheel arc or label renders over it; a cold cache still renders the FunctionWheel alone
 
 ### Requirement: Tile focus and dial
 
@@ -65,3 +75,12 @@ Tapping the DK-Player volume capsule SHALL toggle armed volume mode only when a 
 
 - **WHEN** the knob selects a profile through the shared profile repository
 - **THEN** both the strip and management preview receive the persisted selection, and its own publication does not restart the knob session or close ring feedback
+
+### Requirement: Action failure feedback and available adapters
+
+Focused screen luminance SHALL use the hardware session's typed Luminance command, and focused volume and armed volume SHALL use the native volume adapter. Unsupported monitor-brightness, hotkey or voice actions and native failures SHALL publish only the catalog code in the authoritative notice channel, render a warning toast, and request the hardware error tone AI_ERROR [[90,200]] using Device Alert Volume. Disabled or zero alert volume SHALL remain silent. Buzzer failure SHALL preserve the original notice and SHALL NOT recursively alert. Audit KNOB-018..021/066, MAIN-022.
+
+#### Scenario: Failed physical action
+
+- **WHEN** a physical detent targets an unavailable focused control or a hold cannot start voice
+- **THEN** the panel receives the sanitized failure code and displays the warning, and an available hardware session plays the error tone without changing the selected profile

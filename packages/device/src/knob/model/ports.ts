@@ -10,6 +10,8 @@ import type {
 
 /** All inputs refer to committed profiles. Adapters recheck session ownership before IO. */
 export interface KnobModelPort {
+	/** Best-effort feedback; only the catalog identity reaches this boundary. */
+	readonly alert?: (code: KnobError["code"]) => Effect.Effect<void, KnobError>;
 	readonly selectProfile: (
 		profileId: string,
 	) => Effect.Effect<KnobModelContext, KnobError>;

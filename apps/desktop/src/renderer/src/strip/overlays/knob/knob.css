@@ -336,6 +336,8 @@
 	outline-offset: -2px;
 }
 .knob-notice {
+	color: #ffdf92;
+	border: 1px solid #c79a44;
 	position: absolute;
 	left: 50%;
 	bottom: 20px;
