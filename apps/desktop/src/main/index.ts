@@ -15,6 +15,7 @@ import { createEventForwarder } from "./eventForwarding";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
 import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
+import { createToneRecorder, registerVoiceSurface } from "./voice";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const PANEL_TITLE = "open-quake panel";
@@ -110,6 +111,15 @@ app.whenReady().then(() => {
 	registerProfiles(
 		ManagedRuntime.make(desktopProfilesLive(app.getPath("userData"))),
 	);
+	// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui).
+	const voice = registerVoiceSurface({
+		// Like the device mock, the scripted voice runtime is development-only.
+		mock: isDev && process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
+		tones: createToneRecorder(),
+		serial: () => "quake",
+		panel: () => panelWin,
+		management: () => managementWin,
+	});
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(
 		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
@@ -200,6 +210,7 @@ app.whenReady().then(() => {
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 		void stopBus().then(async () => {
+			await voice.dispose();
 			await runtime.dispose();
 			quitFinished = true;
 			app.quit();

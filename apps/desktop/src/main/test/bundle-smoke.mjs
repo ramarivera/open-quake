@@ -59,6 +59,17 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+// The voice surface only touches these on a renderer request; the smoke sends none.
+const clipboard = {
+	writeText: () => {
+		throw new Error("Bundle smoke must not write the clipboard");
+	},
+};
+const shell = {
+	openExternal: () => {
+		throw new Error("Bundle smoke must not open links");
+	},
+};
 globalThis.openQuakeBundleSmoke = {
 	app,
 	BrowserWindow: Window,
@@ -66,6 +77,8 @@ globalThis.openQuakeBundleSmoke = {
 	ipcMain,
 	dialog,
 	nativeImage,
+	clipboard,
+	shell,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -81,7 +94,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, clipboard, shell } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

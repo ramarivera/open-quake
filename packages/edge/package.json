@@ -10,7 +10,9 @@
 		"./ai": "./src/ai/index.ts",
 		"./ai/contracts": "./src/ai/ai-contracts.ts",
 		"./chat/contracts": "./src/chat/chat-contracts.ts",
-		"./chat/reducers": "./src/chat/chat-invariants.ts"
+		"./chat/reducers": "./src/chat/chat-invariants.ts",
+		"./voice/surface": "./src/voice/surface/index.ts",
+		"./voice/surface/contracts": "./src/voice/surface/voice-surface-contracts.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

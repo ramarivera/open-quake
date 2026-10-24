@@ -14,6 +14,7 @@ import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import { ProfileEnvelope } from "../../../shared/profiles";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { STRIP_THEMES } from "./geometry";
+import { previewVoiceContext } from "./overlays/voice/voice-context";
 import { StripScreen } from "./StripScreen";
 import { selectStripPage } from "./selection";
 import {
@@ -246,7 +247,11 @@ describe("generic tile", () => {
 					pressFeedback: true,
 					pressScale: true,
 				},
-				context: { now: undefined, hourFormat: "24h" },
+				context: {
+					now: undefined,
+					hourFormat: "24h",
+					voice: previewVoiceContext,
+				},
 			}),
 		);
 		expect(profile.name).toBe("Quick");

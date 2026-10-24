@@ -1,0 +1,79 @@
+import { Context, type Effect, type Option } from "effect";
+import type { HoldKeyType } from "./hold-to-talk.js";
+import type {
+	VoiceSurfaceEvent,
+	VoiceTone,
+} from "./voice-surface-contracts.js";
+import type { VoiceRuntimeUnavailable } from "./voice-surface-errors.js";
+
+/**
+ * Infrastructure the voice surface is injected with. Desktop main binds them
+ * to Electron windows, the hardware layer and a voice runtime.
+ */
+
+/** Delivers one decoded event to every strip window. */
+export class VoiceSurfacePublisher extends Context.Tag("VoiceSurfacePublisher")<
+	VoiceSurfacePublisher,
+	{ readonly publish: (event: VoiceSurfaceEvent) => Effect.Effect<void> }
+>() {}
+
+/**
+ * hardware-controls' `HardwareControls.playTone` (PR #22) with the same four
+ * names. It must return promptly; adapters queue the pattern themselves.
+ */
+export class VoiceTonePort extends Context.Tag("VoiceTonePort")<
+	VoiceTonePort,
+	{ readonly play: (serial: string, tone: VoiceTone) => Effect.Effect<void> }
+>() {}
+
+export interface CaptureRequest {
+	readonly serial: string;
+	readonly keyCode: string;
+	readonly captureId: string;
+	readonly generation: number;
+	readonly type: HoldKeyType;
+	readonly agentId: Option.Option<string>;
+}
+export interface TextRequest {
+	readonly serial: string;
+	readonly keyCode: string;
+	readonly agentId: string;
+	readonly message: string;
+}
+
+/**
+ * The runtime behind grid voice keys: knob-push-to-talk's capture/turn
+ * service once it exists, the scripted mock in development. It publishes
+ * stages, levels and chat back through `VoiceSurface`.
+ */
+export class GridVoiceRuntime extends Context.Tag("GridVoiceRuntime")<
+	GridVoiceRuntime,
+	{
+		readonly select: (
+			serial: string,
+			keyCode: string,
+			type: HoldKeyType,
+			agentId: Option.Option<string>,
+		) => Effect.Effect<void>;
+		readonly startCapture: (
+			request: CaptureRequest,
+		) => Effect.Effect<void, VoiceRuntimeUnavailable>;
+		readonly releaseCapture: (
+			serial: string,
+			keyCode: string,
+			generation: number,
+		) => Effect.Effect<void>;
+		readonly cancelCapture: (
+			serial: string,
+			keyCode: string,
+			generation: number,
+		) => Effect.Effect<void>;
+		readonly cancelFlow: (
+			serial: string,
+			keyCode: string,
+		) => Effect.Effect<void>;
+		readonly sendText: (
+			request: TextRequest,
+		) => Effect.Effect<void, VoiceRuntimeUnavailable>;
+	}
+>() {}

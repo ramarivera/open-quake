@@ -87,6 +87,13 @@ vi.mock("./profiles/profile-ipc", async () => {
 		registerProfiles: vi.fn(),
 	};
 });
+vi.mock("./voice", () => ({
+	createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
+	registerVoiceSurface: vi.fn(() => ({
+		publish: vi.fn(async () => undefined),
+		dispose: vi.fn(async () => undefined),
+	})),
+}));
 
 function displayEvent(name: string): void {
 	const listener = electron.screen.on.mock.calls.find(
