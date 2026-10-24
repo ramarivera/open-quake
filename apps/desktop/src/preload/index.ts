@@ -12,6 +12,7 @@ import "../main/integrations/preload";
 import "../main/knob/preload";
 import "../main/hardware/preload";
 import "../main/profiles/preload";
+import "../main/weather-media/preload";
 import "../main/voice/preload";
 import "../main/profiles/manager-preload";
 import {

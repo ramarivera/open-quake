@@ -18,3 +18,9 @@ Retained retries: the earlier `pr33-meetings-native-fhj05shw` run passed IPC che
 Evidence root: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center/review-round-1/`.
 
 Only implementation/proof tasks `.27` and `.28` close here. The epic, physical acceptance and genuine native-app GIF paste acceptance remain open. No hardware, packaged application or real-app paste acceptance is claimed. Restricted maintenance or compatibility source was not read or printed in this continuation.
+
+## Weather/media main integration
+
+Verified source `d2a8890c132648ee046831886fd445721e120f03` normally merges main `85f1e3bacc49e16f2965f614a5ce2a38f6eb3e06`. Ancestry checks confirm both weather/media and meetings main are included. No PR34-only features were added to the base. All six fresh gates passed again, recorded in `pr33-weather-final-gates.json` and its individual logs: 1511 tests across 163 files, both bundle modes and 37 strict OpenSpec items. Turbo used explicit loose environment mode, one task, and two test workers.
+
+The fresh real Electron mock run is `pr33-weather-native-e5a2qxyq/proof.json`, with source identity, four capture hashes and the ownership, allowlist, selection/model and awaited disposal assertions. All four images were inspected: loaded agents, disconnected HA with no stale catalog, configured channels, and the existing shortcut library with retained application. `pr33-weather-native-run.log` retains the run and local Chromium disk-cache warnings. No new functional failures occurred in this integration. Task `.29` remains in progress until the updated base is normally merged into the top; acceptance parents remain open.

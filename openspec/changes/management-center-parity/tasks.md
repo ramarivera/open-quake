@@ -50,3 +50,5 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 - [x] 7.4 Integrate meetings main into the PR33 base using a normal merge, preserve shared main/preload ownership and awaitable shutdown, and refresh all six gates plus synthetic native module proof before merging the updated base into PR34. Bead `open-quake-lih.17.1.27`.
 
 - [x] 7.5 Address fresh PR33 follow-up threads with own-property model scope reads across rendering/resolution/saving and atomic selection repair when shortcut resync removes pages. Add real consumer regressions and refresh six gates and native proof. Bead `open-quake-lih.17.1.28`.
+
+- [ ] 7.6 Integrate weather/media main into the base with a normal merge, retain all shared owners and successful-release routing, refresh six gates and native mock proof, then merge the verified base into the top. Bead `open-quake-lih.17.1.29`.
