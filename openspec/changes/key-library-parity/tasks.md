@@ -25,7 +25,7 @@
 ## 6. Deferred acceptance and exact vendor presentation
 
 - [ ] 6.1 Lead-only physical acceptance: verify real shortcut/text effects, audible alarms, resource delivery and reconnect on the single QUAKE owner. This lane is restricted to mocks.
-- [ ] 6.2 Reconcile the remaining icon presentation and resource fallback differences with the Management Center/artwork lanes: picker window shape, exact paging/progress/palette, proprietary resource-table resets and extracted app artwork. See verification.md for the precise partial rows; do not copy unsafe SVG execution or bundle proprietary packs.
+- [ ] 6.2 Reconcile the remaining icon presentation and resource fallback differences with the Management Center/artwork lanes: picker window shape, exact paging/progress/palette, proprietary resource-table resets and extracted app artwork. See verification.md and verification-icon-presentation.md. Source 12d42ab now covers the owned picker, viewport batches, progress/palette, local application extraction, portable PNGs and semantic fallback, with six fresh gates and complete native fixtures. Exact proprietary resource artwork remains unclaimed; do not copy unsafe SVG execution or bundle proprietary packs.
 
 ## 7. Review integration
 
@@ -49,7 +49,7 @@
 
 ## 8. Lead acceptance
 
-- [ ] 8.1 Run quiet live-device acceptance on this Mac using a single QUAKE owner and isolated test data. Verify actual shortcut/text receipt, resource delivery and software reconnect; preserve user clipboard/state and retain exact evidence. User excludes audible tests for now and requests Home Assistant last. Full physical 6.1 remains open while alarms or physical reconnection remain unverified. Bead `open-quake-lih.10.2.20`.
+- [ ] 8.1 Run quiet live-device acceptance on this Mac using a single QUAKE owner and isolated test data. Verify actual shortcut/text receipt, resource delivery and software reconnect; preserve user clipboard/state and retain exact evidence. User excludes audible tests for now and requests Home Assistant last. Full physical 6.1 remains open while alarms or physical reconnection remain unverified. Bead `open-quake-lih.10.2.20`. Quiet startup/reopen and native app-icon selection → Save → real-device profile selection pass at 12d42ab. GUI lock still prevents physical pixels, shortcut receipt and messaging-app proof; see verification-icon-presentation.md.
 
 - [x] 8.2 Repair real-device profile enrollment and unambiguous DK-QUAKE display startup found by quiet acceptance. Own profile connection lifetime with the native HID scope, preserve ambiguity handling, release display-discovery reservations even when a resume/disconnect race cancels the fiber before it starts, add red/green consumer tests and repeat quiet live proof. Bead `open-quake-lih.10.2.21`; related device-lifecycle requirement updated together. Evidence: `verification-quiet-startup.md`; source `451f108`.
 
