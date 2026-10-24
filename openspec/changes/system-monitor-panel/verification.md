@@ -118,5 +118,23 @@ ancestor, preserving the integrated profile and lifecycle features. No dependenc
 was added. No real HID or DK-Suite was opened. Platform and hardware limits above
 remain. Cluster open-quake-lih.8 and epic open-quake-lih.8.1 are reopened pending
 merge and lead acceptance. Original implementation tasks remain closed. Review
-follow-through is tracked by open-quake-lih.8.1.5 until the pushed fix has been
-replied to and addressed threads resolved.
+follow-through is complete in open-quake-lih.8.1.5. Fix commit
+`5694f120be8d39827848968a5772d147958f1d47` is pushed; all seven threads have
+individual replies with fix evidence and Codex gpt-6.1-sol attribution and are
+resolved. GitHub was read back to verify every resolution. Merge, lead acceptance
+and the hardware checks remain pending; no PR merge or watch was requested.
+
+
+Thread outcomes, all fixed and resolved in `5694f12`:
+
+- r4366854176, native power parsing preserves source and full/idle status.
+- r4366854216, missing values have no numeric units in any readout.
+- r4366854247, only active or explicitly previewed media bytes cross IPC.
+- r4366854290, main-owned panel identity controls subscriptions and broadcasts.
+- r4366857583, duplicate power-source rendering report, covered by parser-to-renderer tests.
+- r4366857589, failed collection preserves successful samples and their age.
+- r4366857596, external IPv6-only interfaces supply network rates.
+
+The runtime process audit found no remaining task-owned Node/Electron processes.
+`review-round-1/thread-outcomes.json`, `threads-after.json` and `process-audit.log`
+retain the external response and cleanup evidence in the artifact directory.

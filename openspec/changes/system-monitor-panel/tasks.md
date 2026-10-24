@@ -18,6 +18,6 @@ Acceptance evidence: [verification.md](verification.md). PR #30 is open; physica
 
 ## 5. Review round 1
 
-- [ ] 5.1 Address PR #30's seven review threads with regressions for power source/state, unavailable units, retained failed samples, IPv6 collection, bounded media reads and main-owned IPC permissions. Rerun six gates and both native mock smokes, push, reply with attribution and resolve addressed threads. Bead open-quake-lih.8.1.5.
+- [x] 5.1 Address PR #30's seven review threads with regressions for power source/state, unavailable units, retained failed samples, IPv6 collection, bounded media reads and main-owned IPC permissions. Rerun six gates and both native mock smokes, push, reply with attribution and resolve addressed threads. Bead open-quake-lih.8.1.5.
 
 Cluster open-quake-lih.8 and delivery epic open-quake-lih.8.1 remain open until merge and lead acceptance. Implementation tasks 1.1 through 4.1 retain their completed status and original evidence.
