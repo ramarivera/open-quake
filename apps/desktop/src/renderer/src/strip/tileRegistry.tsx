@@ -1,4 +1,7 @@
 import type { HourFormat } from "../../../shared/display";
+import { ClockMusicSlot, ClockWeatherSlot } from "../weather-media/ClockCards";
+import { rendererWeatherLocale, useWeatherMedia } from "../weather-media/hooks";
+import { PlayerCard } from "../weather-media/PlayerCard";
 import type { StripTile } from "./geometry";
 import type { StripVoiceContext } from "./overlays/voice/voice-context";
 import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
@@ -51,6 +54,7 @@ function ClockSlot({
 	context,
 }: StripTileProps): React.JSX.Element | null {
 	const clock = useClockSettings();
+	const enrichment = useWeatherMedia();
 	const snapshot = clock.snapshot;
 	const now = useClockNow(snapshot?.showSeconds ?? false, context.now);
 	// Wait for the saved theme rather than flashing the default first.
@@ -65,8 +69,42 @@ function ClockSlot({
 			showSeconds={snapshot?.showSeconds ?? false}
 			media={mediaOf(snapshot)}
 			onThemeSelect={clock.selectTheme}
+			weather={
+				enrichment.snapshot?.settings.enabled ? <ClockWeatherSlot /> : undefined
+			}
+			nowPlaying={
+				enrichment.snapshot?.settings.musicEnabled ? (
+					<ClockMusicSlot />
+				) : undefined
+			}
 		/>
 	);
+}
+
+function PlayerSlot({
+	tile,
+	context,
+}: StripTileProps): React.JSX.Element | null {
+	const { snapshot, client } = useWeatherMedia();
+	// Local soundboard execution stays with its owner. A configured local key
+	// must never turn into an unrelated OS transport action.
+	const localSound = tile.key.config.actions.some(
+		(action) =>
+			action.type === "sound" &&
+			(typeof action.value === "string"
+				? action.value.trim().length > 0
+				: Array.isArray(action.value) && action.value.length > 0),
+	);
+	if (localSound) return <GenericTile tile={tile} context={context} />;
+	return snapshot ? (
+		<PlayerCard
+			widthPx={tile.box.width}
+			heightPx={tile.box.height}
+			snapshot={snapshot.media}
+			control={client.control}
+			locale={rendererWeatherLocale()}
+		/>
+	) : null;
 }
 
 function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
@@ -104,6 +142,7 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		["dkDesktopClock", ClockSlot],
+		["playAudio", PlayerSlot],
 		["meetingMinutes", MeetingKey],
 		["tempMeetingMinutes", MeetingKey],
 		["meetingRecordMark", MeetingKey],

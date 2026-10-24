@@ -41,6 +41,11 @@ import {
 } from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { waitForVoice } from "../voice/smoke-wait";
+import { WeatherMediaController } from "../weather-media/controller";
+import { registerWeatherMedia } from "../weather-media/index";
+import { weatherSettingsLive } from "../weather-media/settings-repository";
+import { systemMediaStub } from "../weather-media/system-media";
+import { WeatherNetwork } from "../weather-media/weather-network";
 import { MediaLive, registerMedia } from "./index";
 
 assert.equal(
@@ -124,14 +129,27 @@ async function smoke(): Promise<void> {
 	};
 	const management = new BrowserWindow(options);
 	const panel = new BrowserWindow(options);
-	const maintenance = registerMaintenance({
-		root: directory,
-		mock: true,
-		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
-		hardware: () => undefined,
-		management: () => management,
-		stopWriters: async () => {},
-	});
+	let weatherRequests = 0;
+	const weatherMedia = registerWeatherMedia(
+		ManagedRuntime.make(
+			WeatherMediaController.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						weatherSettingsLive(directory),
+						systemMediaStub(process.platform),
+						Layer.succeed(WeatherNetwork, {
+							json: () =>
+								Effect.sync(() => {
+									weatherRequests++;
+									return {};
+								}),
+						}),
+					),
+				),
+			),
+		),
+		() => management,
+	);
 	const voice = registerVoiceSurface({
 		mock: true,
 		tones: createToneRecorder(),
@@ -143,6 +161,10 @@ async function smoke(): Promise<void> {
 	const knob = registerKnob(
 		() => panel,
 		() => [management, panel],
+		{
+			readVolume: Effect.succeed({ level: 50, muted: false }),
+			writeVolume: () => Effect.void,
+		},
 	);
 	let runtimeDisposed = false;
 	const runtime = ManagedRuntime.make(
@@ -166,7 +188,21 @@ async function smoke(): Promise<void> {
 		directory,
 		() => management,
 		() => panel,
+		{
+			collect: () => Effect.die("Unmounted monitor must not collect host data"),
+		},
 	);
+	const maintenance = registerMaintenance({
+		root: directory,
+		mock: true,
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		hardware: () => undefined,
+		management: () => management,
+		stopWriters: async () =>
+			assert.fail("Read-only smoke must not reset or restore"),
+		exit: () => assert.fail("Read-only maintenance must not exit the app"),
+	});
+	await maintenance.ready;
 	const unregisterHardware = registerHardware(
 		() => undefined,
 		() => management,
@@ -747,11 +783,17 @@ async function smoke(): Promise<void> {
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
 	unregisterHardware();
+	assert.equal(
+		weatherRequests,
+		0,
+		"disabled weather never requests network IO",
+	);
+	await weatherMedia.dispose();
+	await maintenance.dispose();
 	removeLifecycle();
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
 	await clock.dispose();
-	await maintenance.dispose();
 	await meetings.dispose();
 	await voice.dispose();
 	await monitor.dispose();
