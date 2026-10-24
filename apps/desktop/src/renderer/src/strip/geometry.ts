@@ -354,7 +354,11 @@ export function stripLayout(
 		}
 	return {
 		theme,
-		vivid: page.keys.some((key) => key.config.type === "colorfulScreen"),
+		// DK (QuakeScreenView.vue:2612) also counts hidden colorfulScreen keys,
+		// which blanks a page whose only vivid key is switched off; only a shown one counts here.
+		vivid: page.keys.some(
+			(key) => key.config.type === "colorfulScreen" && key.config.display,
+		),
 		tiles,
 		cells,
 		covered,

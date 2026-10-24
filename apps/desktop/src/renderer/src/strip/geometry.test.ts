@@ -309,6 +309,16 @@ describe("DK-Suite geometry", () => {
 		expect(tileAt({ x: 100, y: 100 }, layout)).toBeUndefined();
 	});
 
+	it("keeps the key grid when the page's colorfulScreen key is hidden", () => {
+		const layout = layoutOf([
+			key("1,1", "colorfulScreen", [1, 1], false),
+			key("1,2", "hotkey"),
+		]);
+		expect(layout.vivid).toBe(false);
+		expect(layout.tiles.map((tile) => tile.keyCode)).toEqual(["1,2"]);
+		expect(tileAt({ x: 360, y: 100 }, layout)?.keyCode).toBe("1,2");
+	});
+
 	it("separates empty and hidden cells", () => {
 		const layout = layoutOf([
 			key("1,1", ""),
