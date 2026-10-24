@@ -94,7 +94,10 @@
 	white-space: nowrap;
 }
 .copilot-hint {
-	letter-spacing: -0.12em;
+	/* AI-196: DK's negative tracking collapses narrow glyphs even inline. */
+	letter-spacing: normal;
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 .copilot-hint [data-lit="true"] {
 	color: #00ffff;

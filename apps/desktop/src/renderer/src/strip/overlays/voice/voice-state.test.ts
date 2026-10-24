@@ -22,6 +22,8 @@ import {
 	orbSpeed,
 	reduceCopilot,
 } from "../../tiles/aiCopilot/copilot-state";
+import { checkSend } from "../../tiles/clawBotInput/input-state";
+import { keyInfo } from "./useVoiceSurface";
 import { StripToasts, VoiceOverlay } from "./VoiceOverlay";
 import {
 	cancelIndicatorKey,
@@ -108,6 +110,42 @@ const statusOf = (view: VoiceView) =>
 	);
 
 describe("AI Copilot through the voice store", () => {
+	it.each([undefined, "", " \t "])(
+		"warns after selecting a ClawBot key with agentId %j",
+		(agentId) => {
+			const info = keyInfo({
+				...copilotTile,
+				type: "clawbot",
+				key: {
+					...copilotTile.key,
+					config: {
+						...copilotTile.key.config,
+						type: "clawbot",
+						actions:
+							agentId === undefined
+								? []
+								: [{ type: "agentId", value: agentId }],
+					},
+				},
+			});
+			const view = reduceVoice(
+				initialVoiceView,
+				{ _tag: "event", event: key("1,5", "down") },
+				new Map([["1,5", info]]),
+				0,
+			);
+			expect(view.input.keyCode).toEqual(Option.some("1,5"));
+			expect(view.input.agentId).toEqual(Option.none());
+			expect(checkSend(view.input, "Keep my draft")).toEqual({
+				_tag: "warn",
+				key: "quakeBotInputIconView.warnings.selectAssistant",
+			});
+			expect(
+				Option.map(view.conversation.activeAgent, (agent) => agent.id),
+			).toEqual(Option.some("default"));
+		},
+	);
+
 	it("keeps voice A's ownership and authoritative prompt when typed-only B is selected", () => {
 		const typedKeys = new Map(keys).set("1,7", {
 			type: "clawbot",

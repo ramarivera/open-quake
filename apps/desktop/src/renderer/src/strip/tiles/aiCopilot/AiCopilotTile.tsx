@@ -202,17 +202,19 @@ export function AiCopilotTile({
 									lineHeight: `${hintSize * 1.5}px`,
 								}}
 							>
-								{Array.from(hintText).map((character, index) => (
-									<span
-										// biome-ignore lint/suspicious/noArrayIndexKey: letters repeat; position is identity.
-										key={index}
-										data-lit={
-											(motion === "full" && index === letter) || undefined
-										}
-									>
-										{character === " " ? "\u00A0" : character}
-									</span>
-								))}
+								<span>
+									{Array.from(hintText).map((character, index) => (
+										<span
+											// biome-ignore lint/suspicious/noArrayIndexKey: letters repeat; position is identity.
+											key={index}
+											data-lit={
+												(motion === "full" && index === letter) || undefined
+											}
+										>
+											{character}
+										</span>
+									))}
+								</span>
 							</div>
 						) : cancel ? (
 							<div

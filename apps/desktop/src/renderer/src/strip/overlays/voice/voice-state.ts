@@ -175,9 +175,7 @@ function routeEvent(
 							now,
 						);
 			if (type === "clawbot") {
-				const agentId = Option.orElse(info?.agentId ?? Option.none(), () =>
-					Option.some("default"),
-				);
+				const agentId = info?.agentId ?? Option.none();
 				const name = info?.title ?? Option.none();
 				next = {
 					...next,

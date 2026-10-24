@@ -329,7 +329,12 @@ Elements:
 - **Right panel.** The text column: font 2·textFs, line height ×1.5, .9
   alpha, half-character side padding, pre-wrap.
 - **Push-to-talk hint (idle on the strip).** 1.5·textFs, .6 alpha,
-  letter-spacing −0.12em. One character turns `#00FFFF` per 100 ms, looping.
+  normal letter spacing, centred inline characters with natural word wrapping
+  and emergency wrapping for an overlong word. One character turns `#00FFFF`
+  per 100 ms, looping. Recovered ACV:1394–1405 uses −0.12em and nowrap;
+  mounted Range/ink measurements reproduce overlapping letters with that
+  tracking, including with DK's inline spans. We improve this AI-196 defect
+  without changing the hint's font size, area, orb or timing.
 - **Cancel hint (status 1 with no text).** "Press {title} button to cancel",
   with the title in `#00FFFF` ("the active" when there is none),
   letter-spacing .04em.
@@ -570,6 +575,8 @@ The user sees the error countdown instead of silence.
 - An up without the touch-end flag never leaves a capture running, unlike
   DK's renderer-only reset (QSV:2920-2932).
 - Reduced motion is honoured on the strip for decorative loops only.
+- The idle Copilot hint uses normal tracking and wraps locale text within
+  its panel; recovered negative tracking overlaps glyphs (AI-196).
 - Account error codes (4001, 4003, 2014) map to generic copy.
 - Another key's busy rejection leaves the running AI Copilot turn alone; DK
   resets it (ACV:840-844). The busy toast still shows.
@@ -640,3 +647,16 @@ stage can arrive after startCapture returns. Unavailable starts publish their
 existing failed stage, which releases that reservation. Deferred-adapter tests
 cover both start orders without publishing a stage; taking the lock alone
 does not close the reservation gap.
+
+## PR #28 review round 3
+
+Copilot's idle hint keeps the recovered 30/45 px text and centred content
+area, with normal spacing and a shared inline text run for per-character
+highlights. Real spaces permit locale word wrapping; an overlong word can
+wrap within the panel. Reduced motion still removes the highlight loop and
+orb animations.
+
+ClawBot input selection retains the key's optional configured assistant ID.
+The synthetic default used for conversation display stays at that display
+boundary. Missing, empty and whitespace-only IDs therefore reach the AI-184
+missing-assistant warning, preserve the draft and issue no SendText.

@@ -223,6 +223,12 @@ The left panel SHALL hold the energy orb in a 1:2 box with speed null 1, 0 → 3
 - **WHEN** aiChat key `1,6` goes down, the mic opens, the key is released and three answer chunks then an end arrive
 - **THEN** the status reads Initializing, Start Recording, Processing, Completed in order, and the text holds the three deltas
 
+#### Scenario: Legible localized idle hint
+
+- **WHEN** the idle Copilot hint renders in any supported locale
+- **THEN** characters retain their natural readable advances without overlapping ink, and the text wraps within the existing content area when needed
+- **AND** the highlight advances once per 100 ms in full motion, while reduced motion keeps the text static and legible
+
 #### Scenario: Whitespace answer chunks
 
 - **WHEN** answer deltas contain standalone spaces, newlines or indentation
@@ -346,6 +352,12 @@ Voice partials SHALL merge into the box, a final transcript SHALL replace it, an
 
 - **WHEN** Send is pressed before any clawbot key was tapped
 - **THEN** the warning "Please tap an AI assistant first!" shows for 1800 ms and nothing is sent
+
+#### Scenario: Selected key has no configured assistant
+
+- **WHEN** a ClawBot key with an absent, empty or whitespace-only agentId is selected and Send is pressed with a draft
+- **THEN** "Please select your assistant!" shows, the draft remains and no SendText request is issued
+- **AND** a fallback agent used for conversation display does not become the input's selected assistant
 
 #### Scenario: Rejected typed send retains draft
 
