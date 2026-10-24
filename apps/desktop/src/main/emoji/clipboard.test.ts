@@ -26,20 +26,27 @@ describe("native GIF file-reference clipboard adapter, mocked processes", () => 
 	it("uses LiteralPath and environment data in PowerShell, and rejects unsupported platforms", async () => {
 		const path = "C:\\synthetic\\name ' ; fake.gif";
 		await copyGifFile("win32", path);
-		expect(execFile).toHaveBeenLastCalledWith(
-			"powershell.exe",
-			[
-				"-NoProfile",
-				"-NonInteractive",
-				"-Command",
-				"Set-Clipboard -LiteralPath $env:OPEN_QUAKE_EMOJI_FILE",
-			],
-			expect.objectContaining({
-				env: expect.objectContaining({ OPEN_QUAKE_EMOJI_FILE: path }),
-				windowsHide: true,
-			}),
-			expect.any(Function),
-		);
+		const call = vi.mocked(execFile).mock.calls.at(-1);
+		expect(call?.[0]).toBe("powershell.exe");
+		expect(call?.[1]).toEqual([
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			"Set-Clipboard -LiteralPath $env:OPEN_QUAKE_EMOJI_FILE",
+		]);
+		const options = call?.[2];
+		expect(
+			typeof options === "object" &&
+				options !== null &&
+				"env" in options &&
+				options.env?.OPEN_QUAKE_EMOJI_FILE === path,
+		).toBe(true);
+		expect(
+			typeof options === "object" &&
+				options !== null &&
+				"windowsHide" in options &&
+				options.windowsHide === true,
+		).toBe(true);
 		await expect(copyGifFile("linux", path)).rejects.toBeInstanceOf(RangeError);
 	});
 });

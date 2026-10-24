@@ -7,9 +7,10 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, nativeImage, nativeTheme } from "electron";
 import { QUAKE_EVENT_CHANNEL, type QuakeEvent } from "../../preload/quake";
+import { managementActivation } from "../../renderer/src/management/navigation";
 import { AgentReply } from "../../shared/agents";
 import { EmojiReply } from "../../shared/emoji";
 import { encodeGif } from "../../shared/gif";
@@ -29,6 +30,11 @@ import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
+import { registerWeatherMedia } from "../weather-media";
+import { WeatherMediaController } from "../weather-media/controller";
+import { weatherSettingsLive } from "../weather-media/settings-repository";
+import { systemMediaStub } from "../weather-media/system-media";
+import { WeatherNetwork } from "../weather-media/weather-network";
 import { registerManagementAppearance } from "./appearance";
 import { managementAgentCredentials } from "./credentials";
 
@@ -151,6 +157,27 @@ async function smoke() {
 		directory,
 		renderer,
 	);
+	let weatherRequests = 0;
+	const weatherMedia = registerWeatherMedia(
+		ManagedRuntime.make(
+			WeatherMediaController.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						weatherSettingsLive(directory),
+						systemMediaStub(process.platform),
+						Layer.succeed(WeatherNetwork, {
+							json: () =>
+								Effect.sync(() => {
+									weatherRequests++;
+									return {};
+								}),
+						}),
+					),
+				),
+			),
+		),
+		() => win,
+	);
 	const profiles = registerProfiles(() => win, renderer);
 	const agents = registerAgents({
 		management: () => win,
@@ -217,6 +244,11 @@ async function smoke() {
 		directory,
 		() => win,
 		() => panel,
+		{
+			collect: () =>
+				Effect.succeed({ state: "unsupported" as const, values: {} }),
+		},
+		renderer,
 	);
 	const hardware = registerHardware(
 		() => undefined,
@@ -254,7 +286,30 @@ async function smoke() {
 		}
 	};
 	const activate = async (name: string) => {
+		const activation = managementActivation(name);
+		assert(activation);
 		win.webContents.send(MANAGEMENT_ACTIVATE, name);
+		await waitFor(
+			`document.querySelector('.content-inner')?.dataset.page === ${JSON.stringify(activation.page)}`,
+		);
+		if (activation.agentTab)
+			await waitFor(
+				`document.querySelector('#agents-tab-${activation.agentTab}')?.getAttribute('aria-selected') === 'true'`,
+			);
+		if (activation.page === "agents")
+			await waitFor(
+				"document.querySelector('#agents-agents .mc-aside') && !document.querySelector('.content-inner')?.textContent.includes('Loading agent workspace')",
+			);
+		if (activation.page === "shortcuts")
+			await waitFor(
+				"Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('Creative'))",
+			);
+		if (activation.page === "home-assistant")
+			await waitFor(
+				"document.querySelector('[aria-label=\"Home Assistant Settings\"] [role=status]')?.textContent === 'Connected'",
+			);
+		if (activation.page === "emoji")
+			await waitFor("document.querySelector('button[title=\"Edit Hello\"]')");
 		await settle();
 	};
 	const capture = async (name: string) => {
@@ -398,7 +453,7 @@ async function smoke() {
 		await js(
 			"document.querySelector('.mc-dialog input:not([type])').focus();null;",
 		);
-		win.webContents.insertText("Hi!");
+		await win.webContents.insertText("Hi!");
 		await js(
 			"Array.from(document.querySelectorAll('.mc-dialog button')).find(b=>b.textContent.trim()==='Save').click();null;",
 		);
@@ -532,11 +587,11 @@ async function smoke() {
 		await js(
 			"document.querySelector('.emoji-fields input[placeholder=\"e.g. Wave happily\"]').focus();null;",
 		);
-		win.webContents.insertText("Waving Cat");
+		await win.webContents.insertText("Waving Cat");
 		await js(
 			"document.querySelector('.emoji-fields input[placeholder=\"e.g. Go for it!\"]').focus();null;",
 		);
-		win.webContents.insertText("Hi Cat!");
+		await win.webContents.insertText("Hi Cat!");
 		await js(
 			"Array.from(document.querySelectorAll('.emoji-actions button')).find(b=>b.textContent.trim()==='Generate Motion Emoji').click();null;",
 		);
@@ -775,6 +830,7 @@ async function smoke() {
 			),
 			false,
 		);
+		assert.equal(weatherRequests, 0, "Disabled weather never uses network IO");
 		assert.deepEqual(errors, []);
 		const captures = await Promise.all(
 			(await readdir(artifacts))
@@ -807,6 +863,7 @@ async function smoke() {
 			`Management native smoke PASS: ${(await readdir(artifacts)).filter((name) => name.endsWith(".png")).length} screenshots; real IPC, caption, placement, protected main, HA REST/live/AI allowlist, permissions, nativeTheme.\n`,
 		);
 	} finally {
+		await weatherMedia.dispose();
 		hardware();
 		await monitor.dispose();
 		lifecycle();
