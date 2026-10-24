@@ -2,7 +2,7 @@
 
 ## Why
 
-The recovered channels hub renders a dynamic catalog and setup drawer, but its complete catalog is missing. The replacement must represent available adapters without claiming unverified channel support.
+The recovered channels hub renders a dynamic catalog and setup drawer backed by six known entries in background.js, already present in 0.4.52 (`CENTER-072`, `CENTER-073`). The replacement must represent available adapters without claiming unverified channel support.
 
 ## What Changes
 

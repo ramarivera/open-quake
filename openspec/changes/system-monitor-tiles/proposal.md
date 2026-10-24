@@ -2,12 +2,12 @@
 
 ## Why
 
-DK-Suite exposes CPU, GPU, memory, disk, network, process, Bluetooth, and power tiles alongside app monitoring and gaming mode. A replacement needs explicit availability and sampling behavior before native collectors are chosen.
+DK-Suite exposes CPU, GPU, memory, disk, network, process, Bluetooth, and power tiles alongside app monitoring. Open-quake also defines a reversible monitoring override below. A replacement needs explicit availability and sampling behavior before native collectors are chosen.
 
 ## What Changes
 
 - Add normalized metric snapshots and app/window monitoring controls.
-- Define gaming mode as a reversible monitoring override with bounded sampling.
+- Define a reversible monitoring override with bounded sampling (`MAIN-096` distinguishes device hotkey mode).
 - Expose stale, permission-denied, and unsupported states on management and panel views.
 
 This lane adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
@@ -26,6 +26,6 @@ None. Existing in-flight SDK, profile, display, AI and theme contracts remain ow
 
 `packages/edge` monitoring contracts, invariants, collector interfaces and conductor; `packages/client` typed subscription API; `apps/desktop` native collectors and tile/settings views. `packages/device` consumes existing display delivery; `packages/protocol` gains no monitoring opcodes.
 
-Recommended phase: Later phases item 1, system monitor tiles, app monitor, and gaming mode. Implementation follows the profile/grid and display contracts.
+Recommended phase: Later phases item 1, system monitor tiles, app monitor, and monitoring override. Implementation follows the profile/grid and display contracts.
 
 Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. No npm dependency is added in this spec-only change.
