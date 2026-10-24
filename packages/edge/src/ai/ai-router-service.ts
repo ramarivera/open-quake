@@ -81,11 +81,18 @@ export class AiVoiceService extends Effect.Service<AiVoiceService>()(
 						request.mode === "auto" ? request.sessionRoute : request.mode;
 					let decision: Option.Option<IntentDecision> = Option.none();
 					if (!route) {
+						const routingProfile = yield* repository.get(request.profileId);
+						const limit = Option.isSome(routingProfile)
+							? routingProfile.value.samplingLimits.maxOutputTokens
+							: undefined;
 						const generation = yield* providers.generate({
 							profileId: request.profileId,
 							modelRole: "routing",
 							controls: { thinking: false, webSearch: false },
-							sampling: { maxOutputTokens: 2048 },
+							sampling:
+								limit === undefined
+									? {}
+									: { maxOutputTokens: Math.min(2048, limit) },
 							requestedCapabilities: [],
 							messages: [
 								{

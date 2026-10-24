@@ -47,6 +47,62 @@ const decision = (action: string, extraData = "") =>
 	});
 
 describe("Auto key mode", () => {
+	it.effect("fits the classification budget to supported profile limits", () =>
+		Effect.gen(function* () {
+			for (const [limit, expected] of [
+				[undefined, undefined],
+				[1, 1],
+				[1024, 1024],
+				[2048, 2048],
+				[4096, 2048],
+			] as const) {
+				const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];
+				const dispatches: VoiceDispatch[] = [];
+				yield* Effect.gen(function* () {
+					const repository = yield* AiRepository;
+					const profile = {
+						...workflowProfile,
+						samplingLimits:
+							limit === undefined ? {} : { maxOutputTokens: limit },
+					};
+					yield* repository.put(profile);
+					expect((yield* (yield* AiVoiceService).submit(request)).route).toBe(
+						"normal",
+					);
+					expect(calls).toHaveLength(1);
+					expect(calls[0]?.request.sampling).toEqual(
+						expected === undefined ? {} : { maxOutputTokens: expected },
+					);
+					expect(dispatches).toHaveLength(1);
+					const stored = yield* repository.get(profile.id);
+					expect(Option.isSome(stored) && stored.value.samplingLimits).toEqual(
+						profile.samplingLimits,
+					);
+				}).pipe(
+					Effect.provide(
+						layer(
+							{
+								open: (input) => {
+									calls.push(input);
+									return Effect.succeed(
+										Stream.fromIterable([
+											{
+												_tag: "textDelta",
+												textDelta: decision("standardChat"),
+												kind: "generation",
+											},
+											{ _tag: "completed" },
+										]),
+									);
+								},
+							},
+							dispatches,
+						),
+					),
+				);
+			}
+		}),
+	);
 	it.effect(
 		"classifies with DeepSeek while thinking and search are disabled",
 		() => {

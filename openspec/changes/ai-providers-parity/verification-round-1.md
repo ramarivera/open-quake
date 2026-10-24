@@ -150,3 +150,32 @@ The additional thread was replied to with that SHA and resolved:
 https://github.com/ramarivera/open-quake/pull/27#discussion_r4366961621.
 Bead open-quake-lih.15.1.12 and the epic are closed with this evidence.
 All seven original threads plus this additional thread are handled.
+
+## Additional routing-budget finding
+
+Thread PRRT_kwDOUADXpM6v36me also appeared during delivery. Its report is
+valid: a fixed 2048-token override rejects otherwise valid Auto profiles with
+smaller limits or no override support. Auto now reads the profile's supported
+limit, caps the requested budget at 2048, and omits the unsupported override.
+The later search-permission read is retained so a control change during
+classification still takes effect before dispatch.
+
+The facade regression failed with AiConfigInvalid before the fix. It now
+proves dispatch for absent, 1, 1024, 2048 and 4096 limits, with compatible
+sampling and unchanged saved profiles. Existing response-size, timeout and
+explicit-mode/follow-up checks still pass. Logs: router-budget-before.log
+and router-budget-after.log in the scratch directory.
+
+All six gates were rerun on this source:
+
+- pnpm biome check packages apps: 425 files, no fixes.
+- pnpm typecheck: 6 successful tasks, 4 cached.
+- pnpm test: 4 successful tasks, 3 cached; protocol 47, device 388,
+  edge 73, desktop 441 tests, 949 total.
+- pnpm build: successful, uncached.
+- env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter
+  @open-quake/desktop test:bundle: both cases passed with awaited shutdown.
+- openspec validate --all --strict: 36 passed, zero failed.
+
+These latest logs use *-budget-final.log. Publication and the thread reply
+and resolution remain for bead open-quake-lih.15.1.13.

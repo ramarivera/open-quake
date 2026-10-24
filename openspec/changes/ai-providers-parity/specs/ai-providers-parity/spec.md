@@ -65,6 +65,11 @@ Auto SHALL supplement explicit modes, use the routing model and recovered prompt
 - **WHEN** an explicit key mode is selected or an Auto session already has a route
 - **THEN** the selected route dispatches without another classification request
 
+#### Scenario: Profile-compatible classification budget
+- **WHEN** Auto classifies with an explicit profile token limit below 2048 or with no token-override support
+- **THEN** classification requests at most the supported limit capped at 2048, or omits the unsupported override, and dispatches the selected target
+- **AND** the saved profile, bounded response size and classification timeout remain enforced
+
 #### Scenario: Untrusted router output
 - **WHEN** the model returns an expression, unknown category, malformed JSON or disabled HA action
 - **THEN** a catalog error is returned and no target runs

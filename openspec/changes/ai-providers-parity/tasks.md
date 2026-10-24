@@ -13,3 +13,4 @@
 - [x] 2.5 Run all lane gates after merging main, publish review evidence and reply to/resolve all seven review threads. Bead: open-quake-lih.15.1.10. Final integration verified against main at bdf8ca8.
 - [x] 2.6 Cancel knob registration work during integrated shutdown and regress pending profile reads/refreshes without changing the bundle gate deadline. Bead: open-quake-lih.15.1.11.
 - [x] 2.7 Accept disabled thinking for DeepSeek Auto classification without provider reasoning options, retain enabled-control rejection, and regress the facade path. Bead: open-quake-lih.15.1.12. Additional thread PRRT_kwDOUADXpM6v33e1.
+- [ ] 2.8 Fit Auto classification's token budget to the profile, omit unsupported overrides, and regress smaller/absent limits through dispatch. Bead: open-quake-lih.15.1.13. Additional thread PRRT_kwDOUADXpM6v36me.
