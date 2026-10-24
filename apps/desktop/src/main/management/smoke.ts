@@ -183,7 +183,6 @@ async function smoke() {
 		management: () => win,
 		renderer,
 		profiles: profiles.runtime,
-		selectProfile: profiles.select,
 		credentials: managementAgentCredentials(
 			join(directory, "agent-credentials"),
 		),

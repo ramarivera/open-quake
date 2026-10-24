@@ -217,7 +217,6 @@ if (!app.requestSingleInstanceLock()) {
 			management: () => managementWin,
 			renderer: rendererURL,
 			profiles: profiles.runtime,
-			selectProfile: profiles.select,
 			credentials: managementAgentCredentials(
 				join(app.getPath("userData"), "agent-credentials"),
 			),

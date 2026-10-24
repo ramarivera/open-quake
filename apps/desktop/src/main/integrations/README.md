@@ -58,8 +58,9 @@ for persisted `homeAssistant` keys. The parent has injected it into the profiles
 root. This module does not add a competing action registration. HA actions store
 one `configData` JSON string, as recovered from background.js. Parent dispatch
 can decode a committed key using `keyHaConfig(key)` from `./profiles`, then call
-`await integrations.executeHa(config)` for a direct key. Accepted AI actions use
-`await integrations.executeHa(config, true)`, enforcing the saved entity
+`await integrations.executeHaFromKey(config)` for an explicitly configured direct key.
+This trusted main-only capability must never be registered as an AI tool. Accepted AI actions use
+`await integrations.executeHa(config)`, always enforcing the saved entity
 allowlist. `await integrations.aiEntities()` is the typed AI discovery query.
 Both calls use the same entity, service and field validation path.
 

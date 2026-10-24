@@ -28,7 +28,6 @@ import {
 } from "../../shared/integrations";
 import { registerAgents } from "../agents";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
-import { makeProfileController } from "../profiles/profile-controller";
 import { registerIntegrations } from "./index";
 import { entity, fakeChannels, fakeVault, service } from "./test-fixtures";
 
@@ -50,6 +49,7 @@ async function main() {
 	app.setPath("userData", join(scratch, "synthetic-user-data"));
 	app.setPath("sessionData", join(scratch, "synthetic-session-data"));
 	await app.whenReady();
+	const deliveries: { serial: string; profileId: string }[] = [];
 	let saved = encodeProfileEnvelope(
 		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
 	);
@@ -78,7 +78,10 @@ async function main() {
 				Layer.succeed(ProfileSwitchingPort, {
 					platform: "darwin",
 					foreground: () => Effect.succeed(Option.none()),
-					push: () => Effect.void,
+					push: (serial, profile) =>
+						Effect.sync(() => {
+							deliveries.push({ serial, profileId: profile.id });
+						}),
 				}),
 			),
 		),
@@ -143,30 +146,11 @@ async function main() {
 			},
 		}),
 	});
-	const profileController = await profiles.runPromise(
-		makeProfileController({
-			confirm: async () => true,
-			execute: async () => {},
-			chooseApp: async () => Option.none(),
-			capture: async () => "",
-			cachedThumbnail: async () => Option.none(),
-			publish: () => {},
-			progress: () => {},
-		}),
-	);
+
 	const agents = registerAgents({
 		management: () => management,
 		renderer,
 		profiles,
-		selectProfile: async (id) => {
-			const result = await profiles.runPromise(
-				profileController.request({
-					type: "manage",
-					command: { type: "select", id },
-				}),
-			);
-			assert.notEqual(result._tag, "rejected");
-		},
 	});
 	const request = async (win: BrowserWindow, input: IntegrationRequest) =>
 		Schema.decodeUnknownSync(IntegrationReply)(
@@ -267,6 +251,10 @@ async function main() {
 		assert.equal(executions, 0);
 		await integrations.executeHa({ ...key, entity_id: "light.desk" });
 		assert.equal(executions, 1);
+		await integrations.executeHaFromKey(key);
+		assert.equal(executions, 2);
+		await assert.rejects(integrations.executeHa(key));
+		assert.equal(executions, 2);
 		await request(management, {
 			type: "ha.revoke",
 			origin: "https://synthetic-ha.test",
@@ -371,6 +359,137 @@ async function main() {
 			`document.querySelector('[aria-label="Agents"]') && document.body.innerText.includes('Main') && !document.body.innerText.includes('Loading Agent configuration') && document.body.innerText.includes('Prototype ID')`,
 		);
 		await capture("base-agents");
+		await profiles.runPromise(
+			Effect.flatMap(ProfileSwitching, (service) =>
+				Effect.gen(function* () {
+					yield* service.connect("claw-unit", "1-8");
+					yield* service.connect("other-unit", "1-4");
+				}),
+			),
+		);
+		const selectedBefore = (await profiles.runPromise(ProfileManager.read()))
+			.activeByDevice;
+		const deliveryCount = deliveries.length;
+		const sync = Schema.decodeUnknownSync(AgentReply)(
+			await management.webContents.executeJavaScript(
+				`window.quakeAgents.request({type:'sync-panel',slots:{'1,5':'main','1,6':'main','2,5':'main','2,6':'main'},revision:${constructorAgent._tag === "success" ? constructorAgent.view.revision : -1}})`,
+			),
+		);
+		assert.equal(sync._tag, "success");
+		assert.deepEqual(
+			(await profiles.runPromise(ProfileManager.read())).activeByDevice,
+			selectedBefore,
+		);
+		assert.deepEqual(deliveries.slice(deliveryCount), [
+			{ serial: "claw-unit", profileId: "1-8" },
+		]);
+		await management.webContents.executeJavaScript(
+			"document.getElementById('agents-tab-ai').click()",
+		);
+		await wait("document.querySelector('#agents-ai table')");
+		const ui = (code: string) => management.webContents.executeJavaScript(code);
+		await ui(
+			"[...document.querySelectorAll('#agents-ai button')].find(b=>b.textContent==='Add Model').click()",
+		);
+		await ui(
+			"[...document.querySelectorAll('#agents-ai button')].find(b=>b.textContent==='Add Model').click()",
+		);
+		await wait(
+			"document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr').length === 3",
+		);
+		const setField = async (row: number, column: number, value: string) => {
+			await ui(
+				`document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr')[${row}].querySelectorAll('input')[${column}].focus()`,
+			);
+			await management.webContents.insertText(value);
+		};
+		await setField(1, 0, "openai");
+		await setField(1, 1, "synthetic-saved");
+		await setField(2, 0, "openai");
+		await setField(2, 1, "synthetic-draft");
+		await setField(2, 3, "synthetic-draft-only");
+		await ui(
+			"document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr')[1].querySelector('button').click()",
+		);
+		await wait(
+			"!document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr')[1].querySelector('button').disabled",
+		);
+		assert(
+			await ui(
+				"(()=>{const rows=document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr');return rows.length===3 && rows[2].querySelectorAll('input')[1].value==='synthetic-draft' && rows[2].querySelector('input[type=password]').value==='synthetic-draft-only'})()",
+			),
+		);
+
+		const readAgents = async () => {
+			const reply = Schema.decodeUnknownSync(AgentReply)(
+				await ui("window.quakeAgents.request({type:'read'})"),
+			);
+			assert(reply._tag === "success");
+			return reply.view;
+		};
+		let modelView = await readAgents();
+		assert(
+			modelView.models.default?.some((row) => row.model === "synthetic-saved"),
+		);
+		await ui(
+			"(()=>{const select=document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr')[1].querySelector('select');select.value='default';select.dispatchEvent(new Event('change',{bubbles:true}))})()",
+		);
+		for (let attempt = 0; ; attempt++) {
+			modelView = await readAgents();
+			if (
+				modelView.models.default?.find((row) => row.model === "synthetic-saved")
+					?.role === "default"
+			)
+				break;
+			assert(attempt < 100);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		assert(
+			await ui(
+				"document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr')[2].querySelector('input[type=password]').value==='synthetic-draft-only'",
+			),
+		);
+		await capture("base-model-drafts-retained");
+		const custom = Schema.decodeUnknownSync(AgentReply)(
+			await ui(
+				`window.quakeAgents.request({type:'inherit',scope:'constructor',enabled:false,revision:${modelView.revision}})`,
+			),
+		);
+		assert(custom._tag === "success");
+		await ui(
+			"[...document.querySelectorAll('#agents-ai nav button')].find(b=>b.textContent==='Agents Config').click()",
+		);
+		await ui(
+			"[...document.querySelectorAll('#agents-ai details')].find(d=>d.querySelector('code')?.textContent==='constructor').open=true",
+		);
+		const agentTable =
+			"[...document.querySelectorAll('#agents-ai table')].find(t=>t.querySelector('caption')?.textContent==='constructor')";
+		await wait(`${agentTable}?.querySelectorAll('tbody tr').length === 2`);
+		await ui(
+			`(()=>{const table=${agentTable};const section=table.parentElement.parentElement;[...section.querySelectorAll('button')].find(b=>b.textContent==='Add Model').click()})()`,
+		);
+		await wait(`${agentTable}.querySelectorAll('tbody tr').length === 3`);
+		await ui(
+			`${agentTable}.querySelectorAll('tbody tr')[2].querySelectorAll('input')[1].focus()`,
+		);
+		await management.webContents.insertText("agent-pending");
+		await ui(
+			`${agentTable}.querySelectorAll('tbody tr')[2].querySelector('input[type=password]').focus()`,
+		);
+		await management.webContents.insertText("synthetic-agent-only");
+		await ui(
+			`${agentTable}.querySelectorAll('tbody tr')[1].querySelector('button').click()`,
+		);
+		await wait(
+			`!${agentTable}.querySelectorAll('tbody tr')[1].querySelector('button').disabled`,
+		);
+		assert(
+			await ui(
+				`${agentTable}.querySelectorAll('tbody tr').length === 3 && ${agentTable}.querySelectorAll('tbody tr')[2].querySelector('input[type=password]').value==='synthetic-agent-only'`,
+			),
+		);
+		await capture("base-agent-model-drafts-retained");
+
 		await request(management, {
 			type: "ha.connect",
 			allowInsecureHttp: false,
@@ -405,6 +524,9 @@ async function main() {
 					allowlist: true,
 					awaitableShutdown: true,
 					modelScopeAndShortcutRepair: true,
+					directKeyAndAiCapabilities: true,
+					modelDraftRetention: true,
+					serialScopedClawDelivery: true,
 					captures,
 				},
 				null,

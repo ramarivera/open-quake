@@ -38,7 +38,6 @@ export interface RegisterAgentsOptions {
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer: string;
 	readonly profiles: ProfilesRuntime;
-	readonly selectProfile: (id: string) => Promise<unknown>;
 	readonly root?: string;
 	readonly backend?: AgentRuntimeAdapter;
 	readonly drafting?: AgentDraftAdapter;
@@ -54,10 +53,7 @@ export function registerAgents(options: RegisterAgentsOptions) {
 			),
 		),
 		Layer.succeed(AgentRuntimePort, options.backend ?? unavailableAgentRuntime),
-		Layer.succeed(
-			AgentPanelPort,
-			agentProfileBinding(options.profiles, options.selectProfile),
-		),
+		Layer.succeed(AgentPanelPort, agentProfileBinding(options.profiles)),
 		options.drafting
 			? Layer.succeed(AgentDraftPort, options.drafting)
 			: Layer.empty,

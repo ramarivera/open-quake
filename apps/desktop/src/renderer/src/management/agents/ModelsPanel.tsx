@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { ConfirmDialog } from "./Dialog";
+import { reconcileModelDrafts, reconcileModelRow } from "./model-drafts";
 import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
 
@@ -21,6 +22,12 @@ function ModelTable({
 	readonly busy: boolean;
 }) {
 	const [drafts, setDrafts] = useState(rows);
+	const baseline = useRef(rows);
+	useEffect(() => {
+		const previous = baseline.current;
+		baseline.current = rows;
+		setDrafts((current) => reconcileModelDrafts(current, previous, rows));
+	}, [rows]);
 	const [secrets, setSecrets] = useState<Readonly<Record<string, string>>>({});
 	const [deleting, setDeleting] = useState<PublicModelRow>();
 	const update = (next: PublicModelRow, propagate = false): void =>
@@ -38,16 +45,39 @@ function ModelTable({
 		previous?: PublicModelRow,
 	): Promise<void> => {
 		const { credentialAvailable, ...input } = row;
+		const submittedSecret = Object.hasOwn(secrets, row.id)
+			? (secrets[row.id] ?? "")
+			: "";
 		const reply = await request({
 			type: "save-model",
 			scope,
 			row: input,
-			secret: Object.hasOwn(secrets, row.id) ? (secrets[row.id] ?? "") : "",
+			secret: submittedSecret,
 			revision: view.revision,
 		});
-		if (reply._tag === "success")
-			setSecrets((current) => ({ ...current, [row.id]: "" }));
-		else if (previous) update(previous);
+		if (reply._tag === "success") {
+			const saved = ownModelRows(reply.view.models, scope)?.find(
+				(entry) => entry.id === row.id,
+			);
+			if (saved)
+				setDrafts((current) =>
+					current.map((entry) =>
+						entry.id === row.id ? reconcileModelRow(entry, row, saved) : entry,
+					),
+				);
+			setSecrets((current) =>
+				current[row.id] === submittedSecret
+					? { ...current, [row.id]: "" }
+					: current,
+			);
+		} else if (previous)
+			setDrafts((current) =>
+				current.map((entry) =>
+					entry.id === row.id && entry.role === row.role
+						? { ...entry, role: previous.role }
+						: entry,
+				),
+			);
 	};
 	return (
 		<>
@@ -324,7 +354,7 @@ export function ModelsPanel({
 			</nav>
 			<div hidden={tab !== "default"}>
 				<ModelTable
-					key={`default-${view.revision}`}
+					key="default"
 					scope="default"
 					rows={view.models.default ?? []}
 					view={view}
@@ -363,7 +393,7 @@ export function ModelsPanel({
 						</label>
 						{ownModelRows(view.models, agent.id) ? (
 							<ModelTable
-								key={`${agent.id}-${view.revision}`}
+								key={agent.id}
 								scope={agent.id}
 								rows={ownModelRows(view.models, agent.id) ?? []}
 								view={view}
