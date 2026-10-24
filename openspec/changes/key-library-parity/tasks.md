@@ -29,4 +29,4 @@
 
 ## 7. Review integration
 
-- [ ] 7.1 Address all thirteen PR #35 review threads after merging current main: disconnect/runtime cleanup, host keyboard fallback, navigation validation, portable font smoke, retained sequence fields, owned-panel authorization, SVG validation, serialized tap pairs, selection feedback, inert unsupported imports, overlay gesture cancellation, editor-only sequence IDs, and wallpaper-aware clock preview. Prove with regressions, six fresh gates and isolated native mock smokes; record evidence and close only open-quake-lih.10.2.10.
+- [x] 7.1 Address all thirteen PR #35 review threads after merging current main: disconnect/runtime cleanup, host keyboard fallback, navigation validation, portable font smoke, retained sequence fields, owned-panel authorization, SVG validation, serialized tap pairs, selection feedback, inert unsupported imports, overlay gesture cancellation, editor-only sequence IDs, and wallpaper-aware clock preview. Prove with regressions, six fresh gates and isolated native mock smokes; record evidence and close only open-quake-lih.10.2.10. Evidence: review-round-1.md; source b7c8ee7c03fefd9e7f2c9675e1c3fb68c8a5d8aa.
