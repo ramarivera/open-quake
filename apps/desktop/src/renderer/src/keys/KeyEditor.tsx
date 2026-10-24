@@ -368,14 +368,6 @@ export function KeyEditor(): React.JSX.Element {
 			...reset,
 			config: {
 				...reset.config,
-				compatibility: Option.some({
-					...Option.getOrElse(reset.config.compatibility, () => ({})),
-					iconSource: reset.config.icon,
-					alternateIconSource: Option.getOrElse(
-						reset.config.alterIcon,
-						() => "",
-					),
-				}),
 				icon: keyArtwork(reset.config.icon, reset.config.type),
 				alterIcon: Option.map(reset.config.alterIcon, (icon) =>
 					keyArtwork(icon, reset.config.type),

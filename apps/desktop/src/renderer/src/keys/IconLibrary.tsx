@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { LibraryPack } from "../../../shared/key-library";
@@ -167,6 +167,19 @@ export function IconLibrary({
 		[mdi, packs, applications, search, locale],
 	);
 	const selected = groups.find((pack) => pack.id === group) ?? groups[0];
+	const total = selected?.icons.length ?? 0;
+	useLayoutEffect(() => {
+		const node = grid.current;
+		if (!node) return;
+		const fill = (): void => {
+			if (node.clientHeight > 0 && node.scrollHeight <= node.clientHeight)
+				setLimit((count) => Math.min(total, count + batch));
+		};
+		fill();
+		const observer = new ResizeObserver(fill);
+		observer.observe(node);
+		return () => observer.disconnect();
+	});
 	const remove = async (id: string, icon = false): Promise<void> => {
 		if (
 			!confirm(

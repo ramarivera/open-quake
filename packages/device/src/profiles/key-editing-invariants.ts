@@ -184,6 +184,19 @@ export const resetKeyIcons = (
 			...(typeof alternate === "string"
 				? { alterIcon: Option.some(alternate) }
 				: {}),
+			// A state without a default keeps its portable pixels AND source identity.
+			// Deletion protection compares imported sources, not the rasterized preview.
+			...(typeof icon === "string" || typeof alternate === "string"
+				? {
+						compatibility: Option.some({
+							...metadata,
+							...(typeof icon === "string" ? { iconSource: icon } : {}),
+							...(typeof alternate === "string"
+								? { alternateIconSource: alternate }
+								: {}),
+						}),
+					}
+				: {}),
 		},
 	};
 };

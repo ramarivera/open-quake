@@ -32,6 +32,7 @@ import {
 	verifyEditorTransactions,
 } from "./smoke-editor";
 import { verifyFinalReview } from "./smoke-final-review";
+import { verifyIconReview } from "./smoke-icon-review";
 import { verifyReviewEditor } from "./smoke-review";
 
 registerClockScheme();
@@ -370,6 +371,16 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		await verifyIconReview(
+			harness,
+			directory,
+			(path) => {
+				selectedPath = path;
+			},
+			process.env.OPEN_QUAKE_KEY_REVIEW_PROBE,
+		);
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE?.startsWith("icon-review"))
+			return;
 		await verifyFinalReview(harness, panel);
 		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "final-review") return;
 		await verifyReviewEditor(harness, process.env.OPEN_QUAKE_KEY_REVIEW_PROBE);

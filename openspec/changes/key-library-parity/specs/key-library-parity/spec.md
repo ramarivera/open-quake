@@ -135,3 +135,17 @@ Selected artwork SHALL be rasterized to a 170×170 PNG through inert image decod
 - **WHEN** a configured generic key has an empty icon string
 - **THEN** the editor, strip and thumbnails preserve its blank artwork
 - **AND** semantic fallback applies to unavailable nonempty resource references while inline custom artwork remains unchanged
+
+#### Scenario: Reset without a default
+- **WHEN** an imported key has no default artwork for either state and its icons are reset
+- **THEN** each state without a default retains its artwork and original source identity through Save, preserving in-use pack protection
+- **AND** resetting a state with a default updates only that state's artwork source
+
+#### Scenario: Underfilled icon viewport
+- **WHEN** the picker loads or its height, width, zoom, search or group changes and the current batch does not overflow
+- **THEN** it appends complete ten-row batches until scrolling is possible or the selected group is exhausted
+
+#### Scenario: Compressed raster expansion
+- **WHEN** a raster import passes file and pixel limits but its decoded PNG exceeds the selection source limit
+- **THEN** the import normalizes the image before storage, preserving aspect ratio and producing a selectable source
+- **AND** selection and Save retain portable 170×170 artwork and source identity

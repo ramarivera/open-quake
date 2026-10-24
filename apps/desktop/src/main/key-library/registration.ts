@@ -43,7 +43,20 @@ const imageData = (bytes: Buffer): string => {
 		size = image.getSize();
 	if (image.isEmpty() || size.width * size.height > 16000000)
 		throw new Error("Invalid image");
-	return image.toDataURL();
+	const data = image.toDataURL();
+	if (data.length <= 8 * 1024 * 1024) return data;
+	// Compressed files can expand beyond the picker source contract. Bound the
+	// stored raster as well as its input bytes, preserving the original ratio.
+	const scale = Math.min(1024 / size.width, 1024 / size.height, 1);
+	const normalized = image
+		.resize({
+			width: Math.max(1, Math.round(size.width * scale)),
+			height: Math.max(1, Math.round(size.height * scale)),
+			quality: "best",
+		})
+		.toDataURL();
+	if (normalized.length > 8 * 1024 * 1024) throw new Error("Image too large");
+	return normalized;
 };
 export function registerKeyLibrary<R>(
 	runtime: ManagedRuntime.ManagedRuntime<
