@@ -86,8 +86,21 @@ const net = {
 		throw new Error("Bundle smoke must not serve clock media");
 	},
 };
+const desktopCapturer = {
+	getSources: () => {
+		throw new Error("Bundle smoke must never capture screens");
+	},
+};
+const systemPreferences = {
+	askForMediaAccess: () => {
+		throw new Error("Bundle smoke must never request audio access");
+	},
+	getMediaAccessStatus: () => "denied",
+};
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
+	desktopCapturer,
+	systemPreferences,
 	powerMonitor,
 	shell,
 	app,
@@ -114,7 +127,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

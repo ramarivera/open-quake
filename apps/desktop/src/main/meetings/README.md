@@ -1,0 +1,128 @@
+# Meetings
+
+MeetAI uses the shipped profiles catalog and registers its viewer, Start, Record,
+Mark, Translate and Mic tiles under `renderer/src/strip/tiles/meeting/`. The
+Meeting page provides local history, task health, four summary templates,
+regeneration, marks, side records and Markdown/plain-text export.
+
+Start/Record/Mark/Translate have independent five-second cooldowns. Repeated presses of an in-flight key are ignored; independent keys retain
+their order. A side recorder shares its main capture's streams;
+only the owner releases them. Capture uses the selected microphone plus explicitly
+requested system audio. macOS microphone and screen-recording permissions are
+checked before the relevant capture. Failed optional capture does not silently
+fall back; choose microphone only in Audio sources and models and start again.
+
+The renderer writes ten-second Opus WebM chunks, rotates recorders hourly, bounds
+queued writes to 16 MiB and sends ordered chunks to main. Main uses an existing
+`ffmpeg` executable to mix/resample to 48 kHz mono MP3 and concatenate hourly
+segments. Set `OPEN_QUAKE_FFMPEG` to an explicit executable path if needed. No
+installer or dependency is added. A failed finalization retains source chunks;
+Retry finalizes them before ASR. A canceled recording removes transient files.
+
+History lives in `<userData>/meetings-v1/history.json`, with per-meeting audio
+under `<uuid>/final_recording.mp3`. Writes stage and atomically rename before the
+committed ref changes. Directories are private; JSON/chunk/export files use mode
+0600 where the filesystem supports Unix permissions. Corrupt history reports an
+error instead of replacing it. Restart marks interrupted work recoverable.
+Deleting a main record cancels its jobs and cascades to side records. Failed
+file deletion retains history and reports an error.
+
+A generated summary, applied template and provider/model/language provenance are
+saved together. Failed regeneration preserves the previous summary. This fixes
+DK-Suite's unsaved regeneration (`AI-277`). Generated text is escaped instead of
+injected HTML (`AI-308/340`). Summary export is UTF-8 `.md`; transcript export is
+UTF-8 `.txt` (`AI-315`). Export cancellation leaves history unchanged.
+
+Translation uses 24 kHz mono signed-16 PCM in 300 ms frames, a bounded PCM queue,
+and display limits of 200 paragraphs / 64,000 characters / 4,000 characters per
+update (`AI-338`). Interim segments replace by ID; final segments are immutable.
+The timeline keeps eight slots, with at least three seconds and two estimated
+lines (50 characters/line) between marks. Clear affects the current display pane,
+not saved meeting content. Main/temp/live tabs have independent font offsets.
+Both OS reduced motion and the app's Reduce motion preference disable animation.
+
+## Provider integration boundary
+
+`packages/edge/src/ai/meeting-adapter.ts` defines `AiMeetingAdapter` behind the
+existing `AiProviderService`. The provider lane supplies submit/poll/cancel file
+ASR and translate/stop PCM operations. `registerMeetings({ adapter })` injects the
+port. Its `audioRef` is a meeting UUID: resolve the local finalized file under
+`<userData>/meetings-v1/<uuid>/final_recording.mp3` in the composition root.
+Credentials, upload policy and SDK types belong behind that port.
+
+The facade supplies DashScope's `qwen-audio-3.0-asr-flash-filetrans`, channel `[0]`,
+diarization, ten-second polling, 48-hour upload expiry and timeout
+`max(180000, durationMs * 1.5 + 120000)`. OpenAI file realtime uses
+`gpt-realtime-mini` and timeout `clamp(180000, durationMs * 0.5 + 180000, 1800000)`.
+Summary generation uses the existing text facade and requires the explicitly
+selected AI profile's model to match the minutes model. Language selection is
+independent of UI locale. ASR/summary failures never log transcript or credentials.
+
+Production does not yet supply a live meeting adapter. Missing translation fails
+before acquiring audio; offline recording/history are available. Non-mock
+configuration rejects fake ASR and deterministic summary models. Mock mode alone
+installs fake meeting providers and bypasses all audio capture. The configuration
+form accepts a provider-owned AI profile UUID/model; configuration applies to new
+sessions in the running app, while each saved record retains its configuration.
+Provider catalog/credential persistence remains owned by the provider lane.
+
+Mic state comes from the existing hardware session via meeting snapshots. Panel
+windows cannot use the management-only hardware channel. No optimistic local Mic
+toggle is used. `AI-341` alert-tone call sites are commented out in recovered
+0.4.95. At base `19d7240`, `ToneName` exposes start/end/error/busy/preview; it does
+not expose the advertised MM_FIREWORK/MM_SUCCESS patterns. This lane invents no
+hardware code or substitute tone.
+
+## Verification
+
+Run from the worktree root. All output goes to the lane scratch directory.
+The native smoke requires already-installed `ffmpeg` and `ffprobe` and never
+opens a microphone, display capture or QUAKE device.
+
+```sh
+export TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings
+pnpm biome check packages apps
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm --filter @open-quake/desktop test:bundle
+openspec validate --all --strict
+pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/meetings/smoke.config.ts
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/meetings-smoke/smoke.js "$TMPDIR"
+```
+
+Also run the documented [media smoke](../media/README.md), passing the same
+scratch directory and mock environment. Both native smokes destroy their windows,
+dispose runtimes and exit. Never run DK-Suite or open real hardware from a lane.
+
+The native meetings smoke drives the real renderer/preload/main with the shipped
+MeetAI profile: repeated Start, side record, mark, translation, native touch
+font control, processing/success/failure, template regeneration/restart, native
+save cancellation/error, independently compared exports, unauthorized documents,
+and narrow/light/reduced-motion views. Synthetic sine WebM exercises real
+mix/concat and `ffprobe` confirms 48 kHz mono MP3 (`audio-finalization.json`).
+
+Unit/property tests cover ASR TestClock polling/deadlines/cancel; retained
+transcripts and summaries; persistence and deletion failures; source loss;
+permission rejection before capture; unavailable translation before capture;
+mic state; monotonic snapshot numbering; long finalization overlap; translation bounds;
+real filesystem recovery; fake MediaRecorder side ownership, hourly rotation,
+late permission cancellation and missing-stop cleanup.
+
+Native screenshots in the scratch directory:
+
+- `meetings-idle.png`, `meetings-recording-side-mark.png`
+- `meetings-processing.png`, `meetings-success.png`, `meetings-failure.png`
+- `meetings-live-translation.png`, `meetings-reduced-motion.png`
+- `meetings-history-empty.png`, `meetings-history-summary.png`
+- `meetings-history-transcript.png`, `meetings-task-failure.png`
+- `meetings-history-narrow.png`, `meetings-history-light.png`
+
+The implementation run passed 897 tests (protocol 47, device 388, edge 41,
+desktop 421), all six required gates, the meetings native smoke and the existing
+media native smoke. Strict OpenSpec validation passed all 34 items.
+
+Physical QUAKE/touch/Mic behavior, OS permission dialogs, actual system loopback,
+hours of continuous real capture and live provider integrations remain
+unverified. Follow-up: `open-quake-lih.16.1`; the parent parity cluster remains
+open for that acceptance. Native mock screenshots do not close those checks.

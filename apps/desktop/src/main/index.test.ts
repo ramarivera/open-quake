@@ -112,6 +112,9 @@ vi.mock("./lifecycle/native-display", async (original) => {
 		probeHiddenMirroring: vi.fn(() => Effect.succeed(false)),
 	};
 });
+vi.mock("./meetings", () => ({
+	registerMeetings: vi.fn(() => ({ dispose: () => Promise.resolve() })),
+}));
 vi.mock("./knob", () => ({
 	registerKnob: () => ({
 		onDevice: () => {},

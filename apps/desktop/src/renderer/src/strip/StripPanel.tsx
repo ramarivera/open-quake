@@ -1,4 +1,7 @@
+import { Either, Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MeetingAction } from "../../../shared/meeting-bridge";
+import { meetingRequest } from "../meetings/useMeetings";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { useQuakeEvents } from "../useQuakeEvents";
@@ -30,8 +33,21 @@ export function StripPanel(): React.JSX.Element {
 					new URLSearchParams(window.location.search).get("rotation") ?? 0,
 				),
 				() => layout.current,
-				(event) =>
-					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined),
+				(event) => {
+					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
+					if (event.keyAction !== 1) return;
+					const tile = layout.current?.tiles.find(
+						(tile) => tile.keyCode === event.keyCode,
+					);
+					if (
+						!tile ||
+						(tile.type === "mic" && tile.cellTheme !== "meetingAssistantTheme")
+					)
+						return;
+					const action = Schema.decodeUnknownEither(MeetingAction)(tile.type);
+					if (Either.isRight(action))
+						void meetingRequest({ _tag: "action", action: action.right });
+				},
 			);
 	}, []);
 	const { snapshot } = useWallpaper();

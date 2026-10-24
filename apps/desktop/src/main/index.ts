@@ -40,6 +40,7 @@ import {
 } from "./lifecycle/native-display";
 import { registerLifecycle } from "./lifecycle/registration";
 import { MediaLive, registerMedia } from "./media";
+import { registerMeetings } from "./meetings";
 import { registerProfiles } from "./profiles";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
@@ -207,6 +208,11 @@ if (!app.requestSingleInstanceLock()) {
 			),
 		);
 		const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+		registerMeetings({
+			userData: app.getPath("userData"),
+			hardware: () => bus?.hardware?.(),
+			mock,
+		});
 		const source = mock
 			? startMockHardwareBus()
 			: Effect.gen(function* () {

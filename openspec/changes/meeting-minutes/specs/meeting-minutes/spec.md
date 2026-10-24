@@ -8,11 +8,13 @@ Meeting capture and browsable history are recovered, but capture, processing, an
 
 ### Requirement: Explicit capture lifecycle
 
-The system SHALL start meeting capture only from an explicit desktop or configured device action, require microphone permission, and expose idle, recording, finalizing, transcribing, generating, completed, cancelled and failed states. At most one user-visible capture session SHALL be active.
+Evidence: AI-262, AI-267, AI-280, AI-289, AI-293.
+
+The system SHALL start meeting capture only from an explicit desktop or configured device action, require microphone permission, and expose idle, recording, finalizing, transcribing, generating, completed, cancelled and failed states. At most one main capture session SHALL be active; side records share its sources.
 
 #### Scenario: Start twice
 
-- **WHEN** a second start arrives while a capture session is recording
+- **WHEN** a repeated Start arrives within its cooldown while a capture session is recording
 - **THEN** the existing session continues and the second request reports already-recording without opening another microphone stream
 
 #### Scenario: Microphone denied
@@ -21,6 +23,8 @@ The system SHALL start meeting capture only from an explicit desktop or configur
 - **THEN** the session fails before recording and all partially acquired resources are released
 
 ### Requirement: Audio source selection and cleanup
+
+Evidence: AI-281-284, AI-288, AI-292, AI-294.
 
 The recorder SHALL capture the selected microphone and optional explicitly selected system audio, identify unavailable optional audio, and stop all owned tracks on stop, cancel, device loss or shutdown.
 
@@ -36,12 +40,14 @@ The recorder SHALL capture the selected microphone and optional explicitly selec
 
 ### Requirement: Finalization and processing
 
+Evidence: AI-268-275, AI-288-294.
+
 Stopping capture SHALL finalize each audio chunk once before transcription. Processing SHALL store transcript and generated minutes separately, label minutes as generated, and preserve completed transcript data if generation fails.
 
 #### Scenario: Duplicate stop
 
 - **WHEN** two stop requests arrive during finalization
-- **THEN** the same finalization result is returned and no chunk is transcribed twice
+- **THEN** the in-progress finalization is reported and no chunk is finalized or transcribed twice
 
 #### Scenario: Summary generation fails
 
@@ -49,6 +55,8 @@ Stopping capture SHALL finalize each audio chunk once before transcription. Proc
 - **THEN** history retains the transcript, identifies generation failure and allows a generation-only retry
 
 ### Requirement: Durable meeting history
+
+Evidence: AI-266, AI-295-317, SETTINGS-105-107.
 
 History SHALL list local meeting ID, title, capture time/duration and stage status, open available transcripts/minutes, and preserve finalized source audio until explicit deletion. Restart SHALL mark interrupted work recoverable rather than completed.
 
@@ -83,6 +91,8 @@ The system SHALL export available generated minutes as raw UTF-8 Markdown to `<s
 
 ### Requirement: Privacy and retry behavior
 
+Evidence: AI-269-279, AI-291.
+
 The system SHALL send audio/text only to the provider explicitly configured for that stage, keep content and credentials out of diagnostics, and avoid retrying capture or duplicating a saved meeting when a processing retry is requested.
 
 #### Scenario: Generation retry
@@ -103,3 +113,85 @@ The system SHALL expose the Meet AI live translation toggle and display, require
 
 - **WHEN** the user selects the shipped Meet AI profile and explicitly starts translation with an available configured adapter
 - **THEN** translation starts despite the library entries being commented out, and meeting end releases the translation capture
+
+
+### Requirement: MeetAI registered controls
+
+The strip registry SHALL render meetingMinutes, tempMeetingMinutes, meetingRecordMark,
+liveAudioTranslate, liveAudioTranslateDisplay and meeting-profile mic tiles under
+`strip/tiles/meeting/`. The profile catalog is owned by the profiles lane.
+Start SHALL show the persisted HH:MM:SS timer updated every 100 ms while recording.
+Start, Record, Mark and Translate SHALL enforce independent 5000 ms cooldowns,
+with a clockwise black 50% sweep from 12 o'clock. Record and Mark require a running
+main meeting. Mic SHALL use the authoritative hardware state, without optimistic toggling.
+Evidence: AI-263-265, AI-297, AI-318-328, WIDGETS-097-098.
+
+#### Scenario: Rapid Start and processing presses
+
+- **WHEN** Start is pressed again within 5000 ms or while processing
+- **THEN** no duplicate capture opens and processing reports "Meeting minutes is being processed"
+
+#### Scenario: Side record and mark
+
+- **WHEN** Record and Mark are activated during main capture, then main capture stops
+- **THEN** side audio is finalized without closing shared tracks early, marks have ordered start/end offsets, and both controls deactivate
+
+### Requirement: Meeting provider contract
+
+The existing AI facade SHALL expose injected meeting ASR and translation adapters, explicitly
+configured profile/model/language, async task submit/poll/cancel, speaker timestamps and timeout.
+DashScope defaults SHALL be qwen-audio-3.0-asr-flash-filetrans, channel [0], diarization true,
+10000 ms poll, 48 h expiry and max(180000, durationMs * 1.5 + 120000) timeout.
+OpenAI defaults SHALL be gpt-realtime-mini with timeout clamp(180000,
+durationMs * 0.5 + 180000, 1800000). Summary generation SHALL use the existing text facade,
+explicit minutes model and language, never a vendor gateway or implicit sidecar.
+Tests SHALL use fakes without paid calls. Evidence: AI-269-274, AI-292, AI-294.
+
+#### Scenario: ASR pending then complete
+
+- **WHEN** the configured adapter returns a pending task and then completed speaker segments
+- **THEN** polling waits 10000 ms on the Effect clock, transcript persists before summary generation, and stop/cancel/timeout cancels the remote task
+
+### Requirement: Saved summary templates
+
+The system SHALL offer exactly project-weekly, standard, executive and interview with the
+recovered labels/section instructions, default project-weekly. Selecting a template SHALL
+leave the existing summary unchanged until regeneration succeeds. Regeneration SHALL save
+summary, applied template and provider provenance atomically. Evidence: AI-275, AI-277,
+AI-296, AI-308, AI-312, SETTINGS-106. This intentionally fixes AI-277.
+
+#### Scenario: Regenerate then restart
+
+- **WHEN** a user regenerates a saved transcript with executive and restarts
+- **THEN** history displays the regenerated saved summary and executive template without recapture or ASR
+
+### Requirement: History task workspace
+
+History SHALL offer In progress and Meeting records tabs, literal case-insensitive search,
+summary/transcript tabs, copy, title edit, confirmed cascading deletion, per-task Audio and upload,
+Live transcript and AI Summary states and retry actions, and the four-template picker.
+Layout SHALL use minmax(196px,226px) minmax(470px,1fr) minmax(238px,272px),
+with reachable inspector actions below the document at 980px. Generated text SHALL be escaped.
+Marks SHALL highlight matching speaker segments using bounded offsets.
+Evidence: AI-299-317, SETTINGS-105-107.
+
+#### Scenario: Summary failure retains completed tasks
+
+- **WHEN** summary fails after transcription
+- **THEN** task health shows completed audio and transcript, failed summary, and a summary-only retry
+
+### Requirement: Meeting viewer and animations
+
+The 5x2 viewer SHALL expose Main minutes, Temporary record and Live translation tabs,
+a floating 344px/44px expanded/collapsed toolbar, dock toggle, copy, clear, font changes
+by 2px within -10..20 per pane, 300px scrolling and 1200ms long-press top/bottom.
+Temporary record SHALL switch between summary/transcript with a 100px swipe.
+Recording, processing, failure and success animations SHALL consume authoritative state.
+Success SHALL celebrate once for 5000ms using 35 fireworks only on the panel.
+All animations SHALL respect reduced motion. Evidence: AI-329-341, WIDGETS-099-100.
+
+#### Scenario: Bounded live translation
+
+- **WHEN** interim and final translations stream beyond 200 paragraphs or 64000 characters
+- **THEN** interim segments replace by ID, oldest content is removed, updates cap at 4000 characters,
+  timeline holds eight slots at least 3000ms apart after two estimated lines (50 characters/line), and update speed shows idle after 5000ms

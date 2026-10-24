@@ -8,6 +8,8 @@ import {
 	useClockSettings,
 } from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
+import { MeetingDisplay } from "./tiles/meeting/MeetingDisplay";
+import { MeetingKey } from "./tiles/meeting/MeetingKey";
 
 /**
  * Everything a registered tile may read; tiles never fetch their own data.
@@ -59,7 +61,15 @@ function ClockSlot({
 
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
-	new Map([["dkDesktopClock", ClockSlot]]);
+	new Map<string, StripTileComponent>([
+		["dkDesktopClock", ClockSlot],
+		["meetingMinutes", MeetingKey],
+		["tempMeetingMinutes", MeetingKey],
+		["meetingRecordMark", MeetingKey],
+		["liveAudioTranslate", MeetingKey],
+		["mic", MeetingKey],
+		["liveAudioTranslateDisplay", MeetingDisplay],
+	]);
 
 export const stripTileFor = (type: string): StripTileComponent =>
 	stripTileRegistry.get(type) ?? GenericTile;

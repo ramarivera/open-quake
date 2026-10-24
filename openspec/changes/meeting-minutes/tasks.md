@@ -1,19 +1,35 @@
 # Tasks
 
-These are future implementation tasks. This lane creates specs only; no checkbox is complete. The parent creates one epic for this change and one issue per numbered task, using each task's text as its description and this OpenSpec path as its reference. Do not close implementation issues on planning-only evidence.
+Execution epic: open-quake-zh8, child of open-quake-lih.16. Existing task beads open-quake-zh8.1 through .7 map in order to these tasks. Close only with source and verification evidence.
 
 ## 1. Capture and storage contracts
 
-- [ ] 1.1 Confirm source/retention/retry contracts and the shipped live translation route (`AI-136/292/327`), and trace `.md`/`.txt` export evidence (`AI-315`); verify stage/capture/export contracts and bounded translation display history.
-- [ ] 1.2 Add meeting/chunk/stage schemas, lifecycle invariants and repository documentation; verify duplicate-stop idempotence, generation IDs and interrupted-stage recovery.
+- [x] 1.1 Confirm source/retention/retry contracts and the shipped live translation route (`AI-136/292/327`), and trace `.md`/`.txt` export evidence (`AI-315`); verify stage/capture/export contracts and bounded translation display history. Include AI-263-275, AI-288-341, SETTINGS-105-107 and WIDGETS-097-100.
+- [x] 1.2 Add meeting/chunk/stage schemas, lifecycle invariants and repository documentation; verify duplicate-stop idempotence, correlated meeting UUIDs and monotonic snapshots and interrupted-stage recovery, marks, side records and four summary templates.
 
 ## 2. Capture and processing
 
-- [ ] 2.1 Implement desktop microphone/system-audio adapters and capture conductor with catalog errors; verify permission failure, optional-source choice, source loss and track cleanup through fake media streams.
-- [ ] 2.2 Implement ordered finalization, transcript persistence, generation and stage-only retry through existing speech/AI facades; verify generation failure retains transcript, cancellation calls no provider and diagnostics omit content.
-- [ ] 2.3 Implement local history read/delete and UTF-8 Markdown summary/plain-text transcript export adapters (`AI-315`) with user documentation; verify filename sanitation, partial deletion failures and independently compare exported text with saved content.
+- [x] 2.1 Implement desktop microphone/system-audio adapters and capture conductor with catalog errors; verify permission failure, optional-source choice, source loss and track cleanup through fake media streams.
+- [x] 2.2 Implement ordered finalization, transcript persistence, generation and stage-only retry through existing speech/AI facades; verify generation failure retains transcript, cancellation calls no provider and diagnostics omit content; prove async ASR polling/timeouts/diarization, output language and saved regeneration.
+- [x] 2.3 Implement local history read/delete and UTF-8 Markdown summary/plain-text transcript export adapters (`AI-315`) with user documentation; verify filename sanitation, partial deletion failures and independently compare exported text with saved content.
 
 ## 3. Recorder and history acceptance
 
-- [ ] 3.1 Wire recording state/animations, history, transcript/minutes, retry/delete/export and the live translation toggle through the typed client (`AI-136/292/327`); verify actual controls produce the expected stage/provider/file operations.
-- [ ] 3.2 Run all meeting-minutes scenarios, including restart/cancel/source loss; document native audio/provider/device-trigger evidence separately and leave missing hardware/OS validation open.
+- [x] 3.1 Wire recording state/animations, history, transcript/minutes, retry/delete/export and the live translation toggle through the typed client (`AI-136/292/327`); verify actual controls produce the expected stage/provider/file operations. Register all MeetAI tiles, cooldowns, four animations, task health, templates and bounded live transcript/toolbar.
+- [x] 3.2 Run all meeting-minutes scenarios, including restart/cancel/source loss; document native audio/provider/device-trigger evidence separately and leave missing hardware/OS validation open.
+
+
+## Evidence and remaining acceptance
+
+Source and scenario evidence: `apps/desktop/src/main/meetings/README.md`, domain
+`meeting-service.test.ts` / `meeting-invariants.test.ts`, desktop `storage.test.ts`
+/ `capture.test.ts`, and the reproducible `main/meetings/smoke.ts`.
+All six required gates pass; 897 tests; strict OpenSpec 34/34. Native meetings and
+existing media smokes use only mock device/capture/provider paths. Screenshots
+and logs are in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings/`.
+
+`open-quake-lih.16.1` remains open for live provider adapter integration and
+lead-owned OS/audio/device acceptance. No physical or paid-provider check is
+closed by these implementation tasks. The profile catalog remains owned by
+merged PR #26. AI-341 tone calls were disabled in the recovered release; current
+hardware ToneName lacks MM_FIREWORK/MM_SUCCESS, so no substitute code is added.

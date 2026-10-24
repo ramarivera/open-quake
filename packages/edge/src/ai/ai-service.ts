@@ -1,4 +1,6 @@
 import { Deferred, Effect, Either, Option, Ref, Schema, Stream } from "effect";
+import type { MeetingConfig } from "../meetings/meeting-contracts.js";
+import { meetingError } from "../meetings/meeting-errors.js";
 import { AiCompatibleAdapter } from "./adapters/adapter.js";
 import { mockEvents } from "./adapters/mock.js";
 import {
@@ -17,6 +19,7 @@ import {
 } from "./ai-errors.js";
 import { validateRequest } from "./ai-invariants.js";
 import { AiRepository } from "./ai-repository.js";
+import { AiMeetingAdapter, transcribeMeeting } from "./meeting-adapter.js";
 
 export interface Generation {
 	/** One subscriber. ChatService owns authoritative assembly and fan-out. */
@@ -72,6 +75,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 		dependencies: [AiRepository.Default],
 		effect: Effect.gen(function* () {
 			const repository = yield* AiRepository;
+			const meetingAdapter = yield* Effect.serviceOption(AiMeetingAdapter);
 			const compatible = yield* Effect.serviceOption(AiCompatibleAdapter);
 			const credentials = yield* Effect.serviceOption(AiCredentials);
 			const adapters = new Map<ProviderProfile["adapter"], RegisteredAdapter>([
@@ -107,6 +111,28 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 				);
 			}
 			return {
+				requireMeetingTranslation: () =>
+					Option.isSome(meetingAdapter)
+						? Effect.void
+						: Effect.fail(meetingError("Unavailable")),
+				transcribeMeeting: (
+					config: MeetingConfig,
+					audioRef: string,
+					durationMs: number,
+				) => transcribeMeeting(meetingAdapter, config, audioRef, durationMs),
+				translateMeeting: Effect.fn("AiProviderService.translateMeeting")(
+					(config: MeetingConfig, pcm: Uint8Array) =>
+						Option.isSome(meetingAdapter)
+							? meetingAdapter.value.translate(config, pcm)
+							: Effect.fail(meetingError("Unavailable")),
+				),
+				stopMeetingTranslation: Effect.fn(
+					"AiProviderService.stopMeetingTranslation",
+				)(() =>
+					Option.isSome(meetingAdapter)
+						? meetingAdapter.value.stopTranslation()
+						: Effect.void,
+				),
 				generate: Effect.fn("AiProviderService.generate")(function* (
 					input: unknown,
 				): Effect.fn.Return<Generation, AiError> {
