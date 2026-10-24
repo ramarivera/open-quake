@@ -491,8 +491,35 @@ async function smoke() {
 			);
 			await settle(30);
 		};
-		await pointer("pointerdown", 218);
-		for (const x of [250, 275, 300]) await pointer("pointermove", x);
+		await pointer("pointerdown", 222);
+		await pointer("pointerup", 222);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			0,
+			"Offset click never persists",
+		);
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"218px",
+		);
+		assert.equal(
+			await js(
+				"document.querySelector('.mc-resizer').getAttribute('aria-valuenow')",
+			),
+			"218",
+		);
+		await pointer("pointerdown", 224);
+		for (const x of [256, 281, 306]) {
+			await pointer("pointermove", x);
+			assert.equal(
+				await js(
+					"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+				),
+				`${x - 6}px`,
+			);
+		}
 		assert.equal(
 			await js(
 				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
@@ -505,7 +532,7 @@ async function smoke() {
 			"No storage writes during drag",
 		);
 		assert.equal(calls.themes, dragThemes, "No theme IPC during drag");
-		await pointer("pointerup", 300);
+		await pointer("pointerup", 306);
 		assert.equal(
 			await js("window.__reviewWrites"),
 			1,
@@ -516,8 +543,8 @@ async function smoke() {
 			dragThemes,
 			"Width must not rewrite native theme",
 		);
-		await pointer("pointerdown", 300);
-		await pointer("pointermove", 330);
+		await pointer("pointerdown", 306);
+		await pointer("pointermove", 336);
 		await js(
 			"document.querySelector('.mc-resizer').releasePointerCapture(77);null;",
 		);
@@ -1514,9 +1541,19 @@ async function smoke() {
 		await js(
 			"document.querySelector('button[title=\"UI Settings\"]').click();null;",
 		);
+		const themesBeforeGrey = calls.themes;
 		await js(
 			"document.querySelector('input[name=mc-theme][value=grey]').click();null;",
 		);
+		await waitFor("document.documentElement.dataset.theme === 'grey'");
+		// executeJavaScript completion does not acknowledge the layout effect's IPC.
+		// Observe the main handler before establishing the font-only baseline.
+		const themeDeadline = Date.now() + 8000;
+		while (calls.themes === themesBeforeGrey) {
+			assert(Date.now() < themeDeadline, "Grey native theme request timed out");
+			await settle(10);
+		}
+		assert.equal(calls.themes, themesBeforeGrey + 1);
 		const themesBeforeScale = calls.themes;
 		for (const scale of ["small", "medium", "large"]) {
 			await js(

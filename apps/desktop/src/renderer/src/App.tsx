@@ -143,7 +143,11 @@ function ManagementSurface({
 		tab: initialActivation?.agentTab ?? "sessions",
 		sequence: 0,
 	}));
-	const sidebarDrag = useRef<{ pointer: number; width: number } | null>(null);
+	const sidebarDrag = useRef<{
+		pointer: number;
+		startX: number;
+		startWidth: number;
+	} | null>(null);
 	const [page, setPage] = useState<Page>(() => {
 		const active = initialActivation;
 		return (
@@ -278,7 +282,8 @@ function ManagementSurface({
 						const target = event.currentTarget;
 						sidebarDrag.current = {
 							pointer: event.pointerId,
-							width: appearance.appearance.sidebarWidth ?? 218,
+							startX: event.clientX,
+							startWidth: appearance.appearance.sidebarWidth ?? 218,
 						};
 						target.setPointerCapture(event.pointerId);
 						document.body.dataset.resizing = "true";
@@ -288,8 +293,15 @@ function ManagementSurface({
 							sidebarDrag.current?.pointer === event.pointerId &&
 							event.currentTarget.hasPointerCapture(event.pointerId)
 						) {
-							const width = Math.max(120, Math.min(360, event.clientX));
-							sidebarDrag.current.width = width;
+							const width = Math.max(
+								120,
+								Math.min(
+									360,
+									sidebarDrag.current.startWidth +
+										event.clientX -
+										sidebarDrag.current.startX,
+								),
+							);
 							document.documentElement.style.setProperty(
 								"--mc-sidebar-width",
 								`${width}px`,
@@ -299,8 +311,13 @@ function ManagementSurface({
 					}}
 					onPointerUp={(event) => {
 						if (sidebarDrag.current?.pointer !== event.pointerId) return;
+						const { startX, startWidth } = sidebarDrag.current;
+						const width = Math.max(
+							120,
+							Math.min(360, startWidth + event.clientX - startX),
+						);
 						sidebarDrag.current = null;
-						appearance.setSidebarWidth(event.clientX);
+						if (width !== startWidth) appearance.setSidebarWidth(width);
 						event.currentTarget.releasePointerCapture(event.pointerId);
 						delete document.body.dataset.resizing;
 					}}
