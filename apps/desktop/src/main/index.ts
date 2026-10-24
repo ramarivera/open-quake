@@ -9,6 +9,7 @@ import {
 	type Display,
 	dialog,
 	ipcMain,
+	nativeTheme,
 	powerMonitor,
 	screen,
 	shell,
@@ -18,6 +19,7 @@ import { ProfileService } from "../../../../packages/device/src/profiles/profile
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
+import { registerAgents } from "./agents";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import {
@@ -26,10 +28,12 @@ import {
 	panelBounds,
 	panelRotation,
 } from "./display";
+import { registerEmoji } from "./emoji";
 import { createEventForwarder } from "./eventForwarding";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import { hardwarePreferencesLive } from "./hardware/preferences";
+import { registerIntegrations } from "./integrations";
 import { registerKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
 import { DeviceLifecycle } from "./lifecycle/lifecycle-service";
@@ -41,6 +45,11 @@ import {
 } from "./lifecycle/native-display";
 import { registerLifecycle } from "./lifecycle/registration";
 import { registerMaintenance } from "./maintenance";
+import {
+	readNativeTheme,
+	registerManagementAppearance,
+} from "./management/appearance";
+import { managementAgentCredentials } from "./management/credentials";
 import { MediaLive, registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
@@ -113,10 +122,27 @@ function createPanelWindow(target: PanelTarget): BrowserWindow {
 }
 
 function createManagementWindow(): BrowserWindow {
+	const theme = readNativeTheme(app.getPath("userData"));
+	nativeTheme.themeSource = theme.base;
 	const win = new BrowserWindow({
 		width: 1100,
 		height: 760,
 		title: "open-quake — management",
+		minWidth: 640,
+		minHeight: 560,
+		backgroundColor: theme.background,
+		...(process.platform === "darwin"
+			? ({ titleBarStyle: "hiddenInset" } as const)
+			: process.platform === "win32"
+				? ({
+						titleBarStyle: "hidden",
+						titleBarOverlay: {
+							color: theme.titlebar,
+							symbolColor: theme.symbol,
+							height: 55,
+						},
+					} as const)
+				: {}),
 		webPreferences: {
 			preload: join(__dirname, "../preload/index.mjs"),
 			sandbox: false,
@@ -144,6 +170,11 @@ if (!app.requestSingleInstanceLock()) {
 		let panelTarget = getPanelTarget();
 		let panelWin = createPanelWindow(panelTarget);
 		let managementWin = createManagementWindow();
+		const removeManagementAppearance = registerManagementAppearance(
+			() => managementWin,
+			app.getPath("userData"),
+			rendererURL,
+		);
 		const weatherMedia = registerWeatherMedia(
 			ManagedRuntime.make(
 				weatherMediaLive(app.getPath("userData"), process.platform),
@@ -182,6 +213,29 @@ if (!app.requestSingleInstanceLock()) {
 			undefined,
 			managementURL.href,
 		);
+		const agents = registerAgents({
+			management: () => managementWin,
+			renderer: rendererURL,
+			profiles: profiles.runtime,
+			credentials: managementAgentCredentials(
+				join(app.getPath("userData"), "agent-credentials"),
+			),
+		});
+		const integrations = registerIntegrations({
+			panel: () => panelWin,
+			management: () => managementWin,
+			rendererURL,
+			profileRuntime: profiles.runtime,
+		});
+		const emoji = registerEmoji({
+			selectionSerial: () => media.selectionSerial(),
+			management: () => managementWin,
+			panel: () => panelWin,
+			profiles,
+			bus: () => bus,
+			renderer: rendererURL,
+			mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
+		});
 		const knob = registerKnob(
 			() => panelWin,
 			() => [panelWin, managementWin],
@@ -497,6 +551,7 @@ if (!app.requestSingleInstanceLock()) {
 			powerMonitor.removeListener("resume", onResume);
 			app.removeListener("second-instance", focusManagement);
 			removeLifecycle();
+			removeManagementAppearance();
 			disposeHardware();
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 			shutdown = (async () => {
@@ -507,6 +562,11 @@ if (!app.requestSingleInstanceLock()) {
 				await lifecycleRuntime.dispose();
 				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));
 				await knob.dispose();
+				await Promise.all([
+					agents.dispose(),
+					integrations.dispose(),
+					emoji.dispose(),
+				]);
 				await voice.dispose();
 				await profiles.dispose();
 				await clock.dispose();

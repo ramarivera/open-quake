@@ -157,6 +157,20 @@ export const ACTION_REGISTRY = [
 		binding: "delegate",
 		defaults: { actions: [{ type: "hourFormat", value: "24h" }] },
 	}),
+	define("emoji", C.EmojiConfig, {
+		submenu: "display",
+		requiredAdapter: "emoji.press",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{ type: "emojiAction", value: 1 },
+				{
+					type: "emojiConfig",
+					value: { packageId: "", emojiId: "", hash: "" },
+				},
+			],
+		},
+	}),
 	define("hotkeySwitch", C.HotkeySwitchCompatibility, {
 		submenu: "shortcut",
 		requiredAdapter: "hotkeySwitch.dispatch-evidence",

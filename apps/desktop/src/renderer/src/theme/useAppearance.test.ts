@@ -3,8 +3,13 @@ import {
 	APPEARANCE_STORAGE_KEY,
 	type Appearance,
 	defaultAppearance,
+	LEGACY_APPEARANCE_STORAGE_KEY,
 } from "./appearance";
-import { persistAppearance, subscribeAppearance } from "./useAppearance";
+import {
+	persistAppearance,
+	readStoredAppearance,
+	subscribeAppearance,
+} from "./useAppearance";
 
 class StorageChange extends Event {
 	constructor(
@@ -48,7 +53,7 @@ describe("live appearance synchronization", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it.each(["{", JSON.stringify({ ...defaultAppearance, version: 2 })])(
+	it.each(["{", JSON.stringify({ ...defaultAppearance, version: 3 })])(
 		"restores defaults and safe feedback in an open renderer for invalid storage %s",
 		(value) => {
 			target.dispatchEvent(new StorageChange(APPEARANCE_STORAGE_KEY, value));
@@ -98,6 +103,74 @@ describe("live appearance synchronization", () => {
 
 describe("appearance persistence", () => {
 	const next: Appearance = { ...defaultAppearance, theme: "light" };
+	it.each([false, true])(
+		"migrates legacy preferences before edits and retains them when writes fail: %s",
+		(fail) => {
+			const legacy = {
+				version: 1,
+				theme: "light",
+				customTheme: null,
+				motion: "reduce",
+			};
+			const setItem = vi.fn(() => {
+				if (fail) throw new Error("quota");
+			});
+			vi.stubGlobal("window", {
+				localStorage: {
+					getItem: (key: string) =>
+						key === LEGACY_APPEARANCE_STORAGE_KEY
+							? JSON.stringify(legacy)
+							: null,
+					setItem,
+				},
+			});
+			try {
+				const result = readStoredAppearance();
+				expect(result.appearance).toEqual({
+					...defaultAppearance,
+					theme: "light",
+					motion: "reduce",
+				});
+				expect(setItem).toHaveBeenCalledWith(
+					APPEARANCE_STORAGE_KEY,
+					JSON.stringify(result.appearance),
+				);
+				expect(result.notice).toBe(
+					fail
+						? "Appearance could not be saved. Changes apply for this session."
+						: "",
+				);
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		},
+	);
+	it("retains invalid-data feedback and never replaces invalid current storage with legacy data", () => {
+		const setItem = vi.fn();
+		vi.stubGlobal("window", {
+			localStorage: {
+				getItem: (key: string) =>
+					key === APPEARANCE_STORAGE_KEY
+						? "{"
+						: JSON.stringify({
+								version: 1,
+								theme: "light",
+								customTheme: null,
+								motion: "reduce",
+							}),
+				setItem,
+			},
+		});
+		try {
+			expect(readStoredAppearance()).toEqual({
+				appearance: defaultAppearance,
+				notice: "Saved appearance was invalid. Defaults restored.",
+			});
+			expect(setItem).not.toHaveBeenCalled();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
 
 	it("broadcasts only after a successful storage write", () => {
 		const setItem = vi.fn();

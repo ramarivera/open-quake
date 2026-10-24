@@ -22,7 +22,7 @@ import { StripScreen, StripViewport, useStripLayout } from "./StripScreen";
 import { selectStripPage } from "./selection";
 import { useStripSettings } from "./stripSettings";
 import type { StripKeyEvent } from "./touch-controller";
-import { useStripProfiles } from "./useStripProfiles";
+import { type StripProfiles, useStripProfiles } from "./useStripProfiles";
 
 type HoldKind = GridVoiceInput["kind"];
 
@@ -95,6 +95,15 @@ function useHoldInput(
  * voice overlay on top (strip-voice-ui).
  */
 export function StripPanel(): React.JSX.Element {
+	const emojiSelection = useRef<
+		| {
+				profileId: string;
+				pageId: string;
+				emojiKeys: readonly string[];
+				generation: symbol;
+		  }
+		| undefined
+	>(undefined);
 	const layout = useRef<StripLayout | undefined>(undefined);
 	const [pressedKeyCode, setPressedKeyCode] = useState<string>();
 	const onLayout = useCallback((current: StripLayout | undefined) => {
@@ -102,7 +111,26 @@ export function StripPanel(): React.JSX.Element {
 	}, []);
 	const { snapshot } = useWallpaper();
 	const feedback = usePanelFeedback(useQuakeEvents());
-	const profiles = useStripProfiles();
+	const observeSelection = (next: StripProfiles): void => {
+		if (next._tag === "ready") {
+			const current = selectStripPage(next.envelope, snapshot?.saved.serial);
+			const previous = emojiSelection.current;
+			emojiSelection.current = {
+				profileId: current.profile.id,
+				pageId: current.page.id,
+				generation:
+					previous?.profileId === current.profile.id &&
+					previous.pageId === current.page.id
+						? previous.generation
+						: Symbol(),
+				emojiKeys: current.page.keys
+					.filter((key) => key.config.type === "emoji")
+					.map((key) => key.keyCode),
+			};
+		} else emojiSelection.current = undefined;
+	};
+	const profiles = useStripProfiles(observeSelection);
+	observeSelection(profiles);
 	const { settings } = useStripSettings();
 	const serial = snapshot?.saved.serial;
 	const stripLayout = useStripLayout(profiles, serial);
@@ -120,21 +148,72 @@ export function StripPanel(): React.JSX.Element {
 	holdKey.current = onHoldKey;
 	useEffect(() => {
 		const root = document.getElementById("root");
-		if (root && window.openQuake)
-			return mountStripTouch(
+		const timers = new Set<ReturnType<typeof setTimeout>>();
+		const heldEmoji = new Map<
+			string,
+			NonNullable<typeof emojiSelection.current>
+		>();
+		let disposed = false;
+		const invalid = (keyCode: string): void => {
+			if (disposed || !root) return;
+			const tile = Array.from(
+				root.querySelectorAll<HTMLElement>(
+					'[data-state="tile"][data-key-code]',
+				),
+			).find((tile) => tile.dataset.keyCode === keyCode);
+			if (!tile) return;
+			tile.dataset.invalid = "true";
+			const timer = setTimeout(() => {
+				delete tile.dataset.invalid;
+				timers.delete(timer);
+			}, 160);
+			timers.add(timer);
+		};
+		if (root && window.openQuake) {
+			const off = mountStripTouch(
 				root,
 				window.openQuake,
-				Number(
-					new URLSearchParams(window.location.search).get("rotation") ?? 0,
-				),
+				Number(new URLSearchParams(location.search).get("rotation") ?? 0),
 				() => layout.current,
 				(event) => {
 					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
 					holdKey.current(event);
 					const action = meetingTouchAction(event, layout.current);
 					if (action) void meetingRequest({ _tag: "action", action });
+					const current = emojiSelection.current;
+					if (event.keyAction === 0) {
+						if (current?.emojiKeys.includes(event.keyCode))
+							heldEmoji.set(event.keyCode, current);
+						else heldEmoji.delete(event.keyCode);
+						return;
+					}
+					const owner = heldEmoji.get(event.keyCode);
+					heldEmoji.delete(event.keyCode);
+					if (
+						!event.voiceTouchEnd ||
+						!owner ||
+						owner.generation !== current?.generation
+					)
+						return;
+					void window.quakeEmoji
+						?.press({
+							profileId: owner.profileId,
+							pageId: owner.pageId,
+							keyCode: event.keyCode,
+							keyAction: event.keyAction,
+						})
+						.then((reply) => {
+							if (reply._tag === "invalid") invalid(event.keyCode);
+						})
+						.catch(() => invalid(event.keyCode));
 				},
 			);
+			return () => {
+				disposed = true;
+				off();
+				for (const timer of timers) clearTimeout(timer);
+			};
+		}
 	}, []);
 	// A profile or page switch drops the voice session's key state (AI-170).
 	const selection =

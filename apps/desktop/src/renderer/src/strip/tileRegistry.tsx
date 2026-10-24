@@ -1,4 +1,5 @@
 import type { HourFormat } from "../../../shared/display";
+import { EmojiTile } from "../management/emoji/EmojiTile";
 import { ClockMusicSlot, ClockWeatherSlot } from "../weather-media/ClockCards";
 import { rendererWeatherLocale, useWeatherMedia } from "../weather-media/hooks";
 import { PlayerCard } from "../weather-media/PlayerCard";
@@ -15,6 +16,7 @@ import {
 	useClockSettings,
 } from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
+import { HomeAssistantTile } from "./tiles/home-assistant/HomeAssistantTile";
 import { MeetingDisplay } from "./tiles/meeting/MeetingDisplay";
 import { MeetingKey } from "./tiles/meeting/MeetingKey";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
@@ -156,6 +158,8 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 		["aiChat", VoiceKeyTile],
 		["clawbot", VoiceKeyTile],
 		["systemMonitorPanel", MonitorSlot],
+		["emoji", EmojiTile],
+		["homeAssistant", HomeAssistantTile],
 	]);
 
 export const stripTileFor = (type: string): StripTileComponent =>

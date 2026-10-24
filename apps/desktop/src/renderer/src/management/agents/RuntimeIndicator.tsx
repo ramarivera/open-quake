@@ -9,6 +9,11 @@ const labels = {
 	error: strings.openclawRuntimeIndicator.statusError,
 	stopped: strings.openclawRuntimeIndicator.statusStopped,
 };
+export function runtimeStatusLabel(runtime: RuntimeState): string {
+	return runtime.available
+		? labels[runtime.status]
+		: "No agent runtime is installed";
+}
 export function RuntimeIndicator({
 	runtime,
 	request,
@@ -40,9 +45,7 @@ export function RuntimeIndicator({
 						marginRight: 6,
 					}}
 				/>
-				{runtime.available
-					? labels[runtime.status]
-					: "No agent runtime is installed"}
+				{runtimeStatusLabel(runtime)}
 			</span>
 			{(["start", "stop", "restart"] as const).map((action) => (
 				<button

@@ -3,6 +3,10 @@
 This refresh supersedes the earlier final-source identities in the base and
 top round reports. Parent owns final-head acceptance and ordered merges.
 
+Evidence root:
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center/review-round-1/`.
+Artifact paths below are relative to that directory.
+
 A bounded metadata check identified a newer Codex review on PR33 head
 `1d662ce085701afa9b012a129bf7d78e3ae0f1f4` with four inline findings.
 All four were independently confirmed, tracked in Bead
@@ -65,7 +69,49 @@ Retained retries and warnings:
 - Chromium local cache warnings remain in native logs. Hook configuration
   and parent/other-lane processes were untouched.
 
-Task `.32` remains in progress until this verified base is normally merged
-into PR34 and the top receives fresh six-gate and native proof. Epic
-`open-quake-lih.17.1`, physical acceptance `.23` and real-app paste `.26`
-remain open. Automatic final-head review remains pending/unverified.
+## Final top integration
+
+The base was normally merged into top source
+`2b47b995cb279286060d4830937587ec4c073df6`. All six fresh gates passed,
+recorded in `pr34-late-final-gates.json` and matching individual logs.
+Tests passed 1624 across 174 files: desktop 945/113, edge 229/23,
+device 390/34 and protocol 60/4. Both desktop bundle modes and all 39
+strict OpenSpec items passed. Turbo used explicit loose environment mode,
+one task at a time and two test workers. Main `85f1e3b` and the published base
+head `7d039d4` are ancestors of this source. The parent began independent
+base verification on `7d039d4`; that branch stays stable.
+
+Full top real Electron mock proof is
+`pr34-late-native-tsracv8j/proof.json`, with
+`pr34-late-native-{build,run}.log`. All 62 capture hashes match; seven
+theme contact sheets and full-size composer metadata, emoji/HA panel and
+narrow rail states were inspected. Audit: `pr34-late-capture-audit.json`.
+It refreshes the complete shell/emoji/integration composition proof,
+including original/caption metadata, verified GIF filename publication,
+panel isolation, repeated exports, touch/cancellation feedback, loopback
+HA, mocked weather, shared registrations and awaited cleanup.
+
+`pr34-late-base-coverage-equivalence.json` confirms identity for all 12
+relevant base consumer/harness files in this top source, including the
+expanded base native smoke. It justifies reusing the base optional-field
+and slot-draft native regressions alongside the full top run. The base
+contact sheet and full-size new states were inspected. Production sources
+remain unchanged after these verified identities; later commits record
+planning/evidence only.
+
+All 21 fetched PR33 findings and eight fixed PR34 findings have attributed
+replies before resolution. Dispositions are in `pr33-dispositions.json`,
+`pr33-followup-dispositions.json`, `pr33-handoff-dispositions.json`,
+`pr33-late-dispositions.json` and `pr34-dispositions.json`. PR34 native-app
+paste thread `PRRT_kwDOUADXpM6v4Hk8` remains open with an attributed reply
+and durable acceptance task `.26`. The original failure/retry/warning
+history remains in the preceding reports and logs. Final native runs pass;
+the top retains the Electron console-message deprecation warning and
+main-only config warning described in the earlier report.
+
+Task `.32`, OpenSpec 7.9, closes after this proof. The epic, physical
+acceptance `.23` and real-app paste `.26` remain open. All native ports use
+synthetic data and mock device mode. Production AI/runtime adapters remain
+unavailable. No hardware, packaged-app or real-app paste acceptance is
+claimed. No manual review trigger or paid review was requested. Automatic
+final-head review remains pending/unverified; the parent owns that check.
