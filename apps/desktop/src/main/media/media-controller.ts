@@ -27,6 +27,7 @@ export interface MediaController {
 		input: unknown,
 	) => Effect.Effect<WallpaperSnapshot, MediaRepositoryError>;
 	readonly ticks: Effect.Effect<void>;
+	readonly selectionSerial: Effect.Effect<string>;
 }
 
 export const makeMediaController = Effect.fn("MediaController.make")(
@@ -138,6 +139,6 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 					Ref.set(clock, next).pipe(Effect.zipRight(edge.publishClock(next))),
 				),
 			);
-			return { request, ticks };
+			return { request, ticks, selectionSerial: Ref.get(activeSerial) };
 		}),
 );

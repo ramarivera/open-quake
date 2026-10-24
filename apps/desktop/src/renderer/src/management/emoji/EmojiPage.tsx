@@ -81,9 +81,22 @@ export function EmojiPage(): React.JSX.Element {
 			}
 			setBusy(true);
 			try {
-				const reply = await bridge.request(input);
+				let reply = await bridge.request(input);
+				if (reply._tag === "generated") {
+					const original = bytesOf(`data:image/gif;base64,${reply.base64}`);
+					const rendered = await captionGif(original, reply.caption);
+					reply = await bridge.request({
+						type: "create-result",
+						name: reply.name,
+						base64: reply.base64,
+						renderedBase64: base64(rendered),
+						caption: reply.caption,
+					});
+				}
 				if (!mounted.current) return;
-				if (reply._tag === "failure") {
+				if (reply._tag !== "ready") {
+					if (reply._tag !== "failure")
+						throw Error("Unexpected generated reply");
 					setMessage(`${reply.message} (${reply.code})`);
 					return;
 				}
@@ -150,13 +163,15 @@ export function EmojiPage(): React.JSX.Element {
 		if (!url) return;
 		setBusy(true);
 		try {
-			let bytes = await stillImageGif(url);
-			if (caption.trim())
-				bytes = await captionGif(bytes, { ...defaultCaption, text: caption });
+			const bytes = await stillImageGif(url);
+			const initialCaption = { ...defaultCaption, text: caption };
+			const rendered = await captionGif(bytes, initialCaption);
 			const next = await run({
 				type: "create-result",
 				name: title || staticAsset?.name || "Emoji",
 				base64: base64(bytes),
+				renderedBase64: base64(rendered),
+				caption: initialCaption,
 			});
 			if (next?.store.drafts[0]) setSelected([next.store.drafts[0]]);
 		} catch {
@@ -328,6 +343,9 @@ export function EmojiPage(): React.JSX.Element {
 											void run({
 												type: "generate",
 												assetId: staticHash,
+												name:
+													title || staticAsset?.name.slice(0, 30) || "Emoji",
+												caption: { ...defaultCaption, text: caption },
 												prompt,
 											})
 										}
@@ -468,7 +486,9 @@ export function EmojiPage(): React.JSX.Element {
 											<span className="emoji-pack-mark">▦</span>
 											<span>
 												<strong>{entry.name}</strong>
-												<small>{entry.emojiIds.length} / 16</small>
+												<small>
+													{entry.emojiIds.filter(Boolean).length} / 16
+												</small>
 											</span>
 										</button>
 									)}
@@ -515,7 +535,9 @@ export function EmojiPage(): React.JSX.Element {
 						<>
 							<div className="mc-toolbar">
 								<h3>Current Pack</h3>
-								<span className="mc-badge">{pack.emojiIds.length} / 16</span>
+								<span className="mc-badge">
+									{pack.emojiIds.filter(Boolean).length} / 16
+								</span>
 							</div>
 							<div className="emoji-pack-grid">
 								{Array.from({ length: 16 }, (_, i) => ({
@@ -561,7 +583,7 @@ export function EmojiPage(): React.JSX.Element {
 							<button
 								className="mc-button"
 								data-primary
-								disabled={busy || !pack.emojiIds.length}
+								disabled={busy || !pack.emojiIds.filter(Boolean).length}
 								type="button"
 								onClick={() => void run({ type: "place", id: pack.id })}
 							>
@@ -569,7 +591,7 @@ export function EmojiPage(): React.JSX.Element {
 							</button>
 							<button
 								className="mc-button"
-								disabled={busy || !pack.emojiIds.length}
+								disabled={busy || !pack.emojiIds.filter(Boolean).length}
 								type="button"
 								onClick={() => void run({ type: "export", id: pack.id })}
 							>

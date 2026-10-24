@@ -1,9 +1,10 @@
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "vitest";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { managerState } from "../../../../../packages/device/src/profiles/profile-manager-invariants";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -121,6 +122,138 @@ describe("emoji profile placement", () => {
 			).rejects.toThrow();
 			expect(selected).toBe(false);
 			expect(f.disk).toEqual(before);
+		} finally {
+			await f.runtime.dispose();
+		}
+	});
+	it("preserves vacancies in placed key coordinates", async () => {
+		const f = setup();
+		try {
+			const id = await placeEmojiPackage({
+				runtime: f.runtime,
+				select: async () => {},
+			})("daily", {
+				...fixture,
+				packages: [
+					{
+						id: "daily",
+						name: "Daily",
+						profileId: null,
+						emojiIds: ["", "hello"],
+					},
+				],
+			});
+			expect(
+				(await f.read()).envelope.profiles
+					.find((profile) => profile.id === id)
+					?.pages[0].keys.map((key) => key.keyCode),
+			).toEqual(["1,2"]);
+		} finally {
+			await f.runtime.dispose();
+		}
+	});
+	it("compensates package-link persistence failure after activation, preserving independent edits", async () => {
+		const f = setup();
+		const failure = new Error("synthetic linkage failure");
+		let refreshed = false;
+		try {
+			const before = (await f.read()).envelope;
+			const place = placeEmojiPackage({
+				runtime: f.runtime,
+				select: async (id) =>
+					f.runtime.runPromise(
+						Effect.flatMap(ProfileRepository, (repo) =>
+							repo.transact((current) =>
+								Effect.succeed({
+									...current,
+									activeByDevice: {
+										...current.activeByDevice,
+										"desktop-preview": { profileId: id, pageId: `${id}-page` },
+									},
+									manager: Option.some({
+										...managerState(current),
+										anchor: Option.some(id),
+									}),
+								}),
+							),
+						),
+					),
+				refresh: async () => {
+					refreshed = true;
+				},
+			});
+			await expect(
+				place("daily", fixture, async () => {
+					await f.runtime.runPromise(
+						Effect.flatMap(ProfileRepository, (repo) =>
+							repo.transact((current) =>
+								Effect.succeed({
+									...current,
+									profiles: [
+										{ ...current.profiles[0], name: "Independent change" },
+										...current.profiles.slice(1),
+									],
+									manager: Option.some({
+										...managerState(current),
+										anchor: Option.some(current.profiles[0].id),
+									}),
+								}),
+							),
+						),
+					);
+					throw failure;
+				}),
+			).rejects.toBe(failure);
+			const after = (await f.read()).envelope;
+			expect(after.profiles).toHaveLength(before.profiles.length);
+			expect(after.profiles[0].name).toBe("Independent change");
+			expect(after.activeByDevice).toEqual(before.activeByDevice);
+			expect(managerState(after).anchor).toEqual(
+				Option.some(before.profiles[0].id),
+			);
+			expect(refreshed).toBe(true);
+		} finally {
+			await f.runtime.dispose();
+		}
+	});
+	it("refuses to overwrite a concurrent edit of the placed profile during rollback", async () => {
+		const f = setup();
+		try {
+			await expect(
+				placeEmojiPackage({ runtime: f.runtime, select: async () => {} })(
+					"daily",
+					fixture,
+					async (id) => {
+						await f.runtime.runPromise(
+							Effect.flatMap(ProfileRepository, (repo) =>
+								repo.transact((current) =>
+									Effect.succeed({
+										...current,
+										profiles: [
+											current.profiles[0],
+											...current.profiles.slice(1).map((profile) =>
+												profile.id === id
+													? {
+															...profile,
+															revision: profile.revision + 1,
+															name: "Concurrent",
+														}
+													: profile,
+											),
+										],
+									}),
+								),
+							),
+						);
+						throw Error("linkage failed");
+					},
+				),
+			).rejects.toThrow("Emoji request is invalid");
+			expect(
+				(await f.read()).envelope.profiles.find(
+					(profile) => profile.id === "emoji-daily",
+				)?.name,
+			).toBe("Concurrent");
 		} finally {
 			await f.runtime.dispose();
 		}

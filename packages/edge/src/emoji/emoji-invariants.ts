@@ -24,7 +24,7 @@ export function emojiCommandRejection(
 		const ids = [...new Set(command.ids)].filter(
 			(id) => !pack.emojiIds.includes(id),
 		);
-		if (pack.emojiIds.length + ids.length > 16)
+		if (pack.emojiIds.filter(Boolean).length + ids.length > 16)
 			return "The package is full (16 emoji).";
 		if (
 			ids.some(
@@ -82,7 +82,7 @@ export function applyEmojiCommand(
 				...next,
 				packages: store.packages.map((p) =>
 					p.id === command.packageId
-						? { ...p, emojiIds: [...new Set([...p.emojiIds, ...command.ids])] }
+						? { ...p, emojiIds: fillEmojiSlots(p.emojiIds, command.ids) }
 						: p,
 				),
 				drafts: store.drafts.filter((id) => !command.ids.includes(id)),
@@ -92,7 +92,10 @@ export function applyEmojiCommand(
 				...next,
 				packages: store.packages.map((p) =>
 					p.id === command.packageId
-						? { ...p, emojiIds: p.emojiIds.filter((id) => id !== command.id) }
+						? {
+								...p,
+								emojiIds: p.emojiIds.map((id) => (id === command.id ? "" : id)),
+							}
 						: p,
 				),
 			};
@@ -112,4 +115,19 @@ export function applyEmojiCommand(
 				),
 			};
 	}
+}
+
+/** Empty strings retain the physical slot; additions fill vacancies in row order. */
+function fillEmojiSlots(
+	slots: readonly string[],
+	ids: readonly string[],
+): readonly string[] {
+	const result = [...slots];
+	for (const id of new Set(ids)) {
+		if (result.includes(id)) continue;
+		const vacant = result.indexOf("");
+		if (vacant < 0) result.push(id);
+		else result[vacant] = id;
+	}
+	return result;
 }

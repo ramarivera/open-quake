@@ -3,6 +3,7 @@ import { link, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { EmojiStore } from "../../../../../packages/edge/src/emoji/emoji-contracts";
+import { decodeGif } from "../../shared/gif";
 
 const absent = (cause: unknown): boolean =>
 	cause instanceof Error && "code" in cause && cause.code === "ENOENT";
@@ -108,5 +109,27 @@ export function emojiFiles(root: string) {
 			throw new RangeError("Changed asset");
 		return bytes;
 	};
-	return { read, write, put, get, assetPath };
+	const clipboardPath = async (hash: string): Promise<string> => {
+		const bytes = await get(hash);
+		decodeGif(bytes);
+		const directory = join(root, "clipboard");
+		await mkdir(directory, { recursive: true });
+		const destination = join(directory, `${hash}.gif`);
+		const temp = join(directory, `.${randomUUID()}.part`);
+		try {
+			await writeFile(temp, bytes, { mode: 0o600, flag: "wx" });
+			try {
+				await link(temp, destination);
+			} catch (cause) {
+				if (!exists(cause)) throw cause;
+			}
+			const published = await readFile(destination);
+			if (createHash("sha256").update(published).digest("hex") !== hash)
+				throw new RangeError("Changed clipboard asset");
+			return destination;
+		} finally {
+			await rm(temp, { force: true }).catch(() => undefined);
+		}
+	};
+	return { read, write, put, get, assetPath, clipboardPath };
 }

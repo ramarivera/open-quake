@@ -221,6 +221,7 @@ if (!app.requestSingleInstanceLock()) {
 			profileRuntime: profiles.runtime,
 		});
 		const emoji = registerEmoji({
+			selectionSerial: () => media.selectionSerial(),
 			management: () => managementWin,
 			panel: () => panelWin,
 			profiles,

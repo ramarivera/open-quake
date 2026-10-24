@@ -23,6 +23,8 @@ export const EmojiRequest = Schema.Union(
 		type: Schema.Literal("create-result"),
 		name: Schema.String,
 		base64: Schema.String,
+		renderedBase64: Schema.optional(Schema.String),
+		caption: Schema.optional(EmojiCaption),
 	}),
 	Schema.Struct({
 		type: Schema.Literal("caption"),
@@ -39,6 +41,8 @@ export const EmojiRequest = Schema.Union(
 		type: Schema.Literal("generate"),
 		assetId: Schema.String,
 		prompt: Schema.String,
+		name: Schema.optional(Schema.String),
+		caption: Schema.optional(EmojiCaption),
 	}),
 );
 export type EmojiRequest = typeof EmojiRequest.Type;
@@ -50,6 +54,12 @@ export const EmojiPressRequest = Schema.Struct({
 });
 export type EmojiPressRequest = typeof EmojiPressRequest.Type;
 export const EmojiReply = Schema.Union(
+	Schema.Struct({
+		_tag: Schema.Literal("generated"),
+		base64: Schema.String,
+		name: Schema.String,
+		caption: EmojiCaption,
+	}),
 	Schema.Struct({
 		_tag: Schema.Literal("ready"),
 		store: EmojiStore,

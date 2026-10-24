@@ -1,7 +1,8 @@
 /** Production preload/renderer and real main handlers. Electron only, mock hardware required. */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
-import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -17,6 +18,7 @@ import { MANAGEMENT_ACTIVATE } from "../../shared/management";
 import { registerAgents } from "../agents";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerEmoji } from "../emoji";
+import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
 import { registerIntegrations } from "../integrations";
 import { registerKnob } from "../knob";
@@ -25,6 +27,7 @@ import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { registerManagementAppearance } from "./appearance";
 import { managementAgentCredentials } from "./credentials";
 
@@ -42,7 +45,7 @@ dialog.showOpenDialog = async () => ({
 	canceled: selectedFile === undefined,
 	filePaths: selectedFile ? [selectedFile] : [],
 });
-const artifacts = process.argv[2] ?? "";
+const artifacts = process.env.OPEN_QUAKE_SMOKE_SCRATCH ?? process.argv[2] ?? "";
 assert(artifacts, "Supply screenshot directory");
 const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 let state = "on";
@@ -156,12 +159,28 @@ async function smoke() {
 			join(directory, "agent-credentials"),
 		),
 	});
+	const voice = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "desktop-preview",
+		panel: () => panel,
+		management: () => win,
+		renderer,
+	});
 	const integrations = registerIntegrations({
+		panel: () => panel,
 		management: () => win,
 		rendererURL: renderer,
 		profileRuntime: profiles.runtime,
 	});
+	const copiedFiles: string[] = [];
+	let generatedBytes = new Uint8Array();
 	const emoji = registerEmoji({
+		generation: { generate: async () => generatedBytes },
+		clipboard: async (path) => {
+			copiedFiles.push(path);
+		},
+		selectionSerial: () => media.selectionSerial(),
 		management: () => win,
 		panel: () => panel,
 		profiles,
@@ -212,12 +231,25 @@ async function smoke() {
 		assert.notEqual(value.type, "error", JSON.stringify(value));
 		return value;
 	};
+	const waitFor = async (condition: string, timeout = 8000): Promise<void> => {
+		const until = Date.now() + timeout;
+		while (!(await js(`Boolean(${condition})`))) {
+			assert(Date.now() < until, `Saved UI state timed out: ${condition}`);
+			await settle(30);
+		}
+	};
 	const activate = async (name: string) => {
 		win.webContents.send(MANAGEMENT_ACTIVATE, name);
 		await settle();
 	};
 	const capture = async (name: string) => {
 		await js("document.fonts.ready");
+		await waitFor(
+			"!document.querySelector('.emoji-page') || !document.querySelector('.emoji-notice')?.textContent.includes('Working')",
+		);
+		await js(
+			"new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+		);
 		await settle();
 		await writeFile(
 			join(artifacts, `${name}.png`),
@@ -305,6 +337,7 @@ async function smoke() {
 				{ rgba, delayMs: 180 },
 			],
 		});
+		generatedBytes = Uint8Array.from(bytes);
 		selectedFile = join(directory, "hello.png");
 		await writeFile(
 			selectedFile,
@@ -354,7 +387,9 @@ async function smoke() {
 		await js(
 			"Array.from(document.querySelectorAll('.mc-dialog button')).find(b=>b.textContent.trim()==='Save').click();null;",
 		);
-		await settle(500);
+		await waitFor(
+			"!document.querySelector('.mc-dialog') && document.querySelector('.emoji-notice')?.textContent === 'Caption saved.'",
+		);
 		em = await emot({ type: "read" });
 		assert.equal(em.store.items[0]?.caption.text, "Hi!");
 		assert.notEqual(em.store.items[0]?.rendered, item.original);
@@ -367,6 +402,40 @@ async function smoke() {
 			`window.quakeEmoji.press(${JSON.stringify({ profileId, pageId: `${profileId}-page`, keyCode: "1,1", keyAction: 1 })})`,
 		);
 		assert.deepEqual(press, { _tag: "handled" });
+		assert(copiedFiles[0]?.endsWith(".gif"));
+		const copied = await readFile(copiedFiles[0] ?? "");
+		assert.equal(
+			createHash("sha256").update(copied).digest("hex"),
+			em.store.items[0]?.rendered,
+		);
+		// Panel receives only pinned current-page bytes, without private library metadata.
+		const publicAsset = await panel.webContents.executeJavaScript(
+			`window.quakeEmoji.request({type:"asset",hash:${JSON.stringify(em.store.items[0]?.rendered)}})`,
+		);
+		assert(Schema.is(EmojiReply)(publicAsset) && publicAsset._tag === "ready");
+		assert.equal(publicAsset.store.items.length, 0);
+		const privateAsset = await panel.webContents.executeJavaScript(
+			`window.quakeEmoji.request({type:"asset",hash:${JSON.stringify(em.store.staticAssets[0]?.hash)}})`,
+		);
+		assert(
+			Schema.is(EmojiReply)(privateAsset) && privateAsset._tag === "failure",
+		);
+		const libraryDenied = await panel.webContents.executeJavaScript(
+			"window.quakeEmoji.request({type:'read'})",
+		);
+		assert(
+			Schema.is(EmojiReply)(libraryDenied) && libraryDenied._tag === "failure",
+		);
+		selectedFile = artifacts;
+		await emot({ type: "export", id: "daily" });
+		await emot({ type: "export", id: "daily" });
+		selectedFile = undefined;
+		assert.equal(
+			(await readdir(artifacts)).filter((name) =>
+				name.startsWith("Emoji-Daily-"),
+			).length,
+			2,
+		);
 		// Real mounted touch dispatch must reach the emoji sink and show failures.
 		await emot({
 			type: "command",
@@ -421,6 +490,52 @@ async function smoke() {
 			},
 		});
 		assert(libraries.type === "libraries" && libraries.libraries[0]);
+		await activate("emoji");
+		await waitFor(
+			"document.querySelector('.emoji-fields input') && document.querySelector('.emoji-thumb')",
+		);
+		await js(
+			"document.querySelector('.emoji-fields input[placeholder=\"e.g. Wave happily\"]').focus();null;",
+		);
+		win.webContents.insertText("Waving Cat");
+		await js(
+			"document.querySelector('.emoji-fields input[placeholder=\"e.g. Go for it!\"]').focus();null;",
+		);
+		win.webContents.insertText("Hi Cat!");
+		await js(
+			"Array.from(document.querySelectorAll('.emoji-actions button')).find(b=>b.textContent.trim()==='Generate Motion Emoji').click();null;",
+		);
+		await waitFor(
+			"document.querySelector('.emoji-notice')?.textContent === 'Generated. Select to add to the pack.'",
+		);
+		em = await emot({ type: "read" });
+		const motion = em.store.items.find((entry) => entry.name === "Waving Cat");
+		assert(
+			motion &&
+				motion.caption.text === "Hi Cat!" &&
+				motion.original !== motion.rendered,
+		);
+		await capture("grey-emoji-motion-metadata");
+		await js(
+			"Array.from(document.querySelectorAll('.emoji-actions button')).find(b=>b.textContent.trim()==='Use static image').click();null;",
+		);
+		await waitFor(
+			"document.querySelector('.emoji-notice')?.textContent === 'Generated. Select to add to the pack.'",
+		);
+		// Wait on persistence as well as the visible notice, which can match the previous result.
+		for (let attempts = 0; ; attempts++) {
+			em = await emot({ type: "read" });
+			if (em.store.items.length >= 3) break;
+			assert(attempts < 80, "Still creation did not persist");
+			await settle(50);
+		}
+		const still = em.store.items[2];
+		assert(
+			still &&
+				still.caption.text === "Hi Cat!" &&
+				still.original !== still.rendered,
+		);
+		await capture("grey-emoji-still-metadata");
 		await integration({
 			type: "shortcuts.sync",
 			id: libraries.libraries[0].id,
@@ -429,6 +544,7 @@ async function smoke() {
 			type: "ha.connect",
 			origin,
 			token: "smoke-local-fixture",
+			allowInsecureHttp: true,
 		});
 		const ha = await integration({ type: "ha.read" });
 		assert(ha.type === "ha");
@@ -625,6 +741,33 @@ async function smoke() {
 			false,
 		);
 		assert.deepEqual(errors, []);
+		const captures = await Promise.all(
+			(await readdir(artifacts))
+				.filter((name) => name.endsWith(".png"))
+				.map(async (name) => ({
+					name,
+					sha256: createHash("sha256")
+						.update(await readFile(join(artifacts, name)))
+						.digest("hex"),
+				})),
+		);
+		await writeFile(
+			join(artifacts, "proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					mock: true,
+					nativeAppPasteVerified: false,
+					clipboardGifFilenameVerified: true,
+					captionOriginalAndMetadataVerified: true,
+					panelIsolationVerified: true,
+					repeatedExportVerified: true,
+					captures,
+				},
+				null,
+				2,
+			),
+		);
 		process.stdout.write(
 			`Management native smoke PASS: ${(await readdir(artifacts)).filter((name) => name.endsWith(".png")).length} screenshots; real IPC, caption, placement, protected main, HA REST/live/AI allowlist, permissions, nativeTheme.\n`,
 		);
@@ -636,6 +779,7 @@ async function smoke() {
 		await knob.dispose();
 		appearance();
 		await emoji.dispose();
+		await voice.dispose();
 		await integrations.dispose();
 		await agents.dispose();
 		await profiles.dispose();

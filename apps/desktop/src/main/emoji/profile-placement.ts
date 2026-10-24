@@ -26,10 +26,15 @@ export const placeEmojiPackage =
 			never
 		>;
 		readonly select: (id: string) => Promise<unknown>;
+		readonly refresh?: () => Promise<void>;
 	}) =>
-	async (packId: string, state: EmojiStore): Promise<string> => {
+	async (
+		packId: string,
+		state: EmojiStore,
+		persistLink: (profileId: string) => Promise<void> = async () => {},
+	): Promise<string> => {
 		const pack = state.packages.find((p) => p.id === packId);
-		if (!pack || pack.emojiIds.length === 0)
+		if (!pack?.emojiIds.some(Boolean))
 			throw new EmojiInvalid("The package is empty.");
 		const profileId = pack.profileId ?? `emoji-${pack.id}`;
 		let before: ProfileEnvelope | undefined;
@@ -56,6 +61,7 @@ export const placeEmojiPackage =
 							);
 						const keys: ProfileKey[] = [];
 						for (const [i, id] of pack.emojiIds.entries()) {
+							if (!id) continue;
 							const item = state.items.find((item) => item.id === id);
 							if (!item)
 								return yield* new EmojiInvalid("An emoji asset is missing.");
@@ -136,6 +142,7 @@ export const placeEmojiPackage =
 		);
 		try {
 			await profiles.select(profileId);
+			await persistLink(profileId);
 		} catch (cause) {
 			const previous = before;
 			if (previous)
@@ -167,27 +174,30 @@ export const placeEmojiPackage =
 								...current,
 								profiles: [first, ...remaining.slice(1)],
 								activeByDevice: Object.fromEntries(
-									Object.entries(current.activeByDevice).map(
-										([serial, selection]) => [
-											serial,
-											selection.profileId === profileId
-												? (previous.activeByDevice[serial] ?? {
-														profileId: first.id,
-														pageId: first.pages[0].id,
-													})
-												: selection,
-										],
+									Object.entries(current.activeByDevice).flatMap(
+										([serial, selection]) => {
+											if (selection.profileId !== profileId)
+												return [[serial, selection]];
+											const old = previous.activeByDevice[serial];
+											return old ? [[serial, old]] : [];
+										},
 									),
 								),
 								manager: Option.some({
 									...managerState(current),
 									revision: managerState(current).revision + 1,
-									anchor: managerState(previous).anchor,
+									anchor: Option.contains(
+										managerState(current).anchor,
+										profileId,
+									)
+										? managerState(previous).anchor
+										: managerState(current).anchor,
 								}),
 							});
 						});
 					}),
 				);
+			await profiles.refresh?.();
 			throw cause;
 		}
 		return profileId;

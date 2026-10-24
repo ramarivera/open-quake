@@ -3,7 +3,10 @@ import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
-import { EmojiKeyReference } from "../../../../../packages/edge/src/emoji/emoji-contracts";
+import {
+	EmojiKeyReference,
+	emptyEmojiStore,
+} from "../../../../../packages/edge/src/emoji/emoji-contracts";
 import {
 	EmojiClipboardFailed,
 	EmojiForegroundFailed,
@@ -27,6 +30,7 @@ import {
 	type EmojiReply,
 	EmojiRequest,
 } from "../../shared/emoji";
+import { selectStripPage } from "../../shared/strip-selection";
 import type { DeviceBus } from "../deviceBus";
 import { ImageDecoder } from "../media/image-decoder";
 import type { registerProfiles } from "../profiles";
@@ -45,16 +49,20 @@ export function registerEmoji(options: {
 	readonly mock: boolean;
 	readonly root?: string;
 	readonly generation?: EmojiGenerationPort;
+	readonly selectionSerial?: () => Promise<string | undefined>;
+	readonly clipboard?: (path: string) => Promise<void>;
+	readonly platform?: "darwin" | "win32" | "linux";
 }) {
 	const files = emojiFiles(
 		options.root ?? join(app.getPath("userData"), "emoji-v1"),
 	);
 	const platform =
-		process.platform === "darwin"
+		options.platform ??
+		(process.platform === "darwin"
 			? "darwin"
 			: process.platform === "win32"
 				? "win32"
-				: "linux";
+				: "linux");
 	const foreground = makeForegroundProbe(platform);
 	const adapters = Layer.succeed(EmojiPressAdapters, {
 		platform,
@@ -70,8 +78,9 @@ export function registerEmoji(options: {
 		copyGif: (hash) =>
 			Effect.tryPromise({
 				try: async () => {
-					await files.get(hash);
-					if (!options.mock) await copyGifFile(platform, files.assetPath(hash));
+					const path = await files.clipboardPath(hash);
+					if (options.clipboard) await options.clipboard(path);
+					else if (!options.mock) await copyGifFile(platform, path);
 				},
 				catch: (cause) => new EmojiClipboardFailed(cause),
 			}),
@@ -114,122 +123,166 @@ export function registerEmoji(options: {
 			...(options.generation ? { generation: options.generation } : {}),
 		}),
 	);
+	let disposed = false;
+	let shutdown: Promise<void> | undefined;
+	const pending = new Set<Promise<unknown>>();
+	const track = <A>(operation: () => Promise<A>): Promise<A> => {
+		const result = operation();
+		pending.add(result);
+		void result.finally(() => pending.delete(result)).catch(() => undefined);
+		return result;
+	};
+	const selectedPage = async () => {
+		const serial = options.selectionSerial
+			? await options.selectionSerial()
+			: "desktop-preview";
+		const { envelope } = await options.profiles.runtime.runPromise(
+			ProfileService.loadProfiles(),
+		);
+		return selectStripPage(envelope, serial);
+	};
 	const allowed = (
 		event: Electron.IpcMainInvokeEvent,
 		write: boolean,
 	): boolean =>
+		!disposed &&
 		event.senderFrame === event.sender.mainFrame &&
 		isAppRenderer(event.sender.getURL(), options.renderer) &&
-		(!write || event.sender === options.management().webContents);
+		(event.sender === options.management().webContents ||
+			(!write && event.sender === options.panel().webContents));
 	ipcMain.handle(
 		EMOJI_REQUEST,
-		async (event, input: unknown): Promise<EmojiReply> => {
-			const decoded = Schema.decodeUnknownOption(EmojiRequest)(input, {
+		(event, input: unknown): Promise<EmojiReply> =>
+			track(async () => {
+				const decoded = Schema.decodeUnknownOption(EmojiRequest)(input, {
+					onExcessProperty: "error",
+				});
+				if (
+					Option.isNone(decoded) ||
+					!allowed(
+						event,
+						decoded.value.type !== "read" && decoded.value.type !== "asset",
+					)
+				)
+					return {
+						_tag: "failure",
+						code: "QUAKE.EMOJI.REQUEST_DENIED",
+						message: "Emoji request denied.",
+					};
+				if (event.sender !== options.management().webContents) {
+					if (decoded.value.type !== "asset") return denied();
+					const hash = decoded.value.hash;
+					const selection = await selectedPage().catch(() => undefined);
+					if (
+						!selection?.page.keys.some(
+							(key) =>
+								key.config.type === "emoji" &&
+								key.config.display &&
+								key.config.icon === `emoji:${hash}`,
+						)
+					)
+						return denied();
+					try {
+						const bytes = await files.get(hash);
+						return {
+							_tag: "ready",
+							store: emptyEmojiStore,
+							assets: {
+								[hash]: `data:image/gif;base64,${bytes.toString("base64")}`,
+							},
+							notice: "",
+							apps: [],
+						};
+					} catch {
+						return denied();
+					}
+				}
+				const result = await runtime.runPromise(
+					Effect.tryPromise({
+						try: () => controller,
+						catch: (cause) => new EmojiLibraryFailed(cause),
+					}).pipe(
+						Effect.flatMap((controller) => controller.request(decoded.value)),
+						Effect.match({
+							onSuccess: (reply) => reply,
+							onFailure: (error): EmojiReply => ({
+								_tag: "failure",
+								code: error.code,
+								message: "reason" in error ? error.reason : error.message,
+							}),
+						}),
+					),
+				);
+				return result;
+			}),
+	);
+	ipcMain.handle(EMOJI_PRESS, (event, input: unknown) =>
+		track(async () => {
+			const decoded = Schema.decodeUnknownOption(EmojiPressRequest)(input, {
 				onExcessProperty: "error",
 			});
 			if (
 				Option.isNone(decoded) ||
-				!allowed(
-					event,
-					decoded.value.type !== "read" && decoded.value.type !== "asset",
-				)
+				!allowed(event, false) ||
+				event.sender !== options.panel().webContents
 			)
-				return {
-					_tag: "failure",
-					code: "QUAKE.EMOJI.REQUEST_DENIED",
-					message: "Emoji request denied.",
-				};
-			const result = await runtime.runPromise(
-				Effect.tryPromise({
-					try: () => controller,
-					catch: (cause) => new EmojiLibraryFailed(cause),
-				}).pipe(
-					Effect.flatMap((controller) => controller.request(decoded.value)),
-					Effect.match({
-						onSuccess: (reply) => reply,
-						onFailure: (error): EmojiReply => ({
-							_tag: "failure",
-							code: error.code,
-							message: "reason" in error ? error.reason : error.message,
-						}),
-					}),
-				),
-			);
-			return result;
-		},
-	);
-	ipcMain.handle(EMOJI_PRESS, async (event, input: unknown) => {
-		const decoded = Schema.decodeUnknownOption(EmojiPressRequest)(input, {
-			onExcessProperty: "error",
-		});
-		if (
-			Option.isNone(decoded) ||
-			!allowed(event, false) ||
-			event.sender !== options.panel().webContents
-		)
-			return { _tag: "invalid" };
-		const request = decoded.value;
-		const found = await options.profiles.runtime
-			.runPromise(
-				Effect.gen(function* () {
-					const { envelope } = yield* ProfileService.loadProfiles();
-					const session = options.bus()?.hardware?.();
-					const hardware = session
-						? yield* session.snapshot().pipe(Effect.option)
-						: Option.none();
-					const serial = options.mock
-						? "desktop-preview"
-						: Option.isSome(hardware)
-							? hardware.value.serial
-							: "";
-					const selected = envelope.activeByDevice[serial];
-					if (
-						selected?.profileId !== request.profileId ||
-						selected.pageId !== request.pageId
-					)
-						return Option.none();
-					const profile = envelope.profiles.find(
-						(p) => p.id === selected.profileId,
-					);
-					const page = profile?.pages.find((p) => p.id === selected.pageId);
-					return Option.fromNullable(
-						page?.keys.find(
+				return { _tag: "invalid" };
+			const request = decoded.value;
+			const selected = await selectedPage().catch(() => undefined);
+			const found = Option.fromNullable(
+				selected?.profile.id === request.profileId &&
+					selected.page.id === request.pageId
+					? selected.page.keys.find(
 							(key) =>
 								key.keyCode === request.keyCode &&
 								key.config.type === "emoji" &&
 								key.config.display,
-						),
-					);
-				}),
-			)
-			.catch(() => Option.none());
-		if (Option.isNone(found)) return { _tag: "ignored" };
-		const ref = Schema.decodeUnknownOption(EmojiKeyReference)(
-			found.value.config.actions.find((action) => action.type === "emojiConfig")
-				?.value,
-		);
-		if (Option.isNone(ref)) return { _tag: "invalid" };
-		const mode = decodeEmojiMode(
-			found.value.config.actions.find((action) => action.type === "emojiAction")
-				?.value,
-		);
-		return runtime.runPromise(
-			EmojiPress.press(ref.value, mode, request.keyAction).pipe(
-				Effect.match({
-					onSuccess: (result) => ({
-						_tag: result === "ignored" ? "ignored" : "handled",
+						)
+					: undefined,
+			);
+			if (Option.isNone(found)) return { _tag: "ignored" };
+			const ref = Schema.decodeUnknownOption(EmojiKeyReference)(
+				found.value.config.actions.find(
+					(action) => action.type === "emojiConfig",
+				)?.value,
+			);
+			if (Option.isNone(ref)) return { _tag: "invalid" };
+			const mode = decodeEmojiMode(
+				found.value.config.actions.find(
+					(action) => action.type === "emojiAction",
+				)?.value,
+			);
+			return runtime.runPromise(
+				EmojiPress.press(ref.value, mode, request.keyAction).pipe(
+					Effect.match({
+						onSuccess: (result) => ({
+							_tag: result === "ignored" ? "ignored" : "handled",
+						}),
+						onFailure: () => ({ _tag: "invalid" }),
 					}),
-					onFailure: () => ({ _tag: "invalid" }),
-				}),
-			),
-		);
-	});
+				),
+			);
+		}),
+	);
 	return {
 		runtime,
-		dispose: async () => {
+		dispose: (): Promise<void> => {
+			if (shutdown) return shutdown;
+			disposed = true;
 			ipcMain.removeHandler(EMOJI_REQUEST);
 			ipcMain.removeHandler(EMOJI_PRESS);
-			await runtime.dispose();
+			shutdown = (async () => {
+				await Promise.allSettled([controller, ...pending]);
+				await runtime.dispose();
+			})();
+			return shutdown;
 		},
+	};
+}
+function denied(): EmojiReply {
+	return {
+		_tag: "failure",
+		code: "QUAKE.EMOJI.REQUEST_DENIED",
+		message: "Emoji request denied.",
 	};
 }

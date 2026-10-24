@@ -345,6 +345,24 @@ export function registerProfiles(
 					),
 				),
 			),
+		/** Republish committed state after a compensating cross-store transaction. */
+		refresh: (): Promise<void> =>
+			runtime
+				.runPromise(
+					Effect.gen(function* () {
+						const envelope = yield* ProfileManager.read();
+						const switching = yield* ProfileSwitching;
+						for (const serial of yield* switching.connectedSerials()) {
+							const selection = envelope.activeByDevice[serial];
+							const profile = envelope.profiles.find(
+								(profile) => profile.id === selection?.profileId,
+							);
+							if (profile) yield* switching.deliver(serial, profile);
+						}
+						yield* (yield* controller).publish();
+					}),
+				)
+				.then(() => undefined),
 		connect,
 		disconnect,
 		dispose: async (): Promise<void> => {

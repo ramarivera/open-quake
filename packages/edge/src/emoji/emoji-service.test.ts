@@ -243,3 +243,59 @@ describe("Emoji package invariants", () => {
 		).toEqual(["wave"]);
 	});
 });
+
+it("leaves a deleted grid slot vacant and fills it before appending", () => {
+	const store = {
+		...initial,
+		packages: [
+			{
+				id: "p",
+				name: "Pack",
+				emojiIds: ["first", "middle", "last"],
+				profileId: null,
+			},
+		],
+	};
+	const removed = applyEmojiCommand(store, {
+		type: "remove-emoji",
+		packageId: "p",
+		id: "middle",
+	});
+	expect(removed.packages[0]?.emojiIds).toEqual(["first", "", "last"]);
+	expect(
+		emojiCommandRejection(removed, {
+			type: "add-drafts",
+			packageId: "p",
+			ids: ["wave"],
+		}),
+	).toBeNull();
+	const added = applyEmojiCommand(removed, {
+		type: "add-drafts",
+		packageId: "p",
+		ids: ["wave", "wave"],
+	});
+	expect(added.packages[0]?.emojiIds).toEqual(["first", "wave", "last"]);
+	const fullSlots = {
+		...removed,
+		packages: removed.packages.map((pack) => ({
+			...pack,
+			emojiIds: Array.from({ length: 16 }, (_, i) =>
+				i === 5 ? "" : `occupied-${i}`,
+			),
+		})),
+	};
+	expect(
+		emojiCommandRejection(fullSlots, {
+			type: "add-drafts",
+			packageId: "p",
+			ids: ["wave"],
+		}),
+	).toBeNull();
+	expect(
+		applyEmojiCommand(fullSlots, {
+			type: "add-drafts",
+			packageId: "p",
+			ids: ["wave"],
+		}).packages[0]?.emojiIds[5],
+	).toBe("wave");
+});

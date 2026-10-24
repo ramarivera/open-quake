@@ -302,3 +302,30 @@ describe("immutable content-addressed emoji assets", () => {
 		expect(fs.readFile).not.toHaveBeenCalled();
 	});
 });
+
+describe("verified GIF clipboard publication", () => {
+	it("publishes a .gif once for concurrent copies and rejects tampering", async () => {
+		const files = emojiFiles(root);
+		await files.put(gif);
+		const paths = await Promise.all(
+			[1, 2].map(() => files.clipboardPath(hash)),
+		);
+		expect(paths[0]).toBe(paths[1]);
+		expect(paths[0]).toBe(join(root, "clipboard", `${hash}.gif`));
+		expect(await realFs.readFile(paths[0] ?? "")).toEqual(gif);
+		expect(await realFs.readdir(join(root, "clipboard"))).toEqual([
+			`${hash}.gif`,
+		]);
+		await realFs.writeFile(paths[0] ?? "", "changed");
+		await expect(files.clipboardPath(hash)).rejects.toBeInstanceOf(RangeError);
+		expect(await files.get(hash)).toEqual(gif);
+	});
+	it("rejects a valid hash containing non-GIF bytes before publication", async () => {
+		const files = emojiFiles(root);
+		const invalid = await files.put(Buffer.from("synthetic PNG placeholder"));
+		await expect(files.clipboardPath(invalid)).rejects.toThrow();
+		await expect(realFs.stat(join(root, "clipboard"))).rejects.toMatchObject({
+			code: "ENOENT",
+		});
+	});
+});

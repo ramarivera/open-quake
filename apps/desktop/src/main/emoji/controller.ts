@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Effect, Option } from "effect";
 import { type BrowserWindow, dialog } from "electron";
 import {
 	defaultCaption,
+	type EmojiCaption,
 	type EmojiItem,
 	type EmojiStore,
 } from "../../../../../packages/edge/src/emoji/emoji-contracts";
@@ -31,13 +32,18 @@ export interface EmojiControllerPort {
 	readonly generation?: EmojiGenerationPort;
 	readonly files: ReturnType<typeof emojiFiles>;
 	readonly management: () => BrowserWindow;
-	readonly place: (packId: string, state: EmojiStore) => Promise<string>;
+	readonly place: (
+		packId: string,
+		state: EmojiStore,
+		persistLink: (profileId: string) => Promise<void>,
+	) => Promise<string>;
 }
 export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 	function* (port: EmojiControllerPort) {
 		const imageDecoder = yield* ImageDecoder;
 		const repository = yield* EmojiRepository;
 		const library = yield* EmojiLibrary;
+		const lock = yield* Effect.makeSemaphore(1);
 		const io = <A>(
 			operation: () => Promise<A>,
 		): Effect.Effect<A, EmojiLibraryFailed> =>
@@ -80,15 +86,26 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 		const addGif = Effect.fn("EmojiDesktop.addGif")(function* (
 			bytes: Uint8Array,
 			name: string,
+			renderedBytes: Uint8Array = bytes,
+			caption: EmojiCaption = defaultCaption,
 		): Effect.fn.Return<void, EmojiInvalid | EmojiLibraryFailed> {
-			yield* validateGif(bytes);
+			if (name.length > 30 || weightedLength(caption.text) > 50)
+				return yield* new EmojiInvalid(
+					"Use a name of at most 30 characters and a caption of at most 50 weighted units.",
+				);
+			const original = yield* validateGif(bytes);
+			const rendered = yield* validateGif(renderedBytes);
+			if (!sameAnimation(original, rendered))
+				return yield* new EmojiInvalid(
+					"Caption rendering changed the animation timing or size.",
+				);
 			const hash = yield* io(() => port.files.put(bytes));
 			const item: EmojiItem = {
 				id: randomUUID(),
 				name: name.slice(0, 30) || "Emoji",
 				original: hash,
-				rendered: hash,
-				caption: defaultCaption,
+				rendered: yield* io(() => port.files.put(renderedBytes)),
+				caption,
 			};
 			yield* repository.transact((state) =>
 				Effect.succeed({
@@ -130,8 +147,19 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 							prompt: input.prompt,
 						}),
 					);
-					yield* addGif(generated, asset.name);
-					return yield* snapshot("Generated. Select to add to the pack.");
+					yield* validateGif(generated);
+					const name = input.name?.trim() || asset.name.slice(0, 30);
+					const caption = input.caption ?? defaultCaption;
+					if (name.length > 30 || weightedLength(caption.text) > 50)
+						return yield* new EmojiInvalid(
+							"Use a name of at most 30 characters and a caption of at most 50 weighted units.",
+						);
+					return {
+						_tag: "generated",
+						base64: Buffer.from(generated).toString("base64"),
+						name,
+						caption,
+					};
 				}
 				case "import-static":
 				case "import-gif": {
@@ -195,9 +223,17 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 					);
 				}
 				case "create-result": {
-					if (input.base64.length > 12 * 1024 * 1024)
+					if (
+						input.base64.length > 12 * 1024 * 1024 ||
+						(input.renderedBase64?.length ?? 0) > 12 * 1024 * 1024
+					)
 						return yield* new EmojiInvalid("GIF exceeds 8 MiB.");
-					yield* addGif(Buffer.from(input.base64, "base64"), input.name);
+					yield* addGif(
+						Buffer.from(input.base64, "base64"),
+						input.name,
+						Buffer.from(input.renderedBase64 ?? input.base64, "base64"),
+						input.caption ?? defaultCaption,
+					);
 					return yield* snapshot("Generated. Select to add to the pack.");
 				}
 				case "caption": {
@@ -298,15 +334,22 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 				}
 				case "place": {
 					const state = yield* repository.read();
-					const profileId = yield* io(() => port.place(input.id, state));
-					yield* repository.transact((state) =>
-						Effect.succeed({
-							...state,
-							revision: state.revision + 1,
-							packages: state.packages.map((p) =>
-								p.id === input.id ? { ...p, profileId } : p,
-							),
-						}),
+					yield* io(() =>
+						port.place(input.id, state, (profileId) =>
+							Effect.runPromise(
+								repository.transact((current) =>
+									current.packages.some((pack) => pack.id === input.id)
+										? Effect.succeed({
+												...current,
+												revision: current.revision + 1,
+												packages: current.packages.map((pack) =>
+													pack.id === input.id ? { ...pack, profileId } : pack,
+												),
+											})
+										: Effect.fail(new EmojiInvalid("Package not found.")),
+								),
+							).then(() => undefined),
+						),
 					);
 					return yield* snapshot("Added to Quake main settings screen");
 				}
@@ -321,29 +364,63 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 					);
 					const directory = picked.filePaths[0];
 					if (!directory) return yield* snapshot();
-					for (const [index, id] of pack.emojiIds.entries()) {
-						const item = state.items.find((item) => item.id === id);
-						if (item) {
-							const bytes = yield* io(() => port.files.get(item.rendered));
-							const name =
-								item.name.replace(/[^\p{L}\p{N} _-]/gu, "_").slice(0, 60) ||
-								"Emoji";
-							yield* io(() =>
-								writeFile(
-									join(
-										directory,
-										`${String(index + 1).padStart(2, "0")}-${name}.gif`,
+					const destination = join(
+						directory,
+						`Emoji-${pack.name.replace(/[^\p{L}\p{N} _-]/gu, "_").slice(0, 40) || "Pack"}-${randomUUID()}`,
+					);
+					yield* io(async () => {
+						await mkdir(destination);
+					});
+					yield* Effect.gen(function* () {
+						for (const [index, id] of pack.emojiIds.entries()) {
+							const item = state.items.find((item) => item.id === id);
+							if (item) {
+								const bytes = yield* io(() => port.files.get(item.rendered));
+								const name =
+									item.name.replace(/[^\p{L}\p{N} _-]/gu, "_").slice(0, 60) ||
+									"Emoji";
+								yield* io(() =>
+									writeFile(
+										join(
+											destination,
+											`${String(index + 1).padStart(2, "0")}-${name}.gif`,
+										),
+										bytes,
+										{ flag: "wx" },
 									),
-									bytes,
-									{ flag: "wx" },
-								),
-							);
+								);
+							}
 						}
-					}
+					}).pipe(
+						Effect.onError(() =>
+							io(() => rm(destination, { recursive: true, force: true })).pipe(
+								Effect.ignore,
+							),
+						),
+					);
 					return yield* snapshot("Emoji pack exported.");
 				}
 			}
 		});
-		return { request, snapshot };
+		return {
+			request: (input: EmojiRequest) =>
+				request(input).pipe(lock.withPermits(1), Effect.uninterruptible),
+			snapshot,
+		};
 	},
 );
+
+function sameAnimation(
+	original: ReturnType<typeof decodeGif>,
+	rendered: ReturnType<typeof decodeGif>,
+): boolean {
+	return (
+		original.width === rendered.width &&
+		original.height === rendered.height &&
+		original.loopCount === rendered.loopCount &&
+		original.frames.length === rendered.frames.length &&
+		rendered.frames.every(
+			(frame, index) => frame.delayMs === original.frames[index]?.delayMs,
+		)
+	);
+}
