@@ -43,7 +43,10 @@ export const makeDiscovery = Effect.fn("StripDiscovery.make")(function* (
 				identified.label.trim().toUpperCase() === "DK-QUAKE" &&
 				isPanelShaped(identified)
 			)
-				return { display: Option.some(identified), issue: "none" };
+				return {
+					display: Option.some(identified),
+					issue: "none",
+				} satisfies DiscoveryResult;
 
 			yield* Effect.acquireRelease(
 				Effect.sync(() =>
