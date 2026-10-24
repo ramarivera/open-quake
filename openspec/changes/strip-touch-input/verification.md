@@ -76,8 +76,8 @@ Epic `open-quake-lih.3.1` is a child of cluster `open-quake-lih.3`.
 Task mapping: 1.1 → `.3.1.1`, 1.2 → `.3.1.2`, 2.1 → `.3.1.3`,
 2.2 → `.3.1.4`, 3.1 → `.3.1.5`, 3.2 → `.3.1.6` under prefix `open-quake-lih`.
 The six original task beads are closed. Review-round tasks 4.1–4.5 map to
-`.3.1.7` through `.3.1.11`. The epic was reopened for this round. The cluster
-remains open per the lead until PR #20 merges.
+`.3.1.7` through `.3.1.11`. All eleven task beads and the epic are closed with source and verification
+evidence. The parent cluster remains open per the lead until PR #20 merges.
 PR: https://github.com/ramarivera/open-quake/pull/20 against main.
 Implementation commit: `3629150`; delivery metadata is recorded in a follow-up
 commit. The branch is pushed, the PR is linked to the T3 thread and remains
@@ -131,3 +131,12 @@ Native smoke ran with `OPEN_QUAKE_MOCK_DEVICE=1`, `env -u ELECTRON_RUN_AS_NODE`
 and scratch `TMPDIR`. No hardware or probe was opened and DK-Suite was never
 started. All started Electron processes exited. Physical behavior remains
 unverified. There were no disagreements with the three review findings.
+
+
+Review fixes and the main merge were pushed in conventional merge commit
+`77c9f831aa43cc7de03bf60fa2e58bf371ea5903`. Normal commit and pre-push hooks
+passed without bypass. The lane helper replied to and resolved exactly the
+three verified connector threads, naming that fix commit. A GraphQL read
+confirmed all three resolved and the PR still open. The PR description now
+reflects real geometry integration, the regressions and current gate results.
+This metadata-only follow-up closes task 4.5; it does not alter tested code.

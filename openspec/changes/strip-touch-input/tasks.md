@@ -21,4 +21,4 @@
 - [x] 4.2 Acquire touch handles with interruption-safe release and regress a non-cancellable open completing after teardown, lock or wake. Sources: MAIN-035, MAIN-041.
 - [x] 4.3 Invalidate registry membership on child mutations and discover new clickables inside existing scrollers without losing local rescan throttling. Sources: SCREEN-061–063.
 - [x] 4.4 Preserve the original velocity sample timestamp and regress a 30 px move over 100 ms released at 100/101 ms. Source: SCREEN-066.
-- [ ] 4.5 Run all six gates and native mock smoke, record evidence, close the review beads, commit/push and reply to/resolve the three fixed threads. No hardware or merge.
+- [x] 4.5 Run all six gates and native mock smoke, record evidence, close the review beads, commit/push and reply to/resolve the three fixed threads. No hardware or merge.
