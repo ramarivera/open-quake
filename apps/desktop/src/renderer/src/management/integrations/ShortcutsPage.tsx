@@ -86,6 +86,8 @@ export function ShortcutsPage() {
 		setRows(library.rows);
 		setOriginal(library.rows);
 		setTitle(library.name);
+		setApp(apps.includes(library.app) ? library.app : s.customAppName);
+		setCustom(library.app);
 		setSelected(new Set());
 		setEditing("");
 	};

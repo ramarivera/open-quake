@@ -232,6 +232,10 @@ async function main() {
 			`document.querySelector('[data-page="channels"]').click()`,
 		);
 		await wait(`document.body.innerText.includes('Feishu')`);
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Refresh').click()`,
+		);
+		await wait(`document.body.innerText.includes('Configured')`);
 		await capture("base-channels");
 		assert.equal(
 			(
@@ -265,6 +269,9 @@ async function main() {
 			`document.querySelector('[data-page="ha"]').click()`,
 		);
 		await wait(`document.body.innerText.includes('Disconnected')`);
+		await wait(
+			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
+		);
 		await capture("base-ha-revoked");
 		const raw = await readFile(
 			join(app.getPath("userData"), "integrations-v1/channels.json"),
@@ -302,6 +309,7 @@ async function main() {
 		await wait(`!document.querySelector('[aria-pressed="true"]')?.disabled`);
 		const libraries = await request(management, { type: "shortcuts.list" });
 		assert(libraries.type === "libraries" && libraries.libraries.length === 2);
+		assert.equal(libraries.libraries[0]?.app, "Figma");
 		await capture("base-shortcuts-existing");
 		await management.webContents.executeJavaScript(
 			`document.querySelector('[data-page="agents"]').click()`,
