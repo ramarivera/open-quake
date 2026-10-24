@@ -1,0 +1,88 @@
+import { Context, Effect, Option, Schema } from "effect";
+import type {
+	MeetingConfig,
+	Segment,
+	Translation,
+} from "../meetings/meeting-contracts.js";
+import { Segment as SegmentSchema } from "../meetings/meeting-contracts.js";
+import { type MeetingError, meetingError } from "../meetings/meeting-errors.js";
+import { asrPlan, asrTimeout } from "../meetings/meeting-invariants.js";
+
+export interface MeetingAsrRequest {
+	readonly audioRef: string;
+	readonly durationMs: number;
+	readonly config: MeetingConfig;
+	readonly channelIds: readonly number[];
+	readonly diarization: boolean;
+	readonly expiresInMs: number;
+}
+export type MeetingAsrResult =
+	| { readonly status: "pending" }
+	| { readonly status: "complete"; readonly segments: readonly Segment[] };
+/** Provider-owned port. Credentials, upload policy and native SDK types stay behind it. */
+export interface MeetingAdapter {
+	readonly submit: (
+		request: MeetingAsrRequest,
+	) => Effect.Effect<string, MeetingError>;
+	readonly poll: (
+		task: string,
+	) => Effect.Effect<MeetingAsrResult, MeetingError>;
+	readonly cancel: (task: string) => Effect.Effect<void>;
+	readonly translate: (
+		config: MeetingConfig,
+		pcm: Uint8Array,
+	) => Effect.Effect<readonly Translation[], MeetingError>;
+	readonly stopTranslation: () => Effect.Effect<void>;
+}
+export class AiMeetingAdapter extends Context.Tag(
+	"@open-quake/edge/AiMeetingAdapter",
+)<AiMeetingAdapter, MeetingAdapter>() {}
+export const transcribeMeeting = Effect.fn(
+	"AiProviderService.transcribeMeeting",
+)(function* (
+	adapter: Option.Option<MeetingAdapter>,
+	config: MeetingConfig,
+	audioRef: string,
+	durationMs: number,
+): Effect.fn.Return<readonly Segment[], MeetingError> {
+	if (Option.isNone(adapter)) return yield* meetingError("Unavailable");
+	const port = adapter.value;
+	const work = Effect.acquireUseRelease(
+		port.submit({
+			config,
+			audioRef,
+			durationMs,
+			channelIds: asrPlan.channelIds,
+			diarization: true,
+			expiresInMs: asrPlan.uploadExpiryMs,
+		}),
+		(task) =>
+			Effect.gen(function* () {
+				while (true) {
+					const result = yield* port.poll(task);
+					if (result.status === "complete") {
+						const segments = yield* Schema.decodeUnknown(
+							Schema.Array(SegmentSchema),
+						)(result.segments).pipe(
+							Effect.mapError((cause) =>
+								meetingError("TranscriptionFailed", cause),
+							),
+						);
+						if (!segments.some((s) => s.text.trim()))
+							return yield* meetingError("TranscriptionFailed");
+						if (segments.some((s) => s.endMs < s.startMs))
+							return yield* meetingError("TranscriptionFailed");
+						return [...segments].sort((a, b) => a.startMs - b.startMs);
+					}
+					yield* Effect.sleep(asrPlan.pollMs);
+				}
+			}),
+		(task, exit) => (exit._tag === "Failure" ? port.cancel(task) : Effect.void),
+	);
+	return yield* work.pipe(
+		Effect.timeoutFail({
+			duration: asrTimeout(config.asrProvider, durationMs),
+			onTimeout: () => meetingError("Timeout"),
+		}),
+	);
+});

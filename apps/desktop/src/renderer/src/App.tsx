@@ -9,6 +9,8 @@ import {
 import { useMaintenance } from "./maintenance/useMaintenance";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
+import { CaptureHost } from "./meetings/CaptureHost";
+import { MeetingHistory } from "./meetings/MeetingHistory";
 import { StripPanel } from "./strip/StripPanel";
 import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { MonitorSettings } from "./strip/tiles/monitor/MonitorSettings";
@@ -57,6 +59,7 @@ type Page =
 	| "screen"
 	| "controls"
 	| "appearance"
+	| "meetings"
 	| "settings";
 
 type NavItem = {
@@ -84,6 +87,7 @@ const sections: ReadonlyArray<{
 	{
 		title: "App",
 		items: [
+			{ id: "meetings", label: "Meeting", Icon: DeviceIcon },
 			{ id: "appearance", label: "Appearance", Icon: AppearanceIcon },
 			{ id: "settings", label: "Settings", Icon: ControlsIcon },
 		],
@@ -99,7 +103,11 @@ function ManagementSurface({
 	const maintenance = useMaintenance();
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
-	const [page, setPage] = useState<Page>("overview");
+	const [page, setPage] = useState<Page>(
+		new URLSearchParams(window.location.search).get("page") === "meetings"
+			? "meetings"
+			: "overview",
+	);
 	const [deviceReady, setDeviceReady] = useState(false);
 	const wasReady = useRef(false);
 	const onReady = useCallback((ready: boolean): void => {
@@ -165,7 +173,7 @@ function ManagementSurface({
 				ref={content}
 				data-session={deviceReady ? "device" : "preview"}
 			>
-				<div className="content-inner">
+				<div className="content-inner" data-page={page}>
 					{/* Keep the diagnostic subscription alive while navigating pages. */}
 					<div hidden={page !== "connection"}>
 						<ConnectionCheck onReady={onReady} />
@@ -191,6 +199,8 @@ function ManagementSurface({
 							<WeatherMediaSettings />
 							<MonitorSettings />
 						</>
+					) : page === "meetings" ? (
+						<MeetingHistory />
 					) : page === "controls" ? (
 						<HardwareSettings />
 					) : page === "settings" ? (
@@ -212,6 +222,14 @@ function ManagementSurface({
 }
 
 export function App(): React.JSX.Element {
+	if (
+		new URLSearchParams(window.location.search).get("surface") ===
+		"meeting-capture"
+	)
+		return <CaptureHost />;
+	return <MainApp />;
+}
+function MainApp(): React.JSX.Element {
 	const surface = useSurface();
 	const appearance = useAppearance();
 	if (

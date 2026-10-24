@@ -15,6 +15,8 @@ import {
 	useClockSettings,
 } from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
+import { MeetingDisplay } from "./tiles/meeting/MeetingDisplay";
+import { MeetingKey } from "./tiles/meeting/MeetingKey";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
 import { useMonitor } from "./tiles/monitor/useMonitor";
 import { previewSnapshot } from "./tiles/monitor/view-model";
@@ -138,9 +140,15 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
-	new Map([
+	new Map<string, StripTileComponent>([
 		["dkDesktopClock", ClockSlot],
 		["playAudio", PlayerSlot],
+		["meetingMinutes", MeetingKey],
+		["tempMeetingMinutes", MeetingKey],
+		["meetingRecordMark", MeetingKey],
+		["liveAudioTranslate", MeetingKey],
+		["mic", MeetingKey],
+		["liveAudioTranslateDisplay", MeetingDisplay],
 		// strip-voice-ui: AI Copilot 5×2, ClawBotView 4×2, ClawBotInput 2×2, AI keys.
 		["aiChatView", AiCopilotTile],
 		["quakeBot", ClawBotTile],

@@ -1,4 +1,6 @@
 import { Deferred, Effect, Either, Option, Ref, Schema, Stream } from "effect";
+import type { MeetingConfig } from "../meetings/meeting-contracts.js";
+import { meetingError } from "../meetings/meeting-errors.js";
 import { AiCompatibleAdapter } from "./adapters/adapter.js";
 import { mockEvents } from "./adapters/mock.js";
 import {
@@ -20,6 +22,7 @@ import { prepareWorkflow } from "./ai-provider-quirks.js";
 import { AiRepository } from "./ai-repository.js";
 import { selectRole } from "./ai-role-presets.js";
 import type { ProviderOptions } from "./ai-workflow-contracts.js";
+import { AiMeetingAdapter, transcribeMeeting } from "./meeting-adapter.js";
 import type { GeneratedAudio } from "./speech/speech-contracts.js";
 import {
 	AiSpeechService,
@@ -82,6 +85,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 		dependencies: [AiRepository.Default, AiSpeechService.Default],
 		effect: Effect.gen(function* () {
 			const repository = yield* AiRepository;
+			const meetingAdapter = yield* Effect.serviceOption(AiMeetingAdapter);
 			const compatible = yield* Effect.serviceOption(AiCompatibleAdapter);
 			const credentials = yield* Effect.serviceOption(AiCredentials);
 			const speech = yield* Effect.serviceOption(AiSpeechService);
@@ -120,6 +124,28 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 				);
 			}
 			return {
+				requireMeetingTranslation: () =>
+					Option.isSome(meetingAdapter)
+						? Effect.void
+						: Effect.fail(meetingError("Unavailable")),
+				transcribeMeeting: (
+					config: MeetingConfig,
+					audioRef: string,
+					durationMs: number,
+				) => transcribeMeeting(meetingAdapter, config, audioRef, durationMs),
+				translateMeeting: Effect.fn("AiProviderService.translateMeeting")(
+					(config: MeetingConfig, pcm: Uint8Array) =>
+						Option.isSome(meetingAdapter)
+							? meetingAdapter.value.translate(config, pcm)
+							: Effect.fail(meetingError("Unavailable")),
+				),
+				stopMeetingTranslation: Effect.fn(
+					"AiProviderService.stopMeetingTranslation",
+				)(() =>
+					Option.isSome(meetingAdapter)
+						? meetingAdapter.value.stopTranslation()
+						: Effect.void,
+				),
 				synthesize: Effect.fn("AiProviderService.synthesize")(
 					(
 						...args: Parameters<AiSpeechService["synthesize"]>

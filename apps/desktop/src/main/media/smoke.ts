@@ -26,6 +26,7 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
+import { registerMeetings } from "../meetings";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
@@ -239,6 +240,12 @@ async function smoke(): Promise<void> {
 		() => management,
 		pathToFileURL(resolve("out/renderer/index.html")).href,
 	);
+	const meetings = registerMeetings({
+		userData: directory,
+		hardware: () => undefined,
+		mock: true,
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+	});
 	let profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
 	app.once("will-quit", () => {
 		assert(
@@ -787,6 +794,7 @@ async function smoke(): Promise<void> {
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
 	await clock.dispose();
+	await meetings.dispose();
 	await voice.dispose();
 	await monitor.dispose();
 	management.destroy();
