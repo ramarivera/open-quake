@@ -218,7 +218,28 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 						return candidate;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
 			);
+			const transact = Effect.fn("ProfileRepository.transact")(
+				(
+					change: (
+						envelope: ProfileEnvelope,
+					) => Effect.Effect<ProfileEnvelope, ProfileRepositoryError>,
+				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
+					Effect.gen(function* () {
+						const { envelope } = yield* loadUnlocked();
+						const next = yield* change(envelope);
+						if (next === envelope) return envelope;
+						const snapshot = yield* committedProfileSnapshot(next).pipe(
+							Effect.catchTag("ParseError", (cause) =>
+								Effect.fail(profileParseFailure(cause)),
+							),
+						);
+						yield* write(snapshot);
+						yield* SubscriptionRef.set(committed, Option.some(snapshot));
+						return snapshot;
+					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
+			);
 			return {
+				transact,
 				load,
 				save,
 				snapshots: committed.changes.pipe(

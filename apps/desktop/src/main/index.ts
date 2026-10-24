@@ -14,6 +14,7 @@ import {
 import { createEventForwarder } from "./eventForwarding";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
+import { registerProfiles } from "./profiles";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const PANEL_TITLE = "open-quake panel";
@@ -109,7 +110,8 @@ app.whenReady().then(() => {
 	const runtime = ManagedRuntime.make(
 		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
 	);
-	const mock = isDev && process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+	const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+	const profiles = registerProfiles(() => managementWin);
 	const source = mock
 		? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
 				Effect.sync(() => bus.stop()),
@@ -132,6 +134,16 @@ app.whenReady().then(() => {
 					Effect.gen(function* () {
 						bus = yield* source;
 						bus.on(createEventForwarder(() => [panelWin, managementWin]));
+						if (mock)
+							bus.on((event) => {
+								if (event.kind === "status") {
+									const operation =
+										event.state === "connected"
+											? profiles.connect("desktop-preview")
+											: profiles.disconnect("desktop-preview");
+									void operation.catch(() => {});
+								}
+							});
 						yield* Effect.never;
 					}),
 				),
@@ -195,6 +207,7 @@ app.whenReady().then(() => {
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 		void stopBus().then(async () => {
+			await profiles.dispose();
 			await runtime.dispose();
 			quitFinished = true;
 			app.quit();

@@ -1,0 +1,132 @@
+.profiles-manager {
+	margin-block: 24px;
+	padding: 20px;
+	border: 1px solid var(--quake-border);
+	border-radius: 8px;
+	color: inherit;
+}
+.profiles-manager header,
+.profile-batch {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+.profiles-manager button,
+.profiles-manager input,
+.profiles-manager select {
+	font: inherit;
+	color: inherit;
+	background: var(--quake-surface);
+	border: 1px solid var(--quake-border);
+	border-radius: 4px;
+	padding: 6px;
+}
+.profiles-manager button {
+	cursor: pointer;
+}
+.profiles-manager button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.profile-columns {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 20px;
+}
+.profile-columns ul {
+	list-style: none;
+	padding: 0;
+}
+.profile-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-block: 8px;
+	padding: 6px;
+	border: 1px solid transparent;
+}
+.profile-row[data-selected="true"] {
+	border-color: currentColor;
+}
+.profile-row img,
+.profile-no-preview {
+	width: 96px;
+	height: 24px;
+	object-fit: contain;
+	font-size: 10px;
+}
+.profile-row input:not([type="checkbox"]) {
+	min-width: 40px;
+	width: 95px;
+}
+.profile-select {
+	flex: 1;
+	text-align: left;
+}
+.profile-settings {
+	margin-top: 16px;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: center;
+}
+.profile-preview {
+	flex-basis: 100%;
+}
+.profile-preview {
+	display: grid;
+	grid-template-columns: repeat(8, minmax(0, 1fr));
+	grid-template-rows: repeat(2, minmax(0, 1fr));
+	gap: 6px;
+	aspect-ratio: 4;
+	background: #161a20;
+	padding: 6px;
+	box-sizing: border-box;
+	width: 100%;
+	color: #fff;
+}
+.profile-settings h4,
+.profile-settings p,
+.profile-settings .profile-preview-key {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	font: 14px system-ui;
+	background: #303743;
+	border-radius: 8px;
+	overflow: hidden;
+}
+.profile-no-preview {
+	color: #999;
+}
+.selected-profile {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background: #151a20;
+}
+body:has([data-profile-ready]) .profile-preview {
+	max-height: 100vh;
+}
+.profile-batch progress {
+	height: 4px;
+}
+@media (max-width: 950px) {
+	.profile-columns {
+		grid-template-columns: 1fr;
+	}
+}
+@media (max-width: 600px) {
+	.profile-row {
+		flex-wrap: wrap;
+	}
+	.profile-select {
+		min-width: 110px;
+	}
+	.profile-settings select {
+		max-width: 100%;
+	}
+}

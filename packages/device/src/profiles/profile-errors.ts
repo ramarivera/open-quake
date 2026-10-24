@@ -33,6 +33,36 @@ export const ProfileErrors = {
 		message: "Saving local profiles failed",
 		policy: { userFacing: false, userRecoverable: true, retry: "manual" },
 	},
+	ProfileForegroundFailed: {
+		code: "QUAKE.PROFILE.FOREGROUND_FAILED",
+		category: "dependency",
+		message: "Reading the foreground application failed",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+	ProfileCommandFailed: {
+		code: "QUAKE.PROFILE.COMMAND_FAILED",
+		category: "dependency",
+		message: "Running the profile command failed",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+	ProfileThumbnailFailed: {
+		code: "QUAKE.PROFILE.THUMBNAIL_FAILED",
+		category: "dependency",
+		message: "Updating the profile thumbnail failed",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+	ProfileThumbnailUnsupported: {
+		code: "QUAKE.PROFILE.THUMBNAIL_UNSUPPORTED",
+		category: "dependency",
+		message: "Thumbnail generation is not supported on this system",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+	ProfileDeliveryFailed: {
+		code: "QUAKE.PROFILE.DELIVERY_FAILED",
+		category: "dependency",
+		message: "Delivering the selected profile failed",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
 } as const;
 const DiagnosticCause: Schema.Schema<ReturnType<typeof toSafeDiagnosticCause>> =
 	Schema.suspend(() =>
@@ -196,9 +226,84 @@ export class ProfileWriteFailed extends Schema.TaggedError<ProfileWriteFailed>()
 		return error;
 	}
 }
+export class ProfileForegroundFailed extends Schema.TaggedError<ProfileForegroundFailed>()(
+	"ProfileForegroundFailed",
+	fields(ProfileErrors.ProfileForegroundFailed),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileForegroundFailed {
+		const error = new ProfileForegroundFailed(
+			props(ProfileErrors.ProfileForegroundFailed, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
+export class ProfileCommandFailed extends Schema.TaggedError<ProfileCommandFailed>()(
+	"ProfileCommandFailed",
+	fields(ProfileErrors.ProfileCommandFailed),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileCommandFailed {
+		const error = new ProfileCommandFailed(
+			props(ProfileErrors.ProfileCommandFailed, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
+export class ProfileThumbnailFailed extends Schema.TaggedError<ProfileThumbnailFailed>()(
+	"ProfileThumbnailFailed",
+	fields(ProfileErrors.ProfileThumbnailFailed),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileThumbnailFailed {
+		const error = new ProfileThumbnailFailed(
+			props(ProfileErrors.ProfileThumbnailFailed, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
+export class ProfileThumbnailUnsupported extends Schema.TaggedError<ProfileThumbnailUnsupported>()(
+	"ProfileThumbnailUnsupported",
+	fields(ProfileErrors.ProfileThumbnailUnsupported),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileThumbnailUnsupported {
+		const error = new ProfileThumbnailUnsupported(
+			props(ProfileErrors.ProfileThumbnailUnsupported, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
+export class ProfileDeliveryFailed extends Schema.TaggedError<ProfileDeliveryFailed>()(
+	"ProfileDeliveryFailed",
+	fields(ProfileErrors.ProfileDeliveryFailed),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileDeliveryFailed {
+		const error = new ProfileDeliveryFailed(
+			props(ProfileErrors.ProfileDeliveryFailed, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
 export type ProfileRepositoryError =
 	| ProfileReadFailed
 	| ProfileWriteFailed
 	| ProfileValidationFailed
 	| ProfileNotFound
 	| ProfileRevisionConflict;
+
+export type ProfileSwitchingError =
+	| ProfileRepositoryError
+	| ProfileForegroundFailed
+	| ProfileDeliveryFailed;
+export type ProfileDesktopError =
+	| ProfileSwitchingError
+	| ProfileCommandFailed
+	| ProfileThumbnailFailed
+	| ProfileThumbnailUnsupported;

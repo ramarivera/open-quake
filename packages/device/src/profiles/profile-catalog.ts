@@ -1,0 +1,176 @@
+import { Array as EffectArray, Option, Schema } from "effect";
+import chat from "./builtins/default_ai_copilot_chat_config.json";
+import vivid from "./builtins/default_colorful_screen_config.json";
+import discord from "./builtins/default_discord_config.json";
+import clock from "./builtins/default_dk_desktop_clock.json";
+import music from "./builtins/default_dk_player_config.json";
+import claw from "./builtins/default_dkclaw_config.json";
+import linux from "./builtins/default_linux_shortcut_config.json";
+import mac from "./builtins/default_mac_shortcut_config.json";
+import meeting from "./builtins/default_meeting_assistant_config.json";
+import monitor from "./builtins/default_system_monitor_panel_config.json";
+import windows from "./builtins/default_windows_shortcut_config.json";
+import locales from "./builtins/locales.json";
+import { Profile, ProfileJsonObject, ProfileKey } from "./profile-contracts.js";
+import type {
+	ProfileLocale,
+	ProfilePlatform,
+} from "./profile-manager-contracts.js";
+
+const dictionaries: Readonly<
+	Record<ProfileLocale, Readonly<Record<string, string>>>
+> = locales;
+export const profileText = (
+	key: string,
+	locale: ProfileLocale = "en",
+): string => dictionaries[locale][key] ?? dictionaries.en[key] ?? key;
+export const BUILTIN_PROFILES = [
+	{ id: "1-0", title: "discord", mode: 1 },
+	{ id: "1-1", title: "meetingAssistant", mode: 1 },
+	{ id: "1-4", title: "colorfulScreen", mode: 0 },
+	{ id: "1-2", title: "shortcut", mode: 1 },
+	{ id: "1-3", title: "systemMonitor", mode: 1 },
+	{ id: "1-5", title: "aiCopilotChat", mode: 1 },
+	{ id: "1-6", title: "DK-Player", mode: 1 },
+	{ id: "1-7", title: "DK-Desktop-Clock", mode: 1 },
+	{ id: "1-8", title: "DKClaw", mode: 1 },
+] as const;
+export const isBuiltinProfile = (id: string): boolean =>
+	BUILTIN_PROFILES.some((p) => p.id === id);
+const RawKey = Schema.Struct({
+	keyCode: Schema.String,
+	childrenName: Schema.optional(Schema.String),
+	config: ProfileJsonObject,
+});
+const titleSchema = Schema.Struct({
+	text: Schema.String,
+	i18nKey: Schema.optional(Schema.String),
+});
+
+/** Layout/action facts recovered from DPD. The canonical projection keeps all extra fields inertly. */
+export const builtinProfiles = (
+	platform: ProfilePlatform,
+	locale: ProfileLocale = "en",
+): readonly Profile[] => {
+	const arrays: Readonly<Record<string, unknown>> = {
+		"1-0": discord,
+		"1-1": meeting,
+		"1-4": vivid,
+		"1-2": platform === "darwin" ? mac : platform === "win32" ? windows : linux,
+		"1-3": monitor,
+		"1-5": chat,
+		"1-6": music,
+		"1-7": clock,
+		"1-8": claw,
+	};
+	return BUILTIN_PROFILES.map((entry) => {
+		const raw = Schema.decodeUnknownSync(Schema.Array(RawKey))(
+			arrays[entry.id],
+		);
+		const keys = raw
+			.filter((key) => key.keyCode !== "0,1")
+			.map((key): ProfileKey => {
+				const title = Schema.decodeUnknownSync(titleSchema)(key.config.title);
+				const text =
+					title.i18nKey &&
+					!title.i18nKey.startsWith("defaultLinuxShortcutConfig.")
+						? profileText(title.i18nKey, locale)
+						: title.text;
+				const actions = Schema.decodeUnknownSync(
+					Schema.Array(
+						Schema.Struct({ type: Schema.String, value: Schema.Unknown }),
+					),
+				)(key.config.actions ?? []).filter((a) => a.type !== "");
+				return Schema.decodeUnknownSync(ProfileKey)({
+					keyCode: key.keyCode,
+					...(key.childrenName ? { childrenName: key.childrenName } : {}),
+					config: {
+						...key.config,
+						title: {
+							...Schema.decodeUnknownSync(ProfileJsonObject)(key.config.title),
+							text,
+						},
+						actions,
+					},
+					compatibility: { catalog: true, source: key },
+				});
+			});
+		const knob = raw.find((key) => key.keyCode === "0,1");
+		return Schema.decodeUnknownSync(Profile)({
+			id: entry.id,
+			name: profileText(entry.title, locale),
+			revision: 0,
+			pages: [
+				{
+					id: "1",
+					keys: keys.map((key) => Schema.encodeSync(ProfileKey)(key)),
+				},
+			],
+			...(knob ? { knob: { keyCode: "0,1", config: knob.config } } : {}),
+			compatibility: {
+				builtin: entry.title,
+				resourceName: `${Number(entry.id.slice(2)) + 1},1,1`,
+				mode: entry.mode,
+			},
+		});
+	});
+};
+export const profileLabel = (
+	profile: Profile,
+	locale: ProfileLocale,
+): string => {
+	const entry = BUILTIN_PROFILES.find((p) => p.id === profile.id);
+	return entry ? profileText(entry.title, locale) : profile.name;
+};
+export const translateProfile = (
+	profile: Profile,
+	locale: ProfileLocale,
+): Profile => ({
+	...profile,
+	name: profileLabel(profile, locale),
+	pages: EffectArray.map(profile.pages, (page) => ({
+		...page,
+		keys: page.keys.map((key) => {
+			if (key.config.type === "clawbot") {
+				const agent = key.config.actions.find(
+					(action) => action.type === "agentId",
+				);
+				if (agent && typeof agent.value === "string")
+					return {
+						...key,
+						config: {
+							...key.config,
+							title: {
+								...key.config.title,
+								text: profileText(`openclawAgents.${agent.value}.name`, locale),
+							},
+						},
+					};
+			}
+			const source = Option.isSome(key.compatibility)
+				? key.compatibility.value.source
+				: undefined;
+			const result = Schema.decodeUnknownEither(RawKey)(source);
+			if (result._tag === "Left") return key;
+			const title = Schema.decodeUnknownEither(titleSchema)(
+				result.right.config.title,
+			);
+			if (
+				title._tag === "Left" ||
+				!title.right.i18nKey ||
+				title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.")
+			)
+				return key;
+			return {
+				...key,
+				config: {
+					...key.config,
+					title: {
+						...key.config.title,
+						text: profileText(title.right.i18nKey, locale),
+					},
+				},
+			};
+		}),
+	})),
+});

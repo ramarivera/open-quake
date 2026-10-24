@@ -1,0 +1,419 @@
+[
+	{
+		"childrenName": "liveAudioTranslateDisplay",
+		"config": {
+			"type": "liveAudioTranslateDisplay",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [5, 2],
+			"display": true,
+			"supportKnob": false,
+			"supportTouchEffect": false,
+			"hasTouchableSubElements": true,
+			"icon": "0-80",
+			"actions": [
+				{
+					"type": "targetLanguage",
+					"value": "zh"
+				}
+			]
+		},
+		"keyCode": "1,1"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,2"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,3"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,4"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,5"
+	},
+	{
+		"childrenName": "meetingMinutes",
+		"config": {
+			"type": "meetingMinutes",
+			"title": {
+				"text": "Start",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultMeetingAssistantConfig.start"
+			},
+			"size": [1, 2],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-61",
+			"actions": [
+				{
+					"type": "generateReport",
+					"value": true
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,6"
+	},
+	{
+		"childrenName": "tempMeetingMinutes",
+		"config": {
+			"type": "tempMeetingMinutes",
+			"title": {
+				"text": "Record",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultMeetingAssistantConfig.record"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-99",
+			"actions": [],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,7"
+	},
+	{
+		"childrenName": "mic",
+		"config": {
+			"type": "mic",
+			"title": {
+				"text": "Mic Mute",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultMeetingAssistantConfig.micMute"
+			},
+			"alterTitle": {
+				"text": "Device Mic",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-59",
+			"alterIcon": "0-100",
+			"actions": [
+				{
+					"type": "toggle",
+					"value": 0
+				},
+				{
+					"type": "toggle",
+					"value": 1
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,8"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,1"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,2"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,3"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,4"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,5"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,6"
+	},
+	{
+		"childrenName": "liveAudioTranslate",
+		"config": {
+			"type": "liveAudioTranslate",
+			"title": {
+				"text": "Translate",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultMeetingAssistantConfig.translate"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-98",
+			"actions": [
+				{
+					"type": "targetLanguage",
+					"value": "zh"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "2,7"
+	},
+	{
+		"childrenName": "meetingRecordMark",
+		"config": {
+			"type": "meetingRecordMark",
+			"title": {
+				"text": "Mark",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultMeetingAssistantConfig.mark"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-99",
+			"actions": [],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "2,8"
+	}
+]

@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { mkdtempSync, rmSync } from "node:fs";
 import { registerHooks } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
+const directory = mkdtempSync(join(tmpdir(), "open-quake-bundle-"));
+const mockMode = process.argv.includes("--mock");
 const app = new EventEmitter();
 app.whenReady = () => Promise.resolve();
-app.getPath = () => "/nonexistent/open-quake-bundle-smoke";
+app.getPath = () => directory;
 let quit = false;
 app.quit = () => {
 	let prevented = false;
@@ -105,39 +112,64 @@ async function until(check) {
 
 try {
 	delete process.env.ELECTRON_RENDERER_URL;
-	// A dev flag must not select synthetic input in a production launch.
-	process.env.OPEN_QUAKE_MOCK_DEVICE = "1";
+	// Default launch still uses HID. Explicit mock mode also works in built applications.
+	if (mockMode) process.env.OPEN_QUAKE_MOCK_DEVICE = "1";
+	else delete process.env.OPEN_QUAKE_MOCK_DEVICE;
 	await import("../../../out/main/index.js");
 	// Other main-process modules (wallpaper) broadcast too; this check owns device events.
 	const quakeEvents = () =>
 		events.filter(({ channel }) => channel === "quake:event");
 	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
-	assert.equal(nativeResolutions, 1, "Native package must remain external");
-	assert.equal(enumerations, 1);
+	assert.equal(
+		nativeResolutions,
+		mockMode ? 0 : 1,
+		"Default native package stays external; mock never loads it",
+	);
+	assert.equal(enumerations, mockMode ? 0 : 1);
 	for (const { channel, event } of quakeEvents()) {
 		assert.equal(channel, "quake:event");
-		assert.deepEqual(event, {
-			source: "hid",
-			kind: "status",
-			state: "error",
-			error: {
-				_tag: "QuakeDeviceNotFound",
-				code: "QUAKE.DEVICE.NOT_FOUND",
-				category: "unavailable",
-			},
-		});
+		if (mockMode)
+			assert.deepEqual(event, {
+				source: "mock",
+				kind: "status",
+				state: "connected",
+			});
+		else {
+			assert.deepEqual(event, {
+				source: "hid",
+				kind: "status",
+				state: "error",
+				error: {
+					_tag: "QuakeDeviceNotFound",
+					code: "QUAKE.DEVICE.NOT_FOUND",
+					category: "unavailable",
+				},
+			});
+		}
 	}
 	app.quit();
 	await until(() => quit);
 	assert.equal(screen.listenerCount("display-added"), 0);
 	assert.equal(ipcMain.listenerCount("quake:status"), 0);
 	console.info(
-		"Bundle smoke passed: default HID, typed absence delivered to both windows, external native resolution, awaited quit; no hardware I/O.",
+		mockMode
+			? "Bundle smoke passed: explicit mock works in built app; no native discovery or hardware I/O."
+			: "Bundle smoke passed: default HID, typed absence delivered to both windows, external native resolution, awaited quit; no hardware I/O.",
 	);
 } finally {
 	app.quit();
 	hooks.deregister();
 	delete globalThis.openQuakeBundleSmoke;
 	delete globalThis.openQuakeSmokeDiscovery;
+	rmSync(directory, { recursive: true, force: true });
+}
+
+if (!mockMode) {
+	const child = spawnSync(
+		process.execPath,
+		[fileURLToPath(import.meta.url), "--mock"],
+		{ stdio: "inherit", env: process.env },
+	);
+	assert.equal(child.status, 0, "Built mock-mode smoke must pass");
 }

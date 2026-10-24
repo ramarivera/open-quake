@@ -7,6 +7,11 @@ import {
 import { useQuakeEvents } from "./useQuakeEvents";
 import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
+import {
+	ProfilesManager,
+	ProfileThumbnail,
+	SelectedProfile,
+} from "./profiles/ProfileViews";
 
 function useSurface(): "management" | "panel" {
 	const [surface] = useState<"management" | "panel">(() =>
@@ -22,7 +27,12 @@ function PanelSurface(): React.JSX.Element {
 		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
 	}, []);
-	return <WallpaperPanel />;
+	return (
+		<>
+			<WallpaperPanel />
+			<SelectedProfile />
+		</>
+	);
 }
 
 function Stat({
@@ -72,6 +82,7 @@ function ManagementSurface({
 				the panel is unplugged.
 			</p>
 			<ThemeSettings controller={appearance} />
+			<ProfilesManager />
 			<WallpaperSettings />
 		</main>
 	);
@@ -79,7 +90,12 @@ function ManagementSurface({
 
 export function App(): React.JSX.Element {
 	const surface = useSurface();
+
 	const appearance = useAppearance();
+	if (
+		new URLSearchParams(location.search).get("surface") === "profile-thumbnail"
+	)
+		return <ProfileThumbnail />;
 	return surface === "panel" ? (
 		<PanelSurface />
 	) : (
