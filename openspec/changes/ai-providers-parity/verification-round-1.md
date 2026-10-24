@@ -76,4 +76,22 @@ configuration changed. No paid provider, real device, microphone or DK-Suite
 was used. Native/live acceptance and the shared voice-stt-tts tasks remain
 open; the current shared tracker also leaves open-quake-c5w.13 open.
 
-Publication and thread-resolution evidence will follow after the fix push.
+## Publication and thread resolution
+
+Fix commit 40fdfcd0b6eeb8d71727a4ac4e4dd19d90ccc860 was pushed to
+lane/ai-providers through the unchanged pre-push gates. All seven original
+threads received addPullRequestReviewThreadReply and resolveReviewThread calls.
+Five threads were fixed (including the duplicate Auto report); two code changes
+were declined for the boundaries above. Reply evidence:
+
+- Kimi: https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932170
+- Auto (Devin): https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932332
+- DeepSeek: https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932448
+- Live qualification: https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932558
+- Caller session identity: https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932677
+- Auto (Codex): https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932813
+- Recognition deadlines: https://github.com/ramarivera/open-quake/pull/27#discussion_r4366932935
+
+Review-round beads open-quake-lih.15.1.6–11 are closed with source and gate
+evidence, and the ai-providers-parity epic is closed again. PR #27 remains open;
+no merge was performed. No PR watcher was started.
