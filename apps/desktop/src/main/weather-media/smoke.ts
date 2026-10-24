@@ -392,7 +392,7 @@ async function smoke(): Promise<void> {
 		);
 		await capture(management, "weather-settings-ip-consent");
 		for (const [index, query] of [", DE", "A, DE"].entries()) {
-			const beforeInvalid = networkCalls.length;
+			const beforeInvalid: number = networkCalls.length;
 			assert.deepEqual(
 				await request(management, { _tag: "verifyCity", query, locale: "en" }),
 				{ _tag: "city", result: { _tag: "not-found" } },
