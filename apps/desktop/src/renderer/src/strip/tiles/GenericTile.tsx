@@ -123,11 +123,23 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 		themeAccent(tile.cellTheme),
 		metrics.layers === "commonBase",
 	);
-	const fontStyle = metrics.italic ? "italic" : "normal";
+	const explicit = config.title.userModifiedStyle === true;
+	const styles = config.title.style.split("|");
+	const fontStyle = (explicit ? styles.includes("italic") : metrics.italic)
+		? "italic"
+		: "normal";
+	const fontWeight = explicit
+		? styles.includes("bold")
+			? 900
+			: 400
+		: metrics.fontWeight;
+	const fontSize = explicit
+		? metrics.fontSize * (config.title.size / 8)
+		: metrics.fontSize;
 	const title = useTruncatedTitle(
 		config.title.text,
 		metrics.titleWidth,
-		`${fontStyle} ${metrics.fontWeight} ${metrics.fontSize}px ${STRIP_PALETTE.font}`,
+		`${fontStyle} ${fontWeight} ${fontSize}px ${STRIP_PALETTE.font}`,
 	);
 	const accentRgb = `${accent.r}, ${accent.g}, ${accent.b}`;
 	return (
@@ -170,17 +182,25 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 				<p
 					className="strip-tile-title"
 					style={{
-						fontSize: metrics.fontSize,
-						fontWeight: metrics.fontWeight,
+						fontSize,
+						fontWeight,
+						textDecoration:
+							explicit && styles.includes("underline") ? "underline" : "none",
 						fontStyle,
 						color: config.title.color,
 						width: tile.box.width,
-						...(metrics.titleAnchor === "top"
-							? { top: `${metrics.titleOffset * 100}%` }
-							: {
-									// DK keeps the paragraph's 1em bottom margin.
-									bottom: `calc(${metrics.titleOffset * 100}% + ${metrics.fontSize}px)`,
-								}),
+						...(config.title.pos === "mid"
+							? { top: "50%", transform: "translateY(-50%)", margin: 0 }
+							: (
+										explicit
+											? config.title.pos === "top"
+											: metrics.titleAnchor === "top"
+									)
+								? { top: `${metrics.titleOffset * 100}%` }
+								: {
+										// DK keeps the paragraph's 1em bottom margin.
+										bottom: `calc(${metrics.titleOffset * 100}% + ${fontSize}px)`,
+									}),
 					}}
 				>
 					{title}

@@ -8,6 +8,7 @@ import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 	Profile,
+	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service";
@@ -380,4 +381,59 @@ describe("production emoji IPC boundaries", () => {
 			await f.close();
 		}
 	});
+});
+
+it("keeps a retained unsupported emoji import inert at the registered press boundary", async () => {
+	const copied: string[] = [];
+	const f = await setup(async (path) => {
+		copied.push(path);
+	});
+	try {
+		expect(await f.press(f.panel)).toEqual({ _tag: "handled" });
+		expect(copied).toHaveLength(1);
+		const retained = await f.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) =>
+				repo.transact((envelope) =>
+					Effect.succeed(
+						Schema.decodeUnknownSync(Schema.typeSchema(ProfileEnvelope))({
+							...envelope,
+							profiles: envelope.profiles.map((profile, i) =>
+								i !== 0
+									? profile
+									: {
+											...profile,
+											pages: profile.pages.map((page, j) =>
+												j !== 0
+													? page
+													: {
+															...page,
+															keys: page.keys.map((key) => ({
+																...key,
+																compatibility: Option.some({
+																	unsupported: true,
+																	retained: "synthetic-import",
+																}),
+															})),
+														},
+											),
+										},
+							),
+						}),
+					),
+				),
+			),
+		);
+		const key = retained.profiles[0].pages[0].keys[0];
+		expect(key?.config.type).toBe("emoji");
+		expect(key?.config.actions).toHaveLength(1);
+		for (let n = 0; n < 2; n++)
+			expect(await f.press(f.panel)).toEqual({ _tag: "ignored" });
+		expect(copied).toHaveLength(1);
+		const after = await f.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) => repo.load()),
+		);
+		expect(after.envelope.profiles[0].pages[0].keys[0]).toEqual(key);
+	} finally {
+		await f.close();
+	}
 });

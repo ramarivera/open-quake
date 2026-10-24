@@ -33,6 +33,7 @@ import { backupPaths } from "./backup-paths";
 import { readBackupFile } from "./backup-read";
 import { archiveClockMedia } from "./clock-backup";
 import { prepareEmojiBackupMerge } from "./emoji-backup-merge";
+import { decodeIconLibrary, prepareIconBackupMerge } from "./icon-backup";
 
 function validateNative(relative: string, data: Uint8Array): void {
 	if (relative.startsWith("emoji-v1/assets/")) {
@@ -50,6 +51,7 @@ function validateNative(relative: string, data: Uint8Array): void {
 		relative !== "emoji-v1/library.backup.json"
 	)
 		throw new BackupInvalid();
+	if (relative.startsWith("key-library-v1.json/")) throw new BackupInvalid();
 	if (!relative.endsWith(".json")) return;
 	const value: unknown = JSON.parse(Buffer.from(data).toString("utf8"));
 	Schema.decodeUnknownSync(ProfileJson)(value);
@@ -69,6 +71,7 @@ function validateNative(relative: string, data: Uint8Array): void {
 		Schema.decodeUnknownSync(ClockRecord)(value);
 	else if (relative === "monitor-v1/settings.json")
 		Schema.decodeUnknownSync(MonitorRecord)(value);
+	else if (relative === "key-library-v1.json") decodeIconLibrary(data);
 	else if (relative === "appearance.json")
 		appearanceRecord(Buffer.from(data).toString("utf8"));
 	else if (
@@ -84,6 +87,7 @@ export const managedData = [
 	"clock-v1",
 	"monitor-v1",
 	"appearance.json",
+	"key-library-v1.json",
 	"emoji-v1/library.json",
 	"emoji-v1/library.backup.json",
 	"emoji-v1/assets",
@@ -117,6 +121,8 @@ async function readManaged(
 		const info = await lstat(path).catch(() => undefined);
 		if (!info) return;
 		if (info.isSymbolicLink()) throw new BackupInvalid();
+		if (relative === "key-library-v1.json" && !info.isFile())
+			throw new BackupInvalid();
 		if (info.isDirectory()) {
 			for (const name of (await readdir(path)).sort())
 				await collect(`${relative}/${name}`);
@@ -222,6 +228,8 @@ export async function prepareRestore(
 			root,
 			join(root, "emoji-v1/library.backup.json"),
 		);
+		await assertOwnedDestination(root, join(root, "key-library-v1.json"));
+		await prepareIconBackupMerge(files, root);
 		const emoji = await prepareEmojiBackupMerge(files, root);
 		mergeBackup(emoji.files, current, root, known);
 	};
@@ -242,6 +250,8 @@ export async function prepareRestore(
 				root,
 				join(root, "emoji-v1/library.backup.json"),
 			);
+			await assertOwnedDestination(root, join(root, "key-library-v1.json"));
+			const icons = await prepareIconBackupMerge(files, root);
 			const emoji = await prepareEmojiBackupMerge(files, root);
 			const result = mergeBackup(emoji.files, current, root, known);
 			const mergedEmoji = emoji.finish(result.profileIds);
@@ -262,6 +272,7 @@ export async function prepareRestore(
 					if (
 						!path.startsWith("open-quake/") ||
 						path === "open-quake/profiles-v1.json" ||
+						path === "open-quake/key-library-v1.json" ||
 						path === "open-quake/emoji-v1/library.json" ||
 						path === "open-quake/emoji-v1/library.backup.json"
 					)
@@ -300,6 +311,11 @@ export async function prepareRestore(
 					await assertOwnedDestination(stage, destination);
 					await mkdir(dirname(destination), { recursive: true });
 					await writeFile(destination, data, { mode: 0o600 });
+				}
+				if (icons) {
+					const destination = join(stage, "key-library-v1.json");
+					await assertOwnedDestination(stage, destination);
+					await writeFile(destination, JSON.stringify(icons), { mode: 0o600 });
 				}
 				if (mergedEmoji) {
 					for (const name of ["library.json", "library.backup.json"]) {

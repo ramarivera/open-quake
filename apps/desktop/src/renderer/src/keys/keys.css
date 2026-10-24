@@ -1,0 +1,148 @@
+.keys-save-boundary {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+}
+.keys-preview,
+.keys-cells {
+	border: 0;
+	padding: 0;
+	min-width: 0;
+}
+.key-editor .keys-preview {
+	position: relative;
+	width: 100%;
+	aspect-ratio: 4;
+	cursor: pointer;
+	margin-block: 20px;
+}
+.key-editor .keys-preview .strip-viewport {
+	width: 100%;
+	height: 100%;
+}
+.keys-cells {
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	gap: 4px;
+	margin-block-end: 24px;
+}
+.key-editor button,
+.key-editor input,
+.key-editor select {
+	font: inherit;
+}
+.key-editor button {
+	cursor: pointer;
+}
+.key-editor button:disabled {
+	cursor: default;
+	opacity: 0.45;
+}
+.key-editor button[aria-pressed="true"] {
+	outline: 2px solid var(--accent, #409eff);
+	outline-offset: -2px;
+}
+.key-editor input,
+.key-editor select {
+	min-width: 0;
+	max-width: 100%;
+}
+.key-editor .row-control {
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.key-editor small[data-warning="true"] {
+	color: #e6a23c;
+}
+.icon-library-body {
+	display: grid;
+	grid-template-columns: 200px minmax(0, 1fr);
+	height: 360px;
+	border-block: 1px solid var(--border, #444);
+}
+.icon-library-body aside {
+	overflow: auto;
+	border-inline-end: 1px solid var(--border, #444);
+}
+.icon-library-body aside > div {
+	display: flex;
+}
+.icon-library-body aside button {
+	text-align: left;
+	min-height: 44px;
+	flex: 1;
+	overflow-wrap: anywhere;
+}
+.icon-library-body aside small {
+	opacity: 0.65;
+}
+.icon-library-grid {
+	display: grid;
+	overflow: auto;
+	align-content: start;
+	gap: 10px;
+	padding: 16px;
+}
+.icon-library-cell {
+	position: relative;
+}
+.icon-library-cell > button:first-child {
+	width: 100%;
+	display: grid;
+	place-items: center;
+	background: #202126;
+	border: 1px solid #45454d;
+	border-radius: 6px;
+}
+.icon-library-cell > button + button {
+	position: absolute;
+	right: 0;
+	top: 0;
+}
+.key-sequence {
+	padding: 16px;
+}
+.key-sequence-step {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 8px;
+	margin-block: 12px;
+}
+.key-sequence-step label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.key-sequence-step input {
+	max-width: 180px;
+}
+@media (max-width: 760px) {
+	.icon-library-body {
+		grid-template-columns: 140px minmax(0, 1fr);
+	}
+	.keys-cells {
+		grid-template-columns: repeat(4, 1fr);
+	}
+}
+
+.icon-library-grid {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.key-title-settings summary {
+	cursor: pointer;
+	padding: 12px 16px;
+}
+.key-title-settings fieldset {
+	border: 0;
+	padding: 0;
+	margin: 0;
+	min-width: 0;
+}
+.key-title-settings input[type="number"] {
+	width: 90px;
+}

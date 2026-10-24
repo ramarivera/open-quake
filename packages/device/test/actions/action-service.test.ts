@@ -10,6 +10,24 @@ import { nextTrackFixture, switchFixture } from "./action-fixtures.js";
 import { config, harness, press } from "./action-harness.js";
 
 describe("action conductor via committed snapshots and fake host consumers", () => {
+	it.effect("MAIN-067 alternates committed shortcuts once per press", () => {
+		const h = harness("hotkeySwitch", switchFixture.config);
+		return Effect.gen(function* () {
+			const service = yield* ActionService;
+			yield* service.activate(press);
+			yield* service.activate({ ...press, sequence: 2 });
+			yield* service.activate({ ...press, kind: "release", sequence: 3 });
+			yield* service.activate({ ...press, sequence: 4 });
+			yield* service.activate({ ...press, kind: "release", sequence: 5 });
+			yield* service.activate({ ...press, sequence: 6 });
+			expect(h.calls).toEqual([
+				["key", "control+a"],
+				["key", "control+b"],
+				["key", "control+a"],
+			]);
+		}).pipe(Effect.provide(h.layer()));
+	});
+
 	it.effect(
 		"executes one press, suppresses held presses, duplicates, repeats, holds and release",
 		() => {
@@ -246,7 +264,6 @@ describe("action conductor via committed snapshots and fake host consumers", () 
 		["open", config("open", "", "path"), "InvalidKeyAction"],
 		["open", config("open", "./private-Editor", "path"), "InvalidKeyAction"],
 		["unregistered-private-value", {}, "KeyFunctionUnavailable"],
-		["hotkeySwitch", switchFixture.config, "KeyFunctionUnavailable"],
 		["nextPage", { type: "nextPage", actions: [] }, "KeyFunctionUnavailable"],
 		[
 			"dkDesktopClock",

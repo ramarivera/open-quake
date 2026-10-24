@@ -23,6 +23,7 @@
 	},
 	"devDependencies": {
 		"@effect/vitest": "catalog:",
+		"@mdi/svg": "7.4.47",
 		"@open-quake/protocol": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/react": "19.2.18",

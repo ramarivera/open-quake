@@ -3,6 +3,7 @@ import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard";
 import type { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { isUnsupportedProfileKey } from "../../../../../packages/device/src/profiles/profile-function-contracts";
 import type { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import {
@@ -254,6 +255,7 @@ export function registerEmoji<R>(options: {
 					? selected.page.keys.find(
 							(key) =>
 								key.keyCode === request.keyCode &&
+								!isUnsupportedProfileKey(key) &&
 								key.config.type === "emoji" &&
 								key.config.display,
 						)

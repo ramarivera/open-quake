@@ -34,6 +34,7 @@ import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import { hardwarePreferencesLive } from "./hardware/preferences";
 import { registerIntegrations } from "./integrations";
+import { resetKeysOnLinkLoss } from "./key-library/device-status";
 import { registerKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
 import { DeviceLifecycle } from "./lifecycle/lifecycle-service";
@@ -212,6 +213,8 @@ if (!app.requestSingleInstanceLock()) {
 			rendererURL,
 			undefined,
 			managementURL.href,
+			() => bus?.hardware?.(),
+			() => panelWin,
 		);
 		const agents = registerAgents({
 			management: () => managementWin,
@@ -450,6 +453,10 @@ if (!app.requestSingleInstanceLock()) {
 									void lifecycle.then((service) =>
 										lifecycleRuntime.runPromise(service.onStatus(event)),
 									);
+									if (!mock)
+										void resetKeysOnLinkLoss(event, profiles.resetKeys).catch(
+											() => {},
+										);
 									if (mock) {
 										const operation =
 											event.state === "connected"
@@ -480,6 +487,7 @@ if (!app.requestSingleInstanceLock()) {
 						reason: "scope-closed",
 					});
 					if (mock) await profiles.disconnect("desktop-preview");
+					else await profiles.resetKeys();
 					await lifecycle.then((service) =>
 						lifecycleRuntime.runPromise(service.lock()),
 					);

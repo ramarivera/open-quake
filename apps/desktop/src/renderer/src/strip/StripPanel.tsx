@@ -1,6 +1,10 @@
 import { Option } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GridVoiceInput } from "../../../shared/voice-surface";
+import {
+	createPanelKeyDispatcher,
+	type PanelKeyTarget,
+} from "../keys/panel-key-dispatch";
 import { meetingTouchAction } from "../meetings/touch-action";
 import { meetingRequest } from "../meetings/useMeetings";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
@@ -95,6 +99,7 @@ function useHoldInput(
  * voice overlay on top (strip-voice-ui).
  */
 export function StripPanel(): React.JSX.Element {
+	const target = useRef<PanelKeyTarget | undefined>(undefined);
 	const emojiSelection = useRef<
 		| {
 				profileId: string;
@@ -148,6 +153,10 @@ export function StripPanel(): React.JSX.Element {
 	holdKey.current = onHoldKey;
 	useEffect(() => {
 		const root = document.getElementById("root");
+		const dispatch = createPanelKeyDispatcher(
+			() => target.current,
+			(request) => window.quakeKeyLibrary.request(request),
+		);
 		const timers = new Set<ReturnType<typeof setTimeout>>();
 		const heldEmoji = new Map<
 			string,
@@ -177,6 +186,7 @@ export function StripPanel(): React.JSX.Element {
 				() => layout.current,
 				(event) => {
 					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
+					dispatch.key(event);
 					holdKey.current(event);
 					const action = meetingTouchAction(event, layout.current);
 					if (action) void meetingRequest({ _tag: "action", action });
@@ -207,6 +217,21 @@ export function StripPanel(): React.JSX.Element {
 						})
 						.catch(() => invalid(event.keyCode));
 				},
+				(direction) => {
+					dispatch.cancel();
+					heldEmoji.clear();
+					if (!target.current) return;
+					void window.quakeKeyLibrary?.request({
+						type: "navigate",
+						deviceId: target.current.deviceId,
+						direction,
+					});
+				},
+				() => {
+					dispatch.cancel();
+					heldEmoji.clear();
+					setPressedKeyCode(undefined);
+				},
 			);
 			return () => {
 				disposed = true;
@@ -215,6 +240,18 @@ export function StripPanel(): React.JSX.Element {
 			};
 		}
 	}, []);
+	if (profiles._tag === "ready") {
+		const { profile, page } = selectStripPage(
+			profiles.envelope,
+			snapshot?.saved.serial,
+		);
+		target.current = {
+			deviceId: snapshot?.saved.serial ?? "desktop-preview",
+			profileId: profile.id,
+			pageId: page.id,
+			revision: profile.revision,
+		};
+	} else target.current = undefined;
 	// A profile or page switch drops the voice session's key state (AI-170).
 	const selection =
 		profiles._tag === "ready"

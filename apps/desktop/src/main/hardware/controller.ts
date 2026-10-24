@@ -30,6 +30,11 @@ export function hardwareRequest(
 				yield* current.configure(command.preferences);
 				break;
 			case "inputMode":
+				if (command.mode === "host")
+					return {
+						_tag: "failure",
+						code: "QUAKE.HARDWARE.HOST_KEYBOARD_UNAVAILABLE",
+					} as const;
 				yield* current.setInputMode(command.mode);
 				break;
 			case "refresh":

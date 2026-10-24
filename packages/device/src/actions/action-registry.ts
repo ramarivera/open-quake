@@ -24,6 +24,7 @@ const define = <A, const I extends string>(
 		readonly defaults: Readonly<Record<string, unknown>>;
 		readonly aliases?: ReadonlyArray<string>;
 		readonly supportKnob?: boolean;
+		readonly alternateState?: boolean;
 		readonly supportTouchEffect?: boolean;
 		readonly permission?: "read" | "write" | "sensitive";
 	},
@@ -40,7 +41,7 @@ const define = <A, const I extends string>(
 		defaultConfig: { type: id, ...options.defaults },
 		supportKnob: options.supportKnob ?? false,
 		supportTouchEffect: options.supportTouchEffect ?? true,
-		alternateState: false,
+		alternateState: options.alternateState ?? false,
 		editPolicy: {
 			title: true,
 			grid: true,
@@ -172,10 +173,34 @@ export const ACTION_REGISTRY = [
 		},
 	}),
 	define("hotkeySwitch", C.HotkeySwitchCompatibility, {
+		alternateState: true,
 		submenu: "shortcut",
-		requiredAdapter: "hotkeySwitch.dispatch-evidence",
-		binding: "unresolved",
-		defaults: { actions: [] },
+		requiredAdapter: "host.keyboard",
+		binding: "hotkey",
+		defaults: {
+			actions: [
+				{ type: "key", value: "" },
+				{ type: "key", value: "" },
+			],
+		},
+	}),
+	define("timer", C.TimerConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "keys.runtime",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{ type: "time", value: 10000 },
+				{ type: "sound", value: "" },
+				{ type: "callback", value: 1 },
+			],
+		},
+	}),
+	define("multiActions", C.MultiActionConfig, {
+		submenu: "shortcut",
+		requiredAdapter: "keys.runtime",
+		binding: "delegate",
+		defaults: { actions: [], subActions: [] },
 	}),
 ] as const;
 export type ActionEntry = (typeof ACTION_REGISTRY)[number];

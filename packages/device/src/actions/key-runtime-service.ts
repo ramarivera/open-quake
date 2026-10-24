@@ -1,0 +1,420 @@
+import { Clock, Context, Effect, Fiber, Layer, Option, Schema } from "effect";
+import { pageIndex } from "../profiles/key-editing-invariants.js";
+import {
+	type ProfileEnvelope,
+	ProfileKey,
+} from "../profiles/profile-contracts.js";
+import { isUnsupportedProfileKey } from "../profiles/profile-function-contracts.js";
+import {
+	GoToPageConfig,
+	HotkeySwitchConfig,
+	MultiActionConfig,
+	NextPageConfig,
+	PreviousPageConfig,
+	TimerConfig,
+} from "./action-contracts.js";
+import {
+	type ActionError,
+	InvalidKeyAction,
+	KeyFunctionUnavailable,
+} from "./action-errors.js";
+import { validateAction } from "./action-invariants.js";
+import type { ActionConfig } from "./action-registry.js";
+export interface KeyFeedback {
+	readonly deviceId: string;
+	readonly profileId: string;
+	readonly pageId: string;
+	readonly keyCode: string;
+	readonly alternate?: 0 | 1;
+	readonly countdown?: number;
+	readonly progress?: number;
+	readonly alert?: 0 | 1 | 2 | 3;
+}
+export class KeyRuntimePort extends Context.Tag(
+	"@open-quake/device/KeyRuntimePort",
+)<
+	KeyRuntimePort,
+	{
+		readonly read: Effect.Effect<ProfileEnvelope, ActionError>;
+		readonly execute: (
+			config: ActionConfig,
+		) => Effect.Effect<void, ActionError>;
+		readonly publish: (state: KeyFeedback) => Effect.Effect<void>;
+		readonly select: (
+			deviceId: string,
+			profileId: string,
+			pageId: string,
+		) => Effect.Effect<void, ActionError>;
+		readonly alarm: (
+			deviceId: string,
+			sound: string,
+		) => Effect.Effect<void, ActionError>;
+	}
+>() {}
+const unavailable = Effect.fail(new KeyFunctionUnavailable("owning-runtime"));
+const NoPort = Layer.succeed(KeyRuntimePort, {
+	read: unavailable,
+	execute: () => unavailable,
+	publish: () => Effect.void,
+	select: () => unavailable,
+	alarm: () => unavailable,
+});
+export class KeyRuntime extends Effect.Service<KeyRuntime>()(
+	"@open-quake/device/KeyRuntime",
+	{
+		accessors: true,
+		dependencies: [NoPort],
+		scoped: Effect.gen(function* () {
+			const port = yield* KeyRuntimePort,
+				scope = yield* Effect.scope;
+			const states = new Map<string, KeyFeedback>();
+			const stateId = (state: KeyFeedback): string =>
+				JSON.stringify([
+					state.deviceId,
+					state.profileId,
+					state.pageId,
+					state.keyCode,
+				]);
+			const held = new Set<string>(),
+				alternates = new Map<string, 0 | 1>(),
+				running = new Map<string, Fiber.RuntimeFiber<void, never>>();
+			const lock = yield* Effect.makeSemaphore(1);
+			const current = (env: ProfileEnvelope, deviceId: string) => {
+				const selection = env.activeByDevice[deviceId];
+				const hidden = Option.isSome(env.manager)
+					? env.manager.value.hidden
+					: [];
+				const visible = env.profiles.filter((p) => !hidden.includes(p.id));
+				const profile =
+					visible.find((p) => p.id === selection?.profileId) ??
+					visible[0] ??
+					env.profiles[0];
+				const page =
+					profile.pages.find((p) => p.id === selection?.pageId) ??
+					profile.pages[0];
+				return { profile, page };
+			};
+			const feedback = Effect.fn("KeyRuntime.feedback")(function* (
+				state: KeyFeedback,
+			): Effect.fn.Return<void> {
+				const active = yield* port.read.pipe(Effect.option);
+				if (Option.isSome(active)) {
+					const { profile, page } = current(active.value, state.deviceId);
+					const visible =
+						profile.id === state.profileId && page.id === state.pageId;
+					const value = {
+						...states.get(stateId(state)),
+						...state,
+						...(!visible ? { alert: 0 as const } : {}),
+					};
+					states.set(stateId(state), value);
+					if (visible) yield* port.publish(value);
+				}
+			});
+			const refresh = Effect.fn("KeyRuntime.refresh")(function* (
+				deviceId: string,
+			): Effect.fn.Return<void, ActionError> {
+				const env = yield* port.read;
+				const { profile, page } = current(env, deviceId);
+				for (const value of states.values())
+					if (
+						value.deviceId === deviceId &&
+						value.profileId === profile.id &&
+						value.pageId === page.id
+					)
+						yield* port.publish(value);
+			});
+
+			const navigate = Effect.fn("KeyRuntime.navigate")(function* (
+				deviceId: string,
+				direction: 0 | 1 | 2 | 3,
+				pageNumber?: number,
+			): Effect.fn.Return<void, ActionError> {
+				const env = yield* port.read;
+				const { profile, page } = current(env, deviceId);
+				if (direction < 2) {
+					const at = profile.pages.findIndex((p) => p.id === page.id);
+					const next =
+						profile.pages[
+							pageNumber === undefined
+								? pageIndex(at, profile.pages.length, direction === 0 ? -1 : 1)
+								: Math.min(
+										profile.pages.length - 1,
+										Math.max(0, pageNumber - 1),
+									)
+						];
+					if (next) {
+						yield* port.select(deviceId, profile.id, next.id);
+						yield* refresh(deviceId);
+					}
+					return;
+				}
+				const hidden = Option.isSome(env.manager)
+					? env.manager.value.hidden
+					: [];
+				const visible = env.profiles.filter(
+					(p) =>
+						!hidden.includes(p.id) && p.pages.some((page) => page.keys.length),
+				);
+				const next =
+					visible[
+						pageIndex(
+							visible.findIndex((p) => p.id === profile.id),
+							visible.length,
+							direction === 2 ? -1 : 1,
+						)
+					];
+				if (next) {
+					yield* port.select(deviceId, next.id, next.pages[0].id);
+					yield* refresh(deviceId);
+				}
+			});
+			const activate = Effect.fn("KeyRuntime.activate")(function* (
+				deviceId: string,
+				keyCode: string,
+				kind: "press" | "release",
+				expected?: {
+					readonly profileId: string;
+					readonly pageId: string;
+					readonly revision: number;
+				},
+			): Effect.fn.Return<void, ActionError> {
+				const control = JSON.stringify([deviceId, keyCode]);
+				if (kind === "release") {
+					held.delete(control);
+					return;
+				}
+				if (held.has(control)) return;
+				held.add(control);
+				const env = yield* port.read;
+				const { profile, page } = current(env, deviceId);
+				if (
+					expected &&
+					(expected.profileId !== profile.id ||
+						expected.pageId !== page.id ||
+						expected.revision !== profile.revision)
+				)
+					return;
+				const key = page.keys.find(
+					(k) => k.keyCode === keyCode && k.config.display,
+				);
+				if (!key || isUnsupportedProfileKey(key)) return;
+				const identity = JSON.stringify([
+					deviceId,
+					profile.id,
+					page.id,
+					keyCode,
+				]);
+				const base = {
+					deviceId,
+					profileId: profile.id,
+					pageId: page.id,
+					keyCode,
+				};
+				const input = Schema.encodeSync(ProfileKey)(key).config;
+				const type = key.config.type;
+				if (type === "hotkeySwitch") {
+					const decoded = Schema.decodeUnknownEither(HotkeySwitchConfig)(input);
+					if (decoded._tag === "Left")
+						return yield* Effect.fail(
+							new InvalidKeyAction("config.actions", decoded.left),
+						);
+					const state = alternates.get(identity) ?? 0;
+					yield* port.execute({
+						type: "hotkey",
+						actions: [decoded.right.actions[state]],
+					});
+					alternates.set(identity, state === 0 ? 1 : 0);
+					yield* feedback({ ...base, alternate: state === 0 ? 1 : 0 });
+					return;
+				}
+				if (
+					[
+						"previousPage",
+						"pageUp",
+						"nextPage",
+						"pageDown",
+						"goToPage",
+					].includes(type)
+				) {
+					const canonical =
+						type === "pageUp"
+							? "previousPage"
+							: type === "pageDown"
+								? "nextPage"
+								: type;
+					const validated = Schema.decodeUnknownEither(
+						Schema.Union(GoToPageConfig, NextPageConfig, PreviousPageConfig),
+					)({
+						...input,
+						type: canonical,
+					});
+					if (validated._tag === "Left")
+						return yield* Effect.fail(
+							new InvalidKeyAction("config.actions", validated.left),
+						);
+					const number =
+						validated.right.type === "goToPage"
+							? validated.right.actions[0].value
+							: undefined;
+					yield* navigate(
+						deviceId,
+						canonical === "previousPage" ? 0 : 1,
+						canonical === "goToPage" && typeof number === "number"
+							? number
+							: undefined,
+					);
+					return;
+				}
+				if (type === "timer" || type === "multiActions") {
+					const previous = running.get(identity);
+					if (previous) {
+						running.delete(identity);
+						yield* Fiber.interrupt(previous);
+						yield* feedback({
+							...base,
+							countdown: -1,
+							progress: 100,
+							alert: 0,
+						});
+						return;
+					}
+					let work: Effect.Effect<void, ActionError>;
+					if (type === "timer") {
+						const decoded = Schema.decodeUnknownEither(TimerConfig)(input);
+						if (decoded._tag === "Left")
+							return yield* Effect.fail(
+								new InvalidKeyAction("config.actions", decoded.left),
+							);
+						const duration = decoded.right.actions.find(
+							(a) => a.type === "time",
+						)?.value;
+						const sound = decoded.right.actions.find(
+							(a) => a.type === "sound",
+						)?.value;
+						if (typeof duration !== "number")
+							return yield* Effect.fail(new InvalidKeyAction("config.actions"));
+						work = Effect.gen(function* () {
+							const end = (yield* Clock.currentTimeMillis) + duration;
+							yield* feedback({ ...base, countdown: duration, alert: 0 });
+							let remaining = duration;
+							while (remaining > 0) {
+								yield* Effect.sleep(Math.min(1000, remaining));
+								remaining = Math.max(0, end - (yield* Clock.currentTimeMillis));
+								if (remaining > 0)
+									yield* feedback({ ...base, countdown: remaining });
+							}
+							yield* feedback({ ...base, countdown: -1, alert: 2 });
+							if (typeof sound === "string" && sound)
+								yield* port.alarm(deviceId, sound);
+						});
+					} else {
+						const decoded =
+							Schema.decodeUnknownEither(MultiActionConfig)(input);
+						if (decoded._tag === "Left")
+							return yield* Effect.fail(
+								new InvalidKeyAction("config.actions", decoded.left),
+							);
+						// Validate the entire sequence before the first host effect.
+						for (const step of decoded.right.subActions)
+							if (
+								step.config.type !== "delay" &&
+								validateAction(step.config.type, step.config)._tag === "Left"
+							)
+								return yield* Effect.fail(
+									new InvalidKeyAction("config.actions"),
+								);
+						work = Effect.gen(function* () {
+							const steps = decoded.right.subActions;
+							yield* feedback({ ...base, progress: 0, alert: 0 });
+							for (let i = 0; i < steps.length; i++) {
+								const config = steps[i]?.config;
+								if (!config) continue;
+								if (config.type === "delay")
+									yield* Effect.sleep(config.actions[0].value);
+								else {
+									const action = validateAction(config.type, config);
+									if (action._tag === "Left")
+										return yield* Effect.fail(action.left);
+									yield* port.execute(action.right);
+								}
+								yield* feedback({
+									...base,
+									progress: Math.floor(((i + 1) / steps.length) * 100),
+								});
+								if (i < steps.length - 1)
+									yield* Effect.sleep(config.gap ?? 100);
+							}
+						});
+					}
+					const fiber = yield* Effect.forkIn(
+						Effect.yieldNow()
+							.pipe(Effect.zipRight(work))
+							.pipe(
+								Effect.catchTags({
+									InvalidKeyAction: () =>
+										feedback({ ...base, alert: 1, progress: 100 }),
+									KeyFunctionUnavailable: () =>
+										feedback({ ...base, alert: 1, progress: 100 }),
+									HostActionFailed: () =>
+										feedback({ ...base, alert: 1, progress: 100 }),
+									ActionPermissionDenied: () =>
+										feedback({ ...base, alert: 1, progress: 100 }),
+									ActionApplicationMissing: () =>
+										feedback({ ...base, alert: 1, progress: 100 }),
+									ActionSnapshotFailed: () =>
+										feedback({ ...base, alert: 1, progress: 100 }),
+								}),
+								Effect.ensuring(Effect.sync(() => running.delete(identity))),
+							),
+						scope,
+					);
+					running.set(identity, fiber);
+					return;
+				}
+				const action = validateAction(
+					Option.getOrElse(key.childrenName, () => type),
+					input,
+				);
+				if (action._tag === "Left") return yield* Effect.fail(action.left);
+				yield* port.execute(action.right);
+			});
+			const reset = Effect.fn("KeyRuntime.reset")(function* (
+				deviceId?: string,
+			): Effect.fn.Return<void> {
+				for (const [key, fiber] of running)
+					if (!deviceId || JSON.parse(key)[0] === deviceId) {
+						yield* Fiber.interrupt(fiber);
+						running.delete(key);
+					}
+
+				for (const [id, value] of states)
+					if (!deviceId || value.deviceId === deviceId) {
+						yield* port.publish({
+							...value,
+							alternate: 0,
+							countdown: -1,
+							progress: 100,
+							alert: 0,
+						});
+						states.delete(id);
+					}
+
+				for (const key of held)
+					if (!deviceId || JSON.parse(key)[0] === deviceId) held.delete(key);
+				for (const key of alternates.keys())
+					if (!deviceId || JSON.parse(key)[0] === deviceId)
+						alternates.delete(key);
+			});
+			return {
+				activate: (...args: Parameters<typeof activate>) =>
+					activate(...args).pipe(lock.withPermits(1)),
+				navigate: (...args: Parameters<typeof navigate>) =>
+					navigate(...args).pipe(lock.withPermits(1)),
+				refresh,
+				snapshot: Effect.sync(() => [...states.values()]),
+				reset: (deviceId?: string) => reset(deviceId).pipe(lock.withPermits(1)),
+			};
+		}),
+	},
+) {}

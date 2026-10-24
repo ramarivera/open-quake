@@ -4,7 +4,7 @@ The parent creates an epic and one issue per checkbox at this OpenSpec path. Sou
 
 ## 1. First-release registry and typed inputs
 
-- [x] 1.1 Record Ramiro's decisions on first-release payloads, default text-enter behavior, supported host keys, and open question 10; verify design.md retains hotkeySwitch as unresolved unless execution evidence justifies a changed spec.
+- [x] 1.1 Record Ramiro's decisions on first-release payloads, default text-enter behavior, supported host keys, and open question 10; record the initial hotkeySwitch deferral and its MAIN-067 resolution by key-library-parity.
 - [x] 1.2 Add a single packages/device capability registry and action Schemas for website/hotkey/text/open/media, plus profile/knob/clock integration descriptors; verify every first-release entry has input validation, permission/autonomy, support flags, aliases, and an explicit required adapter.
 - [x] 1.3 Add narrow import normalization for next-track's mismatched type, localized hotkey sentinels, and empty text-enter objects; verify fixtures preserve originals and do not rewrite a genuine previous-track tile or hotkeySwitch.
 - [x] 1.4 Add the action conductor, typed host interfaces, per-reason catalog errors, and no-auto-retry policy for side effects; verify invalid/unavailable actions produce distinct scrubbed failures and no adapter calls.
@@ -25,7 +25,7 @@ Evidence for tasks 1.1–1.4 is recorded in `verification.md`. Parent owns Beads
 - [ ] 3.1 Register later timer/device-toggle/folder/audio/AI/agent/HA/camera/printer/cmd/monitor metadata with explicit runtime dependencies; verify unavailable entries cannot execute and document all submenu coverage from design.md.
 - [ ] 3.2 Implement ordered non-recursive multiActions and delay after their leaf adapters exist; verify sequence order, cancellation, first-failure stop, held-input cleanup, and no reconnect replay using the real sequence consumer.
 - [ ] 3.3 Enable each later function only with its owning domain's Schema, dispatch, and integration evidence; verify that registering metadata alone never marks a backend available and record dependency links per family.
-- [ ] 3.4 Investigate hotkeySwitch's host dispatch and obtain Ramiro's scope decision before enabling it; verify consecutive presses, release, reset/profile/reconnect behavior and alternate visuals, then update this change's requirement and evidence record together.
+- [x] 3.4 Resolve hotkeySwitch using MAIN-067 and Ramiro's 2026-10-24 key-library scope. Implement consecutive presses, held/release suppression, profile/revision continuity, disconnect reset and alternate artwork in key-library-parity; verify with key-runtime.test.ts, action-service.test.ts and the native key-library smoke.
 
 ## 4. Integration close-out
 

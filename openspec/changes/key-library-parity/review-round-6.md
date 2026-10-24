@@ -1,0 +1,13 @@
+# PR35 cancellation and PR34 review integration
+
+Cancellation fix `f0c9187863969c9ee07d7407cd0d8432520fc999` clears pending emoji ownership both when a gesture is cancelled and when navigation takes ownership. This prevents a synthetic cancelled release from reaching clipboard or keyboard dispatch. The existing selection-generation guard remains active.
+
+Normal merges integrate PR34 metadata-only emoji snapshots, lazy/cached gallery sources, placement error identity, GIF validation caching, repeated agent activation, and appearance persistence fixes. The final tested source is `96dcac4074ddd325e8b67b6c1fdd8aa8c2136942`, which includes PR34 source `aa64024` and main `c60378fafcd041245a8c54ae329c87003f4fdcab`. No force push or root source edit was used.
+
+The management fixture exercises overlay takeover while an emoji is held, overlay closure before lift, gesture movement cancellation, profile/page changes and a subsequent valid tap. It records no clipboard operation for cancelled cases and verifies that an ordinary tap still copies. Real keyboard/clipboard operations are replaced by the existing recorded fixture ports.
+
+All six final-source gates passed: Biome checked 801 files; forced typecheck, 1,747 uncached tests across 187 files, forced build, both bundle cases and 40 strict OpenSpec items passed. Sequential Keys, preview, management and media native fixtures passed with exit zero and all required final markers. All 66 management hashes matched its manifest, and 112 PNG hashes were recorded overall. Four captures were viewed. The finding received an attributed source-SHA reply before resolution.
+
+The combined management and media fixtures have zero missing-handler lines. The isolated Keys fixture retains 20 missing-handler log lines and one Chromium cache line; the preview fixture retains six missing-handler lines and one cache line. Those fixtures omit management/agent/weather owners, and the logs include the resulting rejected theme requests. They are not represented as warning-free integration. All required consumer assertions and final markers passed. All recorded gate/native process groups are empty; generated fixture bundles and owned temporary data were removed while evidence remains. The inherited sidebar regression models pointer capture in hidden Chromium; visible-window capture remains unverified.
+
+Evidence root: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/key-library/review-round-6/`. Only review task 7.7 / bead `open-quake-lih.10.2.17` closes here. Physical, package and remaining presentation acceptance remain open. Independent review of the published head and merge remain pending.

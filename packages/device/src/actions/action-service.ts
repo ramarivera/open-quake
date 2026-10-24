@@ -32,7 +32,7 @@ interface InputState {
 const missing = () => new KeyFunctionUnavailable("adapter-missing");
 
 /** Host leaf execution only. Knob directional actions and view runtimes own their dispatch. */
-const execute = Effect.fn("ActionService.execute")(function* (
+export const executeActionLeaf = Effect.fn("ActionService.execute")(function* (
 	config: ActionConfig,
 	adapters: ActionHostAdapters["Type"],
 ): Effect.fn.Return<void, ActionError> {
@@ -129,6 +129,8 @@ export class ActionService extends Effect.Service<ActionService>()(
 		effect: Effect.gen(function* () {
 			const adapters = yield* ActionHostAdapters;
 			const profiles = yield* ActionProfileSource;
+			const alternates = new Map<string, 0 | 1>();
+			const lock = yield* Effect.makeSemaphore(1);
 			const inputs = yield* Ref.make<ReadonlyMap<string, InputState>>(
 				new Map(),
 			);
@@ -177,7 +179,24 @@ export class ActionService extends Effect.Service<ActionService>()(
 				if (!key) return "ignored";
 				const action = validateAction(key.childrenName, key.config);
 				if (Either.isLeft(action)) return yield* Effect.fail(action.left);
-				yield* execute(action.right, adapters);
+				if (action.right.type === "hotkeySwitch") {
+					const actionConfig = action.right;
+					yield* Effect.gen(function* () {
+						const identity = JSON.stringify([
+							event.deviceId,
+							event.sessionId,
+							event.profileId,
+							event.pageId,
+							event.keyCode,
+						]);
+						const state = alternates.get(identity) ?? 0;
+						yield* executeActionLeaf(
+							{ type: "hotkey", actions: [actionConfig.actions[state]] },
+							adapters,
+						);
+						alternates.set(identity, state === 0 ? 1 : 0);
+					}).pipe(lock.withPermits(1));
+				} else yield* executeActionLeaf(action.right, adapters);
 				return "executed";
 			});
 			return { activate };

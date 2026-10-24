@@ -73,8 +73,11 @@ export const ProfileCoordinate = Schema.String.pipe(
 	Schema.filter((code) => Option.isSome(parseProfileCoordinate(code))),
 );
 export const ProfileTitle = Schema.Struct({
+	userModifiedStyle: Schema.optional(Schema.Boolean),
+	multiLanguage: Schema.optional(Schema.Boolean),
+	i18nKey: Schema.optional(Schema.String),
 	text: Schema.String,
-	pos: Schema.Literal("top", "bot"),
+	pos: Schema.Literal("top", "mid", "bot"),
 	size: Schema.Finite.pipe(Schema.positive()),
 	color: Schema.String.pipe(Schema.pattern(/^#[\da-fA-F]{6}([\da-fA-F]{2})?$/)),
 	display: Schema.Boolean,
@@ -105,6 +108,8 @@ export const ProfileAction = Schema.Struct({
 	value: ProfileJson,
 });
 const KeyConfigFields = Schema.Struct({
+	userModifiedTitle: Schema.optional(Schema.Boolean),
+	userModifiedAlterTitle: Schema.optional(Schema.Boolean),
 	type: Schema.String,
 	title: ProfileTitle,
 	size: Schema.Tuple(

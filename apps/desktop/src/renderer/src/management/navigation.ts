@@ -1,6 +1,7 @@
 export const pages = [
 	"overview",
 	"profiles",
+	"keys",
 	"screen",
 	"controls",
 	"connection",

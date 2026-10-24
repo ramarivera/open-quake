@@ -4,7 +4,7 @@ import {
 	ProfileSnapshotReply,
 	type ProfilesBridge,
 } from "../../../shared/profile-snapshot-contracts";
-import type { ProfileEnvelope } from "../../../shared/profiles";
+import { ProfileEnvelope } from "../../../shared/profiles";
 
 export type StripProfiles =
 	| { readonly _tag: "loading" }
@@ -51,11 +51,22 @@ export function useStripProfiles(
 	useEffect(() => {
 		const bridge = window.quakeProfiles;
 		if (!bridge) return;
-		return subscribeStripProfiles(bridge, (next) => {
-			// Observe each committed snapshot before React can batch multiple selections.
+		const update = (next: StripProfiles): void => {
 			observer.current?.(next);
 			setProfiles(next);
+		};
+		const off = subscribeStripProfiles(bridge, update);
+		const preview = window.quakeKeyLibrary?.onPreview((snapshot) => {
+			const decoded = Schema.decodeUnknownEither(ProfileEnvelope)(
+				snapshot.envelope,
+			);
+			if (Either.isRight(decoded))
+				update({ _tag: "ready", envelope: decoded.right });
 		});
+		return () => {
+			off();
+			preview?.();
+		};
 	}, []);
 	return profiles;
 }

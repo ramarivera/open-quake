@@ -57,7 +57,7 @@ are integration descriptors. Their schemas match the owning change's action
 contract. They report unavailable in this host leaf conductor and delegate
 execution or rendering to their own runtime. A two-chord focused hotkey also
 requires the knob router; a tile press cannot guess which chord to execute.
-hotkeySwitch remains unresolved and cannot validate as executable. Later catalog
+hotkeySwitch now validates exactly two chords and alternates per press using MAIN-067. The scoped KeyRuntime owns its alternate artwork, countdowns, sequences and wrapping navigation. Later catalog
 coverage and composite actions remain tasks 3.x.
 
 Verification uses the real action conductor with fake adapters and committed

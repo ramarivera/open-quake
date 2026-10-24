@@ -222,9 +222,61 @@ export const DesktopClockConfig = Schema.Struct({
 		}),
 	),
 });
-export const HotkeySwitchCompatibility = Schema.Struct({
+export const HotkeySwitchConfig = Schema.Struct({
 	type: Schema.Literal("hotkeySwitch"),
+	actions: Schema.Tuple(KeyAction, KeyAction),
+});
+export const HotkeySwitchCompatibility = HotkeySwitchConfig;
+export const TimerConfig = Schema.Struct({
+	type: Schema.Literal("timer"),
+	actions: Schema.Array(
+		Schema.Union(
+			Schema.Struct({
+				type: Schema.Literal("time"),
+				value: Schema.Int.pipe(Schema.between(1, 86400000)),
+			}),
+			Schema.Struct({ type: Schema.Literal("sound"), value: Schema.String }),
+			Schema.Struct({
+				type: Schema.Literal("callback"),
+				value: Schema.Literal(0, 1),
+			}),
+		),
+	).pipe(
+		Schema.filter(
+			(a) =>
+				a.filter((v) => v.type === "time").length === 1 &&
+				new Set(a.map((v) => v.type)).size === a.length,
+		),
+	),
+});
+export const SequenceLeaf = Schema.Union(
+	WebsiteConfig,
+	HotkeyConfig,
+	TextConfig,
+	OpenAppConfig,
+	Schema.Struct({
+		type: Schema.Literal("delay"),
+		actions: Schema.Tuple(
+			Schema.Struct({
+				type: Schema.Literal("time"),
+				value: Schema.Int.pipe(Schema.between(0, 86400000)),
+			}),
+		),
+	}),
+);
+export const MultiActionConfig = Schema.Struct({
+	type: Schema.Literal("multiActions"),
 	actions: Schema.Array(Schema.Unknown),
+	subActions: Schema.Array(
+		Schema.Struct({
+			config: Schema.extend(
+				SequenceLeaf,
+				Schema.Struct({
+					gap: Schema.optional(Schema.Int.pipe(Schema.between(0, 60000))),
+				}),
+			),
+		}),
+	).pipe(Schema.minItems(1), Schema.maxItems(100)),
 });
 
 export const ActionActivation = Schema.Struct({

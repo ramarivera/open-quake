@@ -78,6 +78,9 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 0.30.0(effect@3.22.1)(vitest@4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)))
+      '@mdi/svg':
+        specifier: 7.4.47
+        version: 7.4.47
       '@open-quake/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -517,6 +520,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
+  '@mdi/svg@7.4.47':
+    resolution: {integrity: sha512-WQ2gDll12T9WD34fdRFgQVgO8bag3gavrAgJ0frN4phlwdJARpE6gO1YvLEMJR0KKgoc+/Ea/A0Pp11I00xBvw==}
   '@koromix/koffi-android-arm64@3.3.3':
     resolution: {integrity: sha512-c8iDq/mPXkgQmrmZ6SpqWIVF3ZnJEpjVQswzKzbrCSdr68pmSY/cNj1t4qvv32T8nNjW71/hB+E8Rq1+vVpmQg==}
     cpu: [arm64]
@@ -1527,6 +1532,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@mdi/svg@7.4.47': {}
   '@koromix/koffi-android-arm64@3.3.3':
     optional: true
 

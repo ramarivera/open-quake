@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import {
 	app,
 	BrowserWindow,
@@ -44,11 +44,16 @@ import { proveEmojiRestore } from "../emoji/backup-proof";
 import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
 import { registerIntegrations } from "../integrations";
+import { iconStore } from "../key-library/icon-store";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
 import { prepareRestore } from "../maintenance/backup-store";
+import {
+	iconBackupAliasFixture,
+	proveIconRestore,
+} from "../maintenance/icon-backup-proof";
 import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
@@ -486,8 +491,49 @@ async function smoke() {
 			);
 			await settle(30);
 		};
-		await pointer("pointerdown", 218);
-		for (const x of [250, 275, 300]) await pointer("pointermove", x);
+		await pointer("pointerdown", 222);
+		await pointer("pointerup", 222);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			0,
+			"Offset click never persists",
+		);
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"218px",
+		);
+		assert.equal(
+			await js(
+				"document.querySelector('.mc-resizer').getAttribute('aria-valuenow')",
+			),
+			"218",
+		);
+		await pointer("pointerdown", 222);
+		await pointer("pointermove", 250);
+		await pointer("pointerup", 222);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			0,
+			"Returning to the initial width never persists",
+		);
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"218px",
+		);
+		await pointer("pointerdown", 224);
+		for (const x of [256, 281, 306]) {
+			await pointer("pointermove", x);
+			assert.equal(
+				await js(
+					"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+				),
+				`${x - 6}px`,
+			);
+		}
 		assert.equal(
 			await js(
 				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
@@ -500,7 +546,7 @@ async function smoke() {
 			"No storage writes during drag",
 		);
 		assert.equal(calls.themes, dragThemes, "No theme IPC during drag");
-		await pointer("pointerup", 300);
+		await pointer("pointerup", 306);
 		assert.equal(
 			await js("window.__reviewWrites"),
 			1,
@@ -511,8 +557,8 @@ async function smoke() {
 			dragThemes,
 			"Width must not rewrite native theme",
 		);
-		await pointer("pointerdown", 300);
-		await pointer("pointermove", 330);
+		await pointer("pointerdown", 306);
+		await pointer("pointermove", 336);
 		await js(
 			"document.querySelector('.mc-resizer').releasePointerCapture(77);null;",
 		);
@@ -675,6 +721,61 @@ async function smoke() {
 			createHash("sha256").update(copied).digest("hex"),
 			em.store.items[0]?.rendered,
 		);
+		const setQuarantine = async (unsupported: boolean) =>
+			profiles.runtime.runPromise(
+				Effect.flatMap(ProfileRepository, (repo) =>
+					repo.transact((envelope) =>
+						Effect.succeed(
+							Schema.decodeUnknownSync(Schema.typeSchema(ProfileEnvelope))({
+								...envelope,
+								profiles: envelope.profiles.map((profile) =>
+									profile.id !== profileId
+										? profile
+										: {
+												...profile,
+												pages: profile.pages.map((page) => ({
+													...page,
+													keys: page.keys.map((key) =>
+														key.keyCode !== "1,1"
+															? key
+															: {
+																	...key,
+																	compatibility: unsupported
+																		? Option.some({
+																				unsupported: true,
+																				retained: "synthetic-import",
+																			})
+																		: Option.none(),
+																},
+													),
+												})),
+											},
+								),
+							}),
+						),
+					),
+				),
+			);
+		await setQuarantine(true);
+		const beforeQuarantine = copiedFiles.length;
+		const quarantined = await panel.webContents.executeJavaScript(
+			`window.quakeEmoji.press(${JSON.stringify({ profileId, pageId: `${profileId}-page`, keyCode: "1,1", keyAction: 1 })})`,
+		);
+		assert.deepEqual(quarantined, { _tag: "ignored" });
+		assert.equal(copiedFiles.length, beforeQuarantine);
+		const retainedEnvelope = await profiles.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) => repo.load()),
+		);
+		const retainedKey = retainedEnvelope.envelope.profiles
+			.find((profile) => profile.id === profileId)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(retainedKey && Option.isSome(retainedKey.compatibility));
+		assert.equal(retainedKey.compatibility.value.retained, "synthetic-import");
+		assert.equal(retainedKey.config.type, "emoji");
+		await setQuarantine(false);
+		console.log(
+			"Emoji quarantine PASS: supported copy; retained unsupported IPC ignored; no clipboard side effect",
+		);
 		const thumbnailReply = await win.webContents.executeJavaScript(
 			`window.quakeProfileManager.request({type:"thumbnail",id:${JSON.stringify(profileId)},locale:"en"})`,
 		);
@@ -717,6 +818,26 @@ async function smoke() {
 			),
 		);
 
+		const iconData = nativeImage
+			.createFromBitmap(Buffer.from(rgba), { width: 96, height: 96 })
+			.toDataURL();
+		await Effect.runPromise(
+			iconStore(join(directory, "key-library-v1.json")).write([
+				await iconBackupAliasFixture(iconData),
+				{
+					id: "local",
+					name: "Local App Icons",
+					icons: [
+						{
+							id: "backup-icon",
+							name: "Local backup",
+							tags: [],
+							data: iconData,
+						},
+					],
+				},
+			]),
+		);
 		const inlineData = nativeImage
 			.createFromBitmap(Buffer.from(rgba), { width: 96, height: 96 })
 			.toDataURL();
@@ -795,6 +916,25 @@ async function smoke() {
 		);
 
 		assert.equal((await maintenance.request({ action: "export" })).ok, true);
+		const iconBackupProof = await proveIconRestore(
+			await readFile(backupFile),
+			directory,
+			iconData,
+		);
+		await writeFile(
+			join(artifacts, "icon-backup-proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					results: iconBackupProof,
+				},
+				null,
+				2,
+			),
+		);
+		console.log(
+			"Icon backup PASS: imported aliases and local icons survive clean, populated and repeated restore; native image decode",
+		);
 		const renderedItem = em.store.items[0],
 			staticAsset = em.store.staticAssets[0];
 		assert(renderedItem && staticAsset);
@@ -865,11 +1005,11 @@ async function smoke() {
 		await panel.webContents.executeJavaScript(
 			"window.__emojiInvalidSeen=false;(()=>{const observer=new MutationObserver(records=>{if(records.some(r=>r.target.dataset.invalid==='true')){window.__emojiInvalidSeen=true;observer.disconnect();}});observer.observe(document.getElementById('root'),{subtree:true,attributes:true,attributeFilter:['data-invalid']});})();",
 		);
-		const touch = (action: number): void =>
+		const touch = (action: number, x = 120): void =>
 			panel.webContents.send(QUAKE_EVENT_CHANNEL, {
 				source: "mock",
 				kind: "touch",
-				points: [{ action, x: 120, y: 360 }],
+				points: [{ action, x, y: 360 }],
 			} satisfies QuakeEvent);
 		touch(1);
 		await settle(30);
@@ -897,6 +1037,47 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
 		});
+		const cancelledTouchCases: string[] = [];
+		for (const closesBeforeLift of [false, true]) {
+			const before = copiedFiles.length;
+			touch(1);
+			await settle(30);
+			await panel.webContents.executeJavaScript(
+				"document.getElementById('root').dataset.stripOverlay='true';null;",
+			);
+			touch(1);
+			await settle(30);
+			if (closesBeforeLift)
+				await panel.webContents.executeJavaScript(
+					"document.getElementById('root').dataset.stripOverlay='false';null;",
+				);
+			touch(0);
+			await settle(100);
+			assert.equal(
+				copiedFiles.length,
+				before,
+				"Overlay takeover must cancel held emoji, even when it closes before lift",
+			);
+			await panel.webContents.executeJavaScript(
+				"document.getElementById('root').dataset.stripOverlay='false';null;",
+			);
+			cancelledTouchCases.push(
+				`overlay-closes-before-lift-${closesBeforeLift}`,
+			);
+		}
+		const beforeMovement = copiedFiles.length;
+		touch(1);
+		await settle(30);
+		touch(1, 160);
+		await settle(30);
+		touch(0, 160);
+		await settle(100);
+		assert.equal(
+			copiedFiles.length,
+			beforeMovement,
+			"Gesture movement cancellation must discard held emoji",
+		);
+		cancelledTouchCases.push("movement");
 		const copiedBeforeCancel = copiedFiles.length;
 		touch(1);
 		await settle(30);
@@ -992,7 +1173,7 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 2 },
 		});
-		const cancelledCases: string[] = [];
+		const cancelledCases = cancelledTouchCases;
 		for (const target of [
 			[profileId, otherPageId, "page"],
 			["synthetic-other", "synthetic-other-page", "profile"],
@@ -1073,6 +1254,9 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
 		});
+		process.stdout.write(
+			"Emoji cancellation regressions PASS: overlay takeover, early close, movement; no copy.\n",
+		);
 		const beforeNormal = copiedFiles.length;
 		touch(1);
 		await settle(30);
@@ -1093,6 +1277,7 @@ async function smoke() {
 					cancelledCases,
 					subsequentTouchCopied: true,
 					modeDuringCancellation: 2,
+					overlayAndMovementMode: 0,
 					realClipboardOrKeyboard: false,
 				},
 				null,
@@ -1370,9 +1555,19 @@ async function smoke() {
 		await js(
 			"document.querySelector('button[title=\"UI Settings\"]').click();null;",
 		);
+		const themesBeforeGrey = calls.themes;
 		await js(
 			"document.querySelector('input[name=mc-theme][value=grey]').click();null;",
 		);
+		await waitFor("document.documentElement.dataset.theme === 'grey'");
+		// executeJavaScript completion does not acknowledge the layout effect's IPC.
+		// Observe the main handler before establishing the font-only baseline.
+		const themeDeadline = Date.now() + 8000;
+		while (calls.themes === themesBeforeGrey) {
+			assert(Date.now() < themeDeadline, "Grey native theme request timed out");
+			await settle(10);
+		}
+		assert.equal(calls.themes, themesBeforeGrey + 1);
 		const themesBeforeScale = calls.themes;
 		for (const scale of ["small", "medium", "large"]) {
 			await js(

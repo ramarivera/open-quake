@@ -1,6 +1,11 @@
 import type { HourFormat } from "../../../shared/display";
 import { EmojiTile } from "../management/emoji/EmojiTile";
-import { ClockMusicSlot, ClockWeatherSlot } from "../weather-media/ClockCards";
+import {
+	ClockMusicCard,
+	ClockMusicSlot,
+	ClockWeatherCard,
+	ClockWeatherSlot,
+} from "../weather-media/ClockCards";
 import { rendererWeatherLocale, useWeatherMedia } from "../weather-media/hooks";
 import { PlayerCard } from "../weather-media/PlayerCard";
 import type { StripTile } from "./geometry";
@@ -35,6 +40,8 @@ export interface StripTileContext {
 	readonly hourFormat: HourFormat;
 	/** Voice and chat state for the AI tiles (strip-voice-ui). */
 	readonly voice: StripVoiceContext;
+	/** Defaults to live for existing tile consumers outside selection previews. */
+	readonly interactive?: boolean;
 }
 export interface StripTileProps {
 	readonly tile: StripTile;
@@ -70,13 +77,33 @@ function ClockSlot({
 			hourFormat={context.hourFormat}
 			showSeconds={snapshot?.showSeconds ?? false}
 			media={mediaOf(snapshot)}
-			onThemeSelect={clock.selectTheme}
+			onThemeSelect={
+				context.interactive === false ? undefined : clock.selectTheme
+			}
 			weather={
-				enrichment.snapshot?.settings.enabled ? <ClockWeatherSlot /> : undefined
+				enrichment.snapshot?.settings.enabled ? (
+					context.interactive === false ? (
+						<ClockWeatherCard
+							city={enrichment.snapshot.settings.city}
+							unit={enrichment.snapshot.settings.unit}
+							state={{ kind: "loading" }}
+							loading={false}
+						/>
+					) : (
+						<ClockWeatherSlot />
+					)
+				) : undefined
 			}
 			nowPlaying={
 				enrichment.snapshot?.settings.musicEnabled ? (
-					<ClockMusicSlot />
+					context.interactive === false ? (
+						<ClockMusicCard
+							snapshot={enrichment.snapshot.media}
+							control={async () => false}
+						/>
+					) : (
+						<ClockMusicSlot />
+					)
 				) : undefined
 			}
 		/>
@@ -103,7 +130,9 @@ function PlayerSlot({
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
 			snapshot={snapshot.media}
-			control={client.control}
+			control={
+				context.interactive === false ? async () => false : client.control
+			}
 			locale={rendererWeatherLocale()}
 		/>
 	) : null;

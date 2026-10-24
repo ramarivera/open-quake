@@ -85,6 +85,14 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+const clipboard = new Proxy(
+	{},
+	{
+		get() {
+			throw new Error("Bundle smoke must not access the clipboard");
+		},
+	},
+);
 const shell = { openExternal: () => Promise.resolve() };
 // The clock registers its media scheme before ready and a handler after.
 const schemes = [];
@@ -112,12 +120,6 @@ const systemPreferences = {
 	getMediaAccessStatus: () => "denied",
 };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
-// The voice surface writes the clipboard only on a renderer request; the smoke sends none.
-const clipboard = {
-	writeText: () => {
-		throw new Error("Bundle smoke must not write the clipboard");
-	},
-};
 globalThis.openQuakeBundleSmoke = {
 	desktopCapturer,
 	systemPreferences,

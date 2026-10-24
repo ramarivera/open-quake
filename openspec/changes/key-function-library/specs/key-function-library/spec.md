@@ -105,27 +105,27 @@ The library SHALL allow an editable key's artwork to reference app-owned assets 
 - **WHEN** a local icon becomes unreadable
 - **THEN** both windows show a labeled fallback and the saved action payload remains unchanged
 
-### Requirement: hotkeySwitch stays unresolved
+### Requirement: hotkeySwitch alternates per press
 
-Until the pending decision and dispatch evidence are recorded, hotkeySwitch SHALL be unavailable for new executable assignments and runtime activation. Imported two-chord actions and alternate visuals SHALL survive unrelated saves as unsupported compatibility data. The system SHALL NOT reinterpret hotkeySwitch as a plain hotkey or as a held-key toggle.
+hotkeySwitch SHALL require exactly two validated key actions. The first committed press SHALL send chord[0], and each subsequent press SHALL alternate between chord[1] and chord[0]. Held duplicates and releases SHALL send no additional chord. Alternate artwork SHALL follow the next state. State SHALL be scoped to the device session and key identity and reset on disconnect. Imported two-chord actions and alternate visuals SHALL survive unrelated saves. Source: MAIN-067; scope approved in the key-library lane on 2026-10-24.
 
 #### Scenario: Imported switch tile
 
-- **WHEN** a hotkeySwitch tile with two key actions is imported and activated
-- **THEN** the editor identifies the unresolved function, retains both actions, and sends no host key input
+- **WHEN** a hotkeySwitch tile with two valid key actions is imported and receives press, release and press
+- **THEN** chord[0] then chord[1] execute once each, and alternate title/icon follows the runtime state
 
 ### Requirement: Later catalog coverage
 
-The library SHALL retain an explicit later-phase catalog for timer, luminance/brightness/vol/mute, buzzer, mic, folder, switchProfile/pageNo, close, audio playback, multiActions/delay, AI and agent views, Home Assistant, camera/printer views, cmd, and system-monitor tiles. Each SHALL declare its owning runtime and remain unavailable until that runtime validates its schema and proves dispatch. Active navigation, panel brightness, and knob voice entries SHALL delegate to their owning first-release capabilities rather than duplicate dispatch.
+The library SHALL retain an explicit later-phase catalog for luminance/brightness/vol/mute, buzzer, mic, folder, switchProfile/pageNo, close, audio playback, AI and agent views, Home Assistant, camera/printer views, cmd, and system-monitor tiles. Each SHALL declare its owning runtime and remain unavailable until that runtime validates its schema and proves dispatch. Active navigation, panel brightness, and knob voice entries SHALL delegate to their owning first-release capabilities rather than duplicate dispatch.
 
 #### Scenario: Missing monitor backend
 
 - **WHEN** cpuInfo metadata exists but no monitor runtime is installed
 - **THEN** the library marks the entry later-phase and shows no fabricated CPU reading
 
-### Requirement: Later composite actions
+### Requirement: Sequential composite actions
 
-When enabled, multiActions SHALL contain an ordered non-recursive subActions list of validated available leaf functions and delay steps. A delay SHALL use config.type delay and exactly `{type:'time',value:nonnegative integer milliseconds}`. The runner SHALL execute sequentially, stop on the first failure or cancellation, release held host input, and never replay after reconnect.
+multiActions SHALL contain an ordered non-recursive subActions list of validated available leaf functions and delay steps. A delay SHALL use config.type delay and exactly `{type:'time',value:nonnegative integer milliseconds}`. The runner SHALL execute sequentially, stop on the first failure or cancellation, release held host input, and never replay after reconnect.
 
 #### Scenario: Sequence failure
 

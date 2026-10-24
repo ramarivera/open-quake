@@ -259,7 +259,7 @@ export function HardwareSettings(): React.JSX.Element {
 				<Row
 					label="Hotkey output"
 					htmlFor="hotkey-route"
-					hint="Resets to Device keyboard when the app starts."
+					hint="Device keyboard sends shortcuts through QUAKE. Host keyboard is unavailable in this build."
 				>
 					<select
 						className="text-field"
@@ -276,7 +276,9 @@ export function HardwareSettings(): React.JSX.Element {
 						}}
 					>
 						<option value="device">Device keyboard</option>
-						<option value="host">Host keyboard</option>
+						<option value="host" disabled>
+							Host keyboard unavailable
+						</option>
 					</select>
 				</Row>
 			</Group>
