@@ -307,6 +307,10 @@ export async function reviewRound3Smoke(
 				panel,
 				`document.querySelector('.clawbot-input-warning')?.textContent === 'Please select your assistant!'`,
 			);
+			await waitForVoice(
+				panel,
+				"Number(getComputedStyle(document.querySelector('.clawbot-input-warning')).opacity) >= 0.99",
+			);
 			assert.equal(
 				await js<string>("document.querySelector('.clawbot-input-box').value"),
 				"Keep my draft",

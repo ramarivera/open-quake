@@ -70,6 +70,7 @@ async function smoke(): Promise<void> {
 		width: 1920,
 		height: 480,
 		webPreferences: {
+			backgroundThrottling: false,
 			preload: resolve("out/preload/index.mjs"),
 			sandbox: false,
 			contextIsolation: true,
@@ -98,6 +99,10 @@ async function smoke(): Promise<void> {
 		panel.webContents.executeJavaScript(source);
 	const capture = async (name: string): Promise<void> => {
 		if (!artifacts) return;
+		// Hidden windows can otherwise capture the compositor's previous frame.
+		await js(
+			"new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+		);
 		let image = await panel.webContents.capturePage();
 		const { width } = image.getSize();
 		if (width !== 1920) image = image.resize({ width: 1920, height: 480 });
