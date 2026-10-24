@@ -4,6 +4,7 @@ import { NodeHidLive } from "@open-quake/device/node-hid";
 import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import { app, BrowserWindow, type Display, ipcMain, screen } from "electron";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
+import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import {
 	findPanelDisplay,
@@ -16,6 +17,7 @@ import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+registerClockScheme();
 const PANEL_TITLE = "open-quake panel";
 
 interface PanelTarget {
@@ -103,6 +105,10 @@ app.whenReady().then(() => {
 		ManagedRuntime.make(
 			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 		),
+		() => managementWin,
+	);
+	registerClock(
+		ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 		() => managementWin,
 	);
 	// One service layer for the main process. Only this Electron boundary runs it.

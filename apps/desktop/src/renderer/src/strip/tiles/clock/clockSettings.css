@@ -1,0 +1,115 @@
+/* Management "Desktop clock" section; theme tokens only. */
+.clock-settings {
+	margin-top: 28px;
+	padding-top: 24px;
+	border-top: 1px solid var(--quake-border);
+}
+.clock-settings-preview {
+	width: 100%;
+	aspect-ratio: 4 / 1;
+	overflow: hidden;
+	border: 1px solid var(--quake-border);
+	background: #0b0e14;
+}
+.clock-settings-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+	align-items: center;
+	margin: 16px 0;
+}
+.clock-settings-mode {
+	display: flex;
+	gap: 16px;
+	border: 0;
+	padding: 0;
+	margin: 0;
+}
+.clock-settings-mode legend {
+	float: left;
+	margin-right: 12px;
+	color: var(--quake-muted);
+}
+.clock-settings-format,
+.clock-settings-mode label,
+.clock-settings-seconds {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+}
+.clock-theme-cards {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 16px;
+}
+.clock-theme-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.clock-theme-thumb {
+	position: relative;
+	display: block;
+	width: 100%;
+	aspect-ratio: 4 / 1;
+	padding: 0;
+	overflow: hidden;
+	border: 2px solid var(--quake-border);
+	border-radius: 10px;
+	background: #0b0e14;
+	cursor: pointer;
+}
+.clock-theme-card[data-selected="true"] .clock-theme-thumb {
+	border-color: var(--quake-accent);
+}
+.clock-theme-thumb img,
+.clock-theme-thumb video {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.clock-theme-name,
+.clock-theme-badge,
+.clock-theme-missing {
+	position: absolute;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 12px;
+	color: #fff;
+	background: rgba(0, 0, 0, 0.55);
+}
+.clock-theme-name {
+	left: 6px;
+	bottom: 6px;
+}
+.clock-theme-badge {
+	right: 6px;
+	top: 6px;
+}
+.clock-theme-missing {
+	right: 6px;
+	bottom: 6px;
+	font-weight: 700;
+	background: #c62828;
+}
+.clock-theme-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.clock-theme-actions button {
+	font: inherit;
+	font-size: 13px;
+}
+.clock-theme-file {
+	margin: 0;
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

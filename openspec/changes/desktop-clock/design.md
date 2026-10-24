@@ -2,71 +2,91 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+DK-Suite drives the QUAKE strip as an extended OS display and renders the desktop clock as a live 1920×480 web stage (AUDIT_WIDGETS §1). open-quake does the same: the panel window covers the strip and React renders the clock. No HID command is involved.
 
-Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
+Path roots (local-only, read-only research inputs, never committed):
 
-## Evidence and source paths
+- `V` = `~/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95`
+- `RS` = `V/recovered_sources/src`
 
-Path roots are local-only, read-only research inputs. S means recovered source for the stated behavior, P means partial analysis/dependency evidence, and N means name-only evidence. Source availability does not prove runtime or hardware success. Replacement limits and new failure behavior are proposed, not recovered facts.
+Recovered sources this design copies from:
 
-- ATLAS = `/Users/ramarivera/dev/open-quake/.agents/skills/dark-encyclopedia/dk-suite-introspeccion`
-- ART = `ATLAS/artifacts`
-- RS = `ART/recovered_sources`
-
-- **S** `RS/webpack:__dk-suite_src_utils_DefaultProfileData.js`: DEFAULT_DK_DESKTOP_CLOCK and hourFormat action.
-- **S** `RS/webpack:__dk-suite_src_views_Components_dkDesktopClock.vue`: 24h default, 12h AM/PM conversion, minute/day scheduling and timer cleanup.
+- `RS/views/Components/dkDesktopClock.vue`: stage, date rail, theme nav, tint table, tick scheduling.
+- `RS/views/Components/DkFlipClock.vue`: flip geometry, two-phase flip, AM/PM pill.
+- `RS/views/Components/DkClockBackground.vue`: L0 media, 5 s fallback, generation token, L1 scrim.
+- `RS/shared/clockContract.js`: theme ids, slot shape, normalisation/migration, `resolveBackground`.
+- `RS/shared/clockThemePatch.js`: narrow theme patch and its failure reasons.
+- `RS/views/Components/UnitControl.vue:1859-1889`: `clock-style:set-theme` call and rollback.
+- `V/locales/locale-*.json`: `dkDesktopClockLang.*` and `settings.clock*` strings in 8 languages.
+- `V/app-resources/clock-bg/theme-*.jpg` + `README.md`: DK's built-in art (reference only, see decision 2).
 
 ## Goals / Non-Goals
 
-Goals: give implementers one owned contract, observable failure states and a verification path for this capability.
+Goals: the clock renders like DK-Suite 0.4.95 on the strip, pixel for pixel in layout, type and material. It keeps the behaviour DK-Suite gets right and fixes what it gets wrong (frozen PC preview, file paths in URLs).
 
-Non-goals: implementation in this lane, new dependencies, changes to other lanes' artifacts, guessed device opcodes, or claiming unresolved integrations work.
-
-## Package ownership
-
-`packages/edge` clock configuration and formatting invariants; `packages/client` clock settings contract; `apps/desktop` clock rendering and scheduling. Existing profile/display services own layout and delivery; `packages/protocol` and `packages/device` need no new command.
-
-Approved (Ramiro, 2026-10-23): keep domain modules in the existing packages rather than adding feature packages now. In `packages/edge`, each domain separates contracts, pure invariants, repository interfaces and an Effect.Service conductor. Electron-specific APIs live in `apps/desktop/src/main` adapters supplied at the composition root; renderers consume `packages/client` through a narrow typed preload bridge. `packages/protocol` stays pure; `packages/device` owns hardware I/O. `packages/cli` is an optional client, not another domain owner.
-
-Native control contracts are Schema-first `@effect/rpc`; external third-party protocols stay boundary adapters. Services declare dependencies, use named `Effect.fn` methods with explicit success/error types and scoped cleanup. User/automation actions have one capability-registry declaration. UI never calls raw SDKs. AI calls, where needed, use the existing Vercel AI SDK Effect facade and mocked providers in CI.
+Non-goals: weather and now-playing cards (`open-quake-lih.7`); the tile registry and grid (`open-quake-lih.2`); the profile catalog and editor revert model (`open-quake-lih.8`, `open-quake-lih.9`); touch frame decoding (`open-quake-lih.3`).
 
 ## Decisions
 
-1. Approved (Ramiro, 2026-10-23): use host local time and system timezone with 24h as the default, matching the recovered component; remote timezone selection is deferred.
+1. **Geometry, type and material are copied verbatim.** Stage 1920×480, `padding: 0 64px`, flex row centred. Date rail 240×300 at x 80. Flip block of four 160×300 cards with 14 px gaps and a colon column, centred by auto margins in the space between rail and right slot. Right slot 564 wide with `margin-right: 16`. Glass tokens, tint table, scrim gradients, font stack and every size/weight/letter-spacing come from the recovered CSS. The right slot collapses to zero width when no card is present, exactly as DK's flex layout does when weather and music are off. In that case the flip block centres at x ≈ 1080, not 798.
 
-2. Approved (Ramiro, 2026-10-23): share one clock schedule per visible desktop session and recompute from wall-clock time on resume, rather than accumulating elapsed ticks.
+2. **Built-in art is our own.** DK's five JPEGs ship inside a proprietary app bundle with no licence grant. Its README says DecoKee generated them with OpenAI ImageGen. Licensing is unclear, so open-quake does not copy them. It ships its own equivalents: deterministic SVG scenes built by pure TypeScript (`art/`), seeded so they are identical on every run, at 1920×480, each following DK's composition notes:
+   - season: misty alpine valley at sunrise, blue-grey firs, peach sky.
+   - cyber: rainy neon megacity at night, violet and blue.
+   - anime: bright summer sky with cumulus over green hills.
+   - tactical: night industrial compound with a searchlight.
+   - aurora: green and violet aurora over dark mountains.
+   DK's files are cited by path only. A user who wants DK's pictures can pick them as the theme's custom image.
 
-### Data model
+3. **Persistence keeps DK's cell shape.** Main stores `<userData>/clock-v1/clock.json` = `{ version: 1, revision, keys: [{ keyCode, config: { type: "dkDesktopClock", actions } }] }`. The actions are DK's `clockStyle` value plus the open-quake `showSeconds` extension. The device ◀/▶ path calls DK's `buildClockThemePatch` semantics: only `themeId` changes and `mode` becomes `theme`; other actions and slots stay byte-identical; a missing `clockStyle` action is appended with defaults. The whole array is written atomically (temp file + rename) and `revision` is bumped only when something changed. When profiles are wired to the panel, the profile owner can move these actions into the profile key verbatim. The hour format stays in the wallpaper store that owns it today.
 
-Approved (Ramiro, 2026-10-23): ClockConfig belongs to its profile key and contains hourFormat as 12h or 24h. ClockSnapshot contains host-local date, hour, minute and optional meridiem, computed from an injected instant and timezone.
+4. **Custom media never exposes paths.** The slot stores `{ kind, path }` as DK does, but only main reads `path`. The renderer receives `{ kind, name, available }` and a URL `oq-clock-media://theme/<themeId>?r=<revision>`. The protocol handler resolves the theme's persisted slot, rejects anything else with 404, and streams the file through `net.fetch` with the request's `Range` header so video seeking works. This replaces DK's `dkbg://bg/media.<ext>?p=<abs path>` plus allow-list (WIDGETS-034).
 
-### Data flow and lifecycle
+5. **Media selection mirrors DK's validation.** Management asks main to choose a file for a theme. Main shows the dialog filtered to `jpg jpeg png gif webp bmp mp4 webm mov mkv`, checks that the file exists and its extension maps to a kind, and stages it as a pending candidate. Images commit at once. For videos, management probes duration through the candidate URL (6 s timeout) and commits only when the video is at least 2 s long. Otherwise it shows "Video duration too short, should be longer than 2 seconds." Cancel writes nothing (WIDGETS-059).
 
-Approved (Ramiro, 2026-10-23): The profile owner persists configuration; pure clock invariants compute labels. Desktop owns one cancellable schedule for visible consumers and refreshes immediately after activation/resume/timezone changes. Panel and management render the same snapshot under the shared theme/motion contract.
+6. **Ticking happens in each view, aligned to wall-clock boundaries.** A view schedules its next update at the next minute boundary (or the next second when seconds are shown), re-reads `Date.now()` there, and re-arms. It resynchronises immediately on `visibilitychange` to visible. DK ticks only on the device; open-quake's management preview ticks too (WIDGETS-029, gap 1 "beat DK" note). Labels are always derived from the current instant and never accumulated, so sleep, DST and timezone changes are picked up at the next tick.
 
-### Failure contract
+7. **The flip is a small sequencer, not CSS alone.** When minute-ones changes, the upper flap keeps the old digit and runs `flipOn` (0→-92°, 380 ms, `cubic-bezier(.45,.05,.55,.95)`). Then it shows the new digit and runs `flipDown` (92°→0, 380 ms, strong glass) and returns to idle. A change during a flip restarts from the previous value, as DK does. Hours and minute-tens snap. Reduced motion switches immediately. "Reduced" means the OS preference or the app's appearance setting `motion: reduce`, which already drives `data-motion` on the root.
 
-Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially QUAKE.CLOCK.CONFIG_INVALID and QUAKE.CLOCK.SCHEDULE_FAILED. Final code names must be reconciled with the shared catalog before implementation; never introduce a second catalog. Each leaf is a catalog-derived Schema.TaggedError with private original cause and bounded, scrubbed diagnostic projection. Consumers branch on tag/code, never text. Verify exact identity, cause retention, safe serialization and broken-dependency paths through real consumers.
+8. **The theme switch is optimistic with rollback.** ◀/▶ cycles `season, cyber, anime, tactical, aurora` with wrap; from `none` it starts at season. The tile shows the preview immediately and calls `onThemeSelect(themeId)`. A result of `{ ok: false, reason }` or a rejected promise reverts the preview. A new persisted `theme` prop clears it. Reasons are DK's: `bad-config | invalid-keycode | invalid-theme | cell-missing | cell-not-clock | no-target | write-failed` (WIDGETS-038). Unlike DK, a newer selection is never rolled back by the failure of an older one.
 
-## Recommended phase and dependencies
+9. **Touch uses DK's sub-touch contract.** Theme buttons carry `data-quake-sub-touch="clock-theme-prev|next"` and `data-support-quake-move="false"`. They handle `quake-sub-touch-start` / `quake-sub-touch-end` CustomEvents with `detail.isEffective`, as well as pointer and click. The action fires exactly once, on click or on an effective sub-touch end. The touch lane (`open-quake-lih.3`) dispatches those events from `0xFF73/0x71` frames.
 
-Basic display clock is first-release cut item 3. The configurable DK-Desktop-Clock profile can ship alongside Later phases item 1, after display and profile foundations.
+10. **Seconds are an option (approved decision 6).** Default off, so the strip looks like DK-Suite. When on, a glass seconds pill joins the AM/PM pill in a column 18 px right of the minutes. It uses the AM/PM pill's material at 40 px weight 200, tabular figures, with no animation, so the minute flip stays the only moving part. Ticks move to one per second while it is shown.
 
-Dependencies are contracts supplied by their owning changes. An unavailable dependency yields an explicit unavailable state; this change does not duplicate its implementation or modify its specs.
+11. **Cards are slots.** `ClockTile` accepts optional `weather` and `nowPlaying` React nodes and exports the `ClockWeatherCardProps` / `ClockNowPlayingCardProps` data contracts that lih.7's cards implement. They are taken from DK's card inputs. An absent card renders nothing: no placeholder data and no reserved space.
+
+12. **Errors are module-local catalog leaves**, matching `display-errors.ts`: `QUAKE.CLOCK.CONFIG_INVALID`, `QUAKE.CLOCK.PERSISTENCE_FAILED`, `QUAKE.CLOCK.MEDIA_UNUSABLE` ("File missing or unusable; fell back to built-in") and `QUAKE.CLOCK.MEDIA_TOO_SHORT`. The IPC edge maps them to typed replies by tag. Raw causes stay on the instance, non-enumerable.
+
+13. **Strings come from DK's locales.** Weekdays, AM/PM, theme names, ◀/▶ labels and the settings strings are copied verbatim for en, zh, ja, ko, de, fr, es and it. The locale comes from `navigator.language`, normalised to those eight with English fallback. Date text follows DK: zh/ja/ko use `toLocaleDateString(loc, { month: 'long', day: 'numeric' })`; other locales use the upper-cased short month plus the day.
+
+## Data model
+
+```ts
+type ThemeId = "season" | "cyber" | "anime" | "tactical" | "aurora";
+type ClockStyle = {
+  background: { mode: "none" | "theme"; themeId: ThemeId;
+                themes: Partial<Record<ThemeId, { kind: "image" | "video"; path: string }>> };
+  musicEnabled: boolean;            // kept for DK import parity; the card is lih.7
+};
+type ClockTileProps = {
+  widthPx: number; heightPx: number; now: Date; theme: string; // ThemeId | "none"
+  hourFormat?: "24h" | "12h"; showSeconds?: boolean; locale?: string;
+  reducedMotion?: boolean;
+  media?: Partial<Record<ThemeId, { kind: "image" | "video"; url: string }>>;
+  onThemeSelect?: (themeId: ThemeId) => Promise<ClockThemeResult>;
+  weather?: ReactNode; nowPlaying?: ReactNode;
+};
+```
+
+`normalizeClockStyle` is total and accepts both the v0.4 shape and the v0.3 shape. v0.3 migrates as DK does: `builtin` maps to a theme, image or video becomes the season slot, and garbage falls back to `theme/season`, music off.
 
 ## Risks / Trade-offs
 
-Timers pause during sleep and DST changes invalidate accumulated ticks. Always recompute current wall-clock time; do not replay missed animations.
+- `backdrop-filter` over a full-strip image costs GPU time. DK ships the same 26 px blur. Only the flipping card animates, and only for 760 ms a minute.
+- Procedural art will not match DK's painterly AI images stroke for stroke. Composition, palette and mood follow DK's notes; users can still choose any image.
+- The temporary panel mount always shows the clock until lih.2 renders the active profile. That matches today's behaviour, where the panel shows only a clock.
 
-The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
+## Verification
 
-## Migration plan
-
-Create versioned local settings/repository records behind a capability gate. Validate imported shapes before writing and preserve the last valid snapshot on failure. Enable only the verified capability subset after its acceptance scenarios pass. Roll back by disabling the capability and retaining readable user records; destructive native side effects need their own recovery flow.
-
-## Verification and outstanding evidence
-
-Exercise midnight, noon, minute/date rollover and a timezone change under an injected clock. Mount management and panel consumers, change the format through the profile API, and assert matching labels plus zero timers after teardown. Physical panel layout remains unverified.
-
-Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+Unit tests cover the contract (normalisation, migration, resolve, patch reasons, cycle order), labels (12h/24h, midnight/noon, locale dates, weekday tables), the boundary scheduler and the flip sequencer under fake timers (380 + 380 ms, restart, reduced motion, disposal). They also cover the theme-preview controller (optimistic select, rollback on `ok:false` and on rejection, no stale rollback, clear on persisted change), static rendering of the tile at 1920×480 and scaled, the store (patch, revision, atomic write failure, invalid file) and media URL resolution. The native Electron smoke renders all five themes, None, seconds and 12h at 1920×480 with screenshots, exercises the panel ◀/▶ save path and a forced save failure, and checks the 5 s fallback with a missing custom file. Hardware (the strip itself, touch on the buttons) stays unverified until the lead runs it on the QUAKE.

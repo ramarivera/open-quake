@@ -59,6 +59,18 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+// The clock registers its media scheme before ready and a handler after.
+const schemes = [];
+const protocol = {
+	registerSchemesAsPrivileged: (list) => schemes.push(...list),
+	handle: () => {},
+	unhandle: () => {},
+};
+const net = {
+	fetch: () => {
+		throw new Error("Bundle smoke must not serve clock media");
+	},
+};
 globalThis.openQuakeBundleSmoke = {
 	app,
 	BrowserWindow: Window,
@@ -66,6 +78,8 @@ globalThis.openQuakeBundleSmoke = {
 	ipcMain,
 	dialog,
 	nativeImage,
+	protocol,
+	net,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -81,7 +95,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, protocol, net } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -115,6 +129,10 @@ try {
 	assert.equal(Window.windows.length, 2);
 	assert.equal(nativeResolutions, 1, "Native package must remain external");
 	assert.equal(enumerations, 1);
+	assert.deepEqual(
+		schemes.map(({ scheme }) => scheme),
+		["oq-clock-media"],
+	);
 	for (const { channel, event } of quakeEvents()) {
 		assert.equal(channel, "quake:event");
 		assert.deepEqual(event, {

@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
+import { PanelFeedbackLayer } from "./panel/PanelFeedbackLayer";
+import { usePanelFeedback } from "./panel/usePanelFeedback";
+import { ClockPanel } from "./strip/tiles/clock/ClockPanel";
+import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
 	useAppearance,
 } from "./theme/useAppearance";
 import { useQuakeEvents } from "./useQuakeEvents";
-import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
+import { WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
 
 function useSurface(): "management" | "panel" {
@@ -22,7 +26,10 @@ function PanelSurface(): React.JSX.Element {
 		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
 	}, []);
-	return <WallpaperPanel />;
+	const feedback = usePanelFeedback(useQuakeEvents());
+	// Until the strip grid renders profiles (open-quake-lih.2), the panel shows
+	// the DK-Desktop-Clock profile full-strip.
+	return <ClockPanel overlay={<PanelFeedbackLayer view={feedback} />} />;
 }
 
 function Stat({
@@ -73,6 +80,7 @@ function ManagementSurface({
 			</p>
 			<ThemeSettings controller={appearance} />
 			<WallpaperSettings />
+			<ClockSettings />
 		</main>
 	);
 }
