@@ -40,3 +40,7 @@ Create parent-owned Beads epic and one issue per checkbox, each linking this dir
 Profile/editor saves (1.3), navigation/profile integration (2.3), panel qualification (2.4), voice runtime work, hardware checks, and cross-lane integration remain open. Beads are parent-owned; this lane does not run bd.
 
 W4 gates: `pnpm install` passed with unchanged lockfile; `pnpm run lint` passed, 79 files; `pnpm run typecheck` passed, 6 tasks with 5 cache hits; `pnpm run test` passed, device 76 tests including 40 knob tests, protocol 25 and desktop 87 from unchanged-package cache hits. `openspec validate knob-configuration` passed; `openspec validate --all` passed, 28 changes; `git diff --check` passed. Desktop was untouched, so the conditional desktop build gate was not required.
+
+## Knob-model parity reconciliation
+
+Physical idle slot dispatch from historical task 2.2 is superseded by approved GAP-MAP decision 1. Implementation and current evidence live in openspec/changes/knob-model-parity/ under open-quake-lih.4.1. Historical W4 evidence describes the earlier policy. Hardware tasks remain open.

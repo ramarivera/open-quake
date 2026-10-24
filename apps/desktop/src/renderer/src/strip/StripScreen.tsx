@@ -140,8 +140,8 @@ export function StripScreen({
 				<svg
 					className="strip-overlay"
 					viewBox={`0 0 ${STRIP_CANVAS.width} ${STRIP_CANVAS.height}`}
-					aria-hidden="true"
 				>
+					<title>Panel controls</title>
 					{children}
 				</svg>
 			) : null}

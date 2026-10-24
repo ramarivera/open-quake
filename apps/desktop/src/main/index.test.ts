@@ -84,12 +84,21 @@ const electron = vi.hoisted(() => {
 vi.mock("electron", () => electron);
 vi.mock("./profiles", () => ({
 	registerProfiles: vi.fn(() => ({
+		runtime: { runFork: vi.fn(), runPromise: vi.fn() },
+		select: vi.fn(),
 		connect: vi.fn(async () => {}),
 		disconnect: vi.fn(async () => {}),
 		dispose: vi.fn(async () => {}),
 	})),
 }));
 
+vi.mock("./knob", () => ({
+	registerKnob: () => ({
+		onDevice: () => {},
+		refresh: () => Promise.resolve(),
+		dispose: () => Promise.resolve(),
+	}),
+}));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
@@ -103,9 +112,19 @@ vi.mock("./clock", async () => {
 	};
 });
 vi.mock("./profiles/profile-ipc", async () => {
-	const { Layer } = await import("effect");
+	const actual = await vi.importActual<typeof import("./profiles/profile-ipc")>(
+		"./profiles/profile-ipc",
+	);
+	const { createInitialProfileEnvelope, encodeProfileEnvelope } = await import(
+		"../../../../packages/device/src/profiles/profile-contracts.js"
+	);
 	return {
-		desktopProfilesLive: vi.fn(() => Layer.empty),
+		desktopProfilesLive: vi.fn(() =>
+			actual.ProfilesLive({
+				read: async () => encodeProfileEnvelope(createInitialProfileEnvelope()),
+				write: async () => undefined,
+			}),
+		),
 		registerProfiles: vi.fn(),
 	};
 });

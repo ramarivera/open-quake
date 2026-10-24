@@ -20,6 +20,7 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileDeliveryFailed,
+	ProfileNotFound,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import type {
@@ -324,6 +325,24 @@ export function registerProfiles(
 			}),
 		);
 	return {
+		runtime,
+		/** Shared knob mutations use the manager's visibility, anchor and delivery rules. */
+		select: (id: string): Promise<ProfileEnvelope> =>
+			runtime.runPromise(
+				controller.pipe(
+					Effect.flatMap((service) =>
+						service.request({
+							type: "manage",
+							command: { type: "select", id },
+						}),
+					),
+					Effect.flatMap((reply) =>
+						reply._tag === "rejected"
+							? Effect.fail(ProfileNotFound.fromCause(undefined))
+							: ProfileManager.read(),
+					),
+				),
+			),
 		connect,
 		disconnect,
 		dispose: async (): Promise<void> => {

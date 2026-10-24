@@ -109,6 +109,8 @@ export const builtinProfiles = (
 			...(knob ? { knob: { keyCode: "0,1", config: knob.config } } : {}),
 			compatibility: {
 				builtin: entry.title,
+				resourceId: entry.id,
+				titleKey: entry.title,
 				resourceName: `${Number(entry.id.slice(2)) + 1},1,1`,
 				mode: entry.mode,
 			},
@@ -125,60 +127,74 @@ export const profileLabel = (
 export const translateProfile = (
 	profile: Profile,
 	locale: ProfileLocale,
-): Profile => ({
-	...profile,
-	name: profileLabel(profile, locale),
-	pages: EffectArray.map(profile.pages, (page) => ({
-		...page,
-		keys: page.keys.map((key) => {
-			const source = Option.isSome(key.compatibility)
-				? key.compatibility.value.source
-				: undefined;
-			const result = Schema.decodeUnknownEither(RawKey)(source);
-			if (result._tag === "Left") return key;
-			const title = Schema.decodeUnknownEither(titleSchema)(
-				result.right.config.title,
-			);
-			if (key.config.type === "clawbot") {
-				const agent = key.config.actions.find(
-					(action) => action.type === "agentId",
+): Profile => {
+	const builtin = BUILTIN_PROFILES.find((entry) => entry.id === profile.id);
+	return {
+		...profile,
+		name: profileLabel(profile, locale),
+		// Older installed catalogs also need stable renderer identities on reads.
+		compatibility: builtin
+			? Option.some({
+					...Option.getOrElse(profile.compatibility, () => ({})),
+					resourceId: builtin.id,
+					titleKey: builtin.title,
+				})
+			: profile.compatibility,
+		pages: EffectArray.map(profile.pages, (page) => ({
+			...page,
+			keys: page.keys.map((key) => {
+				const source = Option.isSome(key.compatibility)
+					? key.compatibility.value.source
+					: undefined;
+				const result = Schema.decodeUnknownEither(RawKey)(source);
+				if (result._tag === "Left") return key;
+				const title = Schema.decodeUnknownEither(titleSchema)(
+					result.right.config.title,
 				);
-				if (
-					agent &&
-					typeof agent.value === "string" &&
-					(key.config.title.text ===
-						profileText(`openclawAgents.${agent.value}.name`, "en") ||
-						(title._tag === "Right" &&
-							key.config.title.text === title.right.text))
-				)
-					return {
-						...key,
-						config: {
-							...key.config,
-							title: {
-								...key.config.title,
-								text: profileText(`openclawAgents.${agent.value}.name`, locale),
+				if (key.config.type === "clawbot") {
+					const agent = key.config.actions.find(
+						(action) => action.type === "agentId",
+					);
+					if (
+						agent &&
+						typeof agent.value === "string" &&
+						(key.config.title.text ===
+							profileText(`openclawAgents.${agent.value}.name`, "en") ||
+							(title._tag === "Right" &&
+								key.config.title.text === title.right.text))
+					)
+						return {
+							...key,
+							config: {
+								...key.config,
+								title: {
+									...key.config.title,
+									text: profileText(
+										`openclawAgents.${agent.value}.name`,
+										locale,
+									),
+								},
 							},
+						};
+				}
+				if (
+					title._tag === "Left" ||
+					!title.right.i18nKey ||
+					title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.") ||
+					key.config.title.text !== profileText(title.right.i18nKey, "en")
+				)
+					return key;
+				return {
+					...key,
+					config: {
+						...key.config,
+						title: {
+							...key.config.title,
+							text: profileText(title.right.i18nKey, locale),
 						},
-					};
-			}
-			if (
-				title._tag === "Left" ||
-				!title.right.i18nKey ||
-				title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.") ||
-				key.config.title.text !== profileText(title.right.i18nKey, "en")
-			)
-				return key;
-			return {
-				...key,
-				config: {
-					...key.config,
-					title: {
-						...key.config.title,
-						text: profileText(title.right.i18nKey, locale),
 					},
-				},
-			};
-		}),
-	})),
-});
+				};
+			}),
+		})),
+	};
+};

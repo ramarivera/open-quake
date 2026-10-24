@@ -93,6 +93,15 @@ describe("profile IPC initialization recovery and document authority", () => {
 				expect(
 					(await handler(event, { type: "read", locale: "en" }))._tag,
 				).toBe("success");
+				const knobSelected = await profiles.select("1-2");
+				expect(knobSelected.activeByDevice["desktop-preview"]?.profileId).toBe(
+					"1-2",
+				);
+				const fromIPC = await handler(event, { type: "read", locale: "en" });
+				expect(
+					fromIPC._tag === "success" &&
+						fromIPC.view.envelope.activeByDevice["desktop-preview"]?.profileId,
+				).toBe("1-2");
 				for (const suffix of ["?surface=foreign", "#foreign"]) {
 					electron.frame.url = `file:///application/index.html${suffix}`;
 					const writes = storage.write.mock.calls.length;

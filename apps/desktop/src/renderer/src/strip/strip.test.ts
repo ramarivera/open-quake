@@ -3,6 +3,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
+	builtinProfiles,
+	translateProfile,
+} from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { createInitialProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { installProfileCatalog } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
+import {
 	clockProfile,
 	meetAiProfile,
 	quickProfile,
@@ -13,7 +19,7 @@ import {
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import { ProfileEnvelope } from "../../../shared/profiles";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
-import { STRIP_THEMES } from "./geometry";
+import { resolveProfileTheme, STRIP_THEMES, stripLayout } from "./geometry";
 import { StripScreen } from "./StripScreen";
 import { selectStripPage } from "./selection";
 import {
@@ -66,6 +72,78 @@ const count = (markup: string, needle: string): number =>
 	markup.split(needle).length - 1;
 
 describe("strip screen", () => {
+	it("keeps actual catalog geometry stable across eight locales and legacy metadata", () => {
+		for (const [id, theme] of [
+			["1-1", "meetingAssistantTheme"],
+			["1-3", "systemInfoTheme"],
+		] as const) {
+			const source = builtinProfiles("darwin").find(
+				(profile) => profile.id === id,
+			);
+			if (!source) throw new Error("Missing catalog fixture");
+			const geometry = (profile: typeof source) =>
+				stripLayout(profile, profile.pages[0]).tiles.map((tile) => ({
+					box: tile.box,
+					slot: tile.slot,
+					cellTheme: tile.cellTheme,
+				}));
+			const baseline = geometry(source);
+			for (const locale of [
+				"en",
+				"zh",
+				"de",
+				"fr",
+				"it",
+				"es",
+				"ja",
+				"ko",
+			] as const) {
+				const localized = builtinProfiles("darwin", locale).find(
+					(profile) => profile.id === id,
+				);
+				if (!localized) throw new Error("Missing localized fixture");
+				const legacy = {
+					...source,
+					compatibility: Option.some({ builtin: "legacy", retained: true }),
+				};
+				for (const profile of [localized, translateProfile(legacy, locale)]) {
+					expect(resolveProfileTheme(profile)).toBe(theme);
+					expect(geometry(profile)).toEqual(baseline);
+				}
+			}
+		}
+	});
+
+	it("renders a visible macOS profile without a saved preview and preserves valid selections", () => {
+		const envelope = installProfileCatalog(
+			createInitialProfileEnvelope(),
+			"darwin",
+		);
+		expect(envelope.activeByDevice).toEqual({});
+		for (const serial of [undefined, "desktop-preview"]) {
+			expect(selectStripPage(envelope, serial).profile.id).toBe("1-1");
+			const legacyHidden = {
+				...envelope,
+				activeByDevice: {
+					"desktop-preview": { profileId: "1-0", pageId: "1" },
+				},
+			};
+			expect(selectStripPage(legacyHidden, serial).profile.id).toBe("1-1");
+		}
+		expect(
+			render({
+				profiles: { _tag: "ready", envelope },
+				showEmptyGridDashedBorder: true,
+			}),
+		).toContain('data-theme="meetingAssistantTheme"');
+		const saved = {
+			...envelope,
+			activeByDevice: { "desktop-preview": { profileId: "1-2", pageId: "1" } },
+		};
+		expect(selectStripPage(saved, "desktop-preview").profile.id).toBe("1-2");
+		expect(installProfileCatalog(saved, "darwin")).toBe(saved);
+	});
+
 	it("draws the active page's grid on black, identically in panel and preview", () => {
 		const props = {
 			profiles: ready(),

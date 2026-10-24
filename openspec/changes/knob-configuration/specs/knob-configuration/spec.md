@@ -29,7 +29,7 @@ Knob edits SHALL save through the profile's revision contract. Page changes SHAL
 #### Scenario: Independent profiles
 
 - **WHEN** profile A's right slot is edited and profile B is selected
-- **THEN** B's saved slots appear unchanged and rotating right uses only B's committed assignment
+- **THEN** B's saved slots appear unchanged and idle rotation uses only B's current profile menu
 
 #### Scenario: Late release after switch
 
@@ -38,40 +38,17 @@ Knob edits SHALL save through the profile's revision contract. Page changes SHAL
 
 ### Requirement: Deterministic rotation and press routing
 
-The system SHALL consume normalized device events without guessing wire values. Counterclockwise SHALL select left and clockwise right. Each detent SHALL use one snapshot and route to a validated focused visible key with supportKnob first, then the directional profile slot, then a rotation-capable center assignment. Focused two-key hotkeys SHALL use action 0 for counterclockwise and action 1 for clockwise. One detent SHALL NOT activate multiple routes. A press SHALL activate only a press-capable center assignment; rotation SHALL NOT start voice capture. When short press and hold share center, the short action SHALL wait until release is classified short; raw press SHALL NOT dispatch it before a possible hold.
+Physical rotation SHALL follow knob-model parity: focused visible supportKnob key, armed available player volume, ready thumbnail picker, then FunctionWheel profile selection. Idle rotation SHALL NOT execute stored left/right slots or a center assignment. Focused hotkeys SHALL use action 0 for decrease and action 1 for increase. Firmware codes are 1 short, 2 double, 5 hold start and 255 hold release; rotation byte 1 is increase. Physical short press SHALL interrupt voice or confirm an open picker, never execute a stored center shortcut. Audit KNOB-001..012/024, SCREEN-071/072, MAIN-029..033; approved GAP-MAP decision 1 supersedes the earlier slot-routing policy.
 
-#### Scenario: Focused key takes precedence
+#### Scenario: Saved slots remain inert on idle turn
 
-- **WHEN** a supported focused hotkey and a right-slot navigation action both exist and one clockwise detent arrives
-- **THEN** only the focused key's second chord executes
+- **WHEN** a profile has left/right assignments and no tile is focused or player volume armed
+- **THEN** the detent selects a profile through the picker or ring and no stored slot executes
 
-#### Scenario: No selected operation
+#### Scenario: Focused hotkey
 
-- **WHEN** no focused supported key, no directional slot, and no rotation-capable center exist
-- **THEN** a detent changes neither page nor brightness and executes no host key
-
-### Requirement: First-release panel brightness mode
-
-A center panelBrightness assignment SHALL contain exactly `{type:'stepPercent',value:positive integer from 1 through 100}`, default 5. One clockwise detent SHALL increase the verified current logical panel brightness by the step, one counterclockwise detent SHALL decrease it, and results SHALL clamp to `0..100`. The adapter SHALL convert to its verified native range. Unknown current brightness or missing verified target support SHALL return unavailable without a write. This action SHALL NOT change RGB lighting or an unrelated host monitor. Pressing this mode SHALL NOT change brightness.
-
-#### Scenario: Brightness upper bound
-
-- **WHEN** current panel brightness is 98 and one clockwise detent uses step 5
-- **THEN** the panel adapter receives logical value 100 exactly once
-
-#### Scenario: Target unverified
-
-- **WHEN** a recovered brightness preset has no verified panel-target mapping
-- **THEN** it remains inactive compatibility data and sends no guessed QMK command
-
-### Requirement: First-release knob page navigation
-
-Navigation assignments SHALL use previousPage or nextPage with no actions, or goToPage with exactly `{type:'page',value:positive integer}`. They SHALL call the active profile's page-selection contract and obey its boundaries. Imported pageUp/pageDown SHALL normalize to previousPage/nextPage only when the import identifies a navigation assignment.
-
-#### Scenario: Right detent at last page
-
-- **WHEN** nextPage is assigned right and the last page is active
-- **THEN** the page remains selected and no profile switch occurs
+- **WHEN** a visible hotkey with two validated directional actions is focused
+- **THEN** a decrease dispatches action 0 once and an increase action 1 once
 
 ### Requirement: Voice route field sets
 

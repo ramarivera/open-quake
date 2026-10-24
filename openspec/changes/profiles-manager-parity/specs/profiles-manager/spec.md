@@ -11,6 +11,14 @@ The app SHALL install Discord, MeetAI, Vivid, Quick, SysView, AI Chat, Music, Cl
 - **WHEN** a built-in cmd key runs without approval for its exact command
 - **THEN** management shows a native confirmation with the command, cancellation executes nothing, and approval is persisted only after confirmation
 
+#### Scenario: Localized strip geometry
+- **WHEN** MeetAI or SysView is previewed or captured in any of the eight locales, including from an older installed catalog
+- **THEN** stable resource identity preserves its strip theme and tile geometry
+
+#### Scenario: Fresh macOS preview
+- **WHEN** macOS has no saved preview selection, or its saved selection references hidden Discord
+- **THEN** the strip renders the first visible profile, matching the manager, and valid visible saved selections remain active
+
 ### Requirement: Atomic profile management
 The manager SHALL support create, rename, deep duplicate, selection and confirmed deletion of custom profiles, show/hide built-ins and preserve hidden data. It SHALL retain one visible built-in and enforce 30 visible defaults plus customs on every add, duplicate and unhide. It SHALL generate Custom<N>, trim names, count U+4E00–9FA5 as two UTF-16 units and all other units as one, truncate inline input to ten weighted units, and reject empty, over-limit or duplicate names. Source: MGMT-313–323, 345. Built-ins SHALL resist deletion/replacement. Deleting a selected transient custom profile SHALL restore its stable anchor if available, otherwise first remaining custom then first visible built-in. Every change SHALL persist atomically before publication, without losing concurrent key saves.
 

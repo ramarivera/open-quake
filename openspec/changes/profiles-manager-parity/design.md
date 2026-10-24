@@ -28,3 +28,7 @@ Management mutations require both the main-owned window's main frame and its exa
 Visibility clears hidden startup defaults; connection also rejects legacy hidden defaults/reports/saved selections. Deletion restores only visible anchors and preserves unrelated transient selections. Matching selects the best eligible link for each serial, after filtering hidden profiles. Linux application paths are canonicalized before linking; its picker omits extension filters. Approved long-running commands resolve on spawn acceptance rather than waiting for application exit.
 
 Task 1.8 defers Windows's per-probe `Add-Type` replacement to a scoped persistent PowerShell helper with native Windows latency/lifecycle verification. Bead: `open-quake-lih.9.1.8`.
+
+The subsequent main merge includes knob-model parity. Knob reads and selections use the existing manager runtime and its transactional selection path. Committed snapshots refresh the knob context; shutdown interrupts that subscription before disposing the knob and profile runtimes. Hidden profiles are excluded from knob context, and the actual Vivid catalog ID selects wallpaper mode.
+
+Catalog metadata includes stable resource and title keys for renderer themes. Translation restores those identifiers on older installed built-ins without changing custom metadata. The strip selects only visible profiles, including its no-selection fallback, so a fresh macOS panel agrees with the manager without requiring a mock device connection.

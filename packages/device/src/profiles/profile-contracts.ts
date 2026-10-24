@@ -197,6 +197,11 @@ export const SaveProfileRequest = Schema.Struct({
 	profile: ProfileDraft,
 });
 export type SaveProfileRequest = typeof SaveProfileRequest.Encoded;
+export const SelectProfileRequest = Schema.Struct({
+	deviceId: StableId.pipe(Schema.filter((serial) => serial !== "__proto__")),
+	profileId: StableId,
+	pageId: Schema.optional(StableId),
+});
 export const ProfileSelection = Schema.Struct({
 	profileId: StableId,
 	pageId: StableId,

@@ -5,11 +5,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
+import { KnobReply } from "../../shared/knob-contracts";
 import {
 	ProfileReplySchema,
 	type ProfileRequest,
 } from "../../shared/profile-manager";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { registerKnob } from "../knob";
+import { knobProfileBinding } from "../knob/profile-binding";
 import { MediaLive, registerMedia } from "../media";
 import { nativeForegroundApp } from "./foreground-app";
 import { registerProfiles } from "./index";
@@ -39,6 +42,7 @@ async function smoke(): Promise<void> {
 	};
 	let managementDebug: BrowserWindow | undefined;
 	let profiles: ReturnType<typeof registerProfiles> | undefined;
+	let knob: ReturnType<typeof registerKnob> | undefined;
 	let media: ReturnType<typeof registerMedia> | undefined;
 	let clock: ReturnType<typeof registerClock> | undefined;
 	try {
@@ -76,6 +80,13 @@ async function smoke(): Promise<void> {
 				deliveries.push(`${serial}:${profile.id}`);
 			},
 		);
+		knob = registerKnob(
+			() => panel,
+			() => [panel, management],
+			{
+				profiles: knobProfileBinding(profiles.runtime, profiles.select),
+			},
+		);
 		media = registerMedia(
 			ManagedRuntime.make(MediaLive(join(directory, "wallpaper-v1"))),
 			() => management,
@@ -100,6 +111,16 @@ async function smoke(): Promise<void> {
 		if (first._tag !== "success") throw new Error("read failed");
 		assert.equal(first.view.envelope.profiles.length, 9);
 		assert(!first.view.envelope.profiles.some((p) => p.id === "local-profile"));
+		if (process.platform === "darwin") {
+			assert.equal(
+				first.view.envelope.activeByDevice["desktop-preview"],
+				undefined,
+			);
+			await ready(panel, '[data-theme="meetingAssistantTheme"]');
+			process.stdout.write(
+				"profiles smoke: fresh macOS panel uses visible MeetAI\n",
+			);
+		}
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "management" },
 		});
@@ -151,15 +172,20 @@ async function smoke(): Promise<void> {
 				page.keys.some((key) => key.config.type === "dkDesktopClock"),
 			),
 		)) {
+			const knobSelection = await profiles.select(profile.id);
 			assert.equal(
-				(
-					await request(management, {
-						type: "manage",
-						command: { type: "select", id: profile.id },
-					})
-				)._tag,
-				"success",
+				knobSelection.activeByDevice["desktop-preview"]?.profileId,
+				profile.id,
 			);
+			await knob.refresh();
+			const knobRead = Schema.decodeUnknownSync(KnobReply)(
+				await panel.webContents.executeJavaScript(
+					'window.quakeKnob.request({_tag:"Read"})',
+				),
+			);
+			assert.equal(knobRead._tag, "success");
+			if (knobRead._tag === "success")
+				assert.equal(knobRead.snapshot.context.session.profileId, profile.id);
 			await ready(panel, ".oq-clock .oq-clock-stage");
 			await writeFile(
 				join(scratch, `built-in-clock-${profile.id}.png`),
@@ -289,9 +315,17 @@ async function smoke(): Promise<void> {
 			command: { type: "startup", id: "1-2", enabled: true, confirmed: true },
 		});
 		assert.equal(startup._tag, "success");
+		await knob.dispose();
 		await profiles.dispose();
 		managementDebug = management;
 		profiles = registerProfiles(() => management);
+		knob = registerKnob(
+			() => panel,
+			() => [panel, management],
+			{
+				profiles: knobProfileBinding(profiles.runtime, profiles.select),
+			},
+		);
 		await profiles.connect("desktop-preview", "1-1");
 		await management.loadFile(resolve("out/renderer/index.html"));
 		const restarted = await request(management, { type: "read", locale: "en" });
@@ -327,6 +361,7 @@ async function smoke(): Promise<void> {
 			}
 		});
 	} finally {
+		await knob?.dispose();
 		await profiles?.dispose();
 		await media?.dispose();
 		await clock?.dispose();
