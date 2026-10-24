@@ -1,8 +1,8 @@
 import { Either, Option, Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MeetingAction } from "../../../shared/meeting-bridge";
-import { meetingRequest } from "../meetings/useMeetings";
 import type { GridVoiceInput } from "../../../shared/voice-surface";
+import { meetingRequest } from "../meetings/useMeetings";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { useQuakeEvents } from "../useQuakeEvents";

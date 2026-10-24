@@ -20,9 +20,9 @@ import {
 import { validateRequest } from "./ai-invariants.js";
 import { prepareWorkflow } from "./ai-provider-quirks.js";
 import { AiRepository } from "./ai-repository.js";
-import { AiMeetingAdapter, transcribeMeeting } from "./meeting-adapter.js";
 import { selectRole } from "./ai-role-presets.js";
 import type { ProviderOptions } from "./ai-workflow-contracts.js";
+import { AiMeetingAdapter, transcribeMeeting } from "./meeting-adapter.js";
 import type { GeneratedAudio } from "./speech/speech-contracts.js";
 import {
 	AiSpeechService,
