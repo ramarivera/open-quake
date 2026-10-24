@@ -314,7 +314,24 @@ if (!app.requestSingleInstanceLock()) {
 			: Effect.gen(function* () {
 					const controls = yield* HardwareControls;
 					return yield* startDeviceBus((connection) =>
-						attachHardware(controls, connection),
+						Effect.gen(function* () {
+							const serial = connection.info.serialNumber;
+							if (serial)
+								yield* Effect.acquireRelease(
+									Effect.tryPromise(() => profiles.connect(serial)).pipe(
+										Effect.catchAll(() =>
+											Effect.logWarning("Profile session enrollment failed"),
+										),
+									),
+									() =>
+										Effect.tryPromise(() => profiles.disconnect(serial)).pipe(
+											Effect.catchAll(() =>
+												Effect.logWarning("Profile session cleanup failed"),
+											),
+										),
+								);
+							return yield* attachHardware(controls, connection);
+						}),
 					);
 				});
 		const disposeHardware = registerHardware(

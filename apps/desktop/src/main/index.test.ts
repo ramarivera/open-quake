@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -704,6 +705,7 @@ describe("desktop window lifecycle", () => {
 
 import type { HidTransport } from "@open-quake/device";
 import {
+	FAKE_QUAKE_DEVICE,
 	type FakeHidTransport,
 	makeFakeHidTransport,
 } from "@open-quake/device/fake";
@@ -739,6 +741,102 @@ describe("desktop main with the real device service and fake HID", () => {
 			),
 		);
 	}
+
+	it("enrolls the real serial for the native connection lifetime and reconnects", async () => {
+		fake = await Effect.runPromise(
+			makeFakeHidTransport([
+				{ ...FAKE_QUAKE_DEVICE, serialNumber: "FAKE-QUAKE-001" },
+			]),
+		);
+		native.layer = fake.layer;
+		await start();
+		const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+		await vi.waitFor(() =>
+			expect(profiles?.connect).toHaveBeenCalledWith("FAKE-QUAKE-001"),
+		);
+		await Effect.runPromise(fake.failRead(new Error("synthetic disconnect")));
+		await vi.waitFor(() =>
+			expect(profiles?.disconnect).toHaveBeenCalledWith("FAKE-QUAKE-001"),
+		);
+		await vi.waitFor(() => expect(profiles?.connect).toHaveBeenCalledTimes(2), {
+			timeout: 3500,
+		});
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		expect(profiles?.disconnect).toHaveBeenCalledTimes(2);
+	});
+
+	it("enrolls and cleans up the serial when saved hardware preferences are corrupt", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "quake-corrupt-preferences-"),
+		);
+		const serial = "FAKE-QUAKE-CORRUPT";
+		await mkdir(join(directory, "hardware-v1"));
+		await writeFile(
+			join(
+				directory,
+				"hardware-v1",
+				`${createHash("sha256").update(serial).digest("hex")}.json`,
+			),
+			"{invalid",
+		);
+		const path = electron.app.getPath.mockImplementation(() => directory);
+		fake = await Effect.runPromise(
+			makeFakeHidTransport([{ ...FAKE_QUAKE_DEVICE, serialNumber: serial }]),
+		);
+		native.layer = fake.layer;
+		try {
+			await start();
+			const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+			await vi.waitFor(() =>
+				expect(profiles?.connect).toHaveBeenCalledExactlyOnceWith(serial),
+			);
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			expect(profiles?.disconnect).toHaveBeenCalledExactlyOnceWith(serial);
+			expect(await Effect.runPromise(fake.closes)).toBe(1);
+		} finally {
+			path.mockImplementation(() => join(tmpdir(), "open-quake-window-test"));
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("settles discovery and restores the known strip after resume reopens HID", async () => {
+		const primary = makeDisplay();
+		const strip = makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 480, height: 1920 },
+			bounds: { x: -480, y: 0, width: 480, height: 1920 },
+		});
+		electron.screen.getAllDisplays.mockReturnValue([primary, strip]);
+		await start();
+		const { panel, management } = windows();
+		await vi.waitFor(() => expect(panel.showInactive).toHaveBeenCalled());
+		panel.showInactive.mockClear();
+		const resume: (() => void) | undefined =
+			electron.powerMonitor.on.mock.calls.find(
+				([event]) => event === "resume",
+			)?.[1];
+		expect(resume).toBeDefined();
+		resume?.();
+		await vi.waitFor(
+			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
+			{ timeout: 7000 },
+		);
+		await vi.waitFor(() => {
+			const diagnostic = management.webContents.send.mock.calls
+				.filter(([channel]) => channel === "quake:diagnostic")
+				.at(-1)?.[1];
+			expect(diagnostic).toMatchObject({
+				usb: "pass",
+				hdmi: "pass",
+				checking: false,
+				issue: "none",
+			});
+			expect(panel.showInactive).toHaveBeenCalled();
+		});
+	}, 12000);
 
 	it("defaults to HID, forwards to both windows, cleans up unplug and reconnects", async () => {
 		await start();
@@ -802,7 +900,7 @@ describe("desktop main with the real device service and fake HID", () => {
 		const primary = makeDisplay();
 		const strip = makeDisplay({
 			id: 2,
-			label: "DK-QUAKE",
+			label: "Unnamed strip candidate",
 			size: { width: 1920, height: 480 },
 			bounds: { x: 2560, y: 0, width: 1920, height: 480 },
 		});
