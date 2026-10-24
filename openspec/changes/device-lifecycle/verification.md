@@ -381,11 +381,31 @@ Hardware originals are under `hw-controls/pr21-review-fix-2/` in the same parity
 scratch root, as required by that runner.
 
 OpenSpec tasks 6.1-6.4 map to beads `open-quake-lih.11.1.11` through `.14`.
-Tasks 6.1-6.3 are complete; task 6.4 remains open through delivery and review
-thread resolution. The user explicitly authorizes resolving these three threads
+Tasks 6.1-6.4 are complete. All four beads and the epic are closed with source,
+verification, push and thread-resolution evidence. The user explicitly authorizes resolving these three threads
 for this round, overriding the brief's general no-resolution instruction.
 No real QUAKE or touch controller was opened, DK-Suite was not started, no
 firmware was flashed, no dependency was added and no hook was bypassed or
 redirected. `core.hooksPath` remains `.husky/_`. Physical blanking/enumeration,
 real wake/unlock and native CoreGraphics effects remain lead-owned and unverified.
 PR #21 must remain unmerged.
+
+### Review-fix round 2 delivery
+
+Fix commit `5537ea0f420d73ff18369d455619f5512ae03f50` was pushed normally to
+`lane/device-lifecycle`. The normal commit and pre-push hooks passed, including
+Biome; Truth Mirror retained its existing disabled policy. A fresh GitHub read
+confirmed this pushed head and PR #21 remained OPEN.
+
+Each requested connector thread received an attributed GraphQL
+`addPullRequestReviewThreadReply` naming the fix commit, followed by
+`resolveReviewThread`. A fresh GraphQL read verified all three resolved and
+containing that fix SHA:
+
+- Initial readiness: [reply](https://github.com/ramarivera/open-quake/pull/21#discussion_r4366717554), thread `PRRT_kwDOUADXpM6v3Gfl`.
+- Dock activation: [reply](https://github.com/ramarivera/open-quake/pull/21#discussion_r4366717900), thread `PRRT_kwDOUADXpM6v3Gfn`.
+- Late HDMI: [reply](https://github.com/ramarivera/open-quake/pull/21#discussion_r4366718135), thread `PRRT_kwDOUADXpM6v3Ou9`.
+
+Delivery evidence is retained in scratch `commit.log`, `push.log`,
+`threads-before.json`, `thread-resolutions.json` and `threads-after.json`.
+Cluster `open-quake-lih.11` remains lead-owned until merge. PR #21 was not merged.
