@@ -55,7 +55,7 @@ The importer SHALL accept ordered local MP3 path lists, the recovered JSON-array
 
 ### Requirement: Shared per-key playback sessions
 
-Desktop and key controls SHALL operate the same per-key playback session with play, pause, resume, stop, previous and next. Each session SHALL expose idle/loading/playing/paused/stopped/failed status keyed by playbackId and playlist revision. An explicit play control SHALL replace that key's current playback; recovered PLAY_ADD SHALL instead add an independently identified instance under the same key session; different keys SHALL remain independent until stopAudio stops all soundboard sessions. Pause/resume SHALL preserve position and stop SHALL reset it.
+Desktop and key controls SHALL operate the same per-key playback session with play, pause, resume, stop, previous and next. Each session SHALL expose idle/loading/playing/paused/stopped/failed status keyed by playbackId and playlist revision. An explicit play control SHALL replace that key's current playback; recovered PLAY_ADD SHALL instead add an independently identified instance under the same key session; different keys SHALL remain independent until stopAudio stops all soundboard sessions. Pause/resume SHALL preserve position. Stop SHALL reset the position to the start of a track while remembering which playlist track was stopped, so a later PLAY_STOP or PLAY_RESTART resumes at that track's beginning.
 
 #### Scenario: Key and UI control
 
@@ -69,7 +69,7 @@ Desktop and key controls SHALL operate the same per-key playback session with pl
 
 ### Requirement: Track navigation
 
-Track navigation SHALL preserve playlist order and start the target track at its beginning. Previous from the first track SHALL wrap to the last; next or natural end from the last SHALL wrap to the first. Natural end SHALL advance exactly once per playbackId and track generation, continuing indefinitely until stopped. Unavailable entries SHALL remain visible but be skipped by navigation with a search bounded to one playlist traversal; when all entries are unavailable the key session SHALL stop without another start. This copies the intended DK-Suite playlist behavior, not a bug. Evidence: `KNOB-086`; GAP-MAP cluster 18 and its copy-DK-Suite direction.
+Track navigation SHALL preserve playlist order and start the target track at its beginning. Previous from the first track SHALL wrap to the last; next or natural end from the last SHALL wrap to the first. Natural end SHALL advance exactly once per playbackId and track generation, continuing indefinitely until stopped. The only exception is a PLAY_LOOP session, whose natural end repeats the current track (`KNOB-082`). Unavailable entries SHALL remain visible but be skipped by navigation with a search bounded to one playlist traversal; when all entries are unavailable the key session SHALL stop without another start. This copies the intended DK-Suite playlist behavior, not a bug. Evidence: `KNOB-086`; GAP-MAP cluster 18 and its copy-DK-Suite direction.
 
 #### Scenario: End of playlist
 
@@ -148,10 +148,10 @@ The importer and runtime SHALL use these recovered mappings. Evidence: `KNOB-082
 
 | audioAction | Named operation | Behavior |
 | --- | --- | --- |
-| 0 | PLAY_STOP | Toggle stop/play; playlists remember the stopped track |
+| 0 | PLAY_STOP | Toggle stop/play; stop remembers the track index (not the position), and play starts that track from its beginning |
 | 1 | PLAY_ADD | Start another independent playback instance |
 | 2 | PLAY_RESTART | Restart the current track, or start the last stopped track |
-| 3 | PLAY_LOOP | Toggle playback with looping enabled |
+| 3 | PLAY_LOOP | Toggle playback of the current track on repeat: while it plays, its natural end restarts the same track instead of advancing |
 | 4 | STOP_ALL | Stop all soundboard playback |
 | 5 | PLAY_PREV | Select previous track, wrapping |
 | 6 | PLAY_NEXT | Select next track, wrapping |
