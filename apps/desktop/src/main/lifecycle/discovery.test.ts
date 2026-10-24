@@ -76,6 +76,7 @@ describe("screen-off pairing", () => {
 	for (const candidate of [
 		{ ...strip, label: "Other device" },
 		{ ...strip, size: { width: 1600, height: 900 } },
+		{ ...strip, size: { width: 1919, height: 480 } },
 	])
 		it.scoped(
 			`requires blanking when name or physical size does not identify ${candidate.label} ${candidate.size.width}`,

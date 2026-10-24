@@ -1,7 +1,7 @@
 import { Deferred, Effect, Option, Queue, type Scope } from "effect";
 import type { Display } from "electron";
 import type { DeviceBus } from "../deviceBus";
-import { isPanelCandidate, isPanelShaped } from "../display";
+import { isPanelCandidate, physicalSize } from "../display";
 
 export interface DiscoveryEdges {
 	readonly displays: () => readonly Display[];
@@ -38,10 +38,13 @@ export const makeDiscovery = Effect.fn("StripDiscovery.make")(function* (
 			// This firmware can blank its pixels while retaining the HDMI EDID.
 			// An exact name and size identify a sole candidate without that edge.
 			const identified = before.length === 1 ? before[0] : undefined;
+			const size = identified ? physicalSize(identified) : undefined;
 			if (
 				identified &&
 				identified.label.trim().toUpperCase() === "DK-QUAKE" &&
-				isPanelShaped(identified)
+				size &&
+				((size.width === 1920 && size.height === 480) ||
+					(size.width === 480 && size.height === 1920))
 			)
 				return {
 					display: Option.some(identified),
