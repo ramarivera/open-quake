@@ -548,7 +548,8 @@ async function smoke(): Promise<void> {
 		assert(imported._tag === "success" && imported.packs?.length);
 		if (imported._tag !== "success" || !imported.packs?.[0])
 			throw new Error("Pack import failed");
-		const pack = imported.packs[0];
+		const pack = imported.packs.find((pack) => pack.name === "Shapes smoke");
+		assert(pack);
 		process.stdout.write("keys smoke: pack references\n");
 		const read = await request(manager, { type: "read", locale: "en" });
 		assert(read._tag === "success" && read.envelope);
