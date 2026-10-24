@@ -160,7 +160,7 @@ async function smoke(): Promise<void> {
 		() => management,
 		() => panel,
 		{
-			collect: () => Effect.die("Disabled monitor must not collect host data"),
+			collect: () => Effect.die("Unmounted monitor must not collect host data"),
 		},
 		renderer,
 	);
@@ -255,7 +255,7 @@ async function smoke(): Promise<void> {
 		assert.equal(
 			await evaluate(
 				management,
-				"window.quakeMonitor.request({_tag:'read'}).then(reply => reply._tag === 'success' && !reply.view.settings.enabled)",
+				"window.quakeMonitor.request({_tag:'read'}).then(reply => reply._tag === 'success' && reply.view.settings.enabled && reply.view.settings.styleId === 'glass')",
 			),
 			true,
 			"monitor reads coexist with weather/media on the shared preload",

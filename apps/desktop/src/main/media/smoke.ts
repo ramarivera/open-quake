@@ -188,7 +188,7 @@ async function smoke(): Promise<void> {
 		() => management,
 		() => panel,
 		{
-			collect: () => Effect.die("Disabled monitor must not collect host data"),
+			collect: () => Effect.die("Unmounted monitor must not collect host data"),
 		},
 	);
 	const maintenance = registerMaintenance({
