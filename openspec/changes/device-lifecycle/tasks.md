@@ -11,4 +11,4 @@
 
 ## 3. Integration and delivery
 
-- [ ] 3.1 Run all lane gates, native smoke, inspect screenshots, sync beads with evidence, commit/push and open a PR against main with hardware limits. Verify clean git state and linked PR head.
+- [x] 3.1 Run all lane gates, native smoke, inspect screenshots, sync beads with evidence, commit/push and open a PR against main with hardware limits. Verify clean git state and linked PR head. Delivered in PR #21; evidence in verification.md.
