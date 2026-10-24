@@ -35,3 +35,7 @@
 ## 7. PR #21 clock and knob merge round
 
 - [x] 7.1 Merge origin/main at 129ceb5 into head 0ae18bd, preserving lifecycle startup/recovery and hidden release fallback plus clock scheme/registration, knob bus/profile binding, both test mocks and all preload/smoke APIs. Run all six lane gates and media, hardware, knob, clock and lifecycle native mock smokes; commit through existing hooks and push without merging PR #21. Bead: open-quake-lih.11.1.15.
+
+## Live acceptance follow-up
+
+- [ ] Bind an exact-label, exact-size sole DK-QUAKE display while preserving blanking identification for ambiguous candidates. Prove the live EDID-retaining startup case and strict ambiguity regressions. Shared bead `open-quake-lih.10.2.21`; key-library-parity task8.2 tracks profile enrollment in the same fix.

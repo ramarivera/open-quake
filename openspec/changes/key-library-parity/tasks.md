@@ -46,3 +46,9 @@
 - [x] 7.8 Block quarantined emoji keys at registered press dispatch and include validated icon packs/local icons in native backup export and lossless restore. Verify real press and restored store consumers, populated/repeated restore and malformed input rejection, six fresh gates and sequential native mocks. Reply before resolving both PR35 findings. Bead `open-quake-lih.10.2.18`. Evidence: `review-round-7.md`; source `b9d21e0f02bae466d574c51d5d3dd64d96293bb8`.
 
 - [x] 7.9 Accept importer-produced repeated artwork IDs in icon backups, preserve differently named aliases and normalize collisions deterministically during clean/populated/repeated restore, including existing libraries. Verify actual parser/store/backup consumers and native proof; run fresh gates and reply before resolving PR35 finding. Bead `open-quake-lih.10.2.19`. Evidence: `review-round-8.md`; source `b62e18a79f6dee0cd8661e1e6ef6ecac2d4d36ab`.
+
+## 8. Lead acceptance
+
+- [ ] 8.1 Run quiet live-device acceptance on this Mac using a single QUAKE owner and isolated test data. Verify actual shortcut/text receipt, resource delivery and software reconnect; preserve user clipboard/state and retain exact evidence. User excludes audible tests for now and requests Home Assistant last. Full physical 6.1 remains open while alarms or physical reconnection remain unverified. Bead `open-quake-lih.10.2.20`.
+
+- [ ] 8.2 Repair real-device profile enrollment and unambiguous DK-QUAKE display startup found by quiet acceptance. Own profile connection lifetime with the native HID scope, preserve ambiguity handling, add red/green consumer tests and repeat quiet live proof. Bead `open-quake-lih.10.2.21`; related device-lifecycle requirement updated together.

@@ -26,7 +26,12 @@ The app MUST acquire its single-instance lock before windows or device access. A
 - **THEN** the existing instance restarts the device bus after the old owner closes, unlocks the lifecycle and schedules the same wake recovery as activate
 
 ### Requirement: Screen pairing transaction
-The app SHALL serialize discovery, observe display disappearance before sending opcode 1 command [04,00], identify the unique removed QUAKE candidate, send [04,01], and bind when that display returns or a unique matching replacement appears. It SHALL restore screen power on timeout, interruption and failure. A transaction SHALL time out after 30 seconds and leave unresolved displays hidden rather than guess. Locked sessions SHALL defer discovery. Sources: MAIN-024, MAIN-042, MAIN-045, MAIN-050, MAIN-053, SETTINGS-083.
+When exactly one candidate has both the exact DK-QUAKE label and the physical 1920×480 dimensions in either orientation, the app SHALL bind that identified display without requiring a power-cycle topology change. Other candidate sets SHALL retain the screen-pairing transaction: the app SHALL serialize discovery, observe display disappearance before sending opcode 1 command [04,00], identify the unique removed QUAKE candidate, send [04,01], and bind when that display returns or a unique matching replacement appears. It SHALL restore screen power on timeout, interruption and failure. A transaction SHALL time out after 30 seconds and leave unresolved displays hidden rather than guess. Locked sessions SHALL defer discovery. Sources: MAIN-024, MAIN-042, MAIN-045, MAIN-050, MAIN-053, SETTINGS-083.
+
+#### Scenario: Known strip retains EDID while blanked
+- **WHEN** USB is connected and the sole candidate has the exact DK-QUAKE label and physical 1920×480 dimensions in either orientation
+- **THEN** the panel binds that display without screen-power writes and without waiting for a disappearance event
+- **AND** missing labels, mismatched dimensions and multiple candidates still require the blanking transaction
 
 #### Scenario: Blanking identifies the strip
 - **WHEN** two candidate displays exist and only one disappears during blanking

@@ -704,6 +704,7 @@ describe("desktop window lifecycle", () => {
 
 import type { HidTransport } from "@open-quake/device";
 import {
+	FAKE_QUAKE_DEVICE,
 	type FakeHidTransport,
 	makeFakeHidTransport,
 } from "@open-quake/device/fake";
@@ -739,6 +740,30 @@ describe("desktop main with the real device service and fake HID", () => {
 			),
 		);
 	}
+
+	it("enrolls the real serial for the native connection lifetime and reconnects", async () => {
+		fake = await Effect.runPromise(
+			makeFakeHidTransport([
+				{ ...FAKE_QUAKE_DEVICE, serialNumber: "FAKE-QUAKE-001" },
+			]),
+		);
+		native.layer = fake.layer;
+		await start();
+		const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+		await vi.waitFor(() =>
+			expect(profiles?.connect).toHaveBeenCalledWith("FAKE-QUAKE-001"),
+		);
+		await Effect.runPromise(fake.failRead(new Error("synthetic disconnect")));
+		await vi.waitFor(() =>
+			expect(profiles?.disconnect).toHaveBeenCalledWith("FAKE-QUAKE-001"),
+		);
+		await vi.waitFor(() => expect(profiles?.connect).toHaveBeenCalledTimes(2), {
+			timeout: 3500,
+		});
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		expect(profiles?.disconnect).toHaveBeenCalledTimes(2);
+	});
 
 	it("defaults to HID, forwards to both windows, cleans up unplug and reconnects", async () => {
 		await start();
@@ -802,7 +827,7 @@ describe("desktop main with the real device service and fake HID", () => {
 		const primary = makeDisplay();
 		const strip = makeDisplay({
 			id: 2,
-			label: "DK-QUAKE",
+			label: "Unnamed strip candidate",
 			size: { width: 1920, height: 480 },
 			bounds: { x: 2560, y: 0, width: 1920, height: 480 },
 		});

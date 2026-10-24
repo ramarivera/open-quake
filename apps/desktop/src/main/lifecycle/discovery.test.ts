@@ -49,6 +49,62 @@ const harness = Effect.fn("Test.discovery")(function* (
 });
 describe("screen-off pairing", () => {
 	it.scoped(
+		"binds the sole exact-label, exact-size strip without EDID disappearance",
+		() =>
+			Effect.gen(function* () {
+				let writes = 0;
+				const discovery = yield* makeDiscovery({
+					displays: () => [primary, strip],
+					watch: () => () => {},
+					bus: () => ({
+						on: () => () => {},
+						currentStatus: () => undefined,
+						setScreenPower: () =>
+							Effect.sync(() => {
+								writes++;
+								return true;
+							}),
+					}),
+				});
+				const result = yield* discovery.run();
+				expect(result.issue).toBe("none");
+				expect(Option.getOrUndefined(result.display)?.id).toBe(strip.id);
+				expect(writes).toBe(0);
+			}),
+	);
+
+	for (const candidate of [
+		{ ...strip, label: "Other device" },
+		{ ...strip, size: { width: 1600, height: 900 } },
+	])
+		it.scoped(
+			`requires blanking when name or physical size does not identify ${candidate.label} ${candidate.size.width}`,
+			() =>
+				Effect.gen(function* () {
+					const power: boolean[] = [];
+					const discovery = yield* makeDiscovery({
+						displays: () => [primary, candidate],
+						watch: () => () => {},
+						bus: () => ({
+							on: () => () => {},
+							currentStatus: () => undefined,
+							setScreenPower: (on) =>
+								Effect.sync(() => {
+									power.push(on);
+									return true;
+								}),
+						}),
+					});
+					const fiber = yield* discovery.run().pipe(Effect.fork);
+					yield* TestClock.adjust(30_000);
+					const result = yield* Fiber.join(fiber);
+					expect(result.issue).toBe("timeout");
+					expect(Option.isNone(result.display)).toBe(true);
+					expect(power).toEqual([false, true]);
+				}),
+		);
+
+	it.scoped(
 		"returns immediately without screen-power writes when no candidates exist",
 		() =>
 			Effect.gen(function* () {
