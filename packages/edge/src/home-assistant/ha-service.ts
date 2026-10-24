@@ -11,6 +11,7 @@ import {
 	HaNetworkFailed,
 	InputRejected,
 	type IntegrationError,
+	IntegrationErrors,
 	ProfilePlacementFailed,
 	StoreFailed,
 } from "../channels/integration-errors.js";
@@ -34,6 +35,7 @@ export interface HaPortShape {
 		origin: string,
 		token: string,
 		trust: readonly Certificate[],
+		allowInsecureHttp: boolean,
 	) => Promise<HaConnection>;
 	readonly place: (target: HaTarget, key: HaKey) => Promise<void>;
 }
@@ -102,12 +104,16 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 				connection = undefined;
 				state = "Disconnected";
 				live = [];
+				entities = [];
+				services = [];
+				reason = "";
+				certificate = null;
 			};
 			const recordFailure = (error: IntegrationError) =>
 				Effect.sync(() => {
 					disconnect();
 					state = "Failed";
-					reason = error.message;
+					reason = IntegrationErrors[error._tag].message;
 					certificate =
 						error instanceof HaCertificateRejected
 							? { origin: error.origin, fingerprint: error.fingerprint }
@@ -117,6 +123,7 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 				(
 					address: string,
 					token: string,
+					allowInsecureHttp = false,
 				): Effect.Effect<HaSnapshot, IntegrationError> =>
 					Effect.gen(function* () {
 						disconnect();
@@ -130,6 +137,10 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 							catch: (c) =>
 								c instanceof InputRejected ? c : new InputRejected(c),
 						});
+						if (origin.startsWith("http:") && !allowInsecureHttp)
+							return yield* Effect.fail(
+								new InputRejected(undefined, "Unencrypted HTTP consent"),
+							);
 						let config = yield* load();
 						if (token) {
 							const reference = yield* Effect.tryPromise({
@@ -165,7 +176,8 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 							catch: (c) => new CredentialFailed(c),
 						});
 						const next = yield* Effect.tryPromise({
-							try: () => ports.open(origin, secret, config.trusted),
+							try: () =>
+								ports.open(origin, secret, config.trusted, allowInsecureHttp),
 							catch: haBoundaryError,
 						});
 						connection = next;

@@ -9,7 +9,7 @@ export const agentIdError = (
 	id: string,
 	agents: readonly Agent[],
 ): "format" | "reserved" | "duplicate" | "" =>
-	id === "main"
+	id === "main" || id === "default"
 		? "reserved"
 		: !/^[a-z][a-z0-9-]*$/.test(id) || id.length > 48
 			? "format"

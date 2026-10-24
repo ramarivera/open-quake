@@ -27,6 +27,7 @@ export function HomeAssistantPage() {
 	const [snapshot, setSnapshot] = useState<HaSnapshot>();
 	const [origin, setOrigin] = useState("");
 	const [token, setToken] = useState("");
+	const [allowInsecureHttp, setAllowInsecureHttp] = useState(false);
 	const [connecting, setConnecting] = useState(false);
 	const [group, setGroup] = useState<"room" | "entity">("room");
 	const [allowlist, setAllowlist] = useState<readonly string[]>([]);
@@ -73,7 +74,7 @@ export function HomeAssistantPage() {
 	const connect = async () => {
 		setConnecting(true);
 		setNotice("");
-		await request({ type: "ha.connect", origin, token });
+		await request({ type: "ha.connect", origin, token, allowInsecureHttp });
 		setToken("");
 		await refresh();
 		setConnecting(false);
@@ -108,7 +109,10 @@ export function HomeAssistantPage() {
 								value={origin}
 								placeholder="http(s)://"
 								required
-								onChange={(event) => setOrigin(event.target.value)}
+								onChange={(event) => {
+									setOrigin(event.target.value);
+									setAllowInsecureHttp(false);
+								}}
 							/>
 						</label>
 						<label className="mc-field">
@@ -123,6 +127,24 @@ export function HomeAssistantPage() {
 							{snapshot?.tokenMask && <span>{snapshot.tokenMask}</span>}
 						</label>
 					</div>
+					{origin.trim().startsWith("http:") && (
+						<label className="mc-field">
+							<span>
+								HTTP sends the Home Assistant token without encryption. Use
+								HTTPS when available.
+							</span>
+							<span>
+								<input
+									type="checkbox"
+									checked={allowInsecureHttp}
+									onChange={(event) =>
+										setAllowInsecureHttp(event.target.checked)
+									}
+								/>{" "}
+								Allow unencrypted HTTP for this connection
+							</span>
+						</label>
+					)}
 					<div className="mc-toolbar">
 						<span>
 							{s.connectionStatus}: {status}

@@ -1,0 +1,369 @@
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { app, BrowserWindow } from "electron";
+import {
+	createInitialProfileEnvelope,
+	encodeProfileEnvelope,
+} from "../../../../../packages/device/src/profiles/profile-contracts";
+import { installProfileCatalog } from "../../../../../packages/device/src/profiles/profile-manager-invariants";
+import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service";
+import {
+	ProfileRepository,
+	profileStorageLayer,
+} from "../../../../../packages/device/src/profiles/profile-repository";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
+import {
+	ProfileSwitching,
+	ProfileSwitchingPort,
+} from "../../../../../packages/device/src/profiles/profile-switching-service";
+import { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import {
+	IntegrationReply,
+	type IntegrationRequest,
+} from "../../shared/integrations";
+import { registerAgents } from "../agents";
+import { ManagementProfileContractsLive } from "../management/profile-contracts";
+import { makeProfileController } from "../profiles/profile-controller";
+import { registerIntegrations } from "./index";
+import { entity, fakeChannels, fakeVault, service } from "./test-fixtures";
+
+async function main() {
+	const smokeDirectory = fileURLToPath(new URL(".", import.meta.url));
+	const scratch = process.env.OPEN_QUAKE_SMOKE_SCRATCH;
+	assert(scratch);
+	assert(
+		process.env.OPEN_QUAKE_MOCK_DEVICE === "1" &&
+			!process.env.ELECTRON_RUN_AS_NODE,
+	);
+	assert(
+		scratch?.startsWith("/Volumes/ExtSSD/") &&
+			scratch.includes("management-center/review-round-1/"),
+	);
+	await mkdir(scratch, { recursive: true });
+	await mkdir(join(scratch, "synthetic-user-data"), { recursive: true });
+	await mkdir(join(scratch, "synthetic-session-data"), { recursive: true });
+	app.setPath("userData", join(scratch, "synthetic-user-data"));
+	app.setPath("sessionData", join(scratch, "synthetic-session-data"));
+	await app.whenReady();
+	let saved = encodeProfileEnvelope(
+		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
+	);
+	const profiles = ManagedRuntime.make(
+		Layer.mergeAll(
+			ProfileService.DefaultWithoutDependencies,
+			ProfileManager.DefaultWithoutDependencies,
+			ProfileSwitching.DefaultWithoutDependencies,
+		).pipe(
+			Layer.provideMerge(
+				ProfileRepository.DefaultWithoutDependencies.pipe(
+					Layer.provide(
+						Layer.mergeAll(
+							ManagementProfileContractsLive,
+							profileStorageLayer({
+								read: async () => saved,
+								write: async (next) => {
+									saved = next;
+								},
+							}),
+						),
+					),
+				),
+			),
+			Layer.provide(
+				Layer.succeed(ProfileSwitchingPort, {
+					platform: "darwin",
+					foreground: () => Effect.succeed(Option.none()),
+					push: () => Effect.void,
+				}),
+			),
+		),
+	);
+	const renderer = pathToFileURL(
+		join(smokeDirectory, "../management-review-renderer/index.html"),
+	).href;
+	const makeWindow = () =>
+		new BrowserWindow({
+			width: 1180,
+			height: 850,
+			show: false,
+			webPreferences: {
+				preload: join(smokeDirectory, "../management-review-preload/index.mjs"),
+				sandbox: false,
+				contextIsolation: true,
+				nodeIntegration: false,
+			},
+		});
+	const management = makeWindow();
+	const panel = makeWindow();
+	const stranger = makeWindow();
+	for (const win of [management, panel, stranger]) {
+		win.webContents.on("preload-error", (_event, _path, error) =>
+			process.stderr.write(`Synthetic preload error: ${String(error)}\n`),
+		);
+	}
+	const vault = fakeVault();
+	const channelRuntime = fakeChannels();
+	let executions = 0;
+	let closes = 0;
+	let release: (() => void) | undefined;
+	let started: (() => void) | undefined;
+	let block = false;
+	const entered = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	const blocked = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const integrations = registerIntegrations({
+		management: () => management,
+		panel: () => panel,
+		rendererURL: renderer,
+		profileRuntime: profiles,
+		vault: vault.port,
+		channelRuntime: channelRuntime.port,
+		openHa: async () => ({
+			entities: async () => [entity, { ...entity, entity_id: "light.private" }],
+			services: async () => [service],
+			states: async () => [],
+			execute: async () => {
+				executions++;
+				if (block) {
+					started?.();
+					await blocked;
+				}
+			},
+			close: () => {
+				closes++;
+			},
+		}),
+	});
+	const profileController = await profiles.runPromise(
+		makeProfileController({
+			confirm: async () => true,
+			execute: async () => {},
+			chooseApp: async () => Option.none(),
+			capture: async () => "",
+			cachedThumbnail: async () => Option.none(),
+			publish: () => {},
+			progress: () => {},
+		}),
+	);
+	const agents = registerAgents({
+		management: () => management,
+		renderer,
+		profiles,
+		selectProfile: async (id) => {
+			const result = await profiles.runPromise(
+				profileController.request({
+					type: "manage",
+					command: { type: "select", id },
+				}),
+			);
+			assert.notEqual(result._tag, "rejected");
+		},
+	});
+	const request = async (win: BrowserWindow, input: IntegrationRequest) =>
+		Schema.decodeUnknownSync(IntegrationReply)(
+			await win.webContents.executeJavaScript(
+				`window.quakeIntegrations.request(${JSON.stringify(input)})`,
+			),
+		);
+	const captures: { file: string; sha256: string }[] = [];
+	const capture = async (name: string) => {
+		const bytes = (await management.webContents.capturePage()).toPNG();
+		const file = join(scratch, `${name}.png`);
+		await writeFile(file, bytes);
+		captures.push({
+			file,
+			sha256: createHash("sha256").update(bytes).digest("hex"),
+		});
+	};
+	const wait = async (script: string) => {
+		const end = Date.now() + 8000;
+		while (!(await management.webContents.executeJavaScript(script))) {
+			assert(Date.now() < end, "UI wait expired");
+			await new Promise((resolve) => setTimeout(resolve, 40));
+		}
+	};
+	try {
+		await Promise.all([
+			management.loadURL(renderer),
+			panel.loadURL(renderer),
+			stranger.loadURL(renderer),
+		]);
+		assert.equal((await request(stranger, { type: "ha.live" })).type, "error");
+		assert.equal(
+			(await request(panel, { type: "channels.list" })).type,
+			"error",
+		);
+		assert.equal((await request(panel, { type: "ha.live" })).type, "live");
+		assert.equal(
+			(
+				await request(management, {
+					type: "channels.save",
+					id: "feishu",
+					fields: {
+						appId: "synthetic-app",
+						appSecret: "synthetic-only",
+						domain: "feishu",
+					},
+					session: "",
+				})
+			).type,
+			"channels",
+		);
+		assert.equal(
+			(
+				await request(management, {
+					type: "channels.save",
+					id: "feishu",
+					fields: { appId: "updated-app", domain: "lark" },
+					session: "",
+				})
+			).type,
+			"channels",
+		);
+		assert.equal(vault.values.size, 1);
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[data-page="channels"]').click()`,
+		);
+		await wait(`document.body.innerText.includes('Feishu')`);
+		await capture("base-channels");
+		assert.equal(
+			(
+				await request(management, {
+					type: "ha.connect",
+					allowInsecureHttp: false,
+					origin: "https://synthetic-ha.test",
+					token: "synthetic-only",
+				})
+			).type,
+			"ha",
+		);
+		await request(management, { type: "ha.allowlist", ids: ["light.desk"] });
+		const key = Schema.decodeUnknownSync(HaKey)({
+			entity_id: "light.private",
+			service: "turn_on",
+			service_data: { brightness: 12 },
+			custom_display_type: "default",
+			custom_display_settings: { fontSize: 40 },
+			custom_display_detail: [],
+		});
+		await assert.rejects(integrations.executeHa(key));
+		assert.equal(executions, 0);
+		await integrations.executeHa({ ...key, entity_id: "light.desk" });
+		assert.equal(executions, 1);
+		await request(management, {
+			type: "ha.revoke",
+			origin: "https://synthetic-ha.test",
+		});
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[data-page="ha"]').click()`,
+		);
+		await wait(`document.body.innerText.includes('Disconnected')`);
+		await capture("base-ha-revoked");
+		const raw = await readFile(
+			join(app.getPath("userData"), "integrations-v1/channels.json"),
+			"utf8",
+		);
+		assert(!raw.includes("synthetic-only"));
+		for (const name of ["First", "Second"])
+			await request(management, {
+				type: "shortcuts.save",
+				library: {
+					id: "",
+					name,
+					app: "Figma",
+					createdAt: "",
+					rows: [
+						{ id: "copy", name: "Copy", app: "Figma", chord: "control+c" },
+					],
+				},
+			});
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[data-page="shortcuts"]').click()`,
+		);
+		await wait(`document.body.innerText.includes('First')`);
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('button')].find(b=>b.textContent.trim().endsWith('First')).click()`,
+		);
+		await wait(`document.querySelector('input[type="checkbox"]') !== null`);
+		await management.webContents.executeJavaScript(
+			`document.querySelector('input[type="checkbox"]').click()`,
+		);
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Add to shortcut pack').click()`,
+		);
+		await wait(`document.querySelector('input[placeholder]') !== undefined`);
+		await wait(`!document.querySelector('[aria-pressed="true"]')?.disabled`);
+		const libraries = await request(management, { type: "shortcuts.list" });
+		assert(libraries.type === "libraries" && libraries.libraries.length === 2);
+		await capture("base-shortcuts-existing");
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[data-page="agents"]').click()`,
+		);
+		await wait(`document.body.innerText.includes('Main')`);
+		await capture("base-agents");
+		await request(management, {
+			type: "ha.connect",
+			allowInsecureHttp: false,
+			origin: "https://synthetic-ha.test",
+			token: "",
+		});
+		block = true;
+		const inFlight = integrations.executeHa({
+			...key,
+			entity_id: "light.desk",
+		});
+		await entered;
+		const first = integrations.dispose();
+		assert.equal(first, integrations.dispose());
+		let finished = false;
+		void first.then(() => {
+			finished = true;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		assert.equal(finished, false);
+		release?.();
+		await inFlight;
+		await first;
+		assert.equal(closes, 2);
+		await writeFile(
+			join(scratch, "proof.json"),
+			JSON.stringify(
+				{
+					passed: true,
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					ownership: true,
+					allowlist: true,
+					awaitableShutdown: true,
+					captures,
+				},
+				null,
+				2,
+			),
+		);
+		process.stdout.write(
+			"PR33 native mock production IPC, ownership, allowlist, persisted secrets, UI and disposal passed\n",
+		);
+	} catch (error) {
+		await capture("base-failure");
+		throw error;
+	} finally {
+		release?.();
+		await integrations.dispose();
+		await agents.dispose();
+		await profiles.dispose();
+		for (const win of [management, panel, stranger])
+			if (!win.isDestroyed()) win.destroy();
+		app.quit();
+	}
+}
+void main().catch((error: unknown) => {
+	process.stderr.write(`${String(error)}\n`);
+	app.exit(1);
+});

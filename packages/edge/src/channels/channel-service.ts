@@ -56,8 +56,11 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 			>();
 			const approvals = new Set<string>();
 			const secrets = new Set<string>();
-			const load = Effect.fn("ChannelService.load")(
-				function* (): Effect.fn.Return<ChannelConfig[], IntegrationError> {
+			const loadStore = Effect.fn("ChannelService.loadStore")(
+				function* (): Effect.fn.Return<
+					typeof ChannelStore.Type,
+					IntegrationError
+				> {
 					const raw = yield* Effect.tryPromise({
 						try: ports.store.read,
 						catch: (c) => new StoreFailed(c),
@@ -67,14 +70,56 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 							Effect.fail(new StoreFailed(c)),
 						),
 					);
-					return [...data.channels];
+					return data;
 				},
 			);
-			const write = (channels: readonly ChannelConfig[]) =>
-				Effect.tryPromise({
-					try: () => ports.store.write({ version: 1, channels }),
-					catch: (c) => new StoreFailed(c),
+			const load = () =>
+				loadStore().pipe(Effect.map((data) => [...data.channels]));
+			const write = (
+				channels: readonly ChannelConfig[],
+				pendingCredentialRefs?: readonly string[],
+			) =>
+				Effect.gen(function* () {
+					const pending =
+						pendingCredentialRefs ?? (yield* loadStore()).pendingCredentialRefs;
+					yield* Effect.tryPromise({
+						try: () =>
+							ports.store.write({
+								version: 1,
+								channels,
+								pendingCredentialRefs: pending,
+							}),
+						catch: (c) => new StoreFailed(c),
+					});
 				});
+			// Called under the mutation lock. References remain durable until vault cleanup succeeds.
+			const cleanup = () =>
+				Effect.gen(function* () {
+					const data = yield* loadStore();
+					for (const ref of data.pendingCredentialRefs) {
+						yield* Effect.tryPromise({
+							try: () => ports.vault.remove(ref),
+							catch: (c) => new CredentialFailed(c),
+						});
+					}
+					if (data.pendingCredentialRefs.length)
+						yield* write(data.channels, []);
+				});
+			const readCredentials = (ref: string) =>
+				Effect.tryPromise({
+					try: async () =>
+						Schema.decodeUnknownSync(
+							Schema.Record({ key: Schema.String, value: Schema.String }),
+						)(JSON.parse(await ports.vault.get(ref))),
+					catch: (c) => new CredentialFailed(c),
+				}).pipe(
+					Effect.tap((values) =>
+						Effect.sync(() => {
+							for (const value of Object.values(values))
+								if (value) secrets.add(value);
+						}),
+					),
+				);
 			const list = Effect.fn("ChannelService.list")(
 				function* (): Effect.fn.Return<
 					readonly ChannelView[],
@@ -101,7 +146,9 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 							configured: !!config,
 							enabled: config?.enabled ?? false,
 							publicFields: config?.publicFields ?? {},
-							reason: runtime.reason,
+							reason: runtime.available
+								? ""
+								: "OpenClaw runtime is unavailable",
 							state: !runtime.available
 								? "Unavailable"
 								: !config
@@ -153,7 +200,13 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 						const publicFields: Record<string, string> = {};
 						const privateFields: Record<string, string> = {};
 						for (const field of credentialFields(id)) {
-							const value = fields[field.key]?.trim() ?? "";
+							const supplied = fields[field.key]?.trim() ?? "";
+							const value =
+								supplied ||
+								(field.secret && old
+									? ((yield* readCredentials(old.credentialRef))[field.key] ??
+										"")
+									: "");
 							if (!value)
 								return yield* Effect.fail(
 									new InputRejected(undefined, field.label),
@@ -187,7 +240,13 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 							credentialRef: ref,
 							publicFields,
 						};
-						yield* write([...all.filter((c) => c.id !== id), config]).pipe(
+						yield* write(
+							[...all.filter((c) => c.id !== id), config],
+							[
+								...(yield* loadStore()).pendingCredentialRefs,
+								...(old?.credentialRef ? [old.credentialRef] : []),
+							],
+						).pipe(
 							Effect.tapError(() =>
 								Effect.tryPromise({
 									try: () => ports.vault.remove(ref),
@@ -199,11 +258,7 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 						yield* runtimeCall(() =>
 							ports.runtime.configure(config, privateFields),
 						).pipe(Effect.catchTag("RuntimeUnavailable", () => Effect.void));
-						if (old?.credentialRef)
-							yield* Effect.tryPromise({
-								try: () => ports.vault.remove(old.credentialRef),
-								catch: (c) => new CredentialFailed(c),
-							});
+						yield* cleanup();
 						if (sessionId) yield* cancelQr(sessionId);
 						return yield* list();
 					}).pipe(lock.withPermits(1)),
@@ -245,13 +300,17 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 						Effect.gen(function* () {
 							const all = yield* load();
 							const old = all.find((c) => c.id === id);
-							yield* runtimeCall(() => ports.runtime.remove(id));
-							if (old)
-								yield* Effect.tryPromise({
-									try: () => ports.vault.remove(old.credentialRef),
-									catch: (c) => new CredentialFailed(c),
-								});
-							yield* write(all.filter((c) => c.id !== id));
+							yield* runtimeCall(() => ports.runtime.remove(id)).pipe(
+								Effect.catchTag("RuntimeUnavailable", () => Effect.void),
+							);
+							yield* write(
+								all.filter((c) => c.id !== id),
+								[
+									...(yield* loadStore()).pendingCredentialRefs,
+									...(old ? [old.credentialRef] : []),
+								],
+							);
+							yield* cleanup();
 							for (const [key, s] of sessions)
 								if (s.view.channelId === id) yield* cancelQr(key);
 							return yield* list();
@@ -267,6 +326,9 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 						return yield* Effect.fail(new RuntimeUnavailable());
 					for (const [key, s] of sessions)
 						if (s.view.channelId === id) yield* cancelQr(key);
+					// Hydrate secrets before the runtime can emit, including credentials from previous sessions.
+					for (const config of yield* load())
+						yield* readCredentials(config.credentialRef);
 					const key = ports.id();
 					const state: {
 						view: QrSession;
@@ -313,13 +375,15 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 								)
 								.slice(-6)
 								.map((line) => {
-									let clean = line.slice(0, 300);
+									let clean = line;
 									for (const secret of secrets)
 										clean = clean.split(secret).join("••••");
-									return clean.replace(
-										/(token|secret|password|authorization)\s*[:=]\s*\S+/gi,
-										"$1=••••",
-									);
+									return clean
+										.slice(0, 300)
+										.replace(
+											/(token|secret|password|authorization)\s*[:=]\s*\S+/gi,
+											"$1=••••",
+										);
 								});
 							state.view = {
 								...state.view,

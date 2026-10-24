@@ -100,13 +100,25 @@ async function certificate() {
 	};
 }
 describe("real HA HTTP/TLS sessions", () => {
+	it("sends no request or bearer token to HTTP without explicit connection consent", async () => {
+		const calls: string[] = [];
+		const url = await origin(
+			http.createServer(handler(calls, "Bearer synthetic-token")),
+			"http",
+		);
+		await expect(openHaRest(url, "synthetic-token", [])).rejects.toMatchObject({
+			code: "INTEGRATION.INPUT.REJECTED",
+		});
+		expect(calls).toEqual([]);
+	});
+
 	it("uses bearer headers, REST services, area metadata, scoped entity reads and closes the session", async () => {
 		const calls: string[] = [];
 		const url = await origin(
 			http.createServer(handler(calls, "Bearer private-token")),
 			"http",
 		);
-		const connection = await openHaRest(url, "private-token", []);
+		const connection = await openHaRest(url, "private-token", [], true);
 		expect(await connection.entities()).toMatchObject([
 			{ entity_id: "light.desk", area: "Study", state: "on" },
 		]);
@@ -136,7 +148,7 @@ describe("real HA HTTP/TLS sessions", () => {
 			http.createServer(handler([], "Bearer expected")),
 			"http",
 		);
-		await expect(openHaRest(url, "wrong", [])).rejects.toMatchObject({
+		await expect(openHaRest(url, "wrong", [], true)).rejects.toMatchObject({
 			code: "HA.AUTH.FAILED",
 		});
 	});

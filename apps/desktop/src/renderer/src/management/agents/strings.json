@@ -99,7 +99,7 @@
 		"agentId": "Agent ID",
 		"agentIdPlaceholder": "Lowercase letters, digits and hyphens; start with a letter (e.g. my-agent2)",
 		"agentIdFormatError": "Lowercase letter first; digits and hyphens allowed (e.g. my-agent2)",
-		"agentIdReservedError": "“main” is reserved and cannot be used",
+		"agentIdReservedError": "“main” and “default” are reserved and cannot be used",
 		"agentIdDuplicate": "This ID already exists",
 		"skillPromptLabel": "Skill Prompt:",
 		"generateSkill": "Generate Skill",

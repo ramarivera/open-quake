@@ -4,17 +4,22 @@ import { Effect, Fiber, Layer, ManagedRuntime, Schema, Stream } from "effect";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import type { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
-import type { ChannelRuntime } from "../../../../../packages/edge/src/channels/channel-contracts";
+import type {
+	ChannelRuntime,
+	CredentialVault,
+} from "../../../../../packages/edge/src/channels/channel-contracts";
 import {
 	ChannelPorts,
 	ChannelService,
 } from "../../../../../packages/edge/src/channels/channel-service";
+import { RuntimeUnavailable } from "../../../../../packages/edge/src/channels/integration-errors";
 import { unavailableChannelRuntime } from "../../../../../packages/edge/src/channels/runtime-adapter";
 import {
 	EMPTY_HA_STORE,
 	type HaKey,
 } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
 import {
+	type HaPortShape,
 	HaPorts,
 	HomeAssistantService,
 } from "../../../../../packages/edge/src/home-assistant/ha-service";
@@ -37,16 +42,20 @@ export const HA_POLL_INTERVAL_MS = 2000;
 
 export function registerIntegrations<R>(options: {
 	readonly management: () => BrowserWindow | undefined;
+	readonly panel?: () => BrowserWindow | undefined;
 	readonly rendererURL: string;
 	readonly profileRuntime: ManagedRuntime.ManagedRuntime<
 		R | ProfileService | ProfileRepository,
 		never
 	>;
 	readonly channelRuntime?: ChannelRuntime;
+	readonly vault?: CredentialVault;
+	readonly openHa?: HaPortShape["open"];
 	readonly draftShortcuts?: (request: string) => Promise<string>;
 }) {
 	const root = join(app.getPath("userData"), "integrations-v1");
-	const vault = systemCredentialVault(join(root, "credentials"));
+	const vault =
+		options.vault ?? systemCredentialVault(join(root, "credentials"));
 	const profiles = integrationProfiles(options.profileRuntime);
 	const runtime = ManagedRuntime.make(
 		Layer.mergeAll(
@@ -85,7 +94,7 @@ export function registerIntegrations<R>(options: {
 					Layer.succeed(HaPorts, {
 						store: fileStore(root, "home-assistant.json", EMPTY_HA_STORE),
 						vault,
-						open: openHaRest,
+						open: options.openHa ?? openHaRest,
 						place: profiles.place,
 					}),
 				),
@@ -99,6 +108,7 @@ export function registerIntegrations<R>(options: {
 		}),
 	);
 	let disposed = false;
+	let disposal: Promise<void> | undefined;
 	const pending = new Set<Promise<unknown>>();
 	const updateVisible = (envelope: Parameters<typeof visibleHaEntities>[0]) =>
 		Effect.promise(() =>
@@ -121,6 +131,7 @@ export function registerIntegrations<R>(options: {
 		if (disposed) return;
 		for (const win of BrowserWindow.getAllWindows()) {
 			if (
+				(win !== options.management() && win !== options.panel?.()) ||
 				win.isDestroyed() ||
 				win.webContents.isDestroyed() ||
 				!integrationRequestAllowed(
@@ -164,6 +175,8 @@ export function registerIntegrations<R>(options: {
 				disposed ||
 				request._tag === "Left" ||
 				!BrowserWindow.fromWebContents(event.sender) ||
+				(event.sender !== options.management()?.webContents &&
+					event.sender !== options.panel?.()?.webContents) ||
 				!integrationRequestAllowed(
 					event.senderFrame?.url ?? "",
 					options.rendererURL,
@@ -189,21 +202,36 @@ export function registerIntegrations<R>(options: {
 			}
 		},
 	);
+	const track = <A>(run: () => Promise<A>): Promise<A> => {
+		if (disposed) return Promise.reject(new RuntimeUnavailable());
+		const operation = run();
+		pending.add(operation);
+		return operation.finally(() => pending.delete(operation));
+	};
 	return {
-		aiEntities: () => runtime.runPromise(HomeAssistantService.aiEntities()),
-		executeHa: (key: HaKey, fromAi = false) =>
-			runtime.runPromise(HomeAssistantService.execute(key, fromAi)),
-		dispose: async () => {
-			if (disposed) return;
-			disposed = true;
-			clearInterval(timer);
-			ipcMain.removeHandler(INTEGRATIONS_REQUEST);
-			await options.profileRuntime.runPromise(Fiber.interrupt(profileMonitor));
-			await Promise.allSettled([...pending]);
-			await runtime.runPromise(
-				Effect.all([ChannelService.dispose(), HomeAssistantService.dispose()]),
-			);
-			await runtime.dispose();
+		aiEntities: () =>
+			track(() => runtime.runPromise(HomeAssistantService.aiEntities())),
+		executeHa: (key: HaKey) =>
+			track(() => runtime.runPromise(HomeAssistantService.execute(key, true))),
+		dispose: () => {
+			if (disposal) return disposal;
+			disposal = (async () => {
+				disposed = true;
+				clearInterval(timer);
+				ipcMain.removeHandler(INTEGRATIONS_REQUEST);
+				await options.profileRuntime.runPromise(
+					Fiber.interrupt(profileMonitor),
+				);
+				await Promise.allSettled([...pending]);
+				await runtime.runPromise(
+					Effect.all([
+						ChannelService.dispose(),
+						HomeAssistantService.dispose(),
+					]),
+				);
+				await runtime.dispose();
+			})();
+			return disposal;
 		},
 	};
 }

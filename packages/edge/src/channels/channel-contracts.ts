@@ -40,6 +40,9 @@ export type ChannelConfig = typeof ChannelConfig.Type;
 export const ChannelStore = Schema.Struct({
 	version: Schema.Literal(1),
 	channels: Schema.Array(ChannelConfig),
+	pendingCredentialRefs: Schema.optionalWith(Schema.Array(Schema.String), {
+		default: () => [],
+	}),
 });
 export const ChannelView = Schema.Struct({
 	id: ChannelId,

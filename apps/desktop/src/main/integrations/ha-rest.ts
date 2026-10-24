@@ -7,6 +7,7 @@ import {
 	HaAuthenticationFailed,
 	HaCertificateRejected,
 	HaNetworkFailed,
+	InputRejected,
 } from "../../../../../packages/edge/src/channels/integration-errors";
 import {
 	type Certificate,
@@ -148,8 +149,14 @@ export async function openHaRest(
 	origin: string,
 	token: string,
 	trust: readonly Certificate[],
+	allowInsecureHttp = false,
 ): Promise<HaConnection> {
 	const base = new URL(origin);
+	if (
+		base.protocol !== "https:" &&
+		(base.protocol !== "http:" || !allowInsecureHttp)
+	)
+		throw new InputRejected(undefined, "Unencrypted HTTP consent");
 	const agent =
 		base.protocol === "https:"
 			? scopedHaAgent(origin, trust)

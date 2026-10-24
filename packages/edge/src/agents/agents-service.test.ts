@@ -7,7 +7,11 @@ import {
 	AgentStorageFailed,
 	SkillMoveIncomplete,
 } from "./agents-errors.js";
-import { initialAgentState, sanitizeAgentId } from "./agents-invariants.js";
+import {
+	agentIdError,
+	initialAgentState,
+	sanitizeAgentId,
+} from "./agents-invariants.js";
 import {
 	AgentCredentialPort,
 	type AgentDraftAdapter,
@@ -443,3 +447,26 @@ describe("AgentsService real consumer", () => {
 		expect(error.code).toBe("AGENT.STORAGE.FAILED");
 	});
 });
+
+it.effect(
+	"reserves the global model scope without altering defaults or inherited routing",
+	() => {
+		const f = fixture();
+		return Effect.gen(function* () {
+			const service = yield* AgentsService;
+			yield* service.request({
+				type: "save-model",
+				scope: "default",
+				row: model("initial", "default"),
+				secret: "synthetic-key",
+				revision: 0,
+			});
+			const before = f.state();
+			expect(agentIdError("default", before.agents)).toBe("reserved");
+			const rejected = yield* create(service, "default").pipe(Effect.either);
+			expect(rejected._tag).toBe("Left");
+			expect(f.state()).toEqual(before);
+			expect(yield* service.resolve("main")).toEqual(before.models.default);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
