@@ -79,3 +79,14 @@ Implementation closure requires scenario evidence and parent-managed Beads updat
 ## Terminology correction
 
 `MAIN-096` and `v0.4.95/app-resources/background.js`, `set-gaming-mode` / `isGamingMode`, establish that DK-Suite's "gaming mode" routes hotkeys through device keyboard command `0x10`. This change's reversible metric-selection/rate overlay is an open-quake "monitoring override". Its behavior stays unchanged and cannot switch host/device hotkey routing. Hardware-controls owns device-typed hotkeys.
+
+## Implemented panel subset
+
+`system-monitor-panel`, under open-quake-lih.8, implements the seven panel
+modules using this change's availability and 0.2–10 Hz rate contract. See
+`packages/edge/src/monitor` and `apps/desktop/src/main/monitor/README.md` for the
+platform matrix. Approved GAP-MAP decisions 4/5 retain unavailable values and
+1 Hz default. WIDGETS-075–077/080–083 provide updated 0.4.95 source evidence.
+Foreground-window monitoring, Bluetooth tiles and monitoring override remain
+unimplemented here; the broader tasks in this change remain open. The panel's
+native mock smoke cannot close those tasks or physical hardware acceptance.

@@ -1,0 +1,113 @@
+.monitor-settings {
+	margin-top: 40px;
+}
+.monitor-settings > h2 {
+	margin-bottom: 4px;
+}
+.monitor-settings > p {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+.monitor-settings fieldset {
+	margin: 20px 0;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 16px;
+}
+.monitor-settings legend {
+	font-size: 14px;
+	font-weight: 600;
+	padding: 0 8px;
+}
+.monitor-settings fieldset p {
+	font-size: 12px;
+	opacity: 0.7;
+}
+.monitor-settings label {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 16px 8px 0;
+	font-size: 13px;
+}
+.monitor-settings input[type="number"] {
+	width: 80px;
+	padding: 6px;
+}
+.monitor-settings button {
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	background: var(--surface);
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+.monitor-settings button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.monitor-settings button[aria-pressed="true"] {
+	outline: 2px solid #4f8bff;
+	outline-offset: 1px;
+}
+.monitor-style-options {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 12px;
+}
+.monitor-style-options button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 8px;
+}
+.monitor-style-swatch {
+	width: 100%;
+	height: 32px;
+	border-radius: 3px;
+	background: linear-gradient(135deg, #374c65, #746a7e);
+}
+.swatch-cyber {
+	background:
+		repeating-linear-gradient(90deg, #00ffff22 0 1px, transparent 1px 8px),
+		#05050c;
+}
+.swatch-anime {
+	background: linear-gradient(140deg, #7dd3fc, #fbcfe8);
+}
+.swatch-tactical {
+	background: linear-gradient(90deg, #fbbf24 0 4px, #14171c 4px);
+}
+.swatch-wasteland {
+	background: repeating-linear-gradient(45deg, #111 0 8px, #ffb000 8px 16px);
+}
+.monitor-bg-options,
+.monitor-media-actions,
+.monitor-save {
+	display: flex;
+	gap: 10px;
+}
+.monitor-media-actions {
+	margin-top: 16px;
+}
+.monitor-save {
+	justify-content: flex-end;
+}
+.monitor-settings-preview {
+	width: 100%;
+	aspect-ratio: 4;
+	position: relative;
+	overflow: hidden;
+	border-radius: 6px;
+	container-type: inline-size;
+}
+.monitor-settings-preview > div {
+	position: absolute;
+	width: 1920px;
+	height: 480px;
+	transform-origin: top left;
+	transform: scale(calc(100cqw / 1920px));
+}

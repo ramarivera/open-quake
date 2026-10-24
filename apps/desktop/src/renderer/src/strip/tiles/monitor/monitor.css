@@ -1,0 +1,1258 @@
+/* Dimensions, type and colour values: recovered SystemMonitorPanel*Canvas.vue,
+   WIDGETS-069..074. Original semantic markup and original background textures. */
+.oq-monitor {
+	position: relative;
+	isolation: isolate;
+	width: 1920px;
+	height: 480px;
+	overflow: hidden;
+	background: #0b0e14;
+	color: #fff;
+	font-family: Arial, sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+}
+.oq-monitor *,
+.oq-monitor *::before,
+.oq-monitor *::after {
+	box-sizing: border-box;
+}
+.monitor-background,
+.monitor-built-in,
+.monitor-scrim {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	z-index: -3;
+	pointer-events: none;
+}
+.monitor-built-in {
+	background:
+		radial-gradient(ellipse at 20% 70%, #374c65, transparent 65%),
+		radial-gradient(ellipse at 70% 10%, #746a7e, transparent 60%), #222631;
+}
+.monitor-scrim {
+	z-index: -1;
+	background: radial-gradient(
+		circle at center,
+		rgba(0, 0, 0, 0.04),
+		rgba(0, 0, 0, 0.2)
+	);
+}
+.monitor-background {
+	z-index: -2;
+}
+.monitor-layout {
+	position: relative;
+	display: flex;
+	width: 1920px;
+	height: 480px;
+	padding: 20px;
+	gap: 20px;
+}
+.monitor-card {
+	position: relative;
+	min-width: 0;
+	min-height: 0;
+	background: rgba(20, 22, 26, 0.28);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 28px;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		0 14px 40px rgba(0, 0, 0, 0.4);
+	backdrop-filter: blur(32px) saturate(170%);
+	padding: 28px;
+	overflow: hidden;
+}
+.monitor-heading {
+	font-size: 14px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 1.68px;
+	color: rgba(255, 255, 255, 0.6);
+}
+.monitor-subtitle,
+.monitor-total {
+	color: rgba(255, 255, 255, 0.4);
+	font-size: 12px;
+}
+.monitor-value {
+	font-size: 72px;
+	line-height: 1;
+	font-weight: 300;
+	letter-spacing: -0.02em;
+	white-space: nowrap;
+}
+.monitor-value small {
+	font-size: 24px;
+	font-weight: 300;
+	color: rgba(255, 255, 255, 0.4);
+	margin-left: 4px;
+	letter-spacing: 0;
+}
+.monitor-state,
+.monitor-field-unavailable {
+	display: block;
+	font-size: 11px;
+	letter-spacing: 0.04em;
+	color: inherit;
+	opacity: 0.7;
+}
+.monitor-compute {
+	flex: 0 0 580px;
+	padding: 32px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+.monitor-compute-values {
+	display: flex;
+	flex-direction: column;
+	gap: 40px;
+}
+.monitor-processor-row {
+	display: flex;
+	gap: 32px;
+	align-items: flex-end;
+	justify-content: space-between;
+}
+.monitor-processor .monitor-value {
+	font-size: 100px;
+}
+.monitor-processor .monitor-value small {
+	font-size: 36px;
+}
+.monitor-processor .monitor-heading {
+	margin-top: 8px;
+}
+.monitor-temperature {
+	border-left: 1px solid rgba(255, 255, 255, 0.1);
+	padding-left: 32px;
+	min-width: 210px;
+}
+.monitor-temperature .monitor-value {
+	font-size: 60px;
+}
+.monitor-temperature .monitor-value small {
+	font-size: 24px;
+}
+.monitor-model {
+	padding-top: 16px;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.monitor-model span {
+	font-size: 18px;
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.monitor-model .monitor-heading {
+	font-size: 10px;
+	margin-bottom: 4px;
+}
+.monitor-middle {
+	flex: 0 0 420px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.monitor-middle > .monitor-card {
+	height: 210px;
+}
+.monitor-memory {
+	position: relative;
+	height: 100%;
+}
+.monitor-memory > .monitor-total {
+	position: absolute;
+	right: 0;
+	top: 0;
+}
+.monitor-memory > .monitor-value {
+	margin: 12px 0 8px;
+}
+.monitor-bar {
+	height: 8px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.1);
+	overflow: hidden;
+}
+.monitor-bar > div {
+	height: 100%;
+	background: rgba(255, 255, 255, 0.8);
+	transform-origin: left;
+	transition: transform 0.3s;
+}
+.monitor-processor > .monitor-bar {
+	display: none;
+}
+.monitor-pair {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	margin-top: 12px;
+	font-size: 12px;
+	color: rgba(255, 255, 255, 0.4);
+}
+.monitor-pair b {
+	display: block;
+	color: #fff;
+	font-size: 14px;
+	font-weight: 500;
+}
+.monitor-process {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+.monitor-process .monitor-value {
+	font-size: 60px;
+	margin: 8px 0;
+}
+.monitor-process .monitor-value small {
+	font-size: 12px;
+	margin-left: 12px;
+}
+.monitor-process-bars {
+	display: flex;
+	height: 8px;
+	gap: 2px;
+	border-radius: 999px;
+	overflow: hidden;
+	flex-shrink: 0;
+	background: rgba(255, 255, 255, 0.05);
+}
+.monitor-process-bars > div {
+	background: rgba(255, 255, 255, 0.5);
+}
+.monitor-process-bars > div:nth-child(2) {
+	background: rgba(255, 255, 255, 0.2);
+}
+.monitor-process-bars > div:nth-child(3) {
+	background: rgba(239, 68, 68, 0.3);
+}
+.monitor-process-counts {
+	display: flex;
+	justify-content: space-between;
+	gap: 20px;
+	margin-top: 12px;
+}
+.monitor-process-counts b {
+	font-size: 14px;
+	font-weight: 500;
+	display: block;
+}
+.monitor-process-counts span {
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.4);
+}
+.monitor-storage-network {
+	flex: 0 0 480px;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+.monitor-disks {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+.monitor-disk-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: none;
+	overscroll-behavior: contain;
+	margin-top: 20px;
+	touch-action: pan-y;
+}
+.monitor-disk-list::-webkit-scrollbar {
+	display: none;
+}
+.monitor-disk-row {
+	margin-bottom: 18px;
+}
+.monitor-disk-label {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	font-size: 12px;
+	margin-bottom: 10px;
+}
+.monitor-disk-label > span:first-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.monitor-disk-label > span:last-child {
+	white-space: nowrap;
+}
+.monitor-disk-row .monitor-bar {
+	height: 6px;
+}
+.monitor-overflow {
+	font-size: 12px;
+}
+.monitor-network {
+	flex-shrink: 0;
+}
+.monitor-storage-network > .monitor-network {
+	height: 141px;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 24px;
+}
+.monitor-network .monitor-heading {
+	display: flex;
+	justify-content: space-between;
+	gap: 6px;
+}
+.monitor-network-rates {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin-top: 14px;
+}
+.monitor-network-rates > div {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+}
+.monitor-network-rates > div > span {
+	color: rgba(255, 255, 255, 0.4);
+	font-size: 12px;
+}
+.monitor-network .monitor-value {
+	font-size: 24px;
+}
+.monitor-network .monitor-value small {
+	font-size: 12px;
+}
+.monitor-link {
+	font-size: 10px;
+	opacity: 0.5;
+}
+.monitor-energy {
+	flex: 0 0 340px;
+	padding: 32px;
+}
+.monitor-power .monitor-value {
+	font-size: 92px;
+	margin: 38px 0 12px;
+}
+.monitor-power .monitor-value small {
+	font-size: 30px;
+}
+.monitor-power-details {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	row-gap: 16px;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 24px;
+	margin-top: 32px;
+	font-size: 12px;
+}
+.monitor-power-details > span {
+	color: rgba(255, 255, 255, 0.4);
+}
+.monitor-power-details b {
+	font-weight: 500;
+}
+.monitor-battery-segments {
+	display: flex;
+	gap: 4px;
+	height: 12px;
+	margin-top: 16px;
+}
+.monitor-battery-segments span {
+	flex: 1;
+	background: rgba(255, 255, 255, 0.1);
+	border-radius: 2px;
+}
+.monitor-battery-segments [data-filled="true"] {
+	background: rgba(255, 255, 255, 0.7);
+}
+.monitor-preview-label,
+.monitor-background-error {
+	position: absolute;
+	bottom: 2px;
+	left: 50%;
+	transform: translateX(-50%);
+	padding: 1px 8px;
+	background: #0b0e14;
+	color: white;
+	font-size: 10px;
+	z-index: 5;
+	border-radius: 3px;
+}
+.monitor-background-error {
+	bottom: 18px;
+}
+/* Cyberpunk: 40 px ticker, then six 308.33 px columns, 205 px rows. */
+.oq-monitor[data-style="cyber"] {
+	color: #00ffff;
+}
+.oq-monitor[data-style="cyber"] .monitor-built-in {
+	background:
+		linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+		radial-gradient(at 40% 30%, #321d49, #020205);
+	background-size:
+		20px 20px,
+		20px 20px,
+		cover;
+}
+.oq-monitor[data-style="cyber"] .monitor-scrim {
+	background: linear-gradient(
+		to right,
+		rgba(2, 2, 5, 0.3),
+		rgba(2, 2, 5, 0.14) 50%,
+		rgba(2, 2, 5, 0.3)
+	);
+}
+.monitor-ticker {
+	height: 40px;
+	display: flex;
+	align-items: center;
+	background: rgba(0, 0, 0, 0.8);
+	color: #22d3ee;
+	font-weight: 700;
+	letter-spacing: 2.1px;
+	padding: 0 20px;
+}
+.oq-monitor[data-style="cyber"] .monitor-layout {
+	height: 440px;
+	padding: 10px;
+	gap: 10px;
+	display: grid;
+	grid-template-columns: repeat(6, 1fr);
+}
+.oq-monitor[data-style="cyber"] .monitor-card {
+	border: 1px solid rgba(0, 255, 255, 0.3);
+	border-radius: 2px;
+	background: rgba(5, 5, 12, 0.46);
+	padding: 20px;
+	backdrop-filter: blur(11px) saturate(140%);
+	clip-path: polygon(
+		0 0,
+		calc(100% - 15px) 0,
+		100% 15px,
+		100% 100%,
+		15px 100%,
+		0 calc(100% - 15px)
+	);
+}
+.oq-monitor[data-style="cyber"] .monitor-card::before,
+.oq-monitor[data-style="cyber"] .monitor-card::after {
+	content: "";
+	position: absolute;
+	width: 12px;
+	height: 12px;
+	pointer-events: none;
+	border-color: #00ffff;
+}
+.oq-monitor[data-style="cyber"] .monitor-card::before {
+	top: 0;
+	left: 0;
+	border-top: 2px solid;
+	border-left: 2px solid;
+}
+.oq-monitor[data-style="cyber"] .monitor-card::after {
+	bottom: 0;
+	right: 0;
+	border-bottom: 2px solid;
+	border-right: 2px solid;
+}
+.oq-monitor[data-style="cyber"] .monitor-heading {
+	font-size: 12px;
+	letter-spacing: 1.8px;
+	color: rgba(0, 255, 255, 0.6);
+}
+.oq-monitor[data-style="cyber"] .monitor-value {
+	font-size: 96px;
+	font-weight: 700;
+	text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+}
+.oq-monitor[data-style="cyber"] .monitor-value small {
+	color: #00ffff;
+	font-size: 30px;
+}
+.oq-monitor[data-style="cyber"] .monitor-processor-row {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 30px;
+	margin-top: 35px;
+}
+.oq-monitor[data-style="cyber"] .monitor-temperature {
+	border: 0;
+	padding: 0;
+	min-width: 0;
+}
+.oq-monitor[data-style="cyber"] .monitor-temperature .monitor-value {
+	font-size: 48px;
+}
+.oq-monitor[data-style="cyber"] .monitor-model {
+	margin-top: 35px;
+}
+.oq-monitor[data-style="cyber"] .monitor-model span {
+	font-size: 14px;
+}
+.oq-monitor[data-style="cyber"] .monitor-bar > div {
+	background: #00ffff;
+}
+.oq-monitor[data-style="cyber"] .monitor-memory > .monitor-heading {
+	display: none;
+}
+.oq-monitor[data-style="cyber"] .monitor-memory > .monitor-total {
+	position: static;
+	display: block;
+	margin-top: 20px;
+}
+.oq-monitor[data-style="cyber"] .monitor-memory .monitor-value {
+	margin: 35px 0;
+}
+.oq-monitor[data-style="cyber"] .monitor-pair {
+	margin-top: 40px;
+}
+.oq-monitor[data-style="cyber"] .monitor-pair b {
+	font-size: 30px;
+	color: #00ffff;
+}
+.oq-monitor[data-style="cyber"] .monitor-process-total {
+	margin: 35px 0;
+}
+.oq-monitor[data-style="cyber"] .monitor-process .monitor-value small {
+	font-size: 16px;
+}
+.oq-monitor[data-style="cyber"] .monitor-process-counts {
+	flex-direction: column;
+}
+.oq-monitor[data-style="cyber"] .monitor-process-counts > div {
+	display: flex;
+	justify-content: space-between;
+}
+.oq-monitor[data-style="cyber"] .monitor-process-counts b {
+	font-size: 24px;
+}
+.oq-monitor[data-style="cyber"] .monitor-disk-row {
+	margin-bottom: 30px;
+}
+.oq-monitor[data-style="cyber"] .monitor-disk-label {
+	flex-direction: column;
+	align-items: flex-start;
+}
+.oq-monitor[data-style="cyber"] .monitor-last {
+	display: grid;
+	grid-template-rows: 205px 205px;
+	gap: 10px;
+}
+.oq-monitor[data-style="cyber"] .monitor-network .monitor-value {
+	font-size: 30px;
+}
+.oq-monitor[data-style="cyber"] .monitor-network .monitor-value small {
+	font-size: 14px;
+}
+.oq-monitor[data-style="cyber"] .monitor-power .monitor-value {
+	font-size: 60px;
+	margin: 16px 0;
+}
+.oq-monitor[data-style="cyber"] .monitor-power-details {
+	margin-top: 10px;
+	padding: 0;
+	border: 0;
+	row-gap: 4px;
+}
+.oq-monitor[data-style="cyber"]
+	.monitor-power-details
+	> :nth-last-child(-n + 2),
+.oq-monitor[data-style="cyber"] .monitor-power > .monitor-total,
+.oq-monitor[data-style="cyber"]
+	.monitor-power
+	> .monitor-heading:nth-of-type(3),
+.oq-monitor[data-style="cyber"] .monitor-battery-segments {
+	display: none;
+}
+.monitor-scanline {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: linear-gradient(
+		transparent,
+		rgba(0, 255, 255, 0.03) 50%,
+		transparent
+	);
+	animation: monitor-scanline 8s linear infinite;
+}
+@keyframes monitor-scanline {
+	from {
+		transform: translateY(-100%);
+	}
+	to {
+		transform: translateY(100%);
+	}
+}
+/* Anime: 540 / 900 / 400, with 440 + 440 cards above the 900 px disks. */
+.oq-monitor[data-style="anime"] {
+	color: #1e293b;
+}
+.oq-monitor[data-style="anime"] .monitor-built-in {
+	background:
+		radial-gradient(at 80% 0, #fbcfe8, transparent 50%),
+		linear-gradient(170deg, #7dd3fc, #dbeafe 60%, #a7f3d0);
+}
+.oq-monitor[data-style="anime"] .monitor-scrim {
+	background: linear-gradient(
+		180deg,
+		rgba(255, 255, 255, 0.04),
+		rgba(248, 250, 252, 0.16)
+	);
+}
+.oq-monitor[data-style="anime"] .monitor-card {
+	border: 2px solid #7dd3fc;
+	border-radius: 32px;
+	background: rgba(255, 255, 255, 0.72);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.55),
+		0 8px 0 rgba(125, 211, 252, 0.22),
+		0 12px 24px rgba(30, 41, 59, 0.08);
+	backdrop-filter: blur(22px) saturate(120%);
+	padding: 24px;
+}
+.oq-monitor[data-style="anime"] .monitor-heading,
+.oq-monitor[data-style="anime"] .monitor-total,
+.oq-monitor[data-style="anime"] .monitor-subtitle,
+.oq-monitor[data-style="anime"] .monitor-value small,
+.oq-monitor[data-style="anime"] .monitor-pair,
+.oq-monitor[data-style="anime"] .monitor-process-counts span,
+.oq-monitor[data-style="anime"] .monitor-network-rates > div > span {
+	color: #64748b;
+}
+.oq-monitor[data-style="anime"] .monitor-value {
+	font-weight: 850;
+	color: #1e293b;
+}
+.oq-monitor[data-style="anime"] .monitor-pair b {
+	color: #475569;
+}
+.oq-monitor[data-style="anime"] .monitor-compute {
+	flex-basis: 540px;
+	padding: 32px;
+}
+.oq-monitor[data-style="anime"] .monitor-processor .monitor-value {
+	font-size: 72px;
+}
+.oq-monitor[data-style="anime"] .monitor-temperature {
+	min-width: 160px;
+	padding-left: 24px;
+}
+.oq-monitor[data-style="anime"] .monitor-temperature .monitor-value {
+	font-size: 48px;
+}
+.oq-monitor[data-style="anime"] .monitor-compute-values {
+	gap: 32px;
+}
+.oq-monitor[data-style="anime"] .monitor-model {
+	border: 2px dashed #7dd3fc;
+	padding: 12px;
+	border-radius: 12px;
+}
+.oq-monitor[data-style="anime"] .monitor-middle {
+	flex-basis: 900px;
+}
+.monitor-middle-top {
+	display: flex;
+	gap: 20px;
+	height: 210px;
+}
+.monitor-middle-top > .monitor-card {
+	width: 440px;
+}
+.oq-monitor[data-style="anime"] .monitor-middle > .monitor-card {
+	height: 210px;
+}
+.oq-monitor[data-style="anime"] .monitor-last {
+	width: 400px;
+	display: grid;
+	grid-template-rows: 150px 270px;
+	gap: 20px;
+}
+.oq-monitor[data-style="anime"] .monitor-power .monitor-value {
+	font-size: 48px;
+	position: absolute;
+	right: 24px;
+	top: 44px;
+	margin: 0;
+}
+.oq-monitor[data-style="anime"] .monitor-power > .monitor-total,
+.oq-monitor[data-style="anime"] .monitor-battery-segments {
+	display: none;
+}
+.oq-monitor[data-style="anime"] .monitor-power-details {
+	border: 0;
+	margin: 14px 0 0;
+	padding: 0;
+	row-gap: 4px;
+}
+.oq-monitor[data-style="anime"] .monitor-power-details > span {
+	display: none;
+}
+.oq-monitor[data-style="anime"] .monitor-power-details b {
+	color: #64748b;
+	font-size: 12px;
+}
+.oq-monitor[data-style="anime"] .monitor-disks {
+	height: 100%;
+}
+.oq-monitor[data-style="anime"] .monitor-disk-list {
+	margin-top: 16px;
+}
+.oq-monitor[data-style="anime"] .monitor-disk-row {
+	margin-bottom: 12px;
+}
+.oq-monitor[data-style="anime"] .monitor-disk-label {
+	margin-bottom: 4px;
+}
+.oq-monitor[data-style="anime"] .monitor-bar {
+	background: rgba(125, 211, 252, 0.2);
+}
+.oq-monitor[data-style="anime"] .monitor-bar > div {
+	background: linear-gradient(90deg, #7dd3fc, #c084fc);
+}
+.oq-monitor[data-style="anime"] .monitor-network-rates {
+	margin-top: 30px;
+	gap: 24px;
+}
+.oq-monitor[data-style="anime"] .monitor-network .monitor-value {
+	font-size: 36px;
+}
+.monitor-pill {
+	display: inline-flex;
+	align-self: flex-start;
+	background: #7dd3fc;
+	color: white;
+	padding: 4px 14px;
+	border-radius: 999px;
+	font-size: 14px;
+	font-weight: 800;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+.monitor-sparkle {
+	position: absolute;
+	pointer-events: none;
+	z-index: 5;
+	animation: monitor-twinkle 2.5s infinite ease-in-out;
+}
+.monitor-sparkle.yellow {
+	left: 540px;
+	top: 40px;
+	font-size: 30px;
+	color: #facc15;
+}
+.monitor-sparkle.pink {
+	left: 10px;
+	top: 400px;
+	font-size: 24px;
+	color: #f9a8d4;
+	animation-delay: 0.5s;
+}
+.monitor-sparkle.blue {
+	left: 1496px;
+	top: 20px;
+	font-size: 24px;
+	color: #93c5fd;
+	animation-delay: 1s;
+}
+@keyframes monitor-twinkle {
+	0%,
+	100% {
+		opacity: 0;
+		transform: scale(0.6) rotate(0deg);
+	}
+	50% {
+		transform: scale(1.1) rotate(180deg);
+		opacity: 0.8;
+	}
+}
+/* Game Dark: source widths 480 / 540 / 848, outer gap 16 and inset 10. */
+.oq-monitor[data-style="tactical"] {
+	color: #9ca3af;
+}
+.oq-monitor[data-style="tactical"] .monitor-built-in {
+	background:
+		repeating-linear-gradient(135deg, transparent 0 90px, #233323 91px 92px),
+		radial-gradient(at 60% 50%, #2f3932, #090f12);
+}
+.oq-monitor[data-style="tactical"] .monitor-layout {
+	padding: 10px;
+	gap: 16px;
+}
+.oq-monitor[data-style="tactical"] .monitor-card {
+	border: 1px solid rgba(56, 189, 248, 0.2);
+	border-radius: 4px;
+	background: rgba(20, 23, 28, 0.24);
+	backdrop-filter: blur(10px) saturate(120%);
+	padding: 12px;
+	clip-path: polygon(
+		0 12px,
+		12px 0,
+		calc(100% - 12px) 0,
+		100% 12px,
+		100% calc(100% - 12px),
+		calc(100% - 12px) 100%,
+		12px 100%,
+		0 calc(100% - 12px)
+	);
+}
+.oq-monitor[data-style="tactical"] .monitor-heading {
+	color: #94a3b8;
+	font-weight: 700;
+	letter-spacing: 2.1px;
+}
+.oq-monitor[data-style="tactical"] .monitor-value {
+	color: #fbbf24;
+	font-weight: 900;
+	font-style: italic;
+	text-shadow:
+		0 0 15px rgba(251, 191, 36, 0.4),
+		0 4px 6px rgba(0, 0, 0, 0.9);
+}
+.oq-monitor[data-style="tactical"] .monitor-value small {
+	color: inherit;
+}
+.oq-monitor[data-style="tactical"] .monitor-compute {
+	flex-basis: 480px;
+	padding: 0;
+	gap: 16px;
+}
+.oq-monitor[data-style="tactical"] .monitor-compute > .monitor-card {
+	height: 154px;
+}
+.oq-monitor[data-style="tactical"] .monitor-compute > .monitor-card:last-child {
+	height: 130px;
+}
+.oq-monitor[data-style="tactical"] .monitor-processor-row {
+	gap: 16px;
+}
+.oq-monitor[data-style="tactical"] .monitor-processor .monitor-value {
+	font-size: 48px;
+}
+.oq-monitor[data-style="tactical"] .monitor-processor .monitor-value small {
+	font-size: 24px;
+}
+.oq-monitor[data-style="tactical"] .monitor-temperature .monitor-value {
+	font-size: 28px;
+}
+.oq-monitor[data-style="tactical"] .monitor-temperature {
+	border: 0;
+	min-width: 150px;
+	padding: 0;
+}
+.oq-monitor[data-style="tactical"] .monitor-processor .monitor-heading {
+	font-size: 10px;
+}
+.oq-monitor[data-style="tactical"] .monitor-processor > .monitor-bar {
+	display: block;
+	margin-top: 8px;
+}
+.oq-monitor[data-style="tactical"] .monitor-bar > div {
+	background: #fbbf24;
+}
+.oq-monitor[data-style="tactical"] .monitor-memory .monitor-value {
+	font-size: 48px;
+	margin: 0;
+	position: absolute;
+	right: 0;
+	top: 15px;
+}
+.oq-monitor[data-style="tactical"] .monitor-memory > .monitor-total {
+	display: none;
+}
+.oq-monitor[data-style="tactical"] .monitor-memory > .monitor-bar {
+	margin-top: 12px;
+	max-width: 250px;
+}
+.oq-monitor[data-style="tactical"] .monitor-pair {
+	max-width: 250px;
+	margin-top: 4px;
+}
+.oq-monitor[data-style="tactical"] .monitor-tasks {
+	width: 540px;
+	padding: 40px;
+}
+.oq-monitor[data-style="tactical"] .monitor-process-total {
+	margin: 55px 0 32px;
+	background: rgba(10, 12, 15, 0.9);
+	border-left: 4px solid #fbbf24;
+	padding: 24px 48px;
+}
+.oq-monitor[data-style="tactical"] .monitor-process-total .monitor-value {
+	font-size: 100px;
+}
+.oq-monitor[data-style="tactical"] .monitor-process-total small {
+	display: block;
+	margin: 10px 0 0;
+	letter-spacing: 3px;
+}
+.oq-monitor[data-style="tactical"] .monitor-process-counts b {
+	font-size: 36px;
+	color: #fbbf24;
+}
+.oq-monitor[data-style="tactical"] .monitor-right {
+	width: 848px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.oq-monitor[data-style="tactical"] .monitor-right > .monitor-card {
+	height: 303.281px;
+	padding: 24px;
+}
+.oq-monitor[data-style="tactical"] .monitor-disks {
+	height: 100%;
+}
+.oq-monitor[data-style="tactical"] .monitor-disk-row {
+	margin-bottom: 20px;
+}
+.oq-monitor[data-style="tactical"] .monitor-disk-label {
+	font-size: 14px;
+}
+.oq-monitor[data-style="tactical"] .monitor-bottom {
+	display: flex;
+	gap: 16px;
+	height: 140.719px;
+}
+.oq-monitor[data-style="tactical"] .monitor-bottom > .monitor-card {
+	width: 416px;
+	padding: 16px;
+}
+.oq-monitor[data-style="tactical"] .monitor-network-rates {
+	flex-direction: row;
+	margin-top: 20px;
+}
+.oq-monitor[data-style="tactical"] .monitor-network-rates > div {
+	flex-direction: column;
+	gap: 4px;
+}
+.oq-monitor[data-style="tactical"] .monitor-network .monitor-value {
+	font-size: 22px;
+}
+.oq-monitor[data-style="tactical"] .monitor-network .monitor-value small {
+	font-size: 12px;
+}
+.oq-monitor[data-style="tactical"] .monitor-power .monitor-value {
+	font-size: 48px;
+	margin: 10px 0;
+}
+.oq-monitor[data-style="tactical"] .monitor-power > .monitor-total,
+.oq-monitor[data-style="tactical"]
+	.monitor-power
+	> .monitor-heading:nth-of-type(3),
+.oq-monitor[data-style="tactical"] .monitor-battery-segments {
+	display: none;
+}
+.oq-monitor[data-style="tactical"] .monitor-power-details {
+	position: absolute;
+	right: 16px;
+	bottom: 24px;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	display: block;
+}
+.oq-monitor[data-style="tactical"] .monitor-power-details > span,
+.oq-monitor[data-style="tactical"] .monitor-power-details > b:last-child {
+	display: none;
+}
+/* Wasteland: three 208 px mechanical gauges, then 550+550 / 780+320. */
+.oq-monitor[data-style="wasteland"] {
+	color: #ffb000;
+	font-family: Arial, sans-serif;
+}
+.oq-monitor[data-style="wasteland"] .monitor-built-in {
+	background: repeating-linear-gradient(
+		10deg,
+		#4a3728 0 3px,
+		#3b3026 4px 7px,
+		#2c1810 8px 10px
+	);
+}
+.oq-monitor[data-style="wasteland"] .monitor-scrim {
+	background: radial-gradient(
+		circle,
+		rgba(26, 21, 18, 0.4),
+		rgba(14, 11, 9, 0.85)
+	);
+}
+.oq-monitor[data-style="wasteland"] .monitor-layout {
+	padding: 10px;
+	gap: 20px;
+}
+.monitor-gauges {
+	width: 760px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 32px;
+	background: rgba(0, 0, 0, 0.4);
+	border-right: 4px solid rgba(0, 0, 0, 0.8);
+}
+.monitor-analog {
+	width: 208px;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	align-items: center;
+}
+.monitor-gauge {
+	position: relative;
+	width: 208px;
+	height: 208px;
+	border: 10px solid #555;
+	border-radius: 50%;
+	color: rgba(0, 0, 0, 0.9);
+	background: radial-gradient(circle at 50% 40%, #ddd, #aaa 70%, #888);
+	box-shadow:
+		inset 0 6px 15px rgba(0, 0, 0, 0.6),
+		0 8px 12px rgba(0, 0, 0, 0.8);
+	text-align: center;
+	padding-top: 98px;
+}
+.monitor-gauge-ticks {
+	position: absolute;
+	inset: 8px;
+	border-radius: 50%;
+	border: 8px dashed #333;
+	clip-path: polygon(0 0, 100% 0, 100% 60%, 0 60%);
+}
+.monitor-gauge-caption {
+	display: block;
+	font-size: 12px;
+	font-weight: 900;
+}
+.monitor-gauge b {
+	font-size: 36px;
+	line-height: 40px;
+	font-weight: 900;
+}
+.monitor-needle {
+	position: absolute;
+	width: 6px;
+	height: 96px;
+	background: #7f1d1d;
+	border-radius: 9999px;
+	filter: drop-shadow(3px 3px 2px rgba(0, 0, 0, 0.6));
+	bottom: 94px;
+	left: 92px;
+	transform-origin: bottom center;
+	transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.monitor-gauge i {
+	position: absolute;
+	left: 88px;
+	top: 88px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: #222;
+}
+.monitor-analog-plate {
+	width: 208px;
+	text-align: center;
+	background: #1a1a1a;
+	border: 3px solid #333;
+	padding: 12px;
+	min-height: 75px;
+}
+.monitor-analog-plate b {
+	font-family: "Courier New", monospace;
+	font-size: 30px;
+	font-weight: 800;
+}
+.monitor-analog-plate small {
+	display: block;
+	font-size: 11px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-heading {
+	color: rgba(255, 255, 255, 0.55);
+	font-size: 14px;
+	font-weight: 900;
+	letter-spacing: 1.12px;
+}
+.monitor-analog-plate .monitor-heading {
+	font-size: 10px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.oq-monitor[data-style="wasteland"] .monitor-card {
+	border: 3px solid #333;
+	border-radius: 4px;
+	padding: 20px;
+	background: #1a1a1a;
+	backdrop-filter: none;
+	box-shadow:
+		inset 0 2px 8px rgba(0, 0, 0, 0.8),
+		0 4px 10px rgba(0, 0, 0, 0.5);
+}
+.oq-monitor[data-style="wasteland"] .monitor-right {
+	width: 1120px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-top {
+	display: flex;
+	gap: 20px;
+	height: 230px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-top > .monitor-card {
+	width: 550px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-disks {
+	height: 100%;
+}
+.oq-monitor[data-style="wasteland"] .monitor-disk-list {
+	margin-top: 16px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-disk-label {
+	color: #ffb000;
+	font-family: "Courier New", monospace;
+}
+.oq-monitor[data-style="wasteland"] .monitor-bar > div {
+	background: #ffb000;
+}
+.oq-monitor[data-style="wasteland"] .monitor-bottom {
+	display: flex;
+	gap: 20px;
+	height: 210px;
+}
+.oq-monitor[data-style="wasteland"]
+	.monitor-bottom
+	> .monitor-card:first-child {
+	width: 780px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-bottom > .monitor-card:last-child {
+	width: 320px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-value {
+	color: #ffb000;
+	font-family: "Courier New", monospace;
+	font-weight: 800;
+	text-shadow: 0 0 12px rgba(255, 176, 0, 0.45);
+}
+.oq-monitor[data-style="wasteland"] .monitor-network .monitor-value {
+	font-size: 30px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-network-rates {
+	margin-top: 30px;
+	gap: 20px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-process-total {
+	position: absolute;
+	margin-top: 28px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-process-total small {
+	display: block;
+	margin: 4px 0;
+	font-size: 12px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-process-counts {
+	margin: 45px 0 0 260px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-process-counts b {
+	font-size: 30px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-process-bars {
+	display: none;
+}
+.oq-monitor[data-style="wasteland"] .monitor-power .monitor-value {
+	font-size: 60px;
+	margin: 20px 0 8px;
+}
+.oq-monitor[data-style="wasteland"] .monitor-power > .monitor-total,
+.oq-monitor[data-style="wasteland"]
+	.monitor-power
+	> .monitor-heading:nth-of-type(3),
+.oq-monitor[data-style="wasteland"] .monitor-battery-segments {
+	display: none;
+}
+.oq-monitor[data-style="wasteland"] .monitor-power-details {
+	margin: 4px 0;
+	padding: 0;
+	border: 0;
+	row-gap: 4px;
+}
+.monitor-rivet {
+	position: absolute;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: #444;
+	box-shadow:
+		inset -1px -1px 3px rgba(255, 255, 255, 0.2),
+		2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+.monitor-rivet.tl {
+	left: 16px;
+	top: 16px;
+}
+.monitor-rivet.tr {
+	right: 16px;
+	top: 16px;
+}
+.monitor-rivet.bl {
+	left: 16px;
+	bottom: 16px;
+}
+.monitor-rivet.br {
+	right: 16px;
+	bottom: 16px;
+}
+@media (prefers-reduced-motion: reduce) {
+	.oq-monitor *,
+	.oq-monitor *::before,
+	.oq-monitor *::after {
+		animation: none;
+		transition: none;
+		scroll-behavior: auto;
+	}
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+	.oq-monitor[data-style="glass"] .monitor-card {
+		background: rgba(20, 22, 26, 0.94);
+		backdrop-filter: none;
+	}
+	.oq-monitor[data-style="cyber"] .monitor-card {
+		background: rgba(5, 5, 12, 0.94);
+		backdrop-filter: none;
+	}
+	.oq-monitor[data-style="tactical"] .monitor-card {
+		background: rgba(20, 23, 28, 0.94);
+		backdrop-filter: none;
+	}
+	.oq-monitor[data-style="anime"] .monitor-card {
+		background: rgba(255, 255, 255, 0.97);
+		backdrop-filter: none;
+	}
+	.oq-monitor[data-style="wasteland"] .monitor-card {
+		background: #141210;
+	}
+}
+@supports not (backdrop-filter: blur(1px)) {
+	.oq-monitor[data-style="glass"] .monitor-card,
+	.oq-monitor[data-style="cyber"] .monitor-card,
+	.oq-monitor[data-style="tactical"] .monitor-card {
+		background: rgba(20, 22, 26, 0.9);
+	}
+	.oq-monitor[data-style="anime"] .monitor-card {
+		background: rgba(255, 255, 255, 0.94);
+	}
+}
