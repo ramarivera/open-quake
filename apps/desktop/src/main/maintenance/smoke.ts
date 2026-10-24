@@ -24,6 +24,7 @@ import {
 } from "../../shared/maintenance-contracts";
 import { MonitorReply, MonitorSnapshot } from "../../shared/monitor-contracts";
 import { ProfileReplySchema } from "../../shared/profile-manager";
+import { VoiceSurfaceReply } from "../../shared/voice-surface";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerHardware } from "../hardware";
 import { startMockHardwareBus } from "../hardware/bus";
@@ -34,6 +35,7 @@ import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { referenceArchive, referenceDecode } from "./archive-fixtures";
 import { hashBytes } from "./firmware-files";
 import { registerMaintenance } from "./index";
@@ -149,12 +151,22 @@ async function smoke() {
 	const profiles = registerProfiles(() => main, renderer);
 	cleanup.push(() => profiles.dispose());
 	await profiles.connect("desktop-preview");
+	const voice = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "mock-quake",
+		panel: () => panel,
+		management: () => main,
+		renderer,
+	});
+	cleanup.push(() => voice.dispose());
 	const knob = registerKnob(
 		() => panel,
 		() => [main, ...(panel ? [panel] : [])],
 		{
 			profiles: knobProfileBinding(profiles.runtime, profiles.select),
 			hardware: () => bus.hardware(),
+			voice: voice.knobVoice,
 		},
 	);
 	cleanup.push(() => knob.dispose());
@@ -238,6 +250,11 @@ async function smoke() {
 	await panel.loadFile(resolve("out/renderer/index.html"), {
 		query: { surface: "management" },
 	});
+	const voiceReply: unknown = await main.webContents.executeJavaScript(
+		'window.quakeVoice.request({_tag:"Hello"})',
+	);
+	assert(Schema.is(VoiceSurfaceReply)(voiceReply));
+	assert.equal(voiceReply._tag, "ok");
 	const profileReply: unknown = await main.webContents.executeJavaScript(
 		'window.quakeProfileManager.request({type:"read",locale:"en"})',
 	);
@@ -663,7 +680,7 @@ async function smoke() {
 	await request({ action: "read" });
 
 	process.stdout.write(
-		"Maintenance native smoke PASS: combined production monitor/profile/lifecycle/hardware/knob/clock/media/maintenance owners, real preload/IPC, monitor save and panel-only collection/disposal, spoofed-window rejection, AES export independently decoded, confirmed backup replacement, actual appearance restore/export, invalid merge rejected before shutdown, four-step firmware dialog, fake scratch-volume write, confirmed recovery without live HID, closed-dialog continuation, intended-serial version re-read, native koffi load, permissions/disabled feed, dark/light/narrow screenshots. Hardware unverified.\n",
+		"Maintenance native smoke PASS: combined production voice/monitor/profile/lifecycle/hardware/knob/clock/media/maintenance owners, real preload/IPC, monitor save and panel-only collection/disposal, spoofed-window rejection, AES export independently decoded, confirmed backup replacement, actual appearance restore/export, invalid merge rejected before shutdown, four-step firmware dialog, fake scratch-volume write, confirmed recovery without live HID, closed-dialog continuation, intended-serial version re-read, native koffi load, permissions/disabled feed, dark/light/narrow screenshots. Hardware unverified.\n",
 	);
 }
 smoke()

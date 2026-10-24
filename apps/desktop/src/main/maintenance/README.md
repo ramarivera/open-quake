@@ -170,3 +170,8 @@ editable values take precedence. Recovery smoke waits for mounted ready controls
 instead of a fixed delay. Its cleanup keeps Electron alive until the explicit
 exit code is set, so failed assertions cannot exit successfully after window
 closure. The round-2 evidence includes an injected failure proving exit code 1.
+
+The combined smoke also registers the merged voice surface, binds its knob
+voice owner, checks Hello through the real preload, and disposes knob before
+voice. Main shutdown coverage holds voice disposal open and proves quit waits
+for it after monitor and knob disposal, while profiles remain alive.

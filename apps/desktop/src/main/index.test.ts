@@ -4,11 +4,13 @@ import type {
 	Rectangle,
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerKnob } from "./knob";
 import { registerMedia } from "./media";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
+import { registerVoiceSurface } from "./voice";
 
 const native = vi.hoisted(() => ({
 	layer: undefined as Layer.Layer<HidTransport> | undefined,
@@ -123,11 +125,11 @@ vi.mock("./lifecycle/native-display", async (original) => {
 	};
 });
 vi.mock("./knob", () => ({
-	registerKnob: () => ({
+	registerKnob: vi.fn(() => ({
 		onDevice: () => {},
 		refresh: () => Promise.resolve(),
-		dispose: () => Promise.resolve(),
-	}),
+		dispose: vi.fn(async () => {}),
+	})),
 }));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
@@ -159,6 +161,19 @@ vi.mock("./profiles/profile-ipc", async () => {
 			}),
 		),
 		registerProfiles: vi.fn(),
+	};
+});
+vi.mock("./voice", async () => {
+	const { Effect } = await import("effect");
+	return {
+		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
+		toneSinks: vi.fn(() => ({ play: vi.fn() })),
+		registerVoiceSurface: vi.fn(() => ({
+			onDevice: vi.fn(async () => undefined),
+			publish: vi.fn(async () => undefined),
+			knobVoice: vi.fn(() => Effect.void),
+			dispose: vi.fn(async () => undefined),
+		})),
 	};
 });
 
@@ -464,6 +479,39 @@ describe("desktop window lifecycle", () => {
 		).toBeLessThan(
 			vi.mocked(profiles.connect).mock.invocationCallOrder[1] ?? 0,
 		);
+	});
+
+	it("awaits voice disposal after knob and monitor before releasing quit", async () => {
+		const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;
+		const knob = vi.mocked(registerKnob).mock.results[0]?.value;
+		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		if (!voice || !knob || !monitor || !profiles)
+			throw new Error("Missing combined owner");
+		let releaseVoice = () => {};
+		vi.mocked(voice.dispose).mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseVoice = resolve;
+				}),
+		);
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(voice.dispose).toHaveBeenCalledOnce());
+		try {
+			expect(monitor.dispose).toHaveBeenCalledOnce();
+			expect(knob.dispose).toHaveBeenCalledOnce();
+			expect(vi.mocked(knob.dispose).mock.invocationCallOrder[0]).toBeLessThan(
+				vi.mocked(voice.dispose).mock.invocationCallOrder[0] ?? 0,
+			);
+			expect(profiles.dispose).not.toHaveBeenCalled();
+			expect(electron.app.quit).not.toHaveBeenCalled();
+			appEvent("before-quit");
+			expect(voice.dispose).toHaveBeenCalledOnce();
+		} finally {
+			releaseVoice();
+		}
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+		expect(profiles.dispose).toHaveBeenCalledOnce();
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {
