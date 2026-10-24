@@ -9,6 +9,7 @@ Completed checkboxes record implemented and verified work. The parent maintains 
 - [x] 1.3 Add pure occupancy, anchor uniqueness, coordinate, span, and empty-cell invariants; verify property tests reject off-grid/overlapping layouts and preserve move/swap configuration.
 - [x] 1.4 Add the profile repository interface and desktop atomic local adapter, with first-launch seeding and backup behavior; verify save/restart preserves nested values and injected write failure leaves the previous envelope readable.
 - [x] 1.5 Add the profile conductor with expected revisions, distinct catalog errors, and named methods; verify two concurrent revision-4 saves produce one revision 5 and one conflict, with scrubbed diagnostics and no partial publication.
+- [x] 1.6 Amend occupancy for approved parity decision 2: forced spans per type and inward edge spans through `profile-footprint.ts`; verify with the property tests in `profile-invariants.test.ts` (strip-key-grid, bead `open-quake-lih.2.1.2`).
 
 ## 2. First-release editor and page selection
 

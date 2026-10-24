@@ -5,6 +5,7 @@ import type {
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerMedia } from "./media";
+import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
 
@@ -85,6 +86,13 @@ vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
 });
+vi.mock("./profiles/profile-ipc", async () => {
+	const { Layer } = await import("effect");
+	return {
+		desktopProfilesLive: vi.fn(() => Layer.empty),
+		registerProfiles: vi.fn(),
+	};
+});
 
 function displayEvent(name: string): void {
 	const listener = electron.screen.on.mock.calls.find(
@@ -150,6 +158,8 @@ describe("desktop window lifecycle", () => {
 		const { panel, management } = windows();
 		expect(registerMedia).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
+		expect(registerProfiles).toHaveBeenCalledOnce();
+		expect(desktopProfilesLive).toHaveBeenCalledOnce();
 		expect(panel.options).toMatchObject({
 			x: 0,
 			y: 0,

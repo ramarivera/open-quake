@@ -21,9 +21,11 @@ set object inheritance. Unsupported import payloads survive unrelated saves
 and restart without gaining runtime meaning. Non-JSON values still fail
 Schema validation and become `ProfileValidationFailed` at the repository.
 
-`profile-invariants.ts` derives occupancy from anchors and `[width,height]`,
-rejects duplicate anchors, off-grid spans, visible overlaps, and executable
-empty placeholders. Covered placeholders do not claim a second occupied
+`profile-invariants.ts` derives occupancy from `profile-footprint.ts`: forced
+spans per tile type override `[width,height]`, and spans that would run past
+column 8 or row 2 grow inward (strip-key-grid, parity decision 2). It rejects
+duplicate anchors, invalid anchors, visible overlaps, and executable empty
+placeholders. Covered placeholders do not claim a second occupied
 cell. `moveOrSwapProfileKeys` preserves configuration objects, rejects drag
 locks, and returns a result without changing its input. The editor and the
 other four edit-lock operations remain task 2.2.

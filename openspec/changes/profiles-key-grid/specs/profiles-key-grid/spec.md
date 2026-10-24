@@ -76,7 +76,7 @@ Each title object SHALL contain `text:string`, `pos:'top'|'bot'`, `size:positive
 
 ### Requirement: Logical coordinates and occupied cells
 
-The initial QUAKE descriptor SHALL contain two rows and eight columns using one-based `row,col`; `1,8` SHALL mean row 1 column 8. `0,1` SHALL be reserved for the profile knob outside page keys. The system SHALL reject duplicate anchors, out-of-bounds spans, and visible overlapping spans. Covered placeholder cells SHALL NOT execute a separate action. Physical HID controls SHALL activate logical cells only through a separately verified mapping supplied by the device capability.
+The initial QUAKE descriptor SHALL contain two rows and eight columns using one-based `row,col`; `1,8` SHALL mean row 1 column 8. `0,1` SHALL be reserved for the profile knob outside page keys. A key's occupied cells SHALL come from the shared footprint defined by `strip-key-grid`. Forced spans by type override `config.size`. A span that would run past column 8 or row 2 SHALL grow inward, left or up, from its anchor, as DK-Suite does (approved parity decision 2, Ramiro 2026-10-23; SCREEN-026, SCREEN-027, MGMT-062, MGMT-063). The system SHALL reject duplicate anchors, invalid anchors, and visible overlapping footprints. Covered placeholder cells SHALL NOT execute a separate action. Physical HID controls SHALL activate logical cells only through a separately verified mapping supplied by the device capability.
 
 #### Scenario: Last column and reserved entry
 
@@ -87,6 +87,16 @@ The initial QUAKE descriptor SHALL contain two rows and eight columns using one-
 
 - **WHEN** an unmapped physical key event arrives while logical preview activation is available
 - **THEN** the system reports physical mapping unavailable and executes no guessed grid action
+
+#### Scenario: Edge span grows inward
+
+- **WHEN** a `[2,1]` tile is anchored at `1,8` and a `[1,2]` tile at `2,3`
+- **THEN** the first occupies `1,7` and `1,8`, the second `1,3` and `2,3`, and neither is rejected as out of bounds
+
+#### Scenario: Forced footprint
+
+- **WHEN** a `dkDesktopClock` key with size `[1,1]` is saved at `1,1` beside a visible hotkey at `2,8`
+- **THEN** the save is rejected as an overlap because the clock occupies all sixteen cells
 
 #### Scenario: Span collision
 

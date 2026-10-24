@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { HardwareSettings } from "./hardware/HardwareSettings";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
+import { StripPanel } from "./strip/StripPanel";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -16,7 +17,7 @@ import {
 } from "./ui/icons";
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
-import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
+import { WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
 import "./management/management.css";
 
@@ -34,7 +35,7 @@ function PanelSurface(): React.JSX.Element {
 		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
 	}, []);
-	return <WallpaperPanel />;
+	return <StripPanel />;
 }
 
 type Page = "overview" | "screen" | "controls" | "appearance";

@@ -14,6 +14,7 @@ import {
 	completeEncodedEnvelope,
 	completeEncodedKey,
 } from "./profile-fixtures.js";
+import { occupiedCells } from "./profile-invariants.js";
 
 describe("profile contracts", () => {
 	it("accepts composite subActions without leaf actions and rejects missing leaf actions", () => {
@@ -71,11 +72,13 @@ describe("profile contracts", () => {
 		});
 		expect(createEmptyProfileKey("1,8").keyCode).toBe("1,8");
 		expect(() => createEmptyProfileKey("0,1")).toThrow();
-		expect(
-			Either.isLeft(
-				Schema.decodeUnknownEither(ProfileKey)(completeEncodedKey("1,8")),
-			),
-		).toBe(true);
+		// A [2,1] anchored in the last column grows left (parity decision 2).
+		const edge = Schema.decodeUnknownEither(ProfileKey)(
+			completeEncodedKey("1,8"),
+		);
+		expect(Either.isRight(edge)).toBe(true);
+		if (Either.isRight(edge))
+			expect(occupiedCells(edge.right)).toEqual(["1,7", "1,8"]);
 		expect(createInitialProfileEnvelope().profiles[0]).toMatchObject({
 			revision: 0,
 			pages: [{ keys: [] }],
