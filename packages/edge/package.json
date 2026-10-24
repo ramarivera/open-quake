@@ -9,6 +9,8 @@
 		".": "./src/index.ts",
 		"./ai": "./src/ai/index.ts",
 		"./ai/contracts": "./src/ai/ai-contracts.ts",
+		"./ai/voice-contracts": "./src/ai/ai-router-contracts.ts",
+		"./ai/speech-contracts": "./src/ai/speech/speech-contracts.ts",
 		"./chat/contracts": "./src/chat/chat-contracts.ts",
 		"./chat/reducers": "./src/chat/chat-invariants.ts"
 	},
