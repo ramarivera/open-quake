@@ -44,6 +44,30 @@ const stable = (value: unknown): string => {
 			.join(",")}}`;
 	return JSON.stringify(value) ?? "null";
 };
+// Preserve legacy-only configuration fields while current editable values take precedence.
+const resolvedConfig = (
+	source: ProfileJson,
+	current: ProfileJson,
+): ProfileJson => {
+	if (
+		source &&
+		current &&
+		typeof source === "object" &&
+		typeof current === "object" &&
+		!Array.isArray(source) &&
+		!Array.isArray(current)
+	)
+		return {
+			...source,
+			...Object.fromEntries(
+				Object.entries(current).map(([name, value]) => [
+					name,
+					resolvedConfig(source[name] ?? null, value),
+				]),
+			),
+		};
+	return current;
+};
 const keyFingerprint = (keys: readonly unknown[]): string =>
 	stable(
 		keys
@@ -258,7 +282,26 @@ export function mergeBackup(
 	});
 	const comparable = (keys: readonly unknown[]) =>
 		keyFingerprint(
-			keys.map((key) => Schema.decodeUnknownSync(comparableKey)(key)),
+			keys.map((key) => {
+				const current = Schema.decodeUnknownSync(comparableKey)(key);
+				const legacy = Schema.decodeUnknownEither(
+					Schema.Struct({
+						compatibility: Schema.Struct({
+							source: Schema.Struct({ config: ProfileJsonObject }),
+						}),
+					}),
+				)(key);
+				return {
+					...current,
+					config:
+						legacy._tag === "Right"
+							? resolvedConfig(
+									legacy.right.compatibility.source.config,
+									current.config,
+								)
+							: current.config,
+				};
+			}),
 		);
 	const fingerprint = (profile: typeof Profile.Encoded) =>
 		hashBytes(

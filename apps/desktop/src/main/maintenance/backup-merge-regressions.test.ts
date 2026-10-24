@@ -170,6 +170,33 @@ describe("complete legacy profile identity", () => {
 			).imported,
 		).toBe(0);
 	});
+	it("includes referenced content retained in legacy-only configuration fields", () => {
+		const files = archive([{ group: 1, page: 1, config: { marker: "same" } }]);
+		const record = key({ marker: "same" });
+		files.set(
+			"app/assets/config/0.json",
+			bytes([
+				{
+					...record,
+					config: {
+						...record.config,
+						legacyPath: `${base}/app/assets/extra/clip.bin`,
+					},
+				},
+			]),
+		);
+		files.set("app/assets/extra/clip.bin", Buffer.from("first bytes"));
+		const first = mergeBackup(files, empty, "/destination");
+		expect(mergeBackup(files, first.envelope, "/destination").imported).toBe(0);
+		files.set("app/assets/extra/clip.bin", Buffer.from("changed bytes"));
+		const changed = mergeBackup(files, first.envelope, "/destination");
+		expect(changed.imported).toBe(1);
+		expect(changed.envelope.profiles).toHaveLength(3);
+		expect(changed.envelope.profiles[1]).toEqual(first.envelope.profiles[1]);
+		expect(mergeBackup(files, changed.envelope, "/destination").imported).toBe(
+			0,
+		);
+	});
 	it.each(["file", "folder"])(
 		"preserves changed referenced %s bytes without changing raw config or overwriting retained assets",
 		async (kind) => {

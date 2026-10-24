@@ -180,7 +180,7 @@ The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatib
 #### Scenario: Referenced content changes
 
 - **WHEN** another archive retains resource IDs, raw configuration and archive-relative paths but changes referenced file, folder or registered image bytes
-- **THEN** the changed resolved profile is imported with distinct content-addressed assets, retained assets remain intact, and unchanged reimports deduplicate
+- **THEN** the changed resolved profile, including legacy-only configuration fields, is imported with distinct content-addressed assets, retained assets remain intact, and unchanged reimports deduplicate
 
 #### Scenario: Appearance and confirmed replacement
 

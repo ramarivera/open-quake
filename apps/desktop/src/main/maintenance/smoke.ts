@@ -58,6 +58,8 @@ const deadline = setTimeout(() => {
 	app.exit(1);
 }, 45000);
 const settle = (ms = 200) => new Promise<void>((done) => setTimeout(done, ms));
+// Keep cleanup from triggering Electron's default successful quit before app.exit(1).
+app.on("window-all-closed", () => {});
 registerClockScheme();
 async function smoke() {
 	directory = await mkdtemp(join(tmpdir(), "oq-maintenance-smoke-"));
@@ -557,11 +559,15 @@ async function smoke() {
 		"",
 		"Offline firmware version must remain unknown",
 	);
-	await settle(1200);
+	let recoveryReady = false;
+	for (let attempt = 0; attempt < 20 && !recoveryReady; attempt++) {
+		await settle(200);
+		recoveryReady = await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('dialog[open] .firmware-volumes button')].some(button => button.textContent.includes('Write to QUAKE DFU'))",
+		);
+	}
 	assert(
-		await main.webContents.executeJavaScript(
-			"document.querySelector('dialog[open]')?.textContent.includes('Write to QUAKE DFU')",
-		),
+		recoveryReady,
 		"The real recovery dialog must reconcile its ready state",
 	);
 	await writeFile(
@@ -663,6 +669,12 @@ smoke()
 		app.exit(0);
 	})
 	.catch(async (cause: unknown) => {
+		if (window && !window.isDestroyed()) {
+			await writeFile(
+				join(artifacts, "maintenance-failure.png"),
+				(await window.webContents.capturePage()).toPNG(),
+			).catch(() => {});
+		}
 		process.stderr.write(
 			`${cause instanceof Error ? cause.stack : String(cause)}\n`,
 		);

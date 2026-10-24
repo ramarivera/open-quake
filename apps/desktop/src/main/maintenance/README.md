@@ -165,3 +165,8 @@ initial and worker persistence-failure coverage, and fake Windows drive discover
 The combined native mock presents two scratch drives, checks their mounted button
 labels, clicks one and verifies its path and intended serial in the native
 confirmation before cancelling. Firmware drive paths wrap inside the dialog.
+The fingerprint also retains legacy-only configuration fields while current
+editable values take precedence. Recovery smoke waits for mounted ready controls
+instead of a fixed delay. Its cleanup keeps Electron alive until the explicit
+exit code is set, so failed assertions cannot exit successfully after window
+closure. The round-2 evidence includes an injected failure proving exit code 1.
