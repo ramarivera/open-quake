@@ -25,6 +25,7 @@ import {
 import { encodeGif } from "../../shared/gif";
 import { readBackup, writeBackup } from "../maintenance/backup-archive";
 import { exportBackup, prepareRestore } from "../maintenance/backup-store";
+import { proveEmojiMerge } from "./backup-merge-proof";
 import { proveEmojiRestore } from "./backup-proof";
 import { emojiFiles } from "./files";
 import { placeEmojiPackage } from "./profile-placement";
@@ -86,10 +87,17 @@ it("restores immutable original/rendered/static assets, library and placed profi
 		};
 		await files.write(store);
 		await files.write({ ...store, revision: 1 });
-		await placeEmojiPackage({ runtime: profiles, select: async () => {} })(
-			"daily",
-			store,
-		);
+		const placedId = await placeEmojiPackage({
+			runtime: profiles,
+			select: async () => {},
+		})("daily", store);
+		await files.write({
+			...store,
+			packages: store.packages.map((pack) => ({
+				...pack,
+				profileId: placedId,
+			})),
+		});
 		await mkdir(join(root, "emoji-v1/clipboard"));
 		await writeFile(
 			join(root, "emoji-v1/clipboard/ignored.gif"),
@@ -107,7 +115,22 @@ it("restores immutable original/rendered/static assets, library and placed profi
 			staticBytes,
 		});
 		expect(proof.syntheticPress).toBe(true);
+		expect(
+			await proveEmojiMerge(archive, join(scratch, "populated")),
+		).toMatchObject({ bothPresses: true, repeatIdempotent: true });
 		const archived = new Map(await readBackup(archive, "synthetic.zip"));
+		const backupOnly = new Map(archived);
+		backupOnly.set(
+			"open-quake/emoji-v1/library.backup.json",
+			backupOnly.get("open-quake/emoji-v1/library.json") ?? new Uint8Array(),
+		);
+		backupOnly.delete("open-quake/emoji-v1/library.json");
+		expect(
+			await proveEmojiMerge(
+				await writeBackup(backupOnly),
+				join(scratch, "fallback-populated"),
+			),
+		).toMatchObject({ bothPresses: true, repeatIdempotent: true });
 		archived.set(
 			`open-quake/emoji-v1/assets/${rendered}`,
 			Buffer.from("changed"),

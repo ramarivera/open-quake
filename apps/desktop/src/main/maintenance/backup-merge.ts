@@ -104,6 +104,7 @@ function archiveRelative(path: string, base: string): string {
 	return safeArchivePath(normalized.slice(root.length + 1));
 }
 export interface BackupMerge {
+	readonly profileIds?: ReadonlyMap<string, string>;
 	readonly envelope: typeof ProfileEnvelope.Encoded;
 	readonly resources: ReadonlyMap<string, Uint8Array>;
 	readonly legacyFiles: ReadonlyMap<string, Uint8Array>;
@@ -175,6 +176,7 @@ export function mergeBackup(
 				}).profiles,
 			}),
 			resources: new Map(),
+			profileIds,
 			legacyFiles: portable.legacyFiles,
 			imported: added,
 			skipped,

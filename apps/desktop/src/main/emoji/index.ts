@@ -2,6 +2,8 @@ import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard";
+import type { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
+import type { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import {
 	EmojiKeyReference,
@@ -33,17 +35,26 @@ import {
 import { selectStripPage } from "../../shared/strip-selection";
 import type { DeviceBus } from "../deviceBus";
 import { ImageDecoder } from "../media/image-decoder";
-import type { registerProfiles } from "../profiles";
 import { makeForegroundProbe } from "../profiles/foreground-app";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { copyGifFile } from "./clipboard";
 import { type EmojiGenerationPort, makeEmojiController } from "./controller";
 import { emojiFiles } from "./files";
 import { placeEmojiPackage } from "./profile-placement";
-export function registerEmoji(options: {
+export function registerEmoji<R>(options: {
 	readonly management: () => BrowserWindow;
 	readonly panel: () => BrowserWindow;
-	readonly profiles: ReturnType<typeof registerProfiles>;
+	readonly profiles: {
+		readonly runtime: ManagedRuntime.ManagedRuntime<
+			R | ProfileService | ProfileRepository,
+			never
+		>;
+		readonly select: (id: string) => Promise<unknown>;
+		readonly refresh?: () => Promise<void>;
+		readonly thumbnailProfile?: (
+			sender: Electron.WebContents,
+		) => Profile | undefined;
+	};
 	readonly bus: () => DeviceBus | undefined;
 	readonly renderer: string;
 	readonly mock: boolean;
@@ -149,7 +160,9 @@ export function registerEmoji(options: {
 		event.senderFrame === event.sender.mainFrame &&
 		isAppRenderer(event.sender.getURL(), options.renderer) &&
 		(event.sender === options.management().webContents ||
-			(!write && event.sender === options.panel().webContents));
+			(!write &&
+				(event.sender === options.panel().webContents ||
+					options.profiles.thumbnailProfile?.(event.sender) !== undefined)));
 	ipcMain.handle(
 		EMOJI_REQUEST,
 		(event, input: unknown): Promise<EmojiReply> =>
@@ -172,9 +185,15 @@ export function registerEmoji(options: {
 				if (event.sender !== options.management().webContents) {
 					if (decoded.value.type !== "asset") return denied();
 					const hash = decoded.value.hash;
-					const selection = await selectedPage().catch(() => undefined);
+					const capture = options.profiles.thumbnailProfile?.(event.sender);
+					const selection =
+						event.sender === options.panel().webContents
+							? await selectedPage().catch(() => undefined)
+							: undefined;
+					const keys =
+						capture?.pages.flatMap((page) => page.keys) ?? selection?.page.keys;
 					if (
-						!selection?.page.keys.some(
+						!keys?.some(
 							(key) =>
 								key.config.type === "emoji" &&
 								key.config.display &&
