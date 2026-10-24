@@ -1,0 +1,38 @@
+# Tasks
+
+## 1. Contracts and planning
+
+- [x] 1.1 Reconcile knob-configuration and push-to-talk inputs, cite audit/source evidence, and validate all changes strictly.
+
+## 2. Domain behavior
+
+- [x] 2.1 Implement firmware arbitration, ring/picker deadlines, focus and volume state with TestClock and property tests proving real port calls and stale-session cleanup; document integration ports.
+
+## 3. Desktop and strip
+
+- [x] 3.1 Compose the main controller and decoded preload, render selector/dial/volume overlays within the panel, and test desktop consumer permissions and geometry.
+
+## 4. Native verification and delivery
+
+- [x] 4.1 Run native mock smoke for ring, picker, paging and gestures; inspect and save screenshots, run every lane gate, close beads with evidence, and create a PR with limitations.
+
+## 5. Owning-lane composition
+
+- [ ] 5.1 Compose active hardware identity, thumbnail production, external-volume observations, focused monitor-brightness/hotkey actions, knob-push-to-talk runtime and physical focus/volume acquisition when their transports are available; verify actual consumers. Tracked by open-quake-lih.4.2. Screen luminance and picker physical touch are composed in task 6.1. Other unavailable runtimes report catalog warnings and request the error tone.
+
+## 6. Review round 1
+
+- [x] 6.1 Merge touch/hardware main, fix rotated picker input and exclusive selectors, compose luminance/volume and publish physical failures with the error buzzer; verify all gates and native mock smokes. Bead open-quake-lih.4.1.5. Delivery is PR #24; reply to both verified review threads with the fix commit after push.
+
+## Evidence
+
+- 1.1: reconciled knob-configuration and knob-push-to-talk; strict OpenSpec validation passes all 30 changes.
+- 2.1: packages/device/src/knob/model/ with 13 port-driven tests in packages/device/test/knob/knob-model.test.ts, including TestClock deadlines, slow cache/writer concurrency, firmware arbitration, failure identity and wrapping properties.
+- 3.1: apps/desktop/src/main/knob/, shared/knob-contracts.ts and strip/overlays/knob/. Desktop consumer tests prove committed storage selection and panel identity permissions; geometry tests retain recovered rounding. Native smoke drives the production bus consumer, IPC, preload and renderer.
+- Runtime composition limits and exact interfaces: apps/desktop/src/main/knob/README.md and design.md. Real hardware and live voice/brightness/hotkey drivers are not verified. The epic and cluster remain open for task 5.1.
+
+- 4.1: all six lane gates and both native mock Electron smokes passed. PR: https://github.com/ramarivera/open-quake/pull/24. Captures and gate logs: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/knob-model/. Open task 5.1 tracks owning-lane integration; it does not claim hardware verification.
+
+- Main integration: merged strip-grid/management changes; shared ProfileService selection and committed notifications now drive knob, panel and preview. Native smoke asserts both windows update after a knob commit and unsupported grid taps clear focus.
+
+- 6.1: merged origin/main 4f736cf, preserving strip grid, geometry.tileAt/sub-touch routing and hardware controls. Rotation=90 pointer and physical picker inputs, exclusive selectors, sanitized physical-failure warnings and hardware error tones are verified. All six gates and three native mock smokes pass. Detailed evidence: verification-round-1.md. Screen luminance is composed; monitor brightness/hotkey/voice and the other task 5.1 integrations remain open.

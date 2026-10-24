@@ -31,7 +31,8 @@ export interface CaptureRequest {
 	readonly keyCode: string;
 	readonly captureId: string;
 	readonly generation: number;
-	readonly type: HoldKeyType;
+	/** The grid key's type, or the knob voice key `0,1`. */
+	readonly type: HoldKeyType | "knob";
 	readonly agentId: Option.Option<string>;
 }
 export interface TextRequest {

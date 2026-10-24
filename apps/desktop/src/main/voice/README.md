@@ -21,13 +21,17 @@ lives in `packages/edge/src/voice/surface/`:
 `index.ts` binds the ports:
 
 - **Publisher.** `BrowserWindow` broadcast, Schema-encoded.
-- **Tones.** `createToneRecorder()`. It logs tones and writes no HID.
-  hardware-controls (PR #22) exposes
-  `HardwareControls.playTone("start"|"end"|"error"|"busy")` with the same
-  names; wiring it means passing a `VoiceToneSink` that calls it.
-- **Runtime.** The mock in development with `OPEN_QUAKE_MOCK_DEVICE=1`.
-  Otherwise `UnavailableRuntimeLive`, so a voice start shows the error
-  countdown instead of nothing. knob-push-to-talk's runtime replaces it.
+- **Tones.** `main/index.ts` passes `toneSinks(createToneRecorder(), …)`.
+  The second sink calls hardware-controls' `HardwareSession.playTone`, which
+  applies the alert volume and the buzzer switch. The mock bus answers it
+  without HID.
+- **Runtime.** The mock with `OPEN_QUAKE_MOCK_DEVICE=1`. Otherwise
+  `UnavailableRuntimeLive`, so a voice start shows the error countdown
+  instead of nothing. knob-push-to-talk's runtime replaces it.
+- **Knob.** `registerVoiceSurface(...).knobVoice` is the knob model's `voice`
+  binding. Hold starts a `0,1` capture, release releases it, a short press
+  interrupts, and a hold while a grid key holds voice is busy ("Previous turn
+  still running").
 
 `voice:request` accepts calls only from the app renderer's top-level frame
 and rejects anything the Schema does not decode, extra keys included. It

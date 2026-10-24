@@ -112,8 +112,11 @@ export function StripScreen({
 	tileOverlay,
 	htmlOverlay,
 	children,
+	onLayout,
 }: {
 	profiles: StripProfiles;
+	/** Reports the layout actually painted for the panel input adapter. */
+	onLayout?: (layout: StripLayout | undefined) => void;
 	wallpaper?: WallpaperSnapshot | undefined;
 	/** "vivid" previews the wallpaper the vivid screen page shows. */
 	view?: "active" | "vivid";
@@ -131,6 +134,10 @@ export function StripScreen({
 	const serial = wallpaper?.saved.serial;
 	const layout = useStripLayout(profiles, serial);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
+	useLayoutEffect(() => {
+		onLayout?.(vivid ? undefined : layout);
+		return () => onLayout?.(undefined);
+	}, [layout, vivid, onLayout]);
 	const now = wallpaper ? new Date(wallpaper.clock.epochMillis) : undefined;
 	const hourFormat = wallpaper?.saved.clock.actions[0].value ?? "24h";
 	return (
@@ -166,8 +173,8 @@ export function StripScreen({
 				<svg
 					className="strip-overlay"
 					viewBox={`0 0 ${STRIP_CANVAS.width} ${STRIP_CANVAS.height}`}
-					aria-hidden="true"
 				>
+					<title>Panel controls</title>
 					{children}
 				</svg>
 			) : null}

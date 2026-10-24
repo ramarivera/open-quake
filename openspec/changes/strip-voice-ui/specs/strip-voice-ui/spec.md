@@ -24,7 +24,7 @@ Main SHALL publish one Schema-decoded `VoiceSurfaceEvent` union to every app win
 
 ### Requirement: Device feedback during a voice press
 
-Main SHALL derive device feedback from consecutive stages of one capture. The first `recording/listening` SHALL play tone `start`. `idle` completed or empty SHALL play `end`. `idle` cancelled SHALL play nothing. `failed` SHALL play `error` and raise key alert `invalid` on a grid key. `busy` SHALL play `busy` and raise `invalid` on a grid key. The knob key `0,1` SHALL get no key alert. Tones SHALL go through a `VoiceTonePort` whose names match hardware-controls' `playTone`. Until that layer is wired, desktop main SHALL record tones without writing HID. Covers AI-075, AI-076, KNOB-066, MAIN-022.
+Main SHALL derive device feedback from consecutive stages of one capture. The first `recording/listening` SHALL play tone `start`. `idle` completed or empty SHALL play `end`. `idle` cancelled SHALL play nothing. `failed` SHALL play `error` and raise key alert `invalid` on a grid key. `busy` SHALL play `busy` and raise `invalid` on a grid key. The knob key `0,1` SHALL get no key alert. Tones SHALL go through a `VoiceTonePort` that desktop main binds to hardware-controls' `playTone`, so the alert volume and buzzer switch apply. A knob hold while another key holds voice SHALL publish `busy` for `0,1` with the "Previous turn still running — try again shortly" toast. Covers AI-075, AI-076, KNOB-042, KNOB-066, MAIN-022.
 
 #### Scenario: Successful knob turn
 
@@ -299,7 +299,7 @@ Overlay, tile and toast strings SHALL come verbatim from DK's en, zh, de, es, fr
 
 ### Requirement: Mock voice runtime
 
-Only in development with `OPEN_QUAKE_MOCK_DEVICE=1` (the device mock's rule), or in the native smoke, main SHALL bind the voice runtime port to a scripted runtime:
+Only with `OPEN_QUAKE_MOCK_DEVICE=1` (the device mock's switch) or in the native smoke, main SHALL bind the voice runtime port to a scripted runtime:
 
 1. preparing 300 ms, then listening
 2. levels every 50 ms with partial transcripts

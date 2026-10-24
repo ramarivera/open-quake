@@ -99,7 +99,7 @@ describe("mock device bus", () => {
 		const emitter: unknown = subscribe.mock.contexts.at(-1);
 		assert(emitter instanceof EventEmitter);
 		expect(emitter.listenerCount("event")).toBe(1);
-		expect(vi.getTimerCount()).toBe(3);
+		expect(vi.getTimerCount()).toBe(4);
 		bus.stop();
 		bus.stop();
 		expect(vi.getTimerCount()).toBe(0);
@@ -107,5 +107,38 @@ describe("mock device bus", () => {
 		emitter.emit("event", { source: "mock", kind: "press" });
 		vi.advanceTimersByTime(12000);
 		expect(listener).not.toHaveBeenCalled();
+	});
+});
+
+describe("mock raw vendor touch", () => {
+	it("parses raw frames, tracks IDs and synthesizes a 100ms up without native I/O", async () => {
+		vi.useFakeTimers();
+		const { SYNTHETIC_TOUCH_DOWN, SYNTHETIC_TOUCH_MOVE } = await import(
+			"../../../../packages/device/src/touch/touch-fixtures"
+		);
+		const bus = startMockDeviceBus();
+		const listener = vi.fn();
+		bus.on(listener);
+		listener.mockClear();
+		bus.emitTouchReport(SYNTHETIC_TOUCH_DOWN);
+		vi.advanceTimersByTime(50);
+		bus.emitTouchReport(SYNTHETIC_TOUCH_MOVE);
+		expect(listener.mock.calls.map(([e]) => e.points?.[0])).toEqual([
+			{ touchId: "touch-1", action: 1, x: 120, y: 360 },
+			{ touchId: "touch-1", action: 1, x: 128, y: 360 },
+		]);
+		vi.advanceTimersByTime(99);
+		expect(listener).toHaveBeenCalledTimes(2);
+		vi.advanceTimersByTime(1);
+		expect(listener.mock.lastCall?.[0].points[0]).toEqual({
+			touchId: "touch-1",
+			action: 0,
+			x: 128,
+			y: 360,
+		});
+		bus.stop();
+		vi.advanceTimersByTime(10000);
+		expect(listener).toHaveBeenCalledTimes(3);
+		vi.useRealTimers();
 	});
 });

@@ -52,3 +52,14 @@ export function AppearanceIcon(): React.JSX.Element {
 		</Icon>
 	);
 }
+
+export function ControlsIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="M2 4h5m3 0h4M2 8h1m3 0h8M2 12h7m3 0h2" />
+			<circle cx="8.5" cy="4" r="1.5" />
+			<circle cx="4.5" cy="8" r="1.5" />
+			<circle cx="10.5" cy="12" r="1.5" />
+		</Icon>
+	);
+}

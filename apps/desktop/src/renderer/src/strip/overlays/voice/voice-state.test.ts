@@ -228,6 +228,30 @@ describe("copilot status machine", () => {
 				.statusText,
 		).toEqual(Option.some({ _tag: "errorCode", code: "1003" }));
 	});
+	it("keeps a running turn's status when another key is rejected busy", () => {
+		const down = reduceCopilot(
+			initialCopilot,
+			{
+				_tag: "keyDown",
+				keyCode: "1,6",
+				keyType: "aiChat",
+				title: Option.none(),
+			},
+			0,
+		);
+		const busyOther = reduceCopilot(
+			down,
+			{
+				_tag: "response",
+				keyCode: Option.some("1,7"),
+				status: 5,
+				errorCode: Option.none(),
+				message: Option.none(),
+			},
+			10,
+		);
+		expect(busyOther).toBe(down);
+	});
 	it("uses DK's orb speeds and layout at 1180×460", () => {
 		const statuses: readonly Option.Option<0 | 1 | 2 | 3 | 4>[] = [
 			Option.none(),

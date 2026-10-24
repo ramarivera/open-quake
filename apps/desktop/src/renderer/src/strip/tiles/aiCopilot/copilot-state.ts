@@ -167,15 +167,16 @@ export function reduceCopilot(
 				return Option.contains(state.status, 1)
 					? { ...reset(state), statusText: Option.none() }
 					: state;
-			if (event.status === 5)
-				return { ...reset(state), statusText: statusText(5) };
-			if (
+			const foreign =
 				Option.isSome(state.activeKey) &&
 				!Option.exists(event.keyCode, (keyCode) =>
 					Option.contains(state.activeKey, keyCode),
-				)
-			)
-				return state;
+				);
+			// DK resets the running turn when another key is rejected busy
+			// (ACV:840-844); here only the toast reports that rejection.
+			if (event.status === 5)
+				return foreign ? state : { ...reset(state), statusText: statusText(5) };
+			if (foreign) return state;
 			const previous = Option.getOrUndefined(state.status);
 			let next: CopilotState = {
 				...withStatus(state, Option.some(event.status), now),

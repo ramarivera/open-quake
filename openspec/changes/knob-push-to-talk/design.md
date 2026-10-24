@@ -2,7 +2,7 @@
 
 ## Context
 
-Key `0,1` is the recovered logical knob voice key. The source establishes routes and migration, but it does not prove physical hold thresholds or live press/release timing. `packages/device` owns raw events and gesture recognition; this domain consumes a logical hold-start/release/cancel event with device identity. Synthetic events can prove routing before hardware is available.
+Key `0,1` is the recovered logical knob voice key. The source establishes routes and migration, but it does not prove physical hold thresholds or live press/release timing. `packages/device` consumes firmware classifications 1/2/5/255 without host hold/double thresholds; this domain consumes a logical hold-start/release/cancel event with device identity. Synthetic events can prove routing before hardware is available.
 
 Approved (Ramiro, 2026-10-23): place action contracts, migration invariants, and KnobVoiceService in `packages/edge/src/voice/knob/`. The profile domain stores configuration; `packages/client/` and desktop renderers expose route settings/status. KnobVoiceService composes VoiceService, ChatService, and later AgentService through declared dependencies and Layers, using named Effect.fn methods and shared catalog errors. Do not make device/protocol packages import AI or Electron. Use Schema-first RPC/preload contracts for UI settings and status.
 
@@ -73,3 +73,7 @@ Preview imported routes before saving version 1 and retain an explicit local bac
 - Device reports without a generation ID permit stale releases to cancel a new capture. Require a correlated logical input adapter before shipping re-press behavior.
 - Strict import validation can require manual repair where DK-Suite defaulted to legacyAssistant. The explicit repair state avoids invoking an unintended model or agent.
 - A global mic owner limits concurrent devices. Queueing hidden captures was rejected because a delayed start could record after the user released.
+
+## Knob-model input agreement
+
+Audit KNOB-001..007, SCREEN-071/082/092 and MAIN-029..033 establish device classifications. knob-model-parity owns short interruption, double Colorful jump and picker arbitration, then forwards holdStart/release/cancel with device/profile revision and a generation. This change retains sole ownership of capture, inference and speech. No second PTT state machine is introduced.

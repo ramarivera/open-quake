@@ -108,9 +108,14 @@ alert volume, a zero follows each step, and steps are 10 ms apart. The
 buzzer setting gates playback (MAIN-021, MAIN-023). Those rules belong to
 hardware-controls' `HardwareControls.playTone("start"|"end"|"error"|"busy")`
 in PR #22. This change defines `VoiceTonePort.play(serial, name)` with the
-same four names. Until PR #22 merges, desktop main binds the port to a
-recorder that logs the tone and sends no HID. Wiring it to `playTone` is
-one line.
+same four names. Desktop main binds it to `HardwareSession.playTone`; the
+mock bus answers without HID.
+
+The knob model's `voice` binding (`KnobVoiceInput`: holdStart, release,
+interrupt, cancel) drives `0,1` captures through the same runtime port. A
+hold while another key holds voice is busy, with DK's "Previous turn still
+running" toast (KNOB-042). A hold while the knob's own turn runs cancels
+that turn first (knob-push-to-talk "Exclusive capture and re-press").
 
 The knob voice key `0,1` has no tile, so it gets no alert. That matches DK's
 `showDeviceAlert` guard, which needs a keyCode on the device (AIManager.js:1402).
@@ -337,7 +342,8 @@ Status machine (ACV:818-1033):
   3 or 0 → 1. Any other status resets.
 - **Responses.** Status 3 is ignored unless the current status is 0. Status 2
   without a keyCode ends a knob session only while processing. Status 5 shows
-  "System busy". Responses for a non-active key are ignored. Status 2 adds a
+  "System busy" unless another key is active. Responses for a non-active key
+  are ignored. Status 2 adds a
   newline. Status −1 shows "Error code: {code}" or "Error".
 - **Timeout.** "Time out" 330 000 ms after the status leaves null.
 
@@ -538,9 +544,9 @@ setting yet; when settings adds one, it replaces the language lookup.
 
 ## Mock runtime
 
-In development with `OPEN_QUAKE_MOCK_DEVICE=1` (the device mock's rule; a
-production launch ignores the flag), and in the native smoke, main binds the
-runtime port to a scripted runtime. A grid long press or knob hold runs:
+With `OPEN_QUAKE_MOCK_DEVICE=1` (the device mock's switch, honoured in built
+apps too) and in the native smoke, main binds the runtime port to a scripted
+runtime. A grid long press or knob hold runs:
 
 1. preparing for 300 ms
 2. listening (start tone)
@@ -565,13 +571,16 @@ The user sees the error countdown instead of silence.
   DK's renderer-only reset (QSV:2920-2932).
 - Reduced motion is honoured on the strip for decorative loops only.
 - Account error codes (4001, 4003, 2014) map to generic copy.
+- Another key's busy rejection leaves the running AI Copilot turn alone; DK
+  resets it (ACV:840-844). The busy toast still shows.
 - Open WebChat is omitted.
 - Links open only validated HTTP(S); files are never opened (AI-177).
 
 ## Risks
 
-- Tone timing and loudness on the real buzzer are unverified until PR #22
-  merges and the lead runs the hardware checklist.
+- Tone timing and loudness on the real buzzer are unverified until the lead
+  runs the hardware checklist; the tests use hardware-controls' fake
+  transport.
 - Real mic levels arrive only once voice-stt-tts's capture adapter calls the
   level meter; until then only the mock runtime drives the bar.
 - `StripScreen`, `tileRegistry.tsx` and `main/index.ts` are shared with other

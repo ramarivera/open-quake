@@ -1,9 +1,11 @@
 import { join } from "node:path";
-import { QuakeDevice } from "@open-quake/device";
+import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
-import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
+import { Effect, Fiber, Layer, ManagedRuntime, Stream } from "effect";
 import { app, BrowserWindow, type Display, ipcMain, screen } from "electron";
+import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
+import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import {
 	findPanelDisplay,
@@ -12,12 +14,17 @@ import {
 	panelRotation,
 } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { registerHardware } from "./hardware";
+import { attachHardware, startMockHardwareBus } from "./hardware/bus";
+import { hardwarePreferencesLive } from "./hardware/preferences";
+import { registerKnob } from "./knob";
+import { knobProfileBinding } from "./knob/profile-binding";
 import { MediaLive, registerMedia } from "./media";
-import { startMockDeviceBus } from "./mockDeviceBus";
 import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
-import { createToneRecorder, registerVoiceSurface } from "./voice";
+import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+registerClockScheme();
 const PANEL_TITLE = "open-quake panel";
 
 interface PanelTarget {
@@ -101,37 +108,90 @@ app.whenReady().then(() => {
 	let panelTarget = getPanelTarget();
 	let panelWin = createPanelWindow(panelTarget);
 	let managementWin = createManagementWindow();
+	const profilesRuntime = ManagedRuntime.make(
+		desktopProfilesLive(app.getPath("userData")),
+	);
+	let bus: DeviceBus | undefined;
+	// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones play
+	// through hardware-controls; the mock bus answers them without HID.
+	const voice = registerVoiceSurface({
+		mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
+		tones: toneSinks(createToneRecorder(), {
+			play: (_serial, tone) => {
+				const hardware = bus?.hardware?.();
+				if (hardware)
+					runtime.runFork(
+						hardware.playTone(tone).pipe(
+							Effect.tapError((error) =>
+								Effect.logWarning("Voice tone failed", error.code),
+							),
+							Effect.ignore,
+						),
+					);
+			},
+		}),
+		serial: () => "quake",
+		panel: () => panelWin,
+		management: () => managementWin,
+	});
+	const knob = registerKnob(
+		() => panelWin,
+		() => [panelWin, managementWin],
+		{
+			profiles: knobProfileBinding(profilesRuntime),
+			hardware: () => bus?.hardware?.(),
+			voice: voice.knobVoice,
+		},
+	);
 	registerMedia(
 		ManagedRuntime.make(
 			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 		),
 		() => managementWin,
 	);
-	// Read-only committed profiles for the strip and its preview.
-	registerProfiles(
-		ManagedRuntime.make(desktopProfilesLive(app.getPath("userData"))),
+	registerClock(
+		ManagedRuntime.make(ClockLive(app.getPath("userData"))),
+		() => managementWin,
 	);
-	// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui).
-	const voice = registerVoiceSurface({
-		// Like the device mock, the scripted voice runtime is development-only.
-		mock: isDev && process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
-		tones: createToneRecorder(),
-		serial: () => "quake",
-		panel: () => panelWin,
-		management: () => managementWin,
-	});
+	// Read-only committed profiles for the strip and its preview.
+	registerProfiles(profilesRuntime);
+	profilesRuntime.runFork(
+		ProfileService.subscribeCommittedProfiles().pipe(
+			Effect.flatMap((snapshots) =>
+				Stream.runForEach(snapshots, () =>
+					Effect.promise(() => knob.refresh()),
+				),
+			),
+		),
+	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(
-		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+		Layer.merge(
+			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+			HardwareControls.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					hardwarePreferencesLive(join(app.getPath("userData"), "hardware-v1")),
+				),
+			),
+		),
 	);
-	const mock = isDev && process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+	const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 	const source = mock
-		? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
-				Effect.sync(() => bus.stop()),
-			)
-		: startDeviceBus();
-	let bus: DeviceBus | undefined;
-	let running: Fiber.RuntimeFiber<void, never> | undefined;
+		? startMockHardwareBus()
+		: Effect.gen(function* () {
+				const controls = yield* HardwareControls;
+				return yield* startDeviceBus((connection) =>
+					attachHardware(controls, connection),
+				);
+			});
+	const disposeHardware = registerHardware(
+		() => bus?.hardware?.(),
+		() => managementWin,
+		mock,
+	);
+	let running:
+		| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
+		| undefined;
 	let stopping = Promise.resolve();
 	let generation = 0;
 	let quitting = false;
@@ -146,7 +206,13 @@ app.whenReady().then(() => {
 				Effect.scoped(
 					Effect.gen(function* () {
 						bus = yield* source;
-						bus.on(createEventForwarder(() => [panelWin, managementWin]));
+						bus.on(
+							createEventForwarder(
+								() => [panelWin, managementWin],
+								() => [panelWin],
+							),
+						);
+						bus.on(knob.onDevice);
 						yield* Effect.never;
 					}),
 				),
@@ -209,7 +275,9 @@ app.whenReady().then(() => {
 		screen.removeListener("display-removed", syncPanelDisplay);
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
+		disposeHardware();
 		void stopBus().then(async () => {
+			await knob.dispose();
 			await voice.dispose();
 			await runtime.dispose();
 			quitFinished = true;

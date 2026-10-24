@@ -2,6 +2,7 @@ import { Effect, Option, Ref } from "effect";
 import type {
 	AgentConnection,
 	StageEvent,
+	ToastKey,
 	VoiceSurfaceEvent,
 } from "./voice-surface-contracts.js";
 import {
@@ -111,10 +112,14 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 				);
 			});
 
-			/** BG `Zo`: busy stage, busy tone and alert; plus DK's busy toast (AI-169). */
+			/**
+			 * BG `Zo`: busy stage, busy tone and alert, plus DK's busy toast
+			 * (AI-169; the knob's "Previous turn still running", KNOB-042).
+			 */
 			const rejectBusy = Effect.fn("VoiceSurface.rejectBusy")(function* (
 				serial: string,
 				keyCode: string,
+				toast: ToastKey = "aiIconViewTxt.busyToast",
 			): Effect.fn.Return<void> {
 				const count = yield* Ref.updateAndGet(busyCount, (value) => value + 1);
 				yield* publish({
@@ -124,11 +129,7 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 					captureId: `busy/${keyCode}/${count}`,
 					stage: { _tag: "busy" },
 				});
-				yield* publish({
-					_tag: "Toast",
-					serial,
-					messageKey: "aiIconViewTxt.busyToast",
-				});
+				yield* publish({ _tag: "Toast", serial, messageKey: toast });
 			});
 
 			const agentStatus = Effect.fn("VoiceSurface.agentStatus")(

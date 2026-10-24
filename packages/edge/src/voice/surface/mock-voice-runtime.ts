@@ -1,15 +1,5 @@
-import {
-	Deferred,
-	Duration,
-	Effect,
-	Fiber,
-	Layer,
-	Option,
-	Ref,
-	Schema,
-} from "effect";
+import { Deferred, Duration, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import { SessionId, TurnId } from "../../chat/chat-contracts.js";
-import { KNOB_VOICE_KEY } from "./voice-surface-contracts.js";
 import {
 	type CaptureRequest,
 	GridVoiceRuntime,
@@ -66,6 +56,7 @@ const decodeTurn = Schema.decodeUnknownSync(TurnId);
 
 interface Capture {
 	readonly generation: number;
+	readonly captureId: string;
 	readonly released: Deferred.Deferred<void>;
 	readonly fiber: Fiber.RuntimeFiber<void>;
 }
@@ -209,7 +200,7 @@ export const MockVoiceRuntimeLive: Layer.Layer<
 					_tag: "Stage",
 					serial,
 					keyCode,
-					captureId: `${keyCode}/${capture.generation}`,
+					captureId: capture.captureId,
 					stage: { _tag: "idle", outcome: "cancelled" },
 				});
 			});
@@ -223,6 +214,7 @@ export const MockVoiceRuntimeLive: Layer.Layer<
 					yield* Ref.update(captures, (map) =>
 						new Map(map).set(request.serial, {
 							generation: request.generation,
+							captureId: request.captureId,
 							released,
 							fiber,
 						}),
@@ -245,16 +237,3 @@ export const MockVoiceRuntimeLive: Layer.Layer<
 		});
 	}),
 );
-
-/** The knob key routes through the same script when the knob runtime is absent. */
-export const mockKnobCapture = (
-	serial: string,
-	generation: number,
-): CaptureRequest => ({
-	serial,
-	keyCode: KNOB_VOICE_KEY,
-	captureId: `${KNOB_VOICE_KEY}/${generation}`,
-	generation,
-	type: "aiChat",
-	agentId: Option.none(),
-});

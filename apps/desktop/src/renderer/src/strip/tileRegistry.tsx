@@ -2,13 +2,22 @@ import type { HourFormat } from "../../../shared/display";
 import type { StripTile } from "./geometry";
 import type { StripVoiceContext } from "./overlays/voice/voice-context";
 import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
-import { ClockPlaceholder } from "./tiles/ClockPlaceholder";
 import { ClawBotTile } from "./tiles/clawBot/ClawBotTile";
 import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
+import { ClockTile } from "./tiles/clock/ClockTile";
+import { useClockNow } from "./tiles/clock/clockHooks";
+import {
+	mediaOf,
+	themeOf,
+	useClockSettings,
+} from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
 import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
-/** Everything a registered tile may read; tiles never fetch their own data. */
+/**
+ * Everything a registered tile may read; tiles never fetch their own data.
+ * The clock is the one exception until profile keys carry `clockStyle`.
+ */
 export interface StripTileContext {
 	/** Host clock from main's one-second snapshot; undefined until it arrives. */
 	readonly now: Date | undefined;
@@ -26,23 +35,33 @@ export type StripTileComponent = (
 ) => React.JSX.Element | null;
 
 /**
- * strip-clock replaces ClockPlaceholder with `ClockTile` from
- * `./tiles/clock/`, which takes the same `{ widthPx, heightPx, now, theme }`.
- * `theme` is the clock theme id; DK's default is "season".
+ * DK-Suite 0.4.95's desktop clock (openspec/changes/desktop-clock). Its theme,
+ * custom media and seconds option come from the clock store
+ * (`window.quakeClock`) until profile keys carry `clockStyle`; it ticks on
+ * wall-clock minute boundaries so the flip lands on the minute, starting from
+ * the host clock.
  */
 function ClockSlot({
 	tile,
 	context,
 }: StripTileProps): React.JSX.Element | null {
-	return context.now ? (
-		<ClockPlaceholder
+	const clock = useClockSettings();
+	const snapshot = clock.snapshot;
+	const now = useClockNow(snapshot?.showSeconds ?? false, context.now);
+	// Wait for the saved theme rather than flashing the default first.
+	if (!clock.ready) return null;
+	return (
+		<ClockTile
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
-			now={context.now}
-			theme="season"
+			now={now}
+			theme={snapshot ? themeOf(snapshot) : "season"}
 			hourFormat={context.hourFormat}
+			showSeconds={snapshot?.showSeconds ?? false}
+			media={mediaOf(snapshot)}
+			onThemeSelect={clock.selectTheme}
 		/>
-	) : null;
+	);
 }
 
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */

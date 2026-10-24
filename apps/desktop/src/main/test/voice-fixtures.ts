@@ -73,7 +73,15 @@ export const copilotProfile: EncodedProfile = {
 		{
 			id: "copilot-1",
 			keys: [
-				key("1,1", "aiChatView", "", STRIP_GLYPHS.chat, [5, 2]),
+				// DK's aiChatView config: no whole-tile press, sub-targets on (copy, scroll).
+				{
+					...key("1,1", "aiChatView", "", STRIP_GLYPHS.chat, [5, 2]),
+					config: {
+						...key("1,1", "aiChatView", "", STRIP_GLYPHS.chat, [5, 2]).config,
+						supportTouchEffect: false,
+						compatibility: { fixture: true, hasTouchableSubElements: true },
+					},
+				},
 				...covered([
 					"1,2",
 					"1,3",

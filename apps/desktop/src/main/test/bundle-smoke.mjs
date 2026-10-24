@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const mockMode = process.argv.includes("--mock");
+
 import { EventEmitter } from "node:events";
 import { registerHooks } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
@@ -47,6 +52,7 @@ const display = {
 };
 screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
+const powerMonitor = new EventEmitter();
 const ipcMain = new EventEmitter();
 ipcMain.handle = () => {};
 ipcMain.removeHandler = () => {};
@@ -59,6 +65,19 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+// The clock registers its media scheme before ready and a handler after.
+const schemes = [];
+const protocol = {
+	registerSchemesAsPrivileged: (list) => schemes.push(...list),
+	handle: () => {},
+	unhandle: () => {},
+};
+const net = {
+	fetch: () => {
+		throw new Error("Bundle smoke must not serve clock media");
+	},
+};
+const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 // The voice surface only touches these on a renderer request; the smoke sends none.
 const clipboard = {
 	writeText: () => {
@@ -72,11 +91,15 @@ const shell = {
 };
 globalThis.openQuakeBundleSmoke = {
 	app,
+	powerMonitor,
 	BrowserWindow: Window,
 	screen,
 	ipcMain,
 	dialog,
 	nativeImage,
+	protocol,
+	net,
+	session,
 	clipboard,
 	shell,
 };
@@ -94,7 +117,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, clipboard, shell } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, powerMonitor, BrowserWindow, screen, ipcMain, dialog, nativeImage, protocol, net, session, clipboard, shell } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -118,35 +141,51 @@ async function until(check) {
 
 try {
 	delete process.env.ELECTRON_RENDERER_URL;
-	// A dev flag must not select synthetic input in a production launch.
-	process.env.OPEN_QUAKE_MOCK_DEVICE = "1";
+	// Explicit mock mode must work in production builds without loading HID.
+	if (mockMode) process.env.OPEN_QUAKE_MOCK_DEVICE = "1";
+	else delete process.env.OPEN_QUAKE_MOCK_DEVICE;
 	await import("../../../out/main/index.js");
 	// Other main-process modules (wallpaper) broadcast too; this check owns device events.
 	const quakeEvents = () =>
 		events.filter(({ channel }) => channel === "quake:event");
 	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
-	assert.equal(nativeResolutions, 1, "Native package must remain external");
-	assert.equal(enumerations, 1);
+	assert.equal(
+		nativeResolutions,
+		mockMode ? 0 : 1,
+		"Mock must not resolve native HID; real mode keeps it external",
+	);
+	assert.equal(enumerations, mockMode ? 0 : 1);
+	assert.deepEqual(
+		schemes.map(({ scheme }) => scheme),
+		["oq-clock-media"],
+	);
 	for (const { channel, event } of quakeEvents()) {
 		assert.equal(channel, "quake:event");
-		assert.deepEqual(event, {
-			source: "hid",
-			kind: "status",
-			state: "error",
-			error: {
-				_tag: "QuakeDeviceNotFound",
-				code: "QUAKE.DEVICE.NOT_FOUND",
-				category: "unavailable",
-			},
-		});
+		assert.deepEqual(
+			event,
+			mockMode
+				? { source: "mock", kind: "status", state: "connected" }
+				: {
+						source: "hid",
+						kind: "status",
+						state: "error",
+						error: {
+							_tag: "QuakeDeviceNotFound",
+							code: "QUAKE.DEVICE.NOT_FOUND",
+							category: "unavailable",
+						},
+					},
+		);
 	}
 	app.quit();
 	await until(() => quit);
 	assert.equal(screen.listenerCount("display-added"), 0);
 	assert.equal(ipcMain.listenerCount("quake:status"), 0);
 	console.info(
-		"Bundle smoke passed: default HID, typed absence delivered to both windows, external native resolution, awaited quit; no hardware I/O.",
+		mockMode
+			? "Bundle smoke passed: built mock mode, connected status to both windows, zero native resolutions/enumerations, awaited quit."
+			: "Bundle smoke passed: default HID, typed absence delivered to both windows, external native resolution, awaited quit; no hardware I/O.",
 	);
 } finally {
 	app.quit();
@@ -154,3 +193,10 @@ try {
 	delete globalThis.openQuakeBundleSmoke;
 	delete globalThis.openQuakeSmokeDiscovery;
 }
+
+if (!mockMode)
+	process.stdout.write(
+		execFileSync(process.execPath, [fileURLToPath(import.meta.url), "--mock"], {
+			encoding: "utf8",
+		}),
+	);

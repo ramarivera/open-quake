@@ -18,9 +18,9 @@ top gap 3, AUDIT_SCREEN top gaps 5 and 8, AUDIT_AI top gaps 1–3 (bead
   chat events, plus key alerts and toasts. Main dedupes the events, derives
   device feedback and fans them out to the strip.
 - Add device feedback for a voice press. DK's buzzer tone patterns play
-  through a tone port; until hardware-controls (PR #22) merges, the port
-  records the tones without sending HID. The pressed key flashes the
-  DisplayEvent alert.
+  through a tone port bound to hardware-controls' `playTone`. The pressed key
+  flashes the DisplayEvent alert. The knob model's voice binding drives knob
+  captures.
 - Add the full-screen voice overlay for the knob voice key `0,1`: waveform
   backdrop, dim, cyan subtitle band, mic mountain bar, stage texts, 3-2-1
   error countdown, busy text, localized in DK's eight locales.

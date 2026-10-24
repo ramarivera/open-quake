@@ -7,7 +7,10 @@ import {
 	nextDeadline,
 	stepHold,
 } from "./hold-to-talk.js";
-import type { GridVoiceInput } from "./voice-surface-contracts.js";
+import {
+	type GridVoiceInput,
+	KNOB_VOICE_KEY,
+} from "./voice-surface-contracts.js";
 import { GridVoiceRuntime, type TextRequest } from "./voice-surface-ports.js";
 import { VoiceSurface } from "./voice-surface-service.js";
 
@@ -203,6 +206,79 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 			);
 		});
 
-		return { input, reset, sendText };
+		/**
+		 * knob model's push-to-talk seam (`KnobVoiceInput`): a hold starts a
+		 * knob capture unless another key's flow or reservation holds voice
+		 * (busy, KNOB-042); a re-press cancels the knob's own turn first
+		 * (knob-push-to-talk "Exclusive capture and re-press"); a short press
+		 * interrupts (KNOB top gap 3).
+		 */
+		const knob = Effect.fn("GridVoice.knob")(function* (
+			serial: string,
+			action: "holdStart" | "release" | "interrupt" | "cancel",
+			generation: number,
+		): Effect.fn.Return<void> {
+			yield* Effect.annotateCurrentSpan({ action, generation });
+			const captureId = `${KNOB_VOICE_KEY}/knob-${generation}`;
+			switch (action) {
+				case "holdStart": {
+					const flow = yield* surface.activeFlow(serial);
+					const reserved = Option.isSome(
+						((yield* Ref.get(states)).get(serial) ?? initialHoldState).held,
+					);
+					if (
+						reserved ||
+						Option.exists(flow, (keyCode) => keyCode !== KNOB_VOICE_KEY)
+					)
+						return yield* surface.rejectBusy(
+							serial,
+							KNOB_VOICE_KEY,
+							"aiAudio.prevTurnBusy",
+						);
+					if (Option.isSome(flow))
+						yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
+					return yield* runtime
+						.startCapture({
+							serial,
+							keyCode: KNOB_VOICE_KEY,
+							captureId,
+							generation,
+							type: "knob",
+							agentId: Option.none(),
+						})
+						.pipe(
+							Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+								surface.publish({
+									_tag: "Stage",
+									serial,
+									keyCode: KNOB_VOICE_KEY,
+									captureId,
+									stage: {
+										_tag: "failed",
+										reason: "unavailable",
+										errorCode: error.code,
+									},
+								}),
+							),
+						);
+				}
+				case "release":
+					return yield* runtime.releaseCapture(
+						serial,
+						KNOB_VOICE_KEY,
+						generation,
+					);
+				case "interrupt":
+					return yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
+				case "cancel":
+					return yield* runtime.cancelCapture(
+						serial,
+						KNOB_VOICE_KEY,
+						generation,
+					);
+			}
+		});
+
+		return { input, reset, sendText, knob };
 	}),
 }) {}

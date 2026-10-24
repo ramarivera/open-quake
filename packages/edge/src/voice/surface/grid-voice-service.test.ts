@@ -214,6 +214,72 @@ describe("GridVoice", () => {
 	});
 });
 
+describe("knob voice seam", () => {
+	it.scoped("starts, releases and interrupts knob captures", () => {
+		const rec = recorder();
+		return Effect.gen(function* () {
+			yield* GridVoice.knob("QK", "holdStart", 3);
+			yield* GridVoice.knob("QK", "release", 3);
+			yield* GridVoice.knob("QK", "interrupt", 3);
+			yield* GridVoice.knob("QK", "cancel", 4);
+			expect(rec.calls).toEqual([
+				"start 0,1 #3",
+				"release 0,1 #3",
+				"cancelFlow 0,1",
+				"cancel 0,1 #4",
+			]);
+		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+	});
+
+	it.scoped(
+		"rejects a knob hold while a grid key holds voice, with the previous-turn toast",
+		() => {
+			const rec = recorder();
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* GridVoice.knob("QK", "holdStart", 1);
+				expect(rec.calls).toEqual(["select 1,6"]);
+				expect(rec.tones).toEqual(["busy"]);
+				expect(rec.events.at(-1)).toMatchObject({
+					_tag: "Toast",
+					messageKey: "aiAudio.prevTurnBusy",
+				});
+				// The knob key has no tile to flash.
+				expect(rec.events.some((event) => event._tag === "KeyAlert")).toBe(
+					false,
+				);
+			}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+		},
+	);
+
+	it.scoped("cancels the knob's own running turn before a new hold", () => {
+		const rec = recorder();
+		return Effect.gen(function* () {
+			yield* VoiceSurface.publish({
+				_tag: "Stage",
+				serial: "QK",
+				keyCode: "0,1",
+				captureId: "old",
+				stage: { _tag: "processing" },
+			});
+			yield* GridVoice.knob("QK", "holdStart", 2);
+			expect(rec.calls).toEqual(["cancelFlow 0,1", "start 0,1 #2"]);
+		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+	});
+
+	it.scoped("shows the error countdown when no knob runtime exists", () => {
+		const rec = recorder();
+		return Effect.gen(function* () {
+			yield* GridVoice.knob("QK", "holdStart", 1);
+			expect(rec.events[0]).toMatchObject({
+				keyCode: "0,1",
+				stage: { _tag: "failed", reason: "unavailable" },
+			});
+			expect(rec.tones).toEqual(["error"]);
+		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec, false))));
+	});
+});
+
 describe("mock voice runtime", () => {
 	it.scoped("scripts a full turn under TestClock", () => {
 		const rec = recorder();

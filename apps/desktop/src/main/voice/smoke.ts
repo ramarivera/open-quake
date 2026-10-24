@@ -28,7 +28,8 @@ import { createToneRecorder, registerVoiceSurface } from "./index";
  * mock mic levels. Captures each overlay stage and the chat tiles.
  */
 const artifacts = process.argv[2];
-const directory = mkdtempSync(join(artifacts ?? tmpdir(), "voice-smoke-"));
+// User data stays out of the screenshot directory (Electron writes it until quit).
+const directory = mkdtempSync(join(tmpdir(), "open-quake-voice-smoke-"));
 app.setPath("userData", directory);
 const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 const SERIAL = "smoke-QK";

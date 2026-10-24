@@ -65,7 +65,13 @@ const electron = vi.hoisted(() => {
 			>(),
 			quit: vi.fn(),
 		},
-		ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+		ipcMain: {
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			handle: vi.fn(),
+			removeHandler: vi.fn(),
+		},
+		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -76,24 +82,54 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./knob", () => ({
+	registerKnob: () => ({
+		onDevice: () => {},
+		refresh: () => Promise.resolve(),
+		dispose: () => Promise.resolve(),
+	}),
+}));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
 });
-vi.mock("./profiles/profile-ipc", async () => {
+vi.mock("./clock", async () => {
 	const { Layer } = await import("effect");
 	return {
-		desktopProfilesLive: vi.fn(() => Layer.empty),
+		ClockLive: vi.fn(() => Layer.empty),
+		registerClock: vi.fn(),
+		registerClockScheme: vi.fn(),
+	};
+});
+vi.mock("./profiles/profile-ipc", async () => {
+	const actual = await vi.importActual<typeof import("./profiles/profile-ipc")>(
+		"./profiles/profile-ipc",
+	);
+	const { createInitialProfileEnvelope, encodeProfileEnvelope } = await import(
+		"../../../../packages/device/src/profiles/profile-contracts.js"
+	);
+	return {
+		desktopProfilesLive: vi.fn(() =>
+			actual.ProfilesLive({
+				read: async () => encodeProfileEnvelope(createInitialProfileEnvelope()),
+				write: async () => undefined,
+			}),
+		),
 		registerProfiles: vi.fn(),
 	};
 });
-vi.mock("./voice", () => ({
-	createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
-	registerVoiceSurface: vi.fn(() => ({
-		publish: vi.fn(async () => undefined),
-		dispose: vi.fn(async () => undefined),
-	})),
-}));
+vi.mock("./voice", async () => {
+	const { Effect } = await import("effect");
+	return {
+		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
+		toneSinks: vi.fn(() => ({ play: vi.fn() })),
+		registerVoiceSurface: vi.fn(() => ({
+			publish: vi.fn(async () => undefined),
+			knobVoice: vi.fn(() => Effect.void),
+			dispose: vi.fn(async () => undefined),
+		})),
+	};
+});
 
 function displayEvent(name: string): void {
 	const listener = electron.screen.on.mock.calls.find(
@@ -141,7 +177,10 @@ describe("desktop window lifecycle", () => {
 		electron.screen.getPrimaryDisplay.mockReturnValue(primary);
 		await import("./index");
 		await vi.waitFor(() =>
-			expect(vi.getTimerCount()).toBeGreaterThanOrEqual(3),
+			expect(windows().management.webContents.send).toHaveBeenCalledWith(
+				"quake:event",
+				{ source: "mock", kind: "status", state: "connected" },
+			),
 		);
 	});
 

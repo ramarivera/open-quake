@@ -1,14 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import { HardwareSettings } from "./hardware/HardwareSettings";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { StripPanel } from "./strip/StripPanel";
+import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
 	useAppearance,
 } from "./theme/useAppearance";
 import { StatusDot } from "./ui/Form";
-import { AppearanceIcon, DeviceIcon, ScreenIcon } from "./ui/icons";
+import {
+	AppearanceIcon,
+	ControlsIcon,
+	DeviceIcon,
+	ScreenIcon,
+} from "./ui/icons";
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperSettings } from "./wallpaper/WallpaperViews";
@@ -32,7 +39,7 @@ function PanelSurface(): React.JSX.Element {
 	return <StripPanel />;
 }
 
-type Page = "overview" | "screen" | "appearance";
+type Page = "overview" | "screen" | "controls" | "appearance";
 
 type NavItem = {
 	readonly id: Page;
@@ -51,6 +58,7 @@ const sections: ReadonlyArray<{
 		items: [
 			{ id: "overview", label: "Overview", Icon: DeviceIcon },
 			{ id: "screen", label: "Screen", Icon: ScreenIcon },
+			{ id: "controls", label: "Controls", Icon: ControlsIcon },
 		],
 	},
 	{
@@ -128,7 +136,16 @@ function ManagementSurface({
 							onOpenScreen={() => open("screen")}
 						/>
 					) : page === "screen" ? (
-						<WallpaperSettings wallpaper={wallpaper} />
+						<>
+							<WallpaperSettings wallpaper={wallpaper} />
+							<ClockSettings
+								hourFormat={
+									wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
+								}
+							/>
+						</>
+					) : page === "controls" ? (
+						<HardwareSettings />
 					) : (
 						<ThemeSettings controller={appearance} />
 					)}

@@ -60,6 +60,15 @@ export function createToneRecorder(limit = 64): VoiceToneSink & {
 	};
 }
 
+/** Plays through every sink, e.g. the recorder and hardware-controls. */
+export const toneSinks = (
+	...sinks: readonly VoiceToneSink[]
+): VoiceToneSink => ({
+	play: (serial, tone) => {
+		for (const sink of sinks) sink.play(serial, tone);
+	},
+});
+
 /** No knob or grid voice runtime yet: voice starts fail visibly, never silently. */
 export const UnavailableRuntimeLive = Layer.succeed(GridVoiceRuntime, {
 	select: () => Effect.void,
@@ -120,8 +129,16 @@ const rejected = (code: string): VoiceSurfaceReply => ({
 });
 const ok: VoiceSurfaceReply = { _tag: "ok" };
 
+/** knob model's `KnobVoiceInput`, minus its session (knob-model-parity). */
+export interface KnobVoiceRequest {
+	readonly action: "holdStart" | "release" | "interrupt" | "cancel";
+	readonly generation: number;
+}
+
 export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	readonly publish: (event: VoiceSurfaceEvent) => Promise<void>;
+	/** The knob model's `voice` binding: knob holds drive the overlay. */
+	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
 	readonly dispose: () => Promise<void>;
 } {
 	const renderer =
@@ -221,6 +238,10 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	let shutdown: Promise<void> | undefined;
 	return {
 		publish: (event) => run(VoiceSurface.publish(event)),
+		knobVoice: ({ action, generation }) =>
+			Effect.promise(() =>
+				run(GridVoice.knob(options.serial(), action, generation)),
+			),
 		dispose: () => {
 			if (shutdown) return shutdown;
 			ipcMain.removeHandler(VOICE_REQUEST_CHANNEL);
