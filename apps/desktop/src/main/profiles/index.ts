@@ -174,7 +174,7 @@ export function registerProfiles(
 			url.searchParams.set("locale", locale);
 			await window.loadURL(url.href);
 			await window.webContents.executeJavaScript(
-				'new Promise((resolve,reject)=>{const check=()=>{if(document.querySelector("[data-profile-ready]")){document.fonts.ready.then(resolve);return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})',
+				'new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");if(preview&&stage&&Math.abs(stage.getBoundingClientRect().width-preview.clientWidth)<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})',
 			);
 			const image = await window.webContents.capturePage();
 			if (image.isEmpty())
