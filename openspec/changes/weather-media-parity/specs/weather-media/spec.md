@@ -113,3 +113,8 @@ The DK-Player SHALL expose a 380×88 overlay insertion point at 1471,355 and rea
 
 - **WHEN** the knob lane supplies its volume overlay
 - **THEN** it renders in the recovered location while this lane only controls the media transport
+
+#### Scenario: Awaitable application shutdown
+
+- **WHEN** shared application shutdown begins during an admitted settings write, media command or polling read
+- **THEN** weather/media rejects new requests, drains admitted work without late broadcasts, and disposes its runtime exactly once alongside the maintenance, monitor, voice, profile and clock owners

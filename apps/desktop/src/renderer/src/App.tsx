@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionCheck } from "./ConnectionDiagnostic";
 import { HardwareSettings } from "./hardware/HardwareSettings";
+import {
+	AppUpdateDialog,
+	FirmwareDialog,
+	SettingsPage,
+} from "./maintenance/SettingsPage";
+import { useMaintenance } from "./maintenance/useMaintenance";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { StripPanel } from "./strip/StripPanel";
@@ -50,7 +56,8 @@ type Page =
 	| "connection"
 	| "screen"
 	| "controls"
-	| "appearance";
+	| "appearance"
+	| "settings";
 
 type NavItem = {
 	readonly id: Page;
@@ -76,7 +83,10 @@ const sections: ReadonlyArray<{
 	},
 	{
 		title: "App",
-		items: [{ id: "appearance", label: "Appearance", Icon: AppearanceIcon }],
+		items: [
+			{ id: "appearance", label: "Appearance", Icon: AppearanceIcon },
+			{ id: "settings", label: "Settings", Icon: ControlsIcon },
+		],
 	},
 ];
 
@@ -86,6 +96,7 @@ function ManagementSurface({
 	appearance: AppearanceController;
 }): React.JSX.Element {
 	const quake = useQuakeEvents();
+	const maintenance = useMaintenance();
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
 	const [page, setPage] = useState<Page>("overview");
@@ -182,11 +193,20 @@ function ManagementSurface({
 						</>
 					) : page === "controls" ? (
 						<HardwareSettings />
+					) : page === "settings" ? (
+						<SettingsPage controller={maintenance} />
 					) : page === "appearance" ? (
 						<ThemeSettings controller={appearance} />
 					) : null}
 				</div>
 			</main>
+			<FirmwareDialog controller={maintenance} />
+			<AppUpdateDialog controller={maintenance} />
+			{maintenance.toast ? (
+				<div role="status" className="maintenance-toast">
+					{maintenance.toast}
+				</div>
+			) : null}
 		</div>
 	);
 }

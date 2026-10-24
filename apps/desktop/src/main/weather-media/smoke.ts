@@ -16,6 +16,7 @@ import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
+import { registerMaintenance } from "../maintenance";
 import { MediaLive, registerMedia } from "../media";
 import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
@@ -163,6 +164,16 @@ async function smoke(): Promise<void> {
 		},
 		renderer,
 	);
+	const maintenance = registerMaintenance({
+		root: base,
+		mock: true,
+		renderer,
+		hardware: () => undefined,
+		management: () => management,
+		stopWriters: async () =>
+			assert.fail("Read-only smoke must not reset or restore"),
+		exit: () => assert.fail("Read-only maintenance must not exit the app"),
+	});
 	const knob = registerKnob(
 		() => panel,
 		() => [management, panel],
@@ -225,13 +236,22 @@ async function smoke(): Promise<void> {
 			window.webContents.send(WEATHER_MEDIA_CHANGED, snapshot);
 	};
 	try {
+		await maintenance.ready;
 		await Promise.all([
 			management.loadFile(resolve("out/renderer/index.html")),
 			panel.loadFile(resolve("out/renderer/index.html"), {
 				query: { surface: "panel" },
 			}),
 		]);
-		await waitForVoice(panel, 5000);
+		await waitForVoice(panel, "!!window.quakeVoice");
+		assert.equal(
+			await evaluate(
+				management,
+				"window.quakeMaintenance.request({action:'read'}).then(reply => reply.ok)",
+			),
+			true,
+			"maintenance reads coexist with weather/media on the shared preload",
+		);
 		assert.equal(
 			await evaluate(
 				management,
@@ -523,6 +543,7 @@ async function smoke(): Promise<void> {
 	} finally {
 		management.destroy();
 		panel.destroy();
+		await maintenance.dispose();
 		await registration.dispose();
 		await monitor.dispose();
 		await knob.dispose();

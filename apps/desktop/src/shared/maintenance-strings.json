@@ -1,0 +1,71 @@
+{
+	"firmwareUpgrade": {
+		"rowStatus": {
+			"deviceOffline": "Device not connected",
+			"upgradingInBackground": "Upgrading…"
+		},
+		"upgradeButton": "Upgrade",
+		"dialogTitle": "Firmware Upgrade",
+		"close": "Close",
+		"step": {
+			"enter_download_mode": "Enter download mode",
+			"wait_volume": "Wait for USB drive",
+			"copy_firmware": "Write firmware",
+			"verify_version": "Verify version"
+		},
+		"stepState": {
+			"pending": "Pending",
+			"active": "In progress",
+			"done": "Done",
+			"failed": "Failed"
+		},
+		"hint": {
+			"checking": "Checking device and firmware version…",
+			"enteringDownloadMode": "Putting the device into download mode…",
+			"waitingVolume": "Waiting for the device to appear as a USB drive. Keep the USB cable connected.",
+			"copying": "Writing firmware. Do not disconnect the USB cable or turn off the device.",
+			"verifying": "Firmware written. The device is restarting and reconnecting…",
+			"waiting": "Working…",
+			"done": "Firmware write completed",
+			"closeKeepsRunning": "The upgrade continues in the background after closing."
+		},
+		"success": "Upgrade complete. The device is now running {version}",
+		"error": {
+			"device_disconnected": "Device is not connected",
+			"no_device": "Device is not connected",
+			"no_bundled_firmware": "No usable firmware file was found",
+			"up_to_date": "The device is already up to date ({current})",
+			"enter_download_mode_failed": "Could not put the device into download mode",
+			"dfu_volume_timeout": "No QUAKE DFU drive detected",
+			"copy_failed": "Firmware write failed: the target drive is not writable or verification failed",
+			"verify_timeout": "The device did not reconnect and report its version in time",
+			"version_mismatch": "Upgrade had no effect: device is {current}, expected {expected}"
+		},
+		"errorHint": {
+			"retryAfterClose": "Close this window and click Upgrade again"
+		},
+		"toast": {
+			"success": "Firmware upgraded: the device is running {version}",
+			"failed": "Firmware upgrade failed: {reason}"
+		}
+	},
+	"clearAllData": "Clear all data and exit",
+	"clearAllDataConfirm": "This will clear all data since initialization and cannot be undone. Backup before continuing?",
+	"clearAllDataCancel": "Cancel",
+	"clearAllDataBackup": "Backup and Continue",
+	"clearAllDataWithoutBackup": "Continue Without Backup",
+	"clearAllDataBackupFailed": "Backup failed. Continue to clear data and exit?",
+	"clearAllDataFailed": "Failed to clear data. Please try again.",
+	"checkUpdate": "Check Update",
+	"resourcesManage": "Backup & Restore",
+	"importResources": "Import",
+	"exportResources": "Export",
+	"permissions": {
+		"sectionTitle": "Permissions",
+		"nameAccessibility": "Accessibility",
+		"nameInputMonitoring": "Input Monitoring",
+		"nameMicrophone": "Microphone",
+		"nameScreenRecording": "Screen Recording",
+		"nameSystemAudio": "System Audio Recording"
+	}
+}

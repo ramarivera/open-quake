@@ -1,9 +1,14 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	BrowserWindowConstructorOptions,
 	Display,
 	Rectangle,
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerKnob } from "./knob";
+import { registerMaintenance } from "./maintenance";
 import { registerMedia } from "./media";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
@@ -69,6 +74,7 @@ const electron = vi.hoisted(() => {
 			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
 			getPath: vi.fn(() => "/tmp/open-quake-window-test"),
+			getVersion: () => "0.0.0",
 			on: vi.fn<
 				(
 					event: string,
@@ -96,6 +102,15 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./maintenance", () => ({
+	registerMaintenance: vi.fn(() => ({
+		dispose: vi.fn(async () => {}),
+		ready: Promise.resolve(),
+	})),
+}));
+vi.mock("./monitor", () => ({
+	registerMonitor: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+}));
 vi.mock("./profiles", () => ({
 	registerProfiles: vi.fn(() => ({
 		runtime: { runFork: vi.fn(), runPromise: vi.fn() },
@@ -116,15 +131,18 @@ vi.mock("./lifecycle/native-display", async (original) => {
 	};
 });
 vi.mock("./knob", () => ({
-	registerKnob: () => ({
+	registerKnob: vi.fn(() => ({
 		onDevice: () => {},
 		refresh: () => Promise.resolve(),
-		dispose: () => Promise.resolve(),
-	}),
+		dispose: vi.fn(async () => {}),
+	})),
 }));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
-	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
+	return {
+		MediaLive: vi.fn(() => Layer.empty),
+		registerMedia: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+	};
 });
 vi.mock("./weather-media", async () => {
 	const { Layer } = await import("effect");
@@ -135,14 +153,11 @@ vi.mock("./weather-media", async () => {
 		})),
 	};
 });
-vi.mock("./monitor", () => ({
-	registerMonitor: vi.fn(() => ({ dispose: vi.fn(async () => undefined) })),
-}));
 vi.mock("./clock", async () => {
 	const { Layer } = await import("effect");
 	return {
 		ClockLive: vi.fn(() => Layer.empty),
-		registerClock: vi.fn(),
+		registerClock: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
 		registerClockScheme: vi.fn(),
 	};
 });
@@ -525,9 +540,117 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
+	for (const state of ["malformed", "unreadable", "runtime-failure"] as const) {
+		it(`completes awaited combined quit after ${state} maintenance initialization`, async () => {
+			const root = await mkdtemp(join(tmpdir(), "combined-quit-"));
+			const actual =
+				await vi.importActual<typeof import("./maintenance")>("./maintenance");
+			const sessions = await import("./maintenance/firmware-session");
+			if (state === "malformed")
+				await writeFile(
+					join(root, "firmware-session-v1.json"),
+					"{synthetic-invalid",
+				);
+			else if (state === "unreadable")
+				await mkdir(join(root, "firmware-session-v1.json"));
+			else
+				vi.spyOn(sessions, "firmwareSessionStore").mockReturnValueOnce({
+					load: async () => {
+						throw new Error("synthetic runtime failure");
+					},
+					save: async () => {},
+				});
+			const real = actual.registerMaintenance({
+				root,
+				mock: true,
+				renderer: "https://fixture.invalid",
+				hardware: () => undefined,
+				management: () => undefined,
+				stopWriters: async () => {},
+			});
+			const owned = vi.mocked(registerMaintenance).mock.results.at(-1)?.value;
+			const monitor = vi.mocked(registerMonitor).mock.results.at(-1)?.value;
+			const voice = vi.mocked(registerVoiceSurface).mock.results.at(-1)?.value;
+			const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+			if (!owned || !monitor || !voice || !profiles)
+				throw new Error("Missing combined owners");
+			const dispose = vi
+				.mocked(owned.dispose)
+				.mockImplementation(() => real.dispose());
+			let release = () => {};
+			vi.mocked(voice.dispose).mockImplementationOnce(
+				() =>
+					new Promise<void>((resolve) => {
+						release = resolve;
+					}),
+			);
+			try {
+				if (state === "runtime-failure")
+					await expect(real.ready).rejects.toBeDefined();
+				else await expect(real.ready).resolves.toBeUndefined();
+				expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+				await vi.waitFor(() => expect(voice.dispose).toHaveBeenCalledOnce());
+				expect(monitor.dispose).toHaveBeenCalledOnce();
+				expect(profiles.dispose).not.toHaveBeenCalled();
+				expect(electron.app.quit).not.toHaveBeenCalled();
+				expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+				expect(dispose).toHaveBeenCalledOnce();
+				release();
+				await vi.waitFor(() =>
+					expect(electron.app.quit).toHaveBeenCalledOnce(),
+				);
+				expect(profiles.dispose).toHaveBeenCalledOnce();
+				expect(appEvent("before-quit").preventDefault).not.toHaveBeenCalled();
+			} finally {
+				release();
+				await real.dispose().catch(() => undefined);
+				await rm(root, { recursive: true, force: true });
+			}
+		});
+	}
+
+	it("awaits voice disposal after knob and monitor before releasing quit", async () => {
+		const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;
+		const knob = vi.mocked(registerKnob).mock.results[0]?.value;
+		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		if (!voice || !knob || !monitor || !profiles)
+			throw new Error("Missing combined owner");
+		let releaseVoice = () => {};
+		vi.mocked(voice.dispose).mockImplementationOnce(
+			() =>
+				new Promise<void>((resolve) => {
+					releaseVoice = resolve;
+				}),
+		);
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(voice.dispose).toHaveBeenCalledOnce());
+		try {
+			expect(monitor.dispose).toHaveBeenCalledOnce();
+			expect(knob.dispose).toHaveBeenCalledOnce();
+			expect(vi.mocked(knob.dispose).mock.invocationCallOrder[0]).toBeLessThan(
+				vi.mocked(voice.dispose).mock.invocationCallOrder[0] ?? 0,
+			);
+			expect(profiles.dispose).not.toHaveBeenCalled();
+			expect(electron.app.quit).not.toHaveBeenCalled();
+			appEvent("before-quit");
+			expect(voice.dispose).toHaveBeenCalledOnce();
+		} finally {
+			releaseVoice();
+		}
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+		expect(profiles.dispose).toHaveBeenCalledOnce();
+	});
+
 	it("unregisters display callbacks and stops the bus before quitting", async () => {
 		appEvent("before-quit");
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
+		if (!monitor) throw new Error("Missing monitor registration");
+		expect(monitor.dispose).toHaveBeenCalledOnce();
+		expect(vi.mocked(monitor.dispose).mock.invocationCallOrder[0]).toBeLessThan(
+			electron.app.quit.mock.invocationCallOrder[0] ?? 0,
+		);
 		for (const [event, listener] of electron.screen.on.mock.calls) {
 			expect(electron.screen.removeListener).toHaveBeenCalledWith(
 				event,

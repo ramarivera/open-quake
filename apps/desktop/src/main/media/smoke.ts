@@ -25,6 +25,7 @@ import { registerHardware } from "../hardware";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
+import { registerMaintenance } from "../maintenance";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
@@ -159,6 +160,10 @@ async function smoke(): Promise<void> {
 	const knob = registerKnob(
 		() => panel,
 		() => [management, panel],
+		{
+			readVolume: Effect.succeed({ level: 50, muted: false }),
+			writeVolume: () => Effect.void,
+		},
 	);
 	let runtimeDisposed = false;
 	const runtime = ManagedRuntime.make(
@@ -182,7 +187,21 @@ async function smoke(): Promise<void> {
 		directory,
 		() => management,
 		() => panel,
+		{
+			collect: () => Effect.die("Disabled monitor must not collect host data"),
+		},
 	);
+	const maintenance = registerMaintenance({
+		root: directory,
+		mock: true,
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		hardware: () => undefined,
+		management: () => management,
+		stopWriters: async () =>
+			assert.fail("Read-only smoke must not reset or restore"),
+		exit: () => assert.fail("Read-only maintenance must not exit the app"),
+	});
+	await maintenance.ready;
 	const unregisterHardware = registerHardware(
 		() => undefined,
 		() => management,
@@ -763,6 +782,7 @@ async function smoke(): Promise<void> {
 		"disabled weather never requests network IO",
 	);
 	await weatherMedia.dispose();
+	await maintenance.dispose();
 	removeLifecycle();
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();

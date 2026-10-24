@@ -32,6 +32,77 @@ class TestWindow {
 describe("weather/media registration ownership", () => {
 	afterEach(() => vi.useRealTimers());
 
+	it("recovers polling after a rejected read and stops notifications after disposal", async () => {
+		vi.useFakeTimers();
+		const started = await Effect.runPromise(Deferred.make<void>());
+		const release = await Effect.runPromise(Deferred.make<void>());
+		let reads = 0;
+		const runtime = ManagedRuntime.make(
+			WeatherMediaController.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(WeatherSettingsRepository, {
+							load: () => Effect.succeed(DEFAULT_WEATHER_SETTINGS),
+							save: () => Effect.void,
+						}),
+						Layer.succeed(WeatherNetwork, {
+							json: () => Effect.die("Disabled weather must not request IO"),
+						}),
+						Layer.succeed(SystemMediaAdapter, {
+							read: () =>
+								Effect.suspend(() => {
+									reads++;
+									if (reads === 3)
+										return Deferred.succeed(started, undefined).pipe(
+											Effect.zipRight(Deferred.await(release)),
+											Effect.as({ session: mediaSession, error: null }),
+										);
+									return reads === 1
+										? Effect.die("Synthetic polling defect")
+										: Effect.succeed({ session: mediaSession, error: null });
+								}),
+							control: () => Effect.succeed(false),
+						}),
+					),
+				),
+			),
+		);
+		const window = new TestWindow();
+		vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+			window as unknown as BrowserWindow,
+		]);
+		const registration = registerWeatherMedia(
+			runtime,
+			() => window as unknown as BrowserWindow,
+			"file:///app/index.html",
+		);
+		try {
+			await vi.advanceTimersByTimeAsync(1500);
+			expect(reads).toBe(1);
+			expect(window.webContents.send).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(1500);
+			expect(reads).toBe(2);
+			expect(window.webContents.send).toHaveBeenCalledOnce();
+			await vi.advanceTimersByTimeAsync(1500);
+			await Effect.runPromise(Deferred.await(started));
+			let disposed = false;
+			const shutdown = registration.dispose().then(() => {
+				disposed = true;
+			});
+			await Promise.resolve();
+			expect(disposed).toBe(false);
+			await Effect.runPromise(Deferred.succeed(release, undefined));
+			await shutdown;
+			await vi.advanceTimersByTimeAsync(3000);
+			expect(reads).toBe(3);
+			expect(window.webContents.send).toHaveBeenCalledOnce();
+			expect(vi.getTimerCount()).toBe(0);
+		} finally {
+			await Effect.runPromise(Deferred.succeed(release, undefined));
+			await registration.dispose();
+		}
+	});
+
 	it.each(["configure", "media"] as const)(
 		"drains admitted %s requests, rejects queued calls and suppresses broadcasts during shutdown",
 		async (command) => {
