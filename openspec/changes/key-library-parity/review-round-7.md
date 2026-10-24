@@ -1,5 +1,7 @@
 # PR35 emoji quarantine and icon backup review
 
+Round eight supersedes the per-icon duplicate-ID rejection recorded here. Importer-produced named aliases are valid; see `review-round-8.md`.
+
 Production fix `e666af32bf40b3773610c50a739af6dea00c1e4e` blocks unsupported retained emoji keys at the registered press handler using the canonical quarantine predicate. Retained editing data remains unchanged, and supported presses still copy. Registered-handler tests cover the transition; the native panel invokes the actual preload IPC and verifies that quarantined data reaches neither clipboard nor execution.
 
 Native backup export now includes schema-validated `key-library-v1.json` under the existing file/aggregate budgets. Restore merges installed packs and local icons into the staged destination, preserving existing collections and artwork. Identical IDs with different icon content receive deterministic imported IDs; repeated restores are stable. Profile icons embed their artwork, so this does not require rewriting profile references. Strict schema and duplicate-ID checks reject malformed stores, malformed archive entries and invalid destinations before replacement. Older archives preserve the destination library. Symlink destinations are rejected.
