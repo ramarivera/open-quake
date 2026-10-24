@@ -4,6 +4,9 @@ MeetAI uses the shipped profiles catalog and registers its viewer, Start, Record
 Mark, Translate and Mic tiles under `renderer/src/strip/tiles/meeting/`. The
 Meeting page provides local history, task health, four summary templates,
 regeneration, marks, side records and Markdown/plain-text export.
+All five shipped MeetAI action keys accept native touch even when their profile
+omits `supportTouchEffect`. Saved manual recordings expose Generate minutes so
+they can be processed after automatic generation was disabled.
 
 Start/Record/Mark/Translate have independent five-second cooldowns. Repeated presses of an in-flight key are ignored; independent keys retain
 their order. A side recorder shares its main capture's streams;
@@ -18,14 +21,28 @@ queued writes to 16 MiB and sends ordered chunks to main. Main uses an existing
 segments. Set `OPEN_QUAKE_FFMPEG` to an explicit executable path if needed. No
 installer or dependency is added. A failed finalization retains source chunks;
 Retry finalizes them before ASR. A canceled recording removes transient files.
+Stopping a main meeting drains every main/side recorder before any conversion.
+A side conversion failure remains on that task while the main recording still
+finalizes. Shutdown keeps chunk/PCM IPC and its quit veto until recorder writes
+finish; concurrent disposal callers await the same cleanup. Idle capture hosts
+are destroyed, and closing the last user window suspends any remaining capture.
 
 History lives in `<userData>/meetings-v1/history.json`, with per-meeting audio
 under `<uuid>/final_recording.mp3`. Writes stage and atomically rename before the
-committed ref changes. Directories are private; JSON/chunk/export files use mode
-0600 where the filesystem supports Unix permissions. Corrupt history reports an
-error instead of replacing it. Restart marks interrupted work recoverable.
-Deleting a main record cancels its jobs and cascades to side records. Failed
-file deletion retains history and reports an error.
+committed ref changes. Managed directories use mode 0700; JSON, chunks, converter
+outputs and exports use mode 0600 where the filesystem supports Unix permissions.
+Converter outputs become private before ffmpeg writes. Export replaces the
+chosen directory entry with a private staged file, including existing readable
+files and symlinks. Audio writes require UUID-contained directories and reject
+symlinked directories or outputs. Corrupt history reports an error instead of
+replacing it. Restart marks interrupted work recoverable.
+
+Deleting a main record cancels its jobs and cascades to side records. Audio
+directories move into `.deleting` before history commits, with rollback on a
+staging or commit failure. Startup restores folders still referenced by history
+and collects committed deletions. The repository holds its lock through each
+uninterruptible disk/ref commit. Shutdown persists finite end times; older
+interrupted records recover their duration from finalized audio before ASR.
 
 A generated summary, applied template and provider/model/language provenance are
 saved together. Failed regeneration preserves the previous summary. This fixes
@@ -40,6 +57,10 @@ The timeline keeps eight slots, with at least three seconds and two estimated
 lines (50 characters/line) between marks. Clear affects the current display pane,
 not saved meeting content. Main/temp/live tabs have independent font offsets.
 Both OS reduced motion and the app's Reduce motion preference disable animation.
+Capture media grants, replies, chunks and PCM require the exact trusted capture
+document and top frame. Navigation/popups are blocked, and actual navigation
+revokes capture. A renderer crash reports standalone translation loss and stops
+the provider even when no meeting recorder is active.
 
 ## Provider integration boundary
 
@@ -96,31 +117,38 @@ scratch directory and mock environment. Both native smokes destroy their windows
 dispose runtimes and exit. Never run DK-Suite or open real hardware from a lane.
 
 The native meetings smoke drives the real renderer/preload/main with the shipped
-MeetAI profile: repeated Start, side record, mark, translation, native touch
+MeetAI profile: all five actions through native touch IPC, repeated Start,
+manual processing, side record, mark, translation, native touch
 font control, processing/success/failure, template regeneration/restart, native
 save cancellation/error, independently compared exports, unauthorized documents,
 and narrow/light/reduced-motion views. Synthetic sine WebM exercises real
-mix/concat and `ffprobe` confirms 48 kHz mono MP3 (`audio-finalization.json`).
+mix/concat, finite duration recovery and private output permissions. `ffprobe`
+confirms 48 kHz mono MP3 (`audio-finalization.json`).
 
 Unit/property tests cover ASR TestClock polling/deadlines/cancel; retained
 transcripts and summaries; persistence and deletion failures; source loss;
 permission rejection before capture; unavailable translation before capture;
 mic state; monotonic snapshot numbering; long finalization overlap; translation bounds;
-real filesystem recovery; fake MediaRecorder side ownership, hourly rotation,
-late permission cancellation and missing-stop cleanup.
+real filesystem rollback/crash recovery and cancellation during committed
+deletion; private export replacement and path rejection; exact-document capture
+authority; hidden-host/translation crash cleanup; final-chunk and repeated-quit
+shutdown races; fake MediaRecorder side ownership, hourly rotation, late
+permission cancellation and missing-stop cleanup.
 
 Native screenshots in the scratch directory:
 
 - `meetings-idle.png`, `meetings-recording-side-mark.png`
+- `meetings-manual-processing.png`
 - `meetings-processing.png`, `meetings-success.png`, `meetings-failure.png`
 - `meetings-live-translation.png`, `meetings-reduced-motion.png`
 - `meetings-history-empty.png`, `meetings-history-summary.png`
 - `meetings-history-transcript.png`, `meetings-task-failure.png`
 - `meetings-history-narrow.png`, `meetings-history-light.png`
 
-The implementation run passed 897 tests (protocol 47, device 388, edge 41,
-desktop 421), all six required gates, the meetings native smoke and the existing
-media native smoke. Strict OpenSpec validation passed all 34 items.
+PR #31 review round 1 passed 915 tests (protocol 47, device 388, edge 44,
+desktop 436), all six required gates, the meetings native smoke and the existing
+media native smoke. Strict OpenSpec validation passed all 34 items. Gate and
+smoke logs use the `round1-` prefix in the scratch directory.
 
 Physical QUAKE/touch/Mic behavior, OS permission dialogs, actual system loopback,
 hours of continuous real capture and live provider integrations remain

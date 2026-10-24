@@ -195,3 +195,61 @@ All animations SHALL respect reduced motion. Evidence: AI-329-341, WIDGETS-099-1
 - **WHEN** interim and final translations stream beyond 200 paragraphs or 64000 characters
 - **THEN** interim segments replace by ID, oldest content is removed, updates cap at 4000 characters,
   timeline holds eight slots at least 3000ms apart after two estimated lines (50 characters/line), and update speed shows idle after 5000ms
+
+
+### Requirement: Recoverable recorder teardown and private files
+
+Stop SHALL drain every affected main/side recorder before audio conversion, attempt all
+recorders even if one fails, and retain failed source chunks for retry. Shutdown SHALL
+keep chunk IPC available until final recorder writes drain and persist a finite end time.
+Interrupted recordings without an end time SHALL recover duration from finalized audio
+before ASR. Cascading deletion SHALL stage audio reversibly until history commits; restart
+SHALL restore staged audio for retained records and collect committed deletions.
+Capture permissions and IPC SHALL require the trusted app document and top-level frame,
+revoking authority on navigation. Hidden capture windows SHALL be released when idle and
+SHALL NOT prevent shutdown after user windows close. Standalone translation source loss
+SHALL stop the provider and clear translating state. Audio, including ffmpeg outputs, and
+export replacements SHALL use private files and reject paths escaping managed storage.
+Evidence: AI-263-264, AI-280-294, AI-299-317, AI-338. These strengthen local privacy and recovery.
+
+#### Scenario: Side conversion fails while stopping main
+
+- **WHEN** a main meeting and side record stop and side conversion fails
+- **THEN** all recorders and shared tracks have already stopped, main audio still finalizes,
+  and the side failure retains chunks and its own retryable task status
+
+#### Scenario: Quit before the first periodic audio chunk
+
+- **WHEN** shutdown stops a recording shorter than ten seconds
+- **THEN** final dataavailable chunks pass through IPC before handlers are removed and the
+  record retains a finite end time for recovery
+
+#### Scenario: Restart after an unclean exit
+
+- **WHEN** retained audio belongs to a recording without endedAt
+- **THEN** retry derives and saves a finite duration from finalized audio before provider
+  submission, excluding application downtime
+
+#### Scenario: Failed cascading deletion
+
+- **WHEN** staging a child directory or saving history fails
+- **THEN** retained records retain their audio, staged directories are restored immediately
+  or on restart, and the error is reported without committing shortened history
+
+#### Scenario: Capture renderer navigates or crashes
+
+- **WHEN** the capture document navigates or its renderer crashes with only translation active
+- **THEN** further media/IPC requests are denied and the translation provider stops with
+  a source-loss notice
+
+#### Scenario: Native MeetAI controls and manual processing
+
+- **WHEN** native touch activates each shipped MeetAI action key whose profile omits touch-effect flags
+- **THEN** each reaches its action once; a manually stopped recorded meeting exposes Generate
+  minutes and processes saved audio without opening capture again
+
+#### Scenario: Existing readable export and audio destination
+
+- **WHEN** private meeting content replaces an existing readable file or audio conversion runs
+- **THEN** resulting files are private from creation, managed audio never follows a directory
+  symlink or traversal ID, and export replacement never follows a destination symlink

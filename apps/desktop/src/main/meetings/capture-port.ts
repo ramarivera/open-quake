@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { Effect, Either, Option, Schema } from "effect";
 import {
+	app,
 	BrowserWindow,
 	desktopCapturer,
 	ipcMain,
@@ -30,9 +31,39 @@ export function createCapturePort(options: {
 	hardware: () => HardwareSession | undefined;
 	mock: boolean;
 	onLost: (id: string) => void;
+	onNoWindows: () => void;
 }) {
 	let window: BrowserWindow | undefined;
 	let allowSystem = false;
+	let translating = false;
+	const translationId = "00000000-0000-4000-8000-000000000000";
+	const captureURL = new URL(options.renderer);
+	captureURL.searchParams.set("surface", "meeting-capture");
+	const trusted = (host: BrowserWindow): boolean =>
+		!host.isDestroyed() &&
+		host.webContents.getURL() === captureURL.href &&
+		host.webContents.mainFrame.url === captureURL.href;
+	const releaseIdle = (): void => {
+		if (active.size || translating || pending.size) return;
+		const host = window;
+		window = undefined;
+		if (host && !host.isDestroyed()) host.destroy();
+	};
+	const observed = new WeakSet<BrowserWindow>();
+	const observeUserWindow = (user: BrowserWindow): void => {
+		if (observed.has(user)) return;
+		observed.add(user);
+		user.once("closed", () => {
+			if (
+				window &&
+				BrowserWindow.getAllWindows().every((win) => win === window)
+			)
+				options.onNoWindows();
+		});
+	};
+	const windowCreated = (_event: Electron.Event, user: BrowserWindow) =>
+		observeUserWindow(user);
+	app.on("browser-window-created", windowCreated);
 	const active = new Set<string>();
 	const pending = new Map<
 		string,
@@ -42,6 +73,7 @@ export function createCapturePort(options: {
 	const listener = (event: Electron.IpcMainEvent, value: unknown): void => {
 		if (
 			!window ||
+			!trusted(window) ||
 			event.sender !== window.webContents ||
 			event.senderFrame !== window.webContents.mainFrame
 		)
@@ -67,15 +99,35 @@ export function createCapturePort(options: {
 		});
 		const host = window;
 		const session = host.webContents.session;
+		for (const user of BrowserWindow.getAllWindows())
+			if (user !== host) observeUserWindow(user);
 		session.setPermissionCheckHandler(
-			(contents, permission) =>
-				contents === host.webContents && permission === "media",
+			(contents, permission, _origin, details) =>
+				contents === host.webContents &&
+				trusted(host) &&
+				permission === "media" &&
+				details.isMainFrame &&
+				details.requestingUrl === captureURL.href &&
+				details.mediaType === "audio",
 		);
-		session.setPermissionRequestHandler((contents, permission, callback) =>
-			callback(contents === host.webContents && permission === "media"),
+		session.setPermissionRequestHandler(
+			(contents, permission, callback, details) =>
+				callback(
+					contents === host.webContents &&
+						trusted(host) &&
+						permission === "media" &&
+						details.isMainFrame &&
+						details.requestingUrl === captureURL.href &&
+						"mediaTypes" in details &&
+						details.mediaTypes.every((type) => type === "audio"),
+				),
 		);
+		host.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+		host.webContents.on("will-navigate", (event) => event.preventDefault());
+		host.webContents.on("will-redirect", (event) => event.preventDefault());
 		session.setDisplayMediaRequestHandler(async (request, callback) => {
 			if (
+				!trusted(host) ||
 				!allowSystem ||
 				request.frame !== host.webContents.mainFrame ||
 				(process.platform === "darwin" &&
@@ -87,19 +139,38 @@ export function createCapturePort(options: {
 			try {
 				const sources = await desktopCapturer.getSources({ types: ["screen"] });
 				const source = sources[0];
-				callback(source ? { video: source, audio: "loopback" } : {});
+				callback(
+					trusted(host) && allowSystem && source
+						? { video: source, audio: "loopback" }
+						: {},
+				);
 			} catch {
 				callback({});
 			}
 		});
-		host.webContents.on("render-process-gone", () => {
-			for (const task of pending.values())
+		const lost = (): void => {
+			const ids = [...active, ...(translating ? [translationId] : [])];
+			active.clear();
+			translating = false;
+			allowSystem = false;
+			if (window === host) window = undefined;
+			if (!host.isDestroyed()) host.destroy();
+			for (const task of [...pending.values()])
 				task.reject(meetingError("SourceLost"));
-			for (const id of active) options.onLost(id);
-		});
+			for (const id of ids) options.onLost(id);
+		};
+		host.webContents.on("render-process-gone", lost);
+		let loaded = false;
+		host.webContents.on(
+			"did-start-navigation",
+			(_event, _url, inPlace, mainFrame) => {
+				if (loaded && mainFrame && !inPlace) lost();
+			},
+		);
 		const captureReady = new Promise<void>((resolve, reject) => {
 			const listener = (event: Electron.IpcMainEvent): void => {
 				if (
+					!trusted(host) ||
 					event.sender !== host.webContents ||
 					event.senderFrame !== host.webContents.mainFrame
 				)
@@ -114,12 +185,12 @@ export function createCapturePort(options: {
 			}, 10000);
 			ipcMain.on(CAPTURE_READY, listener);
 		});
-		await Promise.all([
-			host.loadURL(
-				`${options.renderer}${options.renderer.includes("?") ? "&" : "?"}surface=meeting-capture`,
-			),
-			captureReady,
-		]);
+		await Promise.all([host.loadURL(captureURL.href), captureReady]);
+		if (!trusted(host)) {
+			lost();
+			throw meetingError("CaptureFailed");
+		}
+		loaded = true;
 		return host;
 	};
 	const send = (
@@ -202,21 +273,41 @@ export function createCapturePort(options: {
 					)
 						return yield* meetingError("CaptureDenied");
 				}
-				yield* send("start", id, config, parent);
 				lastConfig = config;
 				active.add(id);
+				yield* send("start", id, config, parent).pipe(
+					Effect.onError(() =>
+						Effect.sync(() => {
+							active.delete(id);
+							releaseIdle();
+						}),
+					),
+				);
 			}),
+		drain: (id) =>
+			Effect.gen(function* () {
+				if (!active.has(id)) return;
+				yield* send("stop", id, lastConfig).pipe(
+					Effect.ensuring(
+						Effect.sync(() => {
+							active.delete(id);
+							releaseIdle();
+						}),
+					),
+				);
+			}),
+		duration: (id) => (options.mock ? Effect.succeed(0) : files.duration(id)),
 		stop: (id) =>
 			Effect.gen(function* () {
-				if (active.has(id)) yield* send("stop", id, lastConfig);
+				yield* port.drain(id);
 				if (!options.mock) yield* files.finalize(id);
-				active.delete(id);
 			}),
 		cancel: (id) =>
 			Effect.gen(function* () {
 				if (!active.has(id)) return;
 				yield* send("cancel", id, lastConfig).pipe(Effect.ignore);
 				active.delete(id);
+				releaseIdle();
 			}),
 		startTranslation: (config) =>
 			Effect.gen(function* () {
@@ -227,20 +318,18 @@ export function createCapturePort(options: {
 				)
 					return yield* meetingError("CaptureDenied");
 				lastConfig = config;
-				yield* send(
-					"translate",
-					"00000000-0000-4000-8000-000000000000",
-					config,
-				);
+				yield* send("translate", translationId, config);
+				translating = true;
 			}),
 		stopTranslation: () =>
-			lastConfig
-				? send(
-						"stopTranslation",
-						"00000000-0000-4000-8000-000000000000",
-						lastConfig,
-					).pipe(Effect.ignore)
-				: Effect.void,
+			Effect.gen(function* () {
+				if (translating && lastConfig && window)
+					yield* send("stopTranslation", translationId, lastConfig).pipe(
+						Effect.ignore,
+					);
+				translating = false;
+				releaseIdle();
+			}),
 		toggleMic: () => {
 			const hardware = options.hardware();
 			return hardware
@@ -256,10 +345,12 @@ export function createCapturePort(options: {
 		files,
 		accepts: (event: Electron.IpcMainInvokeEvent) =>
 			!!window &&
+			trusted(window) &&
 			event.sender === window.webContents &&
 			event.senderFrame === window.webContents.mainFrame,
 		active: (id: string) => active.has(id),
 		dispose: () => {
+			app.removeListener("browser-window-created", windowCreated);
 			ipcMain.removeListener(CAPTURE_REPLY, listener);
 			for (const task of pending.values())
 				task.reject(meetingError("CaptureFailed"));

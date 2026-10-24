@@ -157,3 +157,16 @@ independently when started before microphone recording.
 Verification commands, native screenshots and exact acceptance limits are recorded in
 `apps/desktop/src/main/meetings/README.md`. Physical QUAKE/touch triggers, OS audio permissions,
 system loopback and paid provider behavior require lead-owned verification.
+
+
+## Review round 1 recovery decisions
+
+Capture has separate drain and finalize operations. The conductor drains all main/side
+recorders before any conversion and records individual failures while continuing cleanup.
+Shutdown drains with chunk IPC still registered. Normal shutdown saves end times; legacy
+unclean exits derive duration from finalized MP3 frames before ASR. Deletion stages UUID
+folders under .deleting before history commit and recovers them by history membership at
+startup. Committed deletion garbage is collected independently of the history transition.
+Private output files are created before ffmpeg opens them; exports use same-directory
+private staging and rename. Trusted capture URL/frame checks apply to permissions, replies,
+chunks and PCM; navigation/crash revokes authority and clears owned sources.

@@ -145,37 +145,54 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				record: MeetingRecord,
 			): Effect.fn.Return<void, MeetingError> {
 				const now = yield* Clock.currentTimeMillis;
-				const children = (yield* repo.list()).filter(
-					(r) =>
-						r.state === "recording" && Option.contains(r.parentId, record.id),
-				);
-				for (const child of children) yield* stop(child);
-				yield* patch(record.id, (r) => ({
-					...r,
-					state: "processing",
-					endedAt: Option.some(now),
-				}));
-				yield* capture.stop(record.id).pipe(
-					Effect.tapError((error) =>
-						patch(record.id, (r) => ({
-							...r,
-							state: "failed",
-							audio: "failed",
-							errorCode: Option.some(error.code),
-						})),
+				const affected = [
+					...(yield* repo.list()).filter(
+						(r) =>
+							r.state === "recording" && Option.contains(r.parentId, record.id),
+					),
+					record,
+				];
+				const failures = new Map<MeetingId, MeetingError>();
+				// Drain every recorder before storage or ffmpeg can delay releasing sources.
+				for (const item of affected) {
+					const result = yield* Effect.either(capture.drain(item.id));
+					if (result._tag === "Left") failures.set(item.id, result.left);
+				}
+				if (Option.isNone(record.parentId)) yield* stopTranslation();
+				yield* repo.update((records) =>
+					records.map((r) =>
+						affected.some((item) => item.id === r.id)
+							? {
+									...r,
+									state: "processing",
+									endedAt: Option.some(now),
+									marks: r.marks.map((m) => ({
+										...m,
+										endMs: Option.orElse(m.endMs, () =>
+											Option.some(now - r.startedAt),
+										),
+									})),
+								}
+							: r,
 					),
 				);
-				yield* patch(record.id, (r) => ({
-					...r,
-					state: "recorded",
-					audio: "complete",
-					endedAt: Option.some(now),
-					marks: r.marks.map((m) => ({
-						...m,
-						endMs: Option.orElse(m.endMs, () => Option.some(now - r.startedAt)),
-					})),
-				}));
-				if (Option.isNone(record.parentId)) yield* stopTranslation();
+				yield* publish();
+				for (const item of affected) {
+					if (!failures.has(item.id)) {
+						const result = yield* Effect.either(capture.stop(item.id));
+						if (result._tag === "Left") failures.set(item.id, result.left);
+					}
+					const error = failures.get(item.id);
+					yield* patch(item.id, (r) => ({
+						...r,
+						state: error ? "failed" : "recorded",
+						audio: error ? "failed" : "complete",
+						errorCode: error ? Option.some(error.code) : Option.none(),
+					}));
+				}
+				// Individual task health retains child failures; successful siblings remain usable.
+				const error = failures.get(record.id);
+				if (error) return yield* error;
 			});
 			const action = Effect.fn("MeetingService.action")(
 				(type: MeetingAction): Effect.Effect<MeetingSnapshot, MeetingError> =>
@@ -356,6 +373,42 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						r.transcription === "processing" ? "failed" : r.transcription,
 					summary: r.summary === "processing" ? "failed" : r.summary,
 				}));
+			const suspendCapture = Effect.fn("MeetingService.suspend")(
+				function* (): Effect.fn.Return<void> {
+					const now = yield* Clock.currentTimeMillis;
+					const active = (yield* repo.list()).filter(
+						(r) => r.state === "recording",
+					);
+					for (const record of [...active].sort(
+						(a, b) =>
+							Number(Option.isNone(a.parentId)) -
+							Number(Option.isNone(b.parentId)),
+					))
+						yield* capture.cancel(record.id);
+					yield* repo
+						.update((records) =>
+							records.map((r) =>
+								active.some((item) => item.id === r.id)
+									? {
+											...r,
+											state: "interrupted",
+											audio: "interrupted",
+											endedAt: Option.some(now),
+											marks: r.marks.map((m) => ({
+												...m,
+												endMs: Option.orElse(m.endMs, () =>
+													Option.some(now - r.startedAt),
+												),
+											})),
+										}
+									: r,
+							),
+						)
+						.pipe(Effect.ignore);
+					yield* stopTranslation();
+				},
+				lock.withPermits(1),
+			);
 			return {
 				snapshot,
 				subscribe: Effect.fn("MeetingService.subscribe")(() =>
@@ -372,12 +425,22 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				process: Effect.fn("MeetingService.process")(
 					(id: MeetingId): Effect.Effect<void, MeetingError> =>
 						Effect.gen(function* () {
-							const record = yield* find(id);
+							let record = yield* find(id);
 							if (record.state === "recording" || record.state === "cancelled")
 								return yield* meetingError("Invalid");
 							if (record.audio !== "complete") {
 								yield* capture.stop(id);
 								yield* patch(id, (r) => ({ ...r, audio: "complete" }));
+							}
+							if (Option.isNone(record.endedAt)) {
+								const elapsed = yield* capture.duration(id);
+								if (!Number.isFinite(elapsed) || elapsed < 0)
+									return yield* meetingError("CaptureFailed");
+								yield* patch(id, (r) => ({
+									...r,
+									endedAt: Option.some(r.startedAt + elapsed),
+								}));
+								record = yield* find(id);
 							}
 							if (!record.transcript.length) {
 								yield* patch(id, (r) => ({
@@ -509,10 +572,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						)
 					)
 						yield* stopTranslation();
-					yield* repo.deleteAudio(records.map((r) => r.id));
-					yield* repo.update((items) =>
-						items.filter((r) => !records.some((item) => item.id === r.id)),
-					);
+					yield* repo.remove(records.map((r) => r.id));
 					yield* publish();
 				}),
 				translationLost: Effect.fn("MeetingService.translationLost")(() =>
@@ -535,14 +595,9 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						errorCode: Option.some("QUAKE.MEETING.SOURCE_LOST"),
 					}));
 				}),
-				shutdown: Effect.fn("MeetingService.shutdown")(
-					function* (): Effect.fn.Return<void> {
-						for (const record of yield* repo.list())
-							if (record.state === "recording")
-								yield* capture.cancel(record.id);
-						yield* stopTranslation();
-						yield* PubSub.shutdown(changes);
-					},
+				suspend: suspendCapture,
+				shutdown: Effect.fn("MeetingService.shutdown")(() =>
+					suspendCapture().pipe(Effect.zipRight(PubSub.shutdown(changes))),
 				),
 			};
 		}),

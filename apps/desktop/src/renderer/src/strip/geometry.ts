@@ -282,7 +282,9 @@ function placeTile(
 		zIndex: fullBleed ? 1 : area(footprint) > 1 ? 10 : 0,
 		supportTouchEffect: NO_TOUCH_EFFECT_TYPES.has(type)
 			? false
-			: key.config.supportTouchEffect,
+			: MEETING_ASSISTANT_TYPES.has(type) ||
+				(type === "mic" && meetingPage) ||
+				key.config.supportTouchEffect,
 		hasTouchableSubElements:
 			SUB_TOUCH_TYPES.has(type) || hasSubElementsFlag(key),
 		pressFeedback: !NO_PRESS_FEEDBACK_TYPES.has(type),

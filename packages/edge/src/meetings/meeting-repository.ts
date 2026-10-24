@@ -8,6 +8,10 @@ export interface MeetingStorage {
 	readonly save: (
 		store: typeof MeetingStore.Encoded,
 	) => Effect.Effect<void, MeetingError>;
+	readonly remove: (
+		store: typeof MeetingStore.Encoded,
+		ids: readonly string[],
+	) => Effect.Effect<void, MeetingError>;
 	readonly deleteAudio: (
 		ids: readonly string[],
 	) => Effect.Effect<void, MeetingError>;
@@ -16,6 +20,7 @@ const volatile: MeetingStorage = {
 	load: () => Effect.succeed({ version: 1, records: [] }),
 	save: () => Effect.void,
 	deleteAudio: () => Effect.void,
+	remove: () => Effect.void,
 };
 export class MeetingRepository extends Effect.Service<MeetingRepository>()(
 	"@open-quake/edge/MeetingRepository",
@@ -37,6 +42,7 @@ export class MeetingRepository extends Effect.Service<MeetingRepository>()(
 							Effect.mapError((cause) => meetingError("StorageFailed", cause)),
 							Effect.flatMap(storage.save),
 							Effect.zipRight(Ref.set(records, next)),
+							Effect.uninterruptible,
 						),
 				);
 				return {
@@ -51,6 +57,26 @@ export class MeetingRepository extends Effect.Service<MeetingRepository>()(
 								Ref.get(records).pipe(
 									Effect.flatMap((current) => commit(transform(current))),
 								),
+							),
+					),
+					remove: Effect.fn("MeetingRepository.remove")(
+						(ids: readonly string[]) =>
+							lock.withPermits(1)(
+								Effect.gen(function* () {
+									const next = (yield* Ref.get(records)).filter(
+										(r) => !ids.includes(r.id),
+									);
+									const encoded = yield* Schema.encode(MeetingStore)({
+										version: 1,
+										records: next,
+									}).pipe(
+										Effect.mapError((cause) =>
+											meetingError("StorageFailed", cause),
+										),
+									);
+									yield* storage.remove(encoded, ids);
+									yield* Ref.set(records, next);
+								}).pipe(Effect.uninterruptible),
 							),
 					),
 					deleteAudio: Effect.fn("MeetingRepository.deleteAudio")(

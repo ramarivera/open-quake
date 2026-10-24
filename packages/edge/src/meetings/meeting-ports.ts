@@ -8,6 +8,9 @@ export interface CapturePort {
 		config: MeetingConfig,
 		parent: MeetingId | undefined,
 	) => Effect.Effect<void, MeetingError>;
+	/** Stop MediaRecorders and drain writes without converting audio. */
+	readonly drain: (id: MeetingId) => Effect.Effect<void, MeetingError>;
+	readonly duration: (id: MeetingId) => Effect.Effect<number, MeetingError>;
 	readonly stop: (id: MeetingId) => Effect.Effect<void, MeetingError>;
 	readonly cancel: (id: MeetingId) => Effect.Effect<void>;
 	readonly stopTranslation: () => Effect.Effect<void>;

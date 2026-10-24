@@ -1,5 +1,7 @@
 import { FastCheck } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
+import { stripLayout, tileAt } from "./geometry";
 import { createSubTouchRegistry } from "./sub-touch-registry";
 import {
 	createStripTouchController,
@@ -273,4 +275,41 @@ it("discovers a new clickable over a known scroller after invalidation, retainin
 	registry.invalidate();
 	expect(registry.resolve(point, 1001)?.id).toBe("next-button");
 	expect(registry.targets()).toHaveLength(3);
+});
+
+it("activates all five shipped MeetAI keys through native touch without profile flags", () => {
+	const profile = builtinProfiles("darwin", "en").find((p) => p.id === "1-1");
+	if (!profile?.pages[0]) throw new Error("Missing shipped MeetAI");
+	const layout = stripLayout(profile, profile.pages[0]);
+	const actions = [
+		"meetingMinutes",
+		"tempMeetingMinutes",
+		"meetingRecordMark",
+		"liveAudioTranslate",
+		"mic",
+	];
+	const keys: StripKeyEvent[] = [];
+	const controller = createStripTouchController({
+		view: () => ({ width: 1920, height: 480, rotation: 0 }),
+		layout: () => layout,
+		tileAt,
+		onKey: (event) => keys.push(event),
+		onSubTouch: () => {},
+		overlay: { active: () => false, point: () => {} },
+		now: () => 0,
+		schedule: (action) => {
+			action();
+			return () => {};
+		},
+	});
+	for (const action of actions) {
+		const tile = layout.tiles.find((t) => t.type === action);
+		if (!tile) throw new Error(`Missing ${action}`);
+		controller.event(touch(tile.box.x + 30, tile.box.y + 30));
+		controller.event(touch(tile.box.x + 30, tile.box.y + 30, 0));
+		expect(
+			keys.filter((k) => k.keyCode === tile.keyCode && k.keyAction === 1),
+		).toHaveLength(1);
+	}
+	controller.dispose();
 });

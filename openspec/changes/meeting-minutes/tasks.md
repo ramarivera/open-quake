@@ -24,7 +24,7 @@ Execution epic: open-quake-zh8, child of open-quake-lih.16. Existing task beads 
 Source and scenario evidence: `apps/desktop/src/main/meetings/README.md`, domain
 `meeting-service.test.ts` / `meeting-invariants.test.ts`, desktop `storage.test.ts`
 / `capture.test.ts`, and the reproducible `main/meetings/smoke.ts`.
-All six required gates pass; 897 tests; strict OpenSpec 34/34. Native meetings and
+All six required gates pass; 915 tests; strict OpenSpec 34/34. Native meetings and
 existing media smokes use only mock device/capture/provider paths. Screenshots
 and logs are in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings/`.
 
@@ -33,3 +33,10 @@ lead-owned OS/audio/device acceptance. No physical or paid-provider check is
 closed by these implementation tasks. The profile catalog remains owned by
 merged PR #26. AI-341 tone calls were disabled in the recovered release; current
 hardware ToneName lacks MM_FIREWORK/MM_SUCCESS, so no substitute code is added.
+
+## 4. PR #31 review round 1
+
+- [x] 4.1 Drain every main/side recorder before conversion, preserve final shutdown chunks, recover finite durations, and make cascading deletion reversible before history commit. Evidence: AI-263-264, AI-288-294, AI-299-317; `meeting-service.test.ts`, `storage.test.ts`, `registration.test.ts` and native duration checks.
+- [x] 4.2 Bind capture IPC and media permissions to the trusted document/frame, report standalone translation source loss, release hidden capture windows, and enforce private audio/export files. Evidence: AI-280-294, AI-315, AI-338; `capture-port.test.ts`, `private-files.test.ts`, `registration.test.ts` and native output-mode checks.
+- [x] 4.3 Route all shipped MeetAI keys through native touch and expose saved manual-recording processing. Evidence: AI-263-265, AI-297, AI-318-328, WIDGETS-097-098; `touch-controller.test.ts` and native five-key/manual-processing smoke.
+- [x] 4.4 Run behavioral regressions, six repository gates, meetings and baseline media native mock smokes; record review dispositions and remaining live acceptance. Evidence: `apps/desktop/src/main/meetings/README.md` and lane scratch `REPORT.md`, `round1-*.log`; all 12 original findings accepted with behavioral regressions. Epic `open-quake-zh8` and acceptance parents stay open until merge/acceptance.

@@ -17,7 +17,15 @@ export const asrPlan = Object.freeze({
 	uploadExpiryMs: 48 * 60 * 60 * 1000,
 });
 export const duration = (record: MeetingRecord, now: number): number =>
-	Math.max(0, Option.getOrElse(record.endedAt, () => now) - record.startedAt);
+	Math.max(
+		0,
+		Option.getOrElse(record.endedAt, () =>
+			record.state === "recording"
+				? now
+				: record.startedAt +
+					Math.max(0, ...record.transcript.map((s) => s.endMs)),
+		) - record.startedAt,
+	);
 export const formatTimer = (ms: number): string =>
 	[
 		Math.floor(ms / 3600000),

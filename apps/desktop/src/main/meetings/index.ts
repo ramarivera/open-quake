@@ -1,4 +1,3 @@
-import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -47,6 +46,7 @@ import {
 } from "../../shared/meeting-bridge";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { createCapturePort } from "./capture-port";
+import { writePrivateFile } from "./private-files";
 import { meetingStorage } from "./storage";
 
 /** Explicit mock only. No live request or real capture is made in mock mode. */
@@ -104,8 +104,14 @@ export function registerMeetings(options: {
 		hardware: options.hardware,
 		mock: options.mock,
 		ffmpeg: options.ffmpeg ?? process.env.OPEN_QUAKE_FFMPEG ?? "ffmpeg",
+		onNoWindows: () => {
+			runtime.runFork(MeetingService.suspend());
+		},
 		onLost: (id) => {
-			runtime.runFork(MeetingService.translationLost());
+			if (id === "00000000-0000-4000-8000-000000000000") {
+				runtime.runFork(MeetingService.translationLost());
+				return;
+			}
 			if (Schema.is(MeetingId)(id))
 				runtime.runFork(
 					MeetingService.sourceLost(id).pipe(
@@ -150,7 +156,7 @@ export function registerMeetings(options: {
 		id: MeetingId,
 		template?: MeetingRecord["template"],
 	): void => {
-		if (jobs.has(id)) return;
+		if (disposed || jobs.has(id)) return;
 		const fiber = runtime.runFork(
 			(template
 				? MeetingService.regenerate(id, template)
@@ -283,10 +289,7 @@ export function registerMeetings(options: {
 								],
 							});
 							if (!result.canceled && result.filePath)
-								await writeFile(result.filePath, artifact.text, {
-									encoding: "utf8",
-									mode: 0o600,
-								});
+								await writePrivateFile(result.filePath, artifact.text);
 						},
 						catch: (cause) => meetingError("ExportFailed", cause),
 					});
@@ -308,6 +311,7 @@ export function registerMeetings(options: {
 			const decoded = decodeMeetingCommand(value);
 			if (Either.isLeft(decoded)) return failure(meetingError("Invalid"));
 			await ready;
+			if (disposed) return failure(meetingError("Unavailable"));
 			const result = await runtime.runPromiseExit(runCommand(decoded.right));
 			if (result._tag === "Success") return result.value;
 			const error = Cause.failureOption(result.cause);
@@ -356,20 +360,24 @@ export function registerMeetings(options: {
 	};
 	ipcMain.on(CAPTURE_LOST, lost);
 	let disposed = false;
-	const dispose = async (): Promise<void> => {
-		if (disposed) return;
+	let disposal: Promise<void> | undefined;
+	const dispose = (): Promise<void> => {
+		if (disposal) return disposal;
 		disposed = true;
-		app.removeListener("before-quit", beforeQuit);
-		ipcMain.removeHandler(MEETING_REQUEST);
-		ipcMain.removeHandler(CAPTURE_CHUNK);
-		ipcMain.removeHandler(CAPTURE_PCM);
-		ipcMain.removeListener(CAPTURE_LOST, lost);
-		for (const fiber of jobs.values())
-			await runtime.runPromise(Fiber.interrupt(fiber));
-		await runtime.runPromiseExit(MeetingService.shutdown());
-		await runtime.runPromiseExit(Fiber.interrupt(published));
-		capture.dispose();
-		await runtime.dispose();
+		disposal = (async () => {
+			ipcMain.removeHandler(MEETING_REQUEST);
+			for (const fiber of jobs.values())
+				await runtime.runPromise(Fiber.interrupt(fiber));
+			await runtime.runPromiseExit(MeetingService.shutdown());
+			ipcMain.removeHandler(CAPTURE_CHUNK);
+			ipcMain.removeHandler(CAPTURE_PCM);
+			ipcMain.removeListener(CAPTURE_LOST, lost);
+			await runtime.runPromiseExit(Fiber.interrupt(published));
+			capture.dispose();
+			await runtime.dispose();
+			app.removeListener("before-quit", beforeQuit);
+		})();
+		return disposal;
 	};
 	let quitting = false;
 	const beforeQuit = (event: Electron.Event): void => {

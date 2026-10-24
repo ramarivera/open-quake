@@ -61,6 +61,7 @@ function setup() {
 		failSave = false,
 		failDelete = false,
 		stopDelay = 0;
+	let failStop: string | undefined;
 	const storage: MeetingStorage = {
 		load: () => Effect.succeed(stored),
 		save: (next) =>
@@ -75,6 +76,8 @@ function setup() {
 				stored = next;
 				return Effect.void;
 			}),
+		remove: (next, ids) =>
+			storage.deleteAudio(ids).pipe(Effect.zipRight(storage.save(next))),
 		deleteAudio: (ids) =>
 			Effect.suspend(() => {
 				calls.push(`delete:${ids.length}`);
@@ -89,10 +92,22 @@ function setup() {
 			Effect.sync(() => {
 				calls.push(`start:${parent ? "side" : "main"}:${id}`);
 			}),
+		drain: (id) =>
+			Effect.sync(() => {
+				calls.push(`drain:${id}`);
+			}),
+		duration: () => Effect.succeed(2500),
 		stop: (id) =>
 			Effect.sync(() => {
 				calls.push(`stop:${id}`);
 			}).pipe(
+				Effect.zipRight(
+					Effect.suspend(() =>
+						id === failStop
+							? Effect.fail(meetingError("CaptureFailed"))
+							: Effect.void,
+					),
+				),
 				Effect.zipRight(
 					Effect.suspend(() =>
 						stopDelay > 0 ? Effect.sleep(stopDelay) : Effect.void,
@@ -186,6 +201,9 @@ function setup() {
 		requests,
 		prompts,
 		saved: () => stored,
+		failStop: (id: string) => {
+			failStop = id;
+		},
 		stopDelay: (ms: number) => {
 			stopDelay = ms;
 		},
@@ -222,6 +240,82 @@ const recordOnce = Effect.gen(function* () {
 });
 
 describe("meeting conductor consumers", () => {
+	it.effect(
+		"drains all recorders before conversion and finalizes main despite side failure",
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				yield* configure;
+				const main = (yield* MeetingService.action("meetingMinutes"))
+					.records[0];
+				const side = (yield* MeetingService.action("tempMeetingMinutes"))
+					.records[0];
+				if (!main || !side) return yield* Effect.die("Missing records");
+				f.failStop(side.id);
+				yield* TestClock.adjust(5000);
+				yield* Effect.either(MeetingService.action("meetingMinutes"));
+				const operations = f.calls.filter(
+					(c) => c.startsWith("drain:") || c.startsWith("stop:"),
+				);
+				expect(operations.slice(0, 2)).toEqual([
+					`drain:${side.id}`,
+					`drain:${main.id}`,
+				]);
+				expect(operations).toContain(`stop:${main.id}`);
+				const records = (yield* MeetingService.snapshot()).records;
+				expect(records.find((r) => r.id === main.id)?.state).toBe("recorded");
+				expect(records.find((r) => r.id === side.id)?.audio).toBe("failed");
+				expect(records.every((r) => r.state !== "recording")).toBe(true);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"shutdown saves a finite capture end before restart downtime",
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				yield* configure;
+				const initial = (yield* MeetingService.action("meetingMinutes"))
+					.records[0];
+				if (!initial) return yield* Effect.die("Missing record");
+				yield* TestClock.adjust(2000);
+				yield* MeetingService.shutdown();
+				const record = (yield* Schema.decodeUnknown(MeetingStore)(f.saved()))
+					.records[0];
+				expect(record?.endedAt).toEqual(Option.some(initial.startedAt + 2000));
+				expect(record?.state).toBe("interrupted");
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"recovers legacy interrupted duration from audio before ASR",
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* (yield* MeetingRepository).update((records) =>
+					records.map((r) => ({
+						...r,
+						state: "interrupted",
+						audio: "interrupted",
+						endedAt: Option.none(),
+					})),
+				);
+				yield* TestClock.adjust(86400000);
+				yield* MeetingService.process(id);
+				expect(f.requests[0]?.durationMs).toBe(2500);
+				const record = (yield* MeetingService.snapshot()).records[0];
+				expect(record?.endedAt).toEqual(
+					Option.some((record?.startedAt ?? 0) + 2500),
+				);
+				yield* TestClock.adjust(86400000);
+				expect((yield* MeetingService.snapshot()).records[0]?.endedAt).toEqual(
+					record?.endedAt,
+				);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+
 	it.effect(
 		"enforces independent cooldowns, shared side capture, ordered marks and stop once",
 		() => {

@@ -39,6 +39,17 @@ function TaskInspector({
 			aria-label="Task health and template selection"
 		>
 			<h2>Task health</h2>
+			{record.state === "recorded" ? (
+				<button
+					type="button"
+					className="button"
+					onClick={() => {
+						void meetingRequest({ _tag: "retry", id: record.id });
+					}}
+				>
+					Generate minutes
+				</button>
+			) : null}
 			{tasks.map((task) => (
 				<div className="meeting-task" key={task.id} data-state={task.state}>
 					<span className="meeting-state-dot" />
