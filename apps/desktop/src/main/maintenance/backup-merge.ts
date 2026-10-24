@@ -129,7 +129,10 @@ export function mergeBackup(
 				skipped++;
 				continue;
 			}
-			const id = `import-${fingerprint}`;
+			const base = `import-${fingerprint}`;
+			let id = base;
+			let suffix = 1;
+			while (profiles.some((p) => p.id === id)) id = `${base}-${suffix++}`;
 			profiles.push(
 				Schema.decodeUnknownSync(Profile)({ ...encoded, id, revision: 0 }),
 			);

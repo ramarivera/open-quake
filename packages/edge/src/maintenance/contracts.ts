@@ -1,5 +1,8 @@
 import { Schema } from "effect";
 export const Version = Schema.String.pipe(Schema.pattern(/^\d+\.\d+\.\d+$/));
+export const RecoverySerial = Schema.String.pipe(
+	Schema.pattern(/^[A-Za-z0-9._:-]{1,128}$/),
+);
 export const FirmwareState = Schema.Literal(
 	"idle",
 	"checking",
@@ -97,6 +100,7 @@ export const MaintenanceCommand = Schema.Union(
 			"download-update",
 			"install-update",
 			"defer-update",
+			"appearance-read",
 		),
 	}),
 	Schema.Struct({
@@ -105,6 +109,14 @@ export const MaintenanceCommand = Schema.Union(
 	}),
 	Schema.Struct({ action: Schema.Literal("permission"), key: PermissionKey }),
 	Schema.Struct({ action: Schema.Literal("reset"), backup: Schema.Boolean }),
+	Schema.Struct({
+		action: Schema.Literal("appearance-applied"),
+		record: Schema.String.pipe(Schema.maxLength(20480)),
+	}),
+	Schema.Struct({
+		action: Schema.Literal("firmware-recover"),
+		serial: RecoverySerial,
+	}),
 );
 export type MaintenanceCommand = typeof MaintenanceCommand.Type;
 export const MaintenanceView = Schema.Struct({
@@ -124,6 +136,7 @@ export const MaintenanceReply = Schema.Union(
 		ok: Schema.Literal(true),
 		view: MaintenanceView,
 		message: Schema.String,
+		appearance: Schema.optional(Schema.String.pipe(Schema.maxLength(20480))),
 	}),
 	Schema.Struct({ ok: Schema.Literal(false), code: Schema.String }),
 );
@@ -132,6 +145,7 @@ export const MAINTENANCE_CHANNEL = "maintenance:request";
 /** Single action declaration used by the IPC decoder and future automation. Sensitive actions use native confirmation. */
 export const maintenanceCapabilities = {
 	"firmware-start": "confirm",
+	"firmware-recover": "confirm",
 	"firmware-write": "confirm",
 	reset: "confirm",
 	import: "confirm",
@@ -145,6 +159,8 @@ export const maintenanceCapabilities = {
 	"check-update": "auto",
 	"download-update": "confirm",
 	"defer-update": "auto",
+	"appearance-read": "auto",
+	"appearance-applied": "auto",
 } as const;
 export function newerVersion(a: string, b: string): boolean {
 	if (!Schema.is(Version)(a) || !Schema.is(Version)(b)) return false;

@@ -18,7 +18,9 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { SavedWallpaper } from "../../shared/display";
+import { MonitorRecord } from "../../shared/monitor-contracts";
 import { ClockRecord } from "../clock/clock-store";
+import { appearanceRecord } from "./appearance-backup";
 import { readBackup, writeBackup } from "./backup-archive";
 import {
 	backupProjection,
@@ -45,12 +47,17 @@ function validateNative(relative: string, data: Uint8Array): void {
 		Schema.decodeUnknownSync(SavedWallpaper)(value);
 	else if (relative === "clock-v1/clock.json")
 		Schema.decodeUnknownSync(ClockRecord)(value);
+	else if (relative === "monitor-v1/settings.json")
+		Schema.decodeUnknownSync(MonitorRecord)(value);
+	else if (relative === "appearance.json")
+		appearanceRecord(Buffer.from(data).toString("utf8"));
 }
 export const managedData = [
 	"profiles-v1.json",
 	"hardware-v1",
 	"wallpaper-v1",
 	"clock-v1",
+	"monitor-v1",
 	"appearance.json",
 	"backup-resources-v1",
 	"backup-legacy",
@@ -71,6 +78,7 @@ async function readManaged(root: string): Promise<Map<string, Uint8Array>> {
 	const files = new Map<string, Uint8Array>();
 	async function collect(relative: string): Promise<void> {
 		if (/\.(pending|tmp)$/.test(relative)) return;
+		if (relative === "monitor-v1/settings.json.new") return;
 		const path = join(root, relative);
 		const info = await lstat(path).catch(() => undefined);
 		if (!info) return;
@@ -101,8 +109,14 @@ async function readManaged(root: string): Promise<Map<string, Uint8Array>> {
 export async function exportBackup(
 	root: string,
 	signal?: AbortSignal,
+	appearance?: string,
 ): Promise<Uint8Array> {
 	const files = await readManaged(root);
+	if (appearance !== undefined)
+		files.set(
+			"open-quake/appearance.json",
+			Buffer.from(appearanceRecord(appearance)),
+		);
 	const profileBytes = files.get("open-quake/profiles-v1.json");
 	if (!profileBytes) throw new BackupInvalid();
 	const projection = backupProjection(
@@ -141,9 +155,34 @@ export async function prepareRestore(
 ) {
 	const files = await readBackup(bytes, name, "default", signal);
 	for (const [path, data] of files)
-		if (path.startsWith("open-quake/"))
-			validateNative(path.slice("open-quake/".length), data);
+		if (path.startsWith("open-quake/")) {
+			const relative = path.slice("open-quake/".length);
+			if (
+				!managedData.some(
+					(name) => relative === name || relative.startsWith(`${name}/`),
+				)
+			)
+				throw new BackupInvalid();
+			validateNative(relative, data);
+		}
+	const validate = async (root: string): Promise<void> => {
+		await assertOwnedDestination(root, join(root, "profiles-v1.json"));
+		for (const path of files.keys())
+			if (path.startsWith("open-quake/"))
+				await assertOwnedDestination(
+					root,
+					join(root, path.slice("open-quake/".length)),
+				);
+		const current: unknown = JSON.parse(
+			await readFile(join(root, "profiles-v1.json"), "utf8"),
+		);
+		const known = new Set(
+			await readdir(join(root, "backup-resources-v1")).catch(() => []),
+		);
+		mergeBackup(files, current, root, known);
+	};
 	return {
+		validate,
 		commit: async (
 			root: string,
 		): Promise<{ imported: number; skipped: number }> => {

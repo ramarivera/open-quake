@@ -5,6 +5,7 @@ import type {
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerMedia } from "./media";
+import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
 import { report } from "./test/hid";
@@ -98,6 +99,9 @@ vi.mock("./maintenance", () => ({
 		dispose: vi.fn(async () => {}),
 		ready: Promise.resolve(),
 	})),
+}));
+vi.mock("./monitor", () => ({
+	registerMonitor: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
 }));
 vi.mock("./profiles", () => ({
 	registerProfiles: vi.fn(() => ({
@@ -224,6 +228,9 @@ describe("desktop window lifecycle", () => {
 		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
 		expect(registerProfiles).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerProfiles).mock.calls[0]?.[0]()).toBe(management);
+		expect(registerMonitor).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerMonitor).mock.calls[0]?.[1]()).toBe(management);
+		expect(vi.mocked(registerMonitor).mock.calls[0]?.[2]()).toBe(panel);
 		expect(panel.options).toMatchObject({
 			x: 0,
 			y: 0,
@@ -462,6 +469,12 @@ describe("desktop window lifecycle", () => {
 	it("unregisters display callbacks and stops the bus before quitting", async () => {
 		appEvent("before-quit");
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
+		if (!monitor) throw new Error("Missing monitor registration");
+		expect(monitor.dispose).toHaveBeenCalledOnce();
+		expect(vi.mocked(monitor.dispose).mock.invocationCallOrder[0]).toBeLessThan(
+			electron.app.quit.mock.invocationCallOrder[0] ?? 0,
+		);
 		for (const [event, listener] of electron.screen.on.mock.calls) {
 			expect(electron.screen.removeListener).toHaveBeenCalledWith(
 				event,

@@ -18,6 +18,7 @@ import {
 	encodeProfileEnvelope,
 	Profile,
 	ProfileEnvelope,
+	ProfileJsonObject,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { decodeAccountConfig, encodeAccountConfig } from "./account-config";
@@ -93,6 +94,44 @@ function legacy() {
 	return files;
 }
 describe("authenticated backup compatibility", () => {
+	it("reimports a native profile after editing its first import without reusing its ID", () => {
+		const initial = envelope();
+		const original = initial.profiles[0];
+		if (!original) throw new Error("Missing fixture profile");
+		const files = legacy();
+		files.set(
+			"open-quake/profiles-v1.json",
+			bytes({
+				...initial,
+				profiles: [
+					{
+						...original,
+						id: "custom",
+						knob: { keyCode: "0,1", config: { marker: "original" } },
+					},
+				],
+			}),
+		);
+		const first = mergeBackup(files, initial, "/destination");
+		const edited = {
+			...first.envelope,
+			profiles: first.envelope.profiles.map((p) =>
+				p.id.startsWith("import-")
+					? { ...p, knob: { keyCode: "0,1", config: { marker: "edited" } } }
+					: p,
+			),
+		};
+		const second = mergeBackup(files, edited, "/destination");
+		expect(second.imported).toBe(1);
+		expect(new Set(second.envelope.profiles.map((p) => p.id)).size).toBe(
+			second.envelope.profiles.length,
+		);
+		expect(second.envelope.profiles).toContainEqual(
+			expect.objectContaining({
+				knob: { keyCode: "0,1", config: { marker: "edited" } },
+			}),
+		);
+	});
 	it("deduplicates equal configurations with distinct resource ids in one archive", () => {
 		const files = legacy();
 		files.set(
@@ -221,9 +260,50 @@ describe("authenticated backup compatibility", () => {
 			expect(imported?.pages[0]?.keys[0]?.config.icon).toMatch(
 				/^data:image\/png;base64,/,
 			);
-			const path = join(root, "backup-legacy/app/assets/extra/clip.bin");
-			expect(imported?.pages[0]?.keys[0]?.config.actions[0]?.value).toBe(path);
+			const path = imported?.pages[0]?.keys[0]?.config.actions[0]?.value;
+			expect(path).toMatch(
+				new RegExp(
+					`${root}/backup-legacy/[a-f0-9]{64}/app/assets/extra/clip.bin$`,
+				),
+			);
+			if (typeof path !== "string")
+				throw new Error("Missing restored asset path");
 			expect(await readFile(path, "utf8")).toBe("fixture bytes");
+			files.set(
+				"app/assets/extra/clip.bin",
+				Buffer.from("second backup bytes"),
+			);
+			const changed = Schema.decodeUnknownSync(Schema.Array(ProfileJsonObject))(
+				JSON.parse(
+					Buffer.from(files.get("app/assets/config/one.json") ?? []).toString(
+						"utf8",
+					),
+				),
+			);
+			files.set(
+				"app/assets/config/one.json",
+				bytes(
+					changed.map((key) => ({
+						...key,
+						config: {
+							...Schema.decodeUnknownSync(ProfileJsonObject)(key.config),
+							name: "Second profile",
+						},
+					})),
+				),
+			);
+			const next = await prepareRestore(
+				referenceArchive(files, "old"),
+				"DK-Suite_old_date.zip",
+			);
+			await next.commit(root);
+			expect(await readFile(path, "utf8")).toBe("fixture bytes");
+			const after: unknown = JSON.parse(
+				await readFile(join(root, "profiles-v1.json"), "utf8"),
+			);
+			expect(
+				Schema.decodeUnknownSync(ProfileEnvelope)(after).profiles,
+			).toHaveLength(restored.profiles.length + 1);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -381,6 +461,33 @@ describe("authenticated backup compatibility", () => {
 		await mkdir(root);
 		await writeFile(join(root, "profiles-v1.json"), JSON.stringify(envelope()));
 		await writeFile(join(root, "unrelated"), "retain");
+		const monitor = {
+			revision: 3,
+			settings: {
+				styleId: "glass",
+				background: "custom",
+				media: {
+					glass: { id: "a".repeat(32), kind: "image", name: "fixture" },
+				},
+				temperatureUnit: "fahrenheit",
+				enabled: true,
+				hz: 2,
+			},
+		};
+		await mkdir(join(root, "monitor-v1", "assets"), { recursive: true });
+		await writeFile(join(root, "monitor-v1", "settings.json"), bytes(monitor));
+		await writeFile(
+			join(root, "monitor-v1", "settings.json.new"),
+			"incomplete",
+		);
+		await writeFile(
+			join(root, "monitor-v1", "assets", "a".repeat(32)),
+			"fixture pixels",
+		);
+		await writeFile(
+			join(root, "monitor-v1", "assets", `${"a".repeat(32)}.mime`),
+			"image/png",
+		);
 		await mkdir(join(root, "hardware-v1"));
 		await writeFile(
 			join(root, "hardware-v1", "settings.json"),
@@ -394,6 +501,9 @@ describe("authenticated backup compatibility", () => {
 		try {
 			const archive = await exportBackup(root);
 			const decoded = referenceDecode(archive);
+			expect(decoded.has("open-quake/monitor-v1/settings.json.new")).toBe(
+				false,
+			);
 			expect(
 				JSON.parse(
 					Buffer.from(
@@ -410,7 +520,25 @@ describe("authenticated backup compatibility", () => {
 				'{"volume":0}',
 			);
 			const plan = await prepareRestore(archive, "DK-Suite_default_date.zip");
+			await rm(join(root, "monitor-v1"), { recursive: true });
 			await plan.commit(root);
+			expect(
+				JSON.parse(
+					await readFile(join(root, "monitor-v1", "settings.json"), "utf8"),
+				),
+			).toEqual(monitor);
+			expect(
+				await readFile(
+					join(root, "monitor-v1", "assets", "a".repeat(32)),
+					"utf8",
+				),
+			).toBe("fixture pixels");
+			expect(
+				await readFile(
+					join(root, "monitor-v1", "assets", `${"a".repeat(32)}.mime`),
+					"utf8",
+				),
+			).toBe("image/png");
 			expect(
 				JSON.parse(
 					await readFile(join(root, "hardware-v1", "settings.json"), "utf8"),
@@ -428,6 +556,16 @@ describe("authenticated backup compatibility", () => {
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
+	});
+	it("rejects malformed native monitor settings before restore can mutate data", async () => {
+		const files = legacy();
+		files.set(
+			"open-quake/monitor-v1/settings.json",
+			bytes({ revision: 0, settings: { hz: 100 } }),
+		);
+		await expect(
+			prepareRestore(referenceArchive(files, "old"), "DK-Suite_old_date.zip"),
+		).rejects.toBeDefined();
 	});
 	it("clear removes only its captured app root", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "oq-clear-"));

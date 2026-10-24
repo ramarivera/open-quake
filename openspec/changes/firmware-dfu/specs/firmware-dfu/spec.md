@@ -110,6 +110,11 @@ Failures SHALL identify the stage and stable reason without exposing user file p
 - **WHEN** a user opens recovery guidance after a write failure
 - **THEN** instructions are available locally and no firmware operation starts until a new explicit update is confirmed
 
+#### Scenario: Bootloader without a live firmware session
+
+- **WHEN** the user selects a trusted local image, enters the intended device serial and confirms recovery for a device already in its bootloader
+- **THEN** discovery and explicit volume selection work without a normal HID/version session or another DFU command, writing still requires separate confirmation and full image/mount revalidation, and success still requires a fresh expected-version read from that exact serial
+
 ### Requirement: Manual version row and recoverable four-step dialog
 
 The system SHALL show the selected serial's version from the typed [2E] query, unknown as `--`, and an Upgrade action only for a newer trusted local image. It SHALL never auto-enter DFU. The 520px dialog SHALL show Enter download mode, Wait for USB drive, Write firmware, Verify version using recovered English strings. Closing SHALL leave the main-owned session running; Settings SHALL reconcile every 1000ms and restore the session. A closed terminal dialog SHALL produce a 6000ms toast. Terminal snapshots SHALL expire after 600000ms. Evidence: SETTINGS-020, SETTINGS-034 through SETTINGS-046.

@@ -26,6 +26,7 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { startMockDeviceBus } from "../mockDeviceBus";
+import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { makeDisplay } from "../test/display";
 import {
@@ -140,6 +141,11 @@ async function smoke(): Promise<void> {
 	const clock = registerClock(
 		ManagedRuntime.make(ClockLive(directory)),
 		() => management,
+	);
+	const monitor = registerMonitor(
+		directory,
+		() => management,
+		() => panel,
 	);
 	const unregisterHardware = registerHardware(
 		() => undefined,
@@ -713,6 +719,7 @@ async function smoke(): Promise<void> {
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
 	await clock.dispose();
+	await monitor.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

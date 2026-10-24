@@ -3,6 +3,7 @@ import {
 	FirmwareSnapshot,
 	idleFirmware,
 	newerVersion,
+	RecoverySerial,
 	runningFirmware,
 } from "./contracts.js";
 import {
@@ -240,6 +241,34 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 			});
 			return {
 				start,
+				recover: Effect.fn("FirmwareUpdates.recover")(function* (
+					serial: string,
+				): Effect.fn.Return<void, MaintenanceError> {
+					yield* lock.withPermits(1)(
+						Effect.gen(function* () {
+							if (runningFirmware(state)) return yield* new FirmwareBusy();
+							if (!Schema.is(RecoverySerial)(serial))
+								return yield* new FirmwareUnavailable();
+							const image = yield* port.image();
+							if (!image.trusted) return yield* new FirmwareTargetMismatch();
+							selectedImage = image;
+							yield* set({
+								...idleFirmware,
+								state: "waiting_volume",
+								step: 1,
+								serial,
+								to: image.version,
+								fileName: image.fileName,
+								fingerprint: image.fingerprint,
+								total: image.bytes,
+							});
+							// The user confirmed manual bootloader entry. Never query normal firmware or resend DFU here.
+							worker = Option.some(
+								yield* run(discover).pipe(Effect.forkIn(scope)),
+							);
+						}),
+					);
+				}),
 				write,
 				snapshot: Effect.fn("FirmwareUpdates.snapshot")(
 					function* (): Effect.fn.Return<FirmwareSnapshot> {

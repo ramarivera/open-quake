@@ -34,9 +34,12 @@ SETTINGS-020 and SETTINGS-034..048 are implemented with these deliberate limits:
   an active dialog; closing it keeps the operation alive and terminal toasts
   last 6s.
 
-After interruption or write failure, reconnect the intended device, manually
-enter its known bootloader, and inspect the trusted image again before a fresh
-confirmed update. No rollback is offered. Do not disconnect power during copy.
+After interruption or write failure, manually enter the intended device's known
+bootloader and inspect the trusted image again. Bootloader recovery requires its
+exact serial and a native confirmation before discovery, followed by a separate
+write confirmation and all image/mount revalidation. It needs no live normal HID
+session and sends no DFU command. Only that serial's expected version readback
+can finish recovery. No rollback is offered. Do not disconnect power during copy.
 Bootloader metadata, actual firmware writing and reconnection still require
 supervised physical acceptance by the hardware owner.
 
@@ -62,12 +65,25 @@ profiles, merge unique profiles, remap IDs, preserve knob data and profile names
 and materialize referenced archived files. Paths are rebased across platforms;
 missing archived paths reject the merge. Raster icons become inline images.
 Unknown profile actions remain inert under the profile compatibility contract.
+Content-based legacy asset directories preserve retained profiles when another
+backup reuses a path with different bytes. Native profile IDs are checked for
+collisions independently from content deduplication.
 
 Native managed settings are included under `open-quake/`; credentials, account
 sessions and transient files are excluded. Import clones userData to a sibling
 staging directory and switches roots with rollback after writers stop. Only
 allowlisted managed names can be restored; symlink destinations are rejected.
+Monitor settings and custom media under `monitor-v1` are included. Its record
+uses the monitor owner's Schema; its incomplete `settings.json.new` is excluded.
 Successful import exits so cached writers cannot overwrite restored state.
+Merge validation runs before shutdown and repeats after writers stop. A failure
+after shutdown begins is reported by main, which then exits with failure status.
+Export reads the actual renderer appearance localStorage through its owned
+window and validates it with the appearance parser. Restore stages that record
+for the real appearance hook, then removes it only after localStorage persistence
+is acknowledged. Theme choice, custom colors and motion preference all travel.
+Confirmed backup replacement uses a temporary sibling and atomic rename, keeping
+the previous archive intact on export/write failure.
 Format interoperability is proved with independent fixtures, not a real user's
 DK-Suite backup or a DK-Suite process.
 
@@ -104,8 +120,8 @@ for a test or smoke run.
 ```sh
 export TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/settings-firmware
 pnpm biome check packages apps
-TURBO_ENV_MODE=loose pnpm typecheck
-TURBO_ENV_MODE=loose pnpm test
+TURBO_ENV_MODE=loose pnpm exec turbo run typecheck --force --concurrency=2
+TURBO_ENV_MODE=loose pnpm exec turbo run test --force --concurrency=1 -- --maxWorkers=2
 pnpm build
 pnpm --filter @open-quake/desktop test:bundle
 openspec validate --all --strict
@@ -116,7 +132,22 @@ env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/d
 The native smoke checks real preload/IPC, window spoof rejection, independently
 decoded AES export, cancelled DFU/write confirmations, restored and closed
 dialogs, a synthetic UF2 copy into scratch, intended-version re-read, native FFI
-symbol loading and dark/light/narrow screenshots. It has a 45s deadline and
+symbol loading and dark/light/narrow screenshots. It registers the production
+maintenance, monitor, clock, media, profile, lifecycle, hardware and knob owners
+together, using mock hardware, synthetic metrics and non-prompting display ports.
+It checks profile/lifecycle reads, monitor save and panel-only metric delivery,
+subscription shutdown, monitor archive inclusion, combined clock/monitor controls
+and awaited disposal. `combined-screen-monitor.png` captures the integrated
+Screen page. The main lifecycle tests also check monitor ownership and disposal
+before quit; the shared shutdown promise stops monitor before reset or restore.
+The smoke also drives the recovery serial field and confirmation cancellation,
+verifies offline firmware stays unknown, waits for the real dialog's ready state,
+and proves copy alone cannot complete recovery. `firmware-recovery-ready.png`
+and `firmware-recovery-success.png` capture that path. Appearance restoration,
+confirmed archive replacement and invalid-import preflight use the actual IPC
+and renderer consumers. Post-shutdown failure/exit and collision regressions
+have deterministic unit coverage in this directory.
+The smoke has a 45s deadline and
 removes its userData directory/disposes all runtimes before exiting. The original
 media smoke in `../media/README.md` is also required for renderer changes.
 

@@ -41,6 +41,7 @@ import {
 import { registerLifecycle } from "./lifecycle/registration";
 import { registerMaintenance } from "./maintenance";
 import { MediaLive, registerMedia } from "./media";
+import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
@@ -175,6 +176,11 @@ if (!app.requestSingleInstanceLock()) {
 		const clock = registerClock(
 			ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 			() => managementWin,
+		);
+		const monitor = registerMonitor(
+			app.getPath("userData"),
+			() => managementWin,
+			() => panelWin,
 		);
 		const profileUpdates = profiles.runtime.runFork(
 			ProfileService.subscribeCommittedProfiles().pipe(
@@ -448,6 +454,7 @@ if (!app.requestSingleInstanceLock()) {
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 			shutdown = (async () => {
 				await stopBus();
+				await monitor.dispose();
 				await lifecycleRuntime.dispose();
 				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));
 				await knob.dispose();

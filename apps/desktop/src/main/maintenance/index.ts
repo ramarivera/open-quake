@@ -24,6 +24,7 @@ import {
 	AppUpdatePort,
 	AppUpdates,
 } from "../../../../../packages/edge/src/maintenance/update-service.js";
+import { APPEARANCE_STORAGE_KEY } from "../../renderer/src/theme/appearance";
 import {
 	MAINTENANCE_CHANNEL,
 	MaintenanceCommand,
@@ -32,7 +33,13 @@ import {
 	runningFirmware,
 } from "../../shared/maintenance-contracts";
 import { canRequestWallpaper } from "../media/media-permissions";
+import {
+	acknowledgeAppearance,
+	appearanceRecord,
+	pendingAppearance,
+} from "./appearance-backup";
 import { clearOwnedData, exportBackup, prepareRestore } from "./backup-store";
+import { replaceBackup } from "./backup-write";
 import {
 	atomicJson,
 	firmwareFiles,
@@ -44,6 +51,7 @@ import {
 	type PermissionChecks,
 	permissionRows,
 } from "./permissions";
+import { restoreAndExit } from "./restore-exit";
 import { windowsDfuDiscovery } from "./volume-discovery";
 
 export function maintenanceRequestAllowed(
@@ -67,7 +75,7 @@ interface MaintenanceOptions {
 	readonly hardware: () => HardwareSession | undefined;
 	readonly management: () => BrowserWindow | undefined;
 	readonly stopWriters: () => Promise<void>;
-	readonly exit?: () => void;
+	readonly exit?: (code?: number) => void;
 	readonly fixture?: {
 		readonly roots: readonly string[];
 		readonly descriptors: readonly TrustedFirmware[];
@@ -75,7 +83,7 @@ interface MaintenanceOptions {
 }
 export function registerMaintenance(options: MaintenanceOptions) {
 	const { root, mock } = options;
-	const exit = options.exit ?? (() => app.exit(0));
+	const exit = options.exit ?? ((code = 0) => app.exit(code));
 	const mockRoot = join(root, "firmware-mock");
 	const roots =
 		options.fixture?.roots ??
@@ -147,13 +155,25 @@ export function registerMaintenance(options: MaintenanceOptions) {
 						: await dialog.showSaveDialog(config);
 					if (selected.canceled || !selected.filePath || signal.aborted)
 						return false;
-					const bytes = await exportBackup(root, signal);
+					if (
+						!parent ||
+						parent.isDestroyed() ||
+						!canRequestWallpaper(
+							parent.webContents.getURL(),
+							options.renderer,
+							{ _tag: "read" },
+							true,
+						)
+					)
+						throw new BackupFailed();
+					const appearance = appearanceRecord(
+						await parent.webContents.executeJavaScript(
+							`localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)})`,
+						),
+					);
+					const bytes = await exportBackup(root, signal, appearance);
 					if (signal.aborted) return false;
-					await writeFile(selected.filePath, bytes, {
-						flag: "wx",
-						mode: 0o600,
-						signal,
-					});
+					await replaceBackup(selected.filePath, bytes, signal);
 					shell.showItemInFolder(selected.filePath);
 					return true;
 				},
@@ -319,12 +339,14 @@ export function registerMaintenance(options: MaintenanceOptions) {
 				);
 			return {
 				firmware: yield* firmware.snapshot(),
-				currentVersion: mock
-					? mockVersion
-					: snapshot?.firmware
-						? `${snapshot.firmware.major}.${snapshot.firmware.minor}.${snapshot.firmware.patch}`
-						: "",
-				serial: snapshot?.serial ?? "",
+				currentVersion: !snapshot?.available
+					? ""
+					: mock
+						? mockVersion
+						: snapshot.firmware
+							? `${snapshot.firmware.major}.${snapshot.firmware.minor}.${snapshot.firmware.patch}`
+							: "",
+				serial: snapshot?.available ? snapshot.serial : "",
 				imageVersion: image?.version ?? "",
 				imageTrusted: image?.trusted ?? false,
 				permissions: checks ? permissionRows(checks) : [],
@@ -339,9 +361,13 @@ export function registerMaintenance(options: MaintenanceOptions) {
 	): Promise<MaintenanceReply> => {
 		await ready;
 		if (disposed) return { ok: false, code: "QUAKE.SETTINGS.STOPPING" };
-		if (input.action !== "read" && mutating)
-			return { ok: false, code: "QUAKE.SETTINGS.BUSY" };
-		if (input.action !== "read") mutating = true;
+		const mutation = ![
+			"read",
+			"appearance-read",
+			"appearance-applied",
+		].includes(input.action);
+		if (mutation && mutating) return { ok: false, code: "QUAKE.SETTINGS.BUSY" };
+		if (mutation) mutating = true;
 		pendingOperations++;
 		try {
 			return await runtime.runPromise(
@@ -349,6 +375,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 					const firmware = yield* FirmwareUpdates;
 					const update = yield* AppUpdates;
 					let message = "";
+					let appearance: string | undefined;
 					if (!checks && process.platform === "darwin")
 						checks = mock
 							? {
@@ -362,9 +389,18 @@ export function registerMaintenance(options: MaintenanceOptions) {
 					const io = <A>(f: () => Promise<A>) =>
 						Effect.tryPromise({
 							try: f,
-							catch: (cause) => new RestoreFailed(cause),
+							catch: (cause) =>
+								cause instanceof RestoreFailed
+									? cause
+									: new RestoreFailed(cause),
 						});
 					switch (input.action) {
+						case "appearance-read":
+							appearance = yield* io(() => pendingAppearance(root));
+							break;
+						case "appearance-applied":
+							yield* io(() => acknowledgeAppearance(root, input.record));
+							break;
 						case "read":
 							break;
 						case "firmware-inspect": {
@@ -399,14 +435,27 @@ export function registerMaintenance(options: MaintenanceOptions) {
 								});
 							break;
 						}
+						case "firmware-recover": {
+							if (
+								yield* io(() =>
+									confirm(
+										"Recover QUAKE already in download mode?",
+										`Intended device serial: ${input.serial}. Manually enter its bootloader and select its QUAKE DFU volume. A separate confirmation is required before writing; only a fresh version read from this serial can complete recovery.`,
+									),
+								)
+							)
+								yield* firmware.recover(input.serial);
+							break;
+						}
 						case "firmware-write": {
+							const intended = yield* firmware.snapshot();
 							const path = files.pathFor(input.volumeId);
 							if (!path) return yield* new FirmwareTargetMismatch();
 							if (
 								!(yield* io(() =>
 									confirm(
 										"Write firmware?",
-										"Do not disconnect the USB cable or turn off the device. Writing cannot be undone.",
+										`Intended device serial: ${intended.serial}. Do not disconnect the USB cable or turn off the device. Writing cannot be undone.`,
 									),
 								))
 							)
@@ -481,13 +530,16 @@ export function registerMaintenance(options: MaintenanceOptions) {
 								))
 							)
 								break;
-							yield* io(options.stopWriters);
-							const counts = yield* io(() => restored.commit(root));
-							message = `Import Success (${counts.skipped} skipped, ${counts.imported} imported)`;
-							yield* io(async () => {
-								await dialog.showMessageBox({ message, buttons: ["Close"] });
-								exit();
-							});
+							yield* io(() =>
+								restoreAndExit({
+									validate: () => restored.validate(root),
+									stop: options.stopWriters,
+									commit: () => restored.commit(root),
+									report: (message) =>
+										dialog.showMessageBox({ message, buttons: ["Close"] }),
+									exit,
+								}),
+							);
 							break;
 						}
 						case "reset": {
@@ -525,7 +577,12 @@ export function registerMaintenance(options: MaintenanceOptions) {
 					const next = yield* view();
 					if (!runningFirmware(next.firmware))
 						for (const release of bookmarkReleases.splice(0)) release();
-					return { ok: true, view: next, message } satisfies MaintenanceReply;
+					return {
+						ok: true,
+						view: next,
+						message,
+						...(appearance === undefined ? {} : { appearance }),
+					} satisfies MaintenanceReply;
 				}).pipe(
 					Effect.match({
 						onFailure: (error) =>
@@ -536,7 +593,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 			);
 		} finally {
 			pendingOperations--;
-			if (input.action !== "read") mutating = false;
+			if (mutation) mutating = false;
 		}
 	};
 	const bookmarkReleases: (() => void)[] = [];

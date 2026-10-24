@@ -167,6 +167,21 @@ The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatib
 - **WHEN** an archive has failed authentication, invalid index or unsafe paths
 - **THEN** existing data remains intact and no extracted path escapes staging
 
+#### Scenario: Merge into edited imports
+
+- **WHEN** a native profile was edited after import or another backup reuses a legacy asset path with different bytes
+- **THEN** imported profiles receive collision-free IDs and content-based asset destinations while retained profiles and their assets remain intact
+
+#### Scenario: Appearance and confirmed replacement
+
+- **WHEN** a backup is exported to an existing destination confirmed in the native save dialog
+- **THEN** export reads the validated actual appearance localStorage record including custom theme and motion, replaces the destination atomically, and restore delivers that record to the real appearance consumer with a persistence acknowledgement
+
+#### Scenario: Restore fails after shutdown begins
+
+- **WHEN** restore cannot complete after stopping app writers
+- **THEN** main reports a scrubbed failure and exits even if management windows are gone; merge validation runs before shutdown and repeats against stopped data before commit
+
 ### Requirement: Clear data with optional bounded backup
 
 The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a 520px confirmation. Backup SHALL stop waiting after 60000ms; failure SHALL require a second confirmation. Writers SHALL stop before clearing only app-owned data and exiting. Evidence: SETTINGS-016.

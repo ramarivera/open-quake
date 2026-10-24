@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Schema } from "effect";
 import type { ProfileJson } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
@@ -22,15 +23,25 @@ export function backupPaths(files: ArchiveFiles, destination: string) {
 			.replace(/\/$/, "");
 		if (normalized.startsWith(`${base}/`)) {
 			const relative = safeArchivePath(normalized.slice(base.length + 1));
-			let found = false;
-			for (const [name, bytes] of files) {
-				if (name === relative || name.startsWith(`${relative}/`)) {
-					legacyFiles.set(name, bytes);
-					found = true;
-				}
+			const selected = [...files]
+				.filter(
+					([name]) => name === relative || name.startsWith(`${relative}/`),
+				)
+				.sort(([a], [b]) => a.localeCompare(b));
+			if (!selected.length) throw new BackupInvalid();
+			const hash = createHash("sha256");
+			for (const [name, bytes] of selected) {
+				hash.update(
+					JSON.stringify([
+						name,
+						createHash("sha256").update(bytes).digest("hex"),
+					]),
+				);
 			}
-			if (!found) throw new BackupInvalid();
-			return `${destination}/backup-legacy/${relative}`;
+			const namespace = hash.digest("hex");
+			for (const [name, bytes] of selected)
+				legacyFiles.set(`${namespace}/${name}`, bytes);
+			return `${destination}/backup-legacy/${namespace}/${relative}`;
 		}
 		const native = index.originalUserDataPath
 			?.replaceAll("\\", "/")

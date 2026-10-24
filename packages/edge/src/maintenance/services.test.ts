@@ -29,6 +29,7 @@ function firmwareFixture(
 		copyFails?: boolean;
 		restart?: boolean;
 		unknown?: boolean;
+		offline?: boolean;
 	} = {},
 ) {
 	const calls: string[] = [];
@@ -37,11 +38,13 @@ function firmwareFixture(
 		Layer.provide(
 			Layer.succeed(FirmwarePort, {
 				current: () =>
-					Effect.succeed({
-						serial: "chosen",
-						version: "1.0.19",
-						session: "chosen-session",
-					}),
+					options.offline
+						? Effect.fail(new FirmwareUnavailable())
+						: Effect.succeed({
+								serial: "chosen",
+								version: "1.0.19",
+								session: "chosen-session",
+							}),
 				version: (serial) => {
 					calls.push(`version:${serial}`);
 					return options.unknown
@@ -93,6 +96,25 @@ function firmwareFixture(
 }
 const flush = TestClock.adjust(1);
 describe("firmware session", () => {
+	it.scoped(
+		"recovers an already mounted bootloader without live HID or another DFU command",
+		() => {
+			const f = firmwareFixture({ offline: true });
+			return Effect.gen(function* () {
+				const service = yield* FirmwareUpdates;
+				expect((yield* service.start().pipe(Effect.either))._tag).toBe("Left");
+				yield* service.recover("chosen");
+				yield* flush;
+				expect((yield* service.snapshot()).state).toBe("ready_to_write");
+				expect(f.calls).toEqual([]);
+				yield* service.write("second");
+				yield* TestClock.adjust(firmwareTiming.settle);
+				yield* flush;
+				expect(f.calls).toEqual(["copy:second", "version:chosen"]);
+				expect((yield* service.snapshot()).state).toBe("success");
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
 	it.scoped(
 		"a selection change during confirmation cannot redirect DFU",
 		() => {

@@ -31,6 +31,11 @@ export function useMaintenance() {
 			const mutation = command.action !== "read";
 			if (mutation) {
 				if (pending.current) return;
+				if (
+					command.action === "firmware-start" ||
+					command.action === "firmware-recover"
+				)
+					setToast("");
 				pending.current = true;
 				setBusy(true);
 				setError("");

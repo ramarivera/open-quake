@@ -1,8 +1,10 @@
+import { Schema } from "effect";
 import { useEffect, useRef, useState } from "react";
 import {
 	type FirmwareSnapshot,
 	newerVersion,
 	type PermissionKey,
+	RecoverySerial,
 	runningFirmware,
 } from "../../../shared/maintenance-contracts";
 import strings from "../../../shared/maintenance-strings.json";
@@ -24,6 +26,7 @@ export function SettingsPage({
 	controller: MaintenanceController;
 }): React.JSX.Element {
 	const [reset, setReset] = useState(false);
+	const [recoverySerial, setRecoverySerial] = useState("");
 	const view = c.view;
 	const running = view ? runningFirmware(view.firmware) : false;
 	return (
@@ -94,6 +97,41 @@ export function SettingsPage({
 								</button>
 							) : null}
 						</Row>
+						{view.imageTrusted && !running ? (
+							<Row
+								label="Bootloader recovery"
+								hint="For a QUAKE already in download mode. Enter its exact serial; completion still requires version readback from that device."
+							>
+								<label>
+									Device serial{" "}
+									<input
+										aria-label="Recovery device serial"
+										value={recoverySerial}
+										placeholder={
+											view.firmware.serial || view.serial || "Device serial"
+										}
+										onChange={(event) => setRecoverySerial(event.target.value)}
+										maxLength={128}
+									/>
+								</label>
+								<button
+									type="button"
+									className="button"
+									disabled={
+										c.busy || !Schema.is(RecoverySerial)(recoverySerial)
+									}
+									onClick={() => {
+										c.openDialog();
+										void c.request({
+											action: "firmware-recover",
+											serial: recoverySerial,
+										});
+									}}
+								>
+									Recover from bootloader
+								</button>
+							</Row>
+						) : null}
 					</Group>
 					<Group title="General">
 						<Row
@@ -317,6 +355,7 @@ export function FirmwareDialog({
 			<p className="firmware-filename">
 				{snapshot.fileName || "Select a trusted UF2 image"}
 			</p>
+			{snapshot.serial ? <p>Device serial: {snapshot.serial}</p> : null}
 			<ol className="firmware-steps">
 				{labels.map((label, index) => {
 					const state =

@@ -9,14 +9,25 @@ import { app, BrowserWindow, dialog, shell } from "electron";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { syntheticUf2 } from "../../../../../packages/protocol/src/uf2-fixtures.js";
+import { APPEARANCE_STORAGE_KEY } from "../../renderer/src/theme/appearance";
+import { LifecycleReply } from "../../shared/lifecycle-contracts";
 import {
 	type MaintenanceCommand,
 	MaintenanceReply,
 } from "../../shared/maintenance-contracts";
+import { MonitorReply, MonitorSnapshot } from "../../shared/monitor-contracts";
+import { ProfileReplySchema } from "../../shared/profile-manager";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { registerHardware } from "../hardware";
 import { startMockHardwareBus } from "../hardware/bus";
+import { registerKnob } from "../knob";
+import { knobProfileBinding } from "../knob/profile-binding";
+import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
+import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
-import { referenceDecode } from "./archive-fixtures";
+import { registerMonitor } from "../monitor";
+import { registerProfiles } from "../profiles";
+import { referenceArchive, referenceDecode } from "./archive-fixtures";
 import { hashBytes } from "./firmware-files";
 import { registerMaintenance } from "./index";
 
@@ -101,6 +112,8 @@ async function smoke() {
 	window = new BrowserWindow(options);
 	panel = new BrowserWindow(options);
 	const main = window;
+	let connected = true;
+	let writerStops = 0;
 	const media = registerMedia(
 		ManagedRuntime.make(MediaLive(join(directory, "wallpaper-v1"))),
 		() => main,
@@ -112,13 +125,76 @@ async function smoke() {
 	);
 	cleanup.push(() => clock.dispose());
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
+	const profiles = registerProfiles(() => main, renderer);
+	cleanup.push(() => profiles.dispose());
+	await profiles.connect("desktop-preview");
+	const knob = registerKnob(
+		() => panel,
+		() => [main, ...(panel ? [panel] : [])],
+		{
+			profiles: knobProfileBinding(profiles.runtime, profiles.select),
+			hardware: () => bus.hardware(),
+		},
+	);
+	cleanup.push(() => knob.dispose());
+	const removeHardware = registerHardware(
+		() => bus.hardware(),
+		() => main,
+		true,
+		renderer,
+	);
+	cleanup.push(async () => removeHardware());
+	const lifecycleRuntime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: true,
+			displays: () => [],
+			watch: () => () => {},
+			panel: () => {},
+			bus: () => bus,
+			notify: () => {},
+			prompts: {
+				platform: process.platform,
+				mock: true,
+				displays: () => [],
+				primaryId: () => 1,
+				prompt: () => Effect.die("Smoke must never prompt"),
+				native: () => Effect.die("Smoke must never alter displays"),
+				openSettings: () => Effect.die("Smoke must never open settings"),
+			},
+		}),
+	);
+	cleanup.push(() => lifecycleRuntime.dispose());
+	const removeLifecycle = registerLifecycle(
+		lifecycleRuntime,
+		() => main,
+		renderer,
+	);
+	cleanup.push(async () => removeLifecycle());
+	let collections = 0;
+	const monitor = registerMonitor(
+		directory,
+		() => main,
+		() => panel,
+		{
+			collect: () =>
+				Effect.sync(() => {
+					collections++;
+					return { state: "unavailable" as const, values: {} };
+				}),
+		},
+		renderer,
+	);
+	cleanup.push(() => monitor.dispose());
 	const maintenance = registerMaintenance({
 		root: directory,
 		mock: true,
 		renderer,
 		management: () => main,
-		hardware: () => bus.hardware(),
-		stopWriters: async () => {},
+		hardware: () => (connected ? bus.hardware() : undefined),
+		stopWriters: async () => {
+			writerStops++;
+		},
 		exit: () => {
 			throw new Error("Smoke must not clear real app data");
 		},
@@ -141,6 +217,57 @@ async function smoke() {
 	await panel.loadFile(resolve("out/renderer/index.html"), {
 		query: { surface: "management" },
 	});
+	const profileReply: unknown = await main.webContents.executeJavaScript(
+		'window.quakeProfileManager.request({type:"read",locale:"en"})',
+	);
+	assert(Schema.is(ProfileReplySchema)(profileReply));
+	assert.equal(profileReply._tag, "success");
+	const lifecycleReply: unknown = await main.webContents.executeJavaScript(
+		'window.quakeLifecycle.request({action:"read"})',
+	);
+	assert(Schema.is(LifecycleReply)(lifecycleReply));
+	assert(lifecycleReply.ok);
+	const monitorReply = Schema.decodeUnknownSync(MonitorReply)(
+		await main.webContents.executeJavaScript(
+			'window.quakeMonitor.request({_tag:"read"})',
+		),
+	);
+	assert.equal(monitorReply._tag, "success");
+	if (monitorReply._tag !== "success") throw new Error("Monitor read failed");
+	const monitorSave = await main.webContents.executeJavaScript(
+		`window.quakeMonitor.request(${JSON.stringify({ _tag: "save", revision: monitorReply.view.revision, settings: { ...monitorReply.view.settings, hz: 2 } })})`,
+	);
+	assert.equal(
+		Schema.decodeUnknownSync(MonitorReply)(monitorSave)._tag,
+		"success",
+	);
+	assert.equal(
+		Schema.decodeUnknownSync(MonitorReply)(
+			await main.webContents.executeJavaScript(
+				'window.quakeMonitor.request({_tag:"watch",active:true})',
+			),
+		)._tag,
+		"failure",
+	);
+	assert.equal(collections, 0, "Management must not start metric collection");
+	await panel.webContents.executeJavaScript(
+		'window.oqMetricReceipt = new Promise(resolve => { const off = window.quakeMonitor.onMetrics(value => { off(); resolve(value); }); }); window.quakeMonitor.request({_tag:"watch",active:true})',
+	);
+	await settle(600);
+	assert(collections > 0, "Only the owned panel starts collection");
+	const metrics: unknown = await panel.webContents.executeJavaScript(
+		"window.oqMetricReceipt",
+	);
+	assert(
+		Schema.is(MonitorSnapshot)(metrics),
+		"Metrics must reach the production preload subscriber",
+	);
+	await panel.webContents.executeJavaScript(
+		'window.quakeMonitor.request({_tag:"watch",active:false})',
+	);
+	const stopped = collections;
+	await settle(600);
+	assert.equal(collections, stopped, "Panel unsubscribe must stop collection");
 	const request = async (command: MaintenanceCommand) => {
 		const raw: unknown = await main.webContents.executeJavaScript(
 			`window.quakeMaintenance.request(${JSON.stringify(command)})`,
@@ -156,6 +283,25 @@ async function smoke() {
 		ok: false,
 		code: "QUAKE.SETTINGS.REQUEST_DENIED",
 	});
+	await main.webContents.executeJavaScript(
+		"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Screen').click()",
+	);
+	await settle(500);
+	assert.equal(
+		await main.webContents.executeJavaScript(
+			"!!document.querySelector('.clock-settings') && !!document.querySelector('.monitor-settings')",
+		),
+		true,
+		"Clock and monitor settings must coexist",
+	);
+	await main.webContents.executeJavaScript(
+		"document.querySelector('.monitor-settings').scrollIntoView()",
+	);
+	await settle();
+	await writeFile(
+		join(artifacts, "combined-screen-monitor.png"),
+		(await main.webContents.capturePage()).toPNG(),
+	);
 	await main.webContents.executeJavaScript(
 		"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Settings').click()",
 	);
@@ -177,9 +323,47 @@ async function smoke() {
 		join(artifacts, "settings-dark.png"),
 		(await main.webContents.capturePage()).toPNG(),
 	);
+	const restoredAppearance = {
+		version: 1,
+		theme: "custom",
+		customTheme: {
+			version: 1,
+			name: "Restored fixture",
+			base: "dark",
+			colors: { accent: "#ff9d52" },
+		},
+		motion: "reduce",
+	};
+	await writeFile(
+		join(directory, "appearance.json"),
+		JSON.stringify(restoredAppearance),
+	);
+	await main.loadFile(resolve("out/renderer/index.html"));
+	await settle(500);
+	assert(
+		await main.webContents.executeJavaScript(
+			`localStorage.getItem(${JSON.stringify(APPEARANCE_STORAGE_KEY)}) === ${JSON.stringify(JSON.stringify(restoredAppearance))}`,
+		),
+		"Restored theme, custom colors and motion must reach the localStorage consumer",
+	);
+	await assert.rejects(
+		readFile(join(directory, "appearance.json")),
+		"Applied appearance receipt must be consumed",
+	);
+	await main.webContents.executeJavaScript(
+		"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Settings').click()",
+	);
+	await request({ action: "export" });
 	await request({ action: "export" });
 	const decoded = referenceDecode(await readFile(backup));
 	assert(decoded.has("default_config.json"));
+	assert(decoded.has("open-quake/monitor-v1/settings.json"));
+	assert(
+		Buffer.from(decoded.get("open-quake/appearance.json") ?? []).toString(
+			"utf8",
+		) === JSON.stringify(restoredAppearance),
+		"Export must capture actual renderer appearance",
+	);
 	await request({ action: "firmware-inspect" });
 	confirmation = 0;
 	assert.equal(
@@ -287,14 +471,134 @@ async function smoke() {
 		join(artifacts, "settings-narrow.png"),
 		(await main.webContents.capturePage()).toPNG(),
 	);
+	await request({ action: "firmware-close" });
+	const recoverySerial = view.serial;
+	assert(recoverySerial);
+	connected = false;
+	confirmation = 0;
+	main.setSize(1100, 1000);
+	await main.webContents.executeJavaScript(
+		`{ const input = document.querySelector('[aria-label="Recovery device serial"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(recoverySerial)}); input.dispatchEvent(new Event('input', { bubbles: true })); }`,
+	);
+	await settle();
+	const recoverClick =
+		"[...document.querySelectorAll('button')].find(b=>b.textContent==='Recover from bootloader').click()";
+	await main.webContents.executeJavaScript(recoverClick);
+	await settle(300);
+	assert.equal((await request({ action: "read" })).firmware.state, "idle");
+	await main.webContents.executeJavaScript(
+		"document.querySelector('[aria-label=\"Close firmware upgrade\"]').click()",
+	);
+	await settle();
+	confirmation = 1;
+	await main.webContents.executeJavaScript(recoverClick);
+	await settle(300);
+	const recovery = await request({ action: "read" });
+	assert.equal(recovery.firmware.state, "ready_to_write");
+	assert.equal(
+		recovery.currentVersion,
+		"",
+		"Offline firmware version must remain unknown",
+	);
+	await settle(1200);
+	assert(
+		await main.webContents.executeJavaScript(
+			"document.querySelector('dialog[open]')?.textContent.includes('Write to QUAKE DFU')",
+		),
+		"The real recovery dialog must reconcile its ready state",
+	);
+	await writeFile(
+		join(artifacts, "firmware-recovery-ready.png"),
+		(await main.webContents.capturePage()).toPNG(),
+	);
+	const recoveryVolume = recovery.firmware.volumes[0];
+	assert(recoveryVolume);
+	await rm(
+		join(directory, "firmware-mock", "QUAKE DFU", "open-quake-update.uf2"),
+	);
+	await request({ action: "firmware-write", volumeId: recoveryVolume.id });
+	await settle(2800);
+	assert.equal(
+		(await request({ action: "read" })).firmware.state,
+		"verifying",
+		"A copied recovery image without intended serial cannot succeed",
+	);
+	connected = true;
+	await settle(2200);
+	assert.equal((await request({ action: "read" })).firmware.state, "success");
+	await settle(1200);
+	await writeFile(
+		join(artifacts, "firmware-recovery-success.png"),
+		(await main.webContents.capturePage()).toPNG(),
+	);
+	await main.webContents.executeJavaScript(
+		"document.querySelector('[aria-label=\"Close firmware upgrade\"]').click()",
+	);
+	await request({ action: "firmware-close" });
+	const brokenBackup = join(directory, "DK-Suite_default_missing.zip");
+	await writeFile(
+		brokenBackup,
+		referenceArchive(
+			new Map([
+				[
+					"export_index.json",
+					Buffer.from(
+						JSON.stringify({
+							originalBasePath: "/fixture",
+							originalPlatform: "darwin",
+						}),
+					),
+				],
+				[
+					"app/assets/resources.conf",
+					Buffer.from(
+						JSON.stringify([
+							{
+								data: [
+									{
+										id: "missing",
+										name: "20,1,1",
+										path: "/fixture/missing.json",
+										resourceType: "DeviceConfig",
+									},
+								],
+							},
+						]),
+					),
+				],
+			]),
+			"default",
+		),
+	);
+	dialog.showOpenDialog = async () => ({
+		canceled: false,
+		filePaths: [brokenBackup],
+	});
+	const rejected: unknown = await main.webContents.executeJavaScript(
+		'window.quakeMaintenance.request({action:"import"})',
+	);
+	assert(Schema.is(MaintenanceReply)(rejected));
+	assert(
+		!rejected.ok && rejected.code === "QUAKE.BACKUP.RESTORE_FAILED",
+		"Invalid merge must fail before shutdown",
+	);
+	assert.equal(
+		writerStops,
+		0,
+		"Invalid imports must keep combined owners available",
+	);
+	await request({ action: "read" });
 
 	process.stdout.write(
-		"Maintenance native smoke PASS: real preload/IPC, spoofed-window rejection, AES export independently decoded, four-step firmware dialog, fake scratch-volume write, closed-dialog continuation, version re-read, native koffi load, permissions/disabled feed, dark/light/narrow screenshots. Hardware unverified.\n",
+		"Maintenance native smoke PASS: combined production monitor/profile/lifecycle/hardware/knob/clock/media/maintenance owners, real preload/IPC, monitor save and panel-only collection/disposal, spoofed-window rejection, AES export independently decoded, confirmed backup replacement, actual appearance restore/export, invalid merge rejected before shutdown, four-step firmware dialog, fake scratch-volume write, confirmed recovery without live HID, closed-dialog continuation, intended-serial version re-read, native koffi load, permissions/disabled feed, dark/light/narrow screenshots. Hardware unverified.\n",
 	);
 }
 smoke()
 	.then(async () => {
 		for (const dispose of cleanup.reverse()) await dispose();
+		process.stdout.write(
+			"All combined owners disposed before Electron exit PASS\n",
+		);
 		window?.destroy();
 		panel?.destroy();
 		await rm(directory, { recursive: true, force: true });
