@@ -35,3 +35,11 @@ Local evidence root: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/l
 macOS reports the GUI session locked. Peekaboo cannot capture the actual display and Electron desktop capture returns no screen sources. The renderer capture proves rendering and native window placement, not physical pixels or actual OS framebuffer output.
 
 No physical cable unplug, physical touch, real shortcut/text receipt, audible alarm, messaging-app GIF draft or Windows acceptance is claimed. No real Home Assistant action ran. Quiet acceptance `.20`, full physical `.8`, icon presentation `.9`, native GIF and other acceptance parents remain open. Home Assistant stays last, and audible checks remain excluded by the user.
+
+## PR36 corrupt-preferences review follow-up
+
+Tested source `d6aa21e` enrolls the profile serial before optional hardware attachment. A malformed saved preferences file still produces the existing typed hardware warning, while the native connection scope owns profile cleanup. Devin review thread `discussion_r4368553790` identified this independent failure path.
+
+The real main/fake-HID regression fails before the fix with zero enrollment calls and passes afterward with one enrollment, one disconnect and one native close. All 50 affected tests pass. Six fresh gates in a clean dedicated checkout pass: Biome 804 files, forced types/test/build, both bundle modes, and 40 strict OpenSpec items. There are 1,772 tests across 188 files. Sequential management and media native fixtures exit zero with their complete required markers; 69 management and 16 media captures are hashed. This follow-up changes no device command or display-discovery behavior and adds no physical acceptance claim.
+
+Evidence: `live-quiet-2026-10-24/review-preferences/verification.json`, six gate logs, sequential native logs and `capture-hashes.json` under the evidence root above. Red and green logs are `red-corrupt-preferences.log` and `green-corrupt-preferences.log`. Task 8.3 and bead `.22` close only this review correction. Existing quiet and physical acceptance limits remain open.
