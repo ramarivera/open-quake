@@ -318,8 +318,15 @@ async function smoke(): Promise<void> {
 		});
 		await ready(manager, "document.querySelector('#keys-profile')");
 		await select(manager, "#keys-profile", custom.id);
+		await ready(
+			manager,
+			"document.querySelector('#keys-profile')?.value === 'keys-smoke' && !document.querySelector('#key-title')",
+		);
 		await click(manager, ".keys-cells button:first-child");
-		await ready(manager, "document.querySelector('#key-title')");
+		await ready(
+			manager,
+			"document.querySelector('#key-function')?.value === 'hotkeySwitch'",
+		);
 		await evalIn(
 			manager,
 			'document.querySelectorAll(".keys-cells button")[0].click();document.querySelectorAll(".keys-cells button")[1].click();true',
