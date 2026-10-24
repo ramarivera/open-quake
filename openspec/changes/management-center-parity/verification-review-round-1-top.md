@@ -1,5 +1,9 @@
 # Management review round 1 top-layer proof
 
+The final source identities and fresh proof after the four late base findings
+are in [the late review report](verification-review-round-1-late.md).
+The source and gate records below describe the preceding verified top source.
+
 PR34: https://github.com/ramarivera/open-quake/pull/34, based on PR33:
 https://github.com/ramarivera/open-quake/pull/33. Implemented by Codex
 (gpt-6.1-sol). Parent owns acceptance and ordered merges.
