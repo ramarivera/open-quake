@@ -34,7 +34,29 @@ export const KeyRequest = Schema.Union(
 	}),
 	Schema.Struct({ type: Schema.Literal("delete"), target: KeyTarget }),
 	Schema.Struct({
-		type: Schema.Literal("icons", "import-pack", "import-icon"),
+		type: Schema.Literal(
+			"icons",
+			"application-icons",
+			"import-pack",
+			"import-icon",
+		),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("open-icons"),
+		token: Schema.NonEmptyString,
+		locale: ProfileLocale,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("cancel-icons"),
+		token: Schema.NonEmptyString,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("pick-icon"),
+		token: Schema.NonEmptyString,
+		data: Schema.String.pipe(Schema.maxLength(8 * 1024 * 1024)),
+		source: Schema.optional(
+			Schema.String.pipe(Schema.maxLength(8 * 1024 * 1024)),
+		),
 	}),
 	Schema.Struct({
 		type: Schema.Literal("remove-pack", "remove-icon"),
@@ -85,6 +107,8 @@ export const KeyReply = Schema.Union(
 		envelope: Schema.optional(Schema.encodedSchema(ProfileEnvelope)),
 		packs: Schema.optional(Schema.Array(LibraryPack)),
 		states: Schema.optional(Schema.Array(KeyRuntimeState)),
+		icon: Schema.optional(Schema.String),
+		iconSource: Schema.optional(Schema.String),
 	}),
 	Schema.Struct({ _tag: Schema.Literal("rejected"), reason: Schema.String }),
 );

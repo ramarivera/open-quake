@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { LibraryPack } from "../../../shared/key-library";
-import { Group, Row } from "../ui/Form";
 
 type MdiIcon = {
 	readonly name: string;
@@ -10,84 +10,171 @@ type MdiIcon = {
 };
 const mdiData = (path: string): string =>
 	`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="${path}"/></svg>`)}`;
+
+/** Decode an inert URL into portable pixels; imported markup is never inserted in DOM. */
+export async function rasterizeIcon(data: string): Promise<string> {
+	if (
+		!/^data:image\/(?:png|jpeg|gif|webp|svg\+xml)[;,]/.test(data) ||
+		data.length > 8 * 1024 * 1024
+	)
+		throw new Error("Invalid icon image.");
+	const image = new Image();
+	image.src = data;
+	await image.decode();
+	if (
+		!image.naturalWidth ||
+		image.naturalWidth * image.naturalHeight > 16000000
+	)
+		throw new Error("Invalid icon image.");
+	const canvas = document.createElement("canvas");
+	canvas.width = canvas.height = 170;
+	const context = canvas.getContext("2d");
+	if (!context) throw new Error("Could not prepare icon.");
+	const scale = Math.min(170 / image.naturalWidth, 170 / image.naturalHeight);
+	const width = image.naturalWidth * scale,
+		height = image.naturalHeight * scale;
+	context.drawImage(
+		image,
+		(170 - width) / 2,
+		(170 - height) / 2,
+		width,
+		height,
+	);
+	return canvas.toDataURL("image/png");
+}
+
 export function IconLibrary({
 	onSelect,
 	onClose,
+	locale = "en",
 }: {
-	onSelect: (data: string) => void;
+	onSelect: (data: string, source: string) => void | Promise<void>;
 	onClose: () => void;
+	locale?: ProfileLocale;
 }): React.JSX.Element {
 	const [packs, setPacks] = useState<readonly LibraryPack[]>([]),
+		[applications, setApplications] = useState<readonly LibraryPack[]>([]),
 		[mdi, setMdi] = useState<readonly MdiIcon[]>(),
 		[query, setQuery] = useState(""),
 		[search, setSearch] = useState(""),
 		[group, setGroup] = useState("mdi"),
 		[zoom, setZoom] = useState(72),
-		[limit, setLimit] = useState(120),
-		[status, setStatus] = useState(keyText("iconLib.loadingGroups"));
-	const load = useCallback(async (): Promise<void> => {
-		const reply = await window.quakeKeyLibrary.request({ type: "icons" });
-		if (reply._tag === "success") {
-			setPacks(reply.packs ?? []);
-			setStatus("");
-		} else setStatus(reply.reason);
+		[width, setWidth] = useState(window.innerWidth),
+		[limit, setLimit] = useState(0),
+		[loading, setLoading] = useState(true),
+		[progress, setProgress] = useState(8),
+		[status, setStatus] = useState(""),
+		[retry, setRetry] = useState(0);
+	const grid = useRef<HTMLUListElement>(null);
+	const mounted = useRef(true);
+	const loadGeneration = useRef(0);
+	const batch = 10 * Math.max(1, Math.floor(width / (zoom + 12)));
+	const t = (key: string): string => keyText(key, locale);
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+	useEffect(() => {
+		const resize = (): void => setWidth(window.innerWidth);
+		window.addEventListener("resize", resize);
+		return () => window.removeEventListener("resize", resize);
 	}, []);
 	useEffect(() => {
 		let live = true;
-		void load();
-		void import("virtual:mdi-icons").then((module) => {
-			if (live) setMdi(module.default);
-		});
+		const ticket = retry;
+		loadGeneration.current = ticket;
+		const isLive = (): boolean => live && loadGeneration.current === ticket;
+		setLoading(true);
+		setProgress(8);
+		setStatus("");
+		void (async () => {
+			try {
+				const library = await window.quakeKeyLibrary.request({ type: "icons" });
+				if (!isLive()) return;
+				if (library._tag === "rejected") throw new Error(library.reason);
+				setPacks(library.packs ?? []);
+				setProgress(28);
+				const apps = await window.quakeKeyLibrary.request({
+					type: "application-icons",
+				});
+				if (!isLive()) return;
+				if (apps._tag === "success") setApplications(apps.packs ?? []);
+				else setStatus(apps.reason);
+				setProgress(48);
+				const module = await import("virtual:mdi-icons");
+				if (!isLive()) return;
+				setMdi(module.default);
+				setProgress(88);
+				setProgress(100);
+			} catch (cause) {
+				if (isLive())
+					setStatus(
+						cause instanceof Error ? cause.message : "Could not load icons.",
+					);
+			} finally {
+				if (isLive()) setLoading(false);
+			}
+		})();
 		return () => {
 			live = false;
 		};
-	}, [load]);
+	}, [retry]);
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setSearch(query.trim().toLowerCase());
-			setLimit(120);
+			setLimit(batch);
+			if (grid.current) grid.current.scrollTop = 0;
 		}, 500);
 		return () => clearTimeout(timer);
-	}, [query]);
+	}, [query, batch]);
+	useEffect(() => {
+		setLimit(batch);
+		if (grid.current) grid.current.scrollTop = 0;
+	}, [batch]);
 	const groups = useMemo(
 		() =>
 			[
 				{
 					id: "mdi",
-					name: keyText("iconLib.groupMaterial"),
-					icons: (mdi ?? []).map((i) => ({
-						id: i.name,
-						name: i.name,
-						tags: i.tags,
-						data: () => mdiData(i.path),
+					name: keyText("iconLib.groupMaterial", locale),
+					icons: (mdi ?? []).map((icon) => ({
+						id: icon.name,
+						name: icon.name,
+						tags: icon.tags,
+						data: () => mdiData(icon.path),
 					})),
 				},
-				...packs.map((p) => ({
-					...p,
-					icons: p.icons.map((i) => ({ ...i, data: () => i.data })),
+				...applications.map((pack) => ({
+					...pack,
+					icons: pack.icons.map((icon) => ({ ...icon, data: () => icon.data })),
+				})),
+				...packs.map((pack) => ({
+					...pack,
+					icons: pack.icons.map((icon) => ({ ...icon, data: () => icon.data })),
 				})),
 			]
-				.map((p) => ({
-					...p,
-					icons: p.icons.filter((i) =>
-						`${i.name} ${i.tags.join(" ")}`.toLowerCase().includes(search),
+				.map((pack) => ({
+					...pack,
+					icons: pack.icons.filter((icon) =>
+						`${icon.name} ${icon.tags.join(" ")}`
+							.toLowerCase()
+							.includes(search),
 					),
 				}))
-				.filter((p) => p.icons.length || !search),
-		[mdi, packs, search],
+				.filter((pack) => pack.icons.length || !search),
+		[mdi, packs, applications, search, locale],
 	);
-	const selected = groups.find((p) => p.id === group) ?? groups[0];
+	const selected = groups.find((pack) => pack.id === group) ?? groups[0];
 	const remove = async (id: string, icon = false): Promise<void> => {
 		if (
 			!confirm(
 				icon
-					? keyText("iconLib.deleteCustomIconConfirm").replace(
-							"{{iconName}}",
-							id,
-						)
-					: keyText("iconLib.deleteIconPackConfirm").replace(
+					? t("iconLib.deleteCustomIconConfirm").replace("{{iconName}}", id)
+					: t("iconLib.deleteIconPackConfirm").replace(
 							"{{iconPackName}}",
-							packs.find((p) => p.id === id)?.name ?? id,
+							packs.find((pack) => pack.id === id)?.name ?? id,
 						),
 			)
 		)
@@ -96,55 +183,88 @@ export function IconLibrary({
 			type: icon ? "remove-icon" : "remove-pack",
 			id,
 		});
+		if (!mounted.current) return;
 		if (reply._tag === "success") setPacks(reply.packs ?? []);
 		else setStatus(reply.reason);
 	};
 	const upload = async (type: "import-pack" | "import-icon"): Promise<void> => {
-		setStatus(keyText("iconLib.loadingIcons"));
-		const reply = await window.quakeKeyLibrary.request({ type });
-		if (reply._tag === "success") {
-			setPacks(reply.packs ?? []);
-			setStatus("");
-		} else setStatus(reply.reason);
+		setLoading(true);
+		setProgress(8);
+		setStatus("");
+		try {
+			const reply = await window.quakeKeyLibrary.request({ type });
+			if (!mounted.current) return;
+			if (reply._tag === "success") {
+				setPacks(reply.packs ?? []);
+				setProgress(100);
+			} else setStatus(reply.reason);
+		} finally {
+			if (mounted.current) setLoading(false);
+		}
+	};
+	const choose = async (data: string): Promise<void> => {
+		setLoading(true);
+		setProgress(88);
+		setStatus("");
+		try {
+			await onSelect(await rasterizeIcon(data), data);
+		} catch (cause) {
+			if (mounted.current)
+				setStatus(
+					cause instanceof Error ? cause.message : "Could not prepare icon.",
+				);
+		} finally {
+			if (mounted.current) {
+				setProgress(100);
+				setLoading(false);
+			}
+		}
 	};
 	return (
-		<section className="key-icon-library" aria-label={keyText("iconLib.title")}>
-			<Group title={keyText("iconLib.title")}>
-				<Row label={keyText("iconLib.searchHint")} htmlFor="icon-search">
-					<input
-						id="icon-search"
-						type="search"
-						value={query}
-						onChange={(e) => setQuery(e.target.value)}
-					/>
-					<button
-						type="button"
-						onClick={onClose}
-						aria-label="Close Icon Library"
-					>
-						×
-					</button>
-				</Row>
-				<div className="icon-library-body">
+		<section className="key-icon-library" aria-label={t("iconLib.title")}>
+			<header className="icon-library-toolbar">
+				<label className="visually-hidden" htmlFor="icon-search">
+					{t("iconLib.searchHint")}
+				</label>
+				<input
+					id="icon-search"
+					type="search"
+					placeholder={t("iconLib.searchHint")}
+					value={query}
+					onChange={(event) => setQuery(event.target.value)}
+				/>
+				<span className="icon-library-count">
+					{selected?.icons.length ?? 0}
+				</span>
+				<button type="button" onClick={onClose} aria-label="Close Icon Library">
+					×
+				</button>
+			</header>
+			<div className="icon-library-body-wrap">
+				<div className="icon-library-body" aria-busy={loading}>
 					<aside aria-label="Icon groups">
-						{groups.map((p) => (
-							<div key={p.id}>
+						{groups.map((pack) => (
+							<div key={pack.id} className="icon-library-group">
 								<button
 									type="button"
-									aria-pressed={selected?.id === p.id}
+									aria-label={pack.name}
+									aria-pressed={selected?.id === pack.id}
 									onClick={() => {
-										setGroup(p.id);
-										setLimit(120);
+										setGroup(pack.id);
+										setLimit(batch);
+										if (grid.current) grid.current.scrollTop = 0;
 									}}
 								>
-									{p.name}{" "}
-									<small>{p.id === "mdi" && !mdi ? "…" : p.icons.length}</small>
+									<span>{pack.name}</span>
+									<small>
+										{pack.id === "mdi" && !mdi ? "…" : pack.icons.length}
+									</small>
 								</button>
-								{p.id !== "mdi" && p.id !== "local" && (
+								{!["mdi", "local", "applications"].includes(pack.id) && (
 									<button
 										type="button"
-										aria-label={`Uninstall ${p.name}`}
-										onClick={() => void remove(p.id)}
+										aria-label={`Uninstall ${pack.name}`}
+										onClick={() => void remove(pack.id)}
 									>
 										×
 									</button>
@@ -153,19 +273,21 @@ export function IconLibrary({
 						))}
 					</aside>
 					<ul
+						ref={grid}
 						className="icon-library-grid"
-						onScroll={(e) => {
-							const node = e.currentTarget;
+						data-batch={batch}
+						onScroll={(event) => {
+							const node = event.currentTarget;
 							if (node.scrollHeight - node.scrollTop - node.clientHeight < 100)
-								setLimit((n) => n + 120);
+								setLimit((count) =>
+									Math.min(selected?.icons.length ?? 0, count + batch),
+								);
 						}}
 						style={{
 							gridTemplateColumns: `repeat(auto-fill, minmax(${zoom}px,1fr))`,
 						}}
 					>
-						{!mdi && group === "mdi" ? (
-							<li role="status">{keyText("iconLib.loadingMaterial")}</li>
-						) : selected?.icons.length ? (
+						{selected?.icons.length ? (
 							selected.icons.slice(0, limit).map((icon) => (
 								<li key={icon.id} className="icon-library-cell">
 									<button
@@ -173,7 +295,7 @@ export function IconLibrary({
 										title={icon.name}
 										aria-label={`Select ${icon.name}`}
 										style={{ height: zoom }}
-										onClick={() => onSelect(icon.data())}
+										onClick={() => void choose(icon.data())}
 									>
 										<img
 											loading="lazy"
@@ -194,27 +316,47 @@ export function IconLibrary({
 								</li>
 							))
 						) : (
-							<li>{keyText("iconLib.searchHint")}</li>
+							<li className="icon-library-empty">
+								{loading ? t("iconLib.loadingIcons") : "No matching icons."}
+							</li>
 						)}
 					</ul>
 				</div>
-				<Row
-					label={keyText("iconLib.importIcon")}
-					hint={keyText("iconLib.iconPackSupportType")}
+				{loading && (
+					<div className="icon-library-loading" role="status">
+						<span>{t("iconLib.loadingIcons")}</span>
+						<progress
+							max={100}
+							value={progress}
+							aria-label={t("iconLib.loadingIcons")}
+						/>
+						<span>{progress}%</span>
+					</div>
+				)}
+			</div>
+			<footer className="icon-library-footer">
+				<button
+					type="button"
+					disabled={loading}
+					onClick={() => void upload("import-pack")}
+					title={t("iconLib.iconPackSupportType")}
 				>
-					<button type="button" onClick={() => void upload("import-pack")}>
-						{keyText("iconLib.importIcon")}
-					</button>
-					<button type="button" onClick={() => void upload("import-icon")}>
-						Select Picture
-					</button>
-				</Row>
-				<Row label={`${zoom}px`}>
+					{t("iconLib.importIcon")}
+				</button>
+				<button
+					type="button"
+					disabled={loading}
+					onClick={() => void upload("import-icon")}
+				>
+					Select Picture
+				</button>
+				<div className="icon-library-zoom">
+					<span>{zoom}px</span>
 					<button
 						type="button"
 						aria-label="Zoom out"
-						disabled={zoom <= 40}
-						onClick={() => setZoom((z) => Math.max(40, z - 8))}
+						disabled={zoom <= 40 || loading}
+						onClick={() => setZoom((size) => Math.max(40, size - 8))}
 					>
 						−
 					</button>
@@ -225,19 +367,31 @@ export function IconLibrary({
 						max={120}
 						step={8}
 						value={zoom}
-						onChange={(e) => setZoom(Number(e.target.value))}
+						disabled={loading}
+						onChange={(event) => setZoom(Number(event.target.value))}
 					/>
 					<button
 						type="button"
 						aria-label="Zoom in"
-						disabled={zoom >= 120}
-						onClick={() => setZoom((z) => Math.min(120, z + 8))}
+						disabled={zoom >= 120 || loading}
+						onClick={() => setZoom((size) => Math.min(120, size + 8))}
 					>
 						+
 					</button>
-				</Row>
-			</Group>
-			{status && <p role="status">{status}</p>}
+				</div>
+			</footer>
+			{status && (
+				<div className="icon-library-notice" role="alert">
+					<span>{status}</span>
+					<button
+						type="button"
+						disabled={loading}
+						onClick={() => setRetry((value) => value + 1)}
+					>
+						Retry
+					</button>
+				</div>
+			)}
 		</section>
 	);
 }

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
-import { BrowserWindow } from "electron";
+import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
 import {
 	KeyRuntime,
@@ -34,7 +34,13 @@ const electron = vi.hoisted(() => {
 			showOpenDialog:
 				vi.fn<() => Promise<{ canceled: boolean; filePaths: string[] }>>(),
 		},
-		nativeImage: {},
+		nativeImage: {
+			createFromDataURL: vi.fn((data: string) => ({
+				isEmpty: () => false,
+				getSize: () => ({ width: 170, height: 170 }),
+				toDataURL: () => data,
+			})),
+		},
 		ipcMain: {
 			handle:
 				vi.fn<
@@ -61,7 +67,8 @@ const electron = vi.hoisted(() => {
 });
 vi.mock("electron", () => ({
 	...electron,
-	BrowserWindow: class {
+	BrowserWindow: class extends EventEmitter {
+		destroyed = false;
 		webContents = Object.assign(new EventEmitter(), {
 			id: electron.nextId(),
 			mainFrame: {},
@@ -71,11 +78,22 @@ vi.mock("electron", () => ({
 			},
 			isDestroyed: () => false,
 			send: vi.fn(),
+			setWindowOpenHandler: vi.fn(),
 		});
-		constructor() {
+		constructor(readonly options: BrowserWindowConstructorOptions = {}) {
+			super();
 			electron.windows.push(this);
 		}
-		isDestroyed = () => false;
+		isDestroyed = () => this.destroyed;
+		loadURL = async (url: string): Promise<void> => {
+			this.webContents.url = url;
+		};
+		destroy = (): void => {
+			this.destroyed = true;
+			this.emit("closed");
+		};
+		show = vi.fn();
+		showInactive = vi.fn();
 		static getAllWindows = () => electron.windows;
 		static fromWebContents = () => true;
 	},
@@ -89,6 +107,153 @@ afterEach(async () => {
 	electron.dialog.showOpenDialog.mockReset();
 	for (const dir of directories.splice(0))
 		await rm(dir, { recursive: true, force: true });
+});
+
+it("restricts the owned picker to icon operations and returns pixels without editing the draft", async () => {
+	const f = fixture();
+	try {
+		const pending = f.request(f.manager, {
+			type: "open-icons",
+			token: "picker-a",
+			locale: "de",
+		});
+		const child = BrowserWindow.getAllWindows().at(-1);
+		if (!child) throw new Error("Missing picker");
+		expect(child).not.toBe(f.impostor);
+		for (const command of [
+			f.activation,
+			{ type: "select", deviceId: "device", profileId: "q", pageId: "one" },
+			{
+				type: "preview",
+				target: {
+					token: "foreign",
+					profileId: "p",
+					pageId: "one",
+					keyCode: "1,1",
+					revision: 0,
+				},
+				key: f.key,
+			},
+		])
+			expect(await f.request(child, command)).toEqual({
+				_tag: "rejected",
+				reason: "unauthorized",
+			});
+		expect((await f.request(child, { type: "icons" }))._tag).toBe("success");
+		expect((await f.request(child, { type: "icons" }, {}))._tag).toBe(
+			"rejected",
+		);
+		const data = "data:image/png;base64,AAAA";
+		expect(
+			(await f.request(child, { type: "pick-icon", token: "wrong", data }))
+				._tag,
+		).toBe("rejected");
+		expect(
+			(
+				await f.request(child, {
+					type: "pick-icon",
+					token: "picker-a",
+					data: "data:image/svg+xml,<svg/>",
+				})
+			)._tag,
+		).toBe("rejected");
+		expect(
+			(
+				await f.request(child, {
+					type: "pick-icon",
+					token: "picker-a",
+					data,
+					source: "library-reference",
+				})
+			)._tag,
+		).toBe("success");
+		expect(await pending).toEqual({
+			_tag: "success",
+			icon: data,
+			iconSource: "library-reference",
+		});
+		expect(child.isDestroyed()).toBe(true);
+		const read = await f.request(f.manager, { type: "read", locale: "en" });
+		expect(
+			read._tag === "success" &&
+				read.envelope?.profiles[0]?.pages[0]?.keys[0]?.config.icon,
+		).toBe(f.key.config.icon);
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it("ignores stale picker cancellation and settles open requests during disposal", async () => {
+	const f = fixture();
+	try {
+		const first = f.request(f.manager, {
+			type: "open-icons",
+			token: "old",
+			locale: "en",
+		});
+		const old = BrowserWindow.getAllWindows().at(-1);
+		const second = f.request(f.manager, {
+			type: "open-icons",
+			token: "new",
+			locale: "en",
+		});
+		const current = BrowserWindow.getAllWindows().at(-1);
+		if (!old || !current) throw new Error("Missing picker");
+		expect(await first).toEqual({ _tag: "success" });
+		expect(old.isDestroyed()).toBe(true);
+		await f.request(f.manager, { type: "cancel-icons", token: "old" });
+		expect(current.isDestroyed()).toBe(false);
+		vi.spyOn(f.impostor.webContents, "getURL").mockReturnValue(
+			current.webContents.getURL(),
+		);
+		expect((await f.request(f.impostor, { type: "icons" }))._tag).toBe(
+			"rejected",
+		);
+		await f.registration.dispose();
+		expect(await second).toEqual({ _tag: "success" });
+		expect(current.isDestroyed()).toBe(true);
+	} finally {
+		await f.runtime.dispose();
+	}
+});
+
+it("rejects a delayed import after the owning picker closes", async () => {
+	const files = await importFixture();
+	const f = fixture();
+	let release = () => {};
+	electron.dialog.showOpenDialog.mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				release = () =>
+					resolve({ canceled: false, filePaths: [files.localPath] });
+			}),
+	);
+	try {
+		const opened = f.request(f.manager, {
+			type: "open-icons",
+			token: "closing",
+			locale: "en",
+		});
+		const child = BrowserWindow.getAllWindows().at(-1);
+		if (!child) throw new Error("Missing picker");
+		const importing = f.request(child, { type: "import-icon" });
+		await vi.waitFor(() =>
+			expect(electron.dialog.showOpenDialog).toHaveBeenCalledOnce(),
+		);
+		await f.request(f.manager, { type: "cancel-icons", token: "closing" });
+		await opened;
+		release();
+		expect((await importing)._tag).toBe("rejected");
+		expect(await f.request(f.manager, { type: "icons" })).toMatchObject({
+			_tag: "success",
+			packs: [],
+		});
+	} finally {
+		release();
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
 });
 function fixture(
 	config: Readonly<Record<string, unknown>> = {},
@@ -182,11 +347,11 @@ function fixture(
 		.reverse()
 		.find(([channel]) => channel === KEY_REQUEST)?.[1];
 	if (!handler) throw new Error("Missing key IPC");
-	const request = (win: BrowserWindow, input: unknown) =>
-		handler(
-			{ sender: win.webContents, senderFrame: win.webContents.mainFrame },
-			input,
-		);
+	const request = (
+		win: BrowserWindow,
+		input: unknown,
+		frame: object = win.webContents.mainFrame,
+	) => handler({ sender: win.webContents, senderFrame: frame }, input);
 	const activation = {
 		type: "activate",
 		deviceId: "device",

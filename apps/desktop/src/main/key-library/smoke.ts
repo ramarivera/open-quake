@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, ManagedRuntime, Schema } from "effect";
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, nativeImage } from "electron";
 import {
 	createEmptyProfileKey,
 	Profile,
@@ -35,6 +35,8 @@ import { verifyFinalReview } from "./smoke-final-review";
 import { verifyReviewEditor } from "./smoke-review";
 
 registerClockScheme();
+// Retain explicit failure status while the final owned window is disposed.
+app.on("window-all-closed", () => {});
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
 const scratchArg = process.argv[2];
 assert(scratchArg, "Provide an absolute scratch directory");
@@ -105,6 +107,29 @@ const snapshot = async (win: BrowserWindow, name: string): Promise<void> => {
 		join(scratch, `${name}.png`),
 		(await win.webContents.capturePage()).toPNG(),
 	);
+};
+const iconPicker = async (manager: BrowserWindow): Promise<BrowserWindow> => {
+	const end = Date.now() + 12000;
+	while (Date.now() < end) {
+		const child = BrowserWindow.getAllWindows().find(
+			(win) =>
+				win.getParentWindow() === manager &&
+				new URL(win.webContents.getURL() || "about:blank").searchParams.get(
+					"surface",
+				) === "icons",
+		);
+		if (child) {
+			assert.deepEqual(child.getMinimumSize(), [600, 550]);
+			assert.equal(child.isResizable(), true);
+			await ready(
+				child,
+				"document.querySelector('.icon-library-body[aria-busy=false]') && document.querySelectorAll('.icon-library-cell').length === 10 * Math.max(1, Math.floor(innerWidth / (72 + 12)))",
+			);
+			return child;
+		}
+		await sleep(25);
+	}
+	throw new Error("Owned native icon picker did not open");
 };
 const key = (code: string, type: string, actions: unknown[], extra = {}) => {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code));
@@ -313,6 +338,7 @@ async function smoke(): Promise<void> {
 		await ready(manager, "document.querySelector('#keys-profile')");
 		const harness = {
 			manager,
+			iconPicker,
 			profiles,
 			scratch,
 			delays,
@@ -400,33 +426,72 @@ async function smoke(): Promise<void> {
 		// Full bundled MDI catalog, search debounce, zoom and target-bound selection.
 		process.stdout.write("keys smoke: icon library\n");
 		await button(manager, "Icon Library");
-		await ready(
-			manager,
-			"document.querySelectorAll('.icon-library-cell').length===120",
+		const chooser = await iconPicker(manager);
+		assert.equal(
+			(
+				await request(chooser, {
+					type: "pick-icon",
+					token:
+						new URL(chooser.webContents.getURL()).searchParams.get("token") ??
+						"",
+					data: (await evalIn(
+						chooser,
+						"(()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=10;return canvas.toDataURL()})()",
+					)) as string,
+				})
+			)._tag,
+			"rejected",
+			"picker must reject native-decodable images with incorrect dimensions",
 		);
-		await input(manager, "#icon-search", "alarm");
+		assert.equal(
+			(
+				await request(chooser, {
+					type: "navigate",
+					deviceId: "mock",
+					direction: 0,
+				})
+			)._tag,
+			"rejected",
+		);
+		await snapshot(chooser, "icon-library-default");
+		await input(chooser, "#icon-search", "alarm");
 		await sleep(650);
 		assert(
 			await evalIn(
-				manager,
+				chooser,
 				"document.querySelectorAll('.icon-library-cell').length>0",
 			),
 		);
-		await click(manager, 'button[aria-label="Zoom in"]');
+		await click(chooser, 'button[aria-label="Zoom in"]');
 		assert.equal(
 			await evalIn(
-				manager,
-				"document.querySelector('input[aria-label=\"Icon size\"]').value",
+				chooser,
+				`document.querySelector('input[aria-label="Icon size"]').value`,
 			),
 			"80",
 		);
-		await click(manager, ".icon-library-cell button");
-		await evalIn(
+		await snapshot(chooser, "mdi-search-zoom");
+		await click(chooser, ".icon-library-cell button");
+		await ready(
 			manager,
-			'document.querySelector(".key-icon-library").scrollIntoView({block:"start"});true',
+			"Array.from(document.querySelectorAll('.keys-preview img')).some(image => image.src.startsWith('data:image/png;base64,'))",
 		);
-		await snapshot(manager, "mdi-search-zoom");
 		await button(manager, "Save");
+		await ready(
+			manager,
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
+		);
+		const savedIcon = await request(manager, { type: "read", locale: "en" });
+		assert(savedIcon._tag === "success");
+		const savedKey = savedIcon.envelope?.profiles
+			.find((p) => p.id === custom.id)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(savedKey);
+		assert(savedKey.config.icon.startsWith("data:image/png;base64,"));
+		assert.deepEqual(
+			nativeImage.createFromDataURL(savedKey.config.icon).getSize(),
+			{ width: 170, height: 170 },
+		);
 		// Import picker -> archive parser -> local store -> rendered group.
 		const svg =
 			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="M0 0h24v24z"/></svg>';
@@ -469,24 +534,38 @@ async function smoke(): Promise<void> {
 		};
 		const existing = p.pages[0].keys.find((k) => k.keyCode === "1,1");
 		assert(existing);
-		assert.equal(
-			(
-				await request(manager, {
-					type: "preview",
-					target,
-					key: {
-						...existing,
-						config: { ...existing.config, icon: pack.icons[0]?.data ?? "" },
-					},
-				})
-			)._tag,
-			"success",
+
+		await button(manager, "Icon Library");
+		const packChooser = await iconPicker(manager);
+		await click(packChooser, 'button[aria-label="Shapes smoke"]');
+		await click(packChooser, ".icon-library-cell button");
+		await ready(
+			manager,
+			"document.querySelector('.keys-preview img')?.getAttribute('src') !== " +
+				JSON.stringify(existing.config.icon),
 		);
+
 		assert.equal(
 			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"rejected",
 		);
-		await request(manager, { type: "save", token: target.token });
+		await button(manager, "Save");
+		await ready(
+			manager,
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
+		);
+		const packed = await request(manager, { type: "read", locale: "en" });
+		assert(packed._tag === "success");
+		const packedKey = packed.envelope?.profiles
+			.find((profile) => profile.id === p.id)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(packedKey);
+		assert(packedKey.config.icon.startsWith("data:image/png;base64,"));
+		assert.equal(
+			packedKey.config.compatibility?.iconSource,
+			pack.icons[0]?.data,
+		);
+		await snapshot(manager, "rasterized-pack-saved");
 		assert.equal(
 			(await request(manager, { type: "remove-pack", id: pack.id }))._tag,
 			"rejected",
@@ -677,21 +756,77 @@ async function smoke(): Promise<void> {
 		await click(manager, ".keys-cells button:first-child");
 		process.stdout.write("keys smoke: icon library\n");
 		await button(manager, "Icon Library");
-		await evalIn(
-			manager,
-			'document.querySelector(".key-icon-library").scrollIntoView({block:"start"});true',
+		const resizedChooser = await iconPicker(manager);
+		await snapshot(resizedChooser, "icon-library");
+		assert(
+			await evalIn(
+				resizedChooser,
+				"document.documentElement.scrollWidth<=innerWidth && document.documentElement.scrollHeight<=innerHeight",
+			),
 		);
+		const initialCount = await evalIn(
+			resizedChooser,
+			"document.querySelectorAll('.icon-library-cell').length",
+		);
+		await evalIn(
+			resizedChooser,
+			"document.querySelector('.icon-library-grid').scrollTop=100000;true",
+		);
+		await sleep();
+		assert.notEqual(
+			await evalIn(
+				resizedChooser,
+				"document.querySelectorAll('.icon-library-cell').length",
+			),
+			initialCount,
+		);
+		resizedChooser.setContentSize(900, 650);
+		await ready(
+			resizedChooser,
+			"document.querySelectorAll('.icon-library-cell').length === 10 * Math.floor(innerWidth / 84)",
+		);
+		await snapshot(resizedChooser, "icon-library-wide");
+		await click(resizedChooser, 'button[aria-label="Installed applications"]');
+		await ready(
+			resizedChooser,
+			"Array.from(document.querySelectorAll('.icon-library-cell img')).some(image => image.complete && image.naturalWidth > 0)",
+		);
+		await snapshot(resizedChooser, "installed-application-artwork");
+		await click(resizedChooser, ".icon-library-cell button");
+		await sleep();
+		assert.equal(resizedChooser.isDestroyed(), true);
+		await button(manager, "Save");
 		await ready(
 			manager,
-			"document.querySelectorAll('.icon-library-cell').length===120",
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
 		);
-		await snapshot(manager, "icon-library");
+		await button(manager, "Icon Library");
+		const cancelledChooser = await iconPicker(manager);
+		await select(manager, "#key-function", "text");
+		await sleep();
+		assert.equal(cancelledChooser.isDestroyed(), true);
+		await button(manager, "Reset to default");
+		await ready(
+			manager,
+			`(()=>{const image=document.querySelector('.keys-preview [data-key-code="1,1"] img');return image?.src.startsWith('data:image/svg+xml,') && image.complete && image.naturalWidth>0})()`,
+		);
+		await snapshot(manager, "semantic-fallback-preview");
+		await button(manager, "Save");
+		await ready(
+			manager,
+			"document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && document.body.innerText.includes('Saved successfully')",
+		);
+		const fallback = await request(manager, { type: "read", locale: "en" });
+		assert(fallback._tag === "success");
+		const fallbackKey = fallback.envelope?.profiles
+			.find((p) => p.id === custom.id)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(fallbackKey?.config.icon.startsWith("data:image/svg+xml,"));
 		manager.setContentSize(680, 1000);
 		await sleep();
 		assert(
 			await evalIn(manager, "document.documentElement.scrollWidth<=innerWidth"),
 		);
-		await snapshot(manager, "icon-library-narrow");
 		await evalIn(
 			manager,
 			'document.querySelector(".key-editor").scrollIntoView({block:"start"});true',

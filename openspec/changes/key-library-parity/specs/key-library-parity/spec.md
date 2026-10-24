@@ -106,3 +106,21 @@ Page up/down SHALL wrap and goToPage SHALL clamp. Strip slide 0/1 SHALL select p
 #### Scenario: Navigation bounds
 - **WHEN** next page executes on the last page or previous page on the first
 - **THEN** selection wraps to the first or last page respectively
+
+### Requirement: Native icon picker and portable artwork
+The icon picker SHALL open as an owned, resizable 600×550 child window with matching minimum dimensions. It SHALL keep search outside the loading overlay, use the recovered dark palette, and append ten rows per page using max(1, floor(viewport width / (icon size + 12))) columns. Loading stages SHALL reflect completed operations rather than fabricated elapsed progress. Management transitions SHALL remain at most 160 ms.
+
+Selected artwork SHALL be rasterized to a 170×170 PNG through inert image decoding. Installed application artwork SHALL be extracted locally through the operating system and SHALL not be redistributed as a bundled pack. Unavailable proprietary resource references SHALL use an explicit open-source semantic fallback, preserving inline custom images and known defaults.
+
+#### Scenario: Owned picker cancellation
+- **WHEN** the editor changes key, profile, page, function, alternate state or navigates away while a picker or import is pending
+- **THEN** the obsolete picker closes and cannot update the newer draft or commit a late import
+- **AND** the child can list, import, remove and select icons but cannot activate keys, edit profiles or issue other management mutations
+
+#### Scenario: Picker resize and selection
+- **WHEN** the picker opens, resizes, searches or changes zoom
+- **THEN** its ten-row batches follow the viewport formula, search stays usable while loading, and selecting artwork updates only the current draft with a decoded 170×170 PNG
+
+#### Scenario: Portable application and fallback artwork
+- **WHEN** a user selects an installed application's icon or resets an unavailable legacy resource
+- **THEN** the saved key retains portable inline artwork without depending on a proprietary resource pack or an installed application on the restore host

@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { keyArtwork } from "../../keys/key-artwork";
 import "../css-properties";
 import { STRIP_PALETTE } from "../palette";
 import {
@@ -112,6 +113,7 @@ function SystemInfoGlow({
 export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 	const id = `tile${useId().replace(/[^\w-]/g, "")}`;
 	const { config } = tile.key;
+	const icon = keyArtwork(config.icon, config.type);
 	const metrics = genericTileMetrics(
 		tile.box,
 		tile.footprint,
@@ -174,8 +176,8 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 					transform: `translateY(${metrics.iconShift}%)`,
 				}}
 			>
-				{isInlineIcon(config.icon) ? (
-					<img src={config.icon} alt="" draggable={false} />
+				{isInlineIcon(icon) ? (
+					<img src={icon} alt="" draggable={false} />
 				) : null}
 			</div>
 			{config.title.display ? (

@@ -186,7 +186,7 @@ export async function verifyFinalReview(
 	// Choose a real MDI icon, save it, and check preview, live strip and thumbnail consumers.
 	await click(win, ".keys-cells button:nth-child(2)");
 	await button(win, "Icon Library");
-	await click(win, ".icon-library-cell button");
+	await click(await h.iconPicker(win), ".icon-library-cell button");
 	await button(win, "Save");
 	await ready(
 		win,
@@ -195,7 +195,7 @@ export async function verifyFinalReview(
 	const saved = await savedProfile();
 	const savedEmoji = saved.pages[0].keys.find((k) => k.keyCode === "1,2");
 	const mdi = savedEmoji?.config.icon;
-	assert(mdi?.startsWith("data:image/svg+xml"));
+	assert(mdi?.startsWith("data:image/png;base64,"));
 	assert.notEqual(mdi, svg("green"));
 	assert.deepEqual(
 		savedEmoji?.config.actions,
