@@ -107,7 +107,7 @@ it("restores immutable original/rendered/static assets, library and placed profi
 			staticBytes,
 		});
 		expect(proof.syntheticPress).toBe(true);
-		const archived = await readBackup(archive, "synthetic.zip");
+		const archived = new Map(await readBackup(archive, "synthetic.zip"));
 		archived.set(
 			`open-quake/emoji-v1/assets/${rendered}`,
 			Buffer.from("changed"),
