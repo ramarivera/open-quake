@@ -264,3 +264,15 @@ describe("reduced-motion selection", () => {
 		},
 	);
 });
+
+// Maintenance restoration acknowledges the validated serialized representation.
+it("keeps default-derived v2 records byte-stable through validation", () => {
+	for (const record of [
+		defaultAppearance,
+		{ ...defaultAppearance, theme: "light", motion: "reduce" },
+		{ ...defaultAppearance, fontScale: "large", sidebarWidth: 280 },
+	]) {
+		const serialized = JSON.stringify(record);
+		expect(JSON.stringify(parseAppearance(serialized))).toBe(serialized);
+	}
+});

@@ -19,9 +19,9 @@ export type Appearance = {
 
 export const defaultAppearance: Appearance = {
 	version: 2,
-	theme: "grey",
 	fontScale: "small",
 	sidebarWidth: null,
+	theme: "grey",
 	customTheme: null,
 	motion: "system",
 };
