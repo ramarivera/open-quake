@@ -327,6 +327,15 @@ for (const [query, locale, restriction] of [
 				const url = new URL(f.calls[0] ?? "");
 				expect(url.searchParams.get("language")).toBe(locale);
 				expect(url.searchParams.get("country_code")).toBe(restriction);
+				expect(
+					yield* WeatherService.fetchWeather(
+						{ ...weatherSettings, city: query, location: null },
+						locale,
+					),
+				).toMatchObject({ _tag: "ready" });
+				expect(
+					f.calls.filter((call) => call.includes("geocoding")),
+				).toHaveLength(2);
 			}).pipe(Effect.provide(f.layer));
 		},
 	);
@@ -385,6 +394,83 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+for (const query of [", DE", " A, DE ", "123!, FR", "京, CN"]) {
+	for (const path of ["verify", "fetch", "saved-location"] as const) {
+		it.effect(`${path} rejects invalid city part ${query} without IO`, () => {
+			const calls: string[] = [];
+			const network = Layer.succeed(WeatherNetwork, {
+				json: (url: string) =>
+					Effect.suspend(() => {
+						calls.push(url);
+						return Effect.fail(WeatherNetworkFailed.fromCause("offline"));
+					}),
+			});
+			return Effect.gen(function* () {
+				const service = yield* WeatherService;
+				const result =
+					path === "verify"
+						? yield* service.verifyCity(query, "en")
+						: yield* service.fetchWeather(
+								{
+									...weatherSettings,
+									city: query,
+									ipLookup: true,
+									location:
+										path === "saved-location" && weatherSettings.location
+											? {
+													...weatherSettings.location,
+													sourceCity: query.trim(),
+												}
+											: null,
+								},
+								"en",
+							);
+				expect(result).toEqual(
+					path === "verify"
+						? { _tag: "not-found" }
+						: { _tag: "error", reason: "city-not-found" },
+				);
+				expect(calls).toEqual([]);
+			}).pipe(
+				Effect.provide(WeatherService.Default.pipe(Layer.provide(network))),
+			);
+		});
+	}
+}
+
+for (const [name, country, code] of [
+	["New York", "United States", "US"],
+	["São Paulo", "Brazil", "BR"],
+] as const) {
+	it.effect(`${name} preserves multiword names and explicit countries`, () => {
+		const f = fixture();
+		f.overrides.geo = {
+			results: [
+				...cityFixture.results,
+				{ name, country, country_code: code, latitude: 1, longitude: 2 },
+			],
+		};
+		return Effect.gen(function* () {
+			const service = yield* WeatherService;
+			const query = ` ${name} , ${code} `;
+			expect(yield* service.verifyCity(query, "en")).toMatchObject({
+				_tag: "matched",
+				location: { name, country, sourceCity: query.trim() },
+			});
+			expect(
+				yield* service.fetchWeather(
+					{ ...weatherSettings, city: query, location: null },
+					"en",
+				),
+			).toMatchObject({ _tag: "ready", data: { city: name } });
+			const searches = f.calls.filter((url) => url.includes("geocoding"));
+			expect(searches).toHaveLength(2);
+			for (const url of searches)
+				expect(new URL(url).searchParams.get("name")).toBe(name);
+		}).pipe(Effect.provide(f.layer));
+	});
+}
+
 it.effect(
 	"verification deadline interrupts the injected network after 12 s",
 	() =>

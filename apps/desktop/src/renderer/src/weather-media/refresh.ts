@@ -49,6 +49,7 @@ export class WeatherRefresh {
 			this.publish(result);
 			let next =
 				result._tag === "ready" ? result.refreshAfterMs : WEATHER_REFRESH_MS;
+			if (result._tag === "ready") this.retried = false;
 			if (result._tag === "error" && this.auto() && !this.retried) {
 				this.retried = true;
 				next = 120_000;

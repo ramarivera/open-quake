@@ -391,6 +391,51 @@ async function smoke(): Promise<void> {
 			false,
 		);
 		await capture(management, "weather-settings-ip-consent");
+		for (const [index, query] of [", DE", "A, DE"].entries()) {
+			const beforeInvalid = networkCalls.length;
+			assert.deepEqual(
+				await request(management, { _tag: "verifyCity", query, locale: "en" }),
+				{ _tag: "city", result: { _tag: "not-found" } },
+			);
+			const configured = await request(management, {
+				_tag: "configure",
+				settings: {
+					...weatherSettings,
+					city: query,
+					location: null,
+					musicEnabled: true,
+				},
+			});
+			assert.equal(configured._tag, "snapshot");
+			assert.deepEqual(
+				await request(panel, { _tag: "weather", locale: "en" }),
+				{
+					_tag: "weather",
+					result: { _tag: "error", reason: "city-not-found" },
+				},
+			);
+			await evaluate(
+				management,
+				`(() => { const input = document.querySelector('[aria-label="City"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(query)}); input.dispatchEvent(new Event('input', {bubbles:true})); input.scrollIntoView({block:'center'}); })()`,
+			);
+			await waitFor(
+				management,
+				"document.querySelector('.weather-verification')?.textContent.includes('No city found for')",
+				"invalid city is not a renderer network error",
+			);
+			await waitFor(
+				panel,
+				"document.querySelector('.oq-weather-desc')?.textContent === 'City not found'",
+				"invalid city is not a provider outage",
+			);
+			assert.equal(
+				networkCalls.length,
+				beforeInvalid,
+				"invalid city makes no IO",
+			);
+			await capture(management, `weather-invalid-city-${index}`);
+			await capture(panel, `clock-invalid-city-${index}`);
+		}
 		outage = true;
 		await request(management, {
 			_tag: "configure",

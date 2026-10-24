@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	berlin,
 	forecastFixture,
 	mediaSession,
 	weatherSettings,
@@ -160,6 +161,108 @@ describe("visible refresh and query sequencing", () => {
 		expect(load).toHaveBeenCalledTimes(2);
 		refresh.dispose();
 	});
+	it("restores one 120s retry after recovery, keeps normal expiry and stops hidden or disposed work", async () => {
+		vi.useFakeTimers();
+		let visible = true;
+		const failure: WeatherResult = { _tag: "error", reason: "unavailable" };
+		const ready: WeatherResult = {
+			_tag: "ready",
+			data: {
+				city: "Berlin",
+				temperature: 12,
+				high: 15,
+				low: 7,
+				weatherCode: 2,
+				description: "Partly cloudy",
+				stale: false,
+				provider: "open-meteo",
+			},
+			refreshAfterMs: WEATHER_REFRESH_MS,
+		};
+		const load = vi.fn(async (): Promise<WeatherResult> => failure);
+		load.mockResolvedValueOnce(failure).mockResolvedValueOnce(ready);
+		const publish = vi.fn();
+		const refresh = new WeatherRefresh(
+			load,
+			publish,
+			() => visible,
+			() => true,
+		);
+		try {
+			await vi.advanceTimersByTimeAsync(800);
+			expect(load).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(119_999);
+			expect(load).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(publish).toHaveBeenLastCalledWith(ready);
+			await vi.advanceTimersByTimeAsync(WEATHER_REFRESH_MS - 1);
+			expect(load).toHaveBeenCalledTimes(2);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(publish).toHaveBeenLastCalledWith(failure);
+			expect(load).toHaveBeenCalledTimes(3);
+			await vi.advanceTimersByTimeAsync(119_999);
+			expect(load).toHaveBeenCalledTimes(3);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(load).toHaveBeenCalledTimes(4);
+			await vi.advanceTimersByTimeAsync(WEATHER_REFRESH_MS - 1);
+			expect(load).toHaveBeenCalledTimes(4);
+			await vi.advanceTimersByTimeAsync(1);
+			expect(load).toHaveBeenCalledTimes(5);
+			visible = false;
+			await vi.advanceTimersByTimeAsync(WEATHER_REFRESH_MS);
+			expect(load).toHaveBeenCalledTimes(5);
+			expect(vi.getTimerCount()).toBe(0);
+			visible = true;
+			refresh.visibilityChanged();
+			await vi.advanceTimersByTimeAsync(50);
+			expect(load).toHaveBeenCalledTimes(6);
+		} finally {
+			refresh.dispose();
+		}
+		const calls = publish.mock.calls.length;
+		refresh.changed();
+		refresh.visibilityChanged();
+		await vi.advanceTimersByTimeAsync(WEATHER_REFRESH_MS);
+		expect(load).toHaveBeenCalledTimes(6);
+		expect(publish).toHaveBeenCalledTimes(calls);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+	for (const query of [", DE", " A, DE ", "123!, FR", "京, CN"]) {
+		it(`rejects invalid city part ${query} before renderer search`, async () => {
+			vi.useFakeTimers();
+			const search = vi.fn(
+				async (): Promise<CityResult> => ({ _tag: "network" }),
+			);
+			const publish = vi.fn();
+			const settled = vi.fn();
+			const verifier = new CityVerifier(search, publish, settled);
+			verifier.update(query);
+			await vi.advanceTimersByTimeAsync(599);
+			expect(settled).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(1);
+			expect(search).not.toHaveBeenCalled();
+			expect(publish).toHaveBeenLastCalledWith({ _tag: "not-found" });
+			expect(settled).toHaveBeenCalledExactlyOnceWith(query, {
+				_tag: "not-found",
+			});
+			verifier.dispose();
+			expect(vi.getTimerCount()).toBe(0);
+		});
+	}
+	for (const query of ["東京, JP", "北京, CN", "London, UK", "New York, US"]) {
+		it(`verifies valid city part ${query} through the renderer`, async () => {
+			vi.useFakeTimers();
+			const result: CityResult = { _tag: "matched", location: berlin };
+			const search = vi.fn(async () => result);
+			const settled = vi.fn();
+			const verifier = new CityVerifier(search, vi.fn(), settled);
+			verifier.update(query);
+			await vi.advanceTimersByTimeAsync(600);
+			expect(search).toHaveBeenCalledExactlyOnceWith(query);
+			expect(settled).toHaveBeenCalledExactlyOnceWith(query, result);
+			verifier.dispose();
+		});
+	}
 	it("debounces verification and drops old results and disposed work", async () => {
 		vi.useFakeTimers();
 		const pending = new Map<string, (result: CityResult) => void>();

@@ -49,7 +49,7 @@ export const normalizeWeatherLocale = (locale: string): WeatherLocale => {
 	}
 };
 export const validCityQuery = (query: string): boolean =>
-	(query.match(/\p{L}/gu)?.length ?? 0) >= 2;
+	(query.split(",")[0]?.trim().match(/\p{L}/gu)?.length ?? 0) >= 2;
 export const matchingLocation = (settings: WeatherSettings): boolean =>
 	settings.location?.sourceCity.trim().toLocaleLowerCase() ===
 	settings.city.trim().toLocaleLowerCase();

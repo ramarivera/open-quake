@@ -305,6 +305,13 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 								(!settings.city.trim() && !settings.ipLookup)
 							)
 								return { _tag: "empty" } satisfies WeatherResult;
+							if (settings.city.trim() && !validCityQuery(settings.city)) {
+								cached = undefined;
+								return {
+									_tag: "error",
+									reason: "city-not-found",
+								} satisfies WeatherResult;
+							}
 							const key = JSON.stringify([
 								settings.city.trim(),
 								settings.ipLookup,

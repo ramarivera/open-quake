@@ -30,6 +30,11 @@ Weather SHALL default to disabled, manual city entry and Celsius. IP lookup SHAL
 - **WHEN** a Japanese user searches for 東京 or 東京, JP, or an English user searches for London, UK
 - **THEN** Japanese queries retain the Japanese locale without a China restriction and UK matches GB; an explicit country always filters candidates, including in Chinese UI
 
+#### Scenario: Country suffix cannot validate an invalid city
+
+- **WHEN** a query has fewer than two city-name letters before the comma, such as `, DE` or `A, DE`
+- **THEN** renderer verification and both public weather service paths reject it as not-found without network requests, including when saved coordinates match that invalid query
+
 #### Scenario: Ambiguous city from IP lookup
 
 - **WHEN** opted-in IP lookup identifies Paris in the United States
@@ -57,6 +62,11 @@ The card SHALL occupy 564×153 design pixels with a radius of 32, an 88 px icon 
 
 - **WHEN** 30 min passes while the view is hidden
 - **THEN** no forecast refresh starts until the view is visible
+
+#### Scenario: Automatic location recovers between failures
+
+- **WHEN** an automatic-location refresh fails, retries after 120 seconds and recovers, then fails again at normal expiry
+- **THEN** the new failure receives one fresh 120-second retry, continued failures return to the normal interval, and hidden or disposed views start no requests
 
 #### Scenario: Refresh after a slow load or cache hit
 
