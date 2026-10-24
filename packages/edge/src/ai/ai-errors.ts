@@ -69,22 +69,23 @@ export interface DiagnosticCause {
 	readonly cause?: DiagnosticCause;
 	readonly truncated: true;
 }
-const DiagnosticCause: Schema.Schema<DiagnosticCause> = Schema.suspend(() =>
-	Schema.Struct({
-		name: Schema.Literal(
-			"Error",
-			"TypeError",
-			"RangeError",
-			"UnknownCause",
-			"TruncatedCause",
-		),
-		sourceCode: Schema.optionalWith(
-			Schema.Literal("EACCES", "EPERM", "EIO", "ENOENT"),
-			{ exact: true },
-		),
-		cause: Schema.optionalWith(DiagnosticCause, { exact: true }),
-		truncated: Schema.Literal(true),
-	}),
+export const DiagnosticCause: Schema.Schema<DiagnosticCause> = Schema.suspend(
+	() =>
+		Schema.Struct({
+			name: Schema.Literal(
+				"Error",
+				"TypeError",
+				"RangeError",
+				"UnknownCause",
+				"TruncatedCause",
+			),
+			sourceCode: Schema.optionalWith(
+				Schema.Literal("EACCES", "EPERM", "EIO", "ENOENT"),
+				{ exact: true },
+			),
+			cause: Schema.optionalWith(DiagnosticCause, { exact: true }),
+			truncated: Schema.Literal(true),
+		}),
 );
 /** Never projects messages, URLs, names supplied by a provider, or arbitrary codes. */
 export function toSafeDiagnosticCause(

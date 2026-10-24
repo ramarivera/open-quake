@@ -25,6 +25,7 @@ import { encodeProfileEnvelope, ProfileEnvelope } from "../../shared/profiles";
 import { MediaLive, registerMedia } from "../media";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { quickProfile } from "../test/strip-fixtures";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { desktopKnobAdapters } from "./desktop-adapters";
 import { makeKnobRuntime, registerKnobRuntime } from "./index";
 
@@ -73,6 +74,14 @@ async function smoke(): Promise<void> {
 	};
 	const panel = new BrowserWindow(options);
 	const management = new BrowserWindow(options);
+	const voiceSurface = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "native-mock",
+		panel: () => panel,
+		management: () => management,
+		renderer: new URL(`file://${resolve("out/renderer/index.html")}`).href,
+	});
 	const errors: string[] = [];
 	panel.webContents.on("console-message", (event) => {
 		if (/Uncaught|Error:/.test(event.message)) errors.push(event.message);
@@ -506,6 +515,7 @@ async function smoke(): Promise<void> {
 			`Knob native smoke PASS: exclusive ring/picker, rotation=90 pointer and physical-touch paging/card selection, panel-only commands, gesture arbitration, volume/focus and physical-error warnings. Screenshots: ${output}\n`,
 		);
 	} finally {
+		await voiceSurface.dispose();
 		panel.destroy();
 		management.destroy();
 		await registration.dispose();

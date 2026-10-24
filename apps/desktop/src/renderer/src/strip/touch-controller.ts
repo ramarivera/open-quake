@@ -105,7 +105,15 @@ export function createStripTouchController<Layout>(options: {
 		event(event: QuakeEvent): void {
 			if (disposed) return;
 			if (event.kind === "status" && event.state !== "connected") {
-				release(0);
+				// Link loss cancels touch ownership. It is never a successful voice
+				// touch end; main resets GridVoice from this same status report.
+				for (const [keyCode, cancel] of releases) {
+					cancel();
+					options.onKey({ keyCode, keyAction: 1 });
+				}
+				releases.clear();
+				if (held) options.onKey({ keyCode: held, keyAction: 1 });
+				held = undefined;
 				if (sub) {
 					emitSub(sub, sub.last, "end");
 					sub = undefined;
