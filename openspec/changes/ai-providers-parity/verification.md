@@ -29,8 +29,8 @@ All required lane gates passed on 2026-10-24:
 - openspec validate --all --strict: 31 passed, zero failed.
 
 Logs are local-only at /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/ai-providers/.
-No renderer changes, so no native UI screenshots were required. Beads task 1.5
-remains open until the PR is published; implementation tasks 1.1–1.4 and the
+No renderer changes, so no native UI screenshots were required. PR #27:
+https://github.com/ramarivera/open-quake/pull/27. Beads tasks 1.1–1.5 and the
 independent OpenAI TTS task carry source/test closure evidence.
 
 The first shutdown regression failed on malformed input and early cancellation.
