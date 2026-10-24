@@ -50,7 +50,10 @@ import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
 import { prepareRestore } from "../maintenance/backup-store";
-import { proveIconRestore } from "../maintenance/icon-backup-proof";
+import {
+	iconBackupAliasFixture,
+	proveIconRestore,
+} from "../maintenance/icon-backup-proof";
 import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
@@ -779,13 +782,7 @@ async function smoke() {
 			.toDataURL();
 		await Effect.runPromise(
 			iconStore(join(directory, "key-library-v1.json")).write([
-				{
-					id: "synthetic-pack",
-					name: "Unused imported pack",
-					icons: [
-						{ id: "backup-icon", name: "Backup", tags: [], data: iconData },
-					],
-				},
+				await iconBackupAliasFixture(iconData),
 				{
 					id: "local",
 					name: "Local App Icons",
@@ -895,7 +892,7 @@ async function smoke() {
 			),
 		);
 		console.log(
-			"Icon backup PASS: installed and local icons survive clean, populated and repeated restore; native image decode",
+			"Icon backup PASS: imported aliases and local icons survive clean, populated and repeated restore; native image decode",
 		);
 		const renderedItem = em.store.items[0],
 			staticAsset = em.store.staticAssets[0];

@@ -9,15 +9,10 @@ export function decodeIconLibrary(bytes: Uint8Array): readonly IconPack[] {
 	const packs = Schema.decodeUnknownSync(Schema.Array(IconPack), {
 		onExcessProperty: "error",
 	})(JSON.parse(Buffer.from(bytes).toString("utf8")));
-	if (
-		new Set(packs.map((pack) => pack.id)).size !== packs.length ||
-		packs.some(
-			(pack) =>
-				new Set(pack.icons.map((icon) => icon.id)).size !== pack.icons.length,
-		)
-	)
+	if (new Set(packs.map((pack) => pack.id)).size !== packs.length)
 		throw new BackupInvalid();
-	return packs;
+	// Import IDs are artwork hashes. Distinct named aliases can share one ID.
+	return packs.map((pack) => ({ ...pack, icons: mergeIcons([], pack.icons) }));
 }
 
 /** Icon references embed artwork, so collision IDs can change without rewriting profiles. */
@@ -30,6 +25,7 @@ function mergeIcons(
 		const content = JSON.stringify([icon.name, icon.tags, icon.data]);
 		const same = (value: IconAsset) =>
 			JSON.stringify([value.name, value.tags, value.data]) === content;
+		if (icons.some(same)) continue;
 		let id = icon.id;
 		if (icons.some((value) => value.id === id && !same(value))) {
 			const base = `import-${createHash("sha256").update(content).digest("hex")}`;

@@ -8,8 +8,36 @@ import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { parseIconPack } from "../key-library/icon-packs";
 import { iconStore } from "../key-library/icon-store";
+import { iconZip } from "../test/icon-pack-fixtures";
 import { prepareRestore } from "./backup-store";
+
+export async function iconBackupAliasFixture(data: string) {
+	const pack = await parseIconPack(
+		iconZip([
+			{
+				name: "manifest.json",
+				data: JSON.stringify({ Name: "Backup aliases" }),
+			},
+			{
+				name: "icons.json",
+				data: JSON.stringify([
+					{ path: "art.png", name: "Backup", tags: [] },
+					{ path: "art.png", name: "Backup alias", tags: ["alias"] },
+				]),
+			},
+			{
+				name: "icons/art.png",
+				data: Buffer.from(data.split(",")[1] ?? "", "base64"),
+			},
+		]),
+		(bytes) => nativeImage.createFromBuffer(bytes).toDataURL(),
+	);
+	assert.equal(pack.icons.length, 2);
+	assert.equal(pack.icons[0]?.id, pack.icons[1]?.id);
+	return { ...pack, id: "synthetic-pack" };
+}
 
 export async function proveIconRestore(
 	archive: Uint8Array,
@@ -25,9 +53,11 @@ export async function proveIconRestore(
 			JSON.stringify(encodeProfileEnvelope(createInitialProfileEnvelope())),
 		);
 		const path = join(root, "key-library-v1.json");
+		const aliasPack = await iconBackupAliasFixture(expectedData);
 		if (populated)
 			await Effect.runPromise(
 				iconStore(path).write([
+					{ ...aliasPack, icons: [...aliasPack.icons].reverse() },
 					{
 						id: "destination",
 						name: "Preserve",
@@ -56,11 +86,14 @@ export async function proveIconRestore(
 		for (const id of ["synthetic-pack", "local"]) {
 			const pack = packs.find((pack) => pack.id === id);
 			assert(pack);
-			assert(
-				pack?.icons.some(
-					(icon) => icon.id === "backup-icon" && icon.data === expectedData,
-				),
-			);
+			assert(pack.icons.some((icon) => icon.data === expectedData));
+			if (id === "synthetic-pack") {
+				assert.deepEqual(pack.icons.map((icon) => icon.name).sort(), [
+					"Backup",
+					"Backup alias",
+				]);
+				assert.equal(new Set(pack.icons.map((icon) => icon.id)).size, 2);
+			}
 			for (const icon of pack.icons)
 				assert(!nativeImage.createFromDataURL(icon.data).isEmpty());
 		}

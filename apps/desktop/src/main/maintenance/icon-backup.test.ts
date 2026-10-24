@@ -14,8 +14,13 @@ import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
-import { type IconPack, svgData } from "../key-library/icon-packs";
+import {
+	type IconPack,
+	parseIconPack,
+	svgData,
+} from "../key-library/icon-packs";
 import { iconStore } from "../key-library/icon-store";
+import { iconZip } from "../test/icon-pack-fixtures";
 import { readBackup, writeBackup } from "./backup-archive";
 import { exportBackup, prepareRestore } from "./backup-store";
 
@@ -119,7 +124,6 @@ for (const value of [
 	{ invalid: true },
 	[{ ...incoming[0], icons: [{ id: "x" }] }],
 	[incoming[0], incoming[0]],
-	[{ ...incoming[0], icons: [incoming[0]?.icons[0], incoming[0]?.icons[0]] }],
 ]) {
 	it("rejects malformed/ambiguous icon stores on export, archive validation and destination validation", async () => {
 		const f = await fixture();
@@ -170,3 +174,96 @@ it("preserves the destination library for older archives and rejects symlink des
 		await rm(f.scratch, { recursive: true, force: true });
 	}
 });
+
+for (const populated of [false, true])
+	it(`backs up real imported artwork aliases and restores them stably, populated=${populated}`, async () => {
+		const f = await fixture();
+		try {
+			const svg =
+				'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><path d="M0 0h8v8z" fill="red"/></svg>';
+			const pack = await parseIconPack(
+				iconZip([
+					{ name: "manifest.json", data: JSON.stringify({ Name: "Aliases" }) },
+					{
+						name: "icons.json",
+						data: JSON.stringify([
+							{ path: "first.svg", name: "First", tags: ["one"] },
+							{ path: "second.svg", name: "Second", tags: ["two"] },
+							{ path: "first.svg", name: "First", tags: ["one"] },
+						]),
+					},
+					{ name: "icons/first.svg", data: svg },
+					{ name: "icons/second.svg", data: svg },
+				]),
+				() => {
+					throw new Error("Unexpected raster");
+				},
+			);
+			expect(pack.icons).toHaveLength(3);
+			expect(new Set(pack.icons.map((icon) => icon.id)).size).toBe(1);
+			await Effect.runPromise(
+				iconStore(join(f.source, "key-library-v1.json")).add(pack),
+			);
+			const sourceBefore = await readFile(
+				join(f.source, "key-library-v1.json"),
+				"utf8",
+			);
+			const archive = await exportBackup(f.source);
+			expect(
+				await readFile(join(f.source, "key-library-v1.json"), "utf8"),
+			).toBe(sourceBefore);
+			const archived = await readBackup(archive, "aliases.zip");
+			expect(
+				JSON.parse(
+					Buffer.from(
+						archived.get("open-quake/key-library-v1.json") ?? [],
+					).toString(),
+				).find((stored: IconPack) => stored.id === pack.id),
+			).toEqual(pack);
+			if (populated)
+				await Effect.runPromise(
+					iconStore(join(f.destination, "key-library-v1.json")).write([
+						{
+							...pack,
+							icons: [...pack.icons.slice(1), ...pack.icons.slice(0, 1)],
+						},
+						...incoming,
+					]),
+				);
+			const restore = await prepareRestore(archive, "aliases.zip");
+			await restore.validate(f.destination);
+			await restore.commit(f.destination);
+			const restored = await Effect.runPromise(
+				iconStore(join(f.destination, "key-library-v1.json")).read(),
+			);
+			const aliases = restored.find((value) => value.id === pack.id);
+			expect(aliases?.icons).toHaveLength(2);
+			expect(aliases?.icons.map((icon) => icon.name).sort()).toEqual([
+				"First",
+				"Second",
+			]);
+			expect(aliases?.icons.map((icon) => icon.tags).sort()).toEqual([
+				["one"],
+				["two"],
+			]);
+			expect(new Set(aliases?.icons.map((icon) => icon.id)).size).toBe(2);
+			expect(
+				aliases?.icons.every((icon) => icon.data === pack.icons[0]?.data),
+			).toBe(true);
+			for (const library of incoming)
+				expect(restored.find((value) => value.id === library.id)).toEqual(
+					library,
+				);
+			const before = await readFile(
+				join(f.destination, "key-library-v1.json"),
+				"utf8",
+			);
+			await restore.validate(f.destination);
+			await restore.commit(f.destination);
+			expect(
+				await readFile(join(f.destination, "key-library-v1.json"), "utf8"),
+			).toBe(before);
+		} finally {
+			await rm(f.scratch, { recursive: true, force: true });
+		}
+	});
