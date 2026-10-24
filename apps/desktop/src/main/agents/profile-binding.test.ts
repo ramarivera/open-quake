@@ -37,7 +37,6 @@ import {
 import { AgentStorage } from "../../../../../packages/edge/src/agents/agents-repository.js";
 import { AgentsService } from "../../../../../packages/edge/src/agents/agents-service.js";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
-import { makeProfileController } from "../profiles/profile-controller";
 import { agentProfileBinding } from "./profile-binding";
 
 function fixture(
@@ -51,6 +50,7 @@ function fixture(
 	let writes = 0;
 	let failDelivery = 0;
 	let deliveries = 0;
+	const delivered: { serial: string; profileId: string }[] = [];
 	let failProfileWrite = false;
 	const repository =
 		composition === "repository-defaults"
@@ -102,8 +102,9 @@ function fixture(
 				Layer.succeed(ProfileSwitchingPort, {
 					platform: "darwin",
 					foreground: () => Effect.succeed(Option.none()),
-					push: () => {
+					push: (serial, profile) => {
 						deliveries++;
+						delivered.push({ serial, profileId: profile.id });
 						if (failDelivery > 0) {
 							failDelivery--;
 							return Effect.fail(ProfileDeliveryFailed.fromCause(undefined));
@@ -116,27 +117,6 @@ function fixture(
 	);
 	let state: AgentState = initialAgentState();
 	let failAgentWrite = false;
-	let selects = 0;
-	const controller = profiles.runPromise(
-		makeProfileController({
-			confirm: async () => true,
-			execute: async () => {},
-			chooseApp: async () => Option.none(),
-			capture: async () => "",
-			cachedThumbnail: async () => Option.none(),
-			publish: () => {},
-			progress: () => {},
-		}),
-	);
-	const select = async (id: string): Promise<ProfileEnvelope> => {
-		selects++;
-		const service = await controller;
-		const result = await profiles.runPromise(
-			service.request({ type: "manage", command: { type: "select", id } }),
-		);
-		if (result._tag === "rejected") throw new Error("selection rejected");
-		return profiles.runPromise(ProfileManager.read());
-	};
 	const agents = ManagedRuntime.make(
 		AgentsService.Default.pipe(
 			Layer.provide(
@@ -165,7 +145,7 @@ function fixture(
 						restart: Effect.void,
 						subscribe: () => () => {},
 					}),
-					Layer.succeed(AgentPanelPort, agentProfileBinding(profiles, select)),
+					Layer.succeed(AgentPanelPort, agentProfileBinding(profiles)),
 				),
 			),
 		),
@@ -173,14 +153,14 @@ function fixture(
 	return {
 		profiles,
 		agents,
-		connect: () =>
+		connect: (serial = "mock-unit", id = active) =>
 			profiles.runPromise(
-				Effect.flatMap(ProfileSwitching, (s) => s.connect("mock-unit", active)),
+				Effect.flatMap(ProfileSwitching, (s) => s.connect(serial, id)),
 			),
 		state: () => state,
 		read: () => profiles.runPromise(ProfileManager.read()),
 		writes: () => writes,
-		selects: () => selects,
+		delivered,
 		deliveries: () => deliveries,
 		failDelivery: (count: number) => {
 			failDelivery = count;
@@ -224,7 +204,6 @@ describe("DK-Claw sync through ProfileService and the real profile manager consu
 			);
 			expect(await f.read()).toEqual(before);
 			expect(f.writes()).toBe(0);
-			expect(f.selects()).toBe(0);
 			expect(f.state().revision).toBe(0);
 		} finally {
 			await f.dispose();
@@ -253,7 +232,6 @@ describe("DK-Claw sync through ProfileService and the real profile manager consu
 				deviceApplied: false,
 			});
 			expect(progress.map((p) => p.percent)).toEqual([5, 40, 80, 100]);
-			expect(f.selects()).toBe(0);
 			const profile = claw(await f.read());
 			expect(profile?.revision).toBe(1);
 			for (const code of Object.keys(allMain)) {
@@ -267,7 +245,7 @@ describe("DK-Claw sync through ProfileService and the real profile manager consu
 			await f.dispose();
 		}
 	});
-	it("applies through the existing manager when DK-Claw is active", async () => {
+	it("redelivers committed DK-Claw content when active", async () => {
 		const f = fixture("1-8");
 		try {
 			await f.connect();
@@ -280,7 +258,6 @@ describe("DK-Claw sync through ProfileService and the real profile manager consu
 				}),
 			);
 			expect(reply.view.progress.deviceApplied).toBe(true);
-			expect(f.selects()).toBe(1);
 			expect(f.deliveries()).toBeGreaterThan(before);
 		} finally {
 			await f.dispose();
@@ -301,7 +278,6 @@ describe("DK-Claw sync through ProfileService and the real profile manager consu
 				"AGENT.PANEL.SLOT_INVALID",
 			);
 			expect(f.writes()).toBe(before);
-			expect(f.selects()).toBe(0);
 		} finally {
 			await f.dispose();
 		}
@@ -420,3 +396,68 @@ for (const failure of ["none", "profile", "agent", "device"] as const) {
 		}
 	});
 }
+
+for (const failure of ["none", "delivery", "agent"] as const) {
+	it(`keeps unrelated device and preview selections during sync and compensation: ${failure}`, async () => {
+		const f = fixture("1-8");
+		try {
+			await f.connect();
+			await f.connect("other-unit", "1-4");
+			await f.profiles.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					profileId: "1-4",
+				}),
+			);
+			const before = await f.read();
+			const count = f.delivered.length;
+			if (failure === "delivery") f.failDelivery(1);
+			if (failure === "agent") f.failAgentWrite();
+			const result = await f.agents.runPromise(
+				AgentsService.request({
+					type: "sync-panel",
+					slots: allMain,
+					revision: 0,
+				}).pipe(Effect.either),
+			);
+			expect(result._tag).toBe(failure === "none" ? "Right" : "Left");
+			const after = await f.read();
+			expect(after.activeByDevice).toEqual(before.activeByDevice);
+			expect(f.delivered.slice(count).length).toBeGreaterThan(0);
+			expect(
+				f.delivered
+					.slice(count)
+					.every(
+						(entry) =>
+							entry.serial === "mock-unit" && entry.profileId === "1-8",
+					),
+			).toBe(true);
+			if (failure !== "none")
+				expect(claw(after)?.pages).toEqual(claw(before)?.pages);
+		} finally {
+			await f.dispose();
+		}
+	});
+}
+it("rechecks selection when a device leaves DK-Claw after preparation", async () => {
+	const f = fixture("1-8");
+	try {
+		await f.connect();
+		const transaction = await Effect.runPromise(
+			agentProfileBinding(f.profiles).prepare(allMain, f.state().agents),
+		);
+		await f.profiles.runPromise(
+			Effect.flatMap(ProfileSwitching, (service) =>
+				service.selectNow("mock-unit", "1-4"),
+			),
+		);
+		const count = f.deliveries();
+		const before = await f.read();
+		expect(await Effect.runPromise(transaction.apply)).toBe(false);
+		await Effect.runPromise(transaction.rollback);
+		expect(f.deliveries()).toBe(count);
+		expect((await f.read()).activeByDevice).toEqual(before.activeByDevice);
+	} finally {
+		await f.dispose();
+	}
+});

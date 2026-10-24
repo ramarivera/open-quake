@@ -29,7 +29,6 @@ export type ProfilesRuntime = ManagedRuntime.ManagedRuntime<
 const profileId = "1-8";
 export function agentProfileBinding(
 	runtime: ProfilesRuntime,
-	select: (id: string) => Promise<unknown>,
 ): typeof AgentPanelPort.Service {
 	const external = <A>(
 		f: () => Promise<A>,
@@ -86,16 +85,6 @@ export function agentProfileBinding(
 			};
 			// ProfileService.saveProfile decodes the encoded Draft and compares expectedRevision.
 			let savedRevision: Option.Option<number> = Option.none();
-			const serials = yield* external(() =>
-				runtime.runPromise(
-					Effect.flatMap(ProfileSwitching, (service) =>
-						service.connectedSerials(),
-					),
-				),
-			);
-			const wasActive = serials.some(
-				(serial) => envelope.activeByDevice[serial]?.profileId === profileId,
-			);
 			const save = (profile: Profile, expectedRevision: number) =>
 				external(() =>
 					runtime.runPromise(
@@ -114,10 +103,13 @@ export function agentProfileBinding(
 					const current = saved.profiles.find((p) => p.id === profileId);
 					if (!current) return yield* new AgentPanelFailed();
 					savedRevision = Option.some(current.revision);
-					if (!wasActive) return false;
-					// select drives the existing manager visibility/anchor/delivery consumer.
-					yield* external(() => select(profileId));
-					return true;
+					return yield* external(() =>
+						runtime.runPromise(
+							Effect.flatMap(ProfileSwitching, (service) =>
+								service.redeliverSelected(profileId),
+							),
+						),
+					);
 				})(),
 				rollback: Effect.fn("AgentsPanel.rollback")(
 					function* (): Effect.fn.Return<void, AgentError> {
@@ -127,12 +119,17 @@ export function agentProfileBinding(
 								Effect.fail(new AgentRollbackFailed(cause)),
 							),
 						);
-						if (wasActive)
-							yield* external(() => select(profileId)).pipe(
-								Effect.catchTag("AgentPanelFailed", (cause) =>
-									Effect.fail(new AgentRollbackFailed(cause)),
+						yield* external(() =>
+							runtime.runPromise(
+								Effect.flatMap(ProfileSwitching, (service) =>
+									service.redeliverSelected(profileId),
 								),
-							);
+							),
+						).pipe(
+							Effect.catchTag("AgentPanelFailed", (cause) =>
+								Effect.fail(new AgentRollbackFailed(cause)),
+							),
+						);
 					},
 				)(),
 			};

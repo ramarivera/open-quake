@@ -13,7 +13,6 @@ const agents = registerAgents({
   management: () => managementWin,
   renderer: rendererURL,
   profiles: profiles.runtime,
-  selectProfile: profiles.select,
   credentials: managementAgentCredentials(credentialRoot),
 });
 // Before disposing profiles:
