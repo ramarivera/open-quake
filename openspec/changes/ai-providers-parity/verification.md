@@ -1,5 +1,8 @@
 # Verification
 
+Review round 2 is documented in [review-round-2.md](review-round-2.md), including
+five addressed threads, 957 uncached tests and the retained acceptance limits.
+
 PR #27 round-one corrections, final gate results and current acceptance limits
 are recorded in verification-round-1.md. The original lane evidence follows.
 
