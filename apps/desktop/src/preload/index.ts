@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import "../main/clock/preload";
+import "../main/monitor/preload";
 import "../main/media/preload";
 import "./lifecycle";
 import "../main/knob/preload";
