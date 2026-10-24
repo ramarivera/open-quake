@@ -1,4 +1,11 @@
 import { type RefObject, useEffect, useRef } from "react";
+import {
+	messageDragOffset,
+	messageReleaseVelocity,
+	shouldFlingMessages,
+	stepMessageFling,
+} from "../../message-scroll";
+import type { VelocitySample } from "../../scroll-physics";
 
 /**
  * Consumers of strip-touch-input's sub-element events (PR #20): elements
@@ -60,4 +67,84 @@ export function useSubTouchTap(
 		element.addEventListener("quake-sub-touch-end", onEnd);
 		return () => element.removeEventListener("quake-sub-touch-end", onEnd);
 	});
+}
+
+/**
+ * ClawBotView's message scroll (quakeMessagesTouchScroll.js, AI-163) with
+ * strip-touch's chat physics: 1:1 drag capped at 96 px per fast event, then a
+ * fling only for a quick flick. Reduced motion drags without flinging.
+ */
+export function useSubTouchMessages(
+	ref: RefObject<HTMLElement | null>,
+	motion: "full" | "reduce",
+): void {
+	useEffect(() => {
+		const element = ref.current;
+		if (!element) return;
+		let origin = 0;
+		let startedAt = 0;
+		let lastAt = 0;
+		let samples: VelocitySample[] = [];
+		let frame = 0;
+		const max = (): number =>
+			Math.max(0, element.scrollHeight - element.clientHeight);
+		const onStart = (event: Event): void => {
+			const detail = detailOf(event);
+			if (!detail) return;
+			const now = performance.now();
+			if (detail.phase === "start") {
+				cancelAnimationFrame(frame);
+				origin = element.scrollTop;
+				startedAt = now;
+				lastAt = now;
+				samples = [{ offset: origin, time: now }];
+				return;
+			}
+			element.scrollTop = messageDragOffset(
+				origin,
+				detail.y - detail.startY,
+				element.scrollTop,
+				max(),
+				now - lastAt,
+			);
+			lastAt = now;
+			samples = [...samples, { offset: element.scrollTop, time: now }].slice(
+				-12,
+			);
+		};
+		const onEnd = (event: Event): void => {
+			if (!detailOf(event) || motion === "reduce") return;
+			const now = performance.now();
+			let velocity = messageReleaseVelocity(samples);
+			if (
+				!shouldFlingMessages(
+					velocity,
+					now - startedAt,
+					element.scrollTop - origin,
+				)
+			)
+				return;
+			let previous = now;
+			const tick = (time: number): void => {
+				const step = stepMessageFling(
+					element.scrollTop,
+					velocity,
+					max(),
+					time - previous,
+				);
+				previous = time;
+				element.scrollTop = step.offset;
+				velocity = step.velocity;
+				if (!step.done) frame = requestAnimationFrame(tick);
+			};
+			frame = requestAnimationFrame(tick);
+		};
+		element.addEventListener("quake-sub-touch-start", onStart);
+		element.addEventListener("quake-sub-touch-end", onEnd);
+		return () => {
+			cancelAnimationFrame(frame);
+			element.removeEventListener("quake-sub-touch-start", onStart);
+			element.removeEventListener("quake-sub-touch-end", onEnd);
+		};
+	}, [ref, motion]);
 }

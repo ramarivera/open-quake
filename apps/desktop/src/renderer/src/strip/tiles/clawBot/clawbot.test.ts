@@ -352,6 +352,24 @@ describe("ClawBotView rendering", () => {
 	});
 });
 
+describe("FunctionWheel interplay (AI-207)", () => {
+	it("goes opaque without blur while the wheel is open", () => {
+		const markup = (wheelOpen: boolean) =>
+			renderToStaticMarkup(
+				createElement(ClawBotTile, {
+					tile: tile("quakeBot"),
+					context: {
+						now: undefined,
+						hourFormat: "24h",
+						voice: { ...previewVoiceContext, wheelOpen },
+					},
+				}),
+			);
+		expect(markup(true)).toContain('data-wheel="true"');
+		expect(markup(false)).not.toContain("data-wheel");
+	});
+});
+
 describe("ClawBotInput", () => {
 	it("needs a tapped clawbot key, then text", () => {
 		expect(checkSend(initialInput, "hi")).toEqual({

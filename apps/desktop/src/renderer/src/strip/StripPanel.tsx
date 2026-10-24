@@ -8,6 +8,7 @@ import { useWallpaper } from "../wallpaper/useWallpaper";
 import type { StripLayout } from "./geometry";
 import { mountStripTouch } from "./mount-strip-touch";
 import { KnobPanelLayer } from "./overlays/knob/KnobPanelLayer";
+import { useKnob } from "./overlays/knob/useKnob";
 import { KeyAlert } from "./overlays/voice/KeyDecorations";
 import { holdKeyOf, useVoiceSurface } from "./overlays/voice/useVoiceSurface";
 import { StripToasts, VoiceOverlay } from "./overlays/voice/VoiceOverlay";
@@ -109,6 +110,9 @@ export function StripPanel(): React.JSX.Element {
 	const stripLayout = useStripLayout(profiles, serial);
 	const voice = useVoiceSurface(stripLayout);
 	const motion = useStripMotion();
+	// Chat cards go opaque while the FunctionWheel or picker is open (AI-207).
+	const knobSelector = useKnob().snapshot?.selector.mode;
+	const wheelOpen = knobSelector !== undefined && knobSelector !== "closed";
 	const main = useRef<HTMLElement>(null);
 	const { request, view, locale } = voice.context;
 	const onHoldKey = useHoldInput(main, stripLayout, (input) => {
@@ -163,7 +167,7 @@ export function StripPanel(): React.JSX.Element {
 						...voice.context,
 						surface: "panel",
 						motion,
-						wheelOpen: false,
+						wheelOpen,
 					}}
 					tileOverlay={(tile) => {
 						const alert = view.alerts.get(tile.keyCode);

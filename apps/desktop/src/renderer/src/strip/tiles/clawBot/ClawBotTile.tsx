@@ -2,7 +2,7 @@ import { Option } from "effect";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import "../../css-properties";
 import { type StripLocale, stripText } from "../../overlays/voice/strings";
-import { useSubTouchDrag } from "../../overlays/voice/sub-touch";
+import { useSubTouchMessages } from "../../overlays/voice/sub-touch";
 import type { StripTileProps } from "../../tileRegistry";
 import type {
 	ChatGroup,
@@ -96,17 +96,19 @@ function Messages({
 	state,
 	locale,
 	scale,
+	motion,
 	onOpen,
 }: {
 	state: ConversationState;
 	locale: StripLocale;
 	scale: number;
+	motion: "full" | "reduce";
 	onOpen: (url: string) => void;
 }): React.JSX.Element {
 	const area = useRef<HTMLDivElement>(null);
 	const following = useRef(true);
 	const firstBatch = useRef(state.groups.length);
-	useSubTouchDrag(area);
+	useSubTouchMessages(area, motion);
 	const live = Option.getOrUndefined(state.live);
 	const lastText = state.groups.at(-1)?.messages.at(-1);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: follow new content.
@@ -280,7 +282,7 @@ export function ClawBotTile({
 	tile,
 	context,
 }: StripTileProps): React.JSX.Element {
-	const { view, locale, surface, wheelOpen } = context.voice;
+	const { view, locale, surface, wheelOpen, motion } = context.voice;
 	const { width, height } = tile.box;
 	const scale = clawBotScale(width, height);
 	const state = view.conversation;
@@ -362,7 +364,13 @@ export function ClawBotTile({
 				</button>
 			</div>
 			{surface === "panel" ? (
-				<Messages state={state} locale={locale} scale={scale} onOpen={open} />
+				<Messages
+					state={state}
+					locale={locale}
+					scale={scale}
+					motion={motion}
+					onOpen={open}
+				/>
 			) : null}
 		</div>
 	);
