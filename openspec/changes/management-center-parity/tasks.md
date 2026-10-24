@@ -38,5 +38,5 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 ## 6. Verification and delivery
 
 - [x] 6.1 Native mock smoke screenshots of every page in Dark, Light and Grey, plus the narrow rail and the popover, saved under the lane scratch folder. Bead `open-quake-lih.17.1.21`.
-- [ ] 6.2 Run the six repository gates, update beads and evidence, and open the PRs. Bead `open-quake-lih.17.1.22`.
+- [x] 6.2 Run the six repository gates, update beads and evidence, and open the PRs. Bead `open-quake-lih.17.1.22`.
 - [ ] 6.3 Lead-owned hardware acceptance, explicitly outside this mock-only lane and left open at PR handoff: emoji paste and Enter through the device keyboard, Home Assistant against a real server, and DK-Claw and Home Assistant tiles on the QUAKE. Bead `open-quake-lih.17.1.23`.

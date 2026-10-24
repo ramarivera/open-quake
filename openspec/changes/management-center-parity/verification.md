@@ -1,6 +1,6 @@
 # Management Center verification
 
-The lane is split into two review layers. The module branch `lane/management-modules` contains the plan, agent workbench and integrations. PR https://github.com/ramarivera/open-quake/pull/33 targets main. The application branch `lane/management-center` adds emoji keys and composes the modules into the themed shell. Its PR targets the module branch. No dependencies were added.
+The lane is split into two review layers. The module branch `lane/management-modules` contains the plan, agent workbench and integrations. PR https://github.com/ramarivera/open-quake/pull/33 targets main. The application branch `lane/management-center` adds emoji keys and composes the modules into the themed shell. PR https://github.com/ramarivera/open-quake/pull/34 targets the module branch. The module head is `467d113801450a88c8c98daa480a1ab0e1cbe777`; the integrated implementation commit is `07211a2`. No dependencies were added.
 
 ## Coverage and source
 
@@ -48,4 +48,4 @@ The existing `main/media/smoke.ts` also passed. Its screenshots are in `scratch/
 - GIFs are bounded at 8 MiB, 1024×1024, 300 frames and 128 MiB retained RGBA. Encoding uses binary alpha and palette quantization. Still-image conversion is also limited to 1024×1024. Referenced assets are retained after package deletion.
 - Emoji packages and shortcut libraries sync as custom profiles until folder navigation lands. Repeating sync updates the same profile. Saving does not establish hardware acceptance.
 - CENTER-006 locale synchronization is outside this change. Account login, Agent Market, installer, editions, cloud model catalog and token-bearing WebChat are excluded by the approved scope and safety decisions.
-- Beads `open-quake-lih.17.1.1`–`.21` record implementation and screenshot evidence. Delivery is `.22`; lead-owned hardware acceptance `.23` remains open. The cluster, parity epic and redesign epic remain open. The macOS title-bar defect is tracked by `open-quake-nyd.1`; other platforms need native acceptance.
+- Beads `open-quake-lih.17.1.1`–`.21` record implementation and screenshot evidence. Delivery `.22` is also closed after both PRs were opened and linked. Lead-owned hardware acceptance `.23` remains open. The cluster, parity epic and redesign epic remain open. The macOS title-bar defect is tracked by `open-quake-nyd.1`; other platforms need native acceptance.
