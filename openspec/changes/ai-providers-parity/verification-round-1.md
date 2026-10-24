@@ -177,5 +177,9 @@ All six gates were rerun on this source:
   @open-quake/desktop test:bundle: both cases passed with awaited shutdown.
 - openspec validate --all --strict: 36 passed, zero failed.
 
-These latest logs use *-budget-final.log. Publication and the thread reply
-and resolution remain for bead open-quake-lih.15.1.13.
+These latest logs use *-budget-final.log. Fix commit
+f1fa10df9d21dc9d6ac4036956c0e7b5c2661e0d was pushed through the normal hooks.
+The thread received a reply naming the fix and was resolved:
+https://github.com/ramarivera/open-quake/pull/27#discussion_r4366975958.
+Bead open-quake-lih.15.1.13 and the epic are closed with this evidence.
+The original seven threads and both additional findings are handled.
