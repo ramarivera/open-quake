@@ -219,6 +219,7 @@ export function StripPanel(): React.JSX.Element {
 				},
 				(direction) => {
 					dispatch.cancel();
+					heldEmoji.clear();
 					if (!target.current) return;
 					void window.quakeKeyLibrary?.request({
 						type: "navigate",
@@ -228,6 +229,7 @@ export function StripPanel(): React.JSX.Element {
 				},
 				() => {
 					dispatch.cancel();
+					heldEmoji.clear();
 					setPressedKeyCode(undefined);
 				},
 			);

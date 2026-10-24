@@ -722,11 +722,11 @@ async function smoke() {
 		await panel.webContents.executeJavaScript(
 			"window.__emojiInvalidSeen=false;(()=>{const observer=new MutationObserver(records=>{if(records.some(r=>r.target.dataset.invalid==='true')){window.__emojiInvalidSeen=true;observer.disconnect();}});observer.observe(document.getElementById('root'),{subtree:true,attributes:true,attributeFilter:['data-invalid']});})();",
 		);
-		const touch = (action: number): void =>
+		const touch = (action: number, x = 120): void =>
 			panel.webContents.send(QUAKE_EVENT_CHANNEL, {
 				source: "mock",
 				kind: "touch",
-				points: [{ action, x: 120, y: 360 }],
+				points: [{ action, x, y: 360 }],
 			} satisfies QuakeEvent);
 		touch(1);
 		await settle(30);
@@ -754,6 +754,47 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
 		});
+		const cancelledTouchCases: string[] = [];
+		for (const closesBeforeLift of [false, true]) {
+			const before = copiedFiles.length;
+			touch(1);
+			await settle(30);
+			await panel.webContents.executeJavaScript(
+				"document.getElementById('root').dataset.stripOverlay='true';null;",
+			);
+			touch(1);
+			await settle(30);
+			if (closesBeforeLift)
+				await panel.webContents.executeJavaScript(
+					"document.getElementById('root').dataset.stripOverlay='false';null;",
+				);
+			touch(0);
+			await settle(100);
+			assert.equal(
+				copiedFiles.length,
+				before,
+				"Overlay takeover must cancel held emoji, even when it closes before lift",
+			);
+			await panel.webContents.executeJavaScript(
+				"document.getElementById('root').dataset.stripOverlay='false';null;",
+			);
+			cancelledTouchCases.push(
+				`overlay-closes-before-lift-${closesBeforeLift}`,
+			);
+		}
+		const beforeMovement = copiedFiles.length;
+		touch(1);
+		await settle(30);
+		touch(1, 160);
+		await settle(30);
+		touch(0, 160);
+		await settle(100);
+		assert.equal(
+			copiedFiles.length,
+			beforeMovement,
+			"Gesture movement cancellation must discard held emoji",
+		);
+		cancelledTouchCases.push("movement");
 		const copiedBeforeCancel = copiedFiles.length;
 		touch(1);
 		await settle(30);
@@ -849,7 +890,7 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 2 },
 		});
-		const cancelledCases: string[] = [];
+		const cancelledCases = cancelledTouchCases;
 		for (const target of [
 			[profileId, otherPageId, "page"],
 			["synthetic-other", "synthetic-other-page", "profile"],
@@ -930,6 +971,9 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
 		});
+		process.stdout.write(
+			"Emoji cancellation regressions PASS: overlay takeover, early close, movement; no copy.\n",
+		);
 		const beforeNormal = copiedFiles.length;
 		touch(1);
 		await settle(30);
@@ -950,6 +994,7 @@ async function smoke() {
 					cancelledCases,
 					subsequentTouchCopied: true,
 					modeDuringCancellation: 2,
+					overlayAndMovementMode: 0,
 					realClipboardOrKeyboard: false,
 				},
 				null,
