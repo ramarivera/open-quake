@@ -189,6 +189,29 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				),
 			);
 
+			/** Refresh committed content under the selection lock without changing any selection. */
+			const redeliverSelected = Effect.fn("ProfileSwitching.redeliverSelected")(
+				function* (
+					id: string,
+				): Effect.fn.Return<boolean, ProfileSwitchingError> {
+					let applied = false;
+					yield* repository.transact((current) =>
+						Effect.gen(function* () {
+							const profile = current.profiles.find((p) => p.id === id);
+							if (!profile) return yield* ProfileNotFound.fromCause(undefined);
+							for (const serial of sessions) {
+								if (current.activeByDevice[serial]?.profileId !== id) continue;
+								generations.set(serial, (generations.get(serial) ?? 0) + 1);
+								yield* port.push(serial, profile);
+								applied = true;
+							}
+							return current;
+						}),
+					);
+					return applied;
+				},
+			);
+
 			return {
 				/** Called under the manager transaction; never reacquires its repository lock. */
 				deliver: Effect.fn("ProfileSwitching.deliver")(
@@ -206,6 +229,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				selectNow,
 				probe,
 				poll,
+				redeliverSelected,
 				connectedSerials: Effect.fn("ProfileSwitching.connectedSerials")(
 					(): Effect.Effect<readonly string[]> =>
 						Effect.sync(() => [...sessions]),
