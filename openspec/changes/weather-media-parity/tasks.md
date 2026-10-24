@@ -14,7 +14,7 @@ Each numbered task has a child bead under `open-quake-lih.7.1` referencing this 
 
 ## 3. Acceptance
 
-- [ ] 3.1 Run all six lane gates and native mock smokes, inspect screenshots, save lane report and open a PR with audit coverage, exact head and unverified native/hardware items.
+- [x] 3.1 Run all six lane gates and native mock smokes, inspect screenshots, save lane report and open a PR with audit coverage, exact head and unverified native/hardware items.
 - [ ] 3.2 Separate follow-up approved by Ramiro: vendor a reviewed macOS MediaRemote helper, implement and qualify real read/control, then verify on host media sessions. Windows SMTC also remains unimplemented behind its platform check. This task stays open after this PR's spec + stub delivery.
 
 ## Verification evidence
@@ -22,3 +22,5 @@ Each numbered task has a child bead under `open-quake-lih.7.1` referencing this 
 All six lane gates passed on 2026-10-24. Root tests report 781 passing tests, including 362 desktop tests. Focused weather/media tests cover real conductors with injected IO, Effect TestClock cache/deadline behavior, city sequencing, rejected writes, controls, schemas and renderer state. Both native Electron mock smokes passed with production preload/IPC/renderers and no local server or device access. Captures include the clock with both cards, city verification and IP consent, and DK-Player playing, paused, idle/guide, unavailable, navigation-disabled, pause-disabled and unknown-duration states. The existing media smoke also covers narrow layout, light theme, reduced motion and strip touch routing.
 
 Logs, inspected captures and the lane report live under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/weather-media/`. Native MediaRemote/SMTC, provider availability on the live network and real QUAKE rendering/touch remain unverified. Task 3.2 and its parent epic stay open.
+
+PR: https://github.com/ramarivera/open-quake/pull/29. Implementation evidence is commit `6176f0d42dc75aeccb03d67376d2066ec0bc8c29`; the final head is recorded in the lane report after the acceptance bookkeeping commit.
