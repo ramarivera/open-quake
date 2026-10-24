@@ -2,13 +2,22 @@
 
 ## Purpose
 
-The recovered channels hub renders a dynamic catalog and setup drawer, but its complete catalog is missing. The replacement must represent available adapters without claiming unverified channel support.
+The recovered channels hub renders a dynamic catalog and setup drawer backed by six known entries in background.js, already present in 0.4.52 (`CENTER-072`, `CENTER-073`). The replacement must represent available adapters without claiming unverified channel support.
 
 ## ADDED Requirements
 
 ### Requirement: Verified dynamic catalog
 
-The hub SHALL list only registered channel descriptors with stable ID, label, setup type, required runtime and availability. It SHALL support an empty catalog without inventing entries from integration names.
+The hub SHALL list only registered channel descriptors with stable ID, label, setup type, required runtime and availability. It SHALL support an empty adapter registry. The recovered catalog SHALL contain the six descriptors below with stable IDs, setup types, install specifications, bundled flags and observed region groups. Catalog membership SHALL NOT mark an adapter connected or authorize implicit installation. Evidence: `CENTER-072`, `CENTER-073`; `v0.4.95/app-resources/background.js`, `OPENCLAW_CN_CHANNEL_CATALOG` / `OPENCLAW_INTL_CHANNEL_CATALOG`, and the 0.4.52 `strings/background_strings_4.txt` catalog.
+
+| ID | English label | Observed group | Setup type | installSpec | Bundled |
+| --- | --- | --- | --- | --- | --- |
+| `feishu` | Feishu | China | `credentials_or_qr` | `@openclaw/feishu` | Yes |
+| `qqbot` | QQ Bot | China | `app_id_secret` | `@openclaw/qqbot` | Yes |
+| `openclaw-weixin` | WeChat | China | `qr_login` | `@tencent-weixin/openclaw-weixin` | No |
+| `wecom` | WeCom | China | `wecom_bot_credentials` | `@wecom/wecom-openclaw-plugin` | No |
+| `whatsapp` | WhatsApp | International | `qr_login` | `clawhub:@openclaw/whatsapp`, fallback `@openclaw/whatsapp` | No |
+| `discord` | Discord | International | `bot_token` | `@openclaw/discord` | Yes |
 
 #### Scenario: No adapters
 

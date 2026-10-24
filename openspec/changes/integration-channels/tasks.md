@@ -4,7 +4,7 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 
 ## 1. Catalog and runtime boundary
 
-- [ ] 1.1 Resolve question 9 and setup/expiry proposals by recording supported descriptor fixtures rather than inventing a complete catalog; verify each planned adapter names its owning runtime contract.
+- [ ] 1.1 Record the six recovered descriptor fixtures and China/international grouping (`CENTER-072/073`), then confirm setup/expiry proposals; verify each planned adapter names its owning runtime contract.
 - [ ] 1.2 Add channel/setup/status schemas, registry invariants and public API documentation; verify empty catalog, unsupported setup type and credential-free status round-trips.
 
 ## 2. Setup lifecycle
@@ -15,4 +15,4 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 ## 3. Hub acceptance
 
 - [ ] 3.1 Wire catalog cards, setup drawer, QR progress, disable/remove and error states through the typed client with adapter-author documentation; verify actual UI flows on empty and controllable fixture catalogs.
-- [ ] 3.2 Run all integration-channels scenarios and one real adapter pairing after runtime readiness; record catalog and external pairing evidence as unverified until then.
+- [ ] 3.2 Run all integration-channels scenarios and one real adapter pairing after runtime readiness; retain the source-verified catalog evidence and record external pairing as unverified until exercised.

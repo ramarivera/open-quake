@@ -2,7 +2,7 @@
 
 ## Purpose
 
-DK-Suite exposes CPU, GPU, memory, disk, network, process, Bluetooth, and power tiles alongside app monitoring and gaming mode. A replacement needs explicit availability and sampling behavior before native collectors are chosen.
+DK-Suite exposes CPU, GPU, memory, disk, network, process, Bluetooth, and power tiles alongside app monitoring. Open-quake also defines a reversible monitoring override below. A replacement needs explicit availability and sampling behavior before native collectors are chosen.
 
 ## ADDED Requirements
 
@@ -48,19 +48,19 @@ The system SHALL publish foreground-window changes by window identity and owning
 - **WHEN** the user disables app monitoring while a poll is pending
 - **THEN** no further poll is scheduled and the pending result does not reactivate monitoring
 
-### Requirement: Reversible gaming mode
+### Requirement: Reversible monitoring override
 
-The system SHALL apply the saved gaming monitoring configuration while gaming mode is enabled and restore the latest saved normal configuration when it is disabled.
+The system SHALL apply the saved monitoring override configuration while monitoring override is enabled and restore the latest saved normal configuration when it is disabled. This monitoring-only control SHALL be named "monitoring override". DK-Suite's "gaming mode" selects device-typed hotkeys, a separate hardware-controls behavior; this override SHALL NOT change hotkey dispatch. Evidence: `MAIN-096`.
 
-#### Scenario: Enter and leave gaming mode
+#### Scenario: Enter and leave monitoring override
 
-- **WHEN** a user enables gaming mode with CPU-only tiles and then disables it
-- **THEN** CPU-only monitoring runs during gaming mode and the saved normal tile selection returns afterwards
+- **WHEN** a user enables monitoring override with CPU-only tiles and then disables it
+- **THEN** CPU-only monitoring runs during monitoring override and the saved normal tile selection returns afterwards
 
-#### Scenario: Edit normal settings during gaming
+#### Scenario: Edit normal settings during the override
 
-- **WHEN** the user changes the saved normal rate while gaming mode is active
-- **THEN** gaming sampling stays unchanged until exit, then the new normal rate applies
+- **WHEN** the user changes the saved normal rate while monitoring override is active
+- **THEN** override sampling stays unchanged until exit, then the new normal rate applies
 
 ### Requirement: Shared monitor state
 

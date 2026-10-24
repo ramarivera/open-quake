@@ -45,8 +45,8 @@ Each new change's `openspec status --change <name> --json` reports all four plan
 ## Evidence limits and open decisions
 
 - Codex device login is documented; a supported Vercel inference bridge, isolated helper grant storage, and the integration choice remain pending. No login was attempted.
-- DashScope's active recovered TTS route is HTTP/SSE. Its current audio descriptor and STT final-segment rule still require adapter probes before release.
-- The cited title helper proves preset-label localization, not automatic conversation summarization. Optional generated titles are a proposed extension.
+- DashScope's direct BYO-key TTS route is HTTP/SSE; the active 0.4.95 vendor gateway is separate (`AI-101/102`). Its current audio descriptor and STT final-segment rule still require adapter probes before release.
+- The old title-helper citation proves preset-label localization. `AI-236` and 0.4.95 `AIAssistantContent.vue:885-897` prove first-user-message titles, at most 10 characters plus `...` only for longer input. This lane corrects that specification; runtime acceptance remains open. Optional generated titles are a proposed extension.
 - Physical panel transfer/touch, knob hold/release timing, microphone permissions, real playback, live model/provider behavior, gateway compatibility, and Linux behavior are unverified.
 - No npm dependency was added. Future SDK/provider/GT packages require approved exact versions and catalog pins during implementation.
 - Beads was not run by this lane. The parent must create/reconcile the epic/task records in beads-handoff.md and attach verification before closing implementation work.

@@ -4,8 +4,8 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 
 ## 1. Contracts and evidence
 
-- [ ] 1.1 Resolve the sampling/gaming proposals and map each metric to a real collector or unsupported status; verify a decision record and collector availability matrix against the cited sources.
-- [ ] 1.2 Add monitoring schemas, sample/staleness and gaming-overlay invariants in packages/edge with API documentation; verify schema round-trips and fake-clock/property cases for rate bounds and restore behavior.
+- [ ] 1.1 Resolve the sampling/monitoring override proposals and map each metric to a real collector or unsupported status; verify a decision record and collector availability matrix against the cited sources.
+- [ ] 1.2 Add monitoring schemas, sample/staleness and monitoring override invariants in packages/edge with API documentation; verify schema round-trips and fake-clock/property cases for rate bounds and restore behavior.
 
 ## 2. Collection and transport
 
@@ -14,5 +14,5 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 
 ## 3. Consumers and acceptance
 
-- [ ] 3.1 Wire management controls, panel tiles and gaming mode to the shared state with consumer documentation; verify saving/disable/restore through the real controls and observe old collectors stop.
+- [ ] 3.1 Wire management controls, panel tiles and monitoring override to the shared state with consumer documentation; verify saving/disable/restore through the real controls and observe old collectors stop.
 - [ ] 3.2 Run every system-monitor-tiles scenario through fake layers and targeted native collector smoke checks; record platform-specific support and leave physical panel evidence open until hardware is exercised.

@@ -31,7 +31,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 - **S** `RS/webpack:__dk-suite_src_views_QuakeGuide_quakeGuideContent.js`: guide content data.
 - **S** `RS/webpack:__dk-suite_src_views_ARIS-68_Componets_CalibrationAris68.vue`: calibration belongs to an ARIS-68 view, not demonstrated QUAKE calibration.
 - **N** `ART/ipc_channels.txt`: ReportCalibrationData and DoManualCalibration names do not establish a QUAKE command.
-- **S** `RS/webpack:__dk-suite_src_plugins_KeyConfiguration.js`: liveAudioTranslate menu entries are disabled, supporting the question 11 deferral rather than activation from settings.
+- **S** `RS/webpack:__dk-suite_src_plugins_KeyConfiguration.js`: liveAudioTranslate key-library menu entries are disabled; 0.4.95 instead ships live translation as a Meet AI profile key (`AI-136/292`), so the action is profile-provided rather than added from the key library or settings.
 
 ## Goals / Non-Goals
 
@@ -59,7 +59,7 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 5. Approved (Ramiro, 2026-10-23): offer the recovered locale IDs zh, en, es, fr, ko, de, it and ja only when translations exist; use en as replacement fallback. Record launch-at-login and start-hidden separately because openAsHidden proves only hidden-start storage.
 
-6. Approved (Ramiro, 2026-10-23): question 11 remains deferred in meeting-minutes; settings must not enable a liveAudioTranslate action from disabled menu evidence.
+6. Approved (Ramiro, 2026-10-23): question 11 remains deferred in meeting-minutes; settings must not enable a liveAudioTranslate action from disabled menu evidence. Superseded 2026-10-24 by the 0.4.95 audit: live translation ships in the default Meet AI profile (`AI-136/292`), so question 11 is resolved in meeting-minutes. Settings still does not add its own liveAudioTranslate entry; the action is reached through the Meet AI profile's keys.
 
 ### Data model
 
@@ -81,11 +81,11 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 ### Inventory coverage and decision ownership
 
-- Section 7 monitor tiles, app/window monitoring and gaming mode: `system-monitor-tiles`; desktop clock: `desktop-clock`; global hotkeys/input hooks: `host-input-hooks`.
+- Section 7 monitor tiles, app/window monitoring and the monitoring override: `system-monitor-tiles`; desktop clock: `desktop-clock`; global hotkeys/input hooks: `host-input-hooks`.
 - Section 7 HA: `home-assistant-integration`; channels hub: `integration-channels`; plugin server/management: `stream-deck-compat`; camera and printer gateway views: `camera-and-printer-views`.
 - Section 8 recording/history/export: `meeting-minutes`; DK-Player: `soundboard-player`.
 - Section 9 first run, locale/region, general/AI/device settings, local guide and calibration gating: this change. Artwork/templates: `artwork-library`; DFU and firmware: `firmware-dfu`. Wallpaper and QMK transports remain delegated to their existing owners.
-- Question 5 is an evidence gate in camera-and-printer-views. Questions 7 and 12 stay unresolved in stream-deck-compat. Question 8 has the QUAKE-only recommendation here. Question 9 stays catalog-gated in integration-channels. Question 11 stays deferred in meeting-minutes. Question 13 stays delivery-gated in artwork-library.
+- Question 5 is an evidence gate in camera-and-printer-views. Questions 7 and 12 stay unresolved in stream-deck-compat. Question 8 has the QUAKE-only recommendation here. Question 9 is resolved by the six-channel catalog in integration-channels (`CENTER-072/073`); runtime pairing stays unverified. Question 11 is resolved by shipped Meet AI live translation in meeting-minutes (`AI-136/292`). Question 13 stays delivery-gated in artwork-library.
 
 ## Risks / Trade-offs
 

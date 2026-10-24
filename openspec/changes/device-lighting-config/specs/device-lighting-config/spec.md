@@ -42,7 +42,7 @@ The UI SHALL distinguish desired, applied, and saved-to-device values. Applying 
 
 ### Requirement: Knob LED always-on is a separate preference
 
-The system SHALL persist knobLedAlwaysOn as a boolean per device serial, default true. The preference SHALL remain distinct from global lighting values and hardware-applied state. Without a verified knob-specific adapter, its state SHALL be saved-locally and hardware application SHALL remain unavailable.
+The system SHALL persist knobLedAlwaysOn as a boolean per device serial, default true. The preference SHALL remain distinct from global lighting values and hardware-applied state. The recovered knob command is `0xA3`, opcode `1`, cmd `0x06`, payload `[0]` off / `[1]` on (`SETTINGS-021`); its full transport/lifecycle contract belongs to the hardware-controls lane. Without a qualified knob-specific adapter, its state SHALL be saved-locally and hardware application SHALL remain unavailable.
 
 #### Scenario: Preference without transport
 
