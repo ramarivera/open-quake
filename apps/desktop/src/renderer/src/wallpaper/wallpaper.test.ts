@@ -51,8 +51,22 @@ describe("shared panel and preview consumer", () => {
 		expect(preview).toBe(panel);
 		expect(panel).toContain('viewBox="0 0 1920 480"');
 		expect(panel).toContain('x="720" y="0" width="480" height="480"');
-		expect(panel).toContain('data-tile="dkDesktopClock"');
-		expect(panel).toContain("00:00:00");
+		expect(panel).toContain('data-time="00:00:00"');
+		expect(panel).toContain('data-tile="dkDesktopClock">00:00</text>');
+		expect(panel).toContain(">00</text>");
+		const twelve = render({
+			...snapshot,
+			saved: {
+				...snapshot.saved,
+				clock: {
+					...defaultClockTile,
+					actions: [{ type: "hourFormat", value: "12h" }],
+				},
+			},
+		});
+		expect(twelve).toContain('data-time="12:00:00 AM"');
+		expect(twelve).toContain(">12:00</text>");
+		expect(twelve).toContain(">AM</text>");
 		expect(panel).not.toContain("hardware-applied");
 		expect(render(snapshot)).toContain(
 			'x="0" y="-720" width="1920" height="1920"',

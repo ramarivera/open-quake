@@ -31,6 +31,10 @@ const electron = vi.hoisted(() => {
 		loadURL = vi.fn();
 		loadFile = vi.fn();
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
+		setAlwaysOnTop = vi.fn<(flag: boolean, level?: string) => void>();
+		destroy = vi.fn(() => {
+			this.destroyed = true;
+		});
 		on =
 			vi.fn<
 				(
@@ -102,11 +106,13 @@ function windows() {
 
 describe("desktop window lifecycle", () => {
 	const primary = makeDisplay();
+	// macOS reports the strip's native portrait framebuffer, left of the primary.
 	const panelDisplay = makeDisplay({
 		id: 2,
 		label: "DK-QUAKE",
-		size: { width: 1920, height: 480 },
-		workArea: { x: 2560, y: -480, width: 1920, height: 480 },
+		size: { width: 480, height: 1920 },
+		bounds: { x: -480, y: 0, width: 480, height: 1920 },
+		workArea: { x: -480, y: 25, width: 480, height: 1895 },
 	});
 
 	beforeEach(async () => {
@@ -176,20 +182,49 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
-	it("moves the existing panel when DK-QUAKE is attached, then falls back on removal", () => {
-		const { panel } = windows();
+	it("swaps to a strip panel when DK-QUAKE is attached, then back to a normal fallback", () => {
+		const { panel: fallback } = windows();
+		// A normal window on the current Space, never rotated.
+		expect(fallback.options.type).toBeUndefined();
+		expect(fallback.setAlwaysOnTop).toHaveBeenLastCalledWith(
+			false,
+			"screen-saver",
+		);
+		expect(fallback.loadURL).toHaveBeenLastCalledWith(
+			"http://localhost:5173?surface=panel&rotation=0",
+		);
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
-		expect(panel.setBounds).toHaveBeenLastCalledWith(panelDisplay.workArea);
+		const strip = electron.BrowserWindow.windows.at(-1);
+		expect(strip).not.toBe(fallback);
+		expect(fallback.destroy).toHaveBeenCalledOnce();
+		expect(strip?.options.type).toBe(
+			process.platform === "darwin" ? "panel" : undefined,
+		);
+		// The whole display, menu-bar area included, with the canvas turned upright.
+		expect(strip?.setBounds).toHaveBeenLastCalledWith(panelDisplay.bounds);
+		expect(strip?.setAlwaysOnTop).toHaveBeenLastCalledWith(
+			true,
+			"screen-saver",
+		);
+		expect(strip?.loadURL).toHaveBeenLastCalledWith(
+			"http://localhost:5173?surface=panel&rotation=90",
+		);
 		electron.screen.getAllDisplays.mockReturnValue([primary]);
 		displayEvent("display-removed");
-		expect(panel.setBounds).toHaveBeenLastCalledWith({
+		const restored = electron.BrowserWindow.windows.at(-1);
+		expect(strip?.destroy).toHaveBeenCalledOnce();
+		expect(restored?.options.type).toBeUndefined();
+		expect(restored?.setBounds).toHaveBeenLastCalledWith({
 			x: 0,
 			y: 0,
 			width: 1920,
 			height: 480,
 		});
-		expect(electron.BrowserWindow.windows).toHaveLength(2);
+		expect(restored?.loadURL).toHaveBeenLastCalledWith(
+			"http://localhost:5173?surface=panel&rotation=0",
+		);
+		expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
 	});
 
 	it("recreates a destroyed panel on hot-plug and forwards to the replacement", () => {
@@ -201,24 +236,45 @@ describe("desktop window lifecycle", () => {
 		displayEvent("display-added");
 		const replacement = electron.BrowserWindow.windows.at(-1);
 		expect(replacement?.options).toMatchObject({
-			...panelDisplay.workArea,
+			...panelDisplay.bounds,
 			title: "open-quake panel",
 		});
+		expect(replacement?.loadURL).toHaveBeenCalledWith(
+			"http://localhost:5173?surface=panel&rotation=90",
+		);
 		vi.advanceTimersByTime(1500);
 		expect(panel.webContents.send).not.toHaveBeenCalled();
 		expect(replacement?.webContents.send).toHaveBeenCalledTimes(1);
 		expect(management.webContents.send).toHaveBeenCalledTimes(1);
 	});
 
-	it("tracks work-area changes and clamps the panel to the available area", () => {
-		const { panel } = windows();
-		const smaller = makeDisplay({
+	it("follows display moves and reloads only when the strip's rotation changes", () => {
+		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
+		displayEvent("display-added");
+		const panel = electron.BrowserWindow.windows.at(-1);
+		if (!panel) throw new Error("The strip panel must exist");
+		const loads = panel.loadURL.mock.calls.length;
+		const moved = makeDisplay({
 			...panelDisplay,
-			workArea: { x: -1600, y: 20, width: 1600, height: 400 },
+			bounds: { x: 2560, y: 0, width: 480, height: 1920 },
 		});
-		electron.screen.getAllDisplays.mockReturnValue([primary, smaller]);
+		electron.screen.getAllDisplays.mockReturnValue([primary, moved]);
 		displayEvent("display-metrics-changed");
-		expect(panel.setBounds).toHaveBeenLastCalledWith(smaller.workArea);
+		expect(panel.setBounds).toHaveBeenLastCalledWith(moved.bounds);
+		expect(panel.loadURL).toHaveBeenCalledTimes(loads);
+		// Rotated in System Settings: macOS now reports a landscape strip.
+		const rotated = makeDisplay({
+			...panelDisplay,
+			size: { width: 1920, height: 480 },
+			bounds: { x: -1920, y: 0, width: 1920, height: 480 },
+			rotation: 90,
+		});
+		electron.screen.getAllDisplays.mockReturnValue([primary, rotated]);
+		displayEvent("display-metrics-changed");
+		expect(panel.setBounds).toHaveBeenLastCalledWith(rotated.bounds);
+		expect(panel.loadURL).toHaveBeenLastCalledWith(
+			"http://localhost:5173?surface=panel&rotation=0",
+		);
 	});
 
 	it("prevents page title changes so the OmniWM panel title stays stable", () => {

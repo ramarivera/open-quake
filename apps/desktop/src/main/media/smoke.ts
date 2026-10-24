@@ -175,14 +175,18 @@ async function smoke(): Promise<void> {
 	);
 	const artifacts = process.argv[2];
 	await management.webContents.executeJavaScript(
-		`(() => { const selects = document.querySelectorAll('.appearance select'); const theme = selects[0]; const motion = selects[1]; theme.value = 'light'; theme.dispatchEvent(new Event('change', { bubbles: true })); motion.value = 'reduce'; motion.dispatchEvent(new Event('change', { bubbles: true })); })()`,
+		`(() => { document.querySelector('.nav-item[title="Appearance"]').click(); null; })()`,
+	);
+	await new Promise<void>((done) => setTimeout(done, 100));
+	await management.webContents.executeJavaScript(
+		`(() => { document.querySelector('input[type="radio"][value="light"]').click(); document.querySelector('input[type="radio"][value="reduce"]').click(); document.querySelector('.nav-item[title="Overview"]').click(); null; })()`,
 	);
 	await new Promise<void>((done) => setTimeout(done, 100));
 	for (const window of [management, panel]) {
 		const appearance: unknown = await window.webContents.executeJavaScript(
 			`(() => { const background = document.querySelector('.wallpaper-neutral'); return { fill: getComputedStyle(background).fill, animations: document.querySelector('.wallpaper-canvas').getAnimations({ subtree: true }).length }; })()`,
 		);
-		assert.deepEqual(appearance, { fill: "rgb(245, 247, 250)", animations: 0 });
+		assert.deepEqual(appearance, { fill: "rgb(244, 244, 246)", animations: 0 });
 	}
 	if (artifacts) {
 		await mkdir(artifacts, { recursive: true });
@@ -192,8 +196,9 @@ async function smoke(): Promise<void> {
 		);
 		management.setSize(1100, 1000);
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.wallpaper-settings').scrollIntoView(); null;",
+			`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
 		);
+		await new Promise<void>((done) => setTimeout(done, 100));
 		await writeFile(
 			join(artifacts, "management.png"),
 			(await management.webContents.capturePage()).toPNG(),
@@ -201,8 +206,9 @@ async function smoke(): Promise<void> {
 		management.setSize(390, 844);
 		await new Promise<void>((done) => setTimeout(done, 100));
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.wallpaper-settings').scrollIntoView(); null;",
+			`(() => { document.querySelector('.nav-item[title="Screen"]').click(); null; })()`,
 		);
+		await new Promise<void>((done) => setTimeout(done, 100));
 		const overflow: unknown = await management.webContents.executeJavaScript(
 			"document.documentElement.scrollWidth > innerWidth",
 		);

@@ -5,7 +5,12 @@ import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import { app, BrowserWindow, type Display, ipcMain, screen } from "electron";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
-import { findPanelDisplay, PANEL_SIZE } from "./display";
+import {
+	findPanelDisplay,
+	type PanelRotation,
+	panelBounds,
+	panelRotation,
+} from "./display";
 import { createEventForwarder } from "./eventForwarding";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
@@ -13,33 +18,45 @@ import { startMockDeviceBus } from "./mockDeviceBus";
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const PANEL_TITLE = "open-quake panel";
 
-function panelBounds(display: Display) {
-	return {
-		x: display.workArea.x,
-		y: display.workArea.y,
-		width: Math.min(PANEL_SIZE.width, display.workArea.width),
-		height: Math.min(PANEL_SIZE.height, display.workArea.height),
-	};
+interface PanelTarget {
+	readonly display: Display;
+	/** True when the display is the QUAKE strip, not a fallback. */
+	readonly isPanel: boolean;
 }
 
 function loadSurface(
 	win: BrowserWindow,
 	surface: "management" | "panel",
+	rotation: PanelRotation = 0,
 ): void {
+	const query = { surface, rotation: String(rotation) };
 	if (isDev) {
-		win.loadURL(`${process.env.ELECTRON_RENDERER_URL}?surface=${surface}`);
+		win.loadURL(
+			`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`,
+		);
 	} else {
-		win.loadFile(join(__dirname, "../renderer/index.html"), {
-			query: { surface },
-		});
+		win.loadFile(join(__dirname, "../renderer/index.html"), { query });
 	}
 }
 
-function createPanelWindow(display: Display): BrowserWindow {
+function placePanel(win: BrowserWindow, { display, isPanel }: PanelTarget) {
+	win.setBounds(panelBounds(display, isPanel));
+	// Cover the menu bar macOS draws on every display; only on the strip itself.
+	win.setAlwaysOnTop(isPanel, "screen-saver");
+}
+
+function createPanelWindow(target: PanelTarget): BrowserWindow {
 	const win = new BrowserWindow({
-		...panelBounds(display),
+		...panelBounds(target.display, target.isPanel),
 		title: PANEL_TITLE,
 		frame: false,
+		// An NSPanel is not a standard window, so tiling managers leave the strip
+		// alone. The fallback stays a normal window on the current Space.
+		...(target.isPanel && process.platform === "darwin"
+			? { type: "panel" }
+			: {}),
+		resizable: false,
+		enableLargerThanScreen: true,
 		fullscreenable: true,
 		autoHideMenuBar: true,
 		webPreferences: {
@@ -51,7 +68,8 @@ function createPanelWindow(display: Display): BrowserWindow {
 	});
 	// OmniWM matches this title even while HTML/navigation titles change.
 	win.on("page-title-updated", (event) => event.preventDefault());
-	loadSurface(win, "panel");
+	placePanel(win, target);
+	loadSurface(win, "panel", panelRotation(target.display, target.isPanel));
 	return win;
 }
 
@@ -72,9 +90,14 @@ function createManagementWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
-	const getPanelDisplay = (): Display =>
-		findPanelDisplay(screen.getAllDisplays()) ?? screen.getPrimaryDisplay();
-	let panelWin = createPanelWindow(getPanelDisplay());
+	const getPanelTarget = (): PanelTarget => {
+		const display = findPanelDisplay(screen.getAllDisplays());
+		return display
+			? { display, isPanel: true }
+			: { display: screen.getPrimaryDisplay(), isPanel: false };
+	};
+	let panelTarget = getPanelTarget();
+	let panelWin = createPanelWindow(panelTarget);
 	let managementWin = createManagementWindow();
 	registerMedia(
 		ManagedRuntime.make(
@@ -129,11 +152,21 @@ app.whenReady().then(() => {
 		return stopping;
 	};
 	const syncPanelDisplay = (): void => {
-		const display = getPanelDisplay();
+		const previous = panelTarget;
+		panelTarget = getPanelTarget();
 		if (panelWin.isDestroyed()) {
-			panelWin = createPanelWindow(display);
+			panelWin = createPanelWindow(panelTarget);
+		} else if (panelTarget.isPanel !== previous.isPanel) {
+			// The window type is fixed at creation; swap before closing the old one
+			// so the bus never sees zero windows.
+			const old = panelWin;
+			panelWin = createPanelWindow(panelTarget);
+			old.destroy();
 		} else {
-			panelWin.setBounds(panelBounds(display));
+			placePanel(panelWin, panelTarget);
+			const rotation = panelRotation(panelTarget.display, panelTarget.isPanel);
+			if (rotation !== panelRotation(previous.display, previous.isPanel))
+				loadSurface(panelWin, "panel", rotation);
 		}
 		startBus();
 	};

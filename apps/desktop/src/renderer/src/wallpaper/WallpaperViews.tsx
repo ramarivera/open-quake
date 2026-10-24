@@ -1,5 +1,7 @@
 import { useId, useState } from "react";
 import type { FillMode, HourFormat } from "../../../shared/display";
+import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
+import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { DeviceScreen } from "../ui/DeviceScreen";
 import {
 	Callout,
@@ -9,14 +11,18 @@ import {
 	Segmented,
 	type SegmentOption,
 } from "../ui/Form";
+import { useQuakeEvents } from "../useQuakeEvents";
 import { useWallpaper } from "./useWallpaper";
 import { WallpaperCanvas } from "./WallpaperCanvas";
 
 export function WallpaperPanel(): React.JSX.Element {
 	const { snapshot } = useWallpaper();
+	const feedback = usePanelFeedback(useQuakeEvents());
 	return (
 		<main className="wallpaper-panel" aria-label="Quake device panel">
-			<WallpaperCanvas snapshot={snapshot} />
+			<WallpaperCanvas snapshot={snapshot}>
+				<PanelFeedbackLayer view={feedback} />
+			</WallpaperCanvas>
 		</main>
 	);
 }
