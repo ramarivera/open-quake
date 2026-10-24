@@ -10,7 +10,7 @@ import { DisplayOperationFailed } from "./native-display";
 const primary = makeDisplay();
 const strip = makeDisplay({
 	id: 2,
-	label: "DK-QUAKE",
+	label: "Unidentified strip",
 	size: { width: 1920, height: 480 },
 });
 // A layer's scope must surround every consumer, including its TestClock advances.
@@ -135,6 +135,28 @@ const connected = {
 	state: "connected",
 } as const;
 describe("desktop lifecycle", () => {
+	it.scoped(
+		"starts the known DK-QUAKE without a power-cycle display event",
+		() =>
+			withRealPairing([primary, { ...strip, label: "DK-QUAKE" }], (h) =>
+				Effect.gen(function* () {
+					yield* h.service.onStatus({
+						source: "hid",
+						kind: "status",
+						state: "connected",
+					});
+					yield* TestClock.adjust(1);
+					expect(h.power).toEqual([]);
+					expect(h.service.status()).toMatchObject({
+						usb: "pass",
+						hdmi: "pass",
+						checking: false,
+						issue: "none",
+					});
+				}),
+			),
+	);
+
 	it.scoped(
 		"never publishes real-device readiness before an initial pairing times out",
 		() =>
