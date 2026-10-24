@@ -16,7 +16,7 @@ The Core › Agents page SHALL have four tabs: "Agent sessions", "Agent manageme
 - **THEN** the status becomes Error with a timeout code and the start is cancelled
 
 ### Requirement: Local agent roster
-"Agent management" SHALL list local agents with a count, search by display name and ID, the filter chips All and Local, and a four-row skeleton while loading. Each row SHALL show an emoji avatar, display name, ID, a badge (System for `main`, Local otherwise) and Edit and Delete actions. The `main` agent SHALL always exist, SHALL show a lock labelled as a protected agent, and SHALL offer neither edit nor delete. Deleting SHALL ask for confirmation naming the agent and remove its workspace. Empty states SHALL offer "Clear search" or "Create Agent". Selection SHALL persist and fall back to the first agent when the selected one is removed. Agent Market filters, share and install requests are out of scope (decision 9). Source: CENTER-049, CENTER-051, CENTER-054, CENTER-055, CENTER-059.
+"Agent management" SHALL list local agents with a count, search by display name and ID, the filter chips All and Local, and a four-row skeleton while loading. Each row SHALL show an emoji avatar, display name, ID, a badge (System for `main`, Local otherwise) and Edit and Delete actions. The `main` agent SHALL always exist, SHALL show a lock labelled as a protected agent, and SHALL offer neither edit nor delete. Deleting SHALL ask for confirmation naming the agent and remove its workspace. Empty states SHALL offer "Clear search" or "Create agent". Selection SHALL persist and fall back to the first agent when the selected one is removed. Agent Market filters, share and install requests are out of scope (decision 9). Source: CENTER-049, CENTER-051, CENTER-054, CENTER-055, CENTER-059.
 
 #### Scenario: Protect main
 - **WHEN** a delete request names `main`
@@ -27,7 +27,7 @@ The Core › Agents page SHALL have four tabs: "Agent sessions", "Agent manageme
 - **THEN** the list shows the no-results state with Clear search
 
 ### Requirement: Two-step agent creation
-"Create Agent" SHALL open a two-step wizard. Step 1 ("Basic info") SHALL take an agent ID, a display name and one of the 20 emoji presets (default 🤖). The ID SHALL be validated live against `^[a-z][a-z0-9-]*$`, at most 48 characters, not `main`, and unique; input SHALL be sanitised by dropping characters outside `[a-zA-Z0-9-]`, lowercasing and truncating to 48. "Next" SHALL create the agent and its workspace from open-quake-authored templates (`IDENTITY.md`, `SOUL.md`, `AGENTS.md`) and move to step 2 with no way back. Step 2 ("Role") SHALL offer a persona prompt with "Generate config", which drafts the workspace Markdown through the AI drafting adapter, and a tabbed editor for the workspace `*.md` files. "Save agent" SHALL save the active file and close. Editing an existing agent SHALL open step 2 directly. Source: CENTER-050, CENTER-057, CENTER-058.
+"Create agent" SHALL open a two-step wizard. Step 1 ("Basic Info") SHALL take an agent ID, a display name and one of the 20 emoji presets (default 🤖). The ID SHALL be validated live against `^[a-z][a-z0-9-]*$`, at most 48 characters, not `main`, and unique; input SHALL be sanitised by dropping characters outside `[a-zA-Z0-9-]`, lowercasing and truncating to 48. "Next" SHALL create the agent and its workspace from open-quake-authored templates (`IDENTITY.md`, `SOUL.md`, `AGENTS.md`) and move to step 2 with no way back. Step 2 ("Role Config") SHALL offer a persona prompt with "Generate config", which drafts the workspace Markdown through the AI drafting adapter, and a tabbed editor for the workspace `*.md` files. "Save Agent" SHALL save the active file and close. Editing an existing agent SHALL open step 2 directly. Source: CENTER-050, CENTER-057, CENTER-058.
 
 #### Scenario: Reserved ID
 - **WHEN** the user types `main` as the agent ID
@@ -49,7 +49,7 @@ Skills SHALL be folders holding a `SKILL.md` with `name` and `description` front
 - **THEN** the move fails as a conflict and both copies are unchanged
 
 ### Requirement: Model routing table
-"AI Config" SHALL have "Default config" and "Agents config" sub-tabs. The default table SHALL show one row per model with role (None, Default, Fallback), provider (free text with suggestions from the bundled provider defaults), model (free text with that provider's common models), base URL, credentials, max tokens (an integer of at least 1, default 4096), and Save row / Delete. An "Add model" action SHALL add a row; DK fills rows only from its cloud, which is out of scope. The rules SHALL be DK's:
+"AI Config" SHALL have "Default Config" and "Agents Config" sub-tabs. The default table SHALL show one row per model with role (None, Default, Fallback), provider (free text with suggestions from the bundled provider defaults), model (free text with that provider's common models), base URL, credentials, max tokens (an integer of at least 1, default 4096), and Save row / Delete. An "Add model" action SHALL add a row; DK fills rows only from its cloud, which is out of scope. The rules SHALL be DK's:
 - At most one row is Default; if none is, the first configured row becomes Default.
 - Demoting the Default promotes another configured row, or reverts when it is the only one.
 - Editing a base URL propagates to every row with the same provider.
@@ -57,7 +57,7 @@ Skills SHALL be folders holding a `SKILL.md` with `name` and `description` front
 - Provider and model are required; the URL must parse.
 - The default scope keeps at least one row, and deletion asks for confirmation.
 
-Credentials SHALL be write-only: rows show "Available" or "Missing" and never return a stored key. "Agents config" SHALL list agents with a Custom or Inherited badge and a "Use default config" toggle. Turning it off copies the default rows into the agent's scope; turning it on returns to inheritance. Resolution SHALL return the Default row followed by Fallback rows in table order. Source: CENTER-065, CENTER-066, CENTER-067, CENTER-068, CENTER-070.
+Credentials SHALL be write-only: rows show "Available" or "Missing" and never return a stored key. "Agents Config" SHALL list agents with a Custom or Inherited badge and a "Use default config" toggle. Turning it off copies the default rows into the agent's scope; turning it on returns to inheritance. Resolution SHALL return the Default row followed by Fallback rows in table order. Source: CENTER-065, CENTER-066, CENTER-067, CENTER-068, CENTER-070.
 
 #### Scenario: Second default
 - **WHEN** row B is set to Default while row A is Default
