@@ -14,6 +14,7 @@ import {
 import { createEventForwarder } from "./eventForwarding";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
+import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const PANEL_TITLE = "open-quake panel";
@@ -104,6 +105,10 @@ app.whenReady().then(() => {
 			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 		),
 		() => managementWin,
+	);
+	// Read-only committed profiles for the strip and its preview.
+	registerProfiles(
+		ManagedRuntime.make(desktopProfilesLive(app.getPath("userData"))),
 	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(

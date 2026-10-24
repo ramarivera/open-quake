@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { FastCheck as fc, Option } from "effect";
 import { createEmptyProfileKey, type ProfileKey } from "./profile-contracts.js";
 import { completeProfileKey } from "./profile-fixtures.js";
+import { FORCED_TILE_SPANS } from "./profile-footprint.js";
 import {
 	isEmptyCell,
 	layoutIssues,
@@ -39,7 +40,7 @@ describe("logical layout invariants", () => {
 		},
 	);
 	it.prop(
-		"spans occupy exactly their rectangle or fail at a boundary",
+		"edge spans grow inward and oversized spans fail",
 		[cell, fc.integer({ min: 1, max: 10 }), fc.integer({ min: 1, max: 4 })],
 		([[row, column], width, height]) => {
 			const key = tile(`${row},${column}`);
@@ -47,11 +48,61 @@ describe("logical layout invariants", () => {
 				...key,
 				config: { ...key.config, size: [width, height] as const },
 			};
-			const valid = column + width - 1 <= 8 && row + height - 1 <= 2;
-			expect(occupiedCells(candidate).length).toBe(valid ? width * height : 0);
+			const valid = width <= 8 && height <= 2;
+			const cells = occupiedCells(candidate);
+			expect(cells.length).toBe(valid ? width * height : 0);
 			expect(layoutIssues([candidate]).length === 0).toBe(valid);
+			if (!valid) return;
+			const startRow = Math.min(row, 3 - height);
+			const startColumn = Math.min(column, 9 - width);
+			// The anchor stays inside its own footprint; the rest is in bounds.
+			expect(cells).toContain(`${row},${column}`);
+			expect(cells[0]).toBe(`${startRow},${startColumn}`);
+			for (const code of cells) {
+				const [r = 0, c = 0] = code.split(",").map(Number);
+				expect(r >= 1 && r <= 2 && c >= 1 && c <= 8).toBe(true);
+			}
 		},
 	);
+	it.prop(
+		"forced spans ignore config.size",
+		[cell, fc.constantFrom(...FORCED_TILE_SPANS.entries())],
+		([[row, column], [type, [width, height]]]) => {
+			const key = tile(`${row},${column}`);
+			const forced = {
+				...key,
+				config: { ...key.config, type, size: [1, 1] as const },
+			};
+			expect(occupiedCells(forced).length).toBe(width * height);
+			expect(occupiedCells(forced)).toContain(`${row},${column}`);
+		},
+	);
+	it("matches DK-Suite's edge cases", () => {
+		const at = (
+			code: string,
+			size: readonly [number, number],
+			type = "hotkey",
+		) => {
+			const key = tile(code);
+			return occupiedCells({ ...key, config: { ...key.config, type, size } });
+		};
+		expect(at("1,8", [2, 1])).toEqual(["1,7", "1,8"]);
+		expect(at("2,3", [1, 2])).toEqual(["1,3", "2,3"]);
+		expect(at("2,8", [2, 2])).toEqual(["1,7", "1,8", "2,7", "2,8"]);
+		expect(at("2,7", [1, 1], "quakeBot")).toEqual([
+			"1,5",
+			"1,6",
+			"1,7",
+			"1,8",
+			"2,5",
+			"2,6",
+			"2,7",
+			"2,8",
+		]);
+		expect(at("1,6", [1, 1], "aiChatView")[0]).toBe("1,4");
+		expect(at("2,4", [1, 1], "dkDesktopClock")).toHaveLength(16);
+		expect(at("1,2", [1, 1], "__proto__")).toEqual(["1,2"]);
+	});
 	it.prop(
 		"rejects duplicate anchors, visible overlap, and noninteger spans",
 		[cell],

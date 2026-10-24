@@ -2,8 +2,10 @@
 
 Implements `openspec/changes/device-screen-wallpaper` tasks 1.1–1.5.
 The main process owns selected files, decoding, persistence and the host clock.
-The panel and management preview share one SVG renderer on a logical 1920×480
-canvas. The `dkDesktopClock` registry entry has exactly one `hourFormat` action,
+The panel and management preview share one renderer on a logical 1920×480
+canvas. Since `strip-key-grid`, the strip draws the active profile's key grid;
+the wallpaper shows on the vivid screen page, and the clock is the strip's
+`dkDesktopClock` tile. That registry entry has exactly one `hourFormat` action,
 default `24h`. Main broadcasts one local-time snapshot per second to both views.
 The clock stream stops when all windows close, restarts with a new window, and
 is interrupted on quit. No firmware clock event is sent.
@@ -101,8 +103,10 @@ openspec validate device-screen-wallpaper
 
 The native smoke gate builds its own entry and uses hidden Electron windows,
 real image decoding, the production preload and built renderer. It checks both
-serials, fill modes, matching clock notifications, light theme, reduced motion
-and narrow layout. An optional absolute directory receives screenshots:
+serials, fill modes, matching clock notifications, the strip key grid for five
+built-in-like profiles (`main/test/strip-fixtures.ts`), light theme, reduced
+motion and narrow layout. An optional absolute directory receives screenshots,
+including `panel-<profile>.png` for each fixture:
 
 ```sh
 pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/media/smoke.config.ts
