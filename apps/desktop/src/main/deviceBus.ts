@@ -51,8 +51,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(
 				case "KnobPress":
 					return publish({ source: "hid", kind: "press", state: event.state });
 				case "Touch":
-					// Only the device layer's checksummed control envelope is supported.
-					// Opening a separate touch collection remains hardware-unverified.
+					// The device abstraction owns the separately bound vendor touch stream.
 					return publish({
 						source: "hid",
 						kind: "touch",

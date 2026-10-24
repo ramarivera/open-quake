@@ -1,4 +1,14 @@
 import { EventEmitter } from "node:events";
+import { Option } from "effect";
+import {
+	SYNTHETIC_TOUCH_DOWN,
+	SYNTHETIC_TOUCH_EMPTY,
+	SYNTHETIC_TOUCH_MOVE,
+} from "../../../../packages/device/src/touch/touch-fixtures";
+import {
+	createTouchTracker,
+	parseTouchReport,
+} from "../../../../packages/device/src/touch/touch-invariants";
 import type { DeviceStatusEvent, QuakeEvent } from "../preload/quake";
 import type { DeviceBus } from "./deviceBus";
 
@@ -13,6 +23,8 @@ const KEEPALIVE_INTERVAL_MS = 3000;
 
 export type MockDeviceBus = DeviceBus & {
 	stop(): void;
+	/** Deterministic raw input for preview and tests. */
+	emitTouchReport(report: Uint8Array): void;
 };
 
 export function startMockDeviceBus(): MockDeviceBus {
@@ -25,6 +37,24 @@ export function startMockDeviceBus(): MockDeviceBus {
 	const timers: ReturnType<typeof setInterval>[] = [];
 	let seq = 0;
 	let direction: 1 | -1 = 1;
+	let stopped = false;
+	const touch = createTouchTracker();
+	let idle: ReturnType<typeof setTimeout> | undefined;
+	const emitTouchReport = (report: Uint8Array): void => {
+		if (stopped) return;
+		const parsed = parseTouchReport(report);
+		if (Option.isNone(parsed)) return;
+		if (idle !== undefined) clearTimeout(idle);
+		const points = touch.frame(parsed.value);
+		if (points.length)
+			emitter.emit("event", { source: "mock", kind: "touch", points });
+		idle = setTimeout(() => {
+			idle = undefined;
+			const points = touch.release();
+			if (points.length)
+				emitter.emit("event", { source: "mock", kind: "touch", points });
+		}, 100);
+	};
 
 	timers.push(
 		setInterval(() => {
@@ -55,7 +85,16 @@ export function startMockDeviceBus(): MockDeviceBus {
 		}, KEEPALIVE_INTERVAL_MS),
 	);
 
+	timers.push(
+		setInterval(() => {
+			emitTouchReport(SYNTHETIC_TOUCH_DOWN);
+			emitTouchReport(SYNTHETIC_TOUCH_MOVE);
+			emitTouchReport(SYNTHETIC_TOUCH_EMPTY);
+		}, 10_000),
+	);
+
 	return {
+		emitTouchReport,
 		currentStatus: () => status,
 		on(listener) {
 			emitter.on("event", listener);
@@ -63,6 +102,8 @@ export function startMockDeviceBus(): MockDeviceBus {
 			return () => emitter.off("event", listener);
 		},
 		stop() {
+			stopped = true;
+			if (idle !== undefined) clearTimeout(idle);
 			for (const t of timers) clearInterval(t);
 			emitter.removeAllListeners();
 		},
