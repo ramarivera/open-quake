@@ -146,5 +146,15 @@ automatic retry or silent host keyboard fallback.
 Beads: cluster open-quake-lih.12, epic open-quake-lih.12.1, task issues
 open-quake-lih.12.1.1 through .5. Lighting task open-quake-da4.6 is implemented
 here. Tasks 1.1..1.4 and lighting 2.3 close with this source and mock evidence.
-Task 1.5 and the hardware epic/cluster close when the PR is open and linked.
+Task 1.5, the hardware epic and cluster close with the open, linked PR.
 Hardware acceptance and other lanes' integration tasks remain open.
+
+## PR handoff
+
+PR: https://github.com/ramarivera/open-quake/pull/22, targeting main.
+Implementation commit: 6b56ceb. The PR is registered with the T3 thread.
+A separate documentation commit records this handoff without changing tested
+runtime code. Cluster open-quake-lih.12, epic open-quake-lih.12.1, tasks
+open-quake-lih.12.1.1 through .5 and lighting task open-quake-da4.6 are closed
+with source and mock-verification evidence. The PR is not merged and no
+review threads were resolved.
