@@ -138,3 +138,20 @@ Thread outcomes, all fixed and resolved in `5694f12`:
 The runtime process audit found no remaining task-owned Node/Electron processes.
 `review-round-1/thread-outcomes.json`, `threads-after.json` and `process-audit.log`
 retain the external response and cleanup evidence in the artifact directory.
+
+## Lead verification, 2026-10-24
+
+The lead inspected the implementation and review fixes at `cb05601`, including
+collection retention, power parsing/rendering, lazy media reads and main-owned
+IPC permissions, and visually inspected all five review-round screenshots.
+All six repository commands passed again. The test suite was also executed with
+`pnpm exec turbo run test --force`: 903 tests, four tasks, zero cached tasks.
+Both native monitor and baseline media smokes passed using freshly built entries,
+hidden windows and `OPEN_QUAKE_MOCK_DEVICE=1`.
+
+Logs and fresh captures are under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/monitor-panel/lead-acceptance/`.
+GitHub confirmed all seven threads resolved and the checked head mergeable.
+Physical acceptance remains open as task 6.1, bead `open-quake-lih.8.1.6`.
+This verification supports merging the implementation and does not establish
+physical-device parity or add unsupported GPU/temperature collectors.
