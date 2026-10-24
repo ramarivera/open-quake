@@ -31,6 +31,7 @@ import {
 	interceptEditorRequests,
 	verifyEditorTransactions,
 } from "./smoke-editor";
+import { verifyReviewEditor } from "./smoke-review";
 
 registerClockScheme();
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
@@ -159,6 +160,12 @@ async function smoke(): Promise<void> {
 		const manager = new BrowserWindow(options),
 			panel = new BrowserWindow({ ...options, width: 960, height: 240 });
 		management = manager;
+		for (const win of [manager, panel])
+			win.webContents.on("render-process-gone", (_event, details) => {
+				process.stderr.write(
+					`renderer process gone: ${JSON.stringify(details)}\n`,
+				);
+			});
 		for (const win of [manager, panel])
 			win.webContents.on("console-message", (details) => {
 				if (details.level === "error")
@@ -303,7 +310,7 @@ async function smoke(): Promise<void> {
 		);
 		await button(manager, "Keys");
 		await ready(manager, "document.querySelector('#keys-profile')");
-		await verifyEditorTransactions({
+		const harness = {
 			manager,
 			profiles,
 			scratch,
@@ -315,7 +322,10 @@ async function smoke(): Promise<void> {
 			input,
 			select,
 			snapshot,
-		});
+		};
+		await verifyReviewEditor(harness, process.env.OPEN_QUAKE_KEY_REVIEW_PROBE);
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE) return;
+		await verifyEditorTransactions(harness);
 		await ready(manager, "document.querySelector('#keys-profile')");
 		await select(manager, "#keys-profile", custom.id);
 		await ready(

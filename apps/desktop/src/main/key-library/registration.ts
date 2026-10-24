@@ -22,8 +22,18 @@ import {
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { renderFontIcons } from "./font-renderer";
 import { IconImportFailed, type IconStorageFailed } from "./icon-errors";
-import { parseIconPack, svgData } from "./icon-packs";
+import {
+	type IconAsset,
+	type IconPack,
+	parseIconPack,
+	svgData,
+} from "./icon-packs";
 import { iconStore } from "./icon-store";
+
+type PreparedImport =
+	| { readonly pack: IconPack }
+	| { readonly icon: IconAsset }
+	| undefined;
 
 const imageData = (bytes: Buffer): string => {
 	if (bytes.length > 5 * 1024 * 1024) throw new Error("Image too large");
@@ -147,178 +157,200 @@ export function registerKeyLibrary<R>(
 					sender.removeListener("destroyed", clearDraft);
 				});
 			}
-			const program = Effect.gen(function* (): Effect.fn.Return<
-				KeyReply,
-				| ProfileRepositoryError
-				| ActionError
-				| IconImportFailed
-				| IconStorageFailed,
-				ProfileService | KeyEditing | KeyRuntime
+			const preparation = Effect.gen(function* (): Effect.fn.Return<
+				PreparedImport,
+				IconImportFailed
 			> {
-				switch (command.type) {
-					case "read":
-						return {
-							_tag: "success",
-							envelope: encodeProfileEnvelope(yield* KeyEditing.read()),
-							states: yield* KeyRuntime.snapshot,
-						};
-					case "select":
-						yield* KeyEditing.discard();
-						yield* ProfileService.selectProfile({
-							deviceId: command.deviceId,
-							profileId: command.profileId,
-							pageId: command.pageId,
-						});
-						yield* KeyRuntime.refresh(command.deviceId);
-						break;
-					case "preview":
-						yield* KeyEditing.preview(command.target, command.key);
-						break;
-					case "save":
-						yield* KeyEditing.save(command.token);
-						break;
-					case "revert":
-						yield* KeyEditing.revert(command.token);
-						break;
-					case "delete":
-						yield* KeyEditing.remove(command.target);
-						break;
-					case "activate":
-						yield* KeyRuntime.activate(
-							command.deviceId,
-							command.keyCode,
-							command.kind,
-							{
+				if (command.type !== "import-icon" && command.type !== "import-pack")
+					return undefined;
+				const result = yield* Effect.tryPromise({
+					try: () =>
+						dialog.showOpenDialog({
+							title:
+								command.type === "import-pack"
+									? "Import Icon"
+									: "Select Picture",
+							properties: ["openFile"],
+							filters: [
+								{
+									name: "Icons",
+									extensions:
+										command.type === "import-pack"
+											? ["zip"]
+											: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
+								},
+							],
+						}),
+					catch: (c) => new IconImportFailed(c),
+				});
+				const path = result.filePaths[0];
+				if (result.canceled || !path || !authorized(event, command))
+					return undefined;
+				const bytes = yield* Effect.tryPromise({
+					try: async () => {
+						const info = await stat(path);
+						if (!info.isFile() || info.size > 32 * 1024 * 1024)
+							throw new IconImportFailed(undefined);
+						return readFile(path);
+					},
+					catch: (c) => new IconImportFailed(c),
+				});
+				yield* Effect.try({
+					try: () => {
+						if (bytes.length > 32 * 1024 * 1024)
+							throw new Error("Invalid icon pack");
+					},
+					catch: (c) => new IconImportFailed(c),
+				});
+				if (command.type === "import-pack") {
+					const pack = yield* Effect.tryPromise({
+						try: () => parseIconPack(bytes, imageData, renderFontIcons),
+						catch: (c) => new IconImportFailed(c),
+					});
+					return { pack };
+				} else {
+					const data = yield* Effect.try({
+						try: () =>
+							/\.svg$/i.test(path)
+								? svgData(
+										bytes.toString("utf8").replace(/^\s*<\?xml[^>]*>\s*/, ""),
+									)
+								: imageData(bytes),
+						catch: (c) => new IconImportFailed(c),
+					});
+					return {
+						icon: {
+							id: createHash("sha256").update(data).digest("hex"),
+							name: basename(path),
+							tags: [],
+							data,
+						},
+					};
+				}
+			});
+			const program = (prepared: PreparedImport) =>
+				Effect.gen(function* (): Effect.fn.Return<
+					KeyReply,
+					| ProfileRepositoryError
+					| ActionError
+					| IconImportFailed
+					| IconStorageFailed,
+					ProfileService | KeyEditing | KeyRuntime
+				> {
+					switch (command.type) {
+						case "read":
+							return {
+								_tag: "success",
+								envelope: encodeProfileEnvelope(yield* KeyEditing.read()),
+								states: yield* KeyRuntime.snapshot,
+							};
+						case "select":
+							yield* KeyEditing.discard();
+							yield* ProfileService.selectProfile({
+								deviceId: command.deviceId,
 								profileId: command.profileId,
 								pageId: command.pageId,
-								revision: command.revision,
-							},
-						);
-						return { _tag: "success" };
-					case "navigate":
-						yield* KeyRuntime.navigate(command.deviceId, command.direction);
-						return { _tag: "success" };
-					case "icons":
-						return { _tag: "success", packs: yield* store.read() };
-					case "import-icon":
-					case "import-pack": {
-						const result = yield* Effect.tryPromise({
-							try: () =>
-								dialog.showOpenDialog({
-									title:
-										command.type === "import-pack"
-											? "Import Icon"
-											: "Select Picture",
-									properties: ["openFile"],
-									filters: [
-										{
-											name: "Icons",
-											extensions:
-												command.type === "import-pack"
-													? ["zip"]
-													: ["png", "jpg", "jpeg", "gif", "webp", "svg"],
-										},
-									],
-								}),
-							catch: (c) => new IconImportFailed(c),
-						});
-						const path = result.filePaths[0];
-						if (result.canceled || !path)
+							});
+							yield* KeyRuntime.refresh(command.deviceId);
+							break;
+						case "preview":
+							yield* KeyEditing.preview(command.target, command.key);
+							break;
+						case "save":
+							yield* KeyEditing.save(command.token);
+							break;
+						case "revert":
+							yield* KeyEditing.revert(command.token);
+							break;
+						case "delete":
+							yield* KeyEditing.remove(command.target);
+							break;
+						case "activate":
+							yield* KeyRuntime.activate(
+								command.deviceId,
+								command.keyCode,
+								command.kind,
+								{
+									profileId: command.profileId,
+									pageId: command.pageId,
+									revision: command.revision,
+								},
+							);
+							return { _tag: "success" };
+						case "navigate":
+							yield* KeyRuntime.navigate(command.deviceId, command.direction);
+							return { _tag: "success" };
+						case "icons":
 							return { _tag: "success", packs: yield* store.read() };
-						const bytes = yield* Effect.tryPromise({
-							try: async () => {
-								const info = await stat(path);
-								if (!info.isFile() || info.size > 32 * 1024 * 1024)
-									throw new IconImportFailed(undefined);
-								return readFile(path);
-							},
-							catch: (c) => new IconImportFailed(c),
-						});
-						yield* Effect.try({
-							try: () => {
-								if (bytes.length > 32 * 1024 * 1024)
-									throw new Error("Invalid icon pack");
-							},
-							catch: (c) => new IconImportFailed(c),
-						});
-						if (command.type === "import-pack") {
-							const pack = yield* Effect.tryPromise({
-								try: () => parseIconPack(bytes, imageData, renderFontIcons),
-								catch: (c) => new IconImportFailed(c),
-							});
-							yield* store.add(pack);
-						} else {
-							const data = yield* Effect.try({
-								try: () =>
-									/\.svg$/i.test(path)
-										? svgData(
-												bytes
-													.toString("utf8")
-													.replace(/^\s*<\?xml[^>]*>\s*/, ""),
-											)
-										: imageData(bytes),
-								catch: (c) => new IconImportFailed(c),
-							});
-							yield* store.addLocal({
-								id: createHash("sha256").update(data).digest("hex"),
-								name: basename(path),
-								tags: [],
-								data,
-							});
+						case "import-icon":
+						case "import-pack": {
+							if (prepared) {
+								if ("pack" in prepared) yield* store.add(prepared.pack);
+								else yield* store.addLocal(prepared.icon);
+							}
+							return { _tag: "success", packs: yield* store.read() };
 						}
-						return { _tag: "success", packs: yield* store.read() };
+						case "remove-icon":
+						case "remove-pack": {
+							const packs = yield* store.read();
+							const selected =
+								command.type === "remove-pack"
+									? packs.find((p) => p.id === command.id)?.icons
+									: (packs.find((p) => p.id === "local")?.icons ?? []).filter(
+											(i) => i.id === command.id,
+										);
+							if (command.type === "remove-icon" && !selected?.length)
+								return {
+									_tag: "rejected",
+									reason: "Only local icons can be deleted individually.",
+								};
+							const refs = new Set(selected?.map((i) => i.data) ?? []);
+							const pending = yield* KeyEditing.pending;
+							const saved = yield* ProfileService.loadProfiles();
+							if (
+								iconInUse(
+									Schema.encodeSync(ProfileEnvelope)(saved.envelope),
+									refs,
+								) ||
+								iconInUse(pending, refs)
+							)
+								return {
+									_tag: "rejected",
+									reason:
+										"This icon is currently in use and cannot be deleted.",
+								};
+							yield* store.write(
+								command.type === "remove-pack"
+									? packs.filter((p) => p.id !== command.id)
+									: packs.map((p) => ({
+											...p,
+											icons:
+												p.id === "local"
+													? p.icons.filter((i) => i.id !== command.id)
+													: p.icons,
+										})),
+							);
+							return { _tag: "success", packs: yield* store.read() };
+						}
 					}
-					case "remove-icon":
-					case "remove-pack": {
-						const packs = yield* store.read();
-						const selected =
-							command.type === "remove-pack"
-								? packs.find((p) => p.id === command.id)?.icons
-								: packs
-										.flatMap((p) => p.icons)
-										.filter((i) => i.id === command.id);
-						const refs = new Set(selected?.map((i) => i.data) ?? []);
-						const pending = yield* KeyEditing.pending;
-						const saved = yield* ProfileService.loadProfiles();
-						if (
-							iconInUse(
-								Schema.encodeSync(ProfileEnvelope)(saved.envelope),
-								refs,
-							) ||
-							iconInUse(pending, refs)
-						)
-							return {
-								_tag: "rejected",
-								reason: "This icon is currently in use and cannot be deleted.",
-							};
-						yield* store.write(
-							command.type === "remove-pack"
-								? packs.filter((p) => p.id !== command.id)
-								: packs.map((p) => ({
-										...p,
-										icons: p.icons.filter((i) => i.id !== command.id),
-									})),
-						);
-						return { _tag: "success", packs: yield* store.read() };
-					}
-				}
-				yield* publish;
-				return {
-					_tag: "success",
-					envelope: encodeProfileEnvelope(yield* KeyEditing.read()),
-				};
-			});
+					yield* publish;
+					return {
+						_tag: "success",
+						envelope: encodeProfileEnvelope(yield* KeyEditing.read()),
+					};
+				});
 			return track(
 				runtime.runPromise(
-					Effect.suspend(() =>
-						!authorized(event, command)
-							? Effect.succeed<KeyReply>({
-									_tag: "rejected",
-									reason: "unauthorized",
-								})
-							: program,
+					Effect.flatMap(preparation, (prepared) =>
+						Effect.suspend(() =>
+							!authorized(event, command)
+								? Effect.succeed<KeyReply>({
+										_tag: "rejected",
+										reason: "unauthorized",
+									})
+								: program(prepared),
+						).pipe(lock.withPermits(1)),
 					).pipe(
-						lock.withPermits(1),
 						Effect.match({
 							onSuccess: (r) => r,
 							onFailure: (cause): KeyReply => ({

@@ -297,7 +297,32 @@ export function KeyEditor(): React.JSX.Element {
 		...profile,
 		pages: EffectArray.map(profile.pages, (p) => ({
 			...p,
-			keys: p.keys.map((k) => localizedKey(k, locale)),
+			keys: p.keys.map((k) => {
+				const translated = localizedKey(k, locale);
+				if (
+					!alternate ||
+					selection?.target.profileId !== profile.id ||
+					selection.target.pageId !== p.id ||
+					selection.target.keyCode !== k.keyCode ||
+					k.config.type !== "hotkeySwitch"
+				)
+					return translated;
+				return {
+					...translated,
+					config: {
+						...translated.config,
+						// Freeze the already localized artwork for StripScreen's display pass.
+						userModifiedTitle: true,
+						title: Option.getOrElse(
+							translated.config.alterTitle,
+							() => translated.config.title,
+						),
+						icon:
+							Option.getOrElse(translated.config.alterIcon, () => "") ||
+							translated.config.icon,
+					},
+				};
+			}),
 		})),
 	};
 	const previewEnvelope = {
@@ -457,6 +482,7 @@ export function KeyEditor(): React.JSX.Element {
 								disabled={!keyEditable(key, "allowDelete")}
 								value={key.config.type}
 								onChange={(e) => {
+									if (savePending.current) return;
 									const entry = ACTION_REGISTRY.find(
 										(a) => a.id === e.target.value,
 									);
@@ -464,6 +490,14 @@ export function KeyEditor(): React.JSX.Element {
 									const raw = Schema.encodeSync(ProfileKey)(key);
 									const next = Schema.decodeUnknownSync(ProfileKey)({
 										...raw,
+										...(raw.compatibility?.unsupported === true
+											? {
+													compatibility: {
+														...raw.compatibility,
+														unsupported: false,
+													},
+												}
+											: {}),
 										childrenName: entry.id,
 										config: {
 											...raw.config,
@@ -472,6 +506,7 @@ export function KeyEditor(): React.JSX.Element {
 											supportTouchEffect: entry.supportTouchEffect,
 										},
 									});
+									setAlternate(false);
 									void update(next);
 								}}
 							>

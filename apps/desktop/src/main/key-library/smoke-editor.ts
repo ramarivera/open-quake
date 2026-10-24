@@ -90,7 +90,7 @@ export function interceptEditorRequests() {
 	};
 }
 
-type Harness = {
+export type Harness = {
 	manager: BrowserWindow;
 	profiles: ReturnType<typeof registerProfiles>;
 	scratch: string;
@@ -194,9 +194,17 @@ export async function verifyEditorTransactions(h: Harness): Promise<void> {
 			),
 		]);
 	};
+	await ready(
+		win,
+		`document.querySelector('#keys-profile option[value="editor-races"]')`,
+	);
 	await select(win, "#keys-profile", fixture.id);
+	await ready(
+		win,
+		"document.querySelector('#keys-profile')?.value === 'editor-races' && !document.querySelector('#key-title')",
+	);
 	await click(win, ".keys-cells button:first-child");
-	await ready(win, "document.querySelector('#key-title')");
+	await ready(win, "document.querySelector('#key-title')?.value === 'Initial'");
 	await input(win, "#key-title", "Save transaction");
 	const revision = (await profile()).revision;
 	const before = delays.pause("preview", "before");

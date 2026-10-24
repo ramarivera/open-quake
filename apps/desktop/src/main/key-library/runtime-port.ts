@@ -1,3 +1,6 @@
+import { execFile } from "node:child_process";
+import { platform } from "node:os";
+import { promisify } from "node:util";
 import { Effect, Layer, Option } from "effect";
 import { clipboard, shell } from "electron";
 import type { ActionHostAdapters } from "../../../../../packages/device/src/actions/action-adapters.js";
@@ -18,6 +21,8 @@ import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hard
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { playKeyAlarm } from "./alarm";
+
+const runFile = promisify(execFile);
 
 export const desktopKeyRuntimePort = (
 	hardware: () => HardwareSession | undefined,
@@ -107,16 +112,32 @@ export const desktopKeyRuntimePort = (
 								}),
 				}),
 				application: Option.some({
-					launchApplication: (path) =>
-						mock
-							? Effect.void
-							: Effect.tryPromise({
-									try: async () => {
-										const error = await shell.openPath(path);
-										if (error) throw new Error("Application could not open");
-									},
+					launchApplication: Effect.fn("DesktopKeys.launchApplication")(
+						function* (
+							reference: string,
+						): Effect.fn.Return<void, HostActionFailed> {
+							if (mock) return;
+							if (reference.slice(0, 4).toLowerCase() === "app:") {
+								if (platform() !== "darwin")
+									return yield* Effect.fail(
+										new HostActionFailed(
+											"application-reference-platform-unavailable",
+										),
+									);
+								yield* Effect.tryPromise({
+									try: () =>
+										runFile("/usr/bin/open", ["-b", reference.slice(4)]),
 									catch: (cause) => new HostActionFailed(cause),
-								}),
+								});
+								return;
+							}
+							const error = yield* Effect.tryPromise({
+								try: () => shell.openPath(reference),
+								catch: (cause) => new HostActionFailed(cause),
+							});
+							if (error) return yield* Effect.fail(new HostActionFailed(error));
+						},
+					),
 				}),
 			};
 			return {

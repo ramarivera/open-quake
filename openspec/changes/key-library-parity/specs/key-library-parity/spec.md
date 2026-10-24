@@ -17,6 +17,20 @@ The application SHALL publish a selected key draft immediately to previews and S
 - **WHEN** another revision commits before Save
 - **THEN** the save fails visibly and retains the draft without overwriting that revision
 
+#### Scenario: Explicit replacement of unsupported imported function
+- **WHEN** a user selects a supported Function for an unsupported imported key and saves
+- **THEN** only its unsupported compatibility status is cleared, retained import fields survive, and the replacement executes without the obsolete payload
+- **AND** cosmetic title, style and icon edits alone preserve the unsupported quarantine
+
+#### Scenario: Selected alternate draft preview
+- **WHEN** State 2 of a hotkeySwitch is selected in the editor
+- **THEN** only that selected draft's grid artwork uses alternate title, style and icon with primary fallback for missing alternate fields
+- **AND** switching states or saving does not project artwork into executable or persisted primary fields
+
+#### Scenario: Single-state replacement after alternate editing
+- **WHEN** a user replaces a State 2 hotkeySwitch with a single-state Function
+- **THEN** subsequent title, style and icon edits target primary artwork while retained alternate fields stay untouched
+
 ### Requirement: Safe deletion
 Delete SHALL remove the selected deletable key only when focus is outside editable fields and SHALL respect key edit locks and back keys. Source: MGMT-249, correcting its focused-field vendor bug; MGMT-248.
 
@@ -46,6 +60,16 @@ The Icon Library SHALL offer Material Design Icons from the approved 7.4.47 set,
 - **WHEN** an archive contains traversal, executable SVG, excessive expansion, or an in-use pack is uninstalled
 - **THEN** the operation fails without losing existing assets
 
+#### Scenario: Local icon collection ownership
+- **WHEN** the same icon belongs to an installed pack and the local collection and its unused local entry is deleted
+- **THEN** the installed pack remains intact across restart and individual deletion of pack-only entries is rejected
+- **AND** committed and draft references continue to prevent deletion
+
+#### Scenario: Pending import chooser
+- **WHEN** an import chooser or file preparation is pending while a sequence runs
+- **THEN** panel cancellation and navigation complete before the chooser closes and cancellation stops remaining steps
+- **AND** import commits remain serialized, recheck document authority and disposal, and shutdown awaits owned work without a late write
+
 ### Requirement: Stateful key execution
 hotkeySwitch SHALL require two validated key actions, send chord zero on the first press and alternate thereafter. Timer/countdown/alarm keys SHALL start or cancel, survive profile switches and stop on disposal. Multi-actions SHALL await validated steps, use a default 100 ms gap plus delay values, publish per-step progress and stop on second press or first failure. Alerts SHALL be suppressed when their profile is inactive. Sources: MAIN-067, MAIN-075, MAIN-076, MAIN-081.
 
@@ -60,6 +84,11 @@ hotkeySwitch SHALL require two validated key actions, send chord zero on the fir
 #### Scenario: Cancel sequence
 - **WHEN** a running multi-action key is pressed again
 - **THEN** remaining steps stop and progress completes without replay after reconnect
+
+#### Scenario: Selected application reference
+- **WHEN** an open-application action or sequence step uses an app: bundle identifier
+- **THEN** macOS resolves it using structured platform launch arguments, unsupported platforms fail explicitly, and absolute filesystem paths retain their path launch behavior
+- **AND** mock execution performs no operating-system calls
 
 ### Requirement: Wrapping page and slide navigation
 Page up/down SHALL wrap and goToPage SHALL clamp. Strip slide 0/1 SHALL select previous/next page; 2/3 SHALL select previous/next visible profile group with wrapping. The merged recognizer SHALL preserve in-tile scroll and overlay ownership. Sources: MAIN-077, MAIN-078.
