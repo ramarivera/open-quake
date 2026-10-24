@@ -30,6 +30,22 @@ const Step = Schema.Struct({
 		gap: Schema.optional(Schema.Number),
 	}),
 });
+/** Preserve unknown imported fields when a supported editor field changes. */
+export const changeSequenceStep = (
+	step: typeof ProfileJsonObject.Type,
+	patch: (typeof Step.Type)["config"],
+): typeof ProfileJsonObject.Type => {
+	const original =
+		typeof step.config === "object" &&
+		step.config !== null &&
+		!Array.isArray(step.config)
+			? step.config
+			: {};
+	return Schema.decodeUnknownSync(ProfileJsonObject)({
+		...step,
+		config: { ...original, ...patch },
+	});
+};
 export function SequenceEditor({
 	value,
 	onChange,
@@ -40,9 +56,7 @@ export function SequenceEditor({
 	const change = (index: number, config: (typeof Step.Type)["config"]): void =>
 		onChange(
 			value.map((step, i) =>
-				i === index
-					? Schema.decodeUnknownSync(ProfileJsonObject)({ ...step, config })
-					: step,
+				i === index ? changeSequenceStep(step, config) : step,
 			),
 		);
 	return (

@@ -1,5 +1,12 @@
 import { expect, it } from "@effect/vitest";
-import { Effect, Array as EffectArray, Layer, Schema, TestClock } from "effect";
+import {
+	Effect,
+	Array as EffectArray,
+	Fiber,
+	Layer,
+	Schema,
+	TestClock,
+} from "effect";
 import { HostActionFailed } from "../../src/actions/action-errors.js";
 import type { ActionConfig } from "../../src/actions/action-registry.js";
 import {
@@ -14,14 +21,18 @@ import {
 	ProfileKey,
 } from "../../src/profiles/profile-contracts.js";
 
-function fixture(config: unknown) {
+function fixture(config: unknown, unsupported = false, delay = 0) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	const rawConfig = Schema.decodeUnknownSync(ProfileJsonObject)(config);
 	const key = Schema.decodeUnknownSync(ProfileKey)({
 		...empty,
-		childrenName: "timer",
+		childrenName: typeof rawConfig.type === "string" ? rawConfig.type : "timer",
+		...(unsupported
+			? { compatibility: { unsupported: true, source: { synthetic: true } } }
+			: {}),
 		config: {
 			...empty.config,
-			...Schema.decodeUnknownSync(ProfileJsonObject)(config),
+			...rawConfig,
 		},
 	});
 	let envelope = Schema.decodeUnknownSync(ProfileEnvelope)({
@@ -55,6 +66,7 @@ function fixture(config: unknown) {
 				execute: (config) =>
 					Effect.gen(function* () {
 						calls.push(config);
+						if (delay) yield* Effect.sleep(delay);
 						if (fail) return yield* Effect.fail(new HostActionFailed("failed"));
 					}),
 				publish: (state) =>
@@ -269,3 +281,91 @@ it.effect("drops stale panel targets before executing the current key", () => {
 		expect(f.calls[1]).toEqual(f.calls[0]);
 	}).pipe(Effect.provide(f.layer));
 });
+
+for (const config of [
+	{ type: "goToPage", actions: [] },
+	{ type: "goToPage", actions: [{ type: "page", value: 0 }] },
+	{ type: "goToPage", actions: [{ type: "page", value: 1.5 }] },
+	{ type: "nextPage", actions: [{ type: "page", value: 1 }] },
+	{ type: "previousPage", actions: [{ type: "page", value: 1 }] },
+])
+	it.effect(`rejects malformed navigation ${JSON.stringify(config)}`, () => {
+		const f = fixture(config);
+		return Effect.gen(function* () {
+			const result = yield* Effect.either(press);
+			expect(result._tag).toBe("Left");
+			expect(f.selection()?.pageId).toBe("one");
+		}).pipe(Effect.provide(f.layer));
+	});
+for (const config of [
+	{
+		type: "hotkeySwitch",
+		actions: [
+			{ type: "key", value: "a" },
+			{ type: "key", value: "b" },
+		],
+	},
+	{ type: "text", actions: [{ type: "text", value: "synthetic" }] },
+	{ type: "goToPage", actions: [{ type: "page", value: 2 }] },
+	{ type: "timer", actions: [{ type: "time", value: 1000 }] },
+	{ type: "open", actions: [{ type: "path", value: "/synthetic/app" }] },
+])
+	it.effect(`retains but never activates unsupported ${config.type}`, () => {
+		const f = fixture(config, true);
+		return Effect.gen(function* () {
+			yield* Effect.either(press);
+			yield* TestClock.adjust(2000);
+			expect(f.calls).toEqual([]);
+			expect(f.feedback).toEqual([]);
+			expect(f.selection()?.pageId).toBe("one");
+		}).pipe(Effect.provide(f.layer));
+	});
+
+it.effect(
+	"disconnect reset waits for an in-flight shortcut and clears its late alternate",
+	() => {
+		const f = fixture(
+			{
+				type: "hotkeySwitch",
+				actions: [
+					{ type: "key", value: "a" },
+					{ type: "key", value: "b" },
+				],
+			},
+			false,
+			1000,
+		);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			const activating = yield* Effect.fork(
+				r.activate("device", "1,1", "press"),
+			);
+			yield* TestClock.adjust(100);
+			const resetting = yield* Effect.fork(r.reset("device"));
+			yield* TestClock.adjust(1100);
+			yield* Fiber.join(activating);
+			yield* Fiber.join(resetting);
+			expect(yield* r.snapshot).toEqual([]);
+			const again = yield* Effect.fork(press);
+			yield* TestClock.adjust(1100);
+			yield* Fiber.join(again);
+			expect(f.calls[1]).toEqual(f.calls[0]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+it.effect(
+	"disconnect cancels running sequence and timer before later ticks or host effects",
+	() => {
+		const f = fixture(sequence);
+		return Effect.gen(function* () {
+			const r = yield* KeyRuntime;
+			yield* press;
+			yield* TestClock.adjust(100);
+			yield* r.reset("device");
+			const count = f.calls.length;
+			yield* TestClock.adjust(5000);
+			expect(f.calls.length).toBe(count);
+			expect(yield* r.snapshot).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

@@ -14,7 +14,7 @@ Stream Deck packs use manifest.json, icons.json and icons/. Iconfont packs use i
 
 The scoped KeyRuntime owns switch alternation, countdown fibers and sequential progress. A timer's duration is milliseconds; a second press cancels it. Countdown work survives profile navigation. Feedback is retained for returning to the profile, while inactive visual alerts are suppressed. Multi-actions validate every step before executing any, use 100 ms default gaps plus delay steps, and stop on second press or first failure. Supported sequence leaves are hotkey, website, text, open application and delay. Navigation wraps pages/profiles, clamps goToPage and uses the merged strip recognizer's slide directions without stealing sub-target scroll or knob overlays. Disconnect/reset disposes work and feedback.
 
-IPC contracts are Schema-decoded across main/preload/renderer. Only the exact management URL in its top-level frame can edit or import. Panel documents can read, activate and navigate; activation carries its original device/profile/page/revision snapshot. Native host effects use existing hardware keyboard and shell adapters. Text insertion serializes clipboard replacement, preserves supported formats and refuses unknown formats before mutation. Real media-key dispatch remains unavailable.
+IPC contracts are Schema-decoded across main/preload/renderer. Only the exact management URL in its top-level frame can edit or import. Only the owned panel window can activate and navigate; other app documents can read. Authority is checked again after queued requests acquire the lock. Activation carries its original device/profile/page/revision snapshot. Native host effects use existing hardware keyboard and shell adapters. Text insertion serializes clipboard replacement, preserves supported formats and refuses unknown formats before mutation. Real media-key dispatch remains unavailable.
 
 ## Reproduce verification
 
@@ -36,3 +36,5 @@ env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 TMPDIR=/Volumes/ExtSSD/SCRA
 ```
 
 The worker cap runs all suites while limiting contention with other parity lanes. Native smokes use real preload/IPC and renderer code, native image/font/audio decoding, injected synthetic touch and hidden windows. They dispose all runtimes/windows and remove temporary user data. See the OpenSpec verification artifact for row coverage, screenshots and explicit remaining limits. Real hardware and OS input/audio acceptance remain unverified.
+
+Host keyboard output is unavailable in this desktop build. Hardware settings disable that choice and reject forged host-mode mutations; Device keyboard remains the supported shortcut/text route. The portable native font smoke searches installed host fonts or uses OPEN_QUAKE_SMOKE_FONT, and fails explicitly if no font is available.

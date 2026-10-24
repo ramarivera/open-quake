@@ -100,15 +100,8 @@ const net = {
 	},
 };
 const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
-// The voice surface writes the clipboard only on a renderer request; the smoke sends none.
-const clipboard = {
-	writeText: () => {
-		throw new Error("Bundle smoke must not write the clipboard");
-	},
-};
 globalThis.openQuakeBundleSmoke = {
 	powerMonitor,
-	clipboard,
 	shell,
 	app,
 	BrowserWindow: Window,

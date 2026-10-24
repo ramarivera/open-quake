@@ -4,9 +4,13 @@ import {
 	type ProfileEnvelope,
 	ProfileKey,
 } from "../profiles/profile-contracts.js";
+import { isUnsupportedProfileKey } from "../profiles/profile-function-contracts.js";
 import {
+	GoToPageConfig,
 	HotkeySwitchConfig,
 	MultiActionConfig,
+	NextPageConfig,
+	PreviousPageConfig,
 	TimerConfig,
 } from "./action-contracts.js";
 import {
@@ -194,7 +198,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				const key = page.keys.find(
 					(k) => k.keyCode === keyCode && k.config.display,
 				);
-				if (!key) return;
+				if (!key || isUnsupportedProfileKey(key)) return;
 				const identity = JSON.stringify([
 					deviceId,
 					profile.id,
@@ -233,13 +237,30 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						"goToPage",
 					].includes(type)
 				) {
-					const number = key.config.actions.find(
-						(a) => a.type === "page",
-					)?.value;
+					const canonical =
+						type === "pageUp"
+							? "previousPage"
+							: type === "pageDown"
+								? "nextPage"
+								: type;
+					const validated = Schema.decodeUnknownEither(
+						Schema.Union(GoToPageConfig, NextPageConfig, PreviousPageConfig),
+					)({
+						...input,
+						type: canonical,
+					});
+					if (validated._tag === "Left")
+						return yield* Effect.fail(
+							new InvalidKeyAction("config.actions", validated.left),
+						);
+					const number =
+						validated.right.type === "goToPage"
+							? validated.right.actions[0].value
+							: undefined;
 					yield* navigate(
 						deviceId,
-						type === "previousPage" || type === "pageUp" ? 0 : 1,
-						typeof number === "number" && type === "goToPage"
+						canonical === "previousPage" ? 0 : 1,
+						canonical === "goToPage" && typeof number === "number"
 							? number
 							: undefined,
 					);
@@ -357,6 +378,33 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				if (action._tag === "Left") return yield* Effect.fail(action.left);
 				yield* port.execute(action.right);
 			});
+			const reset = Effect.fn("KeyRuntime.reset")(function* (
+				deviceId?: string,
+			): Effect.fn.Return<void> {
+				for (const [key, fiber] of running)
+					if (!deviceId || JSON.parse(key)[0] === deviceId) {
+						yield* Fiber.interrupt(fiber);
+						running.delete(key);
+					}
+
+				for (const [id, value] of states)
+					if (!deviceId || value.deviceId === deviceId) {
+						yield* port.publish({
+							...value,
+							alternate: 0,
+							countdown: -1,
+							progress: 100,
+							alert: 0,
+						});
+						states.delete(id);
+					}
+
+				for (const key of held)
+					if (!deviceId || JSON.parse(key)[0] === deviceId) held.delete(key);
+				for (const key of alternates.keys())
+					if (!deviceId || JSON.parse(key)[0] === deviceId)
+						alternates.delete(key);
+			});
 			return {
 				activate: (...args: Parameters<typeof activate>) =>
 					activate(...args).pipe(lock.withPermits(1)),
@@ -364,30 +412,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					navigate(...args).pipe(lock.withPermits(1)),
 				refresh,
 				snapshot: Effect.sync(() => [...states.values()]),
-				reset: Effect.fn("KeyRuntime.reset")(function* (deviceId?: string) {
-					for (const [id, value] of states)
-						if (!deviceId || value.deviceId === deviceId) {
-							yield* port.publish({
-								...value,
-								alternate: 0,
-								countdown: -1,
-								progress: 100,
-								alert: 0,
-							});
-							states.delete(id);
-						}
-
-					for (const key of held)
-						if (!deviceId || JSON.parse(key)[0] === deviceId) held.delete(key);
-					for (const key of alternates.keys())
-						if (!deviceId || JSON.parse(key)[0] === deviceId)
-							alternates.delete(key);
-					for (const [key, fiber] of running)
-						if (!deviceId || JSON.parse(key)[0] === deviceId) {
-							yield* Fiber.interrupt(fiber);
-							running.delete(key);
-						}
-				}),
+				reset: (deviceId?: string) => reset(deviceId).pipe(lock.withPermits(1)),
 			};
 		}),
 	},

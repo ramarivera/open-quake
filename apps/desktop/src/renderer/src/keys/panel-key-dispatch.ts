@@ -11,6 +11,8 @@ export function createPanelKeyDispatcher(
 	target: () => PanelKeyTarget | undefined,
 	request: KeyLibraryBridge["request"],
 ) {
+	let queue = Promise.resolve();
+	let generation = 0;
 	let pending: (PanelKeyTarget & { readonly keyCode: string }) | undefined;
 	return {
 		key(event: StripKeyEvent): void {
@@ -22,13 +24,22 @@ export function createPanelKeyDispatcher(
 			const tap = pending;
 			if (!tap || tap.keyCode !== event.keyCode) return;
 			pending = undefined;
-			void request({ ...tap, type: "activate", kind: "press" })
-				.finally(() => request({ ...tap, type: "activate", kind: "release" }))
+			const epoch = generation;
+			queue = queue
+				.then(async () => {
+					if (epoch !== generation) return;
+					try {
+						await request({ ...tap, type: "activate", kind: "press" });
+					} finally {
+						await request({ ...tap, type: "activate", kind: "release" });
+					}
+				})
 				.catch(() => {
 					/* A destroyed renderer cannot display shutdown failures. */
 				});
 		},
 		cancel(): void {
+			generation++;
 			pending = undefined;
 		},
 	};

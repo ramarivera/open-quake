@@ -41,6 +41,7 @@ export function registerKeyLibrary<R>(
 	management: () => BrowserWindow | undefined,
 	renderer: string,
 	managementURL = renderer,
+	panelWindow: () => BrowserWindow | undefined = () => undefined,
 ) {
 	const store = iconStore(join(app.getPath("userData"), "key-library-v1.json"));
 	const lock = runtime.runSync(Effect.makeSemaphore(1));
@@ -54,7 +55,16 @@ export function registerKeyLibrary<R>(
 	const updates = runtime.runFork(
 		ProfileService.subscribeCommittedProfiles().pipe(
 			Effect.flatMap((stream) =>
-				Stream.runForEach(stream, () => publish.pipe(Effect.ignore)),
+				Stream.runForEach(stream, (envelope) =>
+					Effect.gen(function* () {
+						yield* publish;
+						for (const deviceId of new Set([
+							"desktop-preview",
+							...Object.keys(envelope.activeByDevice),
+						]))
+							yield* KeyRuntime.refresh(deviceId).pipe(Effect.ignore);
+					}).pipe(Effect.ignore),
+				),
 			),
 		),
 	);
@@ -82,32 +92,44 @@ export function registerKeyLibrary<R>(
 			);
 	};
 
+	const authorized = (
+		event: Electron.IpcMainInvokeEvent,
+		command: KeyRequest,
+	): boolean => {
+		if (
+			disposed ||
+			event.sender.isDestroyed() ||
+			event.senderFrame !== event.sender.mainFrame ||
+			!BrowserWindow.fromWebContents(event.sender) ||
+			!isAppRenderer(event.sender.getURL(), renderer)
+		)
+			return false;
+		if (
+			event.sender === management()?.webContents &&
+			event.sender.getURL() === new URL(managementURL).href
+		)
+			return true;
+		if (command.type === "read") return true;
+		return (
+			(command.type === "activate" || command.type === "navigate") &&
+			event.sender === panelWindow()?.webContents &&
+			new URL(event.sender.getURL()).searchParams.get("surface") === "panel"
+		);
+	};
+
 	ipcMain.handle(
 		KEY_REQUEST,
 		async (event, input: unknown): Promise<KeyReply> => {
 			const decoded = Schema.decodeUnknownEither(KeyRequest)(input, {
 				onExcessProperty: "error",
 			});
-			if (
-				disposed ||
-				decoded._tag === "Left" ||
-				event.senderFrame !== event.sender.mainFrame ||
-				!BrowserWindow.fromWebContents(event.sender) ||
-				!isAppRenderer(event.sender.getURL(), renderer)
-			)
+			if (decoded._tag === "Left" || !authorized(event, decoded.right))
 				return { _tag: "rejected", reason: "unauthorized" };
 			const command = decoded.right;
 			const privileged =
 				event.sender === management()?.webContents &&
 				event.sender.getURL() === new URL(managementURL).href;
-			const panel =
-				new URL(event.sender.getURL()).searchParams.get("surface") === "panel";
-			if (
-				!privileged &&
-				command.type !== "read" &&
-				!((command.type === "activate" || command.type === "navigate") && panel)
-			)
-				return { _tag: "rejected", reason: "unauthorized" };
+
 			if (privileged && !owners.has(event.sender.id)) {
 				const sender = event.sender;
 				const navigation = (
@@ -289,7 +311,7 @@ export function registerKeyLibrary<R>(
 			return track(
 				runtime.runPromise(
 					Effect.suspend(() =>
-						disposed || event.sender.isDestroyed()
+						!authorized(event, command)
 							? Effect.succeed<KeyReply>({
 									_tag: "rejected",
 									reason: "unauthorized",

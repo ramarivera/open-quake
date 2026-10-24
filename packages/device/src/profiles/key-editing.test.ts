@@ -53,8 +53,8 @@ const seed = () =>
 		],
 		activeByDevice: {},
 	});
-function setup(fail = false) {
-	let stored = encodeProfileEnvelope(seed());
+function setup(fail = false, initial = seed()) {
+	let stored = encodeProfileEnvelope(initial);
 	let writes = 0;
 	const repository = ProfileRepository.Default.pipe(
 		Layer.provide(
@@ -285,3 +285,83 @@ it("keeps alternate custom title origin separate and resets both icons from defa
 	);
 	expect(keyTitle(reset, "ja", true)).toBe("Alternate");
 });
+
+it.effect(
+	"cosmetic saves retain legacy sequence payload despite editor row IDs; executable changes still reject",
+	() => {
+		const initial = encodeProfileEnvelope(seed());
+		const raw = Schema.encodeSync(ProfileKey)(key);
+		const legacy = Schema.decodeUnknownSync(ProfileKey)({
+			...raw,
+			config: {
+				...raw.config,
+				type: "multiActions",
+				actions: [],
+				subActions: [
+					{
+						config: {
+							type: "retainedLegacy",
+							actions: [],
+							vendorOption: "synthetic",
+						},
+					},
+				],
+			},
+		});
+		const envelope = {
+			...seed(),
+			profiles: EffectArray.map(seed().profiles, (p) => ({
+				...p,
+				pages: EffectArray.map(p.pages, (page) => ({
+					...page,
+					keys: [legacy],
+				})),
+			})),
+		};
+		const f = setup(false, envelope);
+		return Effect.gen(function* () {
+			const editing = yield* KeyEditing;
+			const changed = Schema.encodeSync(ProfileKey)(legacy);
+			const rows = changed.config.subActions ?? [];
+			const edited = {
+				...changed,
+				config: {
+					...changed.config,
+					title: { ...changed.config.title, text: "Cosmetic" },
+					subActions: rows.map((row) => ({ ...row, editorId: "row-1" })),
+				},
+			};
+			yield* editing.preview(target, edited);
+			yield* editing.save(target.token);
+			const saved = (yield* editing.read()).profiles[0].pages[0].keys[0];
+			if (!saved) return yield* Effect.die("Missing saved sequence");
+			expect(saved.config.title.text).toBe("Cosmetic");
+			expect(
+				Schema.encodeSync(ProfileKey)(saved).config.subActions?.[0]?.config,
+			).toEqual(rows[0]?.config);
+			yield* editing.preview(
+				{ ...target, revision: 1 },
+				{
+					...edited,
+					config: {
+						...edited.config,
+						subActions: [
+							{
+								editorId: "row-1",
+								config: {
+									type: "retainedLegacy",
+									actions: [],
+									vendorOption: "changed",
+								},
+							},
+						],
+					},
+				},
+			);
+			expect((yield* Effect.either(editing.save(target.token)))._tag).toBe(
+				"Left",
+			);
+			expect(initial.profiles[0]?.id).toBe("p");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

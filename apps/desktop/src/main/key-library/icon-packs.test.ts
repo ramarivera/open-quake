@@ -107,3 +107,17 @@ describe("safe icon packs", () => {
 		expect(() => safeIconSvg(source)).toThrow(),
 	);
 });
+
+it.each([
+	'<svg><path/d="M0 0" onload="x"/></svg>',
+	'<svg><path foo="unchecked"/></svg>',
+	'<svg><path d="M0 0"/garbage></svg>',
+	"<svg><g></svg>",
+	"<svg/><svg></svg>",
+	'<svg><path fill="red"fill="blue"/></svg>',
+	'<svg><path xml:base="https://example.com"/></svg>',
+	"<svg><path d=M0/></svg>",
+	'<svg><path d="M0 0"/> <script/x="y"/></svg>',
+])("rejects malformed or unchecked SVG %s", (source) =>
+	expect(() => safeIconSvg(source)).toThrow(),
+);

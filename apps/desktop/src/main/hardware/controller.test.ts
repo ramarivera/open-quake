@@ -38,6 +38,24 @@ describe("hardware settings consumer", () => {
 						true,
 					),
 				).toEqual({ _tag: "failure", code: "QUAKE.HARDWARE.STALE_SESSION" });
+				expect(
+					yield* hardwareRequest(
+						{ _tag: "inputMode", session: "session-A", mode: "host" },
+						current,
+						true,
+					),
+				).toEqual({
+					_tag: "failure",
+					code: "QUAKE.HARDWARE.HOST_KEYBOARD_UNAVAILABLE",
+				});
+				expect((yield* current.snapshot()).inputMode).toBe("device");
+				expect(
+					(yield* hardwareRequest(
+						{ _tag: "inputMode", session: "session-A", mode: "device" },
+						current,
+						true,
+					))._tag,
+				).toBe("ready");
 				expect(yield* fake.writes).toHaveLength(0);
 				yield* hardwareRequest(
 					{ _tag: "refresh", session: "session-A" },

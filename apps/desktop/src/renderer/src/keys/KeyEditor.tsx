@@ -389,6 +389,7 @@ export function KeyEditor(): React.JSX.Element {
 				<StripViewport>
 					<StripScreen
 						previewSerial="editor-preview"
+						wallpaper={wallpaper}
 						profiles={{ _tag: "ready", envelope: previewEnvelope }}
 						showEmptyGridDashedBorder
 					/>

@@ -74,6 +74,7 @@ export function registerProfiles(
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
 	managementURL = renderer,
 	hardware: () => HardwareSession | undefined = () => undefined,
+	panel: () => BrowserWindow | undefined = () => undefined,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -161,6 +162,7 @@ export function registerProfiles(
 		management,
 		renderer,
 		managementURL,
+		panel,
 	);
 	const snapshots = registerProfileSnapshots(runtime, renderer, false);
 	const captureWindows = new Set<BrowserWindow>();
@@ -369,6 +371,7 @@ export function registerProfiles(
 			),
 		connect,
 		disconnect,
+		resetKeys: () => runtime.runPromise(KeyRuntime.reset()),
 		dispose: async (): Promise<void> => {
 			if (disposed) return;
 			disposed = true;

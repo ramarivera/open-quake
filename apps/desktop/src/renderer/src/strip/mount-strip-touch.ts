@@ -190,6 +190,14 @@ export function mountStripTouch(
 			),
 	});
 	const off = bridge.onQuakeEvent((event) => {
+		if (root.dataset.stripOverlay === "true") {
+			onCancel?.();
+			gesture.cancel();
+			gestureActive = false;
+			// Ownership lasts until lift, even if the picker closes mid-contact.
+			if (event.kind === "touch" && event.points[0]?.action !== 0)
+				gestureStarted = true;
+		}
 		if (event.kind === "touch" && event.points[0]) {
 			const first = event.points[0],
 				point = normalizeTouch(first, { width: 1920, height: 480, rotation });
@@ -216,7 +224,6 @@ export function mountStripTouch(
 			gestureActive = false;
 			gestureStarted = false;
 		}
-		if (root.dataset.stripOverlay === "true") onCancel?.();
 		controller.event(event);
 	});
 	return () => {

@@ -7,6 +7,7 @@ import {
 	keyEditable,
 	previewEnvelope,
 	replaceProfileKey,
+	sequencePayload,
 	titleWeight,
 } from "./key-editing-invariants.js";
 import {
@@ -150,8 +151,8 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 							original.config.type !== key.config.type ||
 							JSON.stringify(original.config.actions) !==
 								JSON.stringify(key.config.actions) ||
-							JSON.stringify(original.config.subActions) !==
-								JSON.stringify(key.config.subActions);
+							sequencePayload(original.config.subActions) !==
+								sequencePayload(key.config.subActions);
 						if (
 							key.config.type &&
 							findAction(key.config.type) &&

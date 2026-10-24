@@ -1,10 +1,10 @@
 import { Option } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { GridVoiceInput } from "../../../shared/voice-surface";
 import {
 	createPanelKeyDispatcher,
 	type PanelKeyTarget,
 } from "../keys/panel-key-dispatch";
-import type { GridVoiceInput } from "../../../shared/voice-surface";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { useQuakeEvents } from "../useQuakeEvents";

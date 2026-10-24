@@ -18,10 +18,14 @@ import { registerHardware } from "../hardware";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
+import { registerMaintenance } from "../maintenance";
 import { MediaLive, registerMedia } from "../media";
 import { registerProfiles } from "../profiles";
 import { iconZip } from "../test/icon-pack-fixtures";
+import { smokeFont } from "../test/smoke-font";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { playKeyAlarm } from "./alarm";
+import { resetKeysOnLinkLoss } from "./device-status";
 
 registerClockScheme();
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
@@ -125,6 +129,8 @@ async function smoke(): Promise<void> {
 		media: ReturnType<typeof registerMedia> | undefined,
 		clock: ReturnType<typeof registerClock> | undefined;
 	let knob: ReturnType<typeof registerKnob> | undefined;
+	let voice: ReturnType<typeof registerVoiceSurface> | undefined;
+	let maintenance: ReturnType<typeof registerMaintenance> | undefined;
 	let disposeLifecycle = async () => {},
 		removeHardware = () => {};
 	let management: BrowserWindow | undefined;
@@ -150,7 +156,30 @@ async function smoke(): Promise<void> {
 					process.stderr.write(`renderer: ${details.message}\n`);
 			});
 		const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
-		profiles = registerProfiles(() => manager, renderer);
+		profiles = registerProfiles(
+			() => manager,
+			renderer,
+			undefined,
+			renderer,
+			() => undefined,
+			() => panel,
+		);
+		voice = registerVoiceSurface({
+			mock: true,
+			tones: createToneRecorder(),
+			serial: () => "desktop-preview",
+			panel: () => panel,
+			management: () => manager,
+			renderer,
+		});
+		maintenance = registerMaintenance({
+			root: directory,
+			mock: true,
+			renderer,
+			hardware: () => undefined,
+			management: () => manager,
+			stopWriters: async () => {},
+		});
 		knob = registerKnob(
 			() => panel,
 			() => [manager, panel],
@@ -436,7 +465,7 @@ async function smoke(): Promise<void> {
 				},
 				{
 					name: "iconfont.ttf",
-					data: await readFile("/System/Library/Fonts/Supplemental/Arial.ttf"),
+					data: await smokeFont(),
 				},
 			]),
 		);
@@ -485,6 +514,24 @@ async function smoke(): Promise<void> {
 		await ready(panel, "window.smokeStates.some(s=>s.countdown>0)");
 		await snapshot(panel, "countdown");
 		await touch(800, 100, 1);
+		await evalIn(
+			panel,
+			"document.getElementById('root').dataset.stripOverlay='true';true",
+		);
+		await touch(650, 100, 1);
+		await evalIn(
+			panel,
+			"document.getElementById('root').dataset.stripOverlay='false';true",
+		);
+		await touch(500, 100, 0);
+		const retainedPage = await request(manager, { type: "read", locale: "en" });
+		assert(
+			retainedPage._tag === "success" &&
+				retainedPage.envelope?.activeByDevice["desktop-preview"]?.pageId ===
+					"one",
+			"Picker takeover must cancel a started slide",
+		);
+		await touch(800, 100, 1);
 		await touch(650, 100, 1);
 		await touch(500, 100, 0);
 		await sleep();
@@ -509,6 +556,45 @@ async function smoke(): Promise<void> {
 			(await request(panel, { type: "delete", target }))._tag,
 			"rejected",
 		);
+		const spoof = new BrowserWindow(options);
+		await spoof.loadURL(`${renderer}?surface=panel`);
+		assert.equal(
+			(
+				await request(spoof, {
+					type: "navigate",
+					deviceId: "desktop-preview",
+					direction: 1,
+				})
+			)._tag,
+			"rejected",
+		);
+		assert.equal(
+			(
+				await request(spoof, {
+					type: "activate",
+					deviceId: "desktop-preview",
+					profileId: custom.id,
+					pageId: "one",
+					revision: 0,
+					keyCode: "1,1",
+					kind: "press",
+				})
+			)._tag,
+			"rejected",
+		);
+		spoof.destroy();
+		// Real disconnect composition path with synthetic HID status. Never opens HID.
+		await resetKeysOnLinkLoss(
+			{
+				source: "hid",
+				kind: "status",
+				state: "disconnected",
+				reason: "scope-closed",
+			},
+			profiles.resetKeys,
+		);
+		const resetState = await request(manager, { type: "read", locale: "en" });
+		assert(resetState._tag === "success" && resetState.states?.length === 0);
 		// Reload clears pending drafts even when the renderer cannot send its cleanup IPC.
 		const latest = await request(manager, { type: "read", locale: "en" });
 		assert(latest._tag === "success" && latest.envelope);
@@ -578,6 +664,10 @@ async function smoke(): Promise<void> {
 				'window.quakeWallpaper.request({_tag:"read"}).then(reply=>reply._tag === "success" && reply.snapshot.saved.clock.actions[0].value === "12h")',
 			),
 		);
+		await ready(
+			manager,
+			"Array.from(document.querySelectorAll('.keys-preview .oq-flip-clock')).some(el=>/AM|PM/.test(el.getAttribute('aria-label')??''))",
+		);
 		await snapshot(manager, "clock-auto-save");
 		// Native audio decoding/playback and cleanup, using a silent 20ms WAV.
 		const wav = Buffer.alloc(44 + 882 * 2);
@@ -614,6 +704,8 @@ async function smoke(): Promise<void> {
 	} finally {
 		removeHardware();
 		await disposeLifecycle();
+		await maintenance?.dispose();
+		await voice?.dispose();
 		await knob?.dispose();
 		await profiles?.dispose();
 		await media?.dispose();

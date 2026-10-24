@@ -116,6 +116,7 @@ vi.mock("./profiles", () => ({
 		select: vi.fn(),
 		connect: vi.fn(async () => {}),
 		disconnect: vi.fn(async () => {}),
+		resetKeys: vi.fn(async () => {}),
 		dispose: vi.fn(async () => {}),
 	})),
 }));
@@ -647,6 +648,8 @@ describe("desktop main with the real device service and fake HID", () => {
 
 	it("defaults to HID, forwards to both windows, cleans up unplug and reconnects", async () => {
 		await start();
+		const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+		expect(profiles?.resetKeys).not.toHaveBeenCalled();
 		const { panel, management } = windows();
 		await Effect.runPromise(fake.emit(report(3, 1, [1])));
 		for (const window of [panel, management])
@@ -672,6 +675,7 @@ describe("desktop main with the real device service and fake HID", () => {
 				},
 			}),
 		);
+		await vi.waitFor(() => expect(profiles?.resetKeys).toHaveBeenCalled());
 		expect(await Effect.runPromise(fake.closes)).toBe(1);
 		await vi.waitFor(
 			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),

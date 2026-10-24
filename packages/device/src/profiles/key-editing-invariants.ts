@@ -4,6 +4,7 @@ import { profileText } from "./profile-catalog.js";
 import type {
 	Profile,
 	ProfileEnvelope,
+	ProfileJsonObject,
 	ProfileKey,
 	ProfileTitle,
 } from "./profile-contracts.js";
@@ -254,3 +255,13 @@ export const pageIndex = (
 	count: number,
 	delta: number,
 ): number => (count ? (((current + delta) % count) + count) % count : 0);
+
+/** Row identity belongs to the editor; all executable and retained config fields still compare. */
+export const sequencePayload = (
+	steps: Option.Option<readonly (typeof ProfileJsonObject.Type)[]>,
+): string =>
+	JSON.stringify(
+		Option.map(steps, (rows) =>
+			rows.map(({ editorId: _editorId, ...payload }) => payload),
+		),
+	);

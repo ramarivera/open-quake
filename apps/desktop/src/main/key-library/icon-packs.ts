@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import { Schema } from "effect";
+import { safeIconSvg } from "./icon-svg";
+
+export { safeIconSvg } from "./icon-svg";
+
 import { readIconZip } from "./zip";
 
 export const IconAsset = Schema.Struct({
@@ -20,42 +24,6 @@ const hash = (bytes: Uint8Array | string): string =>
 const invalid = (): never => {
 	throw new Error("Invalid icon pack");
 };
-/** Strict allowlist for inert image SVG; entities, style, events and external references are forbidden. */
-export function safeIconSvg(source: string): string {
-	if (
-		source.length > 5 * 1024 * 1024 ||
-		/<!|<\?|&|\bon[a-z]+\s*=|\bstyle\s*=|url\s*\(|(?:href|src)\s*=/i.test(
-			source,
-		)
-	)
-		return invalid();
-	if (!/^\s*<svg\b/i.test(source) || !/<\/svg>\s*$/i.test(source))
-		return invalid();
-	const tags = source.matchAll(/<\/?\s*([\w:-]+)/g);
-	const allowed = new Set([
-		"svg",
-		"g",
-		"path",
-		"circle",
-		"ellipse",
-		"rect",
-		"polygon",
-		"polyline",
-		"line",
-		"title",
-		"desc",
-		"defs",
-		"clippath",
-	]);
-	for (const tag of tags)
-		if (!allowed.has((tag[1] ?? "").toLowerCase())) return invalid();
-	if (
-		source.includes("http") &&
-		!/^\s*<svg[^>]*xmlns=["']http:\/\/www\.w3\.org\/2000\/svg["']/i.test(source)
-	)
-		return invalid();
-	return source;
-}
 export const svgData = (svg: string): string =>
 	`data:image/svg+xml;base64,${Buffer.from(safeIconSvg(svg)).toString("base64")}`;
 export async function parseIconPack(
