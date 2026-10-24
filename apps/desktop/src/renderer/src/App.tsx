@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
-import { mountStripTouch } from "./strip/mount-strip-touch";
+import { StripPanel } from "./strip/StripPanel";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
 	type AppearanceController,
@@ -11,7 +11,7 @@ import { StatusDot } from "./ui/Form";
 import { AppearanceIcon, DeviceIcon, ScreenIcon } from "./ui/icons";
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
-import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
+import { WallpaperSettings } from "./wallpaper/WallpaperViews";
 import "./styles.css";
 import "./management/management.css";
 
@@ -28,17 +28,8 @@ function PanelSurface(): React.JSX.Element {
 	useEffect(() => {
 		// Keep the OmniWM titleSubstring float rule matching this window.
 		document.title = "open-quake panel";
-		const root = document.getElementById("root");
-		if (root && window.openQuake)
-			return mountStripTouch(
-				root,
-				window.openQuake,
-				Number(
-					new URLSearchParams(window.location.search).get("rotation") ?? 0,
-				),
-			);
 	}, []);
-	return <WallpaperPanel />;
+	return <StripPanel />;
 }
 
 type Page = "overview" | "screen" | "appearance";

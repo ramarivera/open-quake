@@ -39,8 +39,8 @@ They do not establish physical panel behavior.
   `connection.touch`; it is not asserted by the native smoke.
 - SCREEN-005, 053–055, 057–058: source-derived orientation, first-contact policy,
   overlay capture and ordinary-key down/up arbitration.
-- SCREEN-056: injected resolver contract only. strip-grid owns geometry, covered
-  cells, spans and type-specific touch flags.
+- SCREEN-056: the mounted panel uses strip-grid geometry.tileAt and the current
+  rendered layout. Grid owns covered cells, spans, gaps and touch flags.
 - SCREEN-061–065, AI-206: sub-target dispatch, deferred tap/scroll handoff,
   stale-bound repair/rescan, portrait bounds and minimum 44×44 targets.
 - SCREEN-066–068, AI-163: reusable recognizer, monitor inertia/rubber band and
@@ -75,8 +75,59 @@ lead-only probe was written but never executed.
 Epic `open-quake-lih.3.1` is a child of cluster `open-quake-lih.3`.
 Task mapping: 1.1 → `.3.1.1`, 1.2 → `.3.1.2`, 2.1 → `.3.1.3`,
 2.2 → `.3.1.4`, 3.1 → `.3.1.5`, 3.2 → `.3.1.6` under prefix `open-quake-lih`.
-All six task beads, the epic and cluster are closed with source/test evidence.
+The six original task beads are closed. Review-round tasks 4.1–4.5 map to
+`.3.1.7` through `.3.1.11`. The epic was reopened for this round. The cluster
+remains open per the lead until PR #20 merges.
 PR: https://github.com/ramarivera/open-quake/pull/20 against main.
 Implementation commit: `3629150`; delivery metadata is recorded in a follow-up
 commit. The branch is pushed, the PR is linked to the T3 thread and remains
 unmerged. Hardware limitations above are retained in the closure evidence.
+
+
+## PR #20 review-fix round 1
+
+Merged main `2ac4a2ff3867e0fd5bc1e9c878278bf8af9b9753`, including PR #23's
+strip grid. Both README sections and both native smoke suites are preserved.
+`main/index.ts` retains profile registration and panel-only touch forwarding.
+`StripPanel` now binds input to the layout actually painted by `StripScreen`,
+using `geometry.tileAt`. DOM rectangles locate only sub-targets. Held keys drive
+strip press feedback.
+
+All three connector findings were verified against code and accepted:
+
+- Native open is now acquired with `Effect.acquireRelease`, whose acquisition
+  is uninterruptible. Fake promise tests prove late handles close once after
+  teardown, lock and wake, without subscribing to reports, writing or reopening.
+  The tests failed on the previous code with zero closes in all three cases.
+- Child and sub-target attribute mutations invalidate membership. The next
+  eligible local rescan runs before accepting a known scroller hit. Unit tests
+  preserve the 500 ms throttle and transient-empty behavior; the native smoke
+  adds a clickable inside an already registered scroller and observes its tap.
+- Axis locking preserves the initial velocity sample. `(0,0)@0ms` followed by
+  `(30,0)@100ms` yields `30/101` px/ms on release at 101 ms and `0.3` at 100 ms.
+  This intentionally corrects the recovered `shared/gesture/recognizer.js`
+  timestamp reassignment instead of reproducing that source bug.
+
+All six lane gates pass on the integrated code: Biome checks 229 files;
+typecheck succeeds for all six packages; 605 tests pass (322 device, 231 desktop,
+27 edge, 25 protocol); production build and both bundle modes pass; strict
+OpenSpec validation passes all 30 changes. The native mock smoke passes media,
+profile rendering, real preload/IPC, ordinary-key down/up, press feedback, inert
+gaps, a live profile switch to an inward-growing span, dynamic sub-target
+membership and runtime disposal.
+
+Evidence is local-only under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-touch/review-round-1/`:
+`biome.log`, `typecheck.log`, `tests.log`, `build.log`, `bundle.log`,
+`openspec.log`, `native-build.log`, `native-smoke.log`, `panel.png`,
+`panel-{quick,meetai,spans,clock,vivid}.png`, `management*.png` and
+`panel-touch-complete.png`. The final touch screenshot includes the smoke-only
+injected scroller and button. The initial smoke attempt captured a screenshot
+inside the gesture, exceeding the valid 100 ms inactivity deadline; moving
+capture after the gesture removed that test timing error. Production timings
+were unchanged.
+
+Native smoke ran with `OPEN_QUAKE_MOCK_DEVICE=1`, `env -u ELECTRON_RUN_AS_NODE`
+and scratch `TMPDIR`. No hardware or probe was opened and DK-Suite was never
+started. All started Electron processes exited. Physical behavior remains
+unverified. There were no disagreements with the three review findings.

@@ -69,7 +69,6 @@ export function createGestureRecognizer(options: {
 						: Math.abs(dx) >= Math.abs(dy)
 							? "horizontal"
 							: "vertical";
-				samples = [{ ...start, time }];
 			}
 			const move = {
 				axis,

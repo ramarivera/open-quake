@@ -64,6 +64,25 @@ describe("reusable gestures and scroll physics", () => {
 		r.end({ x: 10, y: 0 }, 11);
 		expect(onEnd).not.toHaveBeenCalled();
 	});
+	it.each([100, 101])(
+		"preserves the initial velocity sample when releasing at %ims",
+		(release) => {
+			const onEnd = vi.fn();
+			const gesture = createGestureRecognizer({
+				width: 100,
+				height: 100,
+				onMove: vi.fn(),
+				onEnd,
+			});
+			gesture.point({ x: 0, y: 0 }, 0);
+			gesture.point({ x: 30, y: 0 }, 100);
+			gesture.end({ x: 30, y: 0 }, release);
+			expect(onEnd).toHaveBeenCalledOnce();
+			expect(onEnd.mock.lastCall?.[0].vx).toBeCloseTo(30 / release);
+			expect(onEnd.mock.lastCall?.[0].vy).toBe(0);
+		},
+	);
+
 	it("tap slop is Euclidean and permanently cancels on excursions", () => {
 		const r = createTapRecognizer({ x: 0, y: 0 }, 0);
 		expect(r.move({ x: 12, y: 12 })).toBe(true);

@@ -3,7 +3,9 @@ import {
 	Deferred,
 	Effect,
 	Exit,
+	Fiber,
 	Layer,
+	Option,
 	Ref,
 	Scope,
 	Stream,
@@ -14,7 +16,7 @@ import {
 	QuakeHidOpenFailed,
 } from "../../src/device-errors.js";
 import { FAKE_QUAKE_DEVICE, makeFakeHidTransport } from "../../src/hid-fake.js";
-import { HidTransport } from "../../src/hid-transport.js";
+import { type HidConnection, HidTransport } from "../../src/hid-transport.js";
 import { type DeviceEvent, QuakeDevice } from "../../src/index.js";
 import {
 	TOUCH_IDENTITY,
@@ -152,6 +154,66 @@ describe("scoped vendor input", () => {
 				expect(yield* fake.closes).toBe(1);
 			}),
 	);
+	for (const interruption of ["teardown", "lock", "wake"] as const) {
+		it.scoped(
+			`closes a late native open exactly once during ${interruption}`,
+			() =>
+				Effect.gen(function* () {
+					const fake = yield* makeFakeHidTransport([info]);
+					const handle = yield* fake.transport.open(info);
+					const reads = yield* Ref.make(0);
+					let finishOpen: ((handle: HidConnection) => void) | undefined;
+					let opens = 0;
+					const pending = new Promise<HidConnection>((resolve) => {
+						finishOpen = resolve;
+					});
+					const scope = yield* Scope.make();
+					const source = yield* Scope.extend(
+						startTouchSource(
+							{
+								...fake.transport,
+								open: () =>
+									Effect.tryPromise({
+										try: () => {
+											opens++;
+											return pending;
+										},
+										catch: (cause) => new QuakeHidOpenFailed(cause),
+									}),
+							},
+							() => Effect.void,
+						),
+						scope,
+					);
+					yield* TestClock.adjust(2000);
+					expect(opens).toBe(1);
+					const cancel =
+						interruption === "teardown"
+							? Scope.close(scope, Exit.void)
+							: interruption === "lock"
+								? source.setLocked(true)
+								: source.wake();
+					const cancelling = yield* cancel.pipe(Effect.fork);
+					yield* Effect.yieldNow();
+					const beforeOpen = yield* Fiber.poll(cancelling);
+					finishOpen?.({
+						...handle,
+						reports: Stream.fromEffect(Ref.update(reads, (n) => n + 1)).pipe(
+							Stream.flatMap(() => handle.reports),
+						),
+					});
+					yield* Fiber.join(cancelling);
+					yield* Scope.close(scope, Exit.void);
+					yield* TestClock.adjust(10000);
+					expect(Option.isNone(beforeOpen)).toBe(true);
+					expect(yield* fake.closes).toBe(1);
+					expect(yield* Ref.get(reads)).toBe(0);
+					expect(opens).toBe(1);
+					expect(yield* fake.writes).toEqual([]);
+				}),
+		);
+	}
+
 	it.scoped(
 		"wake's second failed attempt waits 4500ms, wrong collection never opens",
 		() =>

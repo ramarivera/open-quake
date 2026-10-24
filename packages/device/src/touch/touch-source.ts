@@ -70,21 +70,24 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 		}
 		return yield* Effect.scoped(
 			Effect.gen(function* () {
-				const opened = yield* Effect.either(transport.open(info));
+				// acquireRelease masks interruption until the non-cancellable native
+				// open has returned and its close finalizer has been registered.
+				const opened = yield* Effect.either(
+					Effect.acquireRelease(transport.open(info), (handle) =>
+						handle
+							.close()
+							.pipe(
+								Effect.catchTag("QuakeHidCloseFailed", (error) =>
+									Effect.sync(() => state("HID_READ_FAILED", error.code)),
+								),
+							),
+					),
+				);
 				if (opened._tag === "Left") {
 					state("DK_TARGET_OPEN_FAILED", opened.left.code);
 					return false;
 				}
 				const handle = opened.right;
-				yield* Effect.addFinalizer(() =>
-					handle
-						.close()
-						.pipe(
-							Effect.catchTag("QuakeHidCloseFailed", (error) =>
-								Effect.sync(() => state("HID_READ_FAILED", error.code)),
-							),
-						),
-				);
 				yield* Effect.addFinalizer(session.release);
 				state("TOUCH_OK");
 				health = { ...health, recoveryCycle: 0 };

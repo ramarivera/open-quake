@@ -11,11 +11,18 @@ Panel and management surfaces SHALL take every authored UI colour from semantic
 theme tokens. A typed TypeScript token object SHALL generate the document-root
 `--quake-*` CSS custom properties. Built-in dark and light palettes SHALL define
 the same complete token set, including readable foreground/background pairs,
-muted text, borders, accent/accent text, success, and warning.
+muted text, borders, accent/accent text, success, and warning. Exception: the
+strip key grid (`strip-key-grid`) reproduces DK-Suite's fixed device palette,
+which does not follow the app theme. That palette is one typed object of
+recovered colours. Status overlays on the panel keep using theme tokens.
 
 #### Scenario: Theme switch
 - **WHEN** the active theme changes from dark to light
 - **THEN** both surfaces re-render in the new theme without restarting the app
+
+#### Scenario: Strip grid under the light theme
+- **WHEN** the light theme is active and the panel shows a key grid
+- **THEN** the grid keeps DK-Suite's black canvas and slot colours while status overlays use light tokens
 
 #### Scenario: Token generation
 - **WHEN** a built-in or validated custom palette is applied
@@ -92,16 +99,26 @@ sequence when older events leave the log.
 
 ### Requirement: Bounded micro-animations
 Both surfaces SHALL provide CSS-only micro-animations on changed statistics or
-interactive controls when motion is allowed. Motion SHALL use only opacity or
-transform, last at most 160 ms, travel at most 4 px, and have no infinite loops or
-JavaScript animation loop. Keep-alive updates and theme changes SHALL apply
-immediately without animation. The panel design target SHALL be 60 Hz with a
-16.7 ms frame budget at 1920x480; hardware timing SHALL be measured separately
-before claiming that target is met.
+interactive controls when motion is allowed. In the management window and in
+status overlays on the panel, motion SHALL use only opacity or transform, last at
+most 160 ms, travel at most 4 px, and have no infinite loops or JavaScript
+animation loop. The strip key grid and its tiles SHALL instead use DK-Suite's
+recovered strip motion (approved parity decision 3, Ramiro 2026-10-23): the 0.3 s
+`ease` press that scales a slot to 0.8 with a white glow (SCREEN-034), and, for
+later strip widgets, DK's recovered loops and crossfades such as the 4 s dial
+tick sweep (SCREEN-044) and the 0.8 s wallpaper crossfade (SCREEN-105). Strip
+motion SHALL still be CSS transitions or keyframes and SHALL obey reduced motion.
+Keep-alive updates and theme changes SHALL apply immediately without animation.
+The panel design target SHALL be 60 Hz with a 16.7 ms frame budget at 1920x480;
+hardware timing SHALL be measured separately before claiming that target is met.
 
 #### Scenario: Knob feedback
 - **WHEN** a rotation or press changes a visible counter with motion allowed
 - **THEN** only that changed value receives a finite opacity/transform animation without moving adjacent layout
+
+#### Scenario: Strip tile press
+- **WHEN** a tile on the strip is pressed with motion allowed
+- **THEN** its slot scales to 0.8 over 0.3 s while management controls keep the 160 ms budget
 
 #### Scenario: Keep-alive traffic
 - **WHEN** a new keep-alive sequence arrives

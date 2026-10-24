@@ -24,12 +24,13 @@ Only the first contact drives input in every phase. Pending ups flush before ano
 Disposal releases held keys and cancels timers. Profile overlays get a dedicated
 point sink and own their whole gesture, including a release after hiding.
 
-The mounted panel currently uses `mountStripTouch`, a DOM adapter. Tile hosts mark
-`data-strip-key="1,1"`, `data-strip-covered="true"` for covered placeholders and
-`data-support-touch-effect="false"` for sub-target hosts. It dispatches
-`quake-strip-key` on `#root`; the action lane can subscribe or inject its direct
-key sink when adopting the pure resolver. This lane does not execute key actions.
-The grid owns type-specific touch flags. There is no second grid geometry model.
+The mounted panel uses `mountStripTouch` with the current layout painted by
+`StripScreen` and the pure `tileAt` from `geometry.ts`. Tile hosts use the grid's
+`data-key-code` and `data-state="tile"` attributes only to locate sub-targets;
+DOM rectangles never decide tile hits. The adapter dispatches `quake-strip-key`
+on `#root`, and the held key drives `StripScreen` press feedback. The action lane
+can subscribe or inject its direct key sink. This lane does not execute actions.
+The grid owns spans, gaps, visible cells and type-specific touch flags.
 
 Set `#root.dataset.stripOverlay = "true"` to capture touch as
 `quake-strip-overlay-touch` events. A direct controller can instead supply the
@@ -38,7 +39,9 @@ overlay's active predicate and point handler.
 Sub-target hosts use `data-quake-sub-touch="id"` and optionally
 `data-support-quake-move="true"`. Their bounds have a minimum 44×44 logical target.
 The adapter observes DOM mutations/resize, repairs bounds on misses and rescans a
-local tile at most every 500 ms. It preserves old entries when an empty scan is
+local tile at most every 500 ms. Child and sub-target attribute mutations
+invalidate membership before existing hits are accepted, so new clickables inside
+known scrollers are discovered. It preserves old entries when an empty scan is
 transient. Clickables win overlaps. `quake-sub-touch-start` and
 `quake-sub-touch-end` are non-bubbling events with typed `SubTouchEvent` detail.
 Moving a scroll target repeats start, matching the recovered host convention.
@@ -48,7 +51,7 @@ preferring `quakeBotIconViewMessages`. Disconnect and unmount cancel taps.
 
 `createGestureRecognizer` accepts repeated HID points with injected timestamps.
 It locks an axis at 6 px, requires 44×44 area and 24 px final span, samples 120 ms,
-zeros velocity after an 80 ms pause and clamps speed to 5 px/ms.
+preserves the initial sample timestamp, zeros velocity after an 80 ms pause and clamps speed to 5 px/ms.
 `scroll-physics.ts` contains monitor physics and an injected animation runner.
 `message-scroll.ts` contains the distinct chat drag/fast-flick policy. Widgets
 supply their actual bounds, offsets, reduced-motion preference and animation
@@ -64,3 +67,46 @@ capture suppression to infer an actual hardware release.
 
 Source: local `v0.4.95/audit/AUDIT_SCREEN.md` SCREEN-005, 053–058, 061–068;
 `AUDIT_AI.md` AI-163/206 and the cited recovered Vue/gesture modules.
+# Strip renderer
+
+Implements `openspec/changes/strip-key-grid`. The QUAKE strip and the
+management preview (`ui/DeviceScreen.tsx`) both render `StripScreen` on a fixed
+1920×480 canvas; `StripViewport` scales it to its container.
+
+- `geometry.ts` is pure. It holds the four DK themes, profile and cell theme
+  resolution, `stripLayout(profile, page)` (slots, tiles, covered cells, vivid
+  page), and `tileAt(point, layout)`. Footprints come from
+  `packages/device/src/profiles/profile-footprint.ts`, shared with
+  `profiles-key-grid` occupancy.
+- `tileRegistry.tsx` maps a key type to its tile component. Tiles receive
+  `{ tile, context }`; `context` carries the host clock and saved hour format.
+  Unregistered types draw `tiles/GenericTile.tsx`, DK's icon-and-title tile.
+- `palette.ts` is DK's fixed strip palette. The strip does not follow the app
+  theme; status overlays do.
+- `useStripProfiles.ts` decodes the read-only `profiles:snapshot` channel from
+  `main/profiles/profile-ipc.ts`. `selection.ts` picks the device's page.
+- `stripSettings.ts` stores "Empty Slot Dashed Border" in localStorage and
+  syncs it between windows.
+
+## Seams for other lanes
+
+- **strip-clock:** replace `ClockPlaceholder` in `tileRegistry.tsx` with
+  `ClockTile` from `tiles/clock/`. It receives `{ widthPx, heightPx, now, theme }`
+  (1920×480 on the strip). `theme` is `"season"` until the clock reads it from
+  the key.
+- **strip-touch:** call `tileAt(normalizedPoint, layout)`. It returns the visible
+  tile whose rendered slot contains the point, with `keyCode`,
+  `supportTouchEffect`, `hasTouchableSubElements` and `pressFeedback`, or
+  nothing. Pass the held key to `StripScreen`'s `pressedKeyCode` to show DK's
+  press.
+- **knob / profile switching:** `selectStripPage(envelope, serial)` picks the
+  page. A switcher can pass its own selection instead.
+
+## Verification
+
+`geometry.test.ts` holds the property tests (no shared cells or pixels, inward
+growth, covered cells hidden, valid layouts fully rendered, `tileAt`
+agreement). `strip.test.ts` renders the fixtures in
+`main/test/strip-fixtures.ts`. The native smoke in `main/media/smoke.ts`
+captures `panel-<profile>.png` for each fixture. Hardware rendering on the real
+strip is unverified.

@@ -14,3 +14,11 @@
 
 - [x] 3.1 Feed synthetic raw frames in mock mode and add the opt-in guarded capture script; verify mock delivery and script guards without opening hardware.
 - [x] 3.2 Run all lane gates and native mock smoke, record evidence and unverified hardware findings, synchronize beads, commit, push and open the PR.
+
+## 4. PR #20 review-fix round 1
+
+- [x] 4.1 Merge origin/main and connect the mounted panel to strip-grid's real `geometry.tileAt` and current layout; preserve profile IPC and both native smoke suites. Sources: SCREEN-005, SCREEN-056.
+- [x] 4.2 Acquire touch handles with interruption-safe release and regress a non-cancellable open completing after teardown, lock or wake. Sources: MAIN-035, MAIN-041.
+- [x] 4.3 Invalidate registry membership on child mutations and discover new clickables inside existing scrollers without losing local rescan throttling. Sources: SCREEN-061–063.
+- [x] 4.4 Preserve the original velocity sample timestamp and regress a 30 px move over 100 ms released at 100/101 ms. Source: SCREEN-066.
+- [ ] 4.5 Run all six gates and native mock smoke, record evidence, close the review beads, commit/push and reply to/resolve the three fixed threads. No hardware or merge.

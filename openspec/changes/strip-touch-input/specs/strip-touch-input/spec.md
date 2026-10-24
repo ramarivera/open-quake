@@ -40,8 +40,12 @@ The system SHALL deduplicate descriptors, retry binds every 2000 ms up to five a
 - **WHEN** five attempts find no controller and the scope closes during recovery
 - **THEN** the 60000 ms recovery is cancelled and no later open occurs
 
+#### Scenario: Interruption during native open
+- **WHEN** teardown, lock or wake interrupts a worker while a non-cancellable native open is pending
+- **THEN** a handle returned by that open closes exactly once before cancellation finishes, without reading reports or starting a replacement early
+
 ### Requirement: Strip normalization and key arbitration
-The strip SHALL convert y to H−y and keep x, then flip both axes for normalized rotations 90 or 180. It SHALL use only the first contact for every phase, route overlay-owned gestures exclusively to the overlay, and use an injected tile resolver. Ordinary tiles SHALL emit down once at touch and up 10 ms after release anywhere, preserving the initial key across movement and allowing only one held ordinary key. A first-contact up at any coordinate SHALL release the held key; secondary contacts SHALL be ignored. Sources: SCREEN-005, SCREEN-053–058.
+The strip SHALL convert y to H−y and keep x, then flip both axes for normalized rotations 90 or 180. It SHALL use only the first contact for every phase, route overlay-owned gestures exclusively to the overlay, and use strip-grid's pure `tileAt(point, layout)` resolver against the current rendered layout. Ordinary tiles SHALL emit down once at touch and up 10 ms after release anywhere, preserving the initial key across movement and allowing only one held ordinary key. A first-contact up at any coordinate SHALL release the held key; secondary contacts SHALL be ignored. Sources: SCREEN-005, SCREEN-053–058.
 
 #### Scenario: Drag across tiles and lift outside
 - **WHEN** touch begins on key A, moves to B, then releases outside the grid
@@ -58,12 +62,20 @@ Sub-target routing SHALL prefer clickables over overlapping scrollers, defer tap
 - **WHEN** a finger begins on a clickable child and crosses 16 px then returns
 - **THEN** the child does not tap and the scroller receives the gesture
 
+#### Scenario: Clickable added inside a registered scroller
+- **WHEN** a child mutation adds a clickable over an existing scroller
+- **THEN** the next eligible local rescan discovers the clickable even when the scroller already hits, and clickables retain overlap priority
+
 ### Requirement: Scroll physics policies
 Reusable monitor gestures SHALL use 6 px axis-lock slop, 44 px minimum area, 24 px valid span, 120 ms velocity window, stale release over 80 ms yielding zero velocity and a 5 px/ms cap. Monitor scroll SHALL expose the 8 px/1.2 vertical axis rule and 100 ms samples, 0.15 px/ms minimum fling, exponential decay to 0.05 per second, 0.02 px/ms rest, 64 ms step clamp, 600 ms hard stop, 0.5 rubber damping capped at 32 px and a 200 ms cubic return. Fling SHALL stop at bounds and respect reduced motion. Chat SHALL use 1:1 drag capped at 96 px/event within 20 ms, a last-segment velocity with at least 20 ms separation, 3.5 minimum and 90 maximum px/frame, friction 0.95/frame and stop below 1.75. At duration ≥320 ms, average below 2.8 px/frame or release below 7.7 SHALL suppress chat fling. Sources: SCREEN-066–068, AI-163.
 
 #### Scenario: Bounded motion properties
 - **WHEN** arbitrary finite drags, velocities and frame times drive scrolling
 - **THEN** rubber displacement stays within 32 px, fling velocity decays, monitor fling stops by 600 ms, and reduced motion starts no fling
+
+#### Scenario: First movement retains elapsed time
+- **WHEN** a gesture starts at (0,0) at 0 ms, moves to (30,0) at 100 ms and releases at 101 ms
+- **THEN** horizontal velocity is 30/101 px/ms, and release at 100 ms yields 0.3 px/ms
 
 ### Requirement: Hardware-free development and opt-in capture
 OPEN_QUAKE_MOCK_DEVICE=1 SHALL supply synthetic vendor frames through the parser/tracker in development and built apps. Tests SHALL use synthetic or recorded frames without opening hardware. An opt-in capture script SHALL refuse competing open-quake or DK-Suite processes, restrict output to scratch, open only the exact vendor collection, never write HID commands, and close on timeout or signal. Sources: MAIN-002, MAIN-038; lane safety brief.

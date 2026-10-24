@@ -1,16 +1,23 @@
 import type { OpenQuakeBridge } from "../../../preload/quake";
+import { type StripLayout, tileAt } from "./geometry";
 import {
 	createSubTouchRegistry,
 	type RegistryEntry,
 } from "./sub-touch-registry";
-import { createStripTouchController, type TouchTile } from "./touch-controller";
-import { contains, type Rect } from "./touch-geometry";
+import {
+	createStripTouchController,
+	type StripKeyEvent,
+	type TouchTile,
+} from "./touch-controller";
+import type { Rect } from "./touch-geometry";
 
-/** DOM host seam until strip-grid supplies its pure tileAt(point, layout). */
+/** Grid owns tile hits; DOM observation supplies only in-tile sub-targets. */
 export function mountStripTouch(
 	root: HTMLElement,
 	bridge: OpenQuakeBridge,
 	rotation: number,
+	layout: () => StripLayout | undefined,
+	onKey?: (event: StripKeyEvent) => void,
 ): () => void {
 	const logicalBounds = (element: Element): Rect => {
 		const box = element.getBoundingClientRect(),
@@ -72,38 +79,60 @@ export function mountStripTouch(
 	};
 	const resize = new ResizeObserver(refresh);
 	resize.observe(root);
-	const mutation = new MutationObserver(refresh);
+	const mutation = new MutationObserver((records) => {
+		for (const [tile, current] of registries) {
+			if (
+				records.some(
+					(record) =>
+						(tile === record.target || tile.contains(record.target)) &&
+						(record.type === "childList" ||
+							record.attributeName === "data-quake-sub-touch" ||
+							record.attributeName === "data-support-quake-move"),
+				)
+			)
+				current.invalidate();
+		}
+		refresh();
+	});
 	mutation.observe(root, {
 		subtree: true,
 		childList: true,
 		attributes: true,
-		attributeFilter: ["style", "class"],
+		attributeFilter: [
+			"style",
+			"class",
+			"data-quake-sub-touch",
+			"data-support-quake-move",
+		],
 	});
 	const controller = createStripTouchController({
 		view: () => ({ width: 1920, height: 480, rotation }),
-		layout: () =>
-			Array.from(root.querySelectorAll<HTMLElement>("[data-strip-key]")),
-		tileAt: (point, elements): TouchTile | undefined => {
-			const element = elements.find(
-				(element) =>
-					element.dataset.stripCovered !== "true" &&
-					contains(logicalBounds(element), point),
-			);
-			if (!element) return;
+		layout,
+		tileAt: (point, currentLayout): TouchTile | undefined => {
+			if (!currentLayout) return;
+			const hit = tileAt(point, currentLayout);
+			if (!hit) return;
+			if (!hit.hasTouchableSubElements) return hit;
+			const element = Array.from(
+				root.querySelectorAll<HTMLElement>(
+					'[data-state="tile"][data-key-code]',
+				),
+			).find((element) => element.dataset.keyCode === hit.keyCode);
+			if (!element) return hit;
 			const sub = registry(element);
 			sub.resolve(point, performance.now());
-			return {
-				keyCode: element.dataset.stripKey ?? "",
-				supportTouchEffect: element.dataset.supportTouchEffect !== "false",
-				subTargets: sub.targets(),
-			};
+			return { ...hit, subTargets: sub.targets() };
 		},
-		onKey: (detail) =>
-			root.dispatchEvent(new CustomEvent("quake-strip-key", { detail })),
+		onKey: (detail) => {
+			onKey?.(detail);
+			root.dispatchEvent(new CustomEvent("quake-strip-key", { detail }));
+		},
 		onSubTouch: (detail) => {
 			const tile = Array.from(
-				root.querySelectorAll<HTMLElement>("[data-strip-key]"),
-			).find((element) => element.dataset.stripKey === detail.keyCode);
+				root.querySelectorAll<HTMLElement>(
+					'[data-state="tile"][data-key-code]',
+				),
+			).find((element) => element.dataset.keyCode === detail.keyCode);
 			const target = Array.from(
 				tile?.querySelectorAll<HTMLElement>("[data-quake-sub-touch]") ?? [],
 			).find(

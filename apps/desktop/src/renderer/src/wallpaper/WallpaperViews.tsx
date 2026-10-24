@@ -1,7 +1,6 @@
 import { useId, useState } from "react";
 import type { FillMode, HourFormat } from "../../../shared/display";
-import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
-import { usePanelFeedback } from "../panel/usePanelFeedback";
+import { useStripSettings } from "../strip/stripSettings";
 import { DeviceScreen } from "../ui/DeviceScreen";
 import {
 	Callout,
@@ -11,21 +10,7 @@ import {
 	Segmented,
 	type SegmentOption,
 } from "../ui/Form";
-import { useQuakeEvents } from "../useQuakeEvents";
-import { useWallpaper } from "./useWallpaper";
-import { WallpaperCanvas } from "./WallpaperCanvas";
-
-export function WallpaperPanel(): React.JSX.Element {
-	const { snapshot } = useWallpaper();
-	const feedback = usePanelFeedback(useQuakeEvents());
-	return (
-		<main className="wallpaper-panel" aria-label="Quake device panel">
-			<WallpaperCanvas snapshot={snapshot}>
-				<PanelFeedbackLayer view={feedback} />
-			</WallpaperCanvas>
-		</main>
-	);
-}
+import type { useWallpaper } from "./useWallpaper";
 
 export type WallpaperController = ReturnType<typeof useWallpaper>;
 
@@ -39,6 +24,15 @@ const fillHints: Readonly<Record<FillMode, string>> = {
 	contain: "Shows the whole image.",
 	center: "Original size, centered.",
 };
+type PreviewView = "active" | "vivid";
+const previewOptions: ReadonlyArray<SegmentOption<PreviewView>> = [
+	{ value: "active", label: "Key grid" },
+	{ value: "vivid", label: "Vivid screen" },
+];
+const borderOptions: ReadonlyArray<SegmentOption<"on" | "off">> = [
+	{ value: "on", label: "On" },
+	{ value: "off", label: "Off" },
+];
 const hourOptions: ReadonlyArray<SegmentOption<HourFormat>> = [
 	{ value: "24h", label: "24-hour" },
 	{ value: "12h", label: "12-hour" },
@@ -52,6 +46,8 @@ export function WallpaperSettings({
 }): React.JSX.Element {
 	const { snapshot, notice, busy, request } = wallpaper;
 	const [serial, setSerial] = useState("");
+	const [preview, setPreview] = useState<PreviewView>("active");
+	const strip = useStripSettings();
 	const ids = useId();
 	const saved = snapshot?.saved;
 	const selection = saved
@@ -75,13 +71,48 @@ export function WallpaperSettings({
 		<div className="page" aria-busy={busy}>
 			<PageHeader
 				title="Screen"
-				description="Wallpaper and clock for the QUAKE's 1920 × 480 display."
-			/>
-			<DeviceScreen snapshot={snapshot} size="large" />
+				description="Key grid, wallpaper and clock for the QUAKE's 1920 × 480 display."
+			>
+				<Segmented
+					name={`${ids}-preview`}
+					labelledBy={`${ids}-preview-label`}
+					value={preview}
+					options={previewOptions}
+					onChange={setPreview}
+				/>
+				<span id={`${ids}-preview-label`} className="visually-hidden">
+					Preview
+				</span>
+			</PageHeader>
+			<DeviceScreen snapshot={snapshot} size="large" view={preview} />
+
+			<Group
+				title="Key grid"
+				description="The active profile's keys, drawn as DK-Suite draws them."
+				footer={
+					strip.notice ? <Callout tone="warning">{strip.notice}</Callout> : null
+				}
+			>
+				<Row
+					label="Empty Slot Dashed Border"
+					labelId={`${ids}-dashed`}
+					hint="Outlines empty keys on the device and in this preview."
+				>
+					<Segmented
+						name={`${ids}-dashed`}
+						labelledBy={`${ids}-dashed`}
+						value={strip.settings.showEmptyGridDashedBorder ? "on" : "off"}
+						options={borderOptions}
+						onChange={(value) =>
+							strip.setShowEmptyGridDashedBorder(value === "on")
+						}
+					/>
+				</Row>
+			</Group>
 
 			<Group
 				title="Wallpaper"
-				description="One local JPEG or PNG, saved for each device."
+				description="One local JPEG or PNG for the vivid screen, saved for each device."
 				footer={
 					<div role="status" aria-live="polite" className="status-notes">
 						{snapshot?.asset._tag === "unreadable" ? (

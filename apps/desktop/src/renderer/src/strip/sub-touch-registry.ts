@@ -14,6 +14,14 @@ export interface RegistryEntry extends SubTouchTarget {
 export function createSubTouchRegistry(scan: () => readonly RegistryEntry[]) {
 	let entries = scan();
 	let lastScan = Number.NEGATIVE_INFINITY;
+	let dirty = false;
+	const rescan = (now: number): void => {
+		if (now - lastScan < 500) return;
+		lastScan = now;
+		dirty = false;
+		const scanned = scan();
+		if (scanned.length) entries = scanned;
+	};
 	const hits = (point: Point): RegistryEntry | undefined => {
 		const candidates = entries
 			.filter((entry) => entry.connected() && contains(entry.bounds, point))
@@ -21,22 +29,24 @@ export function createSubTouchRegistry(scan: () => readonly RegistryEntry[]) {
 		return candidates.find((entry) => !entry.scrollable) ?? candidates[0];
 	};
 	return {
+		invalidate(): void {
+			dirty = true;
+		},
 		refresh(): void {
 			entries = entries.map((entry) =>
 				entry.connected() ? { ...entry, bounds: entry.liveBounds() } : entry,
 			);
 		},
 		resolve(point: Point, now: number): RegistryEntry | undefined {
+			// A known scroller can cover a newly mounted clickable. Membership
+			// invalidation must be checked before accepting an existing hit.
+			if (dirty) rescan(now);
 			const hit = hits(point);
 			if (hit) return hit;
 			this.refresh();
 			const repaired = hits(point);
 			if (repaired) return repaired;
-			if (now - lastScan >= 500) {
-				lastScan = now;
-				const scanned = scan();
-				if (scanned.length) entries = scanned;
-			}
+			rescan(now);
 			return hits(point);
 		},
 		targets(): readonly SubTouchTarget[] {

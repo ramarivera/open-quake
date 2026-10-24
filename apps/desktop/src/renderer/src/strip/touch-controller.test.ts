@@ -242,3 +242,35 @@ it("repairs stale bounds and rescans misses at most once every 500ms while retai
 	connected = false;
 	expect(registry.resolve({ x: 110, y: 10 }, 1000)).toBeUndefined();
 });
+
+it("discovers a new clickable over a known scroller after invalidation, retaining throttling", () => {
+	const bounds = { x: 0, y: 0, width: 100, height: 100 };
+	const scroller = {
+		id: "scroll",
+		scrollable: true,
+		bounds,
+		connected: () => true,
+		liveBounds: () => bounds,
+	};
+	const button = { ...scroller, id: "new-button", scrollable: false };
+	const scan = vi.fn(() => [scroller]);
+	const registry = createSubTouchRegistry(scan);
+	const point = { x: 20, y: 20 };
+	expect(registry.resolve(point, 0)?.id).toBe("scroll");
+	scan.mockReturnValue([scroller, button]);
+	registry.invalidate();
+	expect(registry.resolve(point, 1)?.id).toBe("new-button");
+	expect(registry.targets().map((entry) => entry.id)).toContain("new-button");
+	const nextButton = { ...button, id: "next-button" };
+	scan.mockReturnValue([scroller, button, nextButton]);
+	registry.invalidate();
+	expect(registry.resolve(point, 500)?.id).toBe("new-button");
+	expect(scan).toHaveBeenCalledTimes(2);
+	expect(registry.resolve(point, 501)?.id).toBe("next-button");
+	expect(scan).toHaveBeenCalledTimes(3);
+	// A transient empty rescan keeps the previously connected entries.
+	scan.mockReturnValue([]);
+	registry.invalidate();
+	expect(registry.resolve(point, 1001)?.id).toBe("next-button");
+	expect(registry.targets()).toHaveLength(3);
+});
