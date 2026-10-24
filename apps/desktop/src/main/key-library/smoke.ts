@@ -44,6 +44,11 @@ assert(scratchArg, "Provide an absolute scratch directory");
 const scratch = resolve(scratchArg);
 const sleep = (ms = 120): Promise<void> =>
 	new Promise((done) => setTimeout(done, ms));
+const waitForClosed = async (win: BrowserWindow): Promise<void> => {
+	const deadline = Date.now() + 8000;
+	while (!win.isDestroyed() && Date.now() < deadline) await sleep(20);
+	assert(win.isDestroyed(), "Owned icon picker did not close within 8 seconds");
+};
 const evalIn = (win: BrowserWindow, source: string): Promise<unknown> =>
 	win.webContents.executeJavaScript(source);
 const ready = async (win: BrowserWindow, expression: string): Promise<void> => {
@@ -825,8 +830,7 @@ async function smoke(): Promise<void> {
 		);
 		await snapshot(resizedChooser, "installed-application-artwork");
 		await click(resizedChooser, ".icon-library-cell button");
-		await sleep();
-		assert.equal(resizedChooser.isDestroyed(), true);
+		await waitForClosed(resizedChooser);
 		await button(manager, "Save");
 		await ready(
 			manager,
@@ -835,8 +839,7 @@ async function smoke(): Promise<void> {
 		await button(manager, "Icon Library");
 		const cancelledChooser = await iconPicker(manager);
 		await select(manager, "#key-function", "text");
-		await sleep();
-		assert.equal(cancelledChooser.isDestroyed(), true);
+		await waitForClosed(cancelledChooser);
 		await click(manager, 'button[aria-label="Reset icon to default"]');
 		await ready(
 			manager,
