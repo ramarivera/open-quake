@@ -12,6 +12,9 @@ import {
 	useClockSettings,
 } from "./tiles/clock/useClockSettings";
 import { GenericTile } from "./tiles/GenericTile";
+import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
+import { useMonitor } from "./tiles/monitor/useMonitor";
+import { previewSnapshot } from "./tiles/monitor/view-model";
 import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
 /**
@@ -64,6 +67,37 @@ function ClockSlot({
 	);
 }
 
+function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
+	const live =
+		new URLSearchParams(window.location.search).get("surface") === "panel";
+	const monitor = useMonitor(live);
+	return (
+		<div
+			style={{
+				width: tile.box.width,
+				height: tile.box.height,
+				overflow: "hidden",
+			}}
+		>
+			<div
+				style={{
+					width: 1920,
+					height: 480,
+					transformOrigin: "0 0",
+					transform: `scale(${tile.box.width / 1920}, ${tile.box.height / 480})`,
+				}}
+			>
+				<MonitorPanel
+					settings={monitor.settings}
+					snapshot={live ? monitor.snapshot : previewSnapshot()}
+					media={monitor.view?.media[monitor.settings.styleId]}
+					preview={!live}
+				/>
+			</div>
+		</div>
+	);
+}
+
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map([
@@ -74,6 +108,7 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 		["quakeBotInput", ClawBotInputTile],
 		["aiChat", VoiceKeyTile],
 		["clawbot", VoiceKeyTile],
+		["systemMonitorPanel", MonitorSlot],
 	]);
 
 export const stripTileFor = (type: string): StripTileComponent =>

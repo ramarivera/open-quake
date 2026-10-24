@@ -33,6 +33,8 @@ per numbered item below (`open-quake-lih.5.1.1` … `open-quake-lih.5.1.11`).
 
 - [x] 6.1 Merge main and address PR #28 review round 1 with regressions, full gates and voice/knob/media native mock smokes; reply to and resolve the seven threads, push without merging. (`open-quake-lih.5.1.12`)
 
+- [x] 6.2 Reconcile the merged monitor panel with voice, preserving both tile registries and native smoke registrations/cleanup. Run all six gates and voice, knob, media and monitor native mock smokes before integration. (`open-quake-lih.5.1.13`)
+
 ## Verification evidence
 
 Run in `/Volumes/ExtSSD/devplane/oq-strip-voice` on 2026-10-24, after merging
@@ -69,3 +71,10 @@ covering six defects, all replied to and resolved. Main reconciliation is
 `d8267d3` with `origin/main` at `19d7240`. Full gates and the voice, knob and
 media native mock smokes pass. See [review-round-1.md](review-round-1.md)
 for per-thread outcomes, regression coverage, commands and artifact paths.
+
+Lead reconciliation with monitor main `bdf8ca8` passes all six gates,
+including 1014 uncached tests and 36 strict OpenSpec items. Voice, knob,
+media and monitor native mock smokes pass together. Both tile registrations
+and both runtime disposals are retained; the monitor fixture now registers
+the voice hooks mounted by the combined renderer. See
+[lead-integration.md](lead-integration.md). Physical acceptance remains open.
