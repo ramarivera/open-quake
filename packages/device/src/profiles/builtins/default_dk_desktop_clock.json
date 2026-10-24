@@ -1,0 +1,56 @@
+[
+	{
+		"childrenName": "dkDesktopClock",
+		"config": {
+			"type": "dkDesktopClock",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"supportTouchEffect": false,
+			"icon": "",
+			"actions": [
+				{
+					"type": "hourFormat",
+					"value": "24h"
+				},
+				{
+					"type": "weather",
+					"value": {
+						"enabled": false,
+						"city": "",
+						"unit": "celsius",
+						"location": null
+					}
+				},
+				{
+					"type": "clockStyle",
+					"value": {
+						"background": {
+							"mode": "theme",
+							"themeId": "season",
+							"themes": {}
+						},
+						"musicEnabled": true
+					}
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,1"
+	}
+]

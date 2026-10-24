@@ -13,9 +13,12 @@ import {
 import { KnobModelPorts } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import {
+	createInitialProfileEnvelope,
 	type EncodedProfileEnvelope,
+	encodeProfileEnvelope,
 	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { installProfileCatalog } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { ProfilesLive } from "../profiles/profile-ipc";
 import { desktopKnobAdapters } from "./desktop-adapters";
@@ -44,6 +47,55 @@ const source = (): EncodedProfileEnvelope => ({
 });
 
 describe("desktop knob integration", () => {
+	it.effect(
+		"recognizes the manager catalog's Vivid profile as the double-press target",
+		() => {
+			const envelope = encodeProfileEnvelope(
+				installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
+			);
+			const adapters = desktopKnobAdapters(
+				"/unused",
+				{},
+				{ read: async () => envelope, write: async () => {} },
+			);
+			return Effect.gen(function* () {
+				const context = yield* adapters.load;
+				expect(context.profiles.some((p) => p.id === "1-0")).toBe(false);
+				expect(context.profiles.find((p) => p.id === "1-4")?.colorful).toBe(
+					true,
+				);
+			});
+		},
+	);
+	it.effect(
+		"omits manager-hidden profiles and repairs a hidden active profile in knob context",
+		() => {
+			const envelope = {
+				...source(),
+				activeByDevice: {
+					"desktop-preview": { profileId: "grid", pageId: "page" },
+				},
+				manager: {
+					revision: 1,
+					installed: true,
+					hidden: ["grid"],
+					links: [],
+					approvedCommands: [],
+					userHasSetDefault: false,
+				},
+			};
+			const adapters = desktopKnobAdapters(
+				"/unused",
+				{},
+				{ read: async () => envelope, write: async () => {} },
+			);
+			return Effect.gen(function* () {
+				const context = yield* adapters.load;
+				expect(context.profiles.map((p) => p.id)).toEqual(["colorful"]);
+				expect(context.session.profileId).toBe("colorful");
+			});
+		},
+	);
 	it.scoped(
 		"routes focused screen luminance, volume and failure tones through available production adapters",
 		() =>
