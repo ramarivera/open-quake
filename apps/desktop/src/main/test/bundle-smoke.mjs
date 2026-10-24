@@ -52,6 +52,7 @@ const display = {
 };
 screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
+const powerMonitor = new EventEmitter();
 const ipcMain = new EventEmitter();
 ipcMain.handle = () => {};
 ipcMain.removeHandler = () => {};
@@ -66,6 +67,7 @@ const nativeImage = {
 };
 globalThis.openQuakeBundleSmoke = {
 	app,
+	powerMonitor,
 	BrowserWindow: Window,
 	screen,
 	ipcMain,
@@ -86,7 +88,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, powerMonitor, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

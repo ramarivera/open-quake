@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import "../main/media/preload";
+import "../main/hardware/preload";
 import "../main/profiles/preload";
 import {
 	type OpenQuakeBridge,

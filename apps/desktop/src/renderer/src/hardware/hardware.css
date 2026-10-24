@@ -1,0 +1,39 @@
+.hardware-settings output {
+	font-variant-numeric: tabular-nums;
+}
+.hardware-slider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 200px;
+	max-width: 100%;
+}
+.hardware-slider input {
+	width: 100%;
+	min-width: 60px;
+	accent-color: var(--quake-accent);
+}
+.hardware-slider output {
+	min-width: 3ch;
+	text-align: right;
+}
+.hardware-settings input[type="checkbox"] {
+	width: 18px;
+	height: 18px;
+	accent-color: var(--quake-accent);
+}
+.hardware-stepper {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.hardware-stepper output {
+	min-width: 5ch;
+	text-align: center;
+}
+.hardware-settings :disabled {
+	opacity: 0.55;
+}
+.hardware-notices {
+	margin-top: 16px;
+}
