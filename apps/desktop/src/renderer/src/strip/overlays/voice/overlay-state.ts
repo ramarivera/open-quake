@@ -58,6 +58,7 @@ export interface OverlayState {
 	readonly captureId: Option.Option<string>;
 	readonly reachedProcessing: boolean;
 	readonly text: Option.Option<VoiceText>;
+	readonly busyUntil: Option.Option<number>;
 	/** "(3S)" … "(1S)" after a failure; the overlay closes when it runs out. */
 	readonly countdown: Option.Option<{
 		readonly base: VoiceText;
@@ -69,10 +70,12 @@ export const initialOverlay: OverlayState = {
 	captureId: Option.none(),
 	reachedProcessing: false,
 	text: Option.none(),
+	busyUntil: Option.none(),
 	countdown: Option.none(),
 };
 
 export const ERROR_COUNTDOWN_SECONDS = 3;
+export const BUSY_OVERLAY_MS = 3000;
 
 const failureText = (stage: Extract<StageEvent["stage"], { _tag: "failed" }>) =>
 	Option.getOrElse(transcript(stage.message), () =>
@@ -85,6 +88,7 @@ const failureText = (stage: Extract<StageEvent["stage"], { _tag: "failed" }>) =>
 export function reduceOverlay(
 	state: OverlayState,
 	event: StageEvent,
+	now = 0,
 ): OverlayState {
 	const stage = event.stage;
 	const sameCapture = Option.contains(state.captureId, event.captureId);
@@ -93,7 +97,11 @@ export function reduceOverlay(
 	const session: OverlayState = sameCapture
 		? state
 		: { ...initialOverlay, captureId: Option.some(event.captureId) };
-	const next: OverlayState = { ...session, countdown: Option.none() };
+	const next: OverlayState = {
+		...session,
+		countdown: Option.none(),
+		busyUntil: Option.none(),
+	};
 	switch (stage._tag) {
 		case "recording":
 			// Recording news that arrives after processing is late (QSV:2042).
@@ -132,6 +140,7 @@ export function reduceOverlay(
 			return {
 				...next,
 				visible: true,
+				busyUntil: Option.some(now + BUSY_OVERLAY_MS),
 				text: Option.some(
 					Option.getOrElse(transcript(stage.message), () =>
 						message("aiAudio.busy"),
@@ -141,6 +150,12 @@ export function reduceOverlay(
 		case "idle":
 			return { ...initialOverlay, captureId: Option.some(event.captureId) };
 	}
+}
+
+export function expireOverlay(state: OverlayState, now: number): OverlayState {
+	return Option.exists(state.busyUntil, (until) => now >= until)
+		? { ...initialOverlay, captureId: state.captureId }
+		: state;
 }
 
 /** One second of the error countdown (QSV:2140-2156). */

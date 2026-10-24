@@ -27,6 +27,7 @@ import {
 } from "../../tiles/clawBotInput/input-state";
 import {
 	type BarState,
+	expireOverlay,
 	initialBar,
 	initialOverlay,
 	type OverlayState,
@@ -47,6 +48,7 @@ export interface KeyInfo {
 	readonly type: string;
 	readonly title: Option.Option<string>;
 	readonly agentId: Option.Option<string>;
+	readonly voiceInput?: boolean;
 }
 export interface StripToast {
 	readonly id: number;
@@ -108,7 +110,7 @@ function routeEvent(
 		case "Stage": {
 			let next: VoiceView = { ...view, bar: reduceBarStage(view.bar, event) };
 			if (isKnobVoiceKey(event.keyCode))
-				next = { ...next, overlay: reduceOverlay(next.overlay, event) };
+				next = { ...next, overlay: reduceOverlay(next.overlay, event, now) };
 			// Grid stages remap to tile statuses (QSV:1837-1929).
 			else
 				next = Option.match(tileStatusFor(event.stage), {
@@ -147,17 +149,22 @@ function routeEvent(
 			const info = keys.get(event.keyCode);
 			const type = info?.type ?? "";
 			if (event.action === "up")
-				return copilot(view, { _tag: "keyUp", keyCode: event.keyCode }, now);
-			let next = copilot(
-				view,
-				{
-					_tag: "keyDown",
-					keyCode: event.keyCode,
-					keyType: type,
-					title: info?.title ?? Option.none(),
-				},
-				now,
-			);
+				return info?.voiceInput === false
+					? view
+					: copilot(view, { _tag: "keyUp", keyCode: event.keyCode }, now);
+			let next =
+				info?.voiceInput === false
+					? view
+					: copilot(
+							view,
+							{
+								_tag: "keyDown",
+								keyCode: event.keyCode,
+								keyType: type,
+								title: info?.title ?? Option.none(),
+							},
+							now,
+						);
 			if (type === "clawbot") {
 				const agentId = Option.orElse(info?.agentId ?? Option.none(), () =>
 					Option.some("default"),
@@ -288,7 +295,7 @@ export function reduceVoice(
 					{ _tag: "ProfileReset" },
 					now,
 				),
-				input: initialInput,
+				input: { ...initialInput, revision: view.input.revision + 1 },
 				activeClawbot: Option.none(),
 				bar: initialBar,
 			};
@@ -301,6 +308,7 @@ export function reduceVoice(
 			);
 			return {
 				...view,
+				overlay: expireOverlay(view.overlay, now),
 				alerts: alerts.size === view.alerts.size ? view.alerts : alerts,
 				toasts: view.toasts.filter((toast) => now - toast.at < TOAST_MS),
 				copilot: reduceCopilot(view.copilot, { _tag: "timeout" }, now),
@@ -312,6 +320,7 @@ export function reduceVoice(
 /** The next time an alert, toast or the copilot watchdog expires. */
 export function nextExpiry(view: VoiceView): Option.Option<number> {
 	const times = [
+		...Option.toArray(view.overlay.busyUntil),
 		...[...view.alerts.values()]
 			.filter(({ alert }) => alert === "invalid")
 			.map(({ at }) => at + ALERT_INVALID_MS),

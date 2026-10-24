@@ -46,10 +46,10 @@ const decodeReply = Schema.decodeUnknownSync(VoiceSurfaceReply);
 const decodeEvent = Schema.decodeUnknownEither(VoiceSurfaceEvent);
 type Handler = (event: unknown, raw: unknown) => Promise<unknown>;
 
-function setup() {
+function setup(mock = false) {
 	const tones = createToneRecorder();
 	const registration = registerVoiceSurface({
-		mock: false,
+		mock,
 		tones,
 		serial: () => "QK-1",
 		panel: () => undefined,
@@ -178,7 +178,7 @@ describe("voice:request", () => {
 				agentId: "weather",
 				message: "hi",
 			}),
-		).toEqual({ _tag: "ok" });
+		).toEqual({ _tag: "rejected", code: "VOICE.GRID.RUNTIME_UNAVAILABLE" });
 		const stage = sent()
 			.flatMap((event) => (Either.isRight(event) ? [event.right] : []))
 			.find((event) => event._tag === "Stage");
@@ -186,5 +186,29 @@ describe("voice:request", () => {
 			stage: { _tag: "failed", reason: "unavailable" },
 		});
 		await registration.dispose();
+	});
+
+	it("acknowledges a typed send accepted by the mock runtime", async () => {
+		const { request, registration } = setup(true);
+		try {
+			expect(
+				await request({
+					_tag: "SendText",
+					keyCode: "1,5",
+					agentId: "weather",
+					message: "hello",
+				}),
+			).toEqual({ _tag: "ok" });
+			await vi.waitFor(() =>
+				expect(
+					sent().some(
+						(event) =>
+							Either.isRight(event) && event.right._tag === "TurnStarted",
+					),
+				).toBe(true),
+			);
+		} finally {
+			await registration.dispose();
+		}
 	});
 });

@@ -78,6 +78,27 @@ const input = (
 const at = (ms: number) => TestClock.adjust(Duration.millis(ms));
 
 describe("GridVoice", () => {
+	it.scoped("selects typed-only assistants without arming hold-to-talk", () => {
+		const rec = recorder();
+		return Effect.gen(function* () {
+			for (const kind of ["down", "touchEnd"] as const)
+				yield* GridVoice.input("QK", {
+					keyCode: "1,5",
+					type: "clawbot",
+					voiceInput: false,
+					agentId: "weather",
+					kind,
+				});
+			yield* at(2000);
+			expect(rec.calls).toEqual(["select 1,5"]);
+			expect(rec.events).toEqual([
+				{ _tag: "KeyPress", serial: "QK", keyCode: "1,5", action: "down" },
+				{ _tag: "KeyPress", serial: "QK", keyCode: "1,5", action: "up" },
+			]);
+			yield* GridVoice.knob("QK", "holdStart", 1);
+			expect(rec.calls).toContain("start 0,1 #1");
+		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+	});
 	it.scoped(
 		"starts at 1000 ms and releases 350 ms after the touch ends",
 		() => {
@@ -281,6 +302,47 @@ describe("knob voice seam", () => {
 });
 
 describe("mock voice runtime", () => {
+	it.scoped(
+		"keeps the grid capture on knob interrupt, wrong-key release and stale cancellation",
+		() => {
+			const rec = recorder();
+			return Effect.gen(function* () {
+				const runtime = yield* GridVoiceRuntime;
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1400);
+				const before = rec.events.length;
+				yield* GridVoice.knob("QK", "interrupt", 1);
+				yield* runtime.cancelCapture("QK", "0,1", 1);
+				yield* runtime.cancelCapture("QK", "1,6", 0);
+				yield* runtime.releaseCapture("QK", "0,1", 1);
+				yield* at(300);
+				expect(
+					rec.events
+						.slice(before)
+						.some((event) => event._tag === "Level" && event.keyCode === "1,6"),
+				).toBe(true);
+				expect(
+					rec.events.some(
+						(event) =>
+							event._tag === "Stage" && event.stage._tag !== "recording",
+					),
+				).toBe(false);
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(
+					Option.some("1,6"),
+				);
+				yield* runtime.cancelCapture("QK", "1,6", 1);
+				expect(rec.events.at(-1)).toMatchObject({
+					keyCode: "1,6",
+					captureId: "1,6/1",
+					stage: { _tag: "idle", outcome: "cancelled" },
+				});
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(Option.none());
+				const stopped = rec.events.length;
+				yield* at(1000);
+				expect(rec.events).toHaveLength(stopped);
+			}).pipe(Effect.provide(stack(rec, MockVoiceRuntimeLive)));
+		},
+	);
 	it.scoped("scripts a full turn under TestClock", () => {
 		const rec = recorder();
 		return Effect.gen(function* () {

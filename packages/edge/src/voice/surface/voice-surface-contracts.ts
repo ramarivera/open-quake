@@ -169,6 +169,8 @@ export const GridVoiceInput = Schema.Struct({
 	voiceTouchEnd: Schema.optional(Schema.Boolean),
 	/** The key's tile type, `aiChat` or `clawbot`. */
 	type: Schema.Literal("aiChat", "clawbot"),
+	/** False selects a typed-only clawbot assistant without arming capture. */
+	voiceInput: Schema.optional(Schema.Boolean),
 	/** Clawbot agent id from the key's actions, for selection. */
 	agentId: Schema.optional(Schema.String.pipe(Schema.maxLength(128))),
 });

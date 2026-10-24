@@ -585,3 +585,17 @@ The user sees the error countdown instead of silence.
   level meter; until then only the mock runtime drives the bar.
 - `StripScreen`, `tileRegistry.tsx` and `main/index.ts` are shared with other
   lanes, so the edits stay additive to keep merges small.
+
+## PR #28 review round 1
+
+Busy knob rejection expires locally after 3000 ms, matching the busy toast lifetime.
+A new stage clears the previous expiry. This avoids waiting for a terminal
+event from a rejected capture. Typed-only clawbot presses carry `voiceInput:
+false` through the existing input contract and select an assistant without
+entering the hold reducer. Typed delivery preserves the runtime error through
+GridVoice to the IPC edge, which returns `rejected`; the input clears only its
+submitted draft after `ok`. Profile reset increments the input revision to clear
+the mounted textarea even when coordinates are reused. Mock capture release
+and cancellation match both owning key and generation where supplied. Copilot
+appends every nonempty delta, including whitespace. These fixes refine the
+existing AI-184, AI-187, AI-193, AI-170, KNOB-042 and SCREEN-111 scenarios.

@@ -11,6 +11,7 @@ import {
 	type GridVoiceInput,
 	KNOB_VOICE_KEY,
 } from "./voice-surface-contracts.js";
+import type { VoiceRuntimeUnavailable } from "./voice-surface-errors.js";
 import { GridVoiceRuntime, type TextRequest } from "./voice-surface-ports.js";
 import { VoiceSurface } from "./voice-surface-service.js";
 
@@ -152,6 +153,21 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 				keyCode: event.keyCode,
 				kind: event.kind,
 			});
+			if (event.type === "clawbot" && event.voiceInput === false) {
+				if (event.kind === "down")
+					yield* runtime.select(
+						serial,
+						event.keyCode,
+						event.type,
+						Option.fromNullable(event.agentId),
+					);
+				return yield* surface.publish({
+					_tag: "KeyPress",
+					serial,
+					keyCode: event.keyCode,
+					action: event.kind === "down" ? "down" : "up",
+				});
+			}
 			yield* apply(serial, (now, activeFlow): HoldInput => {
 				switch (event.kind) {
 					case "down":
@@ -187,10 +203,10 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 
 		const sendText = Effect.fn("GridVoice.sendText")(function* (
 			request: TextRequest,
-		): Effect.fn.Return<void> {
+		): Effect.fn.Return<void, VoiceRuntimeUnavailable> {
 			const count = yield* Ref.updateAndGet(texts, (value) => value + 1);
 			yield* runtime.sendText(request).pipe(
-				Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+				Effect.tapErrorTag("VoiceRuntimeUnavailable", (error) =>
 					surface.publish({
 						_tag: "Stage",
 						serial: request.serial,

@@ -96,7 +96,7 @@ export type CopilotEvent =
 	| { readonly _tag: "timeout" };
 
 function append(state: CopilotState, message: string): CopilotState {
-	if (message.trim() === "") return state;
+	if (message === "") return state;
 	const separator =
 		Option.contains(state.status, 2) &&
 		state.text !== "" &&

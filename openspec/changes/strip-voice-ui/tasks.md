@@ -29,6 +29,10 @@ per numbered item below (`open-quake-lih.5.1.1` … `open-quake-lih.5.1.11`).
 
 - [x] 5.1 Add the voice native smoke (hidden windows, mock levels, no HID) capturing every overlay stage and the three chat tiles at 1920×480; run biome, typecheck, test, build, bundle smoke and strict OpenSpec validation; open the PR. (`open-quake-lih.5.1.11`)
 
+## 6. PR review
+
+- [ ] 6.1 Merge main and address PR #28 review round 1 with regressions, full gates and voice/knob/media native mock smokes; reply to and resolve the seven threads, push without merging. (`open-quake-lih.5.1.12`)
+
 ## Verification evidence
 
 Run in `/Volumes/ExtSSD/devplane/oq-strip-voice` on 2026-10-24, after merging

@@ -108,6 +108,83 @@ const statusOf = (view: VoiceView) =>
 	);
 
 describe("AI Copilot through the voice store", () => {
+	it("preserves standalone whitespace deltas in the displayed and copied answer", () => {
+		const deltas = ["hello", " ", "world", "\n", "  ", "next", ""];
+		const view = play([
+			key("1,6", "down"),
+			...deltas.map((textDelta, seq) =>
+				chunk(seq, { type: "answer", textDelta }),
+			),
+		]);
+		expect(view.copilot.text).toBe("hello world\n  next");
+	});
+
+	it("expires a busy rejection without closing a newer knob session", () => {
+		const busy = reduceVoice(
+			initialVoiceView,
+			{ _tag: "event", event: stage("0,1", { _tag: "busy" }, "busy") },
+			keys,
+			100,
+		);
+		expect(nextExpiry(busy)).toEqual(Option.some(3100));
+		expect(
+			reduceVoice(busy, { _tag: "expire" }, keys, 3099).overlay.visible,
+		).toBe(true);
+		expect(
+			reduceVoice(busy, { _tag: "expire" }, keys, 3100).overlay.visible,
+		).toBe(false);
+		const newer = reduceVoice(
+			busy,
+			{
+				_tag: "event",
+				event: stage("0,1", { _tag: "recording", status: "listening" }, "new"),
+			},
+			keys,
+			200,
+		);
+		expect(reduceVoice(newer, { _tag: "expire" }, keys, 3100).overlay).toEqual(
+			newer.overlay,
+		);
+	});
+
+	it("clears a mounted input draft on repeated profile resets, even before voice text exists", () => {
+		let view = initialVoiceView;
+		for (let revision = 1; revision <= 3; revision++) {
+			view = play([{ _tag: "profileReset" }], view);
+			expect(view.input.revision).toBe(revision);
+			expect(view.input.voice.text).toBe("");
+			expect(view.input.keyCode).toEqual(Option.none());
+		}
+	});
+
+	it("selects a typed-only assistant without disturbing a running voice turn", () => {
+		const typedKeys = new Map(keys).set("1,5", {
+			type: "clawbot",
+			title: Option.some("Weather"),
+			agentId: Option.some("weather"),
+			voiceInput: false,
+		});
+		const running = play([
+			key("1,6", "down"),
+			stage("1,6", { _tag: "recording", status: "listening" }),
+		]);
+		const selected = reduceVoice(
+			running,
+			{ _tag: "event", event: key("1,5", "down") },
+			typedKeys,
+			100,
+		);
+		const released = reduceVoice(
+			selected,
+			{ _tag: "event", event: key("1,5", "up") },
+			typedKeys,
+			200,
+		);
+		expect(released.input.agentId).toEqual(Option.some("weather"));
+		expect(released.copilot).toEqual(running.copilot);
+		expect(released.bar).toEqual(running.bar);
+	});
+
 	it("holds, records, streams and completes on an aiChat key", () => {
 		const statuses: Option.Option<string>[] = [];
 		let view = initialVoiceView;

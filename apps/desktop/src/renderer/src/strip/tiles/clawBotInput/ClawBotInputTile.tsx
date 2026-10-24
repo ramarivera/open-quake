@@ -41,13 +41,18 @@ export function ClawBotInputTile({
 		const check = checkSend(state, text);
 		if (check._tag === "warn") setWarning(check.key);
 		if (check._tag !== "send") return;
-		void voice.request({
-			_tag: "SendText",
-			keyCode: check.keyCode,
-			agentId: check.agentId,
-			message: check.message,
-		});
-		setText("");
+		void voice
+			.request({
+				_tag: "SendText",
+				keyCode: check.keyCode,
+				agentId: check.agentId,
+				message: check.message,
+			})
+			.then((reply) => {
+				if (reply._tag === "ok")
+					setText((current) => (current === text ? "" : current));
+			})
+			.catch(() => undefined);
 	};
 	const onAttach = (): void => {
 		void voice.request({ _tag: "PickFiles" }).then((reply) => {

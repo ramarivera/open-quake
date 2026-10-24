@@ -89,6 +89,12 @@ Recording events that arrive after `processing` in the same capture SHALL be ign
 - **WHEN** a knob capture fails without a message
 - **THEN** the text reads "Processing error, please retry (3S)", then "(2S)" at 1000 ms and "(1S)" at 2000 ms, and the overlay is gone at 3000 ms
 
+#### Scenario: Rejected knob hold expires
+
+- **WHEN** a grid key owns capture and a knob hold is rejected busy
+- **THEN** the busy overlay closes after 3000 ms without a terminal event, and the grid capture continues
+- **AND** a newer knob session replaces the busy expiry and is not closed by it
+
 #### Scenario: Next press after an error
 
 - **WHEN** a new capture starts `recording/preparing` right after an error countdown ends
@@ -157,6 +163,11 @@ Covers AI-169, AI-193, AI-205, SCREEN-058, SCREEN-059.
 - **WHEN** key `1,6` is capturing and key `1,7` goes down
 - **THEN** `1,7` gets the busy stage, tone and alert, and `1,6` keeps capturing
 
+#### Scenario: Select a typed-only assistant
+
+- **WHEN** a clawbot key has false or absent `voiceInput` and receives pointer or device down and release
+- **THEN** it selects the key and agent for typed chat and publishes key presses without reserving voice or starting capture
+
 #### Scenario: Touch cancel
 
 - **WHEN** a capturing key receives a touch cancel
@@ -194,6 +205,11 @@ The left panel SHALL hold the energy orb in a 1:2 box with speed null 1, 0 → 3
 
 - **WHEN** aiChat key `1,6` goes down, the mic opens, the key is released and three answer chunks then an end arrive
 - **THEN** the status reads Initializing, Start Recording, Processing, Completed in order, and the text holds the three deltas
+
+#### Scenario: Whitespace answer chunks
+
+- **WHEN** answer deltas contain standalone spaces, newlines or indentation
+- **THEN** the displayed and copied answer preserves those deltas in order
 
 #### Scenario: Released before the mic opens
 
@@ -288,6 +304,17 @@ Voice partials SHALL merge into the box, a final transcript SHALL replace it, an
 - **WHEN** Send is pressed before any clawbot key was tapped
 - **THEN** the warning "Please tap an AI assistant first!" shows for 1800 ms and nothing is sent
 
+#### Scenario: Rejected typed send retains draft
+
+- **WHEN** the runtime rejects a typed send as unavailable
+- **THEN** main returns a rejected reply with its stable error code, and the input retains the draft
+- **AND** accepted sends clear only the submitted draft, preserving edits made while awaiting the reply
+
+#### Scenario: Profile or page change clears draft
+
+- **WHEN** a profile or page switch reuses the input tile coordinate
+- **THEN** the mounted input clears its typed draft, voice buffer and selected assistant
+
 ### Requirement: Localized strip copy
 
 Overlay, tile and toast strings SHALL come verbatim from DK's en, zh, de, es, fr, it, ja and ko locales. The strip SHALL select a locale from the renderer language, falling back to English, and the idle placeholder SHALL be localized. Covers AI-208.
@@ -318,3 +345,9 @@ It SHALL call no provider and SHALL mark itself mock. Without mock mode and with
 
 - **WHEN** mock mode is off and a long press starts a capture
 - **THEN** the stage `failed` with reason `unavailable` is published, with the error tone and key alert
+
+#### Scenario: Mock capture ownership
+
+- **WHEN** cancellation or release targets another key or a stale generation
+- **THEN** the current mock capture continues with its original key and capture ID
+- **AND** cancellation of its owning key and generation closes that capture and its mic bar

@@ -179,15 +179,19 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 				await run(GridVoice.reset(serial));
 				return ok;
 			case "SendText":
-				await run(
+				return run(
 					GridVoice.sendText({
 						serial,
 						keyCode: request.keyCode,
 						agentId: request.agentId,
 						message: request.message,
-					}),
+					}).pipe(
+						Effect.as(ok),
+						Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+							Effect.succeed(rejected(error.code)),
+						),
+					),
 				);
-				return ok;
 			case "OpenLink":
 				return Option.match(safeHttpUrl(request.url), {
 					onNone: () => rejected("VOICE.SURFACE.LINK_REJECTED"),

@@ -1,6 +1,7 @@
 import { Either, Option, Schema } from "effect";
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import {
+	type GridVoiceInput,
 	isHoldToTalkKey,
 	VoiceSurfaceEvent,
 	type VoiceSurfaceReply,
@@ -42,23 +43,27 @@ export function keyInfo(tile: StripTile): KeyInfo {
 				? Option.some(config.title.text.trim())
 				: Option.none(),
 		agentId: actionValue(config.actions, "agentId"),
+		voiceInput: isHoldToTalkKey(config),
 	};
 }
 
-/** The hold-to-talk class of a tile, when it has one (QSC:1758-1767). */
-export function holdKeyOf(tile: StripTile): Option.Option<{
-	readonly type: "aiChat" | "clawbot";
-	readonly agentId: Option.Option<string>;
-}> {
+/** Assistant selection also works on clawbot keys with voice input disabled. */
+export function voiceInputOf(
+	tile: StripTile,
+	kind: GridVoiceInput["kind"],
+): Option.Option<GridVoiceInput> {
 	const type = tile.type;
-	if (
-		(type !== "aiChat" && type !== "clawbot") ||
-		!isHoldToTalkKey(tile.key.config)
-	)
-		return Option.none();
+	if (type !== "aiChat" && type !== "clawbot") return Option.none();
+	const agentId = actionValue(tile.key.config.actions, "agentId");
 	return Option.some({
+		keyCode: tile.keyCode,
+		kind,
 		type,
-		agentId: actionValue(tile.key.config.actions, "agentId"),
+		voiceInput: isHoldToTalkKey(tile.key.config),
+		...Option.match(agentId, {
+			onNone: () => ({}),
+			onSome: (value) => ({ agentId: value }),
+		}),
 	});
 }
 

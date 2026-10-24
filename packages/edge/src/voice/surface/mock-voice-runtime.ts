@@ -55,6 +55,7 @@ const decodeSession = Schema.decodeUnknownSync(SessionId);
 const decodeTurn = Schema.decodeUnknownSync(TurnId);
 
 interface Capture {
+	readonly keyCode: string;
 	readonly generation: number;
 	readonly captureId: string;
 	readonly released: Deferred.Deferred<void>;
@@ -191,15 +192,20 @@ export const MockVoiceRuntimeLive: Layer.Layer<
 				),
 			);
 
-		const stop = (serial: string, keyCode: string) =>
+		const stop = (serial: string, keyCode: string, generation?: number) =>
 			Effect.gen(function* () {
 				const capture = (yield* Ref.get(captures)).get(serial);
-				if (!capture) return;
+				if (
+					!capture ||
+					capture.keyCode !== keyCode ||
+					(generation !== undefined && capture.generation !== generation)
+				)
+					return;
 				yield* Fiber.interrupt(capture.fiber);
 				yield* surface.publish({
 					_tag: "Stage",
 					serial,
-					keyCode,
+					keyCode: capture.keyCode,
 					captureId: capture.captureId,
 					stage: { _tag: "idle", outcome: "cancelled" },
 				});
@@ -213,6 +219,7 @@ export const MockVoiceRuntimeLive: Layer.Layer<
 					const fiber = yield* Effect.forkIn(script(request, released), scope);
 					yield* Ref.update(captures, (map) =>
 						new Map(map).set(request.serial, {
+							keyCode: request.keyCode,
 							generation: request.generation,
 							captureId: request.captureId,
 							released,
@@ -220,14 +227,19 @@ export const MockVoiceRuntimeLive: Layer.Layer<
 						}),
 					);
 				}),
-			releaseCapture: (serial, _keyCode, generation) =>
+			releaseCapture: (serial, keyCode, generation) =>
 				Effect.gen(function* () {
 					const capture = (yield* Ref.get(captures)).get(serial);
 					// Late releases from an older generation are ignored (knob-push-to-talk).
-					if (capture && capture.generation === generation)
+					if (
+						capture &&
+						capture.keyCode === keyCode &&
+						capture.generation === generation
+					)
 						yield* Deferred.succeed(capture.released, undefined);
 				}),
-			cancelCapture: (serial, keyCode) => stop(serial, keyCode),
+			cancelCapture: (serial, keyCode, generation) =>
+				stop(serial, keyCode, generation),
 			cancelFlow: (serial, keyCode) => stop(serial, keyCode),
 			sendText: (request: TextRequest) =>
 				Effect.forkIn(

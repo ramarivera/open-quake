@@ -5,7 +5,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { ManagedRuntime, Schema } from "effect";
+import { Effect, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
 import {
 	SessionId,
@@ -13,6 +13,7 @@ import {
 } from "../../../../../packages/edge/src/chat/chat-contracts.js";
 import type { EncodedProfileEnvelope } from "../../shared/profiles";
 import type { VoiceStage, VoiceSurfaceEvent } from "../../shared/voice-surface";
+import { registerKnob } from "../knob";
 import { MediaLive, registerMedia } from "../media";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import {
@@ -21,6 +22,8 @@ import {
 	voiceFixtureEnvelope,
 } from "../test/voice-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "./index";
+import { reviewSmoke } from "./review-smoke";
+import { waitForVoice } from "./smoke-wait";
 
 /**
  * strip-voice-ui native smoke: the built renderer and preload in a hidden
@@ -71,6 +74,10 @@ async function smoke(): Promise<void> {
 			nodeIntegration: false,
 		},
 	});
+	const knobRegistration = registerKnob(
+		() => panel,
+		() => [panel],
+	);
 	const media = registerMedia(
 		ManagedRuntime.make(MediaLive(join(directory, "wallpaper-v1"))),
 		() => undefined,
@@ -98,7 +105,11 @@ async function smoke(): Promise<void> {
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		});
-		await settle(600);
+		await waitForVoice(
+			panel,
+			`!!document.querySelector('.strip-screen[data-profiles="ready"]')`,
+		);
+		await settle(100);
 	};
 	const publish = (event: VoiceSurfaceEvent): Promise<void> =>
 		voice.publish(event);
@@ -205,19 +216,30 @@ async function smoke(): Promise<void> {
 		false,
 	);
 	await capture("voice-knob-processing");
+	// Observe all countdown renders independently of screenshot capture latency.
+	await js(`(() => {
+		const seen = [];
+		const observer = new MutationObserver(() => {
+			const line = document.querySelector('.voice-subtitle')?.textContent;
+			if (line?.match(/\\([123]S\\)$/) && seen.at(-1) !== line) seen.push(line);
+		});
+		observer.observe(document.querySelector('.voice-layer'), { childList: true, characterData: true, subtree: true });
+		window.__voiceCountdown = { seen, observer };
+	})()`);
 	await knob({ _tag: "failed", reason: "server" }, "knob-1");
 	await settle(200);
-	assert.equal(
-		await text(".voice-subtitle"),
-		"Processing error, please retry (3S)",
+	await capture("voice-knob-error-countdown");
+	await settle(3100);
+	assert.deepEqual(
+		await js<string[]>(
+			"window.__voiceCountdown.observer.disconnect(); window.__voiceCountdown.seen",
+		),
+		[
+			"Processing error, please retry (3S)",
+			"Processing error, please retry (2S)",
+			"Processing error, please retry (1S)",
+		],
 	);
-	await capture("voice-knob-error-3s");
-	await settle(1000);
-	assert.equal(
-		await text(".voice-subtitle"),
-		"Processing error, please retry (2S)",
-	);
-	await settle(2100);
 	assert.equal(
 		await js<boolean>("!!document.querySelector('.voice-backdrop')"),
 		false,
@@ -235,10 +257,37 @@ async function smoke(): Promise<void> {
 
 	// Grid hold-to-talk through the real IPC, GridVoice and the mock runtime.
 	await input("1,6", "down");
-	await settle(1500);
+	await waitForVoice(
+		panel,
+		`document.querySelector('.copilot-status')?.textContent === 'Start Recording'`,
+	);
 	assert.equal(await text(".copilot-status"), "Start Recording");
 	assert.match((await text(".voice-bar-row")) ?? "", /speak now|What's/);
 	await capture("voice-grid-hold");
+	// A rejected knob hold expires while the unrelated grid capture continues.
+	await Effect.runPromise(
+		voice.knobVoice({ action: "holdStart", generation: 1 }),
+	);
+	await settle(200);
+	assert.equal(
+		await text(".voice-subtitle"),
+		"System busy, please try again later",
+	);
+	await Effect.runPromise(
+		voice.knobVoice({ action: "interrupt", generation: 1 }),
+	);
+	await settle(2900);
+	assert.equal(
+		await js<boolean>("!!document.querySelector('.voice-backdrop')"),
+		false,
+		"busy knob rejection expires without an idle",
+	);
+	assert.equal(
+		await js<boolean>("!!document.querySelector('.voice-bar')"),
+		true,
+		"knob interrupt leaves the grid capture and mic bar running",
+	);
+	await capture("voice-review-busy-expired-grid-running");
 	// A second key while 1,6 records: busy stage, tone, toast and key alert.
 	await input("1,7", "down");
 	await settle(250);
@@ -255,7 +304,10 @@ async function smoke(): Promise<void> {
 	await capture("voice-grid-busy-alert");
 	await input("1,7", "touchEnd");
 	await input("1,6", "touchEnd");
-	await settle(1400);
+	await waitForVoice(
+		panel,
+		`document.querySelector('.copilot-status')?.textContent === 'Completed'`,
+	);
 	assert.equal(await text(".copilot-status"), "Completed");
 	assert.match((await text(".copilot-text")) ?? "", /\(mock\) Lisbon is sunny/);
 	await capture("voice-copilot-completed");
@@ -311,11 +363,17 @@ async function smoke(): Promise<void> {
 	await load();
 	await publish({ _tag: "AgentStatus", state: "connected" });
 	await input("1,5", "down", "clawbot");
-	await settle(2600);
+	await waitForVoice(
+		panel,
+		`document.querySelector('.clawbot-input-box')?.value.includes('weather')`,
+	);
 	assert.match((await text(".clawbot-messages")) ?? "", /Voice Input/);
 	await capture("voice-clawbot-recording");
 	await input("1,5", "touchEnd", "clawbot");
-	await settle(1400);
+	await waitForVoice(
+		panel,
+		`document.querySelector('.clawbot-messages')?.textContent.includes('Lisbon is sunny')`,
+	);
 	assert.match((await text(".clawbot-messages")) ?? "", /Lisbon is sunny/);
 	assert.match(
 		(await js<string>("document.querySelector('.clawbot-input-box').value")) ??
@@ -405,6 +463,8 @@ async function smoke(): Promise<void> {
 		);
 	await voice.dispose();
 	await profiles.dispose();
+	await reviewSmoke(panel, renderer, SERIAL, capture);
+	await knobRegistration.dispose();
 	await media.dispose();
 	panel.destroy();
 	process.stdout.write(

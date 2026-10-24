@@ -10,7 +10,10 @@ import { mountStripTouch } from "./mount-strip-touch";
 import { KnobPanelLayer } from "./overlays/knob/KnobPanelLayer";
 import { useKnob } from "./overlays/knob/useKnob";
 import { KeyAlert } from "./overlays/voice/KeyDecorations";
-import { holdKeyOf, useVoiceSurface } from "./overlays/voice/useVoiceSurface";
+import {
+	useVoiceSurface,
+	voiceInputOf,
+} from "./overlays/voice/useVoiceSurface";
 import { StripToasts, VoiceOverlay } from "./overlays/voice/VoiceOverlay";
 import { useStripMotion } from "./overlays/voice/voice-context";
 import { StripScreen, StripViewport, useStripLayout } from "./StripScreen";
@@ -39,18 +42,10 @@ function useHoldInput(
 			Option.fromNullable(
 				latest.current.layout?.tiles.find((tile) => tile.keyCode === keyCode),
 			),
-			holdKeyOf,
+			(tile) => voiceInputOf(tile, kind),
 		);
 		if (Option.isNone(key)) return;
-		latest.current.send({
-			keyCode,
-			kind,
-			type: key.value.type,
-			...Option.match(key.value.agentId, {
-				onNone: () => ({}),
-				onSome: (agentId) => ({ agentId }),
-			}),
-		});
+		latest.current.send(key.value);
 	}, []);
 	useEffect(() => {
 		const element = root.current;
