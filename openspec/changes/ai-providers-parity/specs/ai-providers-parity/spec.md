@@ -29,6 +29,12 @@ Profiles SHALL select independent routing, daily, deepThink, vision, image, vide
 - **THEN** classification succeeds without emitting provider reasoning or search options and dispatches the selected target
 - **AND** enabling unsupported reasoning or native search still fails before credentials or adapter invocation
 
+#### Scenario: GPT-5.1 reasoning intent
+- **WHEN** GPT-5.1 has no thinking or reasoning-effort control
+- **THEN** the facade omits reasoning_effort to preserve the provider default
+- **WHEN** thinking is explicitly disabled without an effort override
+- **THEN** reasoning_effort is none; explicit effort remains respected and enabled thinking without an effort uses high
+
 ### Requirement: Corrected independent speech protocols
 
 Facade-owned speech SHALL implement the corrected voice-stt-tts contracts using independent selection and injected fetch/WebSocket transports (AI-094, AI-101, AI-105). DashScope SHALL use workspace hosts, ASR qwen-audio-3.1-asr-flash-streaming and TTS qwen-audio-3.1-tts-flash with longanlingxin_v3.1 and 24kHz mono PCM. Recognition SHALL gate binary data on matching readiness, replace provisional segments, deduplicate finals and require matching task-finished after one nonempty finish. Synthesis SHALL parse fragmented multiline SSE, require stop, bound buffers and verify audio descriptors. OpenAI SHALL request WAV with explicit voice/instructions, gate retired profiles and reject unsupported replacement transports. Failures SHALL retain private original causes and scrub serialized diagnostics.
@@ -36,6 +42,12 @@ Facade-owned speech SHALL implement the corrected voice-stt-tts contracts using 
 #### Scenario: Fragmented synthesis
 - **WHEN** SSE records or WAV headers are split across network chunks
 - **THEN** audio is assembled once, verified and handed to the owned player only after successful synthesis
+
+#### Scenario: Streaming speech framing
+- **WHEN** a completed WAV response uses 0xffffffff RIFF and final data sizes
+- **THEN** the final data size comes from remaining bytes while PCM and ordinary chunk validation remain enforced
+- **WHEN** DashScope SSE uses JSON null or string "null" for finish_reason
+- **THEN** synthesis remains in progress until stop; unsupported reasons and missing stop fail
 
 #### Scenario: Cancellation and natural drain
 - **WHEN** speech is cancelled or revoked while HTTP or playback is pending
@@ -83,3 +95,9 @@ The shipped catalog SHALL preserve recovered role IDs, prompts, per-key thinking
 - **THEN** its recovered translated name and prompt are available
 - **WHEN** a dropped role ID is requested
 - **THEN** it cannot be selected
+
+#### Scenario: Custom prompt belongs to the custom role
+- **WHEN** customPrompt is supplied with a preset role ID instead of custom role -1
+- **THEN** the request fails with AI.PROVIDER.CONFIG_INVALID before credentials or dispatch
+- **WHEN** role -1 supplies a custom prompt
+- **THEN** the facade uses it as the persona system prompt

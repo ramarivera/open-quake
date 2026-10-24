@@ -63,6 +63,16 @@ export function wav(): Uint8Array<ArrayBuffer> {
 	view.setUint32(40, 960, true);
 	return bytes;
 }
+/** Completed streaming WAV with unknown lengths and 20ms of signed PCM. */
+export function streamingWav(): Uint8Array<ArrayBuffer> {
+	const bytes = wav();
+	const view = new DataView(bytes.buffer);
+	view.setUint32(4, 0xffffffff, true);
+	view.setUint32(40, 0xffffffff, true);
+	for (let offset = 44; offset < bytes.length; offset += 2)
+		view.setInt16(offset, offset % 4 === 0 ? 3000 : -3000, true);
+	return bytes;
+}
 export function fragmentedResponse(text: string, size = 7): Response {
 	const bytes = new TextEncoder().encode(text);
 	return new Response(
@@ -110,3 +120,9 @@ export const silentOutput: typeof SpeechOutput.Service = {
 		stop: Effect.void,
 	}),
 };
+
+/** Multiline DashScope progress followed by the required terminal frame. */
+export const dashscopeSse =
+	'data: {"output":{\n' +
+	'data: "audio":{"data":"AAECAw=="},"finish_reason":"null"}}\n\n' +
+	'data: {"output":{"finish_reason":"stop"}}\n\n';

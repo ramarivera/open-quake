@@ -23,3 +23,7 @@
 
 Lead verification: [lead-acceptance.md](lead-acceptance.md). Implementation and
 mock verification do not close production/live acceptance task 3.2.
+
+## 4. Review round 2
+
+- [ ] 4.1 Address the five new PR #27 threads on ec013348: preserve GPT-5.1 default and disabled reasoning, assert router error identities, reject preset custom prompts, accept streaming WAV size placeholders and DashScope in-progress finish reasons. Add regressions, integrate main once if advanced, run all six gates, and publish attributed thread dispositions and evidence. Bead: open-quake-lih.15.1.16. Production/live acceptance task 3.2 remains open.

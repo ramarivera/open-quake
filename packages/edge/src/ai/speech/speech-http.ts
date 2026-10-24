@@ -18,7 +18,7 @@ const Frame = Schema.Struct({
 		audio: Schema.optional(
 			Schema.Struct({ data: Schema.optional(Schema.String) }),
 		),
-		finish_reason: Schema.optional(Schema.String),
+		finish_reason: Schema.optional(Schema.NullOr(Schema.String)),
 	}),
 	code: Schema.optional(Schema.String),
 });
@@ -37,6 +37,8 @@ async function readAudio(
 	let line = "";
 	let data: string[] = [];
 	let stopped = false;
+	// Both null encodings mean progress. Only stop completes synthesis, and
+	// records after it are invalid even if they carry no audio.
 	const record = () => {
 		if (!data.length) return;
 		if (stopped) throw new AiProtocolInvalid();
@@ -57,9 +59,9 @@ async function readAudio(
 			if (bytes > MAX_AUDIO_BYTES) throw new SpeechFormatUnsupported();
 			chunks.push(decoded);
 		}
-		if (frame.output.finish_reason !== undefined) {
-			if (frame.output.finish_reason !== "stop")
-				throw new AiProtocolInvalid(frame);
+		const reason = frame.output.finish_reason;
+		if (reason !== undefined && reason !== null && reason !== "null") {
+			if (reason !== "stop") throw new AiProtocolInvalid(frame);
 			stopped = true;
 		}
 	};
@@ -106,7 +108,8 @@ async function readAudio(
 	return combined;
 }
 
-/** HTTP is independent of the SDK chat port and has zero automatic retries. */
+/** Synthesize through independent HTTP with no retry or provider fallback.
+ * Fragmented SSE must end in stop; WAV is verified after bounded assembly. */
 export function synthesizeHttp(
 	http: typeof SpeechHttp.Service,
 	profile: TtsProfile,

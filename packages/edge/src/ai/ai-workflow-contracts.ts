@@ -32,17 +32,25 @@ export const GenerationControls = Schema.Struct({
 	webSearch: Schema.optional(Schema.Boolean),
 });
 export type GenerationControls = typeof GenerationControls.Type;
+/** Custom text belongs to role -1; preset prompts must not discard caller input. */
 export const RoleSelection = Schema.Struct({
 	roleId: Schema.Int.pipe(Schema.greaterThanOrEqualTo(-1)),
 	locale: Schema.Literal("en", "zh", "ja", "ko", "de", "fr", "es", "it"),
 	customPrompt: Schema.optional(Schema.String.pipe(Schema.maxLength(3000))),
-});
+}).pipe(
+	Schema.filter(
+		(selection) =>
+			selection.roleId === -1 || selection.customPrompt === undefined,
+	),
+);
 /** A closed wire-options contract; secrets and arbitrary provider keys cannot enter it. */
 export const ProviderOptions = Schema.Struct({
 	max_completion_tokens: Schema.optional(Schema.Number),
 	enable_thinking: Schema.optional(Schema.Boolean),
 	enable_search: Schema.optional(Schema.Boolean),
-	reasoning_effort: Schema.optional(Schema.Literal("low", "medium", "high")),
+	reasoning_effort: Schema.optional(
+		Schema.Literal("none", "low", "medium", "high"),
+	),
 	web_search_options: Schema.optional(
 		Schema.Struct({ search_context_size: Schema.Literal("medium") }),
 	),

@@ -4,6 +4,9 @@ import { PCM_24K } from "./speech-contracts.js";
 import { SpeechFormatUnsupported } from "./speech-errors.js";
 
 export const MAX_AUDIO_BYTES = 24000 * 2 * 120 + 4096;
+/** Verify bounded 24kHz mono PCM, including completed streaming WAV responses.
+ * Only RIFF and final data lengths may use 0xffffffff; other chunk sizes,
+ * PCM descriptors and sample alignment remain strict. */
 export function verifiedAudio(
 	bytes: Uint8Array,
 	format: "pcm" | "wav",
@@ -16,10 +19,12 @@ export function verifiedAudio(
 		const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 		const four = (offset: number) =>
 			String.fromCharCode(...bytes.subarray(offset, offset + 4));
+		const streamingSize = 0xffffffff;
+		const riffSize = view.getUint32(4, true);
 		if (
 			four(0) !== "RIFF" ||
 			four(8) !== "WAVE" ||
-			view.getUint32(4, true) + 8 !== bytes.length
+			(riffSize !== streamingSize && riffSize + 8 !== bytes.length)
 		)
 			return fail();
 		let fmt = false;
@@ -27,7 +32,13 @@ export function verifiedAudio(
 		let offset = 12;
 		sampleBytes = 0;
 		while (offset + 8 <= bytes.length) {
-			const size = view.getUint32(offset + 4, true);
+			let size = view.getUint32(offset + 4, true);
+			if (size === streamingSize && four(offset) === "data") {
+				// Unknown-length data owns the remaining response, so its format
+				// must already be known and no later chunk can be parsed.
+				if (!fmt) return fail();
+				size = bytes.length - offset - 8;
+			}
 			const end = offset + 8 + size;
 			if (end > bytes.length) return fail();
 			if (four(offset) === "fmt ") {

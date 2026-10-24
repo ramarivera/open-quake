@@ -178,7 +178,9 @@ describe("Auto key mode", () => {
 								max_completion_tokens: 2048,
 								...(routing === "gpt-5-mini"
 									? {}
-									: { reasoning_effort: "low" }),
+									: {
+											reasoning_effort: routing === "gpt-5.1" ? "none" : "low",
+										}),
 							});
 							const providers = yield* AiProviderService;
 							for (const modelRole of ["daily", "deepThink"] as const) {
@@ -324,14 +326,17 @@ describe("Auto key mode", () => {
 		"rejects expressions, malformed JSON, unknown categories and disabled HA",
 		() =>
 			Effect.gen(function* () {
-				for (const text of [
-					'(()=>{throw "executed"})()',
-					decision("deleteEverything"),
-					'{"userRequestAction":"standardChat","searchOptions":{"shouldDoWebSearch"false:}}',
-					decision("operatingEquipment"),
-					`${decision("standardChat")} trailing`,
-					"answer instead of JSON",
-				]) {
+				for (const [text, tag] of [
+					['(()=>{throw "executed"})()', "AiProtocolInvalid"],
+					[decision("deleteEverything"), "AiProtocolInvalid"],
+					[
+						'{"userRequestAction":"standardChat","searchOptions":{"shouldDoWebSearch"false:}}',
+						"AiProtocolInvalid",
+					],
+					[decision("operatingEquipment"), "AiConfigInvalid"],
+					[`${decision("standardChat")} trailing`, "AiProtocolInvalid"],
+					["answer instead of JSON", "AiProtocolInvalid"],
+				] as const) {
 					const dispatches: VoiceDispatch[] = [];
 					yield* Effect.gen(function* () {
 						yield* (yield* AiRepository).put(workflowProfile);
@@ -341,7 +346,7 @@ describe("Auto key mode", () => {
 								homeAssistantEnabled: false,
 							}),
 						);
-						expect(Either.isLeft(result)).toBe(true);
+						expect(Either.isLeft(result) && result.left._tag).toBe(tag);
 						expect(dispatches).toEqual([]);
 					}).pipe(
 						Effect.provide(
@@ -415,7 +420,10 @@ describe("Auto key mode", () => {
 						.submit(request)
 						.pipe(Effect.either, Effect.fork);
 					yield* TestClock.adjust(300000);
-					expect(Either.isLeft(yield* Fiber.join(fiber))).toBe(true);
+					const outcome = yield* Fiber.join(fiber);
+					expect(Either.isLeft(outcome) && outcome.left._tag).toBe(
+						"AiUnavailable",
+					);
 					expect(signal?.aborted).toBe(true);
 				}).pipe(
 					Effect.provide(

@@ -64,6 +64,9 @@ export interface PreparedRequest {
 	readonly request: InferenceRequest;
 	readonly providerOptions: ProviderOptions;
 }
+/** Select a role model and validate provider controls before credentials or I/O.
+ * Returned profile/request snapshots may carry provider-mandated defaults;
+ * persisted profiles are never modified. */
 export function prepareWorkflow(
 	profile: ProviderProfile,
 	request: InferenceRequest,
@@ -104,9 +107,15 @@ export function prepareWorkflow(
 			controls.reasoningEffort !== "low"
 		)
 			return invalid();
-		if (reasoning)
-			options.reasoning_effort =
-				controls.reasoningEffort ?? (controls.thinking ? "high" : "low");
+		if (reasoning) {
+			// GPT-5.1 defaults to no reasoning. Preserve absence separately from
+			// an explicit disable; retain the recovered mini model's low policy.
+			if (controls.reasoningEffort)
+				options.reasoning_effort = controls.reasoningEffort;
+			else if (controls.thinking) options.reasoning_effort = "high";
+			else if (modelId === "gpt-5.1-mini") options.reasoning_effort = "low";
+			else if (controls.thinking === false) options.reasoning_effort = "none";
+		}
 		if (controls.webSearch)
 			options.web_search_options = { search_context_size: "medium" };
 		if (sampling.maxOutputTokens !== undefined)

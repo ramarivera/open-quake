@@ -19,14 +19,10 @@ import {
 	fragmentedResponse,
 	silentOutput,
 	speechLayer,
+	dashscopeSse as sse,
 	ttsProfile,
 	wav,
 } from "./speech-test-fixtures.js";
-
-const sse =
-	'data: {"output":{\n' +
-	'data: "audio":{"data":"AAECAw=="}}}\n\n' +
-	'data: {"output":{"finish_reason":"stop"}}\n\n';
 
 describe("speech through the provider facade and player", () => {
 	it.effect(
