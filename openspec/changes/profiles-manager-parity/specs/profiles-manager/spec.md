@@ -22,6 +22,14 @@ The manager SHALL support create, rename, deep duplicate, selection and confirme
 - **WHEN** a rename cannot persist
 - **THEN** neither committed snapshots nor subscribers observe the rename
 
+#### Scenario: Delete an unrelated transient profile
+- **WHEN** a custom profile is selected and another custom profile is deleted
+- **THEN** the active selection and stable anchor remain unchanged
+
+#### Scenario: Hidden deletion anchor
+- **WHEN** the selected custom profile is deleted after its stable anchor was hidden
+- **THEN** the manager restores a visible remaining custom or built-in profile
+
 ### Requirement: Profile properties and startup override
 Profiles SHALL support an optional app path/identifier and all-device or serial-specific scope. One top-level profile MAY be the startup default; replacing another SHALL require confirmation. Subpages SHALL not be eligible. First connection SHALL apply the startup default once and ignore duplicate init reports; reconnection SHALL start a new session. Source: MGMT-091, 326–327, 329–336; MAIN-079.
 
@@ -29,12 +37,24 @@ Profiles SHALL support an optional app path/identifier and all-device or serial-
 - **WHEN** a connected device reports an old profile twice while a startup default is configured
 - **THEN** only the startup default is delivered once and neither report replaces it
 
+#### Scenario: Hidden startup and saved selection
+- **WHEN** the startup default or saved selection is hidden before reconnect
+- **THEN** connection selects a visible profile and never delivers the hidden profile
+
+#### Scenario: Failed delivery
+- **WHEN** delivering a requested selection fails
+- **THEN** persisted selections and repository subscribers retain the previous selection
+
 ### Requirement: Foreground automatic switching
 A scoped monitor SHALL probe immediately, poll every 3000 ms on macOS or 2000 ms elsewhere, cache results for 500 ms and bound native execution to 5000 ms. It SHALL react to window ID or owner-path changes, choose the best normalized bundle-path LCS match at similarity >=0.79, and send the profile to connected devices in scope after a 300 ms per-device debounce. It SHALL retain current selection on unmatched apps, avoid overlapping native probes and stop on disposal. Source: MGMT-333; MAIN-084–085.
 
 #### Scenario: Focus changes during debounce
 - **WHEN** two matching apps become foreground within 300 ms
 - **THEN** each target device receives only the last matching profile
+
+#### Scenario: Device-scoped app matching
+- **WHEN** the closest app link targets another serial and a weaker qualifying link targets this serial
+- **THEN** this serial switches using its own eligible link
 
 ### Requirement: Functional manager and thumbnails
 Management SHALL expose Knob Profile, Default Profile, Custom Profile, Add Item, profile settings, visibility and startup-default controls using recovered English strings. Each row SHALL show a generated profile thumbnail. Update all SHALL report done/total with Cancel; unsupported capture SHALL fail closed with the recovered message. Read-only panel IPC SHALL not grant management writes. Source: MGMT-314–324, 326, 329–337, 430–434.
@@ -46,3 +66,11 @@ Management SHALL expose Knob Profile, Default Profile, Custom Profile, Add Item,
 #### Scenario: Unauthorized mutation
 - **WHEN** a panel or foreign frame requests a management mutation or command approval
 - **THEN** the request is rejected before persistence, native dialogs or execution
+
+#### Scenario: Management navigation
+- **WHEN** the management window navigates away from its exact authorized app URL, including same-origin query or fragment navigation
+- **THEN** the new document cannot mutate profiles or execute commands
+
+#### Scenario: Recoverable initialization failure
+- **WHEN** initial profile storage fails and later recovers
+- **THEN** IPC returns a typed failure reason and a subsequent request retries initialization successfully

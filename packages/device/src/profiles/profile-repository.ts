@@ -219,11 +219,11 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
 			);
 			const transact = Effect.fn("ProfileRepository.transact")(
-				(
+				<E = never>(
 					change: (
 						envelope: ProfileEnvelope,
-					) => Effect.Effect<ProfileEnvelope, ProfileRepositoryError>,
-				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
+					) => Effect.Effect<ProfileEnvelope, ProfileRepositoryError | E>,
+				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError | E> =>
 					Effect.gen(function* () {
 						const { envelope } = yield* loadUnlocked();
 						const next = yield* change(envelope);

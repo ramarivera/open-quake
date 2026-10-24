@@ -1,9 +1,11 @@
 import { join } from "node:path";
-import { QuakeDevice } from "@open-quake/device";
+import { pathToFileURL } from "node:url";
+import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
 import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import { app, BrowserWindow, type Display, ipcMain, screen } from "electron";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
+import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import {
 	findPanelDisplay,
@@ -12,11 +14,17 @@ import {
 	panelRotation,
 } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { registerHardware } from "./hardware";
+import { attachHardware, startMockHardwareBus } from "./hardware/bus";
+import { hardwarePreferencesLive } from "./hardware/preferences";
 import { MediaLive, registerMedia } from "./media";
-import { startMockDeviceBus } from "./mockDeviceBus";
 import { registerProfiles } from "./profiles";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+const rendererURL =
+	process.env.ELECTRON_RENDERER_URL ??
+	pathToFileURL(join(__dirname, "../renderer/index.html")).href;
+registerClockScheme();
 const PANEL_TITLE = "open-quake panel";
 
 interface PanelTarget {
@@ -106,19 +114,48 @@ app.whenReady().then(() => {
 		),
 		() => managementWin,
 	);
+	registerClock(
+		ManagedRuntime.make(ClockLive(app.getPath("userData"))),
+		() => managementWin,
+	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(
-		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+		Layer.merge(
+			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+			HardwareControls.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					hardwarePreferencesLive(join(app.getPath("userData"), "hardware-v1")),
+				),
+			),
+		),
 	);
 	const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
-	const profiles = registerProfiles(() => managementWin);
+	const managementURL = new URL(rendererURL);
+	managementURL.searchParams.set("surface", "management");
+	managementURL.searchParams.set("rotation", "0");
+	const profiles = registerProfiles(
+		() => managementWin,
+		rendererURL,
+		undefined,
+		managementURL.href,
+	);
 	const source = mock
-		? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
-				Effect.sync(() => bus.stop()),
-			)
-		: startDeviceBus();
+		? startMockHardwareBus()
+		: Effect.gen(function* () {
+				const controls = yield* HardwareControls;
+				return yield* startDeviceBus((connection) =>
+					attachHardware(controls, connection),
+				);
+			});
 	let bus: DeviceBus | undefined;
-	let running: Fiber.RuntimeFiber<void, never> | undefined;
+	const disposeHardware = registerHardware(
+		() => bus?.hardware?.(),
+		() => managementWin,
+		mock,
+	);
+	let running:
+		| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
+		| undefined;
 	let stopping = Promise.resolve();
 	let generation = 0;
 	let quitting = false;
@@ -163,6 +200,7 @@ app.whenReady().then(() => {
 		running = undefined;
 		if (fiber) {
 			stopping = stopping.then(async () => {
+				if (mock) await profiles.disconnect("desktop-preview");
 				await runtime.runPromise(Fiber.interrupt(fiber));
 				bus = undefined;
 			});
@@ -212,6 +250,7 @@ app.whenReady().then(() => {
 		screen.removeListener("display-removed", syncPanelDisplay);
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
+		disposeHardware();
 		void stopBus().then(async () => {
 			await profiles.dispose();
 			await runtime.dispose();

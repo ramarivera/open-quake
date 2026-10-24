@@ -235,11 +235,11 @@ export const applyManagerCommand = (
 			profiles = [first, ...remaining.slice(1)];
 			const anchor = Option.getOrUndefined(state.anchor);
 			const fallback =
-				profiles.find((p) => p.id === anchor) ??
+				profiles.find((p) => p.id === anchor && !state.hidden.includes(p.id)) ??
 				profiles.find((p) => !isBuiltinProfile(p.id)) ??
 				profiles.find((p) => !state.hidden.includes(p.id)) ??
 				first;
-			if (active !== anchor || active === command.id) select(fallback.id);
+			if (active === command.id) select(fallback.id);
 			selections = Object.fromEntries(
 				Object.entries(selections).map(([serial, s]) => [
 					serial,
@@ -250,9 +250,12 @@ export const applyManagerCommand = (
 			);
 			nextState = {
 				...nextState,
-				anchor: Option.some(
-					selections["desktop-preview"]?.profileId ?? fallback.id,
-				),
+				anchor:
+					active === command.id || anchor === command.id
+						? Option.some(
+								selections["desktop-preview"]?.profileId ?? fallback.id,
+							)
+						: state.anchor,
 				links: state.links.filter((link) => link.profileId !== command.id),
 				startup: Option.filter(state.startup, (id) => id !== command.id),
 			};
@@ -269,7 +272,11 @@ export const applyManagerCommand = (
 				return reject("last-builtin");
 			if (profiles.filter((p) => !hidden.includes(p.id)).length > PROFILE_LIMIT)
 				return reject("limit");
-			nextState = { ...nextState, hidden };
+			nextState = {
+				...nextState,
+				hidden,
+				startup: Option.filter(state.startup, (id) => !hidden.includes(id)),
+			};
 			const fallback = profiles.find((p) => !hidden.includes(p.id));
 			if (fallback)
 				selections = Object.fromEntries(

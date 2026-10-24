@@ -1,7 +1,36 @@
+import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { desktopAppEntry } from "./installed-apps";
+import {
+	canonicalProfileAppPath,
+	desktopAppEntry,
+	loadInstalledProfileApps,
+} from "./installed-apps";
 
 describe("installed Linux application data", () => {
+	it("uses the same resolved executable for discovered and manually chosen symlink apps", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "profile-app-links-"));
+		try {
+			const executable = join(directory, "real-browser"),
+				alias = join(directory, "browser");
+			await writeFile(executable, "fixture");
+			await symlink(executable, alias);
+			await writeFile(
+				join(directory, "browser.desktop"),
+				`[Desktop Entry]\nName=Browser\nExec=${alias} --open %F`,
+			);
+			const apps = await loadInstalledProfileApps("linux", [directory]);
+			const actual = await realpath(executable);
+			expect(apps).toEqual([
+				{ name: "Browser", identifier: "real-browser", path: actual },
+			]);
+			expect(await canonicalProfileAppPath("linux", alias)).toBe(actual);
+			expect(await canonicalProfileAppPath("darwin", alias)).toBe(alias);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
 	it("reads executable identity without running desktop-file arguments", () => {
 		expect(
 			desktopAppEntry(

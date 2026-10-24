@@ -64,3 +64,20 @@ No `bd` commands were run, per the lane brief. Parent updates for OpenSpec path 
 - Close task issues `open-quake-da4.1`, `.2`, `.3`, `.4`, and `.7` with this PR, the implementation in `packages/device/src/lighting/`, the tests in `packages/device/test/lighting/`, and gate results as evidence.
 - Keep epic `open-quake-da4` and the remaining task issues open for desktop and hardware work.
 - Create a follow-up task, "Add qualified QMK v3 lighting menu codecs and bindings". The existing legacy codec accepts one lighting selector for get, so it cannot encode/decode channel plus command-byte bindings. Add get/set/save codecs with response correlation tests in the L1-owned `packages/protocol` lane, then register firmware-matched evidence before enabling v3 fields. Link both `openspec/changes/device-lighting-config/` and `openspec/changes/two-layer-sdk/`.
+
+Hardware-controls-parity recovers cmd0x06 from MAIN-025/SETTINGS-021 and owns the serial preference UI and lock adapter. Existing QMK-control tasks retain their separate scope.
+
+## Hardware controls lane, 2026-10-24
+
+Task 2.3 is complete in hardware-controls-parity. The serial preference defaults
+to true and persists through the validated disk adapter. Saving the preference
+only saves host settings. The recovered op1 cmd0x06 sends LED off on lock and
+on at unlock only when the preference is false, and never substitutes QMK RGB
+writes. Protocol acknowledgments do not establish physical LED behavior.
+
+Evidence: packages/device/src/hardware/, its fake-HID service tests,
+apps/desktop/src/main/hardware/preferences.test.ts, registration.test.ts,
+and the native mock smoke. Full gate results and screenshots are recorded in
+openspec/changes/hardware-controls-parity/verification.md. Bead
+open-quake-da4.6 owns this completed task. QMK desktop task 2.2, hardware task
+3.1 and QMK settings-consumer task 3.2 remain open.

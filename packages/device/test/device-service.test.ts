@@ -270,6 +270,65 @@ describe("QuakeDevice conductor", () => {
 				);
 			}),
 	);
+	for (const shutdown of ["disconnect", "scope-close"] as const) {
+		it.scoped(`drains a cancelled hardware write before ${shutdown}`, () =>
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHidTransport();
+				const writing = yield* Deferred.make<void>();
+				const finishWrite = yield* Deferred.make<void>();
+				const transport = Layer.succeed(HidTransport, {
+					...fake.transport,
+					open: (info: HidDeviceInfo) =>
+						Effect.map(fake.transport.open(info), (handle) => ({
+							...handle,
+							write: (bytes: Uint8Array) =>
+								Deferred.succeed(writing, undefined).pipe(
+									Effect.zipRight(Deferred.await(finishWrite)),
+									Effect.zipRight(handle.write(bytes)),
+								),
+						})),
+				});
+				yield* Effect.gen(function* () {
+					const scope = yield* Scope.make();
+					const connection = yield* Scope.extend(
+						(yield* QuakeDevice).connect(),
+						scope,
+					);
+					const sending = yield* connection
+						.sendHardware({ _tag: "Mic", on: false })
+						.pipe(Effect.fork);
+					yield* Deferred.await(writing);
+					const cancelling = yield* Fiber.interrupt(sending).pipe(Effect.fork);
+					const closing = yield* (
+						shutdown === "disconnect"
+							? connection.disconnect()
+							: Scope.close(scope, Exit.void)
+					).pipe(Effect.fork);
+					yield* TestClock.adjust(0);
+					const earlyCloses = yield* fake.closes;
+					yield* Deferred.succeed(finishWrite, undefined);
+					yield* Fiber.join(cancelling);
+					yield* Fiber.join(closing);
+					yield* Scope.close(scope, Exit.void);
+					expect(earlyCloses).toBe(0);
+					expect(yield* fake.writes).toHaveLength(1);
+					expect(yield* fake.closes).toBe(1);
+					const afterClose = yield* connection
+						.sendHardware({ _tag: "Mic", on: true })
+						.pipe(Effect.either);
+					expect(Either.isLeft(afterClose) && afterClose.left._tag).toBe(
+						"QuakeConnectionClosed",
+					);
+				}).pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(transport),
+						),
+					),
+				);
+			}),
+		);
+	}
 	it.scoped(
 		"interrupting connect during acquisition still closes a successfully opened handle",
 		() =>

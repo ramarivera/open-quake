@@ -50,3 +50,15 @@ unsupported. App icons and vendor dialog styling await the design lane.
 All Electron runs used explicit mock mode. This lane opened no device,
 started no DK-Suite process and flashed no firmware. Physical delivery is
 unverified.
+
+## PR #26 review round 1, 2026-10-24
+
+Merged `origin/main` at `33f13ef600b0be744748474a018511b598ab5484` with all profile-manager, strip/touch, hardware-control and clock features retained. GitHub GraphQL returned 21 unresolved threads, not the expected 20. Twenty findings are fixed; the Windows PowerShell compilation finding is deferred to OpenSpec task 1.8 and bead `open-quake-lih.9.1.8` with a scoped persistent-helper plan.
+
+Behavioural regressions cover failed switch and manager delivery without persistence/publication, retry after failure, mock close/reopen, hidden startup/saved selections, per-device eligible matching, unrelated custom deletion, hidden deletion anchors, IPC read/write initialization failures and recovery, same-origin document/query/hash navigation, Linux symlink identity and extensionless picker, command launch acceptance/failure, stale locale replies, hidden UI selection, edited regular/agent titles and smoke diagnostic failure exit.
+
+All six lane gates pass: Biome checks 337 files; typecheck succeeds in all six packages; 799 tests pass across protocol 47, edge 27, device 370 and desktop 355; production build and both bundle-smoke modes pass; strict OpenSpec validation passes 32 changes. Native profiles and combined media/strip/touch smokes pass with `OPEN_QUAKE_MOCK_DEVICE=1` and `ELECTRON_RUN_AS_NODE` removed.
+
+The profiles smoke exercises actual row controls to duplicate built-in and custom profiles, rejects mutations/commands after same-origin navigation, selects every built-in containing a clock key and asserts the merged `.oq-clock`, then verifies batch thumbnails, restart/default persistence and narrow layout. The clock screenshot and thumbnails were visually inspected. The media smoke verifies raw synthetic touch through the real main/preload/renderer path, grid hits, press feedback, gaps, dynamic clickable discovery, native image decode, fill modes and synchronized clocks. Hardware remains unverified.
+
+Evidence lives under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/profiles-manager/review-round-1/`: `biome.log`, `typecheck.log`, `test.log`, `build.log`, `bundle.log`, `openspec.log`, `profiles-smoke.log`, `media-smoke.log`, `profiles/built-in-clock-1-7.png`, manager/settings screenshots and `media/*.png`. Source tests are in `packages/device/src/profiles/profile-manager.test.ts`, `profile-catalog.test.ts`, desktop `main/index.test.ts`, `main/profiles/*test.ts` and `renderer/src/profiles/manager-view.test.ts`.

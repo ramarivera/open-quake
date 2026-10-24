@@ -32,7 +32,7 @@ command requires approval again. Renderer requests cannot supply shell text.
 | Audit rows | Implementation and verification |
 | --- | --- |
 | MGMT-315–316, 338–340, 343, 346–384 | Nine resources, source footprints/actions/locks, platform Quick and locale projection. Catalog tests and local source comparison cover the data. Widget execution and full-strip rendering belong to other lanes. |
-| MGMT-313–324, 345 | Serialized CRUD, weighted names, deep copy, visibility, 30 visible profiles, stable deletion anchor and thumbnails. Manager/repository tests cover failures and concurrent key saves. The hidden vendor copy action is available through IPC with localized Copy suffixes. |
+| MGMT-313–324, 345 | Serialized CRUD, weighted names, deep copy, visibility, 30 visible profiles, stable deletion anchor and thumbnails. Manager/repository tests cover failures and concurrent key saves. Every row exposes the duplicate action with localized Copy suffixes. |
 | MGMT-326–327, 329–337 | Plain profile properties, installed-app selection, Other picker, connected-device scope, startup singleton and confirmation. Recovered labels are used; this page is ready for the design lane. App icons and vendor dialog styling are deferred. |
 | MGMT-091, 333–334; MAIN-079, 084 | Immediate polling, 3000/2000 ms intervals, 500 ms cache, native deadlines, normalized LCS >=0.79, 300 ms per-device debounce and first-connect default protection. Effect TestClock exercises switching and disposal. Native macOS identity/app-list reads are included in the smoke. |
 | MGMT-430–434 | Real hidden-window captures, content/locale cache keys, per-row update, batch progress and cancellation. Captures use the strip lane's renderer. |
@@ -58,11 +58,10 @@ detached snapshots. Existing user profiles survive catalog installation.
 Fresh desktop storage installs the catalog without the old empty seed.
 Hidden built-ins remain stored. Strip geometry rules are unchanged.
 
-`registerProfiles(management, renderer?, deliver?)` owns the repository,
+`registerProfiles(management, renderer?, deliver?, managementURL?)` owns the repository,
 foreground monitor, IPC handlers, native dialogs and capture windows. The
 optional `deliver(serial, profile): Promise<void>` callback is the real
-profile transport seam. Rejection produces `ProfileDeliveryFailed`; no panel
-selection event is sent on failed delivery. The lifecycle owner must call
+profile transport seam. Rejection produces `ProfileDeliveryFailed`; selection delivery runs inside the repository transaction before persistence/publication. Manager mutations use the same ordering, so failed delivery preserves the prior snapshot and selection. No panel selection event is sent on failed delivery. The lifecycle owner must call
 the returned `connect(serial, reportedProfileId?)` after identity discovery
 and `disconnect(serial)` when that session ends. Connect reserves the session
 before storage IO, so duplicate initialization reports cannot race it.
@@ -86,7 +85,7 @@ meeting or AI widget implementations.
 
 Only the main-owned management window's top-level renderer frame can mutate,
 capture, choose apps or execute a shell key. Matching renderer documents may
-read. Query strings do not grant write permissions. Preview reads preserve
+read. Writes require the exact main-owned management URL, including query and fragment, and the requesting main frame identity. Same-origin navigation cannot retain authority. Preview reads preserve
 the management locale. Every subscription has a disposer, captures destroy
 their windows in `finally`, and quit waits for pending requests and runtime
 disposal.
@@ -139,3 +138,13 @@ native adapters, Wayland support and native first-run shell dialogs remain
 unverified. Controller tests prove approval/cancellation and exact-command
 binding without running shell content. No device was opened, no firmware was
 flashed, and DK-Suite was not started.
+
+## Review round 1
+
+Initialization errors stay in the typed IPC reply. A serialized initializer caches only success, and storage recovery permits retry. Reopened mock bus sessions disconnect profiles before another connection initializes. Hidden startup defaults are cleared, legacy hidden startup/saved selections are ignored on connection, and deletion preserves unrelated transient selections and excludes hidden anchors. App matching filters visibility and serial scope before scoring.
+
+Linux discovery and the native picker resolve executable symlinks with `realpath`; the Linux dialog accepts extensionless programs. Approved shell commands use detached `spawn`, ignore stdio and resolve on launch acceptance. This confirms process creation, not the command's eventual exit status. Locale effect cleanup ignores obsolete replies; translated views preserve edited titles, including DK Claw's recovered Chinese baseline.
+
+The main process registers the merged clock service alongside profiles and hardware controls. Native proof selects the built-in Clock profile and asserts the real `.oq-clock` renderer. Captures wait for clock readiness before writing thumbnails.
+
+The Windows per-probe PowerShell `Add-Type` remains deferred to `open-quake-lih.9.1.8`, OpenSpec task 1.8. The planned scoped helper compiles once, accepts request IDs over stdin/stdout, enforces one outstanding request and five-second deadlines, restarts after crashes, and stops on disposal. Native Windows latency and lifecycle validation remain required.

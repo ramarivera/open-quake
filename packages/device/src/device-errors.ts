@@ -71,13 +71,14 @@ export interface DiagnosticCause {
 	readonly truncated: boolean;
 }
 
-const DiagnosticCause: Schema.Schema<DiagnosticCause> = Schema.suspend(() =>
-	Schema.Struct({
-		name: Schema.String,
-		sourceCode: Schema.optionalWith(Schema.String, { exact: true }),
-		cause: Schema.optionalWith(DiagnosticCause, { exact: true }),
-		truncated: Schema.Boolean,
-	}),
+export const DiagnosticCause: Schema.Schema<DiagnosticCause> = Schema.suspend(
+	() =>
+		Schema.Struct({
+			name: Schema.String,
+			sourceCode: Schema.optionalWith(Schema.String, { exact: true }),
+			cause: Schema.optionalWith(DiagnosticCause, { exact: true }),
+			truncated: Schema.Boolean,
+		}),
 );
 
 /** No upstream messages, paths, arbitrary fields, or user strings serialize. */

@@ -20,6 +20,7 @@ import type {
 	ProfileView,
 } from "../../../shared/profile-manager";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
+import { selectedManagerProfile, subscribeManagerView } from "./manager-view";
 import "./profiles.css";
 
 const decode = (view: ProfileView): ProfileEnvelope =>
@@ -110,20 +111,13 @@ export function ProfilesManager(): React.JSX.Element {
 	const [deviceChoice, setDeviceChoice] = useState({ id: "", serial: "" });
 	useEffect(() => {
 		if (!window.quakeProfileManager) return;
-		const off = window.quakeProfileManager.onSnapshot(setView);
-		const progress = window.quakeProfileManager.onProgress((p) =>
-			setView((v) => (v ? { ...v, progress: p } : v)),
+		return subscribeManagerView(
+			window.quakeProfileManager,
+			locale,
+			setView,
+			(p) => setView((v) => (v ? { ...v, progress: p } : v)),
+			setStatus,
 		);
-		void window.quakeProfileManager
-			.request({ type: "read", locale })
-			.then((r) => {
-				if (r._tag === "success") setView(r.view);
-				else setStatus(r.reason);
-			});
-		return () => {
-			off();
-			progress();
-		};
 	}, [locale]);
 	const request = async (command: ProfileRequest): Promise<boolean> => {
 		const reply = await window.quakeProfileManager.request(command);
@@ -157,10 +151,7 @@ export function ProfilesManager(): React.JSX.Element {
 		);
 	const envelope = decode(view),
 		state = managerState(envelope);
-	const selected =
-		envelope.profiles.find(
-			(p) => p.id === envelope.activeByDevice["desktop-preview"]?.profileId,
-		) ?? envelope.profiles.find((p) => !state.hidden.includes(p.id));
+	const selected = selectedManagerProfile(envelope);
 	const visibleCount = envelope.profiles.filter(
 		(p) => !state.hidden.includes(p.id),
 	).length;
@@ -244,6 +235,19 @@ export function ProfilesManager(): React.JSX.Element {
 					</button>
 				</>
 			)}
+			<button
+				type="button"
+				aria-label={`Duplicate ${p.name}`}
+				disabled={visibleCount >= 30}
+				onClick={() =>
+					void request({
+						type: "manage",
+						command: { type: "duplicate", id: p.id, locale },
+					})
+				}
+			>
+				{text("functionWheelEditor.copy")}
+			</button>
 			<button
 				type="button"
 				onClick={() => void request({ type: "thumbnail", id: p.id, locale })}

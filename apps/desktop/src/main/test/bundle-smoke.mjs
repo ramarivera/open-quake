@@ -54,6 +54,7 @@ const display = {
 };
 screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
+const powerMonitor = new EventEmitter();
 const ipcMain = new EventEmitter();
 ipcMain.handle = () => {};
 ipcMain.removeHandler = () => {};
@@ -66,13 +67,30 @@ const nativeImage = {
 		throw new Error("Bundle smoke must not decode images");
 	},
 };
+// The clock registers its media scheme before ready and a handler after.
+const schemes = [];
+const protocol = {
+	registerSchemesAsPrivileged: (list) => schemes.push(...list),
+	handle: () => {},
+	unhandle: () => {},
+};
+const net = {
+	fetch: () => {
+		throw new Error("Bundle smoke must not serve clock media");
+	},
+};
+const session = { defaultSession: { webRequest: { onBeforeRequest() {} } } };
 globalThis.openQuakeBundleSmoke = {
 	app,
+	powerMonitor,
 	BrowserWindow: Window,
 	screen,
 	ipcMain,
 	dialog,
 	nativeImage,
+	protocol,
+	net,
+	session,
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -88,7 +106,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, powerMonitor, BrowserWindow, screen, ipcMain, dialog, nativeImage, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -127,6 +145,10 @@ try {
 		"Default native package stays external; mock never loads it",
 	);
 	assert.equal(enumerations, mockMode ? 0 : 1);
+	assert.deepEqual(
+		schemes.map(({ scheme }) => scheme),
+		["oq-clock-media"],
+	);
 	for (const { channel, event } of quakeEvents()) {
 		assert.equal(channel, "quake:event");
 		if (mockMode)

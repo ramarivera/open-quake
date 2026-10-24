@@ -12,9 +12,19 @@ Native foreground probing uses fixed execFile programs/arguments, 5 s deadlines 
 
 Thumbnails capture the current canonical profile through a hidden renderer window, cache by profile revision and locale, report batch progress and cancellation, and fail explicitly when capture is unavailable. No proprietary icons or app artwork are copied.
 
-Implementation evidence and source findings are in `apps/desktop/src/main/profiles/README.md`. Thumbnail cache keys include full content and locale so catalog updates also invalidate them. The baseline bus has no serial identity/profile transport. `registerProfiles(management, renderer?, deliver?)` exposes optional async delivery plus connect/disconnect methods; mock composition exercises the complete desktop path. Real serial/twin filtering and hardware acceptance remain task 1.6 / `open-quake-lih.9.1.6`. Keep this change and its epic open until that integration has evidence.
+Implementation evidence and source findings are in `apps/desktop/src/main/profiles/README.md`. Thumbnail cache keys include full content and locale so catalog updates also invalidate them. The baseline bus has no serial identity/profile transport. `registerProfiles(management, renderer?, deliver?, managementURL?)` exposes optional async delivery plus connect/disconnect methods; mock composition exercises the complete desktop path. Real serial/twin filtering and hardware acceptance remain task 1.6 / `open-quake-lih.9.1.6`. Keep this change and its epic open until that integration has evidence.
 
 Integration with merged management/strip lanes retains `<userData>/profiles-v1.json` and shares one repository/runtime with the strip's read-only IPC. The manager has its own preload name and snapshot channel, and a Knob Profile sidebar page. Previews and captures consume the strip lane's `StripScreen`/`StripViewport`; no span or geometry rules change.
 
 ## Safety adaptations
 Decision 12 excludes vendor account, Spotify and NSFW/jailbreak presets. MGMT-341 vendor links become project links. Decision 15 turns automatic IP weather lookup off. Shell keys ship with first-run native confirmation per decision 13. Hardware runs are forbidden in this lane; mock mode must also work in built Electron applications.
+
+## Review round 1 integration
+
+Main includes the shared clock and hardware registrations while retaining the single profiles repository, manager sidebar and touch route. Selection delivery occurs under the repository transaction before committing or publishing. Manager commands prepare connected-device selections in the same transaction. Failed delivery leaves durable selections and repository subscribers unchanged.
+
+Management mutations require both the main-owned window's main frame and its exact expected URL. Initialization uses a semaphore and caches only a successful controller. Typed failures reach IPC and can be retried. Mock bus shutdown disconnects the old profile session before reopen.
+
+Visibility clears hidden startup defaults; connection also rejects legacy hidden defaults/reports/saved selections. Deletion restores only visible anchors and preserves unrelated transient selections. Matching selects the best eligible link for each serial, after filtering hidden profiles. Linux application paths are canonicalized before linking; its picker omits extension filters. Approved long-running commands resolve on spawn acceptance rather than waiting for application exit.
+
+Task 1.8 defers Windows's per-probe `Add-Type` replacement to a scoped persistent PowerShell helper with native Windows latency/lifecycle verification. Bead: `open-quake-lih.9.1.8`.

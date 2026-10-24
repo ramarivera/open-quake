@@ -1,0 +1,411 @@
+/*
+ * DK-Suite 0.4.95 desktop clock. Values are copied from the recovered
+ * dkDesktopClock.vue, DkFlipClock.vue and DkClockBackground.vue styles; the
+ * stage is a fixed 1920x480 design canvas scaled by the host.
+ */
+.oq-clock {
+	/* Liquid Glass base material. Themes override some of these inline. */
+	--glass-bg: linear-gradient(
+		165deg,
+		rgba(255, 255, 255, 0.17) 0%,
+		rgba(255, 255, 255, 0.06) 45%,
+		rgba(255, 255, 255, 0.11) 100%
+	);
+	--glass-bg-strong: linear-gradient(
+		165deg,
+		rgba(255, 255, 255, 0.22) 0%,
+		rgba(255, 255, 255, 0.1) 100%
+	);
+	--glass-border: rgba(255, 255, 255, 0.27);
+	--glass-border-strong: rgba(255, 255, 255, 0.34);
+	--glass-hl:
+		inset 0 1px 0 rgba(255, 255, 255, 0.34),
+		inset 0 -1px 0 rgba(255, 255, 255, 0.07);
+	--glass-blur: blur(26px) saturate(185%);
+	--text-primary: rgba(255, 255, 255, 0.97);
+	--text-secondary: rgba(255, 255, 255, 0.82);
+	--text-dim: rgba(255, 255, 255, 0.58);
+	--digit-shadow: 0 3px 34px rgba(0, 0, 0, 0.24);
+	--scrim-side: rgba(0, 0, 0, 0.38);
+	--scrim-bottom: rgba(0, 0, 0, 0.3);
+
+	position: relative;
+	overflow: hidden;
+	contain: strict;
+	font-family:
+		-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+		"Helvetica Neue", "Segoe UI Variable", "Segoe UI", "PingFang SC",
+		"Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.oq-clock-stage {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 1920px;
+	height: 480px;
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	padding: 0 64px;
+	box-sizing: border-box;
+	transform-origin: 0 0;
+}
+
+/* L0 background + L1 scrim. */
+.oq-clock-bg {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background: #0b0e14;
+	pointer-events: none;
+}
+.oq-clock-bg-media {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	pointer-events: none;
+}
+.oq-clock-scrim {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background:
+		linear-gradient(90deg, var(--scrim-side) 0%, transparent 20%),
+		linear-gradient(270deg, var(--scrim-side) 0%, transparent 18%),
+		linear-gradient(
+			180deg,
+			rgba(0, 0, 0, 0.06) 0%,
+			transparent 14%,
+			transparent 72%,
+			var(--scrim-bottom) 100%
+		);
+}
+
+/* Left: date rail with the theme nav at its foot. */
+.oq-clock-rail {
+	position: relative;
+	flex: 0 0 auto;
+	margin-left: 16px;
+	width: 240px;
+	height: 300px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: flex-start;
+	pointer-events: none;
+}
+.oq-clock-week,
+.oq-clock-date {
+	flex: 0 0 auto;
+	text-shadow: 0 2px 26px rgba(0, 0, 0, 0.35);
+}
+.oq-clock-week {
+	font-size: 30px;
+	font-weight: 400;
+	letter-spacing: 0.22em;
+	color: var(--text-secondary);
+	line-height: normal;
+}
+.oq-clock-date {
+	margin-top: 14px;
+	font-size: 72px;
+	font-weight: 200;
+	letter-spacing: 0.02em;
+	line-height: 1;
+	white-space: nowrap;
+	color: var(--text-primary);
+}
+
+.oq-clock-nav {
+	position: relative;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	pointer-events: auto;
+}
+.oq-clock-nav-btn {
+	width: 54px;
+	height: 54px;
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border-radius: 50%;
+	border: 1px solid var(--glass-border);
+	background: linear-gradient(
+		165deg,
+		rgba(255, 255, 255, 0.14),
+		rgba(255, 255, 255, 0.05)
+	);
+	box-shadow:
+		var(--glass-hl),
+		0 8px 24px rgba(0, 0, 0, 0.14);
+	backdrop-filter: var(--glass-blur);
+	color: var(--text-primary);
+	cursor: pointer;
+	touch-action: manipulation;
+	transition:
+		transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+		background 0.2s ease,
+		box-shadow 0.15s ease;
+}
+.oq-clock-nav-btn:hover {
+	background: linear-gradient(
+		165deg,
+		rgba(255, 255, 255, 0.26),
+		rgba(255, 255, 255, 0.1)
+	);
+}
+.oq-clock-nav-btn.is-pressed,
+.oq-clock-nav-btn:active {
+	transform: scale(0.94);
+	filter: brightness(1.18);
+	box-shadow:
+		var(--glass-hl),
+		0 2px 8px rgba(0, 0, 0, 0.22),
+		inset 0 1px 3px rgba(0, 0, 0, 0.18);
+	transition-duration: 90ms;
+}
+.oq-clock-nav-btn svg {
+	width: 20px;
+	height: 20px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.oq-clock-nav-name {
+	width: 132px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 17px;
+	font-weight: 400;
+	letter-spacing: 0.08em;
+	color: var(--text-secondary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-shadow: 0 1px 18px rgba(0, 0, 0, 0.4);
+}
+
+/* Centre: flip digits, centred in the free space by auto margins. */
+.oq-flip-clock {
+	position: relative;
+	flex: 0 0 auto;
+	margin-left: auto;
+	margin-right: auto;
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+}
+.oq-flip-colon {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-self: center;
+	gap: 34px;
+	height: 300px;
+}
+.oq-flip-colon i {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--glass-bg-strong);
+	border: 1px solid var(--glass-border);
+	box-shadow:
+		var(--glass-hl),
+		0 0 14px rgba(255, 255, 255, 0.35);
+	backdrop-filter: var(--glass-blur);
+}
+.oq-flip {
+	position: relative;
+	width: 160px;
+	height: 300px;
+}
+.oq-flip-upper,
+.oq-flip-lower {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	height: 150px;
+	box-sizing: border-box;
+	overflow: hidden;
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
+	box-shadow:
+		var(--glass-hl),
+		0 18px 46px rgba(0, 0, 0, 0.18);
+	backdrop-filter: var(--glass-blur);
+}
+.oq-flip-upper {
+	top: 0;
+	border-radius: 22px 22px 8px 8px;
+	border-bottom-width: 0.5px;
+	transform-origin: 50% 100%;
+	backface-visibility: hidden;
+	will-change: transform;
+}
+.oq-flip-lower {
+	bottom: 0;
+	border-radius: 8px 8px 22px 22px;
+	border-top-width: 0.5px;
+}
+.oq-flip-upper.turn-on {
+	animation: oq-flip-on 0.38s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+}
+.oq-flip-upper.turn-down {
+	animation: oq-flip-down 0.38s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+	background: var(--glass-bg-strong);
+}
+@keyframes oq-flip-on {
+	0% {
+		transform: rotateX(0deg);
+	}
+	100% {
+		transform: rotateX(-92deg);
+	}
+}
+@keyframes oq-flip-down {
+	0% {
+		transform: rotateX(92deg);
+	}
+	100% {
+		transform: rotateX(0deg);
+	}
+}
+.oq-flip-digit {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	height: 300px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 260px;
+	font-weight: 100;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-primary);
+	text-shadow: var(--digit-shadow);
+}
+.oq-flip-upper .oq-flip-digit {
+	top: 0;
+}
+.oq-flip-lower .oq-flip-digit {
+	bottom: 0;
+}
+.oq-flip-upper::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	height: 26px;
+	background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.18));
+	border-radius: 0 0 8px 8px;
+	pointer-events: none;
+}
+.oq-flip-lower::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	height: 30px;
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+	pointer-events: none;
+}
+
+/* AM/PM (DK) and the optional seconds pill (open-quake, decision 6). */
+.oq-flip-side {
+	align-self: center;
+	margin-left: 18px;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 14px;
+}
+.oq-flip-pill {
+	padding: 6px 14px;
+	border-radius: 14px;
+	font-size: 22px;
+	font-weight: 400;
+	letter-spacing: 0.1em;
+	color: var(--text-secondary);
+	background: var(--glass-bg-strong);
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--glass-hl);
+	backdrop-filter: var(--glass-blur);
+}
+.oq-flip-pill.is-seconds {
+	padding: 8px 16px;
+	border-radius: 18px;
+	font-size: 40px;
+	font-weight: 200;
+	letter-spacing: 0.04em;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-primary);
+}
+
+/* Right: fixed-width card column; collapses when no card is supplied. */
+.oq-clock-cards {
+	position: relative;
+	flex: 0 0 auto;
+	margin-right: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+.oq-clock-card-slot {
+	width: 564px;
+}
+
+/* Reduced motion: the tile sets data-motion from the OS preference and the
+ * app's appearance setting, and the JS flip already switches instantly. */
+.oq-clock[data-motion="reduce"] .oq-flip-upper,
+.oq-clock[data-motion="reduce"] .oq-clock-nav-btn {
+	animation: none;
+	transition: none;
+}
+
+/* Theme tints (dkDesktopClock.vue THEME_TINT): glass borders, highlights and
+ * digit shadow only; the background art carries the mood. */
+.oq-clock[data-theme="cyber"] {
+	--glass-border: rgba(0, 229, 255, 0.32);
+	--glass-border-strong: rgba(0, 229, 255, 0.4);
+	--glass-hl:
+		inset 0 1px 0 rgba(255, 255, 255, 0.28),
+		inset 0 -1px 0 rgba(0, 229, 255, 0.12);
+	--digit-shadow: 0 3px 40px rgba(255, 45, 180, 0.22);
+}
+.oq-clock[data-theme="anime"] {
+	--glass-border: rgba(140, 210, 255, 0.34);
+	--glass-hl:
+		inset 0 1px 0 rgba(255, 255, 255, 0.42),
+		inset 0 -1px 0 rgba(120, 200, 255, 0.14);
+}
+.oq-clock[data-theme="tactical"] {
+	--glass-bg: linear-gradient(
+		165deg,
+		rgba(255, 255, 255, 0.1) 0%,
+		rgba(255, 255, 255, 0.04) 45%,
+		rgba(255, 255, 255, 0.07) 100%
+	);
+	--glass-border: rgba(178, 255, 190, 0.25);
+	--glass-border-strong: rgba(178, 255, 190, 0.32);
+}
+.oq-clock[data-theme="aurora"] {
+	--glass-border: rgba(190, 140, 255, 0.3);
+	--glass-hl:
+		inset 0 1px 0 rgba(255, 255, 255, 0.32),
+		inset 0 -1px 0 rgba(150, 100, 255, 0.14);
+}

@@ -36,9 +36,12 @@ export class ProfileManager extends Effect.Service<ProfileManager>()(
 					(): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
 						repository.load().pipe(Effect.map((r) => r.envelope)),
 				),
-				command: Effect.fn("ProfileManager.command")(function* (
+				command: Effect.fn("ProfileManager.command")(function* <E = never>(
 					input: unknown,
-				): Effect.fn.Return<ManagerResult, ProfileRepositoryError> {
+					prepare?: (
+						envelope: ProfileEnvelope,
+					) => Effect.Effect<ProfileEnvelope, E>,
+				): Effect.fn.Return<ManagerResult, ProfileRepositoryError | E> {
 					const command = yield* Schema.decodeUnknown(ManagerCommand)(input, {
 						onExcessProperty: "error",
 					}).pipe(
@@ -53,7 +56,9 @@ export class ProfileManager extends Effect.Service<ProfileManager>()(
 							rejection = Option.some(result.reason);
 							return Effect.succeed(current);
 						}
-						return Effect.succeed(result.envelope);
+						return prepare
+							? prepare(result.envelope)
+							: Effect.succeed(result.envelope);
 					});
 					return Option.match(rejection, {
 						onNone: (): ManagerResult => ({ _tag: "updated", envelope }),

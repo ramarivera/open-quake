@@ -7,16 +7,18 @@ import {
 	Layer,
 	Option,
 	Schema,
+	Stream,
 	TestClock,
 } from "effect";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "./profile-contracts.js";
-import { ProfileWriteFailed } from "./profile-errors.js";
+import { ProfileDeliveryFailed, ProfileWriteFailed } from "./profile-errors.js";
 import {
 	applyManagerCommand,
 	installProfileCatalog,
+	managerState,
 	truncateProfileName,
 	visibleProfiles,
 	weightedNameLength,
@@ -43,6 +45,10 @@ const makeLayer = (
 	foreground: () => Effect.Effect<
 		Option.Option<{ readonly id: string; readonly path: string }>
 	> = () => Effect.succeed(Option.none()),
+	push?: (
+		serial: string,
+		profile: Profile,
+	) => Effect.Effect<void, ProfileDeliveryFailed>,
 ) =>
 	Layer.mergeAll(
 		ProfileManager.DefaultWithoutDependencies,
@@ -57,10 +63,12 @@ const makeLayer = (
 			Layer.succeed(ProfileSwitchingPort, {
 				platform: "darwin",
 				foreground,
-				push: (serial, p) =>
-					Effect.sync(() => {
-						pushes.push(`${serial}:${p.id}`);
-					}),
+				push:
+					push ??
+					((serial, p) =>
+						Effect.sync(() => {
+							pushes.push(`${serial}:${p.id}`);
+						})),
 			}),
 		),
 	);
@@ -74,6 +82,68 @@ const memory = () => {
 	};
 };
 describe("profile manager behavior", () => {
+	it.effect(
+		"deleting another custom preserves the transient selection and stable anchor",
+		() =>
+			Effect.gen(function* () {
+				const manager = yield* ProfileManager;
+				yield* manager.command({ type: "select", id: "1-2" });
+				yield* manager.command({ type: "create" });
+				yield* manager.command({ type: "create" });
+				yield* manager.command({
+					type: "delete",
+					id: "custom-1",
+					confirmed: true,
+				});
+				const envelope = yield* manager.read();
+				expect(envelope.activeByDevice["desktop-preview"]?.profileId).toBe(
+					"custom-2",
+				);
+				expect(managerState(envelope).anchor).toEqual(Option.some("1-2"));
+			}).pipe(Effect.provide(makeLayer(memory()))),
+	);
+	it.effect(
+		"never restores a hidden deletion anchor, regardless of when it was hidden",
+		() =>
+			Effect.gen(function* () {
+				const manager = yield* ProfileManager;
+				yield* manager.command({ type: "select", id: "1-1" });
+				yield* manager.command({ type: "create" });
+				yield* manager.command({
+					type: "visibility",
+					id: "1-1",
+					visible: false,
+				});
+				yield* manager.command({
+					type: "delete",
+					id: "custom-1",
+					confirmed: true,
+				});
+				expect(
+					(yield* manager.read()).activeByDevice["desktop-preview"]?.profileId,
+				).toBe("local-profile");
+				yield* manager.command({
+					type: "visibility",
+					id: "1-1",
+					visible: true,
+				});
+				yield* manager.command({ type: "select", id: "1-1" });
+				yield* manager.command({
+					type: "visibility",
+					id: "1-1",
+					visible: false,
+				});
+				yield* manager.command({ type: "create" });
+				yield* manager.command({
+					type: "delete",
+					id: "custom-2",
+					confirmed: true,
+				});
+				expect(
+					(yield* manager.read()).activeByDevice["desktop-preview"]?.profileId,
+				).toBe("local-profile");
+			}).pipe(Effect.provide(makeLayer(memory()))),
+	);
 	it.prop(
 		"truncates arbitrary names to ten weighted units",
 		[fc.string()],
@@ -241,6 +311,156 @@ describe("profile manager behavior", () => {
 import { Profile } from "./profile-contracts.js";
 
 describe("automatic profile selection", () => {
+	it.effect(
+		"failed delivery leaves storage and subscribers unchanged and allows reconnect retry",
+		() => {
+			const storage = memory();
+			const cause = new Error("token=private");
+			const failure = ProfileDeliveryFailed.fromCause(cause);
+			let fail = true;
+			return Effect.gen(function* () {
+				const switching = yield* ProfileSwitching,
+					repo = yield* ProfileRepository;
+				const before = (yield* repo.load()).envelope;
+				const publications: unknown[] = [];
+				const subscription = yield* Stream.runForEach(repo.snapshots, (e) =>
+					Effect.sync(() => {
+						publications.push(e);
+					}),
+				).pipe(Effect.fork);
+				yield* TestClock.adjust(0);
+				const result = yield* switching
+					.connect("desktop-preview", "1-2")
+					.pipe(Effect.either);
+				expect(result).toEqual(Either.left(failure));
+				expect(failure.originalCause).toBe(cause);
+				expect(JSON.stringify(failure)).not.toContain("private");
+				expect((yield* repo.load()).envelope).toBe(before);
+				expect(yield* Effect.promise(storage.read)).toEqual(
+					encodeProfileEnvelope(before),
+				);
+				yield* TestClock.adjust(0);
+				expect(publications).toEqual([before]);
+				fail = false;
+				yield* switching.connect("desktop-preview", "1-2");
+				expect(
+					(yield* repo.load()).envelope.activeByDevice["desktop-preview"]
+						?.profileId,
+				).toBe("1-2");
+				yield* Fiber.interrupt(subscription);
+			}).pipe(
+				Effect.provide(
+					makeLayer(storage, [], undefined, () =>
+						fail ? Effect.fail(failure) : Effect.void,
+					),
+				),
+			);
+		},
+	);
+	it.effect(
+		"hiding a startup profile clears the default and reconnect uses a visible profile",
+		() => {
+			const pushes: string[] = [];
+			return Effect.gen(function* () {
+				const manager = yield* ProfileManager,
+					switching = yield* ProfileSwitching;
+				yield* manager.command({
+					type: "startup",
+					id: "1-1",
+					enabled: true,
+					confirmed: true,
+				});
+				yield* switching.connect("serial");
+				yield* switching.disconnect("serial");
+				yield* manager.command({
+					type: "visibility",
+					id: "1-1",
+					visible: false,
+				});
+				expect(managerState(yield* manager.read()).startup).toEqual(
+					Option.none(),
+				);
+				yield* switching.connect("serial", "1-2");
+				expect(pushes).toEqual(["serial:1-1", "serial:1-2"]);
+			}).pipe(Effect.provide(makeLayer(memory(), pushes)));
+		},
+	);
+	it.effect(
+		"ignores legacy hidden startup, reported and saved selections",
+		() => {
+			const envelope = seed();
+			const storage = {
+				...memory(),
+				read: async () =>
+					encodeProfileEnvelope({
+						...envelope,
+						activeByDevice: { serial: { profileId: "1-1", pageId: "1" } },
+						manager: Option.some({
+							...managerState(envelope),
+							hidden: ["1-1"],
+							startup: Option.some("1-1"),
+						}),
+					}),
+			};
+			const pushes: string[] = [];
+			return Effect.gen(function* () {
+				yield* (yield* ProfileSwitching).connect("serial", "1-1");
+				expect(pushes).toHaveLength(1);
+				expect(pushes[0]).not.toBe("serial:1-1");
+			}).pipe(Effect.provide(makeLayer(storage, pushes)));
+		},
+	);
+	it.effect(
+		"chooses the best visible eligible app link separately for each device",
+		() => {
+			const pushes: string[] = [];
+			return Effect.gen(function* () {
+				const manager = yield* ProfileManager,
+					switching = yield* ProfileSwitching;
+				yield* switching.connect("a");
+				yield* switching.connect("b");
+				pushes.length = 0;
+				for (const link of [
+					{
+						profileId: "1-1",
+						appPath: "/Applications/Editor.app",
+						appIdentifier: "Editor",
+						device: "b",
+					},
+					{
+						profileId: "1-2",
+						appPath: "/Applications/Editors.app",
+						appIdentifier: "Editors",
+						device: "a",
+					},
+					{
+						profileId: "1-3",
+						appPath: "/Applications/Editor.app",
+						appIdentifier: "Editor",
+						device: "a",
+					},
+				])
+					yield* manager.command({ type: "link", id: link.profileId, link });
+				yield* manager.command({
+					type: "visibility",
+					id: "1-3",
+					visible: false,
+				});
+				const work = yield* switching.probe().pipe(Effect.fork);
+				yield* TestClock.adjust(300);
+				yield* Fiber.join(work);
+				expect(pushes.sort()).toEqual(["a:1-2", "b:1-1"]);
+			}).pipe(
+				Effect.provide(
+					makeLayer(memory(), pushes, () =>
+						Effect.succeed(
+							Option.some({ id: "1", path: "/Applications/Editor.app" }),
+						),
+					),
+				),
+			);
+		},
+	);
 	it.effect(
 		"reserves a connection before concurrent initialization reports can load",
 		() => {

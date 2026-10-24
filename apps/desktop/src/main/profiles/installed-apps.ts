@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { Schema } from "effect";
@@ -10,6 +10,11 @@ export interface InstalledProfileApp {
 	readonly identifier: string;
 }
 const run = promisify(execFile);
+export const canonicalProfileAppPath = (
+	platform: ProfilePlatform,
+	path: string,
+): Promise<string> =>
+	platform === "linux" ? realpath(path) : Promise.resolve(path);
 const entries = async (directory: string): Promise<string[]> => {
 	try {
 		return await readdir(directory);
@@ -37,6 +42,10 @@ export const desktopAppEntry = (
 };
 export const loadInstalledProfileApps = async (
 	platform: ProfilePlatform,
+	linuxDirectories: readonly string[] = [
+		"/usr/share/applications",
+		"/usr/local/share/applications",
+	],
 ): Promise<readonly InstalledProfileApp[]> => {
 	const apps: InstalledProfileApp[] = [];
 	if (platform === "darwin") {
@@ -65,10 +74,7 @@ export const loadInstalledProfileApps = async (
 				path,
 			});
 	} else {
-		for (const directory of [
-			"/usr/share/applications",
-			"/usr/local/share/applications",
-		])
+		for (const directory of linuxDirectories)
 			for (const file of (await entries(directory)).filter((name) =>
 				name.endsWith(".desktop"),
 			)) {
@@ -86,8 +92,21 @@ export const loadInstalledProfileApps = async (
 						continue;
 					}
 				}
-				if (path)
-					apps.push({ name: entry.name, identifier: basename(path), path });
+				if (path) {
+					try {
+						path = await canonicalProfileAppPath(platform, path);
+						apps.push({ name: entry.name, identifier: basename(path), path });
+					} catch (cause) {
+						if (
+							!(
+								cause instanceof Error &&
+								"code" in cause &&
+								cause.code === "ENOENT"
+							)
+						)
+							throw cause;
+					}
+				}
 			}
 	}
 	return [

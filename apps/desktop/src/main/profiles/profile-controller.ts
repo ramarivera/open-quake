@@ -179,25 +179,41 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 					if (!input.preview) locale = input.locale;
 					return { _tag: "success", view: yield* view(input.locale) };
 				case "manage": {
-					const result = yield* manager.command(input.command);
-					if (result._tag === "rejected") return result;
-					if (
+					const changesSelection =
 						input.command.type === "select" ||
 						input.command.type === "create" ||
 						input.command.type === "duplicate" ||
 						input.command.type === "delete" ||
-						input.command.type === "visibility"
-					) {
-						const selected = result.envelope.activeByDevice["desktop-preview"];
-						for (const serial of yield* switching.connectedSerials()) {
-							const target =
-								input.command.type === "delete" ||
-								input.command.type === "visibility"
-									? result.envelope.activeByDevice[serial]
-									: selected;
-							if (target) yield* switching.selectNow(serial, target.profileId);
-						}
-					}
+						input.command.type === "visibility";
+					const result = yield* manager.command(input.command, (envelope) =>
+						Effect.gen(function* () {
+							if (!changesSelection) return envelope;
+							let selections = envelope.activeByDevice;
+							const selected = envelope.activeByDevice["desktop-preview"];
+							for (const serial of yield* switching.connectedSerials()) {
+								const target =
+									input.command.type === "delete" ||
+									input.command.type === "visibility"
+										? envelope.activeByDevice[serial]
+										: selected;
+								const profile = envelope.profiles.find(
+									(p) => p.id === target?.profileId,
+								);
+								if (profile) {
+									yield* switching.deliver(serial, profile);
+									selections = {
+										...selections,
+										[serial]: {
+											profileId: profile.id,
+											pageId: profile.pages[0].id,
+										},
+									};
+								}
+							}
+							return { ...envelope, activeByDevice: selections };
+						}),
+					);
+					if (result._tag === "rejected") return result;
 					if (input.command.type === "create") {
 						const selected = result.envelope.activeByDevice["desktop-preview"];
 						if (selected)

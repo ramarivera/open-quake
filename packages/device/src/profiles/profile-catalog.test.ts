@@ -1,5 +1,10 @@
+import { Array as EffectArray } from "effect";
 import { describe, expect, it } from "vitest";
-import { builtinProfiles, profileText } from "./profile-catalog.js";
+import {
+	builtinProfiles,
+	profileText,
+	translateProfile,
+} from "./profile-catalog.js";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
@@ -13,6 +18,30 @@ import {
 } from "./profile-manager-invariants.js";
 
 describe("recovered catalog", () => {
+	it("translates catalog titles but preserves edited regular and agent titles in duplicates", () => {
+		for (const id of ["1-0", "1-8"]) {
+			const source = builtinProfiles("win32").find((p) => p.id === id);
+			if (!source) throw new Error("Missing fixture");
+			const duplicate = {
+				...source,
+				id: "custom-1",
+				pages: EffectArray.map(source.pages, (page) => ({
+					...page,
+					keys: page.keys.map((key) => ({
+						...key,
+						config: {
+							...key.config,
+							title: { ...key.config.title, text: "My own title" },
+						},
+					})),
+				})),
+			};
+			for (const page of translateProfile(duplicate, "de").pages)
+				for (const key of page.keys)
+					expect(key.config.title.text).toBe("My own title");
+			expect(translateProfile(source, "de").pages).not.toEqual(source.pages);
+		}
+	});
 	it("decodes all nine layouts on each OS with exact Quick actions", () => {
 		for (const platform of ["darwin", "win32", "linux"] as const) {
 			const profiles = builtinProfiles(platform);

@@ -9,10 +9,14 @@ import {
 	ProfileReplySchema,
 	type ProfileRequest,
 } from "../../shared/profile-manager";
+import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { MediaLive, registerMedia } from "../media";
 import { nativeForegroundApp } from "./foreground-app";
 import { registerProfiles } from "./index";
 import { loadInstalledProfileApps } from "./installed-apps";
+import { reportSmokeFailure } from "./smoke-failure";
+
+registerClockScheme();
 
 async function smoke(): Promise<void> {
 	const scratch = resolve(
@@ -36,6 +40,7 @@ async function smoke(): Promise<void> {
 	let managementDebug: BrowserWindow | undefined;
 	let profiles: ReturnType<typeof registerProfiles> | undefined;
 	let media: ReturnType<typeof registerMedia> | undefined;
+	let clock: ReturnType<typeof registerClock> | undefined;
 	try {
 		await app.whenReady();
 		process.stdout.write("profiles smoke: app ready\n");
@@ -75,6 +80,10 @@ async function smoke(): Promise<void> {
 			ManagedRuntime.make(MediaLive(join(directory, "wallpaper-v1"))),
 			() => management,
 		);
+		clock = registerClock(
+			ManagedRuntime.make(ClockLive(directory)),
+			() => management,
+		);
 		await Promise.all([
 			management.loadFile(resolve("out/renderer/index.html")),
 			panel.loadFile(resolve("out/renderer/index.html"), {
@@ -107,6 +116,28 @@ async function smoke(): Promise<void> {
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		});
+		await management.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "foreign" },
+		});
+		assert.deepEqual(
+			await request(management, {
+				type: "manage",
+				command: { type: "create" },
+			}),
+			{ _tag: "rejected", reason: "unauthorized" },
+		);
+		assert.deepEqual(
+			await request(management, {
+				type: "run-command",
+				id: "1-2",
+				keyCode: "1,7",
+			}),
+			{ _tag: "rejected", reason: "unauthorized" },
+		);
+		await management.loadFile(resolve("out/renderer/index.html"));
+		await management.webContents.executeJavaScript(
+			"Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Knob Profile')).click()",
+		);
 		await profiles.connect("desktop-preview", "1-2");
 		await ready(panel, '.strip-slot[data-state="tile"]');
 		assert.equal(
@@ -115,6 +146,30 @@ async function smoke(): Promise<void> {
 			),
 			16,
 		);
+		for (const profile of first.view.envelope.profiles.filter((p) =>
+			p.pages.some((page) =>
+				page.keys.some((key) => key.config.type === "dkDesktopClock"),
+			),
+		)) {
+			assert.equal(
+				(
+					await request(management, {
+						type: "manage",
+						command: { type: "select", id: profile.id },
+					})
+				)._tag,
+				"success",
+			);
+			await ready(panel, ".oq-clock .oq-clock-stage");
+			await writeFile(
+				join(scratch, `built-in-clock-${profile.id}.png`),
+				(await panel.webContents.capturePage()).toPNG(),
+			);
+		}
+		await request(management, {
+			type: "manage",
+			command: { type: "select", id: "1-2" },
+		});
 		await ready(management, "button");
 		await management.webContents.executeJavaScript(
 			"Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Add Item').click()",
@@ -151,6 +206,35 @@ async function smoke(): Promise<void> {
 			"custom-1",
 		);
 		process.stdout.write("profiles smoke: UI create and rename passed\n");
+		for (const [name, id] of [
+			["Quick", "custom-2"],
+			["My apps", "custom-3"],
+		] as const) {
+			await management.webContents.executeJavaScript(
+				`document.querySelector('button[aria-label=${JSON.stringify(`Duplicate ${name}`)}]').click()`,
+			);
+			await ready(
+				management,
+				`input[aria-label=${JSON.stringify(`Rename ${name} - Copy1`)}]`,
+			);
+			const duplicate = await request(management, {
+				type: "read",
+				locale: "en",
+			});
+			assert(
+				duplicate._tag === "success" &&
+					duplicate.view.envelope.profiles.some(
+						(p) => p.id === id && p.name.startsWith(`${name} - Copy`),
+					),
+			);
+			await request(management, {
+				type: "manage",
+				command: { type: "delete", id: id ?? "", confirmed: true },
+			});
+		}
+		process.stdout.write(
+			"profiles smoke: exact document authority, built-in clock rendering and UI duplicate passed\n",
+		);
 		const thumbnail = await request(management, {
 			type: "thumbnail",
 			id: "1-2",
@@ -226,25 +310,26 @@ async function smoke(): Promise<void> {
 			"Profiles native smoke PASS: nine-resource install; UI create/rename; panel delivery; protected IPC; real capture/batch; restart/default persistence.\n",
 		);
 	} catch (cause) {
-		if (managementDebug && !managementDebug.isDestroyed()) {
-			await writeFile(
-				join(scratch, "failure.png"),
-				(await managementDebug.webContents.capturePage()).toPNG(),
-			);
-			await writeFile(
-				join(scratch, "failure.txt"),
-				String(
-					await managementDebug.webContents.executeJavaScript(
-						"document.body.innerText",
+		await reportSmokeFailure(cause, async () => {
+			if (managementDebug && !managementDebug.isDestroyed()) {
+				await writeFile(
+					join(scratch, "failure.png"),
+					(await managementDebug.webContents.capturePage()).toPNG(),
+				);
+				await writeFile(
+					join(scratch, "failure.txt"),
+					String(
+						await managementDebug.webContents.executeJavaScript(
+							"document.body.innerText",
+						),
 					),
-				),
-			);
-		}
-		process.stderr.write(`${String(cause)}\n`);
-		process.exitCode = 1;
+				);
+			}
+		});
 	} finally {
 		await profiles?.dispose();
 		await media?.dispose();
+		await clock?.dispose();
 		for (const win of BrowserWindow.getAllWindows()) win.destroy();
 		await rm(directory, { recursive: true, force: true });
 		app.exit(Number(process.exitCode ?? 0));

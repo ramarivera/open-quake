@@ -4,6 +4,7 @@ export const profileRequestAllowed = (
 	topLevel: boolean,
 	management: boolean,
 	type: string,
+	managementURL = renderer,
 ): boolean => {
 	try {
 		const u = new URL(url),
@@ -14,7 +15,8 @@ export const profileRequestAllowed = (
 			u.host === r.host &&
 			u.origin === r.origin &&
 			u.pathname === r.pathname &&
-			(type === "read" || management)
+			(type === "read" ||
+				(management && u.href === new URL(managementURL).href))
 		);
 	} catch {
 		return false;

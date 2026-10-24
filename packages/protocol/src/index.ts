@@ -15,6 +15,7 @@ export {
 } from "./contracts.js";
 export * from "./errors.js";
 export { decodeHidReport, encodeHidReport, HidReport } from "./framing.js";
+export * from "./hardware.js";
 export * from "./json-frame.js";
 export * from "./key-matrix.js";
 export * from "./qmk.js";

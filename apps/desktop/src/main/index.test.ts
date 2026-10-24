@@ -65,7 +65,13 @@ const electron = vi.hoisted(() => {
 			>(),
 			quit: vi.fn(),
 		},
-		ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+		ipcMain: {
+			on: vi.fn(),
+			removeListener: vi.fn(),
+			handle: vi.fn(),
+			removeHandler: vi.fn(),
+		},
+		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -87,6 +93,14 @@ vi.mock("./profiles", () => ({
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
+});
+vi.mock("./clock", async () => {
+	const { Layer } = await import("effect");
+	return {
+		ClockLive: vi.fn(() => Layer.empty),
+		registerClock: vi.fn(),
+		registerClockScheme: vi.fn(),
+	};
 });
 vi.mock("./profiles/profile-ipc", async () => {
 	const { Layer } = await import("effect");
@@ -142,7 +156,10 @@ describe("desktop window lifecycle", () => {
 		electron.screen.getPrimaryDisplay.mockReturnValue(primary);
 		await import("./index");
 		await vi.waitFor(() =>
-			expect(vi.getTimerCount()).toBeGreaterThanOrEqual(3),
+			expect(windows().management.webContents.send).toHaveBeenCalledWith(
+				"quake:event",
+				{ source: "mock", kind: "status", state: "connected" },
+			),
 		);
 	});
 
@@ -324,6 +341,27 @@ describe("desktop window lifecycle", () => {
 		}
 		expect(panel.webContents.send).not.toHaveBeenCalled();
 		expect(management.webContents.send).not.toHaveBeenCalled();
+	});
+	it("disconnects the old mock profile session before reopening initializes it again", async () => {
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		if (!profiles) throw new Error("Missing profile registration");
+		await vi.waitFor(() =>
+			expect(profiles.connect).toHaveBeenCalledWith("desktop-preview"),
+		);
+		for (const win of Object.values(windows())) win.destroy();
+		appEvent("window-all-closed");
+		appEvent("activate");
+		await vi.waitFor(() =>
+			expect(profiles.disconnect).toHaveBeenCalledExactlyOnceWith(
+				"desktop-preview",
+			),
+		);
+		await vi.waitFor(() => expect(profiles.connect).toHaveBeenCalledTimes(2));
+		expect(
+			vi.mocked(profiles.disconnect).mock.invocationCallOrder[0],
+		).toBeLessThan(
+			vi.mocked(profiles.connect).mock.invocationCallOrder[1] ?? 0,
+		);
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {

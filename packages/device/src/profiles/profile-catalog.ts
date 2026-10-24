@@ -131,11 +131,26 @@ export const translateProfile = (
 	pages: EffectArray.map(profile.pages, (page) => ({
 		...page,
 		keys: page.keys.map((key) => {
+			const source = Option.isSome(key.compatibility)
+				? key.compatibility.value.source
+				: undefined;
+			const result = Schema.decodeUnknownEither(RawKey)(source);
+			if (result._tag === "Left") return key;
+			const title = Schema.decodeUnknownEither(titleSchema)(
+				result.right.config.title,
+			);
 			if (key.config.type === "clawbot") {
 				const agent = key.config.actions.find(
 					(action) => action.type === "agentId",
 				);
-				if (agent && typeof agent.value === "string")
+				if (
+					agent &&
+					typeof agent.value === "string" &&
+					(key.config.title.text ===
+						profileText(`openclawAgents.${agent.value}.name`, "en") ||
+						(title._tag === "Right" &&
+							key.config.title.text === title.right.text))
+				)
 					return {
 						...key,
 						config: {
@@ -147,18 +162,11 @@ export const translateProfile = (
 						},
 					};
 			}
-			const source = Option.isSome(key.compatibility)
-				? key.compatibility.value.source
-				: undefined;
-			const result = Schema.decodeUnknownEither(RawKey)(source);
-			if (result._tag === "Left") return key;
-			const title = Schema.decodeUnknownEither(titleSchema)(
-				result.right.config.title,
-			);
 			if (
 				title._tag === "Left" ||
 				!title.right.i18nKey ||
-				title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.")
+				title.right.i18nKey.startsWith("defaultLinuxShortcutConfig.") ||
+				key.config.title.text !== profileText(title.right.i18nKey, "en")
 			)
 				return key;
 			return {

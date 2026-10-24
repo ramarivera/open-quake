@@ -10,6 +10,7 @@ import {
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	type Profile,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	installProfileCatalog,
@@ -30,7 +31,12 @@ import {
 	type ProfileDesktopPort,
 } from "./profile-controller";
 
-const layer = () => {
+const layer = (
+	push: (
+		serial: string,
+		profile: Profile,
+	) => Effect.Effect<void, ProfileDeliveryFailed> = () => Effect.void,
+) => {
 	let saved: unknown = encodeProfileEnvelope(
 		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
 	);
@@ -54,7 +60,7 @@ const layer = () => {
 			Layer.succeed(ProfileSwitchingPort, {
 				platform: "darwin",
 				foreground: () => Effect.succeed(Option.none()),
-				push: () => Effect.void,
+				push,
 			}),
 		),
 	);
@@ -69,6 +75,51 @@ const port = (): ProfileDesktopPort => ({
 	progress: () => {},
 });
 describe("real profile desktop controller", () => {
+	it.effect(
+		"does not commit or publish a manager selection when delivery fails",
+		() => {
+			let failing = false;
+			const publications: unknown[] = [];
+			return Effect.gen(function* () {
+				const controller = yield* makeProfileController({
+					...port(),
+					publish: (view) => {
+						publications.push(view);
+					},
+				});
+				const switching = yield* ProfileSwitching,
+					manager = yield* ProfileManager;
+				yield* switching.connect("desktop-preview", "1-1");
+				yield* switching.connect("another", "1-1");
+				const before = yield* manager.read();
+				failing = true;
+				const failed = yield* controller
+					.request({ type: "manage", command: { type: "select", id: "1-2" } })
+					.pipe(Effect.either);
+				expect(failed._tag).toBe("Left");
+				if (failed._tag === "Left")
+					expect(failed.left.code).toBe("QUAKE.PROFILE.DELIVERY_FAILED");
+				expect(yield* manager.read()).toBe(before);
+				expect(publications).toEqual([]);
+				failing = false;
+				yield* controller.request({
+					type: "manage",
+					command: { type: "select", id: "1-2" },
+				});
+				const after = yield* manager.read();
+				expect(after.activeByDevice["desktop-preview"]?.profileId).toBe("1-2");
+				expect(after.activeByDevice.another?.profileId).toBe("1-2");
+			}).pipe(
+				Effect.provide(
+					layer(() =>
+						failing
+							? Effect.fail(ProfileDeliveryFailed.fromCause(undefined))
+							: Effect.void,
+					),
+				),
+			);
+		},
+	);
 	it.effect(
 		"does not reuse thumbnails across locales or content changes at the same revision",
 		() =>

@@ -1,14 +1,13 @@
-import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import {
 	Effect,
 	Fiber,
 	Layer,
 	ManagedRuntime,
 	Option,
+	Schedule,
 	Schema,
 	Stream,
 } from "effect";
@@ -46,8 +45,15 @@ import {
 	ProfileRequest,
 } from "../../shared/profile-manager";
 import { makeForegroundProbe } from "./foreground-app";
-import { loadInstalledProfileApps } from "./installed-apps";
+import {
+	canonicalProfileAppPath,
+	loadInstalledProfileApps,
+} from "./installed-apps";
 import { createDesktopProfileStorage } from "./local-profile-storage";
+import {
+	launchProfileCommand,
+	profileApplicationDialog,
+} from "./native-actions";
 import {
 	makeProfileController,
 	profileThumbnailKey,
@@ -59,6 +65,7 @@ export function registerProfiles(
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	deliver?: (serial: string, profile: Profile) => Promise<void>,
+	managementURL = renderer,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -174,7 +181,7 @@ export function registerProfiles(
 			url.searchParams.set("locale", locale);
 			await window.loadURL(url.href);
 			await window.webContents.executeJavaScript(
-				'new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");if(preview&&stage&&Math.abs(stage.getBoundingClientRect().width-preview.clientWidth)<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})',
+				`new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");if(preview&&stage&&(!${profile.pages.some((page) => page.keys.some((key) => key.config.type === "dkDesktopClock"))}||preview.querySelector(".oq-clock"))&&Math.abs(stage.getBoundingClientRect().width-preview.clientWidth)<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})`,
 			);
 			const image = await window.webContents.capturePage();
 			if (image.isEmpty())
@@ -188,77 +195,65 @@ export function registerProfiles(
 			if (!window.isDestroyed()) window.destroy();
 		}
 	};
-	const run = promisify(execFile);
 	let installed:
 		| Promise<Awaited<ReturnType<typeof loadInstalledProfileApps>>>
 		| undefined;
-	const controller = runtime.runPromise(
-		Effect.gen(function* () {
-			yield* (yield* ProfileManager).install(platform);
-			return yield* makeProfileController({
-				installedApps: () => {
-					installed ??=
-						process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
-							? Promise.resolve([])
-							: loadInstalledProfileApps(platform).catch(() => []);
-					return installed;
-				},
-				confirm: async (message, detail) =>
-					(
-						await dialog.showMessageBox({
-							type: "warning",
-							message,
-							detail,
-							buttons: ["Confirm", "Cancel"],
-							defaultId: 1,
-							cancelId: 1,
-						})
-					).response === 0,
-				execute: async (command) => {
-					await run(
-						platform === "win32" ? "cmd.exe" : "/bin/sh",
-						platform === "win32"
-							? ["/d", "/s", "/c", command]
-							: ["-c", command],
-						{ timeout: 5000, maxBuffer: 65536, windowsHide: true },
-					);
-				},
-				chooseApp: async () => {
-					const result = await dialog.showOpenDialog({
-						title: "Application",
-						properties: ["openFile"],
-						filters: [
-							{
-								name: "Application",
-								extensions:
-									platform === "darwin"
-										? ["app"]
-										: platform === "win32"
-											? ["exe"]
-											: ["sh", "bin"],
-							},
-						],
-					});
-					return result.canceled
-						? Option.none()
-						: Option.fromNullable(result.filePaths[0]);
-				},
-				capture,
-				cachedThumbnail,
-				publish: (view) => broadcast(PROFILE_SNAPSHOT, view),
-				progress: (progress) => broadcast(PROFILE_PROGRESS, progress),
-			});
-		}),
-	);
+	const initialize = Effect.gen(function* () {
+		yield* (yield* ProfileManager).install(platform);
+		return yield* makeProfileController({
+			installedApps: () => {
+				installed ??=
+					process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+						? Promise.resolve([])
+						: loadInstalledProfileApps(platform).catch(() => []);
+				return installed;
+			},
+			confirm: async (message, detail) =>
+				(
+					await dialog.showMessageBox({
+						type: "warning",
+						message,
+						detail,
+						buttons: ["Confirm", "Cancel"],
+						defaultId: 1,
+						cancelId: 1,
+					})
+				).response === 0,
+			execute: (command) => launchProfileCommand(platform, command),
+			chooseApp: async () => {
+				const result = await dialog.showOpenDialog(
+					profileApplicationDialog(platform),
+				);
+				const path = result.canceled ? undefined : result.filePaths[0];
+				return path
+					? Option.some(await canonicalProfileAppPath(platform, path))
+					: Option.none();
+			},
+			capture,
+			cachedThumbnail,
+			publish: (view) => broadcast(PROFILE_SNAPSHOT, view),
+			progress: (progress) => broadcast(PROFILE_PROGRESS, progress),
+		});
+	});
+	const initializationLock = runtime.runSync(Effect.makeSemaphore(1));
+	let initialized: Effect.Effect.Success<typeof initialize> | undefined;
+	const controller = Effect.gen(function* () {
+		if (initialized) return initialized;
+		const service = yield* initialize;
+		initialized = service;
+		return service;
+	}).pipe(initializationLock.withPermits(1));
 	const monitor = runtime.runFork(
 		Effect.gen(function* () {
-			yield* Effect.promise(() => controller);
+			yield* controller.pipe(Effect.retry(Schedule.spaced(2000)));
 			yield* (yield* ProfileSwitching).poll;
 		}),
 	);
 	const managerUpdates = runtime.runFork(
 		Effect.gen(function* () {
-			const service = yield* Effect.promise(() => controller);
+			const service = yield* controller.pipe(
+				Effect.retry(Schedule.spaced(2000)),
+			);
 			const repository = yield* ProfileRepository;
 			yield* Stream.runForEach(repository.snapshots, () =>
 				service.publish().pipe(
@@ -286,17 +281,18 @@ export function registerProfiles(
 				decoded._tag === "Left" ||
 				!BrowserWindow.fromWebContents(event.sender) ||
 				!profileRequestAllowed(
-					event.sender.getURL(),
+					event.senderFrame?.url ?? "",
 					renderer,
 					event.senderFrame === event.sender.mainFrame,
 					event.sender === management()?.webContents,
 					decoded.right.type,
+					managementURL,
 				)
 			)
 				return { _tag: "rejected", reason: "unauthorized" };
-			const service = await controller;
 			const operation = runtime.runPromise(
-				service.request(decoded.right).pipe(
+				controller.pipe(
+					Effect.flatMap((service) => service.request(decoded.right)),
 					Effect.match({
 						onSuccess: (reply) => reply,
 						onFailure: (error): ProfileReply => ({
@@ -317,7 +313,7 @@ export function registerProfiles(
 	const connect = (serial: string, reported?: string): Promise<void> =>
 		runtime.runPromise(
 			Effect.gen(function* () {
-				yield* Effect.promise(() => controller);
+				yield* controller;
 				yield* (yield* ProfileSwitching).connect(serial, reported);
 			}),
 		);

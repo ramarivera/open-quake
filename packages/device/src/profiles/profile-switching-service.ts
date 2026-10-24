@@ -53,23 +53,24 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				if (expectedGeneration === undefined)
 					generations.set(serial, generation);
 				if (generations.get(serial) !== generation) return;
-				const envelope = yield* repository.transact((current) => {
-					if (generations.get(serial) !== generation)
-						return Effect.succeed(current);
-					const profile = current.profiles.find((p) => p.id === id);
-					if (!profile || serial === "__proto__" || !serial)
-						return Effect.fail(ProfileNotFound.fromCause(undefined));
-					return Effect.succeed({
-						...current,
-						activeByDevice: {
-							...current.activeByDevice,
-							[serial]: { profileId: id, pageId: profile.pages[0].id },
-						},
-					});
-				});
-				const profile = envelope.profiles.find((p) => p.id === id);
-				if (profile && generations.get(serial) === generation)
-					yield* port.push(serial, profile);
+				yield* repository.transact((current) =>
+					Effect.gen(function* () {
+						if (generations.get(serial) !== generation) return current;
+						const profile = visibleProfiles(current).find((p) => p.id === id);
+						if (!profile || serial === "__proto__" || !serial)
+							return yield* ProfileNotFound.fromCause(undefined);
+						// Delivery failure must leave both durable state and subscribers unchanged.
+						yield* port.push(serial, profile);
+						if (generations.get(serial) !== generation) return current;
+						return {
+							...current,
+							activeByDevice: {
+								...current.activeByDevice,
+								[serial]: { profileId: id, pageId: profile.pages[0].id },
+							},
+						};
+					}),
+				);
 			});
 			const request = Effect.fn("ProfileSwitching.request")(function* (
 				serial: string,
@@ -97,9 +98,11 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 					const state = managerState(envelope);
 					const visible = visibleProfiles(envelope);
 					const id =
-						Option.getOrUndefined(state.startup) ??
+						visible.find((p) => Option.contains(state.startup, p.id))?.id ??
 						visible.find((p) => p.id === reported)?.id ??
-						envelope.activeByDevice[serial]?.profileId ??
+						visible.find(
+							(p) => p.id === envelope.activeByDevice[serial]?.profileId,
+						)?.id ??
 						visible.at(-1)?.id;
 					if (!id) {
 						sessions.delete(serial);
@@ -134,17 +137,19 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 					previous = next;
 					lastRevision = revision;
 					if (Option.isNone(next) || sessions.size === 0) return;
-					const links = matchAppProfiles(
-						next.value.path,
-						managerState(envelope).links,
-					).filter((link) =>
+					const links = managerState(envelope).links.filter((link) =>
 						visibleProfiles(envelope).some((p) => p.id === link.profileId),
 					);
 					const targets = new Map<string, string>();
-					for (const link of links)
-						for (const serial of sessions)
-							if (Option.isNone(link.device) || link.device.value === serial)
-								targets.set(serial, link.profileId);
+					for (const serial of sessions)
+						for (const link of matchAppProfiles(
+							next.value.path,
+							links.filter(
+								(link) =>
+									Option.isNone(link.device) || link.device.value === serial,
+							),
+						))
+							targets.set(serial, link.profileId);
 					yield* Effect.forEach(
 						targets,
 						([serial, id]) => request(serial, id),
@@ -185,6 +190,16 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 			);
 
 			return {
+				/** Called under the manager transaction; never reacquires its repository lock. */
+				deliver: Effect.fn("ProfileSwitching.deliver")(
+					(
+						serial: string,
+						profile: Profile,
+					): Effect.Effect<void, ProfileDeliveryFailed> =>
+						Effect.sync(() => {
+							generations.set(serial, (generations.get(serial) ?? 0) + 1);
+						}).pipe(Effect.zipRight(port.push(serial, profile))),
+				),
 				connect,
 				disconnect,
 				request,
