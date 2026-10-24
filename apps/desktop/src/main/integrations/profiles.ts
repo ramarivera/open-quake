@@ -12,6 +12,7 @@ import {
 import {
 	applyManagerCommand,
 	PROFILE_LIMIT,
+	visibleProfiles,
 	weightedNameLength,
 } from "../../../../../packages/device/src/profiles/profile-manager-invariants";
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
@@ -135,7 +136,7 @@ export function integrationProfiles<R>(
 					yield* repository.transact((current) =>
 						Effect.gen(function* () {
 							const old = current.profiles.find((p) => p.id === id);
-							if (!old && current.profiles.length >= PROFILE_LIMIT)
+							if (!old && visibleProfiles(current).length >= PROFILE_LIMIT)
 								return yield* Effect.fail(
 									new InputRejected(undefined, "Profile capacity"),
 								);

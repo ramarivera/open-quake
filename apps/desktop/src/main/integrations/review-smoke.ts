@@ -29,6 +29,7 @@ import {
 import { registerAgents } from "../agents";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { registerIntegrations } from "./index";
+import { keyHaConfig } from "./profiles";
 import { entity, fakeChannels, fakeVault, service } from "./test-fixtures";
 
 async function main() {
@@ -132,7 +133,23 @@ async function main() {
 		channelRuntime: channelRuntime.port,
 		openHa: async () => ({
 			entities: async () => [entity, { ...entity, entity_id: "light.private" }],
-			services: async () => [service],
+			services: async () => [
+				{
+					...service,
+					fields: [
+						...service.fields,
+						{
+							name: "effect",
+							label: "Effect",
+							required: false,
+							type: "select",
+							min: 0,
+							max: 0,
+							options: ["rainbow"],
+						},
+					],
+				},
+			],
 			states: async () => [],
 			execute: async () => {
 				executions++;
@@ -255,6 +272,67 @@ async function main() {
 		assert.equal(executions, 2);
 		await assert.rejects(integrations.executeHa(key));
 		assert.equal(executions, 2);
+		await profiles.runPromise(
+			Effect.flatMap(ProfileManager, (manager) =>
+				manager.command({ type: "create" }),
+			),
+		);
+		const haTargets = await request(management, { type: "ha.targets" });
+		assert(haTargets.type === "targets" && haTargets.targets[0]);
+		const haTarget = haTargets.targets[0];
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[data-page="ha"]').click()`,
+		);
+		await wait(
+			`document.querySelector('[aria-label="Key configuration"] select')?.options.length > 1`,
+		);
+		const choose = async (selector: string, value: string) => {
+			await management.webContents.executeJavaScript(
+				`(()=>{const select=document.querySelector(${JSON.stringify(selector)});select.value=${JSON.stringify(value)};select.dispatchEvent(new Event('change',{bubbles:true}))})()`,
+			);
+		};
+		await choose(
+			'[aria-label="Key configuration"] select',
+			`${haTarget.profileId}/${haTarget.pageId}/${haTarget.keyCode}`,
+		);
+		await choose(
+			'[aria-label="Key configuration"] fieldset select',
+			"light.desk",
+		);
+		await wait(
+			`document.querySelectorAll('[aria-label="Key configuration"] fieldset select')[1]?.options.length > 1`,
+		);
+		await choose(
+			'[aria-label="Key configuration"] fieldset label:nth-of-type(2) select',
+			"turn_on",
+		);
+		await wait(`document.querySelector('#ha-field-effect') !== null`);
+		await choose("#ha-field-effect", "rainbow");
+		await wait(
+			`document.querySelector('#ha-field-effect').value === 'rainbow'`,
+		);
+		await choose("#ha-field-effect", "");
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[aria-label="Key configuration"] button[data-primary]').click()`,
+		);
+		await wait(
+			`document.querySelector('[aria-label="Home Assistant Settings"]').innerText.includes('Saved')`,
+		);
+		const optionalProfile = await profiles.runPromise(
+			ProfileService.getProfile(haTarget.profileId),
+		);
+		const optionalKey = optionalProfile.pages
+			.find((p) => p.id === haTarget.pageId)
+			?.keys.find((k) => k.keyCode === haTarget.keyCode);
+		assert(optionalKey);
+		assert.deepEqual(keyHaConfig(optionalKey)?.service_data, { brightness: 0 });
+		await management.webContents.executeJavaScript(
+			`document.querySelector('#ha-field-effect').scrollIntoView({block:'center'})`,
+		);
+		await wait(
+			`(()=>{const rect=document.querySelector('#ha-field-effect').getBoundingClientRect();return rect.top>=0 && rect.bottom<=innerHeight})()`,
+		);
+		await capture("base-ha-optional-cleared");
 		await request(management, {
 			type: "ha.revoke",
 			origin: "https://synthetic-ha.test",
@@ -268,6 +346,7 @@ async function main() {
 		await wait(
 			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
 		);
+		await management.webContents.executeJavaScript("window.scrollTo(0,0)");
 		await capture("base-ha-revoked");
 		const raw = await readFile(
 			join(app.getPath("userData"), "integrations-v1/channels.json"),
@@ -384,6 +463,11 @@ async function main() {
 			{ serial: "claw-unit", profileId: "1-8" },
 		]);
 		await management.webContents.executeJavaScript(
+			"document.getElementById('agents-tab-settings').click()",
+		);
+		await wait(`document.querySelector('[aria-label="DK-Claw 1,5"]') !== null`);
+		await choose('[aria-label="DK-Claw 1,5"]', "constructor");
+		await management.webContents.executeJavaScript(
 			"document.getElementById('agents-tab-ai').click()",
 		);
 		await wait("document.querySelector('#agents-ai table')");
@@ -489,6 +573,20 @@ async function main() {
 			),
 		);
 		await capture("base-agent-model-drafts-retained");
+		await ui("document.getElementById('agents-tab-settings').click()");
+		await wait(
+			`document.querySelector('[aria-label="DK-Claw 1,5"]').value === 'constructor'`,
+		);
+		await capture("base-slot-drafts-retained");
+		await ui(
+			"document.querySelector('#agents-settings .mc-panel button').click()",
+		);
+		for (let attempt = 0; ; attempt++) {
+			const latest = await readAgents();
+			if (latest.slots["1,5"] === "constructor") break;
+			assert(attempt < 100, "Pending slot assignment was not committed");
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
 
 		await request(management, {
 			type: "ha.connect",
@@ -527,6 +625,8 @@ async function main() {
 					directKeyAndAiCapabilities: true,
 					modelDraftRetention: true,
 					serialScopedClawDelivery: true,
+					optionalSelectCleared: true,
+					unsyncedSlotDraftsRetained: true,
 					captures,
 				},
 				null,

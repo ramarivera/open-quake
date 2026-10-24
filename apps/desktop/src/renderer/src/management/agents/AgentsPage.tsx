@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	type Agent,
 	type AgentsBridge,
@@ -11,6 +11,7 @@ import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
 import { SkillsPanel } from "./SkillsPanel";
+import { reconcileSlotDrafts } from "./slot-drafts";
 import strings from "./strings.json";
 import { type AgentRequest, useAgents } from "./useAgents";
 
@@ -269,8 +270,20 @@ function PanelSettings({
 	readonly children: ReactNode;
 }) {
 	const [slots, setSlots] = useState<Slots>(view.slots);
+	const previousSlots = useRef(view.slots);
 	const d = strings.dkclaw;
-	useEffect(() => setSlots(view.slots), [view.slots]);
+	useEffect(() => {
+		const previous = previousSlots.current;
+		previousSlots.current = view.slots;
+		setSlots((draft) =>
+			reconcileSlotDrafts(
+				draft,
+				previous,
+				view.slots,
+				view.agents.map((agent) => agent.id),
+			),
+		);
+	}, [view.slots, view.agents]);
 	return (
 		<>
 			<section className="mc-panel">
