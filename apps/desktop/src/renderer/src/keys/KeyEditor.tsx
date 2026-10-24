@@ -605,6 +605,7 @@ export function KeyEditor(): React.JSX.Element {
 							<button
 								type="button"
 								disabled={!keyEditable(key, "icon")}
+								aria-label="Reset icon to default"
 								onClick={resetIcon}
 							>
 								Reset to default

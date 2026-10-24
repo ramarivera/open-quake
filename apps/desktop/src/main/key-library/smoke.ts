@@ -291,10 +291,20 @@ async function smoke(): Promise<void> {
 				{
 					id: "one",
 					keys: [
-						key("1,1", "hotkeySwitch", [
-							{ type: "key", value: "control+a" },
-							{ type: "key", value: "control+b" },
-						]),
+						key(
+							"1,1",
+							"hotkeySwitch",
+							[
+								{ type: "key", value: "control+a" },
+								{ type: "key", value: "control+b" },
+							],
+							{
+								compatibility: {
+									defaultIcon: "resource:missing/999999",
+									defaultAlterIcon: "resource:missing/888888",
+								},
+							},
+						),
 						key("1,2", "timer", [
 							{ type: "time", value: 1800 },
 							{ type: "sound", value: "" },
@@ -805,12 +815,13 @@ async function smoke(): Promise<void> {
 		await select(manager, "#key-function", "text");
 		await sleep();
 		assert.equal(cancelledChooser.isDestroyed(), true);
-		await button(manager, "Reset to default");
+		await click(manager, 'button[aria-label="Reset icon to default"]');
 		await ready(
 			manager,
 			`(()=>{const image=document.querySelector('.keys-preview [data-key-code="1,1"] img');return image?.src.startsWith('data:image/svg+xml,') && image.complete && image.naturalWidth>0})()`,
 		);
 		await snapshot(manager, "semantic-fallback-preview");
+		await input(manager, "#key-action-0", "Quiet fallback");
 		await button(manager, "Save");
 		await ready(
 			manager,
