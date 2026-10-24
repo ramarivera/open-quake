@@ -58,7 +58,182 @@ const withLifecycle = (
 			),
 		);
 	});
+const withRealPairing = (
+	initial: readonly Display[],
+	test: (h: {
+		service: DeviceLifecycle;
+		power: boolean[];
+		notices: ConnectionDiagnostic[];
+		change: (next: readonly Display[]) => Effect.Effect<void>;
+		onPower: (react: (on: boolean) => Effect.Effect<void>) => void;
+	}) => Effect.Effect<void>,
+) =>
+	Effect.gen(function* () {
+		let displays = initial;
+		const listeners = new Set<() => void>();
+		const power: boolean[] = [];
+		const notices: ConnectionDiagnostic[] = [];
+		let service: DeviceLifecycle | undefined;
+		let react = (_on: boolean): Effect.Effect<void> => Effect.void;
+		const change = (next: readonly Display[]) =>
+			Effect.gen(function* () {
+				displays = next;
+				for (const listener of listeners) listener();
+				if (service) yield* service.topology();
+			});
+		yield* Effect.gen(function* () {
+			service = yield* DeviceLifecycle;
+			yield* test({
+				service,
+				power,
+				notices,
+				change,
+				onPower: (next) => {
+					react = next;
+				},
+			});
+		}).pipe(
+			Effect.provide(
+				DeviceLifecycle.Default({
+					development: false,
+					mock: false,
+					displays: () => displays,
+					watch: (listener) => {
+						listeners.add(listener);
+						return () => {
+							listeners.delete(listener);
+						};
+					},
+					bus: () => ({
+						on: () => () => {},
+						currentStatus: () => undefined,
+						setScreenPower: (on) =>
+							Effect.gen(function* () {
+								power.push(on);
+								yield* react(on);
+								return true;
+							}),
+					}),
+					notify: (status) => notices.push(status),
+					panel: () => {},
+					prompts: {
+						platform: "linux",
+						mock: true,
+						displays: () => displays,
+						primaryId: () => primary.id,
+						prompt: () => Effect.die("must not prompt"),
+						openSettings: () => Effect.void,
+						native: () => Effect.die("must not call native"),
+					},
+				}),
+			),
+		);
+	});
+const connected = {
+	source: "hid",
+	kind: "status",
+	state: "connected",
+} as const;
 describe("desktop lifecycle", () => {
+	it.scoped(
+		"never publishes real-device readiness before an initial pairing times out",
+		() =>
+			withRealPairing([primary, strip], (h) =>
+				Effect.gen(function* () {
+					expect(h.service.status().hdmi).toBe("fail");
+					yield* h.service.onStatus(connected);
+					yield* TestClock.adjust(30_000);
+					expect(
+						h.notices.some(
+							(s) => s.usb === "pass" && s.hdmi === "pass" && !s.checking,
+						),
+					).toBe(false);
+					expect(h.service.status()).toMatchObject({
+						hdmi: "fail",
+						checking: false,
+						issue: "timeout",
+					});
+					h.onPower((on) => h.change(on ? [primary, strip] : [primary]));
+					yield* h.service.redetect(false);
+					expect(h.service.status()).toMatchObject({
+						hdmi: "pass",
+						checking: false,
+						issue: "none",
+					});
+				}),
+			),
+	);
+	it.scoped(
+		"does not blank before HDMI and binds on its later arrival without Re-detect",
+		() =>
+			withRealPairing([primary], (h) =>
+				Effect.gen(function* () {
+					yield* h.service.onStatus(connected);
+					yield* TestClock.adjust(1);
+					expect(h.power).toEqual([]);
+					expect(h.service.status()).toMatchObject({
+						usb: "pass",
+						hdmi: "fail",
+						checking: false,
+						issue: "unavailable",
+					});
+					h.onPower((on) => h.change(on ? [primary, strip] : [primary]));
+					yield* h.change([primary, strip]);
+					yield* TestClock.adjust(1);
+					expect(h.power).toEqual([false, true]);
+					expect(h.service.status()).toMatchObject({
+						hdmi: "pass",
+						checking: false,
+						issue: "none",
+					});
+				}),
+			),
+	);
+	it.scoped(
+		"retries changed candidates after an in-flight timeout and does not loop on its own off/on edges",
+		() => {
+			const decoy = makeDisplay({ ...strip, id: 3 });
+			return withRealPairing([primary, decoy], (h) =>
+				Effect.gen(function* () {
+					yield* h.service.onStatus(connected);
+					yield* TestClock.adjust(5000);
+					expect(h.power).toEqual([false]);
+					yield* h.change([primary, decoy, strip]);
+					expect(h.service.status().checking).toBe(true);
+					h.onPower((on) =>
+						h.change(on ? [primary, decoy, strip] : [primary, decoy]),
+					);
+					yield* TestClock.adjust(25_000);
+					expect(h.power).toEqual([false, true, false, true]);
+					expect(h.service.status()).toMatchObject({
+						hdmi: "pass",
+						checking: false,
+						issue: "none",
+					});
+					yield* TestClock.adjust(60_000);
+					expect(h.power).toEqual([false, true, false, true]);
+				}),
+			);
+		},
+	);
+	it.scoped(
+		"does not repeat a timed-out transaction when restore reports unchanged candidates",
+		() =>
+			withRealPairing([primary, strip], (h) =>
+				Effect.gen(function* () {
+					h.onPower(() => h.change([primary, strip]));
+					yield* h.service.onStatus(connected);
+					yield* TestClock.adjust(90_000);
+					expect(h.power).toEqual([false, true]);
+					expect(h.service.status()).toMatchObject({
+						hdmi: "fail",
+						checking: false,
+						issue: "timeout",
+					});
+				}),
+			),
+	);
+
 	it.scoped(
 		"publishes a safe layout failure, keeps polling through cooldown and clears it after explicit repair",
 		() =>

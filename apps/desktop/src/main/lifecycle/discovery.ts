@@ -34,6 +34,7 @@ export const makeDiscovery = Effect.fn("StripDiscovery.make")(function* (
 			if (!power) return unresolved("unavailable");
 			const snapshots = yield* Queue.unbounded<readonly Display[]>();
 			const before = edges.displays().filter(isPanelCandidate);
+			if (before.length === 0) return unresolved("unavailable");
 			yield* Effect.acquireRelease(
 				Effect.sync(() =>
 					edges.watch(() => Queue.unsafeOffer(snapshots, edges.displays())),

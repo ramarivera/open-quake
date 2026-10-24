@@ -401,8 +401,9 @@ if (!app.requestSingleInstanceLock()) {
 		});
 		const reopenWindows = (): void => {
 			if (quitting) return;
-			if (BrowserWindow.getAllWindows().length === 0) {
-				syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
+			if (managementWin.isDestroyed()) {
+				if (panelWin.isDestroyed())
+					syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
 				managementWin = createManagementWindow();
 				startBus();
 				// stopBus locks the lifecycle before releasing the old owner.
@@ -412,7 +413,7 @@ if (!app.requestSingleInstanceLock()) {
 				});
 			}
 		};
-		app.on("activate", reopenWindows);
+		app.on("activate", focusManagement);
 		app.on("window-all-closed", () => {
 			void stopBus();
 			if (process.platform !== "darwin") app.quit();

@@ -79,10 +79,14 @@ function ManagementSurface({
 	const wallpaper = useWallpaper();
 	const [page, setPage] = useState<Page>("overview");
 	const [deviceReady, setDeviceReady] = useState(false);
+	const wasReady = useRef(false);
 	const onReady = useCallback((ready: boolean): void => {
 		setDeviceReady(ready);
 		if (ready)
 			setPage((current) => (current === "connection" ? "screen" : current));
+		else if (wasReady.current)
+			setPage((current) => (current === "screen" ? "connection" : current));
+		wasReady.current = ready;
 	}, []);
 	const content = useRef<HTMLElement>(null);
 	const bridge = window.openQuake;

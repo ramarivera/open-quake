@@ -49,6 +49,30 @@ const harness = Effect.fn("Test.discovery")(function* (
 });
 describe("screen-off pairing", () => {
 	it.scoped(
+		"returns immediately without screen-power writes when no candidates exist",
+		() =>
+			Effect.gen(function* () {
+				const power: boolean[] = [];
+				const discovery = yield* makeDiscovery({
+					displays: () => [primary],
+					watch: () => () => {},
+					bus: () => ({
+						on: () => () => {},
+						currentStatus: () => undefined,
+						setScreenPower: (on) =>
+							Effect.sync(() => {
+								power.push(on);
+								return true;
+							}),
+					}),
+				});
+				const fiber = yield* discovery.run().pipe(Effect.fork);
+				yield* TestClock.adjust(30_000);
+				expect((yield* Fiber.join(fiber)).issue).toBe("unavailable");
+				expect(power).toEqual([]);
+			}),
+	);
+	it.scoped(
 		"observes synchronous disappearance, powers on, and binds a changed ID among candidates",
 		() =>
 			Effect.gen(function* () {

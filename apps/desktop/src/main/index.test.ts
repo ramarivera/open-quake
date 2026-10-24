@@ -684,24 +684,42 @@ describe("single-instance startup and release policy", () => {
 		);
 		electron.app.requestSingleInstanceLock.mockReturnValue(true);
 	});
-	it("creates a hidden fallback in a packaged build without a strip", async () => {
-		vi.resetModules();
-		vi.stubEnv("ELECTRON_RENDERER_URL", "");
-		electron.app.isPackaged = true;
-		native.layer = (await Effect.runPromise(makeFakeHidTransport([]))).layer;
-		electron.BrowserWindow.windows = [];
-		const display = makeDisplay();
-		electron.screen.getAllDisplays.mockReturnValue([display]);
-		electron.screen.getPrimaryDisplay.mockReturnValue(display);
-		await import("./index");
-		await vi.waitFor(() =>
-			expect(electron.BrowserWindow.windows).toHaveLength(2),
-		);
-		expect(windows().panel.options.show).toBe(false);
-		expect(windows().panel.showInactive).not.toHaveBeenCalled();
-		appEvent("before-quit");
-		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
-		electron.app.isPackaged = false;
-		vi.unstubAllEnvs();
-	});
+	it.each(["destroyed", "hidden", "minimized"])(
+		"activate reopens %s management while the packaged hidden fallback survives",
+		async (state) => {
+			vi.resetModules();
+			vi.stubEnv("ELECTRON_RENDERER_URL", "");
+			electron.app.isPackaged = true;
+			native.layer = (await Effect.runPromise(makeFakeHidTransport([]))).layer;
+			electron.BrowserWindow.windows = [];
+			const display = makeDisplay();
+			electron.screen.getAllDisplays.mockReturnValue([display]);
+			electron.screen.getPrimaryDisplay.mockReturnValue(display);
+			await import("./index");
+			await vi.waitFor(() =>
+				expect(electron.BrowserWindow.windows).toHaveLength(2),
+			);
+			expect(windows().panel.options.show).toBe(false);
+			expect(windows().panel.showInactive).not.toHaveBeenCalled();
+			const { panel, management } = windows();
+			management.destroyed = state === "destroyed";
+			management.isMinimized.mockReturnValue(state === "minimized");
+			appEvent("activate");
+			const reopened = electron.BrowserWindow.getAllWindows().find(
+				(window) => window !== panel,
+			);
+			expect(reopened).toBeDefined();
+			expect(panel.destroyed).toBe(false);
+			expect(reopened?.show).toHaveBeenCalledOnce();
+			expect(reopened?.focus).toHaveBeenCalledOnce();
+			if (state === "destroyed") expect(reopened).not.toBe(management);
+			else expect(reopened).toBe(management);
+			if (state === "minimized")
+				expect(management.restore).toHaveBeenCalledOnce();
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			electron.app.isPackaged = false;
+			vi.unstubAllEnvs();
+		},
+	);
 });

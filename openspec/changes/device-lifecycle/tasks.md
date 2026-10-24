@@ -24,3 +24,10 @@
 ## 5. PR #21 hardware-controls merge round
 
 - [x] 5.1 Merge origin/main at 4f736cf, preserving hardware sessions and controls, typed screen-power discovery, lifecycle recovery and diagnostics, touch binding and StripPanel. Run all six lane gates plus media, hardware and lifecycle native mock smoke coverage, then commit and push without merging PR #21. Bead: open-quake-lih.11.1.10.
+
+## 6. PR #21 review-fix round 2
+
+- [x] 6.1 Require a confirmed binding before real-device HDMI passes, including initial USB notifications; return Screen to Connection on readiness loss while preserving deliberate offline preview. Verify notifications through timeout/retry and mounted native navigation. Bead: open-quake-lih.11.1.11.
+- [x] 6.2 Recreate/show/focus management on activate independently of a surviving hidden fallback panel; preserve close-before-reopen lifecycle recovery. Verify destroyed, hidden and minimized management. Bead: open-quake-lih.11.1.12.
+- [x] 6.3 Skip screen blanking without display candidates; retain changed candidate topology during discovery and retry after completion without self-triggered blanking loops. Verify USB-before-HDMI and late HDMI during an active transaction with TestClock. Bead: open-quake-lih.11.1.13.
+- [ ] 6.4 Run all six lane gates and media/lifecycle/hardware native mock smokes, inspect screenshots, sync evidence and beads, commit/push and reply to/resolve the three authorized connector threads naming the fix commit. Do not merge PR #21 or redirect hooks. Bead: open-quake-lih.11.1.14.

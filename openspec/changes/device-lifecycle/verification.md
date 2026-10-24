@@ -308,3 +308,84 @@ are at `hw-controls/pr21-merge-round-2/`, with copies in this lane's evidence.
 OpenSpec task 5.1 maps to `open-quake-lih.11.1.10`. The cluster
 `open-quake-lih.11` stays open for the lead until PR #21 merges. No new audit
 coverage, dependency, firmware operation or real device access was introduced.
+
+## PR #21 review-fix round 2
+
+Starting head: `f10e0327e9e3945a4a1dedf1d242cae1f81f8692`.
+All three new connector findings were reproduced and fixed. Before the fixes,
+seven regression cases failed and the native mounted renderer stayed on Screen
+after readiness loss. The before/after logs are retained in this round's scratch
+folder. This round adds no new audit coverage beyond the existing MAIN-042/045,
+MAIN-050/053/120 and MGMT-026-040 lifecycle scope.
+
+- Real-device HDMI requires a transaction-confirmed binding from startup.
+  A unique physical-size candidate remains diagnostic information until paired.
+  Initial USB status starts pairing before synchronizing the panel, avoiding a
+  brief development fallback window. The lifecycle regression inspects every
+  notification through a 30-second TestClock timeout, then confirms readiness
+  after a successful explicit retry. Management returns Screen to Connection
+  when readiness turns false. It does this once per transition so deliberate
+  offline Screen preview survives repeated failed status. The native smoke
+  drives checking, timeout, preview and repair failure through production
+  preload/IPC and the mounted subscriber.
+- Dock activation shares the management restore/show/focus handler with second
+  instance. Reopening checks management's destroyed state independently of the
+  hidden fallback panel. Tests cover destroyed, hidden and minimized management
+  in a packaged no-strip build, plus the existing close-before-reopen and native
+  owner teardown cases for activate and second instance.
+- Discovery returns unavailable without screen-power writes when no candidate
+  exists. Topology events during a transaction are retained. After an unresolved
+  transaction restores power, changed candidate IDs or physical dimensions cause
+  another attempt. Off/on events restoring the same candidate set do not cause
+  repeated checks. TestClock covers USB before HDMI, late HDMI arriving five
+  seconds into an active transaction, recovery after the first timeout, and
+  unchanged-topology timeout without repeated blanking. Discovery serialization
+  and interruption/power-restoration regressions still pass.
+
+Source regressions are in `apps/desktop/src/main/lifecycle/discovery.test.ts`,
+`lifecycle-service.test.ts`, `apps/desktop/src/main/index.test.ts`, and the mounted
+renderer checks in `apps/desktop/src/main/media/smoke.ts`.
+
+All six required gates passed on the final implementation:
+
+- `pnpm biome check packages apps`: 272 files, no fixes.
+- `pnpm typecheck --force`: six tasks passed, cache bypassed.
+- `pnpm test --force`: 704 tests passed, protocol 47, edge 27, device 348,
+  desktop 282; cache bypassed. The focused lifecycle/main suite passed 35 tests.
+- `pnpm build`: production main, preload and renderer passed.
+- `pnpm --filter @open-quake/desktop test:bundle`: default and explicit mock
+  modes passed; mock mode resolved/enumerated no native HID.
+- `openspec validate --all --strict`: all 32 changes passed, both before
+  implementation and after it.
+
+`pnpm install --frozen-lockfile` and `git diff --check` also passed. The media
+smoke was rebuilt and run into `media/` and `lifecycle/` directories, both passing
+the new readiness/navigation assertions plus existing media, five strip profile,
+synthetic touch, authorization, narrow layout, theme and disposal checks. The
+separate hardware smoke passed firmware query, LED/lock policy, mic, brightness,
+volume/coalescing/persistence, polling recovery, light/dark/narrow/offline UI.
+Its Chromium scratch-cache warnings did not fail its assertions or exit status.
+All Electron invocations used `OPEN_QUAKE_MOCK_DEVICE=1`, a lane scratch TMPDIR
+and `env -u ELECTRON_RUN_AS_NODE`. Every started smoke process exited.
+
+Logs, before/after evidence and screenshots are under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/device-lifecycle/review-fix-2/`.
+Logs: `install.log`, `regressions-before.log`, `regressions-after.log`,
+`native-before-build.log`, `native-before.log`, `biome.log`, `typecheck.log`,
+`test.log`, `build.log`, `bundle.log`, `openspec.log`, `media-smoke-build.log`,
+`media-smoke.log`, `lifecycle-smoke.log`, `hardware-smoke-build.log` and
+`hardware-smoke.log`. Screenshots are in `media/`, `lifecycle/` and `hardware/`.
+Inspected `media/diagnostic-pairing-timeout.png`,
+`media/diagnostic-layout-failed.png` and `hardware/hardware-narrow.png`.
+Hardware originals are under `hw-controls/pr21-review-fix-2/` in the same parity
+scratch root, as required by that runner.
+
+OpenSpec tasks 6.1-6.4 map to beads `open-quake-lih.11.1.11` through `.14`.
+Tasks 6.1-6.3 are complete; task 6.4 remains open through delivery and review
+thread resolution. The user explicitly authorizes resolving these three threads
+for this round, overriding the brief's general no-resolution instruction.
+No real QUAKE or touch controller was opened, DK-Suite was not started, no
+firmware was flashed, no dependency was added and no hook was bypassed or
+redirected. `core.hooksPath` remains `.husky/_`. Physical blanking/enumeration,
+real wake/unlock and native CoreGraphics effects remain lead-owned and unverified.
+PR #21 must remain unmerged.

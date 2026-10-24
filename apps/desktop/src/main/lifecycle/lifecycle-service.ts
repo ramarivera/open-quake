@@ -2,7 +2,12 @@ import { Effect, Fiber, Option } from "effect";
 import type { Display } from "electron";
 import type { DeviceStatusEvent } from "../../preload/quake";
 import type { ConnectionDiagnostic } from "../../shared/lifecycle-contracts";
-import { findPanelDisplay, isPanelShaped, physicalSize } from "../display";
+import {
+	findPanelDisplay,
+	isPanelCandidate,
+	isPanelShaped,
+	physicalSize,
+} from "../display";
 import { type DiscoveryEdges, makeDiscovery } from "./discovery";
 import { makeDisplayPrompts, type PromptEdges } from "./prompts";
 
@@ -31,7 +36,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 				let locked = false;
 				let grace = false;
 				let bound = Option.none<Display>();
-				let attempted = false;
+				let topologyPending = false;
 				let checking = false;
 				let issue: ConnectionDiagnostic["issue"] = "none";
 				let loss = Option.none<Fiber.RuntimeFiber<void, never>>();
@@ -42,10 +47,19 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					const binding = bound;
 					if (Option.isSome(binding))
 						return edges.displays().find((d) => d.id === binding.value.id);
-					return attempted && !edges.mock
-						? undefined
-						: findPanelDisplay(edges.displays());
+					// Only mock mode may use a size/label guess as a binding.
+					return edges.mock ? findPanelDisplay(edges.displays()) : undefined;
 				};
+				const candidateTopology = (): string =>
+					edges
+						.displays()
+						.filter(isPanelCandidate)
+						.map((display) => {
+							const { width, height } = physicalSize(display);
+							return `${display.id}:${width}:${height}`;
+						})
+						.sort()
+						.join(",");
 				const status = (): ConnectionDiagnostic => {
 					const identified = current();
 					// An unpaired candidate can explain a resolution mismatch, but cannot
@@ -95,10 +109,24 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					const fiber = yield* Effect.gen(function* () {
 						if (refresh) yield* edges.bus()?.recover?.() ?? Effect.void;
 						if (!edges.mock && connected) {
-							attempted = true;
-							const result = yield* discovery.run();
-							bound = result.display;
-							issue = result.issue;
+							while (true) {
+								topologyPending = false;
+								const before = candidateTopology();
+								const result = yield* discovery.run();
+								bound = result.display;
+								issue = result.issue;
+								// Retain arrivals during the transaction, but ignore our own
+								// off/on edges when they restore the same candidate set.
+								if (
+									!topologyPending ||
+									locked ||
+									!connected ||
+									current() ||
+									before === candidateTopology() ||
+									!edges.displays().some(isPanelCandidate)
+								)
+									break;
+							}
 						}
 						return status();
 					}).pipe(
@@ -126,7 +154,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					if (connected) {
 						if (Option.isSome(loss)) yield* Fiber.interrupt(loss.value);
 						grace = false;
-						sync();
+						if (wasConnected || locked || edges.mock) sync();
 						if (!wasConnected && !locked) yield* startPairing;
 					} else {
 						if (wasConnected) {
@@ -151,7 +179,8 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					function* (): Effect.fn.Return<void> {
 						if (locked) return;
 						sync();
-						if (!checking && connected && !current()) yield* startPairing;
+						if (checking) topologyPending = true;
+						else if (connected && !current()) yield* startPairing;
 					},
 				);
 				const lock = Effect.fn("DeviceLifecycle.lock")(

@@ -398,6 +398,58 @@ async function smoke(): Promise<void> {
 			join(artifacts, "diagnostic-ready.png"),
 			(await management.webContents.capturePage()).toPNG(),
 		);
+	// Readiness loss must return from Screen to diagnostics through the mounted subscriber.
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Screen"]').click(); null;`,
+	);
+	await settle(100);
+	management.webContents.send("quake:diagnostic", {
+		...lifecycle.status(),
+		checking: true,
+	});
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Connection"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"A pending pairing must return Screen to Connection",
+	);
+	const timedOut = {
+		...lifecycle.status(),
+		hdmi: "fail",
+		checking: false,
+		issue: "timeout",
+	};
+	management.webContents.send("quake:diagnostic", timedOut);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Connection"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Pairing timeout must keep diagnostics visible",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "diagnostic-pairing-timeout.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Screen"]').click(); null;`,
+	);
+	await settle(100);
+	management.webContents.send("quake:diagnostic", timedOut);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('.nav-item[title="Screen"]').getAttribute('aria-current')`,
+		),
+		"page",
+		"Deliberate offline Screen preview must remain available on repeated failed status",
+	);
+	await lifecycleRuntime.runPromise(lifecycle.topology());
+	await settle(100);
 	management.webContents.send("quake:diagnostic", {
 		...lifecycle.status(),
 		issue: "native-failed",
@@ -408,7 +460,7 @@ async function smoke(): Promise<void> {
 			`document.querySelector('.nav-item[title="Connection"]').getAttribute('aria-current')`,
 		),
 		"page",
-		"A failed repair must keep its diagnostic visible instead of entering Screen",
+		"Readiness loss while on Screen must return to Connection",
 	);
 	assert(
 		(

@@ -8,7 +8,11 @@ existing protocol adapter. No second handle is opened for discovery.
 Discovery subscribes before the off write, keeps topology snapshots, waits for a
 unique disappearing candidate, restores power, and waits for its return. It
 coalesces concurrent transactions and restores power on timeout or interruption.
-The 30-second timeout leaves ambiguous displays unbound. Physical dimensions are
+Without a display candidate it returns unavailable without changing screen power.
+Topology events received during a check are retained; unresolved pairing retries
+a changed candidate set after power is restored. Its own off/on events restoring
+the same candidate set do not trigger another transaction. The 30-second timeout
+leaves ambiguous displays unbound. Physical dimensions are
 rounded `size * scaleFactor`; source comparison is strictly less than 10 pixels
 from 1920x480 or 480x1920. This corrects the audit's inclusive-looking ±10 wording.
 
@@ -39,7 +43,11 @@ A read-only `/usr/sbin/system_profiler SPDisplaysDataType -json` probe also dete
 a DK-QUAKE hidden from Electron by mirroring on first launch. That prompt opens
 Display Settings so the user can extend it. Automatic CoreGraphics repair requires
 an Electron-visible target ID. Diagnostics keep HDMI failed until the strip is
-identified with valid physical dimensions.
+identified with valid physical dimensions, including the first USB connection
+notification. A unique size match alone cannot pass HDMI for a real device.
+Readiness loss returns Screen to Connection once; deliberate offline preview
+remains available. Dock activation restores management even when its hidden
+fallback panel is still alive.
 
 The diagnostic uses recovered English `quakeDiagnostic` and `displayMode` copy.
 The mirror detail replaces DK-Suite's destructive decline warning with an accurate

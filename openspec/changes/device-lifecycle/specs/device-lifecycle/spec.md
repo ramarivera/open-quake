@@ -13,6 +13,10 @@ The app MUST acquire its single-instance lock before windows or device access. A
 - **WHEN** the lock is unavailable
 - **THEN** no device is discovered or opened and no windows are created, and the process quits with an already-running explanation
 
+#### Scenario: Dock activation with a hidden fallback
+- **WHEN** management is closed, hidden or minimized and the packaged fallback panel still exists
+- **THEN** activate recreates or restores management, shows it and focuses it independently of the panel
+
 #### Scenario: Existing instance activated
 - **WHEN** a second-instance event arrives
 - **THEN** the existing management window is restored if minimized, shown, and focused
@@ -27,6 +31,15 @@ The app SHALL serialize discovery, observe display disappearance before sending 
 #### Scenario: Blanking identifies the strip
 - **WHEN** two candidate displays exist and only one disappears during blanking
 - **THEN** discovery powers the screen back on and binds the returning candidate rather than the first label or size hit
+
+#### Scenario: USB arrives before HDMI
+- **WHEN** USB connects without any display candidates
+- **THEN** discovery returns unavailable without screen-power writes, HDMI stays failed, and a later HDMI topology event starts pairing automatically
+
+#### Scenario: HDMI arrives during an active transaction
+- **WHEN** a new candidate arrives while discovery is checking and that transaction finishes without a binding
+- **THEN** the lifecycle retains the topology event and retries against the changed candidate set after restoring power, without requiring Re-detect
+- **AND** off/on events that restore the same candidate set do not cause repeated transactions
 
 #### Scenario: Missing or ambiguous topology
 - **WHEN** no unique candidate disappears and returns within 30 seconds
@@ -84,6 +97,15 @@ Management SHALL expose a USB and HDMI diagnostic with the recovered quakeDiagno
 #### Scenario: Diagnostic integrates with management navigation
 - **WHEN** the user opens Connection from the sidebar or Overview and both checks finish passing
 - **THEN** management enters Screen automatically, preview remains reachable without hardware, and connection updates continue on other pages
+
+#### Scenario: Initial real-device readiness
+- **WHEN** USB connects with a unique panel-shaped display before screen-off pairing completes
+- **THEN** every diagnostic notification keeps HDMI failed until the transaction confirms a binding, and timeout cannot publish readiness
+
+#### Scenario: Readiness lost while viewing Screen
+- **WHEN** a passing check has opened Screen and readiness becomes false
+- **THEN** management returns to Connection to show checking or failure, and a later passing check enters Screen again
+- **AND** Screen remains available as a deliberate desktop preview while offline
 
 ### Requirement: Display prompts and explicit host consent
 The app SHALL detect mirroring and portrait orientation, using displayMode English strings. Portrait SHALL persist 2500 ms and be ignored within 6000 ms of landscape. Later SHALL snooze prompts for ten minutes. macOS arrangement remediation SHALL require explicit consent describing a CoreGraphics call to make QUAKE non-primary, disable mirroring if requested, and move it to the far right. No host change SHALL occur before consent or in mock mode. Windows SHALL open display settings; DisplaySwitch /extend is a future platform-gated consent action. Sources: MAIN-056-058, SETTINGS-087-089.
