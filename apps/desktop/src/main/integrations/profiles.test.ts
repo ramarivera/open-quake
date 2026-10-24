@@ -98,6 +98,66 @@ describe("integration placement through the shared ProfileService repository", (
 			await f.runtime.dispose();
 		}
 	});
+	it("repairs selected removed pages in the same commit and preserves surviving selections", async () => {
+		const f = setup();
+		try {
+			const id = await f.adapter.sync(library(17));
+			await f.runtime.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					profileId: id,
+					pageId: `${id}-2`,
+				}),
+			);
+			await f.runtime.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "synthetic-physical",
+					profileId: id,
+					pageId: `${id}-1`,
+				}),
+			);
+			const before = f.read();
+			f.fail();
+			await expect(f.adapter.sync(library(16))).rejects.toThrow();
+			expect(f.read()).toEqual(before);
+		} finally {
+			await f.runtime.dispose();
+		}
+		const good = setup();
+		try {
+			const id = await good.adapter.sync(library(17));
+			await good.runtime.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					profileId: id,
+					pageId: `${id}-2`,
+				}),
+			);
+			await good.runtime.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "synthetic-physical",
+					profileId: id,
+					pageId: `${id}-1`,
+				}),
+			);
+			await good.adapter.sync(library(16));
+			const { envelope } = await good.runtime.runPromise(
+				ProfileService.loadProfiles(),
+			);
+			expect(envelope.activeByDevice["desktop-preview"]).toEqual({
+				profileId: id,
+				pageId: `${id}-1`,
+			});
+			expect(envelope.activeByDevice["synthetic-physical"]).toEqual({
+				profileId: id,
+				pageId: `${id}-1`,
+			});
+			expect(good.read().activeByDevice).toEqual(envelope.activeByDevice);
+		} finally {
+			await good.runtime.dispose();
+		}
+	});
+
 	it("rejects naming, empty libraries and failed writes without changing profiles", async () => {
 		const f = setup();
 		try {

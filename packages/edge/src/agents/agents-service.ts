@@ -29,6 +29,7 @@ import {
 import {
 	modelValid,
 	normalizeRoles,
+	ownModelRows,
 	resolveModels,
 	skillFrontMatter,
 	workspaceTemplates,
@@ -449,7 +450,9 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 									if (!scopeExists(state, command.scope))
 										return yield* new AgentMissing();
 									const rows =
-										state.models[command.scope] ?? state.models.default ?? [];
+										ownModelRows(state.models, command.scope) ??
+										ownModelRows(state.models, "default") ??
+										[];
 									const previous = rows.find((r) => r.id === command.row.id);
 									const provider = command.row.provider.trim();
 									let row: ModelRow = {
@@ -506,7 +509,7 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 							Effect.gen(function* () {
 								yield* check(state, command.revision);
 								if (!command.confirmed) return yield* new AgentInvalid();
-								const rows = state.models[command.scope];
+								const rows = ownModelRows(state.models, command.scope);
 								if (!rows?.some((r) => r.id === command.id))
 									return yield* new AgentModelInvalid();
 								if (command.scope === "default" && rows.length <= 1)

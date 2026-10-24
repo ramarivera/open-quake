@@ -470,3 +470,45 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"uses only own model scopes for constructor agent inheritance and override mutations",
+	() => {
+		const f = fixture();
+		return Effect.gen(function* () {
+			const service = yield* AgentsService;
+			yield* service.request({
+				type: "save-model",
+				scope: "default",
+				row: model("initial", "default"),
+				secret: "synthetic-global",
+				revision: 0,
+			});
+			yield* create(service, "constructor");
+			let view = yield* service.view();
+			expect(Object.hasOwn(view.models, "constructor")).toBe(false);
+			expect(yield* service.resolve("constructor")).toEqual(
+				f.state().models.default,
+			);
+			yield* service.request({
+				type: "save-model",
+				scope: "constructor",
+				row: model("override", "default"),
+				secret: "synthetic-agent",
+				revision: view.revision,
+			});
+			view = yield* service.view();
+			expect(Object.hasOwn(view.models, "constructor")).toBe(true);
+			expect((yield* service.resolve("constructor"))[0]?.id).toBe("override");
+			yield* service.request({
+				type: "delete-model",
+				scope: "constructor",
+				id: "override",
+				confirmed: true,
+				revision: view.revision,
+			});
+			view = yield* service.view();
+			expect(view.models.default?.[0]?.id).toBe("initial");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

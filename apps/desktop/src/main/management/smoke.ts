@@ -18,13 +18,14 @@ import { MANAGEMENT_ACTIVATE } from "../../shared/management";
 import { registerAgents } from "../agents";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerEmoji } from "../emoji";
-import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
 import { registerIntegrations } from "../integrations";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
+import { registerMaintenance } from "../maintenance";
 import { MediaLive, registerMedia } from "../media";
+import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
@@ -103,6 +104,7 @@ async function smoke() {
 		height: 960,
 		titleBarStyle: "hiddenInset",
 		webPreferences: {
+			backgroundThrottling: false,
 			preload: resolve("out/preload/index.mjs"),
 			sandbox: false,
 			contextIsolation: true,
@@ -158,6 +160,19 @@ async function smoke() {
 		credentials: managementAgentCredentials(
 			join(directory, "agent-credentials"),
 		),
+	});
+	const maintenance = registerMaintenance({
+		root: directory,
+		mock: true,
+		renderer,
+		hardware: () => undefined,
+		management: () => win,
+		stopWriters: async () => {},
+	});
+	const meetings = registerMeetings({
+		userData: directory,
+		mock: true,
+		hardware: () => undefined,
 	});
 	const voice = registerVoiceSurface({
 		mock: true,
@@ -476,6 +491,26 @@ async function smoke() {
 			type: "command",
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
 		});
+		const copiedBeforeCancel = copiedFiles.length;
+		touch(1);
+		await settle(30);
+		panel.webContents.send(QUAKE_EVENT_CHANNEL, {
+			source: "mock",
+			kind: "status",
+			state: "disconnected",
+			reason: "transport-ended",
+		} satisfies QuakeEvent);
+		await settle(100);
+		assert.equal(
+			copiedFiles.length,
+			copiedBeforeCancel,
+			"Cancelled releases must not copy emoji",
+		);
+		panel.webContents.send(QUAKE_EVENT_CHANNEL, {
+			source: "mock",
+			kind: "status",
+			state: "connected",
+		} satisfies QuakeEvent);
 		const libraries = await integration({
 			type: "shortcuts.save",
 			library: {
@@ -779,6 +814,8 @@ async function smoke() {
 		await knob.dispose();
 		appearance();
 		await emoji.dispose();
+		await maintenance.dispose();
+		await meetings.dispose();
 		await voice.dispose();
 		await integrations.dispose();
 		await agents.dispose();

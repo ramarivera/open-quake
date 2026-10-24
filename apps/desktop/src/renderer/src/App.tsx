@@ -21,6 +21,8 @@ import {
 } from "./management/navigation";
 import { OverviewPage } from "./management/OverviewPage";
 import { UiSettings } from "./management/UiSettings";
+import { CaptureHost } from "./meetings/CaptureHost";
+import { MeetingHistory } from "./meetings/MeetingHistory";
 import { StripPanel } from "./strip/StripPanel";
 import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { MonitorSettings } from "./strip/tiles/monitor/MonitorSettings";
@@ -104,6 +106,7 @@ const sections: ReadonlyArray<{
 	{
 		title: "App",
 		items: [
+			{ id: "meetings", label: "Meeting", Icon: DeviceIcon },
 			{ id: "appearance", label: "Appearance", Icon: AppearanceIcon },
 			{ id: "settings", label: "Settings", Icon: ControlsIcon },
 		],
@@ -279,7 +282,7 @@ function ManagementSurface({
 					ref={content}
 					data-session={deviceReady ? "device" : "preview"}
 				>
-					<div className="content-inner">
+					<div className="content-inner" data-page={page}>
 						{/* Keep the diagnostic subscription alive while navigating pages. */}
 						<div hidden={page !== "connection"}>
 							<ConnectionCheck onReady={onReady} />
@@ -304,6 +307,8 @@ function ManagementSurface({
 								/>
 								<MonitorSettings />
 							</>
+						) : page === "meetings" ? (
+							<MeetingHistory />
 						) : page === "controls" ? (
 							<HardwareSettings />
 						) : page === "agents" ? (
@@ -336,6 +341,14 @@ function ManagementSurface({
 }
 
 export function App(): React.JSX.Element {
+	if (
+		new URLSearchParams(window.location.search).get("surface") ===
+		"meeting-capture"
+	)
+		return <CaptureHost />;
+	return <MainApp />;
+}
+function MainApp(): React.JSX.Element {
 	const surface = useSurface();
 	const appearance = useAppearance();
 	if (

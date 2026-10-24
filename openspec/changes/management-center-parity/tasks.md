@@ -47,3 +47,6 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 - [ ] 7.2 Integrate reviewed PR33 into PR34, preserve shared desktop owners and awaitable shutdown, and fix emoji committed-selection authorization, GIF publication, caption/source metadata, export collisions, empty slots and package-link rollback with production IPC/data regressions, six fresh gates and native mock captures. Bead `open-quake-lih.17.1.25`.
 - [ ] 7.3 Parent-owned genuine native-application GIF paste acceptance on macOS and Windows, including animation and attachment filename classification. Mock clipboard proof cannot close this task or physical acceptance `.23`. Bead `open-quake-lih.17.1.26`.
+- [x] 7.4 Integrate meetings main into the PR33 base using a normal merge, preserve shared main/preload ownership and awaitable shutdown, and refresh all six gates plus synthetic native module proof before merging the updated base into PR34. Bead `open-quake-lih.17.1.27`.
+
+- [x] 7.5 Address fresh PR33 follow-up threads with own-property model scope reads across rendering/resolution/saving and atomic selection repair when shortcut resync removes pages. Add real consumer regressions and refresh six gates and native proof. Bead `open-quake-lih.17.1.28`.

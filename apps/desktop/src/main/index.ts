@@ -51,6 +51,7 @@ import {
 } from "./management/appearance";
 import { managementAgentCredentials } from "./management/credentials";
 import { MediaLive, registerMedia } from "./media";
+import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
@@ -294,6 +295,11 @@ if (!app.requestSingleInstanceLock()) {
 			),
 		);
 		const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
+		const meetings = registerMeetings({
+			userData: app.getPath("userData"),
+			hardware: () => bus?.hardware?.(),
+			mock,
+		});
 		const source = mock
 			? startMockHardwareBus()
 			: Effect.gen(function* () {
@@ -544,6 +550,7 @@ if (!app.requestSingleInstanceLock()) {
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 			shutdown = (async () => {
 				await stopBus();
+				await meetings.dispose();
 				await monitor.dispose();
 				await lifecycleRuntime.dispose();
 				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));

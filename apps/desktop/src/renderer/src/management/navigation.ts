@@ -10,6 +10,7 @@ export const pages = [
 	"home-assistant",
 	"appearance",
 	"settings",
+	"meetings",
 ] as const;
 export type ManagementPage = (typeof pages)[number];
 export type Activation = {

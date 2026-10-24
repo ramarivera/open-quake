@@ -21,6 +21,7 @@ import {
 	ProfileSwitchingPort,
 } from "../../../../../packages/device/src/profiles/profile-switching-service";
 import { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import { AgentReply } from "../../shared/agents";
 import {
 	IntegrationReply,
 	type IntegrationRequest,
@@ -91,6 +92,7 @@ async function main() {
 			height: 850,
 			show: false,
 			webPreferences: {
+				backgroundThrottling: false,
 				preload: join(smokeDirectory, "../management-review-preload/index.mjs"),
 				sandbox: false,
 				contextIsolation: true,
@@ -174,6 +176,10 @@ async function main() {
 		);
 	const captures: { file: string; sha256: string }[] = [];
 	const capture = async (name: string) => {
+		await management.webContents.executeJavaScript(
+			"document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))",
+		);
+		await new Promise((resolve) => setTimeout(resolve, 80));
 		const bytes = (await management.webContents.capturePage()).toPNG();
 		const file = join(scratch, `${name}.png`);
 		await writeFile(file, bytes);
@@ -268,7 +274,9 @@ async function main() {
 		await management.webContents.executeJavaScript(
 			`document.querySelector('[data-page="ha"]').click()`,
 		);
-		await wait(`document.body.innerText.includes('Disconnected')`);
+		await wait(
+			`document.querySelector('[aria-label="Home Assistant Settings"] h2')?.textContent === 'Home Assistant' && document.body.innerText.includes('Disconnected')`,
+		);
 		await wait(
 			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
 		);
@@ -311,10 +319,57 @@ async function main() {
 		assert(libraries.type === "libraries" && libraries.libraries.length === 2);
 		assert.equal(libraries.libraries[0]?.app, "Figma");
 		await capture("base-shortcuts-existing");
+		const paging = await request(management, {
+			type: "shortcuts.save",
+			library: {
+				id: "",
+				name: "Paging",
+				app: "Figma",
+				createdAt: "",
+				rows: Array.from({ length: 17 }, (_, i) => ({
+					id: `page-row-${i}`,
+					name: `Key ${i}`,
+					app: "Figma",
+					chord: "control+c",
+				})),
+			},
+		});
+		assert(paging.type === "libraries");
+		const pagingLibrary = paging.libraries.find(
+			(library) => library.name === "Paging",
+		);
+		assert(pagingLibrary);
+		await request(management, { type: "shortcuts.sync", id: pagingLibrary.id });
+		const pagingProfile = `shortcuts-${pagingLibrary.id}`;
+		await profiles.runPromise(
+			ProfileService.selectProfile({
+				deviceId: "desktop-preview",
+				profileId: pagingProfile,
+				pageId: `${pagingProfile}-2`,
+			}),
+		);
+		await request(management, {
+			type: "shortcuts.save",
+			library: { ...pagingLibrary, rows: pagingLibrary.rows.slice(0, 16) },
+		});
+		await request(management, { type: "shortcuts.sync", id: pagingLibrary.id });
+		assert.equal(
+			(await profiles.runPromise(ProfileService.loadProfiles())).envelope
+				.activeByDevice["desktop-preview"]?.pageId,
+			`${pagingProfile}-1`,
+		);
+		const constructorAgent = Schema.decodeUnknownSync(AgentReply)(
+			await management.webContents.executeJavaScript(
+				"window.quakeAgents.request({type:'create',id:'constructor',name:'Prototype ID',emoji:''})",
+			),
+		);
+		assert.equal(constructorAgent._tag, "success");
 		await management.webContents.executeJavaScript(
 			`document.querySelector('[data-page="agents"]').click()`,
 		);
-		await wait(`document.body.innerText.includes('Main')`);
+		await wait(
+			`document.querySelector('[aria-label="Agents"]') && document.body.innerText.includes('Main') && !document.body.innerText.includes('Loading Agent configuration') && document.body.innerText.includes('Prototype ID')`,
+		);
 		await capture("base-agents");
 		await request(management, {
 			type: "ha.connect",
@@ -349,6 +404,7 @@ async function main() {
 					ownership: true,
 					allowlist: true,
 					awaitableShutdown: true,
+					modelScopeAndShortcutRepair: true,
 					captures,
 				},
 				null,

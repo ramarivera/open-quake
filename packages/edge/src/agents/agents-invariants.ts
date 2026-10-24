@@ -80,7 +80,10 @@ export const resolveModels = (
 	state: AgentState,
 	id: string,
 ): readonly ModelRow[] => {
-	const rows = state.models[id] ?? state.models.default ?? [];
+	const rows =
+		ownModelRows(state.models, id) ??
+		ownModelRows(state.models, "default") ??
+		[];
 	return [
 		...rows.filter((r) => r.role === "default" && configured(r)),
 		...rows.filter((r) => r.role === "fallback" && configured(r)),
@@ -125,3 +128,10 @@ export function skillFrontMatter(
 		description = values.get("description");
 	return name && description !== undefined ? { name, description } : undefined;
 }
+
+/** A missing scope inherits defaults; Object.prototype is never an override. */
+export const ownModelRows = <Row>(
+	models: Readonly<Record<string, readonly Row[]>>,
+	scope: string,
+): readonly Row[] | undefined =>
+	Object.hasOwn(models, scope) ? models[scope] : undefined;

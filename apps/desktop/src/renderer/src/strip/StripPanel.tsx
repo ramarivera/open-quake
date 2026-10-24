@@ -1,6 +1,8 @@
 import { Option } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GridVoiceInput } from "../../../shared/voice-surface";
+import { meetingTouchAction } from "../meetings/touch-action";
+import { meetingRequest } from "../meetings/useMeetings";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { useQuakeEvents } from "../useQuakeEvents";
@@ -80,7 +82,8 @@ function useHoldInput(
 	return useCallback(
 		(event: StripKeyEvent): void => {
 			if (event.keyAction === 0) input(event.keyCode, "down");
-			else if (event.voiceTouchEnd) input(event.keyCode, "touchEnd");
+			else
+				input(event.keyCode, event.voiceTouchEnd ? "touchEnd" : "touchCancel");
 		},
 		[input],
 	);
@@ -161,6 +164,9 @@ export function StripPanel(): React.JSX.Element {
 				(event) => {
 					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
 					holdKey.current(event);
+					const action = meetingTouchAction(event, layout.current);
+					if (action) void meetingRequest({ _tag: "action", action });
+					if (event.keyAction !== 1 || !event.voiceTouchEnd) return;
 					const current = emojiSelection.current;
 					if (!current?.emojiKeys.includes(event.keyCode)) return;
 					void window.quakeEmoji

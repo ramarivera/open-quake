@@ -177,6 +177,19 @@ export function integrationProfiles<R>(
 							const next = yield* Schema.validate(ProfileEnvelope)({
 								...current,
 								profiles,
+								activeByDevice: Object.fromEntries(
+									Object.entries(current.activeByDevice).map(
+										([serial, selection]) => [
+											serial,
+											selection.profileId === id &&
+											!profile.pages.some(
+												(page) => page.id === selection.pageId,
+											)
+												? { ...selection, pageId: profile.pages[0].id }
+												: selection,
+										],
+									),
+								),
 							}).pipe(
 								Effect.catchTag("ParseError", (c) =>
 									Effect.fail(new ProfilePlacementFailed(c)),
