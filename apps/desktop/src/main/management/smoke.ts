@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import {
 	app,
 	BrowserWindow,
@@ -17,7 +17,10 @@ import {
 	nativeTheme,
 	shell,
 } from "electron";
-import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
+import {
+	Profile,
+	ProfileEnvelope,
+} from "../../../../../packages/device/src/profiles/profile-contracts";
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { QUAKE_EVENT_CHANNEL, type QuakeEvent } from "../../preload/quake";
@@ -41,11 +44,13 @@ import { proveEmojiRestore } from "../emoji/backup-proof";
 import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
 import { registerIntegrations } from "../integrations";
+import { iconStore } from "../key-library/icon-store";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
 import { prepareRestore } from "../maintenance/backup-store";
+import { proveIconRestore } from "../maintenance/icon-backup-proof";
 import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
@@ -671,6 +676,61 @@ async function smoke() {
 			createHash("sha256").update(copied).digest("hex"),
 			em.store.items[0]?.rendered,
 		);
+		const setQuarantine = async (unsupported: boolean) =>
+			profiles.runtime.runPromise(
+				Effect.flatMap(ProfileRepository, (repo) =>
+					repo.transact((envelope) =>
+						Effect.succeed(
+							Schema.decodeUnknownSync(Schema.typeSchema(ProfileEnvelope))({
+								...envelope,
+								profiles: envelope.profiles.map((profile) =>
+									profile.id !== profileId
+										? profile
+										: {
+												...profile,
+												pages: profile.pages.map((page) => ({
+													...page,
+													keys: page.keys.map((key) =>
+														key.keyCode !== "1,1"
+															? key
+															: {
+																	...key,
+																	compatibility: unsupported
+																		? Option.some({
+																				unsupported: true,
+																				retained: "synthetic-import",
+																			})
+																		: Option.none(),
+																},
+													),
+												})),
+											},
+								),
+							}),
+						),
+					),
+				),
+			);
+		await setQuarantine(true);
+		const beforeQuarantine = copiedFiles.length;
+		const quarantined = await panel.webContents.executeJavaScript(
+			`window.quakeEmoji.press(${JSON.stringify({ profileId, pageId: `${profileId}-page`, keyCode: "1,1", keyAction: 1 })})`,
+		);
+		assert.deepEqual(quarantined, { _tag: "ignored" });
+		assert.equal(copiedFiles.length, beforeQuarantine);
+		const retainedEnvelope = await profiles.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) => repo.load()),
+		);
+		const retainedKey = retainedEnvelope.envelope.profiles
+			.find((profile) => profile.id === profileId)
+			?.pages[0]?.keys.find((key) => key.keyCode === "1,1");
+		assert(retainedKey && Option.isSome(retainedKey.compatibility));
+		assert.equal(retainedKey.compatibility.value.retained, "synthetic-import");
+		assert.equal(retainedKey.config.type, "emoji");
+		await setQuarantine(false);
+		console.log(
+			"Emoji quarantine PASS: supported copy; retained unsupported IPC ignored; no clipboard side effect",
+		);
 		const thumbnailReply = await win.webContents.executeJavaScript(
 			`window.quakeProfileManager.request({type:"thumbnail",id:${JSON.stringify(profileId)},locale:"en"})`,
 		);
@@ -713,7 +773,50 @@ async function smoke() {
 			),
 		);
 
+		const iconData = nativeImage.createFromBuffer(copied).toDataURL();
+		await Effect.runPromise(
+			iconStore(join(directory, "key-library-v1.json")).write([
+				{
+					id: "synthetic-pack",
+					name: "Unused imported pack",
+					icons: [
+						{ id: "backup-icon", name: "Backup", tags: [], data: iconData },
+					],
+				},
+				{
+					id: "local",
+					name: "Local App Icons",
+					icons: [
+						{
+							id: "backup-icon",
+							name: "Local backup",
+							tags: [],
+							data: iconData,
+						},
+					],
+				},
+			]),
+		);
 		assert.equal((await maintenance.request({ action: "export" })).ok, true);
+		const iconBackupProof = await proveIconRestore(
+			await readFile(backupFile),
+			directory,
+			iconData,
+		);
+		await writeFile(
+			join(artifacts, "icon-backup-proof.json"),
+			JSON.stringify(
+				{
+					source: process.env.OPEN_QUAKE_SOURCE_HEAD,
+					results: iconBackupProof,
+				},
+				null,
+				2,
+			),
+		);
+		console.log(
+			"Icon backup PASS: installed and local icons survive clean, populated and repeated restore; native image decode",
+		);
 		const renderedItem = em.store.items[0],
 			staticAsset = em.store.staticAssets[0];
 		assert(renderedItem && staticAsset);
