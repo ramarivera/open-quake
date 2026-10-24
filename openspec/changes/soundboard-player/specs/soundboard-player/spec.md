@@ -36,7 +36,7 @@ The system SHALL expose a DK-Player profile preset with playAudio configuration 
 
 ### Requirement: Safe configuration import
 
-The importer SHALL accept ordered local MP3 path lists, the recovered JSON-array representation and the legacy single-MP3 value, preserving order. It SHALL publish per-entry status for missing, unreadable, non-file and non-MP3 entries instead of silently dropping them, SHALL NOT traverse directory paths, and SHALL reject malformed JSON. Unknown numeric audioAction/audioFade values SHALL become needsConfiguration rather than guessed behavior. Migration SHALL be idempotent and save only after user review.
+The importer SHALL accept ordered local MP3 path lists, the recovered JSON-array representation and the legacy single-MP3 value, preserving order. It SHALL publish per-entry status for missing, unreadable, non-file and non-MP3 entries instead of silently dropping them, SHALL NOT traverse directory paths, and SHALL reject malformed JSON. The importer SHALL decode the recovered `audioAction` values and `audioFade` encoding below. Values outside those mappings or malformed fades SHALL become needsConfiguration rather than guessed behavior. Evidence: `KNOB-082`, `KNOB-083`. Migration SHALL be idempotent and save only after user review.
 
 #### Scenario: Legacy import
 
@@ -50,12 +50,12 @@ The importer SHALL accept ordered local MP3 path lists, the recovered JSON-array
 
 #### Scenario: Unknown recovered numeric control
 
-- **WHEN** imported sound files are valid but audioAction has an unverified numeric value
+- **WHEN** imported sound files are valid but audioAction is 7, outside the recovered 0..6 mapping
 - **THEN** the files appear in the migration preview, runnable playback stays disabled, and the user must choose a named operation
 
 ### Requirement: Shared per-key playback sessions
 
-Desktop and key controls SHALL operate the same per-key playback session with play, pause, resume, stop, previous and next. Each session SHALL expose idle/loading/playing/paused/stopped/failed status keyed by playbackId and playlist revision. Repeated play SHALL replace that key's session; different keys SHALL remain independent until stopAudio stops all soundboard sessions. Pause/resume SHALL preserve position and stop SHALL reset it.
+Desktop and key controls SHALL operate the same per-key playback session with play, pause, resume, stop, previous and next. Each session SHALL expose idle/loading/playing/paused/stopped/failed status keyed by playbackId and playlist revision. An explicit play control SHALL replace that key's current playback; recovered PLAY_ADD SHALL instead add an independently identified instance under the same key session; different keys SHALL remain independent until stopAudio stops all soundboard sessions. Pause/resume SHALL preserve position and stop SHALL reset it.
 
 #### Scenario: Key and UI control
 
@@ -69,17 +69,17 @@ Desktop and key controls SHALL operate the same per-key playback session with pl
 
 ### Requirement: Track navigation
 
-Track navigation SHALL preserve playlist order, start the target track at its beginning, and clamp previous at the first track and next at the last. Natural end SHALL advance exactly once, or stop after the final track; no repeat or shuffle is implied.
+Track navigation SHALL preserve playlist order and start the target track at its beginning. Previous from the first track SHALL wrap to the last; next or natural end from the last SHALL wrap to the first. Natural end SHALL advance exactly once per playbackId and track generation, continuing indefinitely until stopped. Unavailable entries SHALL remain visible but be skipped by navigation with a search bounded to one playlist traversal; when all entries are unavailable the key session SHALL stop without another start. This copies the intended DK-Suite playlist behavior, not a bug. Evidence: `KNOB-086`; GAP-MAP cluster 18 and its copy-DK-Suite direction.
 
 #### Scenario: End of playlist
 
 - **WHEN** the last track ends
-- **THEN** the session becomes stopped and does not restart or select a random track
+- **THEN** the session starts the first available track and continues in playlist order
 
 #### Scenario: Boundary navigation
 
 - **WHEN** previous is requested on the first track or next on the last
-- **THEN** the selected track stays at that boundary and no out-of-range file access occurs
+- **THEN** previous selects the last available track and next selects the first available track without out-of-range access
 
 #### Scenario: Duplicate natural-end callback
 
@@ -107,7 +107,7 @@ The player SHALL validate per-session volume 0..100 (gain 0..1) and linear fade-
 
 ### Requirement: Readiness, rescan, and missing files
 
-Loading SHALL fail after 10 s without player readiness. Rescan SHALL check only the configured list, publish per-entry availability, and SHALL NOT restart current playback. An unavailable next track SHALL fail visibly before it starts, and an all-unavailable playlist SHALL NOT acquire output.
+Loading SHALL fail after 10 s without player readiness. Rescan SHALL check only the configured list, publish per-entry availability, and SHALL NOT restart current playback. Navigation SHALL skip unavailable tracks as specified above; an explicit play of an unavailable file SHALL report file-unavailable. An all-unavailable playlist SHALL stop without acquiring output. Evidence for bounded skip/stop behavior: `KNOB-086`.
 
 #### Scenario: File removed after configuration
 
@@ -117,7 +117,7 @@ Loading SHALL fail after 10 s without player readiness. Rescan SHALL check only 
 #### Scenario: Rescan after file removal
 
 - **WHEN** an upcoming track is removed while the current decoded track plays
-- **THEN** rescan marks it unavailable, current playback is not restarted, and advancing to it reports a file error
+- **THEN** rescan marks it unavailable, current playback is not restarted, and navigation skips it with visible unavailable status and stops if no available track remains
 
 ### Requirement: Shared audio ownership
 
@@ -141,3 +141,34 @@ The system SHALL report decode, output-device and file errors against the affect
 
 - **WHEN** a playing key's profile is deactivated
 - **THEN** that profile's sessions stop and their audio resources are released
+
+### Requirement: Recovered audio operation and fade mapping
+
+The importer and runtime SHALL use these recovered mappings. Evidence: `KNOB-082`, `KNOB-083`, `background.js` constants at character offset 5948, and `AudioPlayer.vue:33-140`.
+
+| audioAction | Named operation | Behavior |
+| --- | --- | --- |
+| 0 | PLAY_STOP | Toggle stop/play; playlists remember the stopped track |
+| 1 | PLAY_ADD | Start another independent playback instance |
+| 2 | PLAY_RESTART | Restart the current track, or start the last stopped track |
+| 3 | PLAY_LOOP | Toggle playback with looping enabled |
+| 4 | STOP_ALL | Stop all soundboard playback |
+| 5 | PLAY_PREV | Select previous track, wrapping |
+| 6 | PLAY_NEXT | Select next track, wrapping |
+
+`audioFade` SHALL decode the string `"<type>-<ms>"`: type `0` none, `1` fade-in from zero to configured volume, `2` fade-out to zero, `3` fade-out if already playing or fade-in otherwise. Duration SHALL retain the existing 0..10,000 ms bound. Stop/restart actions with an applicable fade-out SHALL wait for its completion, except immediate voice-capture preemption. New commands SHALL retain the existing cancellation and stale-callback protections.
+
+#### Scenario: Recognized legacy controls
+
+- **WHEN** import contains audioAction `6` and audioFade `3-500`
+- **THEN** it decodes to PLAY_NEXT with a 500 ms in-out fade and does not require the user to guess numeric meanings
+
+#### Scenario: Add independent playback
+
+- **WHEN** PLAY_ADD arrives twice for one key
+- **THEN** both instances may play, each has its own playback identity, and STOP_ALL stops both
+
+#### Scenario: All playlist files unavailable
+
+- **WHEN** natural end occurs and no playlist entry is available
+- **THEN** the session stops after at most one traversal without an endless retry loop

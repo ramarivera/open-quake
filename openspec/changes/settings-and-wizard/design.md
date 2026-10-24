@@ -81,11 +81,11 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 ### Inventory coverage and decision ownership
 
-- Section 7 monitor tiles, app/window monitoring and gaming mode: `system-monitor-tiles`; desktop clock: `desktop-clock`; global hotkeys/input hooks: `host-input-hooks`.
+- Section 7 monitor tiles, app/window monitoring and the monitoring override: `system-monitor-tiles`; desktop clock: `desktop-clock`; global hotkeys/input hooks: `host-input-hooks`.
 - Section 7 HA: `home-assistant-integration`; channels hub: `integration-channels`; plugin server/management: `stream-deck-compat`; camera and printer gateway views: `camera-and-printer-views`.
 - Section 8 recording/history/export: `meeting-minutes`; DK-Player: `soundboard-player`.
 - Section 9 first run, locale/region, general/AI/device settings, local guide and calibration gating: this change. Artwork/templates: `artwork-library`; DFU and firmware: `firmware-dfu`. Wallpaper and QMK transports remain delegated to their existing owners.
-- Question 5 is an evidence gate in camera-and-printer-views. Questions 7 and 12 stay unresolved in stream-deck-compat. Question 8 has the QUAKE-only recommendation here. Question 9 stays catalog-gated in integration-channels. Question 11 stays deferred in meeting-minutes. Question 13 stays delivery-gated in artwork-library.
+- Question 5 is an evidence gate in camera-and-printer-views. Questions 7 and 12 stay unresolved in stream-deck-compat. Question 8 has the QUAKE-only recommendation here. Question 9 is resolved by the six-channel catalog in integration-channels (`CENTER-072/073`); runtime pairing stays unverified. Question 11 is resolved by shipped Meet AI live translation in meeting-minutes (`AI-136/292`). Question 13 stays delivery-gated in artwork-library.
 
 ## Risks / Trade-offs
 

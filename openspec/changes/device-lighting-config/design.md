@@ -38,7 +38,7 @@ Select an identified QUAKE serial/session, then request capabilities/readback be
 
 Keep desired UI values, last applied/read-back values, and nonvolatile save state distinct. Changing a setting applies only to the selected target through a validated field adapter. On failure retain the desired edit and show the prior known applied value; do not report success. An explicit Save requests the verified nonvolatile operation and reports saved only on the target's qualified completion/readback contract. Reconnect reads actual state before replay is considered; no automatic blind batch replay.
 
-The serial-scoped knobLedAlwaysOn boolean is a local preference with default true. Saving it does not claim a hardware change. Only a separately verified knob LED adapter can mark it applied, and that adapter must not substitute a global backlight or RGB command. This distinction follows the recovered editor's local store write.
+The serial-scoped knobLedAlwaysOn boolean is a local preference with default true. Saving it does not claim a hardware change. Only a separately verified knob LED adapter can mark it applied, and that adapter must not substitute a global backlight or RGB command. The editor saves locally; the 0.4.95 main process also has a recovered hardware command: `0xA3`, opcode `1`, cmd `0x06`, payload `[0]` off / `[1]` on (`SETTINGS-021`). Full command/lifecycle requirements belong to the hardware-controls lane; a known command does not prove hardware acceptance.
 
 ## Risks / Trade-offs
 
@@ -52,7 +52,7 @@ Import only the known serial-scoped boolean and validated settings through a use
 
 ## Approved decisions and remaining verification
 
-Approved (Ramiro, 2026-10-23): all recommendations above, including later-phase placement, capability-gated controls, explicit Save, target identity rules, and separation of the knob preference from applied hardware state. Actual supported QMK fields, value ranges, v3 bindings, per-key RGB, knob LED transport, and persistence after reboot remain unverified. No new dependencies are proposed.
+Approved (Ramiro, 2026-10-23): all recommendations above, including later-phase placement, capability-gated controls, explicit Save, target identity rules, and separation of the knob preference from applied hardware state. Actual supported QMK fields, value ranges, v3 bindings, per-key RGB, physical knob LED acceptance, and persistence after reboot remain unverified. The knob LED command itself is known (`SETTINGS-021`), and is not an unknown QMK binding. No new dependencies are proposed.
 
 ## L1 lighting contract
 

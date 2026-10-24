@@ -44,7 +44,7 @@ Approved (Ramiro, 2026-10-23): ship management chat and the existing panel first
 
 General Translation supplies bundled local en/de strings and source-English fallback. Settings, errors, states, controls, and tool-card chrome are localized without a runtime translation service. Locale changes update both windows; user content and generations remain verbatim. Read `app.getLocale()` only to seed a local preference, never to change provider geography. Coordinate shared GT infrastructure with its owning lane; this change specifies chat consumption only.
 
-Approved (Ramiro, 2026-10-23): create an immediate local title from the first user message and offer optional model-generated titles later. The cited recovered title helper translates preset labels; it does not establish first-exchange summarization. Generated title failure must not fail or overwrite a renamed conversation.
+Approved (Ramiro, 2026-10-23): create an immediate local title from the first user message, taking at most 10 characters and adding `...` only when longer (`AI-236`), and offer optional model-generated titles later. The cited recovered title helper translates preset labels; it does not establish first-exchange summarization. Generated title failure must not fail or overwrite a renamed conversation.
 
 ### Inventory sections 4-6 ownership index
 
