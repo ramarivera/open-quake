@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionCheck } from "./ConnectionDiagnostic";
 import { HardwareSettings } from "./hardware/HardwareSettings";
+import {
+	AppUpdateDialog,
+	FirmwareDialog,
+	SettingsPage,
+} from "./maintenance/SettingsPage";
+import { useMaintenance } from "./maintenance/useMaintenance";
 import { AgentsPage, type AgentsTab } from "./management/agents";
 import { runtimeStatusLabel } from "./management/agents/RuntimeIndicator";
 import { useAgents } from "./management/agents/useAgents";
@@ -97,7 +103,10 @@ const sections: ReadonlyArray<{
 	},
 	{
 		title: "App",
-		items: [{ id: "appearance", label: "Appearance", Icon: AppearanceIcon }],
+		items: [
+			{ id: "appearance", label: "Appearance", Icon: AppearanceIcon },
+			{ id: "settings", label: "Settings", Icon: ControlsIcon },
+		],
 	},
 ];
 
@@ -114,6 +123,7 @@ function ManagementSurface({
 		: agentError
 			? "Agent runtime status unavailable"
 			: "Checking agent runtime";
+	const maintenance = useMaintenance();
 	// One wallpaper subscription feeds both the overview preview and the editor.
 	const wallpaper = useWallpaper();
 	const [agentTab, setAgentTab] = useState<AgentsTab>(
@@ -306,12 +316,21 @@ function ManagementSurface({
 							<ShortcutsPage />
 						) : page === "home-assistant" ? (
 							<HomeAssistantPage />
+						) : page === "settings" ? (
+							<SettingsPage controller={maintenance} />
 						) : page === "appearance" ? (
 							<ThemeSettings controller={appearance} />
 						) : null}
 					</div>
 				</main>
 			</div>
+			<FirmwareDialog controller={maintenance} />
+			<AppUpdateDialog controller={maintenance} />
+			{maintenance.toast ? (
+				<div role="status" className="maintenance-toast">
+					{maintenance.toast}
+				</div>
+			) : null}
 		</div>
 	);
 }

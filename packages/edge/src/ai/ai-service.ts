@@ -16,7 +16,16 @@ import {
 	AiUnavailable,
 } from "./ai-errors.js";
 import { validateRequest } from "./ai-invariants.js";
+import { prepareWorkflow } from "./ai-provider-quirks.js";
 import { AiRepository } from "./ai-repository.js";
+import { selectRole } from "./ai-role-presets.js";
+import type { ProviderOptions } from "./ai-workflow-contracts.js";
+import type { GeneratedAudio } from "./speech/speech-contracts.js";
+import {
+	AiSpeechService,
+	type SpeechFailure,
+	type SpeechTurn,
+} from "./speech/speech-service.js";
 
 export interface Generation {
 	/** One subscriber. ChatService owns authoritative assembly and fan-out. */
@@ -27,6 +36,7 @@ export interface Generation {
 type RegisteredAdapter = (input: {
 	readonly profile: ProviderProfile;
 	readonly request: InferenceRequest;
+	readonly providerOptions: ProviderOptions;
 	readonly signal: AbortSignal;
 }) => Effect.Effect<Stream.Stream<NormalizedEvent, AiError>, AiError>;
 
@@ -69,11 +79,12 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 	"@open-quake/edge/AiProviderService",
 	{
 		accessors: true,
-		dependencies: [AiRepository.Default],
+		dependencies: [AiRepository.Default, AiSpeechService.Default],
 		effect: Effect.gen(function* () {
 			const repository = yield* AiRepository;
 			const compatible = yield* Effect.serviceOption(AiCompatibleAdapter);
 			const credentials = yield* Effect.serviceOption(AiCredentials);
+			const speech = yield* Effect.serviceOption(AiSpeechService);
 			const adapters = new Map<ProviderProfile["adapter"], RegisteredAdapter>([
 				["mock", () => Effect.succeed(mockEvents())],
 			]);
@@ -84,6 +95,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 					Effect.fn("AiProviderService.openCompatible")(function* ({
 						profile,
 						request,
+						providerOptions,
 						signal,
 					}: Parameters<RegisteredAdapter>[0]): Effect.fn.Return<
 						Stream.Stream<NormalizedEvent, AiError>,
@@ -98,6 +110,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 						return yield* adapter.open({
 							profile,
 							request,
+							providerOptions,
 							signal,
 							credential,
 							redirectPolicy: "error",
@@ -107,6 +120,30 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 				);
 			}
 			return {
+				synthesize: Effect.fn("AiProviderService.synthesize")(
+					(
+						...args: Parameters<AiSpeechService["synthesize"]>
+					): Effect.Effect<GeneratedAudio, SpeechFailure> =>
+						Option.isSome(speech)
+							? speech.value.synthesize(...args)
+							: Effect.fail(new AiUnavailable()),
+				),
+				createSpeech: Effect.fn("AiProviderService.createSpeech")(
+					(
+						...args: Parameters<AiSpeechService["createSpeech"]>
+					): Effect.Effect<SpeechTurn, AiUnavailable> =>
+						Option.isSome(speech)
+							? speech.value.createSpeech(...args)
+							: Effect.fail(new AiUnavailable()),
+				),
+				recognize: Effect.fn("AiProviderService.recognize")(
+					(
+						...args: Parameters<AiSpeechService["recognize"]>
+					): ReturnType<AiSpeechService["recognize"]> =>
+						Option.isSome(speech)
+							? speech.value.recognize(...args)
+							: Effect.fail(new AiUnavailable()),
+				),
 				generate: Effect.fn("AiProviderService.generate")(function* (
 					input: unknown,
 				): Effect.fn.Return<Generation, AiError> {
@@ -123,6 +160,34 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 						return yield* validated.left.reason === "capability"
 							? new AiCapabilityUnsupported(validated.left.capability)
 							: new AiConfigInvalid();
+					let request = validated.right;
+					if (request.persona) {
+						const persona = request.persona;
+						const selected =
+							persona.roleId === -1
+								? Either.right({ systemPrompt: persona.customPrompt ?? "" })
+								: selectRole(persona.roleId, persona.locale);
+						if (Either.isLeft(selected)) return yield* selected.left;
+						request = {
+							...request,
+							messages: [
+								{
+									role: "system",
+									content: [
+										{ _tag: "text", text: selected.right.systemPrompt },
+									],
+								},
+								...request.messages,
+							],
+						};
+					}
+					const prepared = prepareWorkflow(profile, request);
+					if (Either.isLeft(prepared)) return yield* prepared.left;
+					const checked = validateRequest(
+						prepared.right.profile,
+						prepared.right.request,
+					);
+					if (Either.isLeft(checked)) return yield* new AiConfigInvalid();
 					const adapter = adapters.get(profile.adapter);
 					if (!adapter) return yield* new AiUnavailable();
 					if (
@@ -149,8 +214,7 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 							);
 							if (controller.signal.aborted) return Stream.empty;
 							const source = yield* adapter({
-								profile,
-								request: validated.right,
+								...prepared.right,
 								signal: controller.signal,
 							});
 							return normalized(source);

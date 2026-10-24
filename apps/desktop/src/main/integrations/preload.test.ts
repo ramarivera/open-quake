@@ -28,6 +28,7 @@ describe("the production preload consumer", () => {
 			});
 			const reply = await integrationsBridge.request({
 				type: "ha.connect",
+				allowInsecureHttp: true,
 				origin: "http://home.test:8123/path",
 				token: "private-a9F2",
 			});

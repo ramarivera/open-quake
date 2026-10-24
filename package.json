@@ -20,7 +20,8 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "electron",
-      "node-hid"
+      "node-hid",
+      "koffi"
     ]
   }
 }

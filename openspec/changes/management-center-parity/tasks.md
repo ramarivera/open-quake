@@ -40,3 +40,10 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 - [x] 6.1 Native mock smoke screenshots of every page in Dark, Light and Grey, plus the narrow rail and the popover, saved under the lane scratch folder. Bead `open-quake-lih.17.1.21`.
 - [x] 6.2 Run the six repository gates, update beads and evidence, and open the PRs. Bead `open-quake-lih.17.1.22`.
 - [ ] 6.3 Lead-owned hardware acceptance, explicitly outside this mock-only lane and left open at PR handoff: emoji paste and Enter through the device keyboard, Home Assistant against a real server, and DK-Claw and Home Assistant tiles on the QUAKE. Bead `open-quake-lih.17.1.23`.
+
+## 7. Review fixes
+
+- [x] 7.1 Integrate current main into PR33, address all module review findings with transactional deletion, preserved secrets, DK-Claw cleanup, reserved model scope, correct shortcut selection, disconnected catalog cleanup, transport consent and trusted AI/renderer boundaries. Verify concurrency, rollback and secret-scrub production paths with six fresh gates and native mock evidence. Bead `open-quake-lih.17.1.24`.
+
+- [ ] 7.2 Integrate reviewed PR33 into PR34, preserve shared desktop owners and awaitable shutdown, and fix emoji committed-selection authorization, GIF publication, caption/source metadata, export collisions, empty slots and package-link rollback with production IPC/data regressions, six fresh gates and native mock captures. Bead `open-quake-lih.17.1.25`.
+- [ ] 7.3 Parent-owned genuine native-application GIF paste acceptance on macOS and Windows, including animation and attachment filename classification. Mock clipboard proof cannot close this task or physical acceptance `.23`. Bead `open-quake-lih.17.1.26`.

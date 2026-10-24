@@ -48,6 +48,7 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 		dependencies: [AgentsRepository.Default, AgentsRuntime.Default],
 		effect: Effect.gen(function* () {
 			const repository = yield* AgentsRepository;
+			const mutationLock = yield* Effect.makeSemaphore(1);
 			const runtime = yield* AgentsRuntime;
 			const draft = yield* Effect.serviceOption(AgentDraftPort);
 			const credentials = yield* Effect.serviceOption(AgentCredentialPort);
@@ -130,7 +131,8 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 					case "create":
 						yield* repository.transact((state) =>
 							Effect.gen(function* () {
-								if (command.id === "main") return yield* new AgentProtected();
+								if (command.id === "main" || command.id === "default")
+									return yield* new AgentProtected();
 								if (state.agents.some((a) => a.id === command.id))
 									return yield* new AgentDuplicate();
 								return {
@@ -151,44 +153,72 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 							}),
 						);
 						break;
-					case "delete":
-						yield* repository.transact((state) =>
-							Effect.gen(function* () {
-								yield* editable(state, command.id);
-								if (!command.confirmed) return yield* new AgentInvalid();
+					case "delete": {
+						let rollback: Effect.Effect<void, AgentError> = Effect.void;
+						yield* Effect.uninterruptible(
+							repository
+								.transact((state) =>
+									Effect.gen(function* () {
+										yield* editable(state, command.id);
+										if (!command.confirmed) return yield* new AgentInvalid();
 
-								const models = Object.fromEntries(
-									Object.entries(state.models).filter(
-										([key]) => key !== command.id,
+										const models = Object.fromEntries(
+											Object.entries(state.models).filter(
+												([key]) => key !== command.id,
+											),
+										);
+										const next: AgentState = {
+											...state,
+											agents: state.agents.filter((a) => a.id !== command.id),
+											skills: state.skills.filter(
+												(s) => s.owner !== command.id,
+											),
+											slots: {
+												"1,5":
+													state.slots["1,5"] === command.id
+														? Schema.decodeUnknownSync(AgentId)("main")
+														: state.slots["1,5"],
+												"1,6":
+													state.slots["1,6"] === command.id
+														? Schema.decodeUnknownSync(AgentId)("main")
+														: state.slots["1,6"],
+												"2,5":
+													state.slots["2,5"] === command.id
+														? Schema.decodeUnknownSync(AgentId)("main")
+														: state.slots["2,5"],
+												"2,6":
+													state.slots["2,6"] === command.id
+														? Schema.decodeUnknownSync(AgentId)("main")
+														: state.slots["2,6"],
+											},
+											models,
+										};
+										if (Object.values(state.slots).includes(command.id)) {
+											if (Option.isNone(panel))
+												return yield* new AgentProfileMissing();
+											const transaction = yield* panel.value.prepare(
+												next.slots,
+												next.agents,
+											);
+											rollback = transaction.rollback;
+											yield* transaction.apply;
+										}
+										return next;
+									}),
+								)
+								.pipe(
+									Effect.catchAll((error) =>
+										rollback.pipe(
+											Effect.catchAll((cause) =>
+												Effect.fail(new AgentRollbackFailed(cause)),
+											),
+											Effect.zipRight(Effect.fail(error)),
+										),
 									),
-								);
-								return {
-									...state,
-									agents: state.agents.filter((a) => a.id !== command.id),
-									skills: state.skills.filter((s) => s.owner !== command.id),
-									slots: {
-										"1,5":
-											state.slots["1,5"] === command.id
-												? Schema.decodeUnknownSync(AgentId)("main")
-												: state.slots["1,5"],
-										"1,6":
-											state.slots["1,6"] === command.id
-												? Schema.decodeUnknownSync(AgentId)("main")
-												: state.slots["1,6"],
-										"2,5":
-											state.slots["2,5"] === command.id
-												? Schema.decodeUnknownSync(AgentId)("main")
-												: state.slots["2,5"],
-										"2,6":
-											state.slots["2,6"] === command.id
-												? Schema.decodeUnknownSync(AgentId)("main")
-												: state.slots["2,6"],
-									},
-									models,
-								};
-							}),
+								),
 						);
 						break;
+					}
 					case "save-file":
 						yield* repository.transact((state) =>
 							Effect.gen(function* () {
@@ -546,7 +576,7 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 				}
 				yield* notify;
 				return { view: yield* view(), draft: draftText };
-			});
+			}, mutationLock.withPermits(1));
 			return {
 				view,
 				request,

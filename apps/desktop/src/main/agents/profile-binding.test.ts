@@ -371,3 +371,52 @@ describe("DK-Claw sync through ProfileService and the real profile manager consu
 		}
 	});
 });
+
+for (const failure of ["none", "profile", "agent", "device"] as const) {
+	it(`deletes assigned agents transactionally through saved DK-Claw profiles: ${failure}`, async () => {
+		const f = fixture("1-8");
+		try {
+			await f.connect();
+			await f.agents.runPromise(
+				AgentsService.request({
+					type: "create",
+					id: "worker",
+					name: "Worker",
+					emoji: "W",
+				}),
+			);
+			await f.agents.runPromise(
+				AgentsService.request({
+					type: "sync-panel",
+					slots: { ...allMain, "1,5": "worker" },
+					revision: f.state().revision,
+				}),
+			);
+			const before = claw(await f.read());
+			if (failure === "profile") f.failProfileWrite();
+			if (failure === "agent") f.failAgentWrite();
+			if (failure === "device") f.failDelivery(1);
+			const result = await f.agents.runPromise(
+				AgentsService.request({
+					type: "delete",
+					id: "worker",
+					confirmed: true,
+				}).pipe(Effect.either),
+			);
+			const after = claw(await f.read());
+			if (failure === "none") {
+				expect(result._tag).toBe("Right");
+				expect(f.state().agents.some((a) => a.id === "worker")).toBe(false);
+				expect(
+					after?.pages[0].keys.find((k) => k.keyCode === "1,5")?.config.actions,
+				).toContainEqual({ type: "agentId", value: "main" });
+			} else {
+				expect(result._tag).toBe("Left");
+				expect(f.state().agents.some((a) => a.id === "worker")).toBe(true);
+				expect(after?.pages).toEqual(before?.pages);
+			}
+		} finally {
+			await f.dispose();
+		}
+	});
+}

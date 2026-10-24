@@ -86,6 +86,8 @@ export function ShortcutsPage() {
 		setRows(library.rows);
 		setOriginal(library.rows);
 		setTitle(library.name);
+		setApp(apps.includes(library.app) ? library.app : s.customAppName);
+		setCustom(library.app);
 		setSelected(new Set());
 		setEditing("");
 	};
@@ -497,11 +499,11 @@ export function ShortcutsPage() {
 								disabled={!selected.size || busy}
 								onClick={async () => {
 									const library: ShortcutLibrary = {
-										id: "",
+										id: activeLibrary?.id ?? "",
 										name:
 											title || s.defaultPackName.replace("{name}", application),
 										app: application,
-										createdAt: "",
+										createdAt: activeLibrary?.createdAt ?? "",
 										rows: rows.filter((r) => selected.has(r.id)),
 									};
 									const reply = await request({
@@ -510,7 +512,11 @@ export function ShortcutsPage() {
 									});
 									if (reply?.type === "libraries") {
 										updateLibraries(reply.libraries);
-										const saved = reply.libraries.at(-1);
+										const saved = activeLibrary
+											? reply.libraries.find(
+													(item) => item.id === activeLibrary.id,
+												)
+											: reply.libraries.at(-1);
 										if (saved) load(saved);
 									}
 								}}

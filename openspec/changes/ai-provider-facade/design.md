@@ -92,3 +92,11 @@ AI catalog, and host Keychain interface are implemented. See
 The desktop root, native Keychain binding, settings consumer, real ChatService,
 Vercel SDK adapter, and Codex helper remain unwired. These are integration
 acceptance items, not revoked design approvals.
+
+
+## Cluster 14 additive provider contracts
+
+`ai-providers-parity` adds role models, thinking/search preparation, persona
+selection and independent fetch speech behind this facade. See that change
+for AI-008/030–033/094/101/105/114 evidence. It adds no SDK dependencies and
+does not close the deferred real SDK chat, native credential or Codex tasks.

@@ -74,6 +74,9 @@ export const IntegrationRequest = Schema.Union(
 		type: Schema.Literal("ha.connect"),
 		origin: text,
 		token: text,
+		allowInsecureHttp: Schema.optionalWith(Schema.Boolean, {
+			default: () => false,
+		}),
 	}),
 	Schema.Struct({ type: Schema.Literal("ha.trust"), certificate: Certificate }),
 	Schema.Struct({ type: Schema.Literal("ha.revoke"), origin: text }),

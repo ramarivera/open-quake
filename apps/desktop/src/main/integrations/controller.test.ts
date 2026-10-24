@@ -320,6 +320,7 @@ describe("production integration controller with real conductors and fake ports"
 		await f.request({
 			type: "ha.connect",
 			origin: "http://ha.example",
+			allowInsecureHttp: true,
 			token: "private",
 		});
 		const target = { profileId: "p", pageId: "page", keyCode: "1,1" };
@@ -379,7 +380,7 @@ describe("production integration controller with real conductors and fake ports"
 });
 
 describe("failure recovery and validated HA execution", () => {
-	it("retains a channel credential reference when secure removal fails, allowing explicit retry", async () => {
+	it("durably retains a cleanup reference after local deletion when vault removal fails, allowing retry", async () => {
 		const f = fixture();
 		await f.request({
 			type: "channels.save",
@@ -392,13 +393,18 @@ describe("failure recovery and validated HA execution", () => {
 			await f.request({ type: "channels.remove", id: "discord" }),
 		).toMatchObject({ type: "error", code: "INTEGRATION.CREDENTIAL.FAILED" });
 		expect(f.channels.read()).toMatchObject({
-			channels: [{ credentialRef: "ref-1" }],
+			channels: [],
+			pendingCredentialRefs: ["ref-1"],
 		});
 		f.vault.failRemove(false);
 		expect(
 			await f.request({ type: "channels.remove", id: "discord" }),
 		).toMatchObject({ type: "channels" });
-		expect(f.channels.read()).toEqual({ version: 1, channels: [] });
+		expect(f.channels.read()).toEqual({
+			version: 1,
+			channels: [],
+			pendingCredentialRefs: [],
+		});
 		expect(f.vault.values.size).toBe(0);
 	});
 	it("uses the same validated execution path for direct keys and allowlisted AI, rejecting unknown targets without side effects", async () => {
@@ -407,6 +413,7 @@ describe("failure recovery and validated HA execution", () => {
 		await f.request({
 			type: "ha.connect",
 			origin: "http://home.test",
+			allowInsecureHttp: true,
 			token: "private",
 		});
 		await f.request({ type: "ha.allowlist", ids: ["light.desk"] });

@@ -452,7 +452,7 @@ async function smoke() {
 		});
 		await integration({ type: "ha.allowlist", ids: ["light.studio"] });
 		assert.equal((await integrations.aiEntities()).length, 1);
-		await integrations.executeHa(key, true);
+		await integrations.executeHa(key);
 		assert.equal(services, 1);
 		await panel.reload();
 		await settle(2400);

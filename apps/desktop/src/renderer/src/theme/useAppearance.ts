@@ -154,6 +154,47 @@ export function useAppearance() {
 			channel.current = null;
 		};
 	}, []);
+	useEffect(() => {
+		const bridge = window.quakeMaintenance;
+		if (!bridge) return;
+		let active = true;
+		const initial = current.current;
+		void bridge
+			.request({ action: "appearance-read" })
+			.then(async (reply) => {
+				if (!active || !reply.ok || reply.appearance === undefined) return;
+				const restored = parseAppearance(reply.appearance);
+				if (!restored) return;
+				if (current.current === initial) {
+					const notice = persistAppearance(
+						restored,
+						window.localStorage,
+						channel.current,
+					);
+					if (notice) {
+						setState({ appearance: current.current, notice });
+						return;
+					}
+					current.current = restored;
+					setState({ appearance: restored, notice: "" });
+				}
+				await bridge.request({
+					action: "appearance-applied",
+					record: reply.appearance,
+				});
+			})
+			.catch(() => {
+				if (active)
+					setState((previous) => ({
+						...previous,
+						notice:
+							"Restored appearance could not be loaded. Reopen the app to retry.",
+					}));
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
 
 	const update = (
 		patch: Partial<

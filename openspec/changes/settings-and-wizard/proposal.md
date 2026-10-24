@@ -10,7 +10,7 @@ The desktop needs a usable local first-run path and one validated settings model
 - Specify general, AI and capability-gated device settings with persistent validation.
 - Document QUAKE-only recommendation, calibration evidence limits and the section 10 exclusion in design only.
 
-This lane adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
+Section 5 now implements backup/restore, reset, permissions and app-update scheduling. The broader wizard and general settings tasks remain open.
 
 ## Capabilities
 
@@ -28,4 +28,6 @@ None. Existing in-flight SDK, profile, display, AI and theme contracts remain ow
 
 Recommended phase: Minimum local wizard, locale, AI and device controls support the first-release cut. Expanded settings and guide follow those capabilities; optional runtime steps wait for Later phases item 5. Full firmware UI remains Later phases item 8 in firmware-dfu.
 
-Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. No npm dependency is added in this spec-only change.
+Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. Exact runtime dependencies and their rationale are documented in apps/desktop/src/main/maintenance/README.md.
+
+The settings-firmware lane implements SETTINGS-014 backup/import, SETTINGS-015 permissions, SETTINGS-016 reset, and SETTINGS-049/050 self-update. Other wizard/general settings tasks remain owned by their existing work.

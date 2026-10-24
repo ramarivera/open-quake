@@ -247,6 +247,11 @@ export function ChannelSetupDrawer({
 									<input
 										autoComplete="off"
 										type={field.secret ? "password" : "text"}
+										placeholder={
+											field.secret && configured?.configured
+												? "Leave blank to keep saved secret"
+												: ""
+										}
 										value={fields[field.key] ?? ""}
 										onChange={(event) =>
 											setFields({ ...fields, [field.key]: event.target.value })
@@ -389,7 +394,9 @@ export function ChannelSetupDrawer({
 								step === 1 &&
 								!qrMode &&
 								credentialFields(descriptor.id).some(
-									(f) => !fields[f.key]?.trim(),
+									(f) =>
+										!fields[f.key]?.trim() &&
+										!(f.secret && configured?.configured),
 								)
 							) {
 								setError("Complete the required credentials");

@@ -1,6 +1,10 @@
 import type { HourFormat } from "../../../shared/display";
 import { EmojiTile } from "../management/emoji/EmojiTile";
 import type { StripTile } from "./geometry";
+import type { StripVoiceContext } from "./overlays/voice/voice-context";
+import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
+import { ClawBotTile } from "./tiles/clawBot/ClawBotTile";
+import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
 import { ClockTile } from "./tiles/clock/ClockTile";
 import { useClockNow } from "./tiles/clock/clockHooks";
 import {
@@ -13,6 +17,7 @@ import { HomeAssistantTile } from "./tiles/home-assistant/HomeAssistantTile";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
 import { useMonitor } from "./tiles/monitor/useMonitor";
 import { previewSnapshot } from "./tiles/monitor/view-model";
+import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
 /**
  * Everything a registered tile may read; tiles never fetch their own data.
@@ -23,6 +28,8 @@ export interface StripTileContext {
 	readonly now: Date | undefined;
 	/** The wallpaper session's saved clock format. */
 	readonly hourFormat: HourFormat;
+	/** Voice and chat state for the AI tiles (strip-voice-ui). */
+	readonly voice: StripVoiceContext;
 }
 export interface StripTileProps {
 	readonly tile: StripTile;
@@ -97,6 +104,12 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map([
 		["dkDesktopClock", ClockSlot],
+		// strip-voice-ui: AI Copilot 5×2, ClawBotView 4×2, ClawBotInput 2×2, AI keys.
+		["aiChatView", AiCopilotTile],
+		["quakeBot", ClawBotTile],
+		["quakeBotInput", ClawBotInputTile],
+		["aiChat", VoiceKeyTile],
+		["clawbot", VoiceKeyTile],
 		["systemMonitorPanel", MonitorSlot],
 		["emoji", EmojiTile],
 		["homeAssistant", HomeAssistantTile],

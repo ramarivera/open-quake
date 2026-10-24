@@ -76,6 +76,7 @@ export const fakeVault = () => {
 };
 export function fakeChannels() {
 	let available = true;
+	let removeUnavailable = false;
 	const connected: ChannelId[] = [];
 	const configured: unknown[] = [];
 	const approvals: string[] = [];
@@ -91,7 +92,9 @@ export function fakeChannels() {
 		configure: async (config, credentials) => {
 			configured.push({ config, credentials });
 		},
-		remove: async () => {},
+		remove: async () => {
+			if (removeUnavailable) throw new TypeError("offline");
+		},
 		startQr: async (_id, session, receive) => {
 			callbacks.set(session, receive);
 			return () => {
@@ -111,6 +114,9 @@ export function fakeChannels() {
 		approvals,
 		callbacks,
 		connected,
+		setRemoveUnavailable: (value: boolean) => {
+			removeUnavailable = value;
+		},
 		setAvailable: (value: boolean) => {
 			available = value;
 		},
@@ -139,14 +145,18 @@ export const service: HaService = {
 		},
 	],
 };
-export function integrationFixture() {
+export function integrationFixture(shared?: {
+	channels: ReturnType<typeof memoryStore>;
+	vault: ReturnType<typeof fakeVault>;
+}) {
 	let now = 1000;
 	let next = 0;
 	let model = '{"ConfigTitle":"Editing","ConfigData":[]}';
-	const channels = memoryStore({ version: 1, channels: [] });
+	const channels =
+		shared?.channels ?? memoryStore({ version: 1, channels: [] });
 	const shortcuts = memoryStore({ version: 1, libraries: [] });
 	const ha = memoryStore(EMPTY_HA_STORE);
-	const vault = fakeVault();
+	const vault = shared?.vault ?? fakeVault();
 	const runtimePort = fakeChannels();
 	let entities: readonly Entity[] = [
 		entity,

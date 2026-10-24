@@ -4,6 +4,7 @@ import { ChannelService } from "../../../../../packages/edge/src/channels/channe
 import {
 	InputRejected,
 	type IntegrationError,
+	IntegrationErrors,
 } from "../../../../../packages/edge/src/channels/integration-errors";
 import { HomeAssistantService } from "../../../../../packages/edge/src/home-assistant/ha-service";
 import { ShortcutService } from "../../../../../packages/edge/src/shortcuts/shortcut-service";
@@ -21,7 +22,7 @@ export const integrationFailure = (
 ): IntegrationReply => ({
 	type: "error",
 	code: error.code,
-	message: error.message,
+	message: IntegrationErrors[error._tag].message,
 	field: error instanceof InputRejected ? error.field : "",
 });
 export function makeIntegrationController(ports: IntegrationControllerPorts) {
@@ -123,7 +124,11 @@ export function makeIntegrationController(ports: IntegrationControllerPorts) {
 				case "ha.connect":
 					return {
 						type: "ha",
-						snapshot: yield* ha.connect(request.origin, request.token),
+						snapshot: yield* ha.connect(
+							request.origin,
+							request.token,
+							request.allowInsecureHttp,
+						),
 					};
 				case "ha.trust":
 					return { type: "ha", snapshot: yield* ha.trust(request.certificate) };

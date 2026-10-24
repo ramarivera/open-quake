@@ -167,11 +167,16 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 										const bytes = yield* encodeHardwareCommand(command);
 										// Native promises cannot be cancelled. Teardown drains this lock.
 										yield* handle.write(bytes);
+										if (command._tag === "Dfu") acceptingWrites = false;
 									}).pipe(Effect.uninterruptible),
 								),
 						);
 						const write = (report: Uint8Array) =>
-							hardwareWriteLock.withPermits(1)(handle.write(report));
+							hardwareWriteLock.withPermits(1)(
+								Effect.suspend(() =>
+									acceptingWrites ? handle.write(report) : Effect.void,
+								),
+							);
 						const reports = yield* recoverHidReads(
 							handle.reports,
 							discover().pipe(Effect.ignore),
