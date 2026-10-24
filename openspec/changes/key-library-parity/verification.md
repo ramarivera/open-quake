@@ -2,7 +2,7 @@
 
 Date: 2026-10-24. Branch: lane/key-library. Worktree: /Volumes/ExtSSD/devplane/oq-key-library. Cluster: open-quake-lih.10. Epic: open-quake-lih.10.2.
 
-The initial main update included PR #26 at 19d7240. The delivery also integrates origin/main through bdf8ca8, including monitor-panel PR #30. Dependency commit 055d3da pins @mdi/svg to exactly 7.4.47 and commits the lockfile. No other dependency was added.
+The initial main update included PR #26 at 19d7240. The delivery also integrates origin/main through bdf8ca8, including monitor-panel PR #30. Dependency commit 055d3da pins @mdi/svg to exactly 7.4.47 and commits the lockfile. No other dependency was added. Renderer builds include the upstream MDI-LICENSE.txt notice; cmp against the installed package LICENSE passes.
 
 ## Audit coverage and limits
 

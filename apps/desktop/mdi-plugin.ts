@@ -8,6 +8,14 @@ const require = createRequire(import.meta.url);
 export function mdiPlugin(): Plugin {
 	return {
 		name: "mdi-icon-assets",
+		generateBundle() {
+			const root = dirname(require.resolve("@mdi/svg/package.json"));
+			this.emitFile({
+				type: "asset",
+				fileName: "MDI-LICENSE.txt",
+				source: readFileSync(join(root, "LICENSE"), "utf8"),
+			});
+		},
 		resolveId: (id) =>
 			id === "virtual:mdi-icons" ? "\0virtual:mdi-icons" : undefined,
 		load(id) {
