@@ -1,6 +1,8 @@
 # Management Center verification
 
-The lane is split into two review layers. The module branch `lane/management-modules` contains the plan, agent workbench and integrations. PR https://github.com/ramarivera/open-quake/pull/33 targets main. The application branch `lane/management-center` adds emoji keys and composes the modules into the themed shell. PR https://github.com/ramarivera/open-quake/pull/34 targets the module branch. The module head is `467d113801450a88c8c98daa480a1ab0e1cbe777`; the integrated implementation commit is `07211a2`. No dependencies were added.
+At initial integration, the lane was split into two review layers. The module branch `lane/management-modules` contains the plan, agent workbench and integrations. PR https://github.com/ramarivera/open-quake/pull/33 targets main. The application branch `lane/management-center` adds emoji keys and composes the modules into the themed shell. PR https://github.com/ramarivera/open-quake/pull/34 targets the module branch. The module head is `467d113801450a88c8c98daa480a1ab0e1cbe777`; the integrated implementation commit is `07211a2`. No dependencies were added.
+
+Current PR34 review evidence: [round four](verification-review-round-4-top.md). PR33 has since integrated into main, and PR34 now targets main. The branch heads and initial counts below describe the original integration.
 
 ## Coverage and source
 
