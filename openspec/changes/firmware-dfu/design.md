@@ -15,7 +15,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 - RS = `ART/recovered_sources`
 
 - **S** `ATLAS/SUBAGENT_PROTOCOL_ANALYSIS.md`: observed DFU opCode 0x01, cmdID 0x2F, subData 0x03 and report/checksum structure.
-- **P** `ATLAS/SUBAGENT_FIRMWARE_ANALYSIS.md`: 1480 UF2 blocks, RP2040 family 0x1aa143c7 and nonstandard first magic byte variant.
+- **P** `ATLAS/SUBAGENT_FIRMWARE_ANALYSIS.md`: 1480 UF2 blocks and RP2040 family 0x1aa143c7. Its old first-magic interpretation is superseded by `SETTINGS-047/048` and the Microsoft specification below.
 - **S** `RS/webpack:__dk-suite_src_views_Setting_DeviceSettings.vue`: enter-download-mode and target selection UI.
 - **S** `RS/webpack:__dk-suite_src_views_Components_UpgradeInfoDialog.vue`: upgrade information presentation; firmware write flow still needs verification.
 - **N** `ART/store_keys.txt`: system.firmware.dfuVolumeBookmark and system.upgradeInfo.
@@ -38,7 +38,7 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 1. Approved (Ramiro, 2026-10-23): never write firmware automatically. User selects image and boot volume, reviews decoded target/size and explicitly starts the update. The raw research image is not bundled by this change.
 
-2. Approved (Ramiro, 2026-10-23): accept standard RP2040 UF2 by default; support the recovered first-header UF2 newline variant only through a narrowly tested compatibility mode, not a permissive magic check.
+2. Approved (Ramiro, 2026-10-23): accept the standard UF2 first magic `0x0A324655` ("UF2\n") by default, together with second magic `0x9E5D5157` and final magic `0x0AB16F30`. The earlier compatibility-mode decision rested on a misread and is corrected by `SETTINGS-048` and the Microsoft UF2 specification, accessed 2026-10-24.
 
 3. Approved (Ramiro, 2026-10-23): retain bookmark as a hint, re-resolve and validate the boot volume every time, and require explicit selection if multiple candidates exist.
 
@@ -64,7 +64,7 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 ## Risks / Trade-offs
 
-RP2040 family ID does not alone prove QUAKE-compatible board/pin layout; require a trusted QUAKE image provenance/target descriptor and declared writable flash range before write enablement. UF2 metadata is partial evidence, and the known header variant must not relax other checks.
+RP2040 family ID does not alone prove QUAKE-compatible board/pin layout; require a trusted QUAKE image provenance/target descriptor and declared writable flash range before write enablement. UF2 metadata is partial evidence. The standard newline magic does not relax board provenance or range checks.
 
 The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
 
@@ -74,6 +74,12 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 ## Verification and outstanding evidence
 
-Use independently generated UF2 fixtures for magic/family/block/address failures and the narrow newline variant. Drive the real update dialog/client through fake HID, volumes, copy and reconnect events; assert cancel writes nothing and copy alone never completes. Validate exact outgoing DFU report bytes against the SDK contract. DFU timing, BOOTSEL volume identity, flashing and version readback remain hardware-unverified.
+Use independently generated UF2 fixtures for standard newline acceptance, null-terminated magic rejection, and magic/family/block/address failures. Drive the real update dialog/client through fake HID, volumes, copy and reconnect events; assert cancel writes nothing and copy alone never completes. Validate exact outgoing DFU report bytes against the SDK contract. DFU timing, BOOTSEL volume identity, flashing and version readback remain hardware-unverified.
 
 Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+
+## 0.4.95 audit correction
+
+`SETTINGS-039/048` identify the vendor bootloader volume as `QUAKE DFU`. `SETTINGS-047/048` and direct inspection of `v0.4.95/app-resources/firmware/QUAKE_01.00.21_NEW.uf2` block 0 show app start `0x12000`, family `0x1aa143c7`, and standard magic. The image payload ends at `0x6E7FF`; this is observed image extent, not proof of the whole board's writable flash range. The 72 KiB offset is consistent with a vendor bootloader reserved below the app.
+
+[Microsoft UF2 file format](https://github.com/microsoft/uf2#file-format), accessed 2026-10-24, specifies the newline in magicStart0. Source for volume discovery is `v0.4.95/app-resources/background.js`, `_waitForQuakeDfuVolume` and `QUAKE DFU` literals. Mount identity, flashing and readback remain hardware-unverified.

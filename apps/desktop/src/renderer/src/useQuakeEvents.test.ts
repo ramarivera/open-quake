@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceStatusEvent, QuakeEvent } from "../../preload/quake";
-import { appendQuakeEvent, type QuakeEventState } from "./useQuakeEvents";
+import {
+	appendLinkEvent,
+	appendQuakeEvent,
+	initialQuakeEvents,
+	type QuakeEventState,
+	type QuakeEventsView,
+} from "./useQuakeEvents";
 
 function initialState(): QuakeEventState {
 	return {
@@ -12,6 +18,64 @@ function initialState(): QuakeEventState {
 		touchPoints: [],
 	};
 }
+
+/** Mirrors the hook: both reducers see every event. */
+function receive(
+	previous: QuakeEventsView,
+	event: QuakeEvent,
+): QuakeEventsView {
+	return {
+		...appendQuakeEvent(previous, event),
+		...appendLinkEvent(previous, event),
+	};
+}
+
+describe("renderer connection state", () => {
+	it("starts with no status report and no knob movement", () => {
+		expect(initialQuakeEvents).toEqual({
+			...initialState(),
+			connection: null,
+			knobSteps: 0,
+		});
+	});
+
+	it("keeps the latest status report after it leaves the bounded log", () => {
+		const connected: DeviceStatusEvent = {
+			source: "hid",
+			kind: "status",
+			state: "connected",
+		};
+		const lost: DeviceStatusEvent = {
+			source: "hid",
+			kind: "status",
+			state: "disconnected",
+			reason: "transport-ended",
+		};
+		let state = receive(initialQuakeEvents, connected);
+		expect(state.connection).toEqual(connected);
+		for (let seq = 1; seq <= 120; seq += 1) {
+			state = receive(state, { source: "hid", kind: "keepalive", seq });
+		}
+		expect(state.events.some((event) => event.kind === "status")).toBe(false);
+		expect(state.connection).toEqual(connected);
+		state = receive(state, lost);
+		expect(state.connection).toEqual(lost);
+		expect(state.lastKeepAliveSeq).toBeNull();
+	});
+
+	it("accumulates signed knob steps independently of the rotation count", () => {
+		let state = initialQuakeEvents;
+		for (const direction of [1, 1, 1, -1] as const) {
+			state = receive(state, { source: "hid", kind: "rotate", direction });
+		}
+		expect(state.knobSteps).toBe(2);
+		expect(state.rotations).toBe(4);
+		expect(
+			receive(state, { source: "hid", kind: "press", state: 1 }).knobSteps,
+		).toBe(2);
+		expect(initialQuakeEvents.knobSteps).toBe(0);
+	});
+});
 
 describe("renderer event statistics", () => {
 	it("counts one HID press/release cycle once while retaining both reports", () => {

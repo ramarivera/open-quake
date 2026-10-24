@@ -27,17 +27,22 @@ The system SHALL enter DFU only for the explicitly selected supported QUAKE devi
 
 ### Requirement: Validated local firmware images
 
-The system SHALL validate UF2 magic, block count/number consistency, payload bounds, non-overlapping flash target ranges and RP2040 family ID 0x1aa143c7 before writing. Write enablement SHALL also require a trusted QUAKE target descriptor tying the image fingerprint to the selected board and its allowed writable flash ranges; family ID alone SHALL NOT authorize a write. A nonstandard first-header variant SHALL require an explicit compatibility selection and its own verified fixture.
+The system SHALL validate UF2 magic, block count/number consistency, payload bounds, non-overlapping flash target ranges and RP2040 family ID 0x1aa143c7 before writing. Write enablement SHALL also require a trusted QUAKE target descriptor tying the image fingerprint to the selected board and its allowed writable flash ranges; family ID alone SHALL NOT authorize a write. Every block SHALL use standard magicStart0 `0x0A324655` (`"UF2\n"`, bytes `55 46 32 0A`), magicStart1 `0x9E5D5157`, and magicEnd `0x0AB16F30`. No compatibility option is required for the standard newline. Recovered QUAKE images start at `0x00012000`; the audited 01.00.19 and 01.00.21 payload range is `0x00012000..0x0006E7FF`. This evidence SHALL inform the trusted descriptor, without authorizing arbitrary RP2040 images. Evidence: `SETTINGS-047`, `SETTINGS-048`; [Microsoft UF2 specification](https://github.com/microsoft/uf2#file-format), accessed 2026-10-24.
 
 #### Scenario: Wrong family or malformed image
 
 - **WHEN** a selected UF2 targets another family or contains inconsistent block metadata
 - **THEN** validation fails and no firmware file is written
 
-#### Scenario: Recovered newline header
+#### Scenario: Standard newline magic
 
-- **WHEN** an image uses the recovered nonstandard first-header newline variant
-- **THEN** default validation rejects it and explicit compatibility mode accepts only the narrowly supported verified variant
+- **WHEN** an otherwise valid trusted QUAKE image uses `0x0A324655` as its first magic
+- **THEN** default structural validation accepts that standard magic without a compatibility selection
+
+#### Scenario: Null-terminated or incomplete magic
+
+- **WHEN** a block begins with `55 46 32 00` or has the wrong second or final magic
+- **THEN** validation rejects it without masking the high byte or writing a file
 
 #### Scenario: Compatible family without board evidence
 
@@ -46,7 +51,7 @@ The system SHALL validate UF2 magic, block count/number consistency, payload bou
 
 ### Requirement: Boot-volume selection and revalidation
 
-The system SHALL validate a user-selected RP2040 boot volume immediately before write, treat a stored volume bookmark only as a hint and require disambiguation when more than one candidate exists.
+The system SHALL validate a user-selected RP2040 boot volume immediately before write, treat a stored volume bookmark only as a hint and require disambiguation when more than one candidate exists. Discovery SHALL recognize the vendor bootloader volume label `QUAKE DFU`; a matching label alone SHALL NOT authorize writing. Evidence: `SETTINGS-039`, `SETTINGS-048`.
 
 #### Scenario: Stale bookmark
 

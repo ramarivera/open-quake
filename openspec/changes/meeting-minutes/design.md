@@ -16,11 +16,9 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 
 - **S** `RS/webpack:__dk-suite_src_views_AIAssistant_MeetingMinutesRecorder.vue`: meeting-minutes-start, mic/system audio streams, Opus MediaRecorder chunks, stop/finalization and device-change cleanup.
 - **S** `RS/webpack:__dk-suite_src_views_Setting_MeetingMinutesHistory.vue`: history, transcription/minutes display, retry/delete and copy behavior.
-- **P** `RS/webpack:__dk-suite_src_main_ai_AIManager.js`: meeting transcription adapter orchestration; `_markdownToDoc` proves generic Markdown-to-DOCX conversion, not an integrated meeting-history export action.
+- **S** `AI-136`, `AI-292`, `AI-327`: `v0.4.95/recovered_sources/src/utils/DefaultProfileData.js:2036-2200` ships liveAudioTranslate and liveAudioTranslateDisplay in Meet AI. `MeetingMinutesRecorder.vue:661-805` captures system PCM for translation. The commented library entries in `KeyConfiguration.js:437-462` do not disable those shipped profile keys.
+- **S** `AI-315`: `v0.4.95/recovered_sources/src/views/Setting/MeetingMinutesHistory.vue:1590-1612`, exportSummary selects `.md` for raw Markdown summaries and `.txt` for plain transcripts, sanitizes filenames, and downloads UTF-8 text. Generic document generation in AIManager is a separate feature.
 - **N** `ART/ipc_channels.txt`: generate-meeting-minutes and meeting-minutes-start entry names.
-- **S** `RS/webpack:__dk-suite_src_plugins_KeyConfiguration.js`: liveAudioTranslate and liveAudioTranslateDisplay menu entries are commented out; this does not establish a supported translation workflow.
-- **N** `ART/store_keys.txt`: aiData.meetingMinutes persistence name; DOCX library presence is not an export integration test.
-- **P** `ART/package.json`: html-docx-js dependency supports inventory export claim but not a proven history-page export action.
 
 ## Goals / Non-Goals
 
@@ -42,9 +40,9 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 2. Approved (Ramiro, 2026-10-23): preserve transcript when summarization fails, and retry only the failed stage. Provider output is labeled generated and is editable/exportable without being represented as a verbatim transcript.
 
-3. Approved (Ramiro, 2026-10-23): question 11, liveAudioTranslate, stays deferred. A commented-out menu and name evidence do not justify continuous translation capture in this recorder.
+3. Approved (Ramiro, 2026-10-23): live translation ships in 0.4.95 through Meet AI (`AI-136`, `AI-292`, `AI-327`). Include the explicit toggle and system-audio route; `voice-stt-tts` owns provider/language selection and cancellation. Commented library entries do not justify deferring the shipped route.
 
-4. Approved (Ramiro, 2026-10-23): keep finalized recordings locally until the user deletes the meeting; partial buffers are removed after cancel. DOCX conversion library choice waits for output fixture evaluation.
+4. Approved (Ramiro, 2026-10-23): keep finalized recordings locally until the user deletes the meeting; partial buffers are removed after cancel. Export raw summary Markdown as `<safe-title>-summary.md` and plain transcript as `<safe-title>-transcript.txt` (`AI-315`), with UTF-8 encoding and illegal filename characters replaced by `-`.
 
 ### Data model
 
@@ -66,7 +64,7 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 ## Risks / Trade-offs
 
-Audio acquisition differs per OS and recording is sensitive. Require explicit source selection, release tracks on every terminal path, and keep content out of logs. The history source does not prove an integrated DOCX button; export is proposed from inventory/dependency evidence.
+Audio acquisition differs per OS and recording is sensitive. Require explicit source selection, release tracks on every terminal path, and keep content out of logs. The 0.4.95 history source proves Markdown/plain-text export (`AI-315`). Live translation has an unbounded-text bug (`AI-338`); retain bounded display history rather than copying that bug.
 
 The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
 
@@ -76,6 +74,6 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 ## Verification and outstanding evidence
 
-With fake capture/provider/file adapters, drive the real recorder and history consumers through duplicate stop, source removal, summary failure, retry, restart and delete. Open a generated DOCX fixture with an independent DOCX reader to confirm title/text/escaping. Native system-audio capture, paid providers and physical start triggers remain unverified.
+With fake capture/provider/file adapters, drive the real recorder and history consumers through duplicate stop, source removal, summary failure, retry, restart and delete. Read exported `.md` and `.txt` fixtures independently as UTF-8 and compare them with the selected saved artifact; cover filename sanitation and write failure. Native system-audio capture, paid providers and physical start triggers remain unverified.
 
 Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.

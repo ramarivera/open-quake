@@ -1,7 +1,10 @@
 # Verification and handoff
 
 Validated 2026-10-24 in `/Volumes/ExtSSD/devplane/oq-strip-touch` on
-`lane/strip-touch`, based on main commit `322db542bd07d9da4aff4ecdde4f78181a140f6d`.
+`lane/strip-touch`, started at main commit `322db542bd07d9da4aff4ecdde4f78181a140f6d`.
+Integrated main `dbc35c31b70dafccfa6f3e2883b1ebd506402103` after PR creation,
+preserving the management redesign and touch mount through an import conflict.
+All gates below were rerun on that merged tree.
 No hardware was opened and DK-Suite was not started.
 
 ## Gates
@@ -10,11 +13,11 @@ All required gates passed:
 
 - `pnpm biome check packages apps`
 - `pnpm typecheck`
-- `pnpm test`: 543 tests, including 317 device, 174 desktop, 27 edge and 25 protocol.
+- `pnpm test`: 553 tests, including 317 device, 184 desktop, 27 edge and 25 protocol.
 - `pnpm build`
 - `pnpm --filter @open-quake/desktop test:bundle`: default HID tested through
   substituted I/O; built mock mode resolved/enumerated no native HID.
-- `openspec validate --all --strict`: 28 changes passed.
+- `openspec validate --all --strict`: 29 changes passed.
 - Native smoke from `apps/desktop/src/main/media/README.md`, run with
   `OPEN_QUAKE_MOCK_DEVICE=1`, `env -u ELECTRON_RUN_AS_NODE` and scratch TMPDIR.
   The production preload and mounted panel emitted one key down and one up from
