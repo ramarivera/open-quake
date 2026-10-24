@@ -25,3 +25,7 @@ Earlier fixtures targeted the embedded picker, expected SVG selection, read the 
 ## Limits
 
 macOS remains locked. Renderer captures establish layout, image decoding and window ownership, but do not establish physical display pixels or user keyboard receipt. No messages were sent. All alarm fixture samples are silent; audible and physical touch/cable acceptance remain open. Exact proprietary DK resource artwork and Windows app-icon/GIF acceptance are not claimed. Home Assistant remains last.
+
+## PR37 review correction
+
+Source `1fdd5ec` preserves intentionally blank icons, moves application extraction outside the live key semaphore, and restricts icon storage mutations to the exact owned child. All six fresh gates, four sequential native fixtures and the repeated quiet live-device icon flow pass. See `verification-icon-review-round-1.md` for red/green regressions, evidence and unchanged physical acceptance limits.
