@@ -50,3 +50,5 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 - [x] 7.5 Address fresh PR33 follow-up threads with own-property model scope reads across rendering/resolution/saving and atomic selection repair when shortcut resync removes pages. Add real consumer regressions and refresh six gates and native proof. Bead `open-quake-lih.17.1.28`.
 
 - [ ] 7.6 Integrate weather/media main into the base with a normal merge, retain all shared owners and successful-release routing, refresh six gates and native mock proof, then merge the verified base into the top. Bead `open-quake-lih.17.1.29`.
+
+- [ ] 7.8 Correct final PR33 feedback on trusted direct-key HA execution, preserving unsaved model rows across saves, and serial-scoped DK-Claw delivery/rollback. Add actual consumer regressions and native mock proof, refresh six gates and merge the verified base normally into PR34. Bead `open-quake-lih.17.1.31`.
