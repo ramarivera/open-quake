@@ -31,6 +31,7 @@ import {
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperSettings } from "./wallpaper/WallpaperViews";
+import { WeatherMediaSettings } from "./weather-media/WeatherMediaSettings";
 import "./styles.css";
 import "./management/management.css";
 import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
@@ -200,6 +201,7 @@ function ManagementSurface({
 									wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
 								}
 							/>
+							<WeatherMediaSettings />
 							<MonitorSettings />
 						</>
 					) : page === "meetings" ? (
