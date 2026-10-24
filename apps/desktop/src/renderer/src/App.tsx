@@ -317,6 +317,11 @@ function ManagementSurface({
 							Math.min(360, startWidth + event.clientX - startX),
 						);
 						sidebarDrag.current = null;
+						document.documentElement.style.setProperty(
+							"--mc-sidebar-width",
+							`${width}px`,
+						);
+						event.currentTarget.setAttribute("aria-valuenow", String(width));
 						if (width !== startWidth) appearance.setSidebarWidth(width);
 						event.currentTarget.releasePointerCapture(event.pointerId);
 						delete document.body.dataset.resizing;

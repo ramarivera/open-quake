@@ -510,6 +510,20 @@ async function smoke() {
 			),
 			"218",
 		);
+		await pointer("pointerdown", 222);
+		await pointer("pointermove", 250);
+		await pointer("pointerup", 222);
+		assert.equal(
+			await js("window.__reviewWrites"),
+			0,
+			"Returning to the initial width never persists",
+		);
+		assert.equal(
+			await js(
+				"document.documentElement.style.getPropertyValue('--mc-sidebar-width')",
+			),
+			"218px",
+		);
 		await pointer("pointerdown", 224);
 		for (const x of [256, 281, 306]) {
 			await pointer("pointermove", x);
