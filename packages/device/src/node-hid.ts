@@ -31,6 +31,9 @@ export const NodeHidLive = Layer.succeed(
 								? [
 										{
 											path: device.path,
+											...(device.serialNumber
+												? { serialNumber: device.serialNumber }
+												: {}),
 											vendorId: device.vendorId,
 											productId: device.productId,
 											usagePage: device.usagePage,

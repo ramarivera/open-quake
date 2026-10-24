@@ -1,5 +1,6 @@
 /** Map protocol-decoded commands to device events. Framing belongs to the kernel. */
 import {
+	decodeHardwareReply,
 	decodeHidReport,
 	encodeHidReport,
 	FRAME_HEADER,
@@ -24,6 +25,12 @@ export function decodeReport(
 	if (physical.right[0] !== FRAME_HEADER) return Either.right(Option.none());
 	const decoded = unwrapShortCommand(physical.right);
 	if (Either.isLeft(decoded)) return Either.left(decoded.left);
+	const hardware = decodeHardwareReply(decoded.right);
+	if (Either.isLeft(hardware)) return Either.left(hardware.left);
+	if (Option.isSome(hardware.right))
+		return Either.right(
+			Option.some({ _tag: "HardwareReply", reply: hardware.right.value }),
+		);
 	const { opCode: opcode, cmdId: command, subData: sub } = decoded.right;
 	const value = sub[0];
 	if (opcode === 3 && (command === 1 || command === 2)) {

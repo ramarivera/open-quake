@@ -92,7 +92,7 @@ SHALL be the byte sum modulo `0xFF`, not modulo `0x100`.
 ### Requirement: DFU has a confirmed command
 The kernel SHALL expose a DFU command constructor for opcode `01`, cmdID `2F`,
 subData `[03]`, producing `[A3,03,01,2F,03,33]` before report padding.
-The broader opcode catalog SHALL remain partial: unknown opcode/cmdID bytes
+The hardware-controls catalog SHALL additionally type set commands 02,03,04,05,06,10, queries 03,05,2E and their 55 replies (MAIN-015,018..026; hardware-controls-parity). The remaining opcode catalog SHALL remain partial: unknown opcode/cmdID bytes
 SHALL survive generic round-trips without inferred behavior.
 
 #### Scenario: Encode DFU without hardware

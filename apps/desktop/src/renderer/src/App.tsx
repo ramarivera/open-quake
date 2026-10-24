@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { HardwareSettings } from "./hardware/HardwareSettings";
 import { describeConnection } from "./management/connection";
 import { OverviewPage } from "./management/OverviewPage";
 import { ThemeSettings } from "./theme/ThemeSettings";
@@ -7,7 +8,12 @@ import {
 	useAppearance,
 } from "./theme/useAppearance";
 import { StatusDot } from "./ui/Form";
-import { AppearanceIcon, DeviceIcon, ScreenIcon } from "./ui/icons";
+import {
+	AppearanceIcon,
+	ControlsIcon,
+	DeviceIcon,
+	ScreenIcon,
+} from "./ui/icons";
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperPanel, WallpaperSettings } from "./wallpaper/WallpaperViews";
@@ -31,7 +37,7 @@ function PanelSurface(): React.JSX.Element {
 	return <WallpaperPanel />;
 }
 
-type Page = "overview" | "screen" | "appearance";
+type Page = "overview" | "screen" | "controls" | "appearance";
 
 type NavItem = {
 	readonly id: Page;
@@ -50,6 +56,7 @@ const sections: ReadonlyArray<{
 		items: [
 			{ id: "overview", label: "Overview", Icon: DeviceIcon },
 			{ id: "screen", label: "Screen", Icon: ScreenIcon },
+			{ id: "controls", label: "Controls", Icon: ControlsIcon },
 		],
 	},
 	{
@@ -128,6 +135,8 @@ function ManagementSurface({
 						/>
 					) : page === "screen" ? (
 						<WallpaperSettings wallpaper={wallpaper} />
+					) : page === "controls" ? (
+						<HardwareSettings />
 					) : (
 						<ThemeSettings controller={appearance} />
 					)}

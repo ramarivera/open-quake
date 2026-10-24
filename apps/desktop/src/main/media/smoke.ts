@@ -11,6 +11,7 @@ import {
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { registerHardware } from "../hardware";
 import { MediaLive, registerMedia } from "./index";
 
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
@@ -83,6 +84,11 @@ async function smoke(): Promise<void> {
 		),
 	);
 	registerMedia(runtime, () => management);
+	const unregisterHardware = registerHardware(
+		() => undefined,
+		() => management,
+		true,
+	);
 	app.once("will-quit", () => {
 		assert(
 			runtimeDisposed,
@@ -218,6 +224,7 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	unregisterHardware();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

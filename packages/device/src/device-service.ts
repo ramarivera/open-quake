@@ -1,4 +1,8 @@
-import type { ProtocolError } from "@open-quake/protocol";
+import {
+	encodeHardwareCommand,
+	type HardwareCommand,
+	type ProtocolError,
+} from "@open-quake/protocol";
 import {
 	Deferred,
 	Effect,
@@ -19,6 +23,7 @@ import {
 	isQuakeDevice,
 } from "./device-contracts.js";
 import {
+	QuakeConnectionClosed,
 	QuakeConnectionConfigInvalid,
 	QuakeDeviceNotFound,
 	type QuakeHidCloseFailed,
@@ -53,6 +58,12 @@ interface Termination {
 
 export interface QuakeConnection {
 	readonly info: HidDeviceInfo;
+	readonly sendHardware: (
+		command: HardwareCommand,
+	) => Effect.Effect<
+		void,
+		ProtocolError | QuakeHidWriteFailed | QuakeConnectionClosed
+	>;
 	/** Broadcast stream. Input events are not replayed; termination is replayed. */
 	readonly events: Stream.Stream<DeviceEvent, DeviceStreamError>;
 	/** Acquire a subscription before generating input, without scheduler races. */
@@ -92,6 +103,8 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				const events =
 					yield* PubSub.unbounded<Take.Take<DeviceEvent, DeviceStreamError>>();
 				yield* Effect.addFinalizer(() => PubSub.shutdown(events));
+				let sendHardware: QuakeConnection["sendHardware"] = () =>
+					Effect.fail(new QuakeConnectionClosed());
 				const ready = yield* Deferred.make<void, QuakeHidOpenFailed>();
 				const stopped = yield* Deferred.make<Termination>();
 				const finished = yield* Deferred.make<Termination>();
@@ -108,6 +121,17 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 							transport.open(info),
 							(handle) => Deferred.complete(closed, handle.close()),
 						);
+						sendHardware = Effect.fn("QuakeConnection.sendHardware")(function* (
+							command: HardwareCommand,
+						) {
+							if (
+								Option.isSome(yield* Deferred.poll(stopped)) ||
+								Option.isSome(yield* Deferred.poll(finished))
+							)
+								return yield* new QuakeConnectionClosed();
+							const bytes = yield* encodeHardwareCommand(command);
+							yield* handle.write(bytes);
+						});
 						// toPull acquires the incoming stream and its listeners before we signal ready.
 						const pull = yield* Stream.toPull(handle.reports);
 						yield* Stream.runForEach(
@@ -209,6 +233,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 				);
 				return {
 					info,
+					sendHardware: (command) => sendHardware(command),
 					events: Stream.unwrapScoped(subscribe()),
 					subscribe,
 					disconnect: Effect.fn("QuakeConnection.disconnect")(
