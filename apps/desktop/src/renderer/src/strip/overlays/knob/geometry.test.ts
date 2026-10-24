@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { clientToLogical } from "../../touch-geometry";
-import { cardRect, pickerLayout, pickerTarget, sameTarget } from "./geometry";
+import {
+	cardRect,
+	focusTargetRect,
+	pickerLayout,
+	pickerTarget,
+	sameTarget,
+	tileRect,
+} from "./geometry";
 
 describe("recovered thumbnail picker geometry", () => {
 	it("retains the source's column table, 4:1 ratio, and paged 300 by 75 cards", () => {
@@ -69,5 +76,23 @@ it("inverts rotation 90 and viewport scaling before picker arrow/card hits", () 
 	expect(pickerTarget(17, 0, point.x, point.y)).toEqual({
 		kind: "card",
 		index: 0,
+	});
+});
+
+describe("knob focus targets", () => {
+	const hotkey = { keyCode: "1,1", slot: tileRect("1,1", [2, 1]) };
+	it("gives no target to a key the strip layout hides under a wider tile", () => {
+		const layout = { tiles: [hotkey] };
+		expect(
+			focusTargetRect({ keyCode: "1,2", size: [1, 1] }, layout),
+		).toBeUndefined();
+		expect(focusTargetRect({ keyCode: "1,1", size: [2, 1] }, layout)).toEqual(
+			hotkey.slot,
+		);
+	});
+	it("falls back to the anchor rectangle when there is no layout", () => {
+		expect(
+			focusTargetRect({ keyCode: "1,2", size: [1, 1] }, undefined),
+		).toEqual(tileRect("1,2", [1, 1]));
 	});
 });

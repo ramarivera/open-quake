@@ -89,3 +89,26 @@ export function tileRect(
 		height: size[1] * 240 - 20,
 	};
 }
+
+/**
+ * Where each visible knob-capable key gets a focus target. With a strip layout,
+ * only tiles the strip draws qualify, so a key covered by a wider neighbour
+ * can't steal that neighbour's clicks; without one, fall back to anchors.
+ */
+export function focusTargetRect(
+	key: {
+		readonly keyCode: string;
+		readonly size?: readonly [number, number] | undefined;
+	},
+	layout:
+		| {
+				readonly tiles: ReadonlyArray<{
+					readonly keyCode: string;
+					readonly slot: Rect;
+				}>;
+		  }
+		| undefined,
+): Rect | undefined {
+	if (!layout) return tileRect(key.keyCode, key.size);
+	return layout.tiles.find((tile) => tile.keyCode === key.keyCode)?.slot;
+}

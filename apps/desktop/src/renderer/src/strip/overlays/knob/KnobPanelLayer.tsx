@@ -3,7 +3,7 @@ import { selectorProfiles } from "../../../../../shared/knob-contracts";
 import { stripLayout } from "../../geometry";
 import { useStripProfiles } from "../../useStripProfiles";
 import { FunctionWheel } from "./FunctionWheel";
-import { tileRect } from "./geometry";
+import { focusTargetRect } from "./geometry";
 import { KnobDial } from "./KnobDial";
 import { ProfilePicker } from "./ProfilePicker";
 import { useKnob } from "./useKnob";
@@ -62,10 +62,9 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 			>
 				{context.keys
 					.filter((key) => key.visible)
-					.map((key) => {
-						const rect =
-							layout?.tiles.find((tile) => tile.keyCode === key.keyCode)
-								?.slot ?? tileRect(key.keyCode, key.size);
+					.flatMap((key) => {
+						const rect = focusTargetRect(key, layout);
+						if (!rect) return [];
 						return (
 							<button
 								key={key.keyCode}
