@@ -44,19 +44,16 @@ const stable = (value: unknown): string => {
 			.join(",")}}`;
 	return JSON.stringify(value) ?? "null";
 };
+const isConfigObject = (
+	value: ProfileJson,
+): value is typeof ProfileJsonObject.Type =>
+	value !== null && typeof value === "object" && !Array.isArray(value);
 // Preserve legacy-only configuration fields while current editable values take precedence.
 const resolvedConfig = (
 	source: ProfileJson,
 	current: ProfileJson,
 ): ProfileJson => {
-	if (
-		source &&
-		current &&
-		typeof source === "object" &&
-		typeof current === "object" &&
-		!Array.isArray(source) &&
-		!Array.isArray(current)
-	)
+	if (isConfigObject(source) && isConfigObject(current))
 		return {
 			...source,
 			...Object.fromEntries(
