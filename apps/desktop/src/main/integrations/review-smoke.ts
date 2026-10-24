@@ -274,7 +274,7 @@ async function main() {
 			`document.querySelector('[data-page="ha"]').click()`,
 		);
 		await wait(
-			`document.querySelector('h1')?.textContent === 'Home Assistant' && document.body.innerText.includes('Disconnected')`,
+			`document.querySelector('[aria-label="Home Assistant Settings"] h2')?.textContent === 'Home Assistant' && document.body.innerText.includes('Disconnected')`,
 		);
 		await wait(
 			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
