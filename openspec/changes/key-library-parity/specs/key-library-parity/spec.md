@@ -13,6 +13,11 @@ The application SHALL publish a selected key draft immediately to previews and S
 - **WHEN** a user changes a title or resets an icon then selects another key
 - **THEN** the old key returns to its committed appearance and no executable payload changes
 
+#### Scenario: Inert selection preview
+- **WHEN** pointer, keyboard, drag or native sub-touch input reaches a tile inside the key-selection preview
+- **THEN** nested controls cannot send media, weather, voice, meeting, clock or other host actions, and pointer selection and accessible key buttons select the intended key
+- **AND** Save retains its busy and disabled boundary while controls on the live strip remain interactive
+
 #### Scenario: Save conflict
 - **WHEN** another revision commits before Save
 - **THEN** the save fails visibly and retains the draft without overwriting that revision
@@ -44,6 +49,11 @@ Built-in key titles SHALL resolve using the recovered eight locales and the exis
 #### Scenario: Locale and custom text
 - **WHEN** a built-in key changes locale before and after a user edits its title
 - **THEN** its default translates before the edit and the custom title remains after the edit
+
+#### Scenario: Profile Manager locale ownership
+- **WHEN** the Profile Manager requests a translated preview or thumbnail while the Keys locale differs or changes
+- **THEN** the rendered titles retain the requested profile language from readiness through capture and locale-specific cache reuse
+- **AND** later manager language changes update its preview while the live strip continues to follow Keys locale changes
 
 #### Scenario: Title style edits
 - **WHEN** a nonempty title is entered and then its advanced style is changed or reset

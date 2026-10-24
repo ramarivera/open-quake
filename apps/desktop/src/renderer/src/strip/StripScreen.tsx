@@ -24,6 +24,14 @@ import "./strip.css";
 
 const palette = stripPaletteProperties();
 
+const storedKeyLocale = (): ProfileLocale => {
+	if (typeof localStorage === "undefined") return "en";
+	const decoded = Schema.decodeUnknownEither(ProfileLocale)(
+		localStorage.getItem("open-quake-key-locale") ?? "en",
+	);
+	return decoded._tag === "Right" ? decoded.right : "en";
+};
+
 function StripGrid({
 	layout,
 	pressedKeyCode,
@@ -31,6 +39,7 @@ function StripGrid({
 	hourFormat,
 	voice,
 	tileOverlay,
+	interactive,
 }: {
 	layout: StripLayout;
 	pressedKeyCode: string | undefined;
@@ -38,6 +47,7 @@ function StripGrid({
 	hourFormat: "24h" | "12h";
 	voice: StripVoiceContext;
 	tileOverlay: ((tile: StripTile) => React.ReactNode) | undefined;
+	interactive: boolean;
 }): React.JSX.Element {
 	return (
 		<div className="strip-grid" data-theme={layout.theme.name}>
@@ -79,7 +89,10 @@ function StripGrid({
 							zIndex: tile.zIndex || undefined,
 						}}
 					>
-						<Tile tile={tile} context={{ now, hourFormat, voice }} />
+						<Tile
+							tile={tile}
+							context={{ now, hourFormat, voice, interactive }}
+						/>
 						{tileOverlay?.(tile)}
 					</div>
 				);
@@ -118,8 +131,14 @@ export function StripScreen({
 	children,
 	onLayout,
 	previewSerial,
+	titles = "key-locale",
+	interactive = true,
 }: {
 	profiles: StripProfiles;
+	/** Profile Manager and the editor already resolve their own title locale. */
+	titles?: "key-locale" | "provided";
+	/** Selection previews paint live state but cannot operate nested controls. */
+	interactive?: boolean;
 	previewSerial?: string;
 	/** Reports the layout actually painted for the panel input adapter. */
 	onLayout?: (layout: StripLayout | undefined) => void;
@@ -139,14 +158,61 @@ export function StripScreen({
 }): React.JSX.Element {
 	const runtimeStates = useKeyRuntime();
 	const serial = previewSerial ?? wallpaper?.saved.serial;
-	const [locale, setLocale] = useState<ProfileLocale>("en");
-	useEffect(() => {
-		const update = (): void => {
-			const decoded = Schema.decodeUnknownEither(ProfileLocale)(
-				localStorage.getItem("open-quake-key-locale") ?? "en",
-			);
-			if (decoded._tag === "Right") setLocale(decoded.right);
+	const screen = useRef<HTMLDivElement>(null);
+	const [locale, setLocale] = useState(() =>
+		titles === "key-locale" ? storedKeyLocale() : "en",
+	);
+	useLayoutEffect(() => {
+		const element = screen.current;
+		if (interactive || !element) return;
+		// inert handles real pointer/keyboard/focus input. Native sub-touch events
+		// are programmatic and non-bubbling, so stop them in native capture too.
+		const stop = (event: Event): void => {
+			event.preventDefault();
+			event.stopImmediatePropagation();
 		};
+		const events = [
+			"click",
+			"auxclick",
+			"dblclick",
+			"contextmenu",
+			"pointerdown",
+			"pointermove",
+			"pointerup",
+			"pointercancel",
+			"mousedown",
+			"mousemove",
+			"mouseup",
+			"keydown",
+			"keyup",
+			"keypress",
+			"touchstart",
+			"touchmove",
+			"touchend",
+			"touchcancel",
+			"dragstart",
+			"drag",
+			"dragover",
+			"dragenter",
+			"dragleave",
+			"dragend",
+			"drop",
+			"wheel",
+			"input",
+			"change",
+			"submit",
+			"quake-sub-touch-start",
+			"quake-sub-touch-end",
+		];
+		for (const event of events) element.addEventListener(event, stop, true);
+		return () => {
+			for (const event of events)
+				element.removeEventListener(event, stop, true);
+		};
+	}, [interactive]);
+	useEffect(() => {
+		if (titles === "provided") return;
+		const update = (): void => setLocale(storedKeyLocale());
 		update();
 		window.addEventListener("storage", update);
 		window.addEventListener("key-locale", update);
@@ -154,7 +220,7 @@ export function StripScreen({
 			window.removeEventListener("storage", update);
 			window.removeEventListener("key-locale", update);
 		};
-	}, []);
+	}, [titles]);
 	const layout = useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);
@@ -169,7 +235,8 @@ export function StripScreen({
 						key.keyCode,
 					]),
 				);
-				const translated = localizedKey(key, locale);
+				const translated =
+					titles === "provided" ? key : localizedKey(key, locale);
 				return state?.alternate === 1
 					? {
 							...translated,
@@ -188,7 +255,7 @@ export function StripScreen({
 					: translated;
 			}),
 		});
-	}, [profiles, serial, locale, runtimeStates]);
+	}, [profiles, serial, locale, runtimeStates, titles]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
 	useLayoutEffect(() => {
 		onLayout?.(vivid ? undefined : layout);
@@ -198,6 +265,9 @@ export function StripScreen({
 	const hourFormat = wallpaper?.saved.clock.actions[0].value ?? "24h";
 	return (
 		<div
+			ref={screen}
+			inert={!interactive}
+			aria-hidden={!interactive || undefined}
 			className="strip-screen"
 			data-vivid={vivid}
 			data-dashed={showEmptyGridDashedBorder}
@@ -217,6 +287,7 @@ export function StripScreen({
 					hourFormat={hourFormat}
 					voice={voice}
 					tileOverlay={tileOverlay}
+					interactive={interactive}
 				/>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (

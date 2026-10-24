@@ -311,8 +311,6 @@ export function KeyEditor(): React.JSX.Element {
 					...translated,
 					config: {
 						...translated.config,
-						// Freeze the already localized artwork for StripScreen's display pass.
-						userModifiedTitle: true,
 						title: Option.getOrElse(
 							translated.config.alterTitle,
 							() => translated.config.title,
@@ -426,7 +424,10 @@ export function KeyEditor(): React.JSX.Element {
 						if (event.key === "Escape") void revert();
 					}}
 					aria-label="Key grid preview"
-					onClick={(event) => {
+					onClickCapture={(event) => {
+						// Capture before nested controls, including programmatic clicks.
+						event.preventDefault();
+						event.stopPropagation();
 						const frame = event.currentTarget.getBoundingClientRect();
 						const point = {
 							x: ((event.clientX - frame.left) * 1920) / frame.width,
@@ -448,6 +449,8 @@ export function KeyEditor(): React.JSX.Element {
 				>
 					<StripViewport>
 						<StripScreen
+							titles="provided"
+							interactive={false}
 							previewSerial="editor-preview"
 							wallpaper={wallpaper}
 							profiles={{ _tag: "ready", envelope: previewEnvelope }}
