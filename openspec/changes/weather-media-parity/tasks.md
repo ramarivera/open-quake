@@ -29,6 +29,10 @@ Each numbered task has a child bead under `open-quake-lih.7.1` referencing this 
 
 - [x] 6.1 Fix PR #29 city-name validation independently of country suffixes and reset the auto-location retry budget after recovery. Preserve all prior scope and lifecycle owners; prove invalid-city results without network on both service paths, valid international queries, failure/recovery/failure timing, hidden/disposed behavior, six fresh gates and the production combined Electron mock. Retain evidence in `weather-media/review-round-2`, reply with Codex attribution and fix SHA before resolving each reviewed thread. Bead: `open-quake-lih.7.1.10`.
 
+## 7. Review round 3
+
+- [ ] 7.1 Correct provider condition semantics after auditing the official World Weather Online table, document lossy WMO approximations, and enforce Celsius for default/custom forecast requests including duplicate unit parameters. Prove fallback decode, localized descriptions/icons, canonical cache and single display conversion through service consumers and production IPC/renderer. Preserve prior fixes and lifecycle owners, refresh/merge main normally before six fresh gates and sequential native mock smokes, inspect captures, and reply with Codex attribution/fix SHA before resolving only handled threads. Evidence: `weather-media/review-round-3` under parity scratch. Bead: `open-quake-lih.7.1.11`. Native/device/package acceptance and lead remain open.
+
 ## Verification evidence
 
 All six lane gates passed on 2026-10-24. Root tests report 907 passing tests, including 445 desktop tests. Focused weather/media tests cover real conductors with injected IO, Effect TestClock cache/deadline behavior, city sequencing, rejected writes, controls, schemas and renderer state. Both native Electron mock smokes passed with production preload/IPC/renderers and no local server or device access. Captures include the clock with both cards, city verification and IP consent, and DK-Player playing, paused, idle/guide, unavailable, navigation-disabled, pause-disabled and unknown-duration states. The existing media smoke also covers narrow layout, light theme, reduced motion and strip touch routing.

@@ -54,6 +54,16 @@ Network access SHALL go through a typed main-process adapter with replaceable te
 - **WHEN** both providers fail for a city with cached data older than 30 min
 - **THEN** that city's cached values remain visible with a stale indicator
 
+#### Scenario: Fallback condition text is missing
+
+- **WHEN** the primary provider fails and wttr.in returns overcast or patchy snow without text in the requested locale
+- **THEN** the decoded WMO condition produces a localized overcast or snow description and the matching cloud or snow icon
+
+#### Scenario: Custom forecast requests Fahrenheit
+
+- **WHEN** a custom URL includes Fahrenheit or duplicate temperature unit parameters
+- **THEN** the request replaces them with one explicit Celsius parameter, preserves unrelated custom parameters, caches Celsius current/high/low values and converts each displayed value once for the selected unit; default requests also explicitly select Celsius
+
 ### Requirement: Weather refresh and card
 
 The card SHALL occupy 564×153 design pixels with a radius of 32, an 88 px icon badge, 50 px temperature, 19 px city/description and TODAY H/L column as recovered in AUDIT_WIDGETS §3.1. WMO codes SHALL use the eight recovered groups and a generic-cloud fallback. Loading and failure SHALL retain temperature/range placeholders `--`, mark aria-busy during loading and show recovered error strings. Refresh SHALL start 800 ms after mounting, repeat every 30 min while visible, debounce configuration refresh by 50 ms and coalesce in-flight requests into one follow-up using the newest configuration. IP lookup failure SHALL retry once after 120 s. Hidden/unmounted views SHALL release their timers and listeners. Strings SHALL use the eight recovered locales; unknown weather text SHALL NOT fall back to English for another locale. Evidence: WIDGETS-040/041/047/048/049.

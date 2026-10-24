@@ -18,6 +18,7 @@ import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
 import { MediaLive, registerMedia } from "../media";
+import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
@@ -106,6 +107,7 @@ async function smoke(): Promise<void> {
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 	const networkCalls: string[] = [];
 	let outage = false;
+	let fallbackCode: number | undefined;
 	const actions: NativeMediaAction[] = [];
 	let native: NativeMediaState = { session: mediaSession, error: null };
 	const runtime = ManagedRuntime.make(
@@ -115,16 +117,44 @@ async function smoke(): Promise<void> {
 					weatherSettingsLive(base),
 					Layer.succeed(WeatherNetwork, {
 						json: (url) =>
-							Effect.suspend(() => {
-								networkCalls.push(url);
-								if (outage)
-									return Effect.fail(
-										WeatherNetworkFailed.fromCause("fake provider outage"),
-									);
-								return Effect.succeed(
-									url.includes("geocoding") ? cityFixture : forecastFixture,
-								);
-							}),
+							Effect.suspend(
+								(): Effect.Effect<unknown, WeatherNetworkFailed> => {
+									networkCalls.push(url);
+									if (outage)
+										return Effect.fail(
+											WeatherNetworkFailed.fromCause("fake provider outage"),
+										);
+									if (url.includes("geocoding"))
+										return Effect.succeed(cityFixture);
+									if (fallbackCode !== undefined) {
+										if (!url.startsWith("https://wttr.in/"))
+											return Effect.fail(
+												WeatherNetworkFailed.fromCause("fake primary outage"),
+											);
+										return Effect.succeed({
+											current_condition: [
+												{ temp_C: "11.4", weatherCode: String(fallbackCode) },
+											],
+											weather: [{ maxtempC: "14.8", mintempC: "6.5" }],
+										});
+									}
+									// The fake honors Fahrenheit, so a request-unit regression
+									// reaches IPC and the rendered current/high/low values.
+									if (
+										new URL(url).searchParams
+											.getAll("temperature_unit")
+											.includes("fahrenheit")
+									)
+										return Effect.succeed({
+											current: { temperature_2m: 54.32, weather_code: 2 },
+											daily: {
+												temperature_2m_max: [59.72],
+												temperature_2m_min: [44.78],
+											},
+										});
+									return Effect.succeed(forecastFixture);
+								},
+							),
 					}),
 					Layer.succeed(SystemMediaAdapter, {
 						read: () => Effect.sync(() => native),
@@ -173,6 +203,12 @@ async function smoke(): Promise<void> {
 		stopWriters: async () =>
 			assert.fail("Read-only smoke must not reset or restore"),
 		exit: () => assert.fail("Read-only maintenance must not exit the app"),
+	});
+	const meetings = registerMeetings({
+		userData: base,
+		hardware: () => undefined,
+		mock: true,
+		renderer,
 	});
 	const knob = registerKnob(
 		() => panel,
@@ -288,6 +324,11 @@ async function smoke(): Promise<void> {
 			"weather and music data",
 		);
 		await capture(panel, "clock-weather-music");
+		assert.deepEqual(
+			new URL(networkCalls[0] ?? "").searchParams.getAll("temperature_unit"),
+			["celsius"],
+			"default explicitly requests canonical units",
+		);
 		assert.equal(
 			await evaluate(
 				panel,
@@ -461,6 +502,87 @@ async function smoke(): Promise<void> {
 			"document.querySelector('.oq-weather-temp')?.textContent.includes('12')",
 			"weather recovers after outage",
 		);
+		for (const [code, wmo, icon, english, german] of [
+			[122, 3, "cloudy", "Overcast", "Bedeckt"],
+			[179, 85, "snow", "Snow", "Schnee"],
+		] as const) {
+			fallbackCode = code;
+			await request(management, {
+				_tag: "configure",
+				settings: {
+					...weatherSettings,
+					musicEnabled: true,
+					forecastUrl: `https://fallback.example/forecast?condition=${code}`,
+				},
+			});
+			await waitFor(
+				panel,
+				`document.querySelector('.oq-weather-desc')?.textContent === '${english}' && !!document.querySelector('[data-weather-icon=${icon}]')`,
+				"fallback card condition without provider text",
+			);
+			const localized = await request(panel, { _tag: "weather", locale: "de" });
+			assert.equal(localized._tag, "weather");
+			if (localized._tag !== "weather" || localized.result._tag !== "ready")
+				assert.fail("fallback IPC missing");
+			assert.equal(localized.result.data.weatherCode, wmo);
+			assert.equal(localized.result.data.description, german);
+			assert.equal(localized.result.data.provider, "wttr.in");
+			await capture(panel, `clock-fallback-${code}`);
+		}
+		fallbackCode = undefined;
+		const customUrl =
+			"https://custom.example/forecast?temperature_unit=fahrenheit&temperature_unit=celsius&temperature_unit=fahrenheit&model=best_match&model=icon";
+		let cachedCalls: number | undefined;
+		for (const [index, unit] of (
+			["fahrenheit", "celsius", "fahrenheit", "celsius"] as const
+		).entries()) {
+			await request(management, {
+				_tag: "configure",
+				settings: {
+					...weatherSettings,
+					musicEnabled: true,
+					forecastUrl: customUrl,
+					unit,
+				},
+			});
+			const [temperature, high, low] =
+				unit === "celsius" ? [12, 15, 7] : [54, 60, 45];
+			const reply = await request(panel, { _tag: "weather", locale: "en" });
+			if (reply._tag !== "weather" || reply.result._tag !== "ready")
+				assert.fail("custom forecast IPC missing");
+			assert.equal(reply.result.data.temperature, temperature);
+			assert.equal(reply.result.data.high, high);
+			assert.equal(reply.result.data.low, low);
+			await waitFor(
+				panel,
+				`document.querySelector('.oq-weather-temp')?.textContent === '${temperature}°' && document.querySelector('.oq-weather-range')?.textContent === 'TODAYH ${high}°L ${low}°' && document.querySelector('.oq-weather-meta')?.textContent === '°${unit === "celsius" ? "C" : "F"}'`,
+				"custom units render once from canonical cache",
+			);
+			if (cachedCalls !== undefined)
+				assert.equal(
+					networkCalls.length,
+					cachedCalls,
+					"unit toggles reuse Celsius cache",
+				);
+			cachedCalls = networkCalls.length;
+			await capture(panel, `clock-custom-${index}-${unit}`);
+		}
+		const customCalls = networkCalls.filter(
+			(url) => new URL(url).hostname === "custom.example",
+		);
+		assert.equal(customCalls.length, 1);
+		const forwarded = new URL(customCalls[0] ?? "");
+		assert.deepEqual(forwarded.searchParams.getAll("temperature_unit"), [
+			"celsius",
+		]);
+		assert.deepEqual(forwarded.searchParams.getAll("model"), [
+			"best_match",
+			"icon",
+		]);
+		await writeFile(
+			join(artifacts, "weather-network-calls.json"),
+			JSON.stringify(networkCalls, null, 2),
+		);
 		const denied = await request(panel, {
 			_tag: "configure",
 			settings: { ...weatherSettings, ipLookup: true },
@@ -590,6 +712,7 @@ async function smoke(): Promise<void> {
 		panel.destroy();
 		await maintenance.dispose();
 		await registration.dispose();
+		await meetings.dispose();
 		await monitor.dispose();
 		await knob.dispose();
 		await voice.dispose();

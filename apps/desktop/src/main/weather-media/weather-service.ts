@@ -100,6 +100,7 @@ export const forecastUrl = (
 		daily: "temperature_2m_max,temperature_2m_min,weather_code",
 		timezone: "auto",
 		forecast_days: "3",
+		temperature_unit: "celsius",
 	}))
 		url.searchParams.set(name, value);
 	return url.href;
