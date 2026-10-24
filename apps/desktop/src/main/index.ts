@@ -13,6 +13,7 @@ import {
 	screen,
 	shell,
 } from "electron";
+import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
@@ -39,10 +40,14 @@ import {
 } from "./lifecycle/native-display";
 import { registerLifecycle } from "./lifecycle/registration";
 import { MediaLive, registerMedia } from "./media";
-import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
+import { registerProfiles } from "./profiles";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
+const rendererURL =
+	isDev && process.env.ELECTRON_RENDERER_URL
+		? process.env.ELECTRON_RENDERER_URL
+		: pathToFileURL(join(__dirname, "../renderer/index.html")).href;
 registerClockScheme();
 const PANEL_TITLE = "open-quake panel";
 
@@ -140,15 +145,21 @@ if (!app.requestSingleInstanceLock()) {
 			),
 			() => managementWin,
 		);
-		const profilesRuntime = ManagedRuntime.make(
-			desktopProfilesLive(app.getPath("userData")),
-		);
 		let bus: DeviceBus | undefined;
+		const managementURL = new URL(rendererURL);
+		managementURL.searchParams.set("surface", "management");
+		managementURL.searchParams.set("rotation", "0");
+		const profiles = registerProfiles(
+			() => managementWin,
+			rendererURL,
+			undefined,
+			managementURL.href,
+		);
 		const knob = registerKnob(
 			() => panelWin,
 			() => [panelWin, managementWin],
 			{
-				profiles: knobProfileBinding(profilesRuntime),
+				profiles: knobProfileBinding(profiles.runtime, profiles.select),
 				hardware: () => bus?.hardware?.(),
 			},
 		);
@@ -171,13 +182,20 @@ if (!app.requestSingleInstanceLock()) {
 			ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 			() => managementWin,
 		);
-		// Read-only committed profiles for the strip and its preview.
-		registerProfiles(profilesRuntime);
-		profilesRuntime.runFork(
+		const profileUpdates = profiles.runtime.runFork(
 			ProfileService.subscribeCommittedProfiles().pipe(
 				Effect.flatMap((snapshots) =>
 					Stream.runForEach(snapshots, () =>
-						Effect.promise(() => knob.refresh()),
+						Effect.tryPromise({
+							try: () => knob.refresh(),
+							catch: KnobDispatchFailed.fromCause,
+						}).pipe(
+							Effect.catchTag("KnobDispatchFailed", (error) =>
+								Effect.logWarning("Refreshing knob profiles failed", {
+									code: error.code,
+								}),
+							),
+						),
 					),
 				),
 			),
@@ -333,10 +351,18 @@ if (!app.requestSingleInstanceLock()) {
 							);
 							bus.on((event) => {
 								forward(event);
-								if (event.kind === "status")
+								if (event.kind === "status") {
 									void lifecycle.then((service) =>
 										lifecycleRuntime.runPromise(service.onStatus(event)),
 									);
+									if (mock) {
+										const operation =
+											event.state === "connected"
+												? profiles.connect("desktop-preview")
+												: profiles.disconnect("desktop-preview");
+										void operation.catch(() => {});
+									}
+								}
 							});
 							bus.on(knob.onDevice);
 							yield* Effect.never;
@@ -352,6 +378,7 @@ if (!app.requestSingleInstanceLock()) {
 			running = undefined;
 			if (fiber) {
 				stopping = stopping.then(async () => {
+					if (mock) await profiles.disconnect("desktop-preview");
 					await lifecycle.then((service) =>
 						lifecycleRuntime.runPromise(service.lock()),
 					);
@@ -430,7 +457,9 @@ if (!app.requestSingleInstanceLock()) {
 			void stopBus().then(async () => {
 				await weatherMedia.dispose();
 				await lifecycleRuntime.dispose();
+				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));
 				await knob.dispose();
+				await profiles.dispose();
 				await runtime.dispose();
 				quitFinished = true;
 				app.quit();

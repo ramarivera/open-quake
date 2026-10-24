@@ -1,0 +1,457 @@
+[
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Mute",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.mute"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-103",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+m"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,5"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Defean",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.deafen"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-110",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+d"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,6"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Nav Back",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.navBack"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-106",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+["
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,7"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Camera",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.camera"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-111",
+			"actions": [
+				{
+					"type": "key",
+					"value": "alt+control+k"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,8"
+	},
+	{
+		"childrenName": "gameMode",
+		"config": {
+			"type": "gameMode",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-118",
+			"actions": [],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "1,1"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,2"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,3"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "1,4"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Push To Talk",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.pushToTalk"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-107",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+p"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "2,5"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Streamer Mode",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.streamerMode"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-109",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+s"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "2,6"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Nav Forward",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.navForward"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-105",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+]"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "2,7"
+	},
+	{
+		"childrenName": "hotkey",
+		"config": {
+			"type": "hotkey",
+			"title": {
+				"text": "Screen Share",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0,
+				"multiLanguage": true,
+				"i18nKey": "defaultDiscordConfig.screenShare"
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "0-104",
+			"actions": [
+				{
+					"type": "key",
+					"value": "control+alt+shift+s"
+				}
+			],
+			"basicEditableItems": {
+				"title": false,
+				"grid": false,
+				"icon": false,
+				"allowDelete": false,
+				"allowDrag": false
+			}
+		},
+		"keyCode": "2,8"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,1"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,2"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,3"
+	},
+	{
+		"childrenName": "",
+		"config": {
+			"type": "",
+			"title": {
+				"text": "",
+				"pos": "bot",
+				"size": 8,
+				"color": "#FFFFFF",
+				"display": true,
+				"style": "bold|italic|underline",
+				"resourceId": 0
+			},
+			"size": [1, 1],
+			"display": true,
+			"supportKnob": false,
+			"icon": "",
+			"actions": []
+		},
+		"keyCode": "2,4"
+	}
+]

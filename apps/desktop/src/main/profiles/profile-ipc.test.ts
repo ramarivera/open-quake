@@ -37,7 +37,7 @@ vi.mock("electron", () => electron);
 const decode = Schema.decodeUnknownEither(ProfileSnapshotReply);
 type Handler = (event: unknown) => Promise<unknown>;
 
-function setup(read: () => Promise<unknown>) {
+function setup(read: () => Promise<unknown>, owned = true) {
 	let stored: EncodedProfileEnvelope | undefined;
 	const runtime = ManagedRuntime.make(
 		ProfilesLive({
@@ -47,7 +47,7 @@ function setup(read: () => Promise<unknown>) {
 			},
 		}),
 	);
-	const registration = registerProfiles(runtime, RENDERER);
+	const registration = registerProfiles(runtime, RENDERER, owned);
 	const handler = electron.ipcMain.handle.mock.calls.find(
 		([channel]) => channel === PROFILES_READ,
 	)?.[1];
@@ -69,6 +69,18 @@ const pushed = () =>
 describe("read-only profile snapshots", () => {
 	afterEach(() => {
 		vi.clearAllMocks();
+	});
+	it("leaves an externally owned shared runtime alive after removing snapshot delivery", async () => {
+		const { runtime, registration, request } = setup(
+			async () => stripFixtureEnvelope(),
+			false,
+		);
+		await request();
+		await registration.dispose();
+		expect(electron.app.on).not.toHaveBeenCalled();
+		const loaded = await runtime.runPromise(ProfileService.loadProfiles());
+		expect(loaded.envelope.profiles.length).toBeGreaterThan(0);
+		await runtime.dispose();
 	});
 
 	it("answers reads, then pushes every committed snapshot to every window", async () => {

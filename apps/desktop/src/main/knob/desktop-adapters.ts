@@ -20,6 +20,7 @@ import {
 	type Profile,
 	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { visibleProfiles } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import type { ProfileStoragePort } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ImageDecoder } from "../media/image-decoder";
 import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
@@ -99,11 +100,12 @@ const keys = (profile: Profile, pageId: string): KnobModelContext["keys"] =>
 			: [];
 	});
 const colorful = (profile: Profile): boolean =>
-	Option.isSome(profile.compatibility) &&
-	(profile.compatibility.value.type === 0 ||
-		(typeof profile.compatibility.value.name === "string" &&
-			profile.compatibility.value.name.startsWith("5,")) ||
-		profile.compatibility.value.resourceId === "1-4");
+	profile.id === "1-4" ||
+	(Option.isSome(profile.compatibility) &&
+		(profile.compatibility.value.type === 0 ||
+			(typeof profile.compatibility.value.name === "string" &&
+				profile.compatibility.value.name.startsWith("5,")) ||
+			profile.compatibility.value.resourceId === "1-4"));
 
 export function desktopKnobAdapters(
 	root: string,
@@ -131,8 +133,11 @@ export function desktopKnobAdapters(
 		envelope: ProfileEnvelope,
 		profileId: string,
 	): KnobModelContext => {
+		const visible = visibleProfiles(envelope);
 		const profile =
-			envelope.profiles.find((p) => p.id === profileId) ?? envelope.profiles[0];
+			visible.find((p) => p.id === profileId) ??
+			visible[0] ??
+			envelope.profiles[0];
 		const selection = envelope.activeByDevice["desktop-preview"];
 		const pageId =
 			selection?.profileId === profile.id
@@ -146,7 +151,7 @@ export function desktopKnobAdapters(
 				revision: profile.revision,
 			},
 			pageId,
-			profiles: envelope.profiles.map((p) => ({
+			profiles: visible.map((p) => ({
 				id: p.id,
 				name: p.name,
 				colorful: colorful(p),
