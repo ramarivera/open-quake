@@ -75,6 +75,12 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./knob", () => ({
+	registerKnob: () => ({
+		onDevice: () => {},
+		dispose: () => Promise.resolve(),
+	}),
+}));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };

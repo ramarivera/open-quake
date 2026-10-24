@@ -11,8 +11,14 @@ import {
 	WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { registerKnob } from "../knob";
 import { MediaLive, registerMedia } from "./index";
 
+assert.equal(
+	process.env.OPEN_QUAKE_MOCK_DEVICE,
+	"1",
+	"Native smoke requires mock device mode",
+);
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
 const pngPath = join(directory, "checkerboard.png");
@@ -69,6 +75,10 @@ async function smoke(): Promise<void> {
 	};
 	const management = new BrowserWindow(options);
 	const panel = new BrowserWindow(options);
+	const knob = registerKnob(
+		() => panel,
+		() => [management, panel],
+	);
 	let runtimeDisposed = false;
 	const runtime = ManagedRuntime.make(
 		Layer.merge(
@@ -212,6 +222,7 @@ async function smoke(): Promise<void> {
 			(await management.webContents.capturePage()).toPNG(),
 		);
 	}
+	await knob.dispose();
 	management.destroy();
 	panel.destroy();
 	process.stdout.write(

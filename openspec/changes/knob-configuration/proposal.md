@@ -8,8 +8,8 @@ The QUAKE knob is a reserved profile entry, not another grid cell. Recovered sou
 
 Approved (Ramiro, 2026-10-23): all design recommendations previously marked Proposed (pending Ramiro). Physical direction, panel brightness targeting and scale, and hardware hold/release remain unverified.
 
-- Define stable center, left, and right slots at key code `0,1`, profile-scoped saves, and snapshot-based event routing.
-- Deliver knob panel brightness and page navigation first, subject to L1 target verification.
+- Define stable center, left, and right slots at key code `0,1`, profile-scoped saves, and snapshot-based focus routing and idle profile selection.
+- Preserve brightness/navigation assignments as compatibility data; idle physical rotation selects profiles under approved GAP-MAP decision 1.
 - Define direct-route push-to-talk configuration and its handoff to the voice lane without implementing STT, TTS, or chat here.
 - Specify legacy route migration, cross-profile isolation, and later DKClaw/legacy compatibility gates.
 
@@ -25,4 +25,4 @@ None.
 
 ## Impact
 
-`packages/device` owns knob Schema contracts, migration invariants, and the knob conductor. `apps/desktop` will own the three-slot editor, local repository adapter, platform brightness adapter where needed, and voice-service composition. `packages/protocol` remains L1-owned; this change consumes normalized rotate, press, holdStart, release, and disconnect events without fixing wire values. Dependencies are `profiles-key-grid`, `key-function-library`, `two-layer-sdk`, and the voice lane for direct push-to-talk. No new dependencies are proposed. Beads updates belong to the parent.
+`packages/device` owns knob Schema contracts, migration invariants, and the knob conductor. `apps/desktop` will own the three-slot editor, local repository adapter, platform brightness adapter where needed, and voice-service composition. `packages/protocol` remains L1-owned; this change consumes normalized rotate, press, holdStart, release, and disconnect events using source-confirmed 1/2/5/255 classifications and direction byte 1 = increase. Dependencies are `profiles-key-grid`, `key-function-library`, `two-layer-sdk`, and the voice lane for direct push-to-talk. No new dependencies are proposed. Beads updates belong to the parent.

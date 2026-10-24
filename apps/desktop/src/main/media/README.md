@@ -106,7 +106,7 @@ and narrow layout. An optional absolute directory receives screenshots:
 
 ```sh
 pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/media/smoke.config.ts
-env -u ELECTRON_RUN_AS_NODE pnpm --filter @open-quake/desktop exec electron out/media-smoke/smoke.js /tmp/open-quake-w6-visuals
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/media-smoke/smoke.js /tmp/open-quake-w6-visuals
 ```
 
 The smoke test creates a temporary user-data directory and removes it afterward.

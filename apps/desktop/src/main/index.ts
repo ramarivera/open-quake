@@ -12,6 +12,7 @@ import {
 	panelRotation,
 } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { registerKnob } from "./knob";
 import { MediaLive, registerMedia } from "./media";
 import { startMockDeviceBus } from "./mockDeviceBus";
 
@@ -99,6 +100,10 @@ app.whenReady().then(() => {
 	let panelTarget = getPanelTarget();
 	let panelWin = createPanelWindow(panelTarget);
 	let managementWin = createManagementWindow();
+	const knob = registerKnob(
+		() => panelWin,
+		() => [panelWin, managementWin],
+	);
 	registerMedia(
 		ManagedRuntime.make(
 			MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
@@ -132,6 +137,7 @@ app.whenReady().then(() => {
 					Effect.gen(function* () {
 						bus = yield* source;
 						bus.on(createEventForwarder(() => [panelWin, managementWin]));
+						bus.on(knob.onDevice);
 						yield* Effect.never;
 					}),
 				),
@@ -195,6 +201,7 @@ app.whenReady().then(() => {
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 		void stopBus().then(async () => {
+			await knob.dispose();
 			await runtime.dispose();
 			quitFinished = true;
 			app.quit();

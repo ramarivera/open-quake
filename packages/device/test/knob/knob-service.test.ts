@@ -37,10 +37,19 @@ import {
 const run = (h: ReturnType<typeof harness>, event: unknown) =>
 	KnobService.dispatch(event).pipe(Effect.provide(h.layer));
 const hold = { _tag: "HoldStart", session, pressId: press.pressId } as const;
+const focusedSnapshot = () => ({
+	...snapshot(),
+	focused: {
+		keyCode: "1,1",
+		visible: true,
+		supportKnob: true,
+		directions: [key("ctrl+a"), key("ctrl+b")],
+	},
+});
 
 describe("knob conductor dispatch consumer", () => {
 	it.effect(
-		"dispatches valid sibling slots after an unsupported voice import",
+		"preserves imported sibling slots without executing them on idle rotation",
 		() =>
 			Effect.gen(function* () {
 				for (const actions of [
@@ -65,14 +74,9 @@ describe("knob conductor dispatch consumer", () => {
 					if (Either.isLeft(imported)) return yield* imported.left;
 					const h = harness(snapshot(imported.right.resource));
 					const result = yield* run(h, rotate());
-					expect(result).toEqual({ dispatched: 1, ignored: 0 });
-					expect(h.commands).toHaveLength(1);
-					expect(h.commands[0]).toMatchObject({
-						route: "right",
-						assignment: nextPage,
-					});
+					expect(result).toEqual({ dispatched: 0, ignored: 1 });
 					yield* run(h, rotate(1, "counterclockwise"));
-					expect(h.commands).toHaveLength(1);
+					expect(h.commands).toEqual([]);
 				}
 			}),
 	);
@@ -109,7 +113,7 @@ describe("knob conductor dispatch consumer", () => {
 			}),
 	);
 	it.effect(
-		"ignores hidden, unsupported, or invalid focus and chooses only the directional profile slot",
+		"ignores hidden, unsupported, or invalid focus without falling through to profile slots",
 		() =>
 			Effect.gen(function* () {
 				for (const focused of [
@@ -137,32 +141,23 @@ describe("knob conductor dispatch consumer", () => {
 						focused,
 					});
 					yield* run(h, rotate());
-					expect(h.commands).toHaveLength(1);
-					expect(h.commands[0]).toMatchObject({
-						route: "right",
-						assignment: nextPage,
-					});
+					expect(h.commands).toEqual([]);
 				}
 			}),
 	);
-	it.effect(
-		"falls back to a rotation-capable center only when the directional slot is empty",
-		() =>
-			Effect.gen(function* () {
-				const h = harness(
-					snapshot(knob([brightness, previousPage, emptyKnobSlot()])),
-				);
-				yield* Effect.gen(function* () {
-					yield* KnobService.dispatch(rotate());
-					yield* KnobService.dispatch(rotate(1, "counterclockwise"));
-				}).pipe(Effect.provide(h.layer));
-				expect(
-					h.commands.map((c) => [c.route, c.assignment.config.type]),
-				).toEqual([
-					["center", "panelBrightness"],
-					["left", "previousPage"],
-				]);
-			}),
+	it.effect("never executes center or directional slots on idle rotation", () =>
+		Effect.gen(function* () {
+			const h = harness(
+				snapshot(knob([brightness, previousPage, emptyKnobSlot()])),
+			);
+			yield* Effect.gen(function* () {
+				yield* KnobService.dispatch(rotate());
+				yield* KnobService.dispatch(rotate(1, "counterclockwise"));
+			}).pipe(Effect.provide(h.layer));
+			expect(
+				h.commands.map((c) => [c.route, c.assignment.config.type]),
+			).toEqual([]);
+		}),
 	);
 	it.effect("empty slots and voice-only centers do nothing on rotation", () =>
 		Effect.gen(function* () {
@@ -183,15 +178,12 @@ describe("knob conductor dispatch consumer", () => {
 					new Error("private runtime"),
 				);
 				const attempted: KnobDispatchCommand[] = [];
-				const h = harness(
-					snapshot(knob([brightness, emptyKnobSlot(), nextPage])),
-					{
-						dispatch: (command) => {
-							attempted.push(command);
-							return Promise.reject(original);
-						},
+				const h = harness(focusedSnapshot(), {
+					dispatch: (command) => {
+						attempted.push(command);
+						return Promise.reject(original);
 					},
-				);
+				});
 				const result = yield* Effect.either(run(h, rotate(3)));
 				expect(Either.isLeft(result)).toBe(true);
 				if (Either.isLeft(result)) {
@@ -199,7 +191,7 @@ describe("knob conductor dispatch consumer", () => {
 					expect(result.left.originalCause).toBe(original.originalCause);
 					expect(result.left.diagnosticCause).toBe(original.diagnosticCause);
 				}
-				expect(attempted.map((c) => c.route)).toEqual(["right"]);
+				expect(attempted.map((c) => c.route)).toEqual(["focused"]);
 				expect(h.commands).toEqual([]);
 			}),
 	);
@@ -208,7 +200,7 @@ describe("knob conductor dispatch consumer", () => {
 		() =>
 			Effect.gen(function* () {
 				const executed: KnobDispatchCommand[] = [];
-				const h = harness(snapshot(), {
+				const h = harness(focusedSnapshot(), {
 					dispatch: (command) => {
 						executed.push(command);
 						h.publish({
@@ -237,10 +229,10 @@ describe("knob conductor dispatch consumer", () => {
 			Effect.gen(function* () {
 				let valid = true;
 				let writes = 0;
-				const h = harness(snapshot(), {
+				const h = harness(focusedSnapshot(), {
 					readSnapshot: () => {
 						valid = false;
-						return Promise.resolve(snapshot());
+						return Promise.resolve(focusedSnapshot());
 					},
 					dispatch: () => {
 						if (!valid) return Promise.reject(KnobSessionStale.fromCause());
@@ -468,7 +460,10 @@ describe("knob conductor dispatch consumer", () => {
 				);
 				expect(
 					yield* Effect.either(run(invalidFunction, rotate())),
-				).toMatchObject({ _tag: "Left", left: { _tag: "InvalidKnobConfig" } });
+				).toMatchObject({
+					_tag: "Right",
+					right: { dispatched: 0, ignored: 1 },
+				});
 				expect(invalidFunction.commands).toEqual([]);
 			}),
 	);
@@ -544,7 +539,7 @@ describe("knob catalog errors at dependency boundaries", () => {
 				);
 				for (const failure of ["read", "dispatch"]) {
 					const h = harness(
-						snapshot(),
+						focusedSnapshot(),
 						failure === "read"
 							? { readSnapshot: () => Promise.reject(original) }
 							: { dispatch: () => Promise.reject(original) },

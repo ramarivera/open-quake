@@ -3,6 +3,7 @@ import { useState } from "react";
 import { FillMode, HourFormat } from "../../../shared/display";
 import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
+import { KnobPanelLayer } from "../strip/overlays/knob/KnobPanelLayer";
 import { useQuakeEvents } from "../useQuakeEvents";
 import { useWallpaper } from "./useWallpaper";
 import { WallpaperCanvas } from "./WallpaperCanvas";
@@ -14,6 +15,7 @@ export function WallpaperPanel(): React.JSX.Element {
 		<main className="wallpaper-panel" aria-label="Quake device panel">
 			<WallpaperCanvas snapshot={snapshot}>
 				<PanelFeedbackLayer view={feedback} />
+				<KnobPanelLayer />
 			</WallpaperCanvas>
 		</main>
 	);
