@@ -24,6 +24,11 @@ Profiles SHALL select independent routing, daily, deepThink, vision, image, vide
 - **THEN** classification uses its explicit routing controls without inheriting daily controls
 - **AND** daily and deep-thinking requests retain the configured reasoning effort
 
+#### Scenario: Disabled controls for DeepSeek classification
+- **WHEN** Auto selects an explicitly configured DeepSeek routing model with thinking and native search disabled
+- **THEN** classification succeeds without emitting provider reasoning or search options and dispatches the selected target
+- **AND** enabling unsupported reasoning or native search still fails before credentials or adapter invocation
+
 ### Requirement: Corrected independent speech protocols
 
 Facade-owned speech SHALL implement the corrected voice-stt-tts contracts using independent selection and injected fetch/WebSocket transports (AI-094, AI-101, AI-105). DashScope SHALL use workspace hosts, ASR qwen-audio-3.1-asr-flash-streaming and TTS qwen-audio-3.1-tts-flash with longanlingxin_v3.1 and 24kHz mono PCM. Recognition SHALL gate binary data on matching readiness, replace provisional segments, deduplicate finals and require matching task-finished after one nonempty finish. Synthesis SHALL parse fragmented multiline SSE, require stop, bound buffers and verify audio descriptors. OpenAI SHALL request WAV with explicit voice/instructions, gate retired profiles and reject unsupported replacement transports. Failures SHALL retain private original causes and scrub serialized diagnostics.

@@ -12,3 +12,4 @@
 - [x] 2.4 Bound all recognition protocol phases including stalled sends and prove speech ownership is released. Bead: open-quake-lih.15.1.9.
 - [x] 2.5 Run all lane gates after merging main, publish review evidence and reply to/resolve all seven review threads. Bead: open-quake-lih.15.1.10. Final integration verified against main at bdf8ca8.
 - [x] 2.6 Cancel knob registration work during integrated shutdown and regress pending profile reads/refreshes without changing the bundle gate deadline. Bead: open-quake-lih.15.1.11.
+- [ ] 2.7 Accept disabled thinking for DeepSeek Auto classification without provider reasoning options, retain enabled-control rejection, and regress the facade path. Bead: open-quake-lih.15.1.12. Additional thread PRRT_kwDOUADXpM6v33e1.

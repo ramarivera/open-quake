@@ -21,6 +21,42 @@ import {
 
 describe("profile workflows", () => {
 	it.effect(
+		"rejects enabled DeepSeek reasoning and search before credentials",
+		() =>
+			Effect.gen(function* () {
+				yield* (yield* AiRepository).put({
+					...workflowProfile,
+					provider: "deepseek",
+				});
+				const service = yield* AiProviderService;
+				for (const controls of [
+					{ thinking: true },
+					{ reasoningEffort: "low" },
+					{ webSearch: true },
+				] as const) {
+					const result = yield* Effect.either(
+						service.generate({ ...workflowRequest, controls }),
+					);
+					expect(Either.isLeft(result) && result.left).toMatchObject({
+						_tag: "AiConfigInvalid",
+						code: "AI.PROVIDER.CONFIG_INVALID",
+					});
+				}
+			}).pipe(
+				Effect.provide(
+					workflowLayer(
+						{
+							open: () => Effect.die("must not dispatch unsupported controls"),
+						},
+						{
+							resolve: () => Effect.die("must not resolve credentials"),
+							revoked: () => Effect.never,
+						},
+					),
+				),
+			),
+	);
+	it.effect(
 		"dispatches mandatory Kimi sampling without caller sampling ranges",
 		() => {
 			const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];

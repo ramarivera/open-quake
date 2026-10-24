@@ -48,6 +48,51 @@ const decision = (action: string, extraData = "") =>
 
 describe("Auto key mode", () => {
 	it.effect(
+		"classifies with DeepSeek while thinking and search are disabled",
+		() => {
+			const calls: Parameters<CompatibleAdapter["open"]>[0][] = [];
+			const dispatches: VoiceDispatch[] = [];
+			return Effect.gen(function* () {
+				yield* (yield* AiRepository).put({
+					...workflowProfile,
+					provider: "deepseek",
+					models: { daily: "deepseek-chat", routing: "deepseek-v4-flash" },
+				});
+				const result = yield* (yield* AiVoiceService).submit(request);
+				expect(result.route).toBe("normal");
+				expect(dispatches).toHaveLength(1);
+				expect(calls).toHaveLength(1);
+				expect(calls[0]?.profile.modelId).toBe("deepseek-v4-flash");
+				expect(calls[0]?.request.controls).toEqual({
+					thinking: false,
+					webSearch: false,
+				});
+				expect(calls[0]?.providerOptions).toEqual({});
+			}).pipe(
+				Effect.provide(
+					layer(
+						{
+							open: (input) => {
+								calls.push(input);
+								return Effect.succeed(
+									Stream.fromIterable([
+										{
+											_tag: "textDelta",
+											textDelta: decision("standardChat"),
+											kind: "generation",
+										},
+										{ _tag: "completed" },
+									]),
+								);
+							},
+						},
+						dispatches,
+					),
+				),
+			);
+		},
+	);
+	it.effect(
 		"classifies independently of daily reasoning and preserves daily/deepThink effort",
 		() =>
 			Effect.gen(function* () {

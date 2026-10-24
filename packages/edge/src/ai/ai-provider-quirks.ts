@@ -149,11 +149,7 @@ export function prepareWorkflow(
 			request.messages.some((m) => m.content.some((p) => p._tag === "image"))
 		)
 			return Either.left(new AiCapabilityUnsupported("images"));
-		if (
-			controls.webSearch ||
-			controls.reasoningEffort ||
-			controls.thinking !== undefined
-		)
+		if (controls.webSearch || controls.reasoningEffort || controls.thinking)
 			return invalid();
 	} else if (
 		controls.thinking ||

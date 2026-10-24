@@ -117,3 +117,32 @@ gates were rerun on the combined source, then the beads were closed again:
 Logs use the *-integrated.log filenames in the scratch directory above.
 There is still no renderer diff relative to origin/main, so the native UI
 screenshot gate does not apply. No paid live calls or device access occurred.
+
+## Additional finding during delivery
+
+Thread PRRT_kwDOUADXpM6v33e1 appeared after the original seven were resolved.
+The report is valid: DeepSeek treated thinking:false as unsupported, so an
+initial Auto request failed before classification despite an explicit routing
+model. DeepSeek now accepts disabled thinking without adding provider options.
+Enabled thinking, reasoning effort and native search still fail before
+credentials or adapter calls.
+
+The new Auto test failed with AiConfigInvalid before the correction, then
+passed through classification and target dispatch with empty provider options.
+A second regression checks the exact tag/code and forbids credential/adapter
+calls for enabled controls. The focused suite passes 16 tests. Logs:
+deepseek-auto-before.log and deepseek-auto-after.log in the scratch directory.
+
+All six gates were rerun after this correction:
+
+- pnpm biome check packages apps: 425 files, no fixes.
+- pnpm typecheck: 6 successful tasks, 4 cached.
+- pnpm test: 4 successful tasks, 3 cached; protocol 47, device 388,
+  edge 72, desktop 441 tests, 948 total.
+- pnpm build: successful, uncached.
+- env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter
+  @open-quake/desktop test:bundle: both cases passed with awaited shutdown.
+- openspec validate --all --strict: 36 passed, zero failed.
+
+These final logs use *-deepseek-final.log. Fix publication and the additional
+thread's resolution are the remaining work for bead open-quake-lih.15.1.12.
