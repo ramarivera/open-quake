@@ -37,6 +37,7 @@ import {
 import {
 	AgentCredentialPort,
 	AgentDraftPort,
+	type AgentMutation,
 	AgentPanelPort,
 } from "./agents-ports.js";
 import { AgentsRepository } from "./agents-repository.js";
@@ -97,6 +98,57 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 					};
 				},
 			);
+			const pendingCredentialCleanup = new Set<string>();
+			const credentialRefs = (state: AgentState) =>
+				new Set(
+					Object.values(state.models)
+						.flatMap((rows) => rows.map((row) => row.credentialRef))
+						.filter(Boolean),
+				);
+			const retireCredentials = (used: ReadonlySet<string>) =>
+				Effect.gen(function* () {
+					if (Option.isNone(credentials)) return;
+					for (const reference of pendingCredentialCleanup) {
+						if (used.has(reference)) {
+							pendingCredentialCleanup.delete(reference);
+							continue;
+						}
+						yield* credentials.value.remove(reference).pipe(
+							Effect.matchEffect({
+								onSuccess: () =>
+									Effect.sync(() => {
+										pendingCredentialCleanup.delete(reference);
+									}),
+								// A committed edit remains committed. Retain the ref for retry, and report
+								// only a stable diagnostic. Native keychain errors can contain secrets.
+								onFailure: () =>
+									Effect.logWarning(
+										"Agent credential cleanup failed; retry pending",
+									).pipe(
+										Effect.annotateLogs({
+											code: "AGENT.CREDENTIAL.UNAVAILABLE",
+											operation: "retire-credential",
+										}),
+									),
+							}),
+						);
+					}
+				});
+			const transactModels = (mutate: AgentMutation) =>
+				Effect.uninterruptible(
+					Effect.gen(function* () {
+						let before = new Set<string>();
+						const committed = yield* repository.transact((state) => {
+							before = credentialRefs(state);
+							return mutate(state);
+						});
+						const used = credentialRefs(committed);
+						for (const reference of before)
+							if (!used.has(reference)) pendingCredentialCleanup.add(reference);
+						yield* retireCredentials(used);
+						return committed;
+					}),
+				);
 			const check = (
 				state: AgentState,
 				revision: number,
@@ -157,66 +209,62 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 					case "delete": {
 						let rollback: Effect.Effect<void, AgentError> = Effect.void;
 						yield* Effect.uninterruptible(
-							repository
-								.transact((state) =>
-									Effect.gen(function* () {
-										yield* editable(state, command.id);
-										if (!command.confirmed) return yield* new AgentInvalid();
+							transactModels((state) =>
+								Effect.gen(function* () {
+									yield* editable(state, command.id);
+									if (!command.confirmed) return yield* new AgentInvalid();
 
-										const models = Object.fromEntries(
-											Object.entries(state.models).filter(
-												([key]) => key !== command.id,
-											),
-										);
-										const next: AgentState = {
-											...state,
-											agents: state.agents.filter((a) => a.id !== command.id),
-											skills: state.skills.filter(
-												(s) => s.owner !== command.id,
-											),
-											slots: {
-												"1,5":
-													state.slots["1,5"] === command.id
-														? Schema.decodeUnknownSync(AgentId)("main")
-														: state.slots["1,5"],
-												"1,6":
-													state.slots["1,6"] === command.id
-														? Schema.decodeUnknownSync(AgentId)("main")
-														: state.slots["1,6"],
-												"2,5":
-													state.slots["2,5"] === command.id
-														? Schema.decodeUnknownSync(AgentId)("main")
-														: state.slots["2,5"],
-												"2,6":
-													state.slots["2,6"] === command.id
-														? Schema.decodeUnknownSync(AgentId)("main")
-														: state.slots["2,6"],
-											},
-											models,
-										};
-										if (Object.values(state.slots).includes(command.id)) {
-											if (Option.isNone(panel))
-												return yield* new AgentProfileMissing();
-											const transaction = yield* panel.value.prepare(
-												next.slots,
-												next.agents,
-											);
-											rollback = transaction.rollback;
-											yield* transaction.apply;
-										}
-										return next;
-									}),
-								)
-								.pipe(
-									Effect.catchAll((error) =>
-										rollback.pipe(
-											Effect.catchAll((cause) =>
-												Effect.fail(new AgentRollbackFailed(cause)),
-											),
-											Effect.zipRight(Effect.fail(error)),
+									const models = Object.fromEntries(
+										Object.entries(state.models).filter(
+											([key]) => key !== command.id,
 										),
+									);
+									const next: AgentState = {
+										...state,
+										agents: state.agents.filter((a) => a.id !== command.id),
+										skills: state.skills.filter((s) => s.owner !== command.id),
+										slots: {
+											"1,5":
+												state.slots["1,5"] === command.id
+													? Schema.decodeUnknownSync(AgentId)("main")
+													: state.slots["1,5"],
+											"1,6":
+												state.slots["1,6"] === command.id
+													? Schema.decodeUnknownSync(AgentId)("main")
+													: state.slots["1,6"],
+											"2,5":
+												state.slots["2,5"] === command.id
+													? Schema.decodeUnknownSync(AgentId)("main")
+													: state.slots["2,5"],
+											"2,6":
+												state.slots["2,6"] === command.id
+													? Schema.decodeUnknownSync(AgentId)("main")
+													: state.slots["2,6"],
+										},
+										models,
+									};
+									if (Object.values(state.slots).includes(command.id)) {
+										if (Option.isNone(panel))
+											return yield* new AgentProfileMissing();
+										const transaction = yield* panel.value.prepare(
+											next.slots,
+											next.agents,
+										);
+										rollback = transaction.rollback;
+										yield* transaction.apply;
+									}
+									return next;
+								}),
+							).pipe(
+								Effect.catchAll((error) =>
+									rollback.pipe(
+										Effect.catchAll((cause) =>
+											Effect.fail(new AgentRollbackFailed(cause)),
+										),
+										Effect.zipRight(Effect.fail(error)),
 									),
 								),
+							),
 						);
 						break;
 					}
@@ -418,7 +466,8 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 							);
 						break;
 					case "inherit":
-						yield* repository.transact((state) =>
+						if (command.scope === "default") return yield* new AgentProtected();
+						yield* transactModels((state) =>
 							Effect.gen(function* () {
 								yield* check(state, command.revision);
 								if (!scopeExists(state, command.scope))
@@ -443,69 +492,71 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 						break;
 					case "save-model": {
 						let createdRef = "";
-						yield* repository
-							.transact((state) =>
-								Effect.gen(function* () {
-									yield* check(state, command.revision);
-									if (!scopeExists(state, command.scope))
-										return yield* new AgentMissing();
-									const rows =
-										ownModelRows(state.models, command.scope) ??
-										ownModelRows(state.models, "default") ??
-										[];
-									const previous = rows.find((r) => r.id === command.row.id);
-									const provider = command.row.provider.trim();
-									let row: ModelRow = {
-										...command.row,
-										provider,
-										model: command.row.model.trim(),
-										baseUrl:
-											command.row.baseUrl.trim() ||
-											providerDefaults.find((p) => p.id === provider)
-												?.baseUrl ||
-											"",
-										credentialRef:
-											previous?.provider === provider
-												? previous.credentialRef
-												: "",
-									};
-									if (!modelValid(row)) return yield* new AgentModelInvalid();
-									if (command.secret.trim()) {
-										if (Option.isNone(credentials))
-											return yield* new AgentCredentialUnavailable();
-										createdRef = yield* credentials.value.store(
-											Redacted.make(command.secret),
-										);
-										row = { ...row, credentialRef: createdRef };
-									}
-									const next = rows.some((r) => r.id === row.id)
-										? rows.map((r) => (r.id === row.id ? row : r))
-										: [...rows, row];
-									const withUrl = next.map((r) =>
-										r.provider === provider
-											? { ...r, baseUrl: row.baseUrl }
-											: r,
+						let retainedRefs = new Set<string>();
+						yield* transactModels((state) =>
+							Effect.gen(function* () {
+								retainedRefs = credentialRefs(state);
+								yield* check(state, command.revision);
+								if (!scopeExists(state, command.scope))
+									return yield* new AgentMissing();
+								const rows =
+									ownModelRows(state.models, command.scope) ??
+									ownModelRows(state.models, "default") ??
+									[];
+								const previous = rows.find((r) => r.id === command.row.id);
+								const provider = command.row.provider.trim();
+								let row: ModelRow = {
+									...command.row,
+									provider,
+									model: command.row.model.trim(),
+									baseUrl:
+										command.row.baseUrl.trim() ||
+										providerDefaults.find((p) => p.id === provider)?.baseUrl ||
+										"",
+									credentialRef:
+										previous?.provider === provider
+											? previous.credentialRef
+											: "",
+								};
+								if (!modelValid(row)) return yield* new AgentModelInvalid();
+								if (command.secret.trim()) {
+									if (Option.isNone(credentials))
+										return yield* new AgentCredentialUnavailable();
+									createdRef = yield* credentials.value.store(
+										Redacted.make(command.secret),
 									);
-									return {
-										...state,
-										models: {
-											...state.models,
-											[command.scope]: normalizeRoles(withUrl, row.id),
-										},
-									};
-								}),
-							)
-							.pipe(
-								Effect.onError(() =>
-									createdRef && Option.isSome(credentials)
-										? credentials.value.remove(createdRef).pipe(Effect.ignore)
-										: Effect.void,
-								),
-							);
+									row = { ...row, credentialRef: createdRef };
+								}
+								const next = rows.some((r) => r.id === row.id)
+									? rows.map((r) => (r.id === row.id ? row : r))
+									: [...rows, row];
+								const withUrl = next.map((r) =>
+									r.provider === provider ? { ...r, baseUrl: row.baseUrl } : r,
+								);
+								return {
+									...state,
+									models: {
+										...state.models,
+										[command.scope]: normalizeRoles(withUrl, row.id),
+									},
+								};
+							}),
+						).pipe(
+							Effect.onError(() =>
+								createdRef
+									? Effect.uninterruptible(
+											Effect.gen(function* () {
+												pendingCredentialCleanup.add(createdRef);
+												yield* retireCredentials(retainedRefs);
+											}),
+										)
+									: Effect.void,
+							),
+						);
 						break;
 					}
 					case "delete-model":
-						yield* repository.transact((state) =>
+						yield* transactModels((state) =>
 							Effect.gen(function* () {
 								yield* check(state, command.revision);
 								if (!command.confirmed) return yield* new AgentInvalid();

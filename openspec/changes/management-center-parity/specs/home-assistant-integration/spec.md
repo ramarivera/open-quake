@@ -29,6 +29,14 @@ A Home Assistant key SHALL carry `{entity_id, service, service_data, custom_disp
 
 Source: CENTER-101; home-assistant-integration "Entity and service configuration".
 
+#### Scenario: Service fields have collapsed sections
+- **WHEN** the server describes nested sections of service fields
+- **THEN** the editor renders their leaf controls with the original metadata, validates their values and saves and submits flat leaf names in service_data
+
+#### Scenario: Display attribute disappears
+- **WHEN** a saved custom display attribute disappears during live polling
+- **THEN** direct key execution and allowlisted AI execution still validate and perform the configured action; save-time display validation and AI allowlist enforcement remain active
+
 #### Scenario: Out-of-range brightness
 - **WHEN** the user enters 300 for a light's `brightness` field whose selector maximum is 255
 - **THEN** the save is rejected naming `brightness` and the key keeps its previous configuration

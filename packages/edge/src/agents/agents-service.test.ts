@@ -1,8 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Effect, Layer, Logger, Option, Redacted, Schema } from "effect";
 import fc from "fast-check";
 import { AgentId, type AgentState } from "./agents-contracts.js";
 import {
+	AgentCredentialUnavailable,
 	AgentDraftFailed,
 	AgentStorageFailed,
 	SkillMoveIncomplete,
@@ -36,6 +37,8 @@ export const unavailableRuntime = {
 function fixture(drafting?: AgentDraftAdapter) {
 	let state: AgentState = initialAgentState();
 	let fail = false;
+	let failRemove = false;
+	const removals: string[] = [];
 	const keys = new Map<string, string>();
 	let calls = 0;
 	const storage: AgentStoragePort = {
@@ -59,8 +62,19 @@ function fixture(drafting?: AgentDraftAdapter) {
 				}),
 			available: (ref) => Effect.sync(() => keys.has(ref)),
 			remove: (ref) =>
-				Effect.sync(() => {
+				Effect.suspend(() => {
+					removals.push(ref);
+					if (failRemove)
+						return Effect.fail(
+							new AgentCredentialUnavailable(new Error("token=cleanup-secret")),
+						);
+					expect(
+						Object.values(state.models)
+							.flat()
+							.some((row) => row.credentialRef === ref),
+					).toBe(false);
 					keys.delete(ref);
+					return Effect.void;
 				}),
 		}),
 		drafting ? Layer.succeed(AgentDraftPort, drafting) : Layer.empty,
@@ -72,6 +86,10 @@ function fixture(drafting?: AgentDraftAdapter) {
 			fail = value;
 		},
 		keys,
+		removals,
+		failRemove: (value: boolean) => {
+			failRemove = value;
+		},
 	};
 }
 const create = (service: AgentsService, id = "researcher") =>
@@ -512,3 +530,224 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+describe("round two model commands through the conductor", () => {
+	it.effect(
+		"rejects global inheritance in both directions without losing routing or credentials",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				yield* service.request({
+					type: "save-model",
+					scope: "default",
+					row: model("initial", "default"),
+					secret: "private-key",
+					revision: 0,
+				});
+				const before = f.state();
+				for (const enabled of [true, false]) {
+					const result = yield* service
+						.request({
+							type: "inherit",
+							scope: "default",
+							enabled,
+							revision: before.revision,
+						})
+						.pipe(Effect.either);
+					expect(result._tag === "Left" && result.left.code).toBe(
+						"AGENT.MAIN.PROTECTED",
+					);
+					expect(f.state()).toEqual(before);
+					expect(yield* service.resolve("main")).toEqual(before.models.default);
+					expect(f.keys.size).toBe(1);
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"rejects template provider URLs before storage or secret writes and accepts a real Azure URL",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				const before = f.state();
+				for (const url of [
+					"",
+					"https://{resource}.openai.azure.com",
+					"https://%7Bresource%7D.openai.azure.com",
+				]) {
+					const result = yield* service
+						.request({
+							type: "save-model",
+							scope: "default",
+							row: model("initial", "default", "azure", url),
+							secret: "private-key",
+							revision: 0,
+						})
+						.pipe(Effect.either);
+					expect(result._tag === "Left" && result.left.code).toBe(
+						"AGENT.MODEL.INVALID",
+					);
+					expect(f.state()).toEqual(before);
+					expect(f.keys.size).toBe(0);
+				}
+				yield* service.request({
+					type: "save-model",
+					scope: "default",
+					row: model(
+						"initial",
+						"default",
+						"azure",
+						"https://my-resource.openai.azure.com",
+					),
+					secret: "private-key",
+					revision: 0,
+				});
+				expect((yield* service.resolve("main"))[0]?.baseUrl).toBe(
+					"https://my-resource.openai.azure.com",
+				);
+				expect(f.keys.size).toBe(1);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"retires rotated and deleted credentials only after commit and the last shared scope releases them",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				yield* create(service);
+				const save = (scope: string, id: string, secret: string) =>
+					service.request({
+						type: "save-model",
+						scope,
+						row: model(id, "default"),
+						secret,
+						revision: f.state().revision,
+					});
+				const inherit = (enabled: boolean) =>
+					service.request({
+						type: "inherit",
+						scope: "researcher",
+						enabled,
+						revision: f.state().revision,
+					});
+				yield* save("default", "initial", "original");
+				yield* inherit(false);
+				yield* create(service, "copy");
+				yield* service.request({
+					type: "inherit",
+					scope: "copy",
+					enabled: false,
+					revision: f.state().revision,
+				});
+				yield* save("default", "initial", "rotated");
+				expect([...f.keys.keys()]).toEqual(["vault-1", "vault-2"]);
+				expect(f.removals).toEqual([]);
+				yield* inherit(true);
+				expect([...f.keys.keys()]).toEqual(["vault-1", "vault-2"]);
+				yield* service.request({ type: "delete", id: "copy", confirmed: true });
+				expect([...f.keys.keys()]).toEqual(["vault-2"]);
+				yield* inherit(false);
+				yield* save("researcher", "initial", "agent-only");
+				expect([...f.keys.keys()]).toEqual(["vault-2", "vault-3"]);
+				// Replacing an existing override with defaults also releases its private key.
+				yield* inherit(false);
+				expect([...f.keys.keys()]).toEqual(["vault-2"]);
+				yield* save("researcher", "initial", "agent-next");
+				f.fail(true);
+				const before = f.state();
+				const failedRotation = yield* save(
+					"researcher",
+					"initial",
+					"failed-write",
+				).pipe(Effect.either);
+				expect(failedRotation._tag === "Left" && failedRotation.left.code).toBe(
+					"AGENT.STORAGE.FAILED",
+				);
+				expect(f.state()).toBe(before);
+				expect([...f.keys.keys()]).toEqual(["vault-2", "vault-4"]);
+				const failedDelete = yield* service
+					.request({ type: "delete", id: "researcher", confirmed: true })
+					.pipe(Effect.either);
+				expect(failedDelete._tag).toBe("Left");
+				expect([...f.keys.keys()]).toEqual(["vault-2", "vault-4"]);
+				f.fail(false);
+				yield* service.request({
+					type: "delete",
+					id: "researcher",
+					confirmed: true,
+				});
+				expect([...f.keys.keys()]).toEqual(["vault-2"]);
+				yield* save("default", "fallback", "fallback-secret");
+				yield* service.request({
+					type: "delete-model",
+					scope: "default",
+					id: "fallback",
+					confirmed: true,
+					revision: f.state().revision,
+				});
+				expect([...f.keys.keys()]).toEqual(["vault-2"]);
+				expect(JSON.stringify(yield* service.view())).not.toMatch(
+					/vault-|original|rotated|agent-next|failed-write/,
+				);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"reports scrubbed cleanup failures after durable commits and retries without deleting shared live refs",
+		() => {
+			const f = fixture();
+			const logs: unknown[] = [];
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				const save = (secret: string) =>
+					service.request({
+						type: "save-model",
+						scope: "default",
+						row: model("initial", "default"),
+						secret,
+						revision: f.state().revision,
+					});
+				yield* save("first-secret");
+				f.failRemove(true);
+				const committed = yield* save("second-secret");
+				expect(committed.view.revision).toBe(2);
+				expect(f.state().models.default?.[0]?.credentialRef).toBe("vault-2");
+				expect(logs.length).toBeGreaterThan(0);
+				expect(JSON.stringify(logs)).not.toMatch(
+					/cleanup-secret|first-secret|second-secret|vault-/,
+				);
+				f.failRemove(false);
+				yield* save("");
+				expect([...f.keys.keys()]).toEqual(["vault-2"]);
+				// A rollback cleanup failure preserves the original storage error and is also retried.
+				f.fail(true);
+				f.failRemove(true);
+				const failed = yield* save("third-secret").pipe(Effect.either);
+				expect(failed._tag === "Left" && failed.left.code).toBe(
+					"AGENT.STORAGE.FAILED",
+				);
+				expect(logs.length).toBeGreaterThan(1);
+				f.fail(false);
+				f.failRemove(false);
+				yield* save("");
+				expect([...f.keys.keys()]).toEqual(["vault-2"]);
+			}).pipe(
+				Effect.provide(f.layer),
+				Effect.provide(
+					Logger.replace(
+						Logger.defaultLogger,
+						Logger.make((event) => {
+							logs.push({
+								message: event.message,
+								annotations: [...event.annotations],
+							});
+						}),
+					),
+				),
+			);
+		},
+	);
+});

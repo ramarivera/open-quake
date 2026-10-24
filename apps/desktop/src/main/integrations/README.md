@@ -87,7 +87,7 @@ profile. No key is executed while decoding, editing, saving or syncing a library
 
 ## Source evidence
 
-Read from `/Users/ramarivera/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95/`:
+Local research archive, `.agents/skills/dark-encyclopedia/`, DK-Suite v0.4.95 artifacts:
 
 - `audit/AUDIT_CENTER.md`, rows 072–079 and 092–102, and `audit/GAP-MAP.md`.
 - `app-resources/background.js`: recovered six-channel catalog, setup validation,

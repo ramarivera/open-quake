@@ -30,7 +30,7 @@ Results SHALL appear in a table with columns: select (select all is indeterminat
 - **THEN** the edit is rejected with the unsupported key named, and the row keeps its previous chord
 
 ### Requirement: Persisted shortcut libraries
-"Add to shortcut pack" SHALL store the selected rows as a library named after the generated title, or "{name} Shortcut Pack" when there is none, with its app and creation date. Libraries SHALL be persisted by main in a versioned store, not renderer `localStorage`. The library aside SHALL list each library with its app icon, name, count and date. Rename SHALL require a non-empty name matching `^[一-龥a-zA-Z0-9\s\-_]+$`; delete SHALL confirm. Selecting a library SHALL load it into the table, where edits persist immediately. Source: CENTER-096.
+"Add to shortcut pack" SHALL store the selected rows as a library named after the generated title, or the application label truncated by the canonical weighted profile-name limit when there is none; the full application identity SHALL remain in the library and its rows, with its app and creation date. Libraries SHALL be persisted by main in a versioned store, not renderer `localStorage`. The library aside SHALL list each library with its app icon, name, count and date. Rename SHALL require a non-empty name matching `^[一-龥a-zA-Z0-9\s\-_]+$`; delete SHALL confirm. Selecting a library SHALL load it into the table, where edits persist immediately. Source: CENTER-096.
 
 #### Scenario: Rename with punctuation
 - **WHEN** a library is renamed to `Cut/Paste`
@@ -38,6 +38,10 @@ Results SHALL appear in a table with columns: select (select all is indeterminat
 
 ### Requirement: Sync to the device
 "Sync to main screen library" SHALL write the library's shortcuts to a custom profile named after the library: up to 16 hotkey keys per page, row-major. Syncing the same library again SHALL update that profile. Profile capacity and naming rules SHALL apply. A failure SHALL leave every profile unchanged. A library with no shortcuts SHALL report that it is empty and write nothing. Source: CENTER-096, CENTER-092.
+
+#### Scenario: Default title syncs
+- **WHEN** the user leaves the shortcut pack title empty, saves selected Adobe Photoshop shortcuts and syncs the library
+- **THEN** the generated profile name fits the canonical weighted limit and the full application identity remains Adobe Photoshop
 
 #### Scenario: Seventeen shortcuts
 - **WHEN** a library with 17 shortcuts is synced

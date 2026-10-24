@@ -5,6 +5,23 @@ export const sanitizeAgentId = (value: string): string =>
 		.replace(/[^a-zA-Z0-9-]/g, "")
 		.toLowerCase()
 		.slice(0, 48);
+export const skillFolderName = (
+	name: string,
+	occupied: readonly string[],
+): string => {
+	const slug = sanitizeAgentId(name.trim().replace(/\s+/g, "-"));
+	const base = (/^[a-z]/.test(slug) ? slug : `skill-${slug || "new"}`).slice(
+		0,
+		48,
+	);
+	const used = new Set(occupied);
+	if (!used.has(base)) return base;
+	for (let index = 2; ; index++) {
+		const suffix = `-${index}`;
+		const candidate = base.slice(0, 48 - suffix.length) + suffix;
+		if (!used.has(candidate)) return candidate;
+	}
+};
 export const agentIdError = (
 	id: string,
 	agents: readonly Agent[],
@@ -91,6 +108,7 @@ export const resolveModels = (
 };
 export const modelValid = (row: ModelRow): boolean => {
 	if (
+		/[{}]|%7[bd]/i.test(row.baseUrl) ||
 		!configured(row) ||
 		!Number.isSafeInteger(row.maxTokens) ||
 		row.maxTokens < 1

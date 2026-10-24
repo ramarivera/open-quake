@@ -28,9 +28,11 @@ import {
 } from "../../shared/integrations";
 import { registerAgents } from "../agents";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
+import { decodeHaServices } from "./ha-rest";
 import { registerIntegrations } from "./index";
 import { keyHaConfig } from "./profiles";
-import { entity, fakeChannels, fakeVault, service } from "./test-fixtures";
+import { groupedServices } from "./review-grouped-services";
+import { entity, fakeChannels, fakeVault } from "./test-fixtures";
 
 async function main() {
 	const smokeDirectory = fileURLToPath(new URL(".", import.meta.url));
@@ -46,7 +48,9 @@ async function main() {
 	);
 	await mkdir(scratch, { recursive: true });
 	await mkdir(join(scratch, "synthetic-user-data"), { recursive: true });
-	await mkdir(join(scratch, "synthetic-session-data"), { recursive: true });
+	await mkdir(join(scratch, "synthetic-session-data/Shared Dictionary/cache"), {
+		recursive: true,
+	});
 	app.setPath("userData", join(scratch, "synthetic-user-data"));
 	app.setPath("sessionData", join(scratch, "synthetic-session-data"));
 	await app.whenReady();
@@ -114,6 +118,8 @@ async function main() {
 	const vault = fakeVault();
 	const channelRuntime = fakeChannels();
 	let executions = 0;
+	const outbound: unknown[] = [];
+	let droppedDisplayAttributes = false;
 	let closes = 0;
 	let release: (() => void) | undefined;
 	let started: (() => void) | undefined;
@@ -133,25 +139,15 @@ async function main() {
 		channelRuntime: channelRuntime.port,
 		openHa: async () => ({
 			entities: async () => [entity, { ...entity, entity_id: "light.private" }],
-			services: async () => [
-				{
-					...service,
-					fields: [
-						...service.fields,
-						{
-							name: "effect",
-							label: "Effect",
-							required: false,
-							type: "select",
-							min: 0,
-							max: 0,
-							options: ["rainbow"],
-						},
-					],
-				},
-			],
-			states: async () => [],
-			execute: async () => {
+			services: async () => decodeHaServices(groupedServices),
+			states: async (ids) =>
+				ids.map((id) => ({
+					...entity,
+					entity_id: id,
+					attributes: droppedDisplayAttributes ? {} : entity.attributes,
+				})),
+			execute: async (domain, service, data) => {
+				outbound.push({ domain, service, data });
 				executions++;
 				if (block) {
 					started?.();
@@ -175,26 +171,146 @@ async function main() {
 				`window.quakeIntegrations.request(${JSON.stringify(input)})`,
 			),
 		);
-	const captures: { file: string; sha256: string }[] = [];
+	const captures: {
+		file: string;
+		sha256: string;
+		width: number;
+		height: number;
+	}[] = [];
 	const capture = async (name: string) => {
 		await management.webContents.executeJavaScript(
 			"document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))",
 		);
 		await new Promise((resolve) => setTimeout(resolve, 80));
-		const bytes = (await management.webContents.capturePage()).toPNG();
+		const captured = await management.webContents.capturePage();
+		const { width, height } = captured.getSize();
+		const bytes = captured.toPNG();
 		const file = join(scratch, `${name}.png`);
 		await writeFile(file, bytes);
 		captures.push({
 			file,
+			width,
+			height,
 			sha256: createHash("sha256").update(bytes).digest("hex"),
 		});
 	};
 	const wait = async (script: string) => {
 		const end = Date.now() + 8000;
 		while (!(await management.webContents.executeJavaScript(script))) {
-			assert(Date.now() < end, "UI wait expired");
+			assert(Date.now() < end, `UI wait expired: ${script}`);
 			await new Promise((resolve) => setTimeout(resolve, 40));
 		}
+	};
+
+	const uiRound2 = (code: string) =>
+		management.webContents.executeJavaScript(code);
+	const agentRound2 = async (input: unknown) => {
+		const reply = Schema.decodeUnknownSync(AgentReply)(
+			await uiRound2(`window.quakeAgents.request(${JSON.stringify(input)})`),
+		);
+		assert(reply._tag === "success");
+		return reply.view;
+	};
+	const workspaceRound2 = async () => {
+		await agentRound2({
+			type: "create",
+			id: "workspace-proof",
+			name: "Workspace proof",
+			emoji: "🦉",
+		});
+		await uiRound2(`document.querySelector('[data-page="agents"]').click()`);
+		await wait(`document.body.innerText.includes('Workspace proof')`);
+		await uiRound2(
+			`[...document.querySelectorAll('.mc-card')].find(c=>c.textContent.includes('Workspace proof')).querySelector('button[aria-label^="Edit"]').click()`,
+		);
+		await wait(
+			`document.querySelector('dialog[open] textarea[spellcheck="false"]')`,
+		);
+		for (const file of ["IDENTITY.md", "SOUL.md", "AGENTS.md"]) {
+			await uiRound2(
+				`[...document.querySelectorAll('dialog[open] nav button')].find(b=>b.textContent===${JSON.stringify(file)}).click()`,
+			);
+			await wait(
+				`document.querySelector('dialog[open] nav button[data-active="true"]').textContent===${JSON.stringify(file)}`,
+			);
+			await uiRound2(
+				`(()=>{const el=document.querySelector('dialog[open] textarea[spellcheck="false"]');el.focus();el.select()})()`,
+			);
+			await management.webContents.insertText(`round-two saved ${file}`);
+		}
+		await capture("round-two-workspace-dirty-tabs");
+		await uiRound2(
+			`document.querySelector('dialog[open] button[type="submit"]').click()`,
+		);
+		await wait(`!document.querySelector('dialog[open]')`);
+		const view = await agentRound2({ type: "read" });
+		const files = view.agents.find((a) => a.id === "workspace-proof")?.files;
+		for (const file of ["IDENTITY.md", "SOUL.md", "AGENTS.md"])
+			assert.equal(files?.[file], `round-two saved ${file}`);
+		await management.reload();
+		await wait(`document.querySelector('[data-page="agents"]')`);
+		await uiRound2(`document.querySelector('[data-page="agents"]').click()`);
+		await wait(`document.body.innerText.includes('Workspace proof')`);
+		await uiRound2(
+			`[...document.querySelectorAll('.mc-card')].find(c=>c.textContent.includes('Workspace proof')).querySelector('button[aria-label^="Edit"]').click()`,
+		);
+		await wait(
+			`document.querySelector('dialog[open] textarea[spellcheck="false"]')`,
+		);
+		for (const file of ["IDENTITY.md", "SOUL.md", "AGENTS.md"]) {
+			await uiRound2(
+				`[...document.querySelectorAll('dialog[open] nav button')].find(b=>b.textContent===${JSON.stringify(file)}).click()`,
+			);
+			await wait(
+				`document.querySelector('dialog[open] textarea[spellcheck="false"]').value===${JSON.stringify(`round-two saved ${file}`)}`,
+			);
+			await wait(
+				`(()=>{const r=document.querySelector('dialog[open]').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight})()`,
+			);
+			await capture(
+				`round-two-workspace-reloaded-${file.replace(".md", "").toLowerCase()}`,
+			);
+		}
+		await capture("round-two-workspace-reloaded");
+		await uiRound2(
+			`document.querySelector('dialog[open] button[type="submit"]').click()`,
+		);
+		await wait(`!document.querySelector('dialog[open]')`);
+		await uiRound2(
+			`[...document.querySelectorAll('#agents-agents [role="tab"]')].find(b=>b.textContent==='Skill management').click()`,
+		);
+		for (const name of ["3D tools", "网页搜索", "网页搜索"]) {
+			await uiRound2(
+				`[...document.querySelectorAll('#agents-agents button')].find(b=>b.textContent==='Create Skill').click()`,
+			);
+			await wait(`document.querySelector('dialog[open] input')`);
+			await uiRound2(`document.querySelector('dialog[open] input').focus()`);
+			await management.webContents.insertText(name);
+			await uiRound2(
+				`document.querySelector('dialog[open] button[type="submit"]').click()`,
+			);
+			await wait(`!document.querySelector('dialog[open]')`);
+		}
+		const skillView = await agentRound2({ type: "read" });
+		const skills = skillView.skills;
+		assert.deepEqual(
+			skills.map((skill) => skill.name),
+			["3D tools", "网页搜索", "网页搜索"],
+		);
+		assert.equal(new Set(skills.map((skill) => skill.folder)).size, 3);
+		assert(skills.every((skill) => /^[a-z][a-z0-9-]*$/.test(skill.folder)));
+		management.setContentSize(1180, 1100);
+		await wait(`innerHeight>=1100`);
+		await uiRound2(
+			`document.querySelector('[aria-label="Skill management"]').scrollIntoView({block:'start'})`,
+		);
+		await wait(
+			`(()=>{const r=document.querySelector('[aria-label="Skill management"]').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight})()`,
+		);
+		await capture("round-two-skill-folders");
+		management.setContentSize(1180, 850);
+		await wait(`innerHeight===850`);
+		await uiRound2(`document.querySelector('[data-page="channels"]').click()`);
 	};
 	try {
 		await Promise.all([
@@ -202,6 +318,7 @@ async function main() {
 			panel.loadURL(renderer),
 			stranger.loadURL(renderer),
 		]);
+		await workspaceRound2();
 		assert.equal((await request(stranger, { type: "ha.live" })).type, "error");
 		assert.equal(
 			(await request(panel, { type: "channels.list" })).type,
@@ -259,7 +376,7 @@ async function main() {
 		const key = Schema.decodeUnknownSync(HaKey)({
 			entity_id: "light.private",
 			service: "turn_on",
-			service_data: { brightness: 12 },
+			service_data: { brightness: 12, transition: 3 },
 			custom_display_type: "default",
 			custom_display_settings: { fontSize: 40 },
 			custom_display_detail: [],
@@ -306,7 +423,17 @@ async function main() {
 			'[aria-label="Key configuration"] fieldset label:nth-of-type(2) select',
 			"turn_on",
 		);
-		await wait(`document.querySelector('#ha-field-effect') !== null`);
+		await wait(
+			`document.querySelector('#ha-field-effect') !== null && document.querySelector('#ha-field-transition') !== null`,
+		);
+		assert.equal(
+			await uiRound2(`document.querySelector('#ha-field-advanced_fields')`),
+			null,
+		);
+		await uiRound2(
+			`(()=>{const el=document.querySelector('#ha-field-transition');el.focus();el.select()})()`,
+		);
+		await management.webContents.insertText("7");
 		await choose("#ha-field-effect", "rainbow");
 		await wait(
 			`document.querySelector('#ha-field-effect').value === 'rainbow'`,
@@ -325,7 +452,60 @@ async function main() {
 			.find((p) => p.id === haTarget.pageId)
 			?.keys.find((k) => k.keyCode === haTarget.keyCode);
 		assert(optionalKey);
-		assert.deepEqual(keyHaConfig(optionalKey)?.service_data, { brightness: 0 });
+		assert.deepEqual(keyHaConfig(optionalKey)?.service_data, {
+			brightness: 0,
+			transition: 7,
+		});
+		const savedHa = keyHaConfig(optionalKey);
+		assert(savedHa);
+		await integrations.executeHaFromKey(savedHa);
+		assert.deepEqual(outbound.at(-1), {
+			domain: "light",
+			service: "turn_on",
+			data: { entity_id: "light.desk", brightness: 0, transition: 7 },
+		});
+		const displayKey = {
+			...savedHa,
+			custom_display_type: "custom",
+			custom_display_detail: [
+				{ displayItemKey: "brightness", displayAlias: "Level" },
+			],
+		} as const;
+		assert.equal(
+			(
+				await request(management, {
+					type: "ha.key",
+					target: {
+						profileId: haTarget.profileId,
+						pageId: haTarget.pageId,
+						keyCode: haTarget.keyCode,
+					},
+					key: displayKey,
+				})
+			).type,
+			"ok",
+		);
+		droppedDisplayAttributes = true;
+		await wait(
+			`window.quakeIntegrations.request({type:"ha.live"}).then(reply=>reply.type === "live" && reply.live.states.some(entity=>entity.entity_id === "light.desk" && !Object.hasOwn(entity.attributes,"brightness")))`,
+		);
+		await integrations.executeHaFromKey(displayKey);
+		await integrations.executeHa(displayKey);
+		assert.equal(
+			(
+				await request(management, {
+					type: "ha.key",
+					target: {
+						profileId: haTarget.profileId,
+						pageId: haTarget.pageId,
+						keyCode: haTarget.keyCode,
+					},
+					key: displayKey,
+				})
+			).type,
+			"error",
+		);
+
 		await management.webContents.executeJavaScript(
 			`document.querySelector('#ha-field-effect').scrollIntoView({block:'center'})`,
 		);
@@ -353,6 +533,63 @@ async function main() {
 			"utf8",
 		);
 		assert(!raw.includes("synthetic-only"));
+		await management.webContents.executeJavaScript(
+			`document.querySelector('[data-page="shortcuts"]').click()`,
+		);
+		await wait(`document.querySelector('[aria-label="Shortcut Library"]')`);
+		await uiRound2(
+			`[...document.querySelectorAll('button')].find(b=>b.textContent==='Add shortcut').click()`,
+		);
+		await wait(`document.querySelector('tbody tr button[aria-label^="Edit"]')`);
+		await uiRound2(
+			`document.querySelector('tbody tr button[aria-label^="Edit"]').click()`,
+		);
+		await wait(`document.querySelector('tbody tr input[aria-label^="Edit"]')`);
+		await uiRound2(
+			`document.querySelector('tbody tr input[aria-label^="Edit"]').focus()`,
+		);
+		await management.webContents.insertText("control+c");
+		await uiRound2(
+			`document.querySelector('tbody tr input[aria-label^="Edit"]').dispatchEvent(new FocusEvent("focusout",{bubbles:true}))`,
+		);
+		await wait(`!document.querySelector('tbody tr input[aria-label^="Edit"]')`);
+		await uiRound2(
+			`[...document.querySelectorAll('button')].find(b=>b.textContent==='Add to shortcut pack').click()`,
+		);
+		await wait(
+			`document.querySelector('[aria-label="Shortcut Library"]').textContent.includes('Adobe')`,
+		);
+		const defaults = await request(management, { type: "shortcuts.list" });
+		assert(defaults.type === "libraries" && defaults.libraries[0]);
+		const defaultLibrary = defaults.libraries[0];
+		assert.equal(defaultLibrary.name, "Adobe Phot");
+		assert.equal(defaultLibrary.app, "Adobe Photoshop");
+		assert.equal(defaultLibrary.rows[0]?.app, "Adobe Photoshop");
+		const syncedDefault = await request(management, {
+			type: "shortcuts.sync",
+			id: defaultLibrary.id,
+		});
+		assert.equal(syncedDefault.type, "ok");
+		const syncedProfile = await profiles.runPromise(
+			ProfileService.getProfile(`shortcuts-${defaultLibrary.id}`),
+		);
+		assert.equal(syncedProfile.name, "Adobe Phot");
+		await uiRound2(
+			`document.querySelector('[aria-label="Shortcut Library"]').scrollIntoView({block:'start'})`,
+		);
+		management.setContentSize(1180, 1000);
+		await wait(`innerHeight>=1000`);
+		await uiRound2(
+			`document.querySelector('[aria-label="Shortcut Library"]').scrollIntoView({block:'start'})`,
+		);
+		await capture("round-two-default-shortcut-synced");
+		management.setContentSize(1180, 850);
+		await wait(`innerHeight===850`);
+		await request(management, {
+			type: "shortcuts.remove",
+			id: defaultLibrary.id,
+		});
+		await uiRound2(`document.querySelector('[data-page="channels"]').click()`);
 		for (const name of ["First", "Second"])
 			await request(management, {
 				type: "shortcuts.save",
@@ -627,6 +864,11 @@ async function main() {
 					serialScopedClawDelivery: true,
 					optionalSelectCleared: true,
 					unsyncedSlotDraftsRetained: true,
+					allWorkspaceTabsPersisted: true,
+					nonAsciiAndNumericSkillFolders: true,
+					groupedHaFieldsSavedAndExecuted: true,
+					ephemeralDisplayDoesNotBlockAction: true,
+					defaultShortcutSavedAndSynced: true,
 					captures,
 				},
 				null,

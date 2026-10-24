@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { truncateProfileName } from "../../../../../../../packages/device/src/profiles/profile-manager-invariants";
 import { InputRejected } from "../../../../../../../packages/edge/src/channels/integration-errors";
 import type {
 	ShortcutLibrary,
@@ -501,7 +502,7 @@ export function ShortcutsPage() {
 									const library: ShortcutLibrary = {
 										id: activeLibrary?.id ?? "",
 										name:
-											title || s.defaultPackName.replace("{name}", application),
+											title.trim() || truncateProfileName(application.trim()),
 										app: application,
 										createdAt: activeLibrary?.createdAt ?? "",
 										rows: rows.filter((r) => selected.has(r.id)),

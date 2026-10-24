@@ -1,4 +1,5 @@
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,8 +9,6 @@ import { AgentStorage } from "../../../../../packages/edge/src/agents/agents-rep
 import { AgentsService } from "../../../../../packages/edge/src/agents/agents-service.js";
 import { createAgentStorage } from "./storage";
 
-const scratch =
-	"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center";
 const roots: string[] = [];
 afterEach(async () => {
 	for (const root of roots.splice(0))
@@ -30,7 +29,7 @@ const backend = {
 } satisfies typeof AgentRuntimePort.Service;
 describe("agent generation storage through the real service", () => {
 	it("persists actual workspace and skill Markdown, reloads it and removes a deleted workspace", async () => {
-		const root = await mkdtemp(join(scratch, "agents-store-"));
+		const root = await mkdtemp(join(await realpath(tmpdir()), "agents-store-"));
 		roots.push(root);
 		const storage = createAgentStorage(root);
 		const layer = () =>
@@ -120,7 +119,9 @@ describe("agent generation storage through the real service", () => {
 		}
 	});
 	it("leaves the committed pointer and all files intact after a staging failure", async () => {
-		const root = await mkdtemp(join(scratch, "agents-failed-"));
+		const root = await mkdtemp(
+			join(await realpath(tmpdir()), "agents-failed-"),
+		);
 		roots.push(root);
 		let fail = false;
 		const storage = createAgentStorage(root, {

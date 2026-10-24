@@ -1,7 +1,8 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { HaAuthenticationFailed } from "../../../../../packages/edge/src/channels/integration-errors";
 import { HomeAssistantService } from "../../../../../packages/edge/src/home-assistant/ha-service";
-import { integrationFixture } from "./test-fixtures";
+import { entity, integrationFixture } from "./test-fixtures";
 
 describe("PR33 production controller regressions", () => {
 	it("preserves configured secrets on concurrent public edits and rejects missing new credentials", async () => {
@@ -184,4 +185,55 @@ describe("PR33 production controller regressions", () => {
 			await f.dispose();
 		}
 	});
+});
+
+it("executes saved direct and allowed AI actions after live display attributes disappear while save still validates display", async () => {
+	const f = integrationFixture();
+	try {
+		await f.request({
+			type: "ha.connect",
+			origin: "https://ha.test",
+			token: "synthetic",
+		});
+		const key = {
+			entity_id: "light.desk",
+			service: "turn_on",
+			service_data: { brightness: 12 },
+			custom_display_type: "custom",
+			custom_display_settings: { fontSize: 40 },
+			custom_display_detail: [
+				{ displayItemKey: "brightness", displayAlias: "Level" },
+			],
+		} as const;
+		const target = { profileId: "profile", pageId: "page", keyCode: "1,1" };
+		expect(await f.request({ type: "ha.key", target, key })).toMatchObject({
+			type: "ok",
+		});
+		await f.runtime.runPromise(HomeAssistantService.setVisible(["light.desk"]));
+		f.entities([{ ...entity, state: "off", attributes: {} }]);
+		await f.runtime.runPromise(HomeAssistantService.poll());
+		await f.runtime.runPromise(HomeAssistantService.execute(key));
+		await f.runtime.runPromise(HomeAssistantService.execute(key, true));
+		expect(f.executions).toHaveLength(2);
+		expect(f.executions[0]).toMatchObject({
+			data: {
+				entity_id: "light.desk",
+				brightness: 12,
+			},
+		});
+		expect(await f.request({ type: "ha.key", target, key })).toMatchObject({
+			type: "error",
+			field: "Display Info",
+		});
+		await f.request({ type: "ha.allowlist", ids: ["button.reset"] });
+		const denied = await f.runtime.runPromise(
+			HomeAssistantService.execute(key, true).pipe(Effect.either),
+		);
+		expect(denied._tag === "Left" && denied.left.code).toBe(
+			"INTEGRATION.INPUT.REJECTED",
+		);
+		expect(f.executions).toHaveLength(2);
+	} finally {
+		await f.dispose();
+	}
 });

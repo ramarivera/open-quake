@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { realpath } from "node:fs/promises";
 import * as http from "node:http";
 import * as https from "node:https";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
@@ -13,11 +14,10 @@ import {
 	HaPorts,
 	HomeAssistantService,
 } from "../../../../../packages/edge/src/home-assistant/ha-service";
-import { openHaRest } from "./ha-rest";
+import { decodeHaServices, openHaRest } from "./ha-rest";
+import { groupedServices } from "./review-grouped-services";
 import { fakeVault, memoryStore } from "./test-fixtures";
 
-const scratch =
-	"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center";
 const servers: (http.Server | https.Server)[] = [];
 const directories: string[] = [];
 afterAll(async () => {
@@ -79,8 +79,7 @@ const handler =
 		}
 	};
 async function certificate() {
-	await mkdir(scratch, { recursive: true });
-	const directory = mkdtempSync(join(scratch, "ha-tls-"));
+	const directory = mkdtempSync(join(await realpath(tmpdir()), "ha-tls-"));
 	directories.push(directory);
 	execFileSync(
 		"openssl",
@@ -295,4 +294,106 @@ describe("real HA HTTP/TLS sessions", () => {
 			{ code: "HA.CERTIFICATE.REJECTED", origin: url },
 		);
 	});
+});
+
+it("flattens service sections into leaf controls with unchanged validation metadata", () => {
+	const catalog = decodeHaServices(groupedServices);
+	expect(catalog[0]?.fields.map((field) => field.name)).toEqual([
+		"brightness",
+		"transition",
+		"effect",
+	]);
+	expect(
+		catalog[0]?.fields.find((field) => field.name === "transition"),
+	).toMatchObject({
+		required: true,
+		type: "number",
+		min: 0,
+		max: 60,
+		label: "Transition",
+	});
+	expect(
+		catalog[0]?.fields.find((field) => field.name === "effect"),
+	).toMatchObject({ type: "select", options: ["rainbow", "pulse"] });
+});
+
+it("submits flattened grouped leaf data through the service and the real REST connection", async () => {
+	const outbound: unknown[] = [];
+	const normal = handler([], "Bearer synthetic-token");
+	const url = await origin(
+		http.createServer((request, response) => {
+			if (request.url === "/api/services") {
+				response.setHeader("Content-Type", "application/json");
+				response.end(JSON.stringify(groupedServices));
+			} else if (request.url === "/api/services/light/turn_on") {
+				let data = "";
+				request.on("data", (chunk: Buffer) => {
+					data += chunk.toString("utf8");
+				});
+				request.on("end", () => {
+					outbound.push(JSON.parse(data));
+					response.end("[]");
+				});
+			} else normal(request, response);
+		}),
+		"http",
+	);
+	const placed: unknown[] = [];
+	const runtime = ManagedRuntime.make(
+		HomeAssistantService.Default.pipe(
+			Layer.provide(
+				Layer.succeed(HaPorts, {
+					store: memoryStore(EMPTY_HA_STORE).port,
+					vault: fakeVault().port,
+					open: openHaRest,
+					place: async (_target, key) => {
+						placed.push(key);
+					},
+				}),
+			),
+		),
+	);
+	try {
+		await runtime.runPromise(
+			HomeAssistantService.connect(url, "synthetic-token", true),
+		);
+		const key = {
+			entity_id: "light.desk",
+			service: "turn_on",
+			service_data: { brightness: 12, transition: 7, effect: "pulse" },
+			custom_display_type: "default",
+			custom_display_settings: { fontSize: 40 },
+			custom_display_detail: [],
+		} as const;
+		await runtime.runPromise(
+			HomeAssistantService.saveKey(
+				{ profileId: "p", pageId: "page", keyCode: "1,1" },
+				key,
+			),
+		);
+		expect(placed).toEqual([key]);
+		await runtime.runPromise(HomeAssistantService.execute(key));
+		expect(outbound).toEqual([
+			{
+				entity_id: "light.desk",
+				brightness: 12,
+				transition: 7,
+				effect: "pulse",
+			},
+		]);
+		const invalid = await runtime.runPromise(
+			HomeAssistantService.execute({
+				...key,
+				service_data: { brightness: 12, transition: 61 },
+			}).pipe(Effect.either),
+		);
+		expect(invalid._tag === "Left" && invalid.left).toMatchObject({
+			code: "INTEGRATION.INPUT.REJECTED",
+			field: "transition",
+		});
+		expect(outbound).toHaveLength(1);
+	} finally {
+		await runtime.runPromise(HomeAssistantService.dispose());
+		await runtime.dispose();
+	}
 });
