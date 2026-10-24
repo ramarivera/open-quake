@@ -39,6 +39,7 @@ export type DeviceEvent = typeof DeviceEvent.Type;
 
 export interface ConnectOptions {
 	readonly keepAliveIntervalMs?: number;
+	readonly path?: string;
 }
 
 export const isQuakeDevice = (info: HidDeviceInfo): boolean =>

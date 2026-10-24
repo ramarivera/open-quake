@@ -29,3 +29,16 @@ export const portraitBounds = (bounds: Rect, height: number): Rect => ({
 	width: bounds.height,
 	height: bounds.width,
 });
+
+/** Invert the panel root's rotation and viewport scale for DOM pointer input. */
+export function clientToLogical(
+	point: Point,
+	bounds: Rect,
+	rotation: number,
+): Point {
+	const x = (point.x - bounds.x) / bounds.width;
+	const y = (point.y - bounds.y) / bounds.height;
+	return rotation === 90
+		? { x: y * 1920, y: (1 - x) * 480 }
+		: { x: x * 1920, y: y * 480 };
+}

@@ -32,6 +32,12 @@ const electron = vi.hoisted(() => {
 		loadURL = vi.fn();
 		loadFile = vi.fn();
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
+		hide = vi.fn();
+		showInactive = vi.fn();
+		show = vi.fn();
+		focus = vi.fn();
+		restore = vi.fn();
+		isMinimized = vi.fn(() => false);
 		setAlwaysOnTop = vi.fn<(flag: boolean, level?: string) => void>();
 		destroy = vi.fn(() => {
 			this.destroyed = true;
@@ -55,6 +61,9 @@ const electron = vi.hoisted(() => {
 	return {
 		BrowserWindow: Window,
 		app: {
+			isPackaged: false,
+			requestSingleInstanceLock: vi.fn(() => true),
+			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
 			getPath: vi.fn(() => "/tmp/open-quake-window-test"),
 			on: vi.fn<
@@ -72,6 +81,8 @@ const electron = vi.hoisted(() => {
 			removeHandler: vi.fn(),
 		},
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
+		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
+		shell: { openExternal: vi.fn() },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -82,6 +93,22 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./lifecycle/native-display", async (original) => {
+	const actual = await original<typeof import("./lifecycle/native-display")>();
+	const { Effect } = await import("effect");
+	return {
+		...actual,
+		callDisplayTool: vi.fn(() => Effect.succeed("extended")),
+		probeHiddenMirroring: vi.fn(() => Effect.succeed(false)),
+	};
+});
+vi.mock("./knob", () => ({
+	registerKnob: () => ({
+		onDevice: () => {},
+		refresh: () => Promise.resolve(),
+		dispose: () => Promise.resolve(),
+	}),
+}));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
@@ -102,19 +129,29 @@ vi.mock("./clock", async () => {
 	};
 });
 vi.mock("./profiles/profile-ipc", async () => {
-	const { Layer } = await import("effect");
+	const actual = await vi.importActual<typeof import("./profiles/profile-ipc")>(
+		"./profiles/profile-ipc",
+	);
+	const { createInitialProfileEnvelope, encodeProfileEnvelope } = await import(
+		"../../../../packages/device/src/profiles/profile-contracts.js"
+	);
 	return {
-		desktopProfilesLive: vi.fn(() => Layer.empty),
+		desktopProfilesLive: vi.fn(() =>
+			actual.ProfilesLive({
+				read: async () => encodeProfileEnvelope(createInitialProfileEnvelope()),
+				write: async () => undefined,
+			}),
+		),
 		registerProfiles: vi.fn(),
 	};
 });
 
 function displayEvent(name: string): void {
-	const listener = electron.screen.on.mock.calls.find(
+	const listeners = electron.screen.on.mock.calls.filter(
 		([event]) => event === name,
-	)?.[1];
-	expect(listener).toBeDefined();
-	listener?.();
+	);
+	expect(listeners.length).toBeGreaterThan(0);
+	for (const [, listener] of listeners) listener();
 }
 
 function appEvent(name: string) {
@@ -201,6 +238,15 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
+	it("focuses and restores the existing management window on second launch", () => {
+		const { management } = windows();
+		management.isMinimized.mockReturnValue(true);
+		appEvent("second-instance");
+		expect(management.restore).toHaveBeenCalledOnce();
+		expect(management.show).toHaveBeenCalledOnce();
+		expect(management.focus).toHaveBeenCalledOnce();
+	});
+
 	it("replays connected mock status when either preload requests it", () => {
 		const handler = electron.ipcMain.on.mock.calls.find(
 			([channel]) => channel === "quake:status",
@@ -216,7 +262,7 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
-	it("swaps to a strip panel when DK-QUAKE is attached, then back to a normal fallback", () => {
+	it("swaps to a strip panel when DK-QUAKE is attached, then back to a normal fallback", async () => {
 		const { panel: fallback } = windows();
 		// A normal window on the current Space, never rotated.
 		expect(fallback.options.type).toBeUndefined();
@@ -229,6 +275,11 @@ describe("desktop window lifecycle", () => {
 		);
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(panelDisplay.bounds),
+		);
 		const strip = electron.BrowserWindow.windows.at(-1);
 		expect(strip).not.toBe(fallback);
 		expect(fallback.destroy).toHaveBeenCalledOnce();
@@ -246,6 +297,11 @@ describe("desktop window lifecycle", () => {
 		);
 		electron.screen.getAllDisplays.mockReturnValue([primary]);
 		displayEvent("display-removed");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows.at(-1)?.options.type,
+			).toBeUndefined(),
+		);
 		const restored = electron.BrowserWindow.windows.at(-1);
 		expect(strip?.destroy).toHaveBeenCalledOnce();
 		expect(restored?.options.type).toBeUndefined();
@@ -261,13 +317,18 @@ describe("desktop window lifecycle", () => {
 		expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
 	});
 
-	it("recreates a destroyed panel on hot-plug and forwards to the replacement", () => {
+	it("recreates a destroyed panel on hot-plug and forwards to the replacement", async () => {
 		const { panel, management } = windows();
 		panel.webContents.send.mockClear();
 		management.webContents.send.mockClear();
 		panel.destroyed = true;
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(panelDisplay.bounds),
+		);
 		const replacement = electron.BrowserWindow.windows.at(-1);
 		expect(replacement?.options).toMatchObject({
 			...panelDisplay.bounds,
@@ -279,12 +340,21 @@ describe("desktop window lifecycle", () => {
 		vi.advanceTimersByTime(1500);
 		expect(panel.webContents.send).not.toHaveBeenCalled();
 		expect(replacement?.webContents.send).toHaveBeenCalledTimes(1);
-		expect(management.webContents.send).toHaveBeenCalledTimes(1);
+		expect(
+			management.webContents.send.mock.calls.filter(
+				([channel]) => channel === "quake:event",
+			),
+		).toHaveLength(1);
 	});
 
-	it("follows display moves and reloads only when the strip's rotation changes", () => {
+	it("follows display moves and reloads only when the strip's rotation changes", async () => {
 		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 		displayEvent("display-added");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(panelDisplay.bounds),
+		);
 		const panel = electron.BrowserWindow.windows.at(-1);
 		if (!panel) throw new Error("The strip panel must exist");
 		const loads = panel.loadURL.mock.calls.length;
@@ -294,6 +364,11 @@ describe("desktop window lifecycle", () => {
 		});
 		electron.screen.getAllDisplays.mockReturnValue([primary, moved]);
 		displayEvent("display-metrics-changed");
+		await vi.waitFor(() =>
+			expect(panel.setBounds).toHaveBeenLastCalledWith(
+				electron.screen.getAllDisplays()[1]?.bounds,
+			),
+		);
 		expect(panel.setBounds).toHaveBeenLastCalledWith(moved.bounds);
 		expect(panel.loadURL).toHaveBeenCalledTimes(loads);
 		// Rotated in System Settings: macOS now reports a landscape strip.
@@ -305,6 +380,11 @@ describe("desktop window lifecycle", () => {
 		});
 		electron.screen.getAllDisplays.mockReturnValue([primary, rotated]);
 		displayEvent("display-metrics-changed");
+		await vi.waitFor(() =>
+			expect(panel.setBounds).toHaveBeenLastCalledWith(
+				electron.screen.getAllDisplays()[1]?.bounds,
+			),
+		);
 		expect(panel.setBounds).toHaveBeenLastCalledWith(rotated.bounds);
 		expect(panel.loadURL).toHaveBeenLastCalledWith(
 			"http://localhost:5173?surface=panel&rotation=0",
@@ -336,7 +416,11 @@ describe("desktop window lifecycle", () => {
 		vi.advanceTimersByTime(1500);
 		expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
 		for (const window of electron.BrowserWindow.getAllWindows()) {
-			expect(window.webContents.send).toHaveBeenCalledTimes(1);
+			expect(
+				window.webContents.send.mock.calls.filter(
+					([channel]) => channel === "quake:event",
+				),
+			).toHaveLength(1);
 		}
 		expect(panel.webContents.send).not.toHaveBeenCalled();
 		expect(management.webContents.send).not.toHaveBeenCalled();
@@ -436,7 +520,8 @@ describe("desktop main with the real device service and fake HID", () => {
 			);
 		expect(
 			panel.webContents.send.mock.calls.every(
-				([, event]) => event.source === "hid",
+				([channel, event]) =>
+					channel !== "quake:event" || event.source === "hid",
 			),
 		).toBe(true);
 		expect(JSON.stringify(panel.webContents.send.mock.calls)).not.toContain(
@@ -447,38 +532,115 @@ describe("desktop main with the real device service and fake HID", () => {
 		expect(await Effect.runPromise(fake.closes)).toBe(2);
 	});
 
-	it("keeps one handle for the remaining window, releases it when all windows close, and reacquires on activation", async () => {
+	it("pairs by blanking through the existing handle and keeps the same panel during brief USB loss", async () => {
+		const primary = makeDisplay();
+		const strip = makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1920, height: 480 },
+			bounds: { x: 2560, y: 0, width: 1920, height: 480 },
+		});
+		const returned = { ...strip, id: 4 };
+		const { HidTransport: Transport } = await import("@open-quake/device");
+		const { Layer: Layers } = await import("effect");
+		native.layer = Layers.succeed(Transport, {
+			...fake.transport,
+			open: (info) =>
+				Effect.map(fake.transport.open(info), (handle) => ({
+					...handle,
+					write: (bytes) =>
+						handle.write(bytes).pipe(
+							Effect.tap(() =>
+								Effect.sync(() => {
+									if (bytes[4] !== 4) return;
+									electron.screen.getAllDisplays.mockReturnValue(
+										bytes[5] === 0 ? [primary] : [primary, returned],
+									);
+									displayEvent(
+										bytes[5] === 0 ? "display-removed" : "display-added",
+									);
+								}),
+							),
+						),
+				})),
+		});
+		electron.screen.getAllDisplays.mockReturnValue([primary, strip]);
 		await start();
-		const { panel, management } = windows();
-		panel.destroyed = true;
-		await Effect.runPromise(fake.emit(report(3, 2, [1])));
+		const panel = windows().panel;
 		await vi.waitFor(() =>
-			expect(management.webContents.send).toHaveBeenCalledWith("quake:event", {
-				source: "hid",
-				kind: "press",
-				state: 1,
-			}),
+			expect(panel.setBounds).toHaveBeenLastCalledWith(returned.bounds),
 		);
-		expect(await Effect.runPromise(fake.closes)).toBe(0);
-		management.destroyed = true;
-		appEvent("window-all-closed");
-		await vi.waitFor(async () =>
-			expect(await Effect.runPromise(fake.closes)).toBe(1),
+		expect(
+			(await Effect.runPromise(fake.writes))
+				.filter((bytes) => bytes[4] === 4)
+				.map((bytes) => bytes[5]),
+		).toEqual([0, 1]);
+		expect(await Effect.runPromise(fake.opens)).toBe(1);
+		await Effect.runPromise(fake.failRead(new Error("unplug")));
+		await vi.waitFor(() => expect(panel.hide).toHaveBeenCalled());
+		await vi.waitFor(
+			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
+			{ timeout: 2500 },
 		);
-		appEvent("activate");
-		await vi.waitFor(async () =>
-			expect(await Effect.runPromise(fake.opens)).toBe(2),
-		);
-		await Effect.runPromise(fake.emit(report(3, 1, [0])));
-		for (const window of electron.BrowserWindow.getAllWindows())
-			await vi.waitFor(() =>
-				expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
-					source: "hid",
-					kind: "rotate",
-					direction: -1,
-				}),
-			);
+		expect(windows().panel).toBe(panel);
+		expect(panel.destroy).not.toHaveBeenCalled();
 	});
+
+	it.each(["activate", "second-instance"])(
+		"restarts the bus and unlocks lifecycle recovery on %s after all windows close",
+		async (event) => {
+			await start();
+			const { panel, management } = windows();
+			panel.destroyed = true;
+			await Effect.runPromise(fake.emit(report(3, 2, [1])));
+			await vi.waitFor(() =>
+				expect(management.webContents.send).toHaveBeenCalledWith(
+					"quake:event",
+					{
+						source: "hid",
+						kind: "press",
+						state: 1,
+					},
+				),
+			);
+			expect(await Effect.runPromise(fake.closes)).toBe(0);
+			management.destroyed = true;
+			appEvent("window-all-closed");
+			await vi.waitFor(async () =>
+				expect(await Effect.runPromise(fake.closes)).toBe(1),
+			);
+			appEvent(event);
+			await vi.waitFor(async () =>
+				expect(await Effect.runPromise(fake.opens)).toBe(2),
+			);
+			const reopened = electron.BrowserWindow.getAllWindows().find(
+				(window) => window.options.title === "open-quake — management",
+			);
+			if (!reopened) throw new Error("Management must reopen");
+			expect(reopened).not.toBe(management);
+			if (event === "second-instance") {
+				expect(reopened.show).toHaveBeenCalledOnce();
+				expect(reopened.focus).toHaveBeenCalledOnce();
+			}
+			await Effect.runPromise(fake.emit(report(3, 1, [0])));
+			for (const window of electron.BrowserWindow.getAllWindows())
+				await vi.waitFor(() =>
+					expect(window.webContents.send).toHaveBeenCalledWith("quake:event", {
+						source: "hid",
+						kind: "rotate",
+						direction: -1,
+					}),
+				);
+			await vi.waitFor(
+				() =>
+					expect(reopened.webContents.send).toHaveBeenCalledWith(
+						"quake:diagnostic",
+						expect.objectContaining({ checking: true }),
+					),
+				{ timeout: 4000 },
+			);
+		},
+	);
 
 	it("replays status after preload subscribes or reloads", async () => {
 		await start();
@@ -495,40 +657,101 @@ describe("desktop main with the real device service and fake HID", () => {
 		);
 	});
 
-	it("holds quit and rapid window reactivation until native close finishes", async () => {
-		const closing = await Effect.runPromise(Deferred.make<void>());
-		const allowClose = await Effect.runPromise(Deferred.make<void>());
-		const { Layer: Layers } = await import("effect");
-		const { HidTransport: Transport } = await import("@open-quake/device");
-		native.layer = Layers.succeed(Transport, {
-			...fake.transport,
-			open: (info) =>
-				Effect.map(fake.transport.open(info), (handle) => ({
-					...handle,
-					close: () =>
-						Deferred.succeed(closing, undefined).pipe(
-							Effect.zipRight(Deferred.await(allowClose)),
-							Effect.zipRight(handle.close()),
-						),
-				})),
-		});
-		await start();
-		for (const window of electron.BrowserWindow.getAllWindows())
-			window.destroyed = true;
-		appEvent("window-all-closed");
-		appEvent("activate");
-		await Effect.runPromise(Deferred.await(closing));
-		expect(await Effect.runPromise(fake.opens)).toBe(1);
-		const event = appEvent("before-quit");
-		expect(event.preventDefault).toHaveBeenCalledOnce();
-		// Repeated quit requests must still wait for the same cleanup.
-		expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
-		electron.app.quit.mockClear();
-		expect(await Effect.runPromise(fake.closes)).toBe(0);
-		await Effect.runPromise(Deferred.succeed(allowClose, undefined));
-		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
-		expect(await Effect.runPromise(fake.closes)).toBe(1);
-		expect(await Effect.runPromise(fake.opens)).toBe(1);
-		expect(appEvent("before-quit").preventDefault).not.toHaveBeenCalled();
+	it.each(["activate", "second-instance"])(
+		"holds quit and rapid %s reopening until native close finishes",
+		async (reopenEvent) => {
+			const closing = await Effect.runPromise(Deferred.make<void>());
+			const allowClose = await Effect.runPromise(Deferred.make<void>());
+			const { Layer: Layers } = await import("effect");
+			const { HidTransport: Transport } = await import("@open-quake/device");
+			native.layer = Layers.succeed(Transport, {
+				...fake.transport,
+				open: (info) =>
+					Effect.map(fake.transport.open(info), (handle) => ({
+						...handle,
+						close: () =>
+							Deferred.succeed(closing, undefined).pipe(
+								Effect.zipRight(Deferred.await(allowClose)),
+								Effect.zipRight(handle.close()),
+							),
+					})),
+			});
+			await start();
+			for (const window of electron.BrowserWindow.getAllWindows())
+				window.destroyed = true;
+			appEvent("window-all-closed");
+			appEvent(reopenEvent);
+			await Effect.runPromise(Deferred.await(closing));
+			expect(await Effect.runPromise(fake.opens)).toBe(1);
+			const event = appEvent("before-quit");
+			expect(event.preventDefault).toHaveBeenCalledOnce();
+			// Repeated quit requests must still wait for the same cleanup.
+			expect(appEvent("before-quit").preventDefault).toHaveBeenCalledOnce();
+			electron.app.quit.mockClear();
+			expect(await Effect.runPromise(fake.closes)).toBe(0);
+			await Effect.runPromise(Deferred.succeed(allowClose, undefined));
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+			expect(await Effect.runPromise(fake.closes)).toBe(1);
+			expect(await Effect.runPromise(fake.opens)).toBe(1);
+			expect(appEvent("before-quit").preventDefault).not.toHaveBeenCalled();
+		},
+	);
+});
+
+describe("single-instance startup and release policy", () => {
+	it("refuses startup before readiness, windows, discovery or HID open", async () => {
+		vi.resetModules();
+		const fake = await Effect.runPromise(makeFakeHidTransport());
+		native.layer = fake.layer;
+		electron.BrowserWindow.windows = [];
+		electron.app.requestSingleInstanceLock.mockReturnValue(false);
+		const output = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+		await import("./index");
+		expect(electron.app.whenReady).not.toHaveBeenCalled();
+		expect(electron.BrowserWindow.windows).toHaveLength(0);
+		expect(await Effect.runPromise(fake.opens)).toBe(0);
+		expect(electron.app.quit).toHaveBeenCalledOnce();
+		expect(output).toHaveBeenCalledWith(
+			expect.stringContaining("Refusing a second device connection"),
+		);
+		electron.app.requestSingleInstanceLock.mockReturnValue(true);
 	});
+	it.each(["destroyed", "hidden", "minimized"])(
+		"activate reopens %s management while the packaged hidden fallback survives",
+		async (state) => {
+			vi.resetModules();
+			vi.stubEnv("ELECTRON_RENDERER_URL", "");
+			electron.app.isPackaged = true;
+			native.layer = (await Effect.runPromise(makeFakeHidTransport([]))).layer;
+			electron.BrowserWindow.windows = [];
+			const display = makeDisplay();
+			electron.screen.getAllDisplays.mockReturnValue([display]);
+			electron.screen.getPrimaryDisplay.mockReturnValue(display);
+			await import("./index");
+			await vi.waitFor(() =>
+				expect(electron.BrowserWindow.windows).toHaveLength(2),
+			);
+			expect(windows().panel.options.show).toBe(false);
+			expect(windows().panel.showInactive).not.toHaveBeenCalled();
+			const { panel, management } = windows();
+			management.destroyed = state === "destroyed";
+			management.isMinimized.mockReturnValue(state === "minimized");
+			appEvent("activate");
+			const reopened = electron.BrowserWindow.getAllWindows().find(
+				(window) => window !== panel,
+			);
+			expect(reopened).toBeDefined();
+			expect(panel.destroyed).toBe(false);
+			expect(reopened?.show).toHaveBeenCalledOnce();
+			expect(reopened?.focus).toHaveBeenCalledOnce();
+			if (state === "destroyed") expect(reopened).not.toBe(management);
+			else expect(reopened).toBe(management);
+			if (state === "minimized")
+				expect(management.restore).toHaveBeenCalledOnce();
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			electron.app.isPackaged = false;
+			vi.unstubAllEnvs();
+		},
+	);
 });

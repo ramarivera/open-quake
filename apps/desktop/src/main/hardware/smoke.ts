@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
 	HardwareControls,
 	type HardwareSession,
@@ -12,6 +13,8 @@ import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, powerMonitor } from "electron";
 import { HardwareResponse } from "../../shared/hardware-contracts";
+import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
+import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { desktopProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { registerHardware } from "./index";
@@ -22,6 +25,8 @@ let directory: string | undefined;
 let disposeRuntime: (() => Promise<void>) | undefined;
 let disposeMedia: (() => Promise<void>) | undefined;
 let disposeProfiles: (() => Promise<void>) | undefined;
+let disposeLifecycle: (() => Promise<void>) | undefined;
+let unregisterLifecycle: (() => void) | undefined;
 let unregister: (() => void) | undefined;
 async function smoke(): Promise<void> {
 	assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1");
@@ -112,6 +117,32 @@ async function smoke(): Promise<void> {
 	disposeProfiles = registerProfiles(
 		ManagedRuntime.make(desktopProfilesLive(directory)),
 	).dispose;
+	const lifecycleRuntime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: true,
+			displays: () => [],
+			watch: () => () => {},
+			panel: () => {},
+			bus: () => undefined,
+			notify: (status) => window.webContents.send("quake:diagnostic", status),
+			prompts: {
+				platform: process.platform,
+				mock: true,
+				displays: () => [],
+				primaryId: () => 1,
+				prompt: () => Effect.die("Smoke must never prompt"),
+				native: () => Effect.die("Smoke must never call native display APIs"),
+				openSettings: () => Effect.void,
+			},
+		}),
+	);
+	disposeLifecycle = () => lifecycleRuntime.dispose();
+	unregisterLifecycle = registerLifecycle(
+		lifecycleRuntime,
+		() => window,
+		pathToFileURL(resolve("out/renderer/index.html")).href,
+	);
 	unregister = registerHardware(
 		() => current,
 		() => window,
@@ -279,6 +310,8 @@ async function smoke(): Promise<void> {
 }
 async function cleanup() {
 	unregister?.();
+	unregisterLifecycle?.();
+	await disposeLifecycle?.();
 	await disposeRuntime?.();
 	await disposeMedia?.();
 	await disposeProfiles?.();

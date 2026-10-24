@@ -12,6 +12,9 @@ import {
 	WeatherMediaReply,
 } from "../../shared/weather-media-contracts";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { registerKnob } from "../knob";
+import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
+import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
@@ -134,6 +137,40 @@ async function smoke(): Promise<void> {
 	);
 	const registration = registerWeatherMedia(
 		runtime,
+		() => management,
+		renderer,
+	);
+	const knob = registerKnob(
+		() => panel,
+		() => [management, panel],
+		{
+			readVolume: Effect.succeed({ level: 50, muted: false }),
+			writeVolume: () => Effect.void,
+		},
+	);
+	const lifecycleRuntime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: true,
+			displays: () => [],
+			watch: () => () => {},
+			panel: () => {},
+			notify: () => {},
+			bus: () => ({ on: () => () => {}, currentStatus: () => undefined }),
+			prompts: {
+				platform: process.platform,
+				mock: true,
+				displays: () => [],
+				primaryId: () => 1,
+				prompt: () => Effect.die("Weather/media smoke must not prompt"),
+				native: () =>
+					Effect.die("Weather/media smoke must not call native display APIs"),
+				openSettings: () => Effect.void,
+			},
+		}),
+	);
+	const removeLifecycle = registerLifecycle(
+		lifecycleRuntime,
 		() => management,
 		renderer,
 	);
@@ -382,6 +419,9 @@ async function smoke(): Promise<void> {
 		management.destroy();
 		panel.destroy();
 		await registration.dispose();
+		await knob.dispose();
+		removeLifecycle();
+		await lifecycleRuntime.dispose();
 		await clock.dispose();
 		await profiles.dispose();
 		await wallpaper.dispose();
