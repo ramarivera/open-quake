@@ -2,13 +2,13 @@
 
 ## Context
 
-The current desktop has wallpaper and device-event forwarding but no composed profile selector or voice runtime. The strip-grid lane owns base layout. Recovered artifacts are local-only and are cited, never redistributed.
+The desktop has strip-grid profile delivery, wallpaper and device-event forwarding, but no composed knob selector or voice runtime. The strip-grid lane owns base layout. Recovered artifacts are local-only and are cited, never redistributed.
 
 ## Decisions
 
 Use an Effect.Service in the device knob domain, Schema commands/state and Effect Clock deadlines. One semaphore serializes inputs and timer commits; scoped timer fibers are interrupted on close, reconfiguration and disposal. Main publishes authoritative snapshots. Renderer owns only geometry, pointer hit testing and bounded visual coalescing. No timers that commit profiles live in React.
 
-KnobModelPorts is the smallest composition interface: committed profile selection, focused tile actions, correlated voice events, volume read/write and thumbnail warming. Desktop loads local profiles with the existing storage adapter. Pending other lane runtimes fail with catalog capability-unavailable, never silently execute a different route. Injected native smoke adapters prove complete input-to-profile and volume/voice dispatch chains without hardware.
+KnobModelPorts is the smallest composition interface: committed profile selection, focused tile actions, correlated voice events, volume read/write and thumbnail warming. Desktop shares the strip lane's committed ProfileService runtime; isolated adapters may use the existing storage adapter. Pending other lane runtimes fail with catalog capability-unavailable, never silently execute a different route. Injected native smoke adapters prove complete input-to-profile and volume/voice dispatch chains without hardware.
 
 Voice stays in knob-push-to-talk: this change emits holdStart/release/interrupt/cancel with generation, device/profile revision, not STT/TTS implementation. The reconstructed 0.4.95 QuakeScreenView.vue:1268-1284 and background.js knobKeyPressListener both dismiss then continue double/hold, so dismissal prevents the focused picker profile from being committed but preserves Colorful jump/PTT.
 
@@ -16,7 +16,7 @@ Sources: v0.4.95/recovered_sources/src/views/DKQuake/QuakeScreenView.vue:919-142
 
 ## UI contract
 
-Render in strip/overlays/knob and compose inside the existing rotated panel canvas. Picker is subordinate to the ring visually, with current violet border and a moving white focus ring. Retain the recovered card ratio and locale strings. Do not change the strip-grid lane's files. Dial and volume are exported tile components for that lane's mount point as well as the panel's current profile view.
+Render in strip/overlays/knob and compose inside the existing rotated panel canvas. Picker is subordinate to the ring visually, with current violet border and a moving white focus ring. Retain the recovered card ratio and locale strings. Use the strip-grid lane's overlay mount and layout without replacing its base layout. Dial and volume are exported tile components for that lane's mount point as well as the panel's current profile view.
 
 ## Risks / Trade-offs
 
@@ -30,15 +30,19 @@ Keep saved knob slots intact. Remove idle physical dispatch of them and correct 
 
 ## Composition handoff
 
-The standalone desktop adapter uses the existing `desktop-preview` selection,
-including its selected page. A profile-manager composition must supply a
-serialized selection port and call configure on device/page/revision changes.
-The default adapter provides native macOS volume but intentionally reports
-unavailable for unqualified brightness, hotkey and voice runtimes. Those runtimes
-remain owned by their existing changes. Thumbnail producers write local hashed
-PNG files atomically; readiness requires native decoding. The profile-manager
-and physical touch transports are absent on this baseline. See the desktop knob
-README for the exact handoff, mock smoke and unsupported runtime paths.
+Production now shares the strip lane's ProfileService runtime. A minimal
+Schema selection command serializes under the profile repository mutex and
+publishes only after persistence, so knob commits reach both panel and preview.
+Committed-profile events synchronize page/revision changes without resetting a
+ring after its own commit. Selection failure preserves the published envelope.
+The default device identity remains desktop-preview until discovery supplies
+one. The raw storage adapter remains for isolated consumers.
+
+The adapter provides native macOS volume and reports unavailable for unqualified
+brightness, hotkey and voice runtimes. Thumbnail capture and external volume
+observation producers remain owning-lane work. Ready local PNGs require native
+decoding. Physical controller touch normalization remains uncomposed. See the
+desktop knob README for the exact handoff and mock verification.
 
 Volume desired state is synchronous per detent; scoped native writes drain the
 latest value without blocking input. Cached thumbnails survive a same-catalog

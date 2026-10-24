@@ -18,7 +18,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 - **S** `RS/webpack:__dk-suite_src_main_utils_ActiveWindowService.logic.js`: 500 ms cache, 3000 ms macOS and 2000 ms other-platform poll defaults, 5000 ms execution timeout.
 - **S** `RS/webpack:__dk-suite_src_views_Setting_GeneralSettings.vue`: monitor master switch, method, and frame-rate controls.
 - **N** `ART/store_keys.txt`: settings.appMonitorConfig, settings.gameModeMonitorConfig and system.appMonitor* names; metric collector details remain unproven.
-- **N** `ART/ipc_channels.txt`: app-monitor-view-config-changed and set-gaming-mode channel names.
+- **N** `ART/ipc_channels.txt`: app-monitor-view-config-changed. `set-gaming-mode` belongs to device-typed hotkeys (`MAIN-096`), not this monitoring override.
 
 ## Goals / Non-Goals
 
@@ -38,7 +38,7 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 1. Approved (Ramiro, 2026-10-23): use a 1 Hz metric default with a validated 0.2–10 Hz range, coalesce active-window queries, and keep at most one sample request in flight per collector. These are replacement-client budgets, not measured DK-Suite metric rates.
 
-2. Approved (Ramiro, 2026-10-23): gaming mode overlays saved monitoring settings and restores them on exit; it does not rewrite profiles or infer game detection from arbitrary foreground apps.
+2. Approved (Ramiro, 2026-10-23): monitoring override overlays saved monitoring settings and restores them on exit; it does not rewrite profiles or infer game detection from arbitrary foreground apps.
 
 3. Approved (Ramiro, 2026-10-23): unsupported collectors remain visible as unavailable. ActiveWindowService proves window discovery, not implementations of every metric named by the inventory.
 
@@ -56,7 +56,7 @@ Approved (Ramiro, 2026-10-23): use operation-specific catalog leaves, initially 
 
 ## Recommended phase and dependencies
 
-Later phases item 1, system monitor tiles, app monitor, and gaming mode. Implementation follows the profile/grid and display contracts.
+Later phases item 1, system monitor tiles, app monitor, and monitoring override. Implementation follows the profile/grid and display contracts.
 
 Dependencies are contracts supplied by their owning changes. An unavailable dependency yields an explicit unavailable state; this change does not duplicate its implementation or modify its specs.
 
@@ -72,6 +72,10 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 ## Verification and outstanding evidence
 
-Use a fake clock and controllable collectors to prove non-overlap, stale thresholds, disable-during-query and gaming restore. Drive a settings save through the typed client to both actual tile consumers and assert obsolete collectors stop. Native collector availability and all device display behavior remain unverified until exercised on target hosts/hardware.
+Use a fake clock and controllable collectors to prove non-overlap, stale thresholds, disable-during-query and override restoration. Drive a settings save through the typed client to both actual tile consumers and assert obsolete collectors stop. Native collector availability and all device display behavior remain unverified until exercised on target hosts/hardware.
 
 Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+
+## Terminology correction
+
+`MAIN-096` and `v0.4.95/app-resources/background.js`, `set-gaming-mode` / `isGamingMode`, establish that DK-Suite's "gaming mode" routes hotkeys through device keyboard command `0x10`. This change's reversible metric-selection/rate overlay is an open-quake "monitoring override". Its behavior stays unchanged and cannot switch host/device hotkey routing. Hardware-controls owns device-typed hotkeys.

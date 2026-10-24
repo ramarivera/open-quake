@@ -35,7 +35,7 @@ Native control contracts are Schema-first `@effect/rpc`; external third-party pr
 
 ## Decisions
 
-1. Approved (Ramiro, 2026-10-23): question 9 remains open. Feishu/Lark and bot-token form branches are observed, but they are not an authoritative catalog. Ship only adapters with their own verified contract; an empty catalog is a supported state.
+1. Approved (Ramiro, 2026-10-23): the catalog evidence question is resolved by `CENTER-072/073`: the main bundle exports four China-region and two international entries, also present in 0.4.52. Preserve those descriptors and group metadata; only adapters with a verified runtime contract are runnable. An empty adapter registry remains supported and does not mean the recovered catalog is missing.
 
 2. Approved (Ramiro, 2026-10-23): keep the hub independent of runtime installation. Runtime absence yields unavailable setup rather than an implicit install.
 
@@ -47,7 +47,7 @@ Approved (Ramiro, 2026-10-23): ChannelDescriptor carries ID, label, setup type, 
 
 ### Data flow and lifecycle
 
-Approved (Ramiro, 2026-10-23): The runtime/provider lane supplies adapters into a registry, not a hard-coded recovered catalog. The hub queries descriptors and live status through the channel conductor. Setup validates descriptor fields, creates a session and streams correlated progress to the drawer. Closing/removal cancels session scope; save does not imply connection verification.
+Approved (Ramiro, 2026-10-23): The runtime/provider lane registers adapters against the recovered six-entry descriptor catalog, retaining availability independently of catalog identity. The hub queries descriptors and live status through the channel conductor. Setup validates descriptor fields, creates a session and streams correlated progress to the drawer. Closing/removal cancels session scope; save does not imply connection verification.
 
 ### Failure contract
 
@@ -61,7 +61,7 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 ## Risks / Trade-offs
 
-Inventory question 9 is unresolved and recovered setup names can be mistaken for supported integrations. Show only registered verified descriptors; link runtime enablement to the owning runtime change.
+The six-entry catalog is recovered (`CENTER-072/073`); catalog presence does not prove successful external pairing or supported local runtimes. Show only registered verified descriptors; link runtime enablement to the owning runtime change.
 
 The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
 
@@ -71,6 +71,10 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 ## Verification and outstanding evidence
 
-Use an empty registry, unavailable-runtime adapter and controllable QR adapter to drive the actual hub/drawer. Prove stale events cannot change a new session, credentials never enter status serialization and removal affects only one channel. Real channel catalog, pairings and external messaging remain unverified.
+Use an empty registry, unavailable-runtime adapter and controllable QR adapter to drive the actual hub/drawer. Prove stale events cannot change a new session, credentials never enter status serialization and removal affects only one channel. The catalog is source-verified. Actual pairings and external messaging remain unverified.
 
 Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+
+## 0.4.95 catalog evidence
+
+`CENTER-072/073` cite the catalog module in `v0.4.95/app-resources/background.js`, exported as `OPENCLAW_CN_CHANNEL_CATALOG` and `OPENCLAW_INTL_CHANNEL_CATALOG`. The six IDs and setup/install metadata are transcribed in the delta spec. The same set is present in 0.4.52 `strings/background_strings_4.txt:3000-3040`. DK-Suite selects four China entries or two international entries via `isChinaServiceRegionFromApp`; its region default is an observed vendor policy, not permission to infer user geography in open-quake. Runtime registration and region presentation policy remain with the runtime/channel owner. Catalog evidence does not verify any provider installation or pairing.

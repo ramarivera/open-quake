@@ -18,13 +18,15 @@
 
 ## 5. Owning-lane composition
 
-- [ ] 5.1 Compose the profile-manager serialized selection/thumbnail producer, active device/page/revision refresh, focused brightness/hotkey actions, knob-push-to-talk runtime and normalized physical touch when their transports are available; verify actual consumers. Tracked by open-quake-lih.4.2. This baseline exposes the ports and fails unavailable runtimes closed.
+- [ ] 5.1 Compose active hardware identity, thumbnail production, external-volume observations, focused brightness/hotkey actions, knob-push-to-talk runtime and normalized physical touch when their transports are available; verify actual consumers. Tracked by open-quake-lih.4.2. This baseline exposes the ports and fails unavailable runtimes closed.
 
 ## Evidence
 
-- 1.1: reconciled knob-configuration and knob-push-to-talk; strict OpenSpec validation passes all 28 changes.
+- 1.1: reconciled knob-configuration and knob-push-to-talk; strict OpenSpec validation passes all 30 changes.
 - 2.1: packages/device/src/knob/model/ with 13 port-driven tests in packages/device/test/knob/knob-model.test.ts, including TestClock deadlines, slow cache/writer concurrency, firmware arbitration, failure identity and wrapping properties.
 - 3.1: apps/desktop/src/main/knob/, shared/knob-contracts.ts and strip/overlays/knob/. Desktop consumer tests prove committed storage selection and panel identity permissions; geometry tests retain recovered rounding. Native smoke drives the production bus consumer, IPC, preload and renderer.
 - Runtime composition limits and exact interfaces: apps/desktop/src/main/knob/README.md and design.md. Real hardware and live voice/brightness/hotkey drivers are not verified. The epic and cluster remain open for task 5.1.
 
 - 4.1: all six lane gates and both native mock Electron smokes passed. PR: https://github.com/ramarivera/open-quake/pull/24. Captures and gate logs: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/knob-model/. Open task 5.1 tracks owning-lane integration; it does not claim hardware verification.
+
+- Main integration: merged strip-grid/management changes; shared ProfileService selection and committed notifications now drive knob, panel and preview. Native smoke asserts both windows update after a knob commit and unsupported grid taps clear focus.

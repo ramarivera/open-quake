@@ -37,7 +37,7 @@ Final results on 2026-10-23:
 
 ## Unverified and remaining work
 
-Hardware field support, firmware ranges/effects, v3 menu bindings, per-key RGB, knob-specific transport, and EEPROM persistence after reboot remain unverified. Save success proves only the registered echo/readback contract. Desktop controls and preferences and their integration scenarios remain tasks 2.2, 2.3, and 3.2; hardware acceptance remains task 3.1.
+Hardware field support, firmware ranges/effects, v3 menu bindings, per-key RGB, physical knob LED acceptance, and EEPROM persistence after reboot remain unverified. `SETTINGS-021` recovers knob LED opcode 1 / cmd 0x06; its full transport/lifecycle requirement is owned by the hardware-controls lane. Save success proves only the registered echo/readback contract. Desktop controls and preferences and their integration scenarios remain tasks 2.2, 2.3, and 3.2; hardware acceptance remains task 3.1.
 
 ## PR #10 review fix, round 1
 

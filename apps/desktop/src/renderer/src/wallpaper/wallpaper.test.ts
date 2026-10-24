@@ -38,7 +38,7 @@ const render = (value?: WallpaperSnapshot): string =>
 	renderToStaticMarkup(createElement(WallpaperCanvas, { snapshot: value }));
 
 describe("shared panel and preview consumer", () => {
-	it("renders identical snapshots, native logical geometry and host clock in both windows", () => {
+	it("renders identical snapshots and native logical geometry in both windows", () => {
 		const contain = {
 			...snapshot,
 			saved: {
@@ -51,28 +51,14 @@ describe("shared panel and preview consumer", () => {
 		expect(preview).toBe(panel);
 		expect(panel).toContain('viewBox="0 0 1920 480"');
 		expect(panel).toContain('x="720" y="0" width="480" height="480"');
-		expect(panel).toContain('data-time="00:00:00"');
-		expect(panel).toContain('data-tile="dkDesktopClock">00:00</text>');
-		expect(panel).toContain(">00</text>");
-		const twelve = render({
-			...snapshot,
-			saved: {
-				...snapshot.saved,
-				clock: {
-					...defaultClockTile,
-					actions: [{ type: "hourFormat", value: "12h" }],
-				},
-			},
-		});
-		expect(twelve).toContain('data-time="12:00:00 AM"');
-		expect(twelve).toContain(">12:00</text>");
-		expect(twelve).toContain(">AM</text>");
 		expect(panel).not.toContain("hardware-applied");
 		expect(render(snapshot)).toContain(
 			'x="0" y="-720" width="1920" height="1920"',
 		);
+		// The clock is the dkDesktopClock tile's job now (strip-key-grid).
+		expect(panel).not.toContain("data-time");
 	});
-	it("uses neutral theme styling and no decorative animation in empty and unreadable states", () => {
+	it("uses the neutral fill and no decorative animation in empty and unreadable states", () => {
 		for (const value of [
 			undefined,
 			{ ...snapshot, asset: { _tag: "empty" as const } },

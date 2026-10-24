@@ -152,6 +152,13 @@ export function registerKnobRuntime(
 					initialized = undefined;
 				});
 		},
+		async refresh(): Promise<void> {
+			if (disposed) return;
+			await initialize();
+			await runtime.runPromise(
+				load.pipe(Effect.flatMap(KnobModel.synchronize)),
+			);
+		},
 		async dispose(): Promise<void> {
 			disposed = true;
 			ipcMain.removeHandler(KNOB_REQUEST);

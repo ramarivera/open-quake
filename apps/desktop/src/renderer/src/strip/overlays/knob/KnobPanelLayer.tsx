@@ -1,4 +1,7 @@
+import { useEffect } from "react";
 import { selectorProfiles } from "../../../../../shared/knob-contracts";
+import { stripLayout } from "../../geometry";
+import { useStripProfiles } from "../../useStripProfiles";
 import { FunctionWheel } from "./FunctionWheel";
 import { tileRect } from "./geometry";
 import { KnobDial } from "./KnobDial";
@@ -10,10 +13,38 @@ import "./knob.css";
 /** SVG child of the strip canvas, so rotation/scaling match the base panel. */
 export function KnobPanelLayer(): React.JSX.Element | null {
 	const { snapshot, notice, request } = useKnob();
+	const profiles = useStripProfiles();
+	useEffect(() => {
+		if (snapshot?.focus._tag !== "tile" || snapshot.selector.mode !== "closed")
+			return;
+		const sessionId = snapshot.context.session.sessionId;
+		const tap = (event: PointerEvent) => {
+			if (
+				!(event.target instanceof Element) ||
+				event.target.closest(".knob-tile-target")
+			)
+				return;
+			const keyCode =
+				event.target.closest<HTMLElement>(".strip-slot")?.dataset.keyCode;
+			if (keyCode) void request({ _tag: "TapTile", sessionId, keyCode });
+		};
+		window.addEventListener("pointerdown", tap);
+		return () => window.removeEventListener("pointerdown", tap);
+	}, [snapshot, request]);
 	if (!snapshot) return null;
 	const { context, selector, focus, volume } = snapshot;
 	const sessionId = context.session.sessionId;
 	const entries = selectorProfiles(snapshot);
+	const profile =
+		profiles._tag === "ready"
+			? profiles.envelope.profiles.find(
+					(p) => p.id === context.session.profileId,
+				)
+			: undefined;
+	const page =
+		profile?.pages.find((page) => page.id === context.pageId) ??
+		profile?.pages[0];
+	const layout = profile && page ? stripLayout(profile, page) : undefined;
 	return (
 		<foreignObject
 			x="0"
@@ -32,7 +63,9 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 				{context.keys
 					.filter((key) => key.visible)
 					.map((key) => {
-						const rect = tileRect(key.keyCode, key.size);
+						const rect =
+							layout?.tiles.find((tile) => tile.keyCode === key.keyCode)
+								?.slot ?? tileRect(key.keyCode, key.size);
 						return (
 							<button
 								key={key.keyCode}

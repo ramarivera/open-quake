@@ -569,6 +569,35 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							),
 						),
 				),
+				synchronize: Effect.fn("KnobModel.synchronize")(
+					(input: unknown): Effect.Effect<void, KnobError> =>
+						Schema.decodeUnknown(KnobModelContext)(input).pipe(
+							Effect.catchTag("ParseError", (cause) =>
+								Effect.fail(InvalidKnobConfig.fromCause(cause)),
+							),
+							Effect.flatMap((context) =>
+								mutex.withPermits(1)(
+									Effect.suspend(() => {
+										const identity = (value: KnobModelContext) =>
+											JSON.stringify({
+												deviceId: value.session.deviceId,
+												profileId: value.session.profileId,
+												revision: value.session.revision,
+												pageId: value.pageId,
+												keys: value.keys,
+												player: value.player,
+												profiles: value.profiles.map(
+													({ id, name, colorful }) => ({ id, name, colorful }),
+												),
+											});
+										return identity(context) === identity(state.context)
+											? Effect.void
+											: replace(context);
+									}),
+								),
+							),
+						),
+				),
 				dispatch: Effect.fn("KnobModel.dispatch")(
 					(input: unknown): Effect.Effect<void, KnobError> =>
 						Schema.decodeUnknown(KnobModelInput, { onExcessProperty: "error" })(

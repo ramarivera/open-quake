@@ -47,7 +47,7 @@ Use atomic whole-revision saves with expected-revision checks. Draft edits do no
 
 Start with one named editable profile and one empty page; page add/select/remove supports first-release navigation. Clamp previous/next at boundaries, reject explicit out-of-range page requests, and refuse deletion of the last page. Multiple-profile create/rename/duplicate/delete follows later; deleting the active profile selects the first remaining profile and page. Keep the last profile. Later folders are validated links to existing pages in the same profile, with an explicit return-page stack; reject cyclic or missing links. Approved (Ramiro, 2026-10-23): these recommendations are the product decisions, including edge cases not established by the recovered UI.
 
-For new edits, reject off-grid spans, duplicate anchors, overlap without explicit replacement, and forbidden edits. Preserve unknown imported functions in a compatibility envelope and show an unsupported tile. Only registered, fully validated actions can execute. New schemas use omitted optional fields in JSON and `Option` in domain code. Legacy null slots and empty action objects normalize at import only; do not turn unknown data into executable actions.
+For new edits, reject invalid anchors, duplicate anchors, overlap without explicit replacement, and forbidden edits. Preserve unknown imported functions in a compatibility envelope and show an unsupported tile. Only registered, fully validated actions can execute. New schemas use omitted optional fields in JSON and `Option` in domain code. Legacy null slots and empty action objects normalize at import only; do not turn unknown data into executable actions.
 
 ## Risks / Trade-offs
 
@@ -63,3 +63,16 @@ Initialize new local data independently of DK-Suite. Import only a user-selected
 ## Approved decisions and remaining verification
 
 Approved (Ramiro, 2026-10-23): adopt the recommended version-1 envelope, one-based row,col logical descriptor, one-profile/one-page seed, clamped previous/next with strict explicit page requests, last-page protection, atomic expected-revision saves, and inert preservation of unknown imported fields. The requirement scenarios describe these accepted policies. Hardware mapping and account-free operation on firmware remain unverified; mocks cannot close those gates.
+
+## Amendment: inward edge spans (strip-key-grid, 2026-10-24)
+
+Approved parity decision 2 (Ramiro, 2026-10-23) replaces the rejection of
+out-of-bounds spans. Occupancy uses `profile-footprint.ts`: forced spans per
+type (8×2 `playAudio`, `dkDesktopClock`, `systemMonitorPanel`; 5×2
+`liveAudioTranslateDisplay`, `aiChatView`; 4×2 `gameMode`, `quakeBot`; 3×2
+`cameraView`, `cameraControlView`; 2×2 `printerStatusView`, `quakeBotInput`),
+otherwise `config.size`, with the start clamped to `min(column, 9 − width)` and
+`min(row, 3 − height)`. DK-Suite imports with edge spans therefore load instead
+of failing. The strip, the preview and hit-testing use the same function. See
+`openspec/changes/strip-key-grid/design.md`.
+

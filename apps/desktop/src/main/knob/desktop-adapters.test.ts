@@ -1,13 +1,16 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Schema } from "effect";
+import { Effect, ManagedRuntime, Option, Schema, Stream } from "effect";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import {
 	type EncodedProfileEnvelope,
 	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import { ProfilesLive } from "../profiles/profile-ipc";
 import { desktopKnobAdapters } from "./desktop-adapters";
 import { makeKnobRuntime } from "./index";
 import { canRequestKnob } from "./permissions";
+import { knobProfileBinding } from "./profile-binding";
 
 const source = (): EncodedProfileEnvelope => ({
 	schemaVersion: 1,
@@ -98,6 +101,102 @@ describe("desktop knob integration", () => {
 				);
 			}),
 	);
+	it("selects through the shared profile repository and publishes the committed snapshot", async () => {
+		let committed = source();
+		let writes = 0;
+		let failWrite = false;
+		const profiles = ManagedRuntime.make(
+			ProfilesLive({
+				read: async () => committed,
+				write: async (next) => {
+					if (failWrite) throw new Error("native storage failure");
+					committed = next;
+					writes++;
+				},
+			}),
+		);
+		const adapter = desktopKnobAdapters(
+			"/unused",
+			{ profiles: knobProfileBinding(profiles) },
+			{
+				read: async () => {
+					throw new Error("old raw storage read");
+				},
+				write: async () => {
+					throw new Error("old raw storage write");
+				},
+			},
+		);
+		const runtime = makeKnobRuntime(adapter.ports);
+		try {
+			await runtime.runPromise(
+				adapter.load.pipe(Effect.flatMap(KnobModel.configure)),
+			);
+			const state = await runtime.runPromise(KnobModel.snapshot());
+			await runtime.runPromise(
+				KnobModel.dispatch({
+					_tag: "Key",
+					sessionId: state.context.session.sessionId,
+					code: 2,
+				}),
+			);
+			const published = await profiles.runPromise(
+				ProfileService.subscribeCommittedProfiles().pipe(
+					Effect.flatMap(Stream.runHead),
+				),
+			);
+			expect(
+				Option.isSome(published) &&
+					published.value.activeByDevice["desktop-preview"]?.profileId,
+			).toBe("colorful");
+			expect(committed.activeByDevice["desktop-preview"]?.profileId).toBe(
+				"colorful",
+			);
+			expect(writes).toBe(1);
+			const next = await runtime.runPromise(KnobModel.snapshot());
+			await runtime.runPromise(
+				adapter.load.pipe(Effect.flatMap(KnobModel.synchronize)),
+			);
+			expect(
+				(await runtime.runPromise(KnobModel.snapshot())).context.session
+					.sessionId,
+			).toBe(next.context.session.sessionId);
+			const invalid = await profiles.runPromise(
+				Effect.either(
+					ProfileService.selectProfile({
+						deviceId: "desktop-preview",
+						profileId: "grid",
+						pageId: "missing",
+					}),
+				),
+			);
+			expect(invalid).toMatchObject({
+				_tag: "Left",
+				left: { _tag: "ProfileNotFound" },
+			});
+			expect(writes).toBe(1);
+			failWrite = true;
+			const failed = await profiles.runPromise(
+				Effect.either(
+					ProfileService.selectProfile({
+						deviceId: "desktop-preview",
+						profileId: "grid",
+					}),
+				),
+			);
+			expect(failed).toMatchObject({
+				_tag: "Left",
+				left: { _tag: "ProfileWriteFailed" },
+			});
+			expect(
+				(await profiles.runPromise(ProfileService.loadProfiles())).envelope
+					.activeByDevice["desktop-preview"]?.profileId,
+			).toBe("colorful");
+		} finally {
+			await runtime.dispose();
+			await profiles.dispose();
+		}
+	});
 	it("accepts only app-document panel mutations and never accepts firmware events from renderer", () => {
 		const renderer = "file:///app/index.html";
 		const input = { _tag: "Page", sessionId: "session", delta: 1 };

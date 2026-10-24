@@ -33,6 +33,7 @@ export const FocusKey = Schema.Struct({
 export type FocusKey = typeof FocusKey.Type;
 export const KnobModelContext = Schema.Struct({
 	session: KnobSession,
+	pageId: Schema.optional(id),
 	profiles: Schema.Array(MenuProfile).pipe(
 		Schema.filter(
 			(profiles) => new Set(profiles.map((p) => p.id)).size === profiles.length,

@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
 import type {
 	KnobModelContext,
@@ -14,7 +14,11 @@ import type {
 } from "../../../../../packages/device/src/knob/model/contracts.js";
 import type { KnobModelPort } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import { encodeProfileEnvelope, ProfileEnvelope } from "../../shared/profiles";
 import { MediaLive, registerMedia } from "../media";
+import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { quickProfile } from "../test/strip-fixtures";
 import { desktopKnobAdapters } from "./desktop-adapters";
 import { makeKnobRuntime, registerKnobRuntime } from "./index";
 
@@ -104,9 +108,59 @@ async function smoke(): Promise<void> {
 	const voice: KnobVoiceInput[] = [];
 	const focused: number[] = [];
 	const volumes: VolumeReading[] = [];
+	let profileEnvelope = encodeProfileEnvelope(
+		Schema.decodeUnknownSync(ProfileEnvelope)({
+			schemaVersion: 1,
+			profiles: context.profiles.map((profile) => ({
+				...quickProfile,
+				id: profile.id,
+				name: profile.name,
+				pages: quickProfile.pages.map((page) => ({
+					...page,
+					keys: page.keys.map((key, index) =>
+						index === 0
+							? {
+									...key,
+									config: {
+										...key.config,
+										title: { ...key.config.title, text: profile.name },
+									},
+								}
+							: key,
+					),
+				})),
+			})),
+			activeByDevice: {
+				"desktop-preview": {
+					profileId: "p0",
+					pageId: quickProfile.pages[0].id,
+				},
+			},
+		}),
+	);
+	const profilesRuntime = ManagedRuntime.make(
+		ProfilesLive({
+			read: async () => profileEnvelope,
+			write: async (next) => {
+				profileEnvelope = next;
+			},
+		}),
+	);
+	const profiles = registerProfiles(
+		profilesRuntime,
+		new URL(`file://${resolve("out/renderer/index.html")}`).href,
+	);
 	const ports: KnobModelPort = {
 		selectProfile: (profileId) =>
-			Effect.sync(() => {
+			Effect.gen(function* () {
+				yield* Effect.promise(() =>
+					profilesRuntime.runPromise(
+						ProfileService.selectProfile({
+							deviceId: "desktop-preview",
+							profileId,
+						}),
+					),
+				);
 				selected.push(profileId);
 				context = {
 					...context,
@@ -187,6 +241,14 @@ async function smoke(): Promise<void> {
 			);
 		}, "renderer state before capture");
 		await delay(220);
+		await panel.webContents.executeJavaScript(
+			"document.fonts.ready.then(() => undefined)",
+		);
+		// Hidden macOS windows can return the pre-update compositor frame once.
+		await panel.webContents.capturePage();
+		await delay(120);
+		if (name === "function-wheel.png")
+			assert(await exists('[data-testid="function-wheel"]'));
 		const image = await panel.webContents.capturePage();
 		assert(!image.isEmpty());
 		await writeFile(join(output, name), image.toPNG());
@@ -214,6 +276,14 @@ async function smoke(): Promise<void> {
 		await screenshot("function-wheel.png");
 		await until(async () => selected.length === 1, "200ms ring commit");
 		assert.equal(selected[0], "p1");
+		for (const window of [panel, management])
+			await until(
+				async () =>
+					window.webContents.executeJavaScript(
+						`document.querySelector('.strip-slot[data-key-code="1,1"] .strip-tile-title')?.textContent?.includes('Quick') === true`,
+					),
+				"committed profile reaches panel and management preview",
+			);
 		const png: unknown = await panel.webContents.executeJavaScript(`(() => {
 			const canvas = document.createElement('canvas'); canvas.width=960; canvas.height=240;
 			const c=canvas.getContext('2d'); c.fillStyle='#15171e'; c.fillRect(0,0,960,240);
@@ -317,6 +387,11 @@ async function smoke(): Promise<void> {
 		assert.deepEqual(focused, [-1]);
 		assert.equal(volumes.length, 1);
 		await screenshot("tile-dial.png");
+		click(350, 110);
+		await until(
+			async () => (await model()).focus._tag === "none",
+			"unsupported grid tile clears focus",
+		);
 		assert.deepEqual(errors, []);
 		process.stdout.write(
 			`Knob native smoke PASS: ring, picker, paging, panel-only commands, gesture arbitration, volume and focus. Screenshots: ${output}\n`,
@@ -325,6 +400,7 @@ async function smoke(): Promise<void> {
 		panel.destroy();
 		management.destroy();
 		await registration.dispose();
+		await profiles.dispose();
 		await media.dispose();
 	}
 }

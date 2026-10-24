@@ -96,7 +96,17 @@ Chat controls, state names, errors, and assistant chrome SHALL use General Trans
 
 ### Requirement: Titles and optional assistant window
 
-The first release SHALL derive a local fallback title from the first nonempty user input and permit renaming. Later automatic title generation SHALL be optional and SHALL NOT overwrite a user title or fail a chat. An optional floating assistant SHALL persist geometry locally and restore within connected displays; core chat and capture SHALL work with that window closed.
+The first release SHALL derive a local fallback title from the first user message, keep messages of at most 10 characters intact, and use the first 10 characters followed by `...` for longer messages. It SHALL permit renaming and retain a manual title on later sends. Evidence: `AI-236`, `AIAssistantContent.vue:885-897`; keeping manual titles deliberately fixes DK-Suite overwriting them on every send. Later automatic title generation SHALL be optional and SHALL NOT overwrite a user title or fail a chat. An optional floating assistant SHALL persist geometry locally and restore within connected displays; core chat and capture SHALL work with that window closed.
+
+#### Scenario: Local title truncation
+
+- **WHEN** the first user message is `abcdefghijk` and no manual title exists
+- **THEN** the local title is `abcdefghij...` without a model request
+
+#### Scenario: Short title
+
+- **WHEN** the first user message is `abcdefghij`
+- **THEN** the local title is `abcdefghij` without an ellipsis
 
 #### Scenario: Late generated title
 - **WHEN** a title generation finishes after the user renamed or deleted the conversation

@@ -22,7 +22,7 @@ The system SHALL consume source-confirmed press codes 1 short, 2 double, 5 hold 
 
 ### Requirement: Idle profile selectors
 
-Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. The picker SHALL use only ready thumbnails in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent and hide after 3000 ms; picker ring feedback SHALL hide after 1200 ms. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
+Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. The picker SHALL use only ready thumbnails in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent and hide after 3000 ms; picker ring feedback SHALL hide after 1200 ms. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
 
 #### Scenario: Deadline restarts
 
@@ -60,3 +60,8 @@ Tapping the DK-Player volume capsule SHALL toggle armed volume mode only when a 
 
 - **WHEN** a profile changes while volume is armed
 - **THEN** the next idle detent selects a profile and performs no volume write
+
+#### Scenario: Shared committed profile selection
+
+- **WHEN** the knob selects a profile through the shared profile repository
+- **THEN** both the strip and management preview receive the persisted selection, and its own publication does not restart the knob session or close ring feedback

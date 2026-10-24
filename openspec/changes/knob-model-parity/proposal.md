@@ -23,4 +23,4 @@ No archived capabilities exist. Reconcile the in-flight knob-configuration and k
 
 ## Impact
 
-Device knob domain, Electron composition and preload, strip overlays under strip/overlays/knob, mock-only native smoke. No new dependencies. No hardware access. Beads epic open-quake-lih.4.1 under cluster open-quake-lih.4.
+Device knob domain, a minimal serialized profile-selection command, Electron composition and preload, strip overlays under strip/overlays/knob, mock-only native smoke. No new dependencies. No hardware access. Beads epic open-quake-lih.4.1 under cluster open-quake-lih.4.

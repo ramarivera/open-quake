@@ -3,22 +3,23 @@
 Main consumes `QuakeEvent` rotation and firmware press classifications through
 `registerKnobRuntime`. Renderer commands cannot inject physical events. Only the
 actual panel window's top-level app document may mutate state; management can
-read. Preload validates replies and exposes snapshots without native causes.
+read. Renderer validates replies and snapshots without native causes.
 Shutdown interrupts streams, timers, pending writes and owned voice work.
 
-The default adapter uses `profiles-v1.json` and its `desktop-preview` selection.
-It reads the selected page, persists profile switches with the existing atomic
-storage adapter, and uses macOS output volume for player mode and focused volume
-tiles. No native volume write runs in tests or smoke. Brightness, hotkey and voice
-ports fail with the knob catalog's unavailable error until their owners supply
-`DesktopKnobBindings`. Other platforms need a volume binding.
+Production shares the strip lane's `ProfileService` runtime and one serialized
+repository for `profiles-v1.json`. `knobProfileBinding` reads committed profiles
+and selects through `ProfileService.selectProfile`; successful writes publish
+the new selection to both panel and management preview. The repository rejects
+unknown profiles/pages and preserves the committed selection on write failure.
+Committed profile notifications call `KnobModel.synchronize`, which resets changed
+page/revision state while preserving a selector after its own commit.
 
-Profile-manager integration should replace this standalone storage composition
-with its serialized selection consumer and call `KnobModel.configure` whenever
-the active device, page or committed profile revision changes. The desktop
-registration currently reloads on connection. It has no profile-editor event
-subscription because that transport is absent on this branch. Do not use two
-independent writers for a future composed profile editor.
+The current serial is `desktop-preview`; device discovery still needs to supply
+a device identity. A raw-storage adapter remains available for isolated consumers.
+Native macOS volume supports player mode and focused volume tiles. No native
+volume write runs in tests or smoke. Brightness, hotkey and voice ports fail with
+the knob catalog's unavailable error until their owners supply
+`DesktopKnobBindings`. Other platforms need a volume binding.
 
 Thumbnail capture belongs to profile-manager. This consumer reads only
 `<userData>/profile-thumbnails/<sha256(profileId)>.png`, limits the file to 1 MB,
@@ -30,7 +31,7 @@ profile has no thumbnail and therefore uses the FunctionWheel.
 Renderer overlays live entirely in `strip/overlays/knob/` and mount inside the
 existing strip canvas. `KnobDial` and `VolumeCapsule` are exported for the strip
 grid owner. Pass its actual tile dimensions and read-only state when composing.
-`KnobPanelLayer` is the current panel mount and respects key spans. Physical
+`KnobPanelLayer` mounts in StripPanel and uses the actual strip layout for tile bounds. Tapping an unsupported grid tile clears focus. Physical
 controller touch normalization belongs to its input owner; DOM pointer events
 already implement card selection, drag-off cancellation, blank dismissal and
 paging. A touch consumer should dispatch the same restricted Page/Select/Dismiss

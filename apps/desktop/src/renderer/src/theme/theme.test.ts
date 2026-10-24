@@ -104,7 +104,7 @@ describe("custom theme validation", () => {
 			...themes.light,
 			...custom.colors,
 		});
-		expect(themes.light.accent).toBe("#174ea6");
+		expect(themes.light.accent).toBe("#b4480b");
 	});
 
 	it("accepts a complete palette without dropping tokens", () => {

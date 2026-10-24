@@ -26,6 +26,12 @@ import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
 
 /** Other lanes compose their qualified action/voice runtimes here. */
 export interface DesktopKnobBindings {
+	readonly profiles?: {
+		readonly read: Effect.Effect<ProfileEnvelope, KnobError>;
+		readonly select: (
+			profileId: string,
+		) => Effect.Effect<ProfileEnvelope, KnobError>;
+	};
 	readonly voice?: (input: KnobVoiceInput) => Effect.Effect<void, KnobError>;
 	readonly focusedTurn?: KnobModelPort["focusedTurn"];
 	readonly readVolume?: KnobModelPort["readVolume"];
@@ -107,15 +113,17 @@ export function desktopKnobAdapters(
 	readonly load: Effect.Effect<KnobModelContext, KnobError>;
 } {
 	let context: KnobModelContext;
-	const read = Effect.tryPromise({
-		try: () => storage.read(),
-		catch: (cause) => KnobDispatchFailed.fromCause(cause),
-	}).pipe(
-		Effect.flatMap((raw) => Schema.decodeUnknown(ProfileEnvelope)(raw)),
-		Effect.catchTag("ParseError", (cause) =>
-			Effect.fail(KnobDispatchFailed.fromCause(cause)),
-		),
-	);
+	const read =
+		bindings.profiles?.read ??
+		Effect.tryPromise({
+			try: () => storage.read(),
+			catch: (cause) => KnobDispatchFailed.fromCause(cause),
+		}).pipe(
+			Effect.flatMap((raw) => Schema.decodeUnknown(ProfileEnvelope)(raw)),
+			Effect.catchTag("ParseError", (cause) =>
+				Effect.fail(KnobDispatchFailed.fromCause(cause)),
+			),
+		);
 	const makeContext = (
 		envelope: ProfileEnvelope,
 		profileId: string,
@@ -134,6 +142,7 @@ export function desktopKnobAdapters(
 				profileId: profile.id,
 				revision: profile.revision,
 			},
+			pageId,
 			profiles: envelope.profiles.map((p) => ({
 				id: p.id,
 				name: p.name,
@@ -195,17 +204,20 @@ export function desktopKnobAdapters(
 				const envelope = yield* read;
 				const profile = envelope.profiles.find((p) => p.id === profileId);
 				if (!profile) return yield* unavailable;
-				const next = {
+				let next: ProfileEnvelope = {
 					...envelope,
 					activeByDevice: {
 						...envelope.activeByDevice,
 						"desktop-preview": { profileId, pageId: profile.pages[0].id },
 					},
 				};
-				yield* Effect.tryPromise({
-					try: () => storage.write(encodeProfileEnvelope(next)),
-					catch: (cause) => KnobDispatchFailed.fromCause(cause),
-				});
+				if (bindings.profiles)
+					next = yield* bindings.profiles.select(profileId);
+				else
+					yield* Effect.tryPromise({
+						try: () => storage.write(encodeProfileEnvelope(next)),
+						catch: (cause) => KnobDispatchFailed.fromCause(cause),
+					});
 				const previousThumbnails = context.profiles;
 				context = makeContext(next, profileId);
 				context = {

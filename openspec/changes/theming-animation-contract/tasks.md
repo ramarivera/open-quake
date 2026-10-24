@@ -77,3 +77,7 @@ Beads commands were intentionally left to the parent per the lane brief.
   Invalid BroadcastChannel messages left that state intact.
 - Actual Electron IPC/HID, physical panel placement and frame timing remain
   unverified. DK-Suite was not started.
+
+## 5. Strip motion amendment (strip-key-grid)
+
+- [x] 5.1 Record approved parity decision 3: DK strip motion on the key grid, the 160 ms / 4 px budget for management and panel overlays, DK's fixed strip palette; implemented in `apps/desktop/src/renderer/src/strip/strip.css` (bead `open-quake-lih.2.1.5`).

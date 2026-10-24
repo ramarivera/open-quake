@@ -37,6 +37,12 @@ export class ProfileService extends Effect.Service<ProfileService>()(
 					): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
 						repository.save(request),
 				),
+				selectProfile: Effect.fn("ProfileService.selectProfile")(
+					(
+						request: unknown,
+					): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
+						repository.select(request),
+				),
 				subscribeCommittedProfiles: Effect.fn(
 					"ProfileService.subscribeCommittedProfiles",
 				)(
