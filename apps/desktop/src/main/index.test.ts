@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -763,6 +764,41 @@ describe("desktop main with the real device service and fake HID", () => {
 		appEvent("before-quit");
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
 		expect(profiles?.disconnect).toHaveBeenCalledTimes(2);
+	});
+
+	it("enrolls and cleans up the serial when saved hardware preferences are corrupt", async () => {
+		const directory = await mkdtemp(
+			join(tmpdir(), "quake-corrupt-preferences-"),
+		);
+		const serial = "FAKE-QUAKE-CORRUPT";
+		await mkdir(join(directory, "hardware-v1"));
+		await writeFile(
+			join(
+				directory,
+				"hardware-v1",
+				`${createHash("sha256").update(serial).digest("hex")}.json`,
+			),
+			"{invalid",
+		);
+		const path = electron.app.getPath.mockImplementation(() => directory);
+		fake = await Effect.runPromise(
+			makeFakeHidTransport([{ ...FAKE_QUAKE_DEVICE, serialNumber: serial }]),
+		);
+		native.layer = fake.layer;
+		try {
+			await start();
+			const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+			await vi.waitFor(() =>
+				expect(profiles?.connect).toHaveBeenCalledExactlyOnceWith(serial),
+			);
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			expect(profiles?.disconnect).toHaveBeenCalledExactlyOnceWith(serial);
+			expect(await Effect.runPromise(fake.closes)).toBe(1);
+		} finally {
+			path.mockImplementation(() => join(tmpdir(), "open-quake-window-test"));
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	it("settles discovery and restores the known strip after resume reopens HID", async () => {

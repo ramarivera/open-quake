@@ -315,7 +315,6 @@ if (!app.requestSingleInstanceLock()) {
 					const controls = yield* HardwareControls;
 					return yield* startDeviceBus((connection) =>
 						Effect.gen(function* () {
-							const hardware = yield* attachHardware(controls, connection);
 							const serial = connection.info.serialNumber;
 							if (serial)
 								yield* Effect.acquireRelease(
@@ -331,7 +330,7 @@ if (!app.requestSingleInstanceLock()) {
 											),
 										),
 								);
-							return hardware;
+							return yield* attachHardware(controls, connection);
 						}),
 					);
 				});
