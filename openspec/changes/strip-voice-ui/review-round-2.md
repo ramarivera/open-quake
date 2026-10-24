@@ -4,14 +4,18 @@ Verified on 2026-10-24 in `/Volumes/ExtSSD/devplane/oq-strip-voice`, branch
 `lane/strip-voice`, starting from reviewed head
 `d22228775568a8dc5c8d1724915c6f0c7694f5f8`. This is one fix round covering
 all nine findings received against that head. No dependencies were added.
+The fix commit is `1bb5376ce0554a744c2e2eb152d9170c814e0a92`.
 Both voice and monitor tile registrations, runtime registrations and disposal
 paths remain present. The PR remains open and unmerged.
 
 ## Thread dispositions
 
-All nine findings were confirmed against the implementation and fixed. The
-latest pre-finish fetch found 16 total threads, seven previously resolved and
-these nine open. Fix-commit replies and resolutions follow the source push.
+All nine findings were confirmed against the implementation and fixed. Each
+received a specific reply linking `1bb5376` with the attribution
+"Implemented by Codex (gpt-6.1-sol).", then was resolved. The final full
+GraphQL fetch and comment-curator fetch confirm 16 of 16 threads resolved,
+including the seven from round one. The new CodeRabbit replies acknowledge
+fixes and add no actionable finding. No pagination remains unread.
 
 | Thread | Fix and evidence |
 | --- | --- |
@@ -108,8 +112,9 @@ Primary scratch directory:
 - Other voice, knob and media screenshots are in `voice/`, `knob/` and
   `media/`. The monitor fixture enforces its own prefix, so its five captures
   are in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/monitor-panel/voice-review-round-2/`.
-- `threads-before.json`, `threads-pre-finish.json` and the comment-curator
-  text snapshots preserve the review findings.
+- `threads-before.json`, `threads-pre-finish.json`, `threads-after.json`,
+  `thread-outcomes.json` and the comment-curator text snapshots preserve the
+  findings, attributed replies and verified resolutions.
 
 ## Advisory and remaining acceptance
 
@@ -127,6 +132,8 @@ merge and subsequent review findings.
 Task 6.3 and bead `open-quake-lih.5.1.14` remain open for physical QUAKE
 rendering, real microphone levels and provider delivery, touch/knob gestures
 and buzzer output. These checks used mocks only and opened no device.
-DK-Suite was not started. Task 6.4 and round bead `open-quake-lih.5.1.15`
-remain in progress until attributed replies and resolutions are recorded.
-The voice epic and parity cluster remain open.
+DK-Suite was not started. Task 6.4 is verified and round bead
+`open-quake-lih.5.1.15` closes with source and verification evidence.
+The voice epic and parity cluster remain open. Bot re-review is requested
+after the final evidence push; its outcome and required checks remain for
+the parent to inspect. This worker does not merge, watch or poll the PR.

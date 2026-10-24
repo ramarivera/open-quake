@@ -37,7 +37,7 @@ per numbered item below (`open-quake-lih.5.1.1` … `open-quake-lih.5.1.11`).
 
 - [ ] 6.3 Accept voice layouts, hold-to-talk, touch, knob stages and buzzer output on the physical QUAKE with user-confirmed gestures. Verify live microphone levels and provider delivery after capture wiring lands; record display captures and HID logs under the hardware checklist. (`open-quake-lih.5.1.14`)
 
-- [ ] 6.4 Address all nine PR #28 second-round threads: selection-only taps, disconnect cancellation, transcript replacement, capture ownership, committed renderer key maps, rejected IPC promises, history rendering cost, code fences and concurrent knob/grid starts; add regressions, run six gates and voice/knob/media/monitor native mock smokes, then reply to and resolve handled threads. (`open-quake-lih.5.1.15`)
+- [x] 6.4 Address all nine PR #28 second-round threads: selection-only taps, disconnect cancellation, transcript replacement, capture ownership, committed renderer key maps, rejected IPC promises, history rendering cost, code fences and concurrent knob/grid starts; add regressions, run six gates and voice/knob/media/monitor native mock smokes, then reply to and resolve handled threads. (`open-quake-lih.5.1.15`)
 
 ## Verification evidence
 
@@ -82,3 +82,11 @@ media and monitor native mock smokes pass together. Both tile registrations
 and both runtime disposals are retained; the monitor fixture now registers
 the voice hooks mounted by the combined renderer. See
 [lead-integration.md](lead-integration.md). Physical acceptance remains open.
+
+PR #28 review round 2 fixes all nine confirmed findings in `1bb5376`.
+Six gates pass with 1,033 uncached tests and 36 strict OpenSpec items, along
+with voice, knob, media and monitor native mock smokes. All nine received
+attributed fix-commit replies and resolutions; the final fetch confirms all
+16 PR threads resolved. See [review-round-2.md](review-round-2.md) for source,
+regressions, the lock-only race counterfactual, artifacts and the inconclusive
+docstring advisory. Physical task 6.3 and the epic remain open.
