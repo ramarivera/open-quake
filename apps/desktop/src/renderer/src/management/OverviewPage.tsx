@@ -126,7 +126,7 @@ export function OverviewPage({
 						<Counter label="Events" value={quake.eventsReceived} />
 					</div>
 				</div>
-				<div className="activity">
+				<div className="activity" aria-live="polite">
 					<h3 className="activity-title">Recent activity</h3>
 					{activity.length ? (
 						<ol className="activity-list">
