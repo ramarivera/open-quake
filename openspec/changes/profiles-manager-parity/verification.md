@@ -1,8 +1,8 @@
 # Profiles manager lane evidence
 
 PR: https://github.com/ramarivera/open-quake/pull/26, against `main`.
-Implementation integrates the management redesign and strip-grid changes at
-`2ac4a2f`. The manager, strip snapshots and switching share one repository;
+Implementation integrates the management redesign and strip-grid and strip-touch changes at
+`969d165`. The manager, strip snapshots and switching share one repository;
 previews and thumbnails consume the existing strip components. No geometry
 rules or dependencies were added.
 
@@ -10,12 +10,12 @@ All six required gates passed on the combined code:
 
 | Gate | Result |
 | --- | --- |
-| `pnpm biome check packages apps` | 242 files, no fixes |
+| `pnpm biome check packages apps` | 263 files, no fixes |
 | `pnpm typecheck` | Six package checks passed |
-| `pnpm test` | 596 tests passed: device 319, desktop 225, protocol 25, edge 27 |
+| `pnpm test` | 635 tests passed: device 340, desktop 243, protocol 25, edge 27 |
 | `pnpm build` | Passed |
 | `pnpm --filter @open-quake/desktop test:bundle` | Default native path isolated through the hermetic test transport; explicit built-app mock loads no native transport |
-| `openspec validate --all --strict` | 30 changes passed |
+| `openspec validate --all --strict` | 31 changes passed |
 
 The native profiles proof passed real UI create/rename, management/panel
 authorization, outbound delivery callback, the shared strip's 16 Quick tiles,

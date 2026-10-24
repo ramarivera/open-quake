@@ -93,14 +93,14 @@ await Effect.runPromise(QuakeDevice.discover().pipe(Effect.provide(QuakeDevice.D
 padding, declared lengths and checksums. The adapter maps decoded commands to
 events. It validates physical report sizes before ignoring unrelated traffic.
 Unknown valid control commands, including opcode `55` with command `1A`, are
-ignored. Touch fixtures use the existing synthetic checksummed `A3/1A` envelope,
+ignored. Legacy control touch fixtures use the synthetic checksummed `A3/1A` envelope,
 with action, little-endian Y, then little-endian X per point.
 
 Native binding installation and read-only enumeration can be checked separately
 from connecting. Live writes/reads, watchdog timing, detach behavior and actual
-knob/touch reports remain unverified. Research identifies touch as a separate
-HID collection on some devices. The synthetic touch tests do not establish its
-actual opcode or raw format; this package does not open a second touch interface.
+knob/touch reports remain unverified. The separately scoped vendor touch reader now implements the source-derived
+0712:0010 FF73/71 format. Synthetic tests establish its software contract only;
+physical framing and delivery still require the lead's hardware capture.
 
 Read-only research sources:
 
@@ -111,3 +111,10 @@ Read-only research sources:
 Ramiro approved `node-hid@3.4.0` and its native install step on 2026-10-23. The
 root build allowlist includes it, and the shared lockfile records it. No research
 source is copied into the repository.
+
+## Vendor touch input
+
+Each control connection also supervises the separately selected touch collection.
+See [touch input](src/touch/README.md) for the source-derived frame format, capture
+controls, recovery and the lead-only probe. Touch read failures recover separately
+from control-channel failures. Real hardware remains unverified.

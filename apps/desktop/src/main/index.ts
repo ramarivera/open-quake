@@ -133,7 +133,12 @@ app.whenReady().then(() => {
 				Effect.scoped(
 					Effect.gen(function* () {
 						bus = yield* source;
-						bus.on(createEventForwarder(() => [panelWin, managementWin]));
+						bus.on(
+							createEventForwarder(
+								() => [panelWin, managementWin],
+								() => [panelWin],
+							),
+						);
 						if (mock)
 							bus.on((event) => {
 								if (event.kind === "status") {
@@ -144,6 +149,7 @@ app.whenReady().then(() => {
 									void operation.catch(() => {});
 								}
 							});
+
 						yield* Effect.never;
 					}),
 				),
