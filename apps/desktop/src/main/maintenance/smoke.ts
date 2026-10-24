@@ -597,7 +597,17 @@ async function smoke() {
 	await main.webContents.executeJavaScript(
 		"document.querySelector('[aria-label=\"Close firmware upgrade\"]').click()",
 	);
-	await request({ action: "firmware-close" });
+	// Closing through the mounted control already sends firmware-close. Wait for
+	// its response instead of racing a second mutation against the same owner.
+	let closeSettled = false;
+	for (let attempt = 0; attempt < 20 && !closeSettled; attempt++) {
+		await settle(100);
+		closeSettled = await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('button')].some(button => button.textContent === 'Select UF2…' && !button.disabled)",
+		);
+	}
+	assert(closeSettled, "The mounted close request must complete before import");
+	assert.equal((await request({ action: "read" })).firmware.state, "idle");
 	const brokenBackup = join(directory, "DK-Suite_default_missing.zip");
 	await writeFile(
 		brokenBackup,
