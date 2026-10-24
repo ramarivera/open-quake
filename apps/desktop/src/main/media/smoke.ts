@@ -20,6 +20,7 @@ import {
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { registerHardware } from "../hardware";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import {
@@ -125,6 +126,11 @@ async function smoke(): Promise<void> {
 	const clock = registerClock(
 		ManagedRuntime.make(ClockLive(directory)),
 		() => management,
+	);
+	const unregisterHardware = registerHardware(
+		() => undefined,
+		() => management,
+		true,
 	);
 	let profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
 	app.once("will-quit", () => {
@@ -454,6 +460,7 @@ async function smoke(): Promise<void> {
 	process.stdout.write(
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
+	unregisterHardware();
 	await profiles.dispose();
 	await clock.dispose();
 	management.destroy();

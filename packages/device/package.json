@@ -9,7 +9,8 @@
 		".": "./src/index.ts",
 		"./plain": "./src/plain.ts",
 		"./fake": "./src/hid-fake.ts",
-		"./node-hid": "./src/node-hid.ts"
+		"./node-hid": "./src/node-hid.ts",
+		"./hardware/fake": "./src/hardware/hardware-fake.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",

@@ -260,7 +260,15 @@ async function smoke(): Promise<void> {
 		await evaluate(panel, flipTrace);
 		await sleep(190);
 		await capture(panel, "clock-flip-phase1");
-		await waitFor(panel, `window.__flip.length === 3`, "two flip phases");
+		try {
+			await waitFor(panel, `window.__flip.length === 3`, "two flip phases");
+		} catch (cause) {
+			const state = await evaluate(
+				panel,
+				`({ trace: window.__flip, time: document.querySelector('.oq-flip-clock').dataset.time, motion: document.querySelector('.oq-clock').dataset.motion, hidden: document.hidden })`,
+			);
+			throw new Error(`Flip trace: ${JSON.stringify(state)}`, { cause });
+		}
 		const trace: unknown = await evaluate(panel, "window.__flip");
 		assert(Array.isArray(trace) && trace.length === 3, JSON.stringify(trace));
 		const [on, down, rest] = trace;

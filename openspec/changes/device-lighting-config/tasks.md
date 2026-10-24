@@ -12,7 +12,7 @@ This entire change is later-phase. First-release panel brightness belongs to kno
 
 - [x] 2.1 Add serial/session-based target selection, actual-state reads, stale binding rejection, and cancellation; verify a late response from target A cannot replace target B's state and unknown v3 bindings cause no probe writes.
 - [ ] 2.2 Add capability-derived brightness/effect/speed/color controls and desired/applied/saved states in desktop; verify apply-success/save-failure remains applied-but-unsaved, unsupported fields are unavailable, and private HID paths do not leak; document field semantics.
-- [ ] 2.3 Add the serial-scoped knobLedAlwaysOn preference with local/applied distinction; verify restart persistence, default true, and no global RGB write when a knob-specific adapter is absent.
+- [x] 2.3 Add the serial-scoped knobLedAlwaysOn preference with local/applied distinction; verify restart persistence, default true, and recovered cmd 0x06 off/on at lock/unlock only when false, without global RGB writes. Evidence: hardware-controls-parity/verification.md.
 - [x] 2.4 Add latest-desired-value handling and explicit nonvolatile Save through L1; verify old slider responses cannot overwrite newer edits, detach cancels old writes, and reconnect reads without blind batch replay.
 
 ## 3. Hardware and integration evidence
@@ -22,4 +22,4 @@ This entire change is later-phase. First-release panel brightness belongs to kno
 
 ## W5 evidence
 
-Tasks 1.1–1.3, 2.1, and 2.4 are implemented by `packages/device/src/lighting/` and verified through the actual legacy QMK codecs and `hid-fake` in `packages/device/test/lighting/`. See `verification.md` for commands, outcomes, integration requirements, and the parent-owned Beads handoff. Hardware remains unverified. Desktop controls and knob preferences are outside this lane, so tasks 2.2, 2.3, 3.1, and settings-consumer task 3.2 remain open.
+Tasks 1.1–1.3, 2.1, and 2.4 are implemented by `packages/device/src/lighting/` and verified through the actual legacy QMK codecs and `hid-fake` in `packages/device/test/lighting/`. See `verification.md` for commands, outcomes, integration requirements, and the parent-owned Beads handoff. Hardware remains unverified. The hardware-controls-parity lane completes task 2.3 with serial preferences, the Controls page and the lock adapter. QMK desktop task 2.2, hardware task 3.1 and QMK settings-consumer task 3.2 remain open.

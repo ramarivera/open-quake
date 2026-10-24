@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { QuakeDevice } from "@open-quake/device";
+import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
 import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import { app, BrowserWindow, type Display, ipcMain, screen } from "electron";
@@ -13,8 +13,10 @@ import {
 	panelRotation,
 } from "./display";
 import { createEventForwarder } from "./eventForwarding";
+import { registerHardware } from "./hardware";
+import { attachHardware, startMockHardwareBus } from "./hardware/bus";
+import { hardwarePreferencesLive } from "./hardware/preferences";
 import { MediaLive, registerMedia } from "./media";
-import { startMockDeviceBus } from "./mockDeviceBus";
 import { desktopProfilesLive, registerProfiles } from "./profiles/profile-ipc";
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -118,16 +120,33 @@ app.whenReady().then(() => {
 	);
 	// One service layer for the main process. Only this Electron boundary runs it.
 	const runtime = ManagedRuntime.make(
-		QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+		Layer.merge(
+			QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(NodeHidLive)),
+			HardwareControls.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					hardwarePreferencesLive(join(app.getPath("userData"), "hardware-v1")),
+				),
+			),
+		),
 	);
 	const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 	const source = mock
-		? Effect.acquireRelease(Effect.sync(startMockDeviceBus), (bus) =>
-				Effect.sync(() => bus.stop()),
-			)
-		: startDeviceBus();
+		? startMockHardwareBus()
+		: Effect.gen(function* () {
+				const controls = yield* HardwareControls;
+				return yield* startDeviceBus((connection) =>
+					attachHardware(controls, connection),
+				);
+			});
 	let bus: DeviceBus | undefined;
-	let running: Fiber.RuntimeFiber<void, never> | undefined;
+	const disposeHardware = registerHardware(
+		() => bus?.hardware?.(),
+		() => managementWin,
+		mock,
+	);
+	let running:
+		| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
+		| undefined;
 	let stopping = Promise.resolve();
 	let generation = 0;
 	let quitting = false;
@@ -210,6 +229,7 @@ app.whenReady().then(() => {
 		screen.removeListener("display-removed", syncPanelDisplay);
 		screen.removeListener("display-metrics-changed", syncPanelDisplay);
 		ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
+		disposeHardware();
 		void stopBus().then(async () => {
 			await runtime.dispose();
 			quitFinished = true;

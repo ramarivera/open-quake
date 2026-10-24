@@ -94,7 +94,7 @@ Unit tests cover the contract (normalisation, migration, resolve, patch reasons,
 
 ## PR #25 review round 1
 
-Main now includes strip-touch from PR #20. The existing `dkDesktopClock` sub-target flag and the clock buttons' `data-quake-sub-touch` attributes connect directly through the merged registry. The clock native smoke sends synthetic raw touch frames through the mock bus, preload and mounted registry and checks one revision per button tap. Physical touch remains lead-owned.
+Main now includes strip-touch from PR #20 and hardware controls from PR #22; both the Controls page and the Screen page clock remain registered. The existing `dkDesktopClock` sub-target flag and the clock buttons' `data-quake-sub-touch` attributes connect directly through the merged registry. The clock native smoke sends synthetic raw touch frames through the mock bus, preload and mounted registry and checks one revision per button tap. Physical touch remains lead-owned.
 
 Settings decode with excess-property preservation at every level before a narrow mutation. Legacy backgrounds migrate into their season slot before theme changes. A successful rename commits a save even if temporary-file cleanup fails, and a failed read projects recovered defaults.
 
