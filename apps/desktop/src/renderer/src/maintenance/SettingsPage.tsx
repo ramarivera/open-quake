@@ -414,7 +414,7 @@ export function FirmwareDialog({
 			) : null}
 			{snapshot.state === "ready_to_write" ? (
 				<div className="firmware-volumes">
-					{snapshot.volumes.map((volume, index) => (
+					{snapshot.volumes.map((volume) => (
 						<button
 							type="button"
 							className="button button-primary"
@@ -428,7 +428,6 @@ export function FirmwareDialog({
 							}
 						>
 							Write to {volume.label}
-							{snapshot.volumes.length > 1 ? ` ${index + 1}` : ""}
 						</button>
 					))}
 					<button

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Deferred, Effect, Fiber, Layer, Option, TestClock } from "effect";
-import { idleFirmware } from "./contracts.js";
+import { type FirmwareSnapshot, idleFirmware } from "./contracts.js";
 import {
 	FirmwarePort,
 	FirmwareUpdates,
@@ -9,6 +9,7 @@ import {
 import {
 	AppUpdateFailed,
 	BackupFailed,
+	FirmwarePersistenceFailed,
 	FirmwareUnavailable,
 	FirmwareWriteFailed,
 	MaintenanceErrors,
@@ -30,6 +31,7 @@ function firmwareFixture(
 		restart?: boolean;
 		unknown?: boolean;
 		offline?: boolean;
+		failSave?: (state: FirmwareSnapshot) => boolean;
 	} = {},
 ) {
 	const calls: string[] = [];
@@ -86,7 +88,9 @@ function firmwareFixture(
 							: undefined,
 					),
 				save: (state) =>
-					Effect.sync(() => {
+					Effect.gen(function* () {
+						if (options.failSave?.(state))
+							return yield* new FirmwarePersistenceFailed();
 						records.push(state);
 					}),
 			}),
@@ -96,6 +100,89 @@ function firmwareFixture(
 }
 const flush = TestClock.adjust(1);
 describe("firmware session", () => {
+	for (const action of ["start", "recover", "write"] as const) {
+		it.scoped(
+			`retries ${action} after its initial save fails without a stranded worker state`,
+			() => {
+				let fail = false;
+				const f = firmwareFixture({ failSave: () => fail });
+				return Effect.gen(function* () {
+					const service = yield* FirmwareUpdates;
+					if (action === "write") {
+						yield* service.recover("chosen");
+						yield* flush;
+					}
+					const before = yield* service.snapshot();
+					const invoke = () =>
+						action === "recover"
+							? service.recover("chosen")
+							: action === "write"
+								? service.write("second")
+								: service.start();
+					fail = true;
+					const result = yield* invoke().pipe(Effect.either);
+					expect(result._tag).toBe("Left");
+					if (result._tag === "Left")
+						expect(result.left.code).toBe("QUAKE.FIRMWARE.PERSIST_FAILED");
+					expect(yield* service.snapshot()).toEqual(before);
+					expect(f.calls).toEqual([]);
+					fail = false;
+					yield* invoke();
+					yield* flush;
+					if (action !== "write") yield* service.write("second");
+					yield* TestClock.adjust(firmwareTiming.settle);
+					yield* flush;
+					expect((yield* service.snapshot()).state).toBe("success");
+					expect(f.calls.filter((call) => call.startsWith("copy:"))).toEqual([
+						"copy:second",
+					]);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
+	for (const stage of [
+		"entering_download_mode",
+		"waiting_volume",
+		"ready_to_write",
+		"written_unverified",
+		"verifying",
+		"success",
+	] as const) {
+		it.scoped(
+			`worker save failure at ${stage} reaches a recoverable terminal state even if terminal persistence also fails`,
+			() => {
+				let failed = false;
+				const f = firmwareFixture({
+					failSave: (state) => {
+						failed ||= state.state === stage;
+						return failed;
+					},
+				});
+				return Effect.gen(function* () {
+					const service = yield* FirmwareUpdates;
+					yield* service.start();
+					yield* flush;
+					const afterCopy = [
+						"written_unverified",
+						"verifying",
+						"success",
+					].includes(stage);
+					if (afterCopy) {
+						yield* service.write("first");
+						yield* TestClock.adjust(firmwareTiming.settle);
+						yield* flush;
+					}
+					const snapshot = yield* service.snapshot();
+					expect(snapshot.state).toBe(afterCopy ? "needs_recovery" : "failed");
+					expect(snapshot.reason).toBe("QUAKE.FIRMWARE.PERSIST_FAILED");
+					expect(
+						f.calls.filter((call) => call.startsWith("copy:")),
+					).toHaveLength(afterCopy ? 1 : 0);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
+
 	it.scoped(
 		"recovers an already mounted bootloader without live HID or another DFU command",
 		() => {

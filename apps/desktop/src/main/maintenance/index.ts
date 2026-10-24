@@ -455,7 +455,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 								!(yield* io(() =>
 									confirm(
 										"Write firmware?",
-										`Intended device serial: ${intended.serial}. Do not disconnect the USB cable or turn off the device. Writing cannot be undone.`,
+										`Selected boot drive: ${path}. Intended device serial: ${intended.serial}. Do not disconnect the USB cable or turn off the device. Writing cannot be undone.`,
 									),
 								))
 							)

@@ -61,11 +61,21 @@ The system SHALL validate a user-selected RP2040 boot volume immediately before 
 #### Scenario: Multiple boot volumes
 
 - **WHEN** two compatible bootloader volumes are mounted
-- **THEN** the UI asks the user to choose one and does not select the first automatically
+- **THEN** the UI shows each recognizable drive letter or mount path, asks the user to choose one, repeats the selected drive identity and intended serial in write confirmation, and does not select the first automatically
 
 ### Requirement: Exclusive write lifecycle
 
 The firmware workflow SHALL expose validating, awaiting-bootloader, ready-to-write, writing, written-unverified, verifying, completed, failed and needs-recovery states. It SHALL require explicit write confirmation and SHALL NOT offer a false rollback once writing has started.
+
+#### Scenario: Session persistence fails
+
+- **WHEN** saving the initial start, recovery or write transition fails
+- **THEN** memory retains the last committed state, no worker or copy starts, and the same action can be retried after storage recovers
+
+#### Scenario: Worker persistence fails
+
+- **WHEN** saving a worker transition fails, including after copying
+- **THEN** the session reaches failed or needs-recovery even if saving that terminal state also fails, and never retries a copy automatically
 
 #### Scenario: Write fails partway
 

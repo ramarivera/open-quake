@@ -145,7 +145,7 @@ export function firmwareFiles(
 			device: meta.dev,
 			inode: meta.ino,
 			id,
-			label: "QUAKE DFU",
+			label: `QUAKE DFU (${actual})`,
 		};
 	};
 	return {

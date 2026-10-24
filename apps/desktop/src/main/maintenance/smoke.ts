@@ -5,7 +5,14 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HardwareControls } from "@open-quake/device";
 import { Effect, Exit, ManagedRuntime, Schema, Scope } from "effect";
-import { app, BrowserWindow, dialog, shell } from "electron";
+import {
+	app,
+	BaseWindow,
+	BrowserWindow,
+	dialog,
+	type MessageBoxOptions,
+	shell,
+} from "electron";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { syntheticUf2 } from "../../../../../packages/protocol/src/uf2-fixtures.js";
@@ -73,10 +80,22 @@ async function smoke() {
 	dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [image] });
 	dialog.showSaveDialog = async () => ({ canceled: false, filePath: backup });
 	let confirmation = 1;
-	dialog.showMessageBox = async () => ({
-		response: confirmation,
-		checkboxChecked: false,
-	});
+	const writeConfirmations: string[] = [];
+	dialog.showMessageBox = async (
+		first: BaseWindow | MessageBoxOptions,
+		second?: MessageBoxOptions,
+	) => {
+		const options = first instanceof BaseWindow ? second : first;
+		if (options?.message === "Write firmware?")
+			writeConfirmations.push(options.detail ?? "");
+		return { response: confirmation, checkboxChecked: false };
+	};
+	const otherVolume = join(directory, "other-drive", "QUAKE DFU");
+	await mkdir(otherVolume, { recursive: true });
+	await writeFile(
+		join(otherVolume, "INFO_UF2.TXT"),
+		"UF2 Board-ID: QUAKE RP2040",
+	);
 	await app.whenReady();
 	shell.showItemInFolder = () => {};
 	// Prove the pinned native bridge loads in this Electron ABI. Do not request any permission.
@@ -199,7 +218,7 @@ async function smoke() {
 			throw new Error("Smoke must not clear real app data");
 		},
 		fixture: {
-			roots: [join(directory, "firmware-mock")],
+			roots: [join(directory, "firmware-mock"), join(directory, "other-drive")],
 			descriptors: [
 				{
 					board: "QUAKE",
@@ -409,6 +428,36 @@ async function smoke() {
 		"[...document.querySelectorAll('button')].find(b=>b.textContent==='View upgrade').click()",
 	);
 	await settle();
+	assert.equal(view.firmware.volumes.length, 2);
+	for (const choice of view.firmware.volumes) {
+		assert(
+			await main.webContents.executeJavaScript(
+				`[...document.querySelectorAll('.firmware-volumes button')].some(button => button.textContent.includes(${JSON.stringify(choice.label)}))`,
+			),
+		);
+	}
+	const otherChoice = view.firmware.volumes.find((choice) =>
+		choice.label.includes(otherVolume),
+	);
+	assert(otherChoice);
+	confirmation = 0;
+	await main.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.firmware-volumes button')].find(button => button.textContent.includes(${JSON.stringify(otherChoice.label)})).click()`,
+	);
+	await settle();
+	assert(
+		writeConfirmations.at(-1)?.includes(`Selected boot drive: ${otherVolume}.`),
+	);
+	assert(
+		writeConfirmations
+			.at(-1)
+			?.includes(`Intended device serial: ${view.firmware.serial}.`),
+	);
+	await assert.rejects(readFile(join(otherVolume, "open-quake-update.uf2")));
+	await writeFile(
+		join(artifacts, "firmware-drive-confirmations.json"),
+		JSON.stringify(writeConfirmations, null, 2),
+	);
 	await writeFile(
 		join(artifacts, "firmware-ready.png"),
 		(await main.webContents.capturePage()).toPNG(),
@@ -418,6 +467,7 @@ async function smoke() {
 	);
 	const volume = view.firmware.volumes[0];
 	assert(volume);
+	assert(volume.label.includes(join(directory, "firmware-mock", "QUAKE DFU")));
 	confirmation = 0;
 	assert.equal(
 		(await request({ action: "firmware-write", volumeId: volume.id })).firmware
@@ -428,6 +478,13 @@ async function smoke() {
 		readFile(
 			join(directory, "firmware-mock", "QUAKE DFU", "open-quake-update.uf2"),
 		),
+	);
+	assert(
+		writeConfirmations
+			.at(-1)
+			?.includes(
+				`Selected boot drive: ${join(directory, "firmware-mock", "QUAKE DFU")}.`,
+			),
 	);
 	confirmation = 1;
 	await request({ action: "firmware-write", volumeId: volume.id });

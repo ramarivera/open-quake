@@ -251,7 +251,6 @@ export function mergeBackup(
 		return value;
 	};
 	const profiles = [...envelope.profiles];
-	const seenConfigs = new Set<string>();
 	const comparableKey = Schema.Struct({
 		keyCode: Schema.String,
 		childrenName: Schema.optional(Schema.String),
@@ -261,125 +260,126 @@ export function mergeBackup(
 		keyFingerprint(
 			keys.map((key) => Schema.decodeUnknownSync(comparableKey)(key)),
 		);
-	for (const profile of profiles) {
-		const encoded = Schema.encodeSync(Profile)(profile);
-		for (const page of encoded.pages)
-			seenConfigs.add(
-				comparable([...page.keys, ...(encoded.knob ? [encoded.knob] : [])]),
-			);
-	}
+	const fingerprint = (profile: typeof Profile.Encoded) =>
+		hashBytes(
+			Buffer.from(
+				stable({
+					pages: profile.pages.map((page) => comparable(page.keys)),
+					knob: profile.knob ? comparable([profile.knob]) : null,
+				}),
+			),
+		);
+	const seenProfiles = new Set(
+		profiles.map((profile) => fingerprint(Schema.encodeSync(Profile)(profile))),
+	);
 	const pending = new Map<
 		string,
 		{
 			name: string;
 			pages: { id: string; keys: (typeof ProfileKey.Encoded)[] }[];
 			knob?: { keyCode: "0,1"; config: typeof ProfileJsonObject.Type };
-			sourceId: string;
-			fingerprints: string[];
+			unchangedBuiltin: boolean;
 		}
 	>();
-	// Identical repeated imports are skipped by source-content identity, independent of remapped paths.
+	// Assemble every page before deduplication. A matching page never removes part of a profile.
 	for (const resource of records.filter(
 		(r) => r.resourceType === "DeviceConfig",
 	)) {
 		const raw = Schema.decodeUnknownSync(Schema.Array(ProfileJsonObject))(
 			json(files.get(archiveRelative(resource.path, index.originalBasePath))),
 		);
-		const content = hashBytes(Buffer.from(stable(raw)));
-		if (
-			seenConfigs.has(comparable(raw)) ||
-			profiles.some(
-				(p) =>
-					p.id === `import-${content}` ||
-					Schema.encodeSync(Profile)(p)
-						.compatibility?.pageFingerprints?.toString()
-						.includes(content),
-			) ||
-			(isBuiltinProfile(String(resource.id)) &&
-				builtinProfiles(index.originalPlatform).some((p) => {
-					const encoded = Schema.encodeSync(Profile)(p);
-					const sourceKeys =
-						p.pages[0]?.keys.map(
-							(k) => Schema.encodeSync(ProfileKey)(k).compatibility?.source,
-						) ?? [];
-					const exportedKeys =
-						p.pages[0]?.keys.map((k) => Schema.encodeSync(ProfileKey)(k)) ?? [];
-					return (
-						p.id === String(resource.id) &&
-						[sourceKeys, exportedKeys].some(
-							(keys) =>
-								keyFingerprint([
-									...keys,
-									...(encoded.knob ? [encoded.knob] : []),
-								]) === keyFingerprint(raw),
-						)
-					);
-				}))
-		) {
-			skipped++;
-			continue;
-		}
-		seenConfigs.add(comparable(raw));
 		const rewritten = Schema.decodeUnknownSync(Schema.Array(ProfileJsonObject))(
 			rewrite(withoutCredentials(raw)),
 		);
 		const parts = resource.name.split(",");
-		const group = parts.length >= 3 ? (parts[0] ?? resource.name) : content;
-		const keySchema = Schema.Struct({
-			keyCode: Schema.String,
-			config: ProfileJsonObject,
-			childrenName: Schema.optional(Schema.String),
-		});
+		const group =
+			parts.length >= 3 ? `group:${parts[0]}` : `resource:${resource.id}`;
 		const keys = rewritten.map((value) =>
-			Schema.decodeUnknownSync(keySchema)(value),
+			Schema.decodeUnknownSync(comparableKey)(value),
 		);
 		const pageKeys = keys
-			.filter((k) => k.keyCode !== "0,1")
-			.map((k) =>
-				Schema.encodeSync(ProfileKey)(
+			.filter((key) => key.keyCode !== "0,1")
+			.map((key) => {
+				const { childrenName, ...fields } = key;
+				return Schema.encodeSync(ProfileKey)(
 					Schema.decodeUnknownSync(ProfileKey)({
-						...k,
-						compatibility: { unsupported: !k.childrenName, source: k },
+						...fields,
+						...(childrenName ? { childrenName } : {}),
+						compatibility: { unsupported: !childrenName, source: key },
 					}),
-				),
-			);
-		const knob = keys.find((k) => k.keyCode === "0,1");
-		const existing = pending.get(group);
+				);
+			});
+		const knob = keys.find((key) => key.keyCode === "0,1");
 		const page = { id: parts[1] ?? "1", keys: pageKeys };
+		const existing = pending.get(group);
 		if (existing) {
 			existing.pages.push(page);
-			existing.fingerprints.push(content);
-		} else
+			existing.unchangedBuiltin = false;
+		} else {
+			const unchangedBuiltin =
+				isBuiltinProfile(String(resource.id)) &&
+				builtinProfiles(index.originalPlatform).some((profile) => {
+					const encoded = Schema.encodeSync(Profile)(profile);
+					const sourceKeys =
+						profile.pages[0]?.keys.map(
+							(key) => Schema.encodeSync(ProfileKey)(key).compatibility?.source,
+						) ?? [];
+					const exportedKeys =
+						profile.pages[0]?.keys.map((key) =>
+							Schema.encodeSync(ProfileKey)(key),
+						) ?? [];
+					return (
+						profile.id === String(resource.id) &&
+						[sourceKeys, exportedKeys].some(
+							(items) =>
+								keyFingerprint([
+									...items,
+									...(encoded.knob ? [encoded.knob] : []),
+								]) === keyFingerprint(raw),
+						)
+					);
+				});
 			pending.set(group, {
 				name:
 					profileNames.get(String(resource.id)) ||
-					(parts.length >= 3 ? `Imported ${group}` : resource.name),
+					(parts.length >= 3 ? `Imported ${parts[0]}` : resource.name),
 				pages: [page],
-				sourceId: content,
-				fingerprints: [content],
+				unchangedBuiltin,
 				...(knob ? { knob: { keyCode: "0,1", config: knob.config } } : {}),
 			});
+		}
 	}
+	let added = 0;
 	for (const item of pending.values()) {
-		// Stable original content identity makes repeated imports idempotent.
-		if (profiles.some((p) => p.id === `import-${item.sourceId}`)) {
+		const draft = {
+			id: "import",
+			name: item.name,
+			revision: 0,
+			pages: item.pages,
+			...(item.knob ? { knob: item.knob } : {}),
+		};
+		// Resolved configs include content-addressed files, folders, resource IDs and inline icons.
+		const content = fingerprint(
+			Schema.encodeSync(Profile)(Schema.decodeUnknownSync(Profile)(draft)),
+		);
+		if (item.unchangedBuiltin || seenProfiles.has(content)) {
 			skipped++;
 			continue;
 		}
+		const base = `import-${content}`;
+		let id = base;
+		let suffix = 1;
+		while (profiles.some((profile) => profile.id === id))
+			id = `${base}-${suffix++}`;
 		profiles.push(
 			Schema.decodeUnknownSync(Profile)({
-				id: `import-${item.sourceId}`,
-				name: item.name,
-				revision: 0,
-				pages: item.pages,
-				...(item.knob ? { knob: item.knob } : {}),
-				compatibility: {
-					imported: true,
-					sourceFingerprint: item.sourceId,
-					pageFingerprints: item.fingerprints,
-				},
+				...draft,
+				id,
+				compatibility: { imported: true, sourceFingerprint: content },
 			}),
 		);
+		seenProfiles.add(content);
+		added++;
 	}
 	return {
 		envelope: encodeProfileEnvelope({
@@ -391,7 +391,7 @@ export function mergeBackup(
 		}),
 		resources,
 		legacyFiles: portable.legacyFiles,
-		imported: pending.size + resources.size,
+		imported: added + resources.size,
 		skipped,
 	};
 }

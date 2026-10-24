@@ -172,6 +172,16 @@ The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatib
 - **WHEN** a native profile was edited after import or another backup reuses a legacy asset path with different bytes
 - **THEN** imported profiles receive collision-free IDs and content-based asset destinations while retained profiles and their assets remain intact
 
+#### Scenario: Complete multi-page identity
+
+- **WHEN** an imported legacy profile contains a retained page, repeated identical pages or a later changed page
+- **THEN** import deduplicates only complete profiles, preserves every page in order, and imports changed complete profiles without truncation
+
+#### Scenario: Referenced content changes
+
+- **WHEN** another archive retains resource IDs, raw configuration and archive-relative paths but changes referenced file, folder or registered image bytes
+- **THEN** the changed resolved profile is imported with distinct content-addressed assets, retained assets remain intact, and unchanged reimports deduplicate
+
 #### Scenario: Appearance and confirmed replacement
 
 - **WHEN** a backup is exported to an existing destination confirmed in the native save dialog

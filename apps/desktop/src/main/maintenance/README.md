@@ -20,7 +20,8 @@ SETTINGS-020 and SETTINGS-034..048 are implemented with these deliberate limits:
 - Separate native confirmations guard DFU and writing. Selection races reject
   before DFU. Device commands, previews and keepalive stop after DFU.
 - Discovery recognizes `QUAKE DFU` with QUAKE bootloader metadata and mount
-  identity. Multiple candidates require a choice. macOS asks for scoped access;
+  identity. Multiple candidates require a choice showing the drive letter or full mount path;
+  native write confirmation repeats the chosen path and intended serial. macOS asks for scoped access;
   remembered bookmarks never authorize a copy. Windows label lookup is cached
   for 5s and refreshed before writing.
 - Discovery polls every 500ms for 90s. Writing settles 2500ms and revalidates
@@ -61,7 +62,8 @@ Imports authenticate all entries before mutation and reject unsafe paths,
 Windows aliases/streams, symlinks, duplicates, overlapping ZIP data and size
 limit violations. Limits are 128 MiB compressed, 256 MiB uncompressed, 32 MiB per
 entry and 8192 entries. They skip deleted/built-in resources and unchanged
-profiles, merge unique profiles, remap IDs, preserve knob data and profile names,
+complete ordered profiles, retaining repeated pages and including resolved
+referenced asset content in their identity, merge unique profiles, remap IDs, preserve knob data and profile names,
 and materialize referenced archived files. Paths are rebased across platforms;
 missing archived paths reject the merge. Raster icons become inline images.
 Unknown profile actions remain inert under the profile compatibility contract.
@@ -157,3 +159,9 @@ Source inputs are local-only under
 locales; `app-resources/background.js` at bytes 6595513/6603890 for ZIP,
 6471708 for encrypted account/profile merging, and 364307 for permission checks.
 No research binaries or recovered application code are bundled.
+
+PR #32 round 2 adds deterministic profile/page and referenced-content regressions,
+initial and worker persistence-failure coverage, and fake Windows drive discovery.
+The combined native mock presents two scratch drives, checks their mounted button
+labels, clicks one and verifies its path and intended serial in the native
+confirmation before cancelling. Firmware drive paths wrap inside the dialog.

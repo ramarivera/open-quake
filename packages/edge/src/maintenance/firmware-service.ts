@@ -97,8 +97,9 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				next: Partial<FirmwareSnapshot>,
 			): Effect.Effect<void, FirmwarePersistenceFailed> =>
 				Effect.gen(function* () {
-					state = { ...state, ...next };
-					yield* port.save(state);
+					const committed = { ...state, ...next };
+					yield* port.save(committed);
+					state = committed;
 				});
 			const failed = (error: MaintenanceError): Effect.Effect<void> =>
 				Effect.gen(function* () {

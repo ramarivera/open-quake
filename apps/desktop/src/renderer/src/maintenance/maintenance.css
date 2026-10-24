@@ -122,6 +122,12 @@
 	gap: 8px;
 	flex-wrap: wrap;
 }
+.firmware-volumes .button {
+	max-width: 100%;
+	white-space: normal;
+	overflow-wrap: anywhere;
+	text-align: left;
+}
 .maintenance-toast {
 	position: fixed;
 	bottom: 24px;
