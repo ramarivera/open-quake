@@ -24,6 +24,7 @@ import { MediaLive, registerMedia } from "../media";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
+import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { registerMonitor } from "./index";
 import { nativeCollector } from "./native-collector";
 
@@ -147,6 +148,14 @@ async function smoke(): Promise<void> {
 			panel = new BrowserWindow(options);
 		const thumbnail = new BrowserWindow(options);
 		const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
+		const voice = registerVoiceSurface({
+			mock: true,
+			tones: createToneRecorder(),
+			serial: () => "desktop-preview",
+			panel: () => panel,
+			management: () => management,
+			renderer,
+		});
 		const media = registerMedia(
 			ManagedRuntime.make(MediaLive(join(base, "wallpaper-v1"))),
 			() => management,
@@ -250,6 +259,7 @@ async function smoke(): Promise<void> {
 			off();
 			bus.stop();
 			await monitor.dispose();
+			await voice.dispose();
 			removeLifecycle();
 			await lifecycleRuntime.dispose();
 			for (const window of [management, panel, thumbnail])

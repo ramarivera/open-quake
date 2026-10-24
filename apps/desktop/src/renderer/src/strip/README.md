@@ -101,6 +101,31 @@ management preview (`ui/DeviceScreen.tsx`) both render `StripScreen` on a fixed
 - **knob / profile switching:** `selectStripPage(envelope, serial)` picks the
   page. A switcher can pass its own selection instead.
 
+## Voice and chat (strip-voice-ui)
+
+`overlays/voice/` draws the full-screen voice overlay, the mic bar, key
+alerts and toasts from main's `voice:surface` events (`useVoiceSurface`).
+`tiles/aiCopilot/`, `tiles/clawBot/` and `tiles/clawBotInput/` are the AI
+Copilot, ClawBotView and ClawBotInput tiles. `tiles/voiceKey/` wraps the
+generic tile for `aiChat`/`clawbot` keys with the cancel indicator and the
+selected clawbot's dot. Tiles read `context.voice`; the management preview
+gets `previewVoiceContext`, which renders no live chat. `StripScreen` takes
+`voice`, `tileOverlay` (per-tile, above the tile) and `htmlOverlay` (above
+everything).
+
+Integration with the other strip lanes:
+
+- **strip-touch:** `mountStripTouch`'s `onKey` callback feeds hold-to-talk
+  keys to main's `GridVoice`, which applies every timing rule; pointer events
+  on the panel cover the mouse and OS touch. AI tiles mark sub-targets with
+  `data-quake-sub-touch` and listen for `quake-sub-touch-start/-end`;
+  ClawBotView scrolls with `message-scroll.ts`'s chat physics.
+- **knob model:** `useKnob()`'s selector mode sets `voice.wheelOpen` (chat
+  cards go opaque, AI-207). Knob voice arrives in main through the knob
+  model's `voice` binding and uses keyCode `0,1`.
+- **hardware-controls:** tones play through `HardwareSession.playTone`; see
+  `main/voice/README.md`.
+
 ## Verification
 
 `geometry.test.ts` holds the property tests (no shared cells or pixels, inward

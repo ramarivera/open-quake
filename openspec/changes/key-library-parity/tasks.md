@@ -26,3 +26,7 @@
 
 - [ ] 6.1 Lead-only physical acceptance: verify real shortcut/text effects, audible alarms, resource delivery and reconnect on the single QUAKE owner. This lane is restricted to mocks.
 - [ ] 6.2 Reconcile the remaining icon presentation and resource fallback differences with the Management Center/artwork lanes: picker window shape, exact paging/progress/palette, proprietary resource-table resets and extracted app artwork. See verification.md for the precise partial rows; do not copy unsafe SVG execution or bundle proprietary packs.
+
+## 7. Review integration
+
+- [ ] 7.1 Address all thirteen PR #35 review threads after merging current main: disconnect/runtime cleanup, host keyboard fallback, navigation validation, portable font smoke, retained sequence fields, owned-panel authorization, SVG validation, serialized tap pairs, selection feedback, inert unsupported imports, overlay gesture cancellation, editor-only sequence IDs, and wallpaper-aware clock preview. Prove with regressions, six fresh gates and isolated native mock smokes; record evidence and close only open-quake-lih.10.2.10.

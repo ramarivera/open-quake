@@ -6,7 +6,16 @@ import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { useKeyRuntime } from "../keys/useKeyRuntime";
 import { WallpaperCanvas } from "../wallpaper/WallpaperCanvas";
 import "./css-properties";
-import { STRIP_CANVAS, type StripLayout, stripLayout } from "./geometry";
+import {
+	STRIP_CANVAS,
+	type StripLayout,
+	type StripTile,
+	stripLayout,
+} from "./geometry";
+import {
+	previewVoiceContext,
+	type StripVoiceContext,
+} from "./overlays/voice/voice-context";
 import { stripPaletteProperties } from "./palette";
 import { selectStripPage } from "./selection";
 import { stripTileFor } from "./tileRegistry";
@@ -20,11 +29,15 @@ function StripGrid({
 	pressedKeyCode,
 	now,
 	hourFormat,
+	voice,
+	tileOverlay,
 }: {
 	layout: StripLayout;
 	pressedKeyCode: string | undefined;
 	now: Date | undefined;
 	hourFormat: "24h" | "12h";
+	voice: StripVoiceContext;
+	tileOverlay: ((tile: StripTile) => React.ReactNode) | undefined;
 }): React.JSX.Element {
 	return (
 		<div className="strip-grid" data-theme={layout.theme.name}>
@@ -66,12 +79,25 @@ function StripGrid({
 							zIndex: tile.zIndex || undefined,
 						}}
 					>
-						<Tile tile={tile} context={{ now, hourFormat }} />
+						<Tile tile={tile} context={{ now, hourFormat, voice }} />
+						{tileOverlay?.(tile)}
 					</div>
 				);
 			})}
 		</div>
 	);
+}
+
+/** The active page's layout; the panel also needs it for voice routing. */
+export function useStripLayout(
+	profiles: StripProfiles,
+	serial: string | undefined,
+): StripLayout | undefined {
+	return useMemo(() => {
+		if (profiles._tag !== "ready") return undefined;
+		const { profile, page } = selectStripPage(profiles.envelope, serial);
+		return stripLayout(profile, page);
+	}, [profiles, serial]);
 }
 
 /**
@@ -86,6 +112,9 @@ export function StripScreen({
 	view = "active",
 	showEmptyGridDashedBorder,
 	pressedKeyCode,
+	voice = previewVoiceContext,
+	tileOverlay,
+	htmlOverlay,
 	children,
 	onLayout,
 	previewSerial,
@@ -99,6 +128,12 @@ export function StripScreen({
 	view?: "active" | "vivid";
 	showEmptyGridDashedBorder: boolean;
 	pressedKeyCode?: string | undefined;
+	/** Voice and chat state for AI tiles; the preview keeps the inert default. */
+	voice?: StripVoiceContext;
+	/** Drawn inside each visible tile's slot, above the tile (key alerts). */
+	tileOverlay?: (tile: StripTile) => React.ReactNode;
+	/** HTML layers above everything, in canvas pixels (voice overlay, toasts). */
+	htmlOverlay?: React.ReactNode;
 	/** Overlays in canvas coordinates, drawn above the grid. */
 	children?: React.ReactNode;
 }): React.JSX.Element {
@@ -180,6 +215,8 @@ export function StripScreen({
 					pressedKeyCode={pressedKeyCode}
 					now={now}
 					hourFormat={hourFormat}
+					voice={voice}
+					tileOverlay={tileOverlay}
 				/>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (
@@ -268,6 +305,7 @@ export function StripScreen({
 					{children}
 				</svg>
 			) : null}
+			{htmlOverlay ? <div className="voice-layer">{htmlOverlay}</div> : null}
 		</div>
 	);
 }
