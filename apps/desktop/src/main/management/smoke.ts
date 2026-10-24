@@ -17,7 +17,10 @@ import {
 	nativeTheme,
 	shell,
 } from "electron";
-import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
+import {
+	Profile,
+	ProfileEnvelope,
+} from "../../../../../packages/device/src/profiles/profile-contracts";
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { QUAKE_EVENT_CHANNEL, type QuakeEvent } from "../../preload/quake";
@@ -72,9 +75,10 @@ dialog.showSaveDialog = async () => ({ canceled: false, filePath: backupFile });
 shell.showItemInFolder = () => {};
 app.setPath("userData", directory);
 let selectedFile: string | undefined;
+let selectedFiles: string[] | undefined;
 dialog.showOpenDialog = async () => ({
-	canceled: selectedFile === undefined,
-	filePaths: selectedFile ? [selectedFile] : [],
+	canceled: selectedFiles === undefined && selectedFile === undefined,
+	filePaths: selectedFiles ?? (selectedFile ? [selectedFile] : []),
 });
 const artifacts = process.env.OPEN_QUAKE_SMOKE_SCRATCH ?? process.argv[2] ?? "";
 assert(artifacts, "Supply screenshot directory");
@@ -711,6 +715,75 @@ async function smoke() {
 				null,
 				2,
 			),
+		);
+
+		const inlineData = nativeImage
+			.createFromBitmap(Buffer.from(rgba), { width: 96, height: 96 })
+			.toDataURL();
+		const setIcon = async (icon: string) =>
+			profiles.runtime.runPromise(
+				Effect.flatMap(ProfileRepository, (repo) =>
+					repo.transact((envelope) =>
+						Effect.succeed(
+							Schema.decodeUnknownSync(Schema.typeSchema(ProfileEnvelope))({
+								...envelope,
+								profiles: envelope.profiles.map((profile) =>
+									profile.id !== profileId
+										? profile
+										: {
+												...profile,
+												revision: profile.revision + 1,
+												pages: profile.pages.map((page) => ({
+													...page,
+													keys: page.keys.map((key) =>
+														key.keyCode !== "1,1"
+															? key
+															: { ...key, config: { ...key.config, icon } },
+													),
+												})),
+											},
+								),
+							}),
+						),
+					),
+				),
+			);
+		await setIcon(inlineData);
+		await settle(300);
+		assert.equal(
+			await panel.webContents.executeJavaScript(
+				`(()=>{const image=document.querySelector('[data-key-code="1,1"] .strip-tile-icon img');return image?.src===${JSON.stringify(inlineData)} && image.naturalWidth===96;})()`,
+			),
+			true,
+		);
+		const inlineThumbnail = await win.webContents.executeJavaScript(
+			`window.quakeProfileManager.request({type:"thumbnail",id:${JSON.stringify(profileId)},locale:"en"})`,
+		);
+		assert.equal(inlineThumbnail._tag, "success");
+		const inlineBitmap = nativeImage
+			.createFromDataURL(inlineThumbnail.view.thumbnails[profileId])
+			.toBitmap();
+		let inlineColored = 0;
+		for (let i = 0; i < inlineBitmap.length; i += 4)
+			if (
+				(inlineBitmap[i + 2] ?? 0) > 120 &&
+				(inlineBitmap[i + 1] ?? 0) > 70 &&
+				(inlineBitmap[i] ?? 255) < 110
+			)
+				inlineColored++;
+		assert(
+			inlineColored > 20,
+			"Inline legacy emoji artwork must survive thumbnail generation",
+		);
+		await writeFile(
+			join(artifacts, "emoji-inline-profile-thumbnail.png"),
+			nativeImage
+				.createFromDataURL(inlineThumbnail.view.thumbnails[profileId])
+				.toPNG(),
+		);
+		await setIcon(`emoji:${em.store.items[0]?.rendered}`);
+		console.log(
+			"Inline emoji artwork PASS: mounted strip image and generated profile thumbnail retain legacy data URL",
 		);
 
 		assert.equal((await maintenance.request({ action: "export" })).ok, true);
@@ -1411,6 +1484,51 @@ async function smoke() {
 		await capture("lazy-gallery-visible-assets");
 		process.stdout.write(
 			"Management review regressions PASS: lazy assets, repeated alias, drag commit/cancel, native theme dedupe.\n",
+		);
+		const badImport = join(directory, "corrupt-import.bin");
+		await writeFile(badImport, "synthetic corrupt image");
+		for (const [type, label, filename, valid] of [
+			["import-gif", "Import GIF", "partial-gif.gif", Buffer.from(bytes)],
+			[
+				"import-static",
+				"Add Asset",
+				"partial-static.png",
+				nativeImage
+					.createFromBitmap(Buffer.from([0, 0, 0, 255, 255, 255, 255, 255]), {
+						width: 2,
+						height: 1,
+					})
+					.toPNG(),
+			],
+		] as const) {
+			const path = join(directory, filename);
+			await writeFile(path, valid);
+			selectedFiles = [path, badImport];
+			await js(
+				`Array.from(document.querySelectorAll('button')).find(button=>button.textContent.trim()===${JSON.stringify(label)}).click();null;`,
+			);
+			await waitFor(
+				`document.querySelector('.emoji-notice')?.textContent.includes('1 imported before an error.') && !document.querySelector('.emoji-notice')?.textContent.includes('Working')`,
+			);
+			selectedFiles = undefined;
+			if (type === "import-static")
+				assert.equal(
+					await js(
+						`Boolean(document.querySelector('.emoji-assets button[title="partial-static.png"]'))`,
+					),
+					true,
+				);
+			else
+				assert.equal(
+					await js(
+						"Array.from(document.querySelectorAll('.emoji-thumb')).some(tile=>tile.textContent.includes('partial-gif'))",
+					),
+					true,
+				);
+			await capture(`partial-${type}`);
+		}
+		console.log(
+			"Partial emoji import PASS: committed GIF and static images visible with explicit partial notice after corrupt second file",
 		);
 		assert.equal(weatherRequests, 0, "Disabled weather never uses network IO");
 		assert.deepEqual(errors, []);

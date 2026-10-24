@@ -164,50 +164,60 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 					if (result.canceled) return yield* snapshot();
 					let added = 0;
 					let duplicates = 0;
-					for (const path of result.filePaths) {
-						const size = yield* io(() => stat(path));
-						if (size.size > 8 * 1024 * 1024)
-							return yield* new EmojiInvalid("Choose an image under 8 MiB.");
-						const bytes = yield* io(() => readFile(path));
-						if (input.type === "import-gif") {
-							yield* addGif(
-								bytes,
-								basename(path)
-									.replace(/\.[^.]+$/, "")
-									.slice(0, 30),
-							);
-							added++;
-						} else {
-							const decoded = yield* imageDecoder
-								.decode(bytes)
-								.pipe(
-									Effect.catchTag("MediaUnreadable", () =>
-										Effect.fail(
-											new EmojiInvalid("Choose a valid PNG or JPG image."),
-										),
-									),
+					return yield* Effect.gen(function* () {
+						for (const path of result.filePaths) {
+							const size = yield* io(() => stat(path));
+							if (size.size > 8 * 1024 * 1024)
+								return yield* new EmojiInvalid("Choose an image under 8 MiB.");
+							const bytes = yield* io(() => readFile(path));
+							if (input.type === "import-gif") {
+								yield* addGif(
+									bytes,
+									basename(path)
+										.replace(/\.[^.]+$/, "")
+										.slice(0, 30),
 								);
-							const hash = yield* io(() => port.files.put(bytes));
-							const state = yield* repository.read();
-							if (state.staticAssets.some((asset) => asset.hash === hash)) {
-								duplicates++;
-								continue;
+								added++;
+							} else {
+								const decoded = yield* imageDecoder
+									.decode(bytes)
+									.pipe(
+										Effect.catchTag("MediaUnreadable", () =>
+											Effect.fail(
+												new EmojiInvalid("Choose a valid PNG or JPG image."),
+											),
+										),
+									);
+								const hash = yield* io(() => port.files.put(bytes));
+								const state = yield* repository.read();
+								if (state.staticAssets.some((asset) => asset.hash === hash)) {
+									duplicates++;
+									continue;
+								}
+								yield* repository.transact((state) =>
+									Effect.succeed({
+										...state,
+										revision: state.revision + 1,
+										staticAssets: [
+											...state.staticAssets,
+											{ hash, name: basename(path), format: decoded.format },
+										],
+									}),
+								);
+								added++;
 							}
-							yield* repository.transact((state) =>
-								Effect.succeed({
-									...state,
-									revision: state.revision + 1,
-									staticAssets: [
-										...state.staticAssets,
-										{ hash, name: basename(path), format: decoded.format },
-									],
-								}),
-							);
-							added++;
 						}
-					}
-					return yield* snapshot(
-						`${added} imported${duplicates ? `, ${duplicates} duplicate images skipped` : ""}.`,
+						return yield* snapshot(
+							`${added} imported${duplicates ? `, ${duplicates} duplicate images skipped` : ""}.`,
+						);
+					}).pipe(
+						Effect.catchAll((error) =>
+							added > 0
+								? snapshot(
+										`${added} imported before an error. Remaining files were not imported. ${error._tag === "EmojiInvalid" ? error.reason : "Could not read or save the next image."}`,
+									)
+								: Effect.fail(error),
+						),
 					);
 				}
 				case "create-result": {
