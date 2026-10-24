@@ -152,3 +152,59 @@ Settings SHALL route wallpaper interval/fill/play controls, monitoring, artwork 
 
 - **WHEN** firmware support has not passed its verification gate
 - **THEN** settings show an unavailable update action and start no DFU operation
+
+### Requirement: Compatible authenticated backups
+
+The system SHALL export and import WinZip AES-256 encrypted ZIP backups compatible with DK-Suite's account-derived format, preserving export_index.json and account_config.json. Import SHALL authenticate before mutation, reject traversal/symlinks/duplicates/oversized archives, skip built-in and deleted resources, deduplicate configurations, renumber new profiles and remap resource IDs and original-platform paths. Only app-owned data SHALL be exported; credentials SHALL be excluded. Evidence: SETTINGS-014.
+
+#### Scenario: Legacy import
+
+- **WHEN** a valid independently generated DK-Suite archive is selected
+- **THEN** its resources and profiles are merged once with imported/skipped counts and cross-platform paths rewritten
+
+#### Scenario: Invalid archive
+
+- **WHEN** an archive has failed authentication, invalid index or unsafe paths
+- **THEN** existing data remains intact and no extracted path escapes staging
+
+### Requirement: Clear data with optional bounded backup
+
+The system SHALL offer Cancel, Backup and Continue, Continue Without Backup in a 520px confirmation. Backup SHALL stop waiting after 60000ms; failure SHALL require a second confirmation. Writers SHALL stop before clearing only app-owned data and exiting. Evidence: SETTINGS-016.
+
+#### Scenario: Backup timeout declined
+
+- **WHEN** backup times out and the second confirmation is declined
+- **THEN** no data is deleted and the app stays running
+
+#### Scenario: Confirmed reset
+
+- **WHEN** backup succeeds or clearing without backup is explicitly confirmed
+- **THEN** writers stop, app-owned data is cleared and the application exits
+
+### Requirement: Live macOS permission dashboard
+
+The system SHALL display Accessibility, Input Monitoring, Microphone, Screen Recording and System Audio Recording on macOS, refresh on mount/focus/every 2000ms, and expose their fixed System Settings privacy deep links. A missing API or failed probe SHALL be unknown rather than granted. Status reads SHALL not request permission. Evidence: SETTINGS-015.
+
+#### Scenario: Permission changes externally
+
+- **WHEN** a permission is changed in System Settings
+- **THEN** focus or the next poll updates its live status
+
+#### Scenario: Unavailable system-audio probe
+
+- **WHEN** the private preflight API is unavailable
+- **THEN** System Audio Recording shows unknown and its settings action remains usable
+
+### Requirement: App-owned self-update scheduling
+
+The system SHALL check at 5000ms after launch and every 12 hours, support manual Check Update, and download background updates before offering installation. Checks/downloads SHALL be single-flight and failures recoverable. Production SHALL use a disabled open-quake feed until an owned release manifest and artifact trust policy exist; tests SHALL inject a fake feed and installer. No vendor feed SHALL be called. Evidence: SETTINGS-049, SETTINGS-050.
+
+#### Scenario: Background update
+
+- **WHEN** the fake feed reports a newer matching-platform release
+- **THEN** the main-owned state progresses checking, downloading, ready, and installation requires an explicit user action
+
+#### Scenario: Quit or duplicate check
+
+- **WHEN** another check arrives during download or the app quits
+- **THEN** no duplicate transfer starts and disposal interrupts scheduled work

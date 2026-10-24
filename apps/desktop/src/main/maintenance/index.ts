@@ -1,0 +1,572 @@
+import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { HardwareSession } from "@open-quake/device";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { app, type BrowserWindow, dialog, ipcMain, shell } from "electron";
+import {
+	FirmwarePort,
+	FirmwareUpdates,
+} from "../../../../../packages/edge/src/maintenance/firmware-service.js";
+import {
+	AppUpdateFailed,
+	BackupFailed,
+	FirmwarePersistenceFailed,
+	FirmwareTargetMismatch,
+	FirmwareUnavailable,
+	ResetFailed,
+	RestoreFailed,
+} from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import {
+	DataReset,
+	ResetPort,
+} from "../../../../../packages/edge/src/maintenance/reset-service.js";
+import {
+	AppUpdatePort,
+	AppUpdates,
+} from "../../../../../packages/edge/src/maintenance/update-service.js";
+import {
+	MAINTENANCE_CHANNEL,
+	MaintenanceCommand,
+	type MaintenanceReply,
+	type MaintenanceView,
+	runningFirmware,
+} from "../../shared/maintenance-contracts";
+import { canRequestWallpaper } from "../media/media-permissions";
+import { clearOwnedData, exportBackup, prepareRestore } from "./backup-store";
+import {
+	atomicJson,
+	firmwareFiles,
+	type TrustedFirmware,
+} from "./firmware-files";
+import {
+	nativePermissionChecks,
+	openPermission,
+	type PermissionChecks,
+	permissionRows,
+} from "./permissions";
+import { windowsDfuDiscovery } from "./volume-discovery";
+
+export function maintenanceRequestAllowed(
+	caller: string,
+	renderer: string,
+	mainFrame: boolean,
+	management: boolean,
+	input: unknown,
+): boolean {
+	return (
+		mainFrame &&
+		management &&
+		canRequestWallpaper(caller, renderer, input, true) &&
+		Schema.is(MaintenanceCommand)(input)
+	);
+}
+interface MaintenanceOptions {
+	readonly root: string;
+	readonly mock: boolean;
+	readonly renderer: string;
+	readonly hardware: () => HardwareSession | undefined;
+	readonly management: () => BrowserWindow | undefined;
+	readonly stopWriters: () => Promise<void>;
+	readonly exit?: () => void;
+	readonly fixture?: {
+		readonly roots: readonly string[];
+		readonly descriptors: readonly TrustedFirmware[];
+	};
+}
+export function registerMaintenance(options: MaintenanceOptions) {
+	const { root, mock } = options;
+	const exit = options.exit ?? (() => app.exit(0));
+	const mockRoot = join(root, "firmware-mock");
+	const roots =
+		options.fixture?.roots ??
+		(mock
+			? [mockRoot]
+			: process.platform === "darwin"
+				? ["/Volumes"]
+				: process.platform === "linux"
+					? [
+							`/media/${process.env.USER ?? ""}`,
+							`/run/media/${process.env.USER ?? ""}`,
+						]
+					: []);
+	const files = firmwareFiles(
+		roots,
+		options.fixture?.descriptors,
+		!mock && process.platform === "win32" ? windowsDfuDiscovery() : undefined,
+	);
+	let checks: PermissionChecks | undefined;
+	let mutating = false;
+	let pendingOperations = 0;
+	let disposed = false;
+	let mockVersion = "1.0.19";
+	const version = (serial: string) =>
+		Effect.gen(function* () {
+			const current = options.hardware();
+			if (!current) return yield* new FirmwareUnavailable();
+			const snapshot = yield* current.snapshot();
+			if (snapshot.serial !== serial || !snapshot.available)
+				return yield* new FirmwareUnavailable();
+			if (mock) return mockVersion;
+			return yield* current
+				.readVersion()
+				.pipe(Effect.mapError((cause) => new FirmwareUnavailable(cause)));
+		});
+	const confirm = async (message: string, detail = ""): Promise<boolean> => {
+		const parent = options.management();
+		const config = {
+			type: "warning" as const,
+			message,
+			detail,
+			buttons: ["Cancel", "Continue"],
+			defaultId: 0,
+			cancelId: 0,
+			noLink: true,
+		};
+		return (
+			(parent && !parent.isDestroyed()
+				? await dialog.showMessageBox(parent, config)
+				: await dialog.showMessageBox(config)
+			).response === 1
+		);
+	};
+	const doExport = Effect.fn("DesktopBackup.export")(
+		function* (): Effect.fn.Return<boolean, BackupFailed> {
+			return yield* Effect.tryPromise({
+				try: async (signal) => {
+					const parent = options.management();
+					const config = {
+						title: "Export",
+						defaultPath: join(
+							app.getPath("downloads"),
+							`DK-Suite_default_${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}_export_resources.zip`,
+						),
+						filters: [{ name: "Encrypted ZIP backup", extensions: ["zip"] }],
+					};
+					const selected = parent
+						? await dialog.showSaveDialog(parent, config)
+						: await dialog.showSaveDialog(config);
+					if (selected.canceled || !selected.filePath || signal.aborted)
+						return false;
+					const bytes = await exportBackup(root, signal);
+					if (signal.aborted) return false;
+					await writeFile(selected.filePath, bytes, {
+						flag: "wx",
+						mode: 0o600,
+						signal,
+					});
+					shell.showItemInFolder(selected.filePath);
+					return true;
+				},
+				catch: (cause) => new BackupFailed(cause),
+			});
+		},
+	);
+	const runtime = ManagedRuntime.make(
+		Layer.mergeAll(
+			FirmwareUpdates.Default.pipe(
+				Layer.provide(
+					Layer.succeed(FirmwarePort, {
+						current: () =>
+							Effect.gen(function* () {
+								const current = options.hardware();
+								if (!current) return yield* new FirmwareUnavailable();
+								const snapshot = yield* current.snapshot();
+								return {
+									serial: snapshot.serial,
+									session: snapshot.session,
+									version: yield* version(snapshot.serial),
+								};
+							}),
+						version,
+						image: files.selected,
+						enter: (serial, session) =>
+							Effect.gen(function* () {
+								const current = options.hardware();
+								if (!current) return yield* new FirmwareUnavailable();
+								const snapshot = yield* current.snapshot();
+								if (
+									snapshot.serial !== serial ||
+									snapshot.session !== session ||
+									!snapshot.available
+								)
+									return yield* new FirmwareUnavailable();
+								if (mock) {
+									yield* Effect.tryPromise({
+										try: async () => {
+											await mkdir(join(mockRoot, "QUAKE DFU"), {
+												recursive: true,
+											});
+											await writeFile(
+												join(mockRoot, "QUAKE DFU", "INFO_UF2.TXT"),
+												"UF2 Bootloader\nBoard-ID: QUAKE RP2040\n",
+											);
+										},
+										catch: (cause) => new FirmwareUnavailable(cause),
+									});
+									return;
+								}
+								yield* current
+									.enterDfu()
+									.pipe(
+										Effect.mapError((cause) => new FirmwareUnavailable(cause)),
+									);
+							}),
+						volumes: files.discover,
+						copy: (image, volume, progress) =>
+							files.copy(image, volume, progress).pipe(
+								Effect.tap(() =>
+									Effect.sync(() => {
+										if (mock) mockVersion = image.version;
+									}),
+								),
+							),
+						load: () =>
+							Effect.tryPromise({
+								try: async () => {
+									try {
+										return JSON.parse(
+											await readFile(
+												join(root, "firmware-session-v1.json"),
+												"utf8",
+											),
+										);
+									} catch (cause) {
+										if (
+											cause &&
+											typeof cause === "object" &&
+											"code" in cause &&
+											cause.code === "ENOENT"
+										)
+											return undefined;
+										throw cause;
+									}
+								},
+								catch: (cause) => new FirmwarePersistenceFailed(cause),
+							}),
+						save: (snapshot) =>
+							Effect.tryPromise({
+								try: () =>
+									atomicJson(join(root, "firmware-session-v1.json"), snapshot),
+								catch: (cause) => new FirmwarePersistenceFailed(cause),
+							}),
+					}),
+				),
+			),
+			AppUpdates.Default.pipe(
+				Layer.provide(
+					Layer.succeed(AppUpdatePort, {
+						enabled: false,
+						currentVersion: app.getVersion(),
+						platform: process.platform,
+						arch: process.arch,
+						check: () => Effect.succeed(Option.none()),
+						download: () => Effect.fail(new AppUpdateFailed()),
+						install: () => Effect.fail(new AppUpdateFailed()),
+					}),
+				),
+			),
+			DataReset.Default.pipe(
+				Layer.provide(
+					Layer.succeed(ResetPort, {
+						backup: doExport,
+						confirmFailure: () =>
+							Effect.tryPromise({
+								try: () =>
+									confirm("Backup failed. Continue to clear data and exit?"),
+								catch: (cause) => new ResetFailed(cause),
+							}),
+						stopWriters: () =>
+							Effect.tryPromise({
+								try: options.stopWriters,
+								catch: (cause) => new ResetFailed(cause),
+							}),
+						clearAndQuit: () =>
+							Effect.tryPromise({
+								try: async () => {
+									await clearOwnedData(root);
+									exit();
+								},
+								catch: (cause) => new ResetFailed(cause),
+							}),
+					}),
+				),
+			),
+		),
+	);
+	const ready = runtime.runPromise(
+		Effect.gen(function* () {
+			yield* FirmwareUpdates;
+			yield* AppUpdates;
+			yield* DataReset;
+		}),
+	);
+	const view = Effect.fn("DesktopMaintenance.view")(
+		function* (): Effect.fn.Return<
+			MaintenanceView,
+			never,
+			FirmwareUpdates | AppUpdates
+		> {
+			const firmware = yield* FirmwareUpdates;
+			const update = yield* AppUpdates;
+			const current = options.hardware();
+			const snapshot = current ? yield* current.snapshot() : undefined;
+			const image = yield* files
+				.selected()
+				.pipe(
+					Effect.catchTag("FirmwareTargetMismatch", () =>
+						Effect.succeed(undefined),
+					),
+				);
+			return {
+				firmware: yield* firmware.snapshot(),
+				currentVersion: mock
+					? mockVersion
+					: snapshot?.firmware
+						? `${snapshot.firmware.major}.${snapshot.firmware.minor}.${snapshot.firmware.patch}`
+						: "",
+				serial: snapshot?.serial ?? "",
+				imageVersion: image?.version ?? "",
+				imageTrusted: image?.trusted ?? false,
+				permissions: checks ? permissionRows(checks) : [],
+				macOS: process.platform === "darwin",
+				appVersion: app.getVersion(),
+				update: yield* update.snapshot(),
+			};
+		},
+	);
+	const request = async (
+		input: MaintenanceCommand,
+	): Promise<MaintenanceReply> => {
+		await ready;
+		if (disposed) return { ok: false, code: "QUAKE.SETTINGS.STOPPING" };
+		if (input.action !== "read" && mutating)
+			return { ok: false, code: "QUAKE.SETTINGS.BUSY" };
+		if (input.action !== "read") mutating = true;
+		pendingOperations++;
+		try {
+			return await runtime.runPromise(
+				Effect.gen(function* () {
+					const firmware = yield* FirmwareUpdates;
+					const update = yield* AppUpdates;
+					let message = "";
+					if (!checks && process.platform === "darwin")
+						checks = mock
+							? {
+									accessibility: () => true,
+									inputMonitoring: () => false,
+									microphone: () => true,
+									screenRecording: () => false,
+									systemAudio: () => undefined,
+								}
+							: yield* Effect.promise(nativePermissionChecks);
+					const io = <A>(f: () => Promise<A>) =>
+						Effect.tryPromise({
+							try: f,
+							catch: (cause) => new RestoreFailed(cause),
+						});
+					switch (input.action) {
+						case "read":
+							break;
+						case "firmware-inspect": {
+							if (runningFirmware(yield* firmware.snapshot()))
+								return yield* new FirmwareTargetMismatch();
+							const selected = yield* io(() =>
+								dialog.showOpenDialog({
+									title: "Select firmware",
+									filters: [{ name: "UF2 firmware", extensions: ["uf2"] }],
+									properties: ["openFile"],
+								}),
+							);
+							if (!selected.canceled && selected.filePaths[0])
+								yield* files.inspect(selected.filePaths[0]);
+							break;
+						}
+						case "firmware-start": {
+							const current = options.hardware();
+							if (!current) return yield* new FirmwareUnavailable();
+							const selected = yield* current.snapshot();
+							if (
+								yield* io(() =>
+									confirm(
+										"Enter download mode?",
+										"The selected QUAKE will disconnect. A separate confirmation is required before writing firmware.",
+									),
+								)
+							)
+								yield* firmware.start({
+									serial: selected.serial,
+									session: selected.session,
+								});
+							break;
+						}
+						case "firmware-write": {
+							const path = files.pathFor(input.volumeId);
+							if (!path) return yield* new FirmwareTargetMismatch();
+							if (
+								!(yield* io(() =>
+									confirm(
+										"Write firmware?",
+										"Do not disconnect the USB cable or turn off the device. Writing cannot be undone.",
+									),
+								))
+							)
+								break;
+							let stopAccess: (() => void) | undefined;
+							if (!mock && process.platform === "darwin") {
+								const selected = yield* io(() =>
+									dialog.showOpenDialog({
+										title: "Select the QUAKE DFU drive",
+										properties: ["openDirectory"],
+										securityScopedBookmarks: true,
+										defaultPath: path,
+									}),
+								);
+								if (selected.canceled || !selected.filePaths[0]) break;
+								if (
+									(yield* io(() => realpath(selected.filePaths[0] ?? ""))) !==
+									path
+								)
+									return yield* new FirmwareTargetMismatch();
+								const bookmark = selected.bookmarks?.[0];
+								if (bookmark) {
+									const release =
+										app.startAccessingSecurityScopedResource(bookmark);
+									stopAccess = () => release();
+									yield* io(() =>
+										atomicJson(join(root, "firmware-volume-hint-v1.json"), {
+											bookmark,
+										}),
+									);
+								}
+							}
+							// Keep any scoped access alive until the main-owned session reaches a terminal state.
+							if (stopAccess) bookmarkReleases.push(stopAccess);
+							yield* firmware.write(input.volumeId);
+							break;
+						}
+						case "firmware-close":
+							yield* firmware.close();
+							break;
+						case "firmware-cancel":
+							yield* firmware.cancel();
+							break;
+						case "export":
+							message = (yield* doExport()) ? "Export Success" : "";
+							break;
+						case "import": {
+							if (runningFirmware(yield* firmware.snapshot()))
+								return yield* new FirmwareTargetMismatch();
+							const selected = yield* io(() =>
+								dialog.showOpenDialog({
+									title: "Import",
+									filters: [
+										{ name: "Encrypted ZIP backup", extensions: ["zip"] },
+									],
+									properties: ["openFile"],
+								}),
+							);
+							const path = selected.filePaths[0];
+							if (selected.canceled || !path) break;
+							const restored = yield* io(async () => {
+								if ((await lstat(path)).size > 128 * 1024 * 1024)
+									throw new RestoreFailed();
+								return prepareRestore(await readFile(path), path);
+							});
+							if (
+								!(yield* io(() =>
+									confirm(
+										"Import backup and exit?",
+										"Profiles and resources will be merged. Reopen open-quake after import.",
+									),
+								))
+							)
+								break;
+							yield* io(options.stopWriters);
+							const counts = yield* io(() => restored.commit(root));
+							message = `Import Success (${counts.skipped} skipped, ${counts.imported} imported)`;
+							yield* io(async () => {
+								await dialog.showMessageBox({ message, buttons: ["Close"] });
+								exit();
+							});
+							break;
+						}
+						case "reset": {
+							if (runningFirmware(yield* firmware.snapshot()))
+								return yield* new FirmwareTargetMismatch();
+							if (
+								yield* io(() =>
+									confirm(
+										"This will clear all data since initialization and cannot be undone. Backup before continuing?",
+									),
+								)
+							) {
+								const reset = yield* DataReset;
+								yield* reset.run(input.backup);
+							}
+							break;
+						}
+						case "permission":
+							if (!mock) yield* openPermission(input.key);
+							break;
+						case "check-update":
+							yield* update.check();
+							break;
+						case "download-update":
+							yield* update.download();
+							break;
+						case "install-update":
+							if (yield* io(() => confirm("Install update now?")))
+								yield* update.install();
+							break;
+						case "defer-update":
+							yield* update.defer();
+							break;
+					}
+					const next = yield* view();
+					if (!runningFirmware(next.firmware))
+						for (const release of bookmarkReleases.splice(0)) release();
+					return { ok: true, view: next, message } satisfies MaintenanceReply;
+				}).pipe(
+					Effect.match({
+						onFailure: (error) =>
+							({ ok: false, code: error.code }) satisfies MaintenanceReply,
+						onSuccess: (reply) => reply,
+					}),
+				),
+			);
+		} finally {
+			pendingOperations--;
+			if (input.action !== "read") mutating = false;
+		}
+	};
+	const bookmarkReleases: (() => void)[] = [];
+	ipcMain.handle(
+		MAINTENANCE_CHANNEL,
+		(event, input: unknown): Promise<MaintenanceReply> | MaintenanceReply => {
+			if (
+				!maintenanceRequestAllowed(
+					event.sender.getURL(),
+					options.renderer,
+					event.senderFrame === event.sender.mainFrame,
+					event.sender === options.management()?.webContents,
+					input,
+				) ||
+				!Schema.is(MaintenanceCommand)(input)
+			)
+				return { ok: false, code: "QUAKE.SETTINGS.REQUEST_DENIED" };
+			return request(input);
+		},
+	);
+	return {
+		request,
+		ready,
+		dispose: async () => {
+			disposed = true;
+			ipcMain.removeHandler(MAINTENANCE_CHANNEL);
+			await ready;
+			await runtime.dispose();
+			for (const release of bookmarkReleases.splice(0)) release();
+		},
+		pending: () => pendingOperations,
+	};
+}

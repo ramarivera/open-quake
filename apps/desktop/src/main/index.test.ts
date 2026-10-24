@@ -93,6 +93,12 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./maintenance", () => ({
+	registerMaintenance: vi.fn(() => ({
+		dispose: vi.fn(async () => {}),
+		ready: Promise.resolve(),
+	})),
+}));
 vi.mock("./profiles", () => ({
 	registerProfiles: vi.fn(() => ({
 		runtime: { runFork: vi.fn(), runPromise: vi.fn() },
@@ -121,13 +127,16 @@ vi.mock("./knob", () => ({
 }));
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
-	return { MediaLive: vi.fn(() => Layer.empty), registerMedia: vi.fn() };
+	return {
+		MediaLive: vi.fn(() => Layer.empty),
+		registerMedia: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+	};
 });
 vi.mock("./clock", async () => {
 	const { Layer } = await import("effect");
 	return {
 		ClockLive: vi.fn(() => Layer.empty),
-		registerClock: vi.fn(),
+		registerClock: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
 		registerClockScheme: vi.fn(),
 	};
 });

@@ -47,6 +47,29 @@ const settle = TestClock.adjust(0);
 
 describe("hardware controls over actual device connection with fake transport", () => {
 	it.scoped(
+		"DFU uses one known command on fake HID and blocks conflicting hardware writes",
+		() =>
+			Effect.gen(function* () {
+				const { fake, session } = yield* setup();
+				expect(yield* session.readVersion()).toBe("1.0.21");
+				yield* session.enterDfu();
+				expect((yield* commands(fake)).filter((b) => b[1] === 0x2f)).toEqual([
+					[1, 0x2f, 3],
+				]);
+				expect(
+					(yield* session.send({ _tag: "Mic", on: false }).pipe(Effect.either))
+						._tag,
+				).toBe("Left");
+				expect((yield* session.enterDfu().pipe(Effect.either))._tag).toBe(
+					"Left",
+				);
+				expect(
+					(yield* commands(fake)).filter((b) => b[1] === 0x2f),
+				).toHaveLength(1);
+			}),
+	);
+
+	it.scoped(
 		"queries firmware/mic/luminance, confirms mic ack, clamps native steps and never opens a second handle",
 		() =>
 			Effect.gen(function* () {

@@ -15,6 +15,7 @@ app.isPackaged = true;
 app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
+app.getVersion = () => "0.0.0";
 let quit = false;
 app.quit = () => {
 	let prevented = false;
@@ -99,6 +100,7 @@ globalThis.openQuakeBundleSmoke = {
 	protocol,
 	net,
 	session,
+	systemPreferences: {},
 };
 let nativeResolutions = 0;
 let enumerations = 0;
@@ -114,7 +116,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

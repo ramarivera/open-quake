@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. Every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the acceptance contract; implementation evidence and remaining physical gates are listed below.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -37,7 +37,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 
 Goals: give implementers one owned contract, observable failure states and a verification path for this capability.
 
-Non-goals: implementation in this lane, new dependencies, changes to other lanes' artifacts, guessed device opcodes, or claiming unresolved integrations work.
+Non-goals: account/cloud migration, a real app-release endpoint, ARIS-68 calibration, changes to other lanes' artifacts, or claims of physical acceptance.
 
 ## Package ownership
 
@@ -91,7 +91,7 @@ Dependencies are contracts supplied by their owning changes. An unavailable depe
 
 The inventory conflates openAsHidden with login startup and associates generic calibration IPC with QUAKE. Separate hidden-start/login fields, and require device capabilities before writes. Preserve unknown future settings fields on versioned migrations.
 
-The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. No npm dependency is selected here; future dependency proposals must name exact versions and approval needs.
+The proposed package placement keeps current workspace boundaries but grows `packages/edge`; retain cohesive domain files and split a new package only when ownership or dependency constraints justify it. Pinned runtime dependencies for this lane are documented below and in the maintenance README; Ramiro approved parity dependencies on 2026-10-24.
 
 ## Migration plan
 
@@ -101,8 +101,20 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 Drive the actual wizard/settings client with fake repository, OS and device layers through first-run resume, failed completion save, explicit choices surviving region changes, secret redaction and selected-target races. Confirm delegated wallpaper/monitor/firmware actions hit their real owner. Native launch-at-login behavior, lighting readback and QUAKE calibration remain unverified.
 
-Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+Implementation closure requires scenario evidence and parent-managed Beads updates. Only implemented and verified lane tasks are checked in tasks.md; physical acceptance remains open. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
 
 ## cloud-features-out-of-scope
 
 Inventory section 10 is CLOUD-SKIPPED: account/login/session and multi-account switching, MQTT, DecoKee model proxy/region routing, device-log upload, and agent market/sharing are excluded. The recovered account wizard step is omitted. No section 10 capability specs are created.
+
+## Settings additions, 2026-10-24
+
+Source: v0.4.95 recovered_sources/src/views/Setting/GeneralSettings.vue and app-resources/background.js bytes 6595513, 6603890, 364307. SETTINGS-014 uses WinZip AES-256 encrypted ZIP, deflate level 9, account_config.json, export_index.json {originalBasePath, originalPlatform}, and app/assets/resources.conf. Compatibility password derivation concatenates account, @, the app name DK-Suite lowercased without punctuation, then the four-digit format year 2026. This is public format compatibility, not confidentiality against someone with the app. Never log derived passwords. Export includes managed app data and a DK-compatible resource projection. Imports authenticate every entry, enforce bounded sizes and safe paths, skip built-in/deleted resources, deduplicate configurations, assign fresh profile/resource IDs, and remap cross-platform paths. Stage and atomically commit validated state; quit/relaunch after restore so cached writers cannot overwrite it. Secrets and account credentials are excluded.
+
+Use pinned @zip.js/zip.js for maintained authenticated ZIP parsing instead of a bespoke ZIP implementation, and koffi@3.3.3 for fixed-path in-process permission checks. Dependency approval is blanket per Ramiro 2026-10-24. Live statuses are granted/denied/unknown/unsupported; System Audio registration success is never interpreted as grant. Poll at 2000ms and on focus, deep link only on user click.
+
+Clear-data backups have a 60000ms deadline. Failed/cancelled backup requires a fresh native confirmation. Stop writers before deleting the app-owned userData root; retain it if stopping writers or staging reset fails. Clear exits. No arbitrary path is accepted by IPC.
+
+Self-update uses an open-quake-owned feed abstraction, disabled production feed and injectable deterministic fake feed. Future release manifest must bind app id, semantic version, platform, architecture, HTTPS artifact location, byte length and SHA-256 under a signed/pinned release policy before enabling a real endpoint. No DK-Suite feed or real endpoint is configured. Main owns a single-flight state machine, first background check at 5000ms then every 43200000ms; background download precedes the prompt, manual checks can prompt before download. Dispose timers/fibers on quit. Download/install is an adapter capability, unavailable with the disabled feed.
+
+Account files also use electron-store 7 / conf 9 encryption. The record is 16 random IV bytes, a colon byte, then AES-256-CBC ciphertext. The key is PBKDF2-SHA512 with 10000 iterations, 32 output bytes, the IV decoded as UTF-8 as salt, and the account-derived app identifier documented in account-config.ts. A plain ZIP entry containing JSON alone is insufficient. Independent Node fixtures verify both layers; DK-Suite was never launched. Legacy import projects profile titles, keys, knob and resource references into the native profile model. Vendor account/cloud credentials are excluded. Native snapshots preserve managed settings and rebase archived paths when restoring to another installation. Unknown missing archive-relative resources reject the import instead of fabricating a path.

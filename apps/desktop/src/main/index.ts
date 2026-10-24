@@ -39,6 +39,7 @@ import {
 	probeHiddenMirroring,
 } from "./lifecycle/native-display";
 import { registerLifecycle } from "./lifecycle/registration";
+import { registerMaintenance } from "./maintenance";
 import { MediaLive, registerMedia } from "./media";
 import { registerProfiles } from "./profiles";
 
@@ -165,13 +166,13 @@ if (!app.requestSingleInstanceLock()) {
 			managementWin.focus();
 		};
 		app.on("second-instance", focusManagement);
-		registerMedia(
+		const media = registerMedia(
 			ManagedRuntime.make(
 				MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 			),
 			() => managementWin,
 		);
-		registerClock(
+		const clock = registerClock(
 			ManagedRuntime.make(ClockLive(app.getPath("userData"))),
 			() => managementWin,
 		);
@@ -431,11 +432,9 @@ if (!app.requestSingleInstanceLock()) {
 		};
 		ipcMain.on(QUAKE_STATUS_CHANNEL, sendStatus);
 
-		app.on("before-quit", (event) => {
-			if (quitFinished) return;
-			// Electron does not await async listeners. Keep it alive for HID finalizers.
-			event.preventDefault();
-			if (quitting) return;
+		let shutdown: Promise<void> | undefined;
+		const stopWriters = (closeWindows = false): Promise<void> => {
+			if (shutdown) return shutdown;
 			quitting = true;
 			screen.removeListener("display-added", topologyChanged);
 			screen.removeListener("display-removed", topologyChanged);
@@ -447,16 +446,47 @@ if (!app.requestSingleInstanceLock()) {
 			removeLifecycle();
 			disposeHardware();
 			ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
-			void stopBus().then(async () => {
+			shutdown = (async () => {
+				await stopBus();
 				await lifecycleRuntime.dispose();
 				await profiles.runtime.runPromise(Fiber.interrupt(profileUpdates));
 				await knob.dispose();
 				await profiles.dispose();
+				await clock.dispose();
+				await media.dispose();
 				await runtime.dispose();
-				quitFinished = true;
-				app.quit();
-			});
+				if (closeWindows) {
+					if (!managementWin.isDestroyed()) {
+						managementWin.webContents.session.flushStorageData();
+						managementWin.destroy();
+					}
+					if (!panelWin.isDestroyed()) panelWin.destroy();
+				}
+			})();
+			return shutdown;
+		};
+		const maintenance = registerMaintenance({
+			root: app.getPath("userData"),
+			mock,
+			renderer: rendererURL,
+			hardware: () => bus?.hardware?.(),
+			management: () => managementWin,
+			stopWriters: () => stopWriters(true),
 		});
+		app.on("before-quit", (event) => {
+			if (quitFinished) return;
+			event.preventDefault();
+			if (quitting) return;
+			quitting = true;
+			void maintenance
+				.dispose()
+				.then(() => stopWriters())
+				.then(() => {
+					quitFinished = true;
+					app.quit();
+				});
+		});
+
 		const reopenWindows = (): void => {
 			if (quitting) return;
 			if (managementWin.isDestroyed()) {

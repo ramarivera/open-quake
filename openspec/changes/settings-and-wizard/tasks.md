@@ -1,6 +1,6 @@
 # Tasks
 
-These are future implementation tasks. This lane creates specs only; no checkbox is complete. The parent creates one epic for this change and one issue per numbered task, using each task's text as its description and this OpenSpec path as its reference. Do not close implementation issues on planning-only evidence.
+Execution is tracked by open-quake-def under open-quake-lih.14. Section 5 is the settings-firmware lane; earlier wizard/general tasks stay open. Source and automated evidence are in apps/desktop/src/main/maintenance/README.md and the lane report. Parent clusters remain open until merge and acceptance.
 
 ## 1. Scope and persistent contracts
 
@@ -21,3 +21,12 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 
 - [ ] 4.1 Run all settings-and-wizard scenarios through real consumers with fake OS/device/repository layers; verify pending/unverified device state is not shown as confirmed.
 - [ ] 4.2 Capture native login/window/lighting and physical onboarding evidence when available; keep QUAKE calibration unverified/unavailable and update parent-managed Beads with source plus verification links.
+
+## 5. Settings-firmware parity lane
+
+- [x] 5.1 Implement authenticated DK-compatible archive export/import, bounded validation and transactional profile/resource merge with independent interoperability fixtures (SETTINGS-014).
+- [x] 5.2 Implement optional-backup reset with 60s deadline, second confirmation and writer shutdown tests (SETTINGS-016).
+- [x] 5.3 Implement five live macOS permission statuses, focus/2s refresh and fixed deep links with mock/native loading evidence (SETTINGS-015).
+- [x] 5.4 Implement app-owned disabled/fake feed, 5s/12h scheduler, single-flight download/install state machine and TestClock coverage (SETTINGS-049/050).
+- [x] 5.5 Wire settings controls through authenticated typed IPC, run all repository gates, capture native mock screenshots and report hardware acceptance separately (SETTINGS-014..016, SETTINGS-049/050).
+- [ ] 5.6 After merge, verify a consented legacy backup and packaged macOS permission attribution/deep links with the acceptance owner; retain the disabled release feed until signing/publishing policy exists.
