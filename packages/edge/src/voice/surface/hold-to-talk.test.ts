@@ -145,6 +145,23 @@ describe("hold-to-talk", () => {
 		const { log } = run([down("1,6", 0), { _tag: "reset", now: 1500 }], 5000);
 		expect(tags(log)).toContain("1500:cancelCapture:1,6");
 	});
+	it("reset takes priority over overdue long-press and release deadlines", () => {
+		const pressed = stepHold(initialHoldState, down("1,6", 0)).state;
+		const disarmed = stepHold(pressed, { _tag: "reset", now: 2000 });
+		expect(disarmed.effects).toEqual([]);
+		expect(nextDeadline(disarmed.state)).toEqual(Option.none());
+		const capturing = stepHold(pressed, { _tag: "tick", now: 1000 }).state;
+		const ending = stepHold(capturing, {
+			_tag: "touchEnd",
+			keyCode: "1,6",
+			now: 1100,
+		}).state;
+		const cancelled = stepHold(ending, { _tag: "reset", now: 2000 });
+		expect(cancelled.effects).toEqual([
+			{ _tag: "cancelCapture", keyCode: "1,6", generation: 1 },
+		]);
+		expect(nextDeadline(cancelled.state)).toEqual(Option.none());
+	});
 
 	it("fires a long press that falls inside the grace, then releases", () => {
 		const { log } = run(

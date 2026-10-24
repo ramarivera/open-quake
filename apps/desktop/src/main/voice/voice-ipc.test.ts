@@ -80,6 +80,62 @@ afterEach(() => {
 });
 
 describe("voice:request", () => {
+	it("gates queued holds on link loss and broadcasts reset before accepting reconnect input", async () => {
+		const { request, registration } = setup(true);
+		try {
+			await request({
+				_tag: "Input",
+				input: {
+					keyCode: "1,5",
+					type: "clawbot",
+					voiceInput: true,
+					kind: "down",
+				},
+			});
+			const reset = registration.onDevice({
+				source: "mock",
+				kind: "status",
+				state: "disconnected",
+				reason: "transport-ended",
+			});
+			expect(
+				await request({
+					_tag: "Input",
+					input: { keyCode: "1,5", type: "clawbot", kind: "touchEnd" },
+				}),
+			).toEqual({
+				_tag: "rejected",
+				code: "VOICE.SURFACE.DEVICE_DISCONNECTED",
+			});
+			await reset;
+			const events = sent().flatMap((event) =>
+				Either.isRight(event) ? [event.right] : [],
+			);
+			expect(events.at(-1)).toEqual({
+				_tag: "Reset",
+				serial: "QK-1",
+				reason: "disconnected",
+			});
+			expect(
+				events.some(
+					(event) => event._tag === "Stage" || event._tag === "TurnStarted",
+				),
+			).toBe(false);
+			await registration.onDevice({
+				source: "mock",
+				kind: "status",
+				state: "connected",
+			});
+			expect(
+				await request({
+					_tag: "Input",
+					input: { keyCode: "1,6", type: "aiChat", kind: "down" },
+				}),
+			).toEqual({ _tag: "ok" });
+		} finally {
+			await registration.dispose();
+		}
+	});
 	it("answers Hello with the agent status on the sender only", async () => {
 		const { request, registration } = setup();
 		expect(await request({ _tag: "Hello" })).toEqual({ _tag: "ok" });

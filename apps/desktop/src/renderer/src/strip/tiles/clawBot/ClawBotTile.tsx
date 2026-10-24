@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useLayoutEffect, useRef } from "react";
 import "../../css-properties";
 import { type StripLocale, stripText } from "../../overlays/voice/strings";
 import { useSubTouchMessages } from "../../overlays/voice/sub-touch";
@@ -32,12 +32,19 @@ const LOCALE_TAGS: Readonly<Record<StripLocale, string>> = {
 	ko: "ko-KR",
 };
 /** HH:mm, 24 h, in the UI locale (QBV:816-841). */
-export const formatChatTime = (ts: number, locale: StripLocale): string =>
-	new Intl.DateTimeFormat(LOCALE_TAGS[locale], {
-		hour: "2-digit",
-		minute: "2-digit",
-		hourCycle: "h23",
-	}).format(ts);
+const timeFormatters = new Map<StripLocale, Intl.DateTimeFormat>();
+export const formatChatTime = (ts: number, locale: StripLocale): string => {
+	let formatter = timeFormatters.get(locale);
+	if (!formatter) {
+		formatter = new Intl.DateTimeFormat(LOCALE_TAGS[locale], {
+			hour: "2-digit",
+			minute: "2-digit",
+			hourCycle: "h23",
+		});
+		timeFormatters.set(locale, formatter);
+	}
+	return formatter.format(ts);
+};
 
 const CONNECTION_LABELS = {
 	checking: "quakeBotIconView.checking",
@@ -75,6 +82,33 @@ const chatText = (locale: StripLocale, text: ChatText): string =>
 			: stripText(locale, "aiIconViewTxt.errorCodeLine", {
 					code: text.copy.code,
 				});
+
+/** Completed message identities survive new deltas in other messages. */
+const MessageContent = memo(function MessageContent({
+	message,
+	locale,
+	scale,
+	onOpen,
+}: {
+	message: ChatMessage;
+	locale: StripLocale;
+	scale: number;
+	onOpen: (url: string) => void;
+}): React.JSX.Element {
+	return message._tag === "tool" ? (
+		<ToolCard tool={message} scale={scale} locale={locale} />
+	) : (
+		<RichText
+			value={parseRichText(
+				message._tag === "answer"
+					? message.view.text
+					: chatText(locale, message.text),
+			)}
+			scale={scale}
+			onOpen={onOpen}
+		/>
+	);
+});
 
 function senderLabel(
 	locale: StripLocale,
@@ -208,7 +242,12 @@ function Messages({
 							{header(senderLabel(locale, group, message), message.ts)}
 							{message._tag === "tool" ? (
 								<div {...bubble(index, visible.length, "tool")}>
-									<ToolCard tool={message} scale={scale} locale={locale} />
+									<MessageContent
+										message={message}
+										scale={scale}
+										locale={locale}
+										onOpen={onOpen}
+									/>
 								</div>
 							) : (
 								<div
@@ -222,13 +261,10 @@ function Messages({
 												: undefined,
 									)}
 								>
-									<RichText
-										value={parseRichText(
-											message._tag === "answer"
-												? message.view.text
-												: chatText(locale, message.text),
-										)}
+									<MessageContent
+										message={message}
 										scale={scale}
+										locale={locale}
 										onOpen={onOpen}
 									/>
 								</div>
@@ -286,11 +322,12 @@ export function ClawBotTile({
 	const { width, height } = tile.box;
 	const scale = clawBotScale(width, height);
 	const state = view.conversation;
-	const open = useMemo(
-		() => (url: string) => {
-			void context.voice.request({ _tag: "OpenLink", url });
+	const request = context.voice.request;
+	const open = useCallback(
+		(url: string) => {
+			void request({ _tag: "OpenLink", url });
 		},
-		[context.voice],
+		[request],
 	);
 	return (
 		<div

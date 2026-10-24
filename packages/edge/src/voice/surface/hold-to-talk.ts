@@ -238,6 +238,24 @@ const heldKey = (state: HoldState, keyCode: string): Option.Option<HeldKey> =>
 	Option.filter(state.held, (held) => held.keyCode === keyCode);
 
 export function stepHold(state: HoldState, input: HoldInput): HoldStep {
+	// Cancellation wins over overdue capture/release deadlines on link loss.
+	if (input._tag === "reset")
+		return {
+			state: { ...state, held: Option.none() },
+			effects: Option.match(state.held, {
+				onNone: () => [],
+				onSome: (held): readonly HoldEffect[] =>
+					held.phase === "capturing"
+						? [
+								{
+									_tag: "cancelCapture",
+									keyCode: held.keyCode,
+									generation: held.generation,
+								},
+							]
+						: [],
+			}),
+		};
 	// Deadlines that passed before this input happen first.
 	const due = tick(state, input.now);
 	const next = ((): HoldStep => {
@@ -270,23 +288,6 @@ export function stepHold(state: HoldState, input: HoldInput): HoldStep {
 				return Option.match(heldKey(current, input.keyCode), {
 					onNone: () => ({ state: current, effects: [] }),
 					onSome: (held) => release(current, held, input.now),
-				});
-			case "reset":
-				return Option.match(current.held, {
-					onNone: () => ({ state: current, effects: [] }),
-					onSome: (held) => ({
-						state: { ...current, held: Option.none() },
-						effects:
-							held.phase === "capturing"
-								? [
-										{
-											_tag: "cancelCapture",
-											keyCode: held.keyCode,
-											generation: held.generation,
-										},
-									]
-								: [],
-					}),
 				});
 		}
 	})();

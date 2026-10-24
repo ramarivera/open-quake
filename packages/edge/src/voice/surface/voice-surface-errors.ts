@@ -15,6 +15,12 @@ export const VoiceSurfaceErrors = {
 		message: "The voice surface request is invalid",
 		policy: { userFacing: false, userRecoverable: false, retry: "never" },
 	},
+	RequestFailed: {
+		code: "VOICE.SURFACE.REQUEST_FAILED",
+		category: "dependency",
+		message: "The voice surface request could not be delivered",
+		policy: { userFacing: false, userRecoverable: true, retry: "manual" },
+	},
 	LinkRejected: {
 		code: "VOICE.SURFACE.LINK_REJECTED",
 		category: "validation",
@@ -61,6 +67,17 @@ export class VoiceSurfaceRequestInvalid extends Schema.TaggedError<VoiceSurfaceR
 	declare readonly originalCause: unknown;
 	constructor(cause: unknown = undefined) {
 		super(props(VoiceSurfaceErrors.RequestInvalid, cause));
+		retain(this, cause);
+	}
+}
+
+export class VoiceSurfaceRequestFailed extends Schema.TaggedError<VoiceSurfaceRequestFailed>()(
+	"VoiceSurfaceRequestFailed",
+	fields(VoiceSurfaceErrors.RequestFailed),
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown) {
+		super(props(VoiceSurfaceErrors.RequestFailed, cause));
 		retain(this, cause);
 	}
 }

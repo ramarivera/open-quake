@@ -10,7 +10,7 @@ colours and strings are the recovered values cited in `design.md`.
 
 ### Requirement: Voice surface events
 
-Main SHALL publish one Schema-decoded `VoiceSurfaceEvent` union to every app window: Stage, Level, TurnStarted, Chunk, Tool, KeyPress, KeyAlert, Toast, AgentStatus and MeetingStage. Stage SHALL carry serial, keyCode, captureId and one of `recording` (preparing, listening, speaking, recording, with an optional partial transcript), `processing` (optional final transcript), `failed` (reason generic, noMic, server, processing, timeout or unavailable, optional errorCode and message), `busy` (optional message) or `idle` (outcome completed, empty or cancelled). Level SHALL carry an rms clamped to [0,1] and a speaking flag. Main SHALL drop a stage identical to the previous stage for the same device. Undecodable input SHALL be rejected, never forwarded. KeyCode `0,1` and stages without a key SHALL target the full-screen overlay; every other keyCode SHALL target tiles. Covers AI-077, AI-200, AI-267 (device push contract), KNOB-057, KNOB-065, SCREEN-114, SCREEN-116.
+Main SHALL publish one Schema-decoded `VoiceSurfaceEvent` union to every app window: Stage, Level, TurnStarted, Chunk, Tool, KeyPress, KeyAlert, Toast, AgentStatus, MeetingStage and Reset. Reset SHALL carry serial and reason profileChanged or disconnected, and SHALL clear renderer voice state after runtime cancellation. Stage SHALL carry serial, keyCode, captureId and one of `recording` (preparing, listening, speaking, recording, with an optional partial transcript), `processing` (optional final transcript), `failed` (reason generic, noMic, server, processing, timeout or unavailable, optional errorCode and message), `busy` (optional message) or `idle` (outcome completed, empty or cancelled). Level SHALL carry an rms clamped to [0,1] and a speaking flag. Main SHALL drop a stage identical to the previous stage for the same device. Undecodable input SHALL be rejected, never forwarded. KeyCode `0,1` and stages without a key SHALL target the full-screen overlay; every other keyCode SHALL target tiles. Covers AI-077, AI-200, AI-267 (device push contract), KNOB-057, KNOB-065, SCREEN-114, SCREEN-116.
 
 #### Scenario: Duplicate stage from the runtime
 
@@ -158,7 +158,24 @@ Covers AI-169, AI-193, AI-205, SCREEN-058, SCREEN-059.
 - **WHEN** the touch ends at 100 ms
 - **THEN** no capture starts and no release is sent; the key stays selected
 
+#### Scenario: Selection-only ClawBot tap leaves Copilot idle
+
+- **WHEN** a voice-enabled clawbot key is tapped without starting capture
+- **THEN** its assistant stays selected for typed input, Copilot clears its pending status, active key and watchdog, and an answer from a different key is accepted
+
+#### Scenario: Device link loss cancels voice
+
+- **WHEN** the device reports disconnected or error before a long press, during capture or inside release grace
+- **THEN** main gates new holds immediately, resets GridVoice with reason disconnected before renderer touch teardown can submit, cancels the active flow, disarms deadlines and broadcasts Reset after cancellation
+- **AND** overdue capture or release deadlines do not run during reset; the strip clears the live row, input buffer, bar, overlay, cancel indicator and expiry timers without submitting an interrupted recording
+
 #### Scenario: Second key while one is busy
+
+- **WHEN** grid and knob starts race while the first adapter is deferred and has not published a stage
+- **THEN** the first capture reserves its key and capture ID and the other receives busy without overwriting it
+- **AND** an unavailable start releases the reservation and retains its failure tone, alert and stable error code
+
+#### Scenario: Second grid key while one is busy
 
 - **WHEN** key `1,6` is capturing and key `1,7` goes down
 - **THEN** `1,7` gets the busy stage, tone and alert, and `1,6` keeps capturing
@@ -255,6 +272,17 @@ Messages SHALL group per turn with avatars, sender and HH:mm time, and normal, s
 - **WHEN** the row holds a 20-character sentence and a 6-character partial with no common prefix arrives
 - **THEN** the partial is appended on a new line
 
+#### Scenario: Update the latest sentence
+
+- **WHEN** partials "This is the first sentence.", "Next", "Next sentence", then "Next" arrive
+- **THEN** both the live row and input retain "This is the first sentence.\n" while replacing only the latest hypothesis
+- **AND** an authoritative final transcript replaces the accumulated text in both views
+
+#### Scenario: Select a typed assistant during voice capture
+
+- **WHEN** voice-enabled assistant A is recording, typed-only B is selected, and A sends more partials, a final transcript and TurnStarted
+- **THEN** A's live row continues with A's capture identity and agent, B stays selected for typed input, and A's voice group uses the authoritative TurnStarted prompt and A's agent
+
 #### Scenario: Hint dedupe
 
 - **WHEN** the same system hint arrives twice within 5000 ms
@@ -273,6 +301,21 @@ Chat text SHALL render a markdown subset when DK's detection rule matches: headi
 
 - **WHEN** a reply is "## Plan\n- **one** `two`\n<script>x</script>"
 - **THEN** it renders a heading, a list item with bold and code, and a literal "<script>x</script>" paragraph
+
+#### Scenario: Fenced code boundaries
+
+- **WHEN** a fenced code block uses backticks or tildes
+- **THEN** only the same marker character, at least the opener's length and followed by whitespace alone closes the block; shorter fences and lines with trailing text stay inside the code
+
+#### Scenario: Stream updates preserve completed message work
+
+- **WHEN** a new answer delta changes one message
+- **THEN** unchanged message identities reuse rendered rich text and the locale reuses its time formatter
+
+#### Scenario: Voice bridge rejects a request
+
+- **WHEN** the renderer bridge throws or rejects a request
+- **THEN** the caller receives a rejected reply with the catalog code VOICE.SURFACE.REQUEST_FAILED, without an unhandled promise or exposed cause
 
 #### Scenario: Rejected link
 

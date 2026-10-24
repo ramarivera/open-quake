@@ -94,7 +94,14 @@ export type AgentRef = typeof AgentRef.Type;
 export const ToolPhase = Schema.Literal("start", "result", "error");
 export type ToolPhase = typeof ToolPhase.Type;
 
+export const VoiceResetReason = Schema.Literal(
+	"profileChanged",
+	"disconnected",
+);
+export type VoiceResetReason = typeof VoiceResetReason.Type;
+
 export const VoiceSurfaceEvent = Schema.Union(
+	Schema.TaggedStruct("Reset", { serial: Serial, reason: VoiceResetReason }),
 	Schema.TaggedStruct("Stage", {
 		serial: Serial,
 		keyCode: VoiceKeyCode,
@@ -180,7 +187,7 @@ export type GridVoiceInput = typeof GridVoiceInput.Type;
 export const VoiceSurfaceRequest = Schema.Union(
 	Schema.TaggedStruct("Input", { input: GridVoiceInput }),
 	Schema.TaggedStruct("Reset", {
-		reason: Schema.Literal("profileChanged", "disconnected"),
+		reason: VoiceResetReason,
 	}),
 	Schema.TaggedStruct("SendText", {
 		keyCode: VoiceKeyCode,

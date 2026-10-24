@@ -77,6 +77,12 @@ export interface ConversationState {
 	readonly live: Option.Option<LiveRow>;
 	readonly activeKey: Option.Option<string>;
 	readonly activeAgent: Option.Option<ChatAgent>;
+	/** Voice ownership survives selecting a different assistant for typed input. */
+	readonly capture: Option.Option<{
+		readonly keyCode: string;
+		readonly captureId: string;
+		readonly agent: Option.Option<ChatAgent>;
+	}>;
 	readonly connection: AgentConnection;
 	readonly nextId: number;
 }
@@ -85,6 +91,7 @@ export const initialConversation: ConversationState = {
 	live: Option.none(),
 	activeKey: Option.none(),
 	activeAgent: Option.none(),
+	capture: Option.none(),
 	connection: "checking",
 	nextId: 1,
 };
@@ -176,10 +183,15 @@ function appendError(
 	);
 }
 
-const keyMatches = (state: ConversationState, keyCode: string): boolean =>
-	Option.match(state.activeKey, {
-		onNone: () => true,
-		onSome: (active) => active === keyCode,
+const keyMatches = (state: ConversationState, event: StageEvent): boolean =>
+	Option.match(state.capture, {
+		onNone: () =>
+			event.keyCode === "0,1" ||
+			Option.isNone(state.activeKey) ||
+			Option.contains(state.activeKey, event.keyCode),
+		onSome: (capture) =>
+			capture.keyCode === event.keyCode &&
+			capture.captureId === event.captureId,
 	});
 
 function updateTurn(
@@ -203,7 +215,14 @@ function reduceStage(
 	now: number,
 ): ConversationState {
 	const stage = event.stage;
-	const agentName = Option.map(state.activeAgent, (agent) => agent.name);
+	const capture = Option.getOrElse(state.capture, () => ({
+		keyCode: event.keyCode,
+		captureId: event.captureId,
+		agent: Option.contains(state.activeKey, event.keyCode)
+			? state.activeAgent
+			: Option.none(),
+	}));
+	const agentName = Option.map(capture.agent, (agent) => agent.name);
 	const live = Option.getOrElse(
 		Option.map(state.live, (row) => row.transcript),
 		() => emptyTranscript,
@@ -211,11 +230,15 @@ function reduceStage(
 	const withLive = (transcript: LiveTranscript): ConversationState =>
 		transcript.text === ""
 			? state
-			: { ...state, live: Option.some({ transcript, ts: now, agentName }) };
+			: {
+					...state,
+					capture: Option.some(capture),
+					live: Option.some({ transcript, ts: now, agentName }),
+				};
 	switch (stage._tag) {
 		case "recording":
 			return stage.transcript === undefined
-				? state
+				? { ...state, capture: Option.some(capture) }
 				: withLive(mergePartial(live, stage.transcript));
 		case "processing":
 			return stage.transcript === undefined
@@ -232,11 +255,15 @@ function reduceStage(
 									? { _tag: "string", key: "aiAudio.error" }
 									: errorCopy(stage.errorCode),
 						};
-			return appendError({ ...state, live: Option.none() }, text, now);
+			return appendError(
+				{ ...state, live: Option.none(), capture: Option.none() },
+				text,
+				now,
+			);
 		}
 		case "busy":
 		case "idle":
-			return { ...state, live: Option.none() };
+			return { ...state, live: Option.none(), capture: Option.none() };
 	}
 }
 
@@ -268,6 +295,7 @@ export function reduceConversation(
 				live: Option.none(),
 				activeKey: Option.none(),
 				activeAgent: Option.none(),
+				capture: Option.none(),
 			};
 		case "AgentStatus": {
 			if (event.state === state.connection) return state;
@@ -282,13 +310,22 @@ export function reduceConversation(
 					);
 		}
 		case "Stage":
-			return keyMatches(state, event.keyCode)
-				? reduceStage(state, event, now)
-				: state;
+			return keyMatches(state, event) ? reduceStage(state, event, now) : state;
 		case "TurnStarted": {
+			const ownsCapture =
+				event.source === "voice" &&
+				Option.exists(
+					state.capture,
+					(capture) => capture.keyCode === event.keyCode,
+				);
+			const ownerAgent = ownsCapture
+				? Option.flatMap(state.capture, (capture) => capture.agent)
+				: Option.contains(state.activeKey, event.keyCode)
+					? state.activeAgent
+					: Option.none();
 			const agent = event.agent
 				? agentFrom(event.agent)
-				: Option.getOrElse(state.activeAgent, () => agentFrom(undefined));
+				: Option.getOrElse(ownerAgent, () => agentFrom(undefined));
 			let next = state;
 			if (event.source === "typed") {
 				// aiChatView:userOutgoingMessage (QBV:1612-1661, AI-165).
@@ -323,10 +360,7 @@ export function reduceConversation(
 								id: `${id}-voice`,
 								text: {
 									_tag: "literal",
-									text: Option.match(next.live, {
-										onNone: () => event.prompt,
-										onSome: (row) => row.transcript.text,
-									}),
+									text: event.prompt,
 								},
 								isVoice: true,
 								ts: now,
@@ -334,7 +368,13 @@ export function reduceConversation(
 						]
 					: [];
 			return push(
-				{ ...next, nextId: next.nextId + 1, live: Option.none() },
+				{
+					...next,
+					nextId: next.nextId + 1,
+					...(ownsCapture
+						? { live: Option.none(), capture: Option.none() }
+						: {}),
+				},
 				{
 					id,
 					kind: "agent",

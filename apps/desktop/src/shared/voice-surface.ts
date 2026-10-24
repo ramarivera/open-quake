@@ -2,6 +2,7 @@
 // strip renderer. Services and the mock runtime stay out of renderer bundles.
 export * from "../../../../packages/edge/src/voice/surface/hold-to-talk";
 export * from "../../../../packages/edge/src/voice/surface/voice-surface-contracts";
+export { VoiceSurfaceRequestFailed } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
 export * from "../../../../packages/edge/src/voice/surface/voice-surface-invariants";
 
 export interface VoiceBridge {

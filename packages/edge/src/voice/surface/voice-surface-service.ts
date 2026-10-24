@@ -81,6 +81,12 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 				event: VoiceSurfaceEvent,
 			): Effect.fn.Return<void> {
 				if (event._tag === "AgentStatus") yield* Ref.set(agent, event.state);
+				if (event._tag === "Reset")
+					yield* Ref.update(flows, (map) => {
+						const next = new Map(map);
+						next.delete(event.serial);
+						return next;
+					});
 				if (event._tag !== "Stage") return yield* publisher.publish(event);
 				yield* Effect.annotateCurrentSpan({
 					keyCode: event.keyCode,
@@ -111,6 +117,16 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 					(flow) => flow.keyCode,
 				);
 			});
+			/** Reserve before an adapter starts; its first Stage may arrive later. */
+			const reserve = Effect.fn("VoiceSurface.reserve")(function* (
+				serial: string,
+				keyCode: string,
+				captureId: string,
+			): Effect.fn.Return<void> {
+				yield* Ref.update(flows, (map) =>
+					new Map(map).set(serial, { keyCode, captureId }),
+				);
+			});
 
 			/**
 			 * BG `Zo`: busy stage, busy tone and alert, plus DK's busy toast
@@ -138,7 +154,7 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 				},
 			);
 
-			return { publish, activeFlow, rejectBusy, agentStatus };
+			return { publish, activeFlow, reserve, rejectBusy, agentStatus };
 		}),
 	},
 ) {}

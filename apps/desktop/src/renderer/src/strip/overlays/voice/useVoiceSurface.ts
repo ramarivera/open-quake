@@ -1,16 +1,23 @@
-import { Either, Option, Schema } from "effect";
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { Effect, Either, Option, Schema } from "effect";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useReducer,
+	useRef,
+} from "react";
 import {
 	type GridVoiceInput,
 	isHoldToTalkKey,
 	VoiceSurfaceEvent,
 	type VoiceSurfaceReply,
-	VoiceSurfaceReply as VoiceSurfaceReplySchema,
 	type VoiceSurfaceRequest,
 } from "../../../../../shared/voice-surface";
 import type { StripLayout, StripTile } from "../../geometry";
 import { stripLocale } from "./strings";
 import type { StripVoiceContext } from "./voice-context";
+import { requestVoiceSurface } from "./voice-request";
 import {
 	initialVoiceView,
 	type KeyInfo,
@@ -21,7 +28,6 @@ import {
 } from "./voice-state";
 
 const decodeEvent = Schema.decodeUnknownEither(VoiceSurfaceEvent);
-const decodeReply = Schema.decodeUnknownEither(VoiceSurfaceReplySchema);
 
 const actionValue = (
 	actions: readonly { readonly type: string; readonly value: unknown }[],
@@ -89,7 +95,9 @@ export function useVoiceSurface(layout: StripLayout | undefined): {
 		[layout],
 	);
 	const keysRef = useRef(keys);
-	keysRef.current = keys;
+	useLayoutEffect(() => {
+		keysRef.current = keys;
+	}, [keys]);
 	const [view, send] = useReducer(reducer, initialVoiceView);
 	const dispatch = useCallback(
 		(action: VoiceAction) =>
@@ -122,15 +130,8 @@ export function useVoiceSurface(layout: StripLayout | undefined): {
 		return () => clearTimeout(timer);
 	}, [expiry, dispatch]);
 	const request = useCallback(
-		async (value: VoiceSurfaceRequest): Promise<VoiceSurfaceReply> => {
-			const bridge = window.quakeVoice;
-			if (!bridge)
-				return { _tag: "rejected", code: "VOICE.SURFACE.BRIDGE_MISSING" };
-			const reply = decodeReply(await bridge.request(value));
-			return Either.isRight(reply)
-				? reply.right
-				: { _tag: "rejected", code: "VOICE.SURFACE.REQUEST_INVALID" };
-		},
+		(value: VoiceSurfaceRequest): Promise<VoiceSurfaceReply> =>
+			Effect.runPromise(requestVoiceSurface(window.quakeVoice, value)),
 		[],
 	);
 	const context = useMemo(

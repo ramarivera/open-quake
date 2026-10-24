@@ -10,6 +10,7 @@ import {
 import {
 	type GridVoiceInput,
 	KNOB_VOICE_KEY,
+	type VoiceResetReason,
 } from "./voice-surface-contracts.js";
 import type { VoiceRuntimeUnavailable } from "./voice-surface-errors.js";
 import { GridVoiceRuntime, type TextRequest } from "./voice-surface-ports.js";
@@ -51,30 +52,34 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 					});
 				case "startCapture": {
 					const captureId = `${effect.keyCode}/${effect.generation}`;
-					return runtime
-						.startCapture({
-							serial,
-							keyCode: effect.keyCode,
-							captureId,
-							generation: effect.generation,
-							type: effect.type,
-							agentId: effect.agentId,
-						})
-						.pipe(
-							Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
-								surface.publish({
-									_tag: "Stage",
+					return surface.reserve(serial, effect.keyCode, captureId).pipe(
+						Effect.zipRight(
+							runtime
+								.startCapture({
 									serial,
 									keyCode: effect.keyCode,
 									captureId,
-									stage: {
-										_tag: "failed",
-										reason: "unavailable",
-										errorCode: error.code,
-									},
-								}),
-							),
-						);
+									generation: effect.generation,
+									type: effect.type,
+									agentId: effect.agentId,
+								})
+								.pipe(
+									Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+										surface.publish({
+											_tag: "Stage",
+											serial,
+											keyCode: effect.keyCode,
+											captureId,
+											stage: {
+												_tag: "failed",
+												reason: "unavailable",
+												errorCode: error.code,
+											},
+										}),
+									),
+								),
+						),
+					);
 				}
 				case "release":
 					return runtime.releaseCapture(
@@ -95,26 +100,25 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 			}
 		};
 
-		const apply = (
+		const applyUnlocked = (
 			serial: string,
 			input: (now: number, activeFlow: Option.Option<string>) => HoldInput,
 		): Effect.Effect<void> =>
-			lock.withPermits(1)(
-				Effect.gen(function* () {
-					const now = yield* Clock.currentTimeMillis;
-					const flow = yield* surface.activeFlow(serial);
-					const state =
-						(yield* Ref.get(states)).get(serial) ?? initialHoldState;
-					const step = stepHold(state, input(now, flow));
-					yield* Ref.update(states, (map) =>
-						new Map(map).set(serial, step.state),
-					);
-					yield* Effect.forEach(step.effects, (effect) => run(serial, effect), {
-						discard: true,
-					});
-					yield* reschedule(serial, step.state, now);
-				}),
-			);
+			Effect.gen(function* () {
+				const now = yield* Clock.currentTimeMillis;
+				const flow = yield* surface.activeFlow(serial);
+				const state = (yield* Ref.get(states)).get(serial) ?? initialHoldState;
+				const step = stepHold(state, input(now, flow));
+				yield* Ref.update(states, (map) =>
+					new Map(map).set(serial, step.state),
+				);
+				yield* Effect.forEach(step.effects, (effect) => run(serial, effect), {
+					discard: true,
+				});
+				yield* reschedule(serial, step.state, now);
+			});
+		const apply: typeof applyUnlocked = (serial, input) =>
+			lock.withPermits(1)(applyUnlocked(serial, input));
 
 		const reschedule = (
 			serial: string,
@@ -197,8 +201,28 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 		/** Profile change or disconnect: disarm and cancel a running capture. */
 		const reset = Effect.fn("GridVoice.reset")(function* (
 			serial: string,
+			reason: VoiceResetReason = "profileChanged",
 		): Effect.fn.Return<void> {
-			yield* apply(serial, (now) => ({ _tag: "reset", now }));
+			yield* lock.withPermits(1)(
+				Effect.gen(function* () {
+					const held = (
+						(yield* Ref.get(states)).get(serial) ?? initialHoldState
+					).held;
+					yield* applyUnlocked(serial, (now) => ({ _tag: "reset", now }));
+					// A released capture may already be processing; it still belongs to
+					// this device and must be cancelled before the renderer reset.
+					const flow = yield* surface.activeFlow(serial);
+					if (
+						Option.isSome(flow) &&
+						!Option.exists(
+							held,
+							(key) => key.phase === "capturing" && key.keyCode === flow.value,
+						)
+					)
+						yield* runtime.cancelFlow(serial, flow.value);
+					yield* surface.publish({ _tag: "Reset", serial, reason });
+				}),
+			);
 		});
 
 		const sendText = Effect.fn("GridVoice.sendText")(function* (
@@ -236,63 +260,68 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 		): Effect.fn.Return<void> {
 			yield* Effect.annotateCurrentSpan({ action, generation });
 			const captureId = `${KNOB_VOICE_KEY}/knob-${generation}`;
-			switch (action) {
-				case "holdStart": {
-					const flow = yield* surface.activeFlow(serial);
-					const reserved = Option.isSome(
-						((yield* Ref.get(states)).get(serial) ?? initialHoldState).held,
-					);
-					if (
-						reserved ||
-						Option.exists(flow, (keyCode) => keyCode !== KNOB_VOICE_KEY)
-					)
-						return yield* surface.rejectBusy(
-							serial,
-							KNOB_VOICE_KEY,
-							"aiAudio.prevTurnBusy",
-						);
-					if (Option.isSome(flow))
-						yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
-					return yield* runtime
-						.startCapture({
-							serial,
-							keyCode: KNOB_VOICE_KEY,
-							captureId,
-							generation,
-							type: "knob",
-							agentId: Option.none(),
-						})
-						.pipe(
-							Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
-								surface.publish({
-									_tag: "Stage",
+			return yield* lock.withPermits(1)(
+				Effect.gen(function* () {
+					switch (action) {
+						case "holdStart": {
+							const flow = yield* surface.activeFlow(serial);
+							const reserved = Option.isSome(
+								((yield* Ref.get(states)).get(serial) ?? initialHoldState).held,
+							);
+							if (
+								reserved ||
+								Option.exists(flow, (keyCode) => keyCode !== KNOB_VOICE_KEY)
+							)
+								return yield* surface.rejectBusy(
+									serial,
+									KNOB_VOICE_KEY,
+									"aiAudio.prevTurnBusy",
+								);
+							if (Option.isSome(flow))
+								yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
+							yield* surface.reserve(serial, KNOB_VOICE_KEY, captureId);
+							return yield* runtime
+								.startCapture({
 									serial,
 									keyCode: KNOB_VOICE_KEY,
 									captureId,
-									stage: {
-										_tag: "failed",
-										reason: "unavailable",
-										errorCode: error.code,
-									},
-								}),
-							),
-						);
-				}
-				case "release":
-					return yield* runtime.releaseCapture(
-						serial,
-						KNOB_VOICE_KEY,
-						generation,
-					);
-				case "interrupt":
-					return yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
-				case "cancel":
-					return yield* runtime.cancelCapture(
-						serial,
-						KNOB_VOICE_KEY,
-						generation,
-					);
-			}
+									generation,
+									type: "knob",
+									agentId: Option.none(),
+								})
+								.pipe(
+									Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+										surface.publish({
+											_tag: "Stage",
+											serial,
+											keyCode: KNOB_VOICE_KEY,
+											captureId,
+											stage: {
+												_tag: "failed",
+												reason: "unavailable",
+												errorCode: error.code,
+											},
+										}),
+									),
+								);
+						}
+						case "release":
+							return yield* runtime.releaseCapture(
+								serial,
+								KNOB_VOICE_KEY,
+								generation,
+							);
+						case "interrupt":
+							return yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
+						case "cancel":
+							return yield* runtime.cancelCapture(
+								serial,
+								KNOB_VOICE_KEY,
+								generation,
+							);
+					}
+				}),
+			);
 		});
 
 		return { input, reset, sendText, knob };

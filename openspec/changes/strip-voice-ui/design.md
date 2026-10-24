@@ -599,3 +599,44 @@ the mounted textarea even when coordinates are reused. Mock capture release
 and cancellation match both owning key and generation where supplied. Copilot
 appends every nonempty delta, including whitespace. These fixes refine the
 existing AI-184, AI-187, AI-193, AI-170, KNOB-042 and SCREEN-111 scenarios.
+
+## PR #28 review round 2
+
+A voice-enabled ClawBot selection tap clears Copilot's initializing state on
+key up. Only a recording status advances release to processing; a foreign
+key up cannot release the pending Copilot key.
+
+Main consumes the real DeviceBus status before forwarding it to renderers.
+Link loss immediately gates new input and knob starts, then calls GridVoice
+reset with reason disconnected. Reset takes priority over overdue deadlines,
+cancels held capture or the remaining active flow, and publishes a typed
+Reset event after cancellation. The renderer clears overlay/countdown,
+watchdog, alerts, live transcript, input revision and selection. Touch teardown
+on disconnect cancels delayed releases and emits no voiceTouchEnd. Reconnect
+permits new holds. An unknown link still permits the development fallback.
+
+The transcript merger records the prefix preceding the current hypothesis.
+Growing, shrinking and corrected hypotheses replace only that suffix.
+Final transcripts remain authoritative full replacements, as in recovered
+QuakeBotIconView.vue:1494-1507 and QuakeBotInputIconView.vue:388 onward.
+This fixes the recovered partial-merging defect under AI-164 and AI-187.
+
+Conversation capture identity and agent are separate from typed assistant
+selection. Selecting B cannot filter A's remaining recording events. Voice
+TurnStarted uses its authoritative prompt and event agent, falling back to
+the capture's agent when absent. Typed turns do not consume a live voice row.
+
+Renderer dispatch reads key maps only after a layout-effect commit. Requests
+use an Effect boundary with the catalog-tagged VoiceSurfaceRequestFailed and
+return its stable rejection code. The original cause remains private and
+diagnostics use the existing scrubber. History message bodies memoize their
+message identity; link callbacks depend on the stable request function and
+Intl formatters cache per supported locale. Code fences retain their opener's
+marker and length and reject closing lines with trailing non-whitespace.
+
+Grid and knob operations share the GridVoice lock. Before calling a capture
+adapter, they reserve its key and capture ID in VoiceSurface, since the first
+stage can arrive after startCapture returns. Unavailable starts publish their
+existing failed stage, which releases that reservation. Deferred-adapter tests
+cover both start orders without publishing a stage; taking the lock alone
+does not close the reservation gap.

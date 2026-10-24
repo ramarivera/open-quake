@@ -7,8 +7,14 @@ export interface LiveTranscript {
 	readonly text: string;
 	/** The last partial as received, trimmed. */
 	readonly last: string;
+	/** Earlier sentences, outside the recognizer's current hypothesis. */
+	readonly prefix: string;
 }
-export const emptyTranscript: LiveTranscript = { text: "", last: "" };
+export const emptyTranscript: LiveTranscript = {
+	text: "",
+	last: "",
+	prefix: "",
+};
 
 const stripBoundary = (value: string): string =>
 	value.replace(/[。，、；：！？．,;:!?…\s]+$/u, "");
@@ -33,43 +39,51 @@ export function mergePartial(
 	const previous = state.text;
 	const trimmed = previous.trimEnd();
 	const last = state.last;
+	let prefix = state.prefix;
 	let text: string;
 	if (last !== "" && next.length <= last.length && last.startsWith(next))
-		text = next;
-	else if (last !== "" && next.startsWith(last)) text = next;
+		text = prefix + next;
+	else if (last !== "" && next.startsWith(last)) text = prefix + next;
 	else if (
 		last !== "" &&
 		next.startsWith(stripBoundary(last)) &&
-		!collapses(trimmed, last, next)
+		!collapses(last, last, next)
 	)
-		text = next;
+		text = prefix + next;
 	else if (
 		trimmed !== "" &&
 		next.startsWith(stripBoundary(trimmed)) &&
 		!collapses(trimmed, trimmed, next)
-	)
+	) {
 		text = next;
-	else {
-		const lcp = commonPrefix(trimmed, next);
+		prefix = "";
+	} else {
+		// Compare a refresh against the current sentence, not accumulated speech.
+		const current = last || trimmed;
+		const lcp = commonPrefix(current, next);
+		const fullRefresh =
+			current.length >= 4 &&
+			next.length >= 8 &&
+			next.length + 2 >= current.length * 0.35 &&
+			lcp >=
+				Math.max(6, Math.floor(Math.min(current.length, next.length) * 0.5));
 		const shortTailAfterBreak =
+			!fullRefresh &&
 			trimmed.length >= 18 &&
 			next.length >= 2 &&
 			next.length < trimmed.length * 0.88 &&
 			lcp < Math.min(14, Math.max(3, Math.floor(trimmed.length * 0.12))) &&
 			!trimmed.endsWith(next);
-		const fullRefresh =
-			!shortTailAfterBreak &&
-			trimmed.length >= 4 &&
-			next.length >= 8 &&
-			next.length + 2 >= trimmed.length * 0.35 &&
-			lcp >=
-				Math.max(6, Math.floor(Math.min(trimmed.length, next.length) * 0.5));
-		if (shortTailAfterBreak)
-			text = trimmed + (trimmed.endsWith("\n") ? "" : "\n") + next;
-		else if (fullRefresh) text = next;
-		else text = previous + raw;
+		if (shortTailAfterBreak) {
+			prefix = `${trimmed}\n`;
+			text = prefix + next;
+		} else if (fullRefresh) text = prefix + next;
+		else {
+			text = previous + raw;
+			prefix = text.slice(0, text.length - next.length);
+		}
 	}
-	return { text, last: next };
+	return { text, last: next, prefix };
 }
 
 /** A final transcript replaces the row outright (QBV:1494-1507). */
@@ -77,5 +91,5 @@ export function applyFinal(state: LiveTranscript, raw: string): LiveTranscript {
 	const normalized = raw.replace(/\r\n?/g, "\n").trimEnd();
 	return normalized === ""
 		? state
-		: { text: normalized, last: normalized.trim() };
+		: { text: normalized, last: normalized.trim(), prefix: "" };
 }

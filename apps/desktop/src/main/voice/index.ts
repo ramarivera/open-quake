@@ -18,6 +18,7 @@ import {
 	VoiceSurfacePublisher,
 	VoiceTonePort,
 } from "../../../../../packages/edge/src/voice/surface/index.js";
+import type { QuakeEvent } from "../../preload/quake";
 import {
 	safeHttpUrl,
 	VOICE_REQUEST_CHANNEL,
@@ -139,6 +140,8 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	readonly publish: (event: VoiceSurfaceEvent) => Promise<void>;
 	/** The knob model's `voice` binding: knob holds drive the overlay. */
 	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
+	/** Called before forwarding device status to renderers. */
+	readonly onDevice: (event: QuakeEvent) => Promise<void>;
 	readonly dispose: () => Promise<void>;
 } {
 	const renderer =
@@ -149,6 +152,8 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	const run = <A>(
 		effect: Effect.Effect<A, never, GridVoice | VoiceSurface>,
 	): Promise<A> => runtime.runPromise(effect);
+	let disconnected = false;
+	let linkGeneration = 0;
 
 	const handle = async (
 		event: IpcMainInvokeEvent,
@@ -172,11 +177,18 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 					event.sender.send(VOICE_SURFACE_CHANNEL, encodeEvent(status));
 				return ok;
 			}
-			case "Input":
-				await run(GridVoice.input(serial, request.input));
-				return ok;
+			case "Input": {
+				const generation = linkGeneration;
+				return run(
+					Effect.suspend(() =>
+						disconnected || generation !== linkGeneration
+							? Effect.succeed(rejected("VOICE.SURFACE.DEVICE_DISCONNECTED"))
+							: GridVoice.input(serial, request.input).pipe(Effect.as(ok)),
+					),
+				);
+			}
 			case "Reset":
-				await run(GridVoice.reset(serial));
+				await run(GridVoice.reset(serial, request.reason));
 				return ok;
 			case "SendText":
 				return run(
@@ -242,9 +254,22 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	let shutdown: Promise<void> | undefined;
 	return {
 		publish: (event) => run(VoiceSurface.publish(event)),
+		onDevice: (event) => {
+			if (event.kind !== "status") return Promise.resolve();
+			disconnected = event.state !== "connected";
+			if (!disconnected) return Promise.resolve();
+			linkGeneration++;
+			return run(GridVoice.reset(options.serial(), "disconnected"));
+		},
 		knobVoice: ({ action, generation }) =>
 			Effect.promise(() =>
-				run(GridVoice.knob(options.serial(), action, generation)),
+				run(
+					Effect.suspend(() =>
+						disconnected && action === "holdStart"
+							? Effect.void
+							: GridVoice.knob(options.serial(), action, generation),
+					),
+				),
 			),
 		dispose: () => {
 			if (shutdown) return shutdown;

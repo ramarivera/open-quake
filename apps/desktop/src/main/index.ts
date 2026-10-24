@@ -373,6 +373,9 @@ if (!app.requestSingleInstanceLock()) {
 								() => [panelWin],
 							);
 							bus.on((event) => {
+								// Gate new holds synchronously and cancel in main before
+								// renderer touch teardown can synthesize a normal release.
+								void voice.onDevice(event);
 								forward(event);
 								if (event.kind === "status") {
 									void lifecycle.then((service) =>
@@ -401,6 +404,12 @@ if (!app.requestSingleInstanceLock()) {
 			running = undefined;
 			if (fiber) {
 				stopping = stopping.then(async () => {
+					await voice.onDevice({
+						source: mock ? "mock" : "hid",
+						kind: "status",
+						state: "disconnected",
+						reason: "scope-closed",
+					});
 					if (mock) await profiles.disconnect("desktop-preview");
 					await lifecycle.then((service) =>
 						lifecycleRuntime.runPromise(service.lock()),

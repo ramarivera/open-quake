@@ -22,6 +22,7 @@ import {
 	voiceFixtureEnvelope,
 } from "../test/voice-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "./index";
+import { reviewRound2Smoke } from "./review-round-2-smoke";
 import { reviewSmoke } from "./review-smoke";
 import { waitForVoice } from "./smoke-wait";
 
@@ -464,6 +465,7 @@ async function smoke(): Promise<void> {
 	await voice.dispose();
 	await profiles.dispose();
 	await reviewSmoke(panel, renderer, SERIAL, capture);
+	await reviewRound2Smoke(panel, renderer, SERIAL, capture);
 	await knobRegistration.dispose();
 	await media.dispose();
 	panel.destroy();

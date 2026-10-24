@@ -30,11 +30,13 @@ export type RichText =
 	| { readonly _tag: "markdown"; readonly blocks: readonly Block[] };
 
 const BLOCK_START = /^(#{1,6} |[-*+] |\d+\. |> )/;
+const FENCE_START = /^(`{3,}|~{3,})(.*)$/;
 /** quakeChatMarkdown.js:14-25 */
 export function looksLikeMarkdown(text: string): boolean {
 	return (
 		text.split("\n").some((line) => BLOCK_START.test(line.trimStart())) ||
 		text.includes("```") ||
+		text.split("\n").some((line) => FENCE_START.test(line.trimStart())) ||
 		/\*\*[^*]+\*\*/.test(text) ||
 		/__[^_]+__/.test(text)
 	);
@@ -106,15 +108,23 @@ export function parseBlocks(text: string): readonly Block[] {
 	for (let index = 0; index < lines.length; index++) {
 		const line = lines[index] ?? "";
 		const trimmed = line.trimStart();
-		if (trimmed.startsWith("```")) {
+		const fence = FENCE_START.exec(trimmed)?.[1];
+		if (fence) {
 			flush();
 			const code: string[] = [];
 			index++;
-			while (
-				index < lines.length &&
-				!(lines[index] ?? "").trimStart().startsWith("```")
-			)
+			while (index < lines.length) {
+				const closing = /^(`+|~+)[\t ]*$/.exec(
+					(lines[index] ?? "").trimStart(),
+				)?.[1];
+				if (
+					closing &&
+					closing[0] === fence[0] &&
+					closing.length >= fence.length
+				)
+					break;
 				code.push(lines[index++] ?? "");
+			}
 			blocks.push({ _tag: "code", text: code.join("\n") });
 			continue;
 		}

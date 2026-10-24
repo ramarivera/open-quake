@@ -154,6 +154,7 @@ vi.mock("./voice", async () => {
 		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
 		toneSinks: vi.fn(() => ({ play: vi.fn() })),
 		registerVoiceSurface: vi.fn(() => ({
+			onDevice: vi.fn(async () => undefined),
 			publish: vi.fn(async () => undefined),
 			knobVoice: vi.fn(() => Effect.void),
 			dispose: vi.fn(async () => undefined),

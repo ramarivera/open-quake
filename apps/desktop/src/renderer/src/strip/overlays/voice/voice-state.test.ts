@@ -108,6 +108,166 @@ const statusOf = (view: VoiceView) =>
 	);
 
 describe("AI Copilot through the voice store", () => {
+	it("keeps voice A's ownership and authoritative prompt when typed-only B is selected", () => {
+		const typedKeys = new Map(keys).set("1,7", {
+			type: "clawbot",
+			title: Option.some("Coder"),
+			agentId: Option.some("code"),
+			voiceInput: false,
+		});
+		let view = initialVoiceView;
+		const send = (event: VoiceSurfaceEvent) => {
+			view = reduceVoice(view, { _tag: "event", event }, typedKeys, 0);
+		};
+		send(key("1,5", "down"));
+		send(
+			stage("1,5", {
+				_tag: "recording",
+				status: "speaking",
+				transcript: "What is",
+			}),
+		);
+		send(key("1,7", "down"));
+		send(key("1,7", "up"));
+		expect(view.input.agentId).toEqual(Option.some("code"));
+		expect(view.conversation.activeKey).toEqual(Option.some("1,7"));
+		send(
+			stage("1,5", {
+				_tag: "recording",
+				status: "speaking",
+				transcript: "What is the weather",
+			}),
+		);
+		expect(
+			Option.map(view.conversation.live, (row) => row.transcript.text),
+		).toEqual(Option.some("What is the weather"));
+		expect(
+			Option.flatMap(view.conversation.live, (row) => row.agentName),
+		).toEqual(Option.some("Weather"));
+		send(
+			stage("1,5", {
+				_tag: "processing",
+				transcript: "What is the weather today?",
+			}),
+		);
+		expect(
+			Option.map(view.conversation.live, (row) => row.transcript.text),
+		).toEqual(Option.some("What is the weather today?"));
+		// Even if the last displayed hypothesis differs, the turn prompt wins.
+		send({
+			_tag: "TurnStarted",
+			serial: "QK",
+			keyCode: "1,5",
+			sessionId,
+			turnId,
+			source: "voice",
+			prompt: "What is the weather today? Final correction.",
+		});
+		const group = view.conversation.groups.at(-1);
+		expect(group?.agent).toEqual({ id: "weather", name: "Weather", icon: 0 });
+		expect(group?.messages[0]).toMatchObject({
+			_tag: "text",
+			isVoice: true,
+			text: {
+				_tag: "literal",
+				text: "What is the weather today? Final correction.",
+			},
+		});
+		expect(view.conversation.live).toEqual(Option.none());
+		expect(view.conversation.capture).toEqual(Option.none());
+		expect(view.input.agentId).toEqual(Option.some("code"));
+	});
+	it("preserves the transcript prefix in both the live row and input through growing, shrinking and final updates", () => {
+		let view = play([key("1,5", "down")]);
+		const steps: readonly (readonly [VoiceStage, string])[] = [
+			[
+				{
+					_tag: "recording",
+					status: "speaking",
+					transcript: "This is the first sentence.",
+				},
+				"This is the first sentence.",
+			],
+			...["Next", "Next sentence", "Next", "Next sentence corrected"].map(
+				(transcript): readonly [VoiceStage, string] => [
+					{ _tag: "recording", status: "speaking", transcript },
+					`This is the first sentence.\n${transcript}`,
+				],
+			),
+			[
+				{
+					_tag: "processing",
+					transcript: "This is the first sentence.\r\nNext sentence final\r\n",
+				},
+				"This is the first sentence.\nNext sentence final",
+			],
+		];
+		for (const [update, expected] of steps) {
+			view = play([stage("1,5", update)], view);
+			expect(view.input.voice.text).toBe(expected);
+			expect(
+				Option.map(view.conversation.live, (row) => row.transcript.text),
+			).toEqual(Option.some(expected));
+		}
+	});
+	it("clears selection-only ClawBot taps and accepts the next key's answer", () => {
+		const tapped = play([key("1,5", "down"), key("1,5", "up")]);
+		expect(tapped.copilot.activeKey).toEqual(Option.none());
+		expect(tapped.copilot.status).toEqual(Option.none());
+		expect(tapped.copilot.statusSince).toEqual(Option.none());
+		expect(tapped.copilot.statusText).toEqual(Option.none());
+		expect(cancelIndicatorKey(tapped)).toEqual(Option.none());
+		expect(tapped.input.agentId).toEqual(Option.some("weather"));
+		const answered = play(
+			[
+				key("1,6", "down"),
+				stage("1,6", { _tag: "recording", status: "listening" }),
+				key("1,6", "up"),
+				chunk(0, { type: "answer", textDelta: "next answer" }),
+				chunk(1, { type: "end", outcome: "completed" }),
+			],
+			tapped,
+		);
+		expect(answered.copilot.text).toBe("next answer\n");
+	});
+	it("a captured ClawBot release processes, while a foreign up cannot change it", () => {
+		const capturing = play([
+			key("1,5", "down"),
+			stage("1,5", { _tag: "recording", status: "listening" }),
+		]);
+		expect(play([key("1,6", "up")], capturing).copilot).toEqual(
+			capturing.copilot,
+		);
+		const released = play([key("1,5", "up")], capturing);
+		expect(cancelIndicatorKey(released)).toEqual(Option.some("1,5"));
+	});
+	it("disconnect reset clears mounted voice state, countdowns and expiry deadlines", () => {
+		const busy = play([
+			key("1,5", "down"),
+			stage("1,5", {
+				_tag: "recording",
+				status: "speaking",
+				transcript: "unfinished",
+			}),
+			stage("0,1", { _tag: "failed", reason: "server" }),
+			{ _tag: "Toast", serial: "QK", messageKey: "aiIconViewTxt.busyToast" },
+		]);
+		const reset = play(
+			[{ _tag: "Reset", serial: "QK", reason: "disconnected" }],
+			busy,
+		);
+		expect(reset.overlay.visible).toBe(false);
+		expect(reset.overlay.countdown).toEqual(Option.none());
+		expect(reset.bar.visible).toBe(false);
+		expect(reset.copilot.activeKey).toEqual(Option.none());
+		expect(reset.input.voice.text).toBe("");
+		expect(reset.input.revision).toBeGreaterThan(busy.input.revision);
+		expect(reset.conversation.live).toEqual(Option.none());
+		expect(reset.activeClawbot).toEqual(Option.none());
+		expect(reset.alerts.size).toBe(0);
+		expect(reset.toasts).toEqual([]);
+		expect(nextExpiry(reset)).toEqual(Option.none());
+	});
 	it("preserves standalone whitespace deltas in the displayed and copied answer", () => {
 		const deltas = ["hello", " ", "world", "\n", "  ", "next", ""];
 		const view = play([

@@ -107,6 +107,15 @@ function routeEvent(
 	const toConversation = (keyCode: string): boolean =>
 		typeOf(keyCode) === "clawbot" || typeOf(keyCode) === "knob";
 	switch (event._tag) {
+		case "Reset": {
+			const reset = reduceVoice(view, { _tag: "profileReset" }, keys, now);
+			return {
+				...reset,
+				overlay: initialOverlay,
+				alerts: new Map(),
+				toasts: [],
+			};
+		}
 		case "Stage": {
 			let next: VoiceView = { ...view, bar: reduceBarStage(view.bar, event) };
 			if (isKnobVoiceKey(event.keyCode))

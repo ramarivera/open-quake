@@ -39,6 +39,28 @@ const sessionId = Schema.decodeUnknownSync(SessionId)(
 const turnId = Schema.decodeUnknownSync(TurnId)(
 	"00000000-0000-4000-8000-000000000022",
 );
+
+describe("code fence boundaries", () => {
+	it.each([
+		["````md\n```\ninner\n```\n````\nafter", "```\ninner\n```"],
+		["~~~js\nconst x = 1;\n```\n~~~~\nafter", "const x = 1;\n```"],
+		[
+			"```\ncode\n``` trailing text\nmore\n```\nafter",
+			"code\n``` trailing text\nmore",
+		],
+		["~~~~\ncode\n~~~\nmore\n~~~~~ \t\nafter", "code\n~~~\nmore"],
+	])("keeps nested or invalid closing lines inside code", (text, expected) => {
+		const parsed = parseRichText(text);
+		expect(parsed._tag).toBe("markdown");
+		if (parsed._tag === "markdown") {
+			expect(parsed.blocks[0]).toEqual({ _tag: "code", text: expected });
+			expect(parsed.blocks[1]).toEqual({
+				_tag: "paragraph",
+				inlines: [{ _tag: "text", text: "after" }],
+			});
+		}
+	});
+});
 const tiles = (() => {
 	const envelope = Schema.decodeUnknownSync(ProfileEnvelope)(
 		voiceFixtureEnvelope(dkClawProfile, "QK"),
@@ -69,6 +91,31 @@ describe("live transcript merge (AI-164)", () => {
 		expect(feed("The meeting starts at nine", "Bring slides")).toBe(
 			"The meeting starts at nine\nBring slides",
 		);
+	});
+	it("keeps earlier sentences while the current partial grows, shrinks and refreshes", () => {
+		const prefix = "This is the first sentence.\n";
+		let state = mergePartial(emptyTranscript, "This is the first sentence.");
+		for (const partial of [
+			"Next",
+			"Next sentence",
+			"Next",
+			"Next sentence for ten",
+			"Next sentence for two minutes",
+			"Next sentence for two minutes.",
+		]) {
+			state = mergePartial(state, partial);
+			expect(state.text).toBe(prefix + partial);
+			expect(mergePartial(state, partial)).toBe(state);
+		}
+		state = mergePartial(state, "Third");
+		state = mergePartial(state, "Third sentence");
+		expect(state.text).toBe(
+			`${prefix}Next sentence for two minutes.\nThird sentence`,
+		);
+		const final = applyFinal(state, "Authoritative final transcript\r\n");
+		expect(final.text).toBe("Authoritative final transcript");
+		expect(final.prefix).toBe("");
+		expect(applyFinal(final, "")).toBe(final);
 	});
 	it("replaces on a full-hypothesis refresh", () => {
 		expect(feed("set a timer for ten", "set a timer for two minutes")).toBe(

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Layer, Option, TestClock } from "effect";
+import {
+	Deferred,
+	Duration,
+	Effect,
+	Fiber,
+	Layer,
+	Option,
+	TestClock,
+} from "effect";
 import { GridVoice } from "./grid-voice-service.js";
 import { MockVoiceRuntimeLive } from "./mock-voice-runtime.js";
 import type {
@@ -78,6 +86,112 @@ const input = (
 const at = (ms: number) => TestClock.adjust(Duration.millis(ms));
 
 describe("GridVoice", () => {
+	for (const knobFirst of [true, false])
+		it.scoped(
+			`reserves ${knobFirst ? "knob" : "grid"} capture while its adapter is deferred and before any Stage`,
+			() => {
+				const rec = recorder();
+				return Effect.gen(function* () {
+					const started = yield* Deferred.make<void>();
+					const finishStart = yield* Deferred.make<void>();
+					const delayed = Layer.succeed(GridVoiceRuntime, {
+						select: () => Effect.void,
+						startCapture: (request) =>
+							Effect.gen(function* () {
+								rec.calls.push(`start ${request.keyCode}`);
+								yield* Deferred.succeed(started, undefined);
+								yield* Deferred.await(finishStart);
+							}),
+						releaseCapture: () => Effect.void,
+						cancelCapture: () => Effect.void,
+						cancelFlow: () => Effect.void,
+						sendText: () => Effect.void,
+					});
+					yield* Effect.gen(function* () {
+						if (!knobFirst) yield* GridVoice.input("QK", input("1,6", "down"));
+						const first = yield* (
+							knobFirst ? GridVoice.knob("QK", "holdStart", 1) : at(1000)
+						).pipe(Effect.forkScoped);
+						yield* Deferred.await(started);
+						const contender = yield* (
+							knobFirst
+								? GridVoice.input("QK", input("1,6", "down"))
+								: GridVoice.knob("QK", "holdStart", 1)
+						).pipe(Effect.forkScoped);
+						yield* Effect.yieldNow();
+						expect(rec.calls).toEqual([`start ${knobFirst ? "0,1" : "1,6"}`]);
+						yield* Deferred.succeed(finishStart, undefined);
+						yield* Fiber.join(first);
+						yield* Fiber.join(contender);
+						yield* at(2000);
+						expect(rec.calls).toHaveLength(1);
+						expect(rec.events).toContainEqual(
+							expect.objectContaining({
+								_tag: "Stage",
+								keyCode: knobFirst ? "1,6" : "0,1",
+								stage: { _tag: "busy" },
+							}),
+						);
+						expect(yield* VoiceSurface.activeFlow("QK")).toEqual(
+							Option.some(knobFirst ? "0,1" : "1,6"),
+						);
+						yield* GridVoice.reset("QK", "disconnected");
+						expect(yield* VoiceSurface.activeFlow("QK")).toEqual(Option.none());
+					}).pipe(Effect.provide(stack(rec, delayed)));
+				});
+			},
+		);
+	it.scoped(
+		"disconnect cancels a capture inside release grace without submitting it",
+		() => {
+			const rec = recorder();
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1500);
+				yield* GridVoice.input("QK", input("1,6", "touchEnd"));
+				yield* at(349);
+				yield* GridVoice.reset("QK", "disconnected");
+				yield* at(5000);
+				expect(
+					rec.events.some(
+						(event) =>
+							event._tag === "TurnStarted" ||
+							event._tag === "Chunk" ||
+							(event._tag === "Stage" && event.stage._tag === "processing"),
+					),
+				).toBe(false);
+				expect(rec.events.at(-1)).toEqual({
+					_tag: "Reset",
+					serial: "QK",
+					reason: "disconnected",
+				});
+				expect(rec.events).toContainEqual(
+					expect.objectContaining({
+						_tag: "Stage",
+						keyCode: "1,6",
+						stage: { _tag: "idle", outcome: "cancelled" },
+					}),
+				);
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(Option.none());
+			}).pipe(Effect.provide(stack(rec, MockVoiceRuntimeLive)));
+		},
+	);
+	it.scoped(
+		"disconnect before the long press prevents capture and frees the next generation",
+		() => {
+			const rec = recorder();
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(999);
+				yield* GridVoice.reset("QK", "disconnected");
+				yield* at(5000);
+				expect(rec.calls).toEqual(["select 1,6"]);
+				yield* GridVoice.input("QK", input("1,7", "down"));
+				yield* at(1000);
+				expect(rec.calls).toEqual(["select 1,6", "select 1,7", "start 1,7 #2"]);
+			}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+		},
+	);
 	it.scoped("selects typed-only assistants without arming hold-to-talk", () => {
 		const rec = recorder();
 		return Effect.gen(function* () {
@@ -211,6 +325,7 @@ describe("GridVoice", () => {
 						errorCode: "VOICE.GRID.RUNTIME_UNAVAILABLE",
 					},
 				});
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(Option.none());
 				expect(rec.tones).toEqual(["error"]);
 				expect(rec.events.some((event) => event._tag === "KeyAlert")).toBe(
 					true,
@@ -297,6 +412,7 @@ describe("knob voice seam", () => {
 				stage: { _tag: "failed", reason: "unavailable" },
 			});
 			expect(rec.tones).toEqual(["error"]);
+			expect(yield* VoiceSurface.activeFlow("QK")).toEqual(Option.none());
 		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec, false))));
 	});
 });

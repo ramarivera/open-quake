@@ -127,16 +127,10 @@ export function reduceCopilot(
 				? { ...state, keyStatus: 1 }
 				: state;
 		case "keyUp": {
+			if (!Option.contains(state.activeKey, event.keyCode)) return state;
 			if (state.keyStatus === 0) return state;
 			const up = { ...state, keyStatus: 0 as const };
 			const status = Option.getOrUndefined(state.status);
-			if (Option.contains(state.activeKeyType, "clawbot"))
-				return status === 3 || status === 0
-					? {
-							...withStatus(up, Option.some(1), now),
-							statusText: statusText(1),
-						}
-					: reset(up);
 			if (status === 3)
 				return {
 					...withStatus(up, Option.some(1), now),
