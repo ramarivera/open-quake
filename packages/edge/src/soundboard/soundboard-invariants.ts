@@ -78,7 +78,7 @@ export function soundPaths(
 			} catch (cause) {
 				return Either.left(new SoundboardConfigInvalid(cause));
 			}
-		} else parsed = [value];
+		} else parsed = [raw];
 	}
 	const paths = Schema.decodeUnknownEither(PathList)(parsed);
 	if (Either.isLeft(paths))

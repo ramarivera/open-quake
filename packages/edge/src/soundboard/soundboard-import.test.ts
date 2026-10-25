@@ -52,6 +52,25 @@ describe("soundboard review-only import", () => {
 			expect(preview.issues).toEqual(["unverifiedFiles"]);
 		},
 	);
+	test("preserves a single selected path exactly, including filename whitespace", async () => {
+		const raw = "/music/a.mp3 ";
+		const visited: string[] = [];
+		const preview = await Effect.runPromise(
+			run(
+				legacy({ sound: raw }),
+				Layer.succeed(SoundboardFiles, {
+					inspect: (path) =>
+						Effect.sync(() => {
+							visited.push(path);
+							return "available" as const;
+						}),
+				}),
+			),
+		);
+		expect(visited).toEqual([raw]);
+		expect(preview.entries[0]).toMatchObject({ path: raw, status: "notMp3" });
+	});
+
 	test("accepts the actual saved playAudio actions shape and rejects duplicate fields", async () => {
 		const actions = Object.entries(legacy()).map(([type, value]) => ({
 			type,
