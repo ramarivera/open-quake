@@ -1,4 +1,8 @@
 import { useId, useState } from "react";
+import {
+	LanguageControl,
+	useLanguageLabel,
+} from "../management/LanguageControl";
 import { Callout, Group, PageHeader, Row, Segmented } from "../ui/Form";
 import type { MotionPreference, ThemeSelection } from "./appearance";
 import { customThemeTokens, loadCustomThemeFile } from "./customTheme";
@@ -71,6 +75,7 @@ export function ThemeSettings({
 		importTheme,
 	} = controller;
 	const custom = appearance.customTheme;
+	const languageLabel = useLanguageLabel();
 	const choices: ReadonlyArray<{
 		value: ThemeSelection;
 		label: string;
@@ -140,6 +145,18 @@ export function ThemeSettings({
 						);
 					})}
 				</div>
+			</Group>
+
+			<Group
+				title={languageLabel}
+				description="Saved for every open-quake window. Conversations and generated text stay in the language they were written in."
+			>
+				<Row label={languageLabel} labelId={`${ids}-language`}>
+					<LanguageControl
+						name={`${ids}-language`}
+						labelledBy={`${ids}-language`}
+					/>
+				</Row>
 			</Group>
 
 			<Group title="Motion">

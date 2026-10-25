@@ -407,6 +407,13 @@ body[data-resizing] {
 	padding: 0 6px;
 }
 
+.mc-language-error {
+	display: block;
+	margin-top: 6px;
+	color: var(--oq-danger);
+	font-size: var(--mc-font-meta);
+}
+
 /* Content column */
 
 .content {

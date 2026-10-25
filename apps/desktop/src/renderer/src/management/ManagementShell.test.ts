@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
+import { AppLocaleProvider } from "../i18n";
 import { defaultAppearance } from "../theme/appearance";
 import type { AppearanceController } from "../theme/useAppearance";
 import { PageHeader } from "../ui/Form";
@@ -24,27 +25,31 @@ function render(narrow: boolean, page: "keys" | "agents" = "keys"): string {
 		}),
 	});
 	return renderToStaticMarkup(
-		createElement(
-			ManagementShell,
-			{
-				page,
-				onOpen: () => {},
-				connection: {
-					tone: "simulated",
-					label: "Simulated",
-					headline: "Simulated QUAKE",
-					detail: "Development mode.",
-					link: null,
-					code: null,
+		createElement(AppLocaleProvider, {
+			bridge: undefined,
+			// biome-ignore lint/correctness/noChildrenProp: the provider types children as a required prop, so createElement must receive it there.
+			children: createElement(
+				ManagementShell,
+				{
+					page,
+					onOpen: () => {},
+					connection: {
+						tone: "simulated",
+						label: "Simulated",
+						headline: "Simulated QUAKE",
+						detail: "Development mode.",
+						link: null,
+						code: null,
+					},
+					runtimeStatus: "unknown",
+					runtimeLabel: "Checking agent runtime",
+					appearance,
+					contentRef: { current: null },
+					deviceReady: false,
 				},
-				runtimeStatus: "unknown",
-				runtimeLabel: "Checking agent runtime",
-				appearance,
-				contentRef: { current: null },
-				deviceReady: false,
-			},
-			createElement(PageHeader, { title: "Keys" }),
-		),
+				createElement(PageHeader, { title: "Keys" }),
+			),
+		}),
 	);
 }
 

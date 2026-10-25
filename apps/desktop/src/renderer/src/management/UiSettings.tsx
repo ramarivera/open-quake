@@ -3,6 +3,7 @@ import { builtinThemeOrder, themeLabels } from "../theme/tokens";
 import type { AppearanceController } from "../theme/useAppearance";
 import { Segmented } from "../ui/Form";
 import { TextSizeIcon } from "../ui/icons";
+import { LanguageControl, useLanguageLabel } from "./LanguageControl";
 
 /** Sidebar footer popover for the two settings people change most often. */
 export function UiSettings({
@@ -37,6 +38,7 @@ export function UiSettings({
 		};
 	}, [open]);
 	const theme = controller.appearance.theme;
+	const languageLabel = useLanguageLabel();
 	return (
 		<div className="mc-ui-settings-host" ref={host}>
 			<button
@@ -86,6 +88,8 @@ export function UiSettings({
 						}))}
 						onChange={controller.setTheme}
 					/>
+					<p id="mc-language-label">{languageLabel}</p>
+					<LanguageControl name="mc-language" labelledBy="mc-language-label" />
 				</section>
 			) : null}
 		</div>
