@@ -15,6 +15,8 @@ export const MenuProfile = Schema.Struct({
 	id,
 	name: id,
 	colorful: Schema.Boolean,
+	/** Content and locale identity supplied by the thumbnail owner. */
+	thumbnailKey: Schema.optional(Schema.NonEmptyString),
 	thumbnail: Thumbnail,
 });
 export type MenuProfile = typeof MenuProfile.Type;

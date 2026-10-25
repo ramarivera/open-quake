@@ -8,7 +8,10 @@ import {
 } from "./profile-errors.js";
 import type { ProfilePlatform } from "./profile-manager-contracts.js";
 import { managerState, visibleProfiles } from "./profile-manager-invariants.js";
-import { ProfileRepository } from "./profile-repository.js";
+import {
+	type ProfileCommitGuard,
+	ProfileRepository,
+} from "./profile-repository.js";
 import {
 	type ForegroundApp,
 	foregroundChanged,
@@ -26,9 +29,11 @@ export class ProfileSwitchingPort extends Context.Tag(
 			Option.Option<ForegroundApp>,
 			ProfileForegroundFailed
 		>;
+		/** Recheck guarded ownership after awaits before publishing to a device consumer. */
 		readonly push: (
 			serial: string,
 			profile: Profile,
+			guard?: ProfileCommitGuard,
 		) => Effect.Effect<void, ProfileDeliveryFailed>;
 	}
 >() {}
@@ -40,6 +45,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 			const repository = yield* ProfileRepository;
 			const port = yield* ProfileSwitchingPort;
 			const sessions = new Set<string>();
+			const lifetimes = new Map<string, number>();
 			const generations = new Map<string, number>();
 			let previous: Option.Option<ForegroundApp> = Option.none();
 			let lastRevision = -1;
@@ -89,6 +95,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 				if (sessions.has(serial)) return;
 				// Reserve before storage yields. A disconnect also invalidates this initialization.
 				sessions.add(serial);
+				lifetimes.set(serial, (lifetimes.get(serial) ?? 0) + 1);
 				const generation = (generations.get(serial) ?? 0) + 1;
 				generations.set(serial, generation);
 				yield* Effect.gen(function* () {
@@ -124,6 +131,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 					Effect.sync(() => {
 						sessions.delete(serial);
 						generations.set(serial, (generations.get(serial) ?? 0) + 1);
+						lifetimes.set(serial, (lifetimes.get(serial) ?? 0) + 1);
 					}),
 			);
 			const probe = Effect.fn("ProfileSwitching.probe")(
@@ -213,15 +221,31 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 			);
 
 			return {
+				/** Captured before waiting for the repository, invalid even after same-serial reconnect. */
+				sessionOwnership: Effect.fn("ProfileSwitching.sessionOwnership")(
+					(serial: string): Effect.Effect<() => boolean> =>
+						Effect.sync(() => {
+							const lifetime = lifetimes.get(serial);
+							return () =>
+								sessions.has(serial) && lifetimes.get(serial) === lifetime;
+						}),
+				),
 				/** Called under the manager transaction; never reacquires its repository lock. */
 				deliver: Effect.fn("ProfileSwitching.deliver")(
 					(
 						serial: string,
 						profile: Profile,
+						guard?: ProfileCommitGuard,
 					): Effect.Effect<void, ProfileDeliveryFailed> =>
 						Effect.sync(() => {
 							generations.set(serial, (generations.get(serial) ?? 0) + 1);
-						}).pipe(Effect.zipRight(port.push(serial, profile))),
+						}).pipe(
+							Effect.zipRight(
+								guard
+									? port.push(serial, profile, guard)
+									: port.push(serial, profile),
+							),
+						),
 				),
 				connect,
 				disconnect,

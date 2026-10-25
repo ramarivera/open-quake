@@ -1,8 +1,17 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Deferred, Effect, Array as EffectArray, Fiber, Schema } from "effect";
+import {
+	Deferred,
+	Effect,
+	Array as EffectArray,
+	Fiber,
+	Layer,
+	Schema,
+} from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { KnobModelPorts } from "../../../../../packages/device/src/knob/model/ports.js";
+import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
@@ -102,7 +111,7 @@ describe("profile manager to knob thumbnail handoff", () => {
 		await Effect.runPromise(adapter.ports.warmThumbnails(edited.profiles));
 		expect(thumbnail).toHaveBeenCalledTimes(5);
 	});
-	it("discards a late old-content capture and skips corrupt files without poisoning other menu entries", async () => {
+	it("discards late old-content captures and recaptures corrupt files without poisoning other entries", async () => {
 		const root = await fixture();
 		let saved = initial();
 		const old = saved.profiles[0];
@@ -115,13 +124,13 @@ describe("profile manager to knob thumbnail handoff", () => {
 				select: () => Effect.succeed(saved),
 			},
 			thumbnail: async (id, locale) => {
-				if (id === old.id) {
+				if (id === old.id && saved.profiles[0]?.name === old.name) {
 					await Effect.runPromise(Deferred.succeed(entered, undefined));
 					await Effect.runPromise(Deferred.await(release));
 					return store.write(old, locale, png);
 				}
 				return store.write(
-					saved.profiles.find((p) => p.id === "second") ?? old,
+					saved.profiles.find((p) => p.id === id) ?? old,
 					locale,
 					png,
 				);
@@ -156,7 +165,90 @@ describe("profile manager to knob thumbnail handoff", () => {
 		const partial = await Effect.runPromise(
 			adapter.ports.warmThumbnails(next.profiles),
 		);
-		expect(partial.map((p) => p.thumbnail._tag)).toEqual(["missing", "ready"]);
+		expect(partial.map((p) => p.thumbnail._tag)).toEqual(["ready", "ready"]);
+	});
+	it("keeps valid warmed images but never restores content or locale-invalidated images through the domain commit", async () => {
+		const root = await fixture();
+		let saved = initial();
+		saved = {
+			...saved,
+			profiles: [
+				...saved.profiles,
+				{ ...saved.profiles[0], id: "third", name: "Third" },
+			],
+		};
+		let locale: ProfileLocale = "en";
+		const store = createProfileThumbnailStore(join(root, "profiles"));
+		for (const source of saved.profiles) await store.write(source, locale, png);
+		const adapter = desktopKnobAdapters(root, {
+			locale: () => locale,
+			profiles: {
+				read: Effect.sync(() => saved),
+				select: () => Effect.sync(() => saved),
+			},
+		});
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const model = yield* KnobModel;
+					const context = yield* adapter.load;
+					const profiles = yield* adapter.ports.warmThumbnails(
+						context.profiles,
+					);
+					yield* model.configure({ ...context, profiles });
+					saved = {
+						...saved,
+						profiles: EffectArray.map(saved.profiles, (p) =>
+							p.id === "first" ? { ...p, name: "Edited without revision" } : p,
+						),
+					};
+					yield* model.dispatch({
+						_tag: "Rotate",
+						sessionId: context.session.sessionId,
+						delta: 1,
+					});
+					yield* model.dispatch({
+						_tag: "Select",
+						sessionId: context.session.sessionId,
+						profileId: "second",
+					});
+					const edited = yield* model.snapshot();
+					expect(edited.context.profiles.map((p) => p.thumbnail._tag)).toEqual([
+						"missing",
+						"ready",
+						"ready",
+					]);
+					expect(edited.context.profiles[0]?.thumbnailKey).not.toBe(
+						profiles[0]?.thumbnailKey,
+					);
+					expect(edited.context.profiles[1]?.thumbnail).toEqual(
+						profiles[1]?.thumbnail,
+					);
+					locale = "de";
+					yield* model.dispatch({
+						_tag: "Rotate",
+						sessionId: edited.context.session.sessionId,
+						delta: 1,
+					});
+					yield* model.dispatch({
+						_tag: "Select",
+						sessionId: edited.context.session.sessionId,
+						profileId: "third",
+					});
+					expect(
+						(yield* model.snapshot()).context.profiles.every(
+							(p) => p.thumbnail._tag === "missing",
+						),
+					).toBe(true);
+				}),
+			).pipe(
+				Effect.provide(
+					KnobModel.DefaultWithoutDependencies.pipe(
+						Layer.provide(Layer.succeed(KnobModelPorts, adapter.ports)),
+					),
+				),
+			),
+		);
 	});
 	it("passes cancellation to the manager and does not publish an interrupted capture", async () => {
 		const root = await fixture();
