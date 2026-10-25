@@ -444,3 +444,79 @@ describe("production voice consumer", () => {
 			),
 	);
 });
+
+it.effect(
+	"serializes overlapping Read Aloud replacement before acquiring a second playback",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const profilesEntered = yield* Queue.unbounded<void>();
+				const profilesReleased = yield* Queue.unbounded<void>();
+				const acquisitions = yield* Queue.unbounded<void>();
+				let live = 0,
+					peak = 0,
+					cancelled = 0;
+				yield* Effect.gen(function* () {
+					const original = yield* AiSpeechService;
+					const speech = AiSpeechService.make({
+						...original,
+						createSpeech: () =>
+							Effect.gen(function* () {
+								live++;
+								peak = Math.max(peak, live);
+								yield* Queue.offer(acquisitions, undefined);
+								const done =
+									yield* Deferred.make<
+										import("../../../../../packages/edge/src/ai/speech/speech-service").SpeechOutcome
+									>();
+								return {
+									result: Deferred.await(done),
+									cancel: () =>
+										Effect.sync(() => {
+											live--;
+											cancelled++;
+										}).pipe(
+											Effect.zipRight(
+												Deferred.succeed(done, { _tag: "cancelled" }),
+											),
+											Effect.asVoid,
+										),
+								};
+							}),
+					});
+					const controller = yield* createProductionVoiceRuntime({
+						speech,
+						capture: {
+							permission: Effect.succeed(false),
+							open: () => Effect.never,
+						},
+						profiles: () =>
+							Queue.offer(profilesEntered, undefined).pipe(
+								Effect.zipRight(Queue.take(profilesReleased)),
+								Effect.as({ speakAnswers: false, tts: ttsProfile }),
+							),
+						sendText: () => Effect.void,
+						sendTranscript: () => Effect.void,
+					});
+					const first = yield* controller.readAloud("one").pipe(Effect.fork);
+					yield* Queue.take(profilesEntered);
+					const second = yield* controller.readAloud("two").pipe(Effect.fork);
+					yield* tick;
+					yield* Queue.offer(profilesReleased, undefined);
+					yield* Queue.take(acquisitions);
+					yield* Queue.take(profilesEntered);
+					yield* Queue.offer(profilesReleased, undefined);
+					yield* Queue.take(acquisitions);
+					expect(peak).toBe(1);
+					expect(cancelled).toBe(1);
+					yield* controller.cancelSpeech();
+					expect(yield* Fiber.join(first)).toEqual({ _tag: "cancelled" });
+					expect(yield* Fiber.join(second)).toEqual({ _tag: "cancelled" });
+				}).pipe(
+					Effect.provide(
+						Layer.mergeAll(surfaceLayer([]), AiSpeechService.Default),
+					),
+				);
+			}),
+		),
+);

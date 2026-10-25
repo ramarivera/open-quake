@@ -158,3 +158,33 @@ describe("authenticated desktop WebSocket using loopback only", () => {
 		}
 	});
 });
+
+it("drains final transcript frames before reporting a provider close in the same read", async () => {
+	const server = await fixture((socket) =>
+		socket.write(
+			Buffer.concat([
+				frame('{"text":"final"}'),
+				frame('{"event":"task-finished"}'),
+				Buffer.from([0x88, 2, 3, 232]),
+			]),
+		),
+	);
+	try {
+		const socket = await Effect.runPromise(
+			connectSpeechSocket(
+				{ url: server.url, headers: {}, signal: new AbortController().signal },
+				true,
+			),
+		);
+		expect(await Effect.runPromise(socket.receive)).toBe('{"text":"final"}');
+		expect(await Effect.runPromise(socket.receive)).toBe(
+			'{"event":"task-finished"}',
+		);
+		expect((await Effect.runPromise(Effect.either(socket.receive)))._tag).toBe(
+			"Left",
+		);
+		await Effect.runPromise(socket.close);
+	} finally {
+		await server.close();
+	}
+});

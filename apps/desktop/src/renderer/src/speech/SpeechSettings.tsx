@@ -60,12 +60,12 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 				setView(reply.view);
 				setDraft(reply.view.settings);
 				setSavedSettings(reply.view.settings);
+				setSttKey("");
+				setTtsKey("");
 			}
 		} catch {
 			setError("Speech settings couldn't be saved.");
 		} finally {
-			setSttKey("");
-			setTtsKey("");
 			setBusy(false);
 		}
 	};

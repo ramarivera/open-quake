@@ -164,3 +164,32 @@ describe("bounded ordered answer speech", () => {
 			),
 	);
 });
+
+it.effect(
+	"starts a fresh two-second timer when punctuation emptied the prior pending text",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const texts: string[] = [];
+				yield* Effect.gen(function* () {
+					const speech = yield* createOrderedSpeech({
+						speech: yield* AiSpeechService,
+						profile: ttsProfile,
+						report: () => Effect.void,
+					});
+					yield* speech.push("First");
+					yield* TestClock.adjust(1500);
+					yield* speech.push(".");
+					yield* speech.settled;
+					yield* speech.push("Second");
+					yield* TestClock.adjust(500);
+					expect(texts).toEqual(["First."]);
+					yield* TestClock.adjust(1499);
+					expect(texts).toEqual(["First."]);
+					yield* TestClock.adjust(1);
+					yield* speech.settled;
+					expect(texts).toEqual(["First.", "Second"]);
+				}).pipe(Effect.provide(speechLayer(texts)));
+			}),
+		),
+);

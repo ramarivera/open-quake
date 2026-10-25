@@ -322,21 +322,32 @@ export const createProductionVoiceRuntime = Effect.fn(
 		readAloud: Effect.fn("DesktopSpeech.readAloud")(function* (
 			text: string,
 		): Effect.fn.Return<SpeechOutcome> {
-			yield* cancelSpeech();
-			const profile = yield* options.profiles().pipe(Effect.either);
-			if (profile._tag === "Left" || !profile.right.tts)
-				return {
-					_tag: "textOnly",
-					error: profile._tag === "Left" ? profile.left : new AiUnavailable(),
-				};
-			if (closed || active) return { _tag: "cancelled" };
-			const turn = yield* options.speech.createSpeech(profile.right.tts, text);
-			const fiber = yield* instrumentSpeechOutcome(
-				turn.result,
-				options.diagnostics?.instrument,
-			).pipe(Effect.forkIn(scope));
-			readAloud = fiber;
-			cancelReadAloud = turn.cancel;
+			const replacement = yield* lock.withPermits(1)(
+				Effect.gen(function* () {
+					yield* cancelSpeech();
+					const profile = yield* options.profiles().pipe(Effect.either);
+					if (profile._tag === "Left" || !profile.right.tts)
+						return {
+							_tag: "textOnly" as const,
+							error:
+								profile._tag === "Left" ? profile.left : new AiUnavailable(),
+						};
+					if (closed || active) return { _tag: "cancelled" as const };
+					const turn = yield* options.speech.createSpeech(
+						profile.right.tts,
+						text,
+					);
+					const fiber = yield* instrumentSpeechOutcome(
+						turn.result,
+						options.diagnostics?.instrument,
+					).pipe(Effect.forkIn(scope));
+					readAloud = fiber;
+					cancelReadAloud = turn.cancel;
+					return { _tag: "turn" as const, fiber };
+				}),
+			);
+			if (replacement._tag !== "turn") return replacement;
+			const fiber = replacement.fiber;
 			return yield* Fiber.join(fiber).pipe(
 				Effect.ensuring(
 					Effect.sync(() => {

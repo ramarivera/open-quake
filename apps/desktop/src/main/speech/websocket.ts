@@ -91,14 +91,20 @@ export function connectSpeechSocket(
 			queue.length = 0;
 			queuedBytes = 0;
 		};
-		const fail = (error: AiError) => {
+		const fail = (error: AiError, drain = false) => {
 			if (failure) return;
 			failure = error;
 			if (!opened) resume(Effect.fail(error));
 			const waiter = pending;
 			pending = undefined;
 			waiter?.(Effect.fail(error));
+			const remaining = drain ? [...queue] : [];
 			close();
+			queue.push(...remaining);
+			queuedBytes = remaining.reduce(
+				(sum, value) => sum + Buffer.byteLength(value),
+				0,
+			);
 		};
 		const abort = () => fail(new AiUnavailable());
 		input.signal.addEventListener("abort", abort, { once: true });
@@ -183,7 +189,7 @@ export function connectSpeechSocket(
 					const payload = buffer.subarray(offset, offset + size);
 					buffer = buffer.subarray(offset + size);
 					if (opcode === 8) {
-						fail(new AiUnavailable());
+						fail(new AiUnavailable(), true);
 						return;
 					}
 					if (opcode === 9) {
@@ -213,7 +219,7 @@ export function connectSpeechSocket(
 			};
 			socket.on("data", onData);
 			socket.on("error", (cause) => fail(new AiUnavailable(cause)));
-			socket.on("close", () => fail(new AiUnavailable()));
+			socket.on("close", () => fail(new AiUnavailable(), true));
 			opened = true;
 			resume(
 				Effect.succeed({
@@ -242,14 +248,14 @@ export function connectSpeechSocket(
 							return Effect.sync(close);
 						}),
 					receive: Effect.async((done) => {
-						if (failure) {
-							done(Effect.fail(failure));
-							return;
-						}
 						const next = queue.shift();
 						if (next !== undefined) {
 							queuedBytes -= Buffer.byteLength(next);
 							done(Effect.succeed(next));
+							return;
+						}
+						if (failure) {
+							done(Effect.fail(failure));
 							return;
 						}
 						if (pending) {

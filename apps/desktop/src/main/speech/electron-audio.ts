@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -28,58 +29,65 @@ export async function openAudioWorker(
 		join(app.getPath("sessionData"), "speech-worker-"),
 	);
 	const file = join(directory, "audio.html");
-	await writeFile(
-		file,
-		"<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-eval'\"><title>Speech audio worker</title>",
-		{ mode: 0o600 },
-	);
-	const audioSession = session.fromPartition("speech-audio");
-	const window = new BrowserWindow({
-		show: false,
-		focusable: false,
-		webPreferences: {
-			session: audioSession,
-			sandbox: true,
-			contextIsolation: true,
-			nodeIntegration: false,
-			backgroundThrottling: false,
-			autoplayPolicy: "no-user-gesture-required",
-		},
-	});
-	let closed = false;
-	let closing: Promise<void> | undefined;
-	const close = (): Promise<void> => {
-		if (closing) return closing;
-		closed = true;
-		signal.removeEventListener("abort", abort);
-		if (!window.isDestroyed()) window.destroy();
-		closing = rm(directory, { recursive: true, force: true });
-		return closing;
-	};
-	const abort = () => {
-		// The owning finalizer awaits the same promise and reports cleanup failure.
-		void close().catch(() => undefined);
-	};
-	signal.addEventListener("abort", abort, { once: true });
-	window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-	window.webContents.on("will-navigate", (event) => event.preventDefault());
-	audioSession.setPermissionRequestHandler(
-		(contents, permission, callback, details) =>
-			callback(
-				contents === window.webContents &&
-					permission === "media" &&
-					"mediaTypes" in details &&
-					details.mediaTypes.every((type) => type === "audio"),
-			),
-	);
-	audioSession.setPermissionCheckHandler(
-		(contents, permission, _origin, details) =>
-			contents === window.webContents &&
-			permission === "media" &&
-			details.isMainFrame &&
-			details.mediaType === "audio",
-	);
+	let window: BrowserWindow | undefined;
+	let close: (() => Promise<void>) | undefined;
 	try {
+		await writeFile(
+			file,
+			"<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-eval'\"><title>Speech audio worker</title>",
+			{ mode: 0o600 },
+		);
+		const audioSession = session.fromPartition(`speech-audio-${randomUUID()}`);
+		window = new BrowserWindow({
+			show: false,
+			focusable: false,
+			webPreferences: {
+				session: audioSession,
+				sandbox: true,
+				contextIsolation: true,
+				nodeIntegration: false,
+				backgroundThrottling: false,
+				autoplayPolicy: "no-user-gesture-required",
+			},
+		});
+		let closed = false;
+		let closing: Promise<void> | undefined;
+		close = (): Promise<void> => {
+			if (closing) return closing;
+			closed = true;
+			signal.removeEventListener("abort", abort);
+			if (window && !window.isDestroyed()) window.destroy();
+			closing = rm(directory, { recursive: true, force: true });
+			return closing;
+		};
+		const abort = () => {
+			// The owning finalizer awaits the same promise and reports cleanup failure.
+			void close?.().catch(() => undefined);
+		};
+		signal.addEventListener("abort", abort, { once: true });
+		window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+		window.webContents.on("will-navigate", (event) => event.preventDefault());
+		audioSession.setPermissionRequestHandler(
+			(contents, permission, callback, details) =>
+				callback(
+					contents === window?.webContents &&
+						permission === "media" &&
+						details.isMainFrame &&
+						details.requestingUrl === pathToFileURL(file).href &&
+						window.webContents.getURL() === pathToFileURL(file).href &&
+						"mediaTypes" in details &&
+						details.mediaTypes?.length === 1 &&
+						details.mediaTypes.every((type) => type === "audio"),
+				),
+		);
+		audioSession.setPermissionCheckHandler(
+			(contents, permission, _origin, details) =>
+				contents === window?.webContents &&
+				permission === "media" &&
+				details.isMainFrame &&
+				window.webContents.getURL() === pathToFileURL(file).href &&
+				details.mediaType === "audio",
+		);
 		if (signal.aborted) {
 			await close();
 			throw new AiUnavailable();
@@ -89,7 +97,11 @@ export async function openAudioWorker(
 		if (closed) throw new AiUnavailable();
 		return {
 			invoke: (method, args = []) => {
-				if (closed || !/^(capture|pull|ready|play|stop)$/.test(method))
+				if (
+					closed ||
+					!window ||
+					!/^(capture|pull|ready|play|stop)$/.test(method)
+				)
 					return Promise.reject(new AiUnavailable());
 				return window.webContents.executeJavaScript(
 					`globalThis.__quakeSpeech.${method}(...${JSON.stringify(args)})`,
@@ -98,7 +110,11 @@ export async function openAudioWorker(
 			close,
 		};
 	} catch (cause) {
-		await close();
+		if (close) await close();
+		else {
+			if (window && !window.isDestroyed()) window.destroy();
+			await rm(directory, { recursive: true, force: true });
+		}
 		throw cause;
 	}
 }
