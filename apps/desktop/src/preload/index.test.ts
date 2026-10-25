@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenQuakeBridge, QuakeEvent } from "./quake";
 
 const electron = vi.hoisted(() => ({
@@ -19,8 +19,10 @@ const electron = vi.hoisted(() => ({
 vi.mock("electron", () => electron);
 
 describe("device preload bridge", () => {
+	afterEach(() => vi.unstubAllGlobals());
 	beforeEach(async () => {
 		vi.resetModules();
+		vi.stubGlobal("window", { addEventListener: vi.fn() });
 		await import("./index");
 	});
 

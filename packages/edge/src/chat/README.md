@@ -121,7 +121,34 @@ rewriting the file. No migration from another schema or DK-Suite is claimed.
 Tests exercise the installed production SDK through ChatService and the browser
 reducer, fake clocks, isolated owners, profile pinning, cancellation, revocation,
 slow subscribers, whole-exchange budgets, close/clear, crash recovery and private
-file permissions. Desktop/preload/renderer production composition, capture
-preparation state, other modes, Codex OAuth inference, and live provider/device
-acceptance remain with their owning tasks. The separate Hermes/OpenClaw HTTP
-conversation service is unchanged.
+file permissions. The desktop now composes this service with the installed SDK, the protected
+model credential vault, and the saved default model from AI settings. Until
+model context metadata is available, the desktop uses a conservative 8192-token
+window and reserves at most 1024 output tokens, within the saved output limit. The
+Schema-first `@open-quake/edge/chat/rpc` entry exports the encoded Effect RPC
+contract without importing Node storage or the provider SDK. Preload supplies
+one scoped RPC connection per trusted management/panel main frame. The host
+chooses the owner and model; renderer payloads cannot choose credentials or
+inject trace IDs. Closing a window cancels its submitted turns. Detaching a
+stream subscription alone preserves the authoritative generation.
+
+Agent sessions includes a direct-chat view with streaming, stop, local history,
+rename and delete. The strip's direct text route and finalized speech
+transcripts use this same service. An explicitly selected external runtime
+retains its separate Hermes/OpenClaw route. Model endpoint changes discard
+credentials for affected rows before another request can use that endpoint.
+
+To rerun the synthetic macOS app acceptance without hardware or a provider key,
+set `OPEN_QUAKE_E2E_RUN=1`, `OPEN_QUAKE_MOCK_DEVICE=1` and an absolute external
+`OPEN_QUAKE_E2E_SCRATCH` directory. Build desktop normally, then build
+`src/main/test/direct-chat-smoke.config.ts` with electron-vite and run its
+`out/direct-chat-smoke/direct-chat-smoke.js` entry with Electron, clearing
+`ELECTRON_RUN_AS_NODE`. It exercises the actual composition root, protected
+settings, preload, RPC, React stream/history/cancellation/error paths, inert
+markup and diagnostics through a synthetic loopback provider. It stores
+screenshots and safe results only in scratch. It never opens the microphone
+or physical device and doesn't change saved application settings.
+
+Capture preparation state, enabled long/tool modes, shared General Translation
+infrastructure, optional assistant window, Codex OAuth inference, and live
+provider/device acceptance remain open under their owning tasks.

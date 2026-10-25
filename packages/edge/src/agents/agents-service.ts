@@ -513,11 +513,14 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 										command.row.baseUrl.trim() ||
 										providerDefaults.find((p) => p.id === provider)?.baseUrl ||
 										"",
-									credentialRef:
-										previous?.provider === provider
-											? previous.credentialRef
-											: "",
+									credentialRef: "",
 								};
+								// A key belongs to the saved provider endpoint, including its path.
+								if (
+									previous?.provider === provider &&
+									previous.baseUrl === row.baseUrl
+								)
+									row = { ...row, credentialRef: previous.credentialRef };
 								if (!modelValid(row)) return yield* new AgentModelInvalid();
 								if (command.secret.trim()) {
 									if (Option.isNone(credentials))
@@ -531,7 +534,9 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 									? rows.map((r) => (r.id === row.id ? row : r))
 									: [...rows, row];
 								const withUrl = next.map((r) =>
-									r.provider === provider ? { ...r, baseUrl: row.baseUrl } : r,
+									r.provider === provider && r.baseUrl !== row.baseUrl
+										? { ...r, baseUrl: row.baseUrl, credentialRef: "" }
+										: r,
 								);
 								return {
 									...state,

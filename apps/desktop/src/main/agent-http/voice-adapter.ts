@@ -36,6 +36,7 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 )(function* (
 	options: AgentHttpVoiceOptions,
 	fallback: typeof GridVoiceRuntime.Service,
+	fallbackTranscript?: typeof fallback.sendText,
 ) {
 	const surface = yield* VoiceSurface;
 	const scope = yield* Effect.scope;
@@ -78,7 +79,10 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 						return yield* new VoiceRuntimeUnavailable();
 					// Agent.id on a QUAKE key belongs to the local workspace. Only the
 					// explicitly selected external ID may enter an HTTP request.
-					if (!selected) return yield* fallback.sendText(request);
+					if (!selected)
+						return yield* source === "voice" && fallbackTranscript
+							? fallbackTranscript(request)
+							: fallback.sendText(request);
 					yield* stop(request.serial);
 					const requestId = randomUUID();
 					const turnId = Schema.decodeUnknownSync(TurnId)(requestId);

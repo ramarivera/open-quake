@@ -17,12 +17,18 @@ import {
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { RuntimeStorageFailed } from "../../../../packages/edge/src/agent-http/runtime-errors.js";
+import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
+import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { registerAgentHttp } from "./agent-http";
 import { registerAgents } from "./agents";
+import { createModelCredentials } from "./chat/credentials";
+import { createDirectChat } from "./chat/host";
+import { registerDirectChat } from "./chat/registration";
+import { createDirectChatVoice } from "./chat/voice";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import { createDesktopDiagnostics } from "./diagnostics";
@@ -57,7 +63,7 @@ import {
 	readNativeTheme,
 	registerManagementAppearance,
 } from "./management/appearance";
-import { managementAgentCredentials } from "./management/credentials";
+
 import { MediaLive, registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
@@ -228,7 +234,35 @@ if (!app.requestSingleInstanceLock()) {
 					);
 					// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
 					// play through hardware-controls; the mock bus answers them without HID.
+					const modelCredentials = await background.runPromise(
+						createModelCredentials(
+							systemCredentialVault(
+								join(app.getPath("userData"), "agent-credentials"),
+							),
+						),
+					);
+					let agents: ReturnType<typeof registerAgents> | undefined;
+					const directChat = createDirectChat({
+						directory: join(app.getPath("userData"), "chat"),
+						credentials: modelCredentials.ai,
+						diagnostics,
+						models: (scope) =>
+							Effect.tryPromise({
+								try: () =>
+									agents
+										? agents.runtime.runPromise(AgentsService.resolve(scope))
+										: Promise.reject(new AiConfigInvalid()),
+								catch: (cause) => new AiConfigInvalid(cause),
+							}),
+					});
+					const chatRegistration = registerDirectChat({
+						host: directChat,
+						management: () => managementWin,
+						panel: () => panelWin,
+						renderer: rendererURL,
+					});
 					const speech = createSpeechVoiceBinding({
+						direct: (fallback) => createDirectChatVoice(directChat, fallback),
 						speech: {
 							storage: fileStore(
 								app.getPath("userData"),
@@ -291,7 +325,7 @@ if (!app.requestSingleInstanceLock()) {
 						),
 						diagnostics,
 					);
-					const agents = registerAgents({
+					agents = registerAgents({
 						diagnostics,
 						...(agentHttp
 							? { backend: agentHttp.backend, drafting: agentHttp.drafting }
@@ -299,9 +333,7 @@ if (!app.requestSingleInstanceLock()) {
 						management: () => managementWin,
 						renderer: rendererURL,
 						profiles: profiles.runtime,
-						credentials: managementAgentCredentials(
-							join(app.getPath("userData"), "agent-credentials"),
-						),
+						credentials: modelCredentials.management,
 					});
 					const integrations = registerIntegrations({
 						diagnostics,
@@ -698,13 +730,15 @@ if (!app.requestSingleInstanceLock()) {
 							);
 							await knob.dispose();
 							await Promise.all([
-								agents.dispose(),
+								agents?.dispose(),
 								integrations.dispose(),
 								emoji.dispose(),
 							]);
+							await chatRegistration.dispose();
 							await agentHttp?.dispose();
 							removeSpeechSettings();
 							await voice.dispose();
+							await directChat.dispose();
 							await profiles.dispose();
 							await clock.dispose();
 							await media.dispose();

@@ -1,0 +1,184 @@
+import { randomUUID } from "node:crypto";
+import { Effect, Fiber, Schema, Stream } from "effect";
+import {
+	SessionId,
+	TurnId,
+} from "../../../../../packages/edge/src/chat/chat-contracts";
+import {
+	GridVoiceRuntime,
+	VoiceRuntimeUnavailable,
+	VoiceSurface,
+} from "../../../../../packages/edge/src/voice/surface";
+import type { TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
+import type { DirectChat } from "./host";
+/** Direct Copilot route. The outer HTTP decorator exclusively owns external-agent selection. */
+export const createDirectChatVoice = (
+	host: DirectChat,
+	fallback: typeof GridVoiceRuntime.Service,
+) =>
+	Effect.gen(function* () {
+		const surface = yield* VoiceSurface;
+		const scope = yield* Effect.scope;
+		const lock = yield* Effect.makeSemaphore(1);
+		const sessions = new Map<string, SessionId>();
+		const active = new Map<
+			string,
+			{
+				sessionId: SessionId;
+				turnId: TurnId;
+				fiber: Fiber.RuntimeFiber<void>;
+				keyCode: string;
+			}
+		>();
+		const stop = (serial: string, keyCode?: string) =>
+			Effect.gen(function* () {
+				const turn = active.get(serial);
+				if (!turn || (keyCode !== undefined && turn.keyCode !== keyCode))
+					return;
+				yield* Effect.promise(() =>
+					host.runtime.runPromise(
+						host.cancel(turn.sessionId, turn.turnId).pipe(Effect.ignore),
+					),
+				);
+				yield* Fiber.interrupt(turn.fiber);
+				if (active.get(serial) === turn) active.delete(serial);
+			});
+		yield* Effect.addFinalizer(() =>
+			Effect.forEach([...active.keys()], (serial) => stop(serial), {
+				discard: true,
+			}),
+		);
+		const send = (request: TextRequest, source: "typed" | "voice") =>
+			lock.withPermits(1)(
+				Effect.gen(function* () {
+					yield* stop(request.serial);
+					const route = JSON.stringify([
+						request.serial,
+						request.keyCode,
+						request.agentId,
+					]);
+					let sessionId = sessions.get(route);
+					if (!sessionId) {
+						sessionId = Schema.decodeUnknownSync(SessionId)(randomUUID());
+						sessions.set(route, sessionId);
+						while (sessions.size > 16) {
+							const first = sessions.keys().next();
+							if (!first.done) sessions.delete(first.value);
+						}
+					}
+					const turnId = Schema.decodeUnknownSync(TurnId)(randomUUID());
+					const accepted = yield* Effect.tryPromise({
+						try: () =>
+							host.runtime.runPromise(
+								host.submit(
+									{ sessionId, turnId, text: request.message },
+									request.agentId,
+								),
+							),
+						catch: (cause) => new VoiceRuntimeUnavailable(cause),
+					});
+					const captureId = `direct/${turnId}`;
+					yield* surface.publish({
+						_tag: "TurnStarted",
+						serial: request.serial,
+						keyCode: request.keyCode,
+						sessionId,
+						turnId,
+						prompt: request.message.slice(0, 8000),
+						source,
+					});
+					yield* surface.publish({
+						_tag: "Stage",
+						serial: request.serial,
+						keyCode: request.keyCode,
+						captureId,
+						stage: { _tag: "processing" },
+					});
+					const start = yield* Effect.makeLatch();
+					const fiber = yield* start.await.pipe(
+						Effect.zipRight(
+							accepted.events.pipe(
+								Stream.runForEach((chunk) =>
+									surface
+										.publish({
+											_tag: "Chunk",
+											serial: request.serial,
+											keyCode: request.keyCode,
+											chunk,
+										})
+										.pipe(
+											Effect.zipRight(
+												chunk.type === "end"
+													? surface.publish({
+															_tag: "Stage",
+															serial: request.serial,
+															keyCode: request.keyCode,
+															captureId,
+															stage:
+																chunk.outcome === "completed" ||
+																chunk.outcome === "cancelled"
+																	? { _tag: "idle", outcome: chunk.outcome }
+																	: {
+																			_tag: "failed",
+																			reason: "server",
+																			...(chunk.errorCode
+																				? { errorCode: chunk.errorCode }
+																				: {}),
+																		},
+														})
+													: Effect.void,
+											),
+										),
+								),
+								Effect.catchAll((error) =>
+									surface.publish({
+										_tag: "Stage",
+										serial: request.serial,
+										keyCode: request.keyCode,
+										captureId,
+										stage: {
+											_tag: "failed",
+											reason: "server",
+											errorCode: error.code,
+										},
+									}),
+								),
+								Effect.ensuring(
+									Effect.sync(() => {
+										if (active.get(request.serial)?.turnId === turnId)
+											active.delete(request.serial);
+									}),
+								),
+							),
+						),
+						Effect.forkIn(scope),
+					);
+					active.set(request.serial, {
+						sessionId,
+						turnId,
+						fiber,
+						keyCode: request.keyCode,
+					});
+					yield* start.open;
+				}),
+			);
+		return {
+			sendTranscript: (request: TextRequest) => send(request, "voice"),
+			cancelText: (serial: string, keyCode: string) =>
+				lock.withPermits(1)(stop(serial, keyCode)),
+			runtime: GridVoiceRuntime.of({
+				...fallback,
+				sendText: (request) => send(request, "typed"),
+				select: (serial, keyCode, type, agentId) =>
+					lock.withPermits(1)(
+						stop(serial).pipe(
+							Effect.zipRight(fallback.select(serial, keyCode, type, agentId)),
+						),
+					),
+				cancelFlow: (serial, keyCode) =>
+					lock
+						.withPermits(1)(stop(serial, keyCode))
+						.pipe(Effect.zipRight(fallback.cancelFlow(serial, keyCode))),
+			}),
+		};
+	});

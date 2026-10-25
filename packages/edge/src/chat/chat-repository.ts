@@ -2,44 +2,17 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { Context, Effect, Either, Layer, Option, Schema } from "effect";
-import {
-	type SessionId,
-	TurnSelection,
-	TurnSnapshot,
-} from "./chat-contracts.js";
+import type { SessionId } from "./chat-contracts.js";
 import {
 	type ChatError,
 	ChatNotFound,
 	ChatStorageFailed,
 } from "./chat-errors.js";
 
-export const SavedTurn = Schema.Struct({
-	selection: TurnSelection,
-	input: Schema.String,
-	systemPrompt: Schema.optional(Schema.String),
-	contextEpoch: Schema.Int.pipe(Schema.nonNegative()),
-	snapshot: TurnSnapshot,
-	status: Schema.Literal(
-		"processing",
-		"completed",
-		"cancelled",
-		"failed",
-		"timedOut",
-		"interrupted",
-	),
-});
-export type SavedTurn = typeof SavedTurn.Type;
-export const ChatHistory = Schema.Struct({
-	owner: Schema.NonEmptyString,
-	sessionId: TurnSelection.fields.sessionId,
-	title: Schema.String,
-	manualTitle: Schema.Boolean,
-	revision: Schema.Int.pipe(Schema.nonNegative()),
-	contextEpoch: Schema.Int.pipe(Schema.nonNegative()),
-	updatedAt: Schema.Number,
-	turns: Schema.Array(SavedTurn),
-});
-export type ChatHistory = typeof ChatHistory.Type;
+import { ChatHistory } from "./chat-history-contracts.js";
+
+export { ChatHistory, SavedTurn } from "./chat-history-contracts.js";
+
 const Document = Schema.Struct({
 	version: Schema.Literal(1),
 	sessions: Schema.Array(ChatHistory),
