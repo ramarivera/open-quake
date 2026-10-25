@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { HERMES_COMMIT, settings } from "./config.mjs";
+import { cleanupProject, failureDiagnostic } from "./lifecycle.mjs";
 
 const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,15 @@ const inside = relative(repository, scratch);
 if (!inside.startsWith("..") && !inside.startsWith("/"))
 	throw new Error("E2E scratch must be outside the repository");
 const state = await mkdtemp(join(scratch, "runtime-e2e-"));
+console.log(`Disposable Compose project: ${config.project}`);
+await writeFile(
+	join(state, "cleanup.compose.json"),
+	JSON.stringify({
+		name: config.project,
+		services: { openclaw: { image: "scratch" }, hermes: { image: "scratch" } },
+	}),
+	{ mode: 0o600 },
+);
 const env = {
 	...process.env,
 	OPEN_QUAKE_E2E_BASE_URL: config.baseURL,
@@ -33,12 +43,6 @@ const composeArgs = [
 ];
 const operationAbort = new AbortController();
 let cleaningUp = false;
-const redact = (value) => {
-	let result = String(value);
-	for (const secret of [config.apiKey, config.token, config.baseURL])
-		if (secret) result = result.replaceAll(secret, "[redacted]");
-	return result;
-};
 async function command(binary, args, timeout = 120000) {
 	try {
 		return await exec(binary, args, {
@@ -50,11 +54,11 @@ async function command(binary, args, timeout = 120000) {
 	} catch (error) {
 		await writeFile(
 			join(scratch, `${config.project}-failure.log`),
-			redact(`${error.stdout ?? ""}\n${error.stderr ?? ""}`),
+			failureDiagnostic(binary, error),
 			{ mode: 0o600 },
 		);
 		throw new Error(
-			`${binary} failed; sanitized diagnostics: ${config.project}-failure.log`,
+			`${binary} failed; exit diagnostics: ${config.project}-failure.log`,
 		);
 	}
 }
@@ -154,7 +158,7 @@ try {
 	console.log(
 		"Testing real runtime adapters, inference streams and session continuity",
 	);
-	const { stdout } = await command(
+	await command(
 		"pnpm",
 		[
 			"--filter",
@@ -168,57 +172,30 @@ try {
 		],
 		600000,
 	);
-	console.log(redact(stdout));
+	console.log("All three runtime inference and session tests passed");
 	if (interrupted) abort();
 	passed = true;
 } catch (error) {
 	failure = error;
-	cleaningUp = true;
-	try {
-		const logs = await compose(["logs", "--no-color", "--tail", "80"], 15000);
-		await writeFile(
-			join(scratch, `${config.project}-runtime.log`),
-			redact(logs.stdout + logs.stderr),
-			{ mode: 0o600 },
-		);
-	} catch {
-		/* original failure and teardown are still retained */
-	}
 } finally {
 	cleaningUp = true;
 	try {
-		await compose(["down", "--volumes", "--remove-orphans"], 60000);
-		const { stdout } = await command("docker", [
-			"ps",
-			"-aq",
-			"--filter",
-			`label=com.docker.compose.project=${config.project}`,
-		]);
-		const networks = await command("docker", [
-			"network",
-			"ls",
-			"-q",
-			"--filter",
-			`label=com.docker.compose.project=${config.project}`,
-		]);
-		if (stdout.trim() || networks.stdout.trim()) {
-			failure = new AggregateError(
-				[failure, new Error("Compose resources survived cleanup")].filter(
-					Boolean,
-				),
-				"E2E cleanup failed",
-			);
-		}
+		await cleanupProject({
+			project: config.project,
+			compose,
+			command,
+			removeState: () => rm(state, { recursive: true, force: true }),
+		});
 		console.log(
 			`Compose cleanup verified; inference tests ${passed ? "passed" : "did not pass"}`,
 		);
 	} catch (error) {
+		console.error(`Cleanup failed; recovery state retained at ${state}`);
 		failure = new AggregateError(
 			[failure, error].filter(Boolean),
 			"E2E cleanup failed",
 		);
 	} finally {
-		await rm(state, { recursive: true, force: true });
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
 	}

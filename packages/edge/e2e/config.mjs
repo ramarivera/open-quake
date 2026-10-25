@@ -19,6 +19,15 @@ export function settings(env) {
 		throw new Error(
 			"Use an HTTP(S) provider base URL without credentials, query or fragment",
 		);
+	if (
+		url.hostname === "localhost" ||
+		url.hostname.endsWith(".localhost") ||
+		url.hostname.startsWith("127.") ||
+		["[::1]", "[::]", "0.0.0.0"].includes(url.hostname)
+	)
+		throw new Error(
+			"Provider URL must be reachable from containers; use a network address or host.docker.internal where supported, not host loopback",
+		);
 	if (!model.trim() || model.length > 256) throw new Error("Invalid E2E model");
 	if (!env.OPEN_QUAKE_E2E_SCRATCH)
 		throw new Error("Set OPEN_QUAKE_E2E_SCRATCH outside the repository");

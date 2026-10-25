@@ -22,7 +22,7 @@
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"test:e2e": "node e2e/run.mjs",
-		"test:e2e:config": "node --test e2e/config.node-test.mjs"
+		"test:e2e:config": "node --test e2e/config.node-test.mjs e2e/lifecycle.node-test.mjs"
 	},
 	"dependencies": {
 		"effect": "catalog:"

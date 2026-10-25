@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 
@@ -48,6 +49,9 @@ const config = {
 	cron: { enabled: false },
 	browser: { enabled: false },
 };
+// HTTP adapters can't observe internal tool execution. Fail before startup if
+// fixture configuration stops denying every tool.
+assert.deepEqual(config.tools?.deny, ["*"], "E2E requires all tools denied");
 writeFileSync(process.env.OPENCLAW_CONFIG_PATH, JSON.stringify(config), {
 	mode: 0o600,
 });
