@@ -6,6 +6,7 @@ import {
 	type ProfileValidationFailed,
 } from "./profile-errors.js";
 import {
+	type ProfileCommitGuard,
 	type ProfileLoadResult,
 	ProfileRepository,
 } from "./profile-repository.js";
@@ -40,8 +41,9 @@ export class ProfileService extends Effect.Service<ProfileService>()(
 				selectProfile: Effect.fn("ProfileService.selectProfile")(
 					(
 						request: unknown,
+						guard?: ProfileCommitGuard,
 					): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
-						repository.select(request),
+						repository.select(request, guard),
 				),
 				subscribeCommittedProfiles: Effect.fn(
 					"ProfileService.subscribeCommittedProfiles",

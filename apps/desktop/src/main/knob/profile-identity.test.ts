@@ -93,7 +93,13 @@ describe("production knob profile identity", () => {
 			const result = await Effect.runPromise(
 				adapter.ports.selectProfile("first").pipe(Effect.either),
 			);
-			expect(select).toHaveBeenCalledExactlyOnceWith("first");
+			expect(select).toHaveBeenCalledExactlyOnceWith(
+				"first",
+				expect.objectContaining({
+					deviceId: "serial-private",
+					isCurrent: expect.any(Function),
+				}),
+			);
 			expect(Either.isLeft(result)).toBe(true);
 			if (Either.isLeft(result)) {
 				expect(result.left).toMatchObject({
