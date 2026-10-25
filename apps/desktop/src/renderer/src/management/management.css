@@ -527,7 +527,8 @@ body[data-resizing] {
 .mc-tabs button:hover {
 	color: var(--oq-text);
 }
-.mc-tabs button[aria-selected="true"] {
+.mc-tabs button[aria-selected="true"],
+.mc-tabs button[aria-pressed="true"] {
 	color: var(--oq-text);
 	font-weight: 600;
 	border-bottom-color: var(--oq-accent);
@@ -536,6 +537,29 @@ body[data-resizing] {
 	outline: none;
 	box-shadow: var(--oq-focus-ring);
 	border-radius: var(--oq-radius-sm);
+}
+
+/* A tab strip used as a toggle group inside a form. */
+fieldset.mc-tabs {
+	min-width: 0;
+	margin: 0 0 var(--oq-space-5);
+	padding: 0;
+	border: 0;
+	border-bottom: 1px solid var(--oq-hairline);
+}
+fieldset.mc-tabs legend {
+	float: left;
+	width: 100%;
+	margin: 0 0 4px;
+	padding: 0;
+	font-size: var(--mc-font-subtitle);
+	font-weight: 600;
+}
+fieldset.mc-tabs button {
+	margin-right: var(--oq-space-5);
+}
+.mc-panel > .mc-card {
+	margin-bottom: var(--oq-space-6);
 }
 
 .mc-grid {
