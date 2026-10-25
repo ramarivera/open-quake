@@ -75,3 +75,9 @@ connection details sheet, verifies Edit and Remove are disabled, attempts both
 clicks, and confirms the selected connection and running reply survive until
 explicit Stop. Evidence: `redesign/review-runtime/stream-guard-B59KBB/` under
 the external scratch root.
+
+The Opus narrow-header and pending-source fixes were rerun on the combined
+revision: disclosure keyboard behavior, stream/draft/route preservation,
+locale switching and recovery from an actual storage-permission failure all
+passed. Evidence: `redesign/review-header/combined-mynBYf/` under the external
+scratch root. The final combined desktop suite passed 1319 tests.

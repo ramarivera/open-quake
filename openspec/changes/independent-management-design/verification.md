@@ -70,3 +70,10 @@ Artifacts are outside the repo in
 and `redesign/runtime-final/`. Earlier lane gaps above are historical;
 PR47's narrow recovery and Display popover review fixes are still in progress.
 Native Windows/Linux and packaged-app visual checks remain unverified.
+
+The final combined revision passed 1319 desktop tests, typecheck and build.
+Opus's Display popover fix is integrated: the sidebar leaves overflow visible,
+individual labels clip locally, and the narrow popover fits its drawer footer.
+The actual-root popover geometry, hit tests, locale switches and focus behavior
+were rerun successfully on the combined source in
+`redesign/integrated/popover-combined/` under the external scratch root.
