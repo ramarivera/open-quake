@@ -159,6 +159,7 @@ export interface KnobVoiceRequest {
 }
 
 export function registerVoiceSurface(options: VoiceSurfaceOptions): {
+	readonly ready: Promise<void>;
 	readonly publish: (event: VoiceSurfaceEvent) => Promise<void>;
 	/** The knob model's `voice` binding: knob holds drive the overlay. */
 	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
@@ -328,6 +329,7 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	);
 	let shutdown: Promise<void> | undefined;
 	return {
+		ready: run(Effect.void),
 		publish: (event) => run(VoiceSurface.publish(event)),
 		reset: () => run(GridVoice.reset(options.serial(), "profileChanged")),
 		onDevice: (event) => {

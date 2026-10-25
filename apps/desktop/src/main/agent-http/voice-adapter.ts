@@ -278,6 +278,8 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 		});
 	return {
 		sendTranscript: (request: TextRequest) => send(request, "voice"),
+		cancelText: (serial: string, keyCode: string) =>
+			lock.withPermits(1)(stop(serial, keyCode)),
 		runtime: GridVoiceRuntime.of({
 			...fallback,
 			select: (serial, keyCode, type, agentId) =>

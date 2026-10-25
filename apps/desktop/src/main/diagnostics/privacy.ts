@@ -18,6 +18,7 @@ import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors
 import { MaintenanceErrors } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting-errors.js";
 import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
+import { DesktopSpeechErrors } from "../speech/errors.js";
 import {
 	knownErrorTags,
 	knownLogEvents,
@@ -58,6 +59,7 @@ const identities = new Map<string, { code: string; category: string }>(
 		DeviceErrors,
 		AiErrors,
 		SpeechErrors,
+		DesktopSpeechErrors,
 		RuntimeErrors,
 		VoiceSurfaceErrors,
 		ActionErrors,

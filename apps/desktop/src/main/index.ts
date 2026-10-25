@@ -40,6 +40,7 @@ import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import { hardwarePreferencesLive } from "./hardware/preferences";
 import { registerIntegrations } from "./integrations";
 import { integrationKeyAction } from "./integrations/key-action";
+import { fileStore, systemCredentialVault } from "./integrations/storage";
 import { resetKeysOnLinkLoss } from "./key-library/device-status";
 import { registerKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
@@ -61,6 +62,8 @@ import { MediaLive, registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
+import { emptySpeechSettings, registerSpeechSettings } from "./speech";
+import { createSpeechVoiceBinding } from "./speech/composition";
 import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 
@@ -225,8 +228,25 @@ if (!app.requestSingleInstanceLock()) {
 					);
 					// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
 					// play through hardware-controls; the mock bus answers them without HID.
+					const speech = createSpeechVoiceBinding({
+						speech: {
+							storage: fileStore(
+								app.getPath("userData"),
+								"speech-v1.json",
+								emptySpeechSettings,
+							),
+							credentials: systemCredentialVault(
+								join(app.getPath("userData"), "credentials"),
+							),
+							diagnostics,
+						},
+						...(agentHttp ? { http: agentHttp.createVoiceAdapter } : {}),
+						run: (effect) => background.runPromise(effect),
+					});
 					const voice = registerVoiceSurface({
-						...(agentHttp ? { runtime: agentHttp.decorateVoiceRuntime } : {}),
+						diagnostics,
+						runtime: speech.decorate,
+						speech,
 						mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 						tones: toneSinks(createToneRecorder(), {
 							play: (_serial, tone) => {
@@ -245,6 +265,14 @@ if (!app.requestSingleInstanceLock()) {
 						serial: () => "quake",
 						panel: () => panelWin,
 						management: () => managementWin,
+					});
+					await voice.ready;
+					const removeSpeechSettings = registerSpeechSettings({
+						controller: speech.settings,
+						management: () => managementWin,
+						renderer: rendererURL,
+						instrument: diagnostics.instrument,
+						run: (effect) => background.runPromise(effect),
 					});
 					resetVoice = voice.reset;
 					publishVoice = voice.publish;
@@ -675,6 +703,7 @@ if (!app.requestSingleInstanceLock()) {
 								emoji.dispose(),
 							]);
 							await agentHttp?.dispose();
+							removeSpeechSettings();
 							await voice.dispose();
 							await profiles.dispose();
 							await clock.dispose();

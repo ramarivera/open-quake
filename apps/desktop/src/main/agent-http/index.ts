@@ -27,7 +27,10 @@ import {
 	type RuntimeRegistry,
 	type RuntimeResolver,
 } from "./runtime-registry";
-import { agentHttpVoiceLayer } from "./voice-adapter";
+import {
+	agentHttpVoiceLayer,
+	createAgentHttpVoiceAdapter,
+} from "./voice-adapter";
 
 export interface AgentHttpOptions {
 	readonly diagnostics?: DesktopDiagnostics;
@@ -181,6 +184,18 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 						),
 					),
 			}),
+			createVoiceAdapter: (
+				fallback: Parameters<typeof createAgentHttpVoiceAdapter>[1],
+			) =>
+				createAgentHttpVoiceAdapter(
+					{
+						selected,
+						stream: service.stream,
+						cancel: service.cancel,
+						generation: () => generation,
+					},
+					fallback,
+				),
 			decorateVoiceRuntime: (
 				fallback: Parameters<typeof agentHttpVoiceLayer>[1],
 			) =>
