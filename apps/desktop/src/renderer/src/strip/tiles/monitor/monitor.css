@@ -59,10 +59,11 @@
 	overflow: hidden;
 }
 .monitor-heading {
-	font-size: 18px;
+	font-size: 24px;
 	font-weight: 600;
+	line-height: 1.2;
 	text-transform: uppercase;
-	letter-spacing: 1.68px;
+	letter-spacing: 0.06em;
 	color: var(--strip-muted);
 }
 .monitor-subtitle,
@@ -142,7 +143,7 @@
 	white-space: nowrap;
 }
 .monitor-model .monitor-heading {
-	font-size: 16px;
+	font-size: 24px;
 	margin-bottom: 4px;
 }
 .monitor-middle {
