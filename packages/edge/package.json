@@ -25,6 +25,8 @@
 		"test:e2e:config": "node --test e2e/config.node-test.mjs e2e/lifecycle.node-test.mjs"
 	},
 	"dependencies": {
+		"@ai-sdk/openai-compatible": "3.0.78",
+		"ai": "7.0.153",
 		"effect": "catalog:"
 	},
 	"devDependencies": {
