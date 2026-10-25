@@ -405,6 +405,27 @@ export function AgentsPage({
 		() => setTab(activation?.tab ?? initialTab),
 		[initialTab, activation],
 	);
+	// Narrow windows scroll the tab row horizontally; keep the selected tab
+	// visible after selection and resizes without moving the page vertically.
+	const tabRow = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const row = tabRow.current;
+		if (!row) return;
+		const reveal = () => {
+			const selected = row.querySelector<HTMLElement>('[aria-selected="true"]');
+			if (!selected) return;
+			const start = selected.offsetLeft - row.offsetLeft;
+			const end = start + selected.offsetWidth;
+			if (start < row.scrollLeft) row.scrollLeft = start;
+			else if (end > row.scrollLeft + row.clientWidth)
+				row.scrollLeft = end - row.clientWidth;
+		};
+		reveal();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(reveal);
+		observer.observe(row);
+		return () => observer.disconnect();
+	}, [tab]);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
 		{ id: "agents", label: strings.clawControlPanel.localLibraryTab },
@@ -421,6 +442,7 @@ export function AgentsPage({
 				</div>
 			</header>
 			<div
+				ref={tabRow}
 				className="mc-tabs"
 				role="tablist"
 				onKeyDown={(event) => {
