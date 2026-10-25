@@ -3,7 +3,7 @@
 ## 1. Shared contract and planning
 
 - [x] 1.1 Lane1, open-quake-hwn.1: validate proposal, design and delta specs using openspec validate agent-http-runtimes --strict before production implementation.
-- [ ] 1.2 Lane1, open-quake-hwn.1: freeze schemas, provider and transport ports, catalog errors and URL invariants; verify edge typecheck and focused schema/URL tests, publish committed interface to all lanes.
+- [x] 1.2 Lane1, open-quake-hwn.1: freeze schemas, provider and transport ports, catalog errors and URL invariants; verify edge typecheck and focused schema/URL tests, publish committed interface to all lanes.
 
 ## 2. Provider and transport implementation
 

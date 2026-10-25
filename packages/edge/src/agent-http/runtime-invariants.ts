@@ -28,11 +28,12 @@ export function normalizeRuntimeBaseURL(input: string): string | undefined {
 		if (
 			input !== input.trim() ||
 			input.length > 4096 ||
-			hasUnsafeCharacters(input) || input.includes("?") ||
+			hasUnsafeCharacters(input) ||
+			input.includes("?") ||
 			input.includes("#")
 		)
 			return undefined;
-		if (!/^https?:\/\//i.test(input)) return undefined;
+		if (!/^https?:\/\/[^/]/i.test(input)) return undefined;
 		const rawPath = input.replace(/^https?:\/\/[^/]+/i, "");
 		if (unsafePath(rawPath)) return undefined;
 		const url = new URL(input);
