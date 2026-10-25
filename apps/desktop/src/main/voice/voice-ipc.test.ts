@@ -268,3 +268,91 @@ describe("voice:request", () => {
 		}
 	});
 });
+
+it("routes Read Aloud through the selected speech consumer using accumulated real answer chunks", async () => {
+	const { Schema } = await import("effect");
+	const { SessionId, TurnId } = await import(
+		"../../../../../packages/edge/src/chat/chat-contracts"
+	);
+	const sessionId = Schema.decodeUnknownSync(SessionId)(crypto.randomUUID());
+	const turnId = Schema.decodeUnknownSync(TurnId)(crypto.randomUUID());
+	const readAloud = vi.fn(async (_text: string) => ({ _tag: "ok" }) as const);
+	const observe = vi.fn((_event: unknown) => undefined);
+	const registration = registerVoiceSurface({
+		mock: false,
+		tones: createToneRecorder(),
+		serial: () => "QK-1",
+		panel: () => undefined,
+		management: () => undefined,
+		renderer: RENDERER,
+		speech: { readAloud, onEvent: observe },
+	});
+	try {
+		const handler = electron.ipcMain.handle.mock.calls.find(
+			([channel]) => channel === VOICE_REQUEST_CHANNEL,
+		)?.[1];
+		if (!handler) throw new Error("missing voice handler");
+		await registration.publish({
+			_tag: "TurnStarted",
+			serial: "QK-1",
+			keyCode: "1,5",
+			sessionId,
+			turnId,
+			prompt: "input",
+			source: "typed",
+		});
+		await registration.publish({
+			_tag: "Chunk",
+			serial: "QK-1",
+			keyCode: "1,5",
+			chunk: {
+				version: 1,
+				sessionId,
+				turnId,
+				seq: 0,
+				type: "answer",
+				textDelta: "Readable answer.",
+			},
+		});
+		await registration.publish({
+			_tag: "Chunk",
+			serial: "QK-1",
+			keyCode: "1,5",
+			chunk: {
+				version: 1,
+				sessionId,
+				turnId,
+				seq: 1,
+				type: "followUp",
+				suggestionId: "one",
+				text: "Never speak this.",
+			},
+		});
+		const reply = decodeReply(
+			await handler(
+				{
+					sender: electron.webContents,
+					senderFrame: electron.webContents.mainFrame,
+				},
+				{ _tag: "ReadAloud", keyCode: "1,5" },
+			),
+		);
+		expect(reply).toEqual({ _tag: "ok" });
+		expect(readAloud).toHaveBeenCalledExactlyOnceWith("Readable answer.");
+		expect(observe).toHaveBeenCalledTimes(3);
+		await registration.reset();
+		expect(
+			decodeReply(
+				await handler(
+					{
+						sender: electron.webContents,
+						senderFrame: electron.webContents.mainFrame,
+					},
+					{ _tag: "ReadAloud", keyCode: "1,5" },
+				),
+			),
+		).toMatchObject({ _tag: "rejected" });
+	} finally {
+		await registration.dispose();
+	}
+});

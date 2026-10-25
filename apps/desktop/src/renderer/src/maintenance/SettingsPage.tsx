@@ -11,6 +11,7 @@ import strings from "../../../shared/maintenance-strings.json";
 import { Group, PageHeader, Row } from "../ui/Form";
 import type { MaintenanceController } from "./useMaintenance";
 import "./maintenance.css";
+import { SpeechSettingsPanel } from "../speech/SpeechSettings";
 
 const fw = strings.firmwareUpgrade;
 const permissionNames: Readonly<Record<PermissionKey, string>> = {
@@ -133,6 +134,7 @@ export function SettingsPage({
 							</Row>
 						) : null}
 					</Group>
+					<SpeechSettingsPanel />
 					<Group title="General">
 						<Row
 							label="Version"

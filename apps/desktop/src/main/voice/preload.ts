@@ -1,3 +1,4 @@
+import "../speech/preload";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
 	VOICE_REQUEST_CHANNEL,
