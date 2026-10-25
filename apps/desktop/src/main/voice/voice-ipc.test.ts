@@ -340,6 +340,31 @@ it("routes Read Aloud through the selected speech consumer using accumulated rea
 		expect(reply).toEqual({ _tag: "ok" });
 		expect(readAloud).toHaveBeenCalledExactlyOnceWith("Readable answer.");
 		expect(observe).toHaveBeenCalledTimes(3);
+		await registration.publish({
+			_tag: "Chunk",
+			serial: "QK-1",
+			keyCode: "1,5",
+			chunk: {
+				version: 1,
+				sessionId,
+				turnId,
+				seq: 2,
+				type: "answer",
+				textDelta: "x".repeat(4000),
+			},
+		});
+		expect(
+			decodeReply(
+				await handler(
+					{
+						sender: electron.webContents,
+						senderFrame: electron.webContents.mainFrame,
+					},
+					{ _tag: "ReadAloud", keyCode: "1,5" },
+				),
+			),
+		).toEqual({ _tag: "rejected", code: "VOICE.TTS.QUEUE_FULL" });
+		expect(readAloud).toHaveBeenCalledTimes(1);
 		await registration.reset();
 		expect(
 			decodeReply(

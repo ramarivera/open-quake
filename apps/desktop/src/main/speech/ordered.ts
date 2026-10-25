@@ -5,6 +5,7 @@ import type {
 	SpeechOutcome,
 	SpeechTurn,
 } from "../../../../../packages/edge/src/ai/speech/speech-service";
+import { instrumentSpeechOutcome, type SpeechDiagnostics } from "./diagnostics";
 import { DesktopSpeechError } from "./errors";
 
 /** One turn owns its unsaid text, one speaker, and a two-second pending-text timer. */
@@ -13,10 +14,7 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 		readonly speech: Pick<AiSpeechService, "createSpeech">;
 		readonly profile: TtsProfile;
 		readonly report: (error: { readonly code: string }) => Effect.Effect<void>;
-		readonly instrument?: <A, E, R>(
-			effect: Effect.Effect<A, E, R>,
-			operation: "speech.playback",
-		) => Effect.Effect<A, E, R>;
+		readonly instrument?: SpeechDiagnostics["instrument"] | undefined;
 	}) {
 		const scope = yield* Effect.scope;
 		const gate = yield* Effect.makeSemaphore(1);
@@ -43,9 +41,10 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 				const segment = segments.shift();
 				if (!segment) continue;
 				current = yield* options.speech.createSpeech(options.profile, segment);
-				const outcome = yield* options.instrument
-					? options.instrument(current.result, "speech.playback")
-					: current.result;
+				const outcome = yield* instrumentSpeechOutcome(
+					current.result,
+					options.instrument,
+				);
 				queued -= segment.length;
 				current = undefined;
 				if (outcome._tag !== "completed") {

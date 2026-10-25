@@ -13,12 +13,18 @@ const speech = yield* createDesktopSpeech({
   credentials: systemCredentialVault(join(userData, "credentials")),
   diagnostics,
   sendTranscript: request => httpVoice.sendTranscript(request),
-  sendText: request => httpVoice.runtime.sendText(request),
-  cancelText: (serial, keyCode) => httpVoice.runtime.cancelFlow(serial, keyCode),
+  sendText: request => fallback.sendText(request),
+  // Optional direct HTTP turn cancel. Never route back through the decorator.
+  cancelText: (serial, keyCode) => httpVoice.cancelText(serial, keyCode),
 });
 ```
 
-The parent owns the HTTP runtime composition. Use late-bound callbacks when
+The parent owns the HTTP runtime composition and adds a direct `cancelText`
+handle if needed. The existing local fallback is the original mock/unavailable
+runtime before HTTP decoration. Never send the speech fallback back through
+`httpVoice.runtime.sendText` or `httpVoice.runtime.cancelFlow`: both delegate
+to their fallback and would recurse when the external selection is absent.
+Use late-bound callbacks when
 constructing the HTTP voice adapter around `speech.runtime`, to preserve its
 capture implementation without introducing a construction cycle. Pass a
 `Layer.scoped(GridVoiceRuntime, ...)` into the voice registration's existing
@@ -31,7 +37,9 @@ It rejects stale turn IDs and nonincreasing chunk sequences. It never speaks
 `followUp` chunks. Map `readAloud(text)` outcomes to `VoiceSurfaceReply`, returning
 `ok` only for `completed`, otherwise a rejected speech error/cancellation code.
 The registration keeps at most 16 current answers, with at most 4,000 characters
-each, to resolve the existing key-only ReadAloud request in main.
+each, to resolve the existing key-only ReadAloud request in main. An oversized
+answer rejects ReadAloud with `VOICE.TTS.QUEUE_FULL` instead of silently reading
+a truncated answer.
 
 Register settings through `registerSpeechSettings({ controller: speech.settings,
 management, renderer, run })`. The supplied `run` is the parent's instrumented
@@ -39,7 +47,9 @@ interpreter. Dispose the returned unregister function during shutdown. The
 existing voice preload loads the speech settings bridge, and SettingsPage uses
 it. No secret or credential reference appears in settings replies. New keys go
 through the existing safeStorage vault, with revocation cancelling live speech.
-Profile destination changes require a new key. Settings changes call
+Profile destination changes require a new key. Failed deletion of an obsolete
+key keeps its reference in a bounded persisted cleanup list and retries on the
+next settings request. Settings changes call
 `speech.reset()` before replacing profiles, physically cancelling capture and
 output. The user can independently disable either route.
 
@@ -81,7 +91,8 @@ Diagnostics are optional and structurally compatible with
 `Pick<DesktopDiagnostics, "layer" | "instrument">`. Parent interpreters must
 provide the shared diagnostics layer. The owned voice interpreter merges it.
 Capture, recognition and playback operations are instrumented before outcome
-catches. New errors come from `DesktopSpeechErrors` with private original causes
+catches. The playback boundary temporarily lifts text-only failures into the
+typed error channel for diagnostics, then restores readable-text continuation. New errors come from `DesktopSpeechErrors` with private original causes
 and scrubbed JSON. No PCM, text, provider bodies or keys are logged here.
 
 Tests drive the serialized audio worker with synthetic tracks/contexts, a real

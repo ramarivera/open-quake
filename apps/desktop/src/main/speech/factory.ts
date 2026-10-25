@@ -1,5 +1,10 @@
 import { Effect, Layer } from "effect";
 import { AiCredentials } from "../../../../../packages/edge/src/ai/ai-credentials";
+import type {
+	SpeechHttp,
+	SpeechOutput,
+	SpeechWebSocket,
+} from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import { AiSpeechService } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import type {
 	CredentialVault,
@@ -26,6 +31,7 @@ export interface DesktopSpeechOptions
 	/** The existing app-owned safeStorage vault, e.g. systemCredentialVault(userData/credentials). */
 	readonly credentials: CredentialVault;
 	readonly capture?: CaptureDriver;
+	readonly ports?: Layer.Layer<SpeechHttp | SpeechWebSocket | SpeechOutput>;
 }
 /** Root composition in one acquisition. No provider, window, mic or speaker is opened here. */
 export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
@@ -36,7 +42,7 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 		Layer.provide(
 			Layer.mergeAll(
 				Layer.succeed(AiCredentials, credentials),
-				desktopSpeechPorts(),
+				options.ports ?? desktopSpeechPorts(),
 			),
 		),
 	);

@@ -47,15 +47,18 @@ export async function openAudioWorker(
 		},
 	});
 	let closed = false;
-	const close = async () => {
-		if (closed) return;
+	let closing: Promise<void> | undefined;
+	const close = (): Promise<void> => {
+		if (closing) return closing;
 		closed = true;
 		signal.removeEventListener("abort", abort);
 		if (!window.isDestroyed()) window.destroy();
-		await rm(directory, { recursive: true, force: true });
+		closing = rm(directory, { recursive: true, force: true });
+		return closing;
 	};
 	const abort = () => {
-		void close();
+		// The owning finalizer awaits the same promise and reports cleanup failure.
+		void close().catch(() => undefined);
 	};
 	signal.addEventListener("abort", abort, { once: true });
 	window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -70,8 +73,11 @@ export async function openAudioWorker(
 			),
 	);
 	audioSession.setPermissionCheckHandler(
-		(contents, permission) =>
-			contents === window.webContents && permission === "media",
+		(contents, permission, _origin, details) =>
+			contents === window.webContents &&
+			permission === "media" &&
+			details.isMainFrame &&
+			details.mediaType === "audio",
 	);
 	try {
 		if (signal.aborted) {
@@ -132,6 +138,10 @@ export function createElectronCaptureDriver(
 							once: true,
 						});
 						const value = await open(controller.signal);
+						if (controller.signal.aborted) {
+							await value.close();
+							throw new AiUnavailable();
+						}
 						await value.invoke("capture", [id]);
 						return value;
 					},
@@ -171,7 +181,14 @@ export function createElectronCaptureDriver(
 						),
 					),
 					stop: boundary(() => worker.invoke("stop")).pipe(
-						Effect.orElseSucceed(() => undefined),
+						Effect.timeout("2 seconds"),
+						Effect.orElse(() =>
+							Effect.promise(async () => {
+								controller.abort();
+								await worker.close();
+							}),
+						),
+						Effect.asVoid,
 					),
 					close: Effect.promise(async () => {
 						controller.abort();
@@ -194,6 +211,10 @@ export function createDesktopAudioOutput(
 			const lease = {
 				ready: boundary(async () => {
 					worker = await open(controller.signal);
+					if (controller.signal.aborted) {
+						await worker.close();
+						throw new AiUnavailable();
+					}
 					await worker.invoke("ready");
 				}).pipe(
 					Effect.onInterrupt(() => Effect.sync(() => controller.abort())),

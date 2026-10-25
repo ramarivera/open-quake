@@ -17,13 +17,16 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 	const [ttsKey, setTtsKey] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	const [saved, setSaved] = useState(false);
+	const [savedSettings, setSavedSettings] = useState<SpeechSettings>();
+	const saved = savedSettings === draft && !sttKey && !ttsKey;
+	const [loading, setLoading] = useState<Promise<unknown>>();
+	useEffect(() => {
+		setLoading(window.quakeSpeech?.request({ _tag: "Get" }));
+	}, []);
 	useEffect(() => {
 		let live = true;
-		const bridge = window.quakeSpeech;
-		if (bridge)
-			void bridge
-				.request({ _tag: "Get" })
+		if (loading)
+			void loading
 				.then((raw) => {
 					const reply = Schema.decodeUnknownSync(SpeechSettingsReply)(raw);
 					if (!live) return;
@@ -38,12 +41,12 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 		return () => {
 			live = false;
 		};
-	}, []);
+	}, [loading]);
 	if (!window.quakeSpeech) return null;
 	const save = async () => {
 		setBusy(true);
 		setError("");
-		setSaved(false);
+		setSavedSettings(undefined);
 		try {
 			const raw = await window.quakeSpeech?.request({
 				_tag: "Save",
@@ -56,7 +59,7 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 			else {
 				setView(reply.view);
 				setDraft(reply.view.settings);
-				setSaved(true);
+				setSavedSettings(reply.view.settings);
 			}
 		} catch {
 			setError("Speech settings couldn't be saved.");
@@ -69,6 +72,18 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 	return (
 		<Group title="Speech">
 			{error ? <p role="alert">{error}</p> : null}
+			{error && !view ? (
+				<button
+					type="button"
+					className="button"
+					onClick={() => {
+						setError("");
+						setLoading(window.quakeSpeech?.request({ _tag: "Get" }));
+					}}
+				>
+					Retry loading speech settings
+				</button>
+			) : null}
 			{!view && !error ? <p role="status">Loading speech settings…</p> : null}
 			<Row
 				label="Recognition"
@@ -79,7 +94,7 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 					value={draft.stt ? "dashscope" : "disabled"}
 					disabled={busy || !view}
 					onChange={(e) => {
-						setSaved(false);
+						setSavedSettings(undefined);
 						setDraft({
 							...draft,
 							stt:

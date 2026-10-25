@@ -1,4 +1,5 @@
 import { Effect, Either, Redacted, Schema } from "effect";
+import { CredentialRef } from "../../../../../packages/edge/src/ai/ai-contracts";
 import type { AiError } from "../../../../../packages/edge/src/ai/ai-errors";
 import {
 	AiAuthRequired,
@@ -25,6 +26,9 @@ const Stored = Schema.Struct({
 	settings: SpeechSettings,
 	stt: Schema.optional(SttProfile),
 	tts: Schema.optional(TtsProfile),
+	retired: Schema.optional(
+		Schema.Array(CredentialRef).pipe(Schema.maxItems(64)),
+	),
 });
 type Stored = typeof Stored.Type;
 const initial: Stored = {
@@ -50,6 +54,19 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 		})(raw ?? initial).pipe(
 			Effect.mapError((cause) => new AiConfigInvalid(cause)),
 		);
+		const cleanup = Effect.fn("DesktopSpeech.cleanupCredentials")(function* () {
+			while (state.retired?.length) {
+				const reference = state.retired[0];
+				if (!reference) break;
+				yield* options.credentials.remove(reference);
+				const next = { ...state, retired: state.retired.slice(1) };
+				yield* Effect.tryPromise({
+					try: () => options.storage.write(next),
+					catch: (cause) => new AiCredentialStoreFailed(cause),
+				});
+				state = next;
+			}
+		});
 		const view = Effect.fn("DesktopSpeech.settingsView")(
 			function* (): Effect.fn.Return<SpeechSettingsView> {
 				const available = (profile: SttProfile | TtsProfile | undefined) =>
@@ -87,7 +104,10 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 							)(input).pipe(
 								Effect.mapError((cause) => new AiConfigInvalid(cause)),
 							);
-							if (request._tag === "Get") return yield* view();
+							if (request._tag === "Get") {
+								yield* cleanup();
+								return yield* view();
+							}
 							const previous = state;
 							const created: Array<SttProfile | TtsProfile> = [];
 							const build = Effect.gen(function* () {
@@ -152,8 +172,25 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 									};
 									if (request.ttsKey) created.push(tts);
 								}
+								const retired = [
+									...new Set([
+										...(previous.retired ?? []),
+										...[previous.stt, previous.tts]
+											.filter(
+												(old) =>
+													old &&
+													old.credentialRef !== stt?.credentialRef &&
+													old.credentialRef !== tts?.credentialRef,
+											)
+											.map((old) => old?.credentialRef)
+											.filter((ref): ref is CredentialRef => ref !== undefined),
+									]),
+								];
+								if (retired.length > 64)
+									return yield* new AiCredentialStoreFailed();
 								const next: Stored = {
 									version: 1,
+									retired,
 									settings: request.settings,
 									...(stt ? { stt } : {}),
 									...(tts ? { tts } : {}),
@@ -168,18 +205,10 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 							const result = yield* build.pipe(Effect.either);
 							if (Either.isLeft(result)) {
 								for (const profile of created)
-									yield* options.credentials
-										.remove(profile.credentialRef)
-										.pipe(Effect.orElseSucceed(() => undefined));
+									yield* options.credentials.remove(profile.credentialRef);
 								return yield* result.left;
 							}
-							for (const old of [previous.stt, previous.tts])
-								if (
-									old &&
-									old.credentialRef !== state.stt?.credentialRef &&
-									old.credentialRef !== state.tts?.credentialRef
-								)
-									yield* options.credentials.remove(old.credentialRef);
+							yield* cleanup();
 							return yield* view();
 						}),
 					),

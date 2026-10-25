@@ -39,7 +39,13 @@ export function connectSpeechSocket(
 	allowLoopback = false,
 ): Effect.Effect<SpeechSocket, AiError> {
 	return Effect.async<SpeechSocket, AiError>((resume) => {
-		const url = new URL(input.url);
+		let url: URL;
+		try {
+			url = new URL(input.url);
+		} catch (cause) {
+			resume(Effect.fail(new AiUnavailable(cause)));
+			return;
+		}
 		const local =
 			allowLoopback &&
 			url.protocol === "ws:" &&

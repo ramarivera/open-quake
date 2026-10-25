@@ -11,6 +11,10 @@ export function registerSpeechSettings(options: {
 	readonly controller: SpeechSettingsController;
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer: string;
+	readonly instrument?: <A, E, R>(
+		effect: Effect.Effect<A, E, R>,
+		operation: "voice.request",
+	) => Effect.Effect<A, E, R>;
 	readonly run: <A>(effect: Effect.Effect<A>) => Promise<A>;
 }): () => void {
 	ipcMain.handle(
@@ -31,8 +35,12 @@ export function registerSpeechSettings(options: {
 					_tag: "rejected",
 					code: "VOICE.SETTINGS.UNAUTHORIZED",
 				});
+			const request = options.controller.request(input);
 			return options.run(
-				options.controller.request(input).pipe(
+				(options.instrument
+					? options.instrument(request, "voice.request")
+					: request
+				).pipe(
 					Effect.match({
 						onSuccess: (view) => ({ _tag: "success", view }) as const,
 						onFailure: (error) =>

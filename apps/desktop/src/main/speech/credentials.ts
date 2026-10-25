@@ -26,7 +26,10 @@ export const createSpeechCredentials = Effect.fn("DesktopSpeech.credentials")(
 				return yield* new AiAuthRevoked();
 			const key = yield* Effect.tryPromise({
 				try: () => native.get(reference),
-				catch: (cause) => new AiCredentialStoreFailed(cause),
+				catch: (cause) =>
+					cause instanceof Error && "code" in cause && cause.code === "ENOENT"
+						? new AiAuthRequired(cause)
+						: new AiCredentialStoreFailed(cause),
 			}).pipe(
 				Effect.timeoutFail({
 					duration: "10 seconds",

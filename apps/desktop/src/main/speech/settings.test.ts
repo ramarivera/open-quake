@@ -174,3 +174,65 @@ describe("explicit speech settings and existing credential ownership", () => {
 			}).pipe(Effect.provide(layer())),
 	);
 });
+
+it.effect(
+	"retains obsolete credential references durably when native deletion fails and retries them on the next settings request",
+	() =>
+		Effect.gen(function* () {
+			const { createSpeechCredentials } = yield* Effect.promise(
+				() => import("./credentials"),
+			);
+			const keys = new Map<string, string>();
+			let failDelete = true;
+			let stored: unknown = emptySpeechSettings;
+			const credentials = yield* createSpeechCredentials({
+				put: async (value) => {
+					const reference = crypto.randomUUID();
+					keys.set(reference, value);
+					return reference;
+				},
+				get: async (reference) => keys.get(reference) ?? "",
+				remove: async (reference) => {
+					if (failDelete)
+						throw new Error("synthetic secure storage unavailable");
+					keys.delete(reference);
+				},
+			});
+			const controller = yield* createSpeechSettings({
+				credentials,
+				storage: {
+					read: async () => stored,
+					write: async (value) => {
+						stored = value;
+					},
+				},
+				changed: Effect.void,
+			});
+			yield* controller.request({
+				_tag: "Save",
+				settings: {
+					version: 1,
+					speakAnswers: false,
+					tts: { provider: "openai", voice: "marin", language: "en" },
+				},
+				ttsKey: "synthetic-retired",
+			});
+			const reference = (yield* controller.profiles()).tts?.credentialRef;
+			const failure = yield* controller
+				.request({
+					_tag: "Save",
+					settings: { version: 1, speakAnswers: false },
+				})
+				.pipe(Effect.either);
+			expect(failure).toMatchObject({
+				_tag: "Left",
+				left: { code: "AI.CREDENTIAL.STORE_FAILED" },
+			});
+			expect(stored).toMatchObject({ retired: [reference] });
+			expect((yield* controller.profiles()).tts).toBeUndefined();
+			failDelete = false;
+			yield* controller.request({ _tag: "Get" });
+			expect(stored).toMatchObject({ retired: [] });
+			expect(keys.size).toBe(0);
+		}),
+);

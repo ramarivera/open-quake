@@ -26,7 +26,7 @@ import {
 	type CaptureSession,
 	captureFrames,
 } from "./capture";
-import type { SpeechDiagnostics } from "./diagnostics";
+import { instrumentSpeechOutcome, type SpeechDiagnostics } from "./diagnostics";
 import { DesktopSpeechError } from "./errors";
 import { createOrderedSpeech, type OrderedSpeech } from "./ordered";
 
@@ -331,9 +331,10 @@ export const createProductionVoiceRuntime = Effect.fn(
 				};
 			if (closed || active) return { _tag: "cancelled" };
 			const turn = yield* options.speech.createSpeech(profile.right.tts, text);
-			const fiber = yield* instrument(turn.result, "speech.playback").pipe(
-				Effect.forkIn(scope),
-			);
+			const fiber = yield* instrumentSpeechOutcome(
+				turn.result,
+				options.diagnostics?.instrument,
+			).pipe(Effect.forkIn(scope));
 			readAloud = fiber;
 			cancelReadAloud = turn.cancel;
 			return yield* Fiber.join(fiber).pipe(
@@ -371,7 +372,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 								speech: options.speech,
 								profile: profiles.right.tts,
 								report,
-								instrument,
+								instrument: options.diagnostics?.instrument,
 							}).pipe(Effect.provideService(Scope.Scope, scope));
 							if (turns.size >= 16) {
 								const oldest = turns.keys().next().value;

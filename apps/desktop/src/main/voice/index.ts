@@ -172,7 +172,10 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 		options.renderer ??
 		process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
-	const answers = new Map<string, { turnId: string; text: string }>();
+	const answers = new Map<
+		string,
+		{ turnId: string; text: string; seq: number; overflow: boolean }
+	>();
 	const answerKey = (serial: string, keyCode: string) =>
 		`${serial}\u0000${keyCode}`;
 	const publish = (event: VoiceSurfaceEvent) => {
@@ -183,6 +186,8 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 			answers.set(answerKey(event.serial, event.keyCode), {
 				turnId: event.turnId,
 				text: "",
+				seq: -1,
+				overflow: false,
 			});
 			while (answers.size > 16) {
 				const key = answers.keys().next().value;
@@ -190,8 +195,15 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 			}
 		} else if (event._tag === "Chunk" && event.chunk.type === "answer") {
 			const answer = answers.get(answerKey(event.serial, event.keyCode));
-			if (answer?.turnId === event.chunk.turnId)
-				answer.text = (answer.text + event.chunk.textDelta).slice(0, 4000);
+			if (
+				answer?.turnId === event.chunk.turnId &&
+				event.chunk.seq > answer.seq
+			) {
+				answer.seq = event.chunk.seq;
+				const combined = answer.text + event.chunk.textDelta;
+				answer.overflow ||= combined.length > 4000;
+				answer.text = combined.slice(0, 4000);
+			}
 		}
 		broadcast(event);
 		options.speech?.onEvent(event);
@@ -300,7 +312,9 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 				return ok;
 			}
 			case "ReadAloud": {
-				const text = answers.get(answerKey(serial, request.keyCode))?.text;
+				const answer = answers.get(answerKey(serial, request.keyCode));
+				if (answer?.overflow) return rejected("VOICE.TTS.QUEUE_FULL");
+				const text = answer?.text;
 				if (!options.speech || !text?.trim())
 					return rejected("VOICE.TTS.UNAVAILABLE");
 				return options.speech.readAloud(text);
