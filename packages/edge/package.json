@@ -17,7 +17,10 @@
 		"./chat/reducers": "./src/chat/chat-invariants.ts",
 		"./voice/surface": "./src/voice/surface/index.ts",
 		"./voice/surface/contracts": "./src/voice/surface/voice-surface-contracts.ts",
-		"./chat/rpc": "./src/chat/chat-rpc.ts"
+		"./chat/rpc": "./src/chat/chat-rpc.ts",
+		"./settings/general-contracts": "./src/settings/general-contracts.ts",
+		"./settings/wizard-contracts": "./src/settings/wizard-contracts.ts",
+		"./settings/backend-rpc": "./src/settings/backend-rpc.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
