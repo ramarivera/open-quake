@@ -19,6 +19,7 @@ import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors
 import { MaintenanceErrors } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting-errors.js";
 import { SettingsErrors } from "../../../../../packages/edge/src/settings/settings-errors";
+import { SoundboardErrors } from "../../../../../packages/edge/src/soundboard/soundboard-errors.js";
 import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
 import { DesktopSpeechErrors } from "../speech/errors.js";
 import { SystemMediaErrors } from "../weather-media/native/errors";
@@ -61,6 +62,7 @@ const identities = new Map<string, { code: string; category: string }>(
 		SpeechErrors,
 		DesktopSpeechErrors,
 		SystemMediaErrors,
+		SoundboardErrors,
 		RuntimeErrors,
 		VoiceSurfaceErrors,
 		ActionErrors,
