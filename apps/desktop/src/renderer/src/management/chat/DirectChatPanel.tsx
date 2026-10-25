@@ -13,6 +13,7 @@ import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { ActionDialog } from "../agent-http/ActionDialog";
 import { Composer } from "./Composer";
 import { createChatController } from "./controller";
+import { revealEnd } from "./follow";
 import { fill, relativeTime } from "./format";
 import { Icon } from "./icons";
 import type { DirectChatModel } from "./model-scope";
@@ -68,6 +69,8 @@ export function DirectChatPanel({
 	const [listOpen, setListOpen] = useState(false);
 	const scroll = useRef<HTMLElement>(null),
 		follow = useRef(true),
+		reveal = useRef(false),
+		shown = useRef<string | undefined>(undefined),
 		input = useRef<HTMLTextAreaElement>(null);
 	useEffect(() => {
 		void controller.refresh();
@@ -78,8 +81,12 @@ export function DirectChatPanel({
 	}, [state.current?.title]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Streaming should follow only while the reader remains at the bottom.
 	useLayoutEffect(() => {
-		if (follow.current && scroll.current)
-			scroll.current.scrollTop = scroll.current.scrollHeight;
+		// Opening another conversation always lands on its newest message.
+		const opened = shown.current !== state.sessionId;
+		shown.current = state.sessionId;
+		if (scroll.current)
+			revealEnd(scroll.current, follow.current, reveal.current || opened);
+		reveal.current = false;
 	}, [state.turn?.lastSeq, state.current?.revision, state.sessionId]);
 	const open = (url: string) => {
 		void window.quakeVoice?.request({ _tag: "OpenLink", url });
@@ -91,6 +98,7 @@ export function DirectChatPanel({
 	const submit = () => {
 		const value = text;
 		follow.current = true;
+		reveal.current = true;
 		void controller.submit(value);
 		setText("");
 	};
