@@ -9,4 +9,4 @@
 
 - [x] 2.1 Run focused release tests, desktop checks and a real local packaged smoke.
 - [x] 2.2 Commit, normally push and open a PR against the latest application branch.
-- [ ] 2.3 Reconcile hosted installer builds and one configured bot-review round.
+- [x] 2.3 Reconcile hosted installer builds and one configured bot-review round.
