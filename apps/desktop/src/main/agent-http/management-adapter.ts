@@ -77,7 +77,7 @@ const DraftFiles = Schema.Struct({
 export function createAgentDraftAdapter(
 	options: RuntimeDraftOptions,
 ): AgentDraftAdapter {
-	const text = Effect.fn("AgentHttp.draftText")(function* (
+	const generate = Effect.fn("AgentHttp.draftText")(function* (
 		prompt: string,
 	): Effect.fn.Return<string, AgentError> {
 		const selected = yield* options
@@ -113,14 +113,17 @@ export function createAgentDraftAdapter(
 						});
 			}),
 			Effect.mapError((cause) => new AgentDraftFailed(cause)),
+		);
+		if (!result.completed) return yield* new AgentDraftFailed();
+		return result.text;
+	});
+	const text = (prompt: string) =>
+		generate(prompt).pipe(
 			Effect.timeoutFail({
 				duration: "60 seconds",
 				onTimeout: () => new AgentDraftFailed(),
 			}),
 		);
-		if (!result.completed) return yield* new AgentDraftFailed();
-		return result.text;
-	});
 	return {
 		agent: Effect.fn("AgentHttp.draftAgent")(function* ({
 			agent,

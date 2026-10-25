@@ -117,93 +117,103 @@ export const createRuntimeRegistry = Effect.fn(
 			listeners.clear();
 		}),
 	);
-	const connect = Effect.fn("AgentHttp.connect")(function* (
-		connectionId: string,
-	): Effect.fn.Return<RuntimeRegistrySnapshot, RuntimeError> {
-		const first = yield* Deferred.make<RuntimeRegistrySnapshot, RuntimeError>();
-		const token = yield* lock.withPermits(1)(
-			Effect.gen(function* () {
-				if (disposed) return yield* new RuntimeUnavailable();
-				yield* invalidate();
-				const current = generation;
-				yield* publish({
-					generation: current,
-					connectionId,
-					status: "connecting",
-				});
-				const probe = Effect.gen(function* () {
-					// Re-resolve each poll so credential edits/removal don't retain stale secrets.
-					const { connection, adapter } = yield* resolve(connectionId);
-					const health = yield* adapter.health(connection);
-					const capabilities =
-						health.status === "ready"
-							? yield* adapter.capabilities(connection)
-							: undefined;
-					const next: RuntimeRegistrySnapshot = {
-						generation: current,
-						connectionId,
-						health,
-						status: health.status === "ready" ? "connected" : health.status,
-						...(capabilities ? { capabilities } : {}),
-					};
-					yield* publish(next);
-					return next;
-				}).pipe(
-					Effect.timeoutFail({
-						duration: timeout,
-						onTimeout: () => new RuntimeTimeout(),
-					}),
-				);
-				const runProbe = probe.pipe(
-					Effect.either,
-					Effect.tap((result) => {
-						if (result._tag === "Right") return Effect.void;
-						return publish({
-							generation: current,
-							connectionId,
-							status:
-								result.left._tag === "RuntimeAuthenticationFailed"
-									? "authenticationRequired"
-									: "error",
-							code: result.left.code,
-						});
-					}),
-				);
-				worker = yield* Effect.gen(function* () {
-					let result = yield* runProbe;
-					yield* result._tag === "Right"
-						? Deferred.succeed(first, result.right)
-						: Deferred.fail(first, result.left);
-					while (current === generation && !disposed) {
-						if (
-							(result._tag === "Left" &&
-								result.left._tag === "RuntimeAuthenticationFailed") ||
-							(result._tag === "Right" &&
-								result.right.status === "authenticationRequired")
-						)
-							return;
-						yield* Effect.sleep(interval);
-						result = yield* runProbe;
-					}
-				}).pipe(
-					Effect.ensuring(Deferred.fail(first, new RuntimeUnavailable())),
-					Effect.forkIn(scope),
-				);
-				return current;
-			}),
-		);
-		return yield* Deferred.await(first).pipe(
-			Effect.onInterrupt(() =>
-				lock.withPermits(1)(
-					Effect.gen(function* () {
-						if (token !== generation) return;
-						yield* invalidate();
-						yield* publish({ generation, status: "disconnected" });
-					}),
-				),
+	const connect = Effect.fn("AgentHttp.connect")(
+		(
+			connectionId: string,
+		): Effect.Effect<RuntimeRegistrySnapshot, RuntimeError> =>
+			Effect.uninterruptibleMask((restore) =>
+				Effect.gen(function* () {
+					const first = yield* Deferred.make<
+						RuntimeRegistrySnapshot,
+						RuntimeError
+					>();
+					const token = yield* lock.withPermits(1)(
+						Effect.gen(function* () {
+							if (disposed) return yield* new RuntimeUnavailable();
+							yield* invalidate();
+							const current = generation;
+							yield* publish({
+								generation: current,
+								connectionId,
+								status: "connecting",
+							});
+							const probe = Effect.gen(function* () {
+								// Re-resolve each poll so credential edits/removal don't retain stale secrets.
+								const { connection, adapter } = yield* resolve(connectionId);
+								const health = yield* adapter.health(connection);
+								const capabilities =
+									health.status === "ready"
+										? yield* adapter.capabilities(connection)
+										: undefined;
+								const next: RuntimeRegistrySnapshot = {
+									generation: current,
+									connectionId,
+									health,
+									status:
+										health.status === "ready" ? "connected" : health.status,
+									...(capabilities ? { capabilities } : {}),
+								};
+								yield* publish(next);
+								return next;
+							}).pipe(
+								Effect.timeoutFail({
+									duration: timeout,
+									onTimeout: () => new RuntimeTimeout(),
+								}),
+							);
+							const runProbe = probe.pipe(
+								Effect.either,
+								Effect.tap((result) => {
+									if (result._tag === "Right") return Effect.void;
+									return publish({
+										generation: current,
+										connectionId,
+										status:
+											result.left._tag === "RuntimeAuthenticationFailed"
+												? "authenticationRequired"
+												: "error",
+										code: result.left.code,
+									});
+								}),
+							);
+							worker = yield* Effect.gen(function* () {
+								let result = yield* runProbe;
+								yield* result._tag === "Right"
+									? Deferred.succeed(first, result.right)
+									: Deferred.fail(first, result.left);
+								while (current === generation && !disposed) {
+									if (
+										(result._tag === "Left" &&
+											result.left._tag === "RuntimeAuthenticationFailed") ||
+										(result._tag === "Right" &&
+											result.right.status === "authenticationRequired")
+									)
+										return;
+									yield* Effect.sleep(interval);
+									result = yield* runProbe;
+								}
+							}).pipe(
+								Effect.ensuring(Deferred.fail(first, new RuntimeUnavailable())),
+								Effect.interruptible,
+								Effect.forkIn(scope),
+							);
+							return current;
+						}),
+					);
+					return yield* restore(Deferred.await(first)).pipe(
+						Effect.onInterrupt(() =>
+							lock.withPermits(1)(
+								Effect.gen(function* () {
+									if (token !== generation) return;
+									yield* invalidate();
+									yield* publish({ generation, status: "disconnected" });
+								}),
+							),
+						),
+					);
+				}),
 			),
-		);
-	});
+	);
 	return {
 		resolve,
 		read: Effect.fn("AgentHttp.readConnection")(() => Effect.sync(() => state)),
