@@ -3,12 +3,11 @@ import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agen
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
-import { agentsStrings as strings } from "./copy";
+import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { reconcileModelDrafts, reconcileModelRow } from "./model-drafts";
 import type { AgentRequest } from "./useAgents";
 
-const t = strings.clawAIConfig;
 function ModelTable({
 	scope,
 	rows,
@@ -22,6 +21,8 @@ function ModelTable({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAIConfig;
 	const [drafts, setDrafts] = useState(rows);
 	const baseline = useRef(rows);
 	useEffect(() => {
@@ -335,6 +336,8 @@ export function ModelsPanel({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAIConfig;
 	const [tab, setTab] = useState("default");
 	const effective = directChatModel(view.models);
 	const mainOverride = Boolean(ownModelRows(view.models, DIRECT_CHAT_SCOPE));

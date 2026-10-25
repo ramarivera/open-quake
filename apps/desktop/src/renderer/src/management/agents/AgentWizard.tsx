@@ -8,12 +8,11 @@ import {
 	type AgentView,
 	EMOJI_PRESETS,
 } from "../../../../shared/agents";
-import { agentsStrings as strings } from "./copy";
+import { useAgentsCopy } from "./copy";
 import { AgentDialog } from "./Dialog";
 import type { AgentRequest } from "./useAgents";
 import { saveWorkspaceFiles } from "./workspace-save";
 
-const t = strings.clawAgentManagement;
 export function AgentWizard({
 	agent,
 	view,
@@ -25,6 +24,8 @@ export function AgentWizard({
 	readonly request: AgentRequest;
 	readonly onClose: () => void;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [id, setId] = useState(agent?.id ?? "");
 	const [name, setName] = useState(agent?.name ?? "");
 	const [emoji, setEmoji] = useState(agent?.emoji ?? "🤖");

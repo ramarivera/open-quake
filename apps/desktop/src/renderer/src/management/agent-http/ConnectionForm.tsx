@@ -6,7 +6,7 @@ import {
 	canSaveConnection,
 	endpointCredentialRequired,
 } from "./connection-draft";
-import { runtimeStrings as t } from "./copy";
+import { useRuntimeCopy } from "./copy";
 
 export function ConnectionForm({
 	existing,
@@ -19,6 +19,7 @@ export function ConnectionForm({
 	readonly onSave: (draft: ConnectionDraft) => Promise<boolean>;
 	readonly onCancel: () => void;
 }) {
+	const t = useRuntimeCopy();
 	const hintId = useId();
 	const [draft, setDraft] = useState<ConnectionDraft>({
 		name: existing?.name ?? "",

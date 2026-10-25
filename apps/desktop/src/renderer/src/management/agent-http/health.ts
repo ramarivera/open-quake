@@ -1,4 +1,4 @@
-import { runtimeStrings as t } from "./copy";
+import { type RuntimeCopy, runtimeStrings } from "./copy";
 
 export type HealthStatus =
 	| "ready"
@@ -7,7 +7,10 @@ export type HealthStatus =
 	| "error"
 	| "";
 
-export const healthLabel = (status: HealthStatus): string =>
+export const healthLabel = (
+	status: HealthStatus,
+	t: RuntimeCopy = runtimeStrings,
+): string =>
 	status === ""
 		? t.notTested
 		: {

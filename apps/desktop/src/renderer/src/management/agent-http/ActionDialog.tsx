@@ -1,5 +1,5 @@
 import { AgentDialog } from "../agents/Dialog";
-import { runtimeStrings as t } from "./copy";
+import { useRuntimeCopy } from "./copy";
 
 export function ActionDialog({
 	title,
@@ -19,6 +19,7 @@ export function ActionDialog({
 	readonly onClose: () => void;
 	readonly onConfirm: () => Promise<void>;
 }) {
+	const t = useRuntimeCopy();
 	return (
 		<AgentDialog
 			title={title}

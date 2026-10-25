@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { skillFolderName } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import type { AgentView, Skill } from "../../../../shared/agents";
-import { agentsStrings as strings } from "./copy";
+import { useAgentsCopy } from "./copy";
 import { AgentDialog, ConfirmDialog, format } from "./Dialog";
 import type { AgentRequest } from "./useAgents";
 
-const t = strings.clawAgentManagement;
 function SkillEditor({
 	skill,
 	view,
@@ -17,6 +16,8 @@ function SkillEditor({
 	readonly request: AgentRequest;
 	readonly onClose: () => void;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [name, setName] = useState(skill?.name ?? "");
 	const [prompt, setPrompt] = useState("");
 	const [content, setContent] = useState(
@@ -158,6 +159,8 @@ export function SkillsPanel({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
 	const [editing, setEditing] = useState<{
 		readonly skill: Skill | undefined;

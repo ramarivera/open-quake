@@ -1,5 +1,5 @@
 import type { RuntimeState } from "../../../../shared/agents";
-import { agentsStrings as strings } from "./copy";
+import { agentsStrings as strings, useAgentsCopy } from "./copy";
 import type { AgentRequest } from "./useAgents";
 
 const s = strings.openclawRuntimeIndicator;
@@ -31,6 +31,14 @@ export function RuntimeIndicator({
 	readonly runtime: RuntimeState;
 	readonly request: AgentRequest;
 }) {
+	const s = useAgentsCopy().openclawRuntimeIndicator;
+	const labels = {
+		ready: s.statusReady,
+		starting: s.statusStarting,
+		stopping: s.statusStopping,
+		error: s.statusError,
+		stopped: s.statusStopped,
+	};
 	const transitioning =
 		runtime.status === "starting" || runtime.status === "stopping";
 	return (

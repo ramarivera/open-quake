@@ -7,6 +7,7 @@ import type {
 	ConversationReply,
 } from "../../../../shared/agent-conversations";
 import { createConversationController } from "./conversation-controller";
+import { type RuntimeCopy, runtimeCopy } from "./copy";
 
 function deferred<T>() {
 	let resolve: (value: T) => void = () => {};
@@ -24,6 +25,7 @@ function harness(
 	respond: (
 		command: ConversationCommand,
 	) => Promise<ConversationReply> = async () => success(),
+	getCopy?: () => RuntimeCopy,
 ) {
 	let receive: ((event: ConversationEvent) => void | Promise<void>) | undefined;
 	const off = vi.fn();
@@ -40,6 +42,7 @@ function harness(
 		bridge,
 		{ connectionId: "hermes" },
 		() => `request-${++serial}`,
+		getCopy,
 	);
 	controller.start();
 	const event = (value: ConversationEvent) => {
@@ -57,6 +60,28 @@ function harness(
 }
 
 describe("runtime conversation UI controller", () => {
+	it("changes generated status copy without replacing the active subscription or user text", async () => {
+		let copy = runtimeCopy("en");
+		const f = harness(undefined, () => copy);
+		try {
+			await tick();
+			await f.controller.send("user words stay unchanged");
+			copy = runtimeCopy("de");
+			f.event(f.delta(1, "provider words stay unchanged"));
+			expect(f.controller.getSnapshot().status).toBe(copy.streaming);
+			expect(f.controller.getSnapshot().history[0]?.turns[0]).toMatchObject({
+				text: "user words stay unchanged",
+				answer: "provider words stay unchanged",
+			});
+			expect(f.off).not.toHaveBeenCalled();
+			expect(
+				f.request.mock.calls.filter(([command]) => command.type === "start"),
+			).toHaveLength(1);
+		} finally {
+			f.controller.dispose();
+		}
+	});
+
 	it("keeps model alias history separate and starts a fresh scope when switching aliases", async () => {
 		const request = vi.fn(
 			async (command: ConversationCommand): Promise<ConversationReply> =>

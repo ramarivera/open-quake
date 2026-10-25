@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { AgentConnectionsBridge } from "../../../../shared/agent-connections";
 import { createConnectionsController } from "./connections-controller";
+import { useRuntimeCopy } from "./copy";
 
 export function useConnections(bridge: AgentConnectionsBridge | undefined) {
+	const copy = useRuntimeCopy();
+	const copyRef = useRef(copy);
+	copyRef.current = copy;
 	const controller = useMemo(
-		() => createConnectionsController(bridge),
+		() => createConnectionsController(bridge, () => copyRef.current),
 		[bridge],
 	);
 	const state = useSyncExternalStore(

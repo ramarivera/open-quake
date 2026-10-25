@@ -18,7 +18,7 @@ import { fill } from "../chat/format";
 import { Icon } from "../chat/icons";
 import { Prose } from "../chat/Prose";
 import { ActionDialog } from "./ActionDialog";
-import { runtimeStrings as t } from "./copy";
+import { useRuntimeCopy } from "./copy";
 import { healthLabel, healthTone } from "./health";
 import { useConversation } from "./useConversation";
 
@@ -49,6 +49,7 @@ export function ConversationPanel({
 	readonly onAgentChange: (agentId: string | undefined) => void;
 	readonly onRunningChange: (running: boolean) => void;
 }) {
+	const t = useRuntimeCopy();
 	const [modelDraft, setModelDraft] = useState("");
 	const models =
 		connection.kind === "hermes" &&
@@ -222,7 +223,7 @@ export function ConversationPanel({
 									data-tone={healthTone(status)}
 									aria-hidden="true"
 								/>
-								<span role="status">{healthLabel(status)}</span>
+								<span role="status">{healthLabel(status, t)}</span>
 							</span>
 							{onTest && (
 								<button

@@ -7,7 +7,7 @@ import { AgentDialog } from "../agents/Dialog";
 import { Icon } from "../chat/icons";
 import { ConnectionForm } from "./ConnectionForm";
 import type { ConnectionDraft } from "./connection-draft";
-import { runtimeStrings as t } from "./copy";
+import { useRuntimeCopy } from "./copy";
 import { healthLabel, healthTone } from "./health";
 
 const capabilityTone = (value: string) =>
@@ -44,6 +44,7 @@ export function ConnectionSheet({
 	readonly onRemove: () => void;
 	readonly onClose: () => void;
 }) {
+	const t = useRuntimeCopy();
 	if (mode === "add" || !connection)
 		return (
 			<AgentDialog title={t.addTitle} onClose={() => !busy && onClose()}>
@@ -91,7 +92,7 @@ export function ConnectionSheet({
 							data-tone={healthTone(status)}
 							aria-hidden="true"
 						/>
-						{healthLabel(status)}
+						{healthLabel(status, t)}
 					</dd>
 				</div>
 				<div>

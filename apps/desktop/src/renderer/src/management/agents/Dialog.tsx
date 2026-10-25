@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
-import { agentsStrings as strings } from "./copy";
+import { useAgentsCopy } from "./copy";
 export function AgentDialog({
 	title,
 	children,
@@ -9,6 +9,7 @@ export function AgentDialog({
 	readonly children: ReactNode;
 	readonly onClose: () => void;
 }) {
+	const strings = useAgentsCopy();
 	const ref = useRef<HTMLDialogElement>(null);
 	const id = useId();
 	useEffect(() => {
@@ -66,6 +67,7 @@ export function ConfirmDialog({
 	readonly onClose: () => void;
 	readonly onConfirm: () => Promise<void>;
 }) {
+	const strings = useAgentsCopy();
 	return (
 		<AgentDialog title={title} onClose={onClose}>
 			<p>{body}</p>

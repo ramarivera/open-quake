@@ -7,21 +7,33 @@ import {
 	useState,
 } from "react";
 import { resolveAppLocale } from "../../../../../../packages/edge/src/settings/settings-invariants";
-
 import type {
 	AppLocale,
 	AppLocaleBridge,
 	LocaleSnapshot,
 } from "../../../shared/locale";
+import agentHttp from "../management/agent-http/strings.json";
+import agents from "../management/agents/strings.json";
+import chat from "../management/chat/strings.json";
 
 export { resolveAppLocale } from "../../../../../../packages/edge/src/settings/settings-invariants";
 export type { AppLocale, AppLocaleBridge, LocaleSnapshot };
 
 type Dictionary = { readonly [key: string]: string | Dictionary };
 export type AppDictionaries = Readonly<Record<AppLocale, Dictionary>>;
-const dictionaries: AppDictionaries = {
-	en: { app: { language: "Language", english: "English", german: "German" } },
-	de: { app: { language: "Sprache", english: "Englisch", german: "Deutsch" } },
+export const appDictionaries: AppDictionaries = {
+	en: {
+		app: { language: "Language", english: "English", german: "German" },
+		chat: chat.en,
+		agentHttp: agentHttp.en,
+		agents: agents.en,
+	},
+	de: {
+		app: { language: "Sprache", english: "Englisch", german: "Deutsch" },
+		chat: chat.de,
+		agentHttp: agentHttp.de,
+		agents: agents.de,
+	},
 };
 // Bundled dictionaries only. Disable development translation requests even if
 // the host environment happens to contain GT credentials.
@@ -32,8 +44,8 @@ initializeGT({
 	_disableDevHotReload: true,
 	cacheExpiryTime: null,
 	loadTranslations: async () => ({}),
-	dictionary: dictionaries.en,
-	loadDictionary: async (locale) => dictionaries[resolveAppLocale(locale)],
+	dictionary: appDictionaries.en,
+	loadDictionary: async (locale) => appDictionaries[resolveAppLocale(locale)],
 });
 const translations = { en: {}, de: {} };
 const Context = createContext({
@@ -49,7 +61,7 @@ export const useAppTranslations = useTranslations;
 export function AppLocaleProvider({
 	children,
 	bridge = window.quakeLocale,
-	bundled = dictionaries,
+	bundled = appDictionaries,
 }: {
 	readonly children: ReactNode;
 	readonly bridge?: AppLocaleBridge | undefined;

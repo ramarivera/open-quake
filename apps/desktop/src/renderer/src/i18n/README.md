@@ -3,8 +3,8 @@
 `AppLocaleProvider` wraps the mounted desktop application. `useAppLocale()` exposes
 `locale`, `setLocale`, loading and safe failure state. `useAppTranslations(scope)`
 is the installed General Translation dictionary hook. Keep source and translated
-strings in bundled JSON. Pass their combined en/de dictionaries through the
-provider's `bundled` prop. Generated answers, user messages, model identifiers and
+strings in bundled JSON. The default provider bundles the Opus-owned `chat`, `agentHttp` and `agents`
+namespaces. Tests can supply replacement dictionaries through its `bundled` prop. Generated answers, user messages, model identifiers and
 provider selections are data and must never become translation inputs.
 
 The exact MIT runtime dependency is `gt-react@11.4.16`. Its source was checked for
@@ -35,6 +35,9 @@ main registration, restart/corruption, and GT's translated/source-fallback outpu
 without fetch. The opt-in `direct-chat-smoke.ts` also runs the actual production
 root, preload and React app with a mock device and local inference fixture.
 
-This is the shared implementation. Final translated product copy and control
-placement belong to the Opus-led redesign. General settings, onboarding and
-physical speech acceptance remain separate open tasks.
+The Opus-led redesign owns product copy and control placement. Agent components
+read the current locale through copy hooks. Non-React conversation controllers
+read a current-copy getter so a language change does not replace subscriptions
+or cancel a reply. The actual direct-chat smoke checks the German Stop label
+while a provider socket remains open, then switches back and cancels normally.
+General settings, onboarding and physical speech acceptance remain separate tasks.

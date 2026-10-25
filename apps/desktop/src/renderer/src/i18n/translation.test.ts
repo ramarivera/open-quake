@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
 	type AppDictionaries,
+	appDictionaries,
 	resolveAppLocale,
 	useAppTranslations,
 } from "./index";
@@ -43,4 +44,45 @@ describe("bundled General Translation", () => {
 			vi.unstubAllGlobals();
 		}
 	});
+});
+
+function ProductCopyProbe() {
+	const chat = useAppTranslations("chat");
+	const runtime = useAppTranslations("agentHttp");
+	const agents = useAppTranslations("agents");
+	return createElement(
+		"p",
+		null,
+		chat("send"),
+		"|",
+		runtime("addTitle"),
+		"|",
+		agents("clawAIConfig.addModel"),
+	);
+}
+it("bundles the approved chat, runtime and agent namespaces offline", () => {
+	const fetch = vi.fn(() => Promise.reject(new Error("Network forbidden")));
+	vi.stubGlobal("fetch", fetch);
+	try {
+		const render = (locale: string) =>
+			renderToStaticMarkup(
+				createElement(
+					GTProvider,
+					{
+						locale,
+						translations: { en: {}, de: {} },
+						dictionaries: appDictionaries,
+						_reload: () => {},
+					},
+					createElement(ProductCopyProbe),
+				),
+			);
+		expect(render("en")).toContain("Send|");
+		expect(render("de")).toContain("Senden|");
+		expect(render("de")).not.toContain("addTitle");
+		expect(render("de")).not.toContain("clawAIConfig");
+		expect(fetch).not.toHaveBeenCalled();
+	} finally {
+		vi.unstubAllGlobals();
+	}
 });

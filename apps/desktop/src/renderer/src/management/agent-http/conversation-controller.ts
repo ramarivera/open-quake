@@ -7,7 +7,7 @@ import type {
 	ConversationScope,
 	ConversationStart,
 } from "../../../../shared/agent-conversations";
-import { runtimeStrings as t } from "./copy";
+import { type RuntimeCopy, runtimeStrings } from "./copy";
 
 type ToolEvent = Extract<RuntimeConversationEvent, { readonly _tag: "tool" }>;
 type UsageEvent = Extract<RuntimeConversationEvent, { readonly _tag: "usage" }>;
@@ -37,6 +37,7 @@ export function createConversationController(
 	bridge: AgentConversationsBridge | undefined,
 	scope: Pick<ConversationStart, "connectionId" | "agentId" | "modelId">,
 	requestId: () => string = () => crypto.randomUUID(),
+	getCopy: () => RuntimeCopy = () => runtimeStrings,
 ) {
 	const historyScope: ConversationScope = {
 		connectionId: scope.connectionId,
@@ -63,7 +64,7 @@ export function createConversationController(
 	};
 	const failure = () => ({
 		code: RuntimeErrors.RuntimeRequestFailed.code,
-		message: t.disconnected,
+		message: getCopy().disconnected,
 	});
 	const finish = (outcome: Outcome) => {
 		const id = state.active?.requestId;
@@ -71,7 +72,7 @@ export function createConversationController(
 			...state,
 			active: undefined,
 			pending: undefined,
-			status: t[outcome],
+			status: getCopy()[outcome],
 			history: state.history.map((session) =>
 				session.sessionId === state.sessionId
 					? {
@@ -102,7 +103,7 @@ export function createConversationController(
 					...state,
 					error: {
 						code: event.errorCode ?? RuntimeErrors.RuntimeRequestFailed.code,
-						message: event.message ?? t.failed,
+						message: event.message ?? getCopy().failed,
 					},
 				});
 			finish(event.outcome);
@@ -113,7 +114,7 @@ export function createConversationController(
 			case "textDelta":
 				update({
 					...state,
-					status: t.streaming,
+					status: getCopy().streaming,
 					history: state.history.map((session) =>
 						session.sessionId === event.sessionId
 							? {
@@ -157,7 +158,7 @@ export function createConversationController(
 				...state,
 				error: {
 					code: RuntimeErrors.RuntimeUnavailable.code,
-					message: t.historyUnavailable,
+					message: getCopy().historyUnavailable,
 				},
 			});
 			return;
@@ -220,7 +221,7 @@ export function createConversationController(
 			pending: "starting",
 			active: { requestId: id, lastSeq: -1 },
 			error: undefined,
-			status: t.waiting,
+			status: getCopy().waiting,
 			tools: [],
 			usage: undefined,
 			history: [
@@ -254,7 +255,7 @@ export function createConversationController(
 					pending: undefined,
 					history: previousHistory,
 					sessionId: previousSessionId,
-					status: t.failed,
+					status: getCopy().failed,
 				});
 				return false;
 			}

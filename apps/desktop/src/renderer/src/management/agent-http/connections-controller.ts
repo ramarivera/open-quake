@@ -7,7 +7,7 @@ import type {
 	AgentConnectionsBridge,
 	AgentConnectionView,
 } from "../../../../shared/agent-connections";
-import { runtimeStrings as t } from "./copy";
+import { type RuntimeCopy, runtimeStrings } from "./copy";
 
 export interface ConnectionState {
 	readonly view: AgentConnectionView | undefined;
@@ -22,6 +22,7 @@ export interface ConnectionState {
 /** Only public snapshots enter state. Credential-bearing commands stay transient. */
 export function createConnectionsController(
 	bridge: AgentConnectionsBridge | undefined,
+	getCopy: () => RuntimeCopy = () => runtimeStrings,
 ) {
 	let state: ConnectionState = {
 		view: undefined,
@@ -77,7 +78,7 @@ export function createConnectionsController(
 				...state,
 				error: {
 					code: RuntimeErrors.RuntimeUnavailable.code,
-					message: t.unavailable,
+					message: getCopy().unavailable,
 				},
 			});
 			return undefined;
@@ -108,7 +109,7 @@ export function createConnectionsController(
 						.catch(() => ({
 							_tag: "rejected" as const,
 							code: RuntimeErrors.RuntimeRequestFailed.code,
-							message: t.disconnected,
+							message: getCopy().disconnected,
 						}));
 					if (!mounted || epoch !== requestEpoch) return undefined;
 					if (selection._tag === "rejected") {
@@ -148,7 +149,7 @@ export function createConnectionsController(
 					...state,
 					error: {
 						code: RuntimeErrors.RuntimeRequestFailed.code,
-						message: t.disconnected,
+						message: getCopy().disconnected,
 					},
 				});
 			return undefined;

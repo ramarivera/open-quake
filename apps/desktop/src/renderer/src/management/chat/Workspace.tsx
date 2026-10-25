@@ -7,7 +7,7 @@ import { ActionDialog } from "../agent-http/ActionDialog";
 import { ConnectionSheet } from "../agent-http/ConnectionSheet";
 import { ConversationPanel } from "../agent-http/ConversationPanel";
 import type { ConnectionDraft } from "../agent-http/connection-draft";
-import { runtimeStrings as rt } from "../agent-http/copy";
+import { useRuntimeCopy } from "../agent-http/copy";
 import { healthLabel, healthTone } from "../agent-http/health";
 import { useConnections } from "../agent-http/useConnections";
 import { chatStrings, DirectChatPanel } from "./DirectChatPanel";
@@ -47,6 +47,7 @@ export function ConversationWorkspace({
 	readonly conversationsBridge?: AgentConversationsBridge;
 }) {
 	const t = chatStrings(locale);
+	const rt = useRuntimeCopy();
 	const connections = useConnections(
 		connectionsBridge ??
 			(typeof window === "undefined"
@@ -197,7 +198,7 @@ export function ConversationWorkspace({
 										aria-hidden="true"
 									/>
 									{item.kind === "hermes" ? "Hermes" : "OpenClaw"} ·{" "}
-									{healthLabel(status)}
+									{healthLabel(status, rt)}
 								</span>
 								{item.id === selectedId && (
 									<span className="mc-badge" data-tone="accent">

@@ -6,12 +6,13 @@ import {
 	SLOT_CODES,
 	type Slots,
 } from "../../../../shared/agents";
+import { useAppLocale } from "../../i18n";
 import { directChatModel } from "../chat/model-scope";
 import { ConversationWorkspace } from "../chat/Workspace";
 import "../chat/workspace.css";
 import "./agents.css";
 import { AgentWizard } from "./AgentWizard";
-import { agentsStrings as strings } from "./copy";
+import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
@@ -19,7 +20,6 @@ import { SkillsPanel } from "./SkillsPanel";
 import { reconcileSlotDrafts } from "./slot-drafts";
 import { type AgentRequest, useAgents } from "./useAgents";
 
-const t = strings.clawAgentManagement;
 export type AgentsTab = "sessions" | "agents" | "ai" | "settings";
 function Roster({
 	view,
@@ -30,6 +30,8 @@ function Roster({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
 	const [filter, setFilter] = useState("all");
 	const [selected, setSelected] = useState("main");
@@ -287,6 +289,7 @@ function PanelSettings({
 	readonly busy: boolean;
 	readonly children: ReactNode;
 }) {
+	const strings = useAgentsCopy();
 	const [slots, setSlots] = useState<Slots>(view.slots);
 	const previousSlots = useRef(view.slots);
 	const d = strings.dkclaw;
@@ -397,6 +400,9 @@ export function AgentsPage({
 	children,
 	bridge,
 }: AgentsPageProps) {
+	const { locale } = useAppLocale();
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const { view, error, busy, request } = useAgents(
 		bridge ?? window.quakeAgents,
 	);
@@ -412,7 +418,7 @@ export function AgentsPage({
 		const row = tabRow.current;
 		if (!row) return;
 		const reveal = () => {
-			const selected = row.querySelector<HTMLElement>('[aria-selected="true"]');
+			const selected = row.querySelector<HTMLElement>(`#agents-tab-${tab}`);
 			if (!selected) return;
 			const start = selected.offsetLeft - row.offsetLeft;
 			const end = start + selected.offsetWidth;
@@ -490,6 +496,7 @@ export function AgentsPage({
 				hidden={tab !== "sessions"}
 			>
 				<ConversationWorkspace
+					locale={locale}
 					model={directChatModel(view?.models)}
 					configurationLoading={!view && !error}
 					configurationError={!view ? error : undefined}

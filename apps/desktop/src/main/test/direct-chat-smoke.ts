@@ -259,14 +259,18 @@ async function run() {
 
 	const beforeLocale = await evaluate(
 		win,
-		"document.querySelector('.direct-chat-transcript').textContent",
+		"Array.from(document.querySelectorAll('.direct-chat-user, .direct-chat .cw-prose')).map(el=>el.textContent).join('\\n')",
 	);
 	await evaluate(win, "window.quakeLocale.set('de')");
 	await wait(win, "document.documentElement.lang==='de'");
+	await wait(
+		win,
+		"Boolean(Array.from(document.querySelectorAll('.direct-chat button')).find(b=>b.textContent===\"Antwort stoppen\"))",
+	);
 	assert.equal(
 		await evaluate(
 			win,
-			"document.querySelector('.direct-chat-transcript').textContent",
+			"Array.from(document.querySelectorAll('.direct-chat-user, .direct-chat .cw-prose')).map(el=>el.textContent).join('\\n')",
 		),
 		beforeLocale,
 	);
