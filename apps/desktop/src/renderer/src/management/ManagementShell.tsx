@@ -78,10 +78,13 @@ export function ManagementShell({
 	appearance,
 	contentRef,
 	deviceReady,
+	setupEntry,
+	setupLabel = "Setup",
 	children,
 }: {
-	page: ManagementPage;
-	onOpen: (page: ManagementPage) => void;
+	/** "setup" is a route outside the nav sections (settings-and-wizard). */
+	page: ManagementPage | "setup";
+	onOpen: (page: ManagementPage | "setup") => void;
 	connection: ConnectionSummary;
 	runtimeStatus: string;
 	runtimeLabel: string;
@@ -90,13 +93,22 @@ export function ManagementShell({
 	appearance: AppearanceController;
 	contentRef: React.RefObject<HTMLElement | null>;
 	deviceReady: boolean;
+	/** Optional sidebar entry shown while setup is unfinished. */
+	setupEntry?: (
+		navigate: (page: ManagementPage | "setup") => void,
+	) => ReactNode;
+	/** Localized name for the setup route in the breadcrumb and top bar. */
+	setupLabel?: string;
 	children?: ReactNode;
 }): React.JSX.Element {
 	const narrow = useNarrow();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const menuButton = useRef<HTMLButtonElement>(null);
 	const sidebar = useRef<HTMLElement>(null);
-	const location = pageLocation(page);
+	const location =
+		page === "setup"
+			? { section: null, label: setupLabel }
+			: pageLocation(page);
 	const drawer = narrow && drawerOpen;
 
 	const closeDrawer = useCallback((): void => {
@@ -126,7 +138,7 @@ export function ManagementShell({
 		return () => document.removeEventListener("keydown", onKey);
 	}, [drawer, closeDrawer]);
 
-	const choose = (next: ManagementPage): void => {
+	const choose = (next: ManagementPage | "setup"): void => {
 		onOpen(next);
 		if (narrow) closeDrawer();
 	};
@@ -240,6 +252,7 @@ export function ManagementShell({
 							</div>
 						))}
 					</nav>
+					{setupEntry?.(choose)}
 					<footer className="mc-sidebar-footer">
 						<UiSettings controller={appearance} />
 					</footer>
@@ -254,7 +267,7 @@ export function ManagementShell({
 						<div
 							className="content-inner"
 							data-page={page}
-							data-layout={pageLayouts[page]}
+							data-layout={page === "setup" ? "default" : pageLayouts[page]}
 						>
 							{children}
 						</div>

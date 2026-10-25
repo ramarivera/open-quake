@@ -40,7 +40,13 @@ import { WeatherMediaSettings } from "./weather-media/WeatherMediaSettings";
 import "./styles.css";
 import { IconPickerSurface } from "./keys/IconPicker";
 import "./management/management.css";
+import { useAppTranslations } from "./i18n";
 import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
+import { settingsBridge } from "./settings/bridge";
+import { GeneralSettings } from "./settings/GeneralSettings";
+import { SetupResumeEntry, SetupWizard } from "./settings/SetupWizard";
+import { useRuntimeChoice } from "./settings/setup-owners";
+import { createSetupStore } from "./settings/stores";
 
 function useSurface(): "management" | "panel" {
 	const [surface] = useState<"management" | "panel">(() =>
@@ -59,7 +65,7 @@ function PanelSurface(): React.JSX.Element {
 	return <StripPanel />;
 }
 
-type Page = ManagementPage;
+type Page = ManagementPage | "setup";
 
 function ManagementSurface({
 	appearance,
@@ -84,6 +90,15 @@ function ManagementSurface({
 			query.get("activeTab") ?? query.get("page") ?? "overview",
 		);
 	});
+	const settingsT = useAppTranslations("settings");
+	const [setup] = useState(() => createSetupStore(settingsBridge()));
+	const runtimeOption = useRuntimeChoice();
+	// Any explicit activation or navigation wins over first-run setup.
+	const navigated = useRef(
+		((query) => query.has("activeTab") || query.has("page"))(
+			new URLSearchParams(location.search),
+		),
+	);
 	const [agentActivation, setAgentActivation] = useState(() => ({
 		tab: initialActivation?.agentTab ?? "sessions",
 		sequence: 0,
@@ -98,6 +113,7 @@ function ManagementSurface({
 				const next = managementActivation(name);
 				const item = pages.find((id) => id === next?.page);
 				if (item) {
+					navigated.current = true;
 					setPage(item);
 					if (next?.agentTab) {
 						const tab = next.agentTab;
@@ -126,7 +142,15 @@ function ManagementSurface({
 	const content = useRef<HTMLElement>(null);
 	const bridge = window.openQuake;
 	const connection = describeConnection(quake.connection, bridge !== undefined);
+	useEffect(() => {
+		// One read. An unfinished record opens setup unless the user already chose a page.
+		void setup.load().then((ok) => {
+			if (ok && !setup.getState().snapshot?.completed && !navigated.current)
+				setPage("setup");
+		});
+	}, [setup]);
 	const open = (next: Page): void => {
+		navigated.current = true;
 		setPage(next);
 		content.current?.scrollTo({ top: 0 });
 	};
@@ -152,6 +176,15 @@ function ManagementSurface({
 				appearance={appearance}
 				contentRef={content}
 				deviceReady={deviceReady}
+				setupLabel={settingsT("setup.title")}
+				setupEntry={(navigate) => (
+					<SetupResumeEntry
+						store={setup}
+						runtime={runtimeOption}
+						current={page === "setup"}
+						onOpen={() => navigate("setup")}
+					/>
+				)}
 			>
 				{/* Keep the diagnostic subscription alive while navigating pages. */}
 				<div hidden={page !== "connection"}>
@@ -198,7 +231,15 @@ function ManagementSurface({
 				) : page === "home-assistant" ? (
 					<HomeAssistantPage />
 				) : page === "settings" ? (
-					<SettingsPage controller={maintenance} />
+					<SettingsPage controller={maintenance}>
+						<GeneralSettings setup={setup} onOpenSetup={() => open("setup")} />
+					</SettingsPage>
+				) : page === "setup" ? (
+					<SetupWizard
+						store={setup}
+						runtime={runtimeOption}
+						onLeave={() => open("overview")}
+					/>
 				) : page === "appearance" ? (
 					<ThemeSettings controller={appearance} />
 				) : null}

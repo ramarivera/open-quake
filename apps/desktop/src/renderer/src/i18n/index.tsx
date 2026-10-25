@@ -15,6 +15,7 @@ import type {
 import agentHttp from "../management/agent-http/strings.json";
 import agents from "../management/agents/strings.json";
 import chat from "../management/chat/strings.json";
+import settings from "../settings/strings.json";
 
 export { resolveAppLocale } from "../../../../../../packages/edge/src/settings/settings-invariants";
 export type { AppLocale, AppLocaleBridge, LocaleSnapshot };
@@ -27,12 +28,14 @@ export const appDictionaries: AppDictionaries = {
 		chat: chat.en,
 		agentHttp: agentHttp.en,
 		agents: agents.en,
+		settings: settings.en,
 	},
 	de: {
 		app: { language: "Sprache", english: "Englisch", german: "Deutsch" },
 		chat: chat.de,
 		agentHttp: agentHttp.de,
 		agents: agents.de,
+		settings: settings.de,
 	},
 };
 // Bundled dictionaries only. Disable development translation requests even if

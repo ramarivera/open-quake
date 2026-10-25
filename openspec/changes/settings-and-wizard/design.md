@@ -148,3 +148,52 @@ source fallback. Bundled dictionaries and local loaders require no account/key.
 Development hot translation requests are disabled and runtimeUrl is null. The
 Opus-led redesign owns final product copy and language-control placement. This
 implementation does not close the broader wizard/general-settings tasks.
+
+## Settings and setup UI, 2026-10-25
+
+Opus 5.5 owns these renderer decisions (Ramiro: Opus makes all visual/design
+decisions); tokens and shell come from independent-management-design.
+
+- **Entry.** Setup is a hidden `setup` route inside the existing management
+  shell, not a separate window or modal. The management window reads the wizard
+  snapshot once on mount. An incomplete record opens `setup` only when the
+  window has no explicit `activeTab`/`page` activation; tray, menu and smoke
+  activations are honoured unchanged. A missing bridge or failed read never
+  takes over the window and shows a retryable unavailable state instead.
+- **Resume and replay.** Each Continue is one explicit `saveWizard` draft; no
+  write happens on render. Leaving setup (Finish later or any navigation) keeps
+  it incomplete and the sidebar shows a labelled Resume setup entry outside
+  the nav list. Settings › General offers Run setup again, which calls
+  `replayWizard` explicitly and reopens Welcome with saved choices preselected.
+- **Steps.** Welcome → Language and region → Display → Profiles → optional
+  Runtime → Review. Language writes immediately on the explicit choice so the
+  flow re-renders in that language. Region is preselected from the OS locale
+  but saved only on Continue. Display offers the connected QUAKE serial from
+  the hardware owner's read and an always-available desktop preview marked
+  hardware unverified. Profiles come from the profile manager read (preview
+  read, no locale side effect) filtered by the manager's `visibleProfiles`
+  rule; at least one must be chosen and none are created. The runtime step
+  appears while the agent connection owner exists, offers Skip for now
+  always and Use saved connections only when at least one HTTP connection is
+  saved, labelled untested; selection and live connectivity are separate
+  facts setup never probes, installs or starts. Review lists the choices;
+  Finish calls `completeWizard` and stays incomplete on failure.
+- **General.** Settings › General holds Language (existing locale bridge),
+  Open at login, Start in the background and the setup entry. The login
+  control reflects the live OS status from `loginStatus`, falls back to saved
+  intent with an explicit unknown-status hint, and keeps OS refusals visible.
+- **Review fixes (PR50).** The language shown and saved by setup is the
+  app-wide locale (`useAppLocale`), so a change made in General is never
+  reverted by Continue; the record's copy is used only until that locale is
+  read. Profiles are recorded as setup choices only: setup never switches the
+  active profile, and the step says so. A failed profile read offers Try
+  again, and only a successful read preselects defaults. Display offers Check
+  again for every read result, including connected, so a swapped QUAKE can be
+  picked. The runtime step is dropped only on the root's exact
+  `AGENT.HTTP.CONNECTION.UNAVAILABLE` list reply (no initialized owner); other
+  list failures keep the step, where Skip for now still works.
+- **Failures.** The UI branches only on a catalog `code` (and `reason` for
+  OS apply failures) carried on the rejection; any other rejection is shown
+  as a generic read/save failure. Copy is bundled en/de through the existing
+  GT dictionaries. Layout is one column at 390px and a step rail plus form
+  at desktop widths, verified in Graphite, Midnight and Paper.
