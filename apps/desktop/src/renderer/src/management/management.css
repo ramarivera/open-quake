@@ -149,12 +149,13 @@
 
 /* Sidebar */
 
+/* The sidebar never clips: the Display popover floats past its edge, so
+   scrolling stays on .nav and each row truncates its own text. */
 .sidebar {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	padding: var(--oq-space-4) var(--oq-space-3) var(--oq-space-3);
-	overflow: hidden;
 	background: var(--oq-sidebar);
 	border-right: 1px solid var(--oq-hairline);
 }
@@ -164,6 +165,7 @@
 	align-items: flex-start;
 	gap: 10px;
 	padding: 0 6px var(--oq-space-4);
+	overflow: hidden;
 }
 .mc-product-icon {
 	display: grid;
@@ -346,6 +348,7 @@ body[data-resizing] {
 	width: 100%;
 	min-height: 34px;
 	padding: 0 10px;
+	overflow: hidden;
 	color: var(--oq-text-muted);
 	font-size: var(--mc-font-body-sm);
 	font-weight: 500;
@@ -1028,6 +1031,12 @@ fieldset.mc-tabs button {
 	}
 	.sidebar[data-drawer="closed"] {
 		display: none;
+	}
+	/* Inside the drawer the popover spans the footer instead of passing the
+	   drawer edge onto the scrim. */
+	.mc-ui-settings {
+		right: 0;
+		width: auto;
 	}
 	.mc-scrim {
 		position: absolute;
