@@ -59,12 +59,12 @@ to retain those names; otherwise the existing privacy filter redacts them.
 No RPC, domain-schema or dependency changes are required.
 
 The early and final seam is recorded in
-`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/windows-foreground/ready.json`.
+`<approved-scratch>/windows-foreground/ready.json`.
 
 ## Offline verification
 
 All commands ran with
-`TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/tmp`.
+`TMPDIR=<approved-scratch>/tmp`.
 
 - `pnpm --filter @open-quake/desktop exec vitest run src/main/profiles`:
   67 tests pass across 10 files, including 32 new protocol/adapter regressions.
@@ -88,7 +88,7 @@ lazy acquisition, actual close waiting, shutdown deadline, termination failure,
 listener release and scoped interruption.
 
 Logs are under
-`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/windows-foreground/`:
+`<approved-scratch>/windows-foreground/`:
 `profiles-tests.log`, `typecheck.log`, `biome.log`, `openspec.log`.
 No live app, native foreground/input, hardware, provider or microphone test ran.
 
@@ -123,7 +123,7 @@ span names. SHA-256 comparisons confirm all three foreground source files in
 this lane match `2fe7a9353349a9d2ed3f38dfb6932079644f7761`. This lane made no
 parent composition edits and leaves aggregate closure and delivery to parent.
 
-`ramar@zeph` passed BatchMode SSH with an eight-second connect deadline.
+Windows x64 host A passed BatchMode SSH with an eight-second connect deadline.
 Prerequisites were Windows AMD64, x64 Node `v20.12.1`, Windows PowerShell
 `5.1.26100.9711` and the existing FullLanguage mode. The SSH process ran in
 session 0 with `UserInteractive=false`; Explorer ran in session 1. No session
@@ -134,7 +134,7 @@ Only scratch Node/PowerShell processes ran, with hidden windows.
 The committed adapter, helper, script and existing Effect dependency were
 bundled locally with the already-installed Vite, targeting Node 20. The bundle
 and a scratch-only harness were transferred into
-`USERPROFILE/dev/agentic-scratchpads/open-quake/foreground-20261025`.
+a host-local scratch directory named `foreground-20261025`.
 The main harness set TEMP/TMP to that directory before compilation and used a
 50-second watchdog. It exercised the actual fixed Add-Type script and production
 probe factories without installing remote dependencies. It persisted only
@@ -173,9 +173,8 @@ No external two-app transition occurred. These latency and CPU numbers must
 not be presented as measurements of the foreground-present Get-Process path.
 ARM64, Unicode executable paths and interactive identity remain unverified.
 
-`ramar@zaph` failed with `ssh: connect to host zaph port 22: Operation timed out`
-at ConnectTimeout=8. Before retrying, Tailscale status confirmed ZAPH offline,
-last seen `2026-09-28T20:12:10.1Z`; no unchanged retry followed. ZEPH stayed online.
+A second Windows host was unreachable at the eight-second SSH deadline and
+was confirmed offline. No unchanged retry followed. Host A stayed online.
 
 The first large bundle transfer succeeded. The stdin transfer of the smaller
 harness timed out after 25 seconds before creating that file. A read verified
@@ -192,10 +191,10 @@ debug and compiler-command files up to 256 KiB found zero candidates and no
 matching comparator artifacts. It did not scan unrelated directories.
 
 Evidence is under the approved local `windows-foreground` scratch directory:
-`zeph-prerequisites.json`, `native-build.log`, `native-harness.cjs`,
-`native-bundle/foreground.cjs`, `zeph-native-result.json`,
-`zeph-native-transport.json`, `zeph-native-cleanup.json`,
-`zeph-comparator-artifacts.json` and `ready.json`.
+`host-a-prerequisites.json`, `native-build.log`, `native-harness.cjs`,
+`native-bundle/foreground.cjs`, `host-a-native-result.json`,
+`host-a-native-transport.json`, `host-a-native-cleanup.json`,
+`host-a-comparator-artifacts.json` and `ready.json`.
 The Windows scratch contains `foreground.cjs`, `native-harness.cjs` and
 `result.json`. Run logs and harness artifacts stay outside git.
 
