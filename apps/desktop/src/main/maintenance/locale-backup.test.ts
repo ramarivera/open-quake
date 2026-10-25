@@ -26,10 +26,8 @@ it("preserves the saved language through export and restore and rejects corrupt 
 		}
 		await writeFile(join(source, "settings-v1.json"), JSON.stringify(saved));
 		const archive = await exportBackup(source);
-		const files = await readBackup(
-			archive,
-			"DK-Suite_default_date.zip",
-			"default",
+		const files = new Map(
+			await readBackup(archive, "DK-Suite_default_date.zip", "default"),
 		);
 		expect(
 			JSON.parse(
