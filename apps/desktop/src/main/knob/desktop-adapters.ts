@@ -26,6 +26,7 @@ import type { ProfileStoragePort } from "../../../../../packages/device/src/prof
 import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
 import type { ProfileSelectionScope } from "../profiles/profile-controller";
 import { profileThumbnailKey } from "../profiles/profile-thumbnail-key";
+import { focusedHotkey } from "./focused-hotkey";
 import { macVolume, script } from "./native-volume";
 import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
 
@@ -220,6 +221,13 @@ export function desktopKnobAdapters(
 					)
 				: unavailable;
 		});
+	const hotkey = focusedHotkey({
+		read,
+		deviceId,
+		hardware: () => bindings.hardware?.(),
+		context: () => context,
+		profiles: () => catalog,
+	});
 	const ports: KnobModelPort = {
 		alert: () => withHardware((session) => session.playTone("error")),
 		selectProfile: Effect.fn("DesktopKnob.selectProfile")(
@@ -269,7 +277,7 @@ export function desktopKnobAdapters(
 		voice: bindings.voice ?? (() => unavailable),
 		focusedTurn:
 			bindings.focusedTurn ??
-			((key, delta) =>
+			((key, delta, snapshot) =>
 				key.kind === "vol"
 					? readVolume.pipe(
 							Effect.flatMap((reading) => {
@@ -279,7 +287,9 @@ export function desktopKnobAdapters(
 						)
 					: key.kind === "luminance"
 						? withHardware((session) => session.stepBrightness(delta))
-						: unavailable),
+						: key.kind === "hotkey"
+							? hotkey(key, delta, snapshot)
+							: unavailable),
 		readVolume,
 		writeVolume,
 		warmThumbnails,
