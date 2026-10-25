@@ -56,12 +56,19 @@ class Window extends EventEmitter {
 	loadURL(url) {
 		this.url = url;
 	}
-	hide() {}
+	hide() {
+		this.shown = false;
+	}
 	shown = false;
+	isVisible() {
+		return this.shown;
+	}
 	show() {
 		this.shown = true;
 	}
-	showInactive() {}
+	showInactive() {
+		this.shown = true;
+	}
 	isMaximized() {
 		return false;
 	}

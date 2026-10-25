@@ -61,6 +61,7 @@ const modifiers: Readonly<Record<string, number>> = {
 	right_shift: 32,
 	right_alt: 64,
 	right_command: 128,
+	right_super: 128,
 };
 const usages: Readonly<Record<string, number>> = {
 	enter: 40,
