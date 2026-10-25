@@ -335,10 +335,13 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 				}
 				case "place": {
 					const state = yield* repository.read();
+					// The native placement callback reenters the current request's
+					// Effect context, including its process logger and trace correlation.
+					const run = Runtime.runPromise(yield* Effect.runtime<never>());
 					yield* Effect.tryPromise({
 						try: () =>
 							port.place(input.id, state, (profileId) =>
-								Effect.runPromise(
+								run(
 									repository.transact((current) =>
 										current.packages.some((pack) => pack.id === input.id)
 											? Effect.succeed({

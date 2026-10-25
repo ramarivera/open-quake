@@ -392,6 +392,10 @@
 	--glass-hl:
 		inset 0 1px 0 rgba(255, 255, 255, 0.42),
 		inset 0 -1px 0 rgba(120, 200, 255, 0.14);
+	/* open-quake addition: the built-in cumulus sits behind the thin digits. */
+	--digit-shadow:
+		0 1px 2px rgba(16, 62, 128, 0.55), 0 2px 10px rgba(16, 62, 128, 0.4),
+		0 3px 34px rgba(0, 0, 0, 0.24);
 }
 .oq-clock[data-theme="tactical"] {
 	--glass-bg: linear-gradient(

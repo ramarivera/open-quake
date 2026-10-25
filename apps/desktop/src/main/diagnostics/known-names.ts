@@ -1,7 +1,12 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`ActionService.activate ActionService.execute AgentConnections.create AgentConnections.get
+	`DesktopSpeech.create DesktopSpeech.createRuntime DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
+DesktopSpeech.profiles DesktopSpeech.configure DesktopSpeech.cancelSpeech DesktopSpeech.stopCapture
+DesktopSpeech.credentials DesktopSpeech.resolveCredential DesktopSpeech.credentialRevoked
+DesktopSpeech.storeCredential DesktopSpeech.removeCredential DesktopSpeech.ordered
+DesktopSpeech.cancelOrdered DesktopSpeech.flushOrdered DesktopSpeech.pushOrdered DesktopSpeech.finishOrdered
+ActionService.activate ActionService.execute AgentConnections.create AgentConnections.get
 AgentConnections.remove AgentConnections.resolveCredential AgentConnections.save
 AgentConnections.select AgentConnections.selected AgentConnections.view AgentHttp.connect
 AgentHttp.createRuntimeRegistry AgentHttp.createVoiceAdapter AgentHttp.disconnect
@@ -101,7 +106,8 @@ WeatherService.verifyCity`.split(/\s+/),
 );
 
 export const knownSourceFiles = new Set(
-	`account-config.ts action-adapters.ts action-contracts.ts action-errors.ts action-import.ts
+	`composition.ts capture.ts electron-audio.ts audio-worker.ts pcm.ts factory.ts settings.ts settings-ipc.ts websocket.ts ordered.ts runtime.ts errors.ts
+account-config.ts action-adapters.ts action-contracts.ts action-errors.ts action-import.ts
 action-invariants.ts action-registry.ts action-service.ts adapter.ts agents-contracts.ts
 agents-errors.ts agents-invariants.ts agents-ports.ts agents-repository.ts agents-runtime.ts
 agents-service.ts ai-contracts.ts ai-credentials.ts ai-errors.ts ai-invariants.ts
@@ -172,6 +178,7 @@ export const knownLogEvents = new Set([
 	"Publishing profiles manager snapshot failed",
 	"Refreshing knob profiles failed",
 	"Voice tone failed",
+	"Speech initialization failed",
 	"Wallpaper asset collection deferred: storage unavailable",
 	"Wallpaper asset collection skipped: invalid settings",
 ]);
@@ -205,6 +212,6 @@ ResourceTargetUnverified RestoreFailed RuntimeAuthenticationFailed RuntimeCapabi
 RuntimeConnectionInvalid RuntimeCredentialUnavailable RuntimeLimitExceeded RuntimeProtocolInvalid
 RuntimeRequestFailed RuntimeStorageFailed RuntimeTimeout RuntimeUnavailable SkillConflict
 SkillMoveIncomplete SkillMoved SkillWorkspaceInvalid SpeechFormatUnsupported SpeechPhaseTimeout
-StoreFailed VoiceLinkRejected VoiceRuntimeUnavailable VoiceSurfaceRequestFailed
+StoreFailed DesktopSpeechError VoiceLinkRejected VoiceRuntimeUnavailable VoiceSurfaceRequestFailed
 VoiceSurfaceRequestInvalid`.split(/\s+/),
 );

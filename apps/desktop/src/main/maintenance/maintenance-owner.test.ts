@@ -8,6 +8,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { Effect, ManagedRuntime } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDesktopDiagnostics } from "../diagnostics";
 import { clearOwnedData } from "./backup-store";
@@ -37,6 +39,96 @@ vi.mock("./backup-store", () => ({
 }));
 
 afterEach(() => vi.restoreAllMocks());
+
+it("a concurrent read can't dispose reset's runtime before its owning request finishes", async () => {
+	const root = await mkdtemp(join(tmpdir(), "maintenance-concurrent-"));
+	const diagnostics = createDesktopDiagnostics({
+		directory: join(root, "diagnostics"),
+	});
+	const exit = vi.fn();
+	native.dialog.showMessageBox.mockResolvedValue({ response: 1 });
+	vi.mocked(clearOwnedData).mockResolvedValue();
+	const owner = registerMaintenance({
+		root,
+		mock: true,
+		renderer: "https://app.invalid",
+		management: () => undefined,
+		hardware: () => undefined,
+		stopWriters: async () => {},
+		diagnostics,
+		exit,
+	});
+	let releaseRead = () => {};
+	let releaseReset = () => {};
+	let readEntered = () => {};
+	let resetEntered = () => {};
+	const readGate = new Promise<void>((resolve) => {
+		releaseRead = resolve;
+	});
+	const resetGate = new Promise<void>((resolve) => {
+		releaseReset = resolve;
+	});
+	const readWaiting = new Promise<void>((resolve) => {
+		readEntered = resolve;
+	});
+	const resetWaiting = new Promise<void>((resolve) => {
+		resetEntered = resolve;
+	});
+	let read: Promise<unknown> | undefined;
+	let reset: Promise<unknown> | undefined;
+	try {
+		await owner.ready;
+		const runtime = vi.mocked(ManagedRuntime.make).mock.results.at(-1)?.value;
+		if (!runtime) throw new Error("Maintenance runtime required");
+		const dispose = vi.spyOn(runtime, "dispose");
+		const instrument = diagnostics.instrument;
+		let boundary = 0;
+		vi.spyOn(diagnostics, "instrument").mockImplementation(
+			(effect, operation) => {
+				boundary++;
+				const gate =
+					boundary === 1
+						? { entered: readEntered, wait: readGate }
+						: boundary === 3
+							? { entered: resetEntered, wait: resetGate }
+							: undefined;
+				return instrument(
+					gate
+						? effect.pipe(
+								Effect.onExit(() =>
+									Effect.promise(async () => {
+										gate.entered();
+										await gate.wait;
+									}),
+								),
+							)
+						: effect,
+					operation,
+				);
+			},
+		);
+		read = owner.request({ action: "read" });
+		await readWaiting;
+		reset = owner.request({ action: "reset", backup: false });
+		await resetWaiting;
+		releaseRead();
+		expect(
+			await Promise.race([read.then(() => true), delay(100).then(() => false)]),
+		).toBe(true);
+		expect(dispose).not.toHaveBeenCalled();
+		expect(exit).not.toHaveBeenCalled();
+		releaseReset();
+		await reset;
+		expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+	} finally {
+		releaseRead();
+		releaseReset();
+		await Promise.allSettled([read, reset]);
+		await owner.dispose();
+		await diagnostics.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
 
 for (const stage of ["stop", "clear", "report"] as const) {
 	it(`reset exits with a scrubbed catalog failure when ${stage} fails`, async () => {

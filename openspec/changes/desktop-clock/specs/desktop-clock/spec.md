@@ -125,12 +125,17 @@ The tile SHALL accept optional weather and now-playing card nodes in the right s
 
 ### Requirement: Theme catalogue, art and tints
 
-The clock SHALL offer five themes in the fixed order `season, cyber, anime, tactical, aurora`, default `season`, named Season, Cyberpunk, Anime, Tactical and Aurora in English. Each theme SHALL have built-in 1920×480 art owned by open-quake that follows DK-Suite's composition for that theme. The base glass tokens SHALL be DK-Suite's, and each theme SHALL apply DK-Suite's tint overrides: cyber border rgba(0,229,255,.32/.40), cyan inner highlight and magenta digit shadow rgba(255,45,180,.22); anime border rgba(140,210,255,.34); tactical dimmer glass .10/.04/.07 with green border rgba(178,255,190,.25/.32); aurora violet border rgba(190,140,255,.30). Covers WIDGETS-031, WIDGETS-032.
+The clock SHALL offer five themes in the fixed order `season, cyber, anime, tactical, aurora`, default `season`, named Season, Cyberpunk, Anime, Tactical and Aurora in English. Each theme SHALL have built-in 1920×480 art owned by open-quake that follows DK-Suite's composition for that theme. The base glass tokens SHALL be DK-Suite's, and each theme SHALL apply DK-Suite's tint overrides: cyber border rgba(0,229,255,.32/.40), cyan inner highlight and magenta digit shadow rgba(255,45,180,.22); anime border rgba(140,210,255,.34); tactical dimmer glass .10/.04/.07 with green border rgba(178,255,190,.25/.32); aurora violet border rgba(190,140,255,.30). Because open-quake's anime art puts bright cumulus behind the digits, anime SHALL also add a crisp blue digit shadow for legibility. This is an open-quake addition to DK's tint list. Covers WIDGETS-031, WIDGETS-032.
 
 #### Scenario: Cyber tint
 
 - **WHEN** the cyber theme is active
 - **THEN** card borders use rgba(0,229,255,.32) and digits cast a magenta shadow
+
+#### Scenario: Anime digits over cumulus
+
+- **WHEN** the anime theme renders its built-in art
+- **THEN** the white digits keep a defined edge over the white cloud mass behind the cards
 
 ### Requirement: Background modes, custom media and fallback
 

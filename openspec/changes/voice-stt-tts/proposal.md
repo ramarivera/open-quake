@@ -23,4 +23,4 @@ None.
 
 ## Impact
 
-Proposed future ownership is `packages/edge/src/voice/` and desktop microphone/player adapters. Credentials reuse `ai-provider-facade`; transcript delivery uses `ai-chat-core`. Knob routing is in `knob-push-to-talk`; soundboard and meeting minutes remain separate. Future transport dependencies need exact catalog pins if essential. This change is spec-only. macOS permissions/audio are day 1; Linux audio integration is day 2.
+Speech protocols live behind `packages/edge/src/ai/speech/`; production microphone/player bindings live in `apps/desktop/src/main/speech/`. Credentials reuse `ai-provider-facade`. Finalized transcripts currently reach the selected external runtime through the production voice adapter; direct ChatService consumption remains tracked separately. Knob routing is in `knob-push-to-talk`; soundboard and meeting minutes remain separate. These bindings add no transport dependencies. macOS permissions/audio are day 1; Linux audio integration is day 2. Live provider and physical audio acceptance remain open.

@@ -1,0 +1,301 @@
+import { describe, expect, it } from "@effect/vitest";
+import { Effect, Layer, Option, Redacted } from "effect";
+import type { CredentialRef } from "../../../../../packages/edge/src/ai/ai-contracts";
+import { CredentialVault, MacOsKeychain } from "../credentials/keychain";
+import { createSpeechSettings, emptySpeechSettings } from "./settings";
+
+const setup = (failWrite = false) =>
+	Effect.gen(function* () {
+		const keys = new Map<CredentialRef, Redacted.Redacted<string>>();
+		let stored: unknown = emptySpeechSettings;
+		let changes = 0;
+		const vault = yield* CredentialVault;
+		const controller = yield* createSpeechSettings({
+			storage: {
+				read: async () => stored,
+				write: async (value) => {
+					if (failWrite) throw new Error("synthetic disk error");
+					stored = value;
+				},
+			},
+			credentials: vault,
+			changed: Effect.sync(() => {
+				changes++;
+			}),
+		});
+		return {
+			controller,
+			stored: () => stored,
+			changes: () => changes,
+			vault,
+			keys,
+		};
+	});
+const nativeKeys = new Map<CredentialRef, Redacted.Redacted<string>>();
+const layer = () =>
+	CredentialVault.Default.pipe(
+		Layer.provide(
+			Layer.succeed(MacOsKeychain, {
+				read: async (_service, reference) =>
+					Option.fromNullable(nativeKeys.get(reference)),
+				write: async (_service, reference, key) => {
+					nativeKeys.set(reference, key);
+				},
+				remove: async (_service, reference) => {
+					nativeKeys.delete(reference);
+				},
+			}),
+		),
+	);
+
+describe("explicit speech settings and existing credential ownership", () => {
+	for (const broken of ["malformed", "unreadable"] as const) {
+		it.effect(
+			`keeps ${broken} settings disabled and unchanged until an explicit valid Save succeeds`,
+			() =>
+				Effect.gen(function* () {
+					let stored: unknown = { version: 99, private: "synthetic-private" };
+					let writes = 0;
+					let failWrite = true;
+					const vault = yield* CredentialVault;
+					const controller = yield* createSpeechSettings({
+						storage: {
+							read: async () => {
+								if (broken === "unreadable")
+									throw new Error("synthetic-private");
+								return stored;
+							},
+							write: async (value) => {
+								if (failWrite) throw new Error("disk unavailable");
+								stored = value;
+								writes++;
+							},
+						},
+						credentials: vault,
+						changed: Effect.void,
+					});
+					expect(yield* controller.profiles()).toEqual({ speakAnswers: false });
+					expect(
+						yield* controller.request({ _tag: "Get" }).pipe(Effect.either),
+					).toMatchObject({
+						_tag: "Left",
+						left: { code: "AI.PROVIDER.CONFIG_INVALID" },
+					});
+					expect(writes).toBe(0);
+					const save = {
+						_tag: "Save",
+						settings: { version: 1, speakAnswers: false },
+					};
+					expect(
+						yield* controller.request(save).pipe(Effect.either),
+					).toMatchObject({
+						_tag: "Left",
+						left: { code: "AI.CREDENTIAL.STORE_FAILED" },
+					});
+					expect(
+						yield* controller.request({ _tag: "Get" }).pipe(Effect.either),
+					).toMatchObject({
+						_tag: "Left",
+						left: { code: "AI.PROVIDER.CONFIG_INVALID" },
+					});
+					expect(stored).toEqual({ version: 99, private: "synthetic-private" });
+					failWrite = false;
+					expect(yield* controller.request(save)).toMatchObject({
+						settings: save.settings,
+						sttCredential: false,
+						ttsCredential: false,
+					});
+					expect(yield* controller.request({ _tag: "Get" })).toMatchObject({
+						settings: save.settings,
+					});
+					expect(writes).toBe(1);
+				}).pipe(Effect.provide(layer())),
+		);
+	}
+	it.effect(
+		"defaults disabled, stores write-only keys in the actual vault, and keeps refs/secrets out of public view",
+		() =>
+			Effect.gen(function* () {
+				const { controller, stored, changes, vault } = yield* setup();
+				expect(yield* controller.profiles()).toEqual({ speakAnswers: false });
+				const view = yield* controller.request({
+					_tag: "Save",
+					settings: {
+						version: 1,
+						speakAnswers: true,
+						stt: { workspace: "fixture", region: "cn-beijing" },
+						tts: { provider: "openai", voice: "marin", language: "de" },
+					},
+					sttKey: "synthetic-asr",
+					ttsKey: "synthetic-tts",
+				});
+				expect(view.sttCredential).toBe(true);
+				expect(view.ttsCredential).toBe(true);
+				expect(changes()).toBe(1);
+				expect(JSON.stringify(view)).not.toMatch(
+					/synthetic|credentialRef|authGeneration/,
+				);
+				expect(JSON.stringify(stored())).not.toMatch(
+					/synthetic-asr|synthetic-tts/,
+				);
+				const profiles = yield* controller.profiles();
+				expect(profiles.stt?.baseUrl).toBe(
+					"wss://fixture.cn-beijing.maas.aliyuncs.com",
+				);
+				expect(profiles.tts?.baseUrl).toBe("https://api.openai.com/v1");
+				if (!profiles.stt) throw new Error("missing STT fixture");
+				expect(
+					Redacted.value(yield* vault.resolve(profiles.stt.credentialRef, 0)),
+				).toBe("synthetic-asr");
+				yield* controller.request({
+					_tag: "Save",
+					settings: { version: 1, speakAnswers: false },
+				});
+				expect(
+					yield* vault
+						.resolve(profiles.stt.credentialRef, 0)
+						.pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { code: "AI.PROVIDER.AUTH_REVOKED" },
+				});
+			}).pipe(Effect.provide(layer())),
+	);
+	it.effect(
+		"preserves credentials for same destination but requires a new key for workspace/region/provider changes",
+		() =>
+			Effect.gen(function* () {
+				const { controller } = yield* setup();
+				const settings = {
+					version: 1,
+					speakAnswers: false,
+					stt: { workspace: "one", region: "cn-beijing" },
+				};
+				yield* controller.request({
+					_tag: "Save",
+					settings,
+					sttKey: "synthetic-one",
+				});
+				expect(
+					(yield* controller.request({ _tag: "Save", settings })).sttCredential,
+				).toBe(true);
+				const result = yield* controller
+					.request({
+						_tag: "Save",
+						settings: {
+							...settings,
+							stt: { workspace: "two", region: "cn-beijing" },
+						},
+					})
+					.pipe(Effect.either);
+				expect(result).toMatchObject({
+					_tag: "Left",
+					left: { code: "AI.PROVIDER.AUTH_REQUIRED" },
+				});
+				expect((yield* controller.profiles()).stt?.baseUrl).toContain(
+					"one.cn-beijing",
+				);
+			}).pipe(Effect.provide(layer())),
+	);
+	it.effect(
+		"rejects spoofed credential refs and cleans up newly stored credentials on persistence failure",
+		() =>
+			Effect.gen(function* () {
+				const { controller, stored } = yield* setup(true);
+				const before = nativeKeys.size;
+				const forged = yield* controller
+					.request({
+						_tag: "Save",
+						settings: {
+							version: 1,
+							speakAnswers: false,
+							credentialRef: "forged",
+						},
+					})
+					.pipe(Effect.either);
+				expect(forged).toMatchObject({
+					_tag: "Left",
+					left: { code: "AI.PROVIDER.CONFIG_INVALID" },
+				});
+				const failed = yield* controller
+					.request({
+						_tag: "Save",
+						settings: {
+							version: 1,
+							speakAnswers: false,
+							tts: { provider: "openai", voice: "marin", language: "en" },
+						},
+						ttsKey: "synthetic-key",
+					})
+					.pipe(Effect.either);
+				expect(failed).toMatchObject({
+					_tag: "Left",
+					left: { code: "AI.CREDENTIAL.STORE_FAILED" },
+				});
+				expect(nativeKeys.size).toBe(before);
+				expect(stored()).toEqual(emptySpeechSettings);
+			}).pipe(Effect.provide(layer())),
+	);
+});
+
+it.effect(
+	"retains obsolete credential references durably when native deletion fails and retries them on the next settings request",
+	() =>
+		Effect.gen(function* () {
+			const { createSpeechCredentials } = yield* Effect.promise(
+				() => import("./credentials"),
+			);
+			const keys = new Map<string, string>();
+			let failDelete = true;
+			let stored: unknown = emptySpeechSettings;
+			const credentials = yield* createSpeechCredentials({
+				put: async (value) => {
+					const reference = crypto.randomUUID();
+					keys.set(reference, value);
+					return reference;
+				},
+				get: async (reference) => keys.get(reference) ?? "",
+				remove: async (reference) => {
+					if (failDelete)
+						throw new Error("synthetic secure storage unavailable");
+					keys.delete(reference);
+				},
+			});
+			const controller = yield* createSpeechSettings({
+				credentials,
+				storage: {
+					read: async () => stored,
+					write: async (value) => {
+						stored = value;
+					},
+				},
+				changed: Effect.void,
+			});
+			yield* controller.request({
+				_tag: "Save",
+				settings: {
+					version: 1,
+					speakAnswers: false,
+					tts: { provider: "openai", voice: "marin", language: "en" },
+				},
+				ttsKey: "synthetic-retired",
+			});
+			const reference = (yield* controller.profiles()).tts?.credentialRef;
+			const failure = yield* controller
+				.request({
+					_tag: "Save",
+					settings: { version: 1, speakAnswers: false },
+				})
+				.pipe(Effect.either);
+			expect(failure).toMatchObject({
+				_tag: "Left",
+				left: { code: "AI.CREDENTIAL.STORE_FAILED" },
+			});
+			expect(stored).toMatchObject({ retired: [reference] });
+			expect((yield* controller.profiles()).tts).toBeUndefined();
+			failDelete = false;
+			yield* controller.request({ _tag: "Get" });
+			expect(stored).toMatchObject({ retired: [] });
+			expect(keys.size).toBe(0);
+		}),
+);

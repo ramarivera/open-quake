@@ -86,6 +86,11 @@ export interface VoiceSurfaceOptions {
 	readonly diagnostics?: DesktopDiagnostics;
 	/** `OPEN_QUAKE_MOCK_DEVICE=1`: bind the scripted runtime. */
 	readonly mock: boolean;
+	/** Explicit speech controller. Chat configuration alone never enables speech. */
+	readonly speech?: {
+		readonly readAloud: (text: string) => Promise<VoiceSurfaceReply>;
+		readonly onEvent: (event: VoiceSurfaceEvent) => void;
+	};
 	readonly tones: VoiceToneSink;
 	/** The device the strip shows; events carry it for per-device dedupe. */
 	readonly serial: () => string;
@@ -146,6 +151,7 @@ export interface KnobVoiceRequest {
 }
 
 export function registerVoiceSurface(options: VoiceSurfaceOptions): {
+	readonly ready: Promise<void>;
 	readonly publish: (event: VoiceSurfaceEvent) => Promise<void>;
 	/** The knob model's `voice` binding: knob holds drive the overlay. */
 	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
@@ -159,8 +165,44 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 		options.renderer ??
 		process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
+	const answers = new Map<
+		string,
+		{ turnId: string; text: string; seq: number; overflow: boolean }
+	>();
+	const answerKey = (serial: string, keyCode: string) =>
+		`${serial}\u0000${keyCode}`;
+	const publish = (event: VoiceSurfaceEvent) => {
+		if (event._tag === "Reset") {
+			for (const key of answers.keys())
+				if (key.startsWith(`${event.serial}\u0000`)) answers.delete(key);
+		} else if (event._tag === "TurnStarted") {
+			answers.set(answerKey(event.serial, event.keyCode), {
+				turnId: event.turnId,
+				text: "",
+				seq: -1,
+				overflow: false,
+			});
+			while (answers.size > 16) {
+				const key = answers.keys().next().value;
+				if (key !== undefined) answers.delete(key);
+			}
+		} else if (event._tag === "Chunk" && event.chunk.type === "answer") {
+			const answer = answers.get(answerKey(event.serial, event.keyCode));
+			if (
+				answer?.turnId === event.chunk.turnId &&
+				event.chunk.seq > answer.seq
+			) {
+				answer.seq = event.chunk.seq;
+				const combined = answer.text + event.chunk.textDelta;
+				answer.overflow ||= combined.length > 4000;
+				answer.text = combined.slice(0, 4000);
+			}
+		}
+		broadcast(event);
+		options.speech?.onEvent(event);
+	};
 	const runtime = makeDesktopRuntime(
-		voiceSurfaceLayer(options, broadcast),
+		voiceSurfaceLayer(options, publish),
 		options.diagnostics,
 		"voice.request",
 	);
@@ -259,9 +301,14 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 				if (!panel.isDestroyed()) panel.focus();
 				return ok;
 			}
-			case "ReadAloud":
-				// Text-to-speech belongs to voice-stt-tts; nothing plays it yet.
-				return rejected("VOICE.TTS.UNAVAILABLE");
+			case "ReadAloud": {
+				const answer = answers.get(answerKey(serial, request.keyCode));
+				if (answer?.overflow) return rejected("VOICE.TTS.QUEUE_FULL");
+				const text = answer?.text;
+				if (!options.speech || !text?.trim())
+					return rejected("VOICE.TTS.UNAVAILABLE");
+				return options.speech.readAloud(text);
+			}
 		}
 	};
 	ipcMain.handle(
@@ -271,6 +318,7 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	);
 	let shutdown: Promise<void> | undefined;
 	return {
+		ready: run(Effect.void),
 		publish: (event) => run(VoiceSurface.publish(event)),
 		reset: () => run(GridVoice.reset(options.serial(), "profileChanged")),
 		onDevice: (event) => {

@@ -210,6 +210,7 @@ vi.mock("./voice", async () => {
 		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
 		toneSinks: vi.fn(() => ({ play: vi.fn() })),
 		registerVoiceSurface: vi.fn(() => ({
+			ready: Promise.resolve(),
 			reset: vi.fn(async () => undefined),
 			onDevice: vi.fn(async () => undefined),
 			publish: vi.fn(async () => undefined),
@@ -223,6 +224,7 @@ vi.mock("./agent-http", () => ({
 	registerAgentHttp: vi.fn(async () => ({
 		backend: undefined,
 		drafting: undefined,
+		createVoiceAdapter: vi.fn(),
 		decorateVoiceRuntime: vi.fn(),
 		dispose: vi.fn(async () => undefined),
 	})),
