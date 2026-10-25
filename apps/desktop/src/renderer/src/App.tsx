@@ -177,14 +177,14 @@ function ManagementSurface({
 				contentRef={content}
 				deviceReady={deviceReady}
 				setupLabel={settingsT("setup.title")}
-				setupEntry={
+				setupEntry={(navigate) => (
 					<SetupResumeEntry
 						store={setup}
 						runtime={runtimeOption}
 						current={page === "setup"}
-						onOpen={() => open("setup")}
+						onOpen={() => navigate("setup")}
 					/>
-				}
+				)}
 			>
 				{/* Keep the diagnostic subscription alive while navigating pages. */}
 				<div hidden={page !== "connection"}>
