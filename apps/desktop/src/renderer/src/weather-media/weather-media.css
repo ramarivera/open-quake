@@ -72,7 +72,7 @@
 	box-sizing: border-box;
 	padding: 1px 12px;
 	border-radius: 999px;
-	background: rgba(0, 0, 0, 0.6);
+	background: #222;
 	color: #ffd6c4;
 }
 .oq-weather-range {

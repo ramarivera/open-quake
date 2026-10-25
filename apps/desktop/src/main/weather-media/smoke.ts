@@ -6,12 +6,14 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
+import { THEME_IDS } from "../../shared/clock-style";
 import {
 	WEATHER_MEDIA_CHANGED,
 	type WeatherMediaCommand,
 	WeatherMediaReply,
 } from "../../shared/weather-media-contracts";
 import { WeatherNetworkFailed } from "../../shared/weather-media-errors";
+import { WEATHER_MEDIA_STRINGS } from "../../shared/weather-media-strings";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
@@ -492,6 +494,37 @@ async function smoke(): Promise<void> {
 			"provider outage keeps a distinct error",
 		);
 		await capture(panel, "clock-weather-unavailable");
+		const contrast: { theme: string; text: string; ratio: unknown }[] = [];
+		for (const theme of THEME_IDS) {
+			await evaluate(
+				panel,
+				`window.quakeClock.request({_tag:'setTheme',keyCode:'1,1',themeId:${JSON.stringify(theme)}})`,
+			);
+			await waitFor(
+				panel,
+				`document.querySelector('.oq-clock')?.dataset.theme===${JSON.stringify(theme)}`,
+				`contrast theme ${theme}`,
+			);
+			for (const text of ["Weather unavailable", "City not found"]) {
+				// These strings already run through real service paths above. This probe isolates
+				// their unchanged error-chip style against each actual built-in background.
+				const ratio = await evaluate(
+					panel,
+					`(()=>{const element=document.querySelector('.oq-weather-desc');element.textContent=${JSON.stringify(text)};const style=getComputedStyle(element);const channels=value=>value.match(/[0-9.]+/g).map(Number);const fg=channels(style.color),bg=channels(style.backgroundColor);if(bg.length===4&&bg[3]!==1)return 0;const luminance=rgb=>rgb.slice(0,3).map(value=>{const c=value/255;return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[0.2126,0.7152,0.0722][index],0);const a=luminance(fg),b=luminance(bg);return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);})()`,
+				);
+				assert(typeof ratio === "number" && ratio >= 4.5);
+				contrast.push({ theme, text, ratio });
+				await capture(
+					panel,
+					`weather-contrast-${theme}-${text.startsWith("City") ? "city" : "unavailable"}`,
+				);
+			}
+		}
+		await writeFile(
+			join(artifacts, "weather-contrast.json"),
+			JSON.stringify(contrast),
+		);
+
 		outage = false;
 		await request(management, {
 			_tag: "configure",
@@ -641,6 +674,56 @@ async function smoke(): Promise<void> {
 				);
 			await capture(panel, `dk-player-${state}`);
 		}
+
+		const localizedBounds: unknown[] = [];
+		for (const locale of ["fr", "it"] as const) {
+			native = { session: null, error: "TCC_DENIED" };
+			await evaluate(
+				panel,
+				`Object.defineProperty(navigator,'language',{value:${JSON.stringify(locale)},configurable:true});null`,
+			);
+			await publish();
+			await waitFor(
+				panel,
+				`document.querySelector('.oq-player-error')?.textContent===${JSON.stringify(WEATHER_MEDIA_STRINGS[locale].media.tccDenied)}`,
+				`${locale} system hint`,
+			);
+			const bounds = await evaluate(
+				panel,
+				"(()=>{const h=document.querySelector('.oq-player-error'),s=document.querySelector('.oq-player-source');return {locale:navigator.language,text:h.textContent,font:getComputedStyle(h).fontSize,hint:h.getBoundingClientRect().toJSON(),source:s.getBoundingClientRect().toJSON()};})()",
+			);
+			localizedBounds.push(bounds);
+			assert.equal(
+				await evaluate(
+					panel,
+					"(()=>{const hint=document.querySelector('.oq-player-error'),source=document.querySelector('.oq-player-source');const box=hint.getBoundingClientRect(),pill=source.getBoundingClientRect();return getComputedStyle(hint).fontSize==='18px' && box.height>=21 && box.height<=42.1 && box.top>=0 && box.bottom<=pill.top;})()",
+				),
+				true,
+				"Localized hint must fit at most two lines above the source pill",
+			);
+
+			await capture(panel, `dk-player-${locale}-permission-hint`);
+		}
+		// Layout-only stress case uses the existing recovered Italian service string.
+		// Real permission errors above still exercise their unmodified production renderer.
+		await evaluate(
+			panel,
+			`document.querySelector('.oq-player-error').textContent=${JSON.stringify(WEATHER_MEDIA_STRINGS.it.media.mediaRemoteUnavailable)};null`,
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				"(()=>{const box=document.querySelector('.oq-player-error').getBoundingClientRect(),pill=document.querySelector('.oq-player-source').getBoundingClientRect();return box.height>21 && box.height<=42.1 && box.top>=0 && box.bottom<=pill.top;})()",
+			),
+			true,
+			"Long recovered hint must wrap to two lines without pill overlap",
+		);
+		await capture(panel, "dk-player-italian-long-service-layout");
+		await writeFile(
+			join(artifacts, "localized-player-bounds.json"),
+			JSON.stringify(localizedBounds),
+		);
+		await evaluate(panel, "delete navigator.language;null");
 		native = {
 			session: { ...mediaSession, canNext: false, canPrevious: false },
 			error: null,
