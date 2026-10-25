@@ -31,12 +31,14 @@ app.quit = () => {
 	if (!prevented) quit = true;
 };
 const events = [];
-class Window {
+class Window extends EventEmitter {
 	static windows = [];
 	static getAllWindows() {
 		return Window.windows;
 	}
-	constructor() {
+	constructor(options) {
+		super();
+		this.options = options;
 		Window.windows.push(this);
 	}
 	url = "";
@@ -48,8 +50,6 @@ class Window {
 	isDestroyed() {
 		return false;
 	}
-	on() {}
-	once() {}
 	loadFile(path) {
 		this.url = pathToFileURL(path).href;
 	}
@@ -57,7 +57,20 @@ class Window {
 		this.url = url;
 	}
 	hide() {}
+	shown = false;
+	show() {
+		this.shown = true;
+	}
 	showInactive() {}
+	isMaximized() {
+		return false;
+	}
+	isFullScreen() {
+		return false;
+	}
+	getBounds() {
+		return { x: 0, y: 0, width: 1100, height: 760 };
+	}
 	setBounds() {}
 	setAlwaysOnTop() {}
 	destroy() {}
@@ -229,6 +242,12 @@ try {
 			});
 		}
 	}
+	// Device events precede async settings restoration. Exercise a fully initialized app.
+	await until(() =>
+		Window.windows.some(
+			(window) => window.options.title?.includes("management") && window.shown,
+		),
+	);
 	app.quit();
 	await until(() => quit);
 	for (const channel of [

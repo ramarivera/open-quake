@@ -7,6 +7,18 @@ const policy = {
 	retry: "manual" as const,
 };
 export const SettingsErrors = {
+	OsApplyFailed: {
+		code: "QUAKE.SETTINGS.OS_APPLY_FAILED",
+		category: "dependency",
+		message: "The operating system preference could not be applied",
+		policy,
+	},
+	WizardIncomplete: {
+		code: "QUAKE.WIZARD.INCOMPLETE",
+		category: "validation",
+		message: "The local setup prerequisites are incomplete",
+		policy,
+	},
 	Invalid: {
 		code: "QUAKE.SETTINGS.INVALID",
 		category: "validation",
@@ -49,9 +61,13 @@ export class SettingsInvalid extends Schema.TaggedError<SettingsInvalid>()(
 	fields("Invalid"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("Invalid", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("Invalid")))(cause)
+				: properties("Invalid", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
 export class SettingsReadFailed extends Schema.TaggedError<SettingsReadFailed>()(
@@ -59,9 +75,13 @@ export class SettingsReadFailed extends Schema.TaggedError<SettingsReadFailed>()
 	fields("ReadFailed"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("ReadFailed", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("ReadFailed")))(cause)
+				: properties("ReadFailed", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
 export class SettingsPersistFailed extends Schema.TaggedError<SettingsPersistFailed>()(
@@ -69,11 +89,68 @@ export class SettingsPersistFailed extends Schema.TaggedError<SettingsPersistFai
 	fields("PersistFailed"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("PersistFailed", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("PersistFailed")))(
+						cause,
+					)
+				: properties("PersistFailed", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
+const OsReason = Schema.Literal(
+	"unsupported",
+	"denied",
+	"timeout",
+	"unverified",
+	"unavailable",
+);
+const OsFields = { ...fields("OsApplyFailed"), reason: OsReason };
+export class SettingsOsApplyFailed extends Schema.TaggedError<SettingsOsApplyFailed>()(
+	"SettingsOsApplyFailed",
+	OsFields,
+) {
+	declare readonly originalCause: unknown;
+	constructor(
+		cause?: unknown,
+		reason: typeof OsReason.Type | true = "unavailable",
+	) {
+		// Effect's class schema decodes via new this(validatedFields, true).
+		// Keep the safe wire projection, never reinterpret fields as a raw cause.
+		super(
+			reason === true
+				? Schema.decodeUnknownSync(Schema.Struct(OsFields))(cause)
+				: { ...properties("OsApplyFailed", cause), reason },
+		);
+		retain(this, reason === true ? undefined : cause);
+	}
+}
+export class WizardIncomplete extends Schema.TaggedError<WizardIncomplete>()(
+	"WizardIncomplete",
+	fields("WizardIncomplete"),
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("WizardIncomplete")))(
+						cause,
+					)
+				: properties("WizardIncomplete", cause),
+		);
+		retain(this, decoded ? undefined : cause);
+	}
+}
+export const SettingsBackendFailure = Schema.Union(
+	SettingsInvalid,
+	SettingsReadFailed,
+	SettingsPersistFailed,
+	SettingsOsApplyFailed,
+	WizardIncomplete,
+);
+export type SettingsBackendFailure = typeof SettingsBackendFailure.Type;
 export const SettingsFailure = Schema.Union(
 	SettingsInvalid,
 	SettingsReadFailed,

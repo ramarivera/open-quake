@@ -168,6 +168,13 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 		});
 		return {
 			backend: createAgentRuntimeAdapter(registry),
+			// Setup checks saved configuration, independent of a server being online.
+			configured: () =>
+				background.runPromise(
+					repository
+						.view()
+						.pipe(Effect.map((view) => view.connections.length > 0)),
+				),
 			drafting: createAgentDraftAdapter({
 				resolve: registry.resolve,
 				selected: () =>

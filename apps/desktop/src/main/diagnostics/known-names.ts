@@ -1,7 +1,10 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`SettingsService.locale SettingsService.setLocale SettingsRepository.read SettingsRepository.setLocale
+	`GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
+WizardService.snapshot WizardService.save WizardService.seedRegion WizardService.replay WizardService.complete SettingsRepository.transact
+DesktopSettings.login DesktopSettings.setLogin DesktopSettings.workAreas DesktopSettings.managementReachable DesktopWizard.displayAvailable DesktopWizard.usableProfiles
+SettingsService.locale SettingsService.setLocale SettingsRepository.read SettingsRepository.setLocale
 DesktopKnob.nativeScript DesktopKnob.readVolume DesktopKnob.load DesktopKnob.warmThumbnails DesktopKnob.thumbnail DesktopKnob.selectProfile DesktopKnob.observeVolume
 ForegroundApp.acquire ForegroundApp.dispose
 ChatService.read ChatService.attach ChatService.submit ChatService.turn ChatService.cancel ChatService.close ChatService.clear ChatService.snapshot ChatService.subscribe ChatService.session ChatService.rename ChatService.supersede ChatService.history ChatService.list
@@ -113,6 +116,7 @@ WeatherService.verifyCity`.split(/\s+/),
 
 export const knownSourceFiles = new Set(
 	`composition.ts capture.ts electron-audio.ts audio-worker.ts pcm.ts factory.ts settings.ts settings-ipc.ts websocket.ts ordered.ts runtime.ts errors.ts
+general-service.ts general-invariants.ts general-contracts.ts wizard-service.ts wizard-invariants.ts wizard-contracts.ts backend-rpc.ts backend-preload.ts os-adapter.ts wizard-owners.ts window-binding.ts
 native-volume.ts thumbnail-binding.ts volume-observer.ts profile-thumbnail-key.ts profile-thumbnails.ts
 windows-foreground.ts windows-foreground-script.ts
 account-config.ts action-adapters.ts action-contracts.ts action-errors.ts action-import.ts
@@ -186,6 +190,7 @@ export const knownLogEvents = new Set([
 	"Profile session enrollment failed",
 	"Publishing profiles manager snapshot failed",
 	"Refreshing knob profiles failed",
+	"Settings window operation failed",
 	"Voice tone failed",
 	"Speech initialization failed",
 	"Wallpaper asset collection deferred: storage unavailable",
@@ -193,7 +198,7 @@ export const knownLogEvents = new Set([
 ]);
 
 export const knownErrorTags = new Set(
-	`SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
+	`SettingsOsApplyFailed WizardIncomplete SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
 ActionApplicationMissing ActionPermissionDenied ActionSnapshotFailed AgentCredentialUnavailable
 AgentDraftFailed AgentDraftUnavailable AgentDuplicate AgentInvalid AgentMissing AgentModelInvalid
 AgentModelLastRow AgentPanelFailed AgentProfileMissing AgentProtected AgentRevisionConflict
