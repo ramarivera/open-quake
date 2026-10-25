@@ -69,3 +69,21 @@ latest value without blocking input. Cached thumbnails survive a same-catalog
 ring commit but not an unrelated configure or disconnect. No cold detent is
 replayed. The source client template removes the independent halo layer, so its
 unused color-cycle state is not rendered here. The cyan direction glow remains.
+
+## Directional hotkey composition
+
+Continue task 5.1 with the existing directional action contract: decrease uses
+action 0 and increase uses action 1. Decode the entire committed HotkeyConfig
+before choosing either action. Reuse hardwareKeyboardAdapter, which respects
+device versus host input mode and owns key release. Never fall back to global
+host input when that mode has no qualified adapter.
+
+The desktop adapter reloads the canonical profile envelope on each focused
+hotkey turn. It compares the loaded profile identity, serial, committed visible profile,
+page and content with the knob snapshot before dispatch. It also rejects a
+hardware session replaced while that read was pending. No renderer chord or
+trace identity is trusted. Existing catalog errors retain their private causes;
+a named span surrounds validation and keyboard dispatch before model feedback
+catches the failure. No chord text is added to diagnostics. This adds no UI,
+copy, dependencies or transport schemas. Monitor brightness stays an independent
+unfinished production adapter; physical key receipt is separate acceptance.

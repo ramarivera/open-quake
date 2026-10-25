@@ -58,8 +58,15 @@ no actual OS volume read or write was run for this backend lane.
 
 Focused screen luminance uses the current hardware session's `stepBrightness`,
 which sends typed `Luminance` commands in 26/255 steps with minimum 25. Monitor
-brightness and hotkey actions still need qualified bindings. Voice delegates to
-the supplied owner; source composition does not prove live microphone, speech
+brightness still needs a qualified binding. Focused directional hotkeys reload
+the committed visible profile and validate both actions with HotkeyConfig before
+sending action 0 for decrease or action 1 for increase through
+`hardwareKeyboardAdapter`. Device/profile/page/revision/content and replaced
+hardware checks reject stale work. The existing keyboard adapter honors input
+mode and releases the chord; host mode without a qualified host adapter fails
+instead of injecting globally. The named `DesktopKnob.focusedHotkey` span retains
+private original causes in the shared diagnostics trace without recording chord
+text. Voice delegates to the supplied owner; source composition does not prove live microphone, speech
 or physical hold/release acceptance. Unavailable actions retain catalog notices
 and hardware error-tone behavior. Physical focus/volume acquisition outside the
 picker remains uncomposed.
