@@ -42,6 +42,7 @@ module.exports = {
 		oneClick: false,
 		perMachine: false,
 		allowToChangeInstallationDirectory: true,
+		runAfterFinish: false,
 	},
 	linux: {
 		target: ["AppImage", "deb"],

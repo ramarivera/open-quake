@@ -8,5 +8,5 @@
 ## 2. Verification and delivery, open-quake-bgu.2
 
 - [x] 2.1 Run focused release tests, desktop checks and a real local packaged smoke.
-- [ ] 2.2 Commit, normally push and open a PR against the latest application branch.
+- [x] 2.2 Commit, normally push and open a PR against the latest application branch.
 - [ ] 2.3 Reconcile hosted installer builds and one configured bot-review round.

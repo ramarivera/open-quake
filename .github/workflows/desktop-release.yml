@@ -37,7 +37,9 @@ jobs:
       - run: pnpm lint
       - run: pnpm --filter @open-quake/desktop test:release
       - run: pnpm typecheck
-      - run: pnpm test
+      # Turbo otherwise starts all package suites at once, and each Vitest
+      # process starts its own worker pool on the same small runner.
+      - run: pnpm exec turbo run test --concurrency=1 -- --maxWorkers=2
       - run: pnpm --filter @open-quake/desktop build
       - run: pnpm --filter @open-quake/desktop test:bundle
 

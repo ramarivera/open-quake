@@ -24,3 +24,11 @@ The system SHALL document unsigned installation and Linux HID access. It SHALL d
 #### Scenario: Choose an installation method
 - **WHEN** a user reads the installation instructions
 - **THEN** they SHALL find the downloads and unsigned limitations without being instructed to install the private workspace packages from npm
+
+#### Scenario: Smoke the distributed downloads
+- **WHEN** a native package job tests its output
+- **THEN** the smoke SHALL execute the app from each shipped download format, using a mounted DMG, extracted ZIP, installed EXE/DEB or AppImage, without opening hardware
+
+#### Scenario: Record without an audio converter
+- **WHEN** recording is requested without an executable FFmpeg with the libmp3lame encoder
+- **THEN** the app SHALL reject the request before capture begins and explain how to install or configure the required converter

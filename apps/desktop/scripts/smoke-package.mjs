@@ -1,34 +1,23 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { execFile, spawn } from "node:child_process";
+import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
+const command = promisify(execFile);
 const directory = resolve(process.argv[2] || "dist");
+const version = process.env.RELEASE_VERSION;
+assert.ok(version, "RELEASE_VERSION must identify the downloads under test");
 const scratch = await mkdtemp(join(tmpdir(), "open-quake-package-"));
-try {
-	let executable;
-	if (process.platform === "darwin") {
-		executable = join(
-			directory,
-			"mac-arm64/open-quake.app/Contents/MacOS/open-quake",
-		);
-	} else {
-		const prefix = process.platform === "win32" ? "win" : "linux";
-		const arch = process.arch === "x64" ? "" : `${process.arch}-`;
-		const unpacked = join(directory, `${prefix}-${arch}unpacked`);
-		const name = process.platform === "win32" ? "open-quake.exe" : "open-quake";
-		assert.ok(
-			(await readdir(unpacked)).includes(name),
-			`Missing packaged executable ${name}`,
-		);
-		executable = join(unpacked, name);
-	}
-	const child = spawn(executable, ["--package-smoke"], {
+
+async function smoke(executable, args = []) {
+	const userData = await mkdtemp(join(scratch, "user-data-"));
+	const child = spawn(executable, [...args, "--package-smoke"], {
 		env: {
 			...process.env,
 			ELECTRON_RUN_AS_NODE: "",
-			PACKAGE_SMOKE_DATA: scratch,
+			PACKAGE_SMOKE_DATA: userData,
 			RELEASE_ARCH: process.arch,
 		},
 		stdio: ["ignore", "pipe", "pipe"],
@@ -45,14 +34,78 @@ try {
 			child.on("error", reject);
 			child.on("close", resolveExit);
 		});
-		assert.equal(code, 0, "Packaged Electron must exit successfully");
+		assert.equal(code, 0, "Distributed Electron must exit successfully");
 		assert.ok(
 			stdout.includes(
-				`PACKAGE_SMOKE_PASS ${process.platform} ${process.arch} ${process.env.RELEASE_VERSION}`,
+				`PACKAGE_SMOKE_PASS ${process.platform} ${process.arch} ${version}`,
 			),
 		);
 	} finally {
 		clearTimeout(timer);
+	}
+}
+
+try {
+	const files = await readdir(directory);
+	const download = (extension) => {
+		const os = { darwin: "mac", win32: "win", linux: "linux" }[
+			process.platform
+		];
+		const name = `open-quake-${version}-${os}-${process.arch}.${extension}`;
+		assert.ok(files.includes(name), `Missing distributed download ${name}`);
+		return join(directory, name);
+	};
+	if (process.platform === "darwin") {
+		const mount = join(scratch, "volume");
+		await mkdir(mount);
+		await command(
+			"hdiutil",
+			[
+				"attach",
+				download("dmg"),
+				"-readonly",
+				"-nobrowse",
+				"-mountpoint",
+				mount,
+			],
+			{ timeout: 60_000 },
+		);
+		try {
+			await smoke(join(mount, "open-quake.app/Contents/MacOS/open-quake"));
+		} finally {
+			await command("hdiutil", ["detach", mount], { timeout: 30_000 });
+		}
+		const extracted = join(scratch, "zip");
+		await command("ditto", ["-x", "-k", download("zip"), extracted]);
+		await smoke(join(extracted, "open-quake.app/Contents/MacOS/open-quake"));
+	} else if (process.platform === "win32") {
+		const installed = join(scratch, "installed");
+		await command(download("exe"), ["/S", "/currentuser", `/D=${installed}`], {
+			timeout: 120_000,
+		});
+		try {
+			await smoke(join(installed, "open-quake.exe"));
+		} finally {
+			await command(join(installed, "Uninstall open-quake.exe"), ["/S"], {
+				timeout: 60_000,
+			});
+		}
+	} else if (process.platform === "linux") {
+		// Installing the DEB also establishes the shipped sandbox helper's owner
+		// and permissions. This only runs on the disposable native CI runner.
+		await command("sudo", ["apt-get", "install", "-y", download("deb")], {
+			timeout: 120_000,
+		});
+		try {
+			await smoke("/opt/open-quake/open-quake");
+			await smoke(download("AppImage"), ["--appimage-extract-and-run"]);
+		} finally {
+			await command("sudo", ["apt-get", "remove", "-y", "open-quake"], {
+				timeout: 60_000,
+			});
+		}
+	} else {
+		throw new Error(`Unsupported package host ${process.platform}`);
 	}
 } finally {
 	await rm(scratch, {

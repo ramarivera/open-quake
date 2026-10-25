@@ -10,7 +10,11 @@ Download installers from [GitHub Releases](https://github.com/ramarivera/open-qu
 | Linux | Intel/AMD, x64 | AppImage and DEB |
 | Linux | ARM64 | AppImage and DEB |
 
-Intel Mac packages aren't built. Choose the package matching your system architecture. The desktop app is self-contained, so Node.js and npm aren't needed to install it. Workspace packages are private, and the CLI is a placeholder. `npm install open-quake` isn't an installation method.
+Intel Mac packages aren't built. Choose the package matching your system architecture. The desktop app includes its JavaScript runtime, so Node.js and npm aren't needed to install it. Workspace packages are private, and the CLI is a placeholder. `npm install open-quake` isn't an installation method.
+
+## Recording prerequisite
+
+Meeting recording requires a separately installed FFmpeg executable with the `libmp3lame` encoder. The installers don't bundle FFmpeg. Install it through your system package manager, then restart open-quake with FFmpeg available on the app's PATH. Apps launched from Finder or the Start menu can have a different PATH from a terminal. Set `OPEN_QUAKE_FFMPEG` to an absolute executable path in the app's launch environment when needed. The app checks the converter before opening the capture window or requesting microphone permission. Missing or incompatible converters prevent recording with an installation message rather than leaving an unfinalizable recording.
 
 ## Unsigned builds
 
@@ -57,4 +61,4 @@ There's no automatic updater in this change. Download and install a newer releas
 
 Use Node 24 and the repository's pinned pnpm version. On the target operating system, run `pnpm install --frozen-lockfile`, `pnpm --filter @open-quake/desktop build`, then `pnpm --filter @open-quake/desktop package --mac --arm64` on Apple Silicon, `--win --x64` or `--win --arm64` on Windows, or `--linux --x64` or `--linux --arm64` on Linux. Build the matching architecture natively. Output goes to the ignored `apps/desktop/dist/` directory.
 
-For a packaged smoke check, set `RELEASE_VERSION` to the package version, then run `pnpm --filter @open-quake/desktop test:package`. The default local version is `0.0.0`; CI uses the tag version or an explicit PR prerelease version. On Linux run the check under `xvfb-run -a` if no display is available. The smoke window stays hidden and never opens the QUAKE or emits keyboard/media actions.
+For a packaged smoke check, set `RELEASE_VERSION` to the package version, then run `pnpm --filter @open-quake/desktop test:package`. The default local version is `0.0.0`; CI uses the tag version or an explicit PR prerelease version. On Linux run the check under `xvfb-run -a` if no display is available. The smoke mounts the DMG and extracts the ZIP on macOS, silently installs and uninstalls the EXE on Windows, and installs/removes the DEB and runs the AppImage on Linux. Windows/Linux checks belong on disposable test machines because they install packages. The smoke window stays hidden and never opens the QUAKE or emits keyboard/media actions.
