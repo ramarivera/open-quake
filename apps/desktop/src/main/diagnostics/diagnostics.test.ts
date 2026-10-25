@@ -1,0 +1,376 @@
+import {
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
+import {
+	Cause,
+	Effect,
+	Either,
+	Fiber,
+	Layer,
+	ManagedRuntime,
+	Redacted,
+} from "effect";
+import { afterEach, describe, expect, it } from "vitest";
+import { RuntimeUnavailable } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
+import { makeRuntimeHttpTransport } from "../../../../../packages/edge/src/agent-http/transport.js";
+import { GridVoice } from "../../../../../packages/edge/src/voice/surface/grid-voice-service.js";
+import { VoiceRuntimeUnavailable } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
+import {
+	GridVoiceRuntime,
+	VoiceSurfacePublisher,
+	VoiceTonePort,
+} from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
+import { VoiceSurface } from "../../../../../packages/edge/src/voice/surface/voice-surface-service.js";
+import { createDesktopDiagnostics, type DesktopDiagnostics } from "./index.js";
+import { createDiagnosticStorage } from "./persistence.js";
+import { safeCause, safeError } from "./privacy.js";
+
+const scratch = "/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish";
+const directories: string[] = [];
+const resources: Array<() => Promise<unknown>> = [];
+async function fixture() {
+	const directory = await mkdtemp(join(scratch, "diagnostics-test-"));
+	directories.push(directory);
+	const diagnostics = createDesktopDiagnostics({ directory });
+	resources.push(diagnostics.close);
+	return { directory, diagnostics };
+}
+function runtime(diagnostics: DesktopDiagnostics) {
+	const app = ManagedRuntime.make(diagnostics.layer);
+	resources.push(() => app.dispose());
+	return app;
+}
+async function records(
+	directory: string,
+): Promise<Array<Record<string, unknown>>> {
+	const files = (await readdir(directory))
+		.filter((name) => /^diagnostics\.\d\.ndjson$/.test(name))
+		.sort()
+		.reverse();
+	return (
+		await Promise.all(
+			files.map((file) => readFile(join(directory, file), "utf8")),
+		)
+	).flatMap((text) =>
+		text.trim()
+			? text
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as Record<string, unknown>)
+			: [],
+	);
+}
+afterEach(async () => {
+	for (const close of resources.splice(0).reverse()) await close();
+	for (const directory of directories.splice(0))
+		await rm(directory, { recursive: true, force: true });
+});
+
+describe("production Effect diagnostics", () => {
+	it("persists exact typed HTTP consumer failure and original source identities before recovery", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		const upstream = Object.assign(
+			new TypeError("private provider URL and prompt"),
+			{ code: "EACCES" },
+		);
+		const transport = makeRuntimeHttpTransport(async () => {
+			throw upstream;
+		});
+		const result = await app.runPromise(
+			diagnostics
+				.instrument(
+					Effect.scoped(
+						transport.execute({
+							connection: {
+								id: "private-id",
+								name: "private-name",
+								kind: "hermes",
+								baseURL: "https://secret.example.test/private",
+							},
+							path: "/v1/chat/completions",
+							method: "POST",
+							body: { prompt: "private-prompt" },
+							credential: Redacted.make("private-token"),
+							headers: { "x-tenant": "private-header" },
+						}),
+					),
+					"agent.request",
+				)
+				.pipe(Effect.either),
+		);
+		expect(Either.isLeft(result)).toBe(true);
+		if (Either.isRight(result)) throw new Error("Expected transport failure");
+		expect(result.left).toBeInstanceOf(RuntimeUnavailable);
+		expect(result.left.originalCause).toBe(upstream);
+		await diagnostics.flush();
+		const lines = await records(directory);
+		const failed = lines.find(
+			(line) => line.span_name === "RuntimeHttpTransport.execute",
+		);
+		expect(failed).toMatchObject({
+			type: "span",
+			outcome: "failure",
+			cause: {
+				kind: "Fail",
+				error: {
+					_tag: "RuntimeUnavailable",
+					code: "AGENT.HTTP.CONNECTION.UNAVAILABLE",
+					cause: { name: "TypeError", sourceCode: "EACCES" },
+				},
+			},
+		});
+		const outer = lines.find((line) => line.span_name === "agent.request");
+		expect(failed?.trace_id).toBe(outer?.trace_id);
+		expect(failed?.parent_span_id).toBe(outer?.span_id);
+		expect(failed?.request_id).toBe(outer?.request_id);
+		expect(failed?.duration_ms).toBeTypeOf("number");
+		const encoded = JSON.stringify(lines);
+		for (const privateValue of [
+			"secret.example",
+			"private-",
+			"Authorization",
+			"Bearer",
+			"headers",
+			"prompt",
+		])
+			expect(encoded).not.toContain(privateValue);
+	});
+
+	it("observes the real GridVoice failed consumer path while keeping renderer stage behavior", async () => {
+		const { directory, diagnostics } = await fixture();
+		const stages: string[] = [];
+		const ports = Layer.mergeAll(
+			Layer.succeed(VoiceSurfacePublisher, {
+				publish: (event) =>
+					Effect.sync(() => {
+						stages.push(event._tag);
+					}),
+			}),
+			Layer.succeed(VoiceTonePort, { play: () => Effect.void }),
+		);
+		const layer = GridVoice.Default.pipe(
+			Layer.provideMerge(
+				Layer.succeed(GridVoiceRuntime, {
+					select: () => Effect.void,
+					startCapture: () => Effect.void,
+					releaseCapture: () => Effect.void,
+					cancelCapture: () => Effect.void,
+					cancelFlow: () => Effect.void,
+					sendText: () =>
+						Effect.fail(
+							new VoiceRuntimeUnavailable(new RangeError("private transcript")),
+						),
+				}),
+			),
+			Layer.provideMerge(VoiceSurface.Default.pipe(Layer.provide(ports))),
+			Layer.provideMerge(diagnostics.layer),
+		);
+		const app = ManagedRuntime.make(layer);
+		resources.push(() => app.dispose());
+		const exit = await app.runPromise(
+			diagnostics
+				.instrument(
+					GridVoice.sendText({
+						serial: "private serial",
+						keyCode: "private key",
+						agentId: "private-agent",
+						message: "private prompt",
+					}),
+					"voice.request",
+				)
+				.pipe(Effect.exit),
+		);
+		expect(exit._tag).toBe("Failure");
+		expect(stages).toContain("Stage");
+		await diagnostics.flush();
+		const lines = await records(directory);
+		expect(
+			lines.find((line) => line.span_name === "GridVoice.sendText"),
+		).toMatchObject({
+			outcome: "failure",
+			cause: {
+				error: {
+					_tag: "VoiceRuntimeUnavailable",
+					code: "VOICE.GRID.RUNTIME_UNAVAILABLE",
+					cause: { name: "RangeError" },
+				},
+			},
+		});
+		expect(JSON.stringify(lines)).not.toContain("private");
+	});
+
+	it("correlates logs, native child fibers, nested Promise runtimes and delayed bound callbacks", async () => {
+		const { directory, diagnostics } = await fixture();
+		const first = runtime(diagnostics);
+		const second = runtime(diagnostics);
+		let callback: (() => Promise<void>) | undefined;
+		await first.runPromise(
+			diagnostics.instrument(
+				Effect.gen(function* () {
+					yield* Effect.logInfo("private prompt", {
+						transcript: "private transcript",
+					}).pipe(Effect.annotateLogs({ authorization: "private-token" }));
+					const fiber = yield* Effect.logInfo("private child").pipe(
+						Effect.withSpan("speech.playback"),
+						Effect.fork,
+					);
+					yield* Fiber.join(fiber);
+					yield* Effect.promise(() =>
+						second.runPromise(
+							diagnostics.instrument(
+								Effect.logWarning("private nested"),
+								"speech.synthesize",
+							),
+						),
+					);
+					yield* Effect.sync(() => {
+						callback = diagnostics.bind(() =>
+							second.runPromise(
+								diagnostics.instrument(
+									Effect.logInfo("private delayed"),
+									"speech.capture",
+								),
+							),
+						);
+					});
+				}),
+				"voice.request",
+			),
+		);
+		if (!callback) throw new Error("Callback wasn't registered");
+		await callback();
+		await diagnostics.flush();
+		const lines = await records(directory);
+		expect(new Set(lines.map((line) => line.trace_id)).size).toBe(1);
+		expect(new Set(lines.map((line) => line.request_id)).size).toBe(1);
+		expect(
+			lines.every(
+				(line) =>
+					typeof line.trace_id === "string" &&
+					typeof line.request_id === "string",
+			),
+		).toBe(true);
+		for (const log of lines.filter((line) => line.type === "log"))
+			expect(
+				lines.some(
+					(line) => line.type === "span" && line.span_id === log.span_id,
+				),
+			).toBe(true);
+		expect(JSON.stringify(lines)).not.toContain("private");
+	});
+
+	it("keeps known source frames and bounded failure topology without paths or free-form defects", async () => {
+		const source = new TypeError("private error");
+		source.stack =
+			"TypeError: private error\n    at privateFunction (/Users/private/transport.ts:12:34)\n    at privateFunction (/private/unknown-secret.ts:2:3)";
+		Object.assign(source, { cause: source });
+		const error = new RuntimeUnavailable(source);
+		expect(safeError(error)).toMatchObject({
+			code: "AGENT.HTTP.CONNECTION.UNAVAILABLE",
+			cause: { frames: [{ file: "transport.ts", line: 12, column: 34 }] },
+		});
+		const projected = safeCause(
+			Cause.parallel(Cause.die(source), Cause.fail(error)),
+		);
+		expect(projected).toMatchObject({
+			kind: "Parallel",
+			left: { kind: "Die" },
+			right: { kind: "Fail" },
+		});
+		expect(JSON.stringify(projected)).not.toMatch(
+			/private|unknown-secret|Users/,
+		);
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		await app.runPromise(
+			diagnostics
+				.instrument(Effect.die(source), "app.background")
+				.pipe(Effect.exit),
+		);
+		await diagnostics.flush();
+		expect(
+			(await records(directory)).find((line) => line.type === "span"),
+		).toMatchObject({
+			outcome: "failure",
+			cause: { kind: "Die", error: { name: "TypeError" } },
+		});
+	});
+
+	it("flushes shutdown finalizers and closes idempotently without changing application failures", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = ManagedRuntime.make(
+			Layer.scopedDiscard(
+				Effect.addFinalizer(() => Effect.logInfo("private finalizer")),
+			).pipe(Layer.provideMerge(diagnostics.layer)),
+		);
+		await app.runPromise(diagnostics.instrument(Effect.void, "app.startup"));
+		await app.dispose();
+		const status = await diagnostics.close();
+		expect(await diagnostics.close()).toEqual(status);
+		expect(status).toMatchObject({
+			closed: true,
+			queuedBytes: 0,
+			storageFailures: 0,
+			dropped: 0,
+		});
+		expect((await records(directory)).some((line) => line.type === "log")).toBe(
+			true,
+		);
+		expect((await stat(directory)).mode & 0o777).toBe(0o700);
+		expect(
+			(await stat(join(directory, "diagnostics.0.ndjson"))).mode & 0o777,
+		).toBe(0o600);
+	});
+
+	it("bounds disk and memory, rotates complete NDJSON and survives broken storage", async () => {
+		const { directory } = await fixture();
+		const store = createDiagnosticStorage({
+			directory,
+			maxFileBytes: 1024,
+			maxFiles: 2,
+			maxQueueBytes: 1024,
+		});
+		resources.push(store.close);
+		for (let batch = 0; batch < 15; batch++) {
+			for (let index = 0; index < 100; index++)
+				store.emit({ type: "test", batch, index });
+			await store.flush();
+		}
+		expect(store.status().dropped).toBeGreaterThan(0);
+		expect(store.status().queuedBytes).toBe(0);
+		const files = await readdir(directory);
+		expect(files).toHaveLength(2);
+		for (const file of files)
+			expect((await stat(join(directory, file))).size).toBeLessThanOrEqual(
+				1024,
+			);
+		expect((await records(directory)).length).toBeGreaterThan(0);
+		await store.close();
+		const broken = join(directory, "file-instead-of-directory");
+		await writeFile(broken, "file");
+		const diagnostics = createDesktopDiagnostics({ directory: broken });
+		resources.push(diagnostics.close);
+		const app = runtime(diagnostics);
+		const original = new RuntimeUnavailable(
+			new Error("private dependency failure"),
+		);
+		const result = await app.runPromise(
+			diagnostics
+				.instrument(Effect.fail(original), "agent.request")
+				.pipe(Effect.either),
+		);
+		expect(Either.isLeft(result)).toBe(true);
+		if (Either.isRight(result)) throw new Error("Expected original failure");
+		expect(Cause.originalError(result.left)).toBe(original);
+		const status = await diagnostics.close();
+		expect(status.storageFailures).toBeGreaterThan(0);
+		expect(JSON.stringify(status)).not.toContain("private");
+	});
+});

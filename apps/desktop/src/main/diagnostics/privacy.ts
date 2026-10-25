@@ -1,0 +1,162 @@
+import type { Cause } from "effect";
+import {
+	DeviceErrors,
+	toSafeDiagnosticCause,
+} from "../../../../../packages/device/src/device-errors.js";
+import { RuntimeErrors } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
+import { AiErrors } from "../../../../../packages/edge/src/ai/ai-errors.js";
+import { SpeechErrors } from "../../../../../packages/edge/src/ai/speech/speech-errors.js";
+import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
+import {
+	knownErrorTags,
+	knownLogEvents,
+	knownSourceFiles,
+	knownSpans,
+} from "./known-names.js";
+
+const identities = new Map<string, { code: string; category: string }>(
+	[DeviceErrors, AiErrors, SpeechErrors, RuntimeErrors, VoiceSurfaceErrors]
+		.flatMap((catalog) => Object.values(catalog))
+		.map(({ code, category }) => [code, { code, category }]),
+);
+
+export interface SafeFrame {
+	readonly file: string;
+	readonly line: number;
+	readonly column: number;
+}
+export interface SafeError {
+	readonly name: string;
+	readonly _tag?: string;
+	readonly code?: string;
+	readonly category?: string;
+	readonly sourceCode?: string;
+	readonly frames?: readonly SafeFrame[];
+	readonly cause?: SafeError;
+	readonly truncated?: true;
+}
+
+/** Read data fields only. Getters, proxies and custom JSON/string renderers aren't trusted. */
+function field(input: unknown, key: string): unknown {
+	try {
+		if (typeof input !== "object" || input === null) return undefined;
+		return Object.getOwnPropertyDescriptor(input, key)?.value;
+	} catch {
+		return undefined;
+	}
+}
+
+function frames(input: unknown): readonly SafeFrame[] {
+	try {
+		if (!(input instanceof Error)) return [];
+		// V8 lazily creates stack via an accessor. Its first line carries private text.
+		const stack = input.stack;
+		if (typeof stack !== "string") return [];
+		const result: SafeFrame[] = [];
+		for (const line of stack.slice(0, 32768).split("\n").slice(1, 25)) {
+			const match = /(?:\/|\\)([\w.-]+):(\d{1,7}):(\d{1,7})\)?$/.exec(line);
+			if (!match || !knownSourceFiles.has(match[1] ?? "")) continue;
+			result.push({
+				file: match[1] ?? "",
+				line: Number(match[2]),
+				column: Number(match[3]),
+			});
+			if (result.length === 6) break;
+		}
+		return result;
+	} catch {
+		return [];
+	}
+}
+
+/** Preserve catalog identities and the private original-cause chain without messages or paths. */
+export function safeError(input: unknown, depth = 0): SafeError {
+	if (depth >= 5) return { name: "TruncatedCause", truncated: true };
+	const projected = toSafeDiagnosticCause(input);
+	const code = field(input, "code");
+	const identity = typeof code === "string" ? identities.get(code) : undefined;
+	const tag = field(input, "_tag");
+	const sourceFrames = frames(input);
+	const original = field(input, "originalCause");
+	const cause = original === undefined ? field(input, "cause") : original;
+	return {
+		name: projected.name,
+		...identity,
+		...(identity && typeof tag === "string" && knownErrorTags.has(tag)
+			? { _tag: tag }
+			: {}),
+		...(projected.sourceCode ? { sourceCode: projected.sourceCode } : {}),
+		...(sourceFrames.length ? { frames: sourceFrames } : {}),
+		...(cause === undefined ? {} : { cause: safeError(cause, depth + 1) }),
+	};
+}
+
+export interface SafeCause {
+	readonly kind:
+		| "Empty"
+		| "Fail"
+		| "Die"
+		| "Interrupt"
+		| "Sequential"
+		| "Parallel"
+		| "Truncated";
+	readonly error?: SafeError;
+	readonly left?: SafeCause;
+	readonly right?: SafeCause;
+}
+/** Keep failure topology, including defects and cancellation; cap wide as well as deep causes. */
+export function safeCause(cause: Cause.Cause<unknown>): SafeCause {
+	let remaining = 24;
+	const visit = (current: Cause.Cause<unknown>, depth: number): SafeCause => {
+		if (--remaining < 0 || depth >= 8) return { kind: "Truncated" };
+		switch (current._tag) {
+			case "Empty":
+				return { kind: "Empty" };
+			case "Fail":
+				return { kind: "Fail", error: safeError(current.error) };
+			case "Die":
+				return { kind: "Die", error: safeError(current.defect) };
+			case "Interrupt":
+				return { kind: "Interrupt" };
+			case "Sequential":
+			case "Parallel":
+				return {
+					kind: current._tag,
+					left: visit(current.left, depth + 1),
+					right: visit(current.right, depth + 1),
+				};
+		}
+	};
+	return visit(cause, 0);
+}
+
+export const diagnosticOperations = [
+	"app.startup",
+	"app.shutdown",
+	"app.background",
+	"voice.request",
+	"voice.knob",
+	"voice.device",
+	"voice.reset",
+	"agent.request",
+	"agent.connection",
+	"agent.conversation",
+	"speech.capture",
+	"speech.recognize",
+	"speech.synthesize",
+	"speech.playback",
+	"speech.shutdown",
+] as const;
+export type DiagnosticOperation = (typeof diagnosticOperations)[number];
+const operations = new Set<string>(diagnosticOperations);
+export const safeSpanName = (name: string): string =>
+	knownSpans.has(name) || operations.has(name) ? name : "redacted.span";
+
+export function safeLogEvent(messages: readonly unknown[]): string {
+	return (
+		messages.find(
+			(value): value is string =>
+				typeof value === "string" && knownLogEvents.has(value),
+		) ?? "effect.log"
+	);
+}
