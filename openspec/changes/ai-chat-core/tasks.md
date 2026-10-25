@@ -1,6 +1,6 @@
 # Tasks
 
-W7 implements task 1.2; integration and persistence remain open. Depends on ai-provider-facade and the shared localization/panel contracts. The parent creates one child Beads issue per checkbox.
+Contracts and durable normal-mode history are implemented; the remaining integration and acceptance items are listed below. Depends on ai-provider-facade and the shared localization/panel contracts. The parent creates one child Beads issue per checkbox.
 
 ## 1. First-release session and stream contracts
 
@@ -25,7 +25,7 @@ ChatService and protected desktop model selection are wired through the real
 Effect RPC/preload and management React UI. Synthetic Electron acceptance
 covers continuation, physical socket cancellation, provider failure,
 rename/deletion, inert generated markup and privacy-safe correlated diagnostics;
-Screenshot viewport assertions and captures are in external scratch `open-quake-finish/direct-chat`.
+Actual 1180px and 390px viewport assertions pass via Electron device emulation. Rerun `src/main/test/direct-chat-smoke.ts` using the build and launch procedure in `packages/edge/src/chat/README.md`; it writes `chat-1180.png`, `chat-390.png` and `result.json` beneath the supplied external `OPEN_QUAKE_E2E_SCRATCH` directory. These are synthetic viewport observations, not physical device captures.
 Direct strip text and finalized transcripts share the service, with regression
 coverage for cancellation reentry and external-runtime fallback source identity.
 Task 2.1 is verified by real SDK/service/repository and outbound continuation

@@ -170,7 +170,9 @@ async function run() {
 		);
 		await writeFile(
 			join(directory, `chat-${width}.png`),
-			(await win.webContents.capturePage()).toPNG(),
+			(
+				await win.webContents.capturePage({ x: 0, y: 0, width, height: 900 })
+			).toPNG(),
 		);
 	}
 	win.webContents.disableDeviceEmulation();

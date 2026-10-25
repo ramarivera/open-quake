@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isIPv4 } from "node:net";
 import { Effect, Layer, Schema } from "effect";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { AiCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/adapter";
@@ -54,7 +55,7 @@ export function profileFromModel(row: ModelRow): ProviderProfile {
 	const loopback =
 		url.hostname === "localhost" ||
 		url.hostname === "[::1]" ||
-		/^127\./.test(url.hostname);
+		(isIPv4(url.hostname) && url.hostname.startsWith("127."));
 	return {
 		version: 1,
 		id,

@@ -25,6 +25,9 @@ type Sheet =
  */
 export function ConversationWorkspace({
 	model,
+	configurationLoading = false,
+	configurationError,
+	onRetryConfiguration,
 	locale = "en",
 	onOpenSettings,
 	chatBridge,
@@ -32,6 +35,11 @@ export function ConversationWorkspace({
 	conversationsBridge,
 }: {
 	readonly model: DirectChatModel;
+	/** Model settings are still being read; readiness is not known yet. */
+	readonly configurationLoading?: boolean;
+	/** Model settings couldn't be read; distinct from "not configured". */
+	readonly configurationError?: string | undefined;
+	readonly onRetryConfiguration?: (() => void) | undefined;
 	readonly locale?: string;
 	readonly onOpenSettings?: () => void;
 	readonly chatBridge?: DirectChatBridge;
@@ -144,10 +152,24 @@ export function ConversationWorkspace({
 						<span className="cw-source-meta">
 							<span
 								className="cw-dot"
-								data-tone={model.ready ? "success" : "warning"}
+								data-tone={
+									configurationLoading
+										? "neutral"
+										: configurationError
+											? "danger"
+											: model.ready
+												? "success"
+												: "warning"
+								}
 								aria-hidden="true"
 							/>
-							{model.row ? model.row.model : t.directNotSet}
+							{configurationLoading
+								? t.loadingConfiguration
+								: configurationError
+									? t.configurationFailed
+									: model.row
+										? model.row.model
+										: t.directNotSet}
 						</span>
 						{!selectedId && view && (
 							<span className="mc-badge" data-tone="accent">
@@ -297,6 +319,9 @@ export function ConversationWorkspace({
 					(typeof window === "undefined" ? undefined : window.quakeChat)
 				}
 				model={model}
+				configurationLoading={configurationLoading}
+				configurationError={configurationError}
+				onRetryConfiguration={onRetryConfiguration}
 				locale={locale}
 				sources={sources}
 				quake={{

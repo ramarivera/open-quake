@@ -491,6 +491,9 @@ export function AgentsPage({
 			>
 				<ConversationWorkspace
 					model={directChatModel(view?.models)}
+					configurationLoading={!view && !error}
+					configurationError={!view ? error : undefined}
+					onRetryConfiguration={() => void request({ type: "read" })}
 					onOpenSettings={() => {
 						setTab("ai");
 						document.getElementById("agents-tab-ai")?.focus();

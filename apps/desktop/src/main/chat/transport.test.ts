@@ -26,7 +26,7 @@ import {
 import { CHAT_DISCONNECT, CHAT_EVENT, CHAT_REQUEST } from "../../shared/chat";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { createModelCredentials } from "./credentials";
-import { createDirectChat } from "./host";
+import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
 import { decodeChatRequest, makeDesktopChatConnection } from "./rpc-server";
 import { createDirectChatVoice } from "./voice";
@@ -59,22 +59,24 @@ function fixtureServer() {
 				created: 1,
 				choices: [{ index: 0, delta: { content }, finish_reason }],
 			});
-		res.write(part("fixture answer"));
+		const unreported = body.messages.at(-1)?.content === "long without usage";
+		res.write(part(unreported ? "界".repeat(800) : "fixture answer"));
 		if (body.messages.at(-1)?.content === "block") {
 			res.on("close", () => disconnected?.());
 			release = () => res.end();
 			return;
 		}
 		res.write(part("", "stop"));
-		res.write(
-			packet({
-				id: "fixture",
-				model: body.model,
-				created: 1,
-				choices: [],
-				usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 },
-			}),
-		);
+		if (!unreported)
+			res.write(
+				packet({
+					id: "fixture",
+					model: body.model,
+					created: 1,
+					choices: [],
+					usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 },
+				}),
+			);
 		res.end("data: [DONE]\n\n");
 	});
 	return { server, calls, closed, release: () => release?.() };
@@ -173,6 +175,60 @@ async function fixture() {
 }
 
 describe("desktop chat RPC through actual SDK and HTTP", () => {
+	it("keeps an SDK reply without provider usage completed beyond the byte estimate reserve", async () => {
+		const f = await fixture();
+		try {
+			const session = sessionId(),
+				turn = turnId();
+			await f.bridge.submit({
+				sessionId: session,
+				turnId: turn,
+				text: "long without usage",
+			});
+			await vi.waitFor(async () => {
+				const saved = await f.bridge.history(session);
+				expect(saved.turns[0]?.snapshot.terminal).toMatchObject({
+					_tag: "Some",
+					value: { outcome: "completed", usage: { provenance: "estimated" } },
+				});
+				expect(saved.turns[0]?.snapshot.text).toBe("界".repeat(800));
+			});
+			await f.bridge.submit({
+				sessionId: session,
+				turnId: turnId(),
+				text: "next",
+			});
+			await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(2));
+			expect(f.endpoint.calls[1]?.body.messages).toContainEqual({
+				role: "assistant",
+				content: "界".repeat(800),
+			});
+		} finally {
+			await f.close();
+		}
+	});
+	it("classifies only literal loopback hosts as local provider endpoints", () => {
+		for (const [hostname, expected] of [
+			["127.0.0.1", "loopback"],
+			["127.50.2.3", "loopback"],
+			["localhost", "loopback"],
+			["[::1]", "loopback"],
+			["127.example.com", "remote"],
+			["provider.example.com", "remote"],
+		] as const) {
+			expect(
+				profileFromModel({
+					id: "row",
+					role: "default",
+					provider: "generic",
+					model: "fixture",
+					baseUrl: `https://${hostname}/v1`,
+					maxTokens: 512,
+					credentialRef: "00000000-0000-4000-8000-000000000001",
+				}).endpointPolicy,
+			).toBe(expected);
+		}
+	});
 	it("keeps large saved output limits inside the conservative context window", async () => {
 		const f = await fixture();
 		try {
@@ -197,7 +253,7 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			await f.bridge.submit({
 				sessionId: session,
 				turnId: turn,
-				text: "hello",
+				text: "  hello\n",
 			});
 			const text: string[] = [];
 			await new Promise<void>((resolve, reject) => {
@@ -309,7 +365,7 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 				_tag: "Request",
 				id: "1",
 				tag: "chat.list",
-				payload: {},
+				payload: undefined,
 				headers: [["authorization", "unsafe"]],
 				traceId: "spoof",
 				owner: "spoof",
@@ -318,7 +374,7 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			_tag: "Request",
 			id: "1",
 			tag: "chat.list",
-			payload: {},
+			payload: undefined,
 			headers: [],
 		});
 		expect(
@@ -330,6 +386,47 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 				headers: [],
 			}),
 		).toBeUndefined();
+	});
+	it("rejects oversized method inputs and headers before RPC dispatch", () => {
+		const base = {
+			_tag: "Request",
+			id: "1",
+			tag: "chat.submit",
+			headers: [],
+			payload: { sessionId: sessionId(), turnId: turnId(), text: "valid" },
+		};
+		expect(decodeChatRequest(base)).toBeDefined();
+		expect(
+			decodeChatRequest({
+				...base,
+				payload: { ...base.payload, text: "x".repeat(32769) },
+			}),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({ ...base, payload: { ...base.payload, text: "   " } }),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({
+				...base,
+				payload: { ...base.payload, secret: "unsupported" },
+			}),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({
+				...base,
+				headers: Array.from({ length: 17 }, () => ["key", "value"]),
+			}),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({ ...base, headers: [["key", "x".repeat(1025)]] }),
+		).toBeUndefined();
+		const pasted = "  paragraph\n";
+		expect(
+			decodeChatRequest({
+				...base,
+				payload: { ...base.payload, text: pasted },
+			}),
+		).toMatchObject({ payload: { text: pasted } });
 	});
 	it("routes finalized voice through the real SDK and cancels without reentering its lock", async () => {
 		const f = await fixture();

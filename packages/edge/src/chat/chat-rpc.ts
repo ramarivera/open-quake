@@ -14,7 +14,11 @@ export type PublicChatHistory = typeof PublicChatHistory.Type;
 export const ChatInput = Schema.Struct({
 	sessionId: SessionId,
 	turnId: TurnId,
-	text: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(32768)),
+	text: Schema.String.pipe(
+		Schema.minLength(1),
+		Schema.maxLength(32768),
+		Schema.filter((value) => value.trim().length > 0),
+	),
 });
 export type ChatInput = typeof ChatInput.Type;
 export const ChatDelivery = Schema.Union(
