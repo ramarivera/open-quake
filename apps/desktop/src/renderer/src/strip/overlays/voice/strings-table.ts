@@ -26,7 +26,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.busyOnGrid": "{name} is busy, please try again later",
 		"aiAudio.prevTurnBusy": "Previous turn still running — try again shortly",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw gateway is not running — start it in Management Center",
+			"OpenClaw is not reachable — check the connection in Assistant › Agents",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw is starting — try again shortly",
 		"aiAudio.openClawNotReady": "OpenClaw is not connected",
@@ -55,7 +55,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Command",
 		"quakeBotIconView.systemSender": "System",
 		"quakeBotIconView.statusHintNoService":
-			'**OpenClaw gateway service is not running. Cannot establish connection.**\n\nGo to "AI Workbench" > "OpenClaw" and click "Start OpenClaw" to enable the OpenClaw gateway service.',
+			"**OpenClaw is not reachable. Cannot establish a connection.**\n\nIn open-quake, open Assistant › Agents and check the OpenClaw connection.",
 		"quakeBotIconView.statusHintConnecting":
 			"Connecting to the gateway and establishing a session…",
 		"quakeBotIconView.statusHintConnected":
@@ -106,7 +106,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.busyOnGrid": "{name} 处理中，请稍后再试",
 		"aiAudio.prevTurnBusy": "上一条还在处理，稍后再说",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw 网关服务未运行，请先在管理中心启动",
+			"无法连接 OpenClaw — 请在「Assistant › Agents」中检查连接",
 		"aiAudio.openClawGatewayStarting": "OpenClaw 正在启动，请稍后再试",
 		"aiAudio.openClawNotReady": "OpenClaw 未连接",
 		"aiIconViewTxt.label": "AI 聊天助手",
@@ -134,7 +134,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "指令输入",
 		"quakeBotIconView.systemSender": "系统",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw 网关服务未运行，无法建立连接。**\n\n请前往「AI工作台」>「OpenClaw」，并点击「启动OpenClaw」，以开启 OpenClaw 网关服务。",
+			"**无法连接 OpenClaw，无法建立连接。**\n\n请在 open-quake 中打开「Assistant › Agents」，检查 OpenClaw 连接。",
 		"quakeBotIconView.statusHintConnecting": "正在连接网关并建立会话……",
 		"quakeBotIconView.statusHintConnected":
 			"网关已就绪，Claw 已连接，可以开始对话。",
@@ -183,7 +183,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"Die vorherige Anfrage läuft noch — bitte kurz warten",
 		"aiAudio.openClawGatewayNotRunning":
-			"Der OpenClaw-Gateway-Dienst läuft nicht — starten Sie ihn im Verwaltungscenter",
+			"OpenClaw ist nicht erreichbar — prüfen Sie die Verbindung unter „Assistant › Agents“",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw wird gestartet — bitte kurz warten",
 		"aiAudio.openClawNotReady": "OpenClaw ist nicht verbunden",
@@ -215,7 +215,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Befehl",
 		"quakeBotIconView.systemSender": "System",
 		"quakeBotIconView.statusHintNoService":
-			'**OpenClaw-Gateway-Dienst läuft nicht. Verbindung kann nicht hergestellt werden.**\n\nGehen Sie zu „AI-Arbeitsplatz" > „OpenClaw" und klicken Sie auf „OpenClaw starten", um den OpenClaw-Gateway-Dienst zu aktivieren.',
+			"**OpenClaw ist nicht erreichbar. Verbindung kann nicht hergestellt werden.**\n\nÖffnen Sie in open-quake „Assistant › Agents“ und prüfen Sie die OpenClaw-Verbindung.",
 		"quakeBotIconView.statusHintConnecting":
 			"Verbindung zum Gateway wird hergestellt, Sitzung wird aufgebaut…",
 		"quakeBotIconView.statusHintConnected":
@@ -271,7 +271,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"La solicitud anterior sigue en curso — inténtelo de nuevo en breve",
 		"aiAudio.openClawGatewayNotRunning":
-			"El servicio de puerta de enlace OpenClaw no está en ejecución — inícielo en el Centro de administración",
+			"OpenClaw no está disponible — revise la conexión en «Assistant › Agents»",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw se está iniciando — inténtelo de nuevo en breve",
 		"aiAudio.openClawNotReady": "OpenClaw no está conectado",
@@ -301,7 +301,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Comando",
 		"quakeBotIconView.systemSender": "Sistema",
 		"quakeBotIconView.statusHintNoService":
-			"**El servicio de puerta de enlace OpenClaw no se está ejecutando. No se puede establecer la conexión.**\n\nVaya a «Estación de trabajo de IA» > «OpenClaw» y haga clic en «Iniciar OpenClaw» para habilitar el servicio de puerta de enlace de OpenClaw.",
+			"**OpenClaw no está disponible. No se puede establecer la conexión.**\n\nEn open-quake, abra «Assistant › Agents» y revise la conexión de OpenClaw.",
 		"quakeBotIconView.statusHintConnecting":
 			"Conectando a la puerta de enlace y estableciendo la sesión…",
 		"quakeBotIconView.statusHintConnected":
@@ -355,7 +355,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"La demande précédente est encore en cours — réessayez dans un instant",
 		"aiAudio.openClawGatewayNotRunning":
-			"Le service passerelle OpenClaw n'est pas en cours d'exécution — démarrez-le dans le Centre de gestion",
+			"OpenClaw est injoignable — vérifiez la connexion dans « Assistant › Agents »",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw démarre — réessayez dans un instant",
 		"aiAudio.openClawNotReady": "OpenClaw n'est pas connecté",
@@ -385,7 +385,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Commande",
 		"quakeBotIconView.systemSender": "Système",
 		"quakeBotIconView.statusHintNoService":
-			"**Le service de passerelle OpenClaw n'est pas en cours d'exécution. Connexion impossible.**\n\nAccédez à « Poste de travail IA » > « OpenClaw » et cliquez sur « Démarrer OpenClaw » pour activer le service de passerelle OpenClaw.",
+			"**OpenClaw est injoignable. Connexion impossible.**\n\nDans open-quake, ouvrez « Assistant › Agents » et vérifiez la connexion OpenClaw.",
 		"quakeBotIconView.statusHintConnecting":
 			"Connexion à la passerelle et établissement de la session…",
 		"quakeBotIconView.statusHintConnected":
@@ -438,7 +438,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"La richiesta precedente è ancora in elaborazione — riprova tra poco",
 		"aiAudio.openClawGatewayNotRunning":
-			"Il servizio gateway OpenClaw non è in esecuzione — avvialo nel Centro di gestione",
+			"OpenClaw non è raggiungibile — controlla la connessione in «Assistant › Agents»",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw si sta avviando — riprova tra poco",
 		"aiAudio.openClawNotReady": "OpenClaw non è connesso",
@@ -468,7 +468,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "Comando",
 		"quakeBotIconView.systemSender": "Sistema",
 		"quakeBotIconView.statusHintNoService":
-			"**Il servizio gateway OpenClaw non è in esecuzione. Impossibile stabilire la connessione.**\n\nVai a «Postazione AI» > «OpenClaw» e fai clic su «Avvia OpenClaw» per abilitare il servizio gateway OpenClaw.",
+			"**OpenClaw non è raggiungibile. Impossibile stabilire la connessione.**\n\nIn open-quake, apri «Assistant › Agents» e controlla la connessione OpenClaw.",
 		"quakeBotIconView.statusHintConnecting":
 			"Connessione al gateway e apertura sessione…",
 		"quakeBotIconView.statusHintConnected":
@@ -521,7 +521,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"前のリクエストはまだ処理中です。しばらくしてからお試しください",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw ゲートウェイサービスが起動していません。管理センターで起動してください",
+			"OpenClaw に接続できません — 「Assistant › Agents」で接続を確認してください",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw を起動中です。しばらくしてからお試しください",
 		"aiAudio.openClawNotReady": "OpenClaw が接続されていません",
@@ -551,7 +551,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "コマンド入力",
 		"quakeBotIconView.systemSender": "システム",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw ゲートウェイサービスが実行されていないため、接続を確立できません。**\n\n「AIワークベンチ」>「OpenClaw」に移動し、「OpenClaw を起動」をクリックして、OpenClaw ゲートウェイサービスを有効にしてください。",
+			"**OpenClaw に接続できないため、接続を確立できません。**\n\nopen-quake で「Assistant › Agents」を開き、OpenClaw の接続を確認してください。",
 		"quakeBotIconView.statusHintConnecting":
 			"ゲートウェイに接続し、セッションを確立しています…",
 		"quakeBotIconView.statusHintConnected":
@@ -603,7 +603,7 @@ export const STRIP_STRINGS = {
 		"aiAudio.prevTurnBusy":
 			"이전 요청이 아직 처리 중입니다. 잠시 후 다시 시도하세요",
 		"aiAudio.openClawGatewayNotRunning":
-			"OpenClaw 게이트웨이 서비스가 실행 중이 아닙니다. 관리 센터에서 먼저 시작하세요",
+			"OpenClaw에 연결할 수 없습니다. 「Assistant › Agents」에서 연결을 확인하세요",
 		"aiAudio.openClawGatewayStarting":
 			"OpenClaw가 시작 중입니다. 잠시 후 다시 시도하세요",
 		"aiAudio.openClawNotReady": "OpenClaw가 연결되지 않았습니다",
@@ -633,7 +633,7 @@ export const STRIP_STRINGS = {
 		"quakeBotIconView.userOutgoing": "명령 입력",
 		"quakeBotIconView.systemSender": "시스템",
 		"quakeBotIconView.statusHintNoService":
-			"**OpenClaw 게이트웨이 서비스가 실행 중이 아니어서 연결을 설정할 수 없습니다.**\n\n「AI 작업대」>「OpenClaw」로 이동하여 「OpenClaw 시작」을 클릭해 OpenClaw 게이트웨이 서비스를 활성화하세요.",
+			"**OpenClaw에 연결할 수 없어 연결을 설정할 수 없습니다.**\n\nopen-quake에서 「Assistant › Agents」를 열고 OpenClaw 연결을 확인하세요.",
 		"quakeBotIconView.statusHintConnecting":
 			"게이트웨이에 연결하고 세션을 설정하는 중…",
 		"quakeBotIconView.statusHintConnected":

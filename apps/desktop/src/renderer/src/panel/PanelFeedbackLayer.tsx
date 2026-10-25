@@ -8,9 +8,9 @@ import "./panel.css";
 
 /** Logical-canvas geometry. The knob sits flush right, clear of the clock. */
 const KNOB = { cx: 1672, cy: 240, body: 168, cap: 106 } as const;
-const TICK = { inner: 136, home: 124, outer: 150 } as const;
-const POINTER = { inner: 116, outer: 160 } as const;
-/** Labels synthetic input; a solid chip keeps it legible over any image. */
+const TRACK = 136;
+const HOME = { inner: 112, outer: 124 } as const;
+/** Labels synthetic input; an opaque chip keeps it legible over any image. */
 const SOURCE_CHIP = {
 	x: KNOB.cx - KNOB.body - 28 - 236,
 	y: KNOB.cy - 32,
@@ -27,13 +27,6 @@ function polar(degrees: number, radius: number): { x: number; y: number } {
 		y: KNOB.cy - radius * Math.cos(radians),
 	};
 }
-
-const ticks = Array.from({ length: 360 / DETENT_DEGREES }, (_, index) => {
-	const degrees = index * DETENT_DEGREES;
-	const from = polar(degrees, index === 0 ? TICK.home : TICK.inner);
-	const to = polar(degrees, TICK.outer);
-	return { degrees, x1: from.x, y1: from.y, x2: to.x, y2: to.y };
-});
 
 function valueSize(text: string): number {
 	return text.length <= 2
@@ -62,9 +55,19 @@ function Knob({ view }: { view: PanelFeedbackView }): React.JSX.Element {
 					r={KNOB.body}
 					className="panel-knob-body"
 				/>
-				{ticks.map((tick) => (
-					<line key={tick.degrees} {...tick} className="panel-knob-tick" />
-				))}
+				<circle
+					cx={KNOB.cx}
+					cy={KNOB.cy}
+					r={TRACK}
+					className="panel-knob-track"
+				/>
+				<line
+					x1={KNOB.cx}
+					y1={KNOB.cy - HOME.inner}
+					x2={KNOB.cx}
+					y2={KNOB.cy - HOME.outer}
+					className="panel-knob-home"
+				/>
 				<g
 					className="panel-knob-pointer"
 					style={{
@@ -72,19 +75,8 @@ function Knob({ view }: { view: PanelFeedbackView }): React.JSX.Element {
 						transformOrigin: `${KNOB.cx}px ${KNOB.cy}px`,
 					}}
 				>
-					<line
-						x1={KNOB.cx}
-						y1={KNOB.cy - POINTER.inner}
-						x2={KNOB.cx}
-						y2={KNOB.cy - POINTER.outer}
-					/>
+					<circle cx={KNOB.cx} cy={KNOB.cy - TRACK} r="16" />
 				</g>
-				<circle
-					cx={KNOB.cx}
-					cy={KNOB.cy}
-					r={KNOB.cap}
-					className="panel-knob-cap"
-				/>
 				<text
 					x={KNOB.cx}
 					y={KNOB.cy + size * 0.36}
@@ -113,31 +105,38 @@ function OfflinePlate({
 }): React.JSX.Element {
 	const iconX = PLATE.x + 84;
 	const textX = PLATE.x + 148;
-	const top = link.code ? PLATE.y + 86 : PLATE.y + 98;
+	const top = link.code ? PLATE.y + 82 : PLATE.y + 96;
 	return (
 		<g className="panel-offline" data-code={link.code ?? undefined}>
-			<rect {...PLATE} rx="32" className="panel-offline-plate" />
+			<rect {...PLATE} rx="24" className="panel-offline-plate" />
+			<rect
+				x={PLATE.x}
+				y={PLATE.y + 24}
+				width="6"
+				height={PLATE.height - 48}
+				className="panel-offline-rule"
+			/>
 			<circle
 				cx={iconX}
 				cy={PLATE.y + PLATE.height / 2}
-				r="34"
+				r="30"
 				className="panel-offline-icon"
 			/>
 			<line
-				x1={iconX - 24}
-				y1={PLATE.y + PLATE.height / 2 + 24}
-				x2={iconX + 24}
-				y2={PLATE.y + PLATE.height / 2 - 24}
+				x1={iconX - 21}
+				y1={PLATE.y + PLATE.height / 2 + 21}
+				x2={iconX + 21}
+				y2={PLATE.y + PLATE.height / 2 - 21}
 				className="panel-offline-icon"
 			/>
 			<text x={textX} y={top} className="panel-offline-title">
 				Controls offline
 			</text>
-			<text x={textX} y={top + 54} className="panel-offline-detail">
+			<text x={textX} y={top + 52} className="panel-offline-detail">
 				{link.detail}
 			</text>
 			{link.code ? (
-				<text x={textX} y={top + 100} className="panel-offline-code">
+				<text x={textX} y={top + 98} className="panel-offline-code">
 					{link.code}
 				</text>
 			) : null}
@@ -166,15 +165,10 @@ export function PanelFeedbackLayer({
 					<circle
 						cx={touch.x}
 						cy={touch.y}
-						r="64"
+						r="48"
 						className="panel-touch-ring"
 					/>
-					<circle
-						cx={touch.x}
-						cy={touch.y}
-						r="12"
-						className="panel-touch-dot"
-					/>
+					<circle cx={touch.x} cy={touch.y} r="8" className="panel-touch-dot" />
 				</g>
 			))}
 		</g>

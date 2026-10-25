@@ -1,6 +1,7 @@
 /*
- * The panel is a hardware strip read from about 60 cm at a low angle:
- * large figures, theme tokens only, and no pointer affordances.
+ * Live input feedback on the device strip, read from about 60 cm at a low
+ * angle: large figures, device palette (--strip-*) only, no pointer
+ * affordances (independent-device-design, "Knob overlays and panel feedback").
  */
 .panel-knob {
 	opacity: 0;
@@ -13,96 +14,91 @@
 	transform-origin: center;
 }
 .panel-knob-body {
-	fill: var(--quake-surface);
-	fill-opacity: 0.92;
-	stroke: var(--quake-border);
-	stroke-opacity: 0.5;
+	fill: var(--strip-surface);
+	stroke: var(--strip-hairline);
 	stroke-width: 2;
 }
-.panel-knob-tick {
-	stroke: var(--quake-muted);
-	stroke-opacity: 0.55;
+.panel-knob[data-pressed="true"] .panel-knob-body {
+	fill: var(--strip-raised);
+	stroke: var(--strip-accent);
+	stroke-width: 6;
+}
+.panel-knob-track {
+	fill: none;
+	stroke: var(--strip-line);
+	stroke-width: 6;
+}
+.panel-knob-home {
+	stroke: var(--strip-muted);
 	stroke-width: 4;
 	stroke-linecap: round;
 }
-.panel-knob-pointer line {
-	stroke: var(--quake-accent);
-	stroke-width: 14;
-	stroke-linecap: round;
-}
-.panel-knob-cap {
-	fill: var(--quake-background);
-	stroke: var(--quake-border);
-	stroke-opacity: 0.4;
-	stroke-width: 2;
-}
-.panel-knob[data-pressed="true"] .panel-knob-cap {
-	fill: var(--quake-accent);
+.panel-knob-pointer circle {
+	fill: var(--strip-accent);
 }
 .panel-knob-value {
-	fill: var(--quake-foreground);
-	font-weight: 650;
+	fill: var(--strip-text);
+	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: -0.02em;
 	text-anchor: middle;
 }
-.panel-knob[data-pressed="true"] .panel-knob-value {
-	fill: var(--quake-accent-text);
-}
 .panel-knob-source rect {
-	fill: var(--quake-surface);
-	fill-opacity: 0.92;
+	fill: var(--strip-raised);
+	stroke: var(--strip-line);
+	stroke-width: 2;
 }
 .panel-knob-source text {
-	fill: var(--quake-muted);
-	font-size: 34px;
-	font-weight: 500;
+	fill: var(--strip-muted);
+	font-size: 30px;
+	font-weight: 550;
 	text-anchor: middle;
 }
 .panel-offline-plate {
-	fill: var(--quake-surface);
-	fill-opacity: 0.94;
-	stroke: var(--quake-warning);
-	stroke-width: 3;
+	fill: var(--strip-surface);
+	stroke: var(--strip-hairline);
+	stroke-width: 2;
+}
+.panel-offline-rule {
+	fill: var(--strip-danger);
 }
 .panel-offline-icon {
 	fill: none;
-	stroke: var(--quake-warning);
-	stroke-width: 7;
+	stroke: var(--strip-danger);
+	stroke-width: 6;
 	stroke-linecap: round;
 }
 .panel-offline-title {
-	fill: var(--quake-warning);
-	font-size: 52px;
-	font-weight: 650;
+	fill: var(--strip-text);
+	font-size: 46px;
+	font-weight: 600;
 }
 .panel-offline-detail {
-	fill: var(--quake-foreground);
-	font-size: 36px;
+	fill: var(--strip-muted);
+	font-size: 32px;
 }
 .panel-offline-code {
-	fill: var(--quake-muted);
-	font-size: 30px;
-	font-variant-numeric: tabular-nums;
+	fill: var(--strip-subtle);
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-size: 26px;
 }
 .panel-touch {
 	transform-box: fill-box;
 	transform-origin: center;
 }
 .panel-touch-ring {
-	fill: var(--quake-accent);
-	fill-opacity: 0.24;
-	stroke: var(--quake-accent);
-	stroke-width: 8;
+	fill: none;
+	stroke: var(--strip-accent);
+	stroke-width: 4;
 }
 .panel-touch-dot {
-	fill: var(--quake-accent);
+	fill: var(--strip-accent);
 }
 
 /* Motion follows the shared appearance setting and the OS preference. */
 @media (prefers-reduced-motion: no-preference) {
 	:root[data-motion="full"] .panel-knob {
-		transition: opacity 220ms ease-out;
+		transition: opacity 160ms ease-out;
 	}
 	:root[data-motion="full"] .panel-knob-pointer {
 		transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -115,19 +111,12 @@
 	}
 	:root[data-motion="full"] .panel-touch {
 		/* Matches TOUCH_MARK_MS in panelFeedback.ts. */
-		animation: panel-touch-ripple 900ms ease-out both;
+		animation: panel-touch-fade 900ms ease-out both;
 	}
 }
 
-@keyframes panel-touch-ripple {
-	from {
-		transform: scale(0.7);
-	}
-	45% {
-		opacity: 1;
-	}
+@keyframes panel-touch-fade {
 	to {
 		opacity: 0;
-		transform: scale(1.25);
 	}
 }
