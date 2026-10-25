@@ -7,9 +7,13 @@ Execution is tracked by open-quake-def under open-quake-lih.14. Section 5 is the
 - [ ] 1.1 Record Ramiro's decision on question 8, the QUAKE calibration gate, wizard ordering, locale/provider seeding and question 11 deferral; verify design/spec/tasks remain coherent and section 10 has only the design note.
 - [ ] 1.2 Add versioned settings/wizard schemas, validation/migration invariants and repository documentation; verify atomic completion failure, unknown-field preservation and user choices surviving reseed.
 
+  Backend implementation is in `packages/edge/src/settings/`, reusing the canonical locale repository and `settings-v1.json`. General/wizard sections migrate additively, retain unknown fields and reject inconsistent completion markers. `onboarding.test.ts` covers shared commits, failed completion, restart/replay, preserved provider choices, owner failure and both cancellation boundaries. Root composition and actual wizard controls remain with the parent; keep this task open until that consumption is reconciled.
+
 ## 2. Settings owners and host adapters
 
 - [ ] 2.1 Implement general OS preference/window adapters and protected provider secret references with catalog errors; verify login/start-hidden separation, unreachable-window correction, denied OS writes and secret-free serialization.
+
+  Backend implementation is in `general-service.ts` and `apps/desktop/src/main/settings/os-adapter.ts`. Fake native tests cover separate login/hidden intent, OS readback, denial, unsupported operations, abort and timeout; file tests cover corruption and restart. Model/speech credentials remain with their existing protected owners. No real login-item/window operation or renderer/native acceptance is claimed. The parent owns existing settings registration and IPC integration; this task remains open pending consumption.
 - [ ] 2.2 Integrate selected-device brightness/lighting capabilities and owner-delegated wallpaper/monitor/artwork/firmware actions; verify invalid values do no IO and device-selection races cannot redirect a write.
 
 ## 3. Wizard and settings UI
