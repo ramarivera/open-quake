@@ -50,8 +50,12 @@ Desktop connection management SHALL provide add, update, remove, select and heal
 - **THEN** the desktop explains the unavailable operation without attempting a fabricated management endpoint
 
 ### Requirement: Evidence-based acceptance
-Setup documentation SHALL distinguish Hermes agent HTTP API from its dashboard/control API and distinguish mocked protocol coverage from live endpoint acceptance. Live testing MUST use existing user-managed instances without service installation, restart or configuration changes.
+Setup documentation SHALL distinguish Hermes agent HTTP API from its dashboard/control API and distinguish mocked protocol coverage from live endpoint acceptance. Live testing SHALL use existing user-managed instances or a task-owned temporary process of an installed runtime. A temporary process MUST bind only to loopback, isolate state in task scratch storage, use an ephemeral bearer credential, disable tools for inference checks and stop after testing. Testing MUST NOT install services, restart user-managed instances or change saved configuration or authentication policy.
 
 #### Scenario: Dashboard is not chat API
 - **WHEN** a configured Hermes address serves only its dashboard
 - **THEN** connection diagnostics explain the missing agent API without claiming chat or lifecycle support
+
+#### Scenario: Isolated installed-runtime acceptance
+- **WHEN** the runtime is installed but its user-managed API is not running
+- **THEN** acceptance may start a task-owned temporary loopback API with isolated state and no enabled tools, and records that it verified a temporary instance rather than the user-managed service

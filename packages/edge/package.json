@@ -7,6 +7,8 @@
 	"types": "./src/index.ts",
 	"exports": {
 		".": "./src/index.ts",
+		"./agent-http": "./src/agent-http/index.ts",
+		"./agent-http/contracts": "./src/agent-http/runtime-contracts.ts",
 		"./ai": "./src/ai/index.ts",
 		"./ai/contracts": "./src/ai/ai-contracts.ts",
 		"./ai/voice-contracts": "./src/ai/ai-router-contracts.ts",
@@ -25,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@effect/vitest": "catalog:",
+		"@types/node": "catalog:",
 		"fast-check": "catalog:",
 		"vitest": "catalog:",
 		"typescript": "catalog:"
