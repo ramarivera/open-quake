@@ -83,12 +83,30 @@ try {
 		console.info(`Installing Windows ${process.arch} download`);
 		const diagnostics = setTimeout(async () => {
 			try {
-				const { stdout } = await command(
-					"tasklist.exe",
-					["/V", "/FO", "CSV", "/FI", "IMAGENAME eq open-quake*"],
+				const { stdout } = await command("tasklist.exe", ["/V", "/FO", "CSV"], {
+					timeout: 15_000,
+				});
+				console.info(
+					"Installer still running after 60 seconds",
+					stdout
+						.split(/\r?\n/)
+						.filter((line) => /open-quake|powershell|pwsh|conhost/i.test(line))
+						.join("\n"),
+				);
+				// Use the native runner PowerShell, separate from NSIS's emulated
+				// helper, to expose child processes and blocked thread states.
+				const { stdout: processes } = await command(
+					"pwsh.exe",
+					[
+						"-NoLogo",
+						"-NoProfile",
+						"-NonInteractive",
+						"-Command",
+						`$rows = Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'open-quake|powershell|pwsh|conhost' }; $rows | Select-Object ProcessId, ParentProcessId, Name, ExecutablePath | ConvertTo-Json -Compress; foreach ($row in $rows) { $p = Get-Process -Id $row.ProcessId -ErrorAction SilentlyContinue; if ($p) { $p.Threads | Select-Object Id, ThreadState, WaitReason | ConvertTo-Json -Compress } }`,
+					],
 					{ timeout: 15_000 },
 				);
-				console.info("Installer still running after 60 seconds", stdout);
+				console.info("Installer process tree and thread states", processes);
 				console.info(
 					"Installed directory entries",
 					await readdir(installed).catch(() => []),
