@@ -100,11 +100,13 @@ inputs don't fit, no turn is accepted and no provider call occurs.
 The service permits four simultaneous turns, eight subscribers per turn,
 32,768 input characters, 65,536 answer characters, and sixteen suggestions of at
 most 4096 characters. Supported provider output limits use the reserved tokens;
-reported or estimated final output exceeding that reserve fails explicitly. Partial output
+only provider-reported output exceeding that reserve fails explicitly. Estimates remain labelled and do not enforce the provider token limit. Partial output
 stays visible in history but only completed pairs enter subsequent context.
 After thirty idle minutes, or explicit close, saved history remains readable
 and no earlier context is sent on the next turn. A local title takes the first
 ten Unicode characters and appends `...` only when needed. Manual titles persist.
+
+Acceptance and terminal records always persist. The first partial snapshot persists immediately; subsequent partial snapshots coalesce until one second or 4096 additional estimated bytes have accumulated. Crash recovery may lose the final checkpoint interval and marks a durable processing record interrupted.
 
 The version-1 JSON store atomically replaces `history-v1.json` using a synced
 0600 temporary file in a newly created 0700 directory. Storage has a 64 MiB
