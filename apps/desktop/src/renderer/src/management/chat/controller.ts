@@ -178,6 +178,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			};
 		},
 		refresh,
+		dismissError: () => set({ error: "" }),
 		submit: async (text: string) => {
 			if (!bridge || disposed || state.pending || !text.trim()) return;
 			chosen = true;

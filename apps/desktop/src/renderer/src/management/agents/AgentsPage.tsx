@@ -6,9 +6,9 @@ import {
 	SLOT_CODES,
 	type Slots,
 } from "../../../../shared/agents";
-import { AgentHttpPanel } from "../agent-http";
-import { DirectChatPanel } from "../chat/DirectChatPanel";
 import { directChatModel } from "../chat/model-scope";
+import { ConversationWorkspace } from "../chat/Workspace";
+import "../chat/workspace.css";
 import { AgentWizard } from "./AgentWizard";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
@@ -380,8 +380,9 @@ export function AgentsPage({
 	] as const;
 	return (
 		<div className="agent-workbench">
-			<header className="mc-toolbar">
+			<header className="aw-header">
 				<div>
+					<p className="mc-page-kicker">{strings.clawControlPanel.kicker}</p>
 					<h1>{strings.clawControlPanel.agentsTab}</h1>
 					<p>{strings.clawControlPanel.libraryHint}</p>
 				</div>
@@ -436,8 +437,13 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
-				<DirectChatPanel configured={directChatModel(view?.models).ready} />
-				<AgentHttpPanel />
+				<ConversationWorkspace
+					model={directChatModel(view?.models)}
+					onOpenSettings={() => {
+						setTab("ai");
+						document.getElementById("agents-tab-ai")?.focus();
+					}}
+				/>
 			</section>
 			{error && tab !== "sessions" && (
 				<p role="alert">

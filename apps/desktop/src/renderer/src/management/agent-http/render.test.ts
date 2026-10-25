@@ -8,11 +8,12 @@ import { ConversationPanel } from "./ConversationPanel";
 
 afterEach(() => vi.unstubAllGlobals());
 
-it("mounts connected runtimes without waiting for the local workspace library to load", () => {
+it("mounts the conversation workspace without waiting for the local workspace library to load", () => {
 	vi.stubGlobal("window", {});
 	const html = renderToStaticMarkup(createElement(AgentsPage));
-	expect(html).toContain("Connected runtimes");
-	expect(html).toContain("Local agent library");
+	expect(html).toContain("Direct model");
+	expect(html).toContain("Add connection");
+	expect(html).toContain("Agent library");
 	expect(html.match(/id="agents-sessions"/g)).toHaveLength(1);
 	expect(html).not.toContain("Start OpenClaw");
 });
