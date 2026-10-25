@@ -132,3 +132,19 @@ Malformed or unreadable persisted sessions retain evidence and emit scrubbed cat
 Task 5.11 keeps the archive writer's numeric limits as the single authority. Export has separate cumulative raw read byte/count limits and retained archive byte/count accounting. Check descriptor sizes against remaining read capacity before allocating or reading, bound reads against growth, and retain only stable regular files. JSON normalization can reduce retained bytes but never refunds raw read work. Map replacement subtracts the previous entry, and content-addressed deduplication charges each retained archive path once. External clock reads share the raw budget; rewritten settings and each generated compatibility projection/index entry use the same retained budget. Reject at the first disallowed read or addition rather than building an invalid full archive. Tests use small shared limits and observe actual filesystem reads.
 
 Native restore records source-to-final profile IDs for both added profiles and complete-content matches. Import only persistent app links from the source manager, rebased through that mapping. Preserve destination profile-manager settings, active selections, command approvals and runtime/default state. Destination links win both an existing profile association and an overlapping app identity; remaining source links are imported in order, at most one per final profile, without dangling targets. Compare app identity using the platform's switching contract and device scope. Same-platform links retain their path/identifier; cross-platform app identities are not portable and are skipped. Repeated import must preserve the resulting envelope. Test a real linked export/reset/import through ProfileSwitching.probe in addition to deduplication, profile-ID collisions and destination conflicts.
+
+## Offline locale implementation, 2026-10-25
+
+The general SettingsRepository owns versioned `settings-v1.json`, preserving
+unrelated fields while changing locale. It suggests only bundled en/de locales
+from the OS on first initialization, then preserves the saved choice. Unknown
+versions and malformed files fail without automatic replacement. Main uses a
+private atomic file adapter and Schema-first encoded Effect RPC; only owned main
+frames at the application renderer can access it. Saved locale/revision events
+update both windows without reloading mounted chat.
+
+The exact MIT dependency `gt-react@11.4.16` supplies dictionary rendering and
+source fallback. Bundled dictionaries and local loaders require no account/key.
+Development hot translation requests are disabled and runtimeUrl is null. The
+Opus-led redesign owns final product copy and language-control placement. This
+implementation does not close the broader wizard/general-settings tasks.

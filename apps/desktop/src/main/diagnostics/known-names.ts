@@ -1,7 +1,8 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`ChatService.read ChatService.attach ChatService.submit ChatService.cancel ChatService.close ChatService.clear ChatService.snapshot ChatService.subscribe ChatService.session ChatService.rename ChatService.supersede ChatService.history ChatService.list
+	`SettingsService.locale SettingsService.setLocale SettingsRepository.read SettingsRepository.setLocale
+ChatService.read ChatService.attach ChatService.submit ChatService.cancel ChatService.close ChatService.clear ChatService.snapshot ChatService.subscribe ChatService.session ChatService.rename ChatService.supersede ChatService.history ChatService.list
 ChatRepository.get ChatRepository.list ChatRepository.put ChatRepository.remove ChatInference.open FileChatStorage.save PinnedAiRepository.get PinnedAiRepository.put VercelCompatibleAdapter.open
 DesktopChat.submit DesktopChat.subscribe DesktopChat.snapshot DesktopChat.cancel DesktopChat.close DesktopChat.clear DesktopChat.rename DesktopChat.history DesktopChat.list DesktopChat.credentials
 DesktopSpeech.create DesktopSpeech.createRuntime DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
@@ -188,7 +189,7 @@ export const knownLogEvents = new Set([
 ]);
 
 export const knownErrorTags = new Set(
-	`ChatBusy ChatContextTooLarge ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
+	`SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
 ActionApplicationMissing ActionPermissionDenied ActionSnapshotFailed AgentCredentialUnavailable
 AgentDraftFailed AgentDraftUnavailable AgentDuplicate AgentInvalid AgentMissing AgentModelInvalid
 AgentModelLastRow AgentPanelFailed AgentProfileMissing AgentProtected AgentRevisionConflict

@@ -1,3 +1,4 @@
+import { createAppLocaleBridge } from "../main/settings/preload";
 import "../main/meetings/preload";
 import { createDirectChatBridge } from "../main/chat/preload";
 import "../main/maintenance/preload";
@@ -57,4 +58,10 @@ const directChat = createDirectChatBridge(ipcRenderer, {
 contextBridge.exposeInMainWorld("quakeChat", directChat);
 window.addEventListener("unload", () => {
 	void directChat.dispose();
+});
+
+const appLocale = createAppLocaleBridge(ipcRenderer);
+contextBridge.exposeInMainWorld("quakeLocale", appLocale);
+window.addEventListener("unload", () => {
+	void appLocale.dispose();
 });

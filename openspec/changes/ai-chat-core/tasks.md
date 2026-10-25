@@ -32,3 +32,12 @@ Task 2.1 is verified by real SDK/service/repository and outbound continuation
 checks. Tasks 1.3, 2.2 and 2.3 remain open for enabled long-mode acceptance,
 fully shared management/panel presentation and General Translation integration.
 No physical microphone, audible playback or hardware acceptance is inferred.
+
+Offline locale infrastructure, 2026-10-25: shared SettingsService, encoded
+RPC/preload, private versioned persistence and bundled General Translation
+provider are implemented. Focused tests prove saved-choice preservation, failed
+writes, corruption/restart, foreign-frame rejection and offline translated/source
+fallback output. Actual production Electron root/preload/React updates both
+windows without document reload using mock hardware and a local provider. Final
+Opus-owned chat copy/control integration and its rendered acceptance remain open,
+so task 2.3 remains unchecked.
