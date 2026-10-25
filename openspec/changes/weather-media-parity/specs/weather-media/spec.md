@@ -4,6 +4,8 @@
 
 Show verified-city weather and one consistent system-media session on the clock and DK-Player, with explicit privacy choices and unavailable states.
 
+> **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (DK-Player turntable drawing and geometry, clock music card styling) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
+
 ## ADDED Requirements
 
 ### Requirement: Weather consent and city verification
