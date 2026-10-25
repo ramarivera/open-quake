@@ -64,10 +64,10 @@ export function farRightOrigins(
 /** Fixed JXA program. Only numeric IDs/origins cross stdin via argv; no shell. */
 export const CORE_GRAPHICS_PROGRAM = `
 ObjC.import('CoreGraphics');
-ObjC.bindFunction('CGDisplayIsInMirrorSet', ['bool', ['uint']]);
-ObjC.bindFunction('CGBeginDisplayConfiguration', ['int', ['void *']]);
-ObjC.bindFunction('CGConfigureDisplayOrigin', ['int', ['void *', 'uint', 'int', 'int']]);
-ObjC.bindFunction('CGConfigureDisplayMirrorOfDisplay', ['int', ['void *', 'uint', 'uint']]);
+ObjC.bindFunction('CGDisplayIsInMirrorSet', ['bool', ['unsigned int']]);
+ObjC.bindFunction('CGBeginDisplayConfiguration', ['int', ['void **']]);
+ObjC.bindFunction('CGConfigureDisplayOrigin', ['int', ['void *', 'unsigned int', 'int', 'int']]);
+ObjC.bindFunction('CGConfigureDisplayMirrorOfDisplay', ['int', ['void *', 'unsigned int', 'unsigned int']]);
 ObjC.bindFunction('CGCompleteDisplayConfiguration', ['int', ['void *', 'int']]);
 ObjC.bindFunction('CGCancelDisplayConfiguration', ['int', ['void *']]);
 function run(args) {
