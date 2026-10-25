@@ -88,6 +88,11 @@ The card SHALL occupy 564×153 design pixels with a radius of 32, an 88 px icon 
 - **WHEN** a valid city has no cached data and both forecast providers fail
 - **THEN** the clock shows the recovered Weather unavailable string, while city-not-found keeps its distinct message
 
+#### Scenario: Weather failure text stays legible on bright art
+
+- **WHEN** Weather unavailable or City not found renders on any built-in clock theme, including the bright Season sky
+- **THEN** the text sits on its own dark translucent chip with at least 4.5:1 contrast instead of tinted text on the glass card
+
 #### Scenario: Portable mock smoke artifacts
 
 - **WHEN** a developer runs the focused native mock smoke with an arbitrary non-empty artifacts directory
@@ -124,6 +129,11 @@ The system-mode playAudio tile SHALL use the recovered 1920×480 geometry: platt
 
 - **WHEN** a session disappears and returns within 3 s
 - **THEN** the guide does not interrupt playback
+
+#### Scenario: System error hint is readable on the strip
+
+- **WHEN** the DK-Player shows a system media error hint
+- **THEN** it renders at 18 px or larger, bottom-anchored above the source pill, and a long localized hint wraps to at most two lines without overlapping the pill
 
 ### Requirement: Knob ownership and test safety
 
