@@ -261,6 +261,7 @@ export function createCapturePort(options: {
 		},
 		start: (id, config, parent) =>
 			Effect.gen(function* () {
+				if (!options.mock) yield* files.ready();
 				if (!options.mock && !parent && process.platform === "darwin") {
 					const granted = yield* Effect.tryPromise({
 						try: () => systemPreferences.askForMediaAccess("microphone"),

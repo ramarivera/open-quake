@@ -70,7 +70,7 @@ const native = vi.hoisted(() => {
 			});
 		});
 	}
-	return { app, ipc, Window };
+	return { app, ipc, Window, converterReady: vi.fn() };
 });
 vi.mock("electron", () => ({
 	app: native.app,
@@ -84,11 +84,13 @@ vi.mock("electron", () => ({
 }));
 vi.mock("./audio-files", () => ({
 	audioFiles: () => ({
+		ready: () => native.converterReady() ?? Effect.void,
 		finalize: () => Effect.void,
 		duration: () => Effect.succeed(2500),
 	}),
 }));
 
+import { meetingError } from "../../../../../packages/edge/src/meetings/meeting-errors";
 import { createCapturePort } from "./capture-port";
 
 const ports: ReturnType<typeof createCapturePort>[] = [];
@@ -110,8 +112,30 @@ const setup = () => {
 afterEach(() => {
 	for (const capture of ports.splice(0)) capture.dispose();
 	native.Window.windows = [];
+	native.converterReady.mockReset();
 });
 describe("capture host ownership and authority", () => {
+	it("rejects recording before creating a capture window when FFmpeg is unavailable", async () => {
+		const { capture } = setup();
+		native.converterReady.mockReturnValue(
+			Effect.fail(meetingError("ConverterUnavailable")),
+		);
+		const result = await Effect.runPromise(
+			Effect.either(
+				capture.port.start(
+					MeetingId.make(crypto.randomUUID()),
+					defaultMeetingConfig,
+					undefined,
+				),
+			),
+		);
+		expect(result).toMatchObject({
+			_tag: "Left",
+			left: { code: "QUAKE.MEETING.CONVERTER_UNAVAILABLE" },
+		});
+		expect(native.Window.windows).toHaveLength(0);
+	});
+
 	it("reports standalone translation loss on crash and releases its hidden host", async () => {
 		const { capture, onLost } = setup();
 		await Effect.runPromise(

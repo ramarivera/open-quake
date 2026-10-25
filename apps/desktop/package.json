@@ -9,7 +9,10 @@
 		"dev": "electron-vite dev",
 		"test": "vitest run",
 		"test:bundle": "node src/main/test/bundle-smoke.mjs",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"package": "electron-builder --config electron-builder.config.cjs --publish never",
+		"test:release": "node --test scripts/release.test.mjs",
+		"test:package": "node scripts/smoke-package.mjs"
 	},
 	"dependencies": {
 		"@open-quake/device": "workspace:*",
@@ -30,9 +33,13 @@
 		"@types/react-dom": "19.2.4",
 		"@vitejs/plugin-react": "6.1.0",
 		"electron": "43.4.1",
+		"electron-builder": "26.18.0",
 		"electron-vite": "5.0.0",
 		"typescript": "5.9.3",
 		"vite": "8.2.2",
 		"vitest": "catalog:"
-	}
+	},
+	"description": "Open-source desktop controller for the DecoKee QUAKE",
+	"author": "Ramiro Rivera <ramarivera@users.noreply.github.com>",
+	"homepage": "https://github.com/ramarivera/open-quake"
 }
