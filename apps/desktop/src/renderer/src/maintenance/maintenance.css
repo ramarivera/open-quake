@@ -9,7 +9,7 @@
 }
 .maintenance-error,
 .danger {
-	color: var(--quake-error, #ef4444);
+	color: var(--oq-danger);
 }
 .maintenance-danger {
 	display: flex;
@@ -25,7 +25,7 @@
 	color: var(--quake-success);
 }
 .permission-status[data-status="denied"] {
-	color: #ef4444;
+	color: var(--oq-danger);
 }
 .maintenance-dialog {
 	box-sizing: border-box;
@@ -38,10 +38,10 @@
 	border-radius: 12px;
 	background: var(--quake-raised);
 	color: var(--quake-foreground);
-	box-shadow: 0 20px 70px #0005;
+	box-shadow: var(--oq-shadow-pop);
 }
 .maintenance-dialog::backdrop {
-	background: #0007;
+	background: rgb(0 0 0 / 0.5);
 }
 .maintenance-dialog header {
 	display: flex;
@@ -94,7 +94,7 @@
 	color: var(--quake-success);
 }
 .firmware-steps [data-state="failed"] > span:first-child {
-	color: #ef4444;
+	color: var(--oq-danger);
 }
 .firmware-steps [data-state="pending"] {
 	color: var(--quake-muted);
@@ -114,7 +114,7 @@
 	display: block;
 	width: 35%;
 	height: 100%;
-	background: linear-gradient(90deg, #10b98166, #10b981);
+	background: var(--oq-accent);
 	animation: firmware-slide 1.4s linear infinite;
 }
 .firmware-volumes {
@@ -135,11 +135,11 @@
 	z-index: 100;
 	max-width: 420px;
 	padding: 14px 20px;
-	border: 1px solid var(--border, #444);
-	background: var(--surface, #252525);
-	color: var(--text, #f0f0f0);
-	border-radius: 8px;
-	box-shadow: 0 4px 24px #0004;
+	color: var(--oq-text);
+	background: var(--oq-raised);
+	border: 0;
+	border-radius: var(--oq-radius-lg);
+	box-shadow: var(--oq-shadow-pop);
 }
 @keyframes firmware-slide {
 	from {
