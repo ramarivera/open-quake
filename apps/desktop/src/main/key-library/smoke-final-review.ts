@@ -159,7 +159,10 @@ export async function verifyFinalReview(
 	// Navigate out of Keys and back, then reload management while the live strip stays mounted.
 	await select(win, "#keys-language", "de");
 	await ready(panel, `${text("1,2")} === 'Aufnahme'`);
-	await button(win, "Knob Profile");
+	await evalIn(
+		win,
+		"document.querySelector('.nav-item[data-nav-page=profiles]').click()",
+	);
 	await button(win, "Keys");
 	await ready(win, "document.querySelector('#keys-language')?.value === 'de'");
 	assert.equal(
@@ -172,7 +175,10 @@ export async function verifyFinalReview(
 	await ready(win, "document.querySelector('#keys-language')?.value === 'de'");
 	await select(win, "#keys-profile", fixture.id);
 	await snapshot(win, "final-review-restored-locale");
-	await button(win, "Knob Profile");
+	await evalIn(
+		win,
+		"document.querySelector('.nav-item[data-nav-page=profiles]').click()",
+	);
 	await evalIn(win, "localStorage.setItem('open-quake-key-locale','invalid')");
 	await button(win, "Keys");
 	await ready(win, "document.querySelector('#keys-language')?.value === 'en'");

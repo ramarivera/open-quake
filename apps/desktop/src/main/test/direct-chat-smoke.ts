@@ -150,7 +150,10 @@ async function run() {
 		),
 		true,
 	);
-	await click(win, "OpenClaw");
+	await evaluate(
+		win,
+		"document.querySelector('.nav-item[data-nav-page=agents]').click()",
+	);
 	await evaluate(win, "document.querySelector('#agents-tab-sessions').click()");
 	await wait(
 		win,

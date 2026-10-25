@@ -136,7 +136,7 @@ async function smoke(): Promise<void> {
 		]);
 		process.stdout.write("profiles smoke: windows loaded\n");
 		await management.webContents.executeJavaScript(
-			"Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Knob Profile')).click()",
+			"document.querySelector('.nav-item[data-nav-page=profiles]').click()",
 		);
 		await ready(management, ".profiles-manager");
 		const first = await request(management, { type: "read", locale: "en" });
@@ -190,7 +190,7 @@ async function smoke(): Promise<void> {
 		);
 		await management.loadFile(resolve("out/renderer/index.html"));
 		await management.webContents.executeJavaScript(
-			"Array.from(document.querySelectorAll('nav button')).find(b=>b.textContent.includes('Knob Profile')).click()",
+			"document.querySelector('.nav-item[data-nav-page=profiles]').click()",
 		);
 		await profiles.connect("desktop-preview", "1-2");
 		await ready(panel, '.strip-slot[data-state="tile"]');

@@ -1590,16 +1590,45 @@ async function smoke() {
 		await activate("emoji");
 		win.setContentSize(820, 960);
 		await settle();
-		assert(
-			(await js(
-				"document.querySelector('.content').getBoundingClientRect().width",
-			)) > 600,
-			"Narrow rail must retain visible page content",
-		);
-		await capture("grey-narrow-rail");
 		assert.equal(
-			await js("getComputedStyle(document.querySelector('.sidebar')).width"),
-			"82px",
+			await js(
+				"document.querySelector('.content').scrollWidth <= document.querySelector('.content').clientWidth + 1",
+			),
+			true,
+			"Labelled sidebar must retain page content without horizontal overflow",
+		);
+		await capture("grey-labelled-sidebar");
+		assert.equal(
+			await js(
+				"document.querySelector('.sidebar').dataset.drawer === undefined && document.querySelector('.nav-label').getBoundingClientRect().width > 0",
+			),
+			true,
+		);
+		win.setContentSize(700, 960);
+		await settle();
+		assert.equal(
+			await js(
+				"document.querySelector('.mc-menu-button').getAttribute('aria-expanded') === 'false' && document.querySelector('#mc-sidebar').inert",
+			),
+			true,
+		);
+		await js("document.querySelector('.mc-menu-button').click()");
+		await settle();
+		assert.equal(
+			await js(
+				"document.querySelector('.mc-menu-button').getAttribute('aria-expanded') === 'true' && !document.querySelector('#mc-sidebar').inert",
+			),
+			true,
+		);
+		await js(
+			"document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true}))",
+		);
+		await settle();
+		assert.equal(
+			await js(
+				"document.querySelector('#mc-sidebar').inert && document.activeElement.classList.contains('mc-menu-button')",
+			),
+			true,
 		);
 		win.setContentSize(1320, 960);
 		await settle();
