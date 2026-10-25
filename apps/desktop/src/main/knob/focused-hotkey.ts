@@ -21,6 +21,8 @@ export const focusedHotkey = (
 	const resolve = committedFocusedKey(bindings);
 	return Effect.fn("DesktopKnob.focusedHotkey")(
 		function* (key, delta, context): Effect.fn.Return<void, KnobError> {
+			if (key.kind !== "hotkey")
+				return yield* KnobCapabilityUnavailable.fromCause();
 			const session = bindings.hardware();
 			const committed = yield* resolve(key, context);
 			if (bindings.hardware() !== session)
