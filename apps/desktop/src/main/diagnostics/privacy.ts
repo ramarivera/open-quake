@@ -18,12 +18,7 @@ import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors
 import { MaintenanceErrors } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting-errors.js";
 import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
-import {
-	knownErrorTags,
-	knownLogEvents,
-	knownSourceFiles,
-	knownSpans,
-} from "./known-names.js";
+import { knownErrorTags, knownLogEvents, knownSpans } from "./known-names.js";
 
 const sourceCodes = new Set([
 	"EACCES",
@@ -76,11 +71,6 @@ const identities = new Map<string, { code: string; category: string }>(
 		.map(({ code, category }) => [code, { code, category }]),
 );
 
-export interface SafeFrame {
-	readonly file: string;
-	readonly line: number;
-	readonly column: number;
-}
 export interface SafeError {
 	readonly name: string;
 	readonly _tag?: string;
@@ -88,7 +78,6 @@ export interface SafeError {
 	readonly category?: string;
 	readonly sourceCode?: string;
 	readonly status?: number;
-	readonly frames?: readonly SafeFrame[];
 	readonly cause?: SafeError;
 	readonly truncated?: true;
 }
@@ -100,29 +89,6 @@ function field(input: unknown, key: string): unknown {
 		return Object.getOwnPropertyDescriptor(input, key)?.value;
 	} catch {
 		return undefined;
-	}
-}
-
-function frames(input: unknown): readonly SafeFrame[] {
-	try {
-		if (!(input instanceof Error)) return [];
-		// V8 lazily creates stack via an accessor. Its first line carries private text.
-		const stack = input.stack;
-		if (typeof stack !== "string") return [];
-		const result: SafeFrame[] = [];
-		for (const line of stack.slice(0, 32768).split("\n").slice(1, 25)) {
-			const match = /(?:\/|\\)([\w.-]+):(\d{1,7}):(\d{1,7})\)?$/.exec(line);
-			if (!match || !knownSourceFiles.has(match[1] ?? "")) continue;
-			result.push({
-				file: match[1] ?? "",
-				line: Number(match[2]),
-				column: Number(match[3]),
-			});
-			if (result.length === 6) break;
-		}
-		return result;
-	} catch {
-		return [];
 	}
 }
 
@@ -138,7 +104,6 @@ export function safeError(input: unknown, depth = 0): SafeError {
 			: projected.sourceCode;
 	const status = field(input, "status");
 	const tag = field(input, "_tag");
-	const sourceFrames = frames(input);
 	const original = field(input, "originalCause");
 	const cause = original === undefined ? field(input, "cause") : original;
 	return {
@@ -154,7 +119,6 @@ export function safeError(input: unknown, depth = 0): SafeError {
 		status <= 599
 			? { status }
 			: {}),
-		...(sourceFrames.length ? { frames: sourceFrames } : {}),
 		...(cause === undefined ? {} : { cause: safeError(cause, depth + 1) }),
 	};
 }

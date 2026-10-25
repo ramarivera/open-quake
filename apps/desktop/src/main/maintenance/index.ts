@@ -81,7 +81,7 @@ interface MaintenanceOptions {
 	readonly hardware: () => HardwareSession | undefined;
 	readonly management: () => BrowserWindow | undefined;
 	readonly stopWriters: () => Promise<void>;
-	readonly exit?: (code?: number) => void;
+	readonly exit?: (code?: number) => void | Promise<void>;
 	readonly fixture?: {
 		readonly roots: readonly string[];
 		readonly descriptors: readonly TrustedFirmware[];
@@ -89,7 +89,13 @@ interface MaintenanceOptions {
 }
 export function registerMaintenance(options: MaintenanceOptions) {
 	const { root, mock } = options;
-	const exit = options.exit ?? ((code = 0) => app.exit(code));
+	const nativeExit = options.exit ?? ((code = 0) => app.exit(code));
+	let requestedExit: number | undefined;
+	// Complete the effect and its diagnostic span before the forced native exit.
+	const exit = (code = 0): void => {
+		requestedExit = code;
+		disposed = true;
+	};
 	const mockRoot = join(root, "firmware-mock");
 	const roots =
 		options.fixture?.roots ??
@@ -613,6 +619,8 @@ export function registerMaintenance(options: MaintenanceOptions) {
 						...(appearance === undefined ? {} : { appearance }),
 					} satisfies MaintenanceReply;
 				}).pipe(
+					(effect) =>
+						options.diagnostics?.instrument(effect, "app.background") ?? effect,
 					Effect.match({
 						onFailure: (error) =>
 							({ ok: false, code: error.code }) satisfies MaintenanceReply,
@@ -623,6 +631,16 @@ export function registerMaintenance(options: MaintenanceOptions) {
 		} finally {
 			pendingOperations--;
 			if (mutation) mutating = false;
+			if (requestedExit !== undefined) {
+				const code = requestedExit;
+				requestedExit = undefined;
+				ipcMain.removeHandler(MAINTENANCE_CHANNEL);
+				try {
+					await runtime.dispose();
+				} finally {
+					await nativeExit(code);
+				}
+			}
 		}
 	};
 	ipcMain.handle(

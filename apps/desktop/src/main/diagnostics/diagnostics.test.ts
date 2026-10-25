@@ -282,7 +282,7 @@ describe("production Effect diagnostics", () => {
 		expect(JSON.stringify(lines)).not.toContain("private");
 	});
 
-	it("keeps known source frames and bounded failure topology without paths or free-form defects", async () => {
+	it("rejects fabricated source frames and keeps bounded failure topology without paths or free-form defects", async () => {
 		const source = new TypeError("private error");
 		source.stack =
 			"TypeError: private error\n    at privateFunction (/Users/private/transport.ts:12:34)\n    at privateFunction (/private/unknown-secret.ts:2:3)";
@@ -290,8 +290,9 @@ describe("production Effect diagnostics", () => {
 		const error = new RuntimeUnavailable(source);
 		expect(safeError(error)).toMatchObject({
 			code: "AGENT.HTTP.CONNECTION.UNAVAILABLE",
-			cause: { frames: [{ file: "transport.ts", line: 12, column: 34 }] },
+			cause: { name: "TypeError" },
 		});
+		expect(JSON.stringify(safeError(error))).not.toContain("frames");
 		const projected = safeCause(
 			Cause.parallel(Cause.die(source), Cause.fail(error)),
 		);
@@ -317,6 +318,22 @@ describe("production Effect diagnostics", () => {
 			outcome: "failure",
 			cause: { kind: "Die", error: { name: "TypeError" } },
 		});
+	});
+
+	it("doesn't duplicate spans when a service provides the shared diagnostics layer again", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = makeDesktopRuntime(Layer.empty, diagnostics);
+		await app.runPromise(
+			diagnostics
+				.instrument(Effect.void, "voice.request")
+				.pipe(Effect.provide(diagnostics.layer)),
+		);
+		await app.dispose();
+		await diagnostics.flush();
+		const spans = (await records(directory)).filter(
+			(line) => line.type === "span",
+		);
+		expect(new Set(spans.map((line) => line.span_id)).size).toBe(spans.length);
 	});
 
 	it("flushes shutdown finalizers and closes idempotently without changing application failures", async () => {

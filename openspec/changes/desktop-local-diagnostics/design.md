@@ -12,7 +12,7 @@ Use the existing Effect Logger and native-delegating Tracer with no new dependen
 
 Instrument before recovery and IPC projection. Generate opaque request identifiers in main, use native child spans for Effect fibers, and carry only identifiers through Promise and delayed callback context. Renderer input never supplies trace identifiers or operation names.
 
-Project catalog codes, safe source errno/status and bounded cause topology. Discard arbitrary messages, annotations, span attributes and request data. Source frames retain known basename and location only. Four files of 2 MiB and a 512 KiB queue are defaults with hard upper bounds. Directory and files use 0700 and 0600. Persist shutdown health counters; storage failure never changes the application result.
+Project catalog codes, safe source errno/status and bounded cause topology. Discard arbitrary messages, annotations, span attributes and request data. Foreign Error.stack values are omitted because their basenames and numeric locations can be fabricated. Local named spans preserve the operation sequence. Four files of 2 MiB and a 512 KiB queue are defaults with hard upper bounds. Directory and files use 0700 and 0600. Persist shutdown health counters; storage failure never changes the application result.
 
 ## Risks / tradeoffs
 

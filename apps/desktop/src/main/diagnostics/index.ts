@@ -133,22 +133,21 @@ export function createDesktopDiagnostics(
 			}
 		},
 	);
+	const installedTracers = new WeakSet<object>();
 	const tracerLayer = Layer.unwrapEffect(
-		Effect.map(Effect.tracer, (native) =>
-			Layer.setTracer(
-				Tracer.make({
-					context: (f, fiber) =>
-						asyncContext.run(
-							{
-								span: Context.getOption(
-									fiber.currentContext,
-									Tracer.ParentSpan,
-								),
-								requestId: fiber.getFiberRef(requestId),
-							},
-							() => native.context(f, fiber),
-						),
-					span: (
+		Effect.map(Effect.tracer, (native) => {
+			if (installedTracers.has(native)) return Layer.empty;
+			const tracer = Tracer.make({
+				context: (f, fiber) =>
+					asyncContext.run(
+						{
+							span: Context.getOption(fiber.currentContext, Tracer.ParentSpan),
+							requestId: fiber.getFiberRef(requestId),
+						},
+						() => native.context(f, fiber),
+					),
+				span: (name, parent, context, links, startTime, kind, spanOptions) => {
+					const span = native.span(
 						name,
 						parent,
 						context,
@@ -156,54 +155,44 @@ export function createDesktopDiagnostics(
 						startTime,
 						kind,
 						spanOptions,
-					) => {
-						const span = native.span(
-							name,
-							parent,
-							context,
-							links,
-							startTime,
-							kind,
-							spanOptions,
-						);
-						const currentRequest =
-							asyncContext.getStore()?.requestId ?? Option.none();
-						const inheritedRequest = Option.isSome(parent)
-							? requestBySpan.get(parent.value)
-							: undefined;
-						const id = Option.isSome(currentRequest)
-							? currentRequest.value
-							: inheritedRequest;
-						if (id) requestBySpan.set(span, id);
-						const end = span.end.bind(span);
-						let ended = false;
-						span.end = (endTime, exit) => {
-							end(endTime, exit);
-							if (ended) return;
-							ended = true;
-							emit({
-								type: "span",
-								...correlation(Option.some(span), Option.fromNullable(id)),
-								...(Option.isSome(parent) &&
-								/^[0-9a-f]{16}$/.test(parent.value.spanId)
-									? { parent_span_id: parent.value.spanId }
-									: {}),
-								duration_ms: Math.max(0, Number(endTime - startTime) / 1e6),
-								outcome: Exit.isSuccess(exit)
-									? "success"
-									: Cause.isInterruptedOnly(exit.cause)
-										? "interrupted"
-										: "failure",
-								...(Exit.isFailure(exit)
-									? { cause: safeCause(exit.cause) }
-									: {}),
-							});
-						};
-						return span;
-					},
-				}),
-			),
-		),
+					);
+					const currentRequest =
+						asyncContext.getStore()?.requestId ?? Option.none();
+					const inheritedRequest = Option.isSome(parent)
+						? requestBySpan.get(parent.value)
+						: undefined;
+					const id = Option.isSome(currentRequest)
+						? currentRequest.value
+						: inheritedRequest;
+					if (id) requestBySpan.set(span, id);
+					const end = span.end.bind(span);
+					let ended = false;
+					span.end = (endTime, exit) => {
+						end(endTime, exit);
+						if (ended) return;
+						ended = true;
+						emit({
+							type: "span",
+							...correlation(Option.some(span), Option.fromNullable(id)),
+							...(Option.isSome(parent) &&
+							/^[0-9a-f]{16}$/.test(parent.value.spanId)
+								? { parent_span_id: parent.value.spanId }
+								: {}),
+							duration_ms: Math.max(0, Number(endTime - startTime) / 1e6),
+							outcome: Exit.isSuccess(exit)
+								? "success"
+								: Cause.isInterruptedOnly(exit.cause)
+									? "interrupted"
+									: "failure",
+							...(Exit.isFailure(exit) ? { cause: safeCause(exit.cause) } : {}),
+						});
+					};
+					return span;
+				},
+			});
+			installedTracers.add(tracer);
+			return Layer.setTracer(tracer);
+		}),
 	);
 	const layer = Layer.mergeAll(
 		Logger.replace(Logger.defaultLogger, logger),

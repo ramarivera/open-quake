@@ -226,6 +226,7 @@ if (!app.requestSingleInstanceLock()) {
 					// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
 					// play through hardware-controls; the mock bus answers them without HID.
 					const voice = registerVoiceSurface({
+						diagnostics,
 						...(agentHttp ? { runtime: agentHttp.decorateVoiceRuntime } : {}),
 						mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 						tones: toneSinks(createToneRecorder(), {
@@ -698,6 +699,17 @@ if (!app.requestSingleInstanceLock()) {
 						hardware: () => bus?.hardware?.(),
 						management: () => managementWin,
 						stopWriters: () => stopWriters(true),
+						exit: async (code) => {
+							try {
+								await background.dispose();
+							} finally {
+								try {
+									await diagnostics.close();
+								} finally {
+									app.exit(code);
+								}
+							}
+						},
 					});
 					app.on("before-quit", (event) => {
 						if (quitFinished) return;
@@ -709,8 +721,10 @@ if (!app.requestSingleInstanceLock()) {
 								cause instanceof MaintenanceShutdownFailed
 									? cause
 									: new MaintenanceShutdownFailed(cause);
-							background.runSync(
-								Effect.logError("Application shutdown failed", error),
+							Effect.runSync(
+								Effect.logError("Application shutdown failed", error).pipe(
+									Effect.provide(diagnostics.layer),
+								),
 							);
 						};
 						void maintenance
@@ -726,10 +740,18 @@ if (!app.requestSingleInstanceLock()) {
 							)
 							.catch(reportFailure)
 							.then(async () => {
-								await background.dispose();
-								await diagnostics.close();
-								quitFinished = true;
-								app.quit();
+								try {
+									await background.dispose();
+								} catch (cause) {
+									reportFailure(cause);
+								} finally {
+									try {
+										await diagnostics.close();
+									} finally {
+										quitFinished = true;
+										app.quit();
+									}
+								}
 							});
 					});
 
