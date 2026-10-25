@@ -197,7 +197,7 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			await f.bridge.submit({
 				sessionId: session,
 				turnId: turn,
-				text: "hello",
+				text: "  hello\n",
 			});
 			const text: string[] = [];
 			await new Promise<void>((resolve, reject) => {
@@ -309,7 +309,7 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 				_tag: "Request",
 				id: "1",
 				tag: "chat.list",
-				payload: {},
+				payload: undefined,
 				headers: [["authorization", "unsafe"]],
 				traceId: "spoof",
 				owner: "spoof",
@@ -318,7 +318,7 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			_tag: "Request",
 			id: "1",
 			tag: "chat.list",
-			payload: {},
+			payload: undefined,
 			headers: [],
 		});
 		expect(
@@ -330,6 +330,47 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 				headers: [],
 			}),
 		).toBeUndefined();
+	});
+	it("rejects oversized method inputs and headers before RPC dispatch", () => {
+		const base = {
+			_tag: "Request",
+			id: "1",
+			tag: "chat.submit",
+			headers: [],
+			payload: { sessionId: sessionId(), turnId: turnId(), text: "valid" },
+		};
+		expect(decodeChatRequest(base)).toBeDefined();
+		expect(
+			decodeChatRequest({
+				...base,
+				payload: { ...base.payload, text: "x".repeat(32769) },
+			}),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({ ...base, payload: { ...base.payload, text: "   " } }),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({
+				...base,
+				payload: { ...base.payload, secret: "unsupported" },
+			}),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({
+				...base,
+				headers: Array.from({ length: 17 }, () => ["key", "value"]),
+			}),
+		).toBeUndefined();
+		expect(
+			decodeChatRequest({ ...base, headers: [["key", "x".repeat(1025)]] }),
+		).toBeUndefined();
+		const pasted = "  paragraph\n";
+		expect(
+			decodeChatRequest({
+				...base,
+				payload: { ...base.payload, text: pasted },
+			}),
+		).toMatchObject({ payload: { text: pasted } });
 	});
 	it("routes finalized voice through the real SDK and cancels without reentering its lock", async () => {
 		const f = await fixture();
