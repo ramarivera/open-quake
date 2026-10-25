@@ -1,4 +1,5 @@
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
@@ -47,7 +48,7 @@ const fixture = (actions: readonly string[] = ["control+a", "control+b"]) => {
 		activeByDevice: { device: { profileId: "p", pageId: "one" } },
 	};
 };
-const setup = (actions?: readonly string[]) =>
+const setup = (actions?: readonly string[], unsupported = false) =>
 	Effect.gen(function* () {
 		const fake = yield* makeFakeHardwareTransport({ serial: "device" });
 		const device = yield* QuakeDevice.pipe(
@@ -65,7 +66,22 @@ const setup = (actions?: readonly string[]) =>
 		});
 		let currentHardware: typeof hardware | undefined = hardware;
 		let serial = "device";
-		let envelope: unknown = fixture(actions);
+		const initial = fixture(actions);
+		let envelope: unknown = unsupported
+			? {
+					...initial,
+					profiles: initial.profiles.map((profile) => ({
+						...profile,
+						pages: profile.pages.map((page) => ({
+							...page,
+							keys: page.keys.map((key) => ({
+								...key,
+								compatibility: { unsupported: true },
+							})),
+						})),
+					})),
+				}
+			: initial;
 		let beforeRead = () => {};
 		const adapter = desktopKnobAdapters(
 			"/unused",
@@ -110,6 +126,37 @@ const run = <A, E>(
 ) => Effect.runPromise(Effect.scoped(program));
 
 describe("focused knob hotkeys", () => {
+	it("executes right_super in both directions through the real device encoder", async () => {
+		await run(
+			Effect.gen(function* () {
+				const h = yield* setup(["right_super+a", "right_super+b"]);
+				yield* h.turn(-1);
+				yield* h.turn(1);
+				expect(
+					(yield* h.fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+				).toEqual([
+					[1, 16, 1, 128, 4],
+					[1, 16, 0, 128, 4],
+					[1, 16, 1, 128, 5],
+					[1, 16, 0, 128, 5],
+				]);
+			}),
+		);
+	});
+	it("rejects quarantined imported keys before either direction can send HID", async () => {
+		await run(
+			Effect.gen(function* () {
+				const h = yield* setup(undefined, true);
+				for (const delta of [-1, 1] as const) {
+					const result = yield* Effect.either(h.turn(delta));
+					expect(Either.isLeft(result) && result.left.code).toBe(
+						"QUAKE.KNOB.CAPABILITY_UNAVAILABLE",
+					);
+				}
+				expect(yield* h.fake.writes).toHaveLength(0);
+			}),
+		);
+	});
 	it("drives both detents from KnobModel through the committed profile to press/release HID bytes", async () => {
 		await run(
 			Effect.gen(function* () {
@@ -312,13 +359,7 @@ describe("focused knob hotkeys", () => {
 });
 
 it("persists the failed knob/keyboard/HID spans with one trace and scrubbed original causes", async () => {
-	const directory = await mkdtemp(
-		join(
-			process.env.TMPDIR ??
-				"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/tmp",
-			"knob-diagnostics-",
-		),
-	);
+	const directory = await mkdtemp(join(tmpdir(), "knob-diagnostics-"));
 	const diagnostics = createDesktopDiagnostics({ directory });
 	try {
 		await run(

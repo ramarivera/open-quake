@@ -15,6 +15,7 @@ import {
 	Profile,
 	type ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { isUnsupportedProfileKey } from "../../../../../packages/device/src/profiles/profile-function-contracts.js";
 import { visibleProfiles } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 
 interface FocusedHotkeyBindings {
@@ -68,6 +69,7 @@ export const focusedHotkey = (
 			if (
 				key.kind !== "hotkey" ||
 				!committed?.config.display ||
+				isUnsupportedProfileKey(committed) ||
 				committed.config.type !== "hotkey" ||
 				!committed.config.supportKnob
 			)
