@@ -12,6 +12,7 @@ import {
 	createEmptyProfileKey,
 	ProfileKey,
 } from "../../../../packages/device/src/profiles/profile-contracts";
+import { LOCALE_REQUEST } from "../shared/locale";
 import { registerAgentHttp } from "./agent-http";
 import { registerIntegrations } from "./integrations";
 import { registerKnob } from "./knob";
@@ -83,6 +84,7 @@ const electron = vi.hoisted(() => {
 			whenReady: vi.fn(() => Promise.resolve()),
 			getPath: vi.fn(() => join(tmpdir(), "open-quake-window-test")),
 			getVersion: () => "0.0.0",
+			getLocale: vi.fn(() => "en-US"),
 			on: vi.fn<
 				(
 					event: string,
@@ -325,6 +327,11 @@ describe("desktop window lifecycle", () => {
 
 	it("starts both surfaces on the primary display without panel hardware", async () => {
 		const { panel, management } = windows();
+		expect(electron.app.getLocale).toHaveBeenCalledOnce();
+		expect(electron.ipcMain.handle).toHaveBeenCalledWith(
+			LOCALE_REQUEST,
+			expect.any(Function),
+		);
 		expect(registerAgentHttp).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerAgentHttp).mock.calls[0]?.[0].management()).toBe(
 			management,
