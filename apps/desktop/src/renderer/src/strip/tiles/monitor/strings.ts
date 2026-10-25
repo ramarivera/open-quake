@@ -81,7 +81,7 @@ export const labels = {
 export const settingsLabels = {
 	styleSection: "Panel style",
 	style: {
-		glass: "Liquid Glass",
+		glass: "Standard",
 		cyber: "Cyberpunk",
 		anime: "Anime",
 		tactical: "Game Dark",

@@ -431,23 +431,31 @@
 	}
 }
 .weather-settings {
-	margin-top: 24px;
+	margin-top: var(--oq-space-6, 24px);
+}
+.weather-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--oq-space-2, 8px);
+	min-width: 0;
 }
 .weather-settings input[type="text"],
 .weather-settings input[type="url"] {
 	width: min(100%, 400px);
 }
 .weather-verification {
-	font-size: 13px;
-	color: var(--text-secondary);
-	margin: 8px 0 0;
+	margin: 0;
+	color: var(--oq-text-muted, var(--quake-muted));
+	font-size: var(--mc-font-meta, 12.5px);
 }
 .weather-verification[data-error="true"] {
-	color: var(--status-warning, #b57435);
+	color: var(--oq-danger, var(--quake-warning));
 }
 .weather-consent {
-	font-size: 13px;
-	color: var(--text-secondary);
 	max-width: 58ch;
+	margin: 0;
+	color: var(--oq-text-muted, var(--quake-muted));
+	font-size: var(--mc-font-meta, 12.5px);
 	line-height: 1.5;
 }

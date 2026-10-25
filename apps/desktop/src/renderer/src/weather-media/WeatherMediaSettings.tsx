@@ -93,9 +93,10 @@ function SettingsFields({
 					/>
 				</Row>
 				<Row label={strings.weatherCity}>
-					<div>
+					<div className="weather-field">
 						<input
 							type="text"
+							className="text-field"
 							value={city}
 							aria-label={strings.weatherCity}
 							aria-describedby={`${id}-city-status`}
@@ -124,6 +125,7 @@ function SettingsFields({
 				</Row>
 				<Row label={strings.weatherUnit}>
 					<select
+						className="text-field"
 						aria-label={strings.weatherUnit}
 						value={settings.unit}
 						onChange={(event) => {
@@ -136,7 +138,7 @@ function SettingsFields({
 					</select>
 				</Row>
 				<Row label="Find my city from my IP address">
-					<div>
+					<div className="weather-field">
 						<input
 							type="checkbox"
 							checked={settings.ipLookup}
@@ -154,9 +156,10 @@ function SettingsFields({
 					</div>
 				</Row>
 				<Row label={strings.weatherUrl}>
-					<div>
+					<div className="weather-field">
 						<input
 							type="url"
+							className="text-field"
 							value={url}
 							aria-label={strings.weatherUrl}
 							aria-invalid={!Schema.is(ForecastUrl)(url)}
@@ -174,6 +177,8 @@ function SettingsFields({
 						) : null}
 						<button
 							type="button"
+							className="button"
+							data-variant="quiet"
 							onClick={() => {
 								setUrl("");
 								save({ forecastUrl: "" });
