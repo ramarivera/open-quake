@@ -1,4 +1,3 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
@@ -6,7 +5,10 @@ import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
-import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
+import {
+	builtinProfiles,
+	translateProfile,
+} from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	encodeProfileEnvelope,
 	Profile,
@@ -16,6 +18,7 @@ import {
 import {
 	ProfileDeliveryFailed,
 	ProfileNotFound,
+	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import type {
@@ -56,12 +59,10 @@ import {
 	launchProfileCommand,
 	profileApplicationDialog,
 } from "./native-actions";
-import {
-	makeProfileController,
-	profileThumbnailKey,
-} from "./profile-controller";
+import { makeProfileController } from "./profile-controller";
 import { registerProfiles as registerProfileSnapshots } from "./profile-ipc";
 import { profileRequestAllowed } from "./profile-permissions";
+import { createProfileThumbnailStore } from "./profile-thumbnails";
 export function registerProfiles(
 	management: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
@@ -167,28 +168,21 @@ export function registerProfiles(
 		panel,
 	);
 	const snapshots = registerProfileSnapshots(runtime, renderer, false);
+	const localeListeners = new Set<() => void>();
 	const captureWindows = new Set<BrowserWindow>();
 	const captureProfiles = new Map<Electron.WebContents, Profile>();
-	const thumbnailPath = (profile: Profile, locale: ProfileLocale): string =>
-		join(root, "thumbnails", `${profileThumbnailKey(profile, locale)}.png`);
-	const cachedThumbnail = async (
-		profile: Profile,
-		locale: ProfileLocale,
-	): Promise<Option.Option<string>> => {
-		try {
-			return Option.some(
-				`data:image/png;base64,${(await readFile(thumbnailPath(profile, locale))).toString("base64")}`,
-			);
-		} catch (cause) {
-			if (cause instanceof Error && "code" in cause && cause.code === "ENOENT")
-				return Option.none();
-			throw cause;
-		}
-	};
+	const thumbnails = createProfileThumbnailStore(root);
+	const thumbnailLock = Effect.unsafeMakeSemaphore(1);
+	const cachedThumbnail = thumbnails.read;
 	const capture = async (
 		profile: Profile,
 		locale: ProfileLocale,
+		signal?: AbortSignal,
 	): Promise<string> => {
+		signal = signal
+			? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+			: AbortSignal.timeout(10000);
+		signal.throwIfAborted();
 		if (disposed) throw new Error("Profile manager disposed");
 		const window = new BrowserWindow({
 			show: false,
@@ -202,6 +196,10 @@ export function registerProfiles(
 				nodeIntegration: false,
 			},
 		});
+		const abort = () => {
+			if (!window.isDestroyed()) window.destroy();
+		};
+		signal?.addEventListener("abort", abort, { once: true });
 		captureWindows.add(window);
 		captureProfiles.set(window.webContents, profile);
 		try {
@@ -210,6 +208,7 @@ export function registerProfiles(
 			url.searchParams.set("profile", profile.id);
 			url.searchParams.set("locale", locale);
 			await window.loadURL(url.href);
+			signal.throwIfAborted();
 			await window.webContents.executeJavaScript(
 				`new Promise((resolve,reject)=>{const check=()=>{const preview=document.querySelector("[data-profile-ready]"),stage=preview?.querySelector(".strip-viewport-stage");const emojis=Array.from(preview?.querySelectorAll("[data-emoji-asset-state]")??[]);const emojiReady=emojis.length===${profile.pages[0].keys.filter((key) => key.config.type === "emoji" && key.config.display).length}&&emojis.every(el=>el.dataset.emojiAssetState==="empty"||(el.dataset.emojiAssetState==="ready"&&Array.from(el.querySelectorAll("img")).some(img=>img.complete&&img.naturalWidth>0)));if(preview&&stage&&emojiReady&&(!${profile.pages.some((page) => page.keys.some((key) => key.config.type === "dkDesktopClock"))}||preview.querySelector(".oq-clock"))&&Math.abs(stage.getBoundingClientRect().width-Math.min(preview.clientWidth,preview.clientHeight*4))<1){document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return;}setTimeout(check,20);};check();setTimeout(()=>reject(new Error("Thumbnail generation timed out")),5000);})`,
 			);
@@ -217,10 +216,10 @@ export function registerProfiles(
 			if (image.isEmpty())
 				throw ProfileThumbnailUnsupported.fromCause(undefined);
 			const png = image.toPNG();
-			await mkdir(join(root, "thumbnails"), { recursive: true });
-			await writeFile(thumbnailPath(profile, locale), png, { mode: 0o600 });
-			return image.toDataURL();
+			signal?.throwIfAborted();
+			return await thumbnails.write(profile, locale, png);
 		} finally {
+			signal?.removeEventListener("abort", abort);
 			captureProfiles.delete(window.webContents);
 			captureWindows.delete(window);
 			if (!window.isDestroyed()) window.destroy();
@@ -232,6 +231,9 @@ export function registerProfiles(
 	const initialize = Effect.gen(function* () {
 		yield* (yield* ProfileManager).install(platform);
 		return yield* makeProfileController({
+			localeChanged: () => {
+				for (const listener of localeListeners) listener();
+			},
 			installedApps: () => {
 				installed ??=
 					process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
@@ -260,7 +262,15 @@ export function registerProfiles(
 					? Option.some(await canonicalProfileAppPath(platform, path))
 					: Option.none();
 			},
-			capture,
+			capture: (profile, locale) =>
+				runtime.runPromise(
+					thumbnailLock.withPermits(1)(
+						Effect.tryPromise({
+							try: (signal) => capture(profile, locale, signal),
+							catch: (cause) => ProfileThumbnailFailed.fromCause(cause),
+						}),
+					),
+				),
 			cachedThumbnail,
 			publish: (view) => broadcast(PROFILE_SNAPSHOT, view),
 			progress: (progress) => broadcast(PROFILE_PROGRESS, progress),
@@ -357,6 +367,47 @@ export function registerProfiles(
 		);
 	return {
 		runtime,
+		/** The profile controller owns this locale, initially en until a non-preview read. */
+		currentLocale: (): ProfileLocale => initialized?.currentLocale() ?? "en",
+		onLocaleChanged: (listener: () => void): (() => void) => {
+			localeListeners.add(listener);
+			return () => {
+				localeListeners.delete(listener);
+			};
+		},
+		/** Shared cache/capture owner. Captures stay hidden, serial and abortable. */
+		thumbnail: (
+			id: string,
+			locale: ProfileLocale,
+			signal: AbortSignal,
+		): Promise<string> => {
+			const operation = runtime.runPromise(
+				thumbnailLock.withPermits(1)(
+					Effect.gen(function* () {
+						yield* controller;
+						const envelope = yield* ProfileManager.read();
+						const source = envelope.profiles.find((p) => p.id === id);
+						if (!source)
+							return yield* Effect.fail(ProfileNotFound.fromCause(undefined));
+						const profile = translateProfile(source, locale);
+						return yield* Effect.tryPromise({
+							try: async () => {
+								const cached = await cachedThumbnail(profile, locale);
+								return Option.isSome(cached)
+									? cached.value
+									: capture(profile, locale, signal);
+							},
+							catch: (cause) => ProfileThumbnailFailed.fromCause(cause),
+						});
+					}),
+				),
+				{ signal },
+			);
+			pending.add(operation);
+			return operation.finally(() => {
+				pending.delete(operation);
+			});
+		},
 		thumbnailProfile: (sender: Electron.WebContents): Profile | undefined =>
 			captureProfiles.get(sender),
 		/** Shared knob mutations use the manager's visibility, anchor and delivery rules. */
@@ -401,6 +452,7 @@ export function registerProfiles(
 			if (disposed) return;
 			disposed = true;
 			ipcMain.removeHandler(PROFILE_REQUEST);
+			localeListeners.clear();
 			captureProfiles.clear();
 			for (const window of captureWindows) window.destroy();
 			await Promise.allSettled([...pending]);

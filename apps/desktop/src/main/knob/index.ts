@@ -22,6 +22,7 @@ import {
 	desktopKnobAdapters,
 } from "./desktop-adapters";
 import { canRequestKnob } from "./permissions";
+import { observeVolume } from "./volume-observer";
 
 export function makeKnobRuntime(
 	ports: KnobModelPort,
@@ -45,18 +46,33 @@ export function registerKnobRuntime(
 	windows: () => readonly BrowserWindow[],
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+	observation?: {
+		readonly readVolume: KnobModelPort["readVolume"];
+		readonly contextVersion?: () => string;
+	},
 ) {
 	let initialized: Promise<void> | undefined;
 	let stream: Fiber.RuntimeFiber<void> | undefined;
 	let disposed = false;
+	let connected = true;
+	let observer: Fiber.RuntimeFiber<never> | undefined;
+	let version = "";
 	let pending = Promise.resolve();
 	const lifetime = new AbortController();
 	const run = <A, E>(effect: Effect.Effect<A, E, KnobModel>): Promise<A> =>
 		runtime.runPromise(effect, { signal: lifetime.signal });
 	const initialize = (): Promise<void> => {
-		initialized ??= run(load.pipe(Effect.flatMap(KnobModel.configure))).then(
-			() => {
-				if (!disposed)
+		initialized ??= run(load.pipe(Effect.flatMap(KnobModel.configure)))
+			.then(() => {
+				if (!disposed) {
+					version = observation?.contextVersion?.() ?? "";
+					if (observation)
+						observer = runtime.runFork(
+							observeVolume(
+								observation.readVolume,
+								() => !disposed && connected,
+							),
+						);
 					stream = runtime.runFork(
 						Effect.gen(function* () {
 							const model = yield* KnobModel;
@@ -69,8 +85,12 @@ export function registerKnobRuntime(
 							);
 						}),
 					);
-			},
-		);
+				}
+			})
+			.catch((cause) => {
+				initialized = undefined;
+				throw cause;
+			});
 		return initialized;
 	};
 	ipcMain.handle(
@@ -117,6 +137,7 @@ export function registerKnobRuntime(
 	);
 	return {
 		onDevice(event: QuakeEvent): void {
+			if (event.kind === "status") connected = event.state === "connected";
 			if (
 				disposed ||
 				event.kind === "keepalive" ||
@@ -154,21 +175,38 @@ export function registerKnobRuntime(
 								yield* load.pipe(Effect.flatMap(KnobModel.configure));
 						}).pipe(
 							Effect.matchEffect({
-								onFailure: (error) => Effect.logWarning(error.code),
+								onFailure: (error) => Effect.logWarning(error),
 								onSuccess: () => Effect.void,
 							}),
 						),
 					);
 				})
 				.catch(() => {
-					initialized = undefined;
+					// runPromise diagnostics retain the failed exit; a dispatch failure must not restart owned observers.
 				});
 		},
 		async refresh(): Promise<void> {
 			if (disposed) return;
 			await initialize();
 			if (disposed) return;
-			await run(load.pipe(Effect.flatMap(KnobModel.synchronize)));
+			await run(
+				load.pipe(
+					Effect.flatMap((context) => {
+						const nextVersion = observation?.contextVersion?.() ?? "";
+						return (
+							nextVersion !== version
+								? KnobModel.configure(context)
+								: KnobModel.synchronize(context)
+						).pipe(
+							Effect.tap(() =>
+								Effect.sync(() => {
+									version = nextVersion;
+								}),
+							),
+						);
+					}),
+				),
+			);
 		},
 		async dispose(): Promise<void> {
 			disposed = true;
@@ -176,6 +214,7 @@ export function registerKnobRuntime(
 			// Interrupt registration-owned loads/dispatches before draining the queue.
 			lifetime.abort();
 			await pending;
+			if (observer) await runtime.runPromise(Fiber.interrupt(observer));
 			if (stream) await runtime.runPromise(Fiber.interrupt(stream));
 			await runtime.dispose();
 		},
@@ -194,5 +233,10 @@ export function registerKnob(
 		adapters.load,
 		panel,
 		windows,
+		undefined,
+		{
+			readVolume: adapters.ports.readVolume,
+			contextVersion: adapters.contextVersion,
+		},
 	);
 }

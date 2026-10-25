@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { Effect, Array as EffectArray, Option, Schema } from "effect";
+import { Effect, Array as EffectArray, Option } from "effect";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	encodeProfileEnvelope,
-	Profile,
+	type Profile,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileCommandFailed,
@@ -25,6 +25,7 @@ import type {
 } from "../../shared/profile-manager";
 
 export interface ProfileDesktopPort {
+	readonly localeChanged?: (locale: ProfileLocale) => void;
 	readonly installedApps?: () => Promise<
 		readonly {
 			readonly name: string;
@@ -47,20 +48,9 @@ export interface ProfileDesktopPort {
 	readonly publish: (view: ProfileView) => void;
 	readonly progress: (progress: ThumbnailProgress) => void;
 }
-/** Include content so recovered-catalog updates and edits cannot reuse stale captures. */
-export const profileThumbnailKey = (
-	profile: Profile,
-	locale: ProfileLocale,
-): string =>
-	createHash("sha256")
-		.update(
-			JSON.stringify([
-				"emoji-assets-v2",
-				locale,
-				Schema.encodeSync(Profile)(profile),
-			]),
-		)
-		.digest("hex");
+export { profileThumbnailKey } from "./profile-thumbnail-key";
+
+import { profileThumbnailKey } from "./profile-thumbnail-key";
 /** Main boundary supplies only native operations; all commands use repository transactions. */
 export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 	function* (port: ProfileDesktopPort) {
@@ -182,7 +172,10 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		): Effect.fn.Return<ProfileReply, ProfileDesktopError> {
 			switch (input.type) {
 				case "read":
-					if (!input.preview) locale = input.locale;
+					if (!input.preview && locale !== input.locale) {
+						locale = input.locale;
+						yield* Effect.sync(() => port.localeChanged?.(locale));
+					}
 					return { _tag: "success", view: yield* view(input.locale) };
 				case "manage": {
 					const changesSelection =
@@ -333,6 +326,12 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 			}
 			return { _tag: "success", view: yield* publish() };
 		});
-		return { request, view, publish, progress: () => progress };
+		return {
+			request,
+			view,
+			publish,
+			progress: () => progress,
+			currentLocale: (): ProfileLocale => locale,
+		};
 	},
 );

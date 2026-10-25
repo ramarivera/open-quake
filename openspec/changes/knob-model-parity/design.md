@@ -35,17 +35,34 @@ Schema selection command serializes under the profile repository mutex and
 publishes only after persistence, so knob commits reach both panel and preview.
 Committed-profile events synchronize page/revision changes without resetting a
 ring after its own commit. Selection failure preserves the published envelope.
-The default device identity remains desktop-preview until discovery supplies
-one. The raw storage adapter remains for isolated consumers.
+The adapter accepts a device-identity getter and reads the current serial's
+committed profile/page. The parent root must supply `connection.info.serialNumber`
+before enrollment and clear it on release; desktop-preview remains the isolated
+fallback. Selection retains the existing manager-owned `select` callback. No
+second profile runtime is introduced.
+
+Manager captures and knob reads share the existing content-and-locale thumbnail
+key under profiles/thumbnails. The canonical store bounds reads, validates with
+Electron, and publishes through atomic rename. The manager exposes one hidden,
+serialized, abortable capture entry point. Warming rejects late content/locale
+results; registration invalidates the model cache on any catalog-content or
+locale change, including inactive-profile edits at an unchanged revision. The
+parent supplies the thumbnail/locale bindings and refreshes on locale changes.
+
+Registration owns a read-only volume observer while the player is armed and
+connected. Sequential one-second sampling has a three-second read timeout and
+bounded native output. Session/disconnect/local-volume guards discard stale
+results before the existing ObservedVolume command and its 500 ms guard. No OS
+volume read or write ran in this backend implementation lane.
 
 The adapter provides native macOS volume and composes the current hardware
-session for typed screen luminance and AI_ERROR [[90,200]] feedback at Device
-Alert Volume. It reports unavailable for unqualified monitor brightness, hotkey
-and voice runtimes. Thumbnail capture and external volume
-observation producers remain owning-lane work. Ready local PNGs require native
-decoding. Picker touch now uses the shared normalized strip overlay route;
-physical focus/volume acquisition remains uncomposed. See the
-desktop knob README for the exact handoff and mock verification.
+session for typed screen luminance and error-tone feedback. Focused monitor
+brightness and hotkeys still need qualified owners. Voice delegation is present
+in the current root, but live speech and physical hold/release acceptance remain
+open. Picker touch uses the shared normalized strip overlay route; physical
+focus/volume acquisition outside the picker remains uncomposed. Root integration
+and physical acceptance are parent-owned. See the desktop knob README for exact
+bindings and verification limits.
 
 Volume desired state is synchronous per detent; scoped native writes drain the
 latest value without blocking input. Cached thumbnails survive a same-catalog

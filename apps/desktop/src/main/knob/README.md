@@ -6,33 +6,81 @@ actual panel window's top-level app document may mutate state; management can
 read. Renderer validates replies and snapshots without native causes.
 Shutdown interrupts streams, timers, pending writes and owned voice work.
 
-Production shares the strip lane's `ProfileService` runtime and one serialized
-repository for `profiles-v1.json`. `knobProfileBinding` reads committed profiles
-and selects through `ProfileService.selectProfile`; successful writes publish
-the new selection to both panel and management preview. The repository rejects
-unknown profiles/pages and preserves the committed selection on write failure.
-Committed profile notifications call `KnobModel.synchronize`, which resets changed
-page/revision state while preserving a selector after its own commit.
+Production shares the profile manager's runtime and serialized repository for
+`profiles-v1.json`. In the application root, `knobProfileBinding` delegates to
+`registerProfiles(...).select`. That method uses the manager's visibility,
+anchor and connected-device delivery rules, then reads the committed envelope.
+It is the selection owner. The binding's default `ProfileService.selectProfile`
+callback remains for isolated consumers. Promise failures retain the underlying
+catalog error rather than only Effect's FiberFailure wrapper.
 
-The current serial is `desktop-preview`; device discovery still needs to supply
-a device identity. A raw-storage adapter remains available for isolated consumers.
-Native macOS volume supports player mode and focused volume tiles. No native
-volume write runs in tests or smoke. Focused screen luminance uses the current
-hardware session's `stepBrightness`, which sends typed `Luminance` commands in
-26/255 steps with minimum 25. Monitor brightness, hotkey and voice ports report
-unavailable until their owners supply `DesktopKnobBindings`. Other platforms
-need a volume binding. Physical failures publish the catalog code through the
-model notice stream and render a warning. The current hardware session plays
-its `error` tone, AI_ERROR [[90,200]], at Device Alert Volume; disabled or zero
-volume remains silent. Alert failures cannot overwrite or recursively alert the
-original failure.
+The parent composition root supplies these `DesktopKnobBindings`:
 
-Thumbnail capture belongs to profile-manager. This consumer reads only
-`<userData>/profile-thumbnails/<sha256(profileId)>.png`, limits the file to 1 MB,
-checks its signature and requires Electron's image decoder to accept it. It
-publishes data URLs, never caller-supplied paths or remote URLs. Producers must
-invalidate thumbnails after edits and publish atomically. The default seeded
-profile has no thumbnail and therefore uses the FunctionWheel.
+```ts
+{
+  deviceId: () => activeSerial ?? "desktop-preview",
+  locale: profiles.currentLocale,
+  profiles: knobProfileBinding(profiles.runtime, profiles.select),
+  thumbnail: profiles.thumbnail,
+  hardware: () => bus?.hardware?.(),
+  voice: voice.knobVoice,
+}
+```
+
+`activeSerial` comes from the device connection's `info.serialNumber`. Set it
+before profile enrollment and connected-event initialization, and clear it when
+that connection is released. Do not derive it from a profile's display name or
+create another profile service. Context reads use that device's committed
+profile and page. An isolated fallback writes only that device's selection;
+late selections for a replaced device fail with the stale-session catalog code.
+Call `knob.refresh()` after committed profile changes. Register
+`profiles.onLocaleChanged(() => { void knob.refresh().catch(reportFailure); })`
+and dispose that subscription with the root. `profiles.currentLocale()` reads
+the existing profile controller, initially en until its first non-preview read.
+Preview reads cannot change it. This is the profile-manager locale, not another
+settings store. If the root needs global settings before any manager read,
+prime the manager through its existing non-preview read with the canonical
+SettingsService locale. A
+content-and-locale fingerprint invalidates even an inactive profile's thumbnail
+or an edit that retains the same revision. Identical publications preserve the
+current selector and ready cache. Root wiring is parent-owned and remains an
+integration prerequisite for these optional bindings.
+
+Native macOS volume supports player mode and focused volume tiles. Registration
+owns one sequential observer, polling at one-second intervals only while player
+volume is armed and connected. Each read is bounded to three seconds and 4 KiB
+of process output, and interruption kills its child. Observations never write
+volume. They dispatch the existing `ObservedVolume` command, preserve the
+500 ms desired-value guard, and discard reads crossing a local volume change,
+session replacement, disarm or disconnect. Disposal interrupts the observer.
+Other platforms need a volume binding. Tests use injected reads and writes;
+no actual OS volume read or write was run for this backend lane.
+
+Focused screen luminance uses the current hardware session's `stepBrightness`,
+which sends typed `Luminance` commands in 26/255 steps with minimum 25. Monitor
+brightness and hotkey actions still need qualified bindings. Voice delegates to
+the supplied owner; source composition does not prove live microphone, speech
+or physical hold/release acceptance. Unavailable actions retain catalog notices
+and hardware error-tone behavior. Physical focus/volume acquisition outside the
+picker remains uncomposed.
+
+Profile manager captures and knob reads now share
+`<userData>/profiles/thumbnails/<content-and-locale-sha256>.png`. The existing
+thumbnail key includes the encoded translated profile, locale and rendering
+version. The old `profile-thumbnails/<sha256(id)>.png` directory is unused.
+The canonical store limits reads to 1 MB, validates PNG signatures and native
+decoding, and publishes private temporary files through atomic rename. Failed
+replacements preserve the prior valid capture. Content-addressed invalidation
+prevents old revisions/locales from being read, without deleting unrelated files.
+
+On a cold detent the model uses its ring immediately and warms asynchronously.
+The knob asks the same profile manager for a hidden, serialized, abortable
+capture when its canonical cache is absent. Capture is bounded to ten seconds;
+no second manager runtime is created. Warming rereads only canonical files,
+rechecks current profile content and locale before publishing, and leaves
+missing/corrupt entries out of the picker without poisoning valid entries.
+Errors retain their original causes privately and diagnostics serialize only
+catalog/source identities. No external thumbnail URL is accepted.
 
 Renderer overlays live entirely in `strip/overlays/knob/` and mount inside the
 existing strip canvas. `KnobDial` and `VolumeCapsule` are exported for the strip
@@ -60,7 +108,7 @@ with mock action/voice/volume ports. It verifies native pointer paging/dismissal
 rotation=90 pointer and physical-touch paging/card selection without grid
 leakage, exclusive selector rendering, physical-failure warning publication,
 panel identity permissions, press arbitration and focus/volume dispatch, and
-checks the production thumbnail reader against valid and truncated PNGs using
+checks the canonical thumbnail writer/reader against valid and truncated PNGs using
 Electron decoding. Captures include ring, picker, page 2, volume and tile dial.
 It does not qualify QUAKE direction, physical touch coordinates, monitor/panel
 brightness, OS hotkeys, live voice or actual volume drivers.
@@ -74,3 +122,14 @@ missing FunctionWheel script in the 0.4.95 map. Its client template removes the
 old halo layer; the strip retains the cyan arc and directional glow. The 200 ms
 angular nudge changes the client label's horizontal arc position while its
 vertical offsets and side rotations stay fixed.
+
+## Backend lane verification
+
+Focused tests cover the production manager capture entry point with mocked
+Electron operations, canonical filesystem IO, independent device selections,
+cause retention, correlated diagnostic spans, observation timing and cleanup.
+A windowless Electron fixture exercised the actual native decoder with the
+canonical writer and knob reader. The current backend lane did not rerun the
+full renderer smoke described above and does not qualify real hardware, native
+volume behavior, focused monitor/hotkey actions or live voice. The aggregate
+OpenSpec task 5.1 and bead `open-quake-lih.4.2` remain open.
