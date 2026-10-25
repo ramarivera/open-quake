@@ -853,6 +853,124 @@ describe("failed durable finalization", () => {
 });
 
 describe("bounded provider output", () => {
+	for (const usage of ["absent", "estimated"] as const) {
+		it.effect(
+			`keeps long replies with ${usage} usage completed and eligible for context`,
+			() => {
+				const answer = "界".repeat(800);
+				const requests: InferenceRequest[] = [];
+				return Effect.gen(function* () {
+					const service = yield* initialize;
+					const turn = yield* service.submit(
+						"a",
+						input(1, { outputReserveTokens: 1024 }),
+					);
+					const actual = yield* chunks(turn.events);
+					expect(actual.at(-1)).toMatchObject({
+						type: "end",
+						outcome: "completed",
+						usage: { provenance: "estimated", outputTokens: 2400 },
+					});
+					expect((yield* service.history("a", sid)).turns[0]?.status).toBe(
+						"completed",
+					);
+					yield* chunks((yield* service.submit("a", input(2))).events);
+					expect(requests[1]?.messages).toContainEqual({
+						role: "assistant",
+						content: [{ _tag: "text", text: answer }],
+					});
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							open: (value) => {
+								requests.push(value.request);
+								return Effect.succeed(
+									Stream.fromIterable([
+										text(answer),
+										...(usage === "estimated"
+											? [
+													{
+														_tag: "usage" as const,
+														usage: {
+															inputTokens: 12,
+															outputTokens: 2400,
+															provenance: "estimated" as const,
+														},
+													},
+												]
+											: []),
+										complete,
+									]),
+								);
+							},
+						}),
+					),
+				);
+			},
+		);
+	}
+	it.effect(
+		"coalesces frequent deltas by time and bytes while preserving live snapshots and terminal durability",
+		() => {
+			const store = memory();
+			const queue = Effect.runSync(Queue.unbounded<NormalizedEvent>());
+			return Effect.gen(function* () {
+				const service = yield* initialize;
+				const turn = yield* service.submit("a", input());
+				const received: ChatChunk[] = [];
+				const first = yield* Deferred.make<void>();
+				const burst = yield* Deferred.make<void>();
+				const timed = yield* Deferred.make<void>();
+				const sized = yield* Deferred.make<void>();
+				const consumer = yield* Stream.runForEach(turn.events, (chunk) =>
+					Effect.gen(function* () {
+						received.push(chunk);
+						if (chunk.seq === 0) yield* Deferred.succeed(first, undefined);
+						if (chunk.seq === 100) yield* Deferred.succeed(burst, undefined);
+						if (chunk.seq === 101) yield* Deferred.succeed(timed, undefined);
+						if (chunk.seq === 102) yield* Deferred.succeed(sized, undefined);
+					}),
+				).pipe(Effect.fork);
+				yield* Queue.offer(queue, text("x"));
+				yield* Deferred.await(first);
+				expect(store.writes).toHaveLength(2);
+				yield* Queue.offerAll(
+					queue,
+					Array.from({ length: 100 }, () => text("x")),
+				);
+				yield* Deferred.await(burst);
+				expect(store.writes).toHaveLength(2);
+				expect((yield* service.snapshot("a", sid, tid(1))).text).toHaveLength(
+					101,
+				);
+				yield* TestClock.adjust(1000);
+				yield* Queue.offer(queue, text("y"));
+				yield* Deferred.await(timed);
+				expect(store.writes).toHaveLength(3);
+				yield* Queue.offer(queue, text("z".repeat(4096)));
+				yield* Deferred.await(sized);
+				expect(store.writes).toHaveLength(4);
+				yield* Queue.offerAll(queue, [text("tail"), complete]);
+				yield* Fiber.join(consumer);
+				expect(store.writes).toHaveLength(5);
+				expect(store.writes.at(-1)?.sessions[0]?.turns[0]).toMatchObject({
+					status: "completed",
+					snapshot: { text: `${"x".repeat(101)}y${"z".repeat(4096)}tail` },
+				});
+				expect(received.at(-1)).toMatchObject({
+					type: "end",
+					outcome: "completed",
+				});
+			}).pipe(
+				Effect.provide(
+					testLayer(
+						{ open: () => Effect.succeed(Stream.fromQueue(queue)) },
+						store.layer,
+					),
+				),
+			);
+		},
+	);
 	it.effect(
 		"keeps reported usage distinct when a provider exceeds the output reserve",
 		() =>

@@ -21,6 +21,7 @@ export interface ChatView {
 	readonly pending: boolean;
 	/** Stop was requested; the turn stays locked until its terminal outcome arrives. */
 	readonly cancelling: boolean;
+	readonly clearing: boolean;
 	readonly loading: boolean;
 	readonly error: string;
 }
@@ -41,6 +42,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 		input: "",
 		pending: false,
 		cancelling: false,
+		clearing: false,
 		loading: true,
 		error: "",
 	};
@@ -179,7 +181,14 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 		},
 		refresh,
 		submit: async (text: string) => {
-			if (!bridge || disposed || state.pending || !text.trim()) return;
+			if (
+				!bridge ||
+				disposed ||
+				state.pending ||
+				state.clearing ||
+				!text.trim()
+			)
+				return;
 			chosen = true;
 			cancelOnAccept = false;
 			accepted = false;
@@ -209,7 +218,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			}
 		},
 		select: async (sessionId?: SessionId) => {
-			if (state.pending || disposed) return;
+			if (state.pending || state.clearing || disposed) return;
 			chosen = true;
 			off?.();
 			subscriptionEpoch++;
@@ -236,7 +245,15 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			await requestCancel(state.sessionId, state.turn.turnId);
 		},
 		clear: async () => {
-			if (!bridge || !state.current) return;
+			if (
+				!bridge ||
+				!state.current ||
+				state.pending ||
+				state.clearing ||
+				disposed
+			)
+				return;
+			set({ clearing: true });
 			try {
 				await bridge.clear(state.sessionId);
 				off?.();
@@ -253,6 +270,8 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				await refresh();
 			} catch (cause) {
 				fail(cause);
+			} finally {
+				set({ clearing: false });
 			}
 		},
 		rename: async (title: string) => {

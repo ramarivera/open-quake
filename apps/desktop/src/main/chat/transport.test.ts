@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
 	Effect,
 	Exit,
+	Fiber,
 	Layer,
 	ManagedRuntime,
 	Redacted,
@@ -26,7 +27,7 @@ import {
 import { CHAT_DISCONNECT, CHAT_EVENT, CHAT_REQUEST } from "../../shared/chat";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { createModelCredentials } from "./credentials";
-import { createDirectChat } from "./host";
+import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
 import { decodeChatRequest, makeDesktopChatConnection } from "./rpc-server";
 import { createDirectChatVoice } from "./voice";
@@ -59,22 +60,24 @@ function fixtureServer() {
 				created: 1,
 				choices: [{ index: 0, delta: { content }, finish_reason }],
 			});
-		res.write(part("fixture answer"));
+		const unreported = body.messages.at(-1)?.content === "long without usage";
+		res.write(part(unreported ? "界".repeat(800) : "fixture answer"));
 		if (body.messages.at(-1)?.content === "block") {
 			res.on("close", () => disconnected?.());
 			release = () => res.end();
 			return;
 		}
 		res.write(part("", "stop"));
-		res.write(
-			packet({
-				id: "fixture",
-				model: body.model,
-				created: 1,
-				choices: [],
-				usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 },
-			}),
-		);
+		if (!unreported)
+			res.write(
+				packet({
+					id: "fixture",
+					model: body.model,
+					created: 1,
+					choices: [],
+					usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 },
+				}),
+			);
 		res.end("data: [DONE]\n\n");
 	});
 	return { server, calls, closed, release: () => release?.() };
@@ -172,7 +175,107 @@ async function fixture() {
 	};
 }
 
+function voiceFixture(
+	host: ReturnType<typeof createDirectChat>,
+	publish: (event: VoiceSurfaceEvent) => Effect.Effect<void>,
+) {
+	let direct:
+		| Effect.Effect.Success<ReturnType<typeof createDirectChatVoice>>
+		| undefined;
+	const fallback = GridVoiceRuntime.of({
+		select: () => Effect.void,
+		startCapture: () => Effect.void,
+		releaseCapture: () => Effect.void,
+		cancelCapture: () => Effect.void,
+		cancelFlow: () => Effect.void,
+		sendText: () => Effect.die("old path"),
+	});
+	const voice = ManagedRuntime.make(
+		Layer.scoped(
+			GridVoiceRuntime,
+			Effect.gen(function* () {
+				direct = yield* createDirectChatVoice(host, fallback);
+				return direct.runtime;
+			}),
+		).pipe(
+			Layer.provideMerge(
+				VoiceSurface.Default.pipe(
+					Layer.provide(
+						Layer.mergeAll(
+							Layer.succeed(VoiceSurfacePublisher, { publish }),
+							Layer.succeed(VoiceTonePort, { play: () => Effect.void }),
+						),
+					),
+				),
+			),
+		),
+	);
+	return {
+		voice,
+		send: (
+			request: Parameters<NonNullable<typeof direct>["sendTranscript"]>[0],
+		) =>
+			Effect.suspend(() =>
+				direct ? direct.sendTranscript(request) : Effect.die("missing runtime"),
+			),
+	};
+}
+
 describe("desktop chat RPC through actual SDK and HTTP", () => {
+	it("keeps an SDK reply without provider usage completed beyond the byte estimate reserve", async () => {
+		const f = await fixture();
+		try {
+			const session = sessionId(),
+				turn = turnId();
+			await f.bridge.submit({
+				sessionId: session,
+				turnId: turn,
+				text: "long without usage",
+			});
+			await vi.waitFor(async () => {
+				const saved = await f.bridge.history(session);
+				expect(saved.turns[0]?.snapshot.terminal).toMatchObject({
+					_tag: "Some",
+					value: { outcome: "completed", usage: { provenance: "estimated" } },
+				});
+				expect(saved.turns[0]?.snapshot.text).toBe("界".repeat(800));
+			});
+			await f.bridge.submit({
+				sessionId: session,
+				turnId: turnId(),
+				text: "next",
+			});
+			await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(2));
+			expect(f.endpoint.calls[1]?.body.messages).toContainEqual({
+				role: "assistant",
+				content: "界".repeat(800),
+			});
+		} finally {
+			await f.close();
+		}
+	});
+	it("classifies only literal loopback hosts as local provider endpoints", () => {
+		for (const [hostname, expected] of [
+			["127.0.0.1", "loopback"],
+			["127.50.2.3", "loopback"],
+			["localhost", "loopback"],
+			["[::1]", "loopback"],
+			["127.example.com", "remote"],
+			["provider.example.com", "remote"],
+		] as const) {
+			expect(
+				profileFromModel({
+					id: "row",
+					role: "default",
+					provider: "generic",
+					model: "fixture",
+					baseUrl: `https://${hostname}/v1`,
+					maxTokens: 512,
+					credentialRef: "00000000-0000-4000-8000-000000000001",
+				}).endpointPolicy,
+			).toBe(expected);
+		}
+	});
 	it("keeps large saved output limits inside the conservative context window", async () => {
 		const f = await fixture();
 		try {
@@ -448,6 +551,127 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			await f.close();
 		}
 	}, 10000);
+	it("drains buffered voice chunks and the terminal stage before cancellation returns", async () => {
+		const f = await fixture();
+		const events: VoiceSurfaceEvent[] = [];
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let entered = false;
+		const v = voiceFixture(f.host, (event) =>
+			Effect.gen(function* () {
+				if (event._tag === "Chunk" && event.chunk.type === "answer") {
+					entered = true;
+					yield* Effect.promise(() => blocked);
+				}
+				events.push(event);
+			}),
+		);
+		try {
+			const runtime = await v.voice.runPromise(GridVoiceRuntime);
+			await v.voice.runPromise(
+				v.send({
+					serial: "fixture",
+					keyCode: "1,5",
+					agentId: "main",
+					message: "block",
+				}),
+			);
+			await vi.waitFor(() => expect(entered).toBe(true));
+			let finished = false;
+			const cancelling = v.voice
+				.runPromise(runtime.cancelFlow("fixture", "1,5"))
+				.then(() => {
+					finished = true;
+				});
+			await f.endpoint.closed;
+			expect(finished).toBe(false);
+			release();
+			await cancelling;
+			expect(
+				events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toHaveLength(1);
+			expect(
+				events.filter((e) => e._tag === "Stage" && e.stage._tag === "idle"),
+			).toHaveLength(1);
+			expect(
+				await v.voice.runPromise(VoiceSurface.activeFlow("fixture")),
+			).toMatchObject({ _tag: "None" });
+		} finally {
+			release();
+			await v.voice.dispose();
+			await f.close();
+		}
+	}, 10000);
+	it("cancels and drains acceptance interrupted by a replacement capture", async () => {
+		const f = await fixture();
+		const events: VoiceSurfaceEvent[] = [];
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let accepted: { sessionId: SessionId; turnId: TurnId } | undefined;
+		const host = {
+			...f.host,
+			submit: (input: Parameters<typeof f.host.submit>[0], scope?: string) =>
+				f.host.submit(input, scope).pipe(
+					Effect.tap(() => {
+						accepted = input;
+						return Effect.promise(() => blocked);
+					}),
+				),
+		};
+		const v = voiceFixture(host, (event) =>
+			Effect.sync(() => {
+				events.push(event);
+			}),
+		);
+		try {
+			await v.voice.runPromise(GridVoiceRuntime);
+			const caller = v.voice.runFork(
+				v.send({
+					serial: "fixture",
+					keyCode: "1,5",
+					agentId: "main",
+					message: "block",
+				}),
+			);
+			await vi.waitFor(() => expect(accepted).toBeDefined());
+			const interrupting = v.voice.runPromise(Fiber.interrupt(caller));
+			release();
+			await interrupting;
+			await f.endpoint.closed;
+			if (!accepted) throw new Error("submission not observed");
+			expect(
+				(
+					await f.host.runtime.runPromise(
+						f.host.snapshot(accepted.sessionId, accepted.turnId),
+					)
+				).terminal,
+			).toMatchObject({ _tag: "Some", value: { outcome: "cancelled" } });
+			expect(
+				events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toHaveLength(1);
+			expect(
+				await v.voice.runPromise(VoiceSurface.activeFlow("fixture")),
+			).toMatchObject({ _tag: "None" });
+			await v.voice.runPromise(
+				v.send({
+					serial: "fixture",
+					keyCode: "1,5",
+					agentId: "main",
+					message: "next",
+				}),
+			);
+			await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(2));
+		} finally {
+			release();
+			await v.voice.dispose();
+			await f.close();
+		}
+	}, 10000);
+
 	it("closing a renderer RPC connection aborts only the turns that connection submitted", async () => {
 		const f = await fixture();
 		try {

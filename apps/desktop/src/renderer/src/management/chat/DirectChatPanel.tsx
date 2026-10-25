@@ -25,6 +25,7 @@ const strings = {
 		message: "Message",
 		history: "Conversation history",
 		loading: "Loading conversations",
+		loadingConfiguration: "Loading model settings",
 		rename: "Rename",
 		clear: "Delete conversation",
 		clearBody:
@@ -46,6 +47,7 @@ const strings = {
 		message: "Nachricht",
 		history: "Gesprächsverlauf",
 		loading: "Gespräche werden geladen",
+		loadingConfiguration: "Modelleinstellungen werden geladen",
 		rename: "Umbenennen",
 		clear: "Gespräch löschen",
 		clearBody:
@@ -61,10 +63,16 @@ const strings = {
 export function DirectChatPanel({
 	bridge = window.quakeChat,
 	configured,
+	configurationLoading = false,
+	configurationError,
+	onRetryConfiguration,
 	locale = "en",
 }: {
 	readonly bridge?: DirectChatBridge | undefined;
 	readonly configured: boolean;
+	readonly configurationLoading?: boolean;
+	readonly configurationError?: string | undefined;
+	readonly onRetryConfiguration?: (() => void) | undefined;
 	readonly locale?: string;
 }) {
 	const [controller] = useState(() => createChatController(bridge));
@@ -126,7 +134,22 @@ export function DirectChatPanel({
 					{t.newChat}
 				</button>
 			</header>
-			{!configured && <p role="status">{t.unavailable}</p>}
+			{configurationLoading ? (
+				<p role="status">{t.loadingConfiguration}</p>
+			) : configurationError ? (
+				<p role="alert">
+					{configurationError}{" "}
+					<button
+						type="button"
+						className="mc-button"
+						onClick={onRetryConfiguration}
+					>
+						{t.retry}
+					</button>
+				</p>
+			) : (
+				!configured && <p role="status">{t.unavailable}</p>
+			)}
 			{state.error && (
 				<p role="alert">
 					{state.error}{" "}
@@ -279,7 +302,7 @@ export function DirectChatPanel({
 					title={t.clear}
 					body={t.clearBody}
 					confirm={t.clear}
-					busy={state.pending}
+					busy={state.pending || state.clearing}
 					onClose={() => setDeleting(false)}
 					onConfirm={async () => {
 						await controller.clear();

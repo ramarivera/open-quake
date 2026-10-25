@@ -436,7 +436,12 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
-				<DirectChatPanel configured={directChatModel(view?.models).ready} />
+				<DirectChatPanel
+					configured={directChatModel(view?.models).ready}
+					configurationLoading={!view && !error}
+					configurationError={!view ? error : undefined}
+					onRetryConfiguration={() => void request({ type: "read" })}
+				/>
 				<AgentHttpPanel />
 			</section>
 			{error && tab !== "sessions" && (

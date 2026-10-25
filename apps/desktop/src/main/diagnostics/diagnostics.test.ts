@@ -23,6 +23,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { QuakeHidOpenFailed } from "../../../../../packages/device/src/device-errors.js";
 import { RuntimeUnavailable } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
 import { makeRuntimeHttpTransport } from "../../../../../packages/edge/src/agent-http/transport.js";
+import { ChatInterrupted } from "../../../../../packages/edge/src/chat/chat-errors.js";
 import { GridVoice } from "../../../../../packages/edge/src/voice/surface/grid-voice-service.js";
 import { VoiceRuntimeUnavailable } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
 import {
@@ -89,6 +90,30 @@ afterEach(async () => {
 });
 
 describe("production Effect diagnostics", () => {
+	it("retains the named chat turn span and interrupted error identity with its parent trace", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		await app.runPromise(
+			diagnostics
+				.instrument(
+					Effect.fail(new ChatInterrupted()).pipe(
+						Effect.withSpan("ChatService.turn"),
+					),
+					"chat.request",
+				)
+				.pipe(Effect.either),
+		);
+		await diagnostics.flush();
+		const lines = await records(directory);
+		const turn = lines.find((line) => line.span_name === "ChatService.turn");
+		const request = lines.find((line) => line.span_name === "chat.request");
+		expect(turn).toMatchObject({
+			outcome: "failure",
+			cause: { kind: "Fail", error: { _tag: "ChatInterrupted" } },
+		});
+		expect(turn?.trace_id).toBe(request?.trace_id);
+		expect(turn?.parent_span_id).toBe(request?.span_id);
+	});
 	it("persists exact typed HTTP consumer failure and original source identities before recovery", async () => {
 		const { directory, diagnostics } = await fixture();
 		const app = runtime(diagnostics);
