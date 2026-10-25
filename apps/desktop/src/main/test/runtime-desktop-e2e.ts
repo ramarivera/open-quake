@@ -23,6 +23,10 @@ app.setPath("sessionData", directory);
 // This background acceptance doesn't need to activate a foreground window.
 if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 app.disableHardwareAcceleration();
+// Verify recovery through the actual renderer/preload/main path in fresh userData.
+await writeFile(join(directory, "speech-v1.json"), "{invalid synthetic", {
+	mode: 0o600,
+});
 
 let step = "production startup";
 let successful = false;
@@ -86,6 +90,24 @@ async function run() {
 	await wait(
 		win,
 		"typeof window.quakeAgentConnections?.request==='function' && document.querySelector('.nav')",
+	);
+	step = "speech settings repair through production IPC";
+	await button(win, "Settings");
+	await button(win, "Replace invalid speech settings");
+	await button(win, "Save speech settings");
+	await wait(
+		win,
+		"document.body.textContent.includes('Speech settings saved.')",
+	);
+	assert.equal(
+		await evaluate(
+			win,
+			"(async()=>{const reply=await window.quakeSpeech.request({_tag:'Get'});return reply._tag==='success' && !reply.view.settings.speakAnswers && !reply.view.settings.stt && !reply.view.settings.tts;})()",
+		),
+		true,
+	);
+	process.stdout.write(
+		"DESKTOP_E2E_PASS speech settings repair; capture remains disabled\n",
 	);
 	// Navigate with the real sidebar and session tab, rather than mounting a
 	// test component or invoking a fake service.

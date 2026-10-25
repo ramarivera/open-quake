@@ -1,7 +1,11 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`DesktopSpeech.create DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
+	`DesktopSpeech.create DesktopSpeech.createRuntime DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
+DesktopSpeech.profiles DesktopSpeech.configure DesktopSpeech.cancelSpeech DesktopSpeech.stopCapture
+DesktopSpeech.credentials DesktopSpeech.resolveCredential DesktopSpeech.credentialRevoked
+DesktopSpeech.storeCredential DesktopSpeech.removeCredential DesktopSpeech.ordered
+DesktopSpeech.cancelOrdered DesktopSpeech.flushOrdered DesktopSpeech.pushOrdered DesktopSpeech.finishOrdered
 ActionService.activate ActionService.execute AgentConnections.create AgentConnections.get
 AgentConnections.remove AgentConnections.resolveCredential AgentConnections.save
 AgentConnections.select AgentConnections.selected AgentConnections.view AgentHttp.connect

@@ -45,15 +45,25 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 		readonly changed: Effect.Effect<void>;
 	}) {
 		const lock = yield* Effect.makeSemaphore(1);
-		const raw = yield* Effect.tryPromise({
+		const loaded = yield* Effect.tryPromise({
 			try: () => options.storage.read(),
 			catch: (cause) => new AiConfigInvalid(cause),
-		});
-		let state = yield* Schema.decodeUnknown(Stored, {
-			onExcessProperty: "error",
-		})(raw ?? initial).pipe(
-			Effect.mapError((cause) => new AiConfigInvalid(cause)),
+		}).pipe(
+			Effect.flatMap((raw) =>
+				Schema.decodeUnknown(Stored, {
+					onExcessProperty: "error",
+				})(raw ?? initial).pipe(
+					Effect.mapError((cause) => new AiConfigInvalid(cause)),
+				),
+			),
+			Effect.either,
 		);
+		let loadError = Either.isLeft(loaded) ? loaded.left : undefined;
+		let state: Stored = Either.isRight(loaded) ? loaded.right : initial;
+		// Keep the saved file untouched until an explicit, validated Save succeeds.
+		// A broken profile must neither enable capture nor disable its repair UI.
+		if (loadError)
+			yield* Effect.logError("Speech initialization failed", loadError);
 		const cleanup = Effect.fn("DesktopSpeech.cleanupCredentials")(function* () {
 			while (state.retired?.length) {
 				const reference = state.retired[0];
@@ -105,6 +115,7 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 								Effect.mapError((cause) => new AiConfigInvalid(cause)),
 							);
 							if (request._tag === "Get") {
+								if (loadError) return yield* loadError;
 								yield* cleanup();
 								return yield* view();
 							}
@@ -201,6 +212,7 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 									catch: (cause) => new AiCredentialStoreFailed(cause),
 								});
 								state = next;
+								loadError = undefined;
 							});
 							const result = yield* build.pipe(Effect.either);
 							if (Either.isLeft(result)) {

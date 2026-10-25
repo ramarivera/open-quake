@@ -73,16 +73,41 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 		<Group title="Speech">
 			{error ? <p role="alert">{error}</p> : null}
 			{error && !view ? (
-				<button
-					type="button"
-					className="button"
-					onClick={() => {
-						setError("");
-						setLoading(window.quakeSpeech?.request({ _tag: "Get" }));
-					}}
-				>
-					Retry loading speech settings
-				</button>
+				<>
+					<button
+						type="button"
+						className="button"
+						onClick={() => {
+							setError("");
+							setLoading(window.quakeSpeech?.request({ _tag: "Get" }));
+						}}
+					>
+						Retry loading speech settings
+					</button>
+					{error === "AI.PROVIDER.CONFIG_INVALID" ? (
+						<button
+							type="button"
+							className="button"
+							onClick={() => {
+								const settings: SpeechSettings = {
+									version: 1,
+									speakAnswers: false,
+								};
+								setDraft(settings);
+								setView({
+									settings,
+									sttCredential: false,
+									ttsCredential: false,
+								});
+								setError(
+									"The saved speech settings couldn't be read. Saving will replace them. Enter new keys to enable speech.",
+								);
+							}}
+						>
+							Replace invalid speech settings
+						</button>
+					) : null}
+				</>
 			) : null}
 			{!view && !error ? <p role="status">Loading speech settings…</p> : null}
 			<Row

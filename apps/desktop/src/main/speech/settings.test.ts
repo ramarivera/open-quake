@@ -49,6 +49,69 @@ const layer = () =>
 	);
 
 describe("explicit speech settings and existing credential ownership", () => {
+	for (const broken of ["malformed", "unreadable"] as const) {
+		it.effect(
+			`keeps ${broken} settings disabled and unchanged until an explicit valid Save succeeds`,
+			() =>
+				Effect.gen(function* () {
+					let stored: unknown = { version: 99, private: "synthetic-private" };
+					let writes = 0;
+					let failWrite = true;
+					const vault = yield* CredentialVault;
+					const controller = yield* createSpeechSettings({
+						storage: {
+							read: async () => {
+								if (broken === "unreadable")
+									throw new Error("synthetic-private");
+								return stored;
+							},
+							write: async (value) => {
+								if (failWrite) throw new Error("disk unavailable");
+								stored = value;
+								writes++;
+							},
+						},
+						credentials: vault,
+						changed: Effect.void,
+					});
+					expect(yield* controller.profiles()).toEqual({ speakAnswers: false });
+					expect(
+						yield* controller.request({ _tag: "Get" }).pipe(Effect.either),
+					).toMatchObject({
+						_tag: "Left",
+						left: { code: "AI.PROVIDER.CONFIG_INVALID" },
+					});
+					expect(writes).toBe(0);
+					const save = {
+						_tag: "Save",
+						settings: { version: 1, speakAnswers: false },
+					};
+					expect(
+						yield* controller.request(save).pipe(Effect.either),
+					).toMatchObject({
+						_tag: "Left",
+						left: { code: "AI.CREDENTIAL.STORE_FAILED" },
+					});
+					expect(
+						yield* controller.request({ _tag: "Get" }).pipe(Effect.either),
+					).toMatchObject({
+						_tag: "Left",
+						left: { code: "AI.PROVIDER.CONFIG_INVALID" },
+					});
+					expect(stored).toEqual({ version: 99, private: "synthetic-private" });
+					failWrite = false;
+					expect(yield* controller.request(save)).toMatchObject({
+						settings: save.settings,
+						sttCredential: false,
+						ttsCredential: false,
+					});
+					expect(yield* controller.request({ _tag: "Get" })).toMatchObject({
+						settings: save.settings,
+					});
+					expect(writes).toBe(1);
+				}).pipe(Effect.provide(layer())),
+		);
+	}
 	it.effect(
 		"defaults disabled, stores write-only keys in the actual vault, and keeps refs/secrets out of public view",
 		() =>

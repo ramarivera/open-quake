@@ -631,7 +631,9 @@ export function registerMaintenance(options: MaintenanceOptions) {
 		} finally {
 			pendingOperations--;
 			if (mutation) mutating = false;
-			if (requestedExit !== undefined) {
+			// Read-only requests may finish while a reset is unwinding. Only the
+			// exclusive mutation that requested exit can dispose its owning runtime.
+			if (mutation && requestedExit !== undefined) {
 				const code = requestedExit;
 				requestedExit = undefined;
 				ipcMain.removeHandler(MAINTENANCE_CHANNEL);

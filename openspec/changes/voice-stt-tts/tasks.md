@@ -1,10 +1,10 @@
 # Tasks
 
-No live capture/provider behavior is verified by this spec PR. The parent creates one Beads issue per checkbox and keeps hardware-only acceptance open.
+Production desktop bindings and synthetic acceptance are implemented. Live provider and physical capture/playback acceptance remain open. Each checkbox maps to a Beads task; a synthetic pass doesn't close a live requirement.
 
 ## 1. First-release speech contracts and evidence
 
-- [ ] 1.1 Record decisions on deadlines, PCM framing, output ownership, TTS batching, and facade-owned transport drivers; verify `openspec validate voice-stt-tts --strict` and document approved choices and required exact dependency pins.
+- [x] 1.1 Record decisions on deadlines, PCM framing, output ownership, TTS batching, and facade-owned transport drivers; verify `openspec validate voice-stt-tts --strict` and document approved choices and required exact dependency pins. Decisions are in design.md and main/speech/README.md; production bindings use existing dependencies without additions.
 - [ ] 1.2 Establish current DashScope STT segment/finality semantics and HTTP TTS codec/rate/channel descriptors with sanitized fixtures and authorized live probes; verify the documented workspace-host/model/voice pairs (`AI-094/101/108`, official docs accessed 2026-10-24) and segment finality, and document supported configuration before enabling either adapter.
 - [ ] 1.3 Implement injected capture/utterance contracts, reducers, phase errors, and finalizers; verify every phase failure, late readiness, empty capture, exactly one terminal, five-second PCM bound, 60s automatic stop, and scrubbed diagnostics with fake clocks/recorders, and document lifecycle semantics.
 
@@ -32,5 +32,10 @@ the actual owned player consumer, including natural drain, text-only errors,
 cancellation, late audio, deadlines and retirement. See ai-providers-parity/
 verification.md. No live/hardware acceptance is claimed; 1.2, 2.3–2.5 stay open.
 Task 2.6 remains unchecked to match the shared open acceptance bead
-`open-quake-c5w.13`. The injected player tests establish implementation
-behavior; production audio bindings and their acceptance remain outstanding.
+`open-quake-c5w.13`. Production audio bindings now exist. The native
+speech-audio-smoke verifies hidden sandboxed Chromium capture with synthetic
+input and muted natural-drain output; it doesn't verify a live provider or
+physical microphone/speaker. The parent composition test drives one finalized
+transcript through the selected external ConversationService into ordered
+answer speech, including original-fallback exclusion and retained safe failures.
+Direct ChatService answer consumption in 2.4 remains open.

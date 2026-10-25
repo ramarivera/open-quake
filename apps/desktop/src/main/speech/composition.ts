@@ -60,13 +60,7 @@ export function createSpeechVoiceBinding(options: {
 						http ? http.sendTranscript(request) : original.sendText(request),
 					cancelText: (serial, keyCode) =>
 						http ? http.cancelText(serial, keyCode) : Effect.void,
-				}).pipe(
-					Effect.catchTag("AiConfigInvalid", (error) =>
-						Effect.logError("Speech initialization failed", error).pipe(
-							Effect.as(undefined),
-						),
-					),
-				);
+				});
 				speech = controller;
 				yield* Effect.addFinalizer(() =>
 					Effect.sync(() => {

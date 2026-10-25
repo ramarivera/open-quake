@@ -105,3 +105,28 @@ uses explicit workspace/region routes; OpenAI Speech API is the existing
 `gpt-4o-mini-tts` compatibility profile, disabled by the service on 2027-01-06.
 No custom inference URL, implicit provider fallback or Realtime substitution is
 supported by these first-release bindings.
+
+The production root uses `createSpeechVoiceBinding` to deliver finalized
+transcripts into the selected HTTP runtime and to feed its answer events into
+ordered speech. The original local text runtime remains the fallback. The
+binding never routes cancellation back into itself. `composition.test.ts`
+drives actual recognition, HTTP conversation service, answer events and natural
+output drain with synthetic adapters, including permission failure and fallback.
+
+Malformed or unreadable saved profiles leave speech disabled. Settings reports
+the configuration error and offers an explicit replacement flow. Nothing writes
+over the saved file until a valid Save succeeds. Failed replacement preserves
+both the file and the reported error; successful replacement requires fresh keys
+before speech can be enabled.
+
+For native Chromium acceptance without recording or audible output, build
+`src/main/test/speech-audio-smoke.config.ts`, then run its
+`out/speech-smoke/speech-audio-smoke.js` entry with Electron and
+`OPEN_QUAKE_SYNTHETIC_AUDIO_TEST=1` plus an absolute external
+`OPEN_QUAKE_TEST_SCRATCH`. Unset `ELECTRON_RUN_AS_NODE`. The entry forces
+Chromium's fake microphone and muted output, keeps all workers invisible,
+checks real 960-byte PCM frames and nonzero signal, waits for natural playback
+drain, and verifies worker cleanup. It has a 30-second deadline and must emit
+`SPEECH_AUDIO_SMOKE_OK`; process exit alone is insufficient. This establishes
+the native worker binding only. It doesn't establish physical audio routing,
+provider compatibility, microphone permission, or audibility.
