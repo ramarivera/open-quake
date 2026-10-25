@@ -15,7 +15,7 @@ Each numbered task has a child bead under `open-quake-lih.7.1` referencing this 
 ## 3. Acceptance
 
 - [x] 3.1 Run all six lane gates and native mock smokes, inspect screenshots, save lane report and open a PR with audit coverage, exact head and unverified native/hardware items.
-- [ ] 3.2 Separate follow-up approved by Ramiro: vendor a reviewed macOS MediaRemote helper, implement and qualify real read/control, then verify on host media sessions. Windows SMTC also remains unimplemented behind its platform check. This task stays open after this PR's spec + stub delivery.
+- [ ] 3.2 Separate follow-up approved by Ramiro: vendor a reviewed macOS MediaRemote helper, implement and qualify real read/control, then verify on host media sessions. Native source and actual-root macOS read/control proof now exist, including clock/player/media-key consumers and correlated private failure traces. Windows SMTC source and session-0 missing-service classification are implemented, but interactive Windows and third-party-player acceptance, reviewed delivery remain open. Local packaged smoke and packaged-helper native read/pause/play passed; live installed-device acceptance remains separate. Evidence: approved system-media scratch, root-YsaxQ7, native-session and windows-classified.json. This task stays open until those qualification gates are reconciled.
 
 ## 4. Review fixes
 

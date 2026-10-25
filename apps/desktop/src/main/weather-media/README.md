@@ -1,17 +1,19 @@
 # Weather and system media
 
-`weather-media-parity` implements cluster 6's weather providers, settings and
-cards. Its native system-media adapters are explicit stubs. Ramiro approved a
-separate follow-up to vendor a reviewed MediaRemote helper, tracked as
-`open-quake-lih.7.1.6`. This PR does not install or bundle one.
+`weather-media-parity` implements weather providers, settings, cards and native
+system-media transport. macOS builds compile the BSD-3-Clause helper source
+pinned in `vendor/mediaremote-adapter/UPSTREAM.md` for Apple Silicon and unpack
+it beside the application resources with its license. No downloaded executable
+or npm dependency is required. Windows uses fixed PowerShell WinRT SMTC.
+Linux and mock-device roots retain explicit unavailable adapters. Tests may
+inject a native adapter independently of mock hardware.
 
-The recovered main bridge launches `mediaremote-adapter.pl` with
-`MediaRemoteAdapter.framework` from `vendor/mac-mediaremote`. Source evidence:
-`~/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95/app-resources/background.js`
-near offset 1759558. Neither is present here. `nowplaying-cli` is also absent.
-The alternatives are the approved reviewed vendored helper, or an explicitly
-approved CLI dependency. App-specific AppleScript would miss other system
-sessions and does not satisfy the generic system-media contract.
+The shared service owns card and committed media-key control. It never starts
+a player. Enabled native commands determine capabilities, and control rechecks
+the observed source. macOS pins both PID and bundle identity, including
+unbundled processes. Windows pins SourceAppUserModelId. Neither OS offers an
+atomic global read-and-send transaction, so source validation minimizes but
+cannot eliminate a player change between validation and delivery.
 
 ## Boundaries
 
@@ -30,13 +32,14 @@ sessions and does not satisfy the generic system-media contract.
 - `WeatherSettingsRepository` atomically saves `weather-media-v1/settings.json`
   under Electron userData. Settings are global while per-profile editing is
   owned by other lanes. Invalid/unreadable files load safe disabled defaults.
-- `SystemMediaAdapter` exposes `read()` and `control(play|pause|previous|next)`.
-  Expected OS failures are schema-derived states. A future helper must map
-  TCC denial, transport failure and session loss, bound subprocess time and
-  output, validate cover bytes, release observers/processes on quit and never
-  start a player. Windows SMTC stays behind the `win32` check and reports
-  `SMTC_UNAVAILABLE`. macOS reports `MEDIAREMOTE_UNAVAILABLE`; other hosts
-  report `UNSUPPORTED_PLATFORM`. Stubs spawn no process.
+- `SystemMediaAdapter` exposes native reads and play/pause/previous/next/stop,
+  fifteen-second seek, repeat and shuffle commands. Child IO has a five-second
+  deadline, four-MiB output limit, fixed argv and a minimal environment. Runtime
+  interruption kills and awaits the child. Metadata is Schema-decoded. Raster
+  dimensions and compressed bytes are bounded before native cover decoding.
+  Missing dependencies, access denial and unexpected failures project to stable
+  UI states after catalog errors and failed spans reach local diagnostics.
+  Titles, artists, artwork, paths and raw stdout/stderr never enter logs.
 - `SystemMediaService` serializes controls, reads live state to resolve a
   toggle and re-reads on rejection. The renderer client subscribes before its
   initial read and independently guards settings and media revisions.
@@ -94,8 +97,8 @@ once for the selected display unit.
 slots mount only when enabled, with no reserved width when disabled.
 `ClockMusicCard` and `PlayerCard` consume the same `MediaSnapshot` and intent
 function. Media art is limited to bounded raster data URLs, so neither card
-initiates a network image request. SVG/CSS turntable artwork is drawn in this
-repo; no vendor binary assets are copied.
+initiates a network image request. The flat player design is owned by `independent-device-design`; no vendor
+binary assets are copied.
 
 `PlayerCard.volumeOverlay` is a ReactNode placed at design x1471 y355,
 380×88. The knob lane retains all volume state, activation and arbitration;
@@ -104,14 +107,14 @@ available on the shared `WeatherMediaSnapshot.media` contract. Local MP3
 soundboard execution remains owned by `soundboard-player`; the new renderer
 is system mode. Spotify Web API/login/lyrics are excluded by decision 12.
 
-The macOS stub uses the recovered generic unavailable hint. The recovered
-MediaRemote-specific hint promises fallback controls, which the stub cannot
-provide, so showing that text would be misleading.
+Unavailable adapters use the generic unavailable hint. No fallback controls
+are promised. Settings reuse the player's localized failure text, per the Opus
+copy review.
 
 ## Verification
 
-Tests use recording fakes and Effect TestClock. No live HTTP, OS media calls,
-HID or local servers are used. Run all six lane gates from the repo root,
+Unit tests use recording fakes, Effect TestClock and bounded owned Node child
+processes. No live HTTP, HID or local servers are used. Run all six lane gates from the repo root,
 then the README media smoke and this focused smoke. Pass any non-empty
 artifacts directory. During parity lane work, set TMPDIR and the artifacts
 argument to the lane scratch folder required by LANE-BRIEF.md. Other checkouts
@@ -127,4 +130,21 @@ weather, effective versus ineffective sub-touch, shared pause state, panel
 write denial, source/capability states and the guide. It captures the clock
 with both cards and DK-Player playing, paused, idle, unavailable, navigation
 unavailable and unknown-duration states. Every window and runtime is disposed.
-Real QUAKE touch/rendering, macOS MediaRemote and Windows SMTC remain unverified.
+The 2026-10-25 actual-root acceptance used mock hardware and a silent native
+macOS publisher. Clock effective sub-touch paused it, player controls resumed
+it, and an ordinary saved media key paused it through the production key
+runtime. Five 1920×480 captures include playing, paused and injected EACCES
+failure. The persisted sink contained 629 records with matching request/trace
+IDs, failed native spans, catalog identity and EACCES; player metadata and the
+private error sentinel were absent. Runtime/publisher cleanup completed.
+
+A read-only Windows SSH session returned SMTC_UNAVAILABLE for the exact missing
+service HRESULT 0x80070424. This is session-0 absence evidence, not interactive
+Windows control acceptance. Interactive Windows metadata, artwork and commands,
+third-party players and physical QUAKE gestures/audio remain unverified.
+The local arm64 app package boots its renderer/preload/native bindings in the
+standard package smoke. Its unpacked helper independently read the synthetic
+publisher and delivered pause/play with observed state transitions. This
+proves resource delivery and native loading, not an installed live-device app. The task remains open through delivery and native acceptance.
+Evidence is under the approved `system-media` scratch directory, especially
+`root-YsaxQ7`, `native-session` and `windows-classified.json`.

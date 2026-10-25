@@ -21,6 +21,7 @@ import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting
 import { SettingsErrors } from "../../../../../packages/edge/src/settings/settings-errors";
 import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
 import { DesktopSpeechErrors } from "../speech/errors.js";
+import { SystemMediaErrors } from "../weather-media/native/errors";
 import { knownErrorTags, knownLogEvents, knownSpans } from "./known-names.js";
 
 const sourceCodes = new Set([
@@ -59,6 +60,7 @@ const identities = new Map<string, { code: string; category: string }>(
 		SettingsErrors,
 		SpeechErrors,
 		DesktopSpeechErrors,
+		SystemMediaErrors,
 		RuntimeErrors,
 		VoiceSurfaceErrors,
 		ActionErrors,

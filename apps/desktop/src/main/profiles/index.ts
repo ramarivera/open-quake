@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
@@ -73,6 +74,7 @@ export function registerProfiles(
 	panel: () => BrowserWindow | undefined = () => undefined,
 	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 	diagnostics?: DesktopDiagnostics,
+	mediaActions?: MediaActionAdapter,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -160,6 +162,7 @@ export function registerProfiles(
 						(state) => broadcast(KEY_RUNTIME, state),
 						undefined,
 						executeOwned,
+						mediaActions,
 					),
 				),
 			),

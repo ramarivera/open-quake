@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Layer, type ManagedRuntime, Schema } from "effect";
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain, nativeImage } from "electron";
 import {
 	WEATHER_MEDIA_CHANGED,
 	WEATHER_MEDIA_REQUEST,
@@ -10,20 +10,51 @@ import {
 } from "../../shared/weather-media-contracts";
 import { canRequestClock } from "../clock/clock-ipc";
 import { WeatherMediaController } from "./controller";
+import { nativeSystemMedia } from "./native";
+import { boundedCoverBytes } from "./native/cover";
 import { weatherSettingsLive } from "./settings-repository";
-import { systemMediaStub } from "./system-media";
+import { SystemMediaService } from "./system-media";
 import { weatherNetworkLive } from "./weather-network";
+import { WeatherService } from "./weather-service";
 
-export const weatherMediaLive = (root: string, platform: string) =>
-	WeatherMediaController.Default.pipe(
+export const weatherMediaLive = (root: string, platform: string) => {
+	const directory = import.meta.dirname.includes("app.asar/")
+		? join(process.resourcesPath, "app.asar.unpacked/out/native-media")
+		: join(import.meta.dirname, "../native-media");
+	const media = SystemMediaService.Default.pipe(
 		Layer.provide(
-			Layer.mergeAll(
-				weatherSettingsLive(root),
-				weatherNetworkLive,
-				systemMediaStub(platform),
-			),
+			nativeSystemMedia({
+				platform,
+				directory,
+				enabled: process.env.OPEN_QUAKE_MOCK_DEVICE !== "1",
+				cover: (base64, mime) => {
+					const bytes = boundedCoverBytes(base64, mime);
+					if (!bytes) return null;
+					try {
+						const image = nativeImage.createFromBuffer(bytes);
+						const size = image.getSize();
+						if (image.isEmpty() || size.width * size.height > 16_000_000)
+							return null;
+						const data = image
+							.resize({ width: Math.min(512, size.width) })
+							.toDataURL();
+						return data.length <= 3_000_000 ? data : null;
+					} catch {
+						// Corrupt optional artwork must not discard an otherwise valid session.
+						return null;
+					}
+				},
+			}),
 		),
 	);
+	return WeatherMediaController.DefaultWithoutDependencies.pipe(
+		Layer.provideMerge(media),
+		Layer.provide(WeatherService.Default),
+		Layer.provide(
+			Layer.mergeAll(weatherSettingsLive(root), weatherNetworkLive),
+		),
+	);
+};
 
 export const canRequestWeatherMedia = (
 	caller: string,
@@ -98,7 +129,7 @@ export function registerWeatherMedia(
 			);
 		},
 	);
-	// The stub is side-effect-free. A future approved adapter shares this poller.
+	// One bounded poller shares the native service with card and key controls.
 	let polling: Promise<void> | undefined;
 	const timer = setInterval(() => {
 		if (

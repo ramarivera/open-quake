@@ -2,9 +2,16 @@ import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
 import { mdiPlugin } from "./mdi-plugin";
+import { buildNativeMedia } from "./native-media-build";
 
 export default defineConfig({
 	main: {
+		plugins: [
+			{
+				name: "open-quake-native-media",
+				buildStart: () => buildNativeMedia(import.meta.dirname),
+			},
+		],
 		build: {
 			rollupOptions: {
 				input: { index: resolve("src/main/entry.ts") },
