@@ -17,9 +17,14 @@ const WireRequest = Schema.Union(
 	Schema.Struct({
 		_tag: Schema.Literal("Request"),
 		id,
-		tag: Schema.String,
+		tag: Schema.String.pipe(Schema.maxLength(64)),
 		payload: Schema.Unknown,
-		headers: Schema.Array(Schema.Tuple(Schema.String, Schema.String)),
+		headers: Schema.Array(
+			Schema.Tuple(
+				Schema.String.pipe(Schema.maxLength(128)),
+				Schema.String.pipe(Schema.maxLength(1024)),
+			),
+		).pipe(Schema.maxItems(16)),
 	}),
 	Schema.Struct({ _tag: Schema.Literal("Ack", "Interrupt"), requestId: id }),
 	Schema.Struct({ _tag: Schema.Literal("Eof", "Ping") }),
@@ -32,7 +37,15 @@ export function decodeChatRequest(
 	if (decoded._tag === "Left") return undefined;
 	const value = decoded.right;
 	if (value._tag !== "Request") return value;
-	if (!ChatRpcs.requests.has(value.tag)) return undefined;
+	const method = ChatRpcs.requests.get(value.tag);
+	if (!method) return undefined;
+	// Validate each method before any main-process request queue or fiber is allocated.
+	if (
+		Schema.decodeUnknownEither(Schema.make<unknown>(method.payloadSchema.ast), {
+			onExcessProperty: "error",
+		})(value.payload)._tag === "Left"
+	)
+		return undefined;
 	return {
 		_tag: "Request",
 		id: value.id,

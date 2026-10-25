@@ -8,6 +8,7 @@ import {
 } from "../../../../shared/agents";
 import { AgentHttpPanel } from "../agent-http";
 import { DirectChatPanel } from "../chat/DirectChatPanel";
+import { directChatModel } from "../chat/model-scope";
 import { AgentWizard } from "./AgentWizard";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
@@ -435,16 +436,7 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
-				<DirectChatPanel
-					configured={Boolean(
-						view?.models.default?.some(
-							(row) =>
-								row.role === "default" &&
-								row.model.trim() &&
-								row.credentialAvailable,
-						),
-					)}
-				/>
+				<DirectChatPanel configured={directChatModel(view?.models).ready} />
 				<AgentHttpPanel />
 			</section>
 			{error && tab !== "sessions" && (

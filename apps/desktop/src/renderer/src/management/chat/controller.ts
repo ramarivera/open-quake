@@ -19,6 +19,8 @@ export interface ChatView {
 	readonly turn: TurnView | undefined;
 	readonly input: string;
 	readonly pending: boolean;
+	/** Stop was requested; the turn stays locked until its terminal outcome arrives. */
+	readonly cancelling: boolean;
 	readonly loading: boolean;
 	readonly error: string;
 }
@@ -38,11 +40,18 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 		turn: undefined,
 		input: "",
 		pending: false,
+		cancelling: false,
 		loading: true,
 		error: "",
 	};
 	let off: (() => void) | undefined;
 	let disposed = false,
+		// Until the user picks or starts a conversation, the first history load
+		// reopens the most recently updated saved conversation.
+		chosen = false,
+		// Stop pressed before the host accepted the turn; cancel once it's owned.
+		cancelOnAccept = false,
+		accepted = false,
 		epoch = 0,
 		subscriptionEpoch = 0,
 		refreshEpoch = 0;
@@ -53,8 +62,22 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			for (const listener of listeners) listener();
 		}
 	};
+	const requestCancel = async (sessionId: SessionId, turnId: TurnId) => {
+		if (!bridge) return;
+		try {
+			await bridge.cancel(sessionId, turnId);
+		} catch (cause) {
+			// The turn may still be running; only its terminal outcome unlocks input.
+			set({ cancelling: false, error: codeOf(cause) });
+		}
+	};
 	const fail = (cause: unknown) =>
-		set({ pending: false, loading: false, error: codeOf(cause) });
+		set({
+			pending: false,
+			cancelling: false,
+			loading: false,
+			error: codeOf(cause),
+		});
 	const refresh = async () => {
 		if (!bridge)
 			return set({ loading: false, error: "CHAT.BRIDGE.UNAVAILABLE" });
@@ -63,12 +86,22 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 		try {
 			const histories = await bridge.list();
 			if (generation !== epoch || refresh !== refreshEpoch) return;
+			if (!chosen && !state.pending) {
+				chosen = true;
+				const latest = histories.reduce<PublicChatHistory | undefined>(
+					(best, item) =>
+						!best || item.updatedAt > best.updatedAt ? item : best,
+					undefined,
+				);
+				if (latest) set({ sessionId: latest.sessionId });
+			}
 			const current = histories.find(
 				(item) => item.sessionId === state.sessionId,
 			);
 			set({ histories, current, loading: false });
 			const active = current?.turns.at(-1);
 			if (active?.status === "processing" && !state.turn) {
+				accepted = true;
 				set({ pending: true, input: active.input });
 				attach(active.snapshot);
 			}
@@ -88,7 +121,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			),
 		});
 		if (Option.isSome(snapshot.terminal)) {
-			set({ pending: false });
+			set({ pending: false, cancelling: false });
 			void refresh();
 			return;
 		}
@@ -123,7 +156,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 					off?.();
 					void recover();
 				} else if (Option.isSome(next.terminal)) {
-					set({ pending: false });
+					set({ pending: false, cancelling: false });
 					off?.();
 					void refresh();
 				}
@@ -131,7 +164,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			(code) => {
 				if (generation === subscriptionEpoch) {
 					if (code === "CHAT.STREAM.RESYNC_REQUIRED") void recover();
-					else set({ pending: false, error: code });
+					else set({ pending: false, cancelling: false, error: code });
 				}
 			},
 		);
@@ -147,6 +180,9 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 		refresh,
 		submit: async (text: string) => {
 			if (!bridge || disposed || state.pending || !text.trim()) return;
+			chosen = true;
+			cancelOnAccept = false;
+			accepted = false;
 			const generation = epoch;
 			const sessionId = state.sessionId,
 				turnId = Schema.decodeUnknownSync(TurnId)(crypto.randomUUID());
@@ -158,14 +194,23 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			});
 			try {
 				const snapshot = await bridge.submit({ sessionId, turnId, text });
-				if (!disposed && generation === epoch) attach(snapshot);
-				else await bridge.cancel(sessionId, turnId);
+				if (disposed || generation !== epoch) {
+					await bridge.cancel(sessionId, turnId);
+					return;
+				}
+				accepted = true;
+				attach(snapshot);
+				if (cancelOnAccept && Option.isNone(snapshot.terminal)) {
+					cancelOnAccept = false;
+					await requestCancel(sessionId, turnId);
+				}
 			} catch (cause) {
 				if (generation === epoch) fail(cause);
 			}
 		},
 		select: async (sessionId?: SessionId) => {
 			if (state.pending || disposed) return;
+			chosen = true;
 			off?.();
 			subscriptionEpoch++;
 			epoch++;
@@ -181,12 +226,14 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			await refresh();
 		},
 		cancel: async () => {
-			if (!bridge || !state.turn) return;
-			try {
-				await bridge.cancel(state.sessionId, state.turn.turnId);
-			} catch (cause) {
-				fail(cause);
+			if (!bridge || !state.turn || !state.pending || state.cancelling) return;
+			set({ cancelling: true });
+			// The host rejects cancellation of a turn it hasn't accepted yet.
+			if (!accepted) {
+				cancelOnAccept = true;
+				return;
 			}
+			await requestCancel(state.sessionId, state.turn.turnId);
 		},
 		clear: async () => {
 			if (!bridge || !state.current) return;
@@ -195,7 +242,14 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				off?.();
 				subscriptionEpoch++;
 				epoch++;
-				set({ turn: undefined, input: "", current: undefined, pending: false });
+				chosen = true;
+				set({
+					turn: undefined,
+					input: "",
+					current: undefined,
+					pending: false,
+					cancelling: false,
+				});
 				await refresh();
 			} catch (cause) {
 				fail(cause);

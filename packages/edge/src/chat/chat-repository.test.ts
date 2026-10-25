@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either, Layer, Option, Schema } from "effect";
+import { vi } from "vitest";
 import { workflowProfile } from "../ai/ai-test-fixtures.js";
 import { SessionId, TurnId } from "./chat-contracts.js";
 import { ChatStorageFailed } from "./chat-errors.js";
@@ -13,6 +15,11 @@ import {
 	ChatStorage,
 	fileChatStorageLayer,
 } from "./chat-repository.js";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs/promises")>();
+	return { ...actual, unlink: vi.fn(actual.unlink) };
+});
 
 const sid = Schema.decodeUnknownSync(SessionId)(
 	"00000000-0000-4000-8000-000000000777",
@@ -45,8 +52,7 @@ const history: ChatHistory = {
 		},
 	],
 };
-const scratch =
-	"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/direct-chat";
+const scratch = tmpdir();
 
 describe("private durable chat repository", () => {
 	it("atomically persists private history, recovers interrupted output on restart, isolates owners and deletes durably", async () => {
@@ -98,6 +104,45 @@ describe("private durable chat repository", () => {
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
+	it("does not attempt temporary cleanup after rename, keeping memory and disk revisions aligned", async () => {
+		const directory = join(scratch, `committed-test-${randomUUID()}`);
+		const layer = ChatRepository.Default.pipe(
+			Layer.provide(fileChatStorageLayer(directory)),
+		);
+		const cleanup = vi.mocked(unlink);
+		cleanup.mockClear();
+		cleanup.mockRejectedValue(
+			Object.assign(new Error("cleanup denied"), { code: "EACCES" }),
+		);
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const repo = yield* ChatRepository;
+					yield* repo.put(history, -1);
+					yield* repo.put(
+						{ ...history, revision: 1, title: "second revision" },
+						0,
+					);
+					const current = yield* repo.get(history.owner, sid);
+					expect(Option.isSome(current) && current.value.revision).toBe(1);
+					expect(Option.isSome(current) && current.value.title).toBe(
+						"second revision",
+					);
+				}).pipe(Effect.provide(layer)),
+			);
+			const saved: unknown = JSON.parse(
+				await readFile(join(directory, "history-v1.json"), "utf8"),
+			);
+			expect(saved).toMatchObject({
+				sessions: [{ revision: 1, title: "second revision" }],
+			});
+			expect(cleanup).not.toHaveBeenCalled();
+		} finally {
+			cleanup.mockReset();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 	it("rejects unknown versions without rewriting or partially migrating history", async () => {
 		const directory = join(scratch, `version-test-${randomUUID()}`);
 		await mkdir(directory, { mode: 0o700 });

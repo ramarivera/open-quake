@@ -84,6 +84,7 @@ export const fileChatStorageLayer = (
 							throw new ChatStorageFailed();
 						await mkdir(directory, { recursive: true, mode: 0o700 });
 						const temporary = join(directory, `.history-${randomUUID()}.json`);
+						let committed = false;
 						try {
 							const file = await open(temporary, "wx", 0o600);
 							try {
@@ -93,17 +94,21 @@ export const fileChatStorageLayer = (
 								await file.close();
 							}
 							await rename(temporary, join(directory, "history-v1.json"));
+							committed = true;
 						} finally {
-							await unlink(temporary).catch((cause) => {
-								if (
-									!(
-										cause instanceof Error &&
-										"code" in cause &&
-										cause.code === "ENOENT"
+							// Rename consumes the temporary path. Cleanup must never turn a
+							// committed replacement into a reported failed save.
+							if (!committed)
+								await unlink(temporary).catch((cause) => {
+									if (
+										!(
+											cause instanceof Error &&
+											"code" in cause &&
+											cause.code === "ENOENT"
+										)
 									)
-								)
-									throw cause;
-							});
+										throw cause;
+								});
 						}
 					},
 					catch: (cause) => new ChatStorageFailed(cause),

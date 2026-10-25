@@ -159,4 +159,99 @@ describe("direct chat renderer lifecycle", () => {
 		});
 		controller.dispose();
 	});
+	it("defers Stop until the host accepts the turn and keeps input locked until it ends", async () => {
+		const f = fixture();
+		let accept: () => void = () => {};
+		vi.mocked(f.bridge.submit).mockImplementation(
+			(value) =>
+				new Promise((resolve) => {
+					accept = () =>
+						resolve({
+							sessionId: value.sessionId,
+							turnId: value.turnId,
+							lastSeq: -1,
+							text: "",
+							suggestions: [],
+							terminal: Option.none(),
+						});
+				}),
+		);
+		const controller = createChatController(f.bridge);
+		const submit = controller.submit("slow acceptance");
+		await controller.cancel();
+		expect(f.bridge.cancel).not.toHaveBeenCalled();
+		expect(controller.getSnapshot()).toMatchObject({
+			pending: true,
+			cancelling: true,
+		});
+		accept();
+		await submit;
+		const identity = vi.mocked(f.bridge.submit).mock.calls[0]?.[0];
+		if (!identity) throw new Error("missing submission");
+		expect(f.bridge.cancel).toHaveBeenCalledExactlyOnceWith(
+			identity.sessionId,
+			identity.turnId,
+		);
+		expect(f.bridge.subscribe).toHaveBeenCalledOnce();
+		expect(controller.getSnapshot().pending).toBe(true);
+		await controller.submit("not yet");
+		expect(f.bridge.submit).toHaveBeenCalledOnce();
+		f.receive({
+			_tag: "snapshot",
+			snapshot: {
+				sessionId: identity.sessionId,
+				turnId: identity.turnId,
+				lastSeq: 0,
+				text: "",
+				suggestions: [],
+				terminal: Option.some({ outcome: "cancelled" }),
+			},
+		});
+		expect(controller.getSnapshot()).toMatchObject({
+			pending: false,
+			cancelling: false,
+		});
+		controller.dispose();
+	});
+	it("keeps a running turn locked when cancellation is rejected", async () => {
+		const f = fixture(),
+			controller = createChatController(f.bridge);
+		await controller.submit("running");
+		vi.mocked(f.bridge.cancel).mockRejectedValueOnce({
+			code: "CHAT.TRANSPORT.UNAVAILABLE",
+		});
+		await controller.cancel();
+		expect(controller.getSnapshot()).toMatchObject({
+			pending: true,
+			cancelling: false,
+			error: "CHAT.TRANSPORT.UNAVAILABLE",
+		});
+		controller.dispose();
+	});
+	it("reopens the most recently updated saved conversation on first load", async () => {
+		const f = fixture();
+		const saved = (title: string, updatedAt: number): PublicChatHistory => ({
+			sessionId: Schema.decodeUnknownSync(SessionId)(crypto.randomUUID()),
+			title,
+			manualTitle: false,
+			revision: 1,
+			contextEpoch: 0,
+			updatedAt,
+			turns: [],
+		});
+		const older = saved("older", 1),
+			latest = saved("latest", 5);
+		vi.mocked(f.bridge.list).mockResolvedValue([older, latest]);
+		const controller = createChatController(f.bridge);
+		await controller.refresh();
+		expect(controller.getSnapshot()).toMatchObject({
+			sessionId: latest.sessionId,
+			current: { title: "latest" },
+		});
+		await controller.select();
+		expect(controller.getSnapshot().current).toBeUndefined();
+		await controller.refresh();
+		expect(controller.getSnapshot().current).toBeUndefined();
+		controller.dispose();
+	});
 });
