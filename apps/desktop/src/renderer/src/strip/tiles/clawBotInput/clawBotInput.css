@@ -1,4 +1,4 @@
-/* ClawBotInput (QuakeBotInputIconView.vue). */
+/* ClawBotInput, drawn per independent-device-design. */
 .clawbot-input {
 	position: absolute;
 	inset: 0;
@@ -6,28 +6,25 @@
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	background: rgba(28, 28, 30, 0.65);
-	backdrop-filter: blur(40px) saturate(180%);
-	border: 1px solid rgba(255, 255, 255, 0.08);
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-	color: #ffffff;
-	font-family:
-		-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-		sans-serif;
+	background: var(--strip-surface);
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-text);
+	font-family: var(--strip-font);
 }
 .clawbot-input-header {
 	flex-shrink: 0;
 	box-sizing: border-box;
 	display: flex;
 	align-items: center;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	border-bottom: 1px solid var(--strip-hairline);
 }
 .clawbot-input-icon {
 	display: flex;
 	flex: none;
 	align-items: center;
 	justify-content: center;
-	background: linear-gradient(135deg, #ff9500 0%, #ffb340 100%);
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-line);
 }
 .clawbot-input-title {
 	overflow: hidden;
@@ -48,19 +45,19 @@
 	box-sizing: border-box;
 	width: 100%;
 	resize: none;
-	border: 1px solid rgba(255, 255, 255, 0.1);
+	border: 1px solid var(--strip-line);
 	outline: none;
-	background: rgba(255, 255, 255, 0.06);
-	color: #ffffff;
+	background: var(--strip-canvas);
+	color: var(--strip-text);
 	font: inherit;
-	line-height: 1.6;
+	line-height: 1.5;
 }
 .clawbot-input-box::placeholder {
-	color: rgba(255, 255, 255, 0.35);
+	color: var(--strip-subtle);
 }
 .clawbot-input-box:focus {
-	border-color: rgba(255, 149, 0, 0.5);
-	box-shadow: 0 0 0 3px rgba(255, 149, 0, 0.1);
+	border-color: var(--strip-accent);
+	box-shadow: 0 0 0 2px var(--strip-accent);
 }
 .clawbot-input-actions {
 	display: flex;
@@ -71,23 +68,21 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border: 1px solid rgba(255, 255, 255, 0.08);
-	background: rgba(255, 255, 255, 0.05);
-	color: rgba(255, 255, 255, 0.7);
+	border: 0;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-line);
+	color: var(--strip-text);
 	font: inherit;
-	font-weight: 500;
+	font-weight: 550;
 	cursor: pointer;
 }
-.clawbot-input-button:hover:not(:disabled) {
-	background: rgba(255, 255, 255, 0.1);
-	border-color: rgba(255, 149, 0, 0.4);
-}
 .clawbot-input-button:active:not(:disabled) {
-	background: rgba(255, 255, 255, 0.18);
-	border-color: rgba(255, 149, 0, 0.6);
+	box-shadow: inset 0 0 0 2px var(--strip-accent);
 	transform: scale(0.97);
 }
 .clawbot-input-button:disabled {
+	color: var(--strip-subtle);
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
 	cursor: default;
 }
 .clawbot-input-warning {
@@ -96,14 +91,10 @@
 	z-index: 5;
 	box-sizing: border-box;
 	transform: translateX(-50%);
-	border: 1px solid rgba(255, 179, 64, 0.5);
-	background: linear-gradient(
-		135deg,
-		rgba(92, 58, 8, 0.92),
-		rgba(60, 36, 4, 0.92)
-	);
-	backdrop-filter: blur(8px);
-	color: #fff3d6;
+	border: 0;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1.5px var(--strip-warning);
+	color: var(--strip-text);
 	text-align: center;
 }
 @media (prefers-reduced-motion: no-preference) {

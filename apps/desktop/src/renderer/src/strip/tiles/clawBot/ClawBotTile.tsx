@@ -170,7 +170,7 @@ function Messages({
 			style: {
 				padding: variant === "tool" ? 0 : `${12 * scale}px ${16 * scale}px`,
 				borderRadius: `${8 * scale}px ${20 * scale}px ${20 * scale}px ${(last ? 20 : 8) * scale}px`,
-				fontSize: 22 * scale,
+				fontSize: 24 * scale,
 			},
 		};
 	};
@@ -211,10 +211,10 @@ function Messages({
 			className="clawbot-message-header"
 			style={{ gap: 10 * scale, marginBottom: 6 * scale }}
 		>
-			<span className="clawbot-sender" style={{ fontSize: 16 * scale }}>
+			<span className="clawbot-sender" style={{ fontSize: 20 * scale }}>
 				{sender}
 			</span>
-			<span className="clawbot-time" style={{ fontSize: 13 * scale }}>
+			<span className="clawbot-time" style={{ fontSize: 18 * scale }}>
 				{formatChatTime(ts, locale)}
 			</span>
 		</div>
@@ -294,7 +294,7 @@ function Messages({
 								style={{
 									padding: `${12 * scale}px ${16 * scale}px`,
 									borderRadius: `${8 * scale}px ${20 * scale}px ${20 * scale}px ${20 * scale}px`,
-									fontSize: 22 * scale,
+									fontSize: 24 * scale,
 								}}
 							>
 								<RichText
@@ -341,7 +341,7 @@ export function ClawBotTile({
 			>
 				<div
 					className="clawbot-title"
-					style={{ gap: 10 * scale, fontSize: 20 * scale }}
+					style={{ gap: 12 * scale, fontSize: 26 * scale }}
 				>
 					<div
 						className="clawbot-title-icon"

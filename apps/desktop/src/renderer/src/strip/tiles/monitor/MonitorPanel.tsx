@@ -8,6 +8,7 @@ import type {
 	MonitorSettings,
 	StyleId,
 } from "../../../../../shared/monitor-contracts";
+import { stripPaletteProperties } from "../../palette";
 import { mountDiskScroll } from "./disk-scroll";
 import { labels as l, settingsLabels } from "./strings";
 import {
@@ -23,6 +24,8 @@ import {
 	withUnit,
 } from "./view-model";
 import "./monitor.css";
+
+const palette = stripPaletteProperties();
 
 const PanelStyle = createContext<StyleId>("glass");
 
@@ -651,6 +654,7 @@ function PanelWithMedia({
 	return (
 		<section
 			className="oq-monitor"
+			style={palette}
 			data-style={settings.styleId}
 			data-background={settings.background}
 			data-testid="sys-monitor-view"

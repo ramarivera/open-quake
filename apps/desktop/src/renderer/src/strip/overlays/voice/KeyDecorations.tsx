@@ -1,10 +1,10 @@
 import type { KeyAlertKind } from "../../../../../shared/voice-surface";
+import { STRIP_PALETTE } from "../../palette";
 import "./voice.css";
 
 /**
- * DK's DisplayEvent `showAlert` over one tile (DEV:7-9, 375-377): a 50×50
- * glyph on an rgb(255,255,100) block. Glyphs are drawn here; DK's PNGs are
- * not copied.
+ * A key alert over one tile: a 50×50 state glyph on an opaque raised disc,
+ * toned by the alert (invalid, done or stopped).
  */
 export function KeyAlert({
 	alert,
@@ -33,55 +33,39 @@ export function KeyAlert({
 	);
 }
 
-/** AI cancel indicator, 120×120 in a 240 viewBox (QSC:173-236, SCREEN-045). */
+/** AI cancel indicator, 120×120: a stop target on an opaque disc. */
 export function CancelIndicator({ id }: { id: string }): React.JSX.Element {
-	const mask = `voice-cancel-mask-${id}`;
 	return (
 		<svg
 			className="voice-cancel-indicator"
+			data-id={id}
 			width="120"
 			height="120"
 			viewBox="0 0 240 240"
 			fill="none"
 			aria-hidden="true"
 		>
-			<defs>
-				<mask id={mask}>
-					<rect x="0" y="0" width="240" height="240" fill="white" />
-					<rect x="70" y="70" width="100" height="100" rx="16" fill="black" />
-				</mask>
-			</defs>
 			<circle
 				cx="120"
 				cy="120"
-				r="100"
-				stroke="white"
-				strokeWidth="1.5"
-				strokeOpacity="0.8"
-				vectorEffect="non-scaling-stroke"
-			/>
-			<circle
-				cx="120"
-				cy="120"
-				r="92"
-				fill="white"
-				fillOpacity="0.3"
-				mask={`url(#${mask})`}
+				r="104"
+				fill={STRIP_PALETTE.raised}
+				stroke={STRIP_PALETTE.danger}
+				strokeWidth="6"
 			/>
 			<rect
-				x="74"
-				y="74"
-				width="92"
-				height="92"
-				rx="12"
-				fill="#8B0000"
-				fillOpacity="0.8"
+				x="84"
+				y="84"
+				width="72"
+				height="72"
+				rx="10"
+				fill={STRIP_PALETTE.danger}
 			/>
 		</svg>
 	);
 }
 
-/** The selected clawbot key's 20 px green dot (UnitControl.vue:3157-3179). */
+/** The selected clawbot key's 20 px dot. */
 export function ClawbotDot(): React.JSX.Element {
 	return <span className="voice-clawbot-dot" aria-hidden="true" />;
 }

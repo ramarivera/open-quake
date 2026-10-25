@@ -1,24 +1,24 @@
 .meeting-key {
 	position: absolute;
 	inset: 0;
-	border: 2px solid #2f2f2f;
+	border: 2px solid var(--strip-line);
 	border-radius: inherit;
 	padding: 0;
-	background: #171a1b;
-	color: #a5b3b7;
-	font-family: Inter, sans-serif;
+	background: var(--strip-surface);
+	color: var(--strip-muted);
+	font-family: var(--strip-font);
 	text-align: left;
 	overflow: hidden;
 	cursor: pointer;
 }
 .meeting-key[data-active="true"] {
-	border-color: #004040;
-	color: #0ff;
-	background: #132021;
+	border-color: var(--strip-accent);
+	color: var(--strip-accent);
+	background: var(--strip-raised);
 }
 .meeting-key:focus-visible,
 .meeting-display button:focus-visible {
-	outline: 3px solid #0ff;
+	outline: 3px solid var(--strip-accent);
 	outline-offset: -4px;
 }
 .meeting-key-title {
@@ -30,7 +30,7 @@
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	font-size: 32px;
-	color: #ffffff80;
+	color: var(--strip-muted);
 }
 .meeting-key-glyph {
 	position: absolute;
@@ -65,7 +65,7 @@
 	font:
 		25px / 1.4 ui-monospace,
 		monospace;
-	color: #c9dbdb;
+	color: var(--strip-text);
 }
 .meeting-key-status {
 	position: absolute;
@@ -73,7 +73,7 @@
 	width: 100%;
 	text-align: center;
 	font-size: 17px;
-	color: #9aacac;
+	color: var(--strip-muted);
 }
 .meeting-mark-count {
 	position: absolute;
@@ -82,16 +82,16 @@
 	width: 42px;
 	height: 42px;
 	border-radius: 50%;
-	background: #0ff9;
-	color: #001a1a;
+	background: var(--strip-accent);
+	color: var(--strip-accent-ink);
 	display: grid;
 	place-items: center;
 	font-size: 24px;
 }
 .meeting-mark-count[data-open="true"] {
-	border: 2px dashed #0ff;
+	border: 2px dashed var(--strip-accent);
 	background: transparent;
-	color: #0ff;
+	color: var(--strip-accent);
 	animation: meeting-pulse 2s linear infinite;
 }
 .meeting-cooldown {
@@ -103,11 +103,11 @@
 .meeting-display {
 	position: absolute;
 	inset: 0;
-	background: #111516;
-	color: #dae5e5;
+	background: var(--strip-surface);
+	color: var(--strip-text);
 	overflow: hidden;
-	border: 2px solid #0ff3;
-	font-family: Inter, sans-serif;
+	border: 2px solid var(--strip-hairline);
+	font-family: var(--strip-font);
 }
 .meeting-display[data-translating="true"] {
 	animation: meeting-border 1s linear infinite;
@@ -125,14 +125,14 @@
 }
 .meeting-display header > span {
 	font-size: 36px;
-	color: #ffffff80;
+	color: var(--strip-muted);
 	font-weight: 500;
 	margin-right: auto;
 }
 .meeting-display button {
 	border: 0;
 	background: transparent;
-	color: #a6b8ba;
+	color: var(--strip-muted);
 	cursor: pointer;
 	padding: 3px;
 	border-radius: 50%;
@@ -147,8 +147,8 @@
 	cursor: default;
 }
 .meeting-display button[aria-pressed="true"] {
-	color: #0ff;
-	background: #0ff1;
+	color: var(--strip-accent);
+	background: var(--strip-accent-soft);
 }
 .meeting-display :where(button) svg {
 	width: 30px;
@@ -176,7 +176,7 @@
 	left: 3%;
 	right: 3%;
 	font-size: 16px;
-	color: #a0b0b0;
+	color: var(--strip-muted);
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	overflow: hidden;
@@ -187,9 +187,9 @@
 	right: 15px;
 	width: 44px;
 	height: 44px;
-	border: 1px solid #465354;
+	border: 1px solid var(--strip-line);
 	border-radius: 24px;
-	background: #1d2527ed;
+	background: var(--strip-raised);
 	display: flex;
 	align-items: center;
 	flex-direction: column;
@@ -211,13 +211,13 @@
 	display: flex;
 	justify-content: space-between;
 	font-size: 16px;
-	color: #8fa2a4;
+	color: var(--strip-muted);
 	margin-bottom: 16px;
 }
 .meeting-document-toggle button {
 	border-radius: 8px;
 	font-size: 18px;
-	border: 1px solid #536568;
+	border: 1px solid var(--strip-line);
 	padding: 0 12px;
 }
 .meeting-safe-text {
@@ -235,19 +235,19 @@
 	display: flex;
 	flex-direction: column;
 	gap: 28px;
-	border-right: 1px solid #0ff3;
+	border-right: 1px solid var(--strip-hairline);
 	font-size: 18px;
-	color: #819c9f;
+	color: var(--strip-muted);
 	padding-right: 20px;
 }
 .meeting-translations p {
 	margin: 0 0 14px;
-	color: #ffffffa6;
+	color: var(--strip-text);
 }
 .meeting-translations strong {
 	display: block;
 	font-size: 33px;
-	color: #ffffffce;
+	color: var(--strip-text);
 }
 .meeting-translations p[data-final="false"] {
 	opacity: 0.7;
@@ -257,7 +257,7 @@
 	display: grid;
 	align-content: center;
 	justify-items: center;
-	color: #8b9d9e;
+	color: var(--strip-muted);
 }
 .meeting-viewer-empty svg {
 	width: 70px;
@@ -271,7 +271,7 @@
 	align-items: center;
 	justify-content: center;
 	font-size: 24px;
-	color: #a0b3b3;
+	color: var(--strip-muted);
 }
 .meeting-animation p {
 	margin: 18px 0 0;
@@ -286,13 +286,13 @@
 .meeting-orbit svg {
 	width: 48px;
 	height: 66px;
-	color: #a5b8b9;
+	color: var(--strip-muted);
 	z-index: 1;
 }
 .meeting-orbit i {
 	position: absolute;
 	inset: -4px;
-	border: 1px solid #ffffff18;
+	border: 1px solid var(--strip-hairline);
 	border-radius: 50%;
 }
 .meeting-orbit i:nth-child(3) {
@@ -302,10 +302,10 @@
 	inset: -42px;
 }
 .meeting-animation[data-animation="recording"] .meeting-orbit {
-	color: #0ff;
+	color: var(--strip-accent);
 }
 .meeting-animation[data-animation="recording"] .meeting-orbit i {
-	border-color: #0ff4;
+	border-color: var(--strip-line);
 	animation: meeting-pulse 4s ease-in-out infinite;
 }
 .meeting-animation[data-animation="recording"] .meeting-orbit i:nth-child(3) {
@@ -314,8 +314,8 @@
 .meeting-gears {
 	width: 180px;
 	height: 120px;
-	fill: #263233;
-	stroke: #829597;
+	fill: var(--strip-raised);
+	stroke: var(--strip-muted);
 	stroke-width: 2;
 }
 .meeting-gear {
@@ -328,18 +328,18 @@
 }
 .meeting-animation[data-animation="failure"] .meeting-gear {
 	animation: none;
-	stroke: #ae7676;
+	stroke: var(--strip-danger);
 }
 .meeting-crack {
 	fill: none;
-	stroke: #ef6a6a;
+	stroke: var(--strip-danger);
 	stroke-width: 4;
 }
 .meeting-success {
 	width: 100px;
 	height: 100px;
 	fill: none;
-	stroke: #4ad6b0;
+	stroke: var(--strip-success);
 	stroke-width: 3;
 }
 .meeting-fireworks {
@@ -348,7 +348,7 @@
 	width: 100%;
 	height: 100%;
 	fill: none;
-	stroke: #0ff;
+	stroke: var(--strip-accent);
 	stroke-width: 2;
 	pointer-events: none;
 }
@@ -403,4 +403,10 @@
 :root[data-motion="reduce"] :is(.meeting-key, .meeting-display) * {
 	animation: none;
 	transition: none;
+}
+
+/* One ring at most: none while the meeting is off, one while recording. */
+.meeting-animation[data-animation="idle"] .meeting-orbit i,
+.meeting-orbit i + i {
+	display: none;
 }

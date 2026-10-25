@@ -4,6 +4,8 @@
 
 Make physical knob gestures select profiles and control the focused tile or player consistently across strip renderers and profile changes.
 
+> **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (selector arc/vignette/label drawing, focus dial drawing, cyan volume fill) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
+
 ## ADDED Requirements
 
 ### Requirement: Firmware gestures and voice arbitration

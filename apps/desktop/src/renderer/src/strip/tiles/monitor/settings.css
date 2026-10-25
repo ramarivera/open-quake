@@ -1,58 +1,41 @@
-.monitor-settings {
-	margin-top: 40px;
+/* Management "System monitor panel" settings on the shared form primitives. */
+.monitor-fieldset {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
 }
-.monitor-settings > h2 {
-	margin-bottom: 4px;
+.monitor-settings-preview {
+	margin-bottom: var(--oq-space-4, 16px);
 }
-.monitor-settings > p {
-	font-size: 12px;
-	color: var(--text-muted);
-}
-.monitor-settings fieldset {
-	margin: 20px 0;
-	border: 1px solid var(--border);
-	border-radius: 10px;
-	padding: 16px;
-}
-.monitor-settings legend {
-	font-size: 14px;
-	font-weight: 600;
-	padding: 0 8px;
-}
-.monitor-settings fieldset p {
-	font-size: 12px;
-	opacity: 0.7;
-}
-.monitor-settings label {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	margin: 8px 16px 8px 0;
-	font-size: 13px;
-}
-.monitor-settings input[type="number"] {
-	width: 80px;
-	padding: 6px;
-}
-.monitor-settings button {
-	padding: 8px 12px;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	background: var(--surface);
-	color: inherit;
+.monitor-style-options button {
+	border: 0;
+	border-radius: var(--oq-radius-md, 8px);
+	background: var(--oq-surface, var(--quake-surface));
+	box-shadow: inset 0 0 0 1px var(--oq-border, var(--quake-hairline));
+	color: var(--oq-text, var(--quake-foreground));
 	font: inherit;
-	font-size: 12px;
+	font-size: var(--mc-font-meta, 12.5px);
+	font-weight: 550;
 	cursor: pointer;
 }
-.monitor-settings button:disabled {
-	opacity: 0.45;
+.monitor-style-options button[aria-pressed="true"] {
+	box-shadow: inset 0 0 0 2px var(--oq-accent, var(--quake-accent));
+	background: var(--oq-accent-soft, var(--quake-surface));
+}
+.monitor-style-options button:focus-visible {
+	outline: 2px solid var(--oq-accent, var(--quake-accent));
+	outline-offset: 2px;
+}
+.monitor-style-options button:disabled {
+	opacity: 0.5;
 	cursor: default;
 }
-.monitor-settings button[aria-pressed="true"] {
-	outline: 2px solid #4f8bff;
-	outline-offset: 1px;
-}
 .monitor-style-options {
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 12px;
@@ -84,24 +67,47 @@
 .swatch-wasteland {
 	background: repeating-linear-gradient(45deg, #111 0 8px, #ffb000 8px 16px);
 }
-.monitor-bg-options,
+.monitor-bg-controls {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--oq-space-3, 12px);
+}
 .monitor-media-actions,
 .monitor-save {
 	display: flex;
-	gap: 10px;
+	gap: var(--oq-space-2, 8px);
 }
-.monitor-media-actions {
-	margin-top: 16px;
+.monitor-media-name,
+.monitor-media-error {
+	margin: 0;
+	font-size: var(--mc-font-meta, 12.5px);
+	color: var(--oq-text-muted, var(--quake-muted));
+}
+.monitor-media-error {
+	color: var(--oq-danger, var(--quake-warning));
+}
+.monitor-hz {
+	width: 96px;
+}
+.monitor-footer {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--oq-space-4, 16px);
+	margin-top: var(--oq-space-4, 16px);
 }
 .monitor-save {
-	justify-content: flex-end;
+	margin-left: auto;
 }
 .monitor-settings-preview {
 	width: 100%;
 	aspect-ratio: 4;
 	position: relative;
 	overflow: hidden;
-	border-radius: 6px;
+	border-radius: var(--oq-radius-md, 8px);
+	background: #000;
+	box-shadow: 0 0 0 1px var(--oq-hairline, var(--quake-hairline));
 	container-type: inline-size;
 }
 .monitor-settings-preview > div {

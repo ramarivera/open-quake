@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
 	defaults,
 	type MediaView,
@@ -8,6 +8,7 @@ import {
 	STYLES,
 	type StyleId,
 } from "../../../../../shared/monitor-contracts";
+import { Callout, Group, Row, Segmented } from "../../../ui/Form";
 import { MonitorPanel } from "./MonitorPanel";
 import { settingsLabels as l } from "./strings";
 import { settingsWithoutMedia, useMonitor } from "./useMonitor";
@@ -17,6 +18,7 @@ import "./settings.css";
 const preview = previewSnapshot();
 export function MonitorSettings(): React.JSX.Element {
 	const { view } = useMonitor();
+	const ids = useId();
 	const [draft, setDraft] = useState<Settings>(defaults);
 	const [revision, setRevision] = useState(0);
 	const [dirty, setDirty] = useState(false),
@@ -125,149 +127,175 @@ export function MonitorSettings(): React.JSX.Element {
 	};
 	return (
 		<section className="monitor-settings" aria-label="System monitor settings">
-			<h2>SysView · Panel</h2>
-			<p>Preview · Sample data</p>
-			<div className="monitor-settings-preview">
-				<div>
-					<MonitorPanel
-						settings={draft}
-						snapshot={preview}
-						media={media[draft.styleId]}
-						preview
-					/>
-				</div>
-			</div>
-			<fieldset disabled={busy || !view}>
-				<legend>{l.styleSection}</legend>
-				<div className="monitor-style-options">
-					{STYLES.map((style) => (
-						<button
-							key={style}
-							type="button"
-							aria-pressed={draft.styleId === style}
-							data-monitor-style={style}
-							onClick={() => change({ ...draft, styleId: style })}
-						>
-							<span className={`monitor-style-swatch swatch-${style}`} />
-							{l.style[style]}
-						</button>
-					))}
-				</div>
-			</fieldset>
-			<fieldset disabled={busy || !view}>
-				<legend>{l.bgSection}</legend>
-				<p>{l.bgCurrentStyle.replace("{name}", l.style[draft.styleId])}</p>
-				<div className="monitor-bg-options">
-					{(["style", "none", "custom"] as const).map((mode) => (
-						<button
-							key={mode}
-							type="button"
-							aria-pressed={draft.background === mode}
-							onClick={() => change({ ...draft, background: mode })}
-						>
-							{l.bgMode[mode]}
-						</button>
-					))}
-				</div>
-				<div className="monitor-media-actions">
-					<button
-						type="button"
-						disabled={draft.background !== "custom"}
-						onClick={() => void choose()}
-					>
-						{l.bgChange}
-					</button>
-					<button
-						type="button"
-						disabled={!draft.media[draft.styleId]}
-						onClick={() => {
-							change(settingsWithoutMedia(draft, draft.styleId));
-							const next = { ...media };
-							delete next[draft.styleId];
-							setMedia(next);
-						}}
-					>
-						{l.bgRestore}
-					</button>
-				</div>
-				{draft.media[draft.styleId] ? (
-					<p>{draft.media[draft.styleId]?.name}</p>
-				) : null}
-				{media[draft.styleId]?.available === false ? (
-					<p role="status">{l.bgInvalid}</p>
-				) : null}
-			</fieldset>
-			<fieldset disabled={busy || !view}>
-				<legend>Temperature Unit</legend>
-				<label>
-					<input
-						type="radio"
-						name="monitor-temperature"
-						checked={draft.temperatureUnit === "celsius"}
-						onChange={() => change({ ...draft, temperatureUnit: "celsius" })}
-					/>{" "}
-					Celsius
-				</label>
-				<label>
-					<input
-						type="radio"
-						name="monitor-temperature"
-						checked={draft.temperatureUnit === "fahrenheit"}
-						onChange={() => change({ ...draft, temperatureUnit: "fahrenheit" })}
-					/>{" "}
-					Fahrenheit
-				</label>
-			</fieldset>
-			<fieldset disabled={busy || !view}>
-				<legend>Sampling</legend>
-				<label>
-					<input
-						type="checkbox"
-						checked={draft.enabled}
-						onChange={(event) =>
-							change({ ...draft, enabled: event.target.checked })
-						}
-					/>{" "}
-					Enable monitoring
-				</label>
-				<label>
-					Samples per second{" "}
-					<input
-						aria-label="Samples per second"
-						type="number"
-						min="0.2"
-						max="10"
-						step="0.2"
-						value={draft.hz}
-						onChange={(event) =>
-							change({ ...draft, hz: event.target.valueAsNumber })
-						}
-					/>
-				</label>
-				<p>0.2–10 Hz. Default: 1 Hz.</p>
-			</fieldset>
-			{error ? <p role="alert">{error}</p> : null}
-			{!view ? <p role="status">Monitor settings are unavailable</p> : null}
-			{view?.recovered ? (
-				<p role="status">Saved settings were invalid. Defaults are shown.</p>
-			) : null}
-			<div className="monitor-save">
-				<button type="button" disabled={!dirty || busy} onClick={revert}>
-					Revert
-				</button>
-				<button
-					type="button"
-					disabled={
-						!dirty ||
-						busy ||
-						!Number.isFinite(draft.hz) ||
-						draft.hz < 0.2 ||
-						draft.hz > 10
-					}
-					onClick={() => void save()}
+			<fieldset className="monitor-fieldset" disabled={busy || !view}>
+				<Group
+					title="System monitor panel"
+					description="Preview with sample data. Changes apply when you save."
 				>
-					Save
-				</button>
+					<div className="monitor-settings-preview">
+						<div>
+							<MonitorPanel
+								settings={draft}
+								snapshot={preview}
+								media={media[draft.styleId]}
+								preview
+							/>
+						</div>
+					</div>
+					<Row label={l.styleSection} labelId={`${ids}-style`} align="start">
+						<fieldset
+							className="monitor-style-options"
+							aria-labelledby={`${ids}-style`}
+						>
+							{STYLES.map((style) => (
+								<button
+									key={style}
+									type="button"
+									aria-pressed={draft.styleId === style}
+									data-monitor-style={style}
+									onClick={() => change({ ...draft, styleId: style })}
+								>
+									<span className={`monitor-style-swatch swatch-${style}`} />
+									{l.style[style]}
+								</button>
+							))}
+						</fieldset>
+					</Row>
+					<Row
+						label={l.bgSection}
+						labelId={`${ids}-bg`}
+						hint={l.bgCurrentStyle.replace("{name}", l.style[draft.styleId])}
+						align="start"
+					>
+						<div className="monitor-bg-controls">
+							<Segmented
+								name={`${ids}-bg`}
+								labelledBy={`${ids}-bg`}
+								value={draft.background}
+								options={(["style", "none", "custom"] as const).map((mode) => ({
+									value: mode,
+									label: l.bgMode[mode],
+								}))}
+								onChange={(mode) => change({ ...draft, background: mode })}
+							/>
+							<div className="monitor-media-actions">
+								<button
+									type="button"
+									className="button"
+									disabled={draft.background !== "custom"}
+									onClick={() => void choose()}
+								>
+									{l.bgChange}
+								</button>
+								<button
+									type="button"
+									className="button"
+									data-variant="quiet"
+									disabled={!draft.media[draft.styleId]}
+									onClick={() => {
+										change(settingsWithoutMedia(draft, draft.styleId));
+										const next = { ...media };
+										delete next[draft.styleId];
+										setMedia(next);
+									}}
+								>
+									{l.bgRestore}
+								</button>
+							</div>
+							{draft.media[draft.styleId] ? (
+								<p className="monitor-media-name">
+									{draft.media[draft.styleId]?.name}
+								</p>
+							) : null}
+							{media[draft.styleId]?.available === false ? (
+								<p className="monitor-media-error" role="status">
+									{l.bgInvalid}
+								</p>
+							) : null}
+						</div>
+					</Row>
+				</Group>
+				<Group title="Readings">
+					<Row label="Temperature unit" labelId={`${ids}-unit`}>
+						<Segmented
+							name="monitor-temperature"
+							labelledBy={`${ids}-unit`}
+							value={draft.temperatureUnit}
+							options={[
+								{ value: "celsius", label: "Celsius" },
+								{ value: "fahrenheit", label: "Fahrenheit" },
+							]}
+							onChange={(unit) => change({ ...draft, temperatureUnit: unit })}
+						/>
+					</Row>
+					<Row label="Enable monitoring" htmlFor={`${ids}-enabled`}>
+						<input
+							id={`${ids}-enabled`}
+							type="checkbox"
+							checked={draft.enabled}
+							onChange={(event) =>
+								change({ ...draft, enabled: event.target.checked })
+							}
+						/>
+					</Row>
+					<Row
+						label="Samples per second"
+						htmlFor={`${ids}-hz`}
+						hint="0.2–10 Hz. Default: 1 Hz."
+					>
+						<input
+							id={`${ids}-hz`}
+							className="text-field monitor-hz"
+							aria-label="Samples per second"
+							type="number"
+							min="0.2"
+							max="10"
+							step="0.2"
+							value={draft.hz}
+							onChange={(event) =>
+								change({ ...draft, hz: event.target.valueAsNumber })
+							}
+						/>
+					</Row>
+				</Group>
+			</fieldset>
+			<div className="monitor-footer">
+				<div role="status" aria-live="polite" className="status-notes">
+					{error ? <Callout tone="warning">{error}</Callout> : null}
+					{!view ? (
+						<Callout tone="warning">Monitor settings are unavailable</Callout>
+					) : null}
+					{view?.recovered ? (
+						<Callout tone="warning">
+							Saved settings were invalid. Defaults are shown.
+						</Callout>
+					) : null}
+				</div>
+				<div className="monitor-save">
+					<button
+						type="button"
+						className="button"
+						disabled={!dirty || busy}
+						onClick={revert}
+					>
+						Revert
+					</button>
+					<button
+						type="button"
+						className="button"
+						data-primary=""
+						disabled={
+							!dirty ||
+							busy ||
+							!Number.isFinite(draft.hz) ||
+							draft.hz < 0.2 ||
+							draft.hz > 10
+						}
+						onClick={() => void save()}
+					>
+						Save
+					</button>
+				</div>
 			</div>
 		</section>
 	);

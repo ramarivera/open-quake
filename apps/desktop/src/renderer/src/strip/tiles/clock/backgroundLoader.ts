@@ -1,5 +1,5 @@
 import type { MediaKind, ThemeId } from "../../../../../shared/clock-style";
-import type { FlipTimers } from "./flipSequencer";
+import type { ClockTimers } from "./clockHooks";
 
 /** `DkClockBackground.vue`: custom media gets 5 s to load or start playing. */
 export const MEDIA_LOAD_TIMEOUT_MS = 5000;
@@ -56,7 +56,7 @@ export class BackgroundLoader {
 
 	constructor(
 		private readonly onChange: (state: EffectiveBackground) => void,
-		private readonly timers: FlipTimers = globalThis,
+		private readonly timers: ClockTimers = globalThis,
 	) {}
 
 	get current(): EffectiveBackground {

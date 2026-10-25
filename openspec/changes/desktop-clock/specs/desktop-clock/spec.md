@@ -4,6 +4,8 @@
 
 The DK-Suite 0.4.95 desktop clock on the QUAKE strip: glass flip digits, five themes with their art and tints, optional custom media, on-device theme switching with persistence and rollback, plus the settings that drive it. Audit rows are from `dark-encyclopedia/dk-suite-introspeccion/v0.4.95/audit/AUDIT_WIDGETS.md`.
 
+> **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (glass flip digits, minute flip animation, DK stage pixel layout, readability scrim) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
+
 ## ADDED Requirements
 
 ### Requirement: Local time and hour format
