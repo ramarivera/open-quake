@@ -32,6 +32,39 @@ and a catalog warning/span emitted before handling it. Re-import rechecks
 availability instead of trusting saved statuses. Migration is stable under
 unchanged observations.
 
-Playback service, managed-file import/copy, 10-second player readiness, fades,
-shared speech preemption, player controls, native audio and physical key
-acceptance remain in the other `soundboard-player` tasks.
+## Gated playback implementation
+
+`SoundboardService.Default` declares its runtime repository dependency. At an
+application root, provide `SoundboardPlayer`, `SoundboardFiles` and the same
+`AudioOutput` instance that production speech/capture uses. Never create a
+second output owner for soundboard. Keep the service's Layer alive until its
+consumer finishes; acquiring a scoped service and returning it from a locally
+provided Layer closes it before the caller can use it.
+
+The current methods are `play`, `stop`, `stopAll`, `naturalEnd`, `snapshot` and
+idempotent awaited `close`. Explicit play replaces that key's instances;
+`additional: true` creates an independent instance. Track generations reject
+stale or duplicate completion, playlists wrap, and `loopTrack` repeats the
+current track. Navigation probes at most one traversal and stops if every
+entry is unavailable. Explicit play checks its remembered target before stopping
+valid playback. Acquisition, readiness and start share one ten-second deadline.
+
+The repository retains at most 256 terminal observations alongside 128 active
+instances. Callers receive detached snapshots with opaque IDs/statuses, never
+paths. A group owns one output lease. Capture/speech invalidates it before
+awaiting every native resource, including pending readiness. Stop cancels loading
+immediately, concurrent teardown waits for the same cleanup, and stale release
+can't stop replacement speech. A two-second teardown failure makes the shared
+output owner refuse future acquisition until restart.
+
+Desktop `SoundboardPlayerLive` uses an invisible sandboxed HTML media worker
+with no Node or microphone access. Each session permits only its own page and
+the explicitly selected local MP3 URL. Gain is local to that media element.
+Its scope closes the window/private directory, including interrupted and late
+acquisition. Native decode failures retain their original cause privately.
+
+These modules aren't composed into the production root or exposed through key,
+IPC or UI controls. Imported soundboard keys remain unavailable. Non-`none`
+fades are rejected until task 2.2 implements ramps. Service pause/resume,
+explicit previous/next, rescan, profile deactivation, managed-file import/copy,
+UI/key integration, audible output and physical-trigger acceptance remain open.
