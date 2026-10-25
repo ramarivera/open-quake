@@ -19,7 +19,7 @@ The parent composition root supplies these `DesktopKnobBindings`:
 ```ts
 {
   deviceId: () => activeSerial ?? "desktop-preview",
-  locale: profiles.currentLocale,
+  locale: () => knobLocale,
   profiles: knobProfileBinding(profiles.runtime, profiles.select),
   thumbnail: profiles.thumbnail,
   hardware: () => bus?.hardware?.(),
@@ -33,18 +33,19 @@ that connection is released. Do not derive it from a profile's display name or
 create another profile service. Context reads use that device's committed
 profile and page. An isolated fallback writes only that device's selection;
 late selections for a replaced device fail with the stale-session catalog code.
-Call `knob.refresh()` after committed profile changes. Register
-`profiles.onLocaleChanged(() => { void knob.refresh().catch(reportFailure); })`
-and dispose that subscription with the root. `profiles.currentLocale()` reads
-the existing profile controller, initially en until its first non-preview read.
-Preview reads cannot change it. This is the profile-manager locale, not another
-settings store. If the root needs global settings before any manager read,
-prime the manager through its existing non-preview read with the canonical
-SettingsService locale. A
+Call `knob.refresh()` after committed profile changes. Global application locale
+is authoritative. The root subscribes through
+`localeRegistration.onLocaleChanged(synchronizeKnobLocale)` before requesting
+`localeRegistration.locale()`, updates `knobLocale`, and refreshes on changes.
+Revision checks prevent a late startup read from overwriting a newer saved
+selection. Dispose this subscription on shutdown. These methods use the existing
+canonical SettingsService runtime and never construct another settings store.
+`profiles.currentLocale()` remains a manager-local convenience for isolated
+consumers. It defaults to en until a non-preview manager read and is not the
+production root's startup authority. A
 content-and-locale fingerprint invalidates even an inactive profile's thumbnail
 or an edit that retains the same revision. Identical publications preserve the
-current selector and ready cache. Root wiring is parent-owned and remains an
-integration prerequisite for these optional bindings.
+current selector and ready cache. Production root wiring is verified separately from physical interaction.
 
 Native macOS volume supports player mode and focused volume tiles. Registration
 owns one sequential observer, polling at one-second intervals only while player

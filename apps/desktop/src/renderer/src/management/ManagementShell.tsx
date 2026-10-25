@@ -84,7 +84,7 @@ export function ManagementShell({
 }: {
 	/** "setup" is a route outside the nav sections (settings-and-wizard). */
 	page: ManagementPage | "setup";
-	onOpen: (page: ManagementPage) => void;
+	onOpen: (page: ManagementPage | "setup") => void;
 	connection: ConnectionSummary;
 	runtimeStatus: string;
 	runtimeLabel: string;
@@ -94,7 +94,9 @@ export function ManagementShell({
 	contentRef: React.RefObject<HTMLElement | null>;
 	deviceReady: boolean;
 	/** Optional sidebar entry shown while setup is unfinished. */
-	setupEntry?: ReactNode;
+	setupEntry?: (
+		navigate: (page: ManagementPage | "setup") => void,
+	) => ReactNode;
 	/** Localized name for the setup route in the breadcrumb and top bar. */
 	setupLabel?: string;
 	children?: ReactNode;
@@ -136,7 +138,7 @@ export function ManagementShell({
 		return () => document.removeEventListener("keydown", onKey);
 	}, [drawer, closeDrawer]);
 
-	const choose = (next: ManagementPage): void => {
+	const choose = (next: ManagementPage | "setup"): void => {
 		onOpen(next);
 		if (narrow) closeDrawer();
 	};
@@ -250,7 +252,7 @@ export function ManagementShell({
 							</div>
 						))}
 					</nav>
-					{setupEntry}
+					{setupEntry?.(choose)}
 					<footer className="mc-sidebar-footer">
 						<UiSettings controller={appearance} />
 					</footer>
