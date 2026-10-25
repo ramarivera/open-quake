@@ -22,4 +22,4 @@
 
 - [x] 4.1 Lane9, open-quake-hwn.9: compose production adapters and QUAKE text/agent routing plus the transcript helper; verify mock-device consumer tests demonstrate selected connection use without real hardware. Production capture/STT/TTS binding remains open in open-quake-lih.15.1.15 and c5w.6/c5w.7.
 - [x] 4.2 Lane10, open-quake-hwn.10: inspect existing endpoints and perform authorized live runtime acceptance without service changes; document exact tested endpoints, capabilities and remaining live gaps without secrets.
-- [ ] 4.3 Parent: reconcile lane commits, exports and task/bead evidence; run focused integration checks, deliver reviewed PR and keep any pending checks under host monitoring.
+- [x] 4.3 Parent: reconcile lane commits, exports and task/bead evidence; run focused integration checks, deliver reviewed PR and keep any pending checks under host monitoring.
