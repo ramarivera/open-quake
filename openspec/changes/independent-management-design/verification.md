@@ -49,3 +49,24 @@ Capture viewport: the host work area is 1280×627, so screenshots use 1180×620 
   natively verified. Main's first-run fallback colour is still DK grey for one frame
   (parent seam).
 - No physical QUAKE or packaged-app acceptance.
+
+## Parent integration acceptance, 2026-10-25
+
+The combined production renderer, preload and main-root smokes now use stable
+navigation selectors, the narrow drawer and the Home Assistant h1. Combined
+management acceptance passed with 69 screenshots, real settings IPC, profile
+thumbnails, permission fixtures, backup and owned disposal. The first native
+window background now uses Graphite. All three Opus lanes are integrated.
+The latest full desktop suite passed 1311 tests with an external TMPDIR;
+production build, typecheck and strict redesign validation passed.
+
+Actual desktop-to-container acceptance passed for both Hermes and OpenClaw
+using gpt-6.1-sol, two-turn continuity and tool-free inference. Correlated
+production Effect spans were persisted and shutdown reported zero dropped
+records and storage failures. Physical device/audio acceptance remains open.
+
+Artifacts are outside the repo in
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/redesign/integrated/management-final/`
+and `redesign/runtime-final/`. Earlier lane gaps above are historical;
+PR47's narrow recovery and Display popover review fixes are still in progress.
+Native Windows/Linux and packaged-app visual checks remain unverified.

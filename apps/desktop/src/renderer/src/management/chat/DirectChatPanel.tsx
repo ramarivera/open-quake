@@ -119,8 +119,9 @@ export function DirectChatPanel({
 		const value = text;
 		follow.current = true;
 		reveal.current = true;
-		void controller.submit(value);
-		setText("");
+		void controller.submit(value).then((accepted) => {
+			if (accepted) setText((draft) => (draft === value ? "" : draft));
+		});
 	};
 	const renaming = Boolean(
 		state.current && title.trim() && title !== state.current.title,

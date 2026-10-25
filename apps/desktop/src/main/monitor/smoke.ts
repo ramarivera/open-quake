@@ -20,6 +20,7 @@ import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
+import { registerManagementAppearance } from "../management/appearance";
 import { MediaLive, registerMedia } from "../media";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
@@ -148,6 +149,11 @@ async function smoke(): Promise<void> {
 			panel = new BrowserWindow(options);
 		const thumbnail = new BrowserWindow(options);
 		const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
+		const removeAppearance = registerManagementAppearance(
+			() => management,
+			base,
+			renderer,
+		);
 		const voice = registerVoiceSurface({
 			mock: true,
 			tones: createToneRecorder(),
@@ -256,6 +262,7 @@ async function smoke(): Promise<void> {
 				panel.webContents.send("quake:event", event);
 		});
 		dispose = async () => {
+			removeAppearance();
 			off();
 			bus.stop();
 			await monitor.dispose();

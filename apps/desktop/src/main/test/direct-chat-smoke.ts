@@ -174,6 +174,25 @@ async function run() {
 	);
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]?.model, "synthetic-model");
+	step = "rejected acceptance retains editable draft";
+	const rejectedDraft = "x".repeat(32769);
+	await send(win, rejectedDraft);
+	await wait(
+		win,
+		"!document.querySelector('.direct-chat textarea').disabled && Boolean(document.querySelector('.direct-chat [role=alert]'))",
+	);
+	assert.equal(
+		await evaluate(
+			win,
+			"document.querySelector('.direct-chat textarea').value",
+		),
+		rejectedDraft,
+	);
+	assert.equal(
+		requests.length,
+		1,
+		"Rejected input must not reach the provider",
+	);
 	step = "history continuation";
 	await send(win, "second message");
 	await wait(

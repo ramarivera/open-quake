@@ -31,3 +31,31 @@ Artifacts are kept outside the repo in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/o
 - The runtime container E2E (`runtime-desktop-e2e.ts`) was not run, because it needs disposable containers. Its selectors were kept by design; only the tab label changed.
 - Live providers, physical QUAKE, microphone and audio were out of scope.
 - Locale switching depends on the parent's i18n provider. This lane delivers dictionaries and seams only.
+
+## Parent integration acceptance, 2026-10-25
+
+The locale-aware combined app includes the Opus narrow workspace rework.
+The direct-chat native smoke passes at true 390 by 625 and 1180 by 625,
+with the newest exchange and composer visible. A rejected oversized host
+submission retains the editable draft and produces no provider request.
+The controller regression also distinguishes accepted submissions from
+rejected or duplicate submissions.
+
+Real disposable Hermes and OpenClaw each passed selected desktop routing,
+streamed rendering, two-turn remote continuity, production shutdown and
+container/network/volume teardown. Inference used the authorized gpt-6.1-sol
+model with a generic environment-configured provider. No tools were enabled.
+Locale switching during a direct stream preserved the active request and
+translated Stop without reloading the renderer.
+
+Artifacts are outside the repo under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/redesign/`:
+`integrated/direct-chat-IMnRjy/` and `runtime-final/desktop-e2e-QlVZ5A/`.
+PR47 review fixes and merge remain pending. Physical QUAKE and microphone/audio
+acceptance are separate and remain unverified.
+
+The actual-root synthetic Hermes regression also holds a reply open, opens the
+connection details sheet, verifies Edit and Remove are disabled, attempts both
+clicks, and confirms the selected connection and running reply survive until
+explicit Stop. Evidence: `redesign/review-runtime/stream-guard-B59KBB/` under
+the external scratch root.

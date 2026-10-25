@@ -18,7 +18,7 @@ item; assigned lane task `open-quake-nyd.4`.
 
 ## 3. Verification
 
-- [ ] 3.1 Renderer tests, typecheck, biome; hidden mock before/after captures at 1920×480 and 480×1920 for clock/theme, voice idle/listening/answer/error, grid, knob, media unavailable/playing and translations; contrast/overlap probes; parent smoke contract handoff. (`open-quake-nyd.5.8`) Lane evidence is complete; this stays open until the parent applies the smoke contract and integrates.
+- [x] 3.1 Renderer tests, typecheck, biome; hidden mock before/after captures at 1920×480 and 480×1920 for clock/theme, voice idle/listening/answer/error, grid, knob, media unavailable/playing and translations; contrast/overlap probes; parent smoke contract handoff. (`open-quake-nyd.5.8`) Parent integrated the smoke contract and verified combined native mock acceptance.
 
 ## Verification evidence
 
@@ -41,3 +41,19 @@ Lane worktree `t3/5166179a`, 2026-10-25. Scratch:
   `compare-*.png`.
 - Not verified: the physical QUAKE strip, real microphone/audio, and the
   monitor smoke (its artifact path is outside this lane's scratch).
+
+## Parent integration acceptance, 2026-10-25
+
+The combined app applies the smoke contracts. Clock, weather/media, voice
+rounds 1-3, knob, monitor and key-library smokes pass against the redesigned
+renderer with mock HID. The monitor and key-library harnesses now register
+and dispose real appearance IPC. Explicit title bold uses the renderer's
+700 weight. The 480 by 1920 profile-picker rotation capture was inspected.
+
+Artifacts live outside the repository under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/redesign/integrated/`.
+The key-library result is in `keys-review-run.log`; monitor artifacts are in
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/monitor-panel/redesign-final/`.
+Isolated harnesses still report missing unrelated IPC handlers; these captures
+do not establish physical strip appearance or microphone/audio acceptance.
+The reviewed PR merge is pending.

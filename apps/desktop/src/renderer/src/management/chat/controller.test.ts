@@ -65,6 +65,24 @@ function fixture() {
 }
 
 describe("direct chat renderer lifecycle", () => {
+	it("reports acceptance distinctly from rejected setup and preserves the rejected input", async () => {
+		const f = fixture();
+		vi.mocked(f.bridge.submit).mockRejectedValueOnce({
+			code: "AI.CONFIG.INVALID",
+		});
+		const controller = createChatController(f.bridge);
+		expect(await controller.submit("keep this draft")).toBe(false);
+		expect(controller.getSnapshot()).toMatchObject({
+			input: "keep this draft",
+			pending: false,
+			error: "AI.CONFIG.INVALID",
+		});
+		expect(f.bridge.subscribe).not.toHaveBeenCalled();
+		expect(await controller.submit("keep this draft")).toBe(true);
+		expect(await controller.submit("duplicate")).toBe(false);
+		expect(f.bridge.submit).toHaveBeenCalledTimes(2);
+		controller.dispose();
+	});
 	for (const failed of [false, true]) {
 		it(`guards repeated deletion and releases its state after ${failed ? "failure" : "success"}`, async () => {
 			const f = fixture();

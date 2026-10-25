@@ -29,4 +29,4 @@ Epic bead `open-quake-nyd`; this change's task bead is `open-quake-nyd.2`.
 ## 6. Integration follow-ups
 
 - [x] 6.1 Language control on the integration branch (`lane/nyd2-on-opus-led`, on top of `redesign/opus-led` with the shared `useAppLocale` provider): Display popover and Appearance group, native language names, translated heading, load/persist failure text.
-- [ ] 6.2 Parent-owned root smokes adopt `.nav-item[data-nav-page=…]`, the drawer at narrow widths and the HA `h1` title (exact list in the lane scratch `PARENT-SEAMS.md`), then rerun the combined root/preload acceptance.
+- [x] 6.2 Parent-owned root smokes adopt `.nav-item[data-nav-page=…]`, the drawer at narrow widths and the HA `h1` title (exact list in the lane scratch `PARENT-SEAMS.md`), then rerun the combined root/preload acceptance.

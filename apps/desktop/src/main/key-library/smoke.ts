@@ -19,6 +19,7 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerMaintenance } from "../maintenance";
+import { registerManagementAppearance } from "../management/appearance";
 import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerProfiles } from "../profiles";
@@ -184,6 +185,7 @@ async function smoke(): Promise<void> {
 	let meetings: ReturnType<typeof registerMeetings> | undefined;
 	let disposeLifecycle = async () => {},
 		removeHardware = () => {};
+	let removeAppearance = () => {};
 	let management: BrowserWindow | undefined;
 	let delays: ReturnType<typeof interceptEditorRequests> | undefined;
 	try {
@@ -214,6 +216,12 @@ async function smoke(): Promise<void> {
 					process.stderr.write(`renderer: ${details.message}\n`);
 			});
 		const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
+		removeAppearance = registerManagementAppearance(
+			() => manager,
+			directory,
+			renderer,
+		);
+
 		delays = interceptEditorRequests();
 		profiles = registerProfiles(
 			() => manager,
@@ -449,7 +457,7 @@ async function smoke(): Promise<void> {
 		await click(manager, 'button[aria-label="bold"]');
 		await ready(
 			panel,
-			"Array.from(document.querySelectorAll('.strip-tile-title')).some(el => el.textContent==='Saved title' && el.style.top==='50%' && el.style.fontWeight==='900')",
+			"Array.from(document.querySelectorAll('.strip-tile-title')).some(el => el.textContent==='Saved title' && el.style.top==='50%' && el.style.fontWeight==='700')",
 		);
 		await snapshot(manager, "title-style");
 		await click(manager, "#key-title-reset");
@@ -923,6 +931,7 @@ async function smoke(): Promise<void> {
 			);
 		}
 	} finally {
+		removeAppearance();
 		delays?.releaseAll();
 		removeHardware();
 		await disposeLifecycle();

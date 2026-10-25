@@ -112,6 +112,7 @@ export function ConversationWorkspace({
 			? view?.connections.find((item) => item.id === sheet.id)
 			: undefined;
 	const save = async (draft: ConnectionDraft): Promise<boolean> => {
+		if (busy) return false;
 		const existing = sheet?.mode === "edit" ? editing : undefined;
 		const reply = await connections.saveAndSelect({
 			type: "save",
@@ -286,7 +287,7 @@ export function ConversationWorkspace({
 						onRunningChange={setConversationRunning}
 					/>
 				) : (
-					<section className="cw-view" aria-busy={connections.busy}>
+					<section className="cw-view" aria-busy={busy}>
 						<aside className="cw-rail">{sources}</aside>
 						<div className="cw-main">
 							<div className="cw-empty">
@@ -338,13 +339,16 @@ export function ConversationWorkspace({
 					connection={editing}
 					health={editing ? connections.health[editing.id] : undefined}
 					discovery={editing ? connections.discovery[editing.id] : undefined}
-					busy={connections.busy}
+					busy={busy}
 					onSave={save}
-					onEdit={() => editing && setSheet({ mode: "edit", id: editing.id })}
+					onEdit={() =>
+						!busy && editing && setSheet({ mode: "edit", id: editing.id })
+					}
 					onDiscover={() =>
 						editing && void request({ type: "discover", id: editing.id })
 					}
 					onRemove={() => {
+						if (busy) return;
 						if (editing) setRemoving(editing);
 						setSheet(undefined);
 					}}
@@ -357,9 +361,10 @@ export function ConversationWorkspace({
 					body={rt.removeBody}
 					confirm={rt.remove}
 					danger
-					busy={connections.busy}
+					busy={busy}
 					onClose={() => setRemoving(undefined)}
 					onConfirm={async () => {
+						if (busy) return;
 						const reply = await request({ type: "remove", id: removing.id });
 						if (reply?._tag === "success") {
 							setRemoving(undefined);
