@@ -1,4 +1,10 @@
-import { type RefObject, useId, useLayoutEffect } from "react";
+import {
+	type RefObject,
+	useEffect,
+	useId,
+	useLayoutEffect,
+	useRef,
+} from "react";
 import { Icon } from "./icons";
 
 export interface ComposerCopy {
@@ -43,6 +49,19 @@ export function Composer({
 	readonly inputRef: RefObject<HTMLTextAreaElement | null>;
 }) {
 	const hintId = useId();
+	// Sending disables the textarea, which drops focus; return it once the
+	// reply ends if the message was sent from here.
+	const refocus = useRef(false);
+	useEffect(() => {
+		if (!disabled && refocus.current) {
+			refocus.current = false;
+			inputRef.current?.focus();
+		}
+	}, [disabled, inputRef]);
+	const send = () => {
+		refocus.current = true;
+		onSubmit();
+	};
 	// Grow with the draft up to a bounded height; the transcript keeps the rest.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Height follows the draft text.
 	useLayoutEffect(() => {
@@ -57,7 +76,7 @@ export function Composer({
 			data-disabled={disabled || undefined}
 			onSubmit={(event) => {
 				event.preventDefault();
-				if (canSend) onSubmit();
+				if (canSend) send();
 			}}
 		>
 			<textarea
@@ -77,7 +96,7 @@ export function Composer({
 						!event.nativeEvent.isComposing
 					) {
 						event.preventDefault();
-						if (canSend) onSubmit();
+						if (canSend) send();
 					}
 				}}
 			/>

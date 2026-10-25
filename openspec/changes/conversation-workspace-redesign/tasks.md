@@ -13,4 +13,4 @@
 
 ## 3. Verification
 
-- [ ] 3.1 open-quake-nyd.3.4: Capture before and after hidden mock Electron screenshots at 1180 and 390 in Graphite, Midnight and Paper, and inspect them. Exercise interactions and layout/a11y checks, renderer tests, and the parent direct-chat smoke.
+- [x] 3.1 open-quake-nyd.3.4: Capture before and after hidden mock Electron screenshots at 1180 and 390 in Graphite, Midnight and Paper, and inspect them. Exercise interactions and layout/a11y checks, renderer tests, and the parent direct-chat smoke.
