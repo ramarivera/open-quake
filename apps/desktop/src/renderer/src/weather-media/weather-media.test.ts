@@ -21,7 +21,7 @@ import { ClockMusicCard, ClockWeatherCard } from "./ClockCards";
 import { type CityStatus, CityVerifier } from "./city-verifier";
 import { WeatherMediaClient } from "./client";
 import { MediaGuide } from "./guide";
-import { needleAngle, PlayerCard } from "./PlayerCard";
+import { formatPlaybackTime, PlayerCard, playbackFraction } from "./PlayerCard";
 import { WeatherRefresh } from "./refresh";
 
 const empty: WeatherResult = { _tag: "empty" };
@@ -473,18 +473,33 @@ describe("real card render states", () => {
 				expect(clock.match(/disabled=""/g)).toHaveLength(3);
 		});
 	}
-	it("needle clamps progress and returns to rest", () => {
+	it("progress clamps to the known duration and is absent without one", () => {
 		expect(
-			needleAngle({
+			playbackFraction({
 				...initial.media,
 				session: { ...mediaSession, positionMs: 999999 },
 			}),
-		).toBe(-15);
+		).toBe(1);
 		expect(
-			needleAngle({
+			playbackFraction({
 				...initial.media,
-				session: { ...mediaSession, playing: false },
+				session: { ...mediaSession, durationMs: null },
 			}),
-		).toBe(25);
+		).toBeUndefined();
+		expect(formatPlaybackTime(65_400)).toBe("1:05");
+		expect(formatPlaybackTime(3_725_000)).toBe("1:02:05");
+	});
+	it("player draws no turntable and keeps one accent primary control", () => {
+		const html = renderToStaticMarkup(
+			createElement(PlayerCard, {
+				widthPx: 1920,
+				heightPx: 480,
+				snapshot: { revision: 1, session: mediaSession, error: null },
+				control: async () => true,
+			}),
+		);
+		expect(html).not.toMatch(/platter|oq-player-arm|grooves|textPath/);
+		expect(html.match(/oq-player-main/g)).toHaveLength(1);
+		expect(html).toContain('role="progressbar"');
 	});
 });
