@@ -190,6 +190,7 @@ try {
 	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
 	for (const channel of [
+		"settings:locale:rpc",
 		"maintenance:request",
 		"voice:request",
 		"meetings:request",
@@ -231,6 +232,7 @@ try {
 	app.quit();
 	await until(() => quit);
 	for (const channel of [
+		"settings:locale:rpc",
 		"maintenance:request",
 		"voice:request",
 		"meetings:request",
