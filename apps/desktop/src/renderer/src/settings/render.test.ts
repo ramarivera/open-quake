@@ -2,9 +2,20 @@ import { GTProvider } from "gt-react";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { appDictionaries } from "../i18n";
+import {
+	type AppLocaleBridge,
+	AppLocaleProvider,
+	appDictionaries,
+	useAppTranslations,
+} from "../i18n";
 import { GeneralSettings } from "./GeneralSettings";
-import { SetupResumeEntry, SetupWizard } from "./SetupWizard";
+import {
+	DisplayStep,
+	ProfilesStep,
+	SetupResumeEntry,
+	SetupWizard,
+} from "./SetupWizard";
+import { initialChoices } from "./setup-model";
 import type { RuntimeChoice } from "./setup-owners";
 import { createSetupStore, type SetupStore } from "./stores";
 import strings from "./strings.json";
@@ -12,19 +23,41 @@ import { fakeBridge, wizard } from "./test-fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
 
-function render(locale: "en" | "de", node: ReactNode): string {
+/** The app locale is still being read, as on first paint in the app. */
+const reading: AppLocaleBridge = {
+	read: () => new Promise(() => {}),
+	set: () => new Promise(() => {}),
+	subscribe: () => () => {},
+	dispose: async () => {},
+};
+function render(
+	locale: "en" | "de",
+	node: ReactNode,
+	app: AppLocaleBridge | null = reading,
+): string {
 	return renderToStaticMarkup(
-		createElement(
-			GTProvider,
-			{
-				locale,
-				translations: { en: {}, de: {} },
-				dictionaries: appDictionaries,
-				_reload: () => {},
-			},
-			node,
-		),
+		createElement(AppLocaleProvider, {
+			bridge: app,
+			children: createElement(
+				GTProvider,
+				{
+					locale,
+					translations: { en: {}, de: {} },
+					dictionaries: appDictionaries,
+					_reload: () => {},
+				},
+				node,
+			),
+		}),
 	);
+}
+/** Renders a step part with the real translations. */
+function Step({
+	part,
+}: {
+	part: (t: ReturnType<typeof useAppTranslations>) => ReactNode;
+}): ReactNode {
+	return part(useAppTranslations("settings"));
 }
 const wizardFor = (
 	store: SetupStore,
@@ -138,6 +171,83 @@ describe("setup rendering", () => {
 		expect(html).toContain("United States");
 		expect(html).toContain("Skipped");
 		expect(html).not.toContain("Finish setup");
+	});
+});
+
+describe("setup review fixes", () => {
+	it("shows the app-wide language once read, not the wizard's stale copy", async () => {
+		// Without a locale bridge the provider knows English is applied.
+		const store = await loaded(
+			wizard({ step: "locale-region", locale: "de", region: "DE" }),
+		);
+		const html = render("en", wizardFor(store), null);
+		expect(html).toMatch(/checked="" value="en"/);
+		expect(html).not.toMatch(/checked="" value="de"/);
+		expect(html).toMatch(/<option value="DE" selected="">Germany<\/option>/);
+	});
+
+	const choices = initialChoices(wizard(), "US");
+	const profiles = (
+		state: Parameters<typeof ProfilesStep>[0]["profiles"],
+		locale: "en" | "de" = "en",
+	) =>
+		render(
+			locale,
+			createElement(Step, {
+				part: (t) =>
+					createElement(ProfilesStep, {
+						t,
+						choices,
+						setChoices: () => {},
+						profiles: state,
+						busy: false,
+						onRetry: () => {},
+					}),
+			}),
+		);
+
+	it("offers a retry when the profile read fails, not when there is no owner", () => {
+		const failed = profiles({ state: "failed" });
+		expect(failed).toContain("Profiles couldn’t be loaded.");
+		expect(failed).toMatch(/<button type="button" class="mc-button">Try again/);
+		expect(profiles({ state: "failed" }, "de")).toContain("Erneut versuchen");
+		expect(profiles({ state: "unavailable" })).not.toContain("Try again");
+	});
+
+	it("says choosing a profile doesn't change the active one", () => {
+		const ready = {
+			state: "ready",
+			profiles: [{ id: "a", name: "Default" }],
+			active: { "desktop-preview": "a" },
+		} as const;
+		const en = profiles(ready);
+		expect(en).toContain("doesn’t create profiles or change the active one");
+		expect(en).toMatch(/aria-describedby="[^"]*-note [^"]*-count"/);
+		expect(profiles(ready, "de")).toContain("ändert das aktive Profil nicht");
+	});
+
+	it("can check again while a QUAKE is connected, so a swapped device appears", () => {
+		const display = (devices: Parameters<typeof DisplayStep>[0]["devices"]) =>
+			render(
+				"en",
+				createElement(Step, {
+					part: (t) =>
+						createElement(DisplayStep, {
+							t,
+							choices,
+							setChoices: () => {},
+							devices,
+							busy: false,
+							onCheckDevices: () => {},
+						}),
+				}),
+			);
+		expect(
+			display({ state: "connected", serial: "QK-A", mock: false }),
+		).toContain("Check again");
+		expect(display({ state: "offline" })).toContain("Check again");
+		expect(display({ state: "unavailable" })).not.toContain("Check again");
+		expect(display(null)).not.toContain("Check again");
 	});
 });
 

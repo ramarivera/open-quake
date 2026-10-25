@@ -35,6 +35,24 @@ export function resumeStep(
 	return snapshot.step;
 }
 
+/**
+ * The language setup shows and saves. The app-wide locale is canonical and can
+ * change in General while setup is open; the wizard record's copy is used only
+ * until that locale has been read.
+ */
+export function liveLocale(
+	app: {
+		readonly locale: "en" | "de";
+		readonly loading: boolean;
+		readonly error: string;
+	},
+	saved: "en" | "de",
+): "en" | "de" {
+	return app.loading || app.error === "QUAKE.SETTINGS.READ_FAILED"
+		? saved
+		: app.locale;
+}
+
 export type SetupChoices = {
 	readonly region: string;
 	readonly display: WizardDisplay | null;

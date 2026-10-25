@@ -34,7 +34,7 @@
 				"body": "Setup takes a minute and only changes this computer.",
 				"language": "Choose the app language and your region.",
 				"display": "Choose your QUAKE or the on-screen desktop preview.",
-				"profiles": "Choose the knob profiles to start with.",
+				"profiles": "Choose the knob profiles you plan to use.",
 				"runtime": "Decide about the optional agent runtime.",
 				"note": "You can change every choice later in Settings."
 			},
@@ -66,7 +66,8 @@
 			},
 			"profiles": {
 				"heading": "Profiles",
-				"body": "Choose at least one knob profile to start with. Setup doesn’t create profiles; you edit them in Knob profiles.",
+				"body": "Choose at least one knob profile you plan to use.",
+				"note": "Setup only records this choice. It doesn’t create profiles or change the active one; you switch and edit profiles in Knob profiles.",
 				"loading": "Loading profiles…",
 				"failed": "Profiles couldn’t be loaded.",
 				"unavailable": "Profiles aren’t available in this window.",
@@ -192,7 +193,7 @@
 				"body": "Die Einrichtung dauert eine Minute und ändert nur diesen Computer.",
 				"language": "Wähle die App-Sprache und deine Region.",
 				"display": "Wähle deinen QUAKE oder die Desktop-Vorschau auf dem Bildschirm.",
-				"profiles": "Wähle die Drehknopf-Profile für den Start.",
+				"profiles": "Wähle die Drehknopf-Profile, die du nutzen möchtest.",
 				"runtime": "Entscheide über die optionale Agenten-Laufzeit.",
 				"note": "Jede Auswahl kannst du später in den Einstellungen ändern."
 			},
@@ -224,7 +225,8 @@
 			},
 			"profiles": {
 				"heading": "Profile",
-				"body": "Wähle mindestens ein Drehknopf-Profil für den Start. Die Einrichtung erstellt keine Profile; du bearbeitest sie unter Drehknopf-Profile.",
+				"body": "Wähle mindestens ein Drehknopf-Profil, das du nutzen möchtest.",
+				"note": "Die Einrichtung merkt sich nur diese Auswahl. Sie erstellt keine Profile und ändert das aktive Profil nicht; Profile wechselst und bearbeitest du unter Drehknopf-Profile.",
 				"loading": "Profile werden geladen…",
 				"failed": "Die Profile konnten nicht geladen werden.",
 				"unavailable": "Profile sind in diesem Fenster nicht verfügbar.",

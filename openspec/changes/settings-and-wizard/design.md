@@ -182,6 +182,16 @@ decisions); tokens and shell come from independent-management-design.
   Open at login, Start in the background and the setup entry. The login
   control reflects the live OS status from `loginStatus`, falls back to saved
   intent with an explicit unknown-status hint, and keeps OS refusals visible.
+- **Review fixes (PR50).** The language shown and saved by setup is the
+  app-wide locale (`useAppLocale`), so a change made in General is never
+  reverted by Continue; the record's copy is used only until that locale is
+  read. Profiles are recorded as setup choices only: setup never switches the
+  active profile, and the step says so. A failed profile read offers Try
+  again, and only a successful read preselects defaults. Display offers Check
+  again for every read result, including connected, so a swapped QUAKE can be
+  picked. The runtime step is dropped only on the root's exact
+  `AGENT.HTTP.CONNECTION.UNAVAILABLE` list reply (no initialized owner); other
+  list failures keep the step, where Skip for now still works.
 - **Failures.** The UI branches only on a catalog `code` (and `reason` for
   OS apply failures) carried on the rejection; any other rejection is shown
   as a generic read/save failure. Copy is bundled en/de through the existing

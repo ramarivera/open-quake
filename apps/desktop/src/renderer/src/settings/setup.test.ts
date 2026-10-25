@@ -22,11 +22,18 @@ import {
 	canContinue,
 	continueDraft,
 	initialChoices,
+	liveLocale,
 	profileDefaults,
 	resumeStep,
 	setupSteps,
 } from "./setup-model";
-import { readDisplay, readProfiles, runtimeChoice } from "./setup-owners";
+import {
+	latestRead,
+	ownerUnavailable,
+	readDisplay,
+	readProfiles,
+	runtimeChoice,
+} from "./setup-owners";
 import { createGeneralStore, createSetupStore } from "./stores";
 import { fakeBridge, general, wizard } from "./test-fixtures";
 
@@ -271,6 +278,25 @@ describe("setup model", () => {
 		).toEqual({ step: "runtime", runtime: "skipped" });
 	});
 
+	it("shows and saves the app-wide language, not a stale wizard copy", () => {
+		const app = { locale: "de", loading: false, error: "" } as const;
+		// Changed in General after setup loaded: Continue keeps German.
+		const locale = liveLocale(app, "en");
+		expect(locale).toBe("de");
+		expect(
+			continueDraft("locale-region", initialChoices(wizard(), "DE"), locale),
+		).toMatchObject({ locale: "de" });
+		// Until the app locale is read, the saved record is the best answer.
+		expect(liveLocale({ ...app, loading: true }, "en")).toBe("en");
+		expect(
+			liveLocale({ ...app, error: "QUAKE.SETTINGS.READ_FAILED" }, "en"),
+		).toBe("en");
+		// A failed language write doesn't make the read locale unknown.
+		expect(
+			liveLocale({ ...app, error: "QUAKE.SETTINGS.PERSIST_FAILED" }, "en"),
+		).toBe("de");
+	});
+
 	it("prefers saved choices over OS suggestions", () => {
 		expect(initialChoices(wizard({ region: "AR" }), "US").region).toBe("AR");
 		expect(initialChoices(wizard(), null).region).toBe("");
@@ -452,6 +478,34 @@ describe("owner reads", () => {
 		).toEqual({ state: "failed" });
 	});
 
+	it("lands only the newest owner read; retries, locale changes and unmount drop older replies", async () => {
+		const accept = vi.fn();
+		const reads = latestRead<string>(accept);
+		let finishFirst: (value: string) => void = () => {};
+		reads.run(
+			() =>
+				new Promise<string>((resolve) => {
+					finishFirst = resolve;
+				}),
+		);
+		reads.run(async () => "retry");
+		await vi.waitFor(() => expect(accept).toHaveBeenCalledWith("retry"));
+		finishFirst("failed first read");
+		await Promise.resolve();
+		expect(accept).toHaveBeenCalledOnce();
+		let finishLast: (value: string) => void = () => {};
+		reads.run(
+			() =>
+				new Promise<string>((resolve) => {
+					finishLast = resolve;
+				}),
+		);
+		reads.cancel();
+		finishLast("after unmount");
+		await Promise.resolve();
+		expect(accept).toHaveBeenCalledOnce();
+	});
+
 	it("treats any saved connection as configured, never selection or health", () => {
 		const bridge = {
 			request: vi.fn(),
@@ -478,6 +532,42 @@ describe("owner reads", () => {
 			count: 2,
 		});
 		expect(bridge.request).not.toHaveBeenCalled();
+	});
+
+	it("drops the runtime step only on the root's explicit no-owner reply", () => {
+		const bridge = {
+			request: vi.fn(),
+			onSnapshot: vi.fn(),
+		} as unknown as AgentConnectionsBridge;
+		const rejected = (code: string) =>
+			({ _tag: "rejected", code, message: "x" }) as const;
+		const noOwner = rejected("AGENT.HTTP.CONNECTION.UNAVAILABLE");
+		expect(ownerUnavailable(noOwner)).toBe(true);
+		expect(runtimeChoice(bridge, null, ownerUnavailable(noOwner))).toEqual({
+			state: "unsupported",
+		});
+		expect(setupSteps({ state: "unsupported" })).not.toContain("runtime");
+		// A live owner's storage or transport failure keeps the skippable step.
+		for (const transient of [
+			rejected("AGENT.HTTP.STORAGE.FAILED"),
+			rejected("QUAKE.UNKNOWN"),
+			rejected("agent.http.connection.unavailable"),
+		]) {
+			expect(ownerUnavailable(transient)).toBe(false);
+			expect(runtimeChoice(bridge, null, ownerUnavailable(transient))).toEqual({
+				state: "supported",
+			});
+		}
+		expect(
+			ownerUnavailable({
+				_tag: "success",
+				view: {
+					revision: 1,
+					cleanupPending: false,
+					connections: [],
+				},
+			} as unknown as Parameters<typeof ownerUnavailable>[0]),
+		).toBe(false);
 	});
 
 	it("suggests a region from the OS locale offline", () => {

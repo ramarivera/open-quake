@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ProfileEnvelope } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { visibleProfiles } from "../../../../../../packages/device/src/profiles/profile-manager-invariants";
 import type {
+	AgentConnectionReply,
 	AgentConnectionsBridge,
 	AgentConnectionView,
 } from "../../../shared/agent-connections";
@@ -42,6 +43,28 @@ export async function readDisplay(
 	} catch {
 		return { state: "failed" };
 	}
+}
+
+/**
+ * Owner reads where only the newest request may land: a superseded or
+ * cancelled reply (locale change, retry, unmount) is dropped.
+ */
+export function latestRead<T>(accept: (value: T) => void): {
+	readonly run: (read: () => Promise<T>) => void;
+	readonly cancel: () => void;
+} {
+	let request = 0;
+	return {
+		run: (read) => {
+			const id = ++request;
+			void read().then((value) => {
+				if (id === request) accept(value);
+			});
+		},
+		cancel: () => {
+			request++;
+		},
+	};
 }
 
 export type ProfileChoice = { readonly id: string; readonly name: string };
@@ -91,6 +114,8 @@ export async function readProfiles(
  * Optional runtime as the root validates it: supported while the agent
  * connection owner exists, configured once any HTTP connection is saved.
  * Selection and live connectivity are separate facts setup never probes.
+ * The preload bridge always exists; only the root's explicit unavailable
+ * reply says the owner was never initialized.
  */
 export type RuntimeChoice =
 	| { readonly state: "unsupported" | "supported" }
@@ -99,10 +124,22 @@ export type RuntimeChoice =
 export function runtimeChoice(
 	connections: AgentConnectionsBridge | undefined,
 	view: AgentConnectionView | null,
+	unavailable = false,
 ): RuntimeChoice {
-	if (!connections) return { state: "unsupported" };
+	if (!connections || unavailable) return { state: "unsupported" };
 	const count = view?.connections.length ?? 0;
 	return count > 0 ? { state: "configured", count } : { state: "supported" };
+}
+
+/**
+ * Only this exact code means "no runtime owner". Storage or transport
+ * failures of a live owner keep the step, where Skip still works.
+ */
+export function ownerUnavailable(reply: AgentConnectionReply): boolean {
+	return (
+		reply._tag === "rejected" &&
+		reply.code === "AGENT.HTTP.CONNECTION.UNAVAILABLE"
+	);
 }
 
 /** The saved connection list via its read-only "list" command and snapshots. */
@@ -112,20 +149,23 @@ export function useRuntimeChoice(): RuntimeChoice {
 			? window.quakeAgentConnections
 			: undefined;
 	const [view, setView] = useState<AgentConnectionView | null>(null);
+	const [unavailable, setUnavailable] = useState(false);
 	useEffect(() => {
 		if (!bridge) return;
 		let active = true;
 		const accept = (next: AgentConnectionView) => {
-			if (active)
-				setView((current) =>
-					!current || next.revision >= current.revision ? next : current,
-				);
+			if (!active) return;
+			setUnavailable(false);
+			setView((current) =>
+				!current || next.revision >= current.revision ? next : current,
+			);
 		};
 		const off = bridge.onSnapshot(accept);
 		void bridge
 			.request({ type: "list" })
 			.then((reply) => {
 				if (reply._tag === "success") accept(reply.view);
+				else if (active && ownerUnavailable(reply)) setUnavailable(true);
 			})
 			.catch(() => {});
 		return () => {
@@ -133,5 +173,5 @@ export function useRuntimeChoice(): RuntimeChoice {
 			off();
 		};
 	}, [bridge]);
-	return runtimeChoice(bridge, view);
+	return runtimeChoice(bridge, view, unavailable);
 }

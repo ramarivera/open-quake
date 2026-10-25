@@ -8,7 +8,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import type { WizardDisplay } from "../../../../../../packages/edge/src/settings/wizard-contracts";
-import { useAppTranslations } from "../i18n";
+import { useAppLocale, useAppTranslations } from "../i18n";
 import { PageHeader, Segmented } from "../ui/Form";
 import type { SettingsUiFailure, WizardSnapshot } from "./bridge";
 import { regionFromLocale, regionOptions } from "./regions";
@@ -16,6 +16,7 @@ import {
 	canContinue,
 	continueDraft,
 	initialChoices,
+	liveLocale,
 	nextStep,
 	previousStep,
 	profileDefaults,
@@ -26,6 +27,7 @@ import {
 } from "./setup-model";
 import {
 	type DisplayChoices,
+	latestRead,
 	type ProfileChoices,
 	type RuntimeChoice,
 	readDisplay,
@@ -64,21 +66,25 @@ export function failureText(t: T, failure: SettingsUiFailure): string {
 function useOwnerChoices(locale: "en" | "de") {
 	const [devices, setDevices] = useState<DisplayChoices | null>(null);
 	const [profiles, setProfiles] = useState<ProfileChoices | null>(null);
+	const [deviceRead] = useState(() => latestRead(setDevices));
+	const [profileRead] = useState(() => latestRead(setProfiles));
 	const checkDevices = useCallback(() => {
 		setDevices(null);
-		void readDisplay(window.quakeHardware).then(setDevices);
-	}, []);
-	useEffect(checkDevices, [checkDevices]);
+		deviceRead.run(() => readDisplay(window.quakeHardware));
+	}, [deviceRead]);
+	const checkProfiles = useCallback(() => {
+		setProfiles(null);
+		profileRead.run(() => readProfiles(window.quakeProfileManager, locale));
+	}, [profileRead, locale]);
 	useEffect(() => {
-		let active = true;
-		void readProfiles(window.quakeProfileManager, locale).then((next) => {
-			if (active) setProfiles(next);
-		});
-		return () => {
-			active = false;
-		};
-	}, [locale]);
-	return { devices, profiles, checkDevices };
+		checkDevices();
+		return deviceRead.cancel;
+	}, [checkDevices, deviceRead]);
+	useEffect(() => {
+		checkProfiles();
+		return profileRead.cancel;
+	}, [checkProfiles, profileRead]);
+	return { devices, profiles, checkDevices, checkProfiles };
 }
 
 export function SetupWizard({
@@ -173,7 +179,8 @@ function SetupFlow({
 			),
 		),
 	);
-	const owners = useOwnerChoices(snapshot.locale);
+	const locale = liveLocale(useAppLocale(), snapshot.locale);
+	const owners = useOwnerChoices(locale);
 	const heading = useRef<HTMLHeadingElement>(null);
 	const shown = useRef(step);
 	const headingId = useId();
@@ -185,10 +192,16 @@ function SetupFlow({
 	});
 	const devices = owners.devices ?? { state: "offline" };
 	const profiles = owners.profiles ?? { state: "failed" };
-	// Preselect once on arrival at Profiles; later unchecking is respected.
+	// Preselect once on arrival at Profiles; later unchecking is respected. Only
+	// a successful read seeds, so a retry after a failure still preselects.
 	const seeded = useRef(false);
 	useEffect(() => {
-		if (seeded.current || step !== "profiles" || !owners.profiles) return;
+		if (
+			seeded.current ||
+			step !== "profiles" ||
+			owners.profiles?.state !== "ready"
+		)
+			return;
 		seeded.current = true;
 		const loaded = owners.profiles;
 		setChoices((value) => ({
@@ -206,7 +219,7 @@ function SetupFlow({
 			await store.complete();
 			return;
 		}
-		if (await store.save(continueDraft(step, current, snapshot.locale)))
+		if (await store.save(continueDraft(step, current, locale)))
 			go(nextStep(steps, step));
 	};
 	const ready =
@@ -229,6 +242,7 @@ function SetupFlow({
 					<Summary
 						t={t}
 						snapshot={snapshot}
+						locale={locale}
 						profiles={profiles}
 						runtime={runtime}
 					/>
@@ -340,6 +354,7 @@ function SetupFlow({
 						t={t}
 						step={step}
 						snapshot={snapshot}
+						locale={locale}
 						choices={current}
 						setChoices={setChoices}
 						devices={owners.devices}
@@ -347,6 +362,7 @@ function SetupFlow({
 						runtime={runtime}
 						busy={busy}
 						onCheckDevices={owners.checkDevices}
+						onCheckProfiles={owners.checkProfiles}
 						onLanguage={(locale) =>
 							void store.save({ step: "locale-region", locale })
 						}
@@ -396,6 +412,7 @@ function StepBody({
 	t,
 	step,
 	snapshot,
+	locale,
 	choices,
 	setChoices,
 	devices,
@@ -403,12 +420,14 @@ function StepBody({
 	runtime,
 	busy,
 	onCheckDevices,
+	onCheckProfiles,
 	onLanguage,
 	onEdit,
 }: {
 	t: T;
 	step: SetupStep;
 	snapshot: WizardSnapshot;
+	locale: "en" | "de";
 	choices: SetupChoices;
 	setChoices: (update: (current: SetupChoices) => SetupChoices) => void;
 	devices: DisplayChoices | null;
@@ -416,6 +435,7 @@ function StepBody({
 	runtime: RuntimeChoice;
 	busy: boolean;
 	onCheckDevices: () => void;
+	onCheckProfiles: () => void;
 	onLanguage: (locale: "en" | "de") => void;
 	onEdit: (step: SetupStep) => void;
 }): React.JSX.Element {
@@ -446,7 +466,7 @@ function StepBody({
 							<Segmented
 								name={`${id}-language`}
 								labelledBy={`${id}-language`}
-								value={snapshot.locale}
+								value={locale}
 								options={languages}
 								disabled={busy}
 								onChange={onLanguage}
@@ -467,7 +487,7 @@ function StepBody({
 								<option value="" disabled>
 									{t("setup.locale.regionPlaceholder")}
 								</option>
-								{regionOptions(snapshot.locale).map((region) => (
+								{regionOptions(locale).map((region) => (
 									<option key={region.code} value={region.code}>
 										{region.name}
 									</option>
@@ -501,6 +521,7 @@ function StepBody({
 					setChoices={setChoices}
 					profiles={profiles}
 					busy={busy}
+					onRetry={onCheckProfiles}
 				/>
 			);
 		case "runtime":
@@ -558,6 +579,7 @@ function StepBody({
 					<Summary
 						t={t}
 						snapshot={snapshot}
+						locale={locale}
 						profiles={profiles}
 						runtime={runtime}
 						onEdit={busy ? undefined : onEdit}
@@ -612,7 +634,7 @@ function Choice({
 	);
 }
 
-function DisplayStep({
+export function DisplayStep({
 	t,
 	choices,
 	setChoices,
@@ -702,9 +724,9 @@ function DisplayStep({
 					{t("setup.display.savedMissing", { serial: saved })}
 				</p>
 			) : null}
-			{devices &&
-			devices.state !== "connected" &&
-			devices.state !== "unavailable" ? (
+			{/* Also offered while connected: the read is a snapshot, and a swapped
+			    QUAKE only appears after checking again. */}
+			{devices && devices.state !== "unavailable" ? (
 				<div className="button-row">
 					<button
 						type="button"
@@ -720,18 +742,20 @@ function DisplayStep({
 	);
 }
 
-function ProfilesStep({
+export function ProfilesStep({
 	t,
 	choices,
 	setChoices,
 	profiles,
 	busy,
+	onRetry,
 }: {
 	t: T;
 	choices: SetupChoices;
 	setChoices: (update: (current: SetupChoices) => SetupChoices) => void;
 	profiles: ProfileChoices | null;
 	busy: boolean;
+	onRetry: () => void;
 }): React.JSX.Element {
 	const id = useId();
 	const activeKey =
@@ -745,21 +769,41 @@ function ProfilesStep({
 			</p>
 		);
 	if (profiles.state !== "ready")
-		return (
+		return profiles.state === "failed" ? (
+			<>
+				<p role="alert" className="setup-error">
+					{t("setup.profiles.failed")}
+				</p>
+				<div className="button-row">
+					<button
+						type="button"
+						className="mc-button"
+						disabled={busy}
+						onClick={onRetry}
+					>
+						{t("setup.retry")}
+					</button>
+				</div>
+			</>
+		) : (
 			<p role="alert" className="setup-error">
-				{profiles.state === "failed"
-					? t("setup.profiles.failed")
-					: t("setup.profiles.unavailable")}
+				{t("setup.profiles.unavailable")}
 			</p>
 		);
 	const selected = new Set(choices.profileIds);
 	return (
 		<>
 			<p className="setup-lead">{t("setup.profiles.body")}</p>
+			<p id={`${id}-note`} className="setup-meta">
+				{t("setup.profiles.note")}
+			</p>
 			{profiles.profiles.length === 0 ? (
 				<p className="setup-meta">{t("setup.profiles.empty")}</p>
 			) : (
-				<fieldset className="setup-choices" aria-describedby={`${id}-count`}>
+				<fieldset
+					className="setup-choices"
+					aria-describedby={`${id}-note ${id}-count`}
+				>
 					<legend className="visually-hidden">
 						{t("setup.profiles.heading")}
 					</legend>
@@ -805,12 +849,14 @@ function ProfilesStep({
 function Summary({
 	t,
 	snapshot,
+	locale,
 	profiles,
 	runtime,
 	onEdit,
 }: {
 	t: T;
 	snapshot: WizardSnapshot;
+	locale: "en" | "de";
 	profiles: ProfileChoices | null;
 	runtime: RuntimeChoice;
 	onEdit?: ((step: SetupStep) => void) | undefined;
@@ -823,9 +869,8 @@ function Summary({
 				)
 			: snapshot.profileIds;
 	const region = snapshot.region
-		? (regionOptions(snapshot.locale).find(
-				(option) => option.code === snapshot.region,
-			)?.name ?? snapshot.region)
+		? (regionOptions(locale).find((option) => option.code === snapshot.region)
+				?.name ?? snapshot.region)
 		: null;
 	const rows: ReadonlyArray<{
 		key: string;
@@ -836,8 +881,7 @@ function Summary({
 		{
 			key: "language",
 			label: t("setup.review.language"),
-			value: languages.find((language) => language.value === snapshot.locale)
-				?.label,
+			value: languages.find((language) => language.value === locale)?.label,
 			step: "locale-region",
 		},
 		{
