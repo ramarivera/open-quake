@@ -19,6 +19,7 @@
 		"@open-quake/edge": "workspace:*",
 		"@zip.js/zip.js": "2.24.0",
 		"effect": "catalog:",
+		"gt-react": "11.4.16",
 		"koffi": "3.3.3",
 		"node-hid": "3.4.0",
 		"react": "19.2.8",

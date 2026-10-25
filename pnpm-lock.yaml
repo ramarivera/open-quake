@@ -62,6 +62,9 @@ importers:
       effect:
         specifier: 'catalog:'
         version: 3.22.1
+      gt-react:
+        specifier: 11.4.16
+        version: 11.4.16(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       koffi:
         specifier: 3.3.3
         version: 3.3.3
@@ -591,6 +594,20 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@generaltranslation/api@0.5.5':
+    resolution: {integrity: sha512-rPOD3JUwaLFDy7KPYcBI2P1czb/rvLaxoIo+Kg5t5TuIw4JqRCW2e2/WuTtUoigH4fMC40CSw3w38uOXelb5fg==}
+
+  '@generaltranslation/format@0.1.9':
+    resolution: {integrity: sha512-GwXbdajc7pIBsnrxVXE4PqjBHRwgKef4GyauH7CLaXSormRLU8G58ahqfwmQRL6ie1xt5KMMb6UAekdj1i9Sxg==}
+
+  '@generaltranslation/icu@0.1.2':
+    resolution: {integrity: sha512-2A0txUrZdAWAc42N58/PtoWv7vNB0U1Iyl+nDzf7RSswLHPMsonp7OmPnSraQgkoRSVSlueARVQK4T+zanWsyA==}
+
+  '@generaltranslation/react-core@11.4.16':
+    resolution: {integrity: sha512-T9JRTZCxBz471UOq5wjzR6/U8TgY85HYIMutcUMTSfOCzdAzqOEhItyxuVb+bJHg8944xL3Kt8DZkMD11ixGsg==}
+    peerDependencies:
+      react: '>=18.0.0'
+
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
@@ -755,6 +772,10 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@2.4.0':
+    resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
+    engines: {node: '>= 20.19.0'}
 
   '@oxc-project/types@0.146.0':
     resolution: {integrity: sha512-XC0QsnnhVe7sLIWmYmdPw7x5P0h4W8vUU3Nv1ySgWXtvCz8NizoAEpGXA0sOYoJQV2Rl13LgURAHQ5cI5ILCSA==}
@@ -1451,6 +1472,9 @@ packages:
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
 
+  generaltranslation@9.5.8:
+    resolution: {integrity: sha512-h/Mo3qbjstXfsIDO+a8pFOu92hL9piNVPKaDmtYCAn6cP39StEG4oMTu1CbGRaY+mjaUhGzqgi936y315g0K/g==}
+
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
@@ -1493,6 +1517,15 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  gt-i18n@1.0.39:
+    resolution: {integrity: sha512-Negt21Ch596LGO4wXnKed071r+5C19vzhV98s0WBg+wWx5PoCWtbp/UZcitGKE+nLq5dYwmhQsPkS485HgQ35w==}
+
+  gt-react@11.4.16:
+    resolution: {integrity: sha512-BnKMjtFU5RCb1nkZl2nJf7G9jauUF4mOO1Y2u11kVqwmM0Fg3nBYhsajlwZAQ0L2ob0852IOaoPPoopEiQCIZg==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -2680,6 +2713,21 @@ snapshots:
   '@esbuild/win32-x64@0.25.12':
     optional: true
 
+  '@generaltranslation/api@0.5.5': {}
+
+  '@generaltranslation/format@0.1.9':
+    dependencies:
+      '@generaltranslation/icu': 0.1.2
+
+  '@generaltranslation/icu@0.1.2': {}
+
+  '@generaltranslation/react-core@11.4.16(react@19.2.8)':
+    dependencies:
+      '@generaltranslation/format': 0.1.9
+      generaltranslation: 9.5.8
+      gt-i18n: 1.0.39
+      react: 19.2.8
+
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
       minipass: 7.1.3
@@ -2797,6 +2845,8 @@ snapshots:
     optional: true
 
   '@noble/hashes@1.8.0': {}
+
+  '@noble/hashes@2.4.0': {}
 
   '@oxc-project/types@0.146.0': {}
 
@@ -3527,6 +3577,13 @@ snapshots:
 
   function-bind@1.1.2: {}
 
+  generaltranslation@9.5.8:
+    dependencies:
+      '@generaltranslation/api': 0.5.5
+      '@generaltranslation/format': 0.1.9
+      '@generaltranslation/icu': 0.1.2
+      '@noble/hashes': 2.4.0
+
   gensync@1.0.0-beta.2: {}
 
   get-caller-file@2.0.5: {}
@@ -3595,6 +3652,19 @@ snapshots:
       responselike: 2.0.1
 
   graceful-fs@4.2.11: {}
+
+  gt-i18n@1.0.39:
+    dependencies:
+      '@generaltranslation/format': 0.1.9
+      generaltranslation: 9.5.8
+
+  gt-react@11.4.16(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
+    dependencies:
+      '@generaltranslation/react-core': 11.4.16(react@19.2.8)
+      generaltranslation: 9.5.8
+      gt-i18n: 1.0.39
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
 
   has-flag@4.0.0: {}
 

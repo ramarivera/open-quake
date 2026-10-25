@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { AppLocaleProvider } from "./i18n";
 import "./panelRotation.css";
 
 const params = new URLSearchParams(window.location.search);
@@ -11,5 +12,9 @@ if (params.get("surface") === "panel") {
 
 const root = document.getElementById("root");
 if (root) {
-	createRoot(root).render(<App />);
+	createRoot(root).render(
+		<AppLocaleProvider>
+			<App />
+		</AppLocaleProvider>,
+	);
 }

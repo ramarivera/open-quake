@@ -18,6 +18,7 @@ import { ChatErrors } from "../../../../../packages/edge/src/chat/chat-errors";
 import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors.js";
 import { MaintenanceErrors } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting-errors.js";
+import { SettingsErrors } from "../../../../../packages/edge/src/settings/settings-errors";
 import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
 import { DesktopSpeechErrors } from "../speech/errors.js";
 import { knownErrorTags, knownLogEvents, knownSpans } from "./known-names.js";
@@ -55,6 +56,7 @@ const identities = new Map<string, { code: string; category: string }>(
 		DeviceErrors,
 		AiErrors,
 		ChatErrors,
+		SettingsErrors,
 		SpeechErrors,
 		DesktopSpeechErrors,
 		RuntimeErrors,

@@ -109,6 +109,33 @@ async function run() {
 		win,
 		"typeof window.quakeChat?.submit==='function' && Boolean(document.querySelector('.nav'))",
 	);
+
+	step = "saved locale broadcasts without renderer reload";
+	await wait(win, "typeof window.quakeLocale?.set==='function'");
+	const originalLocale = await evaluate(
+		win,
+		"window.quakeLocale.read().then(s=>s.locale)",
+	);
+	await evaluate(win, "globalThis.__localeMount = 'same-document'");
+	await evaluate(win, "window.quakeLocale.set('de')");
+	await wait(win, "document.documentElement.lang==='de'");
+	const panel = BrowserWindow.getAllWindows().find((w) =>
+		w.webContents.getURL().includes("surface=panel"),
+	);
+	assert(panel);
+	await wait(panel, "document.documentElement.lang==='de'");
+	assert.equal(
+		await evaluate(win, "globalThis.__localeMount"),
+		"same-document",
+	);
+	await evaluate(win, "window.quakeLocale.set('en')");
+	await wait(win, "document.documentElement.lang==='en'");
+	await wait(panel, "document.documentElement.lang==='en'");
+	assert.equal(
+		await evaluate(win, "globalThis.__localeMount"),
+		"same-document",
+	);
+	assert.equal(typeof originalLocale, "string");
 	step = "persisted model and protected credential settings";
 	assert.equal(
 		await evaluate(
@@ -184,6 +211,31 @@ async function run() {
 	);
 	while (requests.length < 3) await delay(20);
 	await delay(75);
+
+	const beforeLocale = await evaluate(
+		win,
+		"document.querySelector('.direct-chat-transcript').textContent",
+	);
+	await evaluate(win, "window.quakeLocale.set('de')");
+	await wait(win, "document.documentElement.lang==='de'");
+	assert.equal(
+		await evaluate(
+			win,
+			"document.querySelector('.direct-chat-transcript').textContent",
+		),
+		beforeLocale,
+	);
+	assert.equal(
+		await evaluate(
+			win,
+			"document.querySelector('.direct-chat textarea').disabled",
+		),
+		true,
+	);
+	assert.equal(requests.length, 3);
+	assert.equal(blockedClosed, false);
+	await evaluate(win, "window.quakeLocale.set('en')");
+	await wait(win, "document.documentElement.lang==='en'");
 	await click(win, "Stop response");
 	await wait(
 		win,

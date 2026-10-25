@@ -63,11 +63,11 @@ import {
 	readNativeTheme,
 	registerManagementAppearance,
 } from "./management/appearance";
-
 import { MediaLive, registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
+import { registerAppLocale } from "./settings/registration";
 import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
@@ -254,6 +254,13 @@ if (!app.requestSingleInstanceLock()) {
 										: Promise.reject(new AiConfigInvalid()),
 								catch: (cause) => new AiConfigInvalid(cause),
 							}),
+					});
+					const localeRegistration = registerAppLocale({
+						directory: app.getPath("userData"),
+						osLocale: app.getLocale(),
+						renderer: rendererURL,
+						windows: () => [managementWin, panelWin],
+						diagnostics,
 					});
 					const chatRegistration = registerDirectChat({
 						host: directChat,
@@ -734,6 +741,7 @@ if (!app.requestSingleInstanceLock()) {
 								integrations.dispose(),
 								emoji.dispose(),
 							]);
+							await localeRegistration.dispose();
 							await chatRegistration.dispose();
 							await agentHttp?.dispose();
 							removeSpeechSettings();

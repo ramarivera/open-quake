@@ -19,6 +19,7 @@ app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
 app.getVersion = () => "0.0.0";
+app.getLocale = () => "en-US";
 let quit = false;
 app.quit = () => {
 	let prevented = false;
@@ -189,6 +190,7 @@ try {
 	await until(() => quakeEvents().length >= 2);
 	assert.equal(Window.windows.length, 2);
 	for (const channel of [
+		"settings:locale:rpc",
 		"maintenance:request",
 		"voice:request",
 		"meetings:request",
@@ -230,6 +232,7 @@ try {
 	app.quit();
 	await until(() => quit);
 	for (const channel of [
+		"settings:locale:rpc",
 		"maintenance:request",
 		"voice:request",
 		"meetings:request",
