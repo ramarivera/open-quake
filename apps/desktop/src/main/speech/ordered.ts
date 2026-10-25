@@ -105,6 +105,10 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 							queued += delta.length;
 							text += delta;
 							yield* flush(false);
+							if (!text.length && timer) {
+								yield* Fiber.interrupt(timer);
+								timer = undefined;
+							}
 							if (text.length && !timer)
 								timer = yield* Effect.sleep("2 seconds").pipe(
 									Effect.zipRight(
