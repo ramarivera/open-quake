@@ -54,7 +54,11 @@ Desktop connection management SHALL provide add, update, remove, select and heal
 - **THEN** conversations send that model identifier and changing aliases starts a separate conversation without reusing another model route's provider session
 
 ### Requirement: Evidence-based acceptance
-Setup documentation SHALL distinguish Hermes agent HTTP API from its dashboard/control API and distinguish mocked protocol coverage from live endpoint acceptance. Live testing SHALL use existing user-managed instances or a task-owned temporary process of an installed runtime. A temporary process MUST bind only to loopback, isolate state in task scratch storage, use an ephemeral bearer credential, disable tools for inference checks and stop after testing. Testing MUST NOT install services, restart user-managed instances or change saved configuration or authentication policy.
+Setup documentation SHALL distinguish Hermes agent HTTP API from its dashboard/control API and distinguish mocked protocol coverage from live endpoint acceptance. Live testing SHALL use existing user-managed instances, a task-owned temporary process of an installed runtime, or explicitly authorized disposable pinned Docker Compose instances. Temporary APIs MUST be exposed to the host only through loopback, isolate state in task scratch storage or container tmpfs, use an ephemeral bearer credential, disable tools for inference checks and stop after testing. Container processes may listen on their internal interface for loopback-only port publishing. Testing MUST NOT install services, restart user-managed instances or change saved configuration or authentication policy.
+
+#### Scenario: Reusable container acceptance
+- **WHEN** an operator explicitly runs the disposable Compose E2E runner
+- **THEN** provider base URL, optional API key and model come from environment variables without a personal endpoint default, actual adapters verify streaming/session behavior, and success or failure removes the owned containers, network and runtime state
 
 #### Scenario: Dashboard is not chat API
 - **WHEN** a configured Hermes address serves only its dashboard

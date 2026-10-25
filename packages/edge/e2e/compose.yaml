@@ -1,0 +1,52 @@
+services:
+  openclaw:
+    image: ghcr.io/openclaw/openclaw:2026.10.7@sha256:fb26f0841659dc757f23feec9adeab51f11d76779a409db5d22e191b43841afa
+    init: true
+    entrypoint: ["node", "/fixture/openclaw.mjs"]
+    environment:
+      HOME: /state
+      OPENCLAW_STATE_DIR: /state
+      OPENCLAW_CONFIG_PATH: /state/openclaw.json
+      OPEN_QUAKE_E2E_BASE_URL: ${OPEN_QUAKE_E2E_BASE_URL:?set an OpenAI-compatible base URL}
+      OPEN_QUAKE_E2E_API_KEY: ${OPEN_QUAKE_E2E_API_KEY:-}
+      OPEN_QUAKE_E2E_MODEL: ${OPEN_QUAKE_E2E_MODEL:?set a model}
+      OPEN_QUAKE_E2E_RUNTIME_TOKEN: ${OPEN_QUAKE_E2E_RUNTIME_TOKEN:?runner-owned token}
+    ports: ["127.0.0.1::18789"]
+    volumes: ["./openclaw.mjs:/fixture/openclaw.mjs:ro"]
+    tmpfs: ["/state:uid=1000,gid=1000,mode=0700", "/tmp:uid=1000,gid=1000"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 3g
+    cpus: 2
+    stop_grace_period: 10s
+  hermes:
+    image: open-quake-e2e-hermes:e10934b03e115b036b3c38b9c6e6817039a5962d
+    build:
+      context: ${OPEN_QUAKE_E2E_HERMES_SOURCE:?runner-owned pinned source checkout}
+      dockerfile: ${OPEN_QUAKE_E2E_HERMES_DOCKERFILE:?runner-owned absolute Dockerfile}
+    init: true
+    user: "1000:1000"
+    entrypoint: ["/app/.venv/bin/python", "/fixture/hermes.py"]
+    environment:
+      HOME: /state
+      HERMES_HOME: /state
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+      HERMES_DISABLE_LAZY_INSTALLS: "1"
+      API_SERVER_HOST: "0.0.0.0"
+      API_SERVER_PORT: "8642"
+      API_SERVER_MODEL_NAME: e2e-default
+      API_SERVER_KEY: ${OPEN_QUAKE_E2E_RUNTIME_TOKEN}
+      OPEN_QUAKE_E2E_BASE_URL: ${OPEN_QUAKE_E2E_BASE_URL}
+      OPEN_QUAKE_E2E_API_KEY: ${OPEN_QUAKE_E2E_API_KEY:-}
+      OPEN_QUAKE_E2E_MODEL: ${OPEN_QUAKE_E2E_MODEL}
+    ports: ["127.0.0.1::8642"]
+    volumes: ["./hermes.py:/fixture/hermes.py:ro"]
+    tmpfs: ["/state:uid=1000,gid=1000,mode=0700", "/tmp:uid=1000,gid=1000"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    cpus: 2
+    stop_grace_period: 10s

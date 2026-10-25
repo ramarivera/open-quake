@@ -23,3 +23,10 @@
 - [x] 4.1 Lane9, open-quake-hwn.9: compose production adapters and QUAKE text/agent routing plus the transcript helper; verify mock-device consumer tests demonstrate selected connection use without real hardware. Production capture/STT/TTS binding remains open in open-quake-lih.15.1.15 and c5w.6/c5w.7.
 - [x] 4.2 Lane10, open-quake-hwn.10: inspect existing endpoints and perform authorized live runtime acceptance without service changes; document exact tested endpoints, capabilities and remaining live gaps without secrets.
 - [x] 4.3 Parent: reconcile lane commits, exports and task/bead evidence; run focused integration checks, deliver reviewed PR and keep any pending checks under host monitoring.
+
+## 5. Disposable runtime acceptance, open-quake-hwn.11
+
+- [x] 5.1 Add opt-in Docker Compose E2E against pinned real Hermes and OpenClaw runtimes with isolated disposable state, loopback API ports and no user configuration mounts. Supply OpenAI-compatible base URL, optional API key and model through environment variables only; never commit a personal inference endpoint.
+- [x] 5.2 Exercise real adapters and transport for authentication, capabilities, streaming replies and session continuation. Disable agent tools and messaging integrations, bound inference/deadlines, and verify Compose teardown after success and failure. Live runs in this effort use only the user-authorized gpt-6.1-sol route.
+- [x] 5.3 Inspect production speech capture readiness, document exact missing bindings and human microphone acceptance steps, and keep unexercised speech/audio claims open in the existing speech tasks.
+- [ ] 5.4 Reconcile and merge the reviewed existing PR stack, deliver the E2E extension through one bot-review round and passing checks, and merge it after handling findings. No release tag is requested.
