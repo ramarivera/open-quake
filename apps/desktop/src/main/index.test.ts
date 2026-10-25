@@ -12,6 +12,7 @@ import {
 	createEmptyProfileKey,
 	ProfileKey,
 } from "../../../../packages/device/src/profiles/profile-contracts";
+import { registerAgentHttp } from "./agent-http";
 import { registerIntegrations } from "./integrations";
 import { registerKnob } from "./knob";
 import { registerMaintenance } from "./maintenance";
@@ -209,6 +210,7 @@ vi.mock("./voice", async () => {
 		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
 		toneSinks: vi.fn(() => ({ play: vi.fn() })),
 		registerVoiceSurface: vi.fn(() => ({
+			reset: vi.fn(async () => undefined),
 			onDevice: vi.fn(async () => undefined),
 			publish: vi.fn(async () => undefined),
 			knobVoice: vi.fn(() => Effect.void),
@@ -216,6 +218,15 @@ vi.mock("./voice", async () => {
 		})),
 	};
 });
+
+vi.mock("./agent-http", () => ({
+	registerAgentHttp: vi.fn(async () => ({
+		backend: undefined,
+		drafting: undefined,
+		decorateVoiceRuntime: vi.fn(),
+		dispose: vi.fn(async () => undefined),
+	})),
+}));
 
 function displayEvent(name: string): void {
 	const listeners = electron.screen.on.mock.calls.filter(
@@ -310,8 +321,12 @@ describe("desktop window lifecycle", () => {
 		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config, signal);
 	});
 
-	it("starts both surfaces on the primary display without panel hardware", () => {
+	it("starts both surfaces on the primary display without panel hardware", async () => {
 		const { panel, management } = windows();
+		expect(registerAgentHttp).toHaveBeenCalledOnce();
+		expect(vi.mocked(registerAgentHttp).mock.calls[0]?.[0].management()).toBe(
+			management,
+		);
 		expect(registerMedia).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerMedia).mock.calls[0]?.[1]()).toBe(management);
 		expect(registerProfiles).toHaveBeenCalledOnce();
@@ -324,6 +339,13 @@ describe("desktop window lifecycle", () => {
 		expect(vi.mocked(registerMonitor).mock.calls[0]?.[1]()).toBe(management);
 		expect(vi.mocked(registerMonitor).mock.calls[0]?.[2]()).toBe(panel);
 		expect(registerVoiceSurface).toHaveBeenCalledOnce();
+		expect(
+			typeof vi.mocked(registerVoiceSurface).mock.calls[0]?.[0].runtime,
+		).toBe("function");
+		await vi.mocked(registerAgentHttp).mock.calls[0]?.[0].invalidated();
+		expect(
+			vi.mocked(registerVoiceSurface).mock.results[0]?.value.reset,
+		).toHaveBeenCalledOnce();
 		expect(vi.mocked(registerVoiceSurface).mock.calls[0]?.[0].panel()).toBe(
 			panel,
 		);
@@ -693,11 +715,12 @@ describe("desktop window lifecycle", () => {
 	});
 
 	it("awaits voice disposal after knob and monitor before releasing quit", async () => {
+		const agentHttp = await vi.mocked(registerAgentHttp).mock.results[0]?.value;
 		const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;
 		const knob = vi.mocked(registerKnob).mock.results[0]?.value;
 		const monitor = vi.mocked(registerMonitor).mock.results[0]?.value;
 		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
-		if (!voice || !knob || !monitor || !profiles)
+		if (!voice || !knob || !monitor || !profiles || !agentHttp)
 			throw new Error("Missing combined owner");
 		let releaseVoice = () => {};
 		vi.mocked(voice.dispose).mockImplementationOnce(
@@ -711,6 +734,10 @@ describe("desktop window lifecycle", () => {
 		try {
 			expect(monitor.dispose).toHaveBeenCalledOnce();
 			expect(knob.dispose).toHaveBeenCalledOnce();
+			expect(agentHttp.dispose).toHaveBeenCalledOnce();
+			expect(
+				vi.mocked(agentHttp.dispose).mock.invocationCallOrder[0],
+			).toBeLessThan(vi.mocked(voice.dispose).mock.invocationCallOrder[0] ?? 0);
 			expect(vi.mocked(knob.dispose).mock.invocationCallOrder[0]).toBeLessThan(
 				vi.mocked(voice.dispose).mock.invocationCallOrder[0] ?? 0,
 			);

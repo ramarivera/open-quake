@@ -1,6 +1,8 @@
 import "../main/meetings/preload";
 import "../main/maintenance/preload";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
+import { createAgentConnectionsBridge } from "../main/agent-http/connection-preload";
+import { createAgentConversationsBridge } from "../main/agent-http/conversation-preload";
 import "../main/key-library/preload";
 import "../main/clock/preload";
 import "../main/monitor/preload";
@@ -39,3 +41,11 @@ const bridge: OpenQuakeBridge = {
 };
 
 contextBridge.exposeInMainWorld("openQuake", bridge);
+contextBridge.exposeInMainWorld(
+	"quakeAgentConnections",
+	createAgentConnectionsBridge(ipcRenderer),
+);
+contextBridge.exposeInMainWorld(
+	"quakeAgentConversations",
+	createAgentConversationsBridge(ipcRenderer),
+);
