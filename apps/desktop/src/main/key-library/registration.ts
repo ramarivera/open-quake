@@ -297,7 +297,8 @@ export function registerKeyLibrary<R>(
 			});
 			const program = (prepared: PreparedImport) =>
 				Effect.gen(function* (): Effect.fn.Return<
-					KeyReply,
+					| KeyReply
+					| { readonly completion: Effect.Effect<KeyReply, ActionError> },
 					| ProfileRepositoryError
 					| ActionError
 					| IconImportFailed
@@ -332,8 +333,8 @@ export function registerKeyLibrary<R>(
 						case "delete":
 							yield* KeyEditing.remove(command.target);
 							break;
-						case "activate":
-							yield* KeyRuntime.activate(
+						case "activate": {
+							const completion = yield* KeyRuntime.prepareActivation(
 								command.deviceId,
 								command.keyCode,
 								command.kind,
@@ -343,7 +344,12 @@ export function registerKeyLibrary<R>(
 									revision: command.revision,
 								},
 							);
-							return { _tag: "success" };
+							return {
+								completion: completion.pipe(
+									Effect.as<KeyReply>({ _tag: "success" }),
+								),
+							};
+						}
 						case "navigate":
 							yield* KeyRuntime.navigate(command.deviceId, command.direction);
 							return { _tag: "success" };
@@ -418,6 +424,12 @@ export function registerKeyLibrary<R>(
 								: program(prepared),
 						).pipe(lock.withPermits(1)),
 					).pipe(
+						// Await host integration work only after both request locks release.
+						Effect.flatMap((result) =>
+							"completion" in result
+								? result.completion
+								: Effect.succeed(result),
+						),
 						Effect.match({
 							onSuccess: (r) => r,
 							onFailure: (cause): KeyReply => ({

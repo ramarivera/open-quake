@@ -20,6 +20,7 @@ import {
 	encodeProfileEnvelope,
 	Profile,
 	ProfileEnvelope,
+	type ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileDeliveryFailed,
@@ -76,6 +77,7 @@ export function registerProfiles(
 	managementURL = renderer,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
+	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -152,8 +154,11 @@ export function registerProfiles(
 			KeyEditing.DefaultWithoutDependencies,
 			KeyRuntime.DefaultWithoutDependencies.pipe(
 				Layer.provide(
-					desktopKeyRuntimePort(hardware, (state) =>
-						broadcast(KEY_RUNTIME, state),
+					desktopKeyRuntimePort(
+						hardware,
+						(state) => broadcast(KEY_RUNTIME, state),
+						undefined,
+						executeOwned,
 					),
 				),
 			),

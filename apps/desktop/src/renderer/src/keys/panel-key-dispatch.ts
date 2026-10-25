@@ -11,7 +11,8 @@ export function createPanelKeyDispatcher(
 	target: () => PanelKeyTarget | undefined,
 	request: KeyLibraryBridge["request"],
 ) {
-	let queue = Promise.resolve();
+	// Preserve press/release order for each key without serializing unrelated taps.
+	const queues = new Map<string, Promise<void>>();
 	let generation = 0;
 	let pending: (PanelKeyTarget & { readonly keyCode: string }) | undefined;
 	return {
@@ -25,7 +26,8 @@ export function createPanelKeyDispatcher(
 			if (!tap || tap.keyCode !== event.keyCode) return;
 			pending = undefined;
 			const epoch = generation;
-			queue = queue
+			const identity = JSON.stringify([tap.deviceId, tap.keyCode]);
+			const queue = (queues.get(identity) ?? Promise.resolve())
 				.then(async () => {
 					if (epoch !== generation) return;
 					try {
@@ -36,7 +38,11 @@ export function createPanelKeyDispatcher(
 				})
 				.catch(() => {
 					/* A destroyed renderer cannot display shutdown failures. */
+				})
+				.finally(() => {
+					if (queues.get(identity) === queue) queues.delete(identity);
 				});
+			queues.set(identity, queue);
 		},
 		cancel(): void {
 			generation++;

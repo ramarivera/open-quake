@@ -8,6 +8,11 @@ import type {
 	Rectangle,
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	createEmptyProfileKey,
+	ProfileKey,
+} from "../../../../packages/device/src/profiles/profile-contracts";
+import { registerIntegrations } from "./integrations";
 import { registerKnob } from "./knob";
 import { registerMaintenance } from "./maintenance";
 import { registerMedia } from "./media";
@@ -110,7 +115,10 @@ vi.mock("./agents", () => ({
 	registerAgents: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
 }));
 vi.mock("./integrations", () => ({
-	registerIntegrations: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
+	registerIntegrations: vi.fn(() => ({
+		dispose: vi.fn(async () => {}),
+		executeHaFromKey: vi.fn(async () => {}),
+	})),
 }));
 vi.mock("./emoji", () => ({
 	registerEmoji: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
@@ -267,6 +275,33 @@ describe("desktop window lifecycle", () => {
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
 		vi.useRealTimers();
 		vi.unstubAllEnvs();
+	});
+
+	it("wires saved HA activation to the direct integration consumer", async () => {
+		const execute = vi.mocked(registerProfiles).mock.calls[0]?.[6];
+		const integrations = vi.mocked(registerIntegrations).mock.results[0]?.value;
+		expect(execute).toBeTypeOf("function");
+		const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const config = {
+			entity_id: "input_boolean.test",
+			service: "toggle",
+			service_data: {},
+			custom_display_type: "icon",
+			custom_display_settings: { fontSize: 20 },
+			custom_display_detail: [],
+		};
+		const key = Schema.decodeUnknownSync(ProfileKey)({
+			...base,
+			childrenName: "homeAssistant",
+			config: {
+				...base.config,
+				type: "homeAssistant",
+				actions: [{ type: "configData", value: JSON.stringify(config) }],
+			},
+		});
+		const signal = new AbortController().signal;
+		expect(await execute?.(key, signal)).toBe(true);
+		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config, signal);
 	});
 
 	it("starts both surfaces on the primary display without panel hardware", () => {
@@ -709,7 +744,7 @@ import {
 	type FakeHidTransport,
 	makeFakeHidTransport,
 } from "@open-quake/device/fake";
-import { Deferred, Effect, type Layer } from "effect";
+import { Deferred, Effect, type Layer, Schema } from "effect";
 
 describe("desktop main with the real device service and fake HID", () => {
 	let fake: FakeHidTransport;
