@@ -19,6 +19,7 @@ import {
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
+import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { playKeyAlarm } from "./alarm";
 
@@ -28,6 +29,7 @@ export const desktopKeyRuntimePort = (
 	hardware: () => HardwareSession | undefined,
 	publish: (state: KeyFeedback) => void,
 	mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
+	executeOwned?: (key: ProfileKey) => Promise<boolean>,
 ) =>
 	Layer.effect(
 		KeyRuntimePort,
@@ -154,6 +156,13 @@ export const desktopKeyRuntimePort = (
 					}),
 				),
 				execute: (config) => executeActionLeaf(config, adapters),
+				executeOwned: (key) =>
+					mock || !executeOwned
+						? Effect.succeed(false)
+						: Effect.tryPromise({
+								try: () => executeOwned(key),
+								catch: (cause) => new HostActionFailed(cause),
+							}),
 				publish: (state) => Effect.sync(() => publish(state)),
 				select: (deviceId, profileId, pageId) =>
 					profiles.selectProfile({ deviceId, profileId, pageId }).pipe(

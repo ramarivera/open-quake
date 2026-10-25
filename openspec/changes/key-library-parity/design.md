@@ -26,3 +26,7 @@ Share the existing ProfileRepository between editor and runtime. Preview publica
 ## Migration Plan
 
 Add optional title metadata without rewriting old profiles. Retain compatibility payloads. Persist icon packs under a versioned local file; no changes to DK-Suite files. Reset runtime state on application restart, and cancel fibers on disposal.
+
+## Live integration acceptance follow-up
+
+The shared key runtime offers an optional host-owned key execution port after committed selection, revision, visibility and compatibility checks. Desktop composition binds Home Assistant keys to the existing direct integration consumer. The integration retains entity/service validation and its credential store; AI allowlist policy remains specific to AI-originated calls. The mock-device port never invokes external integration actions.

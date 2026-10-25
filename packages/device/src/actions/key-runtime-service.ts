@@ -39,6 +39,10 @@ export class KeyRuntimePort extends Context.Tag(
 		readonly execute: (
 			config: ActionConfig,
 		) => Effect.Effect<void, ActionError>;
+		/** Host integrations receive only the committed key after activation guards. */
+		readonly executeOwned?: (
+			key: ProfileKey,
+		) => Effect.Effect<boolean, ActionError>;
 		readonly publish: (state: KeyFeedback) => Effect.Effect<void>;
 		readonly select: (
 			deviceId: string,
@@ -372,6 +376,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					running.set(identity, fiber);
 					return;
 				}
+				if (port.executeOwned && (yield* port.executeOwned(key))) return;
 				const action = validateAction(
 					Option.getOrElse(key.childrenName, () => type),
 					input,

@@ -62,3 +62,9 @@
 - [x] 8.6 Replace native picker closure timing assumptions with bounded destruction checks after selection and function replacement. Verify the full Keys fixture and focused lint/types; production behavior remains the verified round-two source. Bead `open-quake-lih.10.2.25`. Evidence: verification-icon-review-round-2.md and closure-followup/verification.json; complete native Keys, types, lint and strict change validation pass.
 
 - [x] 8.7 Fix the native CoreGraphics helper crash found during unlocked quiet acceptance. Use supported JXA argument types, verify the actual read-only macOS helper and consented arrangement, retain typed failure handling, and record fresh device output plus cleanup. Bead `open-quake-lih.10.2.20.1`. Evidence: `verification-quiet-keyboard-display.md`; two actual macOS binding regressions and real consented arrangement pass.
+
+- [ ] 8.8 Perform one comment-curator round on PR38; run newly authorized automated live sound and Home Assistant checks, extend native GIF animation/filename acceptance where available, and preserve exact evidence and user state. Physical controls and cable actions remain user-owned for later. Bead `open-quake-lih.10.2.26`.
+
+- [ ] 8.9 Replace the bulky management sidebar scrollbar with a narrow theme-matched thumb; verify live compact/full sidebar scrolling and inspect current Linux adapters. Bead `open-quake-lih.10.2.27`.
+
+- [ ] 8.10 Wire saved Home Assistant keys into the guarded production activation path. Cover direct execution, duplicate/stale/hidden/quarantined rejection and typed host failure, and verify live HTTPS off/on/off against a temporary helper. Bead `open-quake-lih.10.2.28`.

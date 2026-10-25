@@ -683,6 +683,20 @@
 	min-height: 0;
 	padding-bottom: 12px;
 }
+.nav::-webkit-scrollbar {
+	width: 4px;
+	height: 4px;
+}
+.nav::-webkit-scrollbar-track {
+	background: transparent;
+}
+.nav::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--mc-muted) 35%, transparent);
+	border-radius: 4px;
+}
+.nav::-webkit-scrollbar-thumb:hover {
+	background: var(--mc-muted);
+}
 .nav-section + .nav-section {
 	margin-top: 18px;
 }

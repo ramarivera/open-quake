@@ -34,6 +34,7 @@ import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
 import { hardwarePreferencesLive } from "./hardware/preferences";
 import { registerIntegrations } from "./integrations";
+import { integrationKeyAction } from "./integrations/key-action";
 import { resetKeysOnLinkLoss } from "./key-library/device-status";
 import { registerKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
@@ -215,6 +216,7 @@ if (!app.requestSingleInstanceLock()) {
 			managementURL.href,
 			() => bus?.hardware?.(),
 			() => panelWin,
+			integrationKeyAction((key) => integrations.executeHaFromKey(key)),
 		);
 		const agents = registerAgents({
 			management: () => managementWin,

@@ -149,3 +149,12 @@ Selected artwork SHALL be rasterized to a 170×170 PNG through inert image decod
 - **WHEN** a raster import passes file and pixel limits but its decoded PNG exceeds the selection source limit
 - **THEN** the import normalizes the image before storage, preserving aspect ratio and producing a selectable source
 - **AND** selection and Save retain portable 170×170 artwork and source identity
+
+
+### Requirement: Saved integration key activation
+The committed key runtime SHALL route configured Home Assistant keys to the direct Home Assistant service consumer after applying its revision, visibility, compatibility and held-input guards. Direct keys SHALL use their explicit configuration independently of the AI entity allowlist. Missing or failed integration dependencies SHALL retain typed host errors. Mock-device execution SHALL never call the live integration.
+
+#### Scenario: Saved Home Assistant key press
+- **WHEN** a current visible supported Home Assistant key is pressed
+- **THEN** its saved entity, service and service data reach the direct integration consumer once per press
+- **AND** release permits a later press, while repeated held input, stale targets, hidden keys and quarantined keys cannot execute the service
