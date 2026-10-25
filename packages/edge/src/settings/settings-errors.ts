@@ -61,9 +61,13 @@ export class SettingsInvalid extends Schema.TaggedError<SettingsInvalid>()(
 	fields("Invalid"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("Invalid", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("Invalid")))(cause)
+				: properties("Invalid", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
 export class SettingsReadFailed extends Schema.TaggedError<SettingsReadFailed>()(
@@ -71,9 +75,13 @@ export class SettingsReadFailed extends Schema.TaggedError<SettingsReadFailed>()
 	fields("ReadFailed"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("ReadFailed", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("ReadFailed")))(cause)
+				: properties("ReadFailed", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
 export class SettingsPersistFailed extends Schema.TaggedError<SettingsPersistFailed>()(
@@ -81,36 +89,42 @@ export class SettingsPersistFailed extends Schema.TaggedError<SettingsPersistFai
 	fields("PersistFailed"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("PersistFailed", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("PersistFailed")))(
+						cause,
+					)
+				: properties("PersistFailed", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
+const OsReason = Schema.Literal(
+	"unsupported",
+	"denied",
+	"timeout",
+	"unverified",
+	"unavailable",
+);
+const OsFields = { ...fields("OsApplyFailed"), reason: OsReason };
 export class SettingsOsApplyFailed extends Schema.TaggedError<SettingsOsApplyFailed>()(
 	"SettingsOsApplyFailed",
-	{
-		...fields("OsApplyFailed"),
-		reason: Schema.Literal(
-			"unsupported",
-			"denied",
-			"timeout",
-			"unverified",
-			"unavailable",
-		),
-	},
+	OsFields,
 ) {
 	declare readonly originalCause: unknown;
 	constructor(
 		cause?: unknown,
-		reason:
-			| "unsupported"
-			| "denied"
-			| "timeout"
-			| "unverified"
-			| "unavailable" = "unavailable",
+		reason: typeof OsReason.Type | true = "unavailable",
 	) {
-		super({ ...properties("OsApplyFailed", cause), reason });
-		retain(this, cause);
+		// Effect's class schema decodes via new this(validatedFields, true).
+		// Keep the safe wire projection, never reinterpret fields as a raw cause.
+		super(
+			reason === true
+				? Schema.decodeUnknownSync(Schema.Struct(OsFields))(cause)
+				: { ...properties("OsApplyFailed", cause), reason },
+		);
+		retain(this, reason === true ? undefined : cause);
 	}
 }
 export class WizardIncomplete extends Schema.TaggedError<WizardIncomplete>()(
@@ -118,9 +132,15 @@ export class WizardIncomplete extends Schema.TaggedError<WizardIncomplete>()(
 	fields("WizardIncomplete"),
 ) {
 	declare readonly originalCause: unknown;
-	constructor(cause?: unknown) {
-		super(properties("WizardIncomplete", cause));
-		retain(this, cause);
+	constructor(cause?: unknown, decoded = false) {
+		super(
+			decoded
+				? Schema.decodeUnknownSync(Schema.Struct(fields("WizardIncomplete")))(
+						cause,
+					)
+				: properties("WizardIncomplete", cause),
+		);
+		retain(this, decoded ? undefined : cause);
 	}
 }
 export const SettingsBackendFailure = Schema.Union(

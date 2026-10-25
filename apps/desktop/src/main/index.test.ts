@@ -55,6 +55,10 @@ const electron = vi.hoisted(() => {
 		focus = vi.fn();
 		restore = vi.fn();
 		isMinimized = vi.fn(() => false);
+		isMaximized = vi.fn(() => false);
+		isFullScreen = vi.fn(() => false);
+		getBounds = vi.fn(() => ({ x: 0, y: 0, width: 1100, height: 760 }));
+		removeListener = vi.fn();
 		setAlwaysOnTop = vi.fn<(flag: boolean, level?: string) => void>();
 		destroy = vi.fn(() => {
 			this.destroyed = true;
@@ -387,6 +391,9 @@ describe("desktop window lifecycle", () => {
 
 	it("focuses and restores the existing management window on second launch", () => {
 		const { management } = windows();
+		expect(management.options.show).toBe(false);
+		expect(management.show).toHaveBeenCalledOnce();
+		management.show.mockClear();
 		management.isMinimized.mockReturnValue(true);
 		appEvent("second-instance");
 		expect(management.restore).toHaveBeenCalledOnce();

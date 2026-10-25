@@ -97,3 +97,25 @@ restart/corruption tests and OS adapter tests live under desktop settings.
 Property tests verify bounds always fit a connected work area and repeated
 correction is stable. Native login/menu/window acceptance, renderer controls,
 profile creation and physical onboarding remain parent-owned acceptance work.
+
+## Desktop consumer
+
+The root supplies canonical owner probes and bounded Electron OS adapters to the
+existing registration. `settings:backend:rpc` accepts only the current management
+main frame, validates payload schemas and shares the locale group's pending-work
+limit. Both groups share one repository, revision and shutdown. Successful wizard
+locale saves use the same trusted-window broadcast as explicit language changes.
+The preload exposes `quakeSettings`; panel calls to this group are rejected.
+
+Root startup applies reachable saved bounds before showing management. Hidden
+startup requires a visible macOS dock with the registered activate action; other
+platforms stay visible until an owned reopening route exists. Window geometry
+writes are coalesced, serialized through the canonical repository and drained
+before settings disposal. No launch preference is silently applied on startup.
+
+Schema-backed error constructors preserve validated wire fields when Effect RPC
+reconstructs a class. The private original cause exists only on the source error;
+the decoded public error retains catalog identity, reason and safe diagnostics.
+Transport regressions exercise this using actual RpcClient/RpcServer, persistence
+and the production preload, including a denied OS write and correlated failure
+telemetry without private cause text.

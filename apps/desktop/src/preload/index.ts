@@ -1,3 +1,4 @@
+import { createSettingsBackendBridge } from "../main/settings/backend-preload";
 import { createAppLocaleBridge } from "../main/settings/preload";
 import "../main/meetings/preload";
 import { createDirectChatBridge } from "../main/chat/preload";
@@ -64,4 +65,10 @@ const appLocale = createAppLocaleBridge(ipcRenderer);
 contextBridge.exposeInMainWorld("quakeLocale", appLocale);
 window.addEventListener("unload", () => {
 	void appLocale.dispose();
+});
+
+const settingsBackend = createSettingsBackendBridge(ipcRenderer);
+contextBridge.exposeInMainWorld("quakeSettings", settingsBackend);
+window.addEventListener("unload", () => {
+	void settingsBackend.dispose();
 });

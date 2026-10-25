@@ -15,6 +15,7 @@ import {
 	shell,
 } from "electron";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
+import { ProfileManager } from "../../../../packages/device/src/profiles/profile-manager-service.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { RuntimeStorageFailed } from "../../../../packages/edge/src/agent-http/runtime-errors.js";
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
@@ -68,7 +69,10 @@ import { MediaLive, registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
+import { createSettingsOsAdapter } from "./settings/os-adapter";
 import { registerAppLocale } from "./settings/registration";
+import { bindSettingsWindow } from "./settings/window-binding";
+import { createWizardOwners } from "./settings/wizard-owners";
 import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
@@ -148,6 +152,7 @@ function createManagementWindow(): BrowserWindow {
 		width: 1100,
 		height: 760,
 		title: "open-quake — management",
+		show: false,
 		minWidth: 640,
 		minHeight: 560,
 		backgroundColor: theme.background,
@@ -265,6 +270,46 @@ if (!app.requestSingleInstanceLock()) {
 						renderer: rendererURL,
 						windows: () => [managementWin, panelWin],
 						diagnostics,
+						backend: {
+							os: createSettingsOsAdapter({
+								loginSupported:
+									process.platform === "darwin" || process.platform === "win32",
+								getLoginItemSettings: async () => app.getLoginItemSettings(),
+								setLoginItemSettings: async (settings) => {
+									app.setLoginItemSettings(settings);
+								},
+								workAreas: async () =>
+									screen.getAllDisplays().map((display) => display.workArea),
+								managementReachable: async () =>
+									process.platform === "darwin" &&
+									Boolean(app.dock?.isVisible()) &&
+									app.listenerCount("activate") > 0,
+							}),
+							owners: createWizardOwners({
+								deviceId: () => activeSerial,
+								profiles: () =>
+									profiles.runtime.runPromise(
+										ProfileManager.read().pipe(
+											Effect.map((envelope) => envelope.profiles),
+										),
+									),
+								runtimeSupported: () => Boolean(agentHttp),
+								runtimeConfigured: async () =>
+									agents
+										? (await agents.runtime.runPromise(AgentsService.view()))
+												.runtime.status === "ready"
+										: false,
+							}),
+						},
+					});
+					const settingsWindow = bindSettingsWindow({
+						startup: localeRegistration.startup,
+						save: localeRegistration.saveWindow,
+						failure: (cause) => {
+							void background.runPromise(
+								Effect.logWarning("Settings window operation failed", cause),
+							);
+						},
 					});
 					const chatRegistration = registerDirectChat({
 						host: directChat,
@@ -790,6 +835,7 @@ if (!app.requestSingleInstanceLock()) {
 								integrations.dispose(),
 								emoji.dispose(),
 							]);
+							await settingsWindow.dispose();
 							await localeRegistration.dispose();
 							await chatRegistration.dispose();
 							await agentHttp?.dispose();
@@ -880,6 +926,7 @@ if (!app.requestSingleInstanceLock()) {
 							if (panelWin.isDestroyed())
 								syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
 							managementWin = createManagementWindow();
+							settingsWindow.attach(managementWin);
 							startBus();
 							// stopBus locks the lifecycle before releasing the old owner.
 							// Unlock only after that stop completes, including rapid reopening.
@@ -894,6 +941,7 @@ if (!app.requestSingleInstanceLock()) {
 						void stopBus();
 						if (process.platform !== "darwin") app.quit();
 					});
+					await settingsWindow.initialize(managementWin);
 				}),
 				"app.startup",
 			),
