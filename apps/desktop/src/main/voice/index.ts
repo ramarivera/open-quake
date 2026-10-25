@@ -89,15 +89,20 @@ export interface VoiceSurfaceOptions {
 	readonly panel: () => BrowserWindow | undefined;
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer?: string;
+	/** Decorates the existing runtime without replacing normal AI/capture behavior. */
+	readonly runtime?: (
+		fallback: Layer.Layer<GridVoiceRuntime, never, VoiceSurface>,
+	) => Layer.Layer<GridVoiceRuntime, never, VoiceSurface>;
 }
 
 export const voiceSurfaceLayer = (
-	options: Pick<VoiceSurfaceOptions, "mock" | "tones">,
+	options: Pick<VoiceSurfaceOptions, "mock" | "tones" | "runtime">,
 	publish: (event: VoiceSurfaceEvent) => void,
-) =>
-	GridVoice.Default.pipe(
+) => {
+	const fallback = options.mock ? MockVoiceRuntimeLive : UnavailableRuntimeLive;
+	return GridVoice.Default.pipe(
 		Layer.provideMerge(
-			(options.mock ? MockVoiceRuntimeLive : UnavailableRuntimeLive).pipe(
+			(options.runtime ? options.runtime(fallback) : fallback).pipe(
 				Layer.provideMerge(
 					VoiceSurface.Default.pipe(
 						Layer.provide(
@@ -116,6 +121,7 @@ export const voiceSurfaceLayer = (
 			),
 		),
 	);
+};
 
 function broadcast(event: VoiceSurfaceEvent): void {
 	const value = encodeEvent(event);
@@ -142,6 +148,8 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
 	/** Called before forwarding device status to renderers. */
 	readonly onDevice: (event: QuakeEvent) => Promise<void>;
+	/** Main-process connection changes clear the same owner as profile changes. */
+	readonly reset: () => Promise<void>;
 	readonly dispose: () => Promise<void>;
 } {
 	const renderer =
@@ -254,6 +262,7 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 	let shutdown: Promise<void> | undefined;
 	return {
 		publish: (event) => run(VoiceSurface.publish(event)),
+		reset: () => run(GridVoice.reset(options.serial(), "profileChanged")),
 		onDevice: (event) => {
 			if (event.kind !== "status") return Promise.resolve();
 			disconnected = event.state !== "connected";

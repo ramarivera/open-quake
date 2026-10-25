@@ -16,9 +16,12 @@ import {
 } from "electron";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
+import { RuntimeStorageFailed } from "../../../../packages/edge/src/agent-http/runtime-errors.js";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
+import type { VoiceSurfaceEvent } from "../shared/voice-surface";
+import { registerAgentHttp } from "./agent-http";
 import { registerAgents } from "./agents";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
@@ -164,7 +167,7 @@ if (!app.requestSingleInstanceLock()) {
 	);
 	app.quit();
 } else
-	app.whenReady().then(() => {
+	app.whenReady().then(async () => {
 		const getPanelTarget = (): PanelTarget => {
 			const display = findPanelDisplay(screen.getAllDisplays());
 			return display
@@ -186,9 +189,31 @@ if (!app.requestSingleInstanceLock()) {
 			() => managementWin,
 		);
 		let bus: DeviceBus | undefined;
+		let resetVoice = (): Promise<void> => Promise.resolve();
+		let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
+			Promise.resolve();
+		const agentHttp = await Effect.runPromise(
+			Effect.tryPromise({
+				try: () =>
+					registerAgentHttp({
+						management: () => managementWin,
+						renderer: rendererURL,
+						invalidated: () => resetVoice(),
+						publish: (event) => publishVoice(event),
+					}),
+				catch: (cause) => new RuntimeStorageFailed(cause),
+			}).pipe(
+				Effect.catchTag("RuntimeStorageFailed", (error) =>
+					Effect.logWarning("HTTP runtime setup failed", {
+						code: error.code,
+					}).pipe(Effect.as(undefined)),
+				),
+			),
+		);
 		// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
 		// play through hardware-controls; the mock bus answers them without HID.
 		const voice = registerVoiceSurface({
+			...(agentHttp ? { runtime: agentHttp.decorateVoiceRuntime } : {}),
 			mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 			tones: toneSinks(createToneRecorder(), {
 				play: (_serial, tone) => {
@@ -208,6 +233,8 @@ if (!app.requestSingleInstanceLock()) {
 			panel: () => panelWin,
 			management: () => managementWin,
 		});
+		resetVoice = voice.reset;
+		publishVoice = voice.publish;
 		const managementURL = new URL(rendererURL);
 		managementURL.searchParams.set("surface", "management");
 		managementURL.searchParams.set("rotation", "0");
@@ -223,6 +250,9 @@ if (!app.requestSingleInstanceLock()) {
 			),
 		);
 		const agents = registerAgents({
+			...(agentHttp
+				? { backend: agentHttp.backend, drafting: agentHttp.drafting }
+				: {}),
 			management: () => managementWin,
 			renderer: rendererURL,
 			profiles: profiles.runtime,
@@ -598,6 +628,7 @@ if (!app.requestSingleInstanceLock()) {
 					integrations.dispose(),
 					emoji.dispose(),
 				]);
+				await agentHttp?.dispose();
 				await voice.dispose();
 				await profiles.dispose();
 				await clock.dispose();
