@@ -1,12 +1,13 @@
 {
 	"clawControlPanel": {
 		"aria": "Agent sections",
-		"sessionsTab": "Agent sessions",
-		"agentsTab": "Agent management",
-		"localLibraryTab": "Local agent library",
-		"libraryHint": "Connect to a running runtime for conversations. Manage local workspace files, skills, and models in the local library.",
-		"aiConfig": "AI Config",
-		"settings": "Settings"
+		"sessionsTab": "Conversations",
+		"agentsTab": "Agents",
+		"localLibraryTab": "Agent library",
+		"libraryHint": "Talk to your model or a connected runtime, and manage local agents, skills and models.",
+		"aiConfig": "AI configuration",
+		"settings": "Device & channels",
+		"kicker": "Assistant"
 	},
 	"openclawRuntimeIndicator": {
 		"start": "Start OpenClaw",

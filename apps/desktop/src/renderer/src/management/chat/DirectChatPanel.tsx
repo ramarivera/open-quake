@@ -1,5 +1,6 @@
 import { Option } from "effect";
 import {
+	type ReactNode,
 	useEffect,
 	useLayoutEffect,
 	useRef,
@@ -8,64 +9,47 @@ import {
 } from "react";
 import type { TurnSnapshot } from "../../../../../../../packages/edge/src/chat/chat-contracts";
 import type { DirectChatBridge } from "../../../../shared/chat";
-import { RichText } from "../../strip/tiles/clawBot/RichText";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { ActionDialog } from "../agent-http/ActionDialog";
+import { Composer } from "./Composer";
 import { createChatController } from "./controller";
-import "./chat.css";
+import { fill, relativeTime } from "./format";
+import { Icon } from "./icons";
+import type { DirectChatModel } from "./model-scope";
+import { Prose } from "./Prose";
+import strings from "./strings.json";
+import "./workspace.css";
 
-const strings = {
-	en: {
-		title: "Direct chat",
-		hint: "Uses your saved default model from AI settings. Chat history stays on this device.",
-		newChat: "New chat",
-		empty: "Send a message to start a conversation.",
-		send: "Send",
-		cancel: "Stop response",
-		message: "Message",
-		history: "Conversation history",
-		loading: "Loading conversations",
-		rename: "Rename",
-		clear: "Delete conversation",
-		clearBody:
-			"Delete this conversation and its saved history from this device?",
-		you: "You",
-		answer: "Generated answer",
-		unavailable:
-			"Configure a default model and API key in AI settings before chatting.",
-		retry: "Retry",
-		name: "Conversation title",
-	},
-	de: {
-		title: "Direkter Chat",
-		hint: "Verwendet dein gespeichertes Standardmodell aus den KI-Einstellungen. Der Verlauf bleibt auf diesem Gerät.",
-		newChat: "Neuer Chat",
-		empty: "Sende eine Nachricht, um ein Gespräch zu beginnen.",
-		send: "Senden",
-		cancel: "Antwort stoppen",
-		message: "Nachricht",
-		history: "Gesprächsverlauf",
-		loading: "Gespräche werden geladen",
-		rename: "Umbenennen",
-		clear: "Gespräch löschen",
-		clearBody:
-			"Dieses Gespräch und seinen gespeicherten Verlauf von diesem Gerät löschen?",
-		you: "Du",
-		answer: "Generierte Antwort",
-		unavailable:
-			"Lege zuerst ein Standardmodell und einen API-Schlüssel in den KI-Einstellungen fest.",
-		retry: "Erneut versuchen",
-		name: "Gesprächstitel",
-	},
-};
+export type ChatStrings = (typeof strings)["en"];
+export const chatStrings = (locale: string): ChatStrings =>
+	locale === "de" ? strings.de : strings.en;
+export const errorText = (t: ChatStrings, code: string): string =>
+	(t.errors as Readonly<Record<string, string>>)[code] ?? t.errorTitle;
+
+export interface QuakeRoute {
+	/** Name of the selected runtime connection that receives QUAKE requests. */
+	readonly runtime: string | undefined;
+	readonly busy: boolean;
+	readonly useDirect: () => void;
+}
+
 export function DirectChatPanel({
 	bridge = window.quakeChat,
-	configured,
+	model,
 	locale = "en",
+	sources,
+	quake,
+	onOpenSettings,
+	hidden = false,
 }: {
+	readonly hidden?: boolean;
 	readonly bridge?: DirectChatBridge | undefined;
-	readonly configured: boolean;
+	readonly model: DirectChatModel;
 	readonly locale?: string;
+	/** Source switcher rendered at the top of the rail. */
+	readonly sources?: ReactNode;
+	readonly quake?: QuakeRoute | undefined;
+	readonly onOpenSettings?: (() => void) | undefined;
 }) {
 	const [controller] = useState(() => createChatController(bridge));
 	const state = useSyncExternalStore(
@@ -73,12 +57,18 @@ export function DirectChatPanel({
 		controller.getSnapshot,
 		controller.getSnapshot,
 	);
-	const t = locale === "de" ? strings.de : strings.en;
+	const t = chatStrings(locale);
+	const configured = model.ready;
+	const modelName = model.row
+		? `${model.row.provider} / ${model.row.model}`
+		: t.directNotSet;
 	const [text, setText] = useState("");
 	const [title, setTitle] = useState("");
 	const [deleting, setDeleting] = useState(false);
+	const [listOpen, setListOpen] = useState(false);
 	const scroll = useRef<HTMLElement>(null),
-		follow = useRef(true);
+		follow = useRef(true),
+		input = useRef<HTMLTextAreaElement>(null);
 	useEffect(() => {
 		void controller.refresh();
 		return () => controller.dispose();
@@ -90,189 +80,421 @@ export function DirectChatPanel({
 	useLayoutEffect(() => {
 		if (follow.current && scroll.current)
 			scroll.current.scrollTop = scroll.current.scrollHeight;
-	}, [state.turn?.lastSeq, state.current?.revision]);
+	}, [state.turn?.lastSeq, state.current?.revision, state.sessionId]);
 	const open = (url: string) => {
 		void window.quakeVoice?.request({ _tag: "OpenLink", url });
 	};
-	const answer = (snapshot: TurnSnapshot) => (
-		<>
-			<RichText value={parseRichText(snapshot.text)} scale={1} onOpen={open} />
-			{Option.isSome(snapshot.terminal) && (
-				<small className="direct-chat-status">
-					{snapshot.terminal.value.outcome}
-					{snapshot.terminal.value.errorCode
-						? ` · ${snapshot.terminal.value.errorCode}`
-						: ""}
-					{snapshot.terminal.value.usage
-						? ` · ${snapshot.terminal.value.usage.inputTokens} / ${snapshot.terminal.value.usage.outputTokens} tokens · ${snapshot.terminal.value.usage.provenance}`
-						: ""}
-				</small>
-			)}
-		</>
+	const compose = (value: string) => {
+		setText(value);
+		input.current?.focus();
+	};
+	const submit = () => {
+		const value = text;
+		follow.current = true;
+		void controller.submit(value);
+		setText("");
+	};
+	const renaming = Boolean(
+		state.current && title.trim() && title !== state.current.title,
 	);
-	return (
-		<section className="mc-panel direct-chat" aria-label={t.title}>
-			<header className="mc-toolbar">
-				<div>
-					<h2>{t.title}</h2>
-					<p>{t.hint}</p>
-				</div>
-				<button
-					type="button"
-					className="mc-button"
-					disabled={state.pending}
-					onClick={() => void controller.select()}
-				>
-					{t.newChat}
-				</button>
-			</header>
-			{!configured && <p role="status">{t.unavailable}</p>}
-			{state.error && (
-				<p role="alert">
-					{state.error}{" "}
-					<button
-						type="button"
-						className="mc-button"
-						onClick={() => void controller.refresh()}
+	const turns =
+		state.current?.turns.filter(
+			(turn) => turn.selection.turnId !== state.turn?.turnId,
+		) ?? [];
+	const lastTurn = turns.at(-1);
+	const now = Date.now();
+	const answer = (
+		snapshot: TurnSnapshot,
+		input: string,
+		last: boolean,
+		live: boolean,
+	) => {
+		const terminal = Option.getOrUndefined(snapshot.terminal);
+		const usage = terminal?.usage;
+		return (
+			<div className="cw-answer">
+				<p className="cw-answer-label">{t.assistant}</p>
+				{snapshot.text ? (
+					<Prose
+						value={parseRichText(snapshot.text)}
+						onOpen={open}
+						linkHint={t.openLink}
+					/>
+				) : (
+					live && (
+						<p className="cw-waiting" role="status">
+							<span className="cw-pulse" aria-hidden="true" />
+							{state.cancelling ? t.stopping : t.waiting}
+						</p>
+					)
+				)}
+				{live && snapshot.text && (
+					<p className="cw-turn-meta" role="status">
+						<span className="cw-pulse" aria-hidden="true" />
+						{state.cancelling ? t.stopping : t.streaming}
+					</p>
+				)}
+				{terminal && (
+					<div
+						className="cw-turn-meta direct-chat-status"
+						data-outcome={terminal.outcome}
 					>
-						{t.retry}
-					</button>
-				</p>
-			)}
-			<div className="direct-chat-layout">
-				<nav aria-label={t.history} className="direct-chat-history">
-					{state.loading ? (
-						<p role="status">{t.loading}</p>
-					) : (
-						state.histories.map((item) => (
-							<button
-								type="button"
-								className="mc-button"
-								key={item.sessionId}
-								aria-current={
-									item.sessionId === state.sessionId ? "true" : undefined
-								}
-								disabled={state.pending}
-								onClick={() => void controller.select(item.sessionId)}
-							>
-								{item.title}
-							</button>
-						))
-					)}
-				</nav>
-				<div className="direct-chat-main">
-					<section
-						ref={scroll}
-						className="direct-chat-transcript"
-						aria-label={t.history}
-						onScroll={() => {
-							const el = scroll.current;
-							if (el)
-								follow.current =
-									el.scrollHeight - el.scrollTop - el.clientHeight < 32;
-						}}
-					>
-						{!state.current && !state.turn && <p>{t.empty}</p>}
-						{state.current?.turns
-							.filter((turn) => turn.selection.turnId !== state.turn?.turnId)
-							.map((turn) => (
-								<article
-									className="direct-chat-exchange"
-									key={turn.selection.turnId}
-								>
-									<p>
-										<strong>{t.you}</strong>
-									</p>
-									<p className="direct-chat-user">{turn.input}</p>
-									<p>
-										<strong>{t.answer}</strong>
-									</p>
-									{answer(turn.snapshot)}
-								</article>
-							))}
-						{state.turn && (
-							<article className="direct-chat-exchange">
-								<p>
-									<strong>{t.you}</strong>
-								</p>
-								<p className="direct-chat-user">{state.input}</p>
-								<p>
-									<strong>{t.answer}</strong>
-								</p>
-								{answer(state.turn)}
-							</article>
+						<span>{t.outcome[terminal.outcome]}</span>
+						{terminal.errorCode && (
+							<code className="cw-code">{terminal.errorCode}</code>
 						)}
-					</section>
-					<form
-						onSubmit={(event) => {
-							event.preventDefault();
-							const value = text;
-							void controller.submit(value);
-							setText("");
-						}}
-					>
-						<label className="mc-field">
-							{t.message}
-							<textarea
-								value={text}
-								maxLength={32768}
-								disabled={!configured || state.pending || !bridge}
-								onChange={(event) => setText(event.target.value)}
-								rows={3}
-							/>
-						</label>
-						<div className="direct-chat-actions">
-							<button
-								type="submit"
-								className="mc-button"
-								disabled={
-									!configured || state.pending || !text.trim() || !bridge
-								}
-							>
-								{t.send}
-							</button>
-							{state.pending && (
-								<button
-									type="button"
-									className="mc-button"
-									disabled={state.cancelling}
-									onClick={() => void controller.cancel()}
-								>
-									{t.cancel}
-								</button>
+						{usage && (
+							<span>
+								{fill(t.tokens, {
+									input: usage.inputTokens,
+									output: usage.outputTokens,
+								})}{" "}
+								· {t[usage.provenance]}
+							</span>
+						)}
+					</div>
+				)}
+				{terminal?.errorCode && last && (
+					<div className="cw-turn-error">
+						<p>{errorText(t, terminal.errorCode)}</p>
+						<button
+							type="button"
+							className="mc-button"
+							data-variant="quiet"
+							disabled={state.pending}
+							onClick={() => compose(input)}
+						>
+							{t.reuse}
+						</button>
+					</div>
+				)}
+				{last &&
+					terminal?.outcome === "completed" &&
+					snapshot.suggestions.length > 0 && (
+						<ul className="cw-suggestions" aria-label={t.suggestions}>
+							{snapshot.suggestions.map((item) => (
+								<li key={item.suggestionId}>
+									<button
+										type="button"
+										className="cw-chip"
+										disabled={state.pending}
+										onClick={() => compose(item.text)}
+									>
+										{item.text}
+									</button>
+								</li>
+							))}
+						</ul>
+					)}
+			</div>
+		);
+	};
+	const exchange = (
+		key: string,
+		input: string,
+		snapshot: TurnSnapshot,
+		last: boolean,
+		live: boolean,
+	) => (
+		<article className="direct-chat-exchange cw-turn" key={key}>
+			<div className="cw-user">
+				<p className="visually-hidden">{t.you}</p>
+				<p className="direct-chat-user cw-bubble">{input}</p>
+			</div>
+			{answer(snapshot, input, last, live)}
+		</article>
+	);
+	const empty = !state.current?.turns.length && !state.turn;
+	return (
+		<section
+			className="direct-chat cw-view"
+			aria-label={t.direct}
+			hidden={hidden}
+		>
+			<aside className="cw-rail">
+				{sources}
+				<div className="cw-sessions">
+					<div className="cw-sessions-head">
+						<h3 id="direct-chat-history-label">{t.conversations}</h3>
+						<button
+							type="button"
+							className="mc-button cw-list-toggle"
+							data-variant="quiet"
+							aria-expanded={listOpen}
+							aria-controls="direct-chat-history"
+							onClick={() => setListOpen((value) => !value)}
+						>
+							{listOpen ? t.hideConversations : t.showConversations}
+							{state.histories.length > 0 && (
+								<span className="cw-count">{state.histories.length}</span>
 							)}
-						</div>
-					</form>
-					{state.current && (
-						<div className="direct-chat-actions">
-							<label className="mc-field">
-								{t.name}
+						</button>
+						<button
+							type="button"
+							className="mc-button"
+							title={t.newChatHint}
+							disabled={state.pending || (!state.current && !state.turn)}
+							onClick={() => {
+								setListOpen(false);
+								void controller.select();
+								input.current?.focus();
+							}}
+						>
+							<Icon name="plus" />
+							{t.newChat}
+						</button>
+					</div>
+					<nav
+						id="direct-chat-history"
+						aria-labelledby="direct-chat-history-label"
+						className="direct-chat-history cw-session-list"
+						data-open={listOpen || undefined}
+					>
+						{state.loading ? (
+							<p className="cw-muted" role="status">
+								{t.loading}
+							</p>
+						) : state.histories.length === 0 ? (
+							<p className="cw-muted">{t.noConversations}</p>
+						) : (
+							[...state.histories]
+								.sort((a, b) => b.updatedAt - a.updatedAt)
+								.map((item) => (
+									<button
+										type="button"
+										className="cw-session"
+										key={item.sessionId}
+										aria-current={
+											item.sessionId === state.sessionId ? "true" : undefined
+										}
+										disabled={state.pending}
+										onClick={() => {
+											setListOpen(false);
+											void controller.select(item.sessionId);
+										}}
+									>
+										<span className="cw-session-title">
+											{item.title || t.untitled}
+										</span>
+										<span className="cw-session-meta">
+											{relativeTime(item.updatedAt, now, locale, t.justNow)}
+										</span>
+									</button>
+								))
+						)}
+					</nav>
+				</div>
+			</aside>
+			<div className="cw-main">
+				<header className="cw-header">
+					<div className="cw-header-title">
+						{state.current ? (
+							<form
+								className="cw-title-form"
+								onSubmit={(event) => {
+									event.preventDefault();
+									if (renaming && !state.pending) void controller.rename(title);
+								}}
+							>
 								<input
+									className="cw-title-input"
+									aria-label={t.title}
 									value={title}
 									maxLength={200}
 									disabled={state.pending}
 									onChange={(event) => setTitle(event.target.value)}
+									onKeyDown={(event) => {
+										if (event.key === "Escape")
+											setTitle(state.current?.title ?? "");
+									}}
 								/>
-							</label>
+								{renaming && (
+									<>
+										<button
+											type="submit"
+											className="mc-button"
+											data-primary
+											disabled={state.pending}
+										>
+											{t.rename}
+										</button>
+										<button
+											type="button"
+											className="mc-button"
+											data-variant="quiet"
+											onClick={() => setTitle(state.current?.title ?? "")}
+										>
+											{t.cancelRename}
+										</button>
+									</>
+								)}
+							</form>
+						) : (
+							<h2 className="cw-title">{t.untitled}</h2>
+						)}
+						<p className="cw-identity">
+							<span
+								className="cw-dot"
+								data-tone={configured ? "success" : "warning"}
+								aria-hidden="true"
+							/>
+							<span>
+								{model.row
+									? fill(t.answeredBy, { model: modelName })
+									: t.directNotSet}
+							</span>
+							<span aria-hidden="true">·</span>
+							<span>
+								{quake?.runtime
+									? fill(t.quakeElsewhere, { name: quake.runtime })
+									: t.quakeHere}
+							</span>
+							{quake?.runtime && (
+								<button
+									type="button"
+									className="cw-inline-action"
+									disabled={quake.busy}
+									onClick={quake.useDirect}
+								>
+									{t.useDirectForQuake}
+								</button>
+							)}
+						</p>
+					</div>
+					<div className="cw-header-actions">
+						{onOpenSettings && (
 							<button
 								type="button"
 								className="mc-button"
-								disabled={state.pending || !title.trim()}
-								onClick={() => void controller.rename(title)}
+								data-variant="quiet"
+								onClick={onOpenSettings}
 							>
-								{t.rename}
+								<Icon name="settings" />
+								{t.modelSettings}
 							</button>
+						)}
+						{state.current && (
 							<button
 								type="button"
 								className="mc-button"
+								data-variant="quiet"
 								disabled={state.pending}
 								onClick={() => setDeleting(true)}
 							>
-								{t.clear}
+								<Icon name="trash" />
+								{t.delete}
+								{t.deleteSuffix && (
+									<span className="visually-hidden">{t.deleteSuffix}</span>
+								)}
+							</button>
+						)}
+					</div>
+				</header>
+				{state.error && (
+					<div className="cw-banner" role="alert">
+						<p>
+							<strong>{errorText(t, state.error)}</strong>{" "}
+							<code className="cw-code">{state.error}</code>
+						</p>
+						<div className="cw-banner-actions">
+							<button
+								type="button"
+								className="mc-button"
+								onClick={() => void controller.refresh()}
+							>
+								{t.retry}
+							</button>
+							<button
+								type="button"
+								className="mc-button"
+								data-variant="quiet"
+								onClick={controller.dismissError}
+							>
+								{t.dismiss}
 							</button>
 						</div>
+					</div>
+				)}
+				<section
+					ref={scroll}
+					className="direct-chat-transcript cw-transcript"
+					aria-label={t.transcript}
+					onScroll={() => {
+						const el = scroll.current;
+						if (el)
+							follow.current =
+								el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+					}}
+				>
+					{empty && !state.loading && (
+						<div className="cw-empty">
+							{configured ? (
+								<>
+									<h3>{t.emptyTitle}</h3>
+									<p>{fill(t.emptyBody, { model: modelName })}</p>
+								</>
+							) : (
+								<>
+									<h3>{t.setupTitle}</h3>
+									<p>{t.setupBody}</p>
+									{onOpenSettings && (
+										<button
+											type="button"
+											className="mc-button"
+											data-primary
+											onClick={onOpenSettings}
+										>
+											<Icon name="settings" />
+											{t.setupAction}
+										</button>
+									)}
+									<p className="cw-muted">{t.setupOrRuntime}</p>
+								</>
+							)}
+						</div>
 					)}
-				</div>
+					{turns.map((turn) =>
+						exchange(
+							turn.selection.turnId,
+							turn.input,
+							turn.snapshot,
+							turn === lastTurn && !state.turn,
+							false,
+						),
+					)}
+					{state.turn &&
+						exchange(
+							state.turn.turnId,
+							state.input,
+							state.turn,
+							true,
+							state.pending,
+						)}
+				</section>
+				<Composer
+					value={text}
+					onChange={setText}
+					onSubmit={submit}
+					onStop={() => void controller.cancel()}
+					canSend={
+						configured && !state.pending && Boolean(text.trim()) && !!bridge
+					}
+					disabled={!configured || state.pending || !bridge}
+					running={state.pending}
+					stopping={state.cancelling}
+					notice={configured ? undefined : t.setupTitle}
+					inputRef={input}
+					copy={{
+						label: t.message,
+						placeholder: fill(t.placeholder, {
+							name: model.row?.model ?? t.direct,
+						}),
+						hint: t.composerHint,
+						send: [t.send, ""],
+						stop: [t.cancel, t.cancelSuffix],
+						stopping: t.stopping,
+					}}
+				/>
 			</div>
 			{deleting && (
 				<ActionDialog

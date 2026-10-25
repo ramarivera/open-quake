@@ -6,6 +6,7 @@ export function ActionDialog({
 	body,
 	confirm,
 	busy,
+	danger = false,
 	onClose,
 	onConfirm,
 }: {
@@ -13,6 +14,8 @@ export function ActionDialog({
 	readonly body: string;
 	readonly confirm: string;
 	readonly busy: boolean;
+	/** Destructive confirmations use the filled danger action. */
+	readonly danger?: boolean;
 	readonly onClose: () => void;
 	readonly onConfirm: () => Promise<void>;
 }) {
@@ -24,7 +27,8 @@ export function ActionDialog({
 			}}
 		>
 			<p>{body}</p>
-			<footer className="agent-http-actions">
+			<footer className="cw-dialog-actions">
+				<span className="cw-spacer" />
 				<button
 					type="button"
 					className="mc-button"
@@ -36,6 +40,8 @@ export function ActionDialog({
 				<button
 					type="button"
 					className="mc-button"
+					data-primary
+					data-variant={danger ? "danger" : undefined}
 					disabled={busy}
 					onClick={() => void onConfirm()}
 				>
