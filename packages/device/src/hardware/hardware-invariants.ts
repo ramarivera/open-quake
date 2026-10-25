@@ -96,6 +96,7 @@ const usages: Readonly<Record<string, number>> = {
 	left: 80,
 	down: 81,
 	up: 82,
+	numlock: 83,
 	menu: 118,
 	"-": 45,
 	"=": 46,

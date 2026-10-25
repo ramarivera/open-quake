@@ -71,6 +71,7 @@ describe("hardware consumers and failure cleanup", () => {
 	for (const [token, usage] of [
 		["leftbracket", 47],
 		["rightbracket", 48],
+		["numlock", 83],
 	] as const) {
 		it.scoped(
 			`dispatches canonical ${token} through committed ActionService`,

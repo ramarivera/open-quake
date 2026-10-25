@@ -126,6 +126,23 @@ const run = <A, E>(
 ) => Effect.runPromise(Effect.scoped(program));
 
 describe("focused knob hotkeys", () => {
+	it("executes saved Num Lock actions in both directions through real HID encoding", async () => {
+		await run(
+			Effect.gen(function* () {
+				const h = yield* setup(["numlock", "right_super+numlock"]);
+				yield* h.turn(-1);
+				yield* h.turn(1);
+				expect(
+					(yield* h.fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+				).toEqual([
+					[1, 16, 1, 0, 83],
+					[1, 16, 0, 0, 83],
+					[1, 16, 1, 128, 83],
+					[1, 16, 0, 128, 83],
+				]);
+			}),
+		);
+	});
 	it("executes right_super in both directions through the real device encoder", async () => {
 		await run(
 			Effect.gen(function* () {
