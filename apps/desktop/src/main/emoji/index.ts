@@ -298,7 +298,11 @@ export function registerEmoji<R>(options: {
 			ipcMain.removeHandler(EMOJI_PRESS);
 			shutdown = (async () => {
 				await Promise.allSettled([controller, ...pending]);
-				await runtime.dispose();
+				try {
+					await runtime.dispose();
+				} finally {
+					await foreground.dispose();
+				}
 			})();
 			return shutdown;
 		},

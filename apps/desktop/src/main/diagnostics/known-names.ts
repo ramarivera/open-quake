@@ -2,6 +2,8 @@
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
 	`SettingsService.locale SettingsService.setLocale SettingsRepository.read SettingsRepository.setLocale
+DesktopKnob.nativeScript DesktopKnob.readVolume DesktopKnob.load DesktopKnob.warmThumbnails DesktopKnob.thumbnail DesktopKnob.selectProfile DesktopKnob.observeVolume
+ForegroundApp.acquire ForegroundApp.dispose
 ChatService.read ChatService.attach ChatService.submit ChatService.turn ChatService.cancel ChatService.close ChatService.clear ChatService.snapshot ChatService.subscribe ChatService.session ChatService.rename ChatService.supersede ChatService.history ChatService.list
 ChatRepository.get ChatRepository.list ChatRepository.put ChatRepository.remove ChatInference.open FileChatStorage.save PinnedAiRepository.get PinnedAiRepository.put VercelCompatibleAdapter.open
 DesktopChat.submit DesktopChat.subscribe DesktopChat.snapshot DesktopChat.cancel DesktopChat.close DesktopChat.clear DesktopChat.rename DesktopChat.history DesktopChat.list DesktopChat.credentials
@@ -94,7 +96,7 @@ ProfileService.getProfile ProfileService.loadProfiles ProfileService.saveProfile
 ProfileService.selectProfile ProfileService.subscribeCommittedProfiles
 ProfileService.subscribeDispatchProfiles ProfileSwitching.connect ProfileSwitching.connectedSerials
 ProfileSwitching.deliver ProfileSwitching.disconnect ProfileSwitching.probe
-ProfileSwitching.redeliverSelected ProfileSwitching.request ProfileSwitching.selectNow
+ProfileSwitching.redeliverSelected ProfileSwitching.request ProfileSwitching.selectNow ProfileSwitching.sessionOwnership
 QuakeConnection.disconnect QuakeConnection.recoverReads QuakeConnection.sendHardware
 QuakeConnection.subscribe QuakeDevice.connect QuakeDevice.disconnect QuakeDevice.discover
 RuntimeHttpTransport.execute RuntimeHttpTransport.readJson ShortcutService.generate
@@ -111,6 +113,8 @@ WeatherService.verifyCity`.split(/\s+/),
 
 export const knownSourceFiles = new Set(
 	`composition.ts capture.ts electron-audio.ts audio-worker.ts pcm.ts factory.ts settings.ts settings-ipc.ts websocket.ts ordered.ts runtime.ts errors.ts
+native-volume.ts thumbnail-binding.ts volume-observer.ts profile-thumbnail-key.ts profile-thumbnails.ts
+windows-foreground.ts windows-foreground-script.ts
 account-config.ts action-adapters.ts action-contracts.ts action-errors.ts action-import.ts
 action-invariants.ts action-registry.ts action-service.ts adapter.ts agents-contracts.ts
 agents-errors.ts agents-invariants.ts agents-ports.ts agents-repository.ts agents-runtime.ts

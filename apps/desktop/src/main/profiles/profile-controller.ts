@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
-import { Effect, Array as EffectArray, Option, Schema } from "effect";
+import { Effect, Array as EffectArray, Option } from "effect";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	encodeProfileEnvelope,
-	Profile,
+	type Profile,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileCommandFailed,
+	ProfileDeliveryFailed,
 	type ProfileDesktopError,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
@@ -24,7 +25,13 @@ import type {
 	ThumbnailProgress,
 } from "../../shared/profile-manager";
 
+/** Main-process-only ownership. Never accepted from renderer IPC. */
+export interface ProfileSelectionScope {
+	readonly deviceId: string;
+	readonly isCurrent: () => boolean;
+}
 export interface ProfileDesktopPort {
+	readonly localeChanged?: (locale: ProfileLocale) => void;
 	readonly installedApps?: () => Promise<
 		readonly {
 			readonly name: string;
@@ -47,20 +54,9 @@ export interface ProfileDesktopPort {
 	readonly publish: (view: ProfileView) => void;
 	readonly progress: (progress: ThumbnailProgress) => void;
 }
-/** Include content so recovered-catalog updates and edits cannot reuse stale captures. */
-export const profileThumbnailKey = (
-	profile: Profile,
-	locale: ProfileLocale,
-): string =>
-	createHash("sha256")
-		.update(
-			JSON.stringify([
-				"emoji-assets-v2",
-				locale,
-				Schema.encodeSync(Profile)(profile),
-			]),
-		)
-		.digest("hex");
+export { profileThumbnailKey } from "./profile-thumbnail-key";
+
+import { profileThumbnailKey } from "./profile-thumbnail-key";
 /** Main boundary supplies only native operations; all commands use repository transactions. */
 export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 	function* (port: ProfileDesktopPort) {
@@ -89,7 +85,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 			Effect.tryPromise({
 				try: operation,
 				catch: (cause) =>
-					cause instanceof ProfileThumbnailUnsupported
+					cause instanceof ProfileThumbnailUnsupported ||
+					cause instanceof ProfileThumbnailFailed
 						? cause
 						: ProfileThumbnailFailed.fromCause(cause),
 			});
@@ -179,10 +176,29 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		);
 		const request = Effect.fn("ProfileDesktop.request")(function* (
 			input: ProfileRequest,
+			scope?: ProfileSelectionScope,
 		): Effect.fn.Return<ProfileReply, ProfileDesktopError> {
+			const ownsSession =
+				scope && scope.deviceId !== "desktop-preview"
+					? yield* switching.sessionOwnership(scope.deviceId)
+					: () => true;
+			const isCurrent = () => !scope || (scope.isCurrent() && ownsSession());
+			const ensureCurrent = Effect.suspend(() =>
+				!isCurrent()
+					? Effect.fail(ProfileDeliveryFailed.fromCause(undefined))
+					: Effect.void,
+			);
+			const guard = scope
+				? () => {
+						if (!isCurrent()) throw ProfileDeliveryFailed.fromCause(undefined);
+					}
+				: undefined;
 			switch (input.type) {
 				case "read":
-					if (!input.preview) locale = input.locale;
+					if (!input.preview && locale !== input.locale) {
+						locale = input.locale;
+						yield* Effect.sync(() => port.localeChanged?.(locale));
+					}
 					return { _tag: "success", view: yield* view(input.locale) };
 				case "manage": {
 					const changesSelection =
@@ -191,33 +207,49 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 						input.command.type === "duplicate" ||
 						input.command.type === "delete" ||
 						input.command.type === "visibility";
-					const result = yield* manager.command(input.command, (envelope) =>
-						Effect.gen(function* () {
-							if (!changesSelection) return envelope;
-							let selections = envelope.activeByDevice;
-							const selected = envelope.activeByDevice["desktop-preview"];
-							for (const serial of yield* switching.connectedSerials()) {
-								const target =
-									input.command.type === "delete" ||
-									input.command.type === "visibility"
-										? envelope.activeByDevice[serial]
-										: selected;
-								const profile = envelope.profiles.find(
-									(p) => p.id === target?.profileId,
-								);
-								if (profile) {
-									yield* switching.deliver(serial, profile);
-									selections = {
-										...selections,
-										[serial]: {
-											profileId: profile.id,
-											pageId: profile.pages[0].id,
-										},
-									};
+					const result = yield* manager.command(
+						input.command,
+						(envelope) =>
+							Effect.gen(function* () {
+								yield* ensureCurrent;
+								if (!changesSelection) return envelope;
+								let selections = envelope.activeByDevice;
+								const selected = envelope.activeByDevice["desktop-preview"];
+								const connected = yield* switching.connectedSerials();
+								if (
+									scope &&
+									scope.deviceId !== "desktop-preview" &&
+									!connected.includes(scope.deviceId)
+								)
+									return yield* ProfileDeliveryFailed.fromCause(undefined);
+								const targets = scope
+									? connected.filter((serial) => serial === scope.deviceId)
+									: connected;
+								for (const serial of targets) {
+									yield* ensureCurrent;
+									const target =
+										input.command.type === "delete" ||
+										input.command.type === "visibility"
+											? envelope.activeByDevice[serial]
+											: selected;
+									const profile = envelope.profiles.find(
+										(p) => p.id === target?.profileId,
+									);
+									if (profile) {
+										yield* switching.deliver(serial, profile, guard);
+										yield* ensureCurrent;
+										selections = {
+											...selections,
+											[serial]: {
+												profileId: profile.id,
+												pageId: profile.pages[0].id,
+											},
+										};
+									}
 								}
-							}
-							return { ...envelope, activeByDevice: selections };
-						}),
+								return { ...envelope, activeByDevice: selections };
+							}),
+						guard,
 					);
 					if (result._tag === "rejected") return result;
 					if (input.command.type === "create") {
@@ -333,6 +365,12 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 			}
 			return { _tag: "success", view: yield* publish() };
 		});
-		return { request, view, publish, progress: () => progress };
+		return {
+			request,
+			view,
+			publish,
+			progress: () => progress,
+			currentLocale: (): ProfileLocale => locale,
+		};
 	},
 );

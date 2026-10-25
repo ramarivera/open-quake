@@ -93,6 +93,19 @@ describe("profile IPC initialization recovery and document authority", () => {
 				expect(
 					(await handler(event, { type: "read", locale: "en" }))._tag,
 				).toBe("success");
+				expect(profiles.currentLocale()).toBe("en");
+				const changed = vi.fn();
+				const unsubscribe = profiles.onLocaleChanged(changed);
+				await handler(event, { type: "read", locale: "de" });
+				expect(profiles.currentLocale()).toBe("de");
+				expect(changed).toHaveBeenCalledOnce();
+				await handler(event, { type: "read", locale: "ko", preview: true });
+				expect(profiles.currentLocale()).toBe("de");
+				expect(changed).toHaveBeenCalledOnce();
+				unsubscribe();
+				await handler(event, { type: "read", locale: "es" });
+				expect(profiles.currentLocale()).toBe("es");
+				expect(changed).toHaveBeenCalledOnce();
 				const knobSelected = await profiles.select("1-2");
 				expect(knobSelected.activeByDevice["desktop-preview"]?.profileId).toBe(
 					"1-2",

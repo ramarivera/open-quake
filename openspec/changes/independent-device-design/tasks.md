@@ -57,3 +57,31 @@ The key-library result is in `keys-review-run.log`; monitor artifacts are in
 Isolated harnesses still report missing unrelated IPC handlers; these captures
 do not establish physical strip appearance or microphone/audio acceptance.
 The reviewed PR merge is pending.
+
+## Parent actual-display acceptance, 2026-10-25
+
+At combined source `bf03bcd`, the production root ran with exclusive real
+HID ownership and isolated user data. All nine built-in profiles and all
+five clock themes were selected through the real preload/IPC services.
+The hidden optional Discord profile was made visible only in the disposable
+catalog. No key actions, microphone capture, firmware operation or display
+arrangement change was requested.
+
+Fourteen actual QUAKE display captures were compared with the app framebuffer.
+Every pair matched at least 95.88% of sampled pixels within the documented
+30-channel-value tolerance. The panel was visible and fully opaque, and its
+bounds matched the real 1920 by 480 display throughout. Actual Anime and
+DK-Claw display captures were inspected. USB and HDMI diagnostics passed;
+read-only queries reported firmware 1.0.19 and available hardware. Shutdown
+flushed 1,111 correlated native spans with zero drops or storage failures.
+No open-quake or DK-Suite device owner remained after exit.
+
+Evidence and the scratch-only launcher are under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/device-acceptance/`.
+The accepted run is `run-ChZH5F`. Earlier `run-j8wQ0e` display captures showed
+wallpaper because the launcher made the panel transparent; those captures
+are superseded and do not establish display acceptance.
+
+This proves software presentation on the connected display. Physical
+legibility, touch/knob behavior, audio, cable actions and firmware resource
+delivery remain open under `open-quake-lih.24` and their owning tasks.

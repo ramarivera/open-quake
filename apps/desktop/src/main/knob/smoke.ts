@@ -1,8 +1,7 @@
 /** Hidden native Electron windows, production preload/renderer, mock domain ports only. */
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { Effect, ManagedRuntime, Schema } from "effect";
@@ -18,6 +17,7 @@ import type {
 } from "../../../../../packages/device/src/knob/model/contracts.js";
 import type { KnobModelPort } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
+import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { QUAKE_EVENT_CHANNEL } from "../../preload/quake";
 import { cardRect } from "../../renderer/src/strip/overlays/knob/geometry";
@@ -25,6 +25,8 @@ import { encodeProfileEnvelope, ProfileEnvelope } from "../../shared/profiles";
 import { registerManagementAppearance } from "../management/appearance";
 import { MediaLive, registerMedia } from "../media";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { profileThumbnailKey } from "../profiles/profile-thumbnail-key";
+import { createProfileThumbnailStore } from "../profiles/profile-thumbnails";
 import { quickProfile } from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { desktopKnobAdapters } from "./desktop-adapters";
@@ -327,19 +329,31 @@ async function smoke(): Promise<void> {
 		if (typeof png !== "string")
 			throw new Error("PNG thumbnail generation failed");
 		// Exercise the production managed-thumbnail reader and Electron decoder.
-		const thumbnailRoot = join(directory, "profile-thumbnails");
-		await mkdir(thumbnailRoot, { recursive: true });
-		const hash = (id: string) => createHash("sha256").update(id).digest("hex");
-		await writeFile(
-			join(thumbnailRoot, `${hash("p0")}.png`),
+		const thumbnailRoot = join(directory, "profiles", "thumbnails");
+		const envelope = Schema.decodeUnknownSync(ProfileEnvelope)(profileEnvelope);
+		const first = envelope.profiles.find((p) => p.id === "p0");
+		const second = envelope.profiles.find((p) => p.id === "p1");
+		assert(first && second);
+		await createProfileThumbnailStore(join(directory, "profiles")).write(
+			translateProfile(first, "en"),
+			"en",
 			Buffer.from(png.split(",")[1] ?? "", "base64"),
 		);
 		await writeFile(
-			join(thumbnailRoot, `${hash("p1")}.png`),
+			join(
+				thumbnailRoot,
+				`${profileThumbnailKey(translateProfile(second, "en"), "en")}.png`,
+			),
 			Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
 		);
+		const nativeAdapter = desktopKnobAdapters(
+			directory,
+			{},
+			{ read: async () => profileEnvelope, write: async () => {} },
+		);
+		await Effect.runPromise(nativeAdapter.load);
 		const warmed = await Effect.runPromise(
-			desktopKnobAdapters(directory).ports.warmThumbnails(context.profiles),
+			nativeAdapter.ports.warmThumbnails(context.profiles),
 		);
 		assert.equal(warmed[0]?.thumbnail._tag, "ready");
 		assert.equal(warmed[1]?.thumbnail._tag, "missing");

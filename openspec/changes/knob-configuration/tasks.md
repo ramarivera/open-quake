@@ -44,3 +44,10 @@ W4 gates: `pnpm install` passed with unchanged lockfile; `pnpm run lint` passed,
 ## Knob-model parity reconciliation
 
 Physical idle slot dispatch from historical task 2.2 is superseded by approved GAP-MAP decision 1. Implementation and current evidence live in openspec/changes/knob-model-parity/ under open-quake-lih.4.1. Historical W4 evidence describes the earlier policy. Hardware tasks remain open.
+
+Backend continuation under knob-model-parity task 5.1 / open-quake-lih.4.2 adds
+device-specific knob contexts, canonical manager-owned thumbnail production and
+read-only volume observations. It does not complete this change's editor, page
+assignment, monitor/hotkey, qualified voice, or physical acceptance tasks. Their
+checkboxes remain unchanged. See knob-model-parity/design.md and the desktop knob
+README for the parent composition contract and verification limits.

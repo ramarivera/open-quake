@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 import { readlink } from "node:fs/promises";
 import { promisify } from "node:util";
-import { Clock, Effect, Option, Schema } from "effect";
+import { Clock, Effect, Option, Schema, type Scope } from "effect";
 import { ProfileForegroundFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import type { ProfilePlatform } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { ForegroundApp } from "../../../../../packages/device/src/profiles/profile-switching-invariants.js";
+
+import { makeWindowsForeground } from "./windows-foreground";
 
 const run = promisify(execFile);
 export const nativeForegroundApp = async (
@@ -36,15 +38,12 @@ export const nativeForegroundApp = async (
 	}
 
 	if (platform === "win32") {
-		const script =
-			'Add-Type -TypeDefinition \'using System; using System.Runtime.InteropServices; public class OQForeground { [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); }\'; $w=[OQForeground]::GetForegroundWindow(); [uint32]$appPid=0; [void][OQForeground]::GetWindowThreadProcessId($w,[ref]$appPid); $p=Get-Process -Id $appPid -ErrorAction Stop; Write-Output $w.ToString(); Write-Output $p.Path';
-		const { stdout } = await run(
-			"powershell.exe",
-			["-NoProfile", "-NonInteractive", "-Command", script],
-			options,
-		);
-		const [id, path] = stdout.trim().split(/\r?\n/);
-		return id && path ? Option.some({ id, path }) : Option.none();
+		const helper = makeWindowsForeground();
+		try {
+			return await helper.probe();
+		} finally {
+			await helper.dispose();
+		}
 	}
 	const active = await run("xprop", ["-root", "_NET_ACTIVE_WINDOW"], options);
 	const id = /0x[\da-f]+/i.exec(active.stdout)?.[0];
@@ -55,27 +54,42 @@ export const nativeForegroundApp = async (
 		? Option.some({ id, path: await readlink(`/proc/${pid}/exe`) })
 		: Option.none();
 };
-/** A single in-flight probe and clock-based 500 ms cache shared by all consumers. */
+export interface ForegroundProbe {
+	(): Effect.Effect<Option.Option<ForegroundApp>, ProfileForegroundFailed>;
+	readonly dispose: () => Promise<void>;
+}
+
+/** A single in-flight probe and clock-based 500 ms cache shared by all consumers.
+ * Owners must dispose this probe, or acquire makeScopedForegroundProbe instead.
+ */
 export const makeForegroundProbe = (
 	platform: ProfilePlatform,
-	native = nativeForegroundApp,
-): (() => Effect.Effect<
-	Option.Option<ForegroundApp>,
-	ProfileForegroundFailed
->) => {
+	native?: typeof nativeForegroundApp,
+): ForegroundProbe => {
+	const helper =
+		platform === "win32" && !native ? makeWindowsForeground() : undefined;
+	const read = native ?? (helper ? () => helper.probe() : nativeForegroundApp);
+	let disposed = false;
+	let disposal: Promise<void> | undefined;
 	let cached: Option.Option<ForegroundApp> = Option.none();
 	let at = Number.NEGATIVE_INFINITY;
 	let pending: Promise<Option.Option<ForegroundApp>> | undefined;
-	return Effect.fn("ForegroundApp.probe")(function* (): Effect.fn.Return<
+	const probe = Effect.fn("ForegroundApp.probe")(function* (): Effect.fn.Return<
 		Option.Option<ForegroundApp>,
 		ProfileForegroundFailed
 	> {
+		if (disposed)
+			return yield* ProfileForegroundFailed.fromCause(
+				new Error("Foreground probe disposed"),
+			);
 		const now = yield* Clock.currentTimeMillis;
-		if (now - at <= 500) return cached;
+		const cacheHit = now - at <= 500;
+		yield* Effect.annotateCurrentSpan({ platform, cacheHit });
+		if (cacheHit) return cached;
 		const result = yield* Effect.tryPromise({
 			try: () => {
 				if (!pending)
-					pending = native(platform).finally(() => {
+					pending = read(platform).finally(() => {
 						pending = undefined;
 					});
 				return pending;
@@ -86,4 +100,29 @@ export const makeForegroundProbe = (
 		at = yield* Clock.currentTimeMillis;
 		return result;
 	});
+	return Object.assign(probe, {
+		dispose: (): Promise<void> => {
+			if (disposal) return disposal;
+			disposed = true;
+			cached = Option.none();
+			disposal = (helper?.dispose() ?? Promise.resolve()).catch((cause) => {
+				throw ProfileForegroundFailed.fromCause(cause);
+			});
+			return disposal;
+		},
+	});
 };
+
+export const makeScopedForegroundProbe = Effect.fn("ForegroundApp.acquire")(
+	(
+		platform: ProfilePlatform,
+		native?: typeof nativeForegroundApp,
+	): Effect.Effect<ForegroundProbe, never, Scope.Scope> =>
+		Effect.acquireRelease(
+			Effect.sync(() => makeForegroundProbe(platform, native)),
+			(probe) =>
+				Effect.promise(() => probe.dispose()).pipe(
+					Effect.withSpan("ForegroundApp.dispose"),
+				),
+		),
+);
