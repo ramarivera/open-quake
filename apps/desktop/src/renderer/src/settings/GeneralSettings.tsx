@@ -7,6 +7,7 @@ import {
 	type SettingsUiFailure,
 	settingsBridge,
 } from "./bridge";
+import { subscribeGeneralRefresh } from "./general-refresh";
 import { useSetupState } from "./SetupWizard";
 import {
 	createGeneralStore,
@@ -51,9 +52,7 @@ export function GeneralSettings({
 		store.getState,
 		store.getState,
 	);
-	useEffect(() => {
-		void store.load();
-	}, [store]);
+	useEffect(() => subscribeGeneralRefresh(store, window, document), [store]);
 	const setupState = useSetupState(setup);
 	const failure = (field: GeneralField) =>
 		state.failure?.field === field ? (

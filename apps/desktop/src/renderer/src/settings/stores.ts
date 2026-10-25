@@ -160,9 +160,12 @@ export function createGeneralStore(
 				status: snapshot.ok ? "ready" : current.snapshot ? "ready" : "failed",
 				snapshot: snapshot.ok ? accept(snapshot.value) : current.snapshot,
 				login,
-				failure: snapshot.ok
-					? null
-					: { field: "read", failure: settingsFailure(snapshot.error) },
+				failure:
+					current.failure && current.failure.field !== "read"
+						? current.failure
+						: snapshot.ok
+							? null
+							: { field: "read", failure: settingsFailure(snapshot.error) },
 			});
 		},
 		set: async (field, value) => {
