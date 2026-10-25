@@ -18,8 +18,8 @@ import { fill } from "../chat/format";
 import { Icon } from "../chat/icons";
 import { Prose } from "../chat/Prose";
 import { ActionDialog } from "./ActionDialog";
+import { runtimeStrings as t } from "./copy";
 import { healthLabel, healthTone } from "./health";
-import t from "./strings.json";
 import { useConversation } from "./useConversation";
 
 /** A conversation with one saved Hermes or OpenClaw runtime connection. */

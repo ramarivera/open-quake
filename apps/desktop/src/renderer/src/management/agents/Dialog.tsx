@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
-import strings from "./strings.json";
+import { agentsStrings as strings } from "./copy";
 export function AgentDialog({
 	title,
 	children,

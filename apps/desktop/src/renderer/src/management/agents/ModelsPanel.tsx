@@ -3,9 +3,9 @@ import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agen
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
+import { agentsStrings as strings } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { reconcileModelDrafts, reconcileModelRow } from "./model-drafts";
-import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
 
 const t = strings.clawAIConfig;

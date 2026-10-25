@@ -11,12 +11,12 @@ import { ConversationWorkspace } from "../chat/Workspace";
 import "../chat/workspace.css";
 import "./agents.css";
 import { AgentWizard } from "./AgentWizard";
+import { agentsStrings as strings } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
 import { SkillsPanel } from "./SkillsPanel";
 import { reconcileSlotDrafts } from "./slot-drafts";
-import strings from "./strings.json";
 import { type AgentRequest, useAgents } from "./useAgents";
 
 const t = strings.clawAgentManagement;

@@ -1,5 +1,5 @@
 import type { RuntimeState } from "../../../../shared/agents";
-import strings from "./strings.json";
+import { agentsStrings as strings } from "./copy";
 import type { AgentRequest } from "./useAgents";
 
 const s = strings.openclawRuntimeIndicator;
