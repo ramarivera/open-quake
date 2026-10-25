@@ -1,78 +1,103 @@
 /*
- * Voice overlay, mic bar, key decorations and toasts on the strip
- * (openspec/changes/strip-voice-ui/design.md). DK-Suite's fixed values:
- * AIAudioEventDisplay, SttVoiceMountainBar, DisplayEvent, QuakeShortCutView.
+ * Voice sheet, mic meter, key decorations and toasts on the strip
+ * (openspec/changes/independent-device-design, "Voice and AI surfaces").
+ * Colours are the device palette's --strip-* properties.
  */
 .voice-layer {
 	position: absolute;
 	inset: 0;
 	z-index: 40;
 	pointer-events: none;
+	color: var(--strip-text);
+	font-family: var(--strip-font);
 }
 .voice-overlay {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
 }
+
+/* The sheet: near-opaque, a state glyph and one large line. */
 .voice-backdrop {
 	position: absolute;
 	inset: 0;
 	z-index: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 28px;
 	overflow: hidden;
+	background: rgba(11, 12, 13, 0.95);
 }
-.voice-waveform {
-	position: absolute;
-	inset: 0;
-	overflow: hidden;
-	border-radius: 12px;
-	box-shadow: inset 0 0 20px rgba(23, 241, 209, 0.1);
-}
-.voice-waveform::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	z-index: 1;
-	border-radius: inherit;
-	box-shadow: inset 0 0 30px rgba(23, 241, 209, 0.05);
-	pointer-events: none;
+.voice-overlay[data-bar="true"] .voice-backdrop {
+	padding-bottom: 72px;
+	box-sizing: border-box;
 }
 .voice-canvas {
 	display: block;
 }
-.voice-dim {
-	position: absolute;
-	inset: 0;
-	background: rgba(0, 0, 0, 0.55);
+.voice-glyph {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 96px;
+	height: 96px;
+	border-radius: 50%;
+	background: var(--strip-surface);
+	box-shadow: inset 0 0 0 2px var(--strip-line);
+	color: var(--strip-text);
+}
+.voice-glyph svg {
+	width: 48px;
+	height: 48px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.voice-glyph[data-phase="processing"] svg {
+	fill: currentColor;
+	stroke: none;
+}
+.voice-glyph[data-phase="listening"] {
+	background: var(--strip-accent-soft);
+	box-shadow: inset 0 0 0 3px var(--strip-accent);
+	color: var(--strip-accent);
+}
+.voice-glyph[data-phase="error"] {
+	background: var(--strip-danger-soft);
+	box-shadow: inset 0 0 0 3px var(--strip-danger);
+	color: var(--strip-danger);
+}
+.voice-glyph[data-phase="error"] svg,
+.voice-glyph[data-phase="notice"] svg {
+	stroke-width: 2.6;
+}
+.voice-glyph[data-phase="notice"] {
+	box-shadow: inset 0 0 0 3px var(--strip-warning);
+	color: var(--strip-warning);
 }
 
-/* Subtitle band: 96 px, raised by the bar's 72 px while it shows. */
+/* The line: 48 px, one row, marquee when it overflows. */
 .voice-subtitle {
-	position: absolute;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	z-index: 2;
 	box-sizing: border-box;
-	height: 96px;
-	padding: 0 32px 12px;
+	width: 1680px;
+	height: 64px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: linear-gradient(
-		180deg,
-		rgba(0, 0, 0, 0) 0%,
-		rgba(0, 0, 0, 0.72) 100%
-	);
 	overflow: hidden;
-	color: #00ffff;
-	font-family: Inter, Arial, sans-serif;
-	font-weight: 300;
-	font-size: 40px;
-	line-height: 48px;
+	color: var(--strip-text);
+	font-size: 48px;
+	font-weight: 450;
+	line-height: 64px;
+	letter-spacing: -0.005em;
 	white-space: nowrap;
 }
-.voice-overlay[data-bar="true"] .voice-subtitle {
-	bottom: 72px;
+.voice-backdrop[data-phase="error"] .voice-subtitle {
+	color: var(--strip-danger);
 }
 .voice-marquee-line {
 	display: block;
@@ -102,7 +127,7 @@
 	}
 }
 
-/* Mic bar: fixed bottom-left, full width, above the backdrop. */
+/* Mic meter: an opaque bottom sheet; over a grid it carries the transcript. */
 .voice-bar {
 	position: absolute;
 	left: 0;
@@ -113,32 +138,31 @@
 	flex-direction: column;
 	justify-content: flex-end;
 	overflow: hidden;
+	background: var(--strip-surface);
+	box-shadow: inset 0 1px 0 var(--strip-hairline);
 	pointer-events: none;
+}
+.voice-bar[data-overlay="true"] {
+	background: transparent;
+	box-shadow: none;
 }
 .voice-bar-row {
 	flex: none;
 	box-sizing: border-box;
-	min-height: 52px;
-	padding: 0 32px 4px;
+	min-height: 60px;
+	padding: 12px 48px 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	overflow: hidden;
-	background: linear-gradient(
-		180deg,
-		rgba(0, 0, 0, 0) 0%,
-		rgba(0, 0, 0, 0.45) 100%
-	);
-	color: #00ffff;
-	font-family: Inter, Arial, sans-serif;
-	font-size: 40px;
-	font-weight: 300;
+	color: var(--strip-text);
+	font-size: 36px;
+	font-weight: 450;
 	line-height: 48px;
 	white-space: nowrap;
-	text-shadow: 0 0 12px rgba(0, 255, 255, 0.35);
 }
 
-/* DisplayEvent showAlert: 50×50 on rgb(255,255,100), centred on the tile. */
+/* Key alert: a 50 px glyph on an opaque disc, centred on the tile. */
 .voice-key-alert {
 	position: absolute;
 	inset: 0;
@@ -150,22 +174,28 @@
 }
 .voice-key-alert-block {
 	display: block;
-	width: 50px;
-	height: 50px;
-	background: rgb(255, 255, 100);
+	box-sizing: border-box;
+	width: 88px;
+	height: 88px;
+	padding: 19px;
+	border-radius: 50%;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 3px var(--strip-line);
 }
 .voice-key-alert[data-alert="invalid"] .voice-key-alert-block {
-	fill: #d42020;
+	box-shadow: inset 0 0 0 3px var(--strip-danger);
+	fill: var(--strip-danger);
 }
 .voice-key-alert[data-alert="checkmark"] .voice-key-alert-block {
+	box-shadow: inset 0 0 0 3px var(--strip-success);
 	fill: none;
-	stroke: #1a8f3a;
+	stroke: var(--strip-success);
 	stroke-width: 6;
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
 .voice-key-alert[data-alert="stop"] .voice-key-alert-block {
-	fill: #333333;
+	fill: var(--strip-text);
 }
 
 /* aiChat / clawbot keys. */
@@ -181,30 +211,27 @@
 	top: 50%;
 	left: 50%;
 	z-index: 20;
-	transform: translate(-50%, calc(-50% + 20px));
+	transform: translate(-50%, calc(-50% - 16px));
 	shape-rendering: geometricPrecision;
 	pointer-events: none;
 }
 .voice-clawbot-dot {
 	position: absolute;
-	left: 24px;
-	bottom: 24px;
+	left: 20px;
+	top: 20px;
 	z-index: 10;
-	width: 20px;
-	height: 20px;
+	width: 16px;
+	height: 16px;
 	border-radius: 50%;
-	background: linear-gradient(145deg, #3ee66a 0%, #28a745 50%, #1e7b35 100%);
-	box-shadow:
-		inset 2px 2px 4px rgba(255, 255, 255, 0.4),
-		inset -2px -2px 4px rgba(0, 0, 0, 0.2),
-		3px 3px 6px rgba(0, 0, 0, 0.35);
+	background: var(--strip-success);
+	box-shadow: 0 0 0 4px var(--strip-surface);
 	pointer-events: none;
 }
 
-/* Element UI warning message at 24 px text / 28 px icon (QSC:5514-5598). */
+/* Toast: an opaque raised pill, glyph plus 26 px text. */
 .voice-toast {
 	position: absolute;
-	top: 20px;
+	top: 24px;
 	left: 50%;
 	z-index: 4;
 	box-sizing: border-box;
@@ -212,38 +239,38 @@
 	max-width: 1600px;
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 15px 15px 15px 20px;
+	gap: 14px;
+	padding: 14px 28px 14px 18px;
 	transform: translateX(-50%);
-	border: 1px solid #faecd8;
-	border-radius: 4px;
-	background: #fdf6ec;
-	color: #e6a23c;
+	border-radius: 999px;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1.5px var(--strip-warning);
+	color: var(--strip-text);
 	font-family: var(--strip-font);
-	font-size: 24px;
-	line-height: 1.5;
+	font-size: 26px;
+	font-weight: 550;
+	line-height: 1.3;
 	pointer-events: none;
 }
 .voice-toast-icon {
 	flex: none;
-	width: 28px;
-	height: 28px;
+	width: 32px;
+	height: 32px;
 }
 .voice-toast-icon circle:first-child {
-	fill: #e6a23c;
+	fill: var(--strip-warning);
 }
 .voice-toast-icon rect,
 .voice-toast-icon circle + circle {
-	fill: #ffffff;
+	fill: var(--strip-raised);
 }
 @media (prefers-reduced-motion: no-preference) {
 	:root[data-motion="full"] .voice-toast {
-		animation: voice-toast-in 0.3s ease;
+		animation: voice-toast-in 0.16s ease-out;
 	}
 }
 @keyframes voice-toast-in {
 	from {
 		opacity: 0;
-		transform: translate(-50%, -100%);
 	}
 }

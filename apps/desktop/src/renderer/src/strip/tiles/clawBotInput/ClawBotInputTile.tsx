@@ -85,12 +85,12 @@ export function ClawBotInputTile({
 						width: 28 * s,
 						height: 28 * s,
 						borderRadius: 8 * s,
-						fontSize: 15 * s,
+						fontSize: 20 * s,
 					}}
 				>
 					✏️
 				</span>
-				<span className="clawbot-input-title" style={{ fontSize: 15 * s }}>
+				<span className="clawbot-input-title" style={{ fontSize: 22 * s }}>
 					{stripText(voice.locale, "quakeBotInputIconView.title")}
 					{agent === "" ? "" : ` · ${agent}`}
 				</span>
@@ -120,7 +120,7 @@ export function ClawBotInputTile({
 						minHeight: 120 * s,
 						borderRadius: 16 * s,
 						padding: `${16 * s}px ${20 * s}px`,
-						fontSize: 16 * s,
+						fontSize: 22 * s,
 					}}
 				/>
 				<div className="clawbot-input-actions" style={{ gap: 12 * s }}>
@@ -151,7 +151,7 @@ export function ClawBotInputTile({
 							style={{
 								minHeight: 48 * s,
 								borderRadius: 20 * s,
-								fontSize: 14 * s,
+								fontSize: 20 * s,
 								gap: 6 * s,
 							}}
 						>
@@ -168,7 +168,7 @@ export function ClawBotInputTile({
 					style={{
 						top: 8 * s,
 						maxWidth: 300 * s,
-						fontSize: 15 * s,
+						fontSize: 20 * s,
 						padding: `${8 * s}px ${14 * s}px`,
 						borderRadius: 12 * s,
 					}}

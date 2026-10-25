@@ -588,7 +588,7 @@ async function smoke(): Promise<void> {
 			assert.equal(reply.result.data.low, low);
 			await waitFor(
 				panel,
-				`document.querySelector('.oq-weather-temp')?.textContent === '${temperature}°' && document.querySelector('.oq-weather-range')?.textContent === 'TODAYH ${high}°L ${low}°' && document.querySelector('.oq-weather-meta')?.textContent === '°${unit === "celsius" ? "C" : "F"}'`,
+				`document.querySelector('.oq-weather-temp')?.textContent === '${temperature}°' && document.querySelector('.oq-weather-range')?.textContent === 'H ${high}°L ${low}°' && document.querySelector('.oq-weather-meta')?.textContent === '°${unit === "celsius" ? "C" : "F"}'`,
 				"custom units render once from canonical cache",
 			);
 			if (cachedCalls !== undefined)
@@ -696,7 +696,7 @@ async function smoke(): Promise<void> {
 			assert.equal(
 				await evaluate(
 					panel,
-					"(()=>{const hint=document.querySelector('.oq-player-error'),source=document.querySelector('.oq-player-source');const box=hint.getBoundingClientRect(),pill=source.getBoundingClientRect();return getComputedStyle(hint).fontSize==='18px' && box.height>=21 && box.height<=42.1 && box.top>=0 && box.bottom<=pill.top;})()",
+					"(()=>{const hint=document.querySelector('.oq-player-error'),source=document.querySelector('.oq-player-source');const box=hint.getBoundingClientRect(),pill=source.getBoundingClientRect();return getComputedStyle(hint).fontSize==='24px' && box.height>=28 && box.height<=62.5 && box.top>=0 && box.bottom<=pill.top;})()",
 				),
 				true,
 				"Localized hint must fit at most two lines above the source pill",
@@ -713,10 +713,10 @@ async function smoke(): Promise<void> {
 		assert.equal(
 			await evaluate(
 				panel,
-				"(()=>{const box=document.querySelector('.oq-player-error').getBoundingClientRect(),pill=document.querySelector('.oq-player-source').getBoundingClientRect();return box.height>21 && box.height<=42.1 && box.top>=0 && box.bottom<=pill.top;})()",
+				"(()=>{const box=document.querySelector('.oq-player-error').getBoundingClientRect(),pill=document.querySelector('.oq-player-source').getBoundingClientRect();return box.height>=28 && box.height<=62.5 && box.top>=0 && box.bottom<=pill.top;})()",
 			),
 			true,
-			"Long recovered hint must wrap to two lines without pill overlap",
+			"Long recovered hint fits at most two lines without source overlap",
 		);
 		await capture(panel, "dk-player-italian-long-service-layout");
 		await writeFile(

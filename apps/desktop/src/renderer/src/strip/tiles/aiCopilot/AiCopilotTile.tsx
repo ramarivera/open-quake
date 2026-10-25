@@ -10,11 +10,10 @@ import type { StripTileProps } from "../../tileRegistry";
 import {
 	type CopilotStatusText,
 	copilotLayout,
-	orbSpeed,
+	copilotTone,
 	showsCancelHint,
 	showsPushToTalkHint,
 } from "./copilot-state";
-import { GlowEnergyOrb } from "./GlowEnergyOrb";
 import "./aiCopilot.css";
 
 /** DK's one-letter highlight loop on the idle hint (ACV:1043-1076). */
@@ -32,9 +31,33 @@ function usePushToTalkHint(length: number, active: boolean): number {
 	return index;
 }
 
+/** The presence mark: an AI glyph on a ring toned by the copilot's status. */
+function CopilotPresence({
+	tone,
+	size,
+}: {
+	tone: string;
+	size: number;
+}): React.JSX.Element {
+	return (
+		<div
+			className="copilot-presence"
+			data-tone={tone}
+			style={{ width: size, height: size }}
+			aria-hidden="true"
+		>
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				<path d="M12 3.5c.6 3.9 2.6 5.9 6.5 6.5-3.9.6-5.9 2.6-6.5 6.5-.6-3.9-2.6-5.9-6.5-6.5 3.9-.6 5.9-2.6 6.5-6.5Z" />
+				<path d="M18.5 15.5c.25 1.6 1 2.35 2.5 2.5-1.5.15-2.25.9-2.5 2.5-.25-1.6-1-2.35-2.5-2.5 1.5-.15 2.25-.9 2.5-2.5Z" />
+			</svg>
+		</div>
+	);
+}
+
 /**
- * The AI Copilot view (`aiChatView`, 5×2): toolbar, energy orb and transcript
- * (ACV, strip-voice-ui "AI Copilot view"). Text renders as React text.
+ * The AI Copilot view (`aiChatView`, 5×2): toolbar with a status, the presence
+ * mark and the transcript (strip-voice-ui "AI Copilot view", drawn per
+ * independent-device-design). Text renders as React text.
  */
 export function AiCopilotTile({
 	tile,
@@ -56,6 +79,7 @@ export function AiCopilotTile({
 				? stripText(locale, text.key)
 				: stripText(locale, "aiIconViewTxt.errorCodeLine", { code: text.code }),
 	});
+	const tone = copilotTone(state.status, state.statusText);
 	const scroller = useRef<HTMLDivElement>(null);
 	const following = useRef(true);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: follow new text.
@@ -93,33 +117,30 @@ export function AiCopilotTile({
 	return (
 		<div
 			className="copilot"
+			data-tone={tone}
 			style={{
 				width,
 				height,
 				borderRadius: tile.tileRadius,
-				borderWidth: layout.rootBorder,
 			}}
 		>
 			<div
 				className="copilot-toolbar"
 				style={{
 					height: layout.toolbar,
-					padding: `0 ${layout.gap}px`,
-					borderBottomWidth: layout.toolbarBorder,
+					padding: `0 ${Math.max(24, layout.gap)}px`,
 				}}
 			>
-				<div
-					className="copilot-label"
-					style={{ fontSize: layout.smallFs * 2, paddingLeft: width * 0.02 }}
-				>
+				<div className="copilot-label">
 					{stripText(locale, "aiIconViewTxt.label")}
 				</div>
-				<div
-					className="copilot-status"
-					style={{ fontSize: layout.smallFs * 2 }}
-				>
-					{status}
-				</div>
+				{status ? (
+					<div className="copilot-status" data-tone={tone}>
+						{status}
+					</div>
+				) : (
+					<div className="copilot-status" />
+				)}
 				{onStrip && state.text.trim() !== "" ? (
 					<button
 						ref={copyIcon}
@@ -129,31 +150,9 @@ export function AiCopilotTile({
 						aria-label={stripText(locale, "clipboard.copySuccess")}
 						onClick={copy}
 					>
-						<svg
-							width="40"
-							height="40"
-							viewBox="0 0 40 40"
-							fill="none"
-							aria-hidden="true"
-						>
-							<rect width="40" height="40" rx="6" fill="rgba(0, 0, 0, 0.5)" />
-							<rect
-								x="10"
-								y="8"
-								width="16"
-								height="20"
-								rx="1"
-								fill="rgba(117, 117, 117, 0.85)"
-								opacity="0.6"
-							/>
-							<rect
-								x="14"
-								y="12"
-								width="16"
-								height="20"
-								rx="1"
-								fill="rgba(117, 117, 117, 0.85)"
-							/>
+						<svg viewBox="0 0 24 24" aria-hidden="true">
+							<rect x="8" y="8" width="12" height="13" rx="2" />
+							<path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
 						</svg>
 					</button>
 				) : null}
@@ -164,24 +163,17 @@ export function AiCopilotTile({
 					style={{
 						width: layout.left,
 						padding: layout.gap,
-						borderRightWidth: layout.toolbarBorder,
-						boxShadow: `inset 0 0 ${layout.panelShadow}px rgba(0, 0, 0, 0.2)`,
 					}}
 				>
-					<GlowEnergyOrb
-						width={layout.orbWidth}
-						height={layout.orbHeight}
-						speed={orbSpeed(state.status)}
-						playing={motion === "full"}
+					<CopilotPresence
+						tone={tone}
+						size={Math.min(layout.orbWidth, layout.left - layout.gap * 2)}
 					/>
-					<div className="copilot-axis" style={{ width: layout.rootBorder }} />
 				</div>
 				<div
 					className="copilot-right"
 					style={{
 						width: layout.right,
-						borderLeftWidth: layout.toolbarBorder,
-						boxShadow: `inset 0 0 ${layout.panelShadow}px rgba(0, 0, 0, 0.2)`,
 					}}
 				>
 					<div

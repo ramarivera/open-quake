@@ -61,6 +61,12 @@ assert(address && typeof address !== "string");
 const port = address.port;
 let step = "startup",
 	passed = false;
+const captures: {
+	width: number;
+	height: number;
+	imageWidth: number;
+	imageHeight: number;
+}[] = [];
 const deadline = setTimeout(() => {
 	process.stderr.write(`DIRECT_CHAT_SMOKE_TIMEOUT ${step}\n`);
 	app.exit(1);
@@ -144,8 +150,11 @@ async function run() {
 		),
 		true,
 	);
-	await click(win, "OpenClaw");
-	await click(win, "Agent sessions");
+	await evaluate(
+		win,
+		"document.querySelector('.nav-item[data-nav-page=agents]').click()",
+	);
+	await evaluate(win, "document.querySelector('#agents-tab-sessions').click()");
 	await wait(
 		win,
 		"Boolean(document.querySelector('.direct-chat textarea:not(:disabled)'))",
@@ -165,6 +174,25 @@ async function run() {
 	);
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]?.model, "synthetic-model");
+	step = "rejected acceptance retains editable draft";
+	const rejectedDraft = "x".repeat(32769);
+	await send(win, rejectedDraft);
+	await wait(
+		win,
+		"!document.querySelector('.direct-chat textarea').disabled && Boolean(document.querySelector('.direct-chat [role=alert]'))",
+	);
+	assert.equal(
+		await evaluate(
+			win,
+			"document.querySelector('.direct-chat textarea').value",
+		),
+		rejectedDraft,
+	);
+	assert.equal(
+		requests.length,
+		1,
+		"Rejected input must not reach the provider",
+	);
 	step = "history continuation";
 	await send(win, "second message");
 	await wait(
@@ -178,16 +206,28 @@ async function run() {
 	);
 
 	for (const width of [1180, 390]) {
+		step = `screenshot at ${width}px`;
+		// macOS can constrain the native window height. Emulating a taller view
+		// makes capturePage crop the bottom without reporting an error.
+		const currentHeight = win.getContentSize()[1];
+		assert(currentHeight !== undefined);
+		win.setContentSize(
+			Math.max(width, win.getMinimumSize()[0] ?? width),
+			currentHeight,
+		);
+		const height: number | undefined = win.getContentSize()[1];
+		assert(height !== undefined && height > 0);
 		win.webContents.enableDeviceEmulation({
 			screenPosition: "desktop",
-			screenSize: { width, height: 900 },
+			screenSize: { width, height },
 			viewPosition: { x: 0, y: 0 },
 			deviceScaleFactor: 1,
-			viewSize: { width, height: 900 },
+			viewSize: { width, height },
 			scale: 1,
 		});
 		await delay(100);
 		assert.equal(await evaluate(win, "window.innerWidth"), width);
+		assert.equal(await evaluate(win, "window.innerHeight"), height);
 		assert.equal(
 			await evaluate(
 				win,
@@ -195,12 +235,36 @@ async function run() {
 			),
 			true,
 		);
-		await writeFile(
-			join(directory, `chat-${width}.png`),
-			(
-				await win.webContents.capturePage({ x: 0, y: 0, width, height: 900 })
-			).toPNG(),
+		// Bring the composer into view before proving its complete bounds are
+		// inside the same viewport that will be captured.
+		await evaluate(
+			win,
+			"document.querySelector('.direct-chat .cw-composer').scrollIntoView({block:'end'})",
 		);
+		await delay(100);
+		assert.equal(
+			await evaluate(
+				win,
+				"(()=>{const r=document.querySelector('.direct-chat .cw-composer').getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1&&r.left>=0&&r.right<=innerWidth+1;})()",
+			),
+			true,
+			`Composer must be fully reachable at ${width}x${height}`,
+		);
+		const capture = await win.webContents.capturePage({
+			x: 0,
+			y: 0,
+			width,
+			height,
+		});
+		const imageSize = capture.getSize();
+		assert.deepEqual(imageSize, { width, height });
+		captures.push({
+			width,
+			height,
+			imageWidth: imageSize.width,
+			imageHeight: imageSize.height,
+		});
+		await writeFile(join(directory, `chat-${width}.png`), capture.toPNG());
 	}
 	win.webContents.disableDeviceEmulation();
 	step = "physical provider cancellation through UI";
@@ -214,14 +278,18 @@ async function run() {
 
 	const beforeLocale = await evaluate(
 		win,
-		"document.querySelector('.direct-chat-transcript').textContent",
+		"Array.from(document.querySelectorAll('.direct-chat-user, .direct-chat .cw-prose')).map(el=>el.textContent).join('\\n')",
 	);
 	await evaluate(win, "window.quakeLocale.set('de')");
 	await wait(win, "document.documentElement.lang==='de'");
+	await wait(
+		win,
+		"Boolean(Array.from(document.querySelectorAll('.direct-chat button')).find(b=>b.textContent===\"Antwort stoppen\"))",
+	);
 	assert.equal(
 		await evaluate(
 			win,
-			"document.querySelector('.direct-chat-transcript').textContent",
+			"Array.from(document.querySelectorAll('.direct-chat-user, .direct-chat .cw-prose')).map(el=>el.textContent).join('\\n')",
 		),
 		beforeLocale,
 	);
@@ -299,6 +367,7 @@ async function run() {
 			history: true,
 			diagnostics: true,
 			screenshots: [1180, 390],
+			captures,
 			viewportEmulation: true,
 			hardwareVerified: false,
 		}),

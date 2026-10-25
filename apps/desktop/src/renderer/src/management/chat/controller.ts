@@ -180,7 +180,8 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 			};
 		},
 		refresh,
-		submit: async (text: string) => {
+		dismissError: () => set({ error: "" }),
+		submit: async (text: string): Promise<boolean> => {
 			if (
 				!bridge ||
 				disposed ||
@@ -188,7 +189,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				state.clearing ||
 				!text.trim()
 			)
-				return;
+				return false;
 			chosen = true;
 			cancelOnAccept = false;
 			accepted = false;
@@ -205,7 +206,7 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 				const snapshot = await bridge.submit({ sessionId, turnId, text });
 				if (disposed || generation !== epoch) {
 					await bridge.cancel(sessionId, turnId);
-					return;
+					return false;
 				}
 				accepted = true;
 				attach(snapshot);
@@ -213,8 +214,10 @@ export function createChatController(bridge: DirectChatBridge | undefined) {
 					cancelOnAccept = false;
 					await requestCancel(sessionId, turnId);
 				}
+				return true;
 			} catch (cause) {
 				if (generation === epoch) fail(cause);
+				return false;
 			}
 		},
 		select: async (sessionId?: SessionId) => {

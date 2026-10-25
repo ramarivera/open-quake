@@ -6,19 +6,20 @@ import {
 	SLOT_CODES,
 	type Slots,
 } from "../../../../shared/agents";
-import { AgentHttpPanel } from "../agent-http";
-import { DirectChatPanel } from "../chat/DirectChatPanel";
+import { useAppLocale } from "../../i18n";
 import { directChatModel } from "../chat/model-scope";
+import { ConversationWorkspace } from "../chat/Workspace";
+import "../chat/workspace.css";
+import "./agents.css";
 import { AgentWizard } from "./AgentWizard";
+import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
 import { SkillsPanel } from "./SkillsPanel";
 import { reconcileSlotDrafts } from "./slot-drafts";
-import strings from "./strings.json";
 import { type AgentRequest, useAgents } from "./useAgents";
 
-const t = strings.clawAgentManagement;
 export type AgentsTab = "sessions" | "agents" | "ai" | "settings";
 function Roster({
 	view,
@@ -29,6 +30,8 @@ function Roster({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
 	const [filter, setFilter] = useState("all");
 	const [selected, setSelected] = useState("main");
@@ -45,22 +48,31 @@ function Roster({
 			(filter === "all" || a.id !== "main") &&
 			[a.id, a.name].join(" ").toLowerCase().includes(search.toLowerCase()),
 	);
+	const equipped = active
+		? view.skills.filter((s) => s.owner === active.id)
+		: [];
 	return (
 		<>
-			<header className="mc-toolbar">
+			<header className="aw-section-head">
 				<div>
 					<h2>{t.title}</h2>
-					<p>{t.initWorkspaceHint}</p>
+					<p>{t.libraryIntro}</p>
 				</div>
 				<button
 					type="button"
 					className="mc-button"
+					data-primary={tab === "loadout" || undefined}
 					onClick={() => setWizard({ agent: undefined })}
 				>
 					{t.createAgent}
 				</button>
 			</header>
-			<nav className="mc-tabs" aria-label={t.managementViews}>
+			<RuntimeIndicator runtime={view.runtime} request={request} />
+			<div
+				className="mc-tabs aw-subtabs"
+				role="tablist"
+				aria-label={t.managementViews}
+			>
 				<button
 					type="button"
 					className="mc-button"
@@ -79,75 +91,74 @@ function Roster({
 				>
 					{t.skillManagementTab}
 				</button>
-			</nav>
-			<div hidden={tab !== "loadout"} className="mc-split">
-				<section className="mc-aside" aria-label="Agents">
-					<header className="mc-toolbar">
-						<h3>
-							Agents{" "}
-							<span className="mc-badge">
-								{format(t.agentCount, { count: view.agents.length })}
-							</span>
-						</h3>
+			</div>
+			<div hidden={tab !== "loadout"} className="aw-split">
+				<section className="aw-list" aria-label={t.agentsList}>
+					<div className="aw-list-tools">
+						<label className="mc-field aw-search">
+							<span className="visually-hidden">{t.searchPlaceholder}</span>
+							<input
+								type="search"
+								value={search}
+								onChange={(event) => setSearch(event.target.value)}
+								placeholder={t.searchPlaceholder}
+							/>
+						</label>
+						<fieldset className="aw-segmented">
+							<legend className="visually-hidden">{t.filter}</legend>
+							{["all", "local"].map((value) => (
+								<button
+									type="button"
+									key={value}
+									aria-pressed={filter === value}
+									onClick={() => setFilter(value)}
+								>
+									{value === "all" ? t.all : t.local}
+								</button>
+							))}
+						</fieldset>
+					</div>
+					<p className="cw-muted aw-count">
+						{format(t.agentCount, { count: view.agents.length })}
 						<button
 							type="button"
-							className="mc-button"
+							className="cw-inline-action"
 							disabled={busy}
 							onClick={() => void request({ type: "read" })}
 						>
 							{t.refresh}
 						</button>
-					</header>
-					<label className="mc-field">
-						{t.searchPlaceholder}
-						<input
-							type="search"
-							value={search}
-							onChange={(event) => setSearch(event.target.value)}
-							placeholder={t.searchPlaceholder}
-						/>
-					</label>
-					<div className="mc-toolbar">
-						{["all", "local"].map((value) => (
-							<button
-								type="button"
-								className="mc-button"
-								key={value}
-								aria-pressed={filter === value}
-								onClick={() => setFilter(value)}
+					</p>
+					<ul className="aw-rows">
+						{visible.map((agent) => (
+							<li
+								className="mc-card aw-row"
+								data-selected={active?.id === agent.id}
+								key={agent.id}
 							>
-								{value === "all" ? t.all : t.local}
-							</button>
-						))}
-					</div>
-					{visible.map((agent) => (
-						<article
-							className="mc-card"
-							data-selected={selected === agent.id}
-							key={agent.id}
-						>
-							<div className="mc-toolbar">
 								<button
 									type="button"
-									className="mc-button"
-									aria-pressed={selected === agent.id}
+									className="aw-row-main"
+									aria-pressed={active?.id === agent.id}
 									onClick={() => setSelected(agent.id)}
 								>
-									<span aria-hidden="true">{agent.emoji}</span> {agent.name}
+									<span className="aw-emoji" aria-hidden="true">
+										{agent.emoji || "🤖"}
+									</span>
+									<span className="aw-row-text">
+										<span className="aw-row-title">{agent.name}</span>
+										<code className="aw-row-meta">{agent.id}</code>
+									</span>
+									<span className="mc-badge" data-tone="neutral">
+										{agent.id === "main" ? t.system : t.local}
+									</span>
 								</button>
-								<span className="mc-badge">
-									{agent.id === "main" ? t.system : t.local}
-								</span>
-							</div>
-							<code>{agent.id}</code>
-							<div className="mc-toolbar">
-								{agent.id === "main" ? (
-									<span>🔒 {t.protectedAgent}</span>
-								) : (
-									<>
+								{agent.id !== "main" && (
+									<span className="aw-row-actions">
 										<button
 											type="button"
 											className="mc-button"
+											data-variant="quiet"
 											aria-label={`${t.editAgent} ${agent.name}`}
 											onClick={() => setWizard({ agent })}
 										>
@@ -156,16 +167,17 @@ function Roster({
 										<button
 											type="button"
 											className="mc-button"
+											data-variant="quiet"
 											aria-label={`${t.deleteAgent} ${agent.name}`}
 											onClick={() => setDeleting(agent)}
 										>
 											{t.delete}
 										</button>
-									</>
+									</span>
 								)}
-							</div>
-						</article>
-					))}
+							</li>
+						))}
+					</ul>
 					{visible.length === 0 && (
 						<div className="mc-empty">
 							<p>
@@ -185,49 +197,54 @@ function Roster({
 						</div>
 					)}
 				</section>
-				<section className="mc-panel" aria-label={t.equippedSkills}>
+				<section className="aw-detail" aria-label={t.equippedSkills}>
 					{active ? (
 						<>
-							<header className="mc-toolbar">
-								<span style={{ fontSize: 36 }} aria-hidden="true">
-									{active.emoji}
+							<header className="aw-detail-head">
+								<span className="aw-emoji aw-emoji-lg" aria-hidden="true">
+									{active.emoji || "🤖"}
 								</span>
 								<div>
 									<h3>{active.name}</h3>
-									<code>{active.id}</code>
+									<p className="cw-muted">
+										<code className="cw-code">{active.id}</code>
+										{active.id === "main" && <> · {t.protectedAgent}</>}
+									</p>
 								</div>
 							</header>
-							<h3>{t.equippedSkills}</h3>
-							<p>{t.equippedSkillsHint}</p>
-							{view.skills
-								.filter((s) => s.owner === active.id)
-								.map((skill) => (
-									<article className="mc-card" key={skill.folder}>
-										<strong>{skill.name}</strong>
-										<p>{skill.description}</p>
-									</article>
-								))}
-							{!view.skills.some((s) => s.owner === active.id) && (
-								<div className="mc-empty">{t.noEquippedSkills}</div>
+							<h4>{t.equippedSkills}</h4>
+							<p className="cw-muted">{t.equippedSkillsHint}</p>
+							{equipped.length > 0 ? (
+								<ul className="aw-plain-list">
+									{equipped.map((skill) => (
+										<li key={skill.folder}>
+											<strong>{skill.name}</strong>
+											<span className="cw-muted">
+												{skill.description || t.noDescription}
+											</span>
+										</li>
+									))}
+								</ul>
+							) : (
+								<p className="aw-none">{t.noEquippedSkills}</p>
 							)}
-							<h3>Workspace</h3>
-							<div className="mc-toolbar">
-								{Object.keys(active.files).map((file) => (
-									<span className="mc-badge" key={file}>
-										{file}
-									</span>
-								))}
-							</div>
-							<p>
+							<h4>{t.workspace}</h4>
+							<p className="cw-muted">
 								{format(t.filesSkillsCount, {
 									files: Object.keys(active.files).length,
-									skills: view.skills.filter((s) => s.owner === active.id)
-										.length,
+									skills: equipped.length,
 								})}
 							</p>
+							<ul className="aw-files">
+								{Object.keys(active.files).map((file) => (
+									<li key={file}>
+										<code className="cw-code">{file}</code>
+									</li>
+								))}
+							</ul>
 						</>
 					) : (
-						<p>{t.selectAgentHint}</p>
+						<p className="cw-muted">{t.selectAgentHint}</p>
 					)}
 				</section>
 			</div>
@@ -272,6 +289,7 @@ function PanelSettings({
 	readonly busy: boolean;
 	readonly children: ReactNode;
 }) {
+	const strings = useAgentsCopy();
 	const [slots, setSlots] = useState<Slots>(view.slots);
 	const previousSlots = useRef(view.slots);
 	const d = strings.dkclaw;
@@ -287,56 +305,74 @@ function PanelSettings({
 			),
 		);
 	}, [view.slots, view.agents]);
+	const dirty = SLOT_CODES.some((code) => slots[code] !== view.slots[code]);
 	return (
 		<>
-			<section className="mc-panel">
-				<header>
-					<h2>DK-Claw</h2>
-					<p>{d.cardBlurb}</p>
+			<section className="mc-panel aw-slots" aria-labelledby="aw-slots-title">
+				<header className="aw-section-head">
+					<div>
+						<h2 id="aw-slots-title">{d.title}</h2>
+						<p>{d.cardBlurb}</p>
+					</div>
+					<button
+						type="button"
+						className="mc-button"
+						data-primary
+						disabled={busy}
+						onClick={() =>
+							void request({
+								type: "sync-panel",
+								slots,
+								revision: view.revision,
+							})
+						}
+					>
+						{busy ? d.actionSyncing : d.actionSync}
+					</button>
 				</header>
-				<div className="mc-grid">
+				<ul className="aw-slot-list">
 					{SLOT_CODES.map((code) => (
-						<label key={code} className="mc-card mc-field">
-							{code}
-							<select
-								aria-label={`DK-Claw ${code}`}
-								value={slots[code]}
-								disabled={busy}
-								onChange={(event) => {
-									const agent = view.agents.find(
-										(a) => a.id === event.target.value,
-									);
-									if (agent) setSlots({ ...slots, [code]: agent.id });
-								}}
-							>
-								{view.agents.map((agent) => (
-									<option value={agent.id} key={agent.id}>
-										{agent.emoji} {agent.name}
-									</option>
-								))}
-							</select>
-						</label>
+						<li key={code}>
+							<label className="aw-slot">
+								<span className="aw-slot-key">
+									{format(d.keyLabel, { code })}
+									{slots[code] !== view.slots[code] && (
+										<span className="mc-badge" data-tone="warning">
+											{d.unsynced}
+										</span>
+									)}
+								</span>
+								<select
+									aria-label={`DK-Claw ${code}`}
+									value={slots[code]}
+									disabled={busy}
+									onChange={(event) => {
+										const agent = view.agents.find(
+											(a) => a.id === event.target.value,
+										);
+										if (agent) setSlots({ ...slots, [code]: agent.id });
+									}}
+								>
+									{view.agents.map((agent) => (
+										<option value={agent.id} key={agent.id}>
+											{agent.emoji} {agent.name}
+										</option>
+									))}
+								</select>
+							</label>
+						</li>
 					))}
-				</div>
-				<button
-					type="button"
-					className="mc-button"
-					disabled={busy}
-					onClick={() =>
-						void request({ type: "sync-panel", slots, revision: view.revision })
-					}
-				>
-					{busy ? d.actionSyncing : d.actionSync}
-				</button>
+				</ul>
+				{dirty && <p className="cw-muted">{d.pendingHint}</p>}
 				{view.progress.percent > 0 && (
-					<div role="status">
+					<div role="status" className="aw-progress">
 						<progress
 							max={100}
 							value={view.progress.percent}
 							aria-label={d.actionSync}
 						/>
-						<span>
-							{view.progress.percent}% · {view.progress.stage}
+						<span className="cw-muted">
+							{view.progress.percent}% · {d.stages[view.progress.stage]}
 						</span>
 						{view.progress.stage === "done" && (
 							<p>
@@ -364,6 +400,9 @@ export function AgentsPage({
 	children,
 	bridge,
 }: AgentsPageProps) {
+	const { locale } = useAppLocale();
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const { view, error, busy, request } = useAgents(
 		bridge ?? window.quakeAgents,
 	);
@@ -372,6 +411,28 @@ export function AgentsPage({
 		() => setTab(activation?.tab ?? initialTab),
 		[initialTab, activation],
 	);
+	// Narrow windows scroll the tab row horizontally; keep the selected tab
+	// visible after selection and resizes without moving the page vertically.
+	const tabRow = useRef<HTMLDivElement>(null);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: The selected tab is read from the DOM after each tab change.
+	useEffect(() => {
+		const row = tabRow.current;
+		if (!row) return;
+		const reveal = () => {
+			const selected = row.querySelector<HTMLElement>(`#agents-tab-${tab}`);
+			if (!selected) return;
+			const start = selected.offsetLeft - row.offsetLeft;
+			const end = start + selected.offsetWidth;
+			if (start < row.scrollLeft) row.scrollLeft = start;
+			else if (end > row.scrollLeft + row.clientWidth)
+				row.scrollLeft = end - row.clientWidth;
+		};
+		reveal();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(reveal);
+		observer.observe(row);
+		return () => observer.disconnect();
+	}, [tab]);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
 		{ id: "agents", label: strings.clawControlPanel.localLibraryTab },
@@ -380,16 +441,15 @@ export function AgentsPage({
 	] as const;
 	return (
 		<div className="agent-workbench">
-			<header className="mc-toolbar">
+			<header className="aw-header">
 				<div>
+					<p className="mc-page-kicker">{strings.clawControlPanel.kicker}</p>
 					<h1>{strings.clawControlPanel.agentsTab}</h1>
 					<p>{strings.clawControlPanel.libraryHint}</p>
 				</div>
-				{view && tab !== "sessions" && (
-					<RuntimeIndicator runtime={view.runtime} request={request} />
-				)}
 			</header>
 			<div
+				ref={tabRow}
 				className="mc-tabs"
 				role="tablist"
 				onKeyDown={(event) => {
@@ -436,17 +496,21 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
-				<DirectChatPanel
-					configured={directChatModel(view?.models).ready}
+				<ConversationWorkspace
+					locale={locale}
+					model={directChatModel(view?.models)}
 					configurationLoading={!view && !error}
 					configurationError={!view ? error : undefined}
 					onRetryConfiguration={() => void request({ type: "read" })}
+					onOpenSettings={() => {
+						setTab("ai");
+						document.getElementById("agents-tab-ai")?.focus();
+					}}
 				/>
-				<AgentHttpPanel />
 			</section>
 			{error && tab !== "sessions" && (
-				<p role="alert">
-					{error}{" "}
+				<div role="alert" className="cw-banner">
+					<p>{error}</p>
 					<button
 						type="button"
 						className="mc-button"
@@ -454,7 +518,7 @@ export function AgentsPage({
 					>
 						{t.retry}
 					</button>
-				</p>
+				</div>
 			)}
 			{!view ? (
 				<section
@@ -463,14 +527,6 @@ export function AgentsPage({
 					aria-busy={!error}
 					aria-label={t.loadingAgentMd}
 				>
-					{[1, 2, 3, 4].map((n) => (
-						<div
-							key={n}
-							className="mc-card"
-							aria-hidden="true"
-							style={{ height: 48, opacity: 0.35 }}
-						/>
-					))}
 					<p role="status">{error ? t.retry : t.loadingAgentMd}</p>
 				</section>
 			) : (

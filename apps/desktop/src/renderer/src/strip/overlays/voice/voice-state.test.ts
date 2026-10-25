@@ -18,8 +18,8 @@ import {
 	COPILOT_TIMEOUT_MS,
 	type CopilotEvent,
 	copilotLayout,
+	copilotTone,
 	initialCopilot,
-	orbSpeed,
 	reduceCopilot,
 } from "../../tiles/aiCopilot/copilot-state";
 import { checkSend } from "../../tiles/clawBotInput/input-state";
@@ -527,7 +527,7 @@ describe("copilot status machine", () => {
 		);
 		expect(busyOther).toBe(down);
 	});
-	it("uses DK's orb speeds and layout at 1180×460", () => {
+	it("tones the copilot status and keeps the layout at 1180×460", () => {
 		const statuses: readonly Option.Option<0 | 1 | 2 | 3 | 4>[] = [
 			Option.none(),
 			Option.some(0),
@@ -536,7 +536,9 @@ describe("copilot status machine", () => {
 			Option.some(1),
 			Option.some(2),
 		];
-		expect(statuses.map(orbSpeed)).toEqual([1, 3, 6, 6, 10, 1]);
+		expect(
+			statuses.map((status) => copilotTone(status, Option.none())),
+		).toEqual(["idle", "active", "active", "active", "active", "success"]);
 		const layout = copilotLayout(1180, 460);
 		expect(layout).toMatchObject({
 			textFs: 20,

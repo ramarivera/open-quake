@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import type {
 	ConnectionDiagnostic,
 	LifecycleBridge,
@@ -6,6 +6,7 @@ import type {
 } from "../../shared/lifecycle-contracts";
 import strings from "../../shared/lifecycle-strings.json";
 import "./connectionDiagnostic.css";
+import { PageSectionContext } from "./ui/Form";
 
 declare global {
 	interface Window {
@@ -50,13 +51,15 @@ export function DiagnosticView({
 		if (status && !status.checking)
 			setExpanded(status.usb === "fail" ? "usb" : "hdmi");
 	}, [status]);
+	// Inside the management shell the kicker names the navigation section.
+	const section = useContext(PageSectionContext);
 	const checking = !status || status.checking;
 	const ready =
 		status?.usb === "pass" && status.hdmi === "pass" && status.issue === "none";
 	return (
 		<section className="connection-check" aria-labelledby="connection-title">
 			<header>
-				<p className="connection-eyebrow">{text.eyebrow}</p>
+				<p className="connection-eyebrow">{section ?? text.eyebrow}</p>
 				<h1 id="connection-title">{text.title}</h1>
 				<p className="muted">{text.subtitle}</p>
 			</header>

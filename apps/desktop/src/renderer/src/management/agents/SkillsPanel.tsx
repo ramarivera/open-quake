@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { skillFolderName } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import type { AgentView, Skill } from "../../../../shared/agents";
+import { useAgentsCopy } from "./copy";
 import { AgentDialog, ConfirmDialog, format } from "./Dialog";
-import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
 
-const t = strings.clawAgentManagement;
 function SkillEditor({
 	skill,
 	view,
@@ -17,6 +16,8 @@ function SkillEditor({
 	readonly request: AgentRequest;
 	readonly onClose: () => void;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [name, setName] = useState(skill?.name ?? "");
 	const [prompt, setPrompt] = useState("");
 	const [content, setContent] = useState(
@@ -44,6 +45,7 @@ function SkillEditor({
 			}}
 		>
 			<form
+				className="aw-form"
 				onSubmit={(event) => {
 					event.preventDefault();
 					setBusy(true);
@@ -107,7 +109,7 @@ function SkillEditor({
 					{busy ? t.generatingSkill : t.generateSkill}
 				</button>
 				{!view.draftingAvailable && (
-					<p>AI drafting needs a configured provider.</p>
+					<p className="cw-muted">{t.draftingUnavailable}</p>
 				)}
 				<label className="mc-field">
 					SKILL.md
@@ -119,9 +121,14 @@ function SkillEditor({
 						spellCheck={false}
 					/>
 				</label>
-				<p>{t.skillSaveHint}</p>
-				{error && <p role="alert">{error}</p>}
-				<footer className="mc-toolbar">
+				<p className="cw-muted">{t.skillSaveHint}</p>
+				{error && (
+					<p role="alert" className="cw-banner">
+						{error}
+					</p>
+				)}
+				<footer className="cw-dialog-actions">
+					<span className="cw-spacer" />
 					<button
 						type="button"
 						className="mc-button"
@@ -133,6 +140,7 @@ function SkillEditor({
 					<button
 						className="mc-button"
 						type="submit"
+						data-primary
 						disabled={busy || !name.trim() || !content.trim()}
 					>
 						{t.saveSkill}
@@ -151,6 +159,8 @@ export function SkillsPanel({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 }) {
+	const strings = useAgentsCopy();
+	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
 	const [editing, setEditing] = useState<{
 		readonly skill: Skill | undefined;
@@ -202,23 +212,24 @@ export function SkillsPanel({
 			);
 	};
 	return (
-		<section className="mc-panel" aria-label={t.skillManagementTab}>
-			<header className="mc-toolbar">
+		<section className="mc-panel aw-skills" aria-label={t.skillManagementTab}>
+			<header className="aw-section-head">
 				<div>
-					<h2>{t.allSkills}</h2>
+					<h3>{t.allSkills}</h3>
 					<p>{t.allSkillsHint}</p>
 				</div>
 				<button
 					type="button"
 					className="mc-button"
+					data-primary
 					onClick={() => setEditing({ skill: undefined })}
 				>
 					{t.createSkill}
 				</button>
 			</header>
-			<div className="mc-toolbar">
-				<label className="mc-field">
-					{t.searchSkills}
+			<div className="aw-list-tools">
+				<label className="mc-field aw-search">
+					<span className="visually-hidden">{t.searchSkills}</span>
 					<input
 						type="search"
 						value={search}
@@ -229,46 +240,45 @@ export function SkillsPanel({
 				<button
 					type="button"
 					className="mc-button"
+					data-variant="quiet"
 					disabled={busy}
 					onClick={() => void request({ type: "read" })}
 				>
 					{t.refresh}
 				</button>
 			</div>
-			{message && <p role="status">{message}</p>}
+			{message && (
+				<p role="status" className="aw-message">
+					{message}
+				</p>
+			)}
 			{visible.length === 0 ? (
 				<div className="mc-empty">{t.noMatchingSkills}</div>
 			) : (
-				visible.map((skill) => (
-					<article className="mc-card" key={`${skill.owner}/${skill.folder}`}>
-						<header className="mc-toolbar">
-							<div>
-								<h3>{skill.name}</h3>
-								<code>{skill.folder}</code>
-								<p>{skill.description || t.noDescription}</p>
-							</div>
-							<span className="mc-badge">
-								{skill.owner
-									? (view.agents.find((a) => a.id === skill.owner)?.name ??
-										t.unknownAgent)
-									: t.publicLibrary}
-							</span>
-						</header>
-						<div className="mc-toolbar">
-							{!skill.owner ? (
-								<>
-									<button
-										type="button"
-										className="mc-button"
-										disabled={busy}
-										onClick={() =>
-											setEquip(equip === skill.folder ? "" : skill.folder)
-										}
-									>
-										{equip === skill.folder ? t.cancelEquip : t.equipToAgent}
-									</button>
+				<ul className="aw-skill-list">
+					{visible.map((skill) => {
+						const owner = skill.owner
+							? (view.agents.find((a) => a.id === skill.owner)?.name ??
+								t.unknownAgent)
+							: t.publicLibrary;
+						return (
+							<li key={`${skill.owner}/${skill.folder}`}>
+								<div className="aw-skill-text">
+									<p className="aw-row-title">
+										{skill.name}{" "}
+										<span
+											className="mc-badge"
+											data-tone={skill.owner ? "accent" : "neutral"}
+										>
+											{owner}
+										</span>
+									</p>
+									<code className="aw-row-meta">{skill.folder}</code>
+									<p className="cw-muted">
+										{skill.description || t.noDescription}
+									</p>
 									{equip === skill.folder && (
-										<fieldset>
+										<fieldset className="aw-equip">
 											<legend>{t.chooseTargetAgent}</legend>
 											{view.agents
 												.filter((a) => a.id !== "main")
@@ -283,46 +293,56 @@ export function SkillsPanel({
 														{a.emoji} {a.name}
 													</button>
 												))}
-											{view.agents.length < 2 && <p>{t.noEquipTarget}</p>}
+											{view.agents.length < 2 && (
+												<p className="cw-muted">{t.noEquipTarget}</p>
+											)}
 										</fieldset>
 									)}
-								</>
-							) : (
-								<>
-									<span>
-										{format(t.equippedTo, {
-											agent:
-												view.agents.find((a) => a.id === skill.owner)?.name ??
-												skill.owner,
-										})}
-									</span>
+								</div>
+								<div className="aw-row-actions">
+									{!skill.owner ? (
+										<button
+											type="button"
+											className="mc-button"
+											disabled={busy}
+											aria-expanded={equip === skill.folder}
+											onClick={() =>
+												setEquip(equip === skill.folder ? "" : skill.folder)
+											}
+										>
+											{equip === skill.folder ? t.cancelEquip : t.equipToAgent}
+										</button>
+									) : (
+										<button
+											type="button"
+											className="mc-button"
+											disabled={busy}
+											onClick={() => void move(skill, "")}
+										>
+											{t.moveBackToCommon}
+										</button>
+									)}
 									<button
 										type="button"
 										className="mc-button"
-										disabled={busy}
-										onClick={() => void move(skill, "")}
+										data-variant="quiet"
+										onClick={() => setEditing({ skill })}
 									>
-										{t.moveBackToCommon}
+										{t.edit}
 									</button>
-								</>
-							)}
-							<button
-								type="button"
-								className="mc-button"
-								onClick={() => setEditing({ skill })}
-							>
-								{t.edit}
-							</button>
-							<button
-								type="button"
-								className="mc-button"
-								onClick={() => setDeleting(skill)}
-							>
-								{t.delete}
-							</button>
-						</div>
-					</article>
-				))
+									<button
+										type="button"
+										className="mc-button"
+										data-variant="quiet"
+										onClick={() => setDeleting(skill)}
+									>
+										{t.delete}
+									</button>
+								</div>
+							</li>
+						);
+					})}
+				</ul>
 			)}
 			{editing && (
 				<SkillEditor

@@ -108,7 +108,7 @@ export function ClockSettings({
 		<div className="page clock-settings" aria-busy={busy}>
 			<Group
 				title="Desktop clock"
-				description="The DK-Desktop-Clock profile's flip clock. The ◀ and ▶ buttons on the strip switch and save the theme too."
+				description="The clock key on your strip. Its ‹ and › buttons switch and save the theme too."
 				footer={
 					<div role="status" aria-live="polite" className="status-notes">
 						{!available ? (
@@ -163,7 +163,7 @@ export function ClockSettings({
 				<Row
 					label="Seconds"
 					labelId={`${ids}-seconds`}
-					hint="DK-Suite shows minutes only."
+					hint="Off shows hours and minutes only."
 				>
 					<Segmented
 						name={`${ids}-seconds`}
@@ -213,10 +213,6 @@ export function ClockSettings({
 									) : (
 										<img src={themeArtUrl(id)} alt="" />
 									)}
-									<span className="clock-theme-name">
-										{selected ? "✓ " : ""}
-										{strings.themes[id]}
-									</span>
 									{media ? (
 										<span className="clock-theme-badge">
 											✦ {strings.settings.themeOverrideBadge}
@@ -231,6 +227,12 @@ export function ClockSettings({
 										</span>
 									) : null}
 								</button>
+								<span className="clock-theme-name">
+									{strings.themes[id]}
+									{selected ? (
+										<span className="clock-theme-selected"> · Selected</span>
+									) : null}
+								</span>
 								<div className="button-row">
 									<button
 										type="button"

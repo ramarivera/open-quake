@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
-import strings from "./strings.json";
+import { useAgentsCopy } from "./copy";
 export function AgentDialog({
 	title,
 	children,
@@ -9,6 +9,7 @@ export function AgentDialog({
 	readonly children: ReactNode;
 	readonly onClose: () => void;
 }) {
+	const strings = useAgentsCopy();
 	const ref = useRef<HTMLDialogElement>(null);
 	const id = useId();
 	useEffect(() => {
@@ -18,25 +19,38 @@ export function AgentDialog({
 	return (
 		<dialog
 			ref={ref}
-			className="mc-dialog"
+			className="mc-dialog cw-dialog"
 			aria-labelledby={id}
 			onCancel={(event) => {
 				event.preventDefault();
 				onClose();
 			}}
 		>
-			<header className="mc-toolbar">
+			<header className="cw-dialog-head">
 				<h2 id={id}>{title}</h2>
 				<button
 					type="button"
-					className="mc-button"
+					className="mc-button cw-dialog-close"
+					data-variant="quiet"
 					onClick={onClose}
 					aria-label={strings.clawAgentManagement.close}
+					title={strings.clawAgentManagement.close}
 				>
-					×
+					<svg
+						aria-hidden="true"
+						viewBox="0 0 24 24"
+						width="16"
+						height="16"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.8"
+						strokeLinecap="round"
+					>
+						<path d="M6 6l12 12M18 6 6 18" />
+					</svg>
 				</button>
 			</header>
-			{children}
+			<div className="cw-dialog-body">{children}</div>
 		</dialog>
 	);
 }
@@ -53,10 +67,12 @@ export function ConfirmDialog({
 	readonly onClose: () => void;
 	readonly onConfirm: () => Promise<void>;
 }) {
+	const strings = useAgentsCopy();
 	return (
 		<AgentDialog title={title} onClose={onClose}>
 			<p>{body}</p>
-			<footer className="mc-toolbar">
+			<footer className="cw-dialog-actions">
+				<span className="cw-spacer" />
 				<button
 					type="button"
 					className="mc-button"
@@ -68,6 +84,8 @@ export function ConfirmDialog({
 				<button
 					type="button"
 					className="mc-button"
+					data-primary
+					data-variant="danger"
 					disabled={busy}
 					onClick={() => void onConfirm()}
 				>

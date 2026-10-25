@@ -103,3 +103,59 @@ export function HomeIcon(): React.JSX.Element {
 		</Icon>
 	);
 }
+export function OverviewIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<rect x="1.8" y="1.8" width="5.4" height="5.4" rx="1.2" />
+			<rect x="8.8" y="1.8" width="5.4" height="5.4" rx="1.2" />
+			<rect x="1.8" y="8.8" width="5.4" height="5.4" rx="1.2" />
+			<rect x="8.8" y="8.8" width="5.4" height="5.4" rx="1.2" />
+		</Icon>
+	);
+}
+export function KeysIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<rect x="1.5" y="3.5" width="13" height="9" rx="1.6" />
+			<path d="M4 6.5h.01M6.7 6.5h.01M9.3 6.5h.01M12 6.5h.01M5 9.5h6" />
+		</Icon>
+	);
+}
+export function KnobIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<circle cx="8" cy="8" r="6.2" />
+			<path d="M8 4.2v3.3" />
+		</Icon>
+	);
+}
+export function MeetingIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<rect x="5.5" y="1.5" width="5" height="8" rx="2.5" />
+			<path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2" />
+		</Icon>
+	);
+}
+export function SettingsIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<circle cx="8" cy="8" r="2.2" />
+			<path d="M8 1.5v1.8m0 9.4v1.8M1.5 8h1.8m9.4 0h1.8M3.4 3.4l1.3 1.3m6.6 6.6 1.3 1.3m0-9.2-1.3 1.3m-6.6 6.6-1.3 1.3" />
+		</Icon>
+	);
+}
+export function MenuIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="M2 4h12M2 8h12M2 12h12" />
+		</Icon>
+	);
+}
+export function TextSizeIcon(): React.JSX.Element {
+	return (
+		<Icon>
+			<path d="m1.5 13 3.2-9 3.2 9M2.6 10h4.2M9.5 13l2.2-6 2.3 6M10.2 11.2h3" />
+		</Icon>
+	);
+}

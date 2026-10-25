@@ -5,15 +5,18 @@ import {
 	type ThemeId,
 } from "../../../../../shared/clock-style";
 import type { HourFormat } from "../../../../../shared/display";
+import { stripPaletteProperties } from "../../palette";
 import type { ClockMediaSource } from "./backgroundLoader";
 import { ClockBackground } from "./ClockBackground";
 import { useReducedMotion } from "./clockHooks";
 import { CLOCK_STRINGS, normalizeClockLocale } from "./clockStrings";
 import { clockDigits, dateLabel, weekdayLabel } from "./clockTime";
-import { FlipClock } from "./FlipClock";
 import { ThemeNav } from "./ThemeNav";
+import { TimeReadout } from "./TimeReadout";
 import { type ClockThemeSelect, ThemePreviewController } from "./themePreview";
 import "./clock.css";
+
+const palette = stripPaletteProperties();
 
 export const CLOCK_STAGE = { width: 1920, height: 480 } as const;
 
@@ -48,8 +51,8 @@ function persistedTheme(theme: string): ThemeId | null {
 }
 
 /**
- * DK-Suite 0.4.95 desktop clock: a 1920×480 stage scaled to the host, with the
- * date rail and theme nav, glass flip digits and the card column.
+ * The desktop clock: a 1920×480 stage scaled to the host, with the date block
+ * and theme switcher, the typographic time and the information column.
  */
 export function ClockTile({
 	widthPx,
@@ -98,7 +101,7 @@ export function ClockTile({
 			className="oq-clock"
 			data-theme={active ?? "none"}
 			data-motion={reduced ? "reduce" : "full"}
-			style={{ width: widthPx, height: heightPx }}
+			style={{ ...palette, width: widthPx, height: heightPx }}
 		>
 			<div
 				className="oq-clock-stage"
@@ -125,12 +128,11 @@ export function ClockTile({
 						}
 					/>
 				</div>
-				<FlipClock
-					digits={digits}
-					showSeconds={showSeconds}
-					reducedMotion={reduced}
-				/>
-				<div className="oq-clock-cards">
+				<TimeReadout digits={digits} showSeconds={showSeconds} />
+				<div
+					className="oq-clock-cards"
+					data-count={[weather, nowPlaying].filter(Boolean).length}
+				>
 					{weather ? (
 						<div className="oq-clock-card-slot" data-card="weather">
 							{weather}

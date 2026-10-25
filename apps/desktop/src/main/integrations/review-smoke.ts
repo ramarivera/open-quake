@@ -524,7 +524,7 @@ async function main() {
 			`document.querySelector('[data-page="ha"]').click()`,
 		);
 		await wait(
-			`document.querySelector('[aria-label="Home Assistant Settings"] h2')?.textContent === 'Home Assistant' && document.body.innerText.includes('Disconnected')`,
+			`document.querySelector('[aria-label="Home Assistant Settings"] h1')?.textContent === 'Home Assistant' && document.body.innerText.includes('Disconnected')`,
 		);
 		await wait(
 			`document.querySelector('input[type="url"]')?.value === 'https://synthetic-ha.test' || [...document.querySelectorAll('input')].some(i=>i.value==='https://synthetic-ha.test')`,
@@ -713,10 +713,10 @@ async function main() {
 		await wait("document.querySelector('#agents-ai table')");
 		const ui = (code: string) => management.webContents.executeJavaScript(code);
 		await ui(
-			"[...document.querySelectorAll('#agents-ai button')].find(b=>b.textContent==='Add Model').click()",
+			"[...document.querySelectorAll('#agents-ai button')].find(b=>b.textContent==='Add model').click()",
 		);
 		await ui(
-			"[...document.querySelectorAll('#agents-ai button')].find(b=>b.textContent==='Add Model').click()",
+			"[...document.querySelectorAll('#agents-ai button')].find(b=>b.textContent==='Add model').click()",
 		);
 		await wait(
 			"document.querySelectorAll('#agents-ai table')[0].querySelectorAll('tbody tr').length === 3",
@@ -781,7 +781,7 @@ async function main() {
 		);
 		assert(custom._tag === "success");
 		await ui(
-			"[...document.querySelectorAll('#agents-ai nav button')].find(b=>b.textContent==='Agents Config').click()",
+			"[...document.querySelectorAll('#agents-ai nav button')].find(b=>b.textContent==='Per-agent models').click()",
 		);
 		await ui(
 			"[...document.querySelectorAll('#agents-ai details')].find(d=>d.querySelector('code')?.textContent==='constructor').open=true",
@@ -790,7 +790,7 @@ async function main() {
 			"[...document.querySelectorAll('#agents-ai table')].find(t=>t.querySelector('caption')?.textContent==='constructor')";
 		await wait(`${agentTable}?.querySelectorAll('tbody tr').length === 2`);
 		await ui(
-			`(()=>{const table=${agentTable};const section=table.parentElement.parentElement;[...section.querySelectorAll('button')].find(b=>b.textContent==='Add Model').click()})()`,
+			`(()=>{const table=${agentTable};const section=table.parentElement.parentElement;[...section.querySelectorAll('button')].find(b=>b.textContent==='Add model').click()})()`,
 		);
 		await wait(`${agentTable}.querySelectorAll('tbody tr').length === 3`);
 		await ui(

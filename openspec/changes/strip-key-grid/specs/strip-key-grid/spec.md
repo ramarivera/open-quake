@@ -7,6 +7,8 @@ preview the way DK-Suite 0.4.95 draws it. Geometry, colours and timings are the
 recovered values cited in `design.md`. Parity decisions 2 and 3 were approved by
 Ramiro on 2026-10-23.
 
+> **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (slot visuals, generic tile glow/ring/title metrics, DK press scale and glow) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
+
 ## ADDED Requirements
 
 ### Requirement: Strip canvas and layer stack

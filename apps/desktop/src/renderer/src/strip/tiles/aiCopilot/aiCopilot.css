@@ -1,13 +1,15 @@
-/* AI Copilot view (AIChatIconView.vue) and GlowEnergyOrb (GlowEnergyOrb.vue). */
+/*
+ * AI Copilot view (strip-voice-ui "AI Copilot view", drawn per
+ * independent-device-design): flat surface, toolbar status, presence mark.
+ */
 .copilot {
 	position: absolute;
 	inset: 0;
 	box-sizing: border-box;
 	overflow: hidden;
-	background: transparent;
-	border-style: solid;
-	border-color: rgba(200, 200, 200, 0.3);
-	color: #ffffff;
+	background: var(--strip-surface);
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-text);
 	font-family: var(--strip-font);
 }
 .copilot-toolbar {
@@ -15,33 +17,80 @@
 	box-sizing: border-box;
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	border-bottom-style: solid;
-	border-bottom-color: rgba(255, 255, 255, 0.1);
-	box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+	gap: 20px;
+	border-bottom: 1px solid var(--strip-hairline);
 }
 .copilot-label {
-	flex-shrink: 0;
-	color: rgba(255, 255, 255, 0.8);
-	font-weight: bold;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-size: 28px;
+	font-weight: 600;
 	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 .copilot-status {
-	flex: 1;
-	color: rgba(255, 255, 255, 0.9);
-	font-weight: 500;
-	text-align: center;
-	white-space: nowrap;
-}
-.copilot-copy {
 	display: flex;
 	flex: none;
-	width: 40px;
-	height: 40px;
-	padding: 0;
+	align-items: center;
+	gap: 10px;
+	color: var(--strip-muted);
+	font-size: 24px;
+	font-weight: 550;
+	white-space: nowrap;
+}
+.copilot-status[data-tone]::before {
+	content: "";
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: var(--strip-line);
+}
+.copilot-status[data-tone="active"] {
+	color: var(--strip-accent);
+}
+.copilot-status[data-tone="active"]::before {
+	background: var(--strip-accent);
+}
+.copilot-status[data-tone="success"] {
+	color: var(--strip-success);
+}
+.copilot-status[data-tone="success"]::before {
+	background: var(--strip-success);
+}
+.copilot-status[data-tone="warning"] {
+	color: var(--strip-warning);
+}
+.copilot-status[data-tone="warning"]::before {
+	background: var(--strip-warning);
+}
+.copilot-status[data-tone="danger"] {
+	color: var(--strip-danger);
+}
+.copilot-status[data-tone="danger"]::before {
+	background: var(--strip-danger);
+}
+.copilot-copy {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 52px;
+	height: 52px;
+	padding: 12px;
 	border: 0;
-	background: none;
+	border-radius: 12px;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-line);
+	color: var(--strip-text);
 	cursor: pointer;
+}
+.copilot-copy svg {
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linejoin: round;
 }
 .copilot-content {
 	position: relative;
@@ -51,25 +100,46 @@
 	position: relative;
 	box-sizing: border-box;
 	display: flex;
-	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	border-right-style: solid;
-	border-right-color: rgba(255, 255, 255, 0.1);
+	border-right: 1px solid var(--strip-hairline);
 }
-.copilot-axis {
-	position: absolute;
-	top: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(255, 255, 255, 0.2);
-	pointer-events: none;
+.copilot-presence {
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
+	padding: 24%;
+	border-radius: 50%;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 3px var(--strip-line);
+	color: var(--strip-muted);
+}
+.copilot-presence svg {
+	width: 100%;
+	height: 100%;
+	fill: currentColor;
+}
+.copilot-presence[data-tone="active"] {
+	background: var(--strip-accent-soft);
+	box-shadow: inset 0 0 0 4px var(--strip-accent);
+	color: var(--strip-accent);
+}
+.copilot-presence[data-tone="success"] {
+	box-shadow: inset 0 0 0 4px var(--strip-success);
+	color: var(--strip-success);
+}
+.copilot-presence[data-tone="warning"] {
+	box-shadow: inset 0 0 0 4px var(--strip-warning);
+	color: var(--strip-warning);
+}
+.copilot-presence[data-tone="danger"] {
+	background: var(--strip-danger-soft);
+	box-shadow: inset 0 0 0 4px var(--strip-danger);
+	color: var(--strip-danger);
 }
 .copilot-right {
 	position: relative;
 	box-sizing: border-box;
-	border-left-style: solid;
-	border-left-color: rgba(255, 255, 255, 0.1);
 }
 .copilot-scroll {
 	box-sizing: border-box;
@@ -79,7 +149,7 @@
 	scrollbar-width: none;
 }
 .copilot-text {
-	color: rgba(255, 255, 255, 0.9);
+	color: var(--strip-text);
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
 	word-break: break-word;
@@ -89,168 +159,27 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	color: rgba(255, 255, 255, 0.6);
+	color: var(--strip-muted);
 	text-align: center;
 	white-space: nowrap;
 }
 .copilot-hint {
-	/* AI-196: DK's negative tracking collapses narrow glyphs even inline. */
+	/* AI-196: negative tracking collapses narrow glyphs even inline. Optical
+	 * sizing off keeps DOM advances equal to the font's natural metrics. */
 	letter-spacing: normal;
+	font-optical-sizing: none;
 	white-space: normal;
 	overflow-wrap: anywhere;
 }
 .copilot-hint [data-lit="true"] {
-	color: #00ffff;
-	opacity: 1;
+	color: var(--strip-text);
 }
 .copilot-cancel {
-	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-		Arial, sans-serif;
 	font-weight: 400;
-	letter-spacing: 0.04em;
+	letter-spacing: 0.02em;
 	white-space: pre;
 }
 .copilot-cancel-title {
-	color: #00ffff;
-}
-
-.orb-root {
-	position: relative;
-	flex: none;
-	overflow: hidden;
-	background: transparent;
-}
-.orb-svg {
-	display: block;
-	width: 100%;
-	height: 100%;
-}
-/* DK binds every animation to the playing state; paused drops them (GEO:317-500). */
-.orb-root[data-playing="true"] .orb-core {
-	transform-origin: center;
-	animation:
-		orb-breathe calc(3s / var(--orb-speed, 1)) ease-in-out infinite,
-		orb-hue calc(6.7s / var(--orb-speed, 1)) ease-in-out infinite;
-}
-.orb-root[data-playing="true"] .orb-cloud-left {
-	transform-origin: center;
-	animation:
-		orb-cw calc(17.3s / var(--orb-speed, 1)) linear infinite,
-		orb-fade-a calc(3.7s / var(--orb-speed, 1)) ease-in-out infinite;
-}
-.orb-root[data-playing="true"] .orb-cloud-right-a {
-	transform-origin: center;
-	animation:
-		orb-ccw calc(12s / var(--orb-speed, 1)) linear infinite,
-		orb-fade-b calc(2.8s / var(--orb-speed, 1)) ease-in-out infinite;
-}
-.orb-root[data-playing="true"] .orb-cloud-right-b {
-	transform-origin: center;
-	animation:
-		orb-ccw calc(8s / var(--orb-speed, 1)) linear infinite,
-		orb-fade-c calc(2.4s / var(--orb-speed, 1)) ease-in-out infinite;
-}
-.orb-root[data-playing="true"] .orb-gloss-a {
-	transform-origin: center;
-	animation: orb-gloss-a calc(4.3s / var(--orb-speed, 1)) ease-in-out
-		calc(0.5s / var(--orb-speed, 1)) infinite;
-}
-.orb-root[data-playing="true"] .orb-gloss-b {
-	transform-origin: center;
-	animation: orb-gloss-b calc(5.2s / var(--orb-speed, 1)) ease-in-out
-		calc(1.1s / var(--orb-speed, 1)) infinite;
-}
-.orb-root[data-playing="true"] .orb-gloss-c {
-	transform-origin: center;
-	animation: orb-gloss-c calc(6.1s / var(--orb-speed, 1)) ease-in-out
-		calc(1.6s / var(--orb-speed, 1)) infinite;
-}
-@keyframes orb-breathe {
-	0%,
-	100% {
-		transform: scale(0.98);
-	}
-	50% {
-		transform: scale(1.02);
-	}
-}
-@keyframes orb-hue {
-	0%,
-	100% {
-		filter: brightness(1.15) saturate(1.2) hue-rotate(0deg);
-	}
-	50% {
-		filter: brightness(1.15) saturate(1.2) hue-rotate(-6deg);
-	}
-}
-@keyframes orb-cw {
-	to {
-		transform: rotate(360deg);
-	}
-}
-@keyframes orb-ccw {
-	to {
-		transform: rotate(-360deg);
-	}
-}
-@keyframes orb-fade-a {
-	0%,
-	100% {
-		opacity: 0.7;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-@keyframes orb-fade-b {
-	0%,
-	100% {
-		opacity: 0.6;
-	}
-	50% {
-		opacity: 0.95;
-	}
-}
-@keyframes orb-fade-c {
-	0%,
-	100% {
-		opacity: 0.65;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-@keyframes orb-gloss-a {
-	0%,
-	100% {
-		transform: translate(0, 0) skewX(0deg);
-		opacity: 0.55;
-	}
-	50% {
-		transform: translate(6px, -4px) skewX(-6deg);
-		opacity: 0.75;
-	}
-}
-@keyframes orb-gloss-b {
-	0%,
-	100% {
-		transform: translate(0, 0) skewY(0deg);
-		opacity: 0.5;
-	}
-	50% {
-		transform: translate(-5px, 6px) skewY(5deg);
-		opacity: 0.7;
-	}
-}
-@keyframes orb-gloss-c {
-	0%,
-	100% {
-		transform: translate(0, 0) skewX(0deg);
-		opacity: 0.48;
-	}
-	50% {
-		transform: translate(8px, 3px) skewX(7deg);
-		opacity: 0.68;
-	}
+	color: var(--strip-danger);
+	font-weight: 600;
 }

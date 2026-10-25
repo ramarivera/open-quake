@@ -1,125 +1,111 @@
+/*
+ * Weather and now-playing rows inside the clock's information column, and the
+ * flat now-playing player key (openspec/changes/independent-device-design).
+ * Colours are the device palette's --strip-* properties.
+ */
 .oq-weather-card,
 .oq-music-card {
 	position: relative;
 	display: flex;
 	align-items: center;
-	width: 564px;
 	box-sizing: border-box;
-	border-radius: 32px;
-	background: var(--glass-bg-strong, #222a);
-	border: 1px solid var(--glass-border, #fff3);
-	box-shadow:
-		var(--glass-hl, inset 0 1px #fff3),
-		0 22px 56px #0003;
-	backdrop-filter: var(--glass-blur, blur(26px));
-	color: #fffffff7;
+	width: 100%;
+	height: 168px;
+	color: var(--strip-text);
 }
 .oq-weather-card {
-	height: 153px;
-	padding: 0 34px;
-	gap: 20px;
+	gap: 22px;
 }
 .oq-weather-badge {
-	flex: 0 0 88px;
-	height: 88px;
-	border-radius: 26px;
-	display: grid;
-	place-items: center;
-	background: linear-gradient(#ffffff4d, #ffffff14);
-	box-shadow: inset 0 1px #fff5;
+	flex: none;
+	width: 60px;
+	height: 60px;
+	color: var(--strip-text);
 }
 .oq-weather-badge svg {
-	width: 44px;
-	height: 44px;
-}
-.oq-weather-text {
-	min-width: 0;
-	flex: 1;
-}
-.oq-weather-city {
-	font-size: 19px;
-	font-weight: 600;
-	max-width: 220px;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-	overflow: hidden;
-}
-.oq-weather-main {
-	display: flex;
-	flex-direction: column;
+	width: 100%;
+	height: 100%;
 }
 .oq-weather-temp {
-	font-size: 50px;
-	font-weight: 200;
-	line-height: 1.05;
+	flex: none;
+	font-size: 80px;
+	font-weight: 300;
+	line-height: 1;
+	letter-spacing: -0.03em;
 	font-variant-numeric: tabular-nums;
 }
 .oq-weather-temp sup {
-	font-size: 0.5em;
+	position: relative;
+	top: -0.05em;
+	font-size: 0.45em;
+	vertical-align: top;
 }
-.oq-weather-desc {
-	font-size: 19px;
-	font-weight: 450;
-	color: #ffffffad;
-	white-space: nowrap;
+.oq-weather-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+.oq-weather-city {
 	overflow: hidden;
+	font-size: 28px;
+	font-weight: 600;
+	white-space: nowrap;
 	text-overflow: ellipsis;
 }
-/* A dark chip, not tinted text: bright theme art left the glass card at 1.08:1. */
+.oq-weather-desc {
+	overflow: hidden;
+	color: var(--strip-muted);
+	font-size: 24px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+/* An opaque chip so the state reads on its own, with a word, not colour alone. */
 .oq-weather-desc[data-error="true"] {
 	align-self: flex-start;
 	max-width: 100%;
 	box-sizing: border-box;
-	padding: 1px 12px;
+	padding: 2px 14px;
 	border-radius: 999px;
-	background: #222;
-	color: #ffd6c4;
+	background: #2b1915;
+	box-shadow: inset 0 0 0 1.5px var(--strip-danger);
+	color: var(--strip-danger);
+	font-size: 22px;
+	font-weight: 600;
 }
 .oq-weather-range {
-	flex: 0 0 auto;
-	padding-left: 26px;
-	border-left: 1px solid #ffffff24;
+	flex: none;
 	display: flex;
 	flex-direction: column;
-	gap: 7px;
+	gap: 6px;
+	padding-left: 24px;
+	border-left: 1px solid var(--strip-hairline);
+	font-size: 26px;
+	font-variant-numeric: tabular-nums;
 }
-.oq-weather-range > span {
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.14em;
-	color: #ffffff61;
-}
-.oq-weather-range > div {
-	font-size: 21px;
-	color: #ffffffd1;
-}
-.oq-weather-range > div:last-child {
-	color: #ffffff9e;
+.oq-weather-range span {
+	color: var(--strip-muted);
 }
 .oq-weather-meta {
-	position: absolute;
-	right: 25px;
-	bottom: 8px;
-	font-size: 10px;
-	color: #fff9;
+	color: var(--strip-muted);
+	font-size: 20px;
 }
 .oq-music-card {
-	padding: 22px 24px;
-	gap: 14px;
-	min-height: 153px;
-}
-.oq-music-card[data-state="unavailable"] {
-	opacity: 0.55;
+	gap: 22px;
 }
 .oq-music-cover {
-	flex: 0 0 108px;
-	height: 108px;
-	border-radius: 24px;
-	overflow: hidden;
-	background: linear-gradient(135deg, #2b3a8f, #7b2f9e, #e0457b);
+	flex: none;
 	display: grid;
 	place-items: center;
-	font-size: 54px;
+	width: 104px;
+	height: 104px;
+	overflow: hidden;
+	border-radius: 14px;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-muted);
+	font-size: 48px;
 }
 .oq-music-cover img {
 	width: 100%;
@@ -127,289 +113,256 @@
 	object-fit: cover;
 }
 .oq-music-meta {
-	min-width: 0;
+	display: flex;
 	flex: 1;
-	max-width: 158px;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
 }
 .oq-music-meta > div {
-	font-size: 20px;
+	font-size: 28px;
 	font-weight: 600;
 }
 .oq-music-meta > span {
-	font-size: 16px;
-	color: #fff9;
-	display: block;
-	margin-top: 8px;
+	color: var(--strip-muted);
+	font-size: 24px;
 }
 .oq-music-meta > * {
 	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.oq-music-meta > .oq-music-tip {
+	color: var(--strip-warning);
+	font-weight: 550;
+}
+.oq-music-card[data-state="unavailable"] .oq-music-cover,
+.oq-music-card[data-state="unavailable"] .oq-music-meta > div {
+	opacity: 0.55;
 }
 .oq-music-controls {
+	flex: none;
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin-left: auto;
+	gap: 8px;
 }
-.oq-music-controls button {
-	border-radius: 50%;
-	width: 54px;
-	height: 54px;
-	flex-shrink: 0;
-	border: 1px solid #ffffff24;
-	background: #ffffff17;
-	color: white;
+.oq-music-controls button,
+.oq-player-controls button {
+	flex: none;
 	display: grid;
 	place-items: center;
-	padding: 15px;
+	box-sizing: border-box;
+	width: 64px;
+	height: 64px;
+	padding: 20px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-line);
+	color: var(--strip-text);
 	cursor: pointer;
-	transition: transform 100ms ease-out;
+	-webkit-tap-highlight-color: transparent;
 }
-.oq-music-controls button.oq-music-play {
-	width: 70px;
-	height: 70px;
-	background: #ffffffeb;
-	color: #1a1a1f;
-	padding: 22px;
+.oq-music-controls button.oq-music-play,
+.oq-player-controls button.oq-player-main {
+	width: 80px;
+	height: 80px;
+	padding: 25px;
+	background: var(--strip-accent);
+	box-shadow: none;
+	color: var(--strip-accent-ink);
 }
-.oq-music-controls button:disabled {
-	opacity: 0.3;
+.oq-music-controls button:disabled,
+.oq-player-controls button:disabled {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-subtle);
 	cursor: default;
 }
-.oq-music-controls svg {
+.oq-music-controls svg,
+.oq-player-controls svg {
 	width: 100%;
 	height: 100%;
 	fill: currentColor;
 }
-.oq-music-controls button.is-pressed,
-.oq-music-controls button:active {
-	transform: scale(0.9);
-}
-.oq-music-tip {
-	position: absolute;
-	bottom: 7px;
-	right: 24px;
-	font-size: 13px;
-	color: #f0c97a;
+.oq-music-controls button.is-pressed:not(:disabled),
+.oq-music-controls button:active:not(:disabled),
+.oq-player-controls button.is-pressed:not(:disabled),
+.oq-player-controls button:active:not(:disabled) {
+	box-shadow: inset 0 0 0 3px var(--strip-text);
+	transform: scale(0.94);
 }
 .oq-music-controls button:focus-visible,
+.oq-player-controls button:focus-visible,
 .oq-player button:focus-visible {
-	outline: 3px solid #00ffff;
+	outline: 3px solid var(--strip-accent);
 	outline-offset: 4px;
 }
+
 .oq-player {
 	position: relative;
 	overflow: hidden;
-	color: #f0f0f0;
-	font-family: Inter, Arial, sans-serif;
-	background: #111110;
+	background: var(--strip-canvas);
+	color: var(--strip-text);
+	font-family: var(--strip-font);
+	font-variant-numeric: tabular-nums;
+	-webkit-font-smoothing: antialiased;
 }
 .oq-player-stage {
 	position: absolute;
+	top: 0;
+	left: 0;
 	width: 1920px;
 	height: 480px;
 	transform-origin: 0 0;
+}
+.oq-player-cover {
+	position: absolute;
+	left: 64px;
+	top: 64px;
+	display: grid;
+	place-items: center;
+	width: 352px;
+	height: 352px;
 	overflow: hidden;
-	background: linear-gradient(
-		110deg,
-		#181817 0%,
-		#34312b 38%,
-		#181817 70%,
-		#0d0d0e
-	);
+	border-radius: 24px;
+	background: var(--strip-surface);
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-subtle);
 }
-.oq-player-deck {
+.oq-player-cover img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+.oq-player-cover svg {
+	width: 132px;
+	height: 132px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.4;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.oq-player-info {
 	position: absolute;
-	left: 52px;
-	top: 23px;
-	width: 1290px;
-	height: 500px;
-	border-radius: 28px;
-	transform: rotate(-4deg);
-	border: 2px solid #48473c;
-	background:
-		repeating-linear-gradient(0deg, #0000 0 2px, #ffffff03 2px 3px),
-		linear-gradient(95deg, #1a1a17, #35342a, #171714);
-	box-shadow:
-		0 5px 30px #000,
-		inset 0 2px #fff2;
+	left: 472px;
+	top: 64px;
+	display: flex;
+	flex-direction: column;
+	width: 900px;
+	height: 352px;
+	min-width: 0;
 }
-.oq-player-ambient {
-	position: absolute;
-	inset: 0 521px 0 0;
-	background: conic-gradient(
-		from 190deg at 562.5px 258px,
-		#0000,
-		#ffc80040,
-		#0000 42%,
-		#ffc80018,
-		#0000
-	);
-	opacity: 0.4;
-	filter: blur(24px);
-	pointer-events: none;
-}
-.oq-player-platter {
-	position: absolute;
-	left: 355px;
-	top: 50px;
-	width: 415px;
-	height: 416px;
-	border-radius: 50%;
-	box-shadow:
-		0 12px 30px #000b,
-		0 0 0 13px #080809,
-		0 0 0 16px #52514b;
-	animation: oq-disc-spin 10s linear infinite;
-	animation-play-state: paused;
-}
-.oq-player-platter[data-playing="true"] {
-	animation-play-state: running;
-}
-.oq-player-grooves {
-	position: absolute;
-	inset: -38px;
-	border-radius: 50%;
-	background: repeating-radial-gradient(
-		circle,
-		#111 0 2px,
-		#2a2926 3px,
-		#151514 4px 5px
-	);
-}
-.oq-player-disc {
-	position: relative;
-	width: 415px;
-	height: 416px;
-}
-.oq-player-disc text {
-	font-size: 20px;
-	font-weight: 300;
-	opacity: 0.85;
-	letter-spacing: 10px;
-}
-.oq-player-cover-probe {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	opacity: 0;
-	pointer-events: none;
-}
-.oq-player-arm {
-	position: absolute;
-	inset: 0;
-	width: 1920px;
-	height: 480px;
-	pointer-events: none;
-	filter: drop-shadow(7px 7px 4px #0008);
-}
-.oq-player-arm g {
-	transform-origin: 1270px 803px;
-	transition: transform 1600ms linear;
+/* Above the source label, so a wrapped hint pushes the text down, never over it. */
+.oq-player-error {
+	display: -webkit-box;
+	margin-bottom: 14px;
+	overflow: hidden;
+	color: var(--strip-warning);
+	font-size: 24px;
+	font-weight: 550;
+	line-height: 1.3;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
 }
 .oq-player-source {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	color: var(--strip-muted);
+	font-size: 24px;
+	font-weight: 550;
+	line-height: 1.3;
+}
+.oq-player-source::before {
+	content: "";
+	flex: none;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 2px var(--strip-line);
+}
+.oq-player-source[data-active="true"]::before {
+	background: var(--strip-accent);
+	box-shadow: none;
+}
+.oq-player-source span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.oq-player-title {
+	margin-top: 18px;
+	overflow: hidden;
+	font-size: 64px;
+	font-weight: 600;
+	line-height: 1.12;
+	letter-spacing: -0.015em;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.oq-player-artist {
+	margin-top: 8px;
+	overflow: hidden;
+	color: var(--strip-muted);
+	font-size: 34px;
+	line-height: 1.25;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.oq-player-progress {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	margin-top: auto;
+	color: var(--strip-muted);
+	font-size: 26px;
+}
+.oq-player-track {
+	flex: 1;
+	height: 6px;
+	overflow: hidden;
+	border-radius: 3px;
+	background: var(--strip-line);
+}
+.oq-player-track i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--strip-accent);
+}
+.oq-player-track[data-unknown="true"] {
+	background: repeating-linear-gradient(
+		90deg,
+		var(--strip-line) 0 12px,
+		transparent 12px 20px
+	);
+}
+.oq-player[data-state="unavailable"] .oq-player-title,
+.oq-player[data-state="unavailable"] .oq-player-cover {
+	opacity: 0.55;
+}
+.oq-player-controls {
 	position: absolute;
-	left: 1511px;
-	top: 49px;
-	width: 300px;
-	height: 76px;
-	border-radius: 24px;
-	border: 2px solid #232326;
-	box-sizing: border-box;
-	background: conic-gradient(#2a2a2c, #1c1c1e, #2a2a2c);
-	box-shadow:
-		inset 0 2px 3px #ffffff14,
-		inset 0 -2px 4px #000;
+	left: 1440px;
+	top: 96px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 10px;
-	font-size: 30px;
-	opacity: 0.45;
+	gap: 28px;
+	width: 440px;
+	height: 216px;
 }
-.oq-player-source span {
-	font-size: 18px;
-	font-weight: 700;
-	max-width: 235px;
-	text-overflow: ellipsis;
-	overflow: hidden;
-	white-space: nowrap;
+.oq-player-controls button {
+	width: 112px;
+	height: 112px;
+	padding: 36px;
 }
-.oq-player-source[data-active="true"] {
-	opacity: 1;
-	border: 3px solid #fa243c;
-	box-shadow:
-		0 0 22px #fa243c33,
-		inset 0 2px 3px #fff2;
-}
-/* Bottom-anchored above the source pill (top 49) so a wrapped hint grows upward. */
-.oq-player-error {
-	position: absolute;
-	top: 45px;
-	left: 1395px;
-	width: 520px;
-	transform: translateY(-100%);
-	text-align: center;
-	font-size: 18px;
-	line-height: 21px;
-	color: #f0c97a;
-	letter-spacing: 0.3px;
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	overflow: hidden;
-}
-.oq-player button {
-	position: absolute;
-	border-radius: 50%;
-	border: 2px solid #44443c;
-	background: conic-gradient(#33332d, #131312, #35352f, #141413, #33332d);
-	box-shadow:
-		0 7px 10px #0008,
-		inset 0 2px 3px #fff2,
-		inset 0 -2px 3px #000;
-	color: #00ffff;
-	display: grid;
-	place-items: center;
-	padding: 35px;
-	cursor: pointer;
-	transition: transform 100ms ease-out;
-}
-.oq-player button svg {
-	width: 100%;
-	height: 100%;
-	fill: currentColor;
-	filter: drop-shadow(0 0 5px #00ffff44);
-}
-.oq-player button:disabled {
-	color: #171716;
-	cursor: default;
-}
-.oq-player button.is-pressed,
-.oq-player button:active {
-	transform: scale(0.9);
-}
-.oq-player button.oq-player-main {
-	left: 1561px;
-	top: 140px;
-	width: 200px;
-	height: 200px;
-	padding: 58px;
-	border-width: 3.6px;
-}
-.oq-player button.oq-player-previous {
-	left: 1420px;
-	top: 180px;
-	width: 120px;
-	height: 120px;
-}
-.oq-player button.oq-player-next {
-	left: 1782px;
-	top: 180px;
-	width: 120px;
-	height: 120px;
+.oq-player-controls button.oq-player-main {
+	width: 152px;
+	height: 152px;
+	padding: 48px;
 }
 .oq-player-volume-slot {
 	position: absolute;
@@ -422,32 +375,19 @@
 	position: absolute;
 	left: 570px;
 	top: 160px;
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
 	width: 780px;
 	height: 160px;
-	box-sizing: border-box;
-	border-radius: 32px;
-	border: 1px solid #ffffff1f;
-	background: linear-gradient(#222, #141414);
-	box-shadow:
-		0 24px 48px #000c,
-		0 0 20px #00ffff26,
-		inset 0 1px #00ffff0d;
 	padding: 0 48px;
-	display: flex;
-	gap: 32px;
-	align-items: center;
-	animation: oq-guide-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+	border-radius: 24px;
+	background: var(--strip-raised);
+	box-shadow:
+		inset 0 0 0 1px var(--strip-line),
+		inset 6px 0 0 var(--strip-accent);
+	animation: oq-guide-in 0.16s ease-out;
 	pointer-events: none;
-}
-.oq-player-guide > div {
-	flex: 0 0 96px;
-	height: 96px;
-	border-radius: 16px;
-	background: #2a2a2c;
-	display: grid;
-	place-items: center;
-	font-size: 48px;
-	color: #00ffff;
 }
 .oq-player-guide section {
 	display: flex;
@@ -456,40 +396,26 @@
 	min-width: 0;
 }
 .oq-player-guide strong {
-	font-size: 38px;
+	font-size: 36px;
 	font-weight: 600;
 	line-height: 1.2;
-	letter-spacing: -0.01em;
 }
 .oq-player-guide span {
-	font-size: 24px;
+	color: var(--strip-muted);
+	font-size: 26px;
 	line-height: 1.3;
-	color: #fff9;
-}
-.oq-player-unknown-sweep {
-	animation: oq-needle-sweep 60s linear infinite;
-}
-@keyframes oq-disc-spin {
-	to {
-		transform: rotate(-360deg);
-	}
-}
-@keyframes oq-needle-sweep {
-	from {
-		transform: rotate(12deg);
-	}
-	to {
-		transform: rotate(-15deg);
-	}
 }
 @keyframes oq-guide-in {
 	from {
-		transform: translateY(16px);
 		opacity: 0;
 	}
+}
+.oq-player-guide[data-visible="false"] {
+	animation: oq-guide-out 0.16s ease-in forwards;
+}
+@keyframes oq-guide-out {
 	to {
-		transform: translateY(0);
-		opacity: 1;
+		opacity: 0;
 	}
 }
 .oq-player[data-motion="reduce"] *,
@@ -505,33 +431,31 @@
 	}
 }
 .weather-settings {
-	margin-top: 24px;
+	margin-top: var(--oq-space-6, 24px);
+}
+.weather-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--oq-space-2, 8px);
+	min-width: 0;
 }
 .weather-settings input[type="text"],
 .weather-settings input[type="url"] {
 	width: min(100%, 400px);
 }
 .weather-verification {
-	font-size: 13px;
-	color: var(--text-secondary);
-	margin: 8px 0 0;
+	margin: 0;
+	color: var(--oq-text-muted, var(--quake-muted));
+	font-size: var(--mc-font-meta, 12.5px);
 }
 .weather-verification[data-error="true"] {
-	color: var(--status-warning, #b57435);
+	color: var(--oq-danger, var(--quake-warning));
 }
 .weather-consent {
-	font-size: 13px;
-	color: var(--text-secondary);
 	max-width: 58ch;
+	margin: 0;
+	color: var(--oq-text-muted, var(--quake-muted));
+	font-size: var(--mc-font-meta, 12.5px);
 	line-height: 1.5;
-}
-
-.oq-player-guide[data-visible="false"] {
-	animation: oq-guide-out 0.5s ease-in forwards;
-}
-@keyframes oq-guide-out {
-	to {
-		transform: translateY(-10px);
-		opacity: 0;
-	}
 }

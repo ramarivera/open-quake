@@ -14,13 +14,13 @@ export function readNativeTheme(root: string): typeof NativeThemeRequest.Type {
 		const result = decode(value);
 		if (result._tag === "Some") return result.value;
 	} catch {
-		/* First run or unreadable cache uses DK's Grey default. */
+		/* First run or unreadable cache uses the Graphite default. */
 	}
 	return {
 		base: "dark",
-		background: "#282828",
-		titlebar: "#282828",
-		symbol: "#f0f0f0",
+		background: "#1c1d1f",
+		titlebar: "#1c1d1f",
+		symbol: "#ecebe8",
 	};
 }
 export function registerManagementAppearance(

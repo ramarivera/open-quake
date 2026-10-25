@@ -25,27 +25,26 @@ const count = (html: string, needle: string): number =>
 	html.split(needle).length - 1;
 
 describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
-	it("renders DK's 24h layout: four cards, colon, no pills, no cards", () => {
+	it("renders a 24h typographic readout with no glass cards or side column", () => {
 		const html = render();
-		expect(count(html, 'class="oq-flip"')).toBe(4);
-		expect(count(html, 'data-flip="rest"')).toBe(1);
-		expect(count(html, "oq-flip-colon")).toBe(1);
+		expect(html).not.toContain("oq-flip");
+		expect(html).toContain(
+			'<span class="oq-clock-hm" aria-hidden="true"><span>10</span><span class="oq-clock-colon">:</span><span>07</span></span>',
+		);
 		expect(html).toContain('data-time="10:07"');
-		expect(html).not.toContain("oq-flip-pill");
-		expect(html).toContain('<div class="oq-clock-cards"></div>');
+		expect(html).not.toContain("oq-clock-aside");
+		expect(html).toContain('<div class="oq-clock-cards" data-count="0"></div>');
 		expect(html).toContain('class="oq-clock-week">THU<');
 		expect(html).toContain('class="oq-clock-date">SEP 4<');
 		expect(html).toContain('style="transform:scale(1, 1)"');
 	});
 
-	it("adds the AM/PM pill in 12h and the seconds pill only when enabled", () => {
+	it("adds AM/PM in 12h and seconds only when enabled", () => {
 		const twelve = render({ hourFormat: "12h" });
-		expect(twelve).toContain('<span class="oq-flip-pill">AM</span>');
-		expect(twelve).not.toContain("is-seconds");
+		expect(twelve).toContain('<span class="oq-clock-meridiem">AM</span>');
+		expect(twelve).not.toContain("oq-clock-seconds");
 		const seconds = render({ hourFormat: "12h", showSeconds: true });
-		expect(seconds).toContain(
-			'<span class="oq-flip-pill is-seconds">42</span>',
-		);
+		expect(seconds).toContain('<span class="oq-clock-seconds">42</span>');
 	});
 
 	it("scales the 1920×480 stage to the host without reflowing", () => {
@@ -57,7 +56,7 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 		);
 	});
 
-	it("draws the theme's built-in art, tint and name", () => {
+	it("draws the theme's built-in art and name", () => {
 		const html = render({ theme: "cyber" });
 		expect(html).toContain('data-theme="cyber"');
 		expect(html).toContain('data-source="builtin"');
@@ -99,7 +98,7 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 		);
 	});
 
-	it("carries DK's touch contract on the theme buttons", () => {
+	it("keeps the strip touch contract on the theme buttons", () => {
 		const html = render();
 		expect(html).toContain('data-quake-sub-touch="clock-theme-prev"');
 		expect(html).toContain('data-quake-sub-touch="clock-theme-next"');
@@ -108,7 +107,7 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 		expect(html).toContain('aria-label="Next theme"');
 	});
 
-	it("exposes one complete accessible time and hides decorative halves", () => {
+	it("exposes one complete accessible time and hides the visual parts", () => {
 		for (const [props, label] of [
 			[{}, "10:07"],
 			[{ hourFormat: "12h" }, "10:07 AM"],
@@ -118,8 +117,7 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 			const html = render(props);
 			expect(count(html, 'role="img"')).toBe(1);
 			expect(html).toContain(`aria-label="${label}"`);
-			expect(count(html, 'class="oq-flip" aria-hidden="true"')).toBe(3);
-			expect(html).toContain('data-flip="rest" aria-hidden="true"');
+			expect(html).toContain('class="oq-clock-hm" aria-hidden="true"');
 		}
 	});
 
@@ -129,7 +127,7 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 			nowPlaying: createElement("i", null, "n"),
 		});
 		expect(html).toContain(
-			'<div class="oq-clock-cards"><div class="oq-clock-card-slot" data-card="weather"><i>w</i></div><div class="oq-clock-card-slot" data-card="now-playing"><i>n</i></div></div>',
+			'<div class="oq-clock-cards" data-count="2"><div class="oq-clock-card-slot" data-card="weather"><i>w</i></div><div class="oq-clock-card-slot" data-card="now-playing"><i>n</i></div></div>',
 		);
 	});
 
@@ -138,7 +136,7 @@ describe("ClockTile static render (WIDGETS-023/026/030/061, §3.1)", () => {
 	});
 });
 
-describe("DK geometry and tokens in clock.css (WIDGETS-026/027/032/036/037)", () => {
+describe("device design tokens in clock.css (independent-device-design)", () => {
 	const css = readFileSync(new URL("./clock.css", import.meta.url), "utf8");
 	const rule = (selector: string): string => {
 		// The rule that starts with exactly this selector, not a selector list.
@@ -148,62 +146,27 @@ describe("DK geometry and tokens in clock.css (WIDGETS-026/027/032/036/037)", ()
 		return css.slice(start, css.indexOf("}", start));
 	};
 
-	it("keeps the flip card and digit geometry", () => {
-		expect(rule(".oq-flip")).toMatch(/width: 160px;\s+height: 300px;/);
-		expect(rule(".oq-flip-clock")).toContain("gap: 14px");
-		expect(rule(".oq-flip-upper")).toContain(
-			"border-radius: 22px 22px 8px 8px",
+	it("draws no glass, blur, glow or flip animation", () => {
+		expect(css).not.toMatch(
+			/backdrop-filter|blur\(|rotateX|@keyframes|--glass/,
 		);
-		expect(rule(".oq-flip-lower")).toContain(
-			"border-radius: 8px 8px 22px 22px",
+		expect(rule(".oq-clock-hm")).toMatch(
+			/font-size: 232px;\s+font-weight: 300;/,
 		);
-		expect(rule(".oq-flip-digit")).toMatch(
-			/font-size: 260px;\s+font-weight: 100;/,
-		);
-		expect(rule(".oq-flip-colon")).toMatch(/gap: 34px;\s+height: 300px;/);
-		expect(css).toContain("0.38s cubic-bezier(0.45, 0.05, 0.55, 0.95)");
-		expect(css).toContain("rotateX(-92deg)");
-		expect(css).toContain("rotateX(92deg)");
 	});
 
-	it("keeps the stage, rail, nav and right slot", () => {
-		expect(rule(".oq-clock-stage")).toContain("padding: 0 64px");
-		expect(rule(".oq-clock-rail")).toMatch(
-			/margin-left: 16px;\s+width: 240px;\s+height: 300px;/,
+	it("keeps one even scrim over theme art and an opaque information column", () => {
+		expect(rule(".oq-clock-scrim")).toContain(
+			"background: rgba(11, 12, 13, 0.62)",
 		);
-		expect(rule(".oq-clock-nav")).toContain("gap: 18px");
-		expect(rule(".oq-clock-nav-btn")).toMatch(/width: 54px;\s+height: 54px;/);
-		expect(rule(".oq-clock-nav-name")).toContain("width: 132px");
-		expect(rule(".oq-clock-cards")).toMatch(
-			/margin-right: 16px;[\s\S]*gap: 20px;/,
+		expect(rule(".oq-clock-cards")).toContain(
+			"background: var(--strip-surface)",
 		);
-		expect(rule(".oq-clock-nav-btn")).toContain(
-			"transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-		);
-		expect(css).toContain("transition-duration: 90ms");
+		expect(rule('.oq-clock-cards[data-count="0"]')).toContain("display: none");
 	});
 
-	it("keeps the glass base, tints and scrim", () => {
-		expect(css).toContain("--glass-blur: blur(26px) saturate(185%)");
-		expect(css).toContain("--digit-shadow: 0 3px 34px rgba(0, 0, 0, 0.24)");
-		expect(rule('.oq-clock[data-theme="cyber"]')).toContain(
-			"rgba(0, 229, 255, 0.32)",
-		);
-		expect(rule('.oq-clock[data-theme="cyber"]')).toContain(
-			"rgba(255, 45, 180, 0.22)",
-		);
-		expect(rule('.oq-clock[data-theme="anime"]')).toContain(
-			"rgba(140, 210, 255, 0.34)",
-		);
-		expect(rule('.oq-clock[data-theme="tactical"]')).toContain(
-			"rgba(178, 255, 190, 0.25)",
-		);
-		expect(rule('.oq-clock[data-theme="aurora"]')).toContain(
-			"rgba(190, 140, 255, 0.3)",
-		);
-		expect(rule(".oq-clock-scrim")).toContain("transparent 20%");
-		expect(rule(".oq-clock-scrim")).toContain("transparent 18%");
-		expect(rule(".oq-clock-scrim")).toContain("transparent 72%");
+	it("keeps 64 px theme switcher targets", () => {
+		expect(rule(".oq-clock-nav-btn")).toMatch(/width: 64px;\s+height: 64px;/);
 	});
 });
 

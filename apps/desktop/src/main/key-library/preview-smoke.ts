@@ -320,7 +320,10 @@ async function smoke(): Promise<void> {
 		await profiles.connect("desktop-preview", localeProfile.id);
 		if (probe !== "media") {
 			if (probe !== "thumbnail") {
-				await navigate(win, "Knob Profile");
+				await evaluate(
+					win,
+					"document.querySelector('.nav-item[data-nav-page=profiles]').click()",
+				);
 				await select(win, ".profiles-manager header select", "de");
 				await ready(
 					win,

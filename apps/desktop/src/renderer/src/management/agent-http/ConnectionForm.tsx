@@ -6,7 +6,7 @@ import {
 	canSaveConnection,
 	endpointCredentialRequired,
 } from "./connection-draft";
-import t from "./strings.json";
+import { useRuntimeCopy } from "./copy";
 
 export function ConnectionForm({
 	existing,
@@ -19,6 +19,7 @@ export function ConnectionForm({
 	readonly onSave: (draft: ConnectionDraft) => Promise<boolean>;
 	readonly onCancel: () => void;
 }) {
+	const t = useRuntimeCopy();
 	const hintId = useId();
 	const [draft, setDraft] = useState<ConnectionDraft>({
 		name: existing?.name ?? "",
@@ -40,7 +41,6 @@ export function ConnectionForm({
 				void onSave(draft);
 			}}
 		>
-			<h3>{existing ? t.edit : t.add}</h3>
 			<fieldset disabled={busy}>
 				<label className="mc-field">
 					{t.name}
@@ -84,7 +84,7 @@ export function ConnectionForm({
 						}
 						placeholder="http://localhost:8000/"
 					/>
-					<span id={`${hintId}-endpoint`} className="agent-http-hint">
+					<span id={`${hintId}-endpoint`} className="cw-field-hint">
 						{invalidURL ? t.invalidEndpoint : t.endpointHint}
 					</span>
 				</label>
@@ -103,14 +103,14 @@ export function ConnectionForm({
 							setDraft({ ...draft, credential: event.target.value })
 						}
 					/>
-					<span id={`${hintId}-credential`} className="agent-http-hint">
+					<span id={`${hintId}-credential`} className="cw-field-hint">
 						{existing?.credentialAvailable
 							? t.credentialHint
 							: t.credentialEmptyHint}
 					</span>
 				</label>
 				{existing?.credentialAvailable && (
-					<label className="agent-http-check">
+					<label className="cw-check">
 						<input
 							type="checkbox"
 							checked={draft.clearCredential}
@@ -125,8 +125,16 @@ export function ConnectionForm({
 						{t.clearCredential}
 					</label>
 				)}
-				{credentialRequired && <p role="status">{t.changedEndpoint}</p>}
-				<div className="agent-http-actions">
+				{credentialRequired && (
+					<p role="status" className="cw-notice">
+						{t.changedEndpoint}
+					</p>
+				)}
+				<div className="cw-dialog-actions">
+					<span className="cw-spacer" />
+					<button type="button" className="mc-button" onClick={onCancel}>
+						{t.cancel}
+					</button>
 					<button
 						type="submit"
 						className="mc-button"
@@ -134,9 +142,6 @@ export function ConnectionForm({
 						disabled={!canSaveConnection(draft, existing)}
 					>
 						{busy ? t.busy : t.save}
-					</button>
-					<button type="button" className="mc-button" onClick={onCancel}>
-						{t.cancel}
 					</button>
 				</div>
 			</fieldset>

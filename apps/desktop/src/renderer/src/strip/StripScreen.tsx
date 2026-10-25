@@ -1,6 +1,7 @@
 import { Option } from "effect";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import type { KeyRuntimeState } from "../../../shared/key-library";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { storedKeyLocale } from "../keys/key-locale";
 import { useKeyRuntime } from "../keys/useKeyRuntime";
@@ -16,13 +17,59 @@ import {
 	previewVoiceContext,
 	type StripVoiceContext,
 } from "./overlays/voice/voice-context";
-import { stripPaletteProperties } from "./palette";
+import { deviceRadius, stripPaletteProperties } from "./palette";
 import { selectStripPage } from "./selection";
 import { stripTileFor } from "./tileRegistry";
 import type { StripProfiles } from "./useStripProfiles";
 import "./strip.css";
 
 const palette = stripPaletteProperties();
+
+/** Countdown, progress, alarm and invalid operation, drawn inside the tile. */
+function KeyState({
+	state,
+}: {
+	state: KeyRuntimeState | undefined;
+}): React.JSX.Element | null {
+	if (!state) return null;
+	const countdown =
+		state.countdown !== undefined && state.countdown >= 0
+			? Math.ceil(state.countdown / 1000)
+			: undefined;
+	const progress =
+		state.progress !== undefined && state.progress < 100
+			? Math.max(0, state.progress)
+			: undefined;
+	const chip =
+		state.alert === 1 ? (
+			<span className="strip-key-chip" data-kind="invalid" role="status">
+				Invalid operation
+			</span>
+		) : state.alert === 2 ? (
+			<span className="strip-key-chip" data-kind="alarm" role="status">
+				Alarm
+			</span>
+		) : countdown !== undefined ? (
+			<span className="strip-key-chip" data-kind="countdown">
+				{countdown}
+			</span>
+		) : null;
+	if (!chip && progress === undefined) return null;
+	return (
+		<div className="strip-key-state">
+			{chip}
+			{progress !== undefined ? (
+				<div
+					className="strip-key-progress"
+					role="progressbar"
+					aria-valuenow={Math.round(progress)}
+				>
+					<span style={{ width: `${progress}%` }} />
+				</div>
+			) : null}
+		</div>
+	);
+}
 
 function StripGrid({
 	layout,
@@ -32,7 +79,9 @@ function StripGrid({
 	voice,
 	tileOverlay,
 	interactive,
+	runtime,
 }: {
+	runtime: (keyCode: string) => KeyRuntimeState | undefined;
 	layout: StripLayout;
 	pressedKeyCode: string | undefined;
 	now: Date | undefined;
@@ -54,11 +103,16 @@ function StripGrid({
 						top: cell.rect.y,
 						width: cell.rect.width,
 						height: cell.rect.height,
-						borderRadius: layout.theme.borderRadius,
+						borderRadius: deviceRadius(layout.theme.borderRadius),
 					}}
 				/>
 			))}
-			{layout.tiles.map((tile) => {
+			{layout.tiles.map((painted) => {
+				const tile = {
+					...painted,
+					slotRadius: deviceRadius(painted.slotRadius),
+					tileRadius: deviceRadius(painted.tileRadius),
+				};
 				const Tile = stripTileFor(tile.type);
 				return (
 					<div
@@ -85,6 +139,7 @@ function StripGrid({
 							tile={tile}
 							context={{ now, hourFormat, voice, interactive }}
 						/>
+						<KeyState state={runtime(tile.keyCode)} />
 						{tileOverlay?.(tile)}
 					</div>
 				);
@@ -253,6 +308,21 @@ export function StripScreen({
 		onLayout?.(vivid ? undefined : layout);
 		return () => onLayout?.(undefined);
 	}, [layout, vivid, onLayout]);
+	const selection =
+		profiles._tag === "ready"
+			? selectStripPage(profiles.envelope, serial)
+			: undefined;
+	const runtime = (keyCode: string): KeyRuntimeState | undefined =>
+		selection
+			? runtimeStates.get(
+					JSON.stringify([
+						serial ?? "desktop-preview",
+						selection.profile.id,
+						selection.page.id,
+						keyCode,
+					]),
+				)
+			: undefined;
 	const now = wallpaper ? new Date(wallpaper.clock.epochMillis) : undefined;
 	const hourFormat = wallpaper?.saved.clock.actions[0].value ?? "24h";
 	return (
@@ -280,6 +350,7 @@ export function StripScreen({
 					voice={voice}
 					tileOverlay={tileOverlay}
 					interactive={interactive}
+					runtime={runtime}
 				/>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (
@@ -287,77 +358,6 @@ export function StripScreen({
 					<p className="strip-status-title">Profiles unavailable</p>
 					<p className="strip-status-code">{profiles.code}</p>
 				</div>
-			) : null}
-			{layout && !vivid ? (
-				<svg
-					className="strip-overlay"
-					viewBox="0 0 1920 480"
-					aria-label="Key progress"
-				>
-					{layout.tiles.map((tile) => {
-						const selection =
-							profiles._tag === "ready"
-								? selectStripPage(profiles.envelope, serial)
-								: undefined;
-						const state = selection
-							? runtimeStates.get(
-									JSON.stringify([
-										serial ?? "desktop-preview",
-										selection.profile.id,
-										selection.page.id,
-										tile.keyCode,
-									]),
-								)
-							: undefined;
-						if (!state) return null;
-						return (
-							<g key={tile.keyCode} pointerEvents="none">
-								{state.countdown !== undefined && state.countdown >= 0 ? (
-									<text
-										x={tile.slot.x + tile.slot.width / 2}
-										y={tile.slot.y + tile.slot.height * 0.65}
-										textAnchor="middle"
-										fill="white"
-										fontSize={32}
-									>
-										{Math.ceil(state.countdown / 1000)}
-									</text>
-								) : null}
-								{state.progress !== undefined && state.progress < 100 ? (
-									<rect
-										x={tile.slot.x + 16}
-										y={tile.slot.y + tile.slot.height - 26}
-										width={((tile.slot.width - 32) * state.progress) / 100}
-										height={8}
-										fill="#409eff"
-									/>
-								) : null}
-								{state.alert === 2 ? (
-									<text
-										x={tile.slot.x + tile.slot.width / 2}
-										y={tile.slot.y + tile.slot.height * 0.65}
-										textAnchor="middle"
-										fill="#ffbd66"
-										fontSize={32}
-									>
-										Alarm
-									</text>
-								) : null}
-								{state.alert === 1 ? (
-									<text
-										x={tile.slot.x + tile.slot.width / 2}
-										y={tile.slot.y + tile.slot.height * 0.65}
-										textAnchor="middle"
-										fill="#ff6b6b"
-										fontSize={24}
-									>
-										Invalid operation
-									</text>
-								) : null}
-							</g>
-						);
-					})}
-				</svg>
 			) : null}
 			{children ? (
 				<svg

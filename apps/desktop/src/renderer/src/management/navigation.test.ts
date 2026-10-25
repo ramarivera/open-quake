@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseAppearance } from "../theme/appearance";
-import { managementActivation } from "./navigation";
+import {
+	managementActivation,
+	navSections,
+	pageLayouts,
+	pageLocation,
+	pages,
+} from "./navigation";
 
 describe("Management Center activation and migration", () => {
 	it.each(["claw", "openclaw", "clawcontrolpanel"])(
@@ -61,4 +67,37 @@ describe("Management Center activation and migration", () => {
 			).toBeNull();
 		},
 	);
+});
+
+describe("management information architecture", () => {
+	const entries = navSections.flatMap((section) => section.items);
+	it("lists every implemented page exactly once", () => {
+		expect(entries.map((entry) => entry.id).sort()).toEqual([...pages].sort());
+	});
+	it("groups pages by task with Overview first", () => {
+		expect(
+			navSections.map((section) => [
+				section.title,
+				section.items.map((item) => item.label),
+			]),
+		).toEqual([
+			[null, ["Overview"]],
+			["Device", ["Keys", "Knob profiles", "Screen", "Controls", "Connection"]],
+			["Assistant", ["Agents", "AI shortcuts", "AI emoji", "Meetings"]],
+			["Integrations", ["Home Assistant"]],
+			["App", ["Appearance", "Settings"]],
+		]);
+	});
+	it("gives the agents workspace the full content width", () => {
+		expect(pageLayouts.agents).toBe("full");
+		expect(pageLayouts.settings).toBe("default");
+		expect(pageLocation("keys")).toEqual({ section: "Device", label: "Keys" });
+		expect(pageLocation("overview")).toEqual({
+			section: null,
+			label: "Overview",
+		});
+	});
+	it.each(["meeting", "meetingminutes"])("opens meetings for %s", (alias) => {
+		expect(managementActivation(alias)).toEqual({ page: "meetings" });
+	});
 });

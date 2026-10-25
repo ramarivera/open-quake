@@ -1,100 +1,168 @@
+/* Knob profiles: a page, two lists and the selected profile's settings. */
 .profiles-manager {
-	margin-block: 24px;
-	padding: 20px;
-	border: 1px solid var(--quake-border);
-	border-radius: 8px;
 	color: inherit;
 }
-.profiles-manager header,
+.profiles-manager > header,
 .profile-batch {
 	display: flex;
-	align-items: center;
-	gap: 12px;
-	justify-content: space-between;
 	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--oq-space-3);
 }
-.profiles-manager button,
-.profiles-manager input,
-.profiles-manager select {
-	font: inherit;
-	color: inherit;
-	background: var(--quake-surface);
-	border: 1px solid var(--quake-border);
-	border-radius: 4px;
-	padding: 6px;
+.profiles-manager > header h2 {
+	margin: 0;
+	font-size: var(--mc-font-display, 24px);
+	font-weight: 600;
+	letter-spacing: -0.015em;
+}
+.profiles-manager > header label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--oq-space-2);
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta);
+}
+.profiles-manager > p {
+	margin: 6px 0 var(--oq-space-4);
+	color: var(--oq-text-muted);
 }
 .profiles-manager button {
-	cursor: pointer;
+	min-height: 30px;
+	padding: 0 12px;
+	color: var(--oq-text);
+	font-size: var(--mc-font-button, 13.5px);
+	font-weight: 550;
+	white-space: nowrap;
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-border);
+	border-radius: var(--oq-radius-md);
+}
+.profiles-manager button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--oq-surface) 92%, var(--oq-text));
+}
+.profiles-manager input:not([type="checkbox"]),
+.profiles-manager select {
+	min-height: 30px;
+	padding: 0 8px;
+	color: var(--oq-text);
+	background: var(--oq-sunken);
+	border: 1px solid var(--oq-border);
+	border-radius: var(--oq-radius-md);
 }
 .profiles-manager button:disabled {
 	opacity: 0.45;
-	cursor: default;
 }
 .profile-columns {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
-	gap: 20px;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+	gap: var(--oq-space-6);
+	margin-top: var(--oq-space-6);
+}
+.profile-columns h3 {
+	margin: 0 0 var(--oq-space-3);
+	font-size: var(--mc-font-subtitle);
+	font-weight: 600;
 }
 .profile-columns ul {
-	list-style: none;
+	margin: 0 0 var(--oq-space-3);
 	padding: 0;
+	overflow: hidden;
+	list-style: none;
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-lg);
+}
+.profile-columns ul:empty {
+	display: none;
 }
 .profile-row {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
 	align-items: center;
-	margin-block: 8px;
-	padding: 6px;
-	border: 1px solid transparent;
+	gap: var(--oq-space-2);
+	padding: 8px var(--oq-space-3);
+}
+.profile-row + .profile-row {
+	border-top: 1px solid var(--oq-hairline);
 }
 .profile-row[data-selected="true"] {
-	border-color: currentColor;
+	background: var(--oq-accent-soft);
+	box-shadow: inset 3px 0 0 var(--oq-accent);
 }
 .profile-row img,
 .profile-no-preview {
 	width: 96px;
 	height: 24px;
 	object-fit: contain;
-	font-size: 10px;
+	font-size: var(--mc-font-caption);
+}
+.profile-row img {
+	background: #000;
+	border-radius: 4px;
 }
 .profile-row input:not([type="checkbox"]) {
+	width: 110px;
 	min-width: 40px;
-	width: 95px;
 }
-.profile-select {
+.profiles-manager .profile-select {
 	flex: 1;
 	text-align: left;
+	background: transparent;
+	border-color: transparent;
 }
 .profile-settings {
-	margin-top: 16px;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
 	align-items: center;
+	gap: var(--oq-space-3);
+	margin: var(--oq-space-7) 0 0;
+	padding: var(--oq-space-6) 0 0;
+	border: 0;
+	border-top: 1px solid var(--oq-hairline);
+}
+.profile-settings legend {
+	float: left;
+	width: 100%;
+	margin-bottom: var(--oq-space-2);
+	padding: 0;
+	font-size: var(--mc-font-title);
+	font-weight: 600;
+}
+.profile-settings h4 {
+	flex-basis: 100%;
+	margin: var(--oq-space-3) 0 0;
+	font-size: var(--mc-font-subtitle);
+	font-weight: 600;
+}
+.profile-settings p {
+	flex-basis: 100%;
+	margin: 0;
+	color: var(--oq-text-muted);
+}
+.profile-settings label {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--oq-space-2);
 }
 .profile-preview {
 	flex-basis: 100%;
-	aspect-ratio: 4;
 	width: 100%;
+	aspect-ratio: 4;
 	overflow: hidden;
-	background: var(--quake-surface);
+	background: #000;
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-md);
 }
 .profile-no-preview {
-	color: #999;
+	color: var(--oq-text-subtle);
 }
 .profile-batch progress {
 	height: 4px;
-}
-@media (max-width: 950px) {
-	.profile-columns {
-		grid-template-columns: 1fr;
-	}
+	accent-color: var(--oq-accent);
 }
 @media (max-width: 600px) {
-	.profile-row {
-		flex-wrap: wrap;
-	}
 	.profile-select {
 		min-width: 110px;
 	}

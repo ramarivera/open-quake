@@ -22,6 +22,7 @@ import { ProfileService } from "../../../../../packages/device/src/profiles/prof
 import { QUAKE_EVENT_CHANNEL } from "../../preload/quake";
 import { cardRect } from "../../renderer/src/strip/overlays/knob/geometry";
 import { encodeProfileEnvelope, ProfileEnvelope } from "../../shared/profiles";
+import { registerManagementAppearance } from "../management/appearance";
 import { MediaLive, registerMedia } from "../media";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
 import { quickProfile } from "../test/strip-fixtures";
@@ -74,6 +75,11 @@ async function smoke(): Promise<void> {
 	};
 	const panel = new BrowserWindow(options);
 	const management = new BrowserWindow(options);
+	const disposeAppearance = registerManagementAppearance(
+		() => management,
+		directory,
+		new URL(`file://${resolve("out/renderer/index.html")}`).href,
+	);
 	const voiceSurface = registerVoiceSurface({
 		mock: true,
 		tones: createToneRecorder(),
@@ -515,6 +521,7 @@ async function smoke(): Promise<void> {
 			`Knob native smoke PASS: exclusive ring/picker, rotation=90 pointer and physical-touch paging/card selection, panel-only commands, gesture arbitration, volume/focus and physical-error warnings. Screenshots: ${output}\n`,
 		);
 	} finally {
+		disposeAppearance();
 		await voiceSurface.dispose();
 		panel.destroy();
 		management.destroy();

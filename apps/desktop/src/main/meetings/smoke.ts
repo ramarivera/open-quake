@@ -332,7 +332,7 @@ async function smoke(): Promise<void> {
 			panel.loadURL(`${renderer}?surface=panel`),
 		]);
 		await management.webContents.executeJavaScript(
-			"document.querySelector('.nav-item[title=Meeting]').click(); null;",
+			"document.querySelector('.nav-item[data-nav-page=meetings]').click(); null;",
 		);
 		await wait(management, "!!document.querySelector('.meetings-page')");
 		await wait(

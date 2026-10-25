@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { builtinThemeOrder, themeLabels } from "../theme/tokens";
 import type { AppearanceController } from "../theme/useAppearance";
 import { Segmented } from "../ui/Form";
-import { ControlsIcon } from "../ui/icons";
+import { TextSizeIcon } from "../ui/icons";
+import { LanguageControl, useLanguageLabel } from "./LanguageControl";
+
+/** Sidebar footer popover for the two settings people change most often. */
 export function UiSettings({
 	controller,
 }: {
@@ -33,6 +37,8 @@ export function UiSettings({
 			document.removeEventListener("keydown", onEscape);
 		};
 	}, [open]);
+	const theme = controller.appearance.theme;
+	const languageLabel = useLanguageLabel();
 	return (
 		<div className="mc-ui-settings-host" ref={host}>
 			<button
@@ -40,29 +46,34 @@ export function UiSettings({
 				className="mc-ui-settings-button"
 				type="button"
 				title="UI Settings"
-				aria-label="UI Settings"
 				aria-expanded={open}
 				aria-controls="mc-ui-settings"
 				onClick={() => setOpen(!open)}
 			>
-				<ControlsIcon />
+				<TextSizeIcon />
+				<span>Display</span>
+				<span className="mc-ui-settings-summary">
+					{theme === "custom"
+						? (controller.appearance.customTheme?.name ?? "Custom")
+						: themeLabels[theme]}
+				</span>
 			</button>
 			{open ? (
 				<section
 					id="mc-ui-settings"
 					className="mc-ui-settings"
-					aria-label="UI Settings"
+					aria-labelledby="mc-ui-settings-title"
 				>
-					<h2>UI Settings</h2>
-					<p id="mc-font-label">Font size</p>
+					<h2 id="mc-ui-settings-title">Display</h2>
+					<p id="mc-font-label">Text size</p>
 					<Segmented
 						name="mc-font"
 						labelledBy="mc-font-label"
 						value={controller.appearance.fontScale}
 						options={[
-							{ value: "small", label: "Small" },
-							{ value: "medium", label: "Medium" },
-							{ value: "large", label: "Large" },
+							{ value: "small", label: "Default" },
+							{ value: "medium", label: "Larger" },
+							{ value: "large", label: "Largest" },
 						]}
 						onChange={controller.setFontScale}
 					/>
@@ -70,14 +81,15 @@ export function UiSettings({
 					<Segmented
 						name="mc-theme"
 						labelledBy="mc-theme-label"
-						value={controller.appearance.theme}
-						options={[
-							{ value: "dark", label: "Dark" },
-							{ value: "light", label: "Light" },
-							{ value: "grey", label: "Grey" },
-						]}
+						value={theme}
+						options={builtinThemeOrder.map((id) => ({
+							value: id,
+							label: themeLabels[id],
+						}))}
 						onChange={controller.setTheme}
 					/>
+					<p id="mc-language-label">{languageLabel}</p>
+					<LanguageControl name="mc-language" labelledBy="mc-language-label" />
 				</section>
 			) : null}
 		</div>

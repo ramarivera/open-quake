@@ -195,8 +195,8 @@ it.each([
 				}),
 			);
 			expect(card).toContain(`${temperature}<sup>°</sup>`);
-			expect(card).toContain(`H ${high}°`);
-			expect(card).toContain(`L ${low}°`);
+			expect(card).toContain(`H</span> ${high}°`);
+			expect(card).toContain(`L</span> ${low}°`);
 		}
 		expect(calls).toHaveLength(1);
 		expect(calls[0]?.searchParams.getAll("temperature_unit")).toEqual([

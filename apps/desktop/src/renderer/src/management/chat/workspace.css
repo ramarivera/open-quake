@@ -1,0 +1,1125 @@
+/*
+ * Conversation workspace (nyd.3). Consumes the design lead's --oq-* tokens
+ * (DESIGN-BRIEF "quiet workbench"); fallbacks keep the legacy --quake-*
+ * contract readable until the shared token layer is present. Scoped to the
+ * agents area: no shared .mc-* rule is redefined here.
+ */
+.agent-workbench {
+	--cw-bg: var(--oq-bg, var(--quake-background));
+	--cw-surface: var(--oq-surface, var(--quake-surface));
+	--cw-raised: var(
+		--oq-raised,
+		color-mix(in srgb, var(--quake-surface) 88%, var(--quake-foreground))
+	);
+	--cw-sunken: var(
+		--oq-sunken,
+		color-mix(in srgb, var(--quake-background) 82%, #000)
+	);
+	--cw-hairline: var(--oq-hairline, var(--quake-hairline, var(--mc-border)));
+	--cw-border: var(--oq-border, var(--quake-border));
+	--cw-text: var(--oq-text, var(--quake-foreground));
+	--cw-muted: var(--oq-text-muted, var(--quake-muted));
+	--cw-subtle: var(--oq-text-subtle, var(--quake-muted));
+	--cw-accent: var(--oq-accent, var(--quake-accent));
+	--cw-accent-ink: var(--oq-accent-ink, var(--quake-accent));
+	--cw-accent-soft: var(
+		--oq-accent-soft,
+		color-mix(in srgb, var(--quake-accent) 15%, transparent)
+	);
+	--cw-success: var(--oq-success, var(--quake-success));
+	--cw-warning: var(--oq-warning, var(--quake-warning));
+	--cw-danger: var(--oq-danger, light-dark(#b42318, #f08a78));
+	--cw-danger-soft: var(
+		--oq-danger-soft,
+		color-mix(in srgb, var(--cw-danger) 12%, transparent)
+	);
+	--cw-radius-sm: var(--oq-radius-sm, 6px);
+	--cw-radius-md: var(--oq-radius-md, 8px);
+	--cw-radius-lg: var(--oq-radius-lg, 12px);
+	--cw-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+	--cw-measure: 760px;
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	color: var(--cw-text);
+}
+
+/* ---- Page header ------------------------------------------------------ */
+.agent-workbench > .aw-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 4px 24px;
+	margin-bottom: 12px;
+}
+.aw-header .mc-page-kicker {
+	margin: 0 0 2px;
+}
+.aw-header h1 {
+	margin: 0;
+	font-size: var(--mc-font-display);
+	font-weight: 600;
+	line-height: 1.25;
+}
+.aw-header > div > p:not(.mc-page-kicker) {
+	margin: 4px 0 0;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-body-sm);
+	max-width: 70ch;
+}
+.agent-workbench > .mc-tabs {
+	margin-bottom: 20px;
+}
+@media (max-width: 760px) {
+	/* The shell's top bar already names the page; give the space to content. */
+	.agent-workbench > .aw-header {
+		display: none;
+	}
+	/* One scrollable row instead of wrapped underline rows; the selected tab
+	   is scrolled into view by AgentsPage. */
+	.agent-workbench > .mc-tabs,
+	.agent-workbench .aw-subtabs {
+		flex-wrap: nowrap;
+		gap: 20px;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
+		border-bottom: 0;
+		box-shadow: inset 0 -1px 0 var(--cw-hairline);
+	}
+	.agent-workbench > .mc-tabs {
+		margin-bottom: 14px;
+	}
+	.agent-workbench > .mc-tabs::-webkit-scrollbar,
+	.agent-workbench .aw-subtabs::-webkit-scrollbar {
+		display: none;
+	}
+	.agent-workbench > .mc-tabs > button,
+	.agent-workbench .aw-subtabs > button {
+		flex: none;
+		margin-bottom: 0;
+		white-space: nowrap;
+	}
+}
+.agent-workbench > [role="tabpanel"] {
+	min-width: 0;
+}
+/* The shell's full-bleed column flexes to the scroll viewport; the
+   conversations panel fills what the header leaves, scrolling the page only
+   when the window is shorter than a usable workspace. */
+.agent-workbench > #agents-sessions:not([hidden]) {
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 360px;
+}
+
+/* ---- Workspace grid --------------------------------------------------- */
+.conversation-workspace {
+	container: workspace / inline-size;
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+.cw-view {
+	flex: 1 1 0;
+	display: grid;
+	grid-template-columns: minmax(220px, 268px) minmax(0, 1fr);
+	min-width: 0;
+	min-height: 0;
+}
+.cw-view[hidden] {
+	display: none;
+}
+.cw-rail {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 4px 16px 16px 0;
+	border-right: 1px solid var(--cw-hairline);
+	scrollbar-gutter: stable;
+}
+.cw-main {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	padding-left: 28px;
+}
+
+/* ---- Rail: sources and conversations ----------------------------------- */
+.cw-rail-heading,
+.cw-sessions-head h3 {
+	margin: 0;
+	font-size: var(--mc-font-meta);
+	font-weight: 600;
+	color: var(--cw-muted);
+}
+.cw-sources ul {
+	list-style: none;
+	margin: 8px 0 4px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.cw-source,
+.cw-session {
+	all: unset;
+	box-sizing: border-box;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	column-gap: 8px;
+	width: 100%;
+	padding: 7px 10px;
+	border-radius: var(--cw-radius-md);
+	color: var(--cw-text);
+	cursor: pointer;
+}
+.cw-source:hover:not(:disabled),
+.cw-session:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--cw-text) 6%, transparent);
+}
+.cw-source[aria-current="true"],
+.cw-session[aria-current="true"] {
+	background: var(--cw-accent-soft);
+}
+.cw-source:focus-visible,
+.cw-session:focus-visible,
+.cw-chip:focus-visible,
+.cw-link:focus-visible,
+.cw-inline-action:focus-visible {
+	outline: 2px solid var(--cw-accent);
+	outline-offset: 2px;
+}
+.cw-source:disabled,
+.cw-session:disabled {
+	cursor: default;
+	opacity: 0.6;
+}
+.cw-source-name,
+.cw-session-title {
+	grid-column: 1;
+	font-size: var(--mc-font-body-sm);
+	font-weight: 550;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.cw-session-title {
+	font-weight: 450;
+}
+.cw-session[aria-current="true"] .cw-session-title {
+	font-weight: 550;
+}
+.cw-source-meta,
+.cw-session-meta {
+	grid-column: 1;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.cw-source .mc-badge {
+	grid-column: 2;
+	grid-row: 1 / span 2;
+	align-self: center;
+}
+.cw-add {
+	align-self: flex-start;
+}
+.cw-sessions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-height: 0;
+}
+.cw-sessions-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+.cw-session-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.cw-sessions-head .cw-list-toggle {
+	display: none;
+}
+.cw-count {
+	margin-left: 6px;
+	font-variant-numeric: tabular-nums;
+	color: var(--cw-muted);
+}
+.cw-refresh {
+	align-self: flex-start;
+}
+
+/* ---- Header ------------------------------------------------------------ */
+.cw-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px 20px;
+	padding: 2px 0 14px;
+	border-bottom: 1px solid var(--cw-hairline);
+}
+.cw-header-title {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	flex: 1 1 0;
+}
+.cw-title,
+.cw-title-input {
+	margin: 0;
+	font-size: var(--mc-font-title-lg);
+	font-weight: 600;
+	line-height: 1.3;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.cw-title-form {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.cw-title-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding: 2px 6px;
+	margin-left: -7px;
+	color: inherit;
+	font-family: inherit;
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: var(--cw-radius-sm);
+}
+.cw-title-input:hover:not(:disabled) {
+	border-color: var(--cw-hairline);
+}
+.cw-title-input:focus-visible {
+	outline: none;
+	border-color: var(--cw-accent);
+	box-shadow: 0 0 0 3px var(--cw-accent-soft);
+}
+.cw-identity {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+	margin: 0;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+}
+.cw-quake-note {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
+}
+.cw-health {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--cw-text);
+}
+.cw-route {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 16px;
+	font-size: var(--mc-font-meta);
+}
+.cw-route-form {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.agent-workbench .cw-route-field {
+	flex-direction: row;
+	white-space: nowrap;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+}
+.agent-workbench .cw-route-field select,
+.agent-workbench .cw-route-field input {
+	width: auto;
+	min-width: 160px;
+	max-width: 260px;
+	min-height: 30px;
+	padding-block: 4px;
+	font-size: var(--mc-font-meta);
+}
+.cw-header-actions {
+	display: flex;
+	flex: none;
+	justify-content: flex-end;
+	gap: 4px;
+}
+/* Narrow-only: the runtime header's Details disclosure and folded route. */
+.cw-identity .cw-details-toggle,
+.cw-identity .cw-route-summary {
+	display: none;
+}
+.cw-inline-action,
+.cw-link {
+	all: unset;
+	color: var(--cw-accent-ink);
+	font-weight: 550;
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+	text-underline-offset: 3px;
+	border-radius: 2px;
+}
+.cw-inline-action:hover:not(:disabled),
+.cw-link:hover {
+	text-decoration-color: currentColor;
+}
+.cw-inline-action:disabled {
+	color: var(--cw-muted);
+	cursor: default;
+	text-decoration: none;
+}
+
+/* ---- Status primitives ------------------------------------------------- */
+.cw-dot {
+	flex: none;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--cw-subtle);
+}
+.cw-dot[data-tone="success"] {
+	background: var(--cw-success);
+}
+.cw-dot[data-tone="warning"] {
+	background: var(--cw-warning);
+}
+.cw-dot[data-tone="danger"] {
+	background: var(--cw-danger);
+}
+.cw-dot[data-tone="accent"] {
+	background: var(--cw-accent);
+}
+.cw-dot[data-tone="neutral"] {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--cw-subtle);
+}
+.cw-muted {
+	margin: 0;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-meta);
+}
+.cw-code {
+	font-family: var(--cw-mono);
+	font-size: 0.92em;
+	overflow-wrap: anywhere;
+}
+.cw-icon {
+	width: 16px;
+	height: 16px;
+	flex: none;
+}
+.agent-workbench .mc-button .cw-icon {
+	margin-inline: -2px 6px;
+}
+.agent-workbench .mc-button .cw-icon:last-child:not(:first-child) {
+	margin-inline: 6px -2px;
+}
+.cw-banner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	margin: 12px 0 0;
+	padding: 10px 12px;
+	border-radius: var(--cw-radius-md);
+	background: var(--cw-danger-soft);
+	font-size: var(--mc-font-body-sm);
+	overflow-wrap: anywhere;
+}
+.conversation-workspace > .cw-banner {
+	margin: 0 0 12px;
+}
+.cw-banner p {
+	margin: 0;
+}
+.cw-banner-actions {
+	display: flex;
+	gap: 6px;
+}
+.cw-pulse {
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--cw-accent);
+	animation: cw-pulse 1.1s ease-in-out infinite;
+}
+@keyframes cw-pulse {
+	50% {
+		opacity: 0.25;
+	}
+}
+:root[data-motion="reduce"] .cw-pulse {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.cw-pulse {
+		animation: none;
+	}
+}
+
+/* ---- Transcript -------------------------------------------------------- */
+.cw-transcript {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: 24px 4px 16px;
+	scrollbar-gutter: stable;
+}
+.cw-transcript > * {
+	max-width: var(--cw-measure);
+	margin-inline: auto;
+}
+.cw-turn {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin-bottom: 28px;
+}
+.cw-user {
+	display: flex;
+	justify-content: flex-end;
+	margin: 0;
+}
+.cw-bubble {
+	max-width: min(85%, 600px);
+	margin: 0;
+	padding: 9px 14px;
+	border-radius: var(--cw-radius-lg) var(--cw-radius-lg) 4px var(--cw-radius-lg);
+	background: var(--cw-raised);
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.cw-answer {
+	margin: 0;
+	min-width: 0;
+}
+.cw-answer-label {
+	margin: 0 0 6px;
+	font-size: var(--mc-font-meta);
+	font-weight: 600;
+	color: var(--cw-muted);
+}
+.cw-prose {
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+.cw-prose > :first-child {
+	margin-top: 0;
+}
+.cw-prose p,
+.cw-prose ul,
+.cw-prose ol,
+.cw-prose blockquote,
+.cw-prose pre {
+	margin: 0 0 10px;
+}
+.cw-prose-plain {
+	white-space: pre-wrap;
+}
+.cw-prose ul,
+.cw-prose ol {
+	padding-left: 22px;
+}
+.cw-prose > ul > li + li,
+.cw-prose > ol > li + li {
+	margin-top: 3px;
+}
+.cw-prose .cw-prose-heading {
+	font-weight: 600;
+	font-size: var(--mc-font-subtitle);
+	margin-top: 16px;
+}
+.cw-prose .cw-prose-heading[data-level="1"] {
+	font-size: var(--mc-font-title);
+}
+.cw-prose blockquote {
+	padding-left: 12px;
+	border-left: 2px solid var(--cw-hairline);
+	color: var(--cw-muted);
+}
+.cw-prose code {
+	font-family: var(--cw-mono);
+	font-size: 0.9em;
+	padding: 1px 5px;
+	border-radius: 4px;
+	background: var(--cw-sunken);
+}
+.cw-prose pre {
+	padding: 12px 14px;
+	border-radius: var(--cw-radius-md);
+	background: var(--cw-sunken);
+	border: 1px solid var(--cw-hairline);
+	overflow-x: auto;
+	white-space: pre;
+}
+.cw-prose pre code {
+	padding: 0;
+	background: none;
+	font-size: 0.88em;
+	line-height: 1.55;
+}
+.cw-turn-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 10px;
+	margin: 8px 0 0;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+	font-variant-numeric: tabular-nums;
+}
+.cw-turn-meta[data-outcome="failed"],
+.cw-turn-meta[data-outcome="timedOut"] {
+	color: var(--cw-danger);
+}
+.cw-waiting {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-body-sm);
+}
+.cw-turn-error {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px 12px;
+	margin-top: 10px;
+	padding: 8px 8px 8px 12px;
+	border-radius: var(--cw-radius-md);
+	background: var(--cw-danger-soft);
+	font-size: var(--mc-font-body-sm);
+}
+.cw-turn-error p {
+	margin: 0;
+}
+.cw-tools {
+	list-style: none;
+	margin: 10px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: var(--mc-font-meta);
+}
+.cw-answer .cw-tools > li {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.cw-suggestions {
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 12px 0 0;
+	padding: 0;
+}
+.cw-chip {
+	all: unset;
+	box-sizing: border-box;
+	max-width: 100%;
+	padding: 5px 12px;
+	border: 1px solid var(--cw-border);
+	border-radius: 999px;
+	font-size: var(--mc-font-meta);
+	cursor: pointer;
+	overflow-wrap: anywhere;
+}
+.cw-chip:hover:not(:disabled) {
+	background: var(--cw-accent-soft);
+	border-color: var(--cw-accent);
+}
+.cw-chip:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.cw-empty {
+	padding: 12vh 0 24px;
+}
+.cw-empty h3 {
+	margin: 0 0 6px;
+	font-size: var(--mc-font-title);
+	font-weight: 600;
+}
+.cw-empty p {
+	margin: 0 0 16px;
+	max-width: 56ch;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.5;
+}
+
+/* ---- Composer ---------------------------------------------------------- */
+.cw-composer-dock {
+	flex: none;
+}
+.cw-composer {
+	flex: none;
+	width: 100%;
+	max-width: var(--cw-measure);
+	margin: 0 auto;
+	border: 1px solid var(--cw-border);
+	border-radius: var(--cw-radius-lg);
+	background: var(--cw-surface);
+}
+/* System field treatment: one 1px accent border plus a soft halo. */
+.cw-composer:focus-within {
+	border-color: var(--cw-accent);
+	box-shadow: 0 0 0 3px var(--cw-accent-soft);
+}
+.cw-composer textarea:focus,
+.cw-composer textarea:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+.cw-composer[data-disabled] {
+	background: transparent;
+}
+.cw-composer textarea {
+	display: block;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 52px;
+	max-height: 220px;
+	padding: 12px 14px 4px;
+	border: 0;
+	resize: none;
+	color: inherit;
+	background: transparent;
+	font: inherit;
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.5;
+}
+.cw-composer textarea:focus {
+	outline: none;
+}
+.cw-composer textarea::placeholder {
+	color: var(--cw-subtle);
+}
+.cw-composer-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 6px 8px 8px 14px;
+}
+.cw-composer-bar > .mc-button {
+	margin-left: auto;
+}
+.cw-composer-hint {
+	margin: 0;
+	min-width: 0;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-subtle);
+}
+.cw-composer-hint[data-notice] {
+	color: var(--cw-muted);
+}
+
+/* ---- Dialogs ----------------------------------------------------------- */
+.mc-dialog.cw-dialog {
+	width: min(560px, calc(100vw - 32px));
+	padding: 0;
+	color: var(--cw-text, var(--quake-foreground));
+}
+.cw-dialog-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 18px 16px 4px 22px;
+}
+.cw-dialog-head h2 {
+	margin: 0;
+	font-size: var(--mc-font-title);
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.cw-dialog-close {
+	padding-inline: 6px;
+}
+.cw-dialog-body {
+	padding: 8px 22px 22px;
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.5;
+}
+.cw-dialog-body > p:first-child {
+	margin-top: 0;
+	margin-bottom: 16px;
+}
+.cw-dialog-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 20px;
+}
+.cw-spacer {
+	flex: 1 1 auto;
+}
+.cw-dialog fieldset {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.cw-dialog .mc-field {
+	margin: 0;
+}
+.cw-field-hint {
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted, var(--quake-muted));
+	font-weight: 400;
+}
+.cw-check {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.cw-notice {
+	margin: 0;
+	padding: 8px 12px;
+	border-radius: var(--cw-radius-md, 8px);
+	background: color-mix(in srgb, var(--quake-warning) 14%, transparent);
+}
+.cw-facts,
+.cw-capability-list {
+	display: grid;
+	margin: 0;
+}
+.cw-facts > div,
+.cw-capability-list > div {
+	display: grid;
+	grid-template-columns: minmax(110px, 34%) minmax(0, 1fr);
+	gap: 12px;
+	padding: 7px 0;
+	border-bottom: 1px solid var(--cw-hairline, var(--mc-border));
+}
+.cw-facts dt,
+.cw-capability-list dt {
+	color: var(--cw-muted, var(--quake-muted));
+}
+.cw-facts dd,
+.cw-capability-list dd {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	min-width: 0;
+}
+.cw-capabilities {
+	margin-top: 18px;
+}
+.cw-section-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+.cw-section-head h3 {
+	margin: 0;
+	font-size: var(--mc-font-subtitle);
+	font-weight: 600;
+}
+
+/* ---- Narrow: a compact chat that fits the viewport ----------------------
+   At 390x625 the earlier page-scrolling layout spent the whole screen on
+   chrome. Below 720px the workspace keeps filling the shell's column with an
+   internally scrolling transcript, and the chrome above it collapses: the
+   sources and conversation list fold behind one disclosure row next to New
+   chat, the title row carries the actions, and the composer is one row. */
+@container workspace (max-width: 720px) {
+	.cw-view {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+	.cw-rail {
+		flex: none;
+		gap: 8px;
+		max-height: 55%;
+		padding: 0 0 8px;
+		border-right: 0;
+		border-bottom: 1px solid var(--cw-hairline);
+	}
+	.cw-sessions {
+		display: contents;
+	}
+	.cw-sessions-head {
+		order: -1;
+		flex-wrap: nowrap;
+	}
+	.cw-sessions-head h3,
+	.cw-rail-heading {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.cw-sessions-head .cw-list-toggle {
+		display: inline-flex;
+		flex: 1 1 auto;
+		min-width: 0;
+		justify-content: flex-start;
+		margin-right: auto;
+	}
+	/* The visible label is the source; the action stays the accessible name. */
+	.cw-toggle-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.cw-list-toggle .cw-icon {
+		order: 2;
+		margin: 0 0 0 4px;
+		transform: rotate(90deg);
+		transition: transform 120ms ease;
+	}
+	.cw-list-toggle[aria-expanded="true"] .cw-icon {
+		transform: rotate(-90deg);
+	}
+	.cw-list-toggle .cw-count {
+		order: 3;
+	}
+	.cw-toggle-source {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--cw-text);
+		font-weight: 600;
+		margin-right: 6px;
+	}
+	.cw-rail:not([data-open]) .cw-sources,
+	.cw-rail:not([data-open]) .cw-session-list,
+	.cw-rail:not([data-open]) .cw-refresh {
+		display: none;
+	}
+	.cw-sources ul {
+		margin-top: 0;
+	}
+	/* No transcript to make room for: the whole source list stays in view. */
+	.cw-pending > .cw-rail {
+		flex: 0 1 auto;
+		max-height: none;
+	}
+	.cw-main {
+		flex: 1 1 auto;
+		min-height: 0;
+		padding-left: 0;
+	}
+	.cw-header {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 4px 8px;
+		padding: 8px 0;
+	}
+	.cw-header-title {
+		display: contents;
+	}
+	.cw-title,
+	.cw-title-input,
+	.cw-title-form {
+		grid-column: 1;
+		grid-row: 1;
+		font-size: var(--mc-font-title);
+	}
+	.cw-header-actions {
+		grid-column: 2;
+		grid-row: 1;
+		gap: 0;
+	}
+	.cw-identity,
+	.cw-route {
+		grid-column: 1 / -1;
+	}
+	/* A runtime title only repeats its first message, which the transcript
+	   already shows; keep it for assistive tech and give the row to actions. */
+	.agent-http-view .cw-title {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	/* Last in the fold, after the toggle that reveals them. */
+	.agent-http-view .cw-header-actions {
+		grid-column: 1 / -1;
+		grid-row: auto;
+		justify-content: flex-start;
+		margin-left: -8px;
+	}
+	/* The runtime keeps its name and health on one row; the address, Test
+	   connection, route and actions fold behind Details, as the sources do
+	   behind the list toggle, so the transcript gets the height. */
+	.agent-http-view .cw-identity {
+		row-gap: 6px;
+	}
+	/* Folded, the row never wraps: the name and route truncate instead. */
+	.agent-http-view .cw-header:not([data-details-open]) .cw-identity {
+		flex-wrap: nowrap;
+	}
+	.agent-http-view .cw-identity > * {
+		flex: none;
+	}
+	.agent-http-view .cw-identity .mc-badge,
+	.agent-http-view .cw-identity .cw-route-summary {
+		flex: 0 1 auto;
+		min-width: 3em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.agent-http-view .cw-identity .cw-route-summary {
+		display: block;
+		color: var(--cw-text);
+	}
+	.agent-http-view .cw-identity .cw-details-toggle {
+		display: inline-flex;
+		margin: -4px 0 -4px auto;
+	}
+	.cw-details-toggle .cw-icon {
+		order: 2;
+		margin: 0 0 0 4px;
+		transform: rotate(90deg);
+		transition: transform 120ms ease;
+	}
+	.cw-details-toggle[aria-expanded="true"] .cw-icon {
+		transform: rotate(-90deg);
+	}
+	.agent-http-view .cw-identity .agent-http-address {
+		order: 2;
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.agent-http-view .cw-identity .cw-inline-action {
+		order: 3;
+	}
+	/* Starts the unfolded address row below name, health and Details. */
+	.agent-http-view .cw-header[data-details-open] .cw-identity::before {
+		content: "";
+		order: 1;
+		flex-basis: 100%;
+		margin-top: -6px;
+	}
+	.agent-http-view .cw-header[data-details-open] .cw-route-summary,
+	.agent-http-view .cw-header:not([data-details-open]) .agent-http-address,
+	.agent-http-view
+		.cw-header:not([data-details-open])
+		.cw-identity
+		.cw-inline-action,
+	.agent-http-view .cw-header:not([data-details-open]) .cw-route,
+	.agent-http-view .cw-header:not([data-details-open]) .cw-header-actions {
+		display: none;
+	}
+	/* Redundant with the QUAKE badge unless it offers an action. */
+	.cw-quake-note:not([data-actionable]) {
+		display: none;
+	}
+	.cw-route,
+	.agent-workbench .cw-route-field,
+	.cw-route-form {
+		flex-wrap: wrap;
+		min-width: 0;
+		max-width: 100%;
+	}
+	.agent-workbench .cw-route-field select,
+	.agent-workbench .cw-route-field input {
+		min-width: 0;
+		max-width: 100%;
+		flex: 1 1 140px;
+	}
+	.cw-transcript {
+		padding: 12px 2px 8px 0;
+	}
+	.cw-turn {
+		gap: 10px;
+		margin-bottom: 18px;
+	}
+	.cw-bubble {
+		max-width: 92%;
+	}
+	.cw-composer-dock {
+		padding-top: 8px;
+	}
+	/* One row: the draft and its action side by side. */
+	.cw-composer:not(:has([data-notice])) {
+		display: flex;
+		align-items: flex-end;
+	}
+	.cw-composer:not(:has([data-notice])) textarea {
+		flex: 1 1 auto;
+		min-width: 0;
+		min-height: 44px;
+		padding: 11px 12px;
+	}
+	.cw-composer:not(:has([data-notice])) .cw-composer-bar {
+		flex: none;
+		padding: 0 6px 6px 0;
+	}
+	.cw-composer-hint:not([data-notice]) {
+		display: none;
+	}
+	.cw-empty {
+		padding: 16px 0;
+	}
+}

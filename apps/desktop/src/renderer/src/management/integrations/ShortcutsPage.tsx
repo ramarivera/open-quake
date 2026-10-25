@@ -10,6 +10,7 @@ import {
 	displayChord,
 	normalizeChord,
 } from "../../../../../../../packages/edge/src/shortcuts/shortcut-invariants";
+import { PageHeader } from "../../ui/Form";
 import { shortcutStrings as s, shortcutMessages } from "./strings";
 import { useIntegrations } from "./useIntegrations";
 
@@ -153,11 +154,7 @@ export function ShortcutsPage() {
 	};
 	return (
 		<section className="mc-panel" aria-label={s.ariaLabel}>
-			<header className="mc-toolbar">
-				<div>
-					<h2>{s.title}</h2>
-					<p>{s.aiHint}</p>
-				</div>
+			<PageHeader title={s.title} description={s.aiHint}>
 				<button
 					className="mc-button"
 					type="button"
@@ -166,7 +163,7 @@ export function ShortcutsPage() {
 				>
 					Add shortcut
 				</button>
-			</header>
+			</PageHeader>
 			{error && <p role="alert">{error}</p>}
 			{notice && <p role="status">{notice}</p>}
 			<div className="mc-split">

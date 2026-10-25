@@ -6,6 +6,8 @@ Show voice presses and AI conversations on the QUAKE strip the way DK-Suite
 0.4.95 does, with the device feedback that goes with them. Geometry, timings,
 colours and strings are the recovered values cited in `design.md`.
 
+> **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (overlay waveform and colours, mountain bar drawing, key decorations, toasts, Copilot/ClawBot colours, energy orb) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
+
 ## ADDED Requirements
 
 ### Requirement: Voice surface events
