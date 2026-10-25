@@ -57,3 +57,16 @@ Full gates used an absolute nonsymlink TMPDIR with Turbo `--env-mode=loose`; bac
 Both real app sessions ran sequentially and quit. Restored the fixture's Quiet GIF selection for device and desktop-preview, the empty clipboard, and original hardware preferences: knob LED always on true, buzzer enabled true, alert volume 84. Evidence: `fixed-ha/results/011-restore-stop.json`. Microphone recording ended, Quick Look was terminated and the dedicated Finder window closed. No task-owned app or DK-Suite process remained.
 
 Tasks 8.8, 8.9 and 8.10 / beads `.10.2.26`, `.10.2.27` and `.10.2.28` close with this finite acceptance round. Physical controls/cables, hardware-buzzer acoustic qualification, Windows, messaging-app animation, voice, soundboard and the broader parity parents remain open.
+
+
+## PR38 review follow-up: slow integration requests
+
+Codex found that Home Assistant execution awaited its HTTP response while holding the shared runtime semaphore. The renderer's IPC handler also held its editor/icon request semaphore around activation. Either lock could stall unrelated input.
+
+Activation now reserves the committed press under the existing guards and returns an awaitable completion. Home Assistant work runs in a service-scoped fiber; both the runtime entry point and registered IPC handler await completion after releasing their locks. Reset interrupts owned fibers for the requested device, without waiting for a network response. Original typed failures still reach callers. This interrupts the local wait, not a service action already received by Home Assistant.
+
+The production IPC regression stalled the integration and reproduced a blocked duplicate press before the IPC change. The complete regression then proved duplicate suppression, release, unrelated shortcut execution, running-timer cancellation, navigation and reset interruption before releasing the fake network response. An initial broad lock bypass failed the existing queued-panel authorization test; the final two-phase approach preserves that test and the request authorization boundary. Early malformed test fixtures were corrected before the valid red/green run.
+
+Verification on the source in the commit containing this section: all 424 device tests across 36 files and 67 focused desktop tests across five files passed. Both affected package typechecks, the production desktop build, both bundle modes, Biome 813 files, strict change validation and diff checks passed. The earlier 1,793-test aggregate belongs to the preceding source and was not rerun for this focused review fix. No further live device, sound or Home Assistant action was performed.
+
+Reproduction: `pnpm --filter @open-quake/device test`; desktop `vitest run` for `src/main/key-library/registration.test.ts`, `src/main/integrations/key-action.test.ts`, `src/main/key-library/runtime-port.test.ts`, `src/main/index.test.ts` and `src/main/profiles/registration.test.ts`, using the absolute nonsymlink TMPDIR noted above. Task 8.11 / `open-quake-lih.10.2.29` closes for this finding; broader acceptance remains open.

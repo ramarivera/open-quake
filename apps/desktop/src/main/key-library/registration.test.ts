@@ -265,6 +265,8 @@ it("rejects a delayed import after the owning picker closes", async () => {
 function fixture(
 	config: Readonly<Record<string, unknown>> = {},
 	execute: () => Effect.Effect<void> = () => Effect.void,
+	executeOwned?: (key: ProfileKey) => Effect.Effect<boolean>,
+	extraKeys: readonly ProfileKey[] = [],
 ) {
 	let pause: Promise<void> | undefined;
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
@@ -282,7 +284,20 @@ function fixture(
 	let stored: unknown = {
 		schemaVersion: 1,
 		profiles: [
-			{ id: "p", name: "P", revision: 0, pages: [{ id: "one", keys: [key] }] },
+			{
+				id: "p",
+				name: "P",
+				revision: 0,
+				pages: [
+					{
+						id: "one",
+						keys: [
+							key,
+							...extraKeys.map((item) => Schema.encodeSync(ProfileKey)(item)),
+						],
+					},
+				],
+			},
 			{ id: "q", name: "Q", revision: 0, pages: [{ id: "one", keys: [] }] },
 		],
 		activeByDevice: { device: { profileId: "p", pageId: "one" } },
@@ -318,6 +333,7 @@ function fixture(
 									Effect.orDie,
 								),
 							execute,
+							...(executeOwned ? { executeOwned } : {}),
 							select: (deviceId, profileId, pageId) =>
 								service
 									.selectProfile({ deviceId, profileId, pageId })
@@ -837,6 +853,114 @@ it("rejects management icon storage mutations with and without an owned picker",
 		}
 		expect(electron.dialog.showOpenDialog).not.toHaveBeenCalled();
 	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it("keeps live input and timer cancellation responsive during a stalled HA request and interrupts it on reset", async () => {
+	const entered = barrier<void>(),
+		response = barrier<void>();
+	let integrations = 0,
+		shortcuts = 0,
+		interrupted = false;
+	const makeKey = (
+		keyCode: string,
+		config: Readonly<Record<string, unknown>>,
+	) =>
+		Schema.decodeUnknownSync(ProfileKey)({
+			...Schema.encodeSync(ProfileKey)(createEmptyProfileKey(keyCode)),
+			childrenName: config.type,
+			config: {
+				...Schema.encodeSync(ProfileKey)(createEmptyProfileKey(keyCode)).config,
+				...config,
+			},
+		});
+	const f = fixture(
+		{ type: "homeAssistant" },
+		() =>
+			Effect.sync(() => {
+				shortcuts++;
+			}),
+		() =>
+			Effect.sync(() => {
+				integrations++;
+				entered.resolve();
+			}).pipe(
+				Effect.zipRight(Effect.promise(() => response.promise)),
+				Effect.as(true),
+				Effect.onInterrupt(() =>
+					Effect.sync(() => {
+						interrupted = true;
+					}),
+				),
+			),
+		[
+			makeKey("1,2", {
+				type: "hotkey",
+				display: true,
+				actions: [{ type: "key", value: "a" }],
+			}),
+			makeKey("1,3", {
+				type: "timer",
+				display: true,
+				actions: [{ type: "time", value: 60000 }],
+			}),
+		],
+	);
+	const bounded = <A>(work: Promise<A>) =>
+		Promise.race([
+			work,
+			new Promise<string>((resolve) =>
+				setTimeout(() => resolve("blocked by HA"), 1000),
+			),
+		]);
+	let pending: Promise<unknown> | undefined;
+	try {
+		const timer = { ...f.activation, keyCode: "1,3" };
+		await f.request(f.panel, timer);
+		await f.request(f.panel, { ...timer, kind: "release" });
+		pending = f.request(f.panel, f.activation).then(
+			(value) => value,
+			() => "interrupted",
+		);
+		await entered.promise;
+		expect(await bounded(f.request(f.panel, f.activation))).toEqual({
+			_tag: "success",
+		});
+		expect(integrations).toBe(1);
+		expect(
+			await bounded(f.request(f.panel, { ...f.activation, kind: "release" })),
+		).toEqual({ _tag: "success" });
+		expect(
+			await bounded(f.request(f.panel, { ...f.activation, keyCode: "1,2" })),
+		).toEqual({ _tag: "success" });
+		expect(shortcuts).toBe(1);
+		expect(await bounded(f.request(f.panel, timer))).toEqual({
+			_tag: "success",
+		});
+		const states = await f.runtime.runPromise(KeyRuntime.snapshot);
+		expect(states.find((value) => value.keyCode === "1,3")).toMatchObject({
+			countdown: -1,
+			alert: 0,
+		});
+		expect(
+			await bounded(
+				f.request(f.panel, {
+					type: "navigate",
+					deviceId: "device",
+					direction: 1,
+				}),
+			),
+		).toEqual({ _tag: "success" });
+		expect(
+			await bounded(f.runtime.runPromise(KeyRuntime.reset("device"))),
+		).toBeUndefined();
+		expect(interrupted).toBe(true);
+		expect(await bounded(pending)).toBe("interrupted");
+	} finally {
+		response.resolve();
+		await pending;
 		await f.registration.dispose();
 		await f.runtime.dispose();
 	}

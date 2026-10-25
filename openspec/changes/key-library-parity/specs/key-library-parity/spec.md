@@ -158,3 +158,9 @@ The committed key runtime SHALL route configured Home Assistant keys to the dire
 - **WHEN** a current visible supported Home Assistant key is pressed
 - **THEN** its saved entity, service and service data reach the direct integration consumer once per press
 - **AND** release permits a later press, while repeated held input, stale targets, hidden keys and quarantined keys cannot execute the service
+
+#### Scenario: Slow Home Assistant request
+- **WHEN** an authorized saved Home Assistant key awaits a slow or unreachable service
+- **THEN** unrelated key activation, release, navigation and timer cancellation remain available
+- **AND** reset interrupts scoped pending integration work without waiting for the network response
+- **AND** committed-key validation and held-press deduplication remain atomic

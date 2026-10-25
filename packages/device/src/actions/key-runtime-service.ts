@@ -83,6 +83,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				alternates = new Map<string, 0 | 1>(),
 				running = new Map<string, Fiber.RuntimeFiber<void, never>>();
 			const lock = yield* Effect.makeSemaphore(1);
+			const owned = new Map<Fiber.RuntimeFiber<void, ActionError>, string>();
 			const current = (env: ProfileEnvelope, deviceId: string) => {
 				const selection = env.activeByDevice[deviceId];
 				const hidden = Option.isSome(env.manager)
@@ -182,7 +183,10 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					readonly pageId: string;
 					readonly revision: number;
 				},
-			): Effect.fn.Return<void, ActionError> {
+			): Effect.fn.Return<
+				Effect.Effect<void, ActionError> | undefined,
+				ActionError
+			> {
 				const control = JSON.stringify([deviceId, keyCode]);
 				if (kind === "release") {
 					held.delete(control);
@@ -376,7 +380,26 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					running.set(identity, fiber);
 					return;
 				}
-				if (port.executeOwned && (yield* port.executeOwned(key))) return;
+				if (type === "homeAssistant" && port.executeOwned) {
+					// Reserve the committed press atomically, then await network work
+					// outside the input lock. Reset owns the scoped fiber's lifetime.
+					const execute = port.executeOwned;
+					let fiber: Fiber.RuntimeFiber<void, ActionError>;
+					fiber = yield* Effect.forkIn(
+						Effect.yieldNow().pipe(
+							Effect.zipRight(execute(key)),
+							Effect.flatMap((handled) =>
+								handled
+									? Effect.void
+									: Effect.fail(new KeyFunctionUnavailable("owning-runtime")),
+							),
+							Effect.ensuring(Effect.sync(() => owned.delete(fiber))),
+						),
+						scope,
+					);
+					owned.set(fiber, deviceId);
+					return Fiber.join(fiber);
+				}
 				const action = validateAction(
 					Option.getOrElse(key.childrenName, () => type),
 					input,
@@ -387,6 +410,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			const reset = Effect.fn("KeyRuntime.reset")(function* (
 				deviceId?: string,
 			): Effect.fn.Return<void> {
+				for (const [fiber, owner] of owned)
+					if (!deviceId || owner === deviceId) yield* Fiber.interrupt(fiber);
 				for (const [key, fiber] of running)
 					if (!deviceId || JSON.parse(key)[0] === deviceId) {
 						yield* Fiber.interrupt(fiber);
@@ -411,9 +436,16 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					if (!deviceId || JSON.parse(key)[0] === deviceId)
 						alternates.delete(key);
 			});
+			const prepareActivation = (...args: Parameters<typeof activate>) =>
+				activate(...args).pipe(
+					lock.withPermits(1),
+					Effect.map((work) => work ?? Effect.void),
+				);
 			return {
+				/** Reserve guarded input; await its completion after caller locks release. */
+				prepareActivation,
 				activate: (...args: Parameters<typeof activate>) =>
-					activate(...args).pipe(lock.withPermits(1)),
+					prepareActivation(...args).pipe(Effect.flatten),
 				navigate: (...args: Parameters<typeof navigate>) =>
 					navigate(...args).pipe(lock.withPermits(1)),
 				refresh,
