@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { DirectChatPanel } from "./DirectChatPanel";
 import { Prose } from "./Prose";
+import { PendingSource } from "./Workspace";
 
 const model = {
 	ready: true,
@@ -75,5 +77,35 @@ describe("conversation workspace rendering", () => {
 		expect(history).toBeDefined();
 		expect(history).not.toContain("<button");
 		expect(html).toMatch(/<button type="submit"[^>]*>Send<svg/);
+	});
+	it("keeps the sources reachable while a runtime selection is pending or failed", () => {
+		const html = renderToStaticMarkup(
+			createElement(PendingSource, {
+				name: "Studio Hermes",
+				busy: false,
+				sources: createElement(
+					"nav",
+					{ className: "cw-sources" },
+					createElement(
+						"button",
+						{ type: "button", className: "cw-source" },
+						"Direct model",
+					),
+				),
+				onRetry: () => {},
+			}),
+		);
+		expect(html).toMatch(
+			/<aside class="cw-rail" data-open="true"><nav class="cw-sources"><button type="button" class="cw-source">Direct model/,
+		);
+		expect(html).toContain("Studio Hermes");
+		expect(html).toContain(">Retry<");
+		// The narrow rail only folds the sources when it is not open.
+		const css = readFileSync(
+			new URL("./workspace.css", import.meta.url),
+			"utf8",
+		);
+		expect(css).toContain(".cw-rail:not([data-open]) .cw-sources");
+		expect(css).not.toMatch(/\.cw-rail \.cw-sources\s*[,{]/);
 	});
 });

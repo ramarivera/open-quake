@@ -26,6 +26,22 @@ Artifacts are kept outside the repo in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/o
 - The harness and audit script: `harness/`.
 - Smoke results: `direct-smoke/`, `review-smoke/`.
 
+## Narrow runtime header and pending-source recovery (nyd.3.5)
+
+Hidden mock Electron harness (opacity 0, prohibited activation) on the actual root, against the synthetic Hermes API, true 390x625 content:
+- Folded header: 41px instead of 134px. The transcript shows 297px instead of 204px, and 3 messages instead of 2.
+- Keyboard:
+  - Tab from New chat lands on Details, because the folded controls are out of the tab order.
+  - Space opens Details. Tab then reaches Test connection, then Model route.
+  - Enter closes Details. Focus stays on the toggle, and `aria-expanded` and `aria-controls` resolve.
+- Preserved across fold, unfold and a width switch: the composer draft, 6 messages, pinned-to-end scroll, and the chosen model route. The route stays named in the folded row.
+- German locale: the toggle reads "Details".
+- At 1180, the header height (178px) and the selectors used by `runtime-desktop-e2e.ts` match the base. The screenshot differs from the base only in the random port digits.
+- A failed select, forced with read-only runtime storage (`AGENT.HTTP.STORAGE.FAILED`), keeps every source visible at 390. Enter on Direct model recovers. On the base commit the same run reproduces the trap: no source is visible.
+- The audit found no overflow, unnamed controls, duplicate ids or contrast failures in any of the 9 states.
+
+Artifacts: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/redesign/header-final/` (`harness/`, `shots/header3-*`, baseline `shots/base-*`).
+
 ## Not verified here
 
 - The runtime container E2E (`runtime-desktop-e2e.ts`) was not run, because it needs disposable containers. Its selectors were kept by design; only the tab label changed.

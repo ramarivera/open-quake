@@ -380,6 +380,11 @@
 	justify-content: flex-end;
 	gap: 4px;
 }
+/* Narrow-only: the runtime header's Details disclosure and folded route. */
+.cw-identity .cw-details-toggle,
+.cw-identity .cw-route-summary {
+	display: none;
+}
 .cw-inline-action,
 .cw-link {
 	all: unset;
@@ -947,6 +952,11 @@
 	.cw-sources ul {
 		margin-top: 0;
 	}
+	/* No transcript to make room for: the whole source list stays in view. */
+	.cw-pending > .cw-rail {
+		flex: 0 1 auto;
+		max-height: none;
+	}
 	.cw-main {
 		flex: 1 1 auto;
 		min-height: 0;
@@ -988,10 +998,78 @@
 		clip-path: inset(50%);
 		white-space: nowrap;
 	}
+	/* Last in the fold, after the toggle that reveals them. */
 	.agent-http-view .cw-header-actions {
 		grid-column: 1 / -1;
+		grid-row: auto;
 		justify-content: flex-start;
 		margin-left: -8px;
+	}
+	/* The runtime keeps its name and health on one row; the address, Test
+	   connection, route and actions fold behind Details, as the sources do
+	   behind the list toggle, so the transcript gets the height. */
+	.agent-http-view .cw-identity {
+		row-gap: 6px;
+	}
+	/* Folded, the row never wraps: the name and route truncate instead. */
+	.agent-http-view .cw-header:not([data-details-open]) .cw-identity {
+		flex-wrap: nowrap;
+	}
+	.agent-http-view .cw-identity > * {
+		flex: none;
+	}
+	.agent-http-view .cw-identity .mc-badge,
+	.agent-http-view .cw-identity .cw-route-summary {
+		flex: 0 1 auto;
+		min-width: 3em;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.agent-http-view .cw-identity .cw-route-summary {
+		display: block;
+		color: var(--cw-text);
+	}
+	.agent-http-view .cw-identity .cw-details-toggle {
+		display: inline-flex;
+		margin: -4px 0 -4px auto;
+	}
+	.cw-details-toggle .cw-icon {
+		order: 2;
+		margin: 0 0 0 4px;
+		transform: rotate(90deg);
+		transition: transform 120ms ease;
+	}
+	.cw-details-toggle[aria-expanded="true"] .cw-icon {
+		transform: rotate(-90deg);
+	}
+	.agent-http-view .cw-identity .agent-http-address {
+		order: 2;
+		flex: 0 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.agent-http-view .cw-identity .cw-inline-action {
+		order: 3;
+	}
+	/* Starts the unfolded address row below name, health and Details. */
+	.agent-http-view .cw-header[data-details-open] .cw-identity::before {
+		content: "";
+		order: 1;
+		flex-basis: 100%;
+		margin-top: -6px;
+	}
+	.agent-http-view .cw-header[data-details-open] .cw-route-summary,
+	.agent-http-view .cw-header:not([data-details-open]) .agent-http-address,
+	.agent-http-view
+		.cw-header:not([data-details-open])
+		.cw-identity
+		.cw-inline-action,
+	.agent-http-view .cw-header:not([data-details-open]) .cw-route,
+	.agent-http-view .cw-header:not([data-details-open]) .cw-header-actions {
+		display: none;
 	}
 	/* Redundant with the QUAKE badge unless it offers an action. */
 	.cw-quake-note:not([data-actionable]) {

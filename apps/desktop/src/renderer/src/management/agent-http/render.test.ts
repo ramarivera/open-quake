@@ -136,3 +136,54 @@ it("offers discovered Hermes model routes without advertising backend model sele
 		} else expect(html).not.toContain("Model route");
 	}
 });
+
+it("folds the runtime address, test, route and actions behind one Details disclosure", () => {
+	const panel = (agentId: string | undefined) =>
+		renderToStaticMarkup(
+			createElement(ConversationPanel, {
+				connection: {
+					id: "saved",
+					name: "Studio",
+					kind: "openclaw",
+					baseURL: "http://localhost:8000/",
+					credentialAvailable: false,
+				},
+				discovery: {
+					capabilities: {
+						health: "supported",
+						chat: "supported",
+						listAgents: "supported",
+						sessions: "unsupported",
+						resources: "unsupported",
+						models: "unsupported",
+						toolEvents: "unsupported",
+						usage: "unsupported",
+					},
+					agents: [{ id: "ops", name: "Operations" }],
+				},
+				health: { status: "ready" } as never,
+				agentId,
+				bridge: undefined,
+				selectionBusy: false,
+				onTest: () => {},
+				onOpenConnection: () => {},
+				onAgentChange: () => {},
+				onRunningChange: () => {},
+			}),
+		);
+	const html = panel(undefined);
+	const toggle = html.match(/<button[^>]*cw-details-toggle[^>]*>/)?.[0] ?? "";
+	expect(toggle).toContain('aria-expanded="false"');
+	const controls = toggle.match(/aria-controls="([^"]+)"/)?.[1]?.split(" ");
+	expect(controls).toHaveLength(4);
+	for (const id of controls ?? []) expect(html).toContain(`id="${id}"`);
+	expect(html).toMatch(/cw-details-toggle[^>]*>Details</);
+	// Name and health stay outside the fold, before the disclosure.
+	expect(html.indexOf('role="status"')).toBeLessThan(html.indexOf("Details<"));
+	expect(html.indexOf("Details<")).toBeLessThan(
+		html.indexOf("Test connection"),
+	);
+	expect(html).not.toContain("cw-route-summary");
+	// A chosen route stays named in the folded row.
+	expect(panel("ops")).toMatch(/cw-route-summary">Operations</);
+});

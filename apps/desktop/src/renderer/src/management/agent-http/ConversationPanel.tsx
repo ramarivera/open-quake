@@ -1,6 +1,7 @@
 import {
 	type ReactNode,
 	useEffect,
+	useId,
 	useLayoutEffect,
 	useRef,
 	useState,
@@ -68,6 +69,8 @@ export function ConversationPanel({
 	const [agentDraft, setAgentDraft] = useState(agentId ?? "");
 	const [confirmClear, setConfirmClear] = useState(false);
 	const [listOpen, setListOpen] = useState(false);
+	const [detailsOpen, setDetailsOpen] = useState(false);
+	const detailsId = useId();
 	const input = useRef<HTMLTextAreaElement>(null);
 	const log = useRef<HTMLDivElement>(null);
 	const follow = useRef(true);
@@ -81,6 +84,19 @@ export function ConversationPanel({
 	const chat = discovery?.capabilities.chat ?? "unverified";
 	const kind = connection.kind === "hermes" ? "Hermes" : "OpenClaw";
 	const status = health?.status ?? "";
+	// Narrow widths fold these behind the Details disclosure; a chosen route
+	// stays named in the folded row because it changes who answers.
+	const detailIds = [
+		`${detailsId}-address`,
+		...(onTest ? [`${detailsId}-test`] : []),
+		`${detailsId}-route`,
+		`${detailsId}-actions`,
+	].join(" ");
+	const route = modelId
+		? models.find((model) => model.id === modelId)?.name || modelId
+		: agentId &&
+			(discovery?.agents.find((agent) => agent.id === agentId)?.name ||
+				agentId);
 	useEffect(() => setAgentDraft(agentId ?? ""), [agentId]);
 	useEffect(() => {
 		const el = log.current;
@@ -214,7 +230,10 @@ export function ConversationPanel({
 				</div>
 			</aside>
 			<section className="cw-main" aria-label={t.conversation}>
-				<header className="cw-header">
+				<header
+					className="cw-header"
+					data-details-open={detailsOpen || undefined}
+				>
 					<div className="cw-header-title">
 						<h2 className="cw-title">
 							{session?.turns[0]?.text || t.newSession}
@@ -222,7 +241,10 @@ export function ConversationPanel({
 						<p className="cw-identity">
 							<span className="mc-badge">{connection.name}</span>
 							<span>{kind}</span>
-							<code className="agent-http-address cw-code">
+							<code
+								id={`${detailsId}-address`}
+								className="agent-http-address cw-code"
+							>
 								{connection.baseURL}
 							</code>
 							<span className="cw-health">
@@ -233,9 +255,22 @@ export function ConversationPanel({
 								/>
 								<span role="status">{healthLabel(status, t)}</span>
 							</span>
+							{route && <span className="cw-route-summary">{route}</span>}
+							<button
+								type="button"
+								className="mc-button cw-details-toggle"
+								data-variant="quiet"
+								aria-expanded={detailsOpen}
+								aria-controls={detailIds}
+								onClick={() => setDetailsOpen((value) => !value)}
+							>
+								{t.details}
+								<Icon name="chevron" />
+							</button>
 							{onTest && (
 								<button
 									type="button"
+									id={`${detailsId}-test`}
 									className="cw-inline-action"
 									disabled={selectionBusy || busy}
 									onClick={onTest}
@@ -244,7 +279,7 @@ export function ConversationPanel({
 								</button>
 							)}
 						</p>
-						<div className="cw-route">
+						<div id={`${detailsId}-route`} className="cw-route">
 							{connection.kind === "hermes" ? (
 								models.length > 0 ? (
 									<label className="mc-field cw-route-field">
@@ -326,7 +361,7 @@ export function ConversationPanel({
 							<span className="cw-muted cw-quake-note">{t.quakeHere}</span>
 						</div>
 					</div>
-					<div className="cw-header-actions">
+					<div id={`${detailsId}-actions`} className="cw-header-actions">
 						{onOpenConnection && (
 							<button
 								type="button"

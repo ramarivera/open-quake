@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import type { RuntimeConnectionView } from "../../../../../../../packages/edge/src/agent-http/runtime-contracts";
 import type { AgentConnectionsBridge } from "../../../../shared/agent-connections";
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
@@ -287,29 +293,15 @@ export function ConversationWorkspace({
 						onRunningChange={setConversationRunning}
 					/>
 				) : (
-					<section className="cw-view" aria-busy={busy}>
-						<aside className="cw-rail">{sources}</aside>
-						<div className="cw-main">
-							<div className="cw-empty">
-								<h3>{pendingRuntime?.name ?? rt.chooseConnection}</h3>
-								<p role="status">
-									{connections.busy ? rt.busy : rt.chooseRuntime}
-								</p>
-								{pendingRuntime && !connections.busy && (
-									<button
-										type="button"
-										className="mc-button"
-										data-primary
-										onClick={() =>
-											void request({ type: "select", id: pendingRuntime.id })
-										}
-									>
-										{rt.retry}
-									</button>
-								)}
-							</div>
-						</div>
-					</section>
+					<PendingSource
+						name={pendingRuntime?.name}
+						busy={busy}
+						sources={sources}
+						onRetry={
+							pendingRuntime &&
+							(() => void request({ type: "select", id: pendingRuntime.id }))
+						}
+					/>
 				))}
 			{/* Stays mounted while hidden so switching sources never cancels a
 			    streaming direct reply. It follows the runtime view in document
@@ -374,5 +366,47 @@ export function ConversationWorkspace({
 				/>
 			)}
 		</div>
+	);
+}
+
+/**
+ * A runtime whose selection is pending or failed. With no conversation to
+ * protect, the rail keeps the sources unfolded at narrow widths, so the direct
+ * model or another runtime stays one tap away.
+ */
+export function PendingSource({
+	name,
+	busy,
+	sources,
+	onRetry,
+}: {
+	readonly name: string | undefined;
+	readonly busy: boolean;
+	readonly sources: ReactNode;
+	readonly onRetry: (() => void) | undefined;
+}) {
+	const rt = useRuntimeCopy();
+	return (
+		<section className="cw-view cw-pending" aria-busy={busy}>
+			<aside className="cw-rail" data-open>
+				{sources}
+			</aside>
+			<div className="cw-main">
+				<div className="cw-empty">
+					<h3>{name ?? rt.chooseConnection}</h3>
+					<p role="status">{busy ? rt.busy : rt.chooseRuntime}</p>
+					{onRetry && !busy && (
+						<button
+							type="button"
+							className="mc-button"
+							data-primary
+							onClick={onRetry}
+						>
+							{rt.retry}
+						</button>
+					)}
+				</div>
+			</div>
+		</section>
 	);
 }

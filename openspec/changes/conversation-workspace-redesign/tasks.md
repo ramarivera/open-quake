@@ -14,3 +14,4 @@
 ## 3. Verification
 
 - [x] 3.1 open-quake-nyd.3.4: Capture before and after hidden mock Electron screenshots at 1180 and 390 in Graphite, Midnight and Paper, and inspect them. Exercise interactions and layout/a11y checks, renderer tests, and the parent direct-chat smoke.
+- [x] 3.2 open-quake-nyd.3.5: Below 720px, keep the runtime name and health on one row and fold the address, Test connection, model route and header actions behind one Details disclosure. Keep the failed or pending runtime selection's source list unfolded so the direct model stays reachable. Leave the 1180 layout unchanged.
