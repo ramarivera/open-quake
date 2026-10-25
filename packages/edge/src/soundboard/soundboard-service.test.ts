@@ -44,6 +44,7 @@ const rig = (
 	ready: SoundPlayer["ready"] = Effect.void,
 	teardown: Effect.Effect<void> = Effect.void,
 	metadata: Effect.Effect<void> = Effect.void,
+	released: Effect.Effect<void> = Effect.void,
 ) =>
 	Effect.gen(function* () {
 		const output = yield* makeAudioOutput;
@@ -54,7 +55,19 @@ const rig = (
 		const inspected: string[] = [];
 		const unavailable = new Set<string>();
 		const service = yield* makeSoundboardService.pipe(
-			Effect.provideService(AudioOutput, AudioOutput.make(output)),
+			Effect.provideService(
+				AudioOutput,
+				AudioOutput.make({
+					...output,
+					acquire: (kind, preempt) =>
+						output.acquire(kind, preempt).pipe(
+							Effect.map((lease) => ({
+								...lease,
+								release: released.pipe(Effect.zipRight(lease.release)),
+							})),
+						),
+				}),
+			),
 			Effect.provideService(SoundboardRepository, repository),
 			Effect.provideService(SoundboardFiles, {
 				inspect: (path) =>
@@ -110,6 +123,30 @@ const rig = (
 	});
 
 describe("soundboard session lifecycle with real shared output", () => {
+	it.scoped(
+		"forgets fully released groups instead of revisiting history at shutdown",
+		() =>
+			Effect.gen(function* () {
+				let releases = 0;
+				const r = yield* rig(
+					Effect.void,
+					Effect.void,
+					Effect.void,
+					Effect.sync(() => {
+						releases++;
+					}),
+				);
+				for (let index = 0; index < 16; index++) {
+					const session = yield* r.service.play(owner, playlist);
+					yield* r.service.stop(session.playbackId);
+				}
+				expect(releases).toBe(16);
+				yield* r.service.stopAll();
+				yield* r.service.close();
+				expect(releases).toBe(16);
+				expect(r.tracks.every((track) => track.closed === 1)).toBe(true);
+			}),
+	);
 	it.scoped(
 		"rechecks idle ownership after a queued play starts during old Stop",
 		() =>
