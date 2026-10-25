@@ -18,7 +18,7 @@ export const MacMedia = Schema.Struct({
 	elapsedTime: OptionalNumber,
 	supportedCommands: Schema.Array(Schema.Int).pipe(Schema.maxItems(256)),
 	artworkMimeType: Schema.optional(Schema.String),
-	artworkData: Schema.optional(Schema.String.pipe(Schema.maxLength(2_800_000))),
+	artworkData: Schema.optional(Schema.Unknown),
 });
 export type MacMedia = typeof MacMedia.Type;
 export interface NativeMediaReading {
@@ -54,7 +54,9 @@ export const parseMacMedia = (
 			);
 			if (durationMs !== null) positionMs = Math.min(durationMs, positionMs);
 			const coverUrl =
-				data.artworkData && data.artworkMimeType
+				typeof data.artworkData === "string" &&
+				data.artworkData.length <= 2_800_000 &&
+				data.artworkMimeType
 					? cover(data.artworkData, data.artworkMimeType)
 					: null;
 			const session: MediaSession = {

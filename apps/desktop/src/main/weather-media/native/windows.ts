@@ -9,10 +9,24 @@ import {
 import type { CoverDecoder, NativeMediaReading } from "./metadata";
 import { type MediaProcess, mediaProcess } from "./process";
 
+/** Shared by display reads and relative seeks, including sparse native timeline updates. */
+export const windowsPositionScript = `
+function CurrentPositionTicks($timeline, $info) {
+ $position=[double]$timeline.Position.Ticks
+ if ([string]$info.PlaybackStatus -eq 'Playing') {
+  $rate=1.0
+  if ($null -ne $info.PlaybackRate) { $rate=[double]$info.PlaybackRate }
+  $position+=[Math]::Max(0,([DateTimeOffset]::UtcNow-$timeline.LastUpdatedTime).TotalMilliseconds)*10000*$rate
+ }
+ return [long][Math]::Max($timeline.StartTime.Ticks,[Math]::Min($timeline.EndTime.Ticks,$position))
+}
+`;
+
 /** Fixed program. Request data is JSON in the environment, never PowerShell source. */
 export const windowsMediaScript = `
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
+${windowsPositionScript}
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null=[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
@@ -69,7 +83,7 @@ if ($env:OPEN_QUAKE_MEDIA_REQUEST) {
    $timeline=$session.GetTimelineProperties()
    $delta=150000000
    if ($request.action -eq 'rewind') { $delta=-$delta }
-   $ticks=[Math]::Max($timeline.StartTime.Ticks,[Math]::Min($timeline.EndTime.Ticks,$timeline.Position.Ticks+$delta))
+   $ticks=[Math]::Max($timeline.StartTime.Ticks,[Math]::Min($timeline.EndTime.Ticks,(CurrentPositionTicks $timeline $info)+$delta))
    $op=$session.TryChangePlaybackPositionAsync([long]$ticks)
   }
  }
@@ -101,8 +115,7 @@ if ($null -ne $properties.Thumbnail) {
 }
 $timeline=$session.GetTimelineProperties()
 $playing=([string]$info.PlaybackStatus -eq 'Playing')
-$position=$timeline.Position.TotalMilliseconds
-if ($playing) { $position+=[Math]::Max(0,([DateTimeOffset]::UtcNow-$timeline.LastUpdatedTime).TotalMilliseconds)*[double]$info.PlaybackRate }
+$position=(CurrentPositionTicks $timeline $info)/10000
 $duration=[Math]::Max(0,$timeline.EndTime.TotalMilliseconds)
 $position=[Math]::Max(0,[Math]::Min($duration,$position))
 @{session=@{id=$source;appId=$source;appName=$source.Substring(0,[Math]::Min(200,$source.Length));title=[string]$properties.Title;artist=[string]$properties.Artist;coverUrl=$null;playing=$playing;durationMs=$duration;positionMs=$position;canPlay=[bool]$controls.IsPlayEnabled;canPause=[bool]$controls.IsPauseEnabled;canPrevious=[bool]$controls.IsPreviousEnabled;canNext=[bool]$controls.IsNextEnabled};commands=@($commands);source=$source;artwork=$artwork;artworkMime=$artworkMime} | ConvertTo-Json -Compress -Depth 5

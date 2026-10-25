@@ -134,6 +134,30 @@ describe("native system-media consumers", () => {
 			);
 		}
 	});
+	it("keeps transport metadata and controls when optional artwork is excessive", async () => {
+		let decodeCalls = 0;
+		const value = await Effect.runPromise(
+			parseMacMedia(
+				JSON.stringify({
+					...payload,
+					artworkData: "a".repeat(2_800_001),
+					artworkMimeType: "image/png",
+				}),
+				() => {
+					decodeCalls++;
+					return null;
+				},
+			),
+		);
+		expect(value?.session).toMatchObject({
+			title: payload.title,
+			playing: true,
+			canPlay: true,
+			coverUrl: null,
+		});
+		expect(decodeCalls).toBe(0);
+	});
+
 	it("serializes real native-adapter controls through the shared service and pins the source without shell interpolation", async () => {
 		const directory = await fixture();
 		const calls: {
