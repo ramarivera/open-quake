@@ -6,7 +6,6 @@ import {
 	MEDIA_LOAD_TIMEOUT_MS,
 } from "./backgroundLoader";
 import { startClockTicker } from "./clockHooks";
-import { FLIP_PHASE_MS, FlipSequencer, type FlipState } from "./flipSequencer";
 import { type ProbeTarget, probeVideoDuration } from "./probeVideo";
 
 beforeEach(() => {
@@ -14,60 +13,6 @@ beforeEach(() => {
 });
 afterEach(() => {
 	vi.useRealTimers();
-});
-
-describe("minute flip (WIDGETS-027/028)", () => {
-	it("runs two 380 ms phases: old upper falls, new upper drops, then rests", () => {
-		const states: FlipState[] = [];
-		const flip = new FlipSequencer(7, (state) => states.push(state));
-		expect(FLIP_PHASE_MS).toBe(380);
-		flip.set(8, false);
-		expect(flip.snapshot).toEqual({ upper: 7, phase: "turn-on" });
-		vi.advanceTimersByTime(379);
-		expect(flip.snapshot.phase).toBe("turn-on");
-		vi.advanceTimersByTime(1);
-		expect(flip.snapshot).toEqual({ upper: 8, phase: "turn-down" });
-		vi.advanceTimersByTime(379);
-		expect(flip.snapshot.phase).toBe("turn-down");
-		vi.advanceTimersByTime(1);
-		expect(flip.snapshot).toEqual({ upper: 8, phase: "rest" });
-		expect(states).toEqual([
-			{ upper: 7, phase: "turn-on" },
-			{ upper: 8, phase: "turn-down" },
-			{ upper: 8, phase: "rest" },
-		]);
-		expect(vi.getTimerCount()).toBe(0);
-	});
-
-	it("restarts from the previously shown value when the digit changes mid-flip", () => {
-		const flip = new FlipSequencer(1, () => {});
-		flip.set(2, false);
-		vi.advanceTimersByTime(500);
-		flip.set(3, false);
-		expect(flip.snapshot).toEqual({ upper: 2, phase: "turn-on" });
-		vi.advanceTimersByTime(760);
-		expect(flip.snapshot).toEqual({ upper: 3, phase: "rest" });
-		expect(vi.getTimerCount()).toBe(0);
-	});
-
-	it("switches immediately under reduced motion", () => {
-		const flip = new FlipSequencer(4, () => {});
-		flip.set(5, true);
-		expect(flip.snapshot).toEqual({ upper: 5, phase: "rest" });
-		expect(vi.getTimerCount()).toBe(0);
-	});
-
-	it("ignores repeats and releases its timer on dispose", () => {
-		const onChange = vi.fn();
-		const flip = new FlipSequencer(4, onChange);
-		flip.set(4, false);
-		expect(onChange).not.toHaveBeenCalled();
-		flip.set(5, false);
-		flip.dispose();
-		expect(vi.getTimerCount()).toBe(0);
-		flip.set(6, false);
-		expect(onChange).toHaveBeenCalledTimes(1);
-	});
 });
 
 describe("custom background fallback (WIDGETS-035)", () => {

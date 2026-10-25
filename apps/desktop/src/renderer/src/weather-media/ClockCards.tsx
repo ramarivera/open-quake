@@ -82,29 +82,30 @@ export function ClockWeatherCard({
 			<div className="oq-weather-badge">
 				<WeatherIcon code={ready?.weatherCode ?? null} />
 			</div>
+			<span className="oq-weather-temp">
+				{ready?.temperature ?? "--"}
+				<sup>°</sup>
+			</span>
 			<div className="oq-weather-text">
 				<div className="oq-weather-city" title={city}>
 					{city || "—"}
 				</div>
-				<div className="oq-weather-main">
-					<span className="oq-weather-temp">
-						{ready?.temperature ?? "--"}
-						<sup>°</sup>
-					</span>
-					<span className="oq-weather-desc" data-error={state.kind === "error"}>
-						{text}
-					</span>
-				</div>
+				<span className="oq-weather-desc" data-error={state.kind === "error"}>
+					{text}
+				</span>
+				<span className="oq-weather-meta">
+					°{unit === "fahrenheit" ? "F" : "C"}
+					{ready?.stale ? " · Cached" : ""}
+				</span>
 			</div>
 			<div className="oq-weather-range">
-				<span>TODAY</span>
-				<div>H {ready?.high ?? "--"}°</div>
-				<div>L {ready?.low ?? "--"}°</div>
+				<div>
+					<span>H</span> {ready?.high ?? "--"}°
+				</div>
+				<div>
+					<span>L</span> {ready?.low ?? "--"}°
+				</div>
 			</div>
-			<span className="oq-weather-meta">
-				°{unit === "fahrenheit" ? "F" : "C"}
-				{ready?.stale ? " · Cached" : ""}
-			</span>
 		</div>
 	);
 }
@@ -161,7 +162,13 @@ export function ClockMusicCard({
 			</div>
 			<div className="oq-music-meta">
 				<div title={session?.title}>{session?.title || "—"}</div>
-				<span title={session?.artist}>{session?.artist || "—"}</span>
+				{snapshot.error || tip ? (
+					<span className="oq-music-tip" role="status">
+						{strings.musicUnavailable}
+					</span>
+				) : (
+					<span title={session?.artist}>{session?.artist || "—"}</span>
+				)}
 			</div>
 			<div className="oq-music-controls">
 				<TransportButton
@@ -190,11 +197,6 @@ export function ClockMusicCard({
 					<TransportGlyph kind="next" />
 				</TransportButton>
 			</div>
-			{snapshot.error || tip ? (
-				<span className="oq-music-tip" role="status">
-					{strings.musicUnavailable}
-				</span>
-			) : null}
 		</div>
 	);
 }

@@ -422,7 +422,7 @@ describe("real card render states", () => {
 		);
 		expect(html).toContain("City not found");
 		expect(html).toContain("--");
-		expect(html).toContain("TODAY");
+		expect(html).toContain("<span>L</span> --°");
 		expect(html).toContain('data-weather-icon="default"');
 	});
 	it("provider outages show Weather unavailable while keeping the valid city and placeholders", () => {

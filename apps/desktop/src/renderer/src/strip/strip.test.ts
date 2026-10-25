@@ -421,8 +421,10 @@ describe("tile registry", () => {
 				},
 				showEmptyGridDashedBorder: true,
 			});
-		expect(at("24h")).not.toContain("oq-flip-pill");
-		expect(at("12h")).toMatch(/<span class="oq-flip-pill">(AM|PM)<\/span>/);
+		expect(at("24h")).not.toContain("oq-clock-meridiem");
+		expect(at("12h")).toMatch(
+			/<span class="oq-clock-meridiem">(AM|PM)<\/span>/,
+		);
 	});
 });
 

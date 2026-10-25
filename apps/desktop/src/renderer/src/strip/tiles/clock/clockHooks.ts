@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { msUntilNextTick } from "./clockTime";
-import type { FlipTimers } from "./flipSequencer";
+
+/** Injectable timers so clock timing is testable with fake timers. */
+export interface ClockTimers {
+	setTimeout(callback: () => void, ms: number): unknown;
+	clearTimeout(handle: unknown): void;
+}
 
 export interface TickerOptions {
 	readonly seconds: boolean;
 	readonly onTick: (now: Date) => void;
 	readonly now?: () => Date;
-	readonly timers?: FlipTimers;
+	readonly timers?: ClockTimers;
 	/** Visibility source; resynchronises immediately when shown again. */
 	readonly visibility?: Pick<
 		Document,

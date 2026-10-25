@@ -1,125 +1,115 @@
+/*
+ * Weather and now-playing rows inside the clock's information column, and the
+ * flat now-playing player key (openspec/changes/independent-device-design).
+ * Colours are the device palette's --strip-* properties.
+ */
 .oq-weather-card,
 .oq-music-card {
 	position: relative;
 	display: flex;
 	align-items: center;
-	width: 564px;
 	box-sizing: border-box;
-	border-radius: 32px;
-	background: var(--glass-bg-strong, #222a);
-	border: 1px solid var(--glass-border, #fff3);
-	box-shadow:
-		var(--glass-hl, inset 0 1px #fff3),
-		0 22px 56px #0003;
-	backdrop-filter: var(--glass-blur, blur(26px));
-	color: #fffffff7;
+	width: 100%;
+	height: 168px;
+	color: var(--strip-text);
 }
 .oq-weather-card {
-	height: 153px;
-	padding: 0 34px;
-	gap: 20px;
+	gap: 22px;
 }
 .oq-weather-badge {
-	flex: 0 0 88px;
-	height: 88px;
-	border-radius: 26px;
-	display: grid;
-	place-items: center;
-	background: linear-gradient(#ffffff4d, #ffffff14);
-	box-shadow: inset 0 1px #fff5;
+	flex: none;
+	width: 60px;
+	height: 60px;
+	color: var(--strip-text);
 }
 .oq-weather-badge svg {
-	width: 44px;
-	height: 44px;
-}
-.oq-weather-text {
-	min-width: 0;
-	flex: 1;
-}
-.oq-weather-city {
-	font-size: 19px;
-	font-weight: 600;
-	max-width: 220px;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-	overflow: hidden;
-}
-.oq-weather-main {
-	display: flex;
-	flex-direction: column;
+	width: 100%;
+	height: 100%;
 }
 .oq-weather-temp {
-	font-size: 50px;
-	font-weight: 200;
-	line-height: 1.05;
+	flex: none;
+	font-size: 80px;
+	font-weight: 300;
+	line-height: 1;
+	letter-spacing: -0.03em;
 	font-variant-numeric: tabular-nums;
 }
 .oq-weather-temp sup {
-	font-size: 0.5em;
+	position: relative;
+	top: -0.05em;
+	font-size: 0.45em;
+	vertical-align: top;
 }
-.oq-weather-desc {
-	font-size: 19px;
-	font-weight: 450;
-	color: #ffffffad;
-	white-space: nowrap;
+.oq-weather-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+.oq-weather-city {
 	overflow: hidden;
+	font-size: 28px;
+	font-weight: 600;
+	white-space: nowrap;
 	text-overflow: ellipsis;
 }
-/* A dark chip, not tinted text: bright theme art left the glass card at 1.08:1. */
+.oq-weather-desc {
+	overflow: hidden;
+	color: var(--strip-muted);
+	font-size: 24px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+/* An opaque chip so the state reads on its own, with a word, not colour alone. */
 .oq-weather-desc[data-error="true"] {
 	align-self: flex-start;
 	max-width: 100%;
 	box-sizing: border-box;
-	padding: 1px 12px;
+	padding: 2px 14px;
 	border-radius: 999px;
-	background: #222;
-	color: #ffd6c4;
+	background: #2b1915;
+	box-shadow: inset 0 0 0 1.5px var(--strip-danger);
+	color: var(--strip-danger);
+	font-size: 22px;
+	font-weight: 600;
 }
 .oq-weather-range {
-	flex: 0 0 auto;
-	padding-left: 26px;
-	border-left: 1px solid #ffffff24;
+	flex: none;
 	display: flex;
 	flex-direction: column;
-	gap: 7px;
+	gap: 6px;
+	padding-left: 24px;
+	border-left: 1px solid var(--strip-hairline);
+	font-size: 26px;
+	font-variant-numeric: tabular-nums;
 }
-.oq-weather-range > span {
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.14em;
-	color: #ffffff61;
-}
-.oq-weather-range > div {
-	font-size: 21px;
-	color: #ffffffd1;
-}
-.oq-weather-range > div:last-child {
-	color: #ffffff9e;
+.oq-weather-range span {
+	color: var(--strip-muted);
 }
 .oq-weather-meta {
-	position: absolute;
-	right: 25px;
-	bottom: 8px;
-	font-size: 10px;
-	color: #fff9;
+	color: var(--strip-muted);
+	font-size: 20px;
 }
 .oq-music-card {
-	padding: 22px 24px;
-	gap: 14px;
-	min-height: 153px;
+	gap: 22px;
 }
-.oq-music-card[data-state="unavailable"] {
+.oq-music-card[data-state="unavailable"] .oq-music-cover,
+.oq-music-card[data-state="unavailable"] .oq-music-meta > div {
 	opacity: 0.55;
 }
 .oq-music-cover {
-	flex: 0 0 108px;
-	height: 108px;
-	border-radius: 24px;
-	overflow: hidden;
-	background: linear-gradient(135deg, #2b3a8f, #7b2f9e, #e0457b);
+	flex: none;
 	display: grid;
 	place-items: center;
-	font-size: 54px;
+	width: 104px;
+	height: 104px;
+	overflow: hidden;
+	border-radius: 14px;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-muted);
+	font-size: 48px;
 }
 .oq-music-cover img {
 	width: 100%;
@@ -127,77 +117,88 @@
 	object-fit: cover;
 }
 .oq-music-meta {
-	min-width: 0;
+	display: flex;
 	flex: 1;
-	max-width: 158px;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
 }
 .oq-music-meta > div {
-	font-size: 20px;
+	font-size: 28px;
 	font-weight: 600;
 }
 .oq-music-meta > span {
-	font-size: 16px;
-	color: #fff9;
-	display: block;
-	margin-top: 8px;
+	color: var(--strip-muted);
+	font-size: 24px;
 }
 .oq-music-meta > * {
 	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.oq-music-meta > .oq-music-tip {
+	color: var(--strip-warning);
+	font-weight: 550;
 }
 .oq-music-controls {
+	flex: none;
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	margin-left: auto;
+	gap: 8px;
 }
-.oq-music-controls button {
-	border-radius: 50%;
-	width: 54px;
-	height: 54px;
-	flex-shrink: 0;
-	border: 1px solid #ffffff24;
-	background: #ffffff17;
-	color: white;
+.oq-music-controls button,
+.oq-player-controls button {
+	flex: none;
 	display: grid;
 	place-items: center;
-	padding: 15px;
+	box-sizing: border-box;
+	width: 64px;
+	height: 64px;
+	padding: 20px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--strip-raised);
+	box-shadow: inset 0 0 0 1px var(--strip-line);
+	color: var(--strip-text);
 	cursor: pointer;
-	transition: transform 100ms ease-out;
+	-webkit-tap-highlight-color: transparent;
 }
-.oq-music-controls button.oq-music-play {
-	width: 70px;
-	height: 70px;
-	background: #ffffffeb;
-	color: #1a1a1f;
-	padding: 22px;
+.oq-music-controls button.oq-music-play,
+.oq-player-controls button.oq-player-main {
+	width: 80px;
+	height: 80px;
+	padding: 25px;
+	background: var(--strip-accent);
+	box-shadow: none;
+	color: var(--strip-accent-ink);
 }
-.oq-music-controls button:disabled {
-	opacity: 0.3;
+.oq-music-controls button:disabled,
+.oq-player-controls button:disabled {
+	background: transparent;
+	box-shadow: inset 0 0 0 1px var(--strip-hairline);
+	color: var(--strip-subtle);
 	cursor: default;
 }
-.oq-music-controls svg {
+.oq-music-controls svg,
+.oq-player-controls svg {
 	width: 100%;
 	height: 100%;
 	fill: currentColor;
 }
-.oq-music-controls button.is-pressed,
-.oq-music-controls button:active {
-	transform: scale(0.9);
-}
-.oq-music-tip {
-	position: absolute;
-	bottom: 7px;
-	right: 24px;
-	font-size: 13px;
-	color: #f0c97a;
+.oq-music-controls button.is-pressed:not(:disabled),
+.oq-music-controls button:active:not(:disabled),
+.oq-player-controls button.is-pressed:not(:disabled),
+.oq-player-controls button:active:not(:disabled) {
+	box-shadow: inset 0 0 0 3px var(--strip-text);
+	transform: scale(0.94);
 }
 .oq-music-controls button:focus-visible,
+.oq-player-controls button:focus-visible,
 .oq-player button:focus-visible {
-	outline: 3px solid #00ffff;
+	outline: 3px solid var(--strip-accent);
 	outline-offset: 4px;
 }
+
 .oq-player {
 	position: relative;
 	overflow: hidden;
