@@ -6,6 +6,7 @@ import type {
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import { AiSpeechService } from "../../../../../packages/edge/src/ai/speech/speech-service";
+import { AudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import type {
 	CredentialVault,
 	JsonStore,
@@ -37,12 +38,16 @@ export interface DesktopSpeechOptions
 export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 	options: DesktopSpeechOptions,
 ) {
+	const audioOutput = yield* AudioOutput.pipe(
+		Effect.provide(AudioOutput.Default),
+	);
+	yield* Effect.addFinalizer(() => audioOutput.close());
 	const credentials = yield* createSpeechCredentials(options.credentials);
 	const layer = AiSpeechService.Default.pipe(
 		Layer.provide(
 			Layer.mergeAll(
 				Layer.succeed(AiCredentials, credentials),
-				options.ports ?? desktopSpeechPorts(),
+				options.ports ?? desktopSpeechPorts(audioOutput),
 			),
 		),
 	);
@@ -66,5 +71,5 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 		profiles: settings.profiles,
 	});
 	reset = controller.reset();
-	return { ...controller, settings };
+	return { ...controller, settings, audioOutput };
 });

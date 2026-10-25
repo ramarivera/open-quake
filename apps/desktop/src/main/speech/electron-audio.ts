@@ -12,6 +12,7 @@ import {
 	SpeechOutput,
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
+import type { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import { audioWorkerSource } from "./audio-worker";
 import type { CaptureDriver } from "./capture";
 import { DesktopSpeechError } from "./errors";
@@ -215,26 +216,43 @@ export function createElectronCaptureDriver(
 	};
 }
 export function createDesktopAudioOutput(
+	ownership: Effect.Effect.Success<typeof makeAudioOutput>,
 	open = openAudioWorker,
 ): typeof SpeechOutput.Service {
-	let active: { stop: Effect.Effect<void> } | undefined;
 	return {
-		suspendForCapture: Effect.suspend(() => active?.stop ?? Effect.void),
+		suspendForCapture: ownership.suspend(),
+		capture: ownership.acquire("capture", Effect.void).pipe(
+			Effect.map((lease) => ({ stop: lease.release })),
+			Effect.mapError((cause) => new AiUnavailable(cause)),
+		),
 		acquire: Effect.gen(function* () {
-			if (active) yield* active.stop;
 			const controller = new AbortController();
 			let worker: AudioWorker | undefined;
+			const reservation = yield* ownership
+				.acquire(
+					"speech",
+					Effect.promise(async () => {
+						controller.abort();
+						await worker?.close();
+					}),
+				)
+				.pipe(Effect.mapError((cause) => new AiUnavailable(cause)));
+			let preparing: Promise<void> | undefined;
+			const prepare = async () => {
+				worker = await open(controller.signal);
+				if (controller.signal.aborted) {
+					await worker.close();
+					throw new AiUnavailable();
+				}
+				await worker.invoke("ready");
+			};
+			const ready = Effect.fn("DesktopAudioOutput.ready")(function* () {
+				if (!(yield* reservation.current)) return yield* new AiUnavailable();
+				yield* boundary(() => (preparing ??= prepare()));
+				if (!(yield* reservation.current)) return yield* new AiUnavailable();
+			});
 			const lease = {
-				ready: boundary(async () => {
-					worker = await open(controller.signal);
-					if (controller.signal.aborted) {
-						await worker.close();
-						throw new AiUnavailable();
-					}
-					await worker.invoke("ready");
-				}).pipe(
-					Effect.onInterrupt(() => Effect.sync(() => controller.abort())),
-				),
+				ready: ready().pipe(Effect.onError(() => reservation.release)),
 				play: (audio: GeneratedAudio) =>
 					Effect.gen(function* () {
 						const verified = verifiedAudio(audio.bytes, audio.format);
@@ -262,7 +280,11 @@ export function createDesktopAudioOutput(
 								offset += 8 + size + (size % 2);
 							}
 						}
-						if (!worker || active !== lease || controller.signal.aborted)
+						if (
+							!worker ||
+							!(yield* reservation.current) ||
+							controller.signal.aborted
+						)
 							return yield* new AiUnavailable();
 						yield* boundary(() =>
 							worker
@@ -270,20 +292,17 @@ export function createDesktopAudioOutput(
 								: Promise.reject(new AiUnavailable()),
 						);
 					}),
-				stop: Effect.promise(async () => {
-					controller.abort();
-					await worker?.close();
-					if (active === lease) active = undefined;
-				}),
+				stop: reservation.release,
 			};
-			active = lease;
 			return lease;
 		}),
 	};
 }
-export const desktopSpeechPorts = () =>
+export const desktopSpeechPorts = (
+	ownership: Effect.Effect.Success<typeof makeAudioOutput>,
+) =>
 	Layer.mergeAll(
 		Layer.succeed(SpeechHttp, { fetch: (url, init) => fetch(url, init) }),
 		Layer.succeed(SpeechWebSocket, desktopWebSocket),
-		Layer.succeed(SpeechOutput, createDesktopAudioOutput()),
+		Layer.succeed(SpeechOutput, createDesktopAudioOutput(ownership)),
 	);
