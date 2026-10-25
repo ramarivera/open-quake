@@ -45,3 +45,9 @@ Provider loopback addresses are rejected before Docker starts, with explicit gui
 CodeRabbit correctly notes that OpenClaw's HTTP protocols don't expose internal tool events. The bootstrap now asserts its generated deny-all tool configuration before starting the runtime; zero observed tool events alone don't establish that invariant.
 
 The review also correctly notes that live adapter tests don't establish the desktop selected-connection/IPC/conversation/UI path. That separate live acceptance is tracked as open-quake-hwn.12; the E2E README already states this limit. AirPods Max are Bluetooth-connected but not currently enumerated as a CoreAudio input. USB input identity and physical signal remain unverified. No audio device selection or recording was performed.
+
+## Merged container delivery
+
+PR41 was squash-merged as 78007a7040994a4eb625a364631b0a937b94e76d after run 40200809998 passed validation, all five native packaging/install jobs and the complete download matrix. Codex completed review of the final functional head 7d8d7e9bb6306eb71005c56243eb80f15ea56a74 with no findings. All six review threads have attributed replies and are resolved, including the separate live desktop coverage task. No disposable E2E containers, networks or volumes remain. The source checkout was removed after verified teardown; Docker image/build caches intentionally remain.
+
+The original PR38/39/40 stack and the container extension are now merged. No release tag was pushed. Runtime HTTP inference and continuity are verified; desktop live routing and physical speech remain outside that evidence. Existing speech tasks and open-quake-hwn.12 remain open. This final documentation update synchronizes task 5.4 with the completed delivery and doesn't change functional code.
