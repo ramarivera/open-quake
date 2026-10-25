@@ -26,7 +26,7 @@
 
 ## 5. Disposable runtime acceptance, open-quake-hwn.11
 
-- [ ] 5.1 Add opt-in Docker Compose E2E against pinned real Hermes and OpenClaw runtimes with isolated disposable state, loopback API ports and no user configuration mounts. Supply OpenAI-compatible base URL, optional API key and model through environment variables only; never commit a personal inference endpoint.
-- [ ] 5.2 Exercise real adapters and transport for authentication, capabilities, streaming replies and session continuation. Disable agent tools and messaging integrations, bound inference/deadlines, and verify Compose teardown after success and failure. Live runs in this effort use only the user-authorized gpt-6.1-sol route.
-- [ ] 5.3 Inspect production speech capture readiness, document exact missing bindings and human microphone acceptance steps, and keep unexercised speech/audio claims open in the existing speech tasks.
+- [x] 5.1 Add opt-in Docker Compose E2E against pinned real Hermes and OpenClaw runtimes with isolated disposable state, loopback API ports and no user configuration mounts. Supply OpenAI-compatible base URL, optional API key and model through environment variables only; never commit a personal inference endpoint.
+- [x] 5.2 Exercise real adapters and transport for authentication, capabilities, streaming replies and session continuation. Disable agent tools and messaging integrations, bound inference/deadlines, and verify Compose teardown after success and failure. Live runs in this effort use only the user-authorized gpt-6.1-sol route.
+- [x] 5.3 Inspect production speech capture readiness, document exact missing bindings and human microphone acceptance steps, and keep unexercised speech/audio claims open in the existing speech tasks.
 - [ ] 5.4 Reconcile and merge the reviewed existing PR stack, deliver the E2E extension through one bot-review round and passing checks, and merge it after handling findings. No release tag is requested.

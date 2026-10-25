@@ -20,7 +20,9 @@
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest run",
+		"test:e2e": "node e2e/run.mjs",
+		"test:e2e:config": "node --test e2e/config.node-test.mjs"
 	},
 	"dependencies": {
 		"effect": "catalog:"
