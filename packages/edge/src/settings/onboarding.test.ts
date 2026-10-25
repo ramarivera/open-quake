@@ -82,10 +82,10 @@ function fixture(initial: unknown = legacy) {
 			usableProfiles: () => ownerGate.pipe(Effect.as(usable)),
 			runtimeSupported: Effect.sync(() => supported),
 			runtimeConfigured: Effect.sync(() => configured),
-			regionSuggestions: () =>
+			regionSuggestions: (region) =>
 				Effect.sync(() => {
 					seedCalls++;
-					return { provider: "supported-suggestion" };
+					return { provider: `provider-${region}` };
 				}),
 		}),
 	);
@@ -632,7 +632,7 @@ it("seeds on the first explicit region save and keeps local use available if opt
 		await runtime.runPromise(
 			WizardService.save({ step: "profiles", region: "US" }),
 		);
-		expect(restored.seeds()).toBe(0);
+		expect(restored.seeds()).toBe(1);
 		expect(await runtime.runPromise(WizardService.complete())).toMatchObject({
 			completed: true,
 			runtime: "configured",
@@ -722,6 +722,45 @@ it("keeps conductor spans in one parent trace without recording draft or credent
 		);
 		expect(metadata).not.toContain("private-profile-id");
 		expect(metadata).not.toContain("credential");
+	} finally {
+		await runtime.dispose();
+	}
+});
+
+it("refreshes advisory suggestions only when an explicit region changes, preserving chosen locale and providers", async () => {
+	const f = fixture({
+		...legacy,
+		provider: { selected: "mine" },
+		speech: { selected: "my-speech" },
+	});
+	const runtime = f.create();
+	try {
+		expect(
+			await runtime.runPromise(
+				WizardService.save({
+					step: "locale-region",
+					locale: "de",
+					region: "DE",
+				}),
+			),
+		).toMatchObject({ suggestions: { provider: "provider-DE" } });
+		expect(
+			await runtime.runPromise(
+				WizardService.save({ step: "display", region: "US" }),
+			),
+		).toMatchObject({
+			locale: "de",
+			region: "US",
+			suggestions: { provider: "provider-US" },
+		});
+		await runtime.runPromise(
+			WizardService.save({ step: "profiles", region: "US" }),
+		);
+		expect(f.seeds()).toBe(2);
+		expect(f.disk()).toMatchObject({
+			provider: { selected: "mine" },
+			speech: { selected: "my-speech" },
+		});
 	} finally {
 		await runtime.dispose();
 	}

@@ -1,5 +1,6 @@
-import { Context, Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { SettingsBackendRpcs } from "../../../../../packages/edge/src/settings/backend-rpc";
+import { SettingsBackendFailure } from "../../../../../packages/edge/src/settings/settings-errors";
 import {
 	type FromServerEncoded,
 	RpcClient,
@@ -57,7 +58,22 @@ export function createSettingsBackendBridge(
 		runtime
 			.runPromise(Effect.flatMap(ClientTag, f).pipe(Effect.either))
 			.then((result) =>
-				result._tag === "Right" ? result.right : Promise.reject(result.left),
+				result._tag === "Right"
+					? result.right
+					: Promise.reject(
+							Schema.is(SettingsBackendFailure)(result.left)
+								? {
+										_tag: result.left._tag,
+										code: result.left.code,
+										...(result.left._tag === "SettingsOsApplyFailed"
+											? { reason: result.left.reason }
+											: {}),
+									}
+								: {
+										_tag: "SettingsTransportUnavailable",
+										code: "QUAKE.SETTINGS.UNAVAILABLE",
+									},
+						),
 			);
 	return {
 		general: () => run((client) => client.settings.general(undefined)),

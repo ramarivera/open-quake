@@ -232,6 +232,46 @@ describe("real settings RPC/preload and canonical repository", () => {
 			await f.close();
 		}
 	});
+	it("projects catalog failures to plain objects for the real contextBridge and leaves window-only revisions out of locale broadcasts", async () => {
+		const f = await setup();
+		try {
+			await f.bridge.general();
+			const before = await f.locale.read();
+			await f.bridge.saveGeneral({
+				window: { x: 25, y: 40, width: 800, height: 600 },
+			});
+			expect(await f.locale.read()).toEqual({
+				locale: before.locale,
+				revision: before.revision + 1,
+			});
+			expect(f.panel.sender.send).not.toHaveBeenCalledWith(
+				LOCALE_CHANGED,
+				expect.anything(),
+			);
+			f.nativeWrite.mockImplementation(() =>
+				Effect.fail(
+					new SettingsOsApplyFailed(new Error("private-secret"), "denied"),
+				),
+			);
+			const failure: unknown = await f.bridge
+				.saveGeneral({ launchAtLogin: true })
+				.catch((cause: unknown) => cause);
+			expect(failure).toEqual({
+				_tag: "SettingsOsApplyFailed",
+				code: "QUAKE.SETTINGS.OS_APPLY_FAILED",
+				reason: "denied",
+			});
+			expect(Object.getPrototypeOf(failure)).toBe(Object.prototype);
+			expect(structuredClone(failure)).toEqual(failure);
+			await f.locale.set("de");
+			expect(await f.locale.read()).toMatchObject({
+				locale: "de",
+				revision: before.revision + 3,
+			});
+		} finally {
+			await f.close();
+		}
+	});
 	it("rejects panel, foreign/subframes and invalid payloads before native IO", async () => {
 		const f = await setup();
 		const message = {

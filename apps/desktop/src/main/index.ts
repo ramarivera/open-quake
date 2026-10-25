@@ -286,19 +286,21 @@ if (!app.requestSingleInstanceLock()) {
 									app.listenerCount("activate") > 0,
 							}),
 							owners: createWizardOwners({
-								deviceId: () => activeSerial,
+								deviceId: async () => {
+									const hardware = bus?.hardware?.();
+									return hardware
+										? background.runPromise(
+												hardware
+													.snapshot()
+													.pipe(Effect.map((snapshot) => snapshot.serial)),
+											)
+										: undefined;
+								},
 								profiles: () =>
-									profiles.runtime.runPromise(
-										ProfileManager.read().pipe(
-											Effect.map((envelope) => envelope.profiles),
-										),
-									),
+									profiles.runtime.runPromise(ProfileManager.read()),
 								runtimeSupported: () => Boolean(agentHttp),
 								runtimeConfigured: async () =>
-									agents
-										? (await agents.runtime.runPromise(AgentsService.view()))
-												.runtime.status === "ready"
-										: false,
+									agentHttp ? agentHttp.configured() : false,
 							}),
 						},
 					});
@@ -440,14 +442,18 @@ if (!app.requestSingleInstanceLock()) {
 					void localeRegistration
 						.locale()
 						.then(synchronizeKnobLocale, () => {});
+					let managementReady = Promise.resolve();
 					const focusManagement = (): void => {
 						if (quitting) return;
 						reopenWindows();
-						if (managementWin.isDestroyed())
-							managementWin = createManagementWindow();
-						if (managementWin.isMinimized()) managementWin.restore();
-						managementWin.show();
-						managementWin.focus();
+						const target = managementWin;
+						void managementReady.then(() => {
+							if (quitting || target.isDestroyed() || target !== managementWin)
+								return;
+							if (target.isMinimized()) target.restore();
+							target.show();
+							target.focus();
+						});
 					};
 					app.on("second-instance", focusManagement);
 					const media = registerMedia(
@@ -926,7 +932,7 @@ if (!app.requestSingleInstanceLock()) {
 							if (panelWin.isDestroyed())
 								syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
 							managementWin = createManagementWindow();
-							settingsWindow.attach(managementWin);
+							managementReady = settingsWindow.initialize(managementWin, false);
 							startBus();
 							// stopBus locks the lifecycle before releasing the old owner.
 							// Unlock only after that stop completes, including rapid reopening.
@@ -941,7 +947,8 @@ if (!app.requestSingleInstanceLock()) {
 						void stopBus();
 						if (process.platform !== "darwin") app.quit();
 					});
-					await settingsWindow.initialize(managementWin);
+					managementReady = settingsWindow.initialize(managementWin);
+					await managementReady;
 				}),
 				"app.startup",
 			),

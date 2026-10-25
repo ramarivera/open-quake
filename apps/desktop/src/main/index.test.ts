@@ -229,6 +229,7 @@ vi.mock("./voice", async () => {
 vi.mock("./agent-http", () => ({
 	registerAgentHttp: vi.fn(async () => ({
 		backend: undefined,
+		configured: vi.fn(async () => false),
 		drafting: undefined,
 		createVoiceAdapter: vi.fn(),
 		decorateVoiceRuntime: vi.fn(),
@@ -389,14 +390,14 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
-	it("focuses and restores the existing management window on second launch", () => {
+	it("focuses and restores the existing management window on second launch", async () => {
 		const { management } = windows();
 		expect(management.options.show).toBe(false);
 		expect(management.show).toHaveBeenCalledOnce();
 		management.show.mockClear();
 		management.isMinimized.mockReturnValue(true);
 		appEvent("second-instance");
-		expect(management.restore).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(management.restore).toHaveBeenCalledOnce());
 		expect(management.show).toHaveBeenCalledOnce();
 		expect(management.focus).toHaveBeenCalledOnce();
 	});
@@ -827,6 +828,48 @@ describe("desktop main with the real device service and fake HID", () => {
 		);
 	}
 
+	it("restores saved bounds before presenting a replacement management window", async () => {
+		const root = await mkdtemp(join(tmpdir(), "oq-settings-reopen-"));
+		const bounds = { x: 100, y: 100, width: 800, height: 600 };
+		electron.app.getPath.mockImplementation(() => root);
+		await writeFile(
+			join(root, "settings-v1.json"),
+			JSON.stringify({
+				version: 1,
+				revision: 2,
+				locale: "en",
+				general: {
+					version: 1,
+					launchAtLogin: false,
+					startHidden: true,
+					window: bounds,
+				},
+			}),
+		);
+		try {
+			await start();
+			await vi.waitFor(() =>
+				expect(windows().management.setBounds).toHaveBeenCalledWith(bounds),
+			);
+			const old = windows().management;
+			old.destroyed = true;
+			appEvent("activate");
+			const replacement = electron.BrowserWindow.getAllWindows().find(
+				(window) => window.options.title === "open-quake — management",
+			);
+			if (!replacement) throw new Error("Management must reopen");
+			await vi.waitFor(() => expect(replacement.focus).toHaveBeenCalledOnce());
+			expect(replacement.setBounds).toHaveBeenCalledWith(bounds);
+			expect(replacement.setBounds.mock.invocationCallOrder[0]).toBeLessThan(
+				replacement.show.mock.invocationCallOrder[0] ?? 0,
+			);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("enrolls the real serial for the native connection lifetime and reconnects", async () => {
 		fake = await Effect.runPromise(
 			makeFakeHidTransport([
@@ -1183,6 +1226,8 @@ describe("single-instance startup and release policy", () => {
 			expect(windows().panel.options.show).toBe(false);
 			expect(windows().panel.showInactive).not.toHaveBeenCalled();
 			const { panel, management } = windows();
+			await vi.waitFor(() => expect(management.show).toHaveBeenCalledOnce());
+			management.show.mockClear();
 			management.destroyed = state === "destroyed";
 			management.isMinimized.mockReturnValue(state === "minimized");
 			appEvent("activate");
@@ -1191,7 +1236,7 @@ describe("single-instance startup and release policy", () => {
 			);
 			expect(reopened).toBeDefined();
 			expect(panel.destroyed).toBe(false);
-			expect(reopened?.show).toHaveBeenCalledOnce();
+			await vi.waitFor(() => expect(reopened?.show).toHaveBeenCalledOnce());
 			expect(reopened?.focus).toHaveBeenCalledOnce();
 			if (state === "destroyed") expect(reopened).not.toBe(management);
 			else expect(reopened).toBe(management);

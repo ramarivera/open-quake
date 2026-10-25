@@ -52,6 +52,28 @@ describe("canonical settings window lifecycle", () => {
 		await vi.advanceTimersByTimeAsync(1000);
 		expect(save).toHaveBeenCalledTimes(2);
 	});
+	it("restores a replacement after draining the previous window's geometry without presenting it before explicit activation", async () => {
+		vi.useFakeTimers();
+		const old = windowFixture(),
+			replacement = windowFixture();
+		let saved = { ...old.bounds };
+		const binding = bindSettingsWindow({
+			startup: async () => ({ hidden: true, window: saved }),
+			save: async (bounds) => {
+				saved = bounds;
+			},
+			failure: vi.fn(),
+		});
+		await binding.initialize(old);
+		old.bounds.x = 350;
+		old.callbacks.get("move")?.();
+		old.callbacks.get("closed")?.();
+		await binding.initialize(replacement, false);
+		expect(replacement.setBounds).toHaveBeenCalledWith({ ...old.bounds });
+		expect(replacement.show).not.toHaveBeenCalled();
+		expect(old.callbacks.size).toBe(0);
+		await binding.dispose();
+	});
 	it("honors a reachable hidden plan and starts visibly after a failed settings read", async () => {
 		const hidden = windowFixture();
 		const binding = bindSettingsWindow({

@@ -70,7 +70,7 @@ export class WizardService extends Effect.Service<WizardService>()(
 									if (before.completed) return yield* new WizardIncomplete();
 									const { locale, ...choices } = draft;
 									const suggestions =
-										draft.region !== undefined && before.region === undefined
+										draft.region !== undefined && draft.region !== before.region
 											? yield* bounded(owners.regionSuggestions(draft.region))
 											: before.suggestions;
 									const next: WizardProgress = {

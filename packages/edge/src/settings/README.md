@@ -67,7 +67,7 @@ Requery login state rather than treating cancellation or timeout as rollback.
 
 `snapshot()` loads resumable progress. `save(WizardDraft)` stores the step and
 choices without installing runtimes or creating profiles. Locale/region are
-explicit choices. Profile IDs are deduplicated. `seedRegion(region)` initializes
+explicit choices. Profile IDs are deduplicated. Explicit region changes refresh advisory suggestions without replacing chosen provider or speech settings. `seedRegion(region)` initializes
 local advisory suggestions once and never selects a model/provider or overwrites
 explicit settings. The root must return only suggestions supported by canonical
 provider/speech owners; an unsupported suggestion remains absent.
@@ -75,7 +75,7 @@ provider/speech owners; an unsupported suggestion remains absent.
 `complete()` requires confirmed locale, region, a display choice and usable
 profile IDs. The injected owners revalidate the selected QUAKE identity and
 profiles. Explicit desktop preview needs no hardware. Supported optional runtime
-setup must be configured or explicitly skipped; unsupported runtime steps do not
+setup accepts a saved HTTP connection even while its server is offline, or can be explicitly skipped; unsupported runtime steps do not
 block local use. Completion and its step share one durable document write. Failed
 writes leave the running wizard incomplete. Repeated completion is a no-op;
 `replay()` is the explicit action that reopens setup, preserving all choices and

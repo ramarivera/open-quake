@@ -66,15 +66,18 @@ export function bindSettingsWindow(options: {
 	};
 	return {
 		attach,
-		initialize: async (win: SettingsWindow): Promise<void> => {
+		initialize: async (win: SettingsWindow, present = true): Promise<void> => {
 			try {
+				// Drain a closed window's last geometry before reading its replacement.
+				flush();
+				await work;
 				const plan = await options.startup();
 				if (disposed || win.isDestroyed()) return;
 				if (plan.window) win.setBounds(plan.window);
-				if (!plan.hidden) win.show();
+				if (present && !plan.hidden) win.show();
 			} catch (cause) {
 				options.failure(cause);
-				if (!disposed && !win.isDestroyed()) win.show();
+				if (present && !disposed && !win.isDestroyed()) win.show();
 			} finally {
 				if (!win.isDestroyed()) attach(win);
 			}
