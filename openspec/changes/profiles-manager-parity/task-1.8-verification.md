@@ -109,3 +109,7 @@ confirm compilation occurs once per helper lifetime. Exercise crash/restart,
 deadline and teardown with real children, and confirm no orphan PowerShell
 remains after profile/emoji runtime disposal. Preserve these measurements before
 checking task 1.8 or closing its bead. No latency or CPU target is claimed here.
+
+## Parent composition
+
+The production Profiles layer now acquires `makeScopedForegroundProbe` through a scoped layer. Mock mode creates no native helper. Emoji awaits foreground disposal after runtime disposal, including runtime disposal failure. Combined parent source passed 1,380 desktop tests, desktop typecheck, production build and scoped Biome. Native Windows evidence remains separate; this macOS integration does not establish Windows identity, latency, CPU or teardown.

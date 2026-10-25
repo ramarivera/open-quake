@@ -49,7 +49,7 @@ import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
-import { makeForegroundProbe } from "./foreground-app";
+import { makeScopedForegroundProbe } from "./foreground-app";
 import {
 	canonicalProfileAppPath,
 	loadInstalledProfileApps,
@@ -123,25 +123,31 @@ export function registerProfiles(
 			),
 		),
 		Layer.provide(
-			Layer.succeed(ProfileSwitchingPort, {
-				platform,
-				foreground:
-					process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
-						? () => Effect.succeed(Option.none())
-						: makeForegroundProbe(platform),
-				push: (serial, profile) =>
-					Effect.tryPromise({
-						try: async () => {
-							await deliver?.(serial, profile);
-							broadcast(PROFILE_SELECTION, {
-								serial,
-								profile: Schema.encodeSync(Profile)(profile),
-								hardware: "unverified",
-							});
-						},
-						catch: ProfileDeliveryFailed.fromCause,
-					}),
-			}),
+			Layer.scoped(
+				ProfileSwitchingPort,
+				Effect.gen(function* () {
+					const foreground =
+						process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+							? () => Effect.succeed(Option.none())
+							: yield* makeScopedForegroundProbe(platform);
+					return {
+						platform,
+						foreground,
+						push: (serial, profile) =>
+							Effect.tryPromise({
+								try: async () => {
+									await deliver?.(serial, profile);
+									broadcast(PROFILE_SELECTION, {
+										serial,
+										profile: Schema.encodeSync(Profile)(profile),
+										hardware: "unverified",
+									});
+								},
+								catch: ProfileDeliveryFailed.fromCause,
+							}),
+					};
+				}),
+			),
 		),
 	);
 	const runtime = makeDesktopRuntime(

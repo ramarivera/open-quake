@@ -1,5 +1,6 @@
 import { Effect, Layer } from "effect";
 import { type BrowserWindow, type IpcMainInvokeEvent, ipcMain } from "electron";
+import type { LocaleSnapshot } from "../../../../../packages/edge/src/settings/settings-contracts";
 import { SettingsService } from "../../../../../packages/edge/src/settings/settings-service";
 import { LOCALE_CHANGED, LOCALE_REQUEST } from "../../shared/locale";
 import { agentRequestAllowed } from "../agents/controller";
@@ -26,6 +27,7 @@ export function registerAppLocale(options: {
 	let disposed = false,
 		pending = 0;
 	const tasks = new Set<Promise<unknown>>();
+	const localeListeners = new Set<(snapshot: LocaleSnapshot) => void>();
 	const allowed = (event: IpcMainInvokeEvent) =>
 		!disposed &&
 		options.windows().some(
@@ -59,6 +61,7 @@ export function registerAppLocale(options: {
 					const snapshot = yield* Effect.flatMap(SettingsService, (service) =>
 						service.locale(),
 					);
+					for (const listener of localeListeners) listener(snapshot);
 					for (const win of options.windows()) {
 						if (
 							win &&
@@ -91,9 +94,17 @@ export function registerAppLocale(options: {
 		}
 	});
 	return {
+		/** Main consumers share the same settings runtime and durable selection. */
+		locale: (): Promise<LocaleSnapshot> =>
+			runtime.runPromise(SettingsService.use((service) => service.locale())),
+		onLocaleChanged: (listener: (snapshot: LocaleSnapshot) => void) => {
+			localeListeners.add(listener);
+			return () => localeListeners.delete(listener);
+		},
 		dispose: async () => {
 			if (disposed) return;
 			disposed = true;
+			localeListeners.clear();
 			ipcMain.removeHandler(LOCALE_REQUEST);
 			await Promise.allSettled(tasks);
 			await runtime.dispose();

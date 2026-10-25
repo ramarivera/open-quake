@@ -20,6 +20,7 @@ import { RuntimeStorageFailed } from "../../../../packages/edge/src/agent-http/r
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
@@ -209,6 +210,9 @@ if (!app.requestSingleInstanceLock()) {
 						() => managementWin,
 					);
 					let bus: DeviceBus | undefined;
+					let activeSerial: string | undefined;
+					const activeDeviceId = () => activeSerial ?? "desktop-preview";
+					let knobLocale: LocaleSnapshot["locale"] = "en";
 					let resetVoice = (): Promise<void> => Promise.resolve();
 					let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 						Promise.resolve();
@@ -303,7 +307,7 @@ if (!app.requestSingleInstanceLock()) {
 									);
 							},
 						}),
-						serial: () => "quake",
+						serial: activeDeviceId,
 						panel: () => panelWin,
 						management: () => managementWin,
 					});
@@ -363,12 +367,34 @@ if (!app.requestSingleInstanceLock()) {
 						() => panelWin,
 						() => [panelWin, managementWin],
 						{
+							deviceId: activeDeviceId,
+							locale: () => knobLocale,
 							profiles: knobProfileBinding(profiles.runtime, profiles.select),
+							thumbnail: profiles.thumbnail,
 							hardware: () => bus?.hardware?.(),
 							voice: voice.knobVoice,
 						},
 						diagnostics,
 					);
+					let knobLocaleRevision = -1;
+					const synchronizeKnobLocale = (snapshot: LocaleSnapshot): void => {
+						if (snapshot.revision < knobLocaleRevision) return;
+						const changed = knobLocale !== snapshot.locale;
+						knobLocale = snapshot.locale;
+						knobLocaleRevision = snapshot.revision;
+						if (changed)
+							void knob.refresh().catch(() => {
+								// The instrumented knob runtime retains the failed exit.
+							});
+					};
+					const removeKnobLocale = localeRegistration.onLocaleChanged(
+						synchronizeKnobLocale,
+					);
+					// A corrupt settings document remains visible through its original
+					// IPC failure and diagnostics; it must not prevent device startup.
+					void localeRegistration
+						.locale()
+						.then(synchronizeKnobLocale, () => {});
 					const focusManagement = (): void => {
 						if (quitting) return;
 						reopenWindows();
@@ -447,6 +473,28 @@ if (!app.requestSingleInstanceLock()) {
 								return yield* startDeviceBus((connection) =>
 									Effect.gen(function* () {
 										const serial = connection.info.serialNumber;
+										if (serial)
+											yield* Effect.acquireRelease(
+												Effect.sync(() => {
+													activeSerial = serial;
+												}),
+												() =>
+													Effect.promise(() =>
+														voice.onDevice({
+															source: "hid",
+															kind: "status",
+															state: "disconnected",
+															reason: "scope-closed",
+														}),
+													).pipe(
+														Effect.ensuring(
+															Effect.sync(() => {
+																if (activeSerial === serial)
+																	activeSerial = undefined;
+															}),
+														),
+													),
+											);
 										if (serial)
 											yield* Effect.acquireRelease(
 												Effect.tryPromise(() => profiles.connect(serial)).pipe(
@@ -724,6 +772,7 @@ if (!app.requestSingleInstanceLock()) {
 						app.removeListener("second-instance", focusManagement);
 						removeLifecycle();
 						removeManagementAppearance();
+						removeKnobLocale();
 						disposeHardware();
 						ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 						shutdown = (async () => {

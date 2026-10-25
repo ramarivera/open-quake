@@ -58,6 +58,10 @@ describe("production locale IPC registration and durable storage", () => {
 			windows: () => [management.window, panel.window, foreign.window],
 		};
 		let registration = registerAppLocale(options);
+		const mainLocales: unknown[] = [];
+		const removeLocale = registration.onLocaleChanged((snapshot) => {
+			mainLocales.push(snapshot);
+		});
 		const handler = () => {
 			const fn = [...ipc.handle.mock.calls]
 				.reverse()
@@ -71,8 +75,18 @@ describe("production locale IPC registration and durable storage", () => {
 			removeListener: () => {},
 		});
 		try {
+			expect(await registration.locale()).toEqual({
+				locale: "en",
+				revision: 0,
+			});
 			expect(await bridge.read()).toEqual({ locale: "en", revision: 0 });
 			expect(await bridge.set("de")).toEqual({ locale: "de", revision: 1 });
+			expect(await registration.locale()).toEqual({
+				locale: "de",
+				revision: 1,
+			});
+			expect(mainLocales).toEqual([{ locale: "de", revision: 1 }]);
+			removeLocale();
 			expect(management.sender.send).toHaveBeenLastCalledWith(LOCALE_CHANGED, {
 				locale: "de",
 				revision: 1,
@@ -109,6 +123,10 @@ describe("production locale IPC registration and durable storage", () => {
 			await registration.dispose();
 			registration = registerAppLocale({ ...options, osLocale: "fr-FR" });
 			expect(await bridge.read()).toEqual({ locale: "de", revision: 1 });
+			expect(await registration.locale()).toEqual({
+				locale: "de",
+				revision: 1,
+			});
 		} finally {
 			await bridge.dispose();
 			await registration.dispose();
