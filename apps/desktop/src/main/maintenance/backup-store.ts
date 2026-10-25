@@ -18,6 +18,7 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { EmojiStore } from "../../../../../packages/edge/src/emoji/emoji-contracts.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import { SettingsDocument } from "../../../../../packages/edge/src/settings/settings-contracts.js";
 import { SavedWallpaper } from "../../shared/display";
 import { MonitorRecord } from "../../shared/monitor-contracts";
 import { ClockRecord } from "../clock/clock-store";
@@ -51,7 +52,11 @@ function validateNative(relative: string, data: Uint8Array): void {
 		relative !== "emoji-v1/library.backup.json"
 	)
 		throw new BackupInvalid();
-	if (relative.startsWith("key-library-v1.json/")) throw new BackupInvalid();
+	if (
+		relative.startsWith("key-library-v1.json/") ||
+		relative.startsWith("settings-v1.json/")
+	)
+		throw new BackupInvalid();
 	if (!relative.endsWith(".json")) return;
 	const value: unknown = JSON.parse(Buffer.from(data).toString("utf8"));
 	Schema.decodeUnknownSync(ProfileJson)(value);
@@ -69,6 +74,8 @@ function validateNative(relative: string, data: Uint8Array): void {
 		Schema.decodeUnknownSync(SavedWallpaper)(value);
 	else if (relative === "clock-v1/clock.json")
 		Schema.decodeUnknownSync(ClockRecord)(value);
+	else if (relative === "settings-v1.json")
+		Schema.decodeUnknownSync(SettingsDocument)(value);
 	else if (relative === "monitor-v1/settings.json")
 		Schema.decodeUnknownSync(MonitorRecord)(value);
 	else if (relative === "key-library-v1.json") decodeIconLibrary(data);
@@ -87,6 +94,7 @@ export const managedData = [
 	"clock-v1",
 	"monitor-v1",
 	"appearance.json",
+	"settings-v1.json",
 	"key-library-v1.json",
 	"emoji-v1/library.json",
 	"emoji-v1/library.backup.json",
@@ -121,7 +129,10 @@ async function readManaged(
 		const info = await lstat(path).catch(() => undefined);
 		if (!info) return;
 		if (info.isSymbolicLink()) throw new BackupInvalid();
-		if (relative === "key-library-v1.json" && !info.isFile())
+		if (
+			(relative === "key-library-v1.json" || relative === "settings-v1.json") &&
+			!info.isFile()
+		)
 			throw new BackupInvalid();
 		if (info.isDirectory()) {
 			for (const name of (await readdir(path)).sort())
