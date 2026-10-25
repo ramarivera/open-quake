@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect } from "effect";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FirmwareWriteFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import * as files from "./firmware-files";
 import * as sessions from "./firmware-session";
@@ -30,7 +30,14 @@ vi.mock("./permissions", () => ({
 	}),
 	permissionRows: () => [],
 }));
+const hostPlatform = process.platform;
+beforeEach(() => {
+	// Security-scoped bookmarks are a macOS capability. Exercise that branch
+	// on every test host, rather than silently testing Linux's no-bookmark path.
+	Object.defineProperty(process, "platform", { value: "darwin" });
+});
 afterEach(() => {
+	Object.defineProperty(process, "platform", { value: hostPlatform });
 	vi.useRealTimers();
 	vi.restoreAllMocks();
 });

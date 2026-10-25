@@ -271,8 +271,14 @@ describe("desktop window lifecycle", () => {
 	});
 
 	afterEach(async () => {
-		appEvent("before-quit");
-		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		// A prior window-all-closed quit call doesn't prove async shutdown ended.
+		// An unprevented before-quit means shutdown already finished in the test.
+		const priorQuits = electron.app.quit.mock.calls.length;
+		const event = appEvent("before-quit");
+		if (event.preventDefault.mock.calls.length > 0)
+			await vi.waitFor(() =>
+				expect(electron.app.quit.mock.calls.length).toBeGreaterThan(priorQuits),
+			);
 		vi.useRealTimers();
 		vi.unstubAllEnvs();
 	});

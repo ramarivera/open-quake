@@ -11,13 +11,14 @@ import {
 	writePrivateFile,
 } from "./private-files";
 
-const run = (executable: string, args: readonly string[]) =>
+const run = (executable: string, args: readonly string[], timeout?: number) =>
 	Effect.tryPromise({
 		try: (signal) =>
 			new Promise<string>((resolve, reject) => {
 				let output = "";
 				const process = spawn(executable, [...args], {
 					stdio: ["ignore", "pipe", "ignore"],
+					timeout,
 					signal,
 				});
 				process.stdout.on("data", (chunk: Buffer) => {
@@ -34,6 +35,17 @@ const run = (executable: string, args: readonly string[]) =>
 	});
 export function audioFiles(root: string, ffmpeg: string) {
 	return {
+		ready: () =>
+			run(ffmpeg, ["-hide_banner", "-encoders"], 8000).pipe(
+				Effect.mapError((error) =>
+					meetingError("ConverterUnavailable", error.originalCause),
+				),
+				Effect.flatMap((output) =>
+					/\blibmp3lame\b/.test(output)
+						? Effect.void
+						: Effect.fail(meetingError("ConverterUnavailable")),
+				),
+			),
 		write: (chunk: CaptureChunk) =>
 			Effect.tryPromise({
 				try: async () => {

@@ -11,6 +11,10 @@ const definition = <const C extends string, const M extends string>(
 	policy: { userFacing: true, userRecoverable: true, retry: "manual" as const },
 });
 export const MeetingErrors = {
+	ConverterUnavailable: definition(
+		"QUAKE.MEETING.CONVERTER_UNAVAILABLE",
+		"Recording requires FFmpeg with the libmp3lame encoder. Install it and restart open-quake, or set OPEN_QUAKE_FFMPEG to its executable path.",
+	),
 	CaptureDenied: definition(
 		"QUAKE.MEETING.CAPTURE_DENIED",
 		"Meeting capture permission was denied",
@@ -89,6 +93,30 @@ export class MeetingSourceLost extends Schema.TaggedError<MeetingSourceLost>()(
 			code: MeetingErrors.SourceLost.code,
 			message: MeetingErrors.SourceLost.message,
 			category: MeetingErrors.SourceLost.category,
+			diagnosticCause: toSafeDiagnosticCause(cause),
+		});
+		Object.defineProperty(this, "originalCause", {
+			value: cause,
+			enumerable: false,
+		});
+	}
+}
+
+export class MeetingConverterUnavailable extends Schema.TaggedError<MeetingConverterUnavailable>()(
+	"MeetingConverterUnavailable",
+	{
+		code: Schema.Literal(MeetingErrors.ConverterUnavailable.code),
+		message: Schema.Literal(MeetingErrors.ConverterUnavailable.message),
+		category: Schema.Literal(MeetingErrors.ConverterUnavailable.category),
+		diagnosticCause: DiagnosticCause,
+	},
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super({
+			code: MeetingErrors.ConverterUnavailable.code,
+			message: MeetingErrors.ConverterUnavailable.message,
+			category: MeetingErrors.ConverterUnavailable.category,
 			diagnosticCause: toSafeDiagnosticCause(cause),
 		});
 		Object.defineProperty(this, "originalCause", {
@@ -291,6 +319,7 @@ export class MeetingTimeout extends Schema.TaggedError<MeetingTimeout>()(
 }
 
 export type MeetingError =
+	| MeetingConverterUnavailable
 	| MeetingCaptureDenied
 	| MeetingSourceLost
 	| MeetingCaptureFailed
@@ -302,6 +331,7 @@ export type MeetingError =
 	| MeetingInvalid
 	| MeetingTimeout;
 export const MeetingErrorSchema = Schema.Union(
+	MeetingConverterUnavailable,
 	MeetingCaptureDenied,
 	MeetingSourceLost,
 	MeetingCaptureFailed,
@@ -319,6 +349,8 @@ export function meetingError(
 	cause: unknown = undefined,
 ): MeetingError {
 	switch (reason) {
+		case "ConverterUnavailable":
+			return new MeetingConverterUnavailable(cause);
 		case "CaptureDenied":
 			return new MeetingCaptureDenied(cause);
 		case "SourceLost":
