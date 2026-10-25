@@ -5,7 +5,8 @@ BSD-3-Clause source from https://github.com/ungive/mediaremote-adapter at
 No upstream binaries are redistributed. LICENSE accompanies packaged resources.
 
 Local changes reject missing required symbols, expose enabled transport commands,
-fail distinctly on read timeout, and require the expected source before commands.
+fail distinctly on read timeout, require the expected source before commands,
+and omit optional artwork above 2 MiB before base64 encoding.
 Command capability signatures were checked against WebKit MediaRemoteSPI.h and
 andrewwiik/iOS-Blocks Widgets/Music/MediaRemote.h. Native MediaRemote remains a
 private macOS API and can become unavailable after an OS update.

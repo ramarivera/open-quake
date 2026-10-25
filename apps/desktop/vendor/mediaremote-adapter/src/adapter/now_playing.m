@@ -85,9 +85,14 @@ NSMutableDictionary *convertNowPlayingInformation(NSDictionary *information,
     setKey(kMRAArtist, kMRMediaRemoteNowPlayingInfoArtist);
     setKey(kMRAAlbum, kMRMediaRemoteNowPlayingInfoAlbum);
     if (!withoutArtwork) {
-        setKey(kMRAArtworkMimeType,
-               kMRMediaRemoteNowPlayingInfoArtworkMIMEType);
-        setKey(kMRAArtworkData, kMRMediaRemoteNowPlayingInfoArtworkData);
+        // Optional artwork must never exceed the bounded transport or hide metadata.
+        id artwork = information[kMRMediaRemoteNowPlayingInfoArtworkData];
+        if ([artwork isKindOfClass:[NSData class]] &&
+            [(NSData *)artwork length] <= 2097152) {
+            setKey(kMRAArtworkMimeType,
+                   kMRMediaRemoteNowPlayingInfoArtworkMIMEType);
+            setKey(kMRAArtworkData, kMRMediaRemoteNowPlayingInfoArtworkData);
+        }
     }
 
     if (!convertMicros) {
