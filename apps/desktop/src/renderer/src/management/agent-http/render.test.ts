@@ -76,3 +76,43 @@ it("disables chat for an unsupported endpoint even when the conversation bridge 
 	expect(html).not.toContain("Remote agent ID");
 	expect(html).not.toContain("Start Hermes");
 });
+
+it("offers discovered Hermes model routes without advertising backend model selection for OpenClaw", () => {
+	for (const kind of ["hermes", "openclaw"] as const) {
+		const html = renderToStaticMarkup(
+			createElement(ConversationPanel, {
+				connection: {
+					id: "saved",
+					name: "Runtime",
+					kind,
+					baseURL: "http://localhost:8000/",
+					credentialAvailable: false,
+				},
+				discovery: {
+					capabilities: {
+						health: "supported",
+						chat: "supported",
+						listAgents: "unsupported",
+						sessions: "unsupported",
+						resources: "unsupported",
+						models: "supported",
+						toolEvents: "unsupported",
+						usage: "unsupported",
+					},
+					agents: [],
+					models: [{ id: "fast", name: "Fast route" }],
+				},
+				agentId: undefined,
+				bridge: undefined,
+				selectionBusy: false,
+				onAgentChange: () => {},
+				onRunningChange: () => {},
+			}),
+		);
+		if (kind === "hermes") {
+			expect(html).toContain("Model route");
+			expect(html).toContain('value="fast"');
+			expect(html).toContain("Fast route");
+		} else expect(html).not.toContain("Model route");
+	}
+});

@@ -84,6 +84,47 @@ const collect = (
 		.pipe(Stream.runCollect, Effect.map(Chunk.toReadonlyArray));
 
 describe("conversation service", () => {
+	it("retains the model route in history and rejects cross-model session reuse before dispatch", async () => {
+		const calls: string[] = [];
+		const app = runtime(
+			provider("hermes", (_connection, input) => {
+				calls.push(input.modelId ?? "default");
+				return Stream.make(done);
+			}),
+		);
+		try {
+			const service = await app.runPromise(ConversationService);
+			await app.runPromise(
+				collect(service, "owner", { ...request, modelId: "fast" }),
+			);
+			expect(
+				(await app.runPromise(service.history("owner", scope)))[0]?.modelId,
+			).toBe("fast");
+			const rejected = await app.runPromise(
+				collect(service, "owner", {
+					...request,
+					requestId: "other-model",
+					sessionId: request.requestId,
+					modelId: "slow",
+				}),
+			);
+			expect(rejected.at(-1)).toMatchObject({
+				outcome: "failed",
+				errorCode: "AGENT.HTTP.CONNECTION.INVALID",
+			});
+			expect(calls).toEqual(["fast"]);
+			await app.runPromise(
+				collect(service, "owner", {
+					...request,
+					requestId: "new-model",
+					modelId: "slow",
+				}),
+			);
+			expect(calls).toEqual(["fast", "slow"]);
+		} finally {
+			await app.dispose();
+		}
+	});
 	it("doesn't release another request's active session after a busy rejection", async () => {
 		let accepted!: () => void;
 		const ready = new Promise<void>((resolve) => {

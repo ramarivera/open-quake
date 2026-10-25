@@ -5,6 +5,7 @@ import type {
 	ConversationEvent,
 	ConversationHistory,
 	ConversationScope,
+	ConversationStart,
 } from "../../../../shared/agent-conversations";
 import t from "./strings.json";
 
@@ -34,9 +35,13 @@ export interface ConversationState {
 /** Session and request identities prevent late replies from crossing conversation scopes. */
 export function createConversationController(
 	bridge: AgentConversationsBridge | undefined,
-	scope: Pick<ConversationScope, "connectionId" | "agentId">,
+	scope: Pick<ConversationStart, "connectionId" | "agentId" | "modelId">,
 	requestId: () => string = () => crypto.randomUUID(),
 ) {
+	const historyScope: ConversationScope = {
+		connectionId: scope.connectionId,
+		...(scope.agentId === undefined ? {} : { agentId: scope.agentId }),
+	};
 	let state: ConversationState = {
 		history: [],
 		sessionId: undefined,
@@ -160,7 +165,7 @@ export function createConversationController(
 		const requestEpoch = epoch;
 		update({ ...state, pending: "history", error: undefined });
 		try {
-			const reply = await bridge.request({ type: "history", ...scope });
+			const reply = await bridge.request({ type: "history", ...historyScope });
 			if (!mounted || requestEpoch !== epoch) return;
 			if (reply._tag === "rejected") update({ ...state, error: reply });
 			else
@@ -169,13 +174,15 @@ export function createConversationController(
 					history: reply.history.filter(
 						(session) =>
 							session.connectionId === scope.connectionId &&
-							session.agentId === scope.agentId,
+							session.agentId === scope.agentId &&
+							session.modelId === scope.modelId,
 					),
 					sessionId: reply.history.some(
 						(session) =>
 							session.sessionId === state.sessionId &&
 							session.connectionId === scope.connectionId &&
-							session.agentId === scope.agentId,
+							session.agentId === scope.agentId &&
+							session.modelId === scope.modelId,
 					)
 						? state.sessionId
 						: undefined,
@@ -308,7 +315,7 @@ export function createConversationController(
 		try {
 			const reply = await bridge.request({
 				type: "clear",
-				...scope,
+				...historyScope,
 				sessionId,
 			});
 			if (!mounted || requestEpoch !== epoch) return;

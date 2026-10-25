@@ -37,6 +37,7 @@ export type ConversationTurn = typeof ConversationTurn.Type;
 export const ConversationHistory = Schema.Struct({
 	connectionId: Identifier,
 	agentId: Schema.optional(Identifier),
+	modelId: Schema.optional(Identifier),
 	sessionId: Identifier,
 	turns: Schema.Array(ConversationTurn),
 });
@@ -87,7 +88,6 @@ export class ConversationRepository extends Effect.Service<ConversationRepositor
 			> {
 				const requestKey = JSON.stringify([owner, input.requestId]);
 				if (seen.has(requestKey)) return yield* new RuntimeRequestFailed();
-				if (seen.size >= 4096) return yield* new RuntimeLimitExceeded();
 				const sessionId = input.sessionId ?? input.requestId;
 				const key = scopeKey(owner, { ...input, sessionId });
 				let session = sessions.get(key);
@@ -113,10 +113,26 @@ export class ConversationRepository extends Effect.Service<ConversationRepositor
 								? {}
 								: { agentId: input.agentId }),
 							sessionId,
+							...(input.modelId === undefined
+								? {}
+								: { modelId: input.modelId }),
 							turns: [],
 						},
 					};
 					sessions.set(key, session);
+				}
+				if (seen.size >= 4096) {
+					// Retain active/history identities and a bounded recent replay window.
+					const retained = new Set(
+						[...sessions.values()].flatMap((entry) =>
+							entry.view.turns.map((turn) =>
+								JSON.stringify([entry.owner, turn.requestId]),
+							),
+						),
+					);
+					const expired = [...seen].find((id) => !retained.has(id));
+					if (expired === undefined) return yield* new RuntimeLimitExceeded();
+					seen.delete(expired);
 				}
 				seen.add(requestKey);
 				// Failed or cancelled partial answers aren't replayed as successful assistant history.

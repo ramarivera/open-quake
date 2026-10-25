@@ -92,7 +92,7 @@ it("streams and cancels through the actual UI controller, preload acknowledgemen
 	let serial = 0;
 	const ui = createConversationController(
 		bridge,
-		{ connectionId: "hermes" },
+		{ connectionId: "hermes", modelId: "fast" },
 		() => `turn-${++serial}`,
 	);
 	const until = async (condition: () => boolean) => {
@@ -110,6 +110,8 @@ it("streams and cancels through the actual UI controller, preload acknowledgemen
 			outcome: "completed",
 		});
 		expect(inputs[0]?.agentId).toBeUndefined();
+		expect(inputs[0]?.modelId).toBe("fast");
+		expect(ui.getSnapshot().history[0]?.modelId).toBe("fast");
 		expect(inputs[0]?.sessionId).toBeUndefined();
 		expect(await ui.send("wait")).toBe(true);
 		await until(

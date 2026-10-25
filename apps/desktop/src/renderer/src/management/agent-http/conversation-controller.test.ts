@@ -57,6 +57,82 @@ function harness(
 }
 
 describe("runtime conversation UI controller", () => {
+	it("keeps model alias history separate and starts a fresh scope when switching aliases", async () => {
+		const request = vi.fn(
+			async (command: ConversationCommand): Promise<ConversationReply> =>
+				command.type === "history"
+					? {
+							_tag: "success",
+							history: [
+								{
+									connectionId: "hermes",
+									sessionId: "default-session",
+									turns: [],
+								},
+								{
+									connectionId: "hermes",
+									modelId: "fast",
+									sessionId: "fast-session",
+									turns: [],
+								},
+								{
+									connectionId: "hermes",
+									modelId: "slow",
+									sessionId: "slow-session",
+									turns: [],
+								},
+							],
+						}
+					: success(),
+		);
+		const bridge: AgentConversationsBridge = {
+			request,
+			onEvent: () => () => {},
+		};
+		const fast = createConversationController(
+			bridge,
+			{ connectionId: "hermes", modelId: "fast" },
+			() => "fast-turn",
+		);
+		fast.start();
+		await tick();
+		expect(
+			fast.getSnapshot().history.map((session) => session.sessionId),
+		).toEqual(["fast-session"]);
+		fast.selectSession("default-session");
+		expect(fast.getSnapshot().sessionId).toBeUndefined();
+		fast.selectSession("fast-session");
+		expect(await fast.send("hello fast")).toBe(true);
+		expect(request).toHaveBeenCalledWith({
+			type: "start",
+			connectionId: "hermes",
+			modelId: "fast",
+			sessionId: "fast-session",
+			requestId: "fast-turn",
+			text: "hello fast",
+		});
+		fast.dispose();
+		const slow = createConversationController(
+			bridge,
+			{ connectionId: "hermes", modelId: "slow" },
+			() => "slow-turn",
+		);
+		slow.start();
+		await tick();
+		expect(
+			slow.getSnapshot().history.map((session) => session.sessionId),
+		).toEqual(["slow-session"]);
+		expect(slow.getSnapshot().sessionId).toBeUndefined();
+		expect(await slow.send("hello slow")).toBe(true);
+		expect(request).toHaveBeenCalledWith({
+			type: "start",
+			connectionId: "hermes",
+			modelId: "slow",
+			requestId: "slow-turn",
+			text: "hello slow",
+		});
+		slow.dispose();
+	});
 	it("uses the Hermes endpoint default and retains text delivered before the start acknowledgement", async () => {
 		const start = deferred<ConversationReply>();
 		const h = harness(async (command) =>

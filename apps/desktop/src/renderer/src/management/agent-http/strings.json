@@ -57,6 +57,8 @@
 		"usage": "Token usage"
 	},
 	"conversation": "Conversation",
+	"modelAlias": "Model route",
+	"modelAliasHint": "Changing the model route starts a new conversation.",
 	"chooseRuntime": "Choose a runtime connection to start a conversation.",
 	"agent": "Remote agent",
 	"chooseAgent": "Choose an agent",

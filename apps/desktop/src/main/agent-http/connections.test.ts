@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import {
 	lstat,
-	mkdir,
 	mkdtemp,
 	readdir,
 	readFile,
+	realpath,
 	rm,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Either, Redacted } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -92,8 +93,6 @@ const save = {
 	kind: "hermes",
 	baseURL: "http://localhost:8642",
 } as const;
-const scratch =
-	"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-agent-http/lane-5";
 const temporary: string[] = [];
 afterEach(async () => {
 	for (const path of temporary.splice(0))
@@ -378,8 +377,9 @@ describe("credential crash recovery", () => {
 
 describe("runtime connection atomic file storage", () => {
 	it("reopens actual private files with selection and no plaintext secrets or leftover pending files", async () => {
-		await mkdir(scratch, { recursive: true });
-		const root = await mkdtemp(join(scratch, "files-"));
+		const root = await mkdtemp(
+			join(await realpath(tmpdir()), "agent-connections-files-"),
+		);
 		temporary.push(root);
 		const f = fixture(),
 			storage = connectionFileStorage(root);
@@ -407,8 +407,9 @@ describe("runtime connection atomic file storage", () => {
 		});
 	});
 	it("rejects corrupt and symlinked records instead of replacing them with empty state", async () => {
-		await mkdir(scratch, { recursive: true });
-		const root = await mkdtemp(join(scratch, "unsafe-"));
+		const root = await mkdtemp(
+			join(await realpath(tmpdir()), "agent-connections-unsafe-"),
+		);
 		temporary.push(root);
 		const file = join(root, "connections-v1.json");
 		await writeFile(file, "invalid-json");

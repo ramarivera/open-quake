@@ -1,5 +1,6 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, ManagedRuntime, Stream } from "effect";
 import type { BrowserWindow } from "electron";
@@ -236,10 +237,9 @@ describe("HTTP conversations through the production GridVoice consumer", () => {
 		}
 	});
 	it("composes the actual bridge, secure credential resolver, Hermes HTTP adapter and strip answer consumer", async () => {
-		const scratch =
-			"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-agent-http/lane-9";
-		await mkdir(scratch, { recursive: true });
-		const root = await mkdtemp(join(scratch, "composition-"));
+		const root = await mkdtemp(
+			join(await realpath(tmpdir()), "agent-http-composition-"),
+		);
 		const calls: { path: string; authenticated: boolean; session?: string }[] =
 			[];
 		const server = createServer((input, response) => {

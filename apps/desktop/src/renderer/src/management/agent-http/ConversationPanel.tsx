@@ -23,9 +23,19 @@ export function ConversationPanel({
 	readonly onAgentChange: (agentId: string | undefined) => void;
 	readonly onRunningChange: (running: boolean) => void;
 }) {
+	const [modelDraft, setModelDraft] = useState("");
+	const models =
+		connection.kind === "hermes" &&
+		discovery?.capabilities.models === "supported"
+			? (discovery.models ?? [])
+			: [];
+	const modelId = models.some((model) => model.id === modelDraft)
+		? modelDraft
+		: undefined;
 	const conversation = useConversation(bridge, {
 		connectionId: connection.id,
 		...(agentId === undefined ? {} : { agentId }),
+		...(modelId === undefined ? {} : { modelId }),
 	});
 	const [message, setMessage] = useState("");
 	const [agentDraft, setAgentDraft] = useState(agentId ?? "");
@@ -100,6 +110,24 @@ export function ConversationPanel({
 						{t.useAgent}
 					</button>
 				</form>
+			)}
+			{models.length > 0 && (
+				<label className="mc-field">
+					{t.modelAlias}
+					<select
+						value={modelId ?? ""}
+						disabled={busy || selectionBusy}
+						onChange={(event) => setModelDraft(event.target.value)}
+					>
+						<option value="">{t.endpointDefault}</option>
+						{models.map((model) => (
+							<option key={model.id} value={model.id}>
+								{model.name || model.id}
+							</option>
+						))}
+					</select>
+					<span className="agent-http-hint">{t.modelAliasHint}</span>
+				</label>
 			)}
 			<label className="mc-field">
 				{t.session}

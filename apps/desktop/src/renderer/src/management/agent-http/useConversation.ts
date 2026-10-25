@@ -1,22 +1,23 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import type {
 	AgentConversationsBridge,
-	ConversationScope,
+	ConversationStart,
 } from "../../../../shared/agent-conversations";
 import { createConversationController } from "./conversation-controller";
 
 export function useConversation(
 	bridge: AgentConversationsBridge | undefined,
-	scope: Pick<ConversationScope, "connectionId" | "agentId">,
+	scope: Pick<ConversationStart, "connectionId" | "agentId" | "modelId">,
 ) {
-	const { connectionId, agentId } = scope;
+	const { connectionId, agentId, modelId } = scope;
 	const controller = useMemo(
 		() =>
 			createConversationController(bridge, {
 				connectionId,
 				...(agentId === undefined ? {} : { agentId }),
+				...(modelId === undefined ? {} : { modelId }),
 			}),
-		[bridge, connectionId, agentId],
+		[bridge, connectionId, agentId, modelId],
 	);
 	const state = useSyncExternalStore(
 		controller.subscribe,

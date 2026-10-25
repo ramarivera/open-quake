@@ -10,6 +10,47 @@ const start = {
 	text: "hello",
 };
 describe("bounded conversation repository", () => {
+	it("rotates the replay budget without forgetting active or retained requests", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* ConversationRepository;
+				yield* repo.begin("active-owner", start, "binding");
+				for (let index = 0; index < 4100; index++) {
+					const requestId = `turn-${index}`;
+					yield* repo.begin("owner", { ...start, requestId }, "binding");
+					yield* repo.finish(
+						"owner",
+						{ ...scope, sessionId: requestId },
+						requestId,
+						"completed",
+					);
+				}
+				expect(
+					(yield* repo
+						.begin("active-owner", start, "binding")
+						.pipe(Effect.either))._tag,
+				).toBe("Left");
+				expect(
+					(yield* repo
+						.begin("owner", { ...start, requestId: "turn-4099" }, "binding")
+						.pipe(Effect.either))._tag,
+				).toBe("Left");
+				yield* repo.clear("owner", { connectionId: "connection" });
+				expect(
+					(yield* repo
+						.begin("owner", { ...start, requestId: "turn-4099" }, "binding")
+						.pipe(Effect.either))._tag,
+				).toBe("Left");
+				expect(
+					(yield* repo.begin(
+						"owner",
+						{ ...start, requestId: "after-clear" },
+						"binding",
+					)).history.turns,
+				).toHaveLength(1);
+			}).pipe(Effect.provide(ConversationRepository.Default)),
+		);
+	});
 	it("rejects clear while active, preserves snapshots and keeps replay tombstones after clear", async () => {
 		await Effect.runPromise(
 			Effect.gen(function* () {
