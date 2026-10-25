@@ -26,6 +26,7 @@ import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { registerAgentHttp } from "./agent-http";
+import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
 import { registerAgents } from "./agents";
 import { createModelCredentials } from "./chat/credentials";
 import { createDirectChat } from "./chat/host";
@@ -241,6 +242,12 @@ if (!app.requestSingleInstanceLock()) {
 							),
 						),
 					);
+					const disposeUnavailableAgentConnections = agentHttp
+						? () => {}
+						: registerUnavailableAgentConnections({
+								management: () => managementWin,
+								renderer: rendererURL,
+							});
 					// Voice overlay, hold-to-talk and on-strip chat (strip-voice-ui). Tones
 					// play through hardware-controls; the mock bus answers them without HID.
 					const modelCredentials = await background.runPromise(
@@ -845,6 +852,7 @@ if (!app.requestSingleInstanceLock()) {
 							await localeRegistration.dispose();
 							await chatRegistration.dispose();
 							await agentHttp?.dispose();
+							disposeUnavailableAgentConnections();
 							removeSpeechSettings();
 							await voice.dispose();
 							await directChat.dispose();

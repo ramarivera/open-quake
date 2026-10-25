@@ -158,7 +158,9 @@ export function GeneralSettings({
 							: t("general.setupIncomplete")
 						: setupState.status === "loading"
 							? t("general.loading")
-							: t("general.setupUnavailable")
+							: setupState.status === "failed"
+								? t("setup.failure.read")
+								: t("general.setupUnavailable")
 				}
 			>
 				{setupState.snapshot ? (
@@ -177,6 +179,15 @@ export function GeneralSettings({
 						{setupState.snapshot.completed
 							? t("general.replay")
 							: t("general.resume")}
+					</button>
+				) : setupState.status === "failed" ? (
+					<button
+						type="button"
+						className="mc-button"
+						disabled={setupState.pending !== null}
+						onClick={() => void setup.load()}
+					>
+						{t("general.retry")}
 					</button>
 				) : null}
 				{setupState.failure && setupState.snapshot?.completed ? (
