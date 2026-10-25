@@ -1,107 +1,134 @@
+/* Connection check: page header, two expandable checks, actions. */
 .connection-check {
-	max-width: 760px;
-	margin-block: 0 28px;
+	margin-block: 0 var(--oq-space-7);
 }
 .connection-eyebrow {
-	color: var(--quake-accent);
-	font-size: 11px;
-	font-weight: 700;
-	letter-spacing: 0.1em;
+	margin: 0 0 6px;
+	color: var(--oq-accent-ink);
+	font-size: var(--mc-font-meta);
+	font-weight: 600;
 }
 .connection-check h1 {
-	font-size: clamp(24px, 3vw, 34px);
-	margin-block: 10px;
+	margin: 0 0 6px;
+	font-size: var(--mc-font-display, 24px);
+	font-weight: 600;
+	line-height: 1.2;
+	letter-spacing: -0.015em;
+}
+.connection-check > header p,
+.connection-check > p {
+	margin: 0 0 4px;
 }
 .connection-checks {
-	border: 1px solid var(--quake-border);
-	border-radius: 10px;
+	margin-top: var(--oq-space-6);
 	overflow: hidden;
-	background: var(--quake-surface);
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-lg);
 }
 .connection-checks > section + section {
-	border-top: 1px solid var(--quake-border);
+	border-top: 1px solid var(--oq-hairline);
 }
 .connection-summary {
 	display: flex;
 	align-items: center;
-	gap: 20px;
+	gap: var(--oq-space-4);
 	width: 100%;
-	padding: 24px;
+	padding: var(--oq-space-4);
+	color: var(--oq-text);
 	text-align: left;
-	color: var(--quake-foreground);
 	background: none;
 	border: 0;
-	cursor: pointer;
+}
+.connection-summary:hover {
+	background: var(--oq-hover);
 }
 .connection-summary > span:nth-child(2) {
 	flex: 1;
 	min-width: 0;
 }
-.connection-summary strong,
+.connection-summary strong {
+	display: block;
+	font-weight: 600;
+}
 .connection-state {
 	display: block;
-}
-.connection-state {
-	margin-top: 8px;
-	line-height: 1.5;
-	color: var(--quake-warning);
+	margin-top: 2px;
+	color: var(--oq-warning);
+	font-size: var(--mc-font-meta);
 }
 .connection-state[data-pass="true"] {
-	color: var(--quake-success);
+	color: var(--oq-success);
 }
 .connection-port {
-	min-width: 56px;
-	font-size: 12px;
-	padding: 14px 6px;
-	text-align: center;
-	border: 1px solid currentColor;
-	border-radius: 8px;
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 48px;
+	height: 32px;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-caption);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	background: var(--oq-sunken);
+	border-radius: var(--oq-radius-sm);
 }
 .connection-details {
-	padding: 0 24px 20px 110px;
-	line-height: 1.65;
+	padding: 0 var(--oq-space-4) var(--oq-space-4) 80px;
+	line-height: 1.6;
 }
 .connection-details h3 {
-	font-size: 15px;
+	margin: 0 0 4px;
+	font-size: var(--mc-font-subtitle);
+	font-weight: 600;
 }
 .connection-details ol {
 	padding-left: 20px;
 }
 .connection-details li + li {
-	margin-top: 12px;
+	margin-top: var(--oq-space-2);
 }
 .connection-actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 12px;
-	margin-top: 20px;
+	gap: var(--oq-space-2);
+	margin-top: var(--oq-space-4);
 }
 .connection-actions button {
-	padding: 12px 18px;
-	min-height: 44px;
-	border: 1px solid var(--quake-accent);
-	border-radius: 7px;
-	color: var(--quake-accent);
-	background: transparent;
-	cursor: pointer;
+	min-height: 32px;
+	padding: 0 14px;
+	color: var(--oq-text);
+	font-size: var(--mc-font-button, 13.5px);
+	font-weight: 550;
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-border);
+	border-radius: var(--oq-radius-md);
+}
+.connection-actions button:first-child {
+	color: var(--oq-accent-text);
+	background: var(--oq-accent);
+	border-color: transparent;
 }
 .connection-actions button:disabled {
-	opacity: 0.65;
+	opacity: 0.55;
 	cursor: wait;
 }
 .connection-check button:focus-visible {
-	outline: 3px solid var(--quake-accent);
-	outline-offset: -3px;
+	outline: none;
+	box-shadow: var(--oq-focus-ring);
+}
+.connection-summary:focus-visible {
+	box-shadow: inset 0 0 0 2px var(--oq-accent) !important;
 }
 @media (max-width: 620px) {
 	.connection-summary {
-		padding: 16px;
-		gap: 12px;
+		gap: var(--oq-space-3);
+		padding: var(--oq-space-3);
 	}
 	.connection-port {
-		min-width: 42px;
+		width: 40px;
 	}
 	.connection-details {
-		padding: 0 16px 16px;
+		padding: 0 var(--oq-space-3) var(--oq-space-3);
 	}
 }

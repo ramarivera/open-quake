@@ -10,6 +10,7 @@ import {
 	tileLines,
 } from "../../../../../../../packages/edge/src/home-assistant/ha-invariants";
 import type { KeyTarget } from "../../../../shared/integrations";
+import { PageHeader } from "../../ui/Form";
 import { haStrings as s } from "./strings";
 import { useHaLive } from "./useHaLive";
 import { useIntegrations } from "./useIntegrations";
@@ -83,15 +84,18 @@ export function HomeAssistantPage() {
 		live.states.find((e) => e.entity_id === key.entity_id) ?? entity;
 	return (
 		<section className="mc-panel" aria-label="Home Assistant Settings">
-			<header className="mc-toolbar">
-				<div>
-					<h2>Home Assistant</h2>
-					<p>Home Assistant Settings</p>
-				</div>
-				<span className="mc-badge" role="status">
+			<PageHeader
+				title="Home Assistant"
+				description="Show Home Assistant entities on keys and choose what the assistant may see."
+			>
+				<span
+					className="mc-badge"
+					data-tone={status === "Connected" ? "success" : "neutral"}
+					role="status"
+				>
 					{status}
 				</span>
-			</header>
+			</PageHeader>
 			{error && <p role="alert">{error}</p>}
 			{notice && <p role="status">{notice}</p>}
 			<section className="mc-card" aria-label={s.connectionStatus}>

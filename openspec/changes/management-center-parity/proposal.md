@@ -28,3 +28,7 @@ Gap cluster 16 (`open-quake-lih.17`) and the management redesign epic (`open-qua
 ## Impact
 
 `packages/edge` gains the `emoji`, `agents`, `shortcuts`, `channels` and `home-assistant` domain modules. `packages/device` gains the `emoji` action descriptor. `apps/desktop` gains main-process adapters (clipboard, foreground app, device keyboard, keychain, Home Assistant session), typed preload bridges and the renderer pages. No new dependencies. Out of scope by decision 9: account login, Agent Market, the OpenClaw installer, editions and the cloud model catalog. Real AI generation, a real agent runtime and real channel pairing stay behind unavailable adapters until their owning lanes supply them. Hardware delivery of the strip tiles needs the lead.
+
+## Superseded visual requirements (2026-10-25)
+
+Ramiro rejected the DK-Suite look on 2026-10-25 (`open-quake-nyd`). The DK geometry, palette sources, labels and content-card styling in `management-center` are superseded by `openspec/changes/independent-management-design` (`management-design-system`). Behaviour, routes, deep links, persistence and title-bar theming remain specified here.

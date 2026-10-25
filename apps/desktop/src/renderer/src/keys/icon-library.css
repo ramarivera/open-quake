@@ -9,7 +9,7 @@
 		sans-serif;
 	width: 100vw;
 	height: 100vh;
-	--quake-accent: #409eff;
+	--quake-accent: #5fcab5;
 }
 .icon-picker-surface .key-icon-library {
 	height: 100%;
@@ -87,9 +87,9 @@
 	color: #a1a1aa;
 }
 .icon-picker-surface button[aria-pressed="true"] {
-	background: #409eff20;
-	color: #409eff;
-	border-color: #409eff60;
+	background: rgb(95 202 181 / 0.14);
+	color: #5fcab5;
+	border-color: rgb(95 202 181 / 0.45);
 }
 .icon-picker-surface .icon-library-grid {
 	display: grid;
@@ -120,7 +120,7 @@
 	top: 0;
 	right: 0;
 	padding: 0 5px;
-	color: #ef4444;
+	color: #f08a78;
 }
 .icon-library-empty {
 	grid-column: 1 / -1;
@@ -142,7 +142,7 @@
 }
 .icon-library-loading progress {
 	width: min(240px, 70%);
-	accent-color: #409eff;
+	accent-color: #5fcab5;
 }
 .icon-library-footer {
 	display: flex;
@@ -164,7 +164,7 @@
 }
 .icon-library-zoom input {
 	width: 90px;
-	accent-color: #409eff;
+	accent-color: #5fcab5;
 }
 .icon-library-notice {
 	display: flex;

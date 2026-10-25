@@ -1,6 +1,9 @@
-import { type ReactNode, useId } from "react";
+import { createContext, type ReactNode, useContext, useId } from "react";
 
 /** Building blocks for the management window: grouped, label-left forms. */
+
+/** The current page's navigation section, shown as the page header kicker. */
+export const PageSectionContext = createContext<string | null>(null);
 
 export function PageHeader({
 	title,
@@ -11,10 +14,11 @@ export function PageHeader({
 	description?: ReactNode;
 	children?: ReactNode;
 }): React.JSX.Element {
+	const section = useContext(PageSectionContext);
 	return (
 		<header className="page-header">
 			<div>
-				<span className="mc-page-kicker">Management Center</span>
+				{section ? <span className="mc-page-kicker">{section}</span> : null}
 				<h1>{title}</h1>
 				{description ? <p className="page-description">{description}</p> : null}
 			</div>

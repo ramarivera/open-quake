@@ -1,12 +1,13 @@
 .wallpaper-settings {
-	margin-top: 28px;
-	padding-top: 24px;
-	border-top: 1px solid var(--quake-border);
+	margin-top: var(--oq-space-7);
+	padding-top: var(--oq-space-6);
+	border-top: 1px solid var(--oq-hairline);
 }
 .wallpaper-preview {
-	border: 1px solid var(--quake-border);
 	overflow: hidden;
 	aspect-ratio: 4 / 1;
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-md);
 }
 .wallpaper-canvas {
 	display: block;
@@ -29,12 +30,13 @@
 .wallpaper-settings button,
 .wallpaper-serial input {
 	font: inherit;
-	color: var(--quake-foreground);
-	background: var(--quake-surface);
-	border: 1px solid var(--quake-border);
-	border-radius: 5px;
-	padding: 8px 12px;
-	min-height: 40px;
+	min-height: 32px;
+	padding: 0 14px;
+	color: var(--oq-text);
+	font-weight: 550;
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-border);
+	border-radius: var(--oq-radius-md);
 }
 .wallpaper-settings button {
 	cursor: pointer;

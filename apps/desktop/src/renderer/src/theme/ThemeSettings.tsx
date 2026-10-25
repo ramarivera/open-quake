@@ -1,8 +1,18 @@
 import { useId, useState } from "react";
+import {
+	LanguageControl,
+	useLanguageLabel,
+} from "../management/LanguageControl";
 import { Callout, Group, PageHeader, Row, Segmented } from "../ui/Form";
 import type { MotionPreference, ThemeSelection } from "./appearance";
 import { customThemeTokens, loadCustomThemeFile } from "./customTheme";
-import { type ThemeTokens, themes, themeTokenNames } from "./tokens";
+import {
+	builtinThemeOrder,
+	type ThemeTokens,
+	themeLabels,
+	themes,
+	themeTokenNames,
+} from "./tokens";
 import type { AppearanceController } from "./useAppearance";
 
 const example = JSON.stringify(
@@ -65,14 +75,17 @@ export function ThemeSettings({
 		importTheme,
 	} = controller;
 	const custom = appearance.customTheme;
+	const languageLabel = useLanguageLabel();
 	const choices: ReadonlyArray<{
 		value: ThemeSelection;
 		label: string;
 		tokens: ThemeTokens | null;
 	}> = [
-		{ value: "dark", label: "Dark", tokens: themes.dark },
-		{ value: "grey", label: "Grey", tokens: themes.grey },
-		{ value: "light", label: "Light", tokens: themes.light },
+		...builtinThemeOrder.map((id) => ({
+			value: id,
+			label: themeLabels[id],
+			tokens: themes[id],
+		})),
 		{
 			value: "custom",
 			label: custom ? custom.name : "Custom",
@@ -91,7 +104,7 @@ export function ThemeSettings({
 		<div className="page">
 			<PageHeader
 				title="Appearance"
-				description="Applies to this window and the QUAKE screen immediately."
+				description="Theme, text size and motion for open-quake. Changes apply right away."
 			/>
 
 			<Group
@@ -132,6 +145,18 @@ export function ThemeSettings({
 						);
 					})}
 				</div>
+			</Group>
+
+			<Group
+				title={languageLabel}
+				description="Saved for every open-quake window. Conversations and generated text stay in the language they were written in."
+			>
+				<Row label={languageLabel} labelId={`${ids}-language`}>
+					<LanguageControl
+						name={`${ids}-language`}
+						labelledBy={`${ids}-language`}
+					/>
+				</Row>
 			</Group>
 
 			<Group title="Motion">
