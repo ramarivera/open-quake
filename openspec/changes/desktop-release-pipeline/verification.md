@@ -19,3 +19,11 @@ Codex completed review of 853fa26 without findings. Copilot errored, CodeRabbit 
 Thirteen focused recording/registration tests pass on both Mac and Linux, including missing/failed converters, absent MP3 encoding, typed error identity and private cause retention. Updated local DMG and ZIP both passed their real distributed-artifact smoke with `PACKAGE_SMOKE_PASS darwin arm64 0.0.0-test.1`, exit 0. All workspace typechecks, Biome on 821 files, nine release tests, both production bundle modes, actionlint and strict OpenSpec validation passed. Linux/Windows installer behavior remains unverified until the next hosted run finishes.
 
 Round-one artifacts and logs remain outside git under /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-release/, including round1-build, round1-distributed-smoke.log and linux-fixed-full-v2.log. No public release, version tag or merge has occurred.
+
+## Hosted installer diagnosis
+
+Run 40188815594 passed validation and the complete Mac arm64 and Linux arm64 jobs. Windows x64 built and silently installed its EXE, but the executable rejected `--package-smoke` with exit 9. The runner was supplied an empty ELECTRON_RUN_AS_NODE value; Windows can still treat that variable as present. The smoke now removes that key entirely, including differently cased inherited variants. Linux x64 built both downloads but the smoke expected x64 filenames. The pinned builder actually expands x64 to amd64 for DEB and x86_64 for AppImage. One shared filename function now serves the smoke, checksum manifest and publication validation.
+
+Two regression tests first failed with the observed filename mismatch and retained Node-mode variable, then passed after correction. All 11 release tests pass, including a comparison against the installed pinned builder's architecture-macro expansion for all eight assets. Both Mac distributed smokes still pass using the corrected child environment. The full suite and app bundles did not change in this diagnostic fix.
+
+Windows arm64 built its installer but timed out during silent installation with no output. Its cause is still unverified. The smoke now prints bounded process and installed-file diagnostics at 60 seconds while retaining the existing 120-second installation deadline. This does not claim to fix that separate failure. Hosted reruns and review of the changed release scripts remain pending.

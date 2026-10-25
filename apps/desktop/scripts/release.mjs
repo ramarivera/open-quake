@@ -21,15 +21,33 @@ export function releaseVersion(tag) {
 	return match[1];
 }
 
+export function downloadName(version, platform, arch, extension) {
+	const artifactArch =
+		platform === "linux" && arch === "x64"
+			? ({ deb: "amd64", AppImage: "x86_64" }[extension] ?? arch)
+			: arch;
+	return `open-quake-${version}-${platform}-${artifactArch}.${extension}`;
+}
+
+export function electronEnvironment(environment) {
+	// Windows can treat an empty variable as present. Electron must not see
+	// this switch at all; pnpm or an Electron-based host may set it upstream.
+	return Object.fromEntries(
+		Object.entries(environment).filter(
+			([key]) => key.toUpperCase() !== "ELECTRON_RUN_AS_NODE",
+		),
+	);
+}
+
 export function expectedAssets(version) {
 	releaseVersion(`v${version}`);
 	return [
-		`open-quake-${version}-mac-arm64.dmg`,
-		`open-quake-${version}-mac-arm64.zip`,
+		downloadName(version, "mac", "arm64", "dmg"),
+		downloadName(version, "mac", "arm64", "zip"),
 		...["x64", "arm64"].flatMap((arch) => [
-			`open-quake-${version}-win-${arch}.exe`,
-			`open-quake-${version}-linux-${arch}.AppImage`,
-			`open-quake-${version}-linux-${arch}.deb`,
+			downloadName(version, "win", arch, "exe"),
+			downloadName(version, "linux", arch, "AppImage"),
+			downloadName(version, "linux", arch, "deb"),
 		]),
 	].sort();
 }

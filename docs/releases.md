@@ -10,7 +10,7 @@ Download installers from [GitHub Releases](https://github.com/ramarivera/open-qu
 | Linux | Intel/AMD, x64 | AppImage and DEB |
 | Linux | ARM64 | AppImage and DEB |
 
-Intel Mac packages aren't built. Choose the package matching your system architecture. The desktop app includes its JavaScript runtime, so Node.js and npm aren't needed to install it. Workspace packages are private, and the CLI is a placeholder. `npm install open-quake` isn't an installation method.
+Linux x64 downloads use the native architecture labels `amd64` for DEB and `x86_64` for AppImage. Intel Mac packages aren't built. Choose the package matching your system architecture. The desktop app includes its JavaScript runtime, so Node.js and npm aren't needed to install it. Workspace packages are private, and the CLI is a placeholder. `npm install open-quake` isn't an installation method.
 
 ## Recording prerequisite
 

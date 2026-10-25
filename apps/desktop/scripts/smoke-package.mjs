@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
+import { downloadName, electronEnvironment } from "./release.mjs";
 
 const command = promisify(execFile);
 const directory = resolve(process.argv[2] || "dist");
@@ -15,8 +16,7 @@ async function smoke(executable, args = []) {
 	const userData = await mkdtemp(join(scratch, "user-data-"));
 	const child = spawn(executable, [...args, "--package-smoke"], {
 		env: {
-			...process.env,
-			ELECTRON_RUN_AS_NODE: "",
+			...electronEnvironment(process.env),
 			PACKAGE_SMOKE_DATA: userData,
 			RELEASE_ARCH: process.arch,
 		},
@@ -51,7 +51,7 @@ try {
 		const os = { darwin: "mac", win32: "win", linux: "linux" }[
 			process.platform
 		];
-		const name = `open-quake-${version}-${os}-${process.arch}.${extension}`;
+		const name = downloadName(version, os, process.arch, extension);
 		assert.ok(files.includes(name), `Missing distributed download ${name}`);
 		return join(directory, name);
 	};
@@ -80,9 +80,35 @@ try {
 		await smoke(join(extracted, "open-quake.app/Contents/MacOS/open-quake"));
 	} else if (process.platform === "win32") {
 		const installed = join(scratch, "installed");
-		await command(download("exe"), ["/S", "/currentuser", `/D=${installed}`], {
-			timeout: 120_000,
-		});
+		console.info(`Installing Windows ${process.arch} download`);
+		const diagnostics = setTimeout(async () => {
+			try {
+				const { stdout } = await command(
+					"tasklist.exe",
+					["/V", "/FO", "CSV", "/FI", "IMAGENAME eq open-quake*"],
+					{ timeout: 15_000 },
+				);
+				console.info("Installer still running after 60 seconds", stdout);
+				console.info(
+					"Installed directory entries",
+					await readdir(installed).catch(() => []),
+				);
+			} catch (error) {
+				console.error("Installer diagnostics failed", error.message);
+			}
+		}, 60_000);
+		try {
+			await command(
+				download("exe"),
+				["/S", "/currentuser", `/D=${installed}`],
+				{
+					timeout: 120_000,
+				},
+			);
+		} finally {
+			clearTimeout(diagnostics);
+		}
+		console.info("Windows installer completed");
 		try {
 			await smoke(join(installed, "open-quake.exe"));
 		} finally {
