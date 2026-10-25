@@ -1,14 +1,9 @@
-import { GTProvider } from "gt-react";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-	type AppLocaleBridge,
-	AppLocaleProvider,
-	appDictionaries,
-	useAppTranslations,
-} from "../i18n";
+import { type AppLocaleBridge, useAppTranslations } from "../i18n";
 import { GeneralSettings } from "./GeneralSettings";
+import { SettingsRenderFixture } from "./render-fixture";
 import {
 	DisplayStep,
 	ProfilesStep,
@@ -36,19 +31,7 @@ function render(
 	app: AppLocaleBridge | null = reading,
 ): string {
 	return renderToStaticMarkup(
-		createElement(AppLocaleProvider, {
-			bridge: app,
-			children: createElement(
-				GTProvider,
-				{
-					locale,
-					translations: { en: {}, de: {} },
-					dictionaries: appDictionaries,
-					_reload: () => {},
-				},
-				node,
-			),
-		}),
+		createElement(SettingsRenderFixture, { app, locale, node }),
 	);
 }
 /** Renders a step part with the real translations. */
