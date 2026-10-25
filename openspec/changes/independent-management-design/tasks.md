@@ -20,8 +20,13 @@ Epic bead `open-quake-nyd`; this change's task bead is `open-quake-nyd.2`.
 ## 4. Pages
 
 - [x] 4.1 Flatten Overview (flat strip frame, numeric live input) and the Appearance/UI settings surfaces with the new theme labels.
-- [ ] 4.2 Restyle the owned management pages (keys, profiles, hardware, wallpaper, meetings, maintenance, connection diagnostic, emoji, shortcuts, Home Assistant, channels) so no bordered container nests inside another.
+- [x] 4.2 Restyle the owned management pages (keys, profiles, hardware, wallpaper, meetings, maintenance, connection diagnostic, emoji, shortcuts, Home Assistant, channels) so no bordered container nests inside another.
 
 ## 5. Acceptance
 
-- [ ] 5.1 Run the renderer tests, typecheck and Biome; capture after screenshots for every page at 1180 and 390 in all themes, inspect them, fix clipping/overlap, and record before/after evidence plus the remaining gaps in `verification.md`.
+- [x] 5.1 Run the renderer tests, typecheck and Biome; capture after screenshots for every page at 1180 and 390 in all themes, inspect them, fix clipping/overlap, and record before/after evidence plus the remaining gaps in `verification.md`.
+
+## 6. Integration follow-ups
+
+- [x] 6.1 Language control on the integration branch (`lane/nyd2-on-opus-led`, on top of `redesign/opus-led` with the shared `useAppLocale` provider): Display popover and Appearance group, native language names, translated heading, load/persist failure text.
+- [ ] 6.2 Parent-owned root smokes adopt `.nav-item[data-nav-page=…]`, the drawer at narrow widths and the HA `h1` title (exact list in the lane scratch `PARENT-SEAMS.md`), then rerun the combined root/preload acceptance.

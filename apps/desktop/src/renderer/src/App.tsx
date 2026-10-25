@@ -136,8 +136,19 @@ function ManagementSurface({
 				page={page}
 				onOpen={open}
 				connection={connection}
-				runtimeStatus={runtime?.status ?? "unknown"}
+				runtimeStatus={
+					runtime
+						? runtime.available
+							? runtime.status
+							: "unavailable"
+						: "unknown"
+				}
 				runtimeLabel={runtimeLabel}
+				runtimeSummary={
+					runtime && !runtime.available
+						? "Local runtime not installed"
+						: runtimeLabel
+				}
 				appearance={appearance}
 				contentRef={content}
 				deviceReady={deviceReady}

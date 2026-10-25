@@ -74,6 +74,7 @@ export function ManagementShell({
 	connection,
 	runtimeStatus,
 	runtimeLabel,
+	runtimeSummary = runtimeLabel,
 	appearance,
 	contentRef,
 	deviceReady,
@@ -84,6 +85,8 @@ export function ManagementShell({
 	connection: ConnectionSummary;
 	runtimeStatus: string;
 	runtimeLabel: string;
+	/** Visible wording; the optional local runtime is not the whole assistant. */
+	runtimeSummary?: string;
 	appearance: AppearanceController;
 	contentRef: React.RefObject<HTMLElement | null>;
 	deviceReady: boolean;
@@ -200,7 +203,7 @@ export function ManagementShell({
 									aria-label={runtimeLabel}
 									title={runtimeLabel}
 								/>
-								<span aria-hidden="true">{runtimeLabel}</span>
+								<span aria-hidden="true">{runtimeSummary}</span>
 							</span>
 						</span>
 					</div>
