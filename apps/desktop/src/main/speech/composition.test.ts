@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Deferred, Effect, Layer, Option, Queue, Stream } from "effect";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	ConversationRuntimePort,
 	ConversationService,
@@ -303,6 +303,15 @@ const capture = {
 	type: "aiChat" as const,
 	agentId: Option.some(request.agentId),
 };
+const scratchDirectories = new Set<string>();
+afterEach(async () => {
+	await Promise.all(
+		[...scratchDirectories].map((directory) =>
+			rm(directory, { recursive: true, force: true }),
+		),
+	);
+	scratchDirectories.clear();
+});
 async function scratch() {
 	const root =
 		process.env.OPEN_QUAKE_TEST_SCRATCH ??
@@ -310,7 +319,9 @@ async function scratch() {
 	await import("node:fs/promises").then((fs) =>
 		fs.mkdir(root, { recursive: true }),
 	);
-	return mkdtemp(join(root, "speech-binding-"));
+	const directory = await mkdtemp(join(root, "speech-binding-"));
+	scratchDirectories.add(directory);
+	return directory;
 }
 
 describe("actual root speech and HTTP binding", () => {
