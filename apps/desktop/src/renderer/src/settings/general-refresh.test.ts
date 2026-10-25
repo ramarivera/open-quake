@@ -50,7 +50,7 @@ describe("General settings OS readback lifecycle", () => {
 		const bridge = fakeBridge({
 			saveGeneral: vi.fn(
 				() =>
-					new Promise((_, reject) => {
+					new Promise<never>((_, reject) => {
 						release = () => reject(refusal);
 					}),
 			),
