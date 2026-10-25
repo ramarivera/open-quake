@@ -1,0 +1,545 @@
+/*
+ * Agent library, model configuration and DK-Claw keys (nyd.3). One container
+ * level: sections are headings and hairline-separated rows; only dialogs and
+ * the composer are framed. Uses the workspace aliases from chat/workspace.css.
+ */
+.aw-section-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px 24px;
+	margin-bottom: 12px;
+}
+.aw-section-head h2,
+.aw-section-head h3 {
+	margin: 0;
+	font-size: var(--mc-font-title);
+	font-weight: 600;
+}
+.aw-section-head p {
+	margin: 4px 0 0;
+	max-width: 68ch;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.5;
+}
+.aw-subtabs {
+	margin: 16px 0 20px;
+}
+.aw-tab-intro {
+	margin: 0 0 16px;
+	max-width: 68ch;
+}
+
+/* ---- Local runtime status line ---------------------------------------- */
+.aw-runtime {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 12px;
+	padding: 8px 0;
+	border-block: 1px solid var(--cw-hairline);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-runtime-label {
+	color: var(--cw-muted);
+}
+.aw-runtime-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 550;
+}
+.aw-runtime-actions {
+	display: inline-flex;
+	gap: 4px;
+	margin-left: auto;
+}
+.aw-runtime-error {
+	flex-basis: 100%;
+	color: var(--cw-danger);
+}
+.aw-runtime-code {
+	color: var(--cw-muted);
+	font-size: var(--mc-font-meta);
+}
+
+/* ---- List / detail ------------------------------------------------------ */
+.aw-split {
+	display: grid;
+	grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+	gap: 0;
+	min-width: 0;
+}
+.aw-split[hidden] {
+	display: none;
+}
+.aw-list {
+	min-width: 0;
+	padding-right: 20px;
+	border-right: 1px solid var(--cw-hairline);
+}
+.aw-list-tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.agent-workbench .aw-search {
+	flex: 1 1 180px;
+	margin: 0;
+}
+.aw-segmented {
+	display: inline-flex;
+	margin: 0;
+	padding: 2px;
+	border: 1px solid var(--cw-border);
+	border-radius: var(--cw-radius-md);
+}
+.aw-segmented button {
+	all: unset;
+	padding: 4px 12px;
+	border-radius: var(--cw-radius-sm);
+	font-size: var(--mc-font-meta);
+	font-weight: 550;
+	color: var(--cw-muted);
+	cursor: pointer;
+}
+.aw-segmented button[aria-pressed="true"] {
+	background: var(--cw-accent-soft);
+	color: var(--cw-text);
+}
+.aw-segmented button:focus-visible,
+.aw-row-main:focus-visible,
+.aw-file-tab:focus-visible {
+	outline: 2px solid var(--cw-accent);
+	outline-offset: 2px;
+}
+.aw-count {
+	display: flex;
+	justify-content: space-between;
+	margin: 4px 0 6px;
+}
+.aw-rows,
+.aw-plain-list,
+.aw-files,
+.aw-skill-list,
+.aw-slot-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+/* Rows keep .mc-card as a stable hook for existing smoke selectors but read
+   as list rows here: no frame inside the page. */
+.agent-workbench .aw-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0 0 2px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--cw-radius-md);
+	background: transparent;
+	box-shadow: none;
+}
+.agent-workbench .aw-row:hover {
+	background: color-mix(in srgb, var(--cw-text) 5%, transparent);
+}
+.agent-workbench .aw-row[data-selected="true"] {
+	background: var(--cw-accent-soft);
+}
+.aw-row-main {
+	all: unset;
+	box-sizing: border-box;
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	padding: 8px 10px;
+	border-radius: var(--cw-radius-md);
+	cursor: pointer;
+}
+.aw-row-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+.aw-row-title {
+	margin: 0;
+	font-size: var(--mc-font-body-sm);
+	font-weight: 550;
+	overflow-wrap: anywhere;
+}
+.aw-row-meta {
+	font-family: var(--cw-mono);
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.aw-row-actions {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding-right: 4px;
+}
+.aw-emoji {
+	flex: none;
+	display: inline-grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--cw-radius-md);
+	background: var(--cw-sunken);
+	font-size: 18px;
+}
+.aw-emoji-lg {
+	width: 48px;
+	height: 48px;
+	font-size: 26px;
+}
+.aw-detail {
+	min-width: 0;
+	padding-left: 28px;
+}
+.aw-detail-head {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	margin-bottom: 20px;
+}
+.aw-detail-head h3 {
+	margin: 0;
+	font-size: var(--mc-font-title-lg);
+	font-weight: 600;
+}
+.aw-detail-head p {
+	margin: 2px 0 0;
+}
+.aw-detail h4 {
+	margin: 20px 0 4px;
+	font-size: var(--mc-font-subtitle);
+	font-weight: 600;
+}
+.aw-plain-list li {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--cw-hairline);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-none {
+	margin: 0;
+	padding: 10px 0;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-files {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.aw-files li {
+	padding: 2px 8px;
+	border-radius: var(--cw-radius-sm);
+	background: var(--cw-sunken);
+}
+
+/* ---- Skills ------------------------------------------------------------ */
+.aw-message {
+	margin: 0 0 8px;
+	padding: 8px 12px;
+	border-radius: var(--cw-radius-md);
+	background: var(--cw-accent-soft);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-skill-list > li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px 16px;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--cw-hairline);
+}
+.aw-skill-text {
+	flex: 1 1 280px;
+	min-width: 0;
+}
+.aw-skill-text .cw-muted {
+	margin-top: 4px;
+	font-size: var(--mc-font-body-sm);
+}
+.aw-equip {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 10px 0 0;
+	padding: 0;
+	border: 0;
+}
+.aw-equip legend {
+	margin-bottom: 6px;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+}
+
+/* ---- Forms in dialogs --------------------------------------------------- */
+.aw-form {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.aw-form .mc-field {
+	margin: 0;
+}
+.aw-form-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 14px;
+}
+.aw-form-grid > p {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+.aw-field-error {
+	grid-column: 1 / -1;
+	margin: -6px 0 0;
+	color: var(--cw-danger);
+	font-size: var(--mc-font-meta);
+}
+.aw-steps {
+	display: flex;
+	gap: 16px;
+	margin: 0 0 16px;
+	padding: 0;
+	list-style: none;
+	counter-reset: step;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+}
+.aw-steps li {
+	counter-increment: step;
+}
+.aw-steps li::before {
+	content: counter(step) ". ";
+}
+.aw-steps li[aria-current="step"] {
+	color: var(--cw-text);
+	font-weight: 600;
+}
+.aw-wizard-agent {
+	margin: 0;
+	font-size: var(--mc-font-body-sm);
+}
+.aw-file-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	border-bottom: 1px solid var(--cw-hairline);
+}
+.aw-file-tab {
+	all: unset;
+	padding: 6px 10px;
+	margin-bottom: -1px;
+	border-bottom: 2px solid transparent;
+	font-family: var(--cw-mono);
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+	cursor: pointer;
+}
+.aw-file-tab[data-active="true"] {
+	color: var(--cw-text);
+	border-bottom-color: var(--cw-accent);
+}
+.aw-form textarea[spellcheck="false"] {
+	font-family: var(--cw-mono);
+	font-size: var(--mc-font-meta);
+	line-height: 1.55;
+}
+
+/* ---- Models ------------------------------------------------------------ */
+.aw-effective {
+	display: flex;
+	align-items: baseline;
+	gap: 4px 8px;
+	margin: 0;
+	padding: 10px 12px;
+	border-radius: var(--cw-radius-md);
+	background: var(--cw-sunken);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-table-wrap {
+	overflow-x: auto;
+	margin: 0 0 8px;
+}
+.agent-workbench .aw-table {
+	width: 100%;
+	min-width: 860px;
+	border-collapse: collapse;
+	font-size: var(--mc-font-body-sm);
+}
+.agent-workbench .aw-table th {
+	padding: 6px 8px;
+	text-align: left;
+	font-size: var(--mc-font-meta);
+	font-weight: 600;
+	color: var(--cw-muted);
+	border-bottom: 1px solid var(--cw-hairline);
+	white-space: nowrap;
+}
+.agent-workbench .aw-table td {
+	padding: 8px;
+	vertical-align: top;
+	border-bottom: 1px solid var(--cw-hairline);
+}
+.agent-workbench .aw-table input,
+.agent-workbench .aw-table select {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 110px;
+	min-height: 32px;
+	padding: 4px 8px;
+	font-size: var(--mc-font-body-sm);
+	color: var(--cw-text);
+	background: var(--cw-sunken);
+	border: 1px solid var(--cw-border);
+	border-radius: var(--cw-radius-sm);
+}
+.agent-workbench .aw-table input[type="number"] {
+	min-width: 84px;
+}
+.agent-workbench .aw-table input:focus-visible,
+.agent-workbench .aw-table select:focus-visible {
+	outline: 2px solid var(--cw-accent);
+	outline-offset: 1px;
+}
+.aw-credential {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+	font-size: var(--mc-font-meta);
+	color: var(--cw-muted);
+	white-space: nowrap;
+}
+.agent-workbench .aw-table-actions {
+	white-space: nowrap;
+}
+.aw-add-row {
+	margin-bottom: 8px;
+}
+.aw-scope {
+	border-bottom: 1px solid var(--cw-hairline);
+}
+.aw-scope > summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 4px;
+	cursor: pointer;
+	list-style-position: inside;
+}
+.aw-scope > summary:focus-visible {
+	outline: 2px solid var(--cw-accent);
+	outline-offset: 2px;
+}
+.aw-scope[open] > summary {
+	padding-bottom: 8px;
+}
+.aw-scope > .cw-check {
+	margin: 0 0 12px 4px;
+	font-size: var(--mc-font-body-sm);
+}
+.aw-inherited {
+	padding: 0 4px 12px;
+	font-size: var(--mc-font-body-sm);
+}
+.aw-inherited p {
+	margin: 4px 0;
+}
+
+/* ---- DK-Claw keys ------------------------------------------------------ */
+/* Two by two, like the four keys on the device. */
+.aw-slot-list {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0 24px;
+	max-width: 640px;
+}
+.aw-slot {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 12px 0;
+	border-bottom: 1px solid var(--cw-hairline);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-slot-key {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 550;
+}
+.agent-workbench .aw-slot select {
+	min-height: 34px;
+	padding: 4px 8px;
+	color: var(--cw-text);
+	background: var(--cw-sunken);
+	border: 1px solid var(--cw-border);
+	border-radius: var(--cw-radius-md);
+	font-size: var(--mc-font-body-sm);
+}
+.aw-slots > .cw-muted {
+	margin-top: 10px;
+}
+.aw-progress {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 12px;
+	margin-top: 14px;
+	max-width: 880px;
+}
+.aw-progress progress {
+	flex: 1 1 200px;
+	accent-color: var(--cw-accent);
+}
+.aw-progress p {
+	flex-basis: 100%;
+	margin: 0;
+	font-size: var(--mc-font-body-sm);
+}
+#agents-settings > .aw-slots {
+	margin-bottom: 32px;
+}
+
+/* ---- Narrow ------------------------------------------------------------ */
+@media (max-width: 760px) {
+	.aw-split {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 20px;
+	}
+	.aw-list {
+		padding-right: 0;
+		border-right: 0;
+	}
+	.aw-detail {
+		padding: 16px 0 0;
+		border-top: 1px solid var(--cw-hairline);
+	}
+	.aw-runtime-actions {
+		margin-left: 0;
+	}
+	.aw-slot-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
