@@ -1,7 +1,7 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Exit, Layer, Option, Schema } from "effect";
 import { app, type BrowserWindow, dialog, ipcMain, shell } from "electron";
 import {
 	FirmwarePort,
@@ -33,6 +33,8 @@ import {
 	type MaintenanceView,
 	runningFirmware,
 } from "../../shared/maintenance-contracts";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { canRequestWallpaper } from "../media/media-permissions";
 import {
 	acknowledgeAppearance,
@@ -72,6 +74,7 @@ export function maintenanceRequestAllowed(
 	);
 }
 interface MaintenanceOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly root: string;
 	readonly mock: boolean;
 	readonly renderer: string;
@@ -196,7 +199,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 			});
 		},
 	);
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		Layer.mergeAll(
 			FirmwareUpdates.Default.pipe(
 				Layer.provide(
@@ -311,6 +314,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 				),
 			),
 		),
+		options.diagnostics,
 	);
 	const ready = runtime.runPromise(
 		Effect.gen(function* () {
@@ -322,11 +326,13 @@ export function registerMaintenance(options: MaintenanceOptions) {
 	// Observe initialization immediately, while retaining the rejecting promise for callers and disposal.
 	void ready.catch((cause) => {
 		const error = new FirmwarePersistenceFailed(cause);
+		const log = Effect.logError("Maintenance initialization failed", error);
 		Effect.runSync(
-			Effect.logError("Maintenance initialization failed", {
-				code: error.code,
-				diagnosticCause: error.diagnosticCause,
-			}),
+			options.diagnostics
+				? options.diagnostics
+						.instrument(log, "app.background")
+						.pipe(Effect.provide(options.diagnostics.layer))
+				: log,
 		);
 	});
 

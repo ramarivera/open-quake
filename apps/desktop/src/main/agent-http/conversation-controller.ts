@@ -19,8 +19,10 @@ import {
 	type AgentsAuthority,
 	agentRequestAllowed,
 } from "../agents/controller.js";
+import type { DesktopDiagnostics } from "../diagnostics";
 
 export interface ConversationControllerOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly runtime: ManagedRuntime.ManagedRuntime<ConversationService, never>;
 	readonly managementId: () => number | undefined;
 	readonly renderer: string;
@@ -30,6 +32,10 @@ export interface ConversationControllerOptions {
 export function createConversationController(
 	options: ConversationControllerOptions,
 ) {
+	const observe = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+		options.diagnostics
+			? options.diagnostics.instrument(effect, "agent.conversation")
+			: effect;
 	const running = new Map<
 		string,
 		{ owner: string; fiber: Fiber.RuntimeFiber<void, never> }
@@ -131,6 +137,7 @@ export function createConversationController(
 					const service = yield* ConversationService;
 					yield* service.stream(owner, input).pipe(
 						Stream.runForEach(deliver),
+						observe,
 						Effect.catchAll((error) =>
 							Effect.sync(() => {
 								if (
@@ -180,6 +187,7 @@ export function createConversationController(
 				if (type === "clear") yield* service.clear(owner, scope);
 				return yield* service.history(owner, scope);
 			}).pipe(
+				observe,
 				Effect.match({
 					onSuccess: (history): ConversationReply => ({
 						_tag: "success",

@@ -6,7 +6,6 @@ import {
 	Either,
 	Fiber,
 	Layer,
-	ManagedRuntime,
 	Option,
 	Schema,
 	Stream,
@@ -44,6 +43,8 @@ import {
 	MEETING_REQUEST,
 	MEETING_SNAPSHOT,
 } from "../../shared/meeting-bridge";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { createCapturePort } from "./capture-port";
 import { writePrivateFile } from "./private-files";
@@ -86,6 +87,7 @@ export const mockMeetingAdapter: MeetingAdapter = {
 	stopTranslation: () => Effect.void,
 };
 export function registerMeetings(options: {
+	diagnostics?: DesktopDiagnostics;
 	userData: string;
 	hardware: () => HardwareSession | undefined;
 	mock: boolean;
@@ -129,7 +131,7 @@ export function registerMeetings(options: {
 				Layer.provide(Layer.succeed(AiMeetingAdapter, supplied)),
 			)
 		: MeetingProvider.Default;
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		MeetingService.DefaultWithoutDependencies.pipe(
 			Layer.provideMerge(
 				Layer.mergeAll(
@@ -139,6 +141,7 @@ export function registerMeetings(options: {
 				),
 			),
 		),
+		options.diagnostics,
 	);
 	const jobs = new Map<MeetingId, Fiber.RuntimeFiber<void, MeetingError>>();
 	const encode = Schema.encodeSync(MeetingReply);

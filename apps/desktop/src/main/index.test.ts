@@ -356,6 +356,7 @@ describe("desktop window lifecycle", () => {
 			height: 480,
 			title: "open-quake panel",
 			frame: false,
+			roundedCorners: false,
 		});
 		expect(management.options.frame).not.toBe(false);
 		for (const window of [panel, management]) {

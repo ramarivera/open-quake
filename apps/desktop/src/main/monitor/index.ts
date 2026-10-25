@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, ManagedRuntime, Schema, Stream } from "effect";
+import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import {
 	type MetricCollector,
@@ -21,6 +21,8 @@ import {
 	MonitorVideoTooShort,
 } from "../../shared/monitor-errors";
 import { canRequestClock } from "../clock/clock-ipc";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { MonitorStore, monitorStoreLive } from "./monitor-store";
 import { nativeCollector } from "./native-collector";
 import { selectMedia } from "./native-media";
@@ -32,14 +34,16 @@ export function registerMonitor(
 	collector: MetricCollector = nativeCollector(),
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+	diagnostics?: DesktopDiagnostics,
 ) {
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		Layer.merge(
 			monitorStoreLive(root),
 			MonitorService.Default.pipe(
 				Layer.provide(Layer.succeed(MonitorCollector, collector)),
 			),
 		),
+		diagnostics,
 	);
 	const watchers = new Map<Electron.WebContents, () => void>();
 	const trusted = (contents: Electron.WebContents): boolean =>

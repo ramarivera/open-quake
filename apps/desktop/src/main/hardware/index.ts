@@ -4,6 +4,7 @@ import type { HardwareSession } from "@open-quake/device";
 import { Effect } from "effect";
 import { ipcMain, powerMonitor } from "electron";
 import { HARDWARE_REQUEST } from "../../shared/hardware-contracts";
+import type { DesktopDiagnostics } from "../diagnostics";
 import { canRequestWallpaper } from "../media/media-permissions";
 import { hardwareRequest } from "./controller";
 
@@ -13,7 +14,14 @@ export function registerHardware(
 	mock: boolean,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+	diagnostics?: DesktopDiagnostics,
 ): () => void {
+	const observe = <A, E>(work: Effect.Effect<A, E>) =>
+		diagnostics
+			? diagnostics
+					.instrument(work, "voice.device")
+					.pipe(Effect.provide(diagnostics.layer))
+			: work;
 	ipcMain.handle(HARDWARE_REQUEST, (event, input: unknown) => {
 		if (
 			event.sender !== managementWindow()?.webContents ||
@@ -21,16 +29,16 @@ export function registerHardware(
 			!canRequestWallpaper(event.sender.getURL(), renderer, input, true)
 		)
 			return { _tag: "failure", code: "QUAKE.HARDWARE.REQUEST_DENIED" };
-		return Effect.runPromise(hardwareRequest(input, current(), mock));
+		return Effect.runPromise(observe(hardwareRequest(input, current(), mock)));
 	});
 	const setLocked = (locked: boolean): void => {
 		const session = current();
 		if (session)
 			void Effect.runPromise(
-				session.setLocked(locked).pipe(
+				observe(session.setLocked(locked)).pipe(
 					Effect.matchEffect({
 						onSuccess: () => Effect.void,
-						onFailure: (error) => Effect.logWarning(error.code),
+						onFailure: (error) => observe(Effect.logWarning(error)),
 					}),
 				),
 			);

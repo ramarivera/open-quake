@@ -8,6 +8,7 @@ import {
 	AGENT_CONNECTIONS_SNAPSHOT,
 } from "../../shared/agent-connections";
 import { agentRequestAllowed } from "../agents/controller";
+import type { DesktopDiagnostics } from "../diagnostics";
 import { systemCredentialVault } from "../integrations/storage";
 import {
 	type ConnectionOperations,
@@ -22,6 +23,7 @@ import {
 } from "./connections";
 
 export interface RegisterAgentConnectionsOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer: string;
 	readonly root?: string;
@@ -92,18 +94,24 @@ export async function registerAgentConnections(
 	options: RegisterAgentConnectionsOptions,
 ): Promise<AgentConnectionsRegistration> {
 	const root = options.root ?? join(app.getPath("userData"), "agent-http-v1");
+	const acquisition = createAgentConnections({
+		storage: options.storage ?? connectionFileStorage(root),
+		credentials:
+			options.credentials ?? connectionCredentials(join(root, "credentials")),
+	});
 	const repository = await Effect.runPromise(
-		createAgentConnections({
-			storage: options.storage ?? connectionFileStorage(root),
-			credentials:
-				options.credentials ?? connectionCredentials(join(root, "credentials")),
-		}),
+		options.diagnostics
+			? options.diagnostics
+					.instrument(acquisition, "agent.connection")
+					.pipe(Effect.provide(options.diagnostics.layer))
+			: acquisition,
 	);
 	const controller = createAgentConnectionsController({
 		repository,
 		managementId: () => options.management()?.webContents.id,
 		renderer: options.renderer,
 		operations: options.operations,
+		...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
 	});
 	let disposed = false;
 	const pending = new Set<Promise<unknown>>();

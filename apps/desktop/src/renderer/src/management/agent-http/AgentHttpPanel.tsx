@@ -61,10 +61,7 @@ export function AgentHttpPanel({
 	}, [selectedId, discoveryKey, connections.busy, request]);
 	const save = async (draft: ConnectionDraft): Promise<boolean> => {
 		const existing = editing?.connection;
-		const previousIds = new Set(
-			connections.view?.connections.map((item) => item.id),
-		);
-		const reply = await request({
+		const reply = await connections.saveAndSelect({
 			type: "save",
 			...(existing ? { id: existing.id } : {}),
 			name: draft.name.trim(),
@@ -83,12 +80,6 @@ export function AgentHttpPanel({
 				draft.clearCredential)
 		)
 			setConversationRevision((revision) => revision + 1);
-		const savedId =
-			existing?.id ??
-			reply.view.connections.find((item) => !previousIds.has(item.id))?.id;
-		if (savedId && reply.view.selected?.connectionId !== savedId) {
-			await request({ type: "select", id: savedId });
-		}
 		return true;
 	};
 	const healthLabel = health

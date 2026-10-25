@@ -31,9 +31,13 @@ const env = {
 	OPEN_QUAKE_E2E_MODEL: config.model,
 	OPEN_QUAKE_E2E_API_KEY: config.apiKey,
 	OPEN_QUAKE_E2E_RUNTIME_TOKEN: config.token,
+	OPEN_QUAKE_E2E_REPORT_PREFIX: join(scratch, config.project),
 	OPEN_QUAKE_E2E_HERMES_SOURCE: join(state, "hermes"),
 	OPEN_QUAKE_E2E_HERMES_DOCKERFILE: join(here, "hermes.Dockerfile"),
 };
+// T3 may itself run inside Electron with this flag. Child acceptance must
+// launch the real Electron application rather than Electron's Node mode.
+delete env.ELECTRON_RUN_AS_NODE;
 const composeArgs = [
 	"compose",
 	"--project-name",
@@ -173,6 +177,44 @@ try {
 		600000,
 	);
 	console.log("All three runtime inference and session tests passed");
+	if (process.env.OPEN_QUAKE_E2E_DESKTOP === "1") {
+		console.log(
+			"Building and exercising the production desktop UI against both runtimes",
+		);
+		env.OPEN_QUAKE_MOCK_DEVICE = "1";
+		await command("pnpm", ["--filter", "@open-quake/desktop", "build"], 180000);
+		await command(
+			"pnpm",
+			[
+				"--filter",
+				"@open-quake/desktop",
+				"exec",
+				"electron-vite",
+				"build",
+				"--config",
+				"src/main/test/runtime-desktop-e2e.config.ts",
+			],
+			180000,
+		);
+		const result = await command(
+			"pnpm",
+			[
+				"--filter",
+				"@open-quake/desktop",
+				"exec",
+				"electron",
+				"out/agent-e2e/runtime-desktop-e2e.js",
+			],
+			300000,
+		);
+		if (!result.stdout.includes("DESKTOP_E2E_PASS production root and preload"))
+			throw new Error(
+				"Desktop acceptance did not produce its completion marker",
+			);
+		console.log(
+			"Both production desktop selection, UI streaming and session tests passed",
+		);
+	}
 	if (interrupted) abort();
 	passed = true;
 } catch (error) {

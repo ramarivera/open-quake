@@ -69,6 +69,7 @@ export function createConnectionsController(
 	};
 	const request = async (
 		command: AgentConnectionCommand,
+		selectSaved = false,
 	): Promise<AgentConnectionReply | undefined> => {
 		if (!mounted || state.busy) return undefined;
 		if (!bridge) {
@@ -81,11 +82,36 @@ export function createConnectionsController(
 			});
 			return undefined;
 		}
+		const previousIds = new Set(
+			state.view?.connections.map((connection) => connection.id),
+		);
 		const requestEpoch = epoch;
 		update({ ...state, busy: true, error: undefined });
 		try {
-			const reply = await bridge.request(command);
+			let reply = await bridge.request(command);
 			if (!mounted || epoch !== requestEpoch) return undefined;
+			if (selectSaved && command.type === "save" && reply._tag === "success") {
+				const savedId =
+					command.id ??
+					reply.view.connections.find(
+						(connection) => !previousIds.has(connection.id),
+					)?.id;
+				if (savedId && reply.view.selected?.connectionId !== savedId) {
+					// Keep the busy interval across both writes. An automatic discovery
+					// must not consume the gap and silently discard the selection.
+					apply(reply.view);
+					const selection = await bridge.request({
+						type: "select",
+						id: savedId,
+					});
+					if (!mounted || epoch !== requestEpoch) return undefined;
+					if (selection._tag === "rejected") {
+						update({ ...state, error: selection });
+						return reply;
+					}
+					reply = selection;
+				}
+			}
 			if (reply._tag === "rejected") update({ ...state, error: reply });
 			else {
 				const currentReply =
@@ -133,6 +159,9 @@ export function createConnectionsController(
 			};
 		},
 		request,
+		saveAndSelect: (
+			command: Extract<AgentConnectionCommand, { type: "save" }>,
+		) => request(command, true),
 		dismissError: () => update({ ...state, error: undefined }),
 		start: () => {
 			mounted = true;

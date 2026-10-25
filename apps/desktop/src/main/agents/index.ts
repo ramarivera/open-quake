@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer } from "effect";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import { AgentRuntimeUnavailable } from "../../../../../packages/edge/src/agents/agents-errors.js";
 import {
@@ -18,6 +18,8 @@ import {
 	AGENTS_REQUEST,
 	AGENTS_SNAPSHOT,
 } from "../../shared/agents";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { agentRequestAllowed, createAgentsHandler } from "./controller";
 import { agentProfileBinding, type ProfilesRuntime } from "./profile-binding";
 import { createAgentStorage } from "./storage";
@@ -35,6 +37,7 @@ export const unavailableAgentRuntime: AgentRuntimeAdapter = {
 	subscribe: () => () => {},
 };
 export interface RegisterAgentsOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer: string;
 	readonly profiles: ProfilesRuntime;
@@ -61,8 +64,9 @@ export function registerAgents(options: RegisterAgentsOptions) {
 			? Layer.succeed(AgentCredentialPort, options.credentials)
 			: Layer.empty,
 	);
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		AgentsService.Default.pipe(Layer.provide(ports)),
+		options.diagnostics,
 	);
 	const handler = createAgentsHandler(
 		runtime,

@@ -11,6 +11,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import {
 	Cause,
+	Context,
 	Effect,
 	Either,
 	Fiber,
@@ -30,24 +31,25 @@ import {
 	VoiceTonePort,
 } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
 import { VoiceSurface } from "../../../../../packages/edge/src/voice/surface/voice-surface-service.js";
+import { createAgentConnectionsController } from "../agent-http/connection-controller.js";
+import { createAgentConnections } from "../agent-http/connections.js";
 import { createDesktopDiagnostics, type DesktopDiagnostics } from "./index.js";
 import { createDiagnosticStorage } from "./persistence.js";
 import { safeCause, safeError } from "./privacy.js";
+import { makeDesktopRuntime } from "./runtime.js";
 
 const scratch =
-	process.platform === "darwin"
-		? "/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish"
-		: join(
-				homedir(),
-				"dev",
-				"agentic-scratchpads",
-				"open-quake",
-				"diagnostics-tests",
-			);
+	process.env.OPEN_QUAKE_TEST_SCRATCH ??
+	join(
+		homedir(),
+		"dev",
+		"agentic-scratchpads",
+		"open-quake",
+		"diagnostics-tests",
+	);
 const directories: string[] = [];
 const resources: Array<() => Promise<unknown>> = [];
 async function fixture() {
-	if (process.platform === "darwin") await stat("/Volumes/ExtSSD");
 	await mkdir(scratch, { recursive: true });
 	const directory = await mkdtemp(join(scratch, "diagnostics-test-"));
 	directories.push(directory);
@@ -473,5 +475,133 @@ describe("production Effect diagnostics", () => {
 			},
 		});
 		expect(JSON.stringify(lines)).not.toContain("private");
+	});
+});
+
+describe("process-owned runtime diagnostics", () => {
+	it("observes acquisition, all interpreter boundaries and finalizers without changing Effect runtime ownership", async () => {
+		const { directory, diagnostics } = await fixture();
+		class Port extends Context.Tag("DiagnosticRuntimeFixture")<
+			Port,
+			{ value: number }
+		>() {}
+		const live = Layer.scoped(
+			Port,
+			Effect.acquireRelease(
+				Effect.logInfo("HTTP runtime setup failed").pipe(
+					Effect.as({ value: 42 }),
+				),
+				() => Effect.logInfo("Application shutdown failed"),
+			),
+		);
+		const app = makeDesktopRuntime(live, diagnostics, "agent.request");
+		resources.push(app.dispose);
+		expect(Effect.isEffect(app)).toBe(true);
+		const read = Effect.map(Port, (p) => p.value);
+		expect(await app.runPromise(read)).toBe(42);
+		expect(app.runSync(read)).toBe(42);
+		expect(app.runSyncExit(read)._tag).toBe("Success");
+		expect((await app.runPromiseExit(read))._tag).toBe("Success");
+		expect(await Effect.runPromise(Fiber.join(app.runFork(read)))).toBe(42);
+		await new Promise<void>((resolve) =>
+			app.runCallback(read, {
+				onExit: (exit) => {
+					expect(exit._tag).toBe("Success");
+					resolve();
+				},
+			}),
+		);
+		await app.dispose();
+		await diagnostics.flush();
+		const saved = await records(directory);
+		expect(
+			saved.filter((r) => r.type === "span" && r.span_name === "agent.request"),
+		).toHaveLength(6);
+		expect(
+			saved.some(
+				(r) => r.type === "log" && r.event === "HTTP runtime setup failed",
+			),
+		).toBe(true);
+		expect(
+			saved.some(
+				(r) => r.type === "log" && r.event === "Application shutdown failed",
+			),
+		).toBe(true);
+		await expect(app.runPromise(read)).rejects.toThrow(
+			"ManagedRuntime disposed",
+		);
+	});
+	it("retains the actual failed connection operation before IPC projects a safe rejection", async () => {
+		const { directory, diagnostics } = await fixture();
+		const repository = await Effect.runPromise(
+			createAgentConnections({
+				storage: {
+					read: () =>
+						Effect.succeed({
+							version: 1,
+							revision: 0,
+							connections: [
+								{
+									id: "local",
+									name: "Local",
+									kind: "hermes",
+									baseURL: "http://localhost:8642/",
+								},
+							],
+							cleanupRefs: [],
+						}),
+					write: () => Effect.void,
+				},
+				credentials: {
+					store: () => Effect.succeed("a8ab5f08-bf8d-4940-8790-7ea406d9cbec"),
+					resolve: () => Effect.succeed(Redacted.make("private-key")),
+					remove: () => Effect.void,
+				},
+			}),
+		);
+		const controller = createAgentConnectionsController({
+			diagnostics,
+			repository,
+			managementId: () => 42,
+			renderer: "file:///open-quake/renderer/index.html",
+			operations: {
+				health: () =>
+					Effect.fail(
+						new RuntimeUnavailable(
+							Object.assign(new TypeError("private provider URL"), {
+								code: "ECONNREFUSED",
+							}),
+						),
+					),
+			},
+		});
+		try {
+			const reply = await controller.request(
+				{
+					senderId: 42,
+					mainFrame: true,
+					frameURL: "file:///open-quake/renderer/index.html",
+				},
+				{ type: "test", id: "local" },
+			);
+			expect(reply._tag).toBe("rejected");
+			await diagnostics.flush();
+			const saved = await records(directory);
+			const failed = saved.find(
+				(r) =>
+					r.type === "span" &&
+					r.span_name === "agent.connection" &&
+					r.outcome === "failure",
+			);
+			expect(failed).toBeDefined();
+			expect(JSON.stringify(failed)).toContain("ECONNREFUSED");
+			expect(JSON.stringify(failed)).toContain(
+				"AGENT.HTTP.CONNECTION.UNAVAILABLE",
+			);
+			expect(JSON.stringify(saved)).not.toContain("private-key");
+			expect(JSON.stringify(saved)).not.toContain("private provider URL");
+		} finally {
+			controller.dispose();
+		}
 	});
 });

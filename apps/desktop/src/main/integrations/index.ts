@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import { Effect, Fiber, Layer, ManagedRuntime, Schema, Stream } from "effect";
+import {
+	Effect,
+	Fiber,
+	Layer,
+	type ManagedRuntime,
+	Schema,
+	Stream,
+} from "effect";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import type { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
@@ -33,6 +40,8 @@ import {
 	type IntegrationReply,
 	IntegrationRequest,
 } from "../../shared/integrations";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { makeIntegrationController } from "./controller";
 import { openHaRest } from "./ha-rest";
 import { integrationRequestAllowed } from "./permissions";
@@ -41,6 +50,7 @@ import { fileStore, systemCredentialVault } from "./storage";
 export const HA_POLL_INTERVAL_MS = 2000;
 
 export function registerIntegrations<R>(options: {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow | undefined;
 	readonly panel?: () => BrowserWindow | undefined;
 	readonly rendererURL: string;
@@ -57,7 +67,7 @@ export function registerIntegrations<R>(options: {
 	const vault =
 		options.vault ?? systemCredentialVault(join(root, "credentials"));
 	const profiles = integrationProfiles(options.profileRuntime);
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		Layer.mergeAll(
 			ChannelService.Default.pipe(
 				Layer.provide(
@@ -100,6 +110,7 @@ export function registerIntegrations<R>(options: {
 				),
 			),
 		),
+		options.diagnostics,
 	);
 	const controller = runtime.runPromise(
 		makeIntegrationController({

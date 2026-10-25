@@ -19,6 +19,7 @@ Set these environment variables before running:
 | `OPEN_QUAKE_E2E_API_KEY` | Optional provider API key, passed through to both runtime configurations |
 | `OPEN_QUAKE_E2E_MODEL` | Explicit provider model ID. There's no model default or fallback |
 | `OPEN_QUAKE_E2E_SCRATCH` | Absolute scratch directory outside the checkout |
+| `OPEN_QUAKE_E2E_DESKTOP` | Set to `1` to also run production Electron connection/chat UI acceptance |
 
 Use your shell or secret manager to supply the key. Don't put it in command
 arguments, checked-in files or a PR comment. Endpoints without authentication use
@@ -63,5 +64,16 @@ a credential-free recovery Compose file. Remove only that project with
 This recovery file needs no provider settings or original bearer token. Recheck
 project-labeled resources before deleting the retained state directory.
 
-This proves runtime HTTP behavior. It doesn't prove Electron UI interaction,
-microphone input, STT, TTS, physical QUAKE input or audible output.
+The default run proves runtime HTTP behavior. To also exercise the actual desktop,
+set `$env.OPEN_QUAKE_E2E_DESKTOP = "1"` in Nushell before running. This builds the
+production app, starts its real composition root and preload with isolated scratch
+user data and mandatory mock hardware, then drives the management connection and
+chat controls against both runtimes. It adds four model requests, verifies the two
+rendered replies per runtime and remote session continuity, and saves synthetic
+conversation screenshots beneath `desktop-e2e-*` in the scratch directory. It
+uses the normal production quit sequence and a bounded process deadline. On macOS
+it runs without activation. Other platforms may show its isolated windows.
+
+Neither mode establishes microphone input, STT, TTS, physical QUAKE input or
+audible output. The desktop mode uses the real OS credential vault, so a locked
+or unavailable vault fails rather than storing its ephemeral bearer in plaintext.

@@ -71,7 +71,7 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 				message: mirrored ? text.message : "Move Quake to the far right",
 				detail:
 					(mirrored ? mirrorDetail : "") +
-					"\n\nWith your permission, open-quake will call CoreGraphics CGConfigureDisplayMirrorOfDisplay and CGConfigureDisplayOrigin through /usr/bin/osascript. This switches Quake to an extended display, makes another display primary when needed, and moves Quake to the far right. Other displays keep their relative positions.",
+					"\n\nopen-quake will use Quake as a separate display and place it to the far right of your other screens. If Quake is your main display, another screen will become the main display. Your other screens will keep their positions relative to each other. You can change this arrangement later in System Settings > Displays.",
 				buttons: [text.switch, text.orientationLater],
 				defaultId: 1,
 				cancelId: 1,

@@ -1,16 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import {
-	Effect,
-	Fiber,
-	Layer,
-	ManagedRuntime,
-	Option,
-	Schedule,
-	Schema,
-	Stream,
-} from "effect";
+import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
@@ -50,6 +41,8 @@ import {
 	type ProfileReply,
 	ProfileRequest,
 } from "../../shared/profile-manager";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
@@ -78,6 +71,7 @@ export function registerProfiles(
 	hardware: () => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
 	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	diagnostics?: DesktopDiagnostics,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -149,7 +143,7 @@ export function registerProfiles(
 			}),
 		),
 	);
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		Layer.mergeAll(
 			KeyEditing.DefaultWithoutDependencies,
 			KeyRuntime.DefaultWithoutDependencies.pipe(
@@ -163,6 +157,7 @@ export function registerProfiles(
 				),
 			),
 		).pipe(Layer.provideMerge(profileLive)),
+		diagnostics,
 	);
 	const keyLibrary = registerKeyLibrary(
 		runtime,
