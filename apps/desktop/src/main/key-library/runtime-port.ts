@@ -29,7 +29,7 @@ export const desktopKeyRuntimePort = (
 	hardware: () => HardwareSession | undefined,
 	publish: (state: KeyFeedback) => void,
 	mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
-	executeOwned?: (key: ProfileKey) => Promise<boolean>,
+	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 ) =>
 	Layer.effect(
 		KeyRuntimePort,
@@ -160,7 +160,7 @@ export const desktopKeyRuntimePort = (
 					mock || !executeOwned
 						? Effect.succeed(false)
 						: Effect.tryPromise({
-								try: () => executeOwned(key),
+								try: (signal) => executeOwned(key, signal),
 								catch: (cause) => new HostActionFailed(cause),
 							}),
 				publish: (state) => Effect.sync(() => publish(state)),

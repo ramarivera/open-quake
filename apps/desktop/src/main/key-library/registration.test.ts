@@ -19,6 +19,7 @@ import {
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import { createPanelKeyDispatcher } from "../../renderer/src/keys/panel-key-dispatch";
 import { KEY_REQUEST, type KeyReply } from "../../shared/key-library";
 import { iconZip } from "../test/icon-pack-fixtures";
 import { iconStore } from "./icon-store";
@@ -860,7 +861,8 @@ it("rejects management icon storage mutations with and without an owned picker",
 
 it("keeps live input and timer cancellation responsive during a stalled HA request and interrupts it on reset", async () => {
 	const entered = barrier<void>(),
-		response = barrier<void>();
+		response = barrier<void>(),
+		shortcut = barrier<void>();
 	let integrations = 0,
 		shortcuts = 0,
 		interrupted = false;
@@ -881,6 +883,7 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 		() =>
 			Effect.sync(() => {
 				shortcuts++;
+				shortcut.resolve();
 			}),
 		() =>
 			Effect.sync(() => {
@@ -916,14 +919,28 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 			),
 		]);
 	let pending: Promise<unknown> | undefined;
+	const dispatcher = createPanelKeyDispatcher(
+		() => ({ deviceId: "device", profileId: "p", pageId: "one", revision: 0 }),
+		(command) => {
+			const operation = f.request(f.panel, command);
+			if (
+				command.type === "activate" &&
+				command.keyCode === "1,1" &&
+				command.kind === "press"
+			)
+				pending = operation.catch(() => "interrupted");
+			return operation;
+		},
+	);
+	const tap = (keyCode: string) => {
+		dispatcher.key({ keyCode, keyAction: 0 });
+		dispatcher.key({ keyCode, keyAction: 1 });
+	};
 	try {
 		const timer = { ...f.activation, keyCode: "1,3" };
 		await f.request(f.panel, timer);
 		await f.request(f.panel, { ...timer, kind: "release" });
-		pending = f.request(f.panel, f.activation).then(
-			(value) => value,
-			() => "interrupted",
-		);
+		tap("1,1");
 		await entered.promise;
 		expect(await bounded(f.request(f.panel, f.activation))).toEqual({
 			_tag: "success",
@@ -932,17 +949,16 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 		expect(
 			await bounded(f.request(f.panel, { ...f.activation, kind: "release" })),
 		).toEqual({ _tag: "success" });
-		expect(
-			await bounded(f.request(f.panel, { ...f.activation, keyCode: "1,2" })),
-		).toEqual({ _tag: "success" });
+		tap("1,2");
+		expect(await bounded(shortcut.promise)).toBeUndefined();
 		expect(shortcuts).toBe(1);
-		expect(await bounded(f.request(f.panel, timer))).toEqual({
-			_tag: "success",
-		});
-		const states = await f.runtime.runPromise(KeyRuntime.snapshot);
-		expect(states.find((value) => value.keyCode === "1,3")).toMatchObject({
-			countdown: -1,
-			alert: 0,
+		tap("1,3");
+		await vi.waitFor(async () => {
+			const states = await f.runtime.runPromise(KeyRuntime.snapshot);
+			expect(states.find((value) => value.keyCode === "1,3")).toMatchObject({
+				countdown: -1,
+				alert: 0,
+			});
 		});
 		expect(
 			await bounded(
@@ -957,8 +973,11 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 			await bounded(f.runtime.runPromise(KeyRuntime.reset("device"))),
 		).toBeUndefined();
 		expect(interrupted).toBe(true);
+		if (!pending)
+			throw new Error("Panel did not dispatch the Home Assistant press");
 		expect(await bounded(pending)).toBe("interrupted");
 	} finally {
+		dispatcher.cancel();
 		response.resolve();
 		await pending;
 		await f.registration.dispose();

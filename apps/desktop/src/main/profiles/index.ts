@@ -77,7 +77,7 @@ export function registerProfiles(
 	managementURL = renderer,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
-	executeOwned?: (key: ProfileKey) => Promise<boolean>,
+	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"

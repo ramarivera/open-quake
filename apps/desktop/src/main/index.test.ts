@@ -299,8 +299,9 @@ describe("desktop window lifecycle", () => {
 				actions: [{ type: "configData", value: JSON.stringify(config) }],
 			},
 		});
-		expect(await execute?.(key)).toBe(true);
-		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config);
+		const signal = new AbortController().signal;
+		expect(await execute?.(key, signal)).toBe(true);
+		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config, signal);
 	});
 
 	it("starts both surfaces on the primary display without panel hardware", () => {

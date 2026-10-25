@@ -5,11 +5,11 @@ import { keyHaConfig } from "./profiles";
 
 /** Direct saved keys use their explicit configuration, independently of AI access. */
 export const integrationKeyAction =
-	(execute: (key: HaKey) => Promise<void>) =>
-	async (key: ProfileKey): Promise<boolean> => {
+	(execute: (key: HaKey, signal: AbortSignal) => Promise<void>) =>
+	async (key: ProfileKey, signal: AbortSignal): Promise<boolean> => {
 		if (key.config.type !== "homeAssistant") return false;
 		const config = keyHaConfig(key);
 		if (!config) throw new InputRejected(undefined, "Home Assistant key");
-		await execute(config);
+		await execute(config, signal);
 		return true;
 	};

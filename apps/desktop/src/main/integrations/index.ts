@@ -214,8 +214,12 @@ export function registerIntegrations<R>(options: {
 		executeHa: (key: HaKey) =>
 			track(() => runtime.runPromise(HomeAssistantService.execute(key, true))),
 		/** Trusted, explicitly configured direct-key actions. Never expose as an AI tool. */
-		executeHaFromKey: (key: HaKey) =>
-			track(() => runtime.runPromise(HomeAssistantService.execute(key, false))),
+		executeHaFromKey: (key: HaKey, signal: AbortSignal) =>
+			track(() =>
+				runtime.runPromise(HomeAssistantService.execute(key, false), {
+					signal,
+				}),
+			),
 		dispose: () => {
 			if (disposal) return disposal;
 			disposal = (async () => {

@@ -385,7 +385,7 @@ async function main() {
 		assert.equal(executions, 0);
 		await integrations.executeHa({ ...key, entity_id: "light.desk" });
 		assert.equal(executions, 1);
-		await integrations.executeHaFromKey(key);
+		await integrations.executeHaFromKey(key, new AbortController().signal);
 		assert.equal(executions, 2);
 		await assert.rejects(integrations.executeHa(key));
 		assert.equal(executions, 2);
@@ -458,7 +458,7 @@ async function main() {
 		});
 		const savedHa = keyHaConfig(optionalKey);
 		assert(savedHa);
-		await integrations.executeHaFromKey(savedHa);
+		await integrations.executeHaFromKey(savedHa, new AbortController().signal);
 		assert.deepEqual(outbound.at(-1), {
 			domain: "light",
 			service: "turn_on",
@@ -489,7 +489,10 @@ async function main() {
 		await wait(
 			`window.quakeIntegrations.request({type:"ha.live"}).then(reply=>reply.type === "live" && reply.live.states.some(entity=>entity.entity_id === "light.desk" && !Object.hasOwn(entity.attributes,"brightness")))`,
 		);
-		await integrations.executeHaFromKey(displayKey);
+		await integrations.executeHaFromKey(
+			displayKey,
+			new AbortController().signal,
+		);
 		await integrations.executeHa(displayKey);
 		assert.equal(
 			(

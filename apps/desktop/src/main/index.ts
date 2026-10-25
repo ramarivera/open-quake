@@ -216,7 +216,9 @@ if (!app.requestSingleInstanceLock()) {
 			managementURL.href,
 			() => bus?.hardware?.(),
 			() => panelWin,
-			integrationKeyAction((key) => integrations.executeHaFromKey(key)),
+			integrationKeyAction((key, signal) =>
+				integrations.executeHaFromKey(key, signal),
+			),
 		);
 		const agents = registerAgents({
 			management: () => managementWin,

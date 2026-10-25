@@ -80,6 +80,44 @@ it("queues full tap pairs through slow and failed activations", async () => {
 	]);
 });
 
+it("lets other keys complete while preserving order for a stalled key", async () => {
+	const calls: string[] = [];
+	let finish = () => {};
+	const slow = new Promise<void>((resolve) => {
+		finish = resolve;
+	});
+	const d = createPanelKeyDispatcher(
+		() => active,
+		async (command) => {
+			if (command.type === "activate") {
+				calls.push(`${command.keyCode}:${command.kind}`);
+				if (command.keyCode === "1,1" && command.kind === "press") await slow;
+			}
+			return { _tag: "success" };
+		},
+	);
+	try {
+		for (const keyCode of ["1,1", "1,1", "1,2", "1,3"]) {
+			d.key({ keyCode, keyAction: 0 });
+			d.key({ keyCode, keyAction: 1 });
+		}
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(calls).toEqual([
+			"1,1:press",
+			"1,2:press",
+			"1,3:press",
+			"1,2:release",
+			"1,3:release",
+		]);
+		finish();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(calls.slice(5)).toEqual(["1,1:release", "1,1:press", "1,1:release"]);
+	} finally {
+		d.cancel();
+		finish();
+	}
+});
+
 it("cancels queued taps on disconnect while still releasing the in-flight press", async () => {
 	const calls: string[] = [];
 	let finish: (() => void) | undefined;

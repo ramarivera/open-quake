@@ -162,5 +162,7 @@ The committed key runtime SHALL route configured Home Assistant keys to the dire
 #### Scenario: Slow Home Assistant request
 - **WHEN** an authorized saved Home Assistant key awaits a slow or unreachable service
 - **THEN** unrelated key activation, release, navigation and timer cancellation remain available
+- **AND** the production panel dispatcher preserves same-key press/release ordering without waiting for another key's integration completion
 - **AND** reset interrupts scoped pending integration work without waiting for the network response
+- **AND** cancellation crosses the desktop Promise boundary into the integration runtime so queued service actions cannot execute after reset
 - **AND** committed-key validation and held-press deduplication remain atomic
