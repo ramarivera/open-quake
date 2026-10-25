@@ -7,8 +7,8 @@ import { AgentDialog } from "../agents/Dialog";
 import { Icon } from "../chat/icons";
 import { ConnectionForm } from "./ConnectionForm";
 import type { ConnectionDraft } from "./connection-draft";
+import { runtimeStrings as t } from "./copy";
 import { healthLabel, healthTone } from "./health";
-import t from "./strings.json";
 
 const capabilityTone = (value: string) =>
 	value === "supported"

@@ -8,8 +8,8 @@ import {
 	type AgentView,
 	EMOJI_PRESETS,
 } from "../../../../shared/agents";
+import { agentsStrings as strings } from "./copy";
 import { AgentDialog } from "./Dialog";
-import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
 import { saveWorkspaceFiles } from "./workspace-save";
 

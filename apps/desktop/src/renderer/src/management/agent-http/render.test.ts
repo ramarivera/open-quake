@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
 import { AgentsPage } from "../agents/AgentsPage";
+import { DirectChatPanel } from "../chat/DirectChatPanel";
 import { ConnectionForm } from "./ConnectionForm";
 import { ConversationPanel } from "./ConversationPanel";
 
@@ -16,6 +17,24 @@ it("mounts the conversation workspace without waiting for the local workspace li
 	expect(html).toContain("Agent library");
 	expect(html.match(/id="agents-sessions"/g)).toHaveLength(1);
 	expect(html).not.toContain("Start OpenClaw");
+	expect(html).toContain("Loading model settings");
+	expect(html).not.toContain("Set up a model to chat");
+	expect(html).not.toContain("No model set up");
+});
+
+it("reports a configuration read failure separately from an unconfigured model", () => {
+	vi.stubGlobal("window", {});
+	const html = renderToStaticMarkup(
+		createElement(DirectChatPanel, {
+			bridge: undefined,
+			model: { ready: false, row: undefined },
+			configurationError: "Settings could not be read",
+			onRetryConfiguration: () => {},
+		}),
+	);
+	expect(html).toContain("Model settings couldn&#x27;t be read");
+	expect(html).not.toContain("Set up a model to chat");
+	expect(html).not.toContain("No model set up");
 });
 
 it("renders a masked, empty credential field when editing a credential-bearing connection", () => {

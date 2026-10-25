@@ -89,6 +89,9 @@ interface ActiveTurn {
 	history: ChatHistory;
 	generation: Option.Option<Generation>;
 	usage: Option.Option<Usage>;
+	checkpointAt: number;
+	checkpointBytes: number;
+	checkpointSeq: number;
 }
 const key = (owner: string, id: SessionId) => JSON.stringify([owner, id]);
 const selectionOf = (input: ChatSubmit): TurnSelection => ({
@@ -239,7 +242,10 @@ export class ChatService extends Effect.Service<ChatService>()(
 							return;
 						if (event._tag === "usage") {
 							turn.usage = Option.some(event.usage);
-							if (event.usage.outputTokens > turn.outputReserve)
+							if (
+								event.usage.provenance === "reported" &&
+								event.usage.outputTokens > turn.outputReserve
+							)
 								return yield* new ChatLimitExceeded();
 							return;
 						}
@@ -274,7 +280,20 @@ export class ChatService extends Effect.Service<ChatService>()(
 							(item) => item.selection.turnId === turn.selection.turnId,
 						);
 						if (!saved) return yield* new ChatNotFound();
-						yield* store(turn, { ...saved, snapshot: next });
+						// Persist the first partial, then coalesce subsequent deltas.
+						// Acceptance and terminal records always remain durable.
+						const now = yield* Clock.currentTimeMillis;
+						const bytes = estimatedTextTokens(next.text) - 8;
+						if (
+							turn.checkpointSeq < 0 ||
+							now - turn.checkpointAt >= 1000 ||
+							bytes - turn.checkpointBytes >= 4096
+						) {
+							yield* store(turn, { ...saved, snapshot: next });
+							turn.checkpointAt = now;
+							turn.checkpointBytes = bytes;
+							turn.checkpointSeq = next.lastSeq;
+						}
 						if (!(yield* Deferred.isDone(turn.stop)))
 							yield* publish(turn, chunk);
 					}),
@@ -293,6 +312,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 						}));
 						const finalTerminal: Terminal =
 							terminal.outcome === "completed" &&
+							usage.provenance === "reported" &&
 							usage.outputTokens > turn.outputReserve
 								? { outcome: "failed", errorCode: "CHAT.LIMIT.EXCEEDED" }
 								: terminal;
@@ -646,6 +666,9 @@ export class ChatService extends Effect.Service<ChatService>()(
 								history: next,
 								generation: Option.none(),
 								usage: Option.none(),
+								checkpointAt: now,
+								checkpointBytes: 0,
+								checkpointSeq: -1,
 							};
 							active.set(id, turn);
 							const subscription = yield* attach(turn);

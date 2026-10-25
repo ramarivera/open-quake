@@ -1,5 +1,5 @@
 import { AgentDialog } from "../agents/Dialog";
-import t from "./strings.json";
+import { runtimeStrings as t } from "./copy";
 
 export function ActionDialog({
 	title,

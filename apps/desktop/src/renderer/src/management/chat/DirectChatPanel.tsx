@@ -42,8 +42,16 @@ export function DirectChatPanel({
 	quake,
 	onOpenSettings,
 	hidden = false,
+	configurationLoading = false,
+	configurationError,
+	onRetryConfiguration,
 }: {
 	readonly hidden?: boolean;
+	/** Model settings are still being read; readiness is not known yet. */
+	readonly configurationLoading?: boolean;
+	/** Model settings couldn't be read; distinct from "not configured". */
+	readonly configurationError?: string | undefined;
+	readonly onRetryConfiguration?: (() => void) | undefined;
 	readonly bridge?: DirectChatBridge | undefined;
 	readonly model: DirectChatModel;
 	readonly locale?: string;
@@ -59,10 +67,18 @@ export function DirectChatPanel({
 		controller.getSnapshot,
 	);
 	const t = chatStrings(locale);
-	const configured = model.ready;
+	const settings = configurationLoading
+		? "loading"
+		: configurationError
+			? "failed"
+			: model.ready
+				? "ready"
+				: "missing";
+	const configured = settings === "ready";
 	const modelName = model.row
 		? `${model.row.provider} / ${model.row.model}`
 		: t.directNotSet;
+	const busy = state.pending || state.clearing;
 	const [text, setText] = useState("");
 	const [title, setTitle] = useState("");
 	const [deleting, setDeleting] = useState(false);
@@ -241,7 +257,7 @@ export function DirectChatPanel({
 							type="button"
 							className="mc-button"
 							title={t.newChatHint}
-							disabled={state.pending || (!state.current && !state.turn)}
+							disabled={busy || (!state.current && !state.turn)}
 							onClick={() => {
 								setListOpen(false);
 								void controller.select();
@@ -275,7 +291,7 @@ export function DirectChatPanel({
 										aria-current={
 											item.sessionId === state.sessionId ? "true" : undefined
 										}
-										disabled={state.pending}
+										disabled={busy}
 										onClick={() => {
 											setListOpen(false);
 											void controller.select(item.sessionId);
@@ -343,13 +359,25 @@ export function DirectChatPanel({
 						<p className="cw-identity">
 							<span
 								className="cw-dot"
-								data-tone={configured ? "success" : "warning"}
+								data-tone={
+									settings === "ready"
+										? "success"
+										: settings === "failed"
+											? "danger"
+											: settings === "loading"
+												? "neutral"
+												: "warning"
+								}
 								aria-hidden="true"
 							/>
 							<span>
-								{model.row
-									? fill(t.answeredBy, { model: modelName })
-									: t.directNotSet}
+								{settings === "loading"
+									? t.loadingConfiguration
+									: settings === "failed"
+										? t.configurationFailed
+										: model.row
+											? fill(t.answeredBy, { model: modelName })
+											: t.directNotSet}
 							</span>
 							<span aria-hidden="true">·</span>
 							<span>
@@ -386,7 +414,7 @@ export function DirectChatPanel({
 								type="button"
 								className="mc-button"
 								data-variant="quiet"
-								disabled={state.pending}
+								disabled={busy}
 								onClick={() => setDeleting(true)}
 							>
 								<Icon name="trash" />
@@ -436,7 +464,32 @@ export function DirectChatPanel({
 				>
 					{empty && !state.loading && (
 						<div className="cw-empty">
-							{configured ? (
+							{settings === "loading" ? (
+								<p className="cw-waiting" role="status">
+									<span className="cw-pulse" aria-hidden="true" />
+									{t.loadingConfiguration}
+								</p>
+							) : settings === "failed" ? (
+								<div role="alert">
+									<h3>{t.configurationFailed}</h3>
+									<p>
+										{configurationError}{" "}
+										<span className="cw-muted">
+											{t.configurationFailedBody}
+										</span>
+									</p>
+									{onRetryConfiguration && (
+										<button
+											type="button"
+											className="mc-button"
+											data-primary
+											onClick={onRetryConfiguration}
+										>
+											{t.retry}
+										</button>
+									)}
+								</div>
+							) : configured ? (
 								<>
 									<h3>{t.emptyTitle}</h3>
 									<p>{fill(t.emptyBody, { model: modelName })}</p>
@@ -484,13 +537,19 @@ export function DirectChatPanel({
 					onChange={setText}
 					onSubmit={submit}
 					onStop={() => void controller.cancel()}
-					canSend={
-						configured && !state.pending && Boolean(text.trim()) && !!bridge
-					}
-					disabled={!configured || state.pending || !bridge}
+					canSend={configured && !busy && Boolean(text.trim()) && !!bridge}
+					disabled={!configured || busy || !bridge}
 					running={state.pending}
 					stopping={state.cancelling}
-					notice={configured ? undefined : t.setupTitle}
+					notice={
+						settings === "ready"
+							? undefined
+							: settings === "loading"
+								? t.loadingConfiguration
+								: settings === "failed"
+									? t.configurationFailed
+									: t.setupTitle
+					}
 					inputRef={input}
 					copy={{
 						label: t.message,
@@ -509,7 +568,7 @@ export function DirectChatPanel({
 					title={t.clear}
 					body={t.clearBody}
 					confirm={t.clear}
-					busy={state.pending}
+					busy={busy}
 					onClose={() => setDeleting(false)}
 					onConfirm={async () => {
 						await controller.clear();

@@ -1,4 +1,4 @@
-import t from "./strings.json";
+import { runtimeStrings as t } from "./copy";
 
 export type HealthStatus =
 	| "ready"

@@ -65,6 +65,49 @@ function fixture() {
 }
 
 describe("direct chat renderer lifecycle", () => {
+	for (const failed of [false, true]) {
+		it(`guards repeated deletion and releases its state after ${failed ? "failure" : "success"}`, async () => {
+			const f = fixture();
+			const history: PublicChatHistory = {
+				sessionId: Schema.decodeUnknownSync(SessionId)(crypto.randomUUID()),
+				title: "saved",
+				manualTitle: false,
+				revision: 1,
+				contextEpoch: 0,
+				updatedAt: 1,
+				turns: [],
+			};
+			vi.mocked(f.bridge.list).mockResolvedValue([history]);
+			let settle: (() => void) | undefined;
+			vi.mocked(f.bridge.clear).mockImplementation(
+				() =>
+					new Promise<void>((resolve, reject) => {
+						settle = () =>
+							failed
+								? reject({ code: "CHAT.HISTORY.STORAGE_FAILED" })
+								: resolve();
+					}),
+			);
+			const controller = createChatController(f.bridge);
+			await controller.refresh();
+			const deleting = controller.clear();
+			expect(controller.getSnapshot().clearing).toBe(true);
+			await controller.clear();
+			await controller.submit("must not race deletion");
+			await controller.select();
+			expect(controller.getSnapshot().sessionId).toBe(history.sessionId);
+			expect(f.bridge.clear).toHaveBeenCalledOnce();
+			expect(f.bridge.submit).not.toHaveBeenCalled();
+			settle?.();
+			await deleting;
+			expect(controller.getSnapshot().clearing).toBe(false);
+			if (failed)
+				expect(controller.getSnapshot().error).toBe(
+					"CHAT.HISTORY.STORAGE_FAILED",
+				);
+			controller.dispose();
+		});
+	}
 	it("recovers a sequence gap from a snapshot without replaying provider input", async () => {
 		const f = fixture(),
 			controller = createChatController(f.bridge);

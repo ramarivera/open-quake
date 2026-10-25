@@ -77,8 +77,30 @@
 	.aw-header > div > p:not(.mc-page-kicker) {
 		display: none;
 	}
+	/* One scrollable row instead of wrapped underline rows; the selected tab
+	   is scrolled into view by AgentsPage. */
+	.agent-workbench > .mc-tabs,
+	.agent-workbench .aw-subtabs {
+		flex-wrap: nowrap;
+		gap: 20px;
+		overflow-x: auto;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
+		border-bottom: 0;
+		box-shadow: inset 0 -1px 0 var(--cw-hairline);
+	}
 	.agent-workbench > .mc-tabs {
 		margin-bottom: 14px;
+	}
+	.agent-workbench > .mc-tabs::-webkit-scrollbar,
+	.agent-workbench .aw-subtabs::-webkit-scrollbar {
+		display: none;
+	}
+	.agent-workbench > .mc-tabs > button,
+	.agent-workbench .aw-subtabs > button {
+		flex: none;
+		margin-bottom: 0;
+		white-space: nowrap;
 	}
 }
 .agent-workbench > [role="tabpanel"] {

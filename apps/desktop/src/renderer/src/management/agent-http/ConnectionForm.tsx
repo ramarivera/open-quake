@@ -6,7 +6,7 @@ import {
 	canSaveConnection,
 	endpointCredentialRequired,
 } from "./connection-draft";
-import t from "./strings.json";
+import { runtimeStrings as t } from "./copy";
 
 export function ConnectionForm({
 	existing,

@@ -11,12 +11,12 @@ import { ConversationWorkspace } from "../chat/Workspace";
 import "../chat/workspace.css";
 import "./agents.css";
 import { AgentWizard } from "./AgentWizard";
+import { agentsStrings as strings } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
 import { SkillsPanel } from "./SkillsPanel";
 import { reconcileSlotDrafts } from "./slot-drafts";
-import strings from "./strings.json";
 import { type AgentRequest, useAgents } from "./useAgents";
 
 const t = strings.clawAgentManagement;
@@ -405,6 +405,27 @@ export function AgentsPage({
 		() => setTab(activation?.tab ?? initialTab),
 		[initialTab, activation],
 	);
+	// Narrow windows scroll the tab row horizontally; keep the selected tab
+	// visible after selection and resizes without moving the page vertically.
+	const tabRow = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const row = tabRow.current;
+		if (!row) return;
+		const reveal = () => {
+			const selected = row.querySelector<HTMLElement>('[aria-selected="true"]');
+			if (!selected) return;
+			const start = selected.offsetLeft - row.offsetLeft;
+			const end = start + selected.offsetWidth;
+			if (start < row.scrollLeft) row.scrollLeft = start;
+			else if (end > row.scrollLeft + row.clientWidth)
+				row.scrollLeft = end - row.clientWidth;
+		};
+		reveal();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(reveal);
+		observer.observe(row);
+		return () => observer.disconnect();
+	}, [tab]);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
 		{ id: "agents", label: strings.clawControlPanel.localLibraryTab },
@@ -421,6 +442,7 @@ export function AgentsPage({
 				</div>
 			</header>
 			<div
+				ref={tabRow}
 				className="mc-tabs"
 				role="tablist"
 				onKeyDown={(event) => {
@@ -469,6 +491,9 @@ export function AgentsPage({
 			>
 				<ConversationWorkspace
 					model={directChatModel(view?.models)}
+					configurationLoading={!view && !error}
+					configurationError={!view ? error : undefined}
+					onRetryConfiguration={() => void request({ type: "read" })}
 					onOpenSettings={() => {
 						setTab("ai");
 						document.getElementById("agents-tab-ai")?.focus();

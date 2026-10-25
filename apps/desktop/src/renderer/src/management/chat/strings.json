@@ -75,7 +75,10 @@
 			"CHAT.RESPONSE.INTERRUPTED": "The response was interrupted.",
 			"CHAT.TRANSPORT.UNAVAILABLE": "The desktop connection was interrupted.",
 			"CHAT.BRIDGE.UNAVAILABLE": "Chat isn't available in this window."
-		}
+		},
+		"loadingConfiguration": "Loading model settings…",
+		"configurationFailed": "Model settings couldn't be read",
+		"configurationFailedBody": "Chat stays unavailable until they load."
 	},
 	"de": {
 		"workspace": "Unterhaltungen",
@@ -153,6 +156,9 @@
 			"CHAT.RESPONSE.INTERRUPTED": "Die Antwort wurde unterbrochen.",
 			"CHAT.TRANSPORT.UNAVAILABLE": "Die Desktop-Verbindung wurde unterbrochen.",
 			"CHAT.BRIDGE.UNAVAILABLE": "Chat ist in diesem Fenster nicht verfügbar."
-		}
+		},
+		"loadingConfiguration": "Modelleinstellungen werden geladen…",
+		"configurationFailed": "Modelleinstellungen konnten nicht gelesen werden",
+		"configurationFailedBody": "Der Chat bleibt nicht verfügbar, bis sie geladen sind."
 	}
 }

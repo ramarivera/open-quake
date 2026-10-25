@@ -7,7 +7,7 @@ import type {
 	AgentConnectionsBridge,
 	AgentConnectionView,
 } from "../../../../shared/agent-connections";
-import t from "./strings.json";
+import { runtimeStrings as t } from "./copy";
 
 export interface ConnectionState {
 	readonly view: AgentConnectionView | undefined;

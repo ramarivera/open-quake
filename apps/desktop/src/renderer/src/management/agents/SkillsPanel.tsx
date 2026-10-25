@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { skillFolderName } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import type { AgentView, Skill } from "../../../../shared/agents";
+import { agentsStrings as strings } from "./copy";
 import { AgentDialog, ConfirmDialog, format } from "./Dialog";
-import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
 
 const t = strings.clawAgentManagement;

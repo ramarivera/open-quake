@@ -7,7 +7,7 @@ import type {
 	ConversationScope,
 	ConversationStart,
 } from "../../../../shared/agent-conversations";
-import t from "./strings.json";
+import { runtimeStrings as t } from "./copy";
 
 type ToolEvent = Extract<RuntimeConversationEvent, { readonly _tag: "tool" }>;
 type UsageEvent = Extract<RuntimeConversationEvent, { readonly _tag: "usage" }>;
