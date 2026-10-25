@@ -235,6 +235,7 @@ export function DirectChatPanel({
 								<button
 									type="button"
 									className="mc-button"
+									disabled={state.cancelling}
 									onClick={() => void controller.cancel()}
 								>
 									{t.cancel}
