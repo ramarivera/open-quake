@@ -19,6 +19,7 @@ app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
 app.getVersion = () => "0.0.0";
+app.getLocale = () => "en-US";
 let quit = false;
 app.quit = () => {
 	let prevented = false;
