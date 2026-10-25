@@ -97,7 +97,8 @@ export function canContinue(
 		case "profiles":
 			return (
 				profiles.state === "ready" &&
-				choices.profileIds.some((id) =>
+				choices.profileIds.length > 0 &&
+				choices.profileIds.every((id) =>
 					profiles.profiles.some((profile) => profile.id === id),
 				)
 			);

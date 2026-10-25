@@ -124,6 +124,7 @@ export function createGeneralStore(
 		pending: null,
 		failure: null,
 	});
+	let readGeneration = 0;
 	const accept = (next: GeneralSnapshot): GeneralSnapshot => {
 		const current = s.get().snapshot;
 		return !current || next.revision >= current.revision ? next : current;
@@ -149,8 +150,10 @@ export function createGeneralStore(
 		getState: s.get,
 		subscribe: s.subscribe,
 		load: async () => {
-			if (!bridge) return;
+			if (!bridge || s.get().pending) return;
+			const generation = ++readGeneration;
 			const { snapshot, login } = await read(bridge);
+			if (generation !== readGeneration) return;
 			const current = s.get();
 			s.set({
 				...current,
@@ -164,6 +167,7 @@ export function createGeneralStore(
 		},
 		set: async (field, value) => {
 			if (!bridge || s.get().pending) return false;
+			readGeneration++;
 			s.set({ ...s.get(), pending: field, failure: null });
 			try {
 				const saved = await bridge.saveGeneral(

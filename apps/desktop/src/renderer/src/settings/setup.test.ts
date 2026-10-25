@@ -156,6 +156,27 @@ describe("general store", () => {
 		expect(loginStatus).toHaveBeenCalledTimes(2);
 	});
 
+	it("doesn't let an older reload overwrite a newer OS readback or refusal", async () => {
+		let release = (_value: boolean): void => {};
+		const loginStatus = vi
+			.fn<() => Promise<boolean>>()
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						release = resolve;
+					}),
+			)
+			.mockResolvedValue(true);
+		const bridge = fakeBridge({ loginStatus });
+		const store = createGeneralStore(bridge);
+		const oldLoad = store.load();
+		await store.load();
+		expect(store.getState().login).toEqual({ status: "known", enabled: true });
+		release(false);
+		await oldLoad;
+		expect(store.getState().login).toEqual({ status: "known", enabled: true });
+	});
+
 	it("rechecks login only for login changes", async () => {
 		const bridge = fakeBridge({
 			saveGeneral: vi.fn(async () =>
@@ -303,6 +324,15 @@ describe("setup model", () => {
 				configured,
 			),
 		).toBe(true);
+		expect(
+			canContinue(
+				"profiles",
+				{ ...base, profileIds: ["b", "gone"] },
+				connected,
+				profiles,
+				configured,
+			),
+		).toBe(false);
 		const chosen = { ...base, runtime: "configured" } as const;
 		expect(canContinue("runtime", chosen, connected, profiles, supported)).toBe(
 			false,
