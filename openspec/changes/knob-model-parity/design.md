@@ -87,3 +87,25 @@ a named span surrounds validation and keyboard dispatch before model feedback
 catches the failure. No chord text is added to diagnostics. This adds no UI,
 copy, dependencies or transport schemas. Monitor brightness stays an independent
 unfinished production adapter; physical key receipt is separate acceptance.
+
+## Host monitor brightness
+
+The recovered ScreenBrightnessController and processBrightnessLevelConfig in
+`dark-encyclopedia/dk-suite-introspeccion/artifacts/hid_quake_keywords.txt`
+identify host monitor brightness separately from QUAKE luminance, with five-point
+steps. Use DisplayServices on the main macOS display, one active Windows WMI
+backlight, or one Linux sysfs backlight. Reject multiple ambiguous targets and
+unsupported native responses. Never use the source's fabricated 50 percent or
+keyboard fallback. This Mac mini's read-only DisplayServices probe returned 1000,
+which is unsupported, so successful macOS writes remain unverified on this host.
+
+A shared committed-focused-key resolver protects hotkeys and brightness with the
+same device/profile/page/revision/content checks. The native owner serializes
+read, clamp, set and readback, pins the target and checks cancellation before a
+write. A mock device never mutates host brightness unless an explicit test
+adapter is supplied. Native process IO has bounded time, output and cancellation;
+sysfs numeric reads are bounded. A failed or unavailable read writes nothing.
+Private native causes remain in the catalog error chain, with named spans before
+consumer catches. This adds no dependencies, IPC schema, UI or copy.
+
+Native qualification found that the Windows brightness provider on zeph returns no ReturnValue from WmiSetBrightness. Invocation errors propagate; the controller uses independent readback rather than assuming a numeric return code. The first probe's incorrect status check was corrected after read-only inspection confirmed the original brightness had been restored. MacBook DisplayServices and Windows WMI five-point writes and restoration passed. Native subprocess deadlines use hard termination so a child ignoring SIGTERM cannot outlive the bound.

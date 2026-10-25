@@ -26,6 +26,9 @@ import type { ProfileStoragePort } from "../../../../../packages/device/src/prof
 import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
 import type { ProfileSelectionScope } from "../profiles/profile-controller";
 import { profileThumbnailKey } from "../profiles/profile-thumbnail-key";
+import { nativeBrightness } from "./brightness";
+import type { BrightnessAdapter } from "./brightness/controller";
+import { focusedBrightness } from "./focused-brightness";
 import { focusedHotkey } from "./focused-hotkey";
 import { macVolume, script } from "./native-volume";
 import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
@@ -54,6 +57,7 @@ export interface DesktopKnobBindings {
 	readonly focusedTurn?: KnobModelPort["focusedTurn"];
 	readonly readVolume?: KnobModelPort["readVolume"];
 	readonly writeVolume?: KnobModelPort["writeVolume"];
+	readonly brightness?: BrightnessAdapter;
 }
 const unavailable = Effect.fail(KnobCapabilityUnavailable.fromCause());
 const keys = (profile: Profile, pageId: string): KnobModelContext["keys"] =>
@@ -228,6 +232,10 @@ export function desktopKnobAdapters(
 		context: () => context,
 		profiles: () => catalog,
 	});
+	const brightness = focusedBrightness(
+		{ read, deviceId, context: () => context, profiles: () => catalog },
+		bindings.brightness ?? nativeBrightness(),
+	);
 	const ports: KnobModelPort = {
 		alert: () => withHardware((session) => session.playTone("error")),
 		selectProfile: Effect.fn("DesktopKnob.selectProfile")(
@@ -289,7 +297,9 @@ export function desktopKnobAdapters(
 						? withHardware((session) => session.stepBrightness(delta))
 						: key.kind === "hotkey"
 							? hotkey(key, delta, snapshot)
-							: unavailable),
+							: key.kind === "brightness"
+								? brightness(key, delta, snapshot)
+								: unavailable),
 		readVolume,
 		writeVolume,
 		warmThumbnails,

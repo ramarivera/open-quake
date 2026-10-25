@@ -141,3 +141,13 @@ canonical writer and knob reader. The current backend lane did not rerun the
 full renderer smoke described above and does not qualify real hardware, native
 volume behavior, focused monitor/hotkey actions or live voice. The aggregate
 OpenSpec task 5.1 and bead `open-quake-lih.4.2` remain open.
+
+## Focused host brightness
+
+The default brightness binding reads the canonical committed visible key before native IO and again before mutation. Unsupported imported keys cannot execute. Read, five-percentage-point step, clamp, write and readback serialize under one owner. Failed reads never produce guessed values or writes, and unchanged readback is a failure. QUAKE luminance remains the independent device-screen control.
+
+Native targets are the main macOS DisplayServices display, exactly one active Windows WMI backlight, or exactly one Linux sysfs backlight. Targets are pinned through mutation. Windows brightness methods need not return a status field, so success requires the controller's independent readback. Linux reads have bounded numeric buffers and reject changed target identity or maximum. Subprocesses have a five-second hard termination deadline, bounded output and interruption cleanup. No global brightness shortcut, elevation or external helper is used. A mock device disables native brightness unless a test explicitly injects an adapter.
+
+Named DesktopKnob.focusedBrightness and DesktopBrightness spans preserve catalog failures and private native causes through normal knob warning feedback. Persisted diagnostics contain source identities and correlation IDs, not display identifiers, paths or raw native output.
+
+Acceptance on 2026-10-25 verified actual macOS built-in brightness write/readback/restoration on ramiro-macbook and Windows WMI write/readback/restoration on zeph. The Mac mini main display reports unsupported. Synthetic filesystem tests cover Linux sysfs scaling and identity failures; physical Linux backlight writes remain unverified. The hidden production-root mock test confirms panel focus plus both device-event detents and failed-write notice without changing host brightness. Physical knob touch and receipt remain separate acceptance.
