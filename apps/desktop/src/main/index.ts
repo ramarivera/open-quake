@@ -63,7 +63,7 @@ const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
 const rendererURL =
 	isDev && process.env.ELECTRON_RENDERER_URL
 		? process.env.ELECTRON_RENDERER_URL
-		: pathToFileURL(join(__dirname, "../renderer/index.html")).href;
+		: pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
 registerClockScheme();
 const PANEL_TITLE = "open-quake panel";
 
@@ -84,7 +84,9 @@ function loadSurface(
 			`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`,
 		);
 	} else {
-		win.loadFile(join(__dirname, "../renderer/index.html"), { query });
+		win.loadFile(join(import.meta.dirname, "../renderer/index.html"), {
+			query,
+		});
 	}
 }
 
@@ -110,7 +112,7 @@ function createPanelWindow(target: PanelTarget): BrowserWindow {
 		fullscreenable: true,
 		autoHideMenuBar: true,
 		webPreferences: {
-			preload: join(__dirname, "../preload/index.mjs"),
+			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
 			contextIsolation: true,
 			nodeIntegration: false,
@@ -146,7 +148,7 @@ function createManagementWindow(): BrowserWindow {
 					} as const)
 				: {}),
 		webPreferences: {
-			preload: join(__dirname, "../preload/index.mjs"),
+			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
 			contextIsolation: true,
 			nodeIntegration: false,
@@ -431,7 +433,7 @@ if (!app.requestSingleInstanceLock()) {
 			lifecycleRuntime,
 			() => managementWin,
 			process.env.ELECTRON_RENDERER_URL ??
-				pathToFileURL(join(__dirname, "../renderer/index.html")).href,
+				pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 		);
 		const onLock = (): void => {
 			void lifecycle.then((service) =>
