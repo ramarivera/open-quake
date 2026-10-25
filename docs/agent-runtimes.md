@@ -51,7 +51,8 @@ A task-owned temporary process of installed Hermes 0.21.3 then verified the actu
 Live inference then succeeded through the actual open-quake Hermes adapter and fetch transport, using the same isolated process and an existing authorized OpenAI-compatible HTTPS inference gateway. Its live model catalog included `gpt-6.1-sol`, which was the exact backend model used. One disposable conversation produced the expected text, reported token usage, one completion and a real session ID, with zero tool events. The process stopped afterward, its listener disappeared, and saved application/service configuration and credentials stayed unchanged. This verifies the adapter-to-Hermes-to-model path; it does not verify the desktop connection/chat interface, live session continuation, tool execution, or a live OpenClaw conversation.
 
 The local CLI's existing Codex OAuth credentials separately failed an ordinary refresh with `refresh_token_expired`. That finding applies to that credential store. It does not establish that a working desktop or remote dashboard needs another login. The authorized inference-gateway test succeeded without using those credentials or changing the desktop's provider. Identify the actual app's runtime, profile and provider before diagnosing its authentication.
-# Testing real runtimes
+
+## Testing real runtimes
 
 The opt-in disposable Docker Compose runner is documented in
 `packages/edge/e2e/README.md`. It takes the provider base URL, optional API key
