@@ -25,7 +25,7 @@ ChatService and protected desktop model selection are wired through the real
 Effect RPC/preload and management React UI. Synthetic Electron acceptance
 covers continuation, physical socket cancellation, provider failure,
 rename/deletion, inert generated markup and privacy-safe correlated diagnostics;
-Screenshot viewport assertions and captures are in external scratch `open-quake-finish/direct-chat`.
+Actual 1180px and 390px viewport assertions pass via Electron device emulation; captures are in external scratch `open-quake-finish/direct-chat/direct-chat-fAnLN7`. These are synthetic viewport observations, not physical device captures.
 Direct strip text and finalized transcripts share the service, with regression
 coverage for cancellation reentry and external-runtime fallback source identity.
 Task 2.1 is verified by real SDK/service/repository and outbound continuation
