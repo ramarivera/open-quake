@@ -234,15 +234,20 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						yield* emit({
 							context: {
 								...context,
-								profiles: context.profiles.map((profile) => ({
-									...profile,
-									thumbnail:
-										profile.thumbnail._tag === "ready"
-											? profile.thumbnail
-											: (previousProfiles.find(
-													(previous) => previous.id === profile.id,
-												)?.thumbnail ?? profile.thumbnail),
-								})),
+								profiles: context.profiles.map((profile) => {
+									const previous = previousProfiles.find(
+										(candidate) => candidate.id === profile.id,
+									);
+									return {
+										...profile,
+										thumbnail:
+											profile.thumbnail._tag === "missing" &&
+											profile.thumbnailKey !== undefined &&
+											profile.thumbnailKey === previous?.thumbnailKey
+												? previous.thumbnail
+												: profile.thumbnail,
+									};
+								}),
 							},
 							focus: { _tag: "none" },
 							volume: { ...state.volume, phase: "inactive" },
@@ -324,12 +329,18 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 									yield* emit({
 										context: {
 											...state.context,
-											profiles: state.context.profiles.map((profile) => ({
-												...profile,
-												thumbnail:
-													ready.find((candidate) => candidate.id === profile.id)
-														?.thumbnail ?? profile.thumbnail,
-											})),
+											profiles: state.context.profiles.map((profile) => {
+												const candidate = ready.find(
+													(value) => value.id === profile.id,
+												);
+												return {
+													...profile,
+													thumbnail:
+														candidate?.thumbnailKey === profile.thumbnailKey
+															? (candidate?.thumbnail ?? profile.thumbnail)
+															: profile.thumbnail,
+												};
+											}),
 										},
 									});
 							}),
@@ -599,7 +610,12 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 												keys: value.keys,
 												player: value.player,
 												profiles: value.profiles.map(
-													({ id, name, colorful }) => ({ id, name, colorful }),
+													({ id, name, colorful, thumbnailKey }) => ({
+														id,
+														name,
+														colorful,
+														thumbnailKey,
+													}),
 												),
 											});
 										return identity(context) === identity(state.context)

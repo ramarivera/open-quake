@@ -24,6 +24,7 @@ import type { ProfileLocale } from "../../../../../packages/device/src/profiles/
 import { visibleProfiles } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import type { ProfileStoragePort } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
+import type { ProfileSelectionScope } from "../profiles/profile-controller";
 import { profileThumbnailKey } from "../profiles/profile-thumbnail-key";
 import { macVolume, script } from "./native-volume";
 import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
@@ -42,6 +43,7 @@ export interface DesktopKnobBindings {
 		readonly read: Effect.Effect<ProfileEnvelope, KnobError>;
 		readonly select: (
 			profileId: string,
+			scope: ProfileSelectionScope,
 		) => Effect.Effect<ProfileEnvelope, KnobError>;
 	};
 	readonly voice?: (input: KnobVoiceInput) => Effect.Effect<void, KnobError>;
@@ -136,6 +138,7 @@ export function desktopKnobAdapters(
 				id: p.id,
 				name: p.name,
 				colorful: colorful(p),
+				thumbnailKey: profileThumbnailKey(translateProfile(p, locale), locale),
 				thumbnail: { _tag: "missing" },
 			})),
 			keys: keys(profile, pageId),
@@ -222,10 +225,16 @@ export function desktopKnobAdapters(
 		selectProfile: Effect.fn("DesktopKnob.selectProfile")(
 			function* (profileId): Effect.fn.Return<KnobModelContext, KnobError> {
 				const serial = deviceId();
+				const hardware = bindings.hardware?.();
+				const scope: ProfileSelectionScope = {
+					deviceId: serial,
+					isCurrent: () =>
+						deviceId() === serial && bindings.hardware?.() === hardware,
+				};
 				if (context.session.deviceId !== serial)
 					return yield* Effect.fail(KnobSessionStale.fromCause());
 				const envelope = yield* read;
-				if (deviceId() !== serial)
+				if (!scope.isCurrent())
 					return yield* Effect.fail(KnobSessionStale.fromCause());
 				const profile = envelope.profiles.find((p) => p.id === profileId);
 				if (!profile) return yield* unavailable;
@@ -237,30 +246,23 @@ export function desktopKnobAdapters(
 					},
 				};
 				if (bindings.profiles)
-					next = yield* bindings.profiles.select(profileId);
+					next = yield* bindings.profiles.select(profileId, scope);
 				else
 					yield* Effect.tryPromise({
-						try: () => storage.write(encodeProfileEnvelope(next)),
-						catch: (cause) => KnobDispatchFailed.fromCause(cause),
+						try: () =>
+							storage.write(encodeProfileEnvelope(next), () => {
+								if (!scope.isCurrent()) throw KnobSessionStale.fromCause();
+							}),
+						catch: (cause) =>
+							!scope.isCurrent()
+								? KnobSessionStale.fromCause()
+								: KnobDispatchFailed.fromCause(cause),
 					});
-				const previousThumbnails = context.profiles;
-				const previousCatalog = catalog;
+				if (!scope.isCurrent())
+					return yield* Effect.fail(KnobSessionStale.fromCause());
 				catalog = visibleProfiles(next);
+				locale = bindings.locale?.() ?? "en";
 				context = makeContext(next, profileId);
-				context = {
-					...context,
-					profiles: context.profiles.map((p) => ({
-						...p,
-						thumbnail:
-							(sameThumbnail(
-								previousCatalog.find((old) => old.id === p.id),
-								catalog.find((current) => current.id === p.id),
-								locale,
-							)
-								? previousThumbnails.find((old) => old.id === p.id)?.thumbnail
-								: undefined) ?? p.thumbnail,
-					})),
-				};
 				return context;
 			},
 		),
