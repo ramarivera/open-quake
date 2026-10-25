@@ -186,6 +186,7 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 			}),
 			createVoiceAdapter: (
 				fallback: Parameters<typeof createAgentHttpVoiceAdapter>[1],
+				fallbackTranscript?: Parameters<typeof createAgentHttpVoiceAdapter>[2],
 			) =>
 				createAgentHttpVoiceAdapter(
 					{
@@ -195,6 +196,7 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 						generation: () => generation,
 					},
 					fallback,
+					fallbackTranscript,
 				),
 			decorateVoiceRuntime: (
 				fallback: Parameters<typeof agentHttpVoiceLayer>[1],

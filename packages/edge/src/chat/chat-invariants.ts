@@ -153,3 +153,41 @@ export function reduceSession(
 		activeTurn: Option.none(),
 	};
 }
+
+/** Conservative UTF-8 byte estimate, including per-message framing. Never reported usage. */
+export function estimatedTextTokens(text: string): number {
+	return new TextEncoder().encode(text).length + 8;
+}
+
+export interface CompletedExchange {
+	readonly input: string;
+	readonly answer: string;
+}
+
+/** Keeps whole newest exchanges and never truncates fixed inputs or system instructions. */
+export function budgetContext(
+	systemPrompt: string,
+	input: string,
+	exchanges: readonly CompletedExchange[],
+	windowTokens: number,
+	outputReserveTokens: number,
+): Either.Either<readonly CompletedExchange[], "tooLarge"> {
+	let remaining =
+		windowTokens -
+		outputReserveTokens -
+		estimatedTextTokens(systemPrompt) -
+		estimatedTextTokens(input);
+	if (remaining < 0) return Either.left("tooLarge");
+	const retained: CompletedExchange[] = [];
+	for (let index = exchanges.length - 1; index >= 0; index--) {
+		const exchange = exchanges[index];
+		if (!exchange) break;
+		const cost =
+			estimatedTextTokens(exchange.input) +
+			estimatedTextTokens(exchange.answer);
+		if (cost > remaining) break;
+		remaining -= cost;
+		retained.unshift(exchange);
+	}
+	return Either.right(retained);
+}

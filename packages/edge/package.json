@@ -16,7 +16,8 @@
 		"./chat/contracts": "./src/chat/chat-contracts.ts",
 		"./chat/reducers": "./src/chat/chat-invariants.ts",
 		"./voice/surface": "./src/voice/surface/index.ts",
-		"./voice/surface/contracts": "./src/voice/surface/voice-surface-contracts.ts"
+		"./voice/surface/contracts": "./src/voice/surface/voice-surface-contracts.ts",
+		"./chat/rpc": "./src/chat/chat-rpc.ts"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
@@ -25,13 +26,17 @@
 		"test:e2e:config": "node --test e2e/config.node-test.mjs e2e/lifecycle.node-test.mjs"
 	},
 	"dependencies": {
+		"@ai-sdk/openai-compatible": "3.0.78",
+		"@effect/platform": "0.97.1",
+		"@effect/rpc": "0.76.2",
+		"ai": "7.0.153",
 		"effect": "catalog:"
 	},
 	"devDependencies": {
 		"@effect/vitest": "catalog:",
 		"@types/node": "catalog:",
 		"fast-check": "catalog:",
-		"vitest": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:"
 	}
 }

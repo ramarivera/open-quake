@@ -48,12 +48,18 @@ const request = {
 	message: "private typed input",
 };
 
-async function fixture(directory: string, selected = true, permission = true) {
+async function fixture(
+	directory: string,
+	selected = true,
+	permission = true,
+	directRoute = false,
+) {
 	const diagnostics = createDesktopDiagnostics({ directory });
 	const background = makeDesktopRuntime(Layer.empty, diagnostics);
 	const events: VoiceSurfaceEvent[] = [];
 	const requests: RuntimeConversationRequest[] = [];
 	const old = vi.fn(() => Effect.void);
+	const directTranscript = vi.fn(() => Effect.void);
 	let closed = 0;
 	const stopped = await Effect.runPromise(Deferred.make<void>());
 	const messages = await Effect.runPromise(Queue.unbounded<unknown>());
@@ -103,7 +109,17 @@ async function fixture(directory: string, selected = true, permission = true) {
 	let pulled = false;
 	const binding = createSpeechVoiceBinding({
 		run: (effect) => background.runPromise(effect),
-		http: (fallback) =>
+		...(directRoute
+			? {
+					direct: (fallback: typeof GridVoiceRuntime.Service) =>
+						Effect.succeed({
+							runtime: GridVoiceRuntime.of({ ...fallback, sendText: old }),
+							sendTranscript: directTranscript,
+							cancelText: () => Effect.void,
+						}),
+				}
+			: {}),
+		http: (fallback, fallbackTranscript) =>
 			createAgentHttpVoiceAdapter(
 				{
 					selected: () =>
@@ -115,6 +131,7 @@ async function fixture(directory: string, selected = true, permission = true) {
 					generation: () => 0,
 				},
 				fallback,
+				fallbackTranscript,
 			),
 		speech: {
 			diagnostics,
@@ -265,6 +282,7 @@ async function fixture(directory: string, selected = true, permission = true) {
 		events,
 		requests,
 		old,
+		directTranscript,
 		drain,
 		played,
 		closed: () => closed,
@@ -391,4 +409,33 @@ describe("actual root speech and HTTP binding", () => {
 		expect(logs).not.toContain("private-STT-key");
 		await rm(directory, { recursive: true });
 	});
+	it("preserves final transcript routing when the external runtime is deselected", async () => {
+		const directory = await scratch();
+		const f = await fixture(directory, false, true, true);
+		try {
+			await f.voice.runPromise(f.runtime.startCapture(capture));
+			await vi.waitFor(() =>
+				expect(
+					f.events.some(
+						(e) =>
+							e._tag === "Stage" &&
+							e.stage._tag === "recording" &&
+							e.stage.status === "listening",
+					),
+				).toBe(true),
+			);
+			await f.voice.runPromise(
+				f.runtime.releaseCapture(capture.serial, capture.keyCode, 1),
+			);
+			await vi.waitFor(() => expect(f.directTranscript).toHaveBeenCalledOnce());
+			expect(f.directTranscript).toHaveBeenCalledWith(
+				expect.objectContaining({ message: "Private finalized transcript" }),
+			);
+			expect(f.old).not.toHaveBeenCalled();
+			expect(f.requests).toHaveLength(0);
+		} finally {
+			await f.close();
+			await rm(directory, { recursive: true });
+		}
+	}, 10000);
 });

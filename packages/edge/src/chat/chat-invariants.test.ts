@@ -8,9 +8,11 @@ import {
 	TurnSnapshot,
 } from "./chat-contracts.js";
 import {
+	budgetContext,
 	decodeAndReduce,
 	emptySession,
 	emptyTurn,
+	estimatedTextTokens,
 	reduceChunk,
 	reduceSession,
 	restoreSnapshot,
@@ -251,5 +253,58 @@ describe("session reducer", () => {
 				outcome: "completed",
 			}),
 		).toBe(closed);
+	});
+});
+
+describe("whole exchange context budgeting", () => {
+	it("retains only a newest contiguous suffix within a conservative budget", () => {
+		fc.assert(
+			fc.property(
+				fc.array(
+					fc.record({
+						input: fc.string({ maxLength: 100 }),
+						answer: fc.string({ maxLength: 100 }),
+					}),
+					{ maxLength: 20 },
+				),
+				fc.integer({ min: 32, max: 1000 }),
+				(exchanges, windowTokens) => {
+					const retained = budgetContext(
+						"system",
+						"new",
+						exchanges,
+						windowTokens,
+						8,
+					);
+					if (Either.isLeft(retained)) {
+						expect(windowTokens).toBeLessThan(
+							8 + estimatedTextTokens("system") + estimatedTextTokens("new"),
+						);
+					} else {
+						expect(retained.right).toEqual(
+							exchanges.slice(exchanges.length - retained.right.length),
+						);
+						const cost =
+							8 +
+							estimatedTextTokens("system") +
+							estimatedTextTokens("new") +
+							retained.right.reduce(
+								(sum, pair) =>
+									sum +
+									estimatedTextTokens(pair.input) +
+									estimatedTextTokens(pair.answer),
+								0,
+							);
+						expect(cost).toBeLessThanOrEqual(windowTokens);
+					}
+				},
+			),
+		);
+	});
+	it("rejects fixed inputs and counts Unicode by UTF-8 bytes", () => {
+		expect(
+			Either.isLeft(budgetContext("preserve system", "new input", [], 32, 16)),
+		).toBe(true);
+		expect(estimatedTextTokens("😀")).toBe(12);
 	});
 });

@@ -1,4 +1,5 @@
 import "../main/meetings/preload";
+import { createDirectChatBridge } from "../main/chat/preload";
 import "../main/maintenance/preload";
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import { createAgentConnectionsBridge } from "../main/agent-http/connection-preload";
@@ -49,3 +50,11 @@ contextBridge.exposeInMainWorld(
 	"quakeAgentConversations",
 	createAgentConversationsBridge(ipcRenderer),
 );
+
+const directChat = createDirectChatBridge(ipcRenderer, {
+	disconnectOnDispose: false,
+});
+contextBridge.exposeInMainWorld("quakeChat", directChat);
+window.addEventListener("unload", () => {
+	void directChat.dispose();
+});

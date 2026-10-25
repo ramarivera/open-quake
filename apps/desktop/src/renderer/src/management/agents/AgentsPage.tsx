@@ -7,6 +7,8 @@ import {
 	type Slots,
 } from "../../../../shared/agents";
 import { AgentHttpPanel } from "../agent-http";
+import { DirectChatPanel } from "../chat/DirectChatPanel";
+import { directChatModel } from "../chat/model-scope";
 import { AgentWizard } from "./AgentWizard";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
@@ -434,6 +436,12 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
+				<DirectChatPanel
+					configured={directChatModel(view?.models).ready}
+					configurationLoading={!view && !error}
+					configurationError={!view ? error : undefined}
+					onRetryConfiguration={() => void request({ type: "read" })}
+				/>
 				<AgentHttpPanel />
 			</section>
 			{error && tab !== "sessions" && (

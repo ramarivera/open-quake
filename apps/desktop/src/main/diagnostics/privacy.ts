@@ -14,6 +14,7 @@ import { AgentErrors } from "../../../../../packages/edge/src/agents/agents-erro
 import { AiErrors } from "../../../../../packages/edge/src/ai/ai-errors.js";
 import { SpeechErrors } from "../../../../../packages/edge/src/ai/speech/speech-errors.js";
 import { IntegrationErrors } from "../../../../../packages/edge/src/channels/integration-errors.js";
+import { ChatErrors } from "../../../../../packages/edge/src/chat/chat-errors";
 import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors.js";
 import { MaintenanceErrors } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting-errors.js";
@@ -53,6 +54,7 @@ const identities = new Map<string, { code: string; category: string }>(
 	[
 		DeviceErrors,
 		AiErrors,
+		ChatErrors,
 		SpeechErrors,
 		DesktopSpeechErrors,
 		RuntimeErrors,
@@ -168,6 +170,7 @@ export const diagnosticOperations = [
 	"app.startup",
 	"app.shutdown",
 	"app.background",
+	"chat.request",
 	"voice.request",
 	"voice.knob",
 	"voice.device",

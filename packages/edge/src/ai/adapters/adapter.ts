@@ -19,7 +19,7 @@ export interface CompatibleAdapter {
 		readonly maxRetries: 0;
 	}) => Effect.Effect<Stream.Stream<NormalizedEvent, AiError>, AiError>;
 }
-/** Installing the SDK and binding this port is intentionally a separate task. */
+/** Bind VercelCompatibleAdapterLive at the host composition root for direct BYO-key inference. */
 export class AiCompatibleAdapter extends Context.Tag(
 	"@open-quake/edge/AiCompatibleAdapter",
 )<AiCompatibleAdapter, CompatibleAdapter>() {}

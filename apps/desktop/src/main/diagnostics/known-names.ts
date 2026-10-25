@@ -1,7 +1,10 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`DesktopSpeech.create DesktopSpeech.createRuntime DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
+	`ChatService.read ChatService.attach ChatService.submit ChatService.turn ChatService.cancel ChatService.close ChatService.clear ChatService.snapshot ChatService.subscribe ChatService.session ChatService.rename ChatService.supersede ChatService.history ChatService.list
+ChatRepository.get ChatRepository.list ChatRepository.put ChatRepository.remove ChatInference.open FileChatStorage.save PinnedAiRepository.get PinnedAiRepository.put VercelCompatibleAdapter.open
+DesktopChat.submit DesktopChat.subscribe DesktopChat.snapshot DesktopChat.cancel DesktopChat.close DesktopChat.clear DesktopChat.rename DesktopChat.history DesktopChat.list DesktopChat.credentials
+DesktopSpeech.create DesktopSpeech.createRuntime DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
 DesktopSpeech.profiles DesktopSpeech.configure DesktopSpeech.cancelSpeech DesktopSpeech.stopCapture
 DesktopSpeech.credentials DesktopSpeech.resolveCredential DesktopSpeech.credentialRevoked
 DesktopSpeech.storeCredential DesktopSpeech.removeCredential DesktopSpeech.ordered
@@ -156,6 +159,7 @@ runtime-contracts.ts runtime-errors.ts runtime-invariants.ts runtime-port.ts run
 runtime-registry.ts service.ts settings-repository.ts shortcut-contracts.ts shortcut-invariants.ts
 shortcut-service.ts smoke-editor.ts smoke-failure.ts smoke-final-review.ts smoke-font.ts
 smoke-icon-review.ts smoke-review.ts smoke-scratch.ts smoke-wait.ts smoke.config.ts smoke.ts
+host.ts credentials.ts chat-service.ts chat-repository.ts chat-ports.ts chat-errors.ts chat-invariants.ts rpc-server.ts vercel.ts
 speech-audio.ts speech-contracts.ts speech-errors.ts speech-http.ts speech-ports.ts
 speech-service.ts speech-stt.ts speech-test-fixtures.ts storage.ts strip-fixtures.ts system-media.ts
 test-fixtures.ts touch-contracts.ts touch-fixtures.ts touch-invariants.ts touch-session.ts
@@ -184,7 +188,8 @@ export const knownLogEvents = new Set([
 ]);
 
 export const knownErrorTags = new Set(
-	`ActionApplicationMissing ActionPermissionDenied ActionSnapshotFailed AgentCredentialUnavailable
+	`ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
+ActionApplicationMissing ActionPermissionDenied ActionSnapshotFailed AgentCredentialUnavailable
 AgentDraftFailed AgentDraftUnavailable AgentDuplicate AgentInvalid AgentMissing AgentModelInvalid
 AgentModelLastRow AgentPanelFailed AgentProfileMissing AgentProtected AgentRevisionConflict
 AgentRollbackFailed AgentRuntimeBusy AgentRuntimeFailed AgentRuntimeTimeout AgentRuntimeUnavailable

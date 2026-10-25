@@ -1,0 +1,74 @@
+.direct-chat {
+	min-width: 0;
+}
+.direct-chat-layout {
+	display: grid;
+	grid-template-columns: minmax(140px, 210px) minmax(0, 1fr);
+	gap: 20px;
+}
+.direct-chat-history {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 520px;
+	overflow: auto;
+}
+.direct-chat-history .mc-button {
+	text-align: left;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.direct-chat-history [aria-current="true"] {
+	outline: 2px solid currentColor;
+	outline-offset: -2px;
+}
+.direct-chat-main {
+	min-width: 0;
+}
+.direct-chat-transcript {
+	height: 360px;
+	overflow: auto;
+	overflow-wrap: anywhere;
+	padding: 4px 10px 12px 2px;
+}
+.direct-chat-exchange {
+	margin-bottom: 24px;
+}
+.direct-chat-user {
+	white-space: pre-wrap;
+}
+.direct-chat-status {
+	display: block;
+	opacity: 0.75;
+	margin-top: 8px;
+}
+.direct-chat-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 8px;
+	margin-top: 12px;
+}
+.direct-chat textarea {
+	resize: vertical;
+	max-width: 100%;
+	min-height: 76px;
+}
+.direct-chat .clawbot-code {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.direct-chat .clawbot-plain {
+	white-space: pre-wrap;
+}
+@media (max-width: 640px) {
+	.direct-chat-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.direct-chat-history {
+		max-height: 140px;
+	}
+	.direct-chat-transcript {
+		height: 300px;
+	}
+}

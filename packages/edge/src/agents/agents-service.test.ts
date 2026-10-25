@@ -111,6 +111,53 @@ const model = (
 });
 describe("AgentsService real consumer", () => {
 	it.effect(
+		"drops credentials from every affected row when a provider URL changes",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				let view = yield* service.view();
+				for (const [id, role] of [
+					["initial", "default"],
+					["sibling", "fallback"],
+				] as const) {
+					view = (yield* service.request({
+						type: "save-model",
+						scope: "default",
+						row: model(id, role),
+						secret: `key-${id}`,
+						revision: view.revision,
+					})).view;
+				}
+				expect(f.keys.size).toBe(2);
+				view = (yield* service.request({
+					type: "save-model",
+					scope: "default",
+					row: model(
+						"initial",
+						"default",
+						"openai",
+						"https://different.example/v1",
+					),
+					secret: "",
+					revision: view.revision,
+				})).view;
+				expect(
+					(yield* service.resolve("main")).every(
+						(row) =>
+							row.credentialRef === "" &&
+							row.baseUrl === "https://different.example/v1",
+					),
+				).toBe(true);
+				expect(
+					view.models.default?.every((row) => !row.credentialAvailable),
+				).toBe(true);
+				expect(f.keys.size).toBe(0);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+
+	it.effect(
 		"creates the workspace at Next, edits files with revision checks and protects main",
 		() => {
 			const f = fixture();

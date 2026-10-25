@@ -26,8 +26,12 @@ export function createSpeechVoiceBinding(options: {
 		DesktopSpeechOptions,
 		"sendText" | "sendTranscript" | "cancelText"
 	>;
+	readonly direct?: (
+		fallback: typeof GridVoiceRuntime.Service,
+	) => ReturnType<typeof createAgentHttpVoiceAdapter>;
 	readonly http?: (
 		fallback: typeof GridVoiceRuntime.Service,
+		fallbackTranscript?: typeof GridVoiceRuntime.Service.sendText,
 	) => ReturnType<typeof createAgentHttpVoiceAdapter>;
 	readonly run: <A>(effect: Effect.Effect<A>) => Promise<A>;
 }) {
@@ -53,13 +57,24 @@ export function createSpeechVoiceBinding(options: {
 			Effect.gen(function* () {
 				const original = yield* GridVoiceRuntime;
 				let http: HttpVoice | undefined;
+				let direct: HttpVoice | undefined;
 				const controller = yield* createDesktopSpeech({
 					...options.speech,
-					sendText: (request) => original.sendText(request),
+					sendText: (request) =>
+						direct
+							? direct.runtime.sendText(request)
+							: original.sendText(request),
 					sendTranscript: (request) =>
-						http ? http.sendTranscript(request) : original.sendText(request),
+						http
+							? http.sendTranscript(request)
+							: direct
+								? direct.sendTranscript(request)
+								: original.sendText(request),
 					cancelText: (serial, keyCode) =>
-						http ? http.cancelText(serial, keyCode) : Effect.void,
+						Effect.all([
+							http ? http.cancelText(serial, keyCode) : Effect.void,
+							direct ? direct.cancelText(serial, keyCode) : Effect.void,
+						]).pipe(Effect.asVoid),
 				});
 				speech = controller;
 				yield* Effect.addFinalizer(() =>
@@ -67,9 +82,16 @@ export function createSpeechVoiceBinding(options: {
 						speech = undefined;
 					}),
 				);
+				if (options.direct)
+					direct = yield* options.direct(controller?.runtime ?? original);
 				if (options.http)
-					http = yield* options.http(controller?.runtime ?? original);
-				return http?.runtime ?? controller?.runtime ?? original;
+					http = yield* options.http(
+						direct?.runtime ?? controller?.runtime ?? original,
+						direct?.sendTranscript,
+					);
+				return (
+					http?.runtime ?? direct?.runtime ?? controller?.runtime ?? original
+				);
 			}),
 		).pipe(Layer.provide(fallback));
 	return {
