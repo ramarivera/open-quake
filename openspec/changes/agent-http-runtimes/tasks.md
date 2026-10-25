@@ -16,10 +16,10 @@
 - [x] 3.1 Lane5, open-quake-hwn.5: persist/select connections and authorize IPC with secure credential handling; verify persistence, rejected unauthorized callers and secret-free public replies.
 - [x] 3.2 Lane6, open-quake-hwn.6: bridge management to verified runtime capabilities while preserving local workspace management; verify unsupported operations never call fictional remote endpoints.
 - [x] 3.3 Lane7, open-quake-hwn.7: implement owner-scoped cancellable conversations and bounded history/session handling; verify cancellation, continuity, ownership and terminal-event behavior.
-- [ ] 3.4 Lane8, open-quake-hwn.8: implement connection and conversation UI with unavailable/error/streaming states; verify focused UI checks and document supported controls.
+- [x] 3.4 Lane8, open-quake-hwn.8: implement connection and conversation UI with unavailable/error/streaming states; verify focused UI checks and document supported controls.
 
 ## 4. Composition and acceptance
 
-- [ ] 4.1 Lane9, open-quake-hwn.9: compose production adapters and QUAKE voice/agent routing; verify mock-device consumer tests demonstrate selected connection use without real hardware.
-- [ ] 4.2 Lane10, open-quake-hwn.10: inspect existing endpoints and perform authorized live runtime acceptance without service changes; document exact tested endpoints, capabilities and remaining live gaps without secrets.
+- [x] 4.1 Lane9, open-quake-hwn.9: compose production adapters and QUAKE voice/agent routing; verify mock-device consumer tests demonstrate selected connection use without real hardware.
+- [x] 4.2 Lane10, open-quake-hwn.10: inspect existing endpoints and perform authorized live runtime acceptance without service changes; document exact tested endpoints, capabilities and remaining live gaps without secrets.
 - [ ] 4.3 Parent: reconcile lane commits, exports and task/bead evidence; run focused integration checks, deliver reviewed PR and keep any pending checks under host monitoring.

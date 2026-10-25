@@ -16,7 +16,7 @@ Hermes has distinct agent-server and dashboard interfaces. Use its `api_server` 
 
 The official dashboard and third-party Hermes WebUI/control are browser applications. Pointing open-quake at either may return HTML, a login redirect, or a healthy dashboard response while the agent API is absent. Configure the existing API server through Hermes's own administration workflow if necessary. Open-quake does not change that configuration.
 
-Hermes `GET /v1/models` returns model route aliases for one endpoint/profile agent. Those aliases are not independent agents. Agent listing stays unavailable; chat uses the endpoint's default agent without inventing a catalog entry. Conversation continuity uses the real `X-Hermes-Session-Id` returned by the server. Text, usage and tool/status events appear only when the server reports them. This adapter does not expose session/resource catalogs, agent configuration changes, or speech endpoints.
+Hermes `GET /v1/models` returns model route aliases for one endpoint/profile agent. Those aliases are not independent agents. Agent listing stays unavailable; chat uses the endpoint's default agent without inventing a catalog entry. Conversation continuity uses the real `X-Hermes-Session-Id` returned by the server. Text, usage and tool/status events appear only when the server reports them. This adapter does not expose session/resource catalogs, agent configuration changes, or speech endpoints. Desktop text and normalized transcript routing are integrated, but microphone capture, speech recognition and spoken playback remain separate unfinished speech work.
 
 ## OpenClaw
 
@@ -29,6 +29,8 @@ The adapter probes enabled HTTP routes with read-only GET requests and prefers R
 Built-in agent tools execute on the runtime host according to its existing tool policy. `tool_choice: "none"` restricts client-defined function tools; it does not disable the agent's built-in tools.
 
 ## Check the connection
+
+Open Agent sessions in the desktop management window and choose Add connection. Choose the runtime kind, enter its base address and optional bearer credential, and save. The selected runtime handles new conversations. The local agent library remains separate.
 
 Save the connection with its runtime kind, base address and credential, then check the connection. A successful connection requires the expected protocol response and supported features, not only an HTTP 200 health page. Unsupported features remain unavailable. External runtime lifecycle controls, resource management, and agent configuration changes are not implied by chat support.
 

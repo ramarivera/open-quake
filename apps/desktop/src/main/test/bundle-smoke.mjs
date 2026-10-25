@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const directory = mkdtempSync(join(tmpdir(), "open-quake-bundle-"));
+// Match Electron's canonical userData path while preserving storage symlink checks.
+const directory = realpathSync(
+	mkdtempSync(join(tmpdir(), "open-quake-bundle-")),
+);
 const mockMode = process.argv.includes("--mock");
 const app = new EventEmitter();
 app.isPackaged = true;
@@ -189,6 +192,8 @@ try {
 		"maintenance:request",
 		"voice:request",
 		"meetings:request",
+		"agent-connections:request",
+		"agent-http:conversations:request",
 	])
 		assert(requests.has(channel), `Missing request owner: ${channel}`);
 	assert.equal(
@@ -228,6 +233,8 @@ try {
 		"maintenance:request",
 		"voice:request",
 		"meetings:request",
+		"agent-connections:request",
+		"agent-http:conversations:request",
 	])
 		assert(!requests.has(channel), `Request owner survived quit: ${channel}`);
 	assert.equal(screen.listenerCount("display-added"), 0);
