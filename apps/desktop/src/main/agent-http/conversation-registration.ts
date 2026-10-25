@@ -1,5 +1,5 @@
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { type BrowserWindow, ipcMain } from "electron";
+import { ipcMain, type WebContents } from "electron";
 import {
 	type ConversationResolver,
 	ConversationRuntimePort,
@@ -12,8 +12,15 @@ import {
 import { agentRequestAllowed } from "../agents/controller.js";
 import { createConversationController } from "./conversation-controller.js";
 
+export interface ConversationWindow {
+	readonly isDestroyed: () => boolean;
+	readonly webContents: Pick<
+		WebContents,
+		"id" | "isDestroyed" | "getURL" | "send"
+	>;
+}
 export interface RegisterAgentConversationsOptions {
-	readonly management: () => BrowserWindow | undefined;
+	readonly management: () => ConversationWindow | undefined;
 	readonly renderer: string;
 	readonly resolve: ConversationResolver;
 }
@@ -69,11 +76,16 @@ export function registerAgentConversations(
 			const cancel = (): void => {
 				void controller.cancelOwner(source.senderId);
 			};
+			const destroyed = (): void => {
+				cancel();
+				windows.get(source.senderId)?.();
+				windows.delete(source.senderId);
+			};
 			sender.on("did-start-navigation", cancel);
-			sender.once("destroyed", cancel);
+			sender.once("destroyed", destroyed);
 			windows.set(source.senderId, () => {
 				sender.removeListener("did-start-navigation", cancel);
-				sender.removeListener("destroyed", cancel);
+				sender.removeListener("destroyed", destroyed);
 			});
 		}
 		return controller.handle(source, input);

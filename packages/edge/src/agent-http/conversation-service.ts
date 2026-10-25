@@ -112,6 +112,7 @@ export class ConversationService extends Effect.Service<ConversationService>()(
 						};
 						let seq = 0;
 						let begun = false;
+						let settled = false;
 						let completed = false;
 						let remoteSessionId: string | undefined;
 						let failure: RuntimeError | undefined;
@@ -125,7 +126,7 @@ export class ConversationService extends Effect.Service<ConversationService>()(
 							if (Exit.isFailure(exit) && Cause.isInterrupted(exit.cause))
 								state.cancelled = true;
 							return (
-								begun
+								begun && !settled
 									? repository.finish(
 											owner,
 											scope,
@@ -234,17 +235,27 @@ export class ConversationService extends Effect.Service<ConversationService>()(
 						return provider.pipe(
 							Stream.concat(
 								Stream.fromEffect(
-									Effect.sync((): ConversationEvent => {
+									Effect.gen(function* (): Effect.fn.Return<ConversationEvent> {
 										if (!state.cancelled && !completed && !failure)
 											failure = new RuntimeProtocolInvalid();
+										const outcome = state.cancelled
+											? "cancelled"
+											: failure
+												? "failed"
+												: "completed";
+										if (begun)
+											yield* repository.finish(
+												owner,
+												scope,
+												input.requestId,
+												outcome,
+												remoteSessionId,
+											);
+										settled = true;
 										return {
 											...envelope(),
 											type: "end",
-											outcome: state.cancelled
-												? "cancelled"
-												: failure
-													? "failed"
-													: "completed",
+											outcome,
 											...(failure
 												? { errorCode: failure.code, message: failure.message }
 												: {}),
