@@ -7,15 +7,15 @@
 
 ## 2. Provider and transport implementation
 
-- [ ] 2.1 Lane2, open-quake-hwn.2: implement OpenClaw adapter from primary-source protocol evidence; verify local HTTP fixture tests for health, unsupported operations, streaming and failures, and document protocol assumptions.
-- [ ] 2.2 Lane3, open-quake-hwn.3: implement Hermes agent HTTP adapter, session continuity and actual progress normalization; verify local fixture tests and document distinction from dashboard/control API.
-- [ ] 2.3 Lane4, open-quake-hwn.4: implement bounded redacted HTTP transport and stream parsing; verify redirect, timeout, cancellation, size limits and malformed-event fixtures.
+- [x] 2.1 Lane2, open-quake-hwn.2: implement OpenClaw adapter from primary-source protocol evidence; verify local HTTP fixture tests for health, unsupported operations, streaming and failures, and document protocol assumptions.
+- [x] 2.2 Lane3, open-quake-hwn.3: implement Hermes agent HTTP adapter, session continuity and actual progress normalization; verify local fixture tests and document distinction from dashboard/control API.
+- [x] 2.3 Lane4, open-quake-hwn.4: implement bounded redacted HTTP transport and stream parsing; verify redirect, timeout, cancellation, size limits and malformed-event fixtures.
 
 ## 3. Desktop services and interface
 
-- [ ] 3.1 Lane5, open-quake-hwn.5: persist/select connections and authorize IPC with secure credential handling; verify persistence, rejected unauthorized callers and secret-free public replies.
-- [ ] 3.2 Lane6, open-quake-hwn.6: bridge management to verified runtime capabilities while preserving local workspace management; verify unsupported operations never call fictional remote endpoints.
-- [ ] 3.3 Lane7, open-quake-hwn.7: implement owner-scoped cancellable conversations and bounded history/session handling; verify cancellation, continuity, ownership and terminal-event behavior.
+- [x] 3.1 Lane5, open-quake-hwn.5: persist/select connections and authorize IPC with secure credential handling; verify persistence, rejected unauthorized callers and secret-free public replies.
+- [x] 3.2 Lane6, open-quake-hwn.6: bridge management to verified runtime capabilities while preserving local workspace management; verify unsupported operations never call fictional remote endpoints.
+- [x] 3.3 Lane7, open-quake-hwn.7: implement owner-scoped cancellable conversations and bounded history/session handling; verify cancellation, continuity, ownership and terminal-event behavior.
 - [ ] 3.4 Lane8, open-quake-hwn.8: implement connection and conversation UI with unavailable/error/streaming states; verify focused UI checks and document supported controls.
 
 ## 4. Composition and acceptance
