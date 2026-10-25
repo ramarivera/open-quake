@@ -64,7 +64,7 @@
 	font-weight: 600;
 	line-height: 1.25;
 }
-.aw-header p {
+.aw-header > div > p:not(.mc-page-kicker) {
 	margin: 4px 0 0;
 	color: var(--cw-muted);
 	font-size: var(--mc-font-body-sm);

@@ -94,19 +94,20 @@ export function AgentWizard({
 			}}
 		>
 			{!agent && (
-				<ol className="mc-tabs" aria-label={t.createAgent}>
+				<ol className="aw-steps" aria-label={t.createAgent}>
 					<li aria-current={!created ? "step" : undefined}>{t.wizardBasic}</li>
 					<li aria-current={created ? "step" : undefined}>{t.wizardRole}</li>
 				</ol>
 			)}
 			<form
+				className="aw-form"
 				onSubmit={(event) => {
 					event.preventDefault();
 					void run(created ? "save" : "next");
 				}}
 			>
 				{!created ? (
-					<div className="mc-grid">
+					<div className="aw-form-grid">
 						<label className="mc-field">
 							{t.agentId}
 							<input
@@ -120,7 +121,7 @@ export function AgentWizard({
 							/>
 						</label>
 						{validation && (
-							<p id="agent-id-error" role="alert">
+							<p id="agent-id-error" role="alert" className="aw-field-error">
 								{validation}
 							</p>
 						)}
@@ -144,16 +145,14 @@ export function AgentWizard({
 								))}
 							</select>
 						</label>
-						<p>{t.initWorkspaceHint}</p>
+						<p className="cw-muted">{t.initWorkspaceHint}</p>
 					</div>
 				) : (
 					<>
-						<div className="mc-toolbar">
-							<span className="mc-badge">
-								{emoji} {name}
-							</span>
-							<code>{id}</code>
-						</div>
+						<p className="aw-wizard-agent">
+							<span aria-hidden="true">{emoji}</span> <strong>{name}</strong>{" "}
+							<code className="cw-code">{id}</code>
+						</p>
 						<label className="mc-field">
 							{t.describeRole}
 							<textarea
@@ -172,15 +171,16 @@ export function AgentWizard({
 							{busy ? t.generating : t.generateConfig}
 						</button>
 						{!view.draftingAvailable && (
-							<p>AI drafting needs a configured provider.</p>
+							<p className="cw-muted">{t.draftingUnavailable}</p>
 						)}
-						<nav className="mc-tabs" aria-label="Workspace Markdown files">
+						<nav className="aw-file-tabs" aria-label="Workspace Markdown files">
 							{Object.keys(files).map((file) => (
 								<button
 									key={file}
 									type="button"
-									className="mc-button"
+									className="aw-file-tab"
 									data-active={active === file}
+									aria-current={active === file ? "true" : undefined}
 									onClick={() => setActive(file)}
 								>
 									{file}
@@ -201,8 +201,13 @@ export function AgentWizard({
 						</label>
 					</>
 				)}
-				{error && <p role="alert">{error}</p>}
-				<footer className="mc-toolbar">
+				{error && (
+					<p role="alert" className="cw-banner">
+						{error}
+					</p>
+				)}
+				<footer className="cw-dialog-actions">
+					<span className="cw-spacer" />
 					<button
 						type="button"
 						className="mc-button"
@@ -214,6 +219,7 @@ export function AgentWizard({
 					<button
 						type="submit"
 						className="mc-button"
+						data-primary
 						disabled={busy || (!created && (Boolean(invalid) || !name.trim()))}
 					>
 						{busy ? t.saving : created ? t.saveAgent : t.wizardNext}

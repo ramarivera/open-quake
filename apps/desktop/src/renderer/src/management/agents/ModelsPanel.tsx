@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
-import { ConfirmDialog } from "./Dialog";
+import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
+import { ConfirmDialog, format } from "./Dialog";
 import { reconcileModelDrafts, reconcileModelRow } from "./model-drafts";
 import strings from "./strings.json";
 import type { AgentRequest } from "./useAgents";
@@ -81,9 +82,9 @@ function ModelTable({
 	};
 	return (
 		<>
-			<div style={{ overflowX: "auto" }}>
-				<table className="mc-table">
-					<caption>
+			<div className="aw-table-wrap">
+				<table className="mc-table aw-table">
+					<caption className="visually-hidden">
 						{scope === "default" ? t.defaultModelConfig : scope}
 					</caption>
 					<thead>
@@ -196,7 +197,14 @@ function ModelTable({
 									/>
 								</td>
 								<td>
-									<span className="mc-badge">
+									<span className="aw-credential">
+										<span
+											className="cw-dot"
+											data-tone={
+												row.credentialAvailable ? "success" : "neutral"
+											}
+											aria-hidden="true"
+										/>
 										{row.credentialAvailable ? t.authAvailable : t.authMissing}
 									</span>
 									<input
@@ -230,7 +238,7 @@ function ModelTable({
 										}
 									/>
 								</td>
-								<td>
+								<td className="aw-table-actions">
 									<button
 										type="button"
 										className="mc-button"
@@ -248,6 +256,7 @@ function ModelTable({
 									<button
 										type="button"
 										className="mc-button"
+										data-variant="quiet"
 										disabled={
 											busy || (scope === "default" && drafts.length <= 1)
 										}
@@ -276,7 +285,8 @@ function ModelTable({
 			</datalist>
 			<button
 				type="button"
-				className="mc-button"
+				className="mc-button aw-add-row"
+				data-variant="quiet"
 				disabled={busy}
 				onClick={() =>
 					setDrafts([
@@ -326,13 +336,34 @@ export function ModelsPanel({
 	readonly busy: boolean;
 }) {
 	const [tab, setTab] = useState("default");
+	const effective = directChatModel(view.models);
+	const mainOverride = Boolean(ownModelRows(view.models, DIRECT_CHAT_SCOPE));
 	return (
-		<section className="mc-panel">
-			<header>
-				<h2>{t.title}</h2>
-				<p>{t.subtitle}</p>
+		<section className="mc-panel aw-models">
+			<header className="aw-section-head">
+				<div>
+					<h2>{t.title}</h2>
+					<p>{t.subtitle}</p>
+				</div>
 			</header>
-			<nav className="mc-tabs" aria-label={t.title}>
+			<p className="aw-effective" role="status">
+				<span
+					className="cw-dot"
+					data-tone={effective.ready ? "success" : "warning"}
+					aria-hidden="true"
+				/>
+				<span>
+					{effective.row
+						? format(effective.ready ? t.effective : t.effectiveNoKey, {
+								model: `${effective.row.provider} / ${effective.row.model}`,
+							})
+						: t.effectiveNone}
+					{mainOverride && (
+						<span className="cw-muted"> · {t.mainOverride}</span>
+					)}
+				</span>
+			</p>
+			<nav className="mc-tabs aw-subtabs" aria-label={t.title}>
 				<button
 					type="button"
 					className="mc-button"
@@ -363,19 +394,25 @@ export function ModelsPanel({
 				/>
 			</div>
 			<div hidden={tab !== "agents"}>
-				<h3>{t.agentsModelConfig}</h3>
-				<p>{t.agentsModelDescription}</p>
+				<p className="cw-muted aw-tab-intro">{t.agentsModelDescription}</p>
 				{view.agents.map((agent) => (
-					<details className="mc-card" key={agent.id}>
+					<details className="aw-scope" key={agent.id}>
 						<summary>
-							{agent.emoji} {agent.name} <code>{agent.id}</code>{" "}
-							<span className="mc-badge">
+							<span aria-hidden="true">{agent.emoji}</span>{" "}
+							<span className="aw-row-title">{agent.name}</span>{" "}
+							<code className="cw-code">{agent.id}</code>{" "}
+							<span
+								className="mc-badge"
+								data-tone={
+									ownModelRows(view.models, agent.id) ? "accent" : "neutral"
+								}
+							>
 								{ownModelRows(view.models, agent.id)
 									? t.customConfig
 									: t.inherited}
 							</span>
 						</summary>
-						<label className="mc-field">
+						<label className="cw-check">
 							<input
 								type="checkbox"
 								checked={!ownModelRows(view.models, agent.id)}
@@ -401,11 +438,11 @@ export function ModelsPanel({
 								busy={busy}
 							/>
 						) : (
-							<div>
-								<p>{t.currentDefaultConfig}</p>
+							<div className="aw-inherited">
+								<p className="cw-muted">{t.currentDefaultConfig}</p>
 								{(view.models.default ?? []).map((row) => (
 									<p key={row.id}>
-										<span className="mc-badge">
+										<span className="mc-badge" data-tone="neutral">
 											{row.role === "default"
 												? t.roleDefault
 												: row.role === "fallback"

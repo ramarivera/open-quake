@@ -9,7 +9,7 @@
 
 - [x] 2.1 open-quake-nyd.3.1: Build the source rail, the conversation lists, the header identity and QUAKE destination, and the sticky composer for direct and runtime sources. Keep parent smoke selectors.
 - [x] 2.2 open-quake-nyd.3.2: Add the connection sheet, capability-gated runtime controls, inert runtime markup, and status, tool and usage progress.
-- [ ] 2.3 open-quake-nyd.3.3: Restructure the local library, AI configuration and panel settings tabs into list/detail layouts with one container level.
+- [x] 2.3 open-quake-nyd.3.3: Restructure the local library, AI configuration and panel settings tabs into list/detail layouts with one container level.
 
 ## 3. Verification
 
