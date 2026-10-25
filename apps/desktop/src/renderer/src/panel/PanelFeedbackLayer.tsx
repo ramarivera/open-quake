@@ -19,15 +19,6 @@ const SOURCE_CHIP = {
 } as const;
 const PLATE = { x: 1192, y: 128, width: 648, height: 224 } as const;
 
-/** 0° points up; positive angles turn clockwise, like the physical knob. */
-function polar(degrees: number, radius: number): { x: number; y: number } {
-	const radians = (degrees * Math.PI) / 180;
-	return {
-		x: KNOB.cx + radius * Math.sin(radians),
-		y: KNOB.cy - radius * Math.cos(radians),
-	};
-}
-
 function valueSize(text: string): number {
 	return text.length <= 2
 		? 104
