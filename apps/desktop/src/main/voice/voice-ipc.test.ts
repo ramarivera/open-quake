@@ -293,7 +293,10 @@ it("retains the original failed voice span through actual IPC recovery without r
 				agentId: "private-local-agent",
 				message: "private utterance",
 			}),
-		).toMatchObject({ _tag: "rejected", code: "VOICE.GRID.RUNTIME_UNAVAILABLE" });
+		).toMatchObject({
+			_tag: "rejected",
+			code: "VOICE.GRID.RUNTIME_UNAVAILABLE",
+		});
 	} finally {
 		await registration.dispose();
 		await diagnostics.close();
