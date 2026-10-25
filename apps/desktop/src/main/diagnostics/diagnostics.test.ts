@@ -1,4 +1,5 @@
 import {
+	mkdir,
 	mkdtemp,
 	readdir,
 	readFile,
@@ -6,6 +7,7 @@ import {
 	stat,
 	writeFile,
 } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import {
 	Cause,
@@ -17,6 +19,7 @@ import {
 	Redacted,
 } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
+import { QuakeHidOpenFailed } from "../../../../../packages/device/src/device-errors.js";
 import { RuntimeUnavailable } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
 import { makeRuntimeHttpTransport } from "../../../../../packages/edge/src/agent-http/transport.js";
 import { GridVoice } from "../../../../../packages/edge/src/voice/surface/grid-voice-service.js";
@@ -31,10 +34,21 @@ import { createDesktopDiagnostics, type DesktopDiagnostics } from "./index.js";
 import { createDiagnosticStorage } from "./persistence.js";
 import { safeCause, safeError } from "./privacy.js";
 
-const scratch = "/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish";
+const scratch =
+	process.platform === "darwin"
+		? "/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish"
+		: join(
+				homedir(),
+				"dev",
+				"agentic-scratchpads",
+				"open-quake",
+				"diagnostics-tests",
+			);
 const directories: string[] = [];
 const resources: Array<() => Promise<unknown>> = [];
 async function fixture() {
+	if (process.platform === "darwin") await stat("/Volumes/ExtSSD");
+	await mkdir(scratch, { recursive: true });
 	const directory = await mkdtemp(join(scratch, "diagnostics-test-"));
 	directories.push(directory);
 	const diagnostics = createDesktopDiagnostics({ directory });
@@ -323,6 +337,9 @@ describe("production Effect diagnostics", () => {
 		expect((await records(directory)).some((line) => line.type === "log")).toBe(
 			true,
 		);
+		expect(
+			(await records(directory)).find((line) => line.type === "health"),
+		).toMatchObject({ dropped: 0, storageFailures: 0 });
 		expect((await stat(directory)).mode & 0o777).toBe(0o700);
 		expect(
 			(await stat(join(directory, "diagnostics.0.ndjson"))).mode & 0o777,
@@ -372,5 +389,89 @@ describe("production Effect diagnostics", () => {
 		const status = await diagnostics.close();
 		expect(status.storageFailures).toBeGreaterThan(0);
 		expect(JSON.stringify(status)).not.toContain("private");
+	});
+	it("isolates simultaneous requests and records cancellation without remote text", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		await app.runPromise(
+			Effect.all(
+				[
+					diagnostics.instrument(
+						Effect.yieldNow().pipe(
+							Effect.zipRight(Effect.logInfo("private first")),
+						),
+						"voice.request",
+					),
+					diagnostics
+						.instrument(
+							Effect.yieldNow().pipe(Effect.zipRight(Effect.interrupt)),
+							"agent.request",
+						)
+						.pipe(Effect.exit),
+				],
+				{ concurrency: "unbounded" },
+			),
+		);
+		await diagnostics.flush();
+		const lines = await records(directory);
+		const first = lines.find(
+			(line) => line.span_name === "voice.request" && line.type === "span",
+		);
+		const second = lines.find(
+			(line) => line.span_name === "agent.request" && line.type === "span",
+		);
+		expect(first).toBeDefined();
+		expect(second).toMatchObject({
+			outcome: "interrupted",
+			cause: { kind: "Interrupt" },
+		});
+		expect(first?.trace_id).not.toBe(second?.trace_id);
+		expect(first?.request_id).not.toBe(second?.request_id);
+	});
+
+	it("survives hostile log values and preserves actionable device and network source codes", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		const hostile = new Proxy(
+			{},
+			{
+				getPrototypeOf() {
+					throw new Error("private hostile");
+				},
+				getOwnPropertyDescriptor() {
+					throw new Error("private hostile");
+				},
+			},
+		);
+		expect(() => safeError(hostile)).not.toThrow();
+		await app.runPromise(
+			diagnostics.instrument(Effect.logWarning(hostile), "app.background"),
+		);
+		const network = Object.assign(new TypeError("private endpoint refused"), {
+			code: "ECONNREFUSED",
+			status: 503,
+			url: "private-url",
+		});
+		const hid = new QuakeHidOpenFailed(network);
+		await app.runPromise(
+			diagnostics
+				.instrument(Effect.fail(hid), "app.background")
+				.pipe(Effect.exit),
+		);
+		await diagnostics.flush();
+		const lines = await records(directory);
+		expect(
+			lines.some((line) => line.event === "diagnostics.projection_failed"),
+		).toBe(true);
+		expect(lines.find((line) => line.outcome === "failure")).toMatchObject({
+			cause: {
+				error: {
+					_tag: "QuakeHidOpenFailed",
+					code: "QUAKE.HID.OPEN_FAILED",
+					cause: { sourceCode: "ECONNREFUSED", status: 503 },
+				},
+			},
+		});
+		expect(JSON.stringify(lines)).not.toContain("private");
 	});
 });

@@ -16,14 +16,16 @@ the parent span and request ID. Calls to `instrument` from asynchronous work
 inside a traced Effect capture that context across separate ManagedRuntime calls.
 For callbacks registered now and invoked later, register
 `diagnostics.bind(callback)` inside the current Effect. Binding retains only
-the diagnostic context alongside the callback, without inspecting its payload.
+trace/span identifiers and the generated request ID alongside the callback. It
+doesn't retain the span's attributes, events, exit or callback payload.
 Never accept renderer-supplied trace IDs, operation names, or span names.
 
 Dispose background subscriptions and all runtimes before calling
 `await diagnostics.close()`. Close drains accepted records, fsyncs the current
 file, and closes the handle. It's idempotent. Check the returned status for
 `storageFailures` and `dropped`; both mean the trace may be incomplete. `flush()`
-provides an inspection barrier during a running session. Storage errors never
+provides an inspection barrier during a running session. Close also persists a health record with drop and storage failure counts when
+the destination is writable. Storage errors never
 replace the application's failure or throw through the logger.
 
 ## Find and export a physical test's records
@@ -61,7 +63,8 @@ The writer receives only a projected record. It never serializes arbitrary
 messages, annotations, span attributes, events, links, request bodies, prompts,
 transcripts, PCM, headers, credentials, provider URLs, exception messages or
 full stacks. Static application event and span names come from `known-names.ts`.
-Unknown names become `effect.log` or `redacted.span`. Source frames retain only
+Unknown names become `effect.log` or `redacted.span`. Allowlisted native filesystem/network codes and numeric HTTP status also
+survive projection. Source frames retain only
 known source basenames and numeric locations, not function labels or full paths.
 Catalog codes and tags are allowlisted. Error projections traverse private
 `originalCause` and native `cause`, with depth and node limits, and preserve

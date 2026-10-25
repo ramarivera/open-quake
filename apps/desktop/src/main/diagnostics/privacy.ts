@@ -1,11 +1,22 @@
 import type { Cause } from "effect";
+import { ActionErrors } from "../../../../../packages/device/src/actions/action-errors.js";
 import {
 	DeviceErrors,
 	toSafeDiagnosticCause,
 } from "../../../../../packages/device/src/device-errors.js";
+import { DisplayErrors } from "../../../../../packages/device/src/display/display-errors.js";
+import { HardwareErrors } from "../../../../../packages/device/src/hardware/hardware-errors.js";
+import { KnobErrors } from "../../../../../packages/device/src/knob/knob-errors.js";
+import { LightingErrors } from "../../../../../packages/device/src/lighting/lighting-errors.js";
+import { ProfileErrors } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { RuntimeErrors } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
+import { AgentErrors } from "../../../../../packages/edge/src/agents/agents-errors.js";
 import { AiErrors } from "../../../../../packages/edge/src/ai/ai-errors.js";
 import { SpeechErrors } from "../../../../../packages/edge/src/ai/speech/speech-errors.js";
+import { IntegrationErrors } from "../../../../../packages/edge/src/channels/integration-errors.js";
+import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors.js";
+import { MaintenanceErrors } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import { MeetingErrors } from "../../../../../packages/edge/src/meetings/meeting-errors.js";
 import { VoiceSurfaceErrors } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
 import {
 	knownErrorTags,
@@ -14,8 +25,53 @@ import {
 	knownSpans,
 } from "./known-names.js";
 
+const sourceCodes = new Set([
+	"EACCES",
+	"EPERM",
+	"EIO",
+	"ENODEV",
+	"ENOENT",
+	"EBUSY",
+	"ENOSPC",
+	"EMFILE",
+	"ENFILE",
+	"ECONNREFUSED",
+	"ECONNRESET",
+	"ETIMEDOUT",
+	"ENOTFOUND",
+	"EAI_AGAIN",
+	"EPIPE",
+	"ABORT_ERR",
+	"ERR_NETWORK",
+	"ERR_TLS_CERT_ALTNAME_INVALID",
+	"CERT_HAS_EXPIRED",
+	"DEPTH_ZERO_SELF_SIGNED_CERT",
+	"UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+	"UND_ERR_CONNECT_TIMEOUT",
+	"UND_ERR_HEADERS_TIMEOUT",
+	"UND_ERR_BODY_TIMEOUT",
+	"UND_ERR_SOCKET",
+]);
+
 const identities = new Map<string, { code: string; category: string }>(
-	[DeviceErrors, AiErrors, SpeechErrors, RuntimeErrors, VoiceSurfaceErrors]
+	[
+		DeviceErrors,
+		AiErrors,
+		SpeechErrors,
+		RuntimeErrors,
+		VoiceSurfaceErrors,
+		ActionErrors,
+		DisplayErrors,
+		HardwareErrors,
+		KnobErrors,
+		LightingErrors,
+		ProfileErrors,
+		AgentErrors,
+		IntegrationErrors,
+		emojiErrors,
+		MaintenanceErrors,
+		MeetingErrors,
+	]
 		.flatMap((catalog) => Object.values(catalog))
 		.map(({ code, category }) => [code, { code, category }]),
 );
@@ -31,6 +87,7 @@ export interface SafeError {
 	readonly code?: string;
 	readonly category?: string;
 	readonly sourceCode?: string;
+	readonly status?: number;
 	readonly frames?: readonly SafeFrame[];
 	readonly cause?: SafeError;
 	readonly truncated?: true;
@@ -75,6 +132,11 @@ export function safeError(input: unknown, depth = 0): SafeError {
 	const projected = toSafeDiagnosticCause(input);
 	const code = field(input, "code");
 	const identity = typeof code === "string" ? identities.get(code) : undefined;
+	const sourceCode =
+		typeof code === "string" && sourceCodes.has(code)
+			? code
+			: projected.sourceCode;
+	const status = field(input, "status");
 	const tag = field(input, "_tag");
 	const sourceFrames = frames(input);
 	const original = field(input, "originalCause");
@@ -85,7 +147,13 @@ export function safeError(input: unknown, depth = 0): SafeError {
 		...(identity && typeof tag === "string" && knownErrorTags.has(tag)
 			? { _tag: tag }
 			: {}),
-		...(projected.sourceCode ? { sourceCode: projected.sourceCode } : {}),
+		...(sourceCode ? { sourceCode } : {}),
+		...(typeof status === "number" &&
+		Number.isInteger(status) &&
+		status >= 100 &&
+		status <= 599
+			? { status }
+			: {}),
 		...(sourceFrames.length ? { frames: sourceFrames } : {}),
 		...(cause === undefined ? {} : { cause: safeError(cause, depth + 1) }),
 	};

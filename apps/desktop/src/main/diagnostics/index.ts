@@ -59,6 +59,21 @@ export function createDesktopDiagnostics(
 		span: Option.Option<Tracer.AnySpan>;
 		requestId: Option.Option<string>;
 	}>();
+	const capture = () => {
+		const current = asyncContext.getStore();
+		return current
+			? {
+					span: Option.map(current.span, (span) =>
+						Tracer.externalSpan({
+							traceId: span.traceId,
+							spanId: span.spanId,
+							sampled: span.sampled,
+						}),
+					),
+					requestId: current.requestId,
+				}
+			: undefined;
+	};
 	const requestBySpan = new WeakMap<Tracer.AnySpan, string>();
 	let sequence = 0;
 	const emit = (record: object) =>
@@ -196,7 +211,7 @@ export function createDesktopDiagnostics(
 	);
 	const instrument: DesktopDiagnostics["instrument"] = (effect, operation) => {
 		// Capture at the Promise boundary, before another runtime starts its own fiber.
-		const inherited = asyncContext.getStore();
+		const inherited = capture();
 		return Effect.gen(function* () {
 			const active = yield* Effect.currentSpan.pipe(Effect.option);
 			const currentRequest = yield* FiberRef.get(requestId);
@@ -212,18 +227,35 @@ export function createDesktopDiagnostics(
 		});
 	};
 	const bind: DesktopDiagnostics["bind"] = (callback) => {
-		const captured = asyncContext.getStore();
+		const captured = capture();
 		return (...args) =>
 			captured
 				? asyncContext.run(captured, () => callback(...args))
 				: callback(...args);
+	};
+	let closing: Promise<DiagnosticStatus> | undefined;
+	const close = (): Promise<DiagnosticStatus> => {
+		if (closing) return closing;
+		closing = (async () => {
+			const health = await storage.flush();
+			emit({
+				type: "health",
+				event: "diagnostics.shutdown",
+				written: health.written,
+				dropped: health.dropped,
+				storageFailures: health.storageFailures,
+				...(health.lastFailure ? { lastFailure: health.lastFailure } : {}),
+			});
+			return storage.close();
+		})();
+		return closing;
 	};
 	return {
 		layer,
 		bind,
 		instrument,
 		flush: storage.flush,
-		close: storage.close,
+		close,
 		status: storage.status,
 	};
 }
