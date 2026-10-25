@@ -40,7 +40,9 @@ export const createDirectChatVoice = (
 						host.cancel(turn.sessionId, turn.turnId).pipe(Effect.ignore),
 					),
 				);
-				yield* Fiber.interrupt(turn.fiber);
+				// Cancellation queues the authoritative terminal. Let the surface consumer
+				// publish it and release activeFlow before returning.
+				yield* Fiber.await(turn.fiber);
 				if (active.get(serial) === turn) active.delete(serial);
 			});
 		yield* Effect.addFinalizer(() =>
@@ -50,117 +52,126 @@ export const createDirectChatVoice = (
 		);
 		const send = (request: TextRequest, source: "typed" | "voice") =>
 			lock.withPermits(1)(
-				Effect.gen(function* () {
-					yield* stop(request.serial);
-					const route = JSON.stringify([
-						request.serial,
-						request.keyCode,
-						request.agentId,
-					]);
-					let sessionId = sessions.get(route);
-					if (!sessionId) {
-						sessionId = Schema.decodeUnknownSync(SessionId)(randomUUID());
-						sessions.set(route, sessionId);
-						while (sessions.size > 16) {
-							const first = sessions.keys().next();
-							if (!first.done) sessions.delete(first.value);
+				Effect.uninterruptibleMask((restore) =>
+					Effect.gen(function* () {
+						yield* stop(request.serial);
+						const route = JSON.stringify([
+							request.serial,
+							request.keyCode,
+							request.agentId,
+						]);
+						let sessionId = sessions.get(route);
+						if (!sessionId) {
+							sessionId = Schema.decodeUnknownSync(SessionId)(randomUUID());
+							sessions.set(route, sessionId);
+							while (sessions.size > 16) {
+								const first = sessions.keys().next();
+								if (!first.done) sessions.delete(first.value);
+							}
 						}
-					}
-					const turnId = Schema.decodeUnknownSync(TurnId)(randomUUID());
-					const accepted = yield* Effect.tryPromise({
-						try: () =>
-							host.runtime.runPromise(
-								host.submit(
-									{ sessionId, turnId, text: request.message },
-									request.agentId,
+						const turnId = Schema.decodeUnknownSync(TurnId)(randomUUID());
+						const accepted = yield* Effect.tryPromise({
+							try: () =>
+								host.runtime.runPromise(
+									host.submit(
+										{ sessionId, turnId, text: request.message },
+										request.agentId,
+									),
 								),
-							),
-						catch: (cause) => new VoiceRuntimeUnavailable(cause),
-					});
-					const captureId = `direct/${turnId}`;
-					yield* surface.publish({
-						_tag: "TurnStarted",
-						serial: request.serial,
-						keyCode: request.keyCode,
-						sessionId,
-						turnId,
-						prompt: request.message.slice(0, 8000),
-						source,
-					});
-					yield* surface.publish({
-						_tag: "Stage",
-						serial: request.serial,
-						keyCode: request.keyCode,
-						captureId,
-						stage: { _tag: "processing" },
-					});
-					const start = yield* Effect.makeLatch();
-					const fiber = yield* start.await.pipe(
-						Effect.zipRight(
-							accepted.events.pipe(
-								Stream.runForEach((chunk) =>
-									surface
-										.publish({
-											_tag: "Chunk",
+							catch: (cause) => new VoiceRuntimeUnavailable(cause),
+						});
+						const captureId = `direct/${turnId}`;
+						yield* surface.publish({
+							_tag: "TurnStarted",
+							serial: request.serial,
+							keyCode: request.keyCode,
+							sessionId,
+							turnId,
+							prompt: request.message.slice(0, 8000),
+							source,
+						});
+						yield* surface.publish({
+							_tag: "Stage",
+							serial: request.serial,
+							keyCode: request.keyCode,
+							captureId,
+							stage: { _tag: "processing" },
+						});
+						const start = yield* Effect.makeLatch();
+						const fiber = yield* start.await.pipe(
+							Effect.zipRight(
+								accepted.events.pipe(
+									Stream.runForEach((chunk) =>
+										surface
+											.publish({
+												_tag: "Chunk",
+												serial: request.serial,
+												keyCode: request.keyCode,
+												chunk,
+											})
+											.pipe(
+												Effect.zipRight(
+													chunk.type === "end"
+														? surface.publish({
+																_tag: "Stage",
+																serial: request.serial,
+																keyCode: request.keyCode,
+																captureId,
+																stage:
+																	chunk.outcome === "completed" ||
+																	chunk.outcome === "cancelled"
+																		? { _tag: "idle", outcome: chunk.outcome }
+																		: {
+																				_tag: "failed",
+																				reason: "server",
+																				...(chunk.errorCode
+																					? { errorCode: chunk.errorCode }
+																					: {}),
+																			},
+															})
+														: Effect.void,
+												),
+											),
+									),
+									Effect.catchAll((error) =>
+										surface.publish({
+											_tag: "Stage",
 											serial: request.serial,
 											keyCode: request.keyCode,
-											chunk,
-										})
-										.pipe(
-											Effect.zipRight(
-												chunk.type === "end"
-													? surface.publish({
-															_tag: "Stage",
-															serial: request.serial,
-															keyCode: request.keyCode,
-															captureId,
-															stage:
-																chunk.outcome === "completed" ||
-																chunk.outcome === "cancelled"
-																	? { _tag: "idle", outcome: chunk.outcome }
-																	: {
-																			_tag: "failed",
-																			reason: "server",
-																			...(chunk.errorCode
-																				? { errorCode: chunk.errorCode }
-																				: {}),
-																		},
-														})
-													: Effect.void,
-											),
-										),
-								),
-								Effect.catchAll((error) =>
-									surface.publish({
-										_tag: "Stage",
-										serial: request.serial,
-										keyCode: request.keyCode,
-										captureId,
-										stage: {
-											_tag: "failed",
-											reason: "server",
-											errorCode: error.code,
-										},
-									}),
-								),
-								Effect.ensuring(
-									Effect.sync(() => {
-										if (active.get(request.serial)?.turnId === turnId)
-											active.delete(request.serial);
-									}),
+											captureId,
+											stage: {
+												_tag: "failed",
+												reason: "server",
+												errorCode: error.code,
+											},
+										}),
+									),
+									Effect.ensuring(
+										Effect.sync(() => {
+											if (active.get(request.serial)?.turnId === turnId)
+												active.delete(request.serial);
+										}),
+									),
 								),
 							),
-						),
-						Effect.forkIn(scope),
-					);
-					active.set(request.serial, {
-						sessionId,
-						turnId,
-						fiber,
-						keyCode: request.keyCode,
-					});
-					yield* start.open;
-				}),
+							Effect.interruptible,
+							Effect.forkIn(scope),
+						);
+						active.set(request.serial, {
+							sessionId,
+							turnId,
+							fiber,
+							keyCode: request.keyCode,
+						});
+						yield* start.open;
+						// Acceptance and installation are one ownership handoff. A capture
+						// interrupted while awaiting acceptance cancels only after ownership
+						// exists, then drains the terminal before releasing the caller.
+						yield* restore(Effect.void).pipe(
+							Effect.onInterrupt(() => stop(request.serial, request.keyCode)),
+						);
+					}),
+				),
 			);
 		return {
 			sendTranscript: (request: TextRequest) => send(request, "voice"),

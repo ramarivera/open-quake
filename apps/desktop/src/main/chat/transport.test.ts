@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
 	Effect,
 	Exit,
+	Fiber,
 	Layer,
 	ManagedRuntime,
 	Redacted,
@@ -171,6 +172,52 @@ async function fixture() {
 			);
 			await rm(directory, { recursive: true });
 		},
+	};
+}
+
+function voiceFixture(
+	host: ReturnType<typeof createDirectChat>,
+	publish: (event: VoiceSurfaceEvent) => Effect.Effect<void>,
+) {
+	let direct:
+		| Effect.Effect.Success<ReturnType<typeof createDirectChatVoice>>
+		| undefined;
+	const fallback = GridVoiceRuntime.of({
+		select: () => Effect.void,
+		startCapture: () => Effect.void,
+		releaseCapture: () => Effect.void,
+		cancelCapture: () => Effect.void,
+		cancelFlow: () => Effect.void,
+		sendText: () => Effect.die("old path"),
+	});
+	const voice = ManagedRuntime.make(
+		Layer.scoped(
+			GridVoiceRuntime,
+			Effect.gen(function* () {
+				direct = yield* createDirectChatVoice(host, fallback);
+				return direct.runtime;
+			}),
+		).pipe(
+			Layer.provideMerge(
+				VoiceSurface.Default.pipe(
+					Layer.provide(
+						Layer.mergeAll(
+							Layer.succeed(VoiceSurfacePublisher, { publish }),
+							Layer.succeed(VoiceTonePort, { play: () => Effect.void }),
+						),
+					),
+				),
+			),
+		),
+	);
+	return {
+		voice,
+		send: (
+			request: Parameters<NonNullable<typeof direct>["sendTranscript"]>[0],
+		) =>
+			Effect.suspend(() =>
+				direct ? direct.sendTranscript(request) : Effect.die("missing runtime"),
+			),
 	};
 }
 
@@ -504,6 +551,127 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			await f.close();
 		}
 	}, 10000);
+	it("drains buffered voice chunks and the terminal stage before cancellation returns", async () => {
+		const f = await fixture();
+		const events: VoiceSurfaceEvent[] = [];
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let entered = false;
+		const v = voiceFixture(f.host, (event) =>
+			Effect.gen(function* () {
+				if (event._tag === "Chunk" && event.chunk.type === "answer") {
+					entered = true;
+					yield* Effect.promise(() => blocked);
+				}
+				events.push(event);
+			}),
+		);
+		try {
+			const runtime = await v.voice.runPromise(GridVoiceRuntime);
+			await v.voice.runPromise(
+				v.send({
+					serial: "fixture",
+					keyCode: "1,5",
+					agentId: "main",
+					message: "block",
+				}),
+			);
+			await vi.waitFor(() => expect(entered).toBe(true));
+			let finished = false;
+			const cancelling = v.voice
+				.runPromise(runtime.cancelFlow("fixture", "1,5"))
+				.then(() => {
+					finished = true;
+				});
+			await f.endpoint.closed;
+			expect(finished).toBe(false);
+			release();
+			await cancelling;
+			expect(
+				events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toHaveLength(1);
+			expect(
+				events.filter((e) => e._tag === "Stage" && e.stage._tag === "idle"),
+			).toHaveLength(1);
+			expect(
+				await v.voice.runPromise(VoiceSurface.activeFlow("fixture")),
+			).toMatchObject({ _tag: "None" });
+		} finally {
+			release();
+			await v.voice.dispose();
+			await f.close();
+		}
+	}, 10000);
+	it("cancels and drains acceptance interrupted by a replacement capture", async () => {
+		const f = await fixture();
+		const events: VoiceSurfaceEvent[] = [];
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let accepted: { sessionId: SessionId; turnId: TurnId } | undefined;
+		const host = {
+			...f.host,
+			submit: (input: Parameters<typeof f.host.submit>[0], scope?: string) =>
+				f.host.submit(input, scope).pipe(
+					Effect.tap(() => {
+						accepted = input;
+						return Effect.promise(() => blocked);
+					}),
+				),
+		};
+		const v = voiceFixture(host, (event) =>
+			Effect.sync(() => {
+				events.push(event);
+			}),
+		);
+		try {
+			await v.voice.runPromise(GridVoiceRuntime);
+			const caller = v.voice.runFork(
+				v.send({
+					serial: "fixture",
+					keyCode: "1,5",
+					agentId: "main",
+					message: "block",
+				}),
+			);
+			await vi.waitFor(() => expect(accepted).toBeDefined());
+			const interrupting = v.voice.runPromise(Fiber.interrupt(caller));
+			release();
+			await interrupting;
+			await f.endpoint.closed;
+			if (!accepted) throw new Error("submission not observed");
+			expect(
+				(
+					await f.host.runtime.runPromise(
+						f.host.snapshot(accepted.sessionId, accepted.turnId),
+					)
+				).terminal,
+			).toMatchObject({ _tag: "Some", value: { outcome: "cancelled" } });
+			expect(
+				events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toHaveLength(1);
+			expect(
+				await v.voice.runPromise(VoiceSurface.activeFlow("fixture")),
+			).toMatchObject({ _tag: "None" });
+			await v.voice.runPromise(
+				v.send({
+					serial: "fixture",
+					keyCode: "1,5",
+					agentId: "main",
+					message: "next",
+				}),
+			);
+			await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(2));
+		} finally {
+			release();
+			await v.voice.dispose();
+			await f.close();
+		}
+	}, 10000);
+
 	it("closing a renderer RPC connection aborts only the turns that connection submitted", async () => {
 		const f = await fixture();
 		try {
