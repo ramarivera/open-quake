@@ -128,11 +128,21 @@ export const makeAudioOutput = Effect.gen(function* () {
 				if (previous) yield* release(previous);
 			},
 		),
-		close: Effect.fn("AudioOutput.close")(function* (): Effect.fn.Return<void> {
-			closed = true;
-			const previous = active;
-			if (previous) yield* release(previous);
-		}),
+		close: Effect.fn("AudioOutput.close")(
+			(): Effect.Effect<void> =>
+				Effect.uninterruptible(
+					Effect.gen(function* () {
+						// Invalidate immediately, then wait for any previous native teardown.
+						closed = true;
+						yield* gate.withPermits(1)(
+							Effect.gen(function* () {
+								const previous = active;
+								if (previous) yield* release(previous);
+							}),
+						);
+					}),
+				),
+		),
 	};
 });
 

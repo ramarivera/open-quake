@@ -207,6 +207,79 @@ describe("shared audio ownership", () => {
 			}),
 	);
 	it.effect(
+		"shutdown waits for in-flight preemption and refuses the replacement lease",
+		() =>
+			Effect.gen(function* () {
+				const owner = yield* makeAudioOutput;
+				const stopping = yield* Deferred.make<void>();
+				const stopped = yield* Deferred.make<void>();
+				let replacementStops = 0;
+				const board = yield* owner.acquire(
+					"soundboard",
+					Deferred.succeed(stopping, undefined).pipe(
+						Effect.zipRight(Deferred.await(stopped)),
+					),
+				);
+				const acquisition = yield* owner
+					.acquire(
+						"capture",
+						Effect.sync(() => {
+							replacementStops++;
+						}),
+					)
+					.pipe(Effect.either, Effect.fork);
+				yield* Deferred.await(stopping);
+				const closing = yield* owner.close().pipe(Effect.fork);
+				yield* TestClock.adjust(1);
+				expect(Option.isNone(yield* Fiber.poll(closing))).toBe(true);
+				expect(yield* board.current).toBe(false);
+				yield* Deferred.succeed(stopped, undefined);
+				yield* Fiber.join(closing);
+				expect(yield* Fiber.join(acquisition)).toMatchObject({ _tag: "Left" });
+				expect(replacementStops).toBe(1);
+				yield* owner.close();
+				expect(
+					yield* owner.acquire("speech", Effect.void).pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.AUDIO.OUTPUT_FAILED" },
+				});
+			}),
+	);
+	it.effect(
+		"shutdown waits for bounded preemption failure and never grants output afterward",
+		() =>
+			Effect.gen(function* () {
+				const owner = yield* makeAudioOutput;
+				const stopping = yield* Deferred.make<void>();
+				yield* owner.acquire(
+					"soundboard",
+					Deferred.succeed(stopping, undefined).pipe(
+						Effect.zipRight(Effect.never),
+					),
+				);
+				const acquisition = yield* owner
+					.acquire("capture", Effect.void)
+					.pipe(Effect.either, Effect.fork);
+				yield* Deferred.await(stopping);
+				const closing = yield* owner.close().pipe(Effect.fork);
+				yield* TestClock.adjust(1);
+				expect(Option.isNone(yield* Fiber.poll(closing))).toBe(true);
+				yield* TestClock.adjust(2000);
+				yield* Fiber.join(closing);
+				expect(yield* Fiber.join(acquisition)).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.AUDIO.OUTPUT_FAILED" },
+				});
+				expect(
+					yield* owner.acquire("speech", Effect.void).pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.AUDIO.OUTPUT_FAILED" },
+				});
+			}),
+	);
+	it.effect(
 		"closes idempotently, refuses late acquisition and cannot revive old leases",
 		() =>
 			Effect.gen(function* () {

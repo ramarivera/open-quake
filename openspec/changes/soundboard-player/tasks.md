@@ -49,3 +49,9 @@ MP3 playback or actual soundboard-session wiring. Task 2.3 and open-quake-uv9.7
 remain incomplete until the conductor supplies its live session group; prerequisite
 source/delivery is tracked separately by open-quake-uv9.9. Tasks 2.1/2.2/3.1 and
 native/physical acceptance remain open.
+
+PR56 review found shutdown could return while preempted native resources were
+still stopping. Shutdown now invalidates ownership immediately and waits through
+the same transition gate as acquisition. Two deterministic regressions fail on
+the previous source and cover both completed and timed-out prior cleanup, with
+no replacement lease granted after shutdown.
