@@ -225,12 +225,17 @@ async function run() {
 	app.quit();
 }
 void run().catch(async () => {
-	await writeFile(
-		join(directory, "result.json"),
-		JSON.stringify({ passed: false, step }),
-		{ mode: 0o600 },
-	);
-	// Never print arbitrary renderer/provider errors or token-bearing JS source.
-	process.stderr.write(`DESKTOP_E2E_FAILED ${step}\n`);
-	app.quit();
+	try {
+		await writeFile(
+			join(directory, "result.json"),
+			JSON.stringify({ passed: false, step }),
+			{ mode: 0o600 },
+		);
+	} catch {
+		/* The destination may itself be unavailable. */
+	} finally {
+		// Never print arbitrary renderer/provider errors or token-bearing JS source.
+		process.stderr.write(`DESKTOP_E2E_FAILED ${step}\n`);
+		app.quit();
+	}
 });

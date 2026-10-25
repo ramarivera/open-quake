@@ -249,3 +249,42 @@ it("keeps save plus selected connection atomic against automatic discovery", asy
 		h.controller.dispose();
 	}
 });
+
+it("keeps a completed save when follow-up selection throws so the form won't duplicate it", async () => {
+	const saved = {
+		...view,
+		revision: 2,
+		connections: [
+			...view.connections,
+			{
+				id: "new",
+				name: "New",
+				kind: "hermes" as const,
+				baseURL: "http://localhost:8001/",
+				credentialAvailable: false,
+			},
+		],
+	};
+	const h = harness(async (command) => {
+		if (command.type === "select") throw new Error("private IPC detail");
+		return success(command.type === "save" ? saved : view);
+	});
+	await tick();
+	const reply = await h.controller.saveAndSelect({
+		type: "save",
+		name: "New",
+		kind: "hermes",
+		baseURL: "http://localhost:8001/",
+		clearCredential: true,
+	});
+	expect(reply).toEqual(success(saved));
+	expect(h.controller.getSnapshot().view).toEqual(saved);
+	expect(h.controller.getSnapshot().busy).toBe(false);
+	expect(h.controller.getSnapshot().error?.code).toBe(
+		"AGENT.HTTP.REQUEST.FAILED",
+	);
+	expect(JSON.stringify(h.controller.getSnapshot())).not.toContain(
+		"private IPC detail",
+	);
+	h.controller.dispose();
+});

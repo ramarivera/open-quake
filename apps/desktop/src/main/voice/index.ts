@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import {
 	BrowserWindow,
 	clipboard,
@@ -30,6 +30,8 @@ import {
 	VoiceSurfaceRequest,
 	type VoiceTone,
 } from "../../shared/voice-surface";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { isAppRenderer } from "../profiles/profile-ipc";
 
 /**
@@ -81,23 +83,13 @@ export const UnavailableRuntimeLive = Layer.succeed(GridVoiceRuntime, {
 });
 
 export interface VoiceSurfaceOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	/** `OPEN_QUAKE_MOCK_DEVICE=1`: bind the scripted runtime. */
 	readonly mock: boolean;
 	/** Explicit speech controller. Chat configuration alone never enables speech. */
 	readonly speech?: {
 		readonly readAloud: (text: string) => Promise<VoiceSurfaceReply>;
 		readonly onEvent: (event: VoiceSurfaceEvent) => void;
-	};
-	readonly diagnostics?: {
-		readonly layer: Layer.Layer<never>;
-		readonly instrument: <A, E, R>(
-			effect: Effect.Effect<A, E, R>,
-			operation:
-				| "voice.request"
-				| "voice.knob"
-				| "voice.device"
-				| "voice.reset",
-		) => Effect.Effect<A, E, R>;
 	};
 	readonly tones: VoiceToneSink;
 	/** The device the strip shows; events carry it for per-device dedupe. */
@@ -209,20 +201,14 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 		broadcast(event);
 		options.speech?.onEvent(event);
 	};
-	const layer = voiceSurfaceLayer(options, publish);
-	const runtime = ManagedRuntime.make(
-		options.diagnostics
-			? layer.pipe(Layer.provideMerge(options.diagnostics.layer))
-			: layer,
+	const runtime = makeDesktopRuntime(
+		voiceSurfaceLayer(options, publish),
+		options.diagnostics,
+		"voice.request",
 	);
 	const run = <A>(
 		effect: Effect.Effect<A, never, GridVoice | VoiceSurface>,
-	): Promise<A> =>
-		runtime.runPromise(
-			options.diagnostics
-				? options.diagnostics.instrument(effect, "voice.request")
-				: effect,
-		);
+	): Promise<A> => runtime.runPromise(effect);
 	let disconnected = false;
 	let linkGeneration = 0;
 
@@ -269,6 +255,9 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 						agentId: request.agentId,
 						message: request.message,
 					}).pipe(
+						(effect) =>
+							options.diagnostics?.instrument(effect, "voice.request") ??
+							effect,
 						Effect.as(ok),
 						Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
 							Effect.succeed(rejected(error.code)),

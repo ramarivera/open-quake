@@ -5,7 +5,7 @@ export async function resetAndExit(options: {
 	readonly stop: () => Promise<void>;
 	readonly clear: () => Promise<void>;
 	readonly report: (message: string) => Promise<unknown>;
-	readonly exit: (code: number) => void;
+	readonly exit: (code: number) => void | Promise<void>;
 }): Promise<void> {
 	let code = 1;
 	try {
@@ -21,6 +21,6 @@ export async function resetAndExit(options: {
 			.catch(() => undefined);
 		throw error;
 	} finally {
-		options.exit(code);
+		await options.exit(code);
 	}
 }

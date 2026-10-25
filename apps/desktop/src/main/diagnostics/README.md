@@ -42,7 +42,7 @@ application launch, `request_id` for an IPC or physical-input operation, and
 `trace_id` for its nested work. A span's `parent_span_id` references the parent;
 logs carry the active `span_id`. `sequence` reveals dropped or rotated records
 within a session. `duration_ms`, `outcome`, catalog `code` and `_tag`, cause
-`kind`, safe source identities, and source filename/line/column frames are the
+`kind` and safe source identities are the
 fields to use when investigating a failure.
 
 After a user test, flush first or stop the application normally. Copy the
@@ -64,8 +64,7 @@ messages, annotations, span attributes, events, links, request bodies, prompts,
 transcripts, PCM, headers, credentials, provider URLs, exception messages or
 full stacks. Static application event and span names come from `known-names.ts`.
 Unknown names become `effect.log` or `redacted.span`. Allowlisted native filesystem/network codes and numeric HTTP status also
-survive projection. Source frames retain only
-known source basenames and numeric locations, not function labels or full paths.
+survive projection. Foreign stack frames are omitted. Named operation spans identify the failing local operation without trusting provider-supplied source locations.
 Catalog codes and tags are allowlisted. Error projections traverse private
 `originalCause` and native `cause`, with depth and node limits, and preserve
 Effect failures, defects, parallel/sequential causes and interruption. Raw causes
@@ -80,3 +79,5 @@ Run the focused integration suite with
 It uses fake transport and voice ports, real Effect consumers, and private
 scratch directories. It never opens a window, microphone, hardware device or
 live provider connection.
+
+Foreign Error.stack values are never retained, even when they contain known source basenames. Named Effect spans identify the local operation; catalog and OS error codes preserve the failure chain without trusting provider-supplied stack positions.

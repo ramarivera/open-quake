@@ -100,10 +100,16 @@ export function createConnectionsController(
 					// Keep the busy interval across both writes. An automatic discovery
 					// must not consume the gap and silently discard the selection.
 					apply(reply.view);
-					const selection = await bridge.request({
-						type: "select",
-						id: savedId,
-					});
+					const selection = await bridge
+						.request({
+							type: "select",
+							id: savedId,
+						})
+						.catch(() => ({
+							_tag: "rejected" as const,
+							code: RuntimeErrors.RuntimeRequestFailed.code,
+							message: t.disconnected,
+						}));
 					if (!mounted || epoch !== requestEpoch) return undefined;
 					if (selection._tag === "rejected") {
 						update({ ...state, error: selection });

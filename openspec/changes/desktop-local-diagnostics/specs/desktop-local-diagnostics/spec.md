@@ -27,8 +27,8 @@ Diagnostic storage MUST have finite retention and queue limits and private files
 #### Scenario: Provider failure contains private data
 
 - **WHEN** a failure contains a provider URL, request content, credential or nested private source message
-- **THEN** saved records contain only allowlisted identities, numeric status, bounded cause topology and allowlisted source basenames and locations
-- **AND** saved records omit the private values
+- **THEN** saved records contain only allowlisted identities, numeric status, bounded cause topology and named local operation spans
+- **AND** saved records omit private values and untrusted Error.stack frames, even when they resemble known source files
 
 #### Scenario: Destination is full or unavailable
 

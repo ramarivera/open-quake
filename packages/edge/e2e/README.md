@@ -77,3 +77,5 @@ it runs without activation. Other platforms may show its isolated windows.
 Neither mode establishes microphone input, STT, TTS, physical QUAKE input or
 audible output. The desktop mode uses the real OS credential vault, so a locked
 or unavailable vault fails rather than storing its ephemeral bearer in plaintext.
+
+The runner writes one private `*-acceptance.json` checkpoint per adapter. It intentionally replaces that checkpoint before each stage and marks `passed` only after the full conversation assertions finish. On failure it identifies the last attempted stage; it isn't a per-stage success ledger.
