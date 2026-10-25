@@ -6,6 +6,7 @@ import {
 	SLOT_CODES,
 	type Slots,
 } from "../../../../shared/agents";
+import { AgentHttpPanel } from "../agent-http";
 import { AgentWizard } from "./AgentWizard";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
@@ -371,7 +372,7 @@ export function AgentsPage({
 	);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
-		{ id: "agents", label: strings.clawControlPanel.agentsTab },
+		{ id: "agents", label: strings.clawControlPanel.localLibraryTab },
 		{ id: "ai", label: strings.clawControlPanel.aiConfig },
 		{ id: "settings", label: strings.clawControlPanel.settings },
 	] as const;
@@ -380,9 +381,11 @@ export function AgentsPage({
 			<header className="mc-toolbar">
 				<div>
 					<h1>{strings.clawControlPanel.agentsTab}</h1>
-					<p>{t.initWorkspaceHint}</p>
+					<p>{strings.clawControlPanel.libraryHint}</p>
 				</div>
-				{view && <RuntimeIndicator runtime={view.runtime} request={request} />}
+				{view && tab !== "sessions" && (
+					<RuntimeIndicator runtime={view.runtime} request={request} />
+				)}
 			</header>
 			<div
 				className="mc-tabs"
@@ -425,7 +428,15 @@ export function AgentsPage({
 					</button>
 				))}
 			</div>
-			{error && (
+			<section
+				id="agents-sessions"
+				role="tabpanel"
+				aria-labelledby="agents-tab-sessions"
+				hidden={tab !== "sessions"}
+			>
+				<AgentHttpPanel />
+			</section>
+			{error && tab !== "sessions" && (
 				<p role="alert">
 					{error}{" "}
 					<button
@@ -439,6 +450,7 @@ export function AgentsPage({
 			)}
 			{!view ? (
 				<section
+					hidden={tab === "sessions"}
 					className="mc-panel"
 					aria-busy={!error}
 					aria-label={t.loadingAgentMd}
@@ -455,64 +467,6 @@ export function AgentsPage({
 				</section>
 			) : (
 				<>
-					<section
-						id="agents-sessions"
-						role="tabpanel"
-						aria-labelledby="agents-tab-sessions"
-						hidden={tab !== "sessions"}
-						className="mc-panel"
-					>
-						<header className="mc-toolbar">
-							<h2>{strings.clawSessions.title}</h2>
-							<span className="mc-badge">
-								{format(t.agentCount, { count: view.agents.length })} ·{" "}
-								{view.runtime.status === "ready"
-									? strings.clawSessions.serviceReady
-									: strings.clawSessions.serviceStopped}
-							</span>
-						</header>
-						{view.runtime.status !== "ready" ? (
-							<div className="mc-empty">
-								<h3>
-									{view.runtime.available
-										? strings.clawSessions.offlineTitle
-										: "No agent runtime is installed"}
-								</h3>
-								<p>{strings.clawSessions.offlineHint}</p>
-								<RuntimeIndicator
-									runtime={view.runtime}
-									request={request}
-									large
-								/>
-							</div>
-						) : (
-							<div className="mc-grid">
-								{view.agents.map((agent) => (
-									<article className="mc-card" key={agent.id}>
-										<span aria-hidden="true" style={{ fontSize: 32 }}>
-											{agent.emoji}
-										</span>
-										<h3>{agent.name}</h3>
-										<code>{agent.id}</code>
-										<p>
-											{format(t.filesSkillsCount, {
-												files: Object.keys(agent.files).length,
-												skills: view.skills.filter((s) => s.owner === agent.id)
-													.length,
-											})}
-										</p>
-										<button
-											type="button"
-											className="mc-button"
-											onClick={() => setTab("agents")}
-										>
-											{t.title}
-										</button>
-									</article>
-								))}
-							</div>
-						)}
-					</section>
 					<section
 						id="agents-agents"
 						role="tabpanel"
