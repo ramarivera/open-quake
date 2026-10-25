@@ -85,7 +85,10 @@ describe("display prompts", () => {
 					});
 				const prompt: PromptEdges["prompt"] = (request) =>
 					Effect.sync(() => {
-						expect(request.detail).toContain("CGConfigureDisplayOrigin");
+						expect(request.detail).toContain("far right of your other screens");
+						expect(request.detail).toContain("System Settings > Displays");
+						expect(request.detail).not.toContain("CoreGraphics");
+						expect(request.detail).not.toContain("osascript");
 						expect(request.defaultId).toBe(1);
 						return accept ? 0 : 1;
 					});

@@ -18,6 +18,7 @@ import {
 	type AgentsAuthority,
 	agentRequestAllowed,
 } from "../agents/controller";
+import type { DesktopDiagnostics } from "../diagnostics";
 import type { AgentConnections } from "./connections";
 
 export interface ConnectionOperations {
@@ -42,6 +43,7 @@ const stale = (): AgentConnectionReply =>
 	rejected("AGENT.HTTP.IPC.STALE", "The connection changed; test it again");
 /** This is the same authority/decoding/dispatch boundary consumed by production IPC. */
 export function createAgentConnectionsController(options: {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly repository: AgentConnections;
 	readonly managementId: () => number | undefined;
 	readonly renderer: string;
@@ -169,9 +171,16 @@ export function createAgentConnectionsController(options: {
 			},
 		);
 		try {
-			const result = await Effect.runPromiseExit(work, {
-				signal: controller.signal,
-			});
+			const result = await Effect.runPromiseExit(
+				options.diagnostics
+					? options.diagnostics
+							.instrument(work, "agent.connection")
+							.pipe(Effect.provide(options.diagnostics.layer))
+					: work,
+				{
+					signal: controller.signal,
+				},
+			);
 			if (disposed) return closed();
 			if (
 				!agentRequestAllowed(source, options.managementId(), options.renderer)

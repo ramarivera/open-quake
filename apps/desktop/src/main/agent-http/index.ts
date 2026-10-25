@@ -1,4 +1,4 @@
-import { Effect, Exit, Scope } from "effect";
+import { Effect, Exit, Layer, Scope } from "effect";
 import type { BrowserWindow } from "electron";
 import { ConversationService } from "../../../../../packages/edge/src/agent-http/conversation-service.js";
 import { makeHermesRuntimeAdapter } from "../../../../../packages/edge/src/agent-http/hermes/hermes-adapter.js";
@@ -10,6 +10,8 @@ import {
 import type { RuntimeCredentialResolver } from "../../../../../packages/edge/src/agent-http/runtime-ports.js";
 import { makeRuntimeHttpTransport } from "../../../../../packages/edge/src/agent-http/transport.js";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import {
 	type AgentConnectionsRegistration,
 	registerAgentConnections,
@@ -28,6 +30,7 @@ import {
 import { agentHttpVoiceLayer } from "./voice-adapter";
 
 export interface AgentHttpOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow | undefined;
 	readonly renderer: string;
 	readonly root?: string;
@@ -39,7 +42,12 @@ export interface AgentHttpOptions {
  * Construction reads local settings only. All HTTP starts with an explicit user action.
  */
 export async function registerAgentHttp(options: AgentHttpOptions) {
-	const scope = Effect.runSync(Scope.make());
+	const background = makeDesktopRuntime(
+		Layer.empty,
+		options.diagnostics,
+		"agent.connection",
+	);
+	const scope = background.runSync(Scope.make());
 	let connections: AgentConnectionsRegistration | undefined;
 	let conversations: ReturnType<typeof registerAgentConversations> | undefined;
 	let registry: RuntimeRegistry | undefined;
@@ -66,6 +74,7 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 	const resources = createRuntimeResources(resolve);
 	try {
 		connections = await registerAgentConnections({
+			...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
 			management: options.management,
 			renderer: options.renderer,
 			...(options.root ? { root: options.root } : {}),
@@ -80,13 +89,14 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 			},
 		});
 		const repository = connections.repository;
-		registry = await Effect.runPromise(
+		registry = await background.runPromise(
 			createRuntimeRegistry({ resolve }).pipe(
 				Effect.provideService(Scope.Scope, scope),
 			),
 		);
 		const selectedRegistry = registry;
 		conversations = registerAgentConversations({
+			...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
 			management: options.management,
 			renderer: options.renderer,
 			resolve: registry.resolve,
@@ -106,7 +116,7 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 		const track = (work: Promise<void>): void => {
 			const settled = work.catch((cause: unknown) => {
 				const error = new RuntimeRequestFailed(cause);
-				Effect.runSync(
+				background.runSync(
 					Effect.logWarning("HTTP runtime state update failed", {
 						code: error.code,
 					}),
@@ -118,7 +128,7 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 		const offConnections = repository.subscribe(() => {
 			if (closed) return;
 			generation++;
-			const cancellation = Effect.runPromise(
+			const cancellation = background.runPromise(
 				Effect.all(
 					[
 						service.cancelOwner("voice"),
@@ -190,11 +200,12 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 				offConnections();
 				offRegistry();
 				disposal = (async () => {
-					await Effect.runPromise(service.shutdown());
+					await background.runPromise(service.shutdown());
 					await conversationRegistration.dispose();
 					await Promise.allSettled([...pending]);
 					await connections?.dispose();
-					await Effect.runPromise(Scope.close(scope, Exit.void));
+					await background.runPromise(Scope.close(scope, Exit.void));
+					await background.dispose();
 				})();
 				return disposal;
 			},
@@ -202,7 +213,8 @@ export async function registerAgentHttp(options: AgentHttpOptions) {
 	} catch (cause) {
 		await conversations?.dispose();
 		await connections?.dispose();
-		await Effect.runPromise(Scope.close(scope, Exit.void));
+		await background.runPromise(Scope.close(scope, Exit.void));
+		await background.dispose();
 		throw cause;
 	}
 }

@@ -19,6 +19,7 @@ export function useConnections(bridge: AgentConnectionsBridge | undefined) {
 	return {
 		...state,
 		request: controller.request,
+		saveAndSelect: controller.saveAndSelect,
 		dismissError: controller.dismissError,
 	};
 }

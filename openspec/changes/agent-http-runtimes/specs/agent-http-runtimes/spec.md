@@ -67,3 +67,7 @@ Setup documentation SHALL distinguish Hermes agent HTTP API from its dashboard/c
 #### Scenario: Isolated installed-runtime acceptance
 - **WHEN** the runtime is installed but its user-managed API is not running
 - **THEN** acceptance may start a task-owned temporary loopback API with isolated state and no enabled tools, and records that it verified a temporary instance rather than the user-managed service
+
+#### Scenario: Production desktop runtime acceptance
+- **WHEN** an operator enables disposable desktop acceptance
+- **THEN** the production root, preload, connection picker and conversation renderer exercise both live runtimes using isolated application data and mock device access, verify remote session continuity, and close all owned application and container resources

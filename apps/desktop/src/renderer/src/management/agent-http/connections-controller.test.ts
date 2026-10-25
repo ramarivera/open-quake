@@ -193,3 +193,98 @@ describe("runtime connection UI controller", () => {
 		h.controller.dispose();
 	});
 });
+
+it("keeps save plus selected connection atomic against automatic discovery", async () => {
+	const added = {
+		id: "openclaw",
+		name: "New OpenClaw",
+		kind: "openclaw" as const,
+		baseURL: "http://localhost:18789/",
+		credentialAvailable: true,
+	};
+	const saved = {
+		...view,
+		revision: 2,
+		connections: [...view.connections, added],
+	};
+	const selected = {
+		...saved,
+		revision: 3,
+		selected: { connectionId: added.id },
+	};
+	const h = harness(async (command) =>
+		command.type === "save"
+			? success(saved)
+			: command.type === "select"
+				? success(selected)
+				: success(),
+	);
+	await tick();
+	let discoveryAttempted = false;
+	const off = h.controller.subscribe(() => {
+		const state = h.controller.getSnapshot();
+		if (state.view?.revision === 2 && !state.busy && !discoveryAttempted) {
+			discoveryAttempted = true;
+			void h.controller.request({ type: "discover", id: "hermes" });
+		}
+	});
+	try {
+		await h.controller.saveAndSelect({
+			type: "save",
+			name: added.name,
+			kind: added.kind,
+			baseURL: added.baseURL,
+		});
+		expect(h.controller.getSnapshot().view?.selected?.connectionId).toBe(
+			"openclaw",
+		);
+		expect(h.request.mock.calls.map(([command]) => command.type)).toEqual([
+			"list",
+			"save",
+			"select",
+		]);
+		expect(discoveryAttempted).toBe(false);
+	} finally {
+		off();
+		h.controller.dispose();
+	}
+});
+
+it("keeps a completed save when follow-up selection throws so the form won't duplicate it", async () => {
+	const saved = {
+		...view,
+		revision: 2,
+		connections: [
+			...view.connections,
+			{
+				id: "new",
+				name: "New",
+				kind: "hermes" as const,
+				baseURL: "http://localhost:8001/",
+				credentialAvailable: false,
+			},
+		],
+	};
+	const h = harness(async (command) => {
+		if (command.type === "select") throw new Error("private IPC detail");
+		return success(command.type === "save" ? saved : view);
+	});
+	await tick();
+	const reply = await h.controller.saveAndSelect({
+		type: "save",
+		name: "New",
+		kind: "hermes",
+		baseURL: "http://localhost:8001/",
+		clearCredential: true,
+	});
+	expect(reply).toEqual(success(saved));
+	expect(h.controller.getSnapshot().view).toEqual(saved);
+	expect(h.controller.getSnapshot().busy).toBe(false);
+	expect(h.controller.getSnapshot().error?.code).toBe(
+		"AGENT.HTTP.REQUEST.FAILED",
+	);
+	expect(JSON.stringify(h.controller.getSnapshot())).not.toContain(
+		"private IPC detail",
+	);
+	h.controller.dispose();
+});

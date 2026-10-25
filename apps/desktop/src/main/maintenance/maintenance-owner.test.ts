@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
+import { createDesktopDiagnostics } from "../diagnostics";
 import { clearOwnedData } from "./backup-store";
 import { registerMaintenance } from "./index";
 
@@ -187,3 +188,57 @@ for (const backup of [false, true]) {
 		}
 	});
 }
+
+it("finishes reset spans and runtime finalizers before closing diagnostics and forcing exit", async () => {
+	const root = await mkdtemp(join(tmpdir(), "maintenance-trace-"));
+	const directory = join(root, "diagnostics");
+	const diagnostics = createDesktopDiagnostics({ directory });
+	const exit = vi.fn(async () => {
+		await diagnostics.close();
+		const lines = (
+			await readFile(join(directory, "diagnostics.0.ndjson"), "utf8")
+		)
+			.trim()
+			.split("\n")
+			.map(
+				(line) =>
+					JSON.parse(line) as {
+						type: string;
+						span_name?: string;
+						event?: string;
+					},
+			);
+		expect(
+			lines.some(
+				(line) => line.type === "span" && line.span_name === "app.background",
+			),
+		).toBe(true);
+		expect(lines.at(-1)?.event).toBe("diagnostics.shutdown");
+	});
+	native.dialog.showMessageBox.mockResolvedValue({ response: 1 });
+	vi.mocked(clearOwnedData).mockResolvedValue();
+	const owner = registerMaintenance({
+		root,
+		mock: true,
+		renderer: "https://app.invalid",
+		management: () => undefined,
+		hardware: () => undefined,
+		stopWriters: async () => {},
+		diagnostics,
+		exit,
+	});
+	try {
+		await owner.ready;
+		await owner.request({ action: "reset", backup: false });
+		expect(exit).toHaveBeenCalledExactlyOnceWith(0);
+		expect(diagnostics.status()).toMatchObject({
+			closed: true,
+			dropped: 0,
+			storageFailures: 0,
+		});
+	} finally {
+		await owner.dispose();
+		await diagnostics.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});

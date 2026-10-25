@@ -1,4 +1,4 @@
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer } from "effect";
 import { ipcMain, type WebContents } from "electron";
 import {
 	type ConversationResolver,
@@ -10,6 +10,8 @@ import {
 	AGENT_CONVERSATIONS_REQUEST,
 } from "../../shared/agent-conversations.js";
 import { agentRequestAllowed } from "../agents/controller.js";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { createConversationController } from "./conversation-controller.js";
 
 export interface ConversationWindow {
@@ -20,6 +22,7 @@ export interface ConversationWindow {
 	>;
 }
 export interface RegisterAgentConversationsOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => ConversationWindow | undefined;
 	readonly renderer: string;
 	readonly resolve: ConversationResolver;
@@ -28,14 +31,16 @@ export interface RegisterAgentConversationsOptions {
 export function registerAgentConversations(
 	options: RegisterAgentConversationsOptions,
 ) {
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		ConversationService.Default.pipe(
 			Layer.provide(
 				Layer.succeed(ConversationRuntimePort, { resolve: options.resolve }),
 			),
 		),
+		options.diagnostics,
 	);
 	const controller = createConversationController({
+		...(options.diagnostics ? { diagnostics: options.diagnostics } : {}),
 		runtime,
 		managementId: () => options.management()?.webContents.id,
 		renderer: options.renderer,

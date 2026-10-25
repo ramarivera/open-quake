@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, ManagedRuntime, Schema, Stream } from "effect";
+import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import type { KnobModelContext } from "../../../../../packages/device/src/knob/model/contracts.js";
 import {
@@ -15,17 +15,23 @@ import {
 	type KnobReply,
 	KnobRequest,
 } from "../../shared/knob-contracts";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import {
 	type DesktopKnobBindings,
 	desktopKnobAdapters,
 } from "./desktop-adapters";
 import { canRequestKnob } from "./permissions";
 
-export function makeKnobRuntime(ports: KnobModelPort) {
-	return ManagedRuntime.make(
+export function makeKnobRuntime(
+	ports: KnobModelPort,
+	diagnostics?: DesktopDiagnostics,
+) {
+	return makeDesktopRuntime(
 		KnobModel.DefaultWithoutDependencies.pipe(
 			Layer.provide(Layer.succeed(KnobModelPorts, ports)),
 		),
+		diagnostics,
 	);
 }
 export type KnobRuntime = ReturnType<typeof makeKnobRuntime>;
@@ -180,10 +186,11 @@ export function registerKnob(
 	panel: () => BrowserWindow | undefined,
 	windows: () => readonly BrowserWindow[],
 	bindings: DesktopKnobBindings = {},
+	diagnostics?: DesktopDiagnostics,
 ) {
 	const adapters = desktopKnobAdapters(app.getPath("userData"), bindings);
 	return registerKnobRuntime(
-		makeKnobRuntime(adapters.ports),
+		makeKnobRuntime(adapters.ports, diagnostics),
 		adapters.load,
 		panel,
 		windows,

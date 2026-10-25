@@ -1,7 +1,7 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Exit, Layer, Option, Schema } from "effect";
 import { app, type BrowserWindow, dialog, ipcMain, shell } from "electron";
 import {
 	FirmwarePort,
@@ -33,6 +33,8 @@ import {
 	type MaintenanceView,
 	runningFirmware,
 } from "../../shared/maintenance-contracts";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { canRequestWallpaper } from "../media/media-permissions";
 import {
 	acknowledgeAppearance,
@@ -72,13 +74,14 @@ export function maintenanceRequestAllowed(
 	);
 }
 interface MaintenanceOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly root: string;
 	readonly mock: boolean;
 	readonly renderer: string;
 	readonly hardware: () => HardwareSession | undefined;
 	readonly management: () => BrowserWindow | undefined;
 	readonly stopWriters: () => Promise<void>;
-	readonly exit?: (code?: number) => void;
+	readonly exit?: (code?: number) => void | Promise<void>;
 	readonly fixture?: {
 		readonly roots: readonly string[];
 		readonly descriptors: readonly TrustedFirmware[];
@@ -86,7 +89,13 @@ interface MaintenanceOptions {
 }
 export function registerMaintenance(options: MaintenanceOptions) {
 	const { root, mock } = options;
-	const exit = options.exit ?? ((code = 0) => app.exit(code));
+	const nativeExit = options.exit ?? ((code = 0) => app.exit(code));
+	let requestedExit: number | undefined;
+	// Complete the effect and its diagnostic span before the forced native exit.
+	const exit = (code = 0): void => {
+		requestedExit = code;
+		disposed = true;
+	};
 	const mockRoot = join(root, "firmware-mock");
 	const roots =
 		options.fixture?.roots ??
@@ -196,7 +205,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 			});
 		},
 	);
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		Layer.mergeAll(
 			FirmwareUpdates.Default.pipe(
 				Layer.provide(
@@ -311,6 +320,7 @@ export function registerMaintenance(options: MaintenanceOptions) {
 				),
 			),
 		),
+		options.diagnostics,
 	);
 	const ready = runtime.runPromise(
 		Effect.gen(function* () {
@@ -322,11 +332,13 @@ export function registerMaintenance(options: MaintenanceOptions) {
 	// Observe initialization immediately, while retaining the rejecting promise for callers and disposal.
 	void ready.catch((cause) => {
 		const error = new FirmwarePersistenceFailed(cause);
+		const log = Effect.logError("Maintenance initialization failed", error);
 		Effect.runSync(
-			Effect.logError("Maintenance initialization failed", {
-				code: error.code,
-				diagnosticCause: error.diagnosticCause,
-			}),
+			options.diagnostics
+				? options.diagnostics
+						.instrument(log, "app.background")
+						.pipe(Effect.provide(options.diagnostics.layer))
+				: log,
 		);
 	});
 
@@ -607,6 +619,8 @@ export function registerMaintenance(options: MaintenanceOptions) {
 						...(appearance === undefined ? {} : { appearance }),
 					} satisfies MaintenanceReply;
 				}).pipe(
+					(effect) =>
+						options.diagnostics?.instrument(effect, "app.background") ?? effect,
 					Effect.match({
 						onFailure: (error) =>
 							({ ok: false, code: error.code }) satisfies MaintenanceReply,
@@ -617,6 +631,16 @@ export function registerMaintenance(options: MaintenanceOptions) {
 		} finally {
 			pendingOperations--;
 			if (mutation) mutating = false;
+			if (requestedExit !== undefined) {
+				const code = requestedExit;
+				requestedExit = undefined;
+				ipcMain.removeHandler(MAINTENANCE_CHANNEL);
+				try {
+					await runtime.dispose();
+				} finally {
+					await nativeExit(code);
+				}
+			}
 		}
 	};
 	ipcMain.handle(

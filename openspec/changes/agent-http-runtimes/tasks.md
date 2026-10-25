@@ -30,3 +30,8 @@
 - [x] 5.2 Exercise real adapters and transport for authentication, capabilities, streaming replies and session continuation. Disable agent tools and messaging integrations, bound inference/deadlines, and verify Compose teardown after success and failure. Live runs in this effort use only the user-authorized gpt-6.1-sol route.
 - [x] 5.3 Inspect production speech capture readiness, document exact missing bindings and human microphone acceptance steps, and keep unexercised speech/audio claims open in the existing speech tasks.
 - [x] 5.4 Reconcile and merge the reviewed existing PR stack, deliver the E2E extension through one bot-review round and passing checks, and merge it after handling findings. No release tag is requested.
+
+## 6. Production desktop acceptance, open-quake-hbe.4 / open-quake-hwn.12
+
+- [x] 6.1 Add an opt-in isolated Electron acceptance entry that imports the production root and drives the actual management renderer/preload connection and conversation controls against both disposable runtimes. Verify selection, model alias, streamed completion, remote continuity, local history and shutdown, with no user configuration or hardware access.
+- [ ] 6.2 Run the desktop acceptance with the generic environment-based provider configuration and authorized model; inspect screenshots and resource cleanup, then deliver reviewed merged changes. Preserve physical speech acceptance separately.

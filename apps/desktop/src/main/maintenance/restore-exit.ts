@@ -9,7 +9,7 @@ export async function restoreAndExit(options: {
 		readonly imported: number;
 	}>;
 	readonly report: (message: string) => Promise<unknown>;
-	readonly exit: (code: number) => void;
+	readonly exit: (code: number) => void | Promise<void>;
 }): Promise<void> {
 	await options.validate();
 	let code = 1;
@@ -31,6 +31,6 @@ export async function restoreAndExit(options: {
 			.catch(() => undefined);
 		throw error;
 	} finally {
-		options.exit(code);
+		await options.exit(code);
 	}
 }

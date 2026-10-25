@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { Either, Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -6,6 +9,10 @@ import {
 	VoiceSurfaceEvent,
 	VoiceSurfaceReply,
 } from "../../shared/voice-surface";
+import {
+	createDesktopDiagnostics,
+	type DesktopDiagnostics,
+} from "../diagnostics";
 import { createToneRecorder, registerVoiceSurface } from "./index";
 
 const RENDERER = "file:///app/out/renderer/index.html";
@@ -46,10 +53,11 @@ const decodeReply = Schema.decodeUnknownSync(VoiceSurfaceReply);
 const decodeEvent = Schema.decodeUnknownEither(VoiceSurfaceEvent);
 type Handler = (event: unknown, raw: unknown) => Promise<unknown>;
 
-function setup(mock = false) {
+function setup(mock = false, diagnostics?: DesktopDiagnostics) {
 	const tones = createToneRecorder();
 	const registration = registerVoiceSurface({
 		mock,
+		...(diagnostics ? { diagnostics } : {}),
 		tones,
 		serial: () => "QK-1",
 		panel: () => undefined,
@@ -267,4 +275,40 @@ describe("voice:request", () => {
 			await registration.dispose();
 		}
 	});
+});
+
+it("retains the original failed voice span through actual IPC recovery without retaining text", async () => {
+	const root =
+		process.env.OPEN_QUAKE_TEST_SCRATCH ??
+		join(homedir(), "dev/agentic-scratchpads/open-quake/tests");
+	await mkdir(root, { recursive: true });
+	const directory = await mkdtemp(join(root, "voice-diagnostics-"));
+	const diagnostics = createDesktopDiagnostics({ directory });
+	const { request, registration } = setup(false, diagnostics);
+	try {
+		expect(
+			await request({
+				_tag: "SendText",
+				keyCode: "1,5",
+				agentId: "private-local-agent",
+				message: "private utterance",
+			}),
+		).toMatchObject({
+			_tag: "rejected",
+			code: "VOICE.GRID.RUNTIME_UNAVAILABLE",
+		});
+	} finally {
+		await registration.dispose();
+		await diagnostics.close();
+	}
+	const output = await readFile(
+		join(directory, "diagnostics.0.ndjson"),
+		"utf8",
+	);
+	expect(output).toContain('"span_name":"GridVoice.sendText"');
+	expect(output).toContain('"outcome":"failure"');
+	expect(output).toContain('"code":"VOICE.GRID.RUNTIME_UNAVAILABLE"');
+	expect(output).not.toContain("private utterance");
+	expect(output).not.toContain("private-local-agent");
+	await rm(directory, { recursive: true });
 });

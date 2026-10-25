@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Redacted, Stream } from "effect";
 import { makeHermesRuntimeAdapter } from "./hermes/hermes-adapter.js";
@@ -25,6 +26,15 @@ describe.skipIf(process.env.OPEN_QUAKE_E2E_RUN !== "1")(
 			"openclaw-chat",
 		] as const) {
 			it(`${kind}: authenticates, streams inference and continues the same session without tools`, async () => {
+				const report = async (stage: string, passed = false) => {
+					const prefix = required("OPEN_QUAKE_E2E_REPORT_PREFIX");
+					await writeFile(
+						`${prefix}-${kind}-acceptance.json`,
+						JSON.stringify({ kind, stage, passed }),
+						{ mode: 0o600 },
+					);
+				};
+				await report("authentication rejection");
 				const hermes = kind === "hermes";
 				const baseURL = required(
 					hermes ? "OPEN_QUAKE_E2E_HERMES_URL" : "OPEN_QUAKE_E2E_OPENCLAW_URL",
@@ -61,6 +71,7 @@ describe.skipIf(process.env.OPEN_QUAKE_E2E_RUN !== "1")(
 					baseURL,
 					credentialRef: "ephemeral",
 				};
+				await report("health and capability discovery");
 				expect(
 					(await Effect.runPromise(adapter.health(connection))).status,
 				).toBe("ready");
@@ -120,6 +131,7 @@ describe.skipIf(process.env.OPEN_QUAKE_E2E_RUN !== "1")(
 							event._tag === "textDelta" ? [event.textDelta] : [],
 						)
 						.join("");
+				await report("first streamed reply");
 				const first = await collect(
 					`Remember the exact marker ${marker}. Reply with only that marker. Do not use tools.`,
 				);
@@ -128,6 +140,7 @@ describe.skipIf(process.env.OPEN_QUAKE_E2E_RUN !== "1")(
 				expect(terminals).toHaveLength(1);
 				const sessionId = terminals[0]?.sessionId;
 				expect(sessionId).toBeTruthy();
+				await report("remote session continuation");
 				const second = await collect(
 					"What exact marker did I give you in my previous message? Reply with only that marker. Do not use tools.",
 					sessionId,
@@ -139,6 +152,7 @@ describe.skipIf(process.env.OPEN_QUAKE_E2E_RUN !== "1")(
 				expect(
 					[...first, ...second].filter((event) => event._tag === "tool"),
 				).toEqual([]);
+				await report("completed", true);
 			}, 220000);
 		}
 	},

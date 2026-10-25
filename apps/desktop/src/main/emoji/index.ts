@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Layer, type ManagedRuntime, Option, Schema } from "effect";
 import { app, type BrowserWindow, ipcMain } from "electron";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard";
 import type { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
@@ -35,6 +35,8 @@ import {
 } from "../../shared/emoji";
 import { selectStripPage } from "../../shared/strip-selection";
 import type { DeviceBus } from "../deviceBus";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { ImageDecoder } from "../media/image-decoder";
 import { makeForegroundProbe } from "../profiles/foreground-app";
 import { isAppRenderer } from "../profiles/profile-ipc";
@@ -43,6 +45,7 @@ import { type EmojiGenerationPort, makeEmojiController } from "./controller";
 import { emojiFiles } from "./files";
 import { placeEmojiPackage } from "./profile-placement";
 export function registerEmoji<R>(options: {
+	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow;
 	readonly panel: () => BrowserWindow;
 	readonly profiles: {
@@ -115,7 +118,7 @@ export function registerEmoji<R>(options: {
 				: Effect.fail(new EmojiKeyboardFailed(undefined));
 		},
 	});
-	const runtime = ManagedRuntime.make(
+	const runtime = makeDesktopRuntime(
 		Layer.mergeAll(
 			EmojiLibrary.DefaultWithoutDependencies,
 			EmojiPress.DefaultWithoutDependencies,
@@ -126,6 +129,7 @@ export function registerEmoji<R>(options: {
 			),
 			Layer.provide(adapters),
 		),
+		options.diagnostics,
 	);
 	const controller = runtime.runPromise(
 		makeEmojiController({

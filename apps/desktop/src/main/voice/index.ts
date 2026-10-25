@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import {
 	BrowserWindow,
 	clipboard,
@@ -30,6 +30,8 @@ import {
 	VoiceSurfaceRequest,
 	type VoiceTone,
 } from "../../shared/voice-surface";
+import type { DesktopDiagnostics } from "../diagnostics";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { isAppRenderer } from "../profiles/profile-ipc";
 
 /**
@@ -81,6 +83,7 @@ export const UnavailableRuntimeLive = Layer.succeed(GridVoiceRuntime, {
 });
 
 export interface VoiceSurfaceOptions {
+	readonly diagnostics?: DesktopDiagnostics;
 	/** `OPEN_QUAKE_MOCK_DEVICE=1`: bind the scripted runtime. */
 	readonly mock: boolean;
 	readonly tones: VoiceToneSink;
@@ -156,7 +159,11 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 		options.renderer ??
 		process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
-	const runtime = ManagedRuntime.make(voiceSurfaceLayer(options, broadcast));
+	const runtime = makeDesktopRuntime(
+		voiceSurfaceLayer(options, broadcast),
+		options.diagnostics,
+		"voice.request",
+	);
 	const run = <A>(
 		effect: Effect.Effect<A, never, GridVoice | VoiceSurface>,
 	): Promise<A> => runtime.runPromise(effect);
@@ -206,6 +213,9 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 						agentId: request.agentId,
 						message: request.message,
 					}).pipe(
+						(effect) =>
+							options.diagnostics?.instrument(effect, "voice.request") ??
+							effect,
 						Effect.as(ok),
 						Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
 							Effect.succeed(rejected(error.code)),
