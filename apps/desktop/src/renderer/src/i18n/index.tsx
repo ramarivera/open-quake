@@ -64,7 +64,7 @@ export function AppLocaleProvider({
 	bundled = appDictionaries,
 }: {
 	readonly children: ReactNode;
-	readonly bridge?: AppLocaleBridge | undefined;
+	readonly bridge?: AppLocaleBridge | null | undefined;
 	readonly bundled?: AppDictionaries;
 }) {
 	const [snapshot, update] = useState<LocaleSnapshot>({

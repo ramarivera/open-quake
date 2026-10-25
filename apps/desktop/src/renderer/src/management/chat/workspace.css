@@ -74,7 +74,8 @@
 	margin-bottom: 20px;
 }
 @media (max-width: 760px) {
-	.aw-header > div > p:not(.mc-page-kicker) {
+	/* The shell's top bar already names the page; give the space to content. */
+	.agent-workbench > .aw-header {
 		display: none;
 	}
 	/* One scrollable row instead of wrapped underline rows; the selected tab
@@ -320,7 +321,7 @@
 .cw-title-input:focus-visible {
 	outline: none;
 	border-color: var(--cw-accent);
-	box-shadow: var(--oq-focus-ring, 0 0 0 2px var(--cw-accent-soft));
+	box-shadow: 0 0 0 3px var(--cw-accent-soft);
 }
 .cw-identity {
 	display: flex;
@@ -330,6 +331,12 @@
 	margin: 0;
 	font-size: var(--mc-font-meta);
 	color: var(--cw-muted);
+}
+.cw-quake-note {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px 8px;
 }
 .cw-health {
 	display: inline-flex;
@@ -684,6 +691,9 @@
 }
 
 /* ---- Composer ---------------------------------------------------------- */
+.cw-composer-dock {
+	flex: none;
+}
 .cw-composer {
 	flex: none;
 	width: 100%;
@@ -693,9 +703,15 @@
 	border-radius: var(--cw-radius-lg);
 	background: var(--cw-surface);
 }
+/* System field treatment: one 1px accent border plus a soft halo. */
 .cw-composer:focus-within {
 	border-color: var(--cw-accent);
-	box-shadow: var(--oq-focus-ring, 0 0 0 2px var(--cw-accent-soft));
+	box-shadow: 0 0 0 3px var(--cw-accent-soft);
+}
+.cw-composer textarea:focus,
+.cw-composer textarea:focus-visible {
+	outline: none;
+	box-shadow: none;
 }
 .cw-composer[data-disabled] {
 	background: transparent;
@@ -851,25 +867,34 @@
 	font-weight: 600;
 }
 
-/* ---- Narrow: the page scrolls, the composer stays reachable ------------
-   Below 720px a nested fixed-height transcript leaves almost no reading
-   room, so the conversation flows in the page and the composer is sticky at
-   the bottom of the scroll viewport. The rail condenses to source chips and
-   a conversations disclosure. */
+/* ---- Narrow: a compact chat that fits the viewport ----------------------
+   At 390x625 the earlier page-scrolling layout spent the whole screen on
+   chrome. Below 720px the workspace keeps filling the shell's column with an
+   internally scrolling transcript, and the chrome above it collapses: the
+   sources and conversation list fold behind one disclosure row next to New
+   chat, the title row carries the actions, and the composer is one row. */
 @container workspace (max-width: 720px) {
 	.cw-view {
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: 0;
 	}
 	.cw-rail {
 		flex: none;
-		overflow: visible;
-		gap: 10px;
-		padding: 0 0 12px;
+		gap: 8px;
+		max-height: 55%;
+		padding: 0 0 8px;
 		border-right: 0;
 		border-bottom: 1px solid var(--cw-hairline);
 	}
+	.cw-sessions {
+		display: contents;
+	}
+	.cw-sessions-head {
+		order: -1;
+		flex-wrap: nowrap;
+	}
+	.cw-sessions-head h3,
 	.cw-rail-heading {
 		position: absolute;
 		width: 1px;
@@ -878,28 +903,15 @@
 		clip-path: inset(50%);
 		white-space: nowrap;
 	}
-	.cw-sources ul {
-		flex-direction: row;
-		flex-wrap: wrap;
-		gap: 6px;
-		margin: 0 0 6px;
-	}
-	.cw-sources li {
-		flex: 1 1 220px;
-		min-width: 0;
-	}
-	.cw-source {
-		padding: 6px 10px;
-		border: 1px solid var(--cw-hairline);
-	}
-	.cw-source[aria-current="true"] {
-		border-color: var(--cw-accent);
-	}
 	.cw-sessions-head .cw-list-toggle {
 		display: inline-flex;
+		flex: 1 1 auto;
+		min-width: 0;
+		justify-content: flex-start;
 		margin-right: auto;
 	}
-	.cw-sessions-head h3 {
+	/* The visible label is the source; the action stays the accessible name. */
+	.cw-toggle-label {
 		position: absolute;
 		width: 1px;
 		height: 1px;
@@ -907,30 +919,83 @@
 		clip-path: inset(50%);
 		white-space: nowrap;
 	}
-	.cw-session-list:not([data-open]),
-	.cw-session-list:not([data-open]) + .cw-refresh {
+	.cw-list-toggle .cw-icon {
+		order: 2;
+		margin: 0 0 0 4px;
+		transform: rotate(90deg);
+		transition: transform 120ms ease;
+	}
+	.cw-list-toggle[aria-expanded="true"] .cw-icon {
+		transform: rotate(-90deg);
+	}
+	.cw-list-toggle .cw-count {
+		order: 3;
+	}
+	.cw-toggle-source {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--cw-text);
+		font-weight: 600;
+		margin-right: 6px;
+	}
+	.cw-rail:not([data-open]) .cw-sources,
+	.cw-rail:not([data-open]) .cw-session-list,
+	.cw-rail:not([data-open]) .cw-refresh {
 		display: none;
 	}
+	.cw-sources ul {
+		margin-top: 0;
+	}
 	.cw-main {
-		display: block;
+		flex: 1 1 auto;
+		min-height: 0;
 		padding-left: 0;
 	}
 	.cw-header {
-		flex-direction: column;
-		gap: 8px;
-		padding-bottom: 12px;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 4px 8px;
+		padding: 8px 0;
 	}
 	.cw-header-title {
-		flex-basis: auto;
-		width: 100%;
+		display: contents;
 	}
 	.cw-title,
-	.cw-title-input {
+	.cw-title-input,
+	.cw-title-form {
+		grid-column: 1;
+		grid-row: 1;
 		font-size: var(--mc-font-title);
 	}
 	.cw-header-actions {
-		flex-wrap: wrap;
+		grid-column: 2;
+		grid-row: 1;
+		gap: 0;
+	}
+	.cw-identity,
+	.cw-route {
+		grid-column: 1 / -1;
+	}
+	/* A runtime title only repeats its first message, which the transcript
+	   already shows; keep it for assistive tech and give the row to actions. */
+	.agent-http-view .cw-title {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.agent-http-view .cw-header-actions {
+		grid-column: 1 / -1;
 		justify-content: flex-start;
+		margin-left: -8px;
+	}
+	/* Redundant with the QUAKE badge unless it offers an action. */
+	.cw-quake-note:not([data-actionable]) {
+		display: none;
 	}
 	.cw-route,
 	.agent-workbench .cw-route-field,
@@ -946,26 +1011,37 @@
 		flex: 1 1 140px;
 	}
 	.cw-transcript {
-		overflow: visible;
-		padding: 16px 0 8px;
+		padding: 12px 2px 8px 0;
 	}
-	.cw-transcript > * {
-		scroll-margin-bottom: 150px;
+	.cw-turn {
+		gap: 10px;
+		margin-bottom: 18px;
 	}
 	.cw-bubble {
 		max-width: 92%;
 	}
-	.cw-composer {
-		position: sticky;
-		bottom: 8px;
-		z-index: 1;
-		/* Masks transcript text scrolling beneath; not an elevation shadow. */
-		box-shadow: 0 8px 0 0 var(--cw-bg);
+	.cw-composer-dock {
+		padding-top: 8px;
+	}
+	/* One row: the draft and its action side by side. */
+	.cw-composer:not(:has([data-notice])) {
+		display: flex;
+		align-items: flex-end;
+	}
+	.cw-composer:not(:has([data-notice])) textarea {
+		flex: 1 1 auto;
+		min-width: 0;
+		min-height: 44px;
+		padding: 11px 12px;
+	}
+	.cw-composer:not(:has([data-notice])) .cw-composer-bar {
+		flex: none;
+		padding: 0 6px 6px 0;
 	}
 	.cw-composer-hint:not([data-notice]) {
 		display: none;
 	}
 	.cw-empty {
-		padding: 24px 0;
+		padding: 16px 0;
 	}
 }

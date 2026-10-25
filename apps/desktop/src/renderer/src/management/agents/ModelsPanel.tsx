@@ -108,7 +108,7 @@ function ModelTable({
 					<tbody>
 						{drafts.map((row, index) => (
 							<tr key={row.id}>
-								<td>
+								<td data-label={t.role}>
 									<select
 										aria-label={`${t.role} ${scope} ${index + 1}`}
 										value={row.role}
@@ -132,7 +132,7 @@ function ModelTable({
 										<option value="fallback">{t.roleFallback}</option>
 									</select>
 								</td>
-								<td>
+								<td data-label={t.providerCol}>
 									<input
 										aria-label={`${t.providerCol} ${scope} ${index + 1}`}
 										value={row.provider}
@@ -151,7 +151,7 @@ function ModelTable({
 										}}
 									/>
 								</td>
-								<td>
+								<td data-label={t.modelCol}>
 									<input
 										aria-label={`${t.modelCol} ${scope} ${index + 1}`}
 										value={row.model}
@@ -187,7 +187,7 @@ function ModelTable({
 											))}
 									</datalist>
 								</td>
-								<td>
+								<td data-label={t.baseUrlCol}>
 									<input
 										type="url"
 										aria-label={`${t.baseUrlCol} ${scope} ${index + 1}`}
@@ -197,7 +197,7 @@ function ModelTable({
 										}
 									/>
 								</td>
-								<td>
+								<td data-label={t.credentials}>
 									<span className="aw-credential">
 										<span
 											className="cw-dot"
@@ -227,7 +227,7 @@ function ModelTable({
 										}
 									/>
 								</td>
-								<td>
+								<td data-label={t.maxTokensCol}>
 									<input
 										type="number"
 										min={1}
@@ -239,7 +239,7 @@ function ModelTable({
 										}
 									/>
 								</td>
-								<td className="aw-table-actions">
+								<td className="aw-table-actions" data-label={t.actions}>
 									<button
 										type="button"
 										className="mc-button"

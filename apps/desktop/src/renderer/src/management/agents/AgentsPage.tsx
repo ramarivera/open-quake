@@ -414,6 +414,7 @@ export function AgentsPage({
 	// Narrow windows scroll the tab row horizontally; keep the selected tab
 	// visible after selection and resizes without moving the page vertically.
 	const tabRow = useRef<HTMLDivElement>(null);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: The selected tab is read from the DOM after each tab change.
 	useEffect(() => {
 		const row = tabRow.current;
 		if (!row) return;

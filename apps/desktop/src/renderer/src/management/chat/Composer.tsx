@@ -71,77 +71,79 @@ export function Composer({
 		element.style.height = `${Math.min(element.scrollHeight, 220)}px`;
 	}, [value, inputRef]);
 	return (
-		<form
-			className="cw-composer"
-			data-disabled={disabled || undefined}
-			onSubmit={(event) => {
-				event.preventDefault();
-				if (canSend) send();
-			}}
-		>
-			<textarea
-				ref={inputRef}
-				value={value}
-				rows={2}
-				maxLength={32768}
-				aria-label={copy.label}
-				aria-describedby={hintId}
-				placeholder={copy.placeholder}
-				disabled={disabled}
-				onChange={(event) => onChange(event.target.value)}
-				onKeyDown={(event) => {
-					if (
-						event.key === "Enter" &&
-						!event.shiftKey &&
-						!event.nativeEvent.isComposing
-					) {
-						event.preventDefault();
-						if (canSend) send();
-					}
+		<div className="cw-composer-dock">
+			<form
+				className="cw-composer"
+				data-disabled={disabled || undefined}
+				onSubmit={(event) => {
+					event.preventDefault();
+					if (canSend) send();
 				}}
-			/>
-			<div className="cw-composer-bar">
-				<p
-					id={hintId}
-					className="cw-composer-hint"
-					data-notice={notice ? true : undefined}
-				>
-					{notice ?? copy.hint}
-				</p>
-				{running && onStop ? (
-					<button
-						type="button"
-						className="mc-button"
-						disabled={stopping}
-						onClick={onStop}
+			>
+				<textarea
+					ref={inputRef}
+					value={value}
+					rows={2}
+					maxLength={32768}
+					aria-label={copy.label}
+					aria-describedby={hintId}
+					placeholder={copy.placeholder}
+					disabled={disabled}
+					onChange={(event) => onChange(event.target.value)}
+					onKeyDown={(event) => {
+						if (
+							event.key === "Enter" &&
+							!event.shiftKey &&
+							!event.nativeEvent.isComposing
+						) {
+							event.preventDefault();
+							if (canSend) send();
+						}
+					}}
+				/>
+				<div className="cw-composer-bar">
+					<p
+						id={hintId}
+						className="cw-composer-hint"
+						data-notice={notice ? true : undefined}
 					>
-						<Icon name="stop" />
-						{stopping ? (
-							copy.stopping
-						) : (
-							<>
-								{copy.stop[0]}
-								{copy.stop[1] && (
-									<span className="visually-hidden">{copy.stop[1]}</span>
-								)}
-							</>
-						)}
-					</button>
-				) : (
-					<button
-						type="submit"
-						className="mc-button"
-						data-primary
-						disabled={!canSend}
-					>
-						{copy.send[0]}
-						{copy.send[1] && (
-							<span className="visually-hidden">{copy.send[1]}</span>
-						)}
-						<Icon name="send" />
-					</button>
-				)}
-			</div>
-		</form>
+						{notice ?? copy.hint}
+					</p>
+					{running && onStop ? (
+						<button
+							type="button"
+							className="mc-button"
+							disabled={stopping}
+							onClick={onStop}
+						>
+							<Icon name="stop" />
+							{stopping ? (
+								copy.stopping
+							) : (
+								<>
+									{copy.stop[0]}
+									{copy.stop[1] && (
+										<span className="visually-hidden">{copy.stop[1]}</span>
+									)}
+								</>
+							)}
+						</button>
+					) : (
+						<button
+							type="submit"
+							className="mc-button"
+							data-primary
+							disabled={!canSend}
+						>
+							{copy.send[0]}
+							{copy.send[1] && (
+								<span className="visually-hidden">{copy.send[1]}</span>
+							)}
+							<Icon name="send" />
+						</button>
+					)}
+				</div>
+			</form>
+		</div>
 	);
 }

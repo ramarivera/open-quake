@@ -13,7 +13,7 @@ import type { AgentConnectionDiscovery } from "../../../../shared/agent-connecti
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { Composer } from "../chat/Composer";
-import { revealEnd } from "../chat/follow";
+import { pinEndOnResize, revealEnd } from "../chat/follow";
 import { fill } from "../chat/format";
 import { Icon } from "../chat/icons";
 import { Prose } from "../chat/Prose";
@@ -83,6 +83,10 @@ export function ConversationPanel({
 	const status = health?.status ?? "";
 	useEffect(() => setAgentDraft(agentId ?? ""), [agentId]);
 	useEffect(() => {
+		const el = log.current;
+		return el ? pinEndOnResize(el, () => follow.current) : undefined;
+	}, []);
+	useEffect(() => {
 		onRunningChange(busy);
 		return () => onRunningChange(false);
 	}, [busy, onRunningChange]);
@@ -120,7 +124,7 @@ export function ConversationPanel({
 				: t.chatUnverified;
 	return (
 		<section className="cw-view agent-http-view">
-			<aside className="cw-rail">
+			<aside className="cw-rail" data-open={listOpen || undefined}>
 				{sources}
 				<div className="cw-sessions">
 					<div className="cw-sessions-head">
@@ -133,7 +137,11 @@ export function ConversationPanel({
 							aria-controls="agent-http-history"
 							onClick={() => setListOpen((value) => !value)}
 						>
-							{listOpen ? t.hideConversations : t.showConversations}
+							<span className="cw-toggle-source">{connection.name}</span>
+							<span className="cw-toggle-label">
+								{listOpen ? t.hideConversations : t.showConversations}
+							</span>
+							<Icon name="chevron" />
 							{conversation.history.length > 0 && (
 								<span className="cw-count">{conversation.history.length}</span>
 							)}
@@ -315,7 +323,7 @@ export function ConversationPanel({
 									</button>
 								</form>
 							)}
-							<span className="cw-muted">{t.quakeHere}</span>
+							<span className="cw-muted cw-quake-note">{t.quakeHere}</span>
 						</div>
 					</div>
 					<div className="cw-header-actions">

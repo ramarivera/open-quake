@@ -225,20 +225,37 @@ async function smoke(): Promise<void> {
 		assert.equal(initial.showSeconds, false);
 		const geometry = await evaluate(
 			panel,
-			`(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; }; return { rail: r('.oq-clock-rail'), flip: r('.oq-flip-clock'), card: r('.oq-flip'), cards: document.querySelector('.oq-clock-cards').children.length, pills: document.querySelectorAll('.oq-flip-pill').length }; })()`,
+			`(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { l: Math.round(b.left), t: Math.round(b.top), r: Math.round(b.right), b: Math.round(b.bottom) }; }; return { stage: r('.oq-clock'), rail: r('.oq-clock-rail'), time: r('.oq-clock-time'), cards: document.querySelector('.oq-clock-cards').children.length, aside: document.querySelectorAll('.oq-clock-aside').length, glass: document.querySelectorAll('.oq-flip').length, hm: getComputedStyle(document.querySelector('.oq-clock-hm')).fontSize }; })()`,
 		);
-		assert.deepEqual(geometry, {
-			rail: [80, 90, 240, 300],
-			flip: [726, 90, 708, 300],
-			card: [726, 90, 160, 300],
-			cards: 0,
-			pills: 0,
-		});
+		const g = geometry as {
+			stage: { l: number; t: number; r: number; b: number };
+			rail: { l: number; t: number; r: number; b: number };
+			time: { l: number; t: number; r: number; b: number };
+			cards: number;
+			aside: number;
+			glass: number;
+			hm: string;
+		};
+		// Typographic clock: date block left of the time, both inside the stage.
+		assert.equal(g.cards, 0, JSON.stringify(g));
+		assert.equal(g.aside, 0, JSON.stringify(g));
+		assert.equal(g.glass, 0, JSON.stringify(g));
+		assert.equal(g.hm, "232px", JSON.stringify(g));
+		assert(g.rail.r < g.time.l, JSON.stringify(g));
+		for (const box of [g.rail, g.time])
+			assert(
+				box.l >= g.stage.l &&
+					box.r <= g.stage.r &&
+					box.t >= g.stage.t &&
+					box.b <= g.stage.b,
+				JSON.stringify(g),
+			);
 		process.stdout.write("geometry PASS\n");
 
-		// The minute flip in a real compositor: shift the page clock to the
-		// next minute and wake the ticker as a resume would.
-		const flipTrace = `(() => {
+		// The minute change in a real compositor: shift the page clock to the
+		// next minute and wake the ticker as a resume would. The readout
+		// updates in place, without a decorative flip animation.
+		const minuteShift = `(() => {
 			const Real = Date;
 			const shift = (60 - new Real().getSeconds()) * 1000 + 50;
 			window.Date = class extends Real {
@@ -246,65 +263,27 @@ async function smoke(): Promise<void> {
 				static now() { return Real.now() + shift; }
 			};
 			Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
-			const card = document.querySelectorAll('.oq-flip')[3];
-			window.__flip = [];
-			const t0 = performance.now();
-			new MutationObserver(() => {
-				const upper = card.querySelector('.oq-flip-upper');
-				window.__flip.push([card.dataset.flip, Math.round(performance.now() - t0), upper.getAnimations().map((a) => a.animationName).join()]);
-			}).observe(card, { attributes: true, attributeFilter: ['data-flip'] });
 			document.dispatchEvent(new Event('visibilitychange'));
 			return null;
 		})()`;
-		const timeNow = `document.querySelector('.oq-flip-clock').dataset.time`;
-		await evaluate(panel, flipTrace);
-		await sleep(190);
-		await capture(panel, "clock-flip-phase1");
-		try {
-			await waitFor(panel, `window.__flip.length === 3`, "two flip phases");
-		} catch (cause) {
-			const state = await evaluate(
-				panel,
-				`({ trace: window.__flip, time: document.querySelector('.oq-flip-clock').dataset.time, motion: document.querySelector('.oq-clock').dataset.motion, hidden: document.hidden })`,
-			);
-			throw new Error(`Flip trace: ${JSON.stringify(state)}`, { cause });
-		}
-		const trace: unknown = await evaluate(panel, "window.__flip");
-		assert(Array.isArray(trace) && trace.length === 3, JSON.stringify(trace));
-		const [on, down, rest] = trace;
-		assert(Array.isArray(on) && Array.isArray(down) && Array.isArray(rest));
-		assert.deepEqual(
-			[on[0], down[0], rest[0]],
-			["turn-on", "turn-down", "rest"],
-		);
-		assert.equal(on[2], "oq-flip-on");
-		assert.equal(down[2], "oq-flip-down");
-		const phase1 = Number(down[1]) - Number(on[1]);
-		const phase2 = Number(rest[1]) - Number(down[1]);
-		assert(
-			Math.abs(phase1 - 380) < 80 && Math.abs(phase2 - 380) < 80,
-			JSON.stringify(trace),
-		);
-		process.stdout.write(`minute flip PASS (${phase1} ms + ${phase2} ms)\n`);
-		await evaluate(
-			panel,
-			`document.documentElement.dataset.motion = 'reduce'; null`,
-		);
-		await sleep(50);
+		const timeNow = `document.querySelector('.oq-clock-time').dataset.time`;
 		const before = await evaluate(panel, timeNow);
-		await evaluate(panel, flipTrace);
-		await sleep(500);
-		assert.notEqual(await evaluate(panel, timeNow), before, "minute changed");
-		assert.deepEqual(
-			await evaluate(panel, "window.__flip.map((f) => f[0])"),
-			[],
-			"reduced motion switches without a flip",
-		);
-		await evaluate(
+		await evaluate(panel, minuteShift);
+		await waitFor(
 			panel,
-			`delete document.documentElement.dataset.motion; null`,
+			`document.querySelector('.oq-clock-time').dataset.time !== ${JSON.stringify(before)}`,
+			"minute changed",
 		);
-		process.stdout.write("reduced motion PASS\n");
+		assert.equal(
+			await evaluate(
+				panel,
+				`document.querySelector('.oq-clock').getAnimations({ subtree: true }).length`,
+			),
+			0,
+			"the minute change runs no animation",
+		);
+		await capture(panel, "clock-minute-changed");
+		process.stdout.write("minute change PASS\n");
 
 		// Every theme, switched from the strip itself.
 		for (const id of THEME_IDS) {
@@ -442,17 +421,17 @@ async function smoke(): Promise<void> {
 		});
 		await waitFor(
 			panel,
-			`document.querySelectorAll('.oq-flip-pill').length === 2 && /^(AM|PM)$/.test(document.querySelector('.oq-flip-pill').textContent)`,
-			"AM/PM and seconds pills",
+			`!!document.querySelector('.oq-clock-seconds') && /^(AM|PM)$/.test(document.querySelector('.oq-clock-meridiem')?.textContent ?? '')`,
+			"AM/PM and seconds",
 		);
 		const s1 = await evaluate(
 			panel,
-			`document.querySelector('.is-seconds').textContent`,
+			`document.querySelector('.oq-clock-seconds').textContent`,
 		);
 		await sleep(1100);
 		const s2 = await evaluate(
 			panel,
-			`document.querySelector('.is-seconds').textContent`,
+			`document.querySelector('.oq-clock-seconds').textContent`,
 		);
 		assert.notEqual(s1, s2, "seconds tick");
 		await capture(panel, "clock-aurora-12h-seconds");
@@ -655,7 +634,7 @@ async function smoke(): Promise<void> {
 		await profiles.dispose();
 		await media.dispose();
 		process.stdout.write(
-			"Clock Electron smoke PASS: DK geometry, 2×380 ms minute flip, reduced motion, five themes, strip ◀/▶ save + rollback, None, 12h + seconds, custom image/video over oq-clock-media, broken-media fallback, missing-file marker. Hardware unverified.\n",
+			"Clock Electron smoke PASS: typographic geometry and minute updates, reduced motion, five themes, strip ◀/▶ save + rollback, None, 12h + seconds, custom image/video over oq-clock-media, broken-media fallback, missing-file marker. Hardware unverified.\n",
 		);
 	} finally {
 		await chmod(join(base, "clock-v1"), 0o755).catch(() => {});

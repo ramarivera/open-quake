@@ -10,10 +10,15 @@ if (params.get("surface") === "panel") {
 		document.documentElement.dataset.rotation = "90";
 }
 
+// Auxiliary capture and picker windows have separate IPC ownership. They do
+// not ask the management/panel locale service for an unauthorized snapshot.
+const surface = params.get("surface");
+const auxiliary =
+	surface !== null && surface !== "panel" && surface !== "management";
 const root = document.getElementById("root");
 if (root) {
 	createRoot(root).render(
-		<AppLocaleProvider>
+		<AppLocaleProvider bridge={auxiliary ? null : window.quakeLocale}>
 			<App />
 		</AppLocaleProvider>,
 	);

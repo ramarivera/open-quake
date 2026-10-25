@@ -36,7 +36,11 @@ import { EMOJI_REQUEST, EmojiReply } from "../../shared/emoji";
 import { encodeGif } from "../../shared/gif";
 import { IntegrationReply } from "../../shared/integrations";
 import { MANAGEMENT_ACTIVATE, MANAGEMENT_THEME } from "../../shared/management";
+import { registerAgentHttp } from "../agent-http";
 import { registerAgents } from "../agents";
+import { createModelCredentials } from "../chat/credentials";
+import { createDirectChat } from "../chat/host";
+import { registerDirectChat } from "../chat/registration";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
 import { registerEmoji } from "../emoji";
 import { proveEmojiMerge } from "../emoji/backup-merge-proof";
@@ -44,6 +48,7 @@ import { proveEmojiRestore } from "../emoji/backup-proof";
 import { emojiFiles } from "../emoji/files";
 import { registerHardware } from "../hardware";
 import { registerIntegrations } from "../integrations";
+import { systemCredentialVault } from "../integrations/storage";
 import { iconStore } from "../key-library/icon-store";
 import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
@@ -58,6 +63,7 @@ import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
+import { registerAppLocale } from "../settings/registration";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { registerWeatherMedia } from "../weather-media";
 import { WeatherMediaController } from "../weather-media/controller";
@@ -240,6 +246,36 @@ async function smoke() {
 			join(directory, "agent-credentials"),
 		),
 	});
+
+	const locale = registerAppLocale({
+		directory,
+		osLocale: "en-US",
+		renderer,
+		windows: () => [win, panel],
+	});
+	const agentHttp = await registerAgentHttp({
+		root: join(directory, "agent-http"),
+		management: () => win,
+		renderer,
+		invalidated: async () => {},
+		publish: async () => {},
+	});
+	const credentials = await Effect.runPromise(
+		createModelCredentials(
+			systemCredentialVault(join(directory, "agent-credentials")),
+		),
+	);
+	const chat = createDirectChat({
+		directory: join(directory, "chat"),
+		credentials: credentials.ai,
+		models: () => Effect.succeed([]),
+	});
+	const chatRegistration = registerDirectChat({
+		host: chat,
+		management: () => win,
+		panel: () => panel,
+		renderer,
+	});
 	const maintenance = registerMaintenance({
 		root: directory,
 		mock: true,
@@ -351,7 +387,7 @@ async function smoke() {
 			);
 		if (activation.page === "agents")
 			await waitFor(
-				"document.querySelector('#agents-agents .mc-aside') && !document.querySelector('.content-inner')?.textContent.includes('Loading agent workspace')",
+				"document.querySelector('#agents-agents .aw-list') && !document.querySelector('.content-inner')?.textContent.includes('Loading agent workspace')",
 			);
 		if (activation.page === "shortcuts")
 			await waitFor(
@@ -776,10 +812,11 @@ async function smoke() {
 		console.log(
 			"Emoji quarantine PASS: supported copy; retained unsupported IPC ignored; no clipboard side effect",
 		);
+
 		const thumbnailReply = await win.webContents.executeJavaScript(
 			`window.quakeProfileManager.request({type:"thumbnail",id:${JSON.stringify(profileId)},locale:"en"})`,
 		);
-		assert(thumbnailReply._tag === "success");
+		assert(thumbnailReply._tag === "success", JSON.stringify(thumbnailReply));
 		const thumbnail = thumbnailReply.view.thumbnails[profileId];
 		assert(
 			typeof thumbnail === "string" &&
@@ -1546,7 +1583,7 @@ async function smoke() {
 			);
 			assert.equal(
 				await js(
-					"getComputedStyle(document.querySelector('#agents-agents .mc-split')).display",
+					"getComputedStyle(document.querySelector('#agents-agents .aw-split')).display",
 				),
 				"none",
 			);
@@ -1810,6 +1847,10 @@ async function smoke() {
 		await meetings.dispose();
 		await voice.dispose();
 		await integrations.dispose();
+		await chatRegistration.dispose();
+		await chat.dispose();
+		await agentHttp.dispose();
+		await locale.dispose();
 		await agents.dispose();
 		await profiles.dispose();
 		await clock.dispose();

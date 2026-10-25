@@ -20,3 +20,21 @@ export function revealEnd(
 		transcript.getBoundingClientRect().bottom - window.innerHeight < 200;
 	if (force || nearEnd) end.scrollIntoView({ block: "end" });
 }
+
+/**
+ * Keeps an internally scrolling transcript pinned to its newest message when
+ * its box changes size (window resize, rail disclosure, composer growth),
+ * while the reader is following.
+ */
+export function pinEndOnResize(
+	transcript: HTMLElement,
+	following: () => boolean,
+): () => void {
+	if (typeof ResizeObserver === "undefined") return () => {};
+	const observer = new ResizeObserver(() => {
+		if (following() && getComputedStyle(transcript).overflowY !== "visible")
+			transcript.scrollTop = transcript.scrollHeight;
+	});
+	observer.observe(transcript);
+	return () => observer.disconnect();
+}

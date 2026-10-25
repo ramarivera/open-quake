@@ -887,7 +887,7 @@ async function smoke(): Promise<void> {
 		);
 		await ready(
 			manager,
-			"Array.from(document.querySelectorAll('.keys-preview .oq-flip-clock')).some(el=>/AM|PM/.test(el.getAttribute('aria-label')??''))",
+			"Array.from(document.querySelectorAll('.keys-preview .oq-clock-time')).some(el=>/AM|PM/.test(el.getAttribute('aria-label')??''))",
 		);
 		await snapshot(manager, "clock-auto-save");
 		// Native audio decoding/playback and cleanup, using a silent 20ms WAV.

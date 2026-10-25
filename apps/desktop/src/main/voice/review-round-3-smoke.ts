@@ -59,13 +59,20 @@ const hintGeometry = `(() => {
 				inkRight: box.x + metrics.actualBoundingBoxRight });
 		}
 	}
+	// The reference advance comes from untracked DOM text in the same font:
+	// canvas metrics differ from DOM layout for the system UI font.
+	const probe = document.createElement('span');
+	probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;letter-spacing:normal;font:' + style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily;
+	hint.parentElement.appendChild(probe);
+	const domWidth = (text) => { probe.textContent = text; return probe.getBoundingClientRect().width; };
 	for (const [index, glyph] of glyphs.entries()) {
 		const next = glyphs[index + 1];
 		const nextMetrics = canvas.measureText(next?.character ?? '');
 		// Keep the font's own pair kerning; tracking must not compress it further.
-		glyph.naturalAdvance = canvas.measureText(glyph.character + (next?.character ?? '')).width - nextMetrics.width;
+		glyph.naturalAdvance = domWidth(glyph.character + (next?.character ?? '')) - domWidth(next?.character ?? '');
 		glyph.naturalInkGap = glyph.naturalAdvance - nextMetrics.actualBoundingBoxLeft - canvas.measureText(glyph.character).actualBoundingBoxRight;
 	}
+	probe.remove();
 	return { text: hint.textContent, font: canvas.font, tracking: style.letterSpacing,
 		glyphs, left: bounds.left, right: bounds.right, top: bounds.top,
 		bottom: bounds.bottom, fontSize: parseFloat(style.fontSize) };
@@ -259,7 +266,7 @@ export async function reviewRound3Smoke(
 			await js(`new Promise(resolve => setTimeout(resolve, 350))`);
 			assert.equal(
 				await js<number>(
-					"document.querySelector('.orb-root').getAnimations({ subtree: true }).length",
+					"document.querySelector('.copilot-presence').getAnimations({ subtree: true }).length",
 				),
 				0,
 			);

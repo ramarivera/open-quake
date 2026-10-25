@@ -366,6 +366,9 @@
 }
 
 /* ---- Models ------------------------------------------------------------ */
+.aw-models {
+	container: models / inline-size;
+}
 .aw-effective {
 	display: flex;
 	align-items: baseline;
@@ -465,6 +468,67 @@
 }
 .aw-inherited p {
 	margin: 4px 0;
+}
+
+/* Under ~600px each model row becomes a stacked item: role, then provider
+   and model, then base URL, key status and limit, then its actions. The
+   table structure stays for assistive tech and existing automation. */
+@container models (max-width: 600px) {
+	.agent-workbench .aw-table {
+		min-width: 0;
+	}
+	.agent-workbench .aw-table,
+	.agent-workbench .aw-table tbody {
+		display: block;
+	}
+	.agent-workbench .aw-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+	}
+	.agent-workbench .aw-table tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 8px 12px;
+		padding: 14px 0;
+		border-bottom: 1px solid var(--cw-hairline);
+	}
+	.agent-workbench .aw-table td {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-width: 0;
+		padding: 0;
+		border: 0;
+	}
+	.agent-workbench .aw-table td::before {
+		content: attr(data-label);
+		font-size: var(--mc-font-meta);
+		font-weight: 600;
+		color: var(--cw-muted);
+	}
+	.agent-workbench .aw-table td:nth-child(1),
+	.agent-workbench .aw-table td:nth-child(4) {
+		grid-column: 1 / -1;
+	}
+	.agent-workbench .aw-table td.aw-table-actions {
+		grid-column: 1 / -1;
+		flex-direction: row;
+		align-items: center;
+		gap: 8px;
+	}
+	.agent-workbench .aw-table td.aw-table-actions::before {
+		display: none;
+	}
+	.agent-workbench .aw-table input,
+	.agent-workbench .aw-table select {
+		min-width: 0;
+	}
+	.aw-table-wrap {
+		overflow-x: visible;
+	}
 }
 
 /* ---- DK-Claw keys ------------------------------------------------------ */

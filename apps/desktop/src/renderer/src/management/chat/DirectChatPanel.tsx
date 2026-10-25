@@ -13,7 +13,7 @@ import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { ActionDialog } from "../agent-http/ActionDialog";
 import { Composer } from "./Composer";
 import { createChatController } from "./controller";
-import { revealEnd } from "./follow";
+import { pinEndOnResize, revealEnd } from "./follow";
 import { fill, relativeTime } from "./format";
 import { Icon } from "./icons";
 import type { DirectChatModel } from "./model-scope";
@@ -95,6 +95,10 @@ export function DirectChatPanel({
 	useEffect(() => {
 		setTitle(state.current?.title ?? "");
 	}, [state.current?.title]);
+	useEffect(() => {
+		const el = scroll.current;
+		return el ? pinEndOnResize(el, () => follow.current) : undefined;
+	}, []);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Streaming should follow only while the reader remains at the bottom.
 	useLayoutEffect(() => {
 		// Opening another conversation always lands on its newest message.
@@ -235,7 +239,7 @@ export function DirectChatPanel({
 			aria-label={t.direct}
 			hidden={hidden}
 		>
-			<aside className="cw-rail">
+			<aside className="cw-rail" data-open={listOpen || undefined}>
 				{sources}
 				<div className="cw-sessions">
 					<div className="cw-sessions-head">
@@ -248,7 +252,11 @@ export function DirectChatPanel({
 							aria-controls="direct-chat-history"
 							onClick={() => setListOpen((value) => !value)}
 						>
-							{listOpen ? t.hideConversations : t.showConversations}
+							<span className="cw-toggle-source">{t.direct}</span>
+							<span className="cw-toggle-label">
+								{listOpen ? t.hideConversations : t.showConversations}
+							</span>
+							<Icon name="chevron" />
 							{state.histories.length > 0 && (
 								<span className="cw-count">{state.histories.length}</span>
 							)}
@@ -379,22 +387,27 @@ export function DirectChatPanel({
 											? fill(t.answeredBy, { model: modelName })
 											: t.directNotSet}
 							</span>
-							<span aria-hidden="true">·</span>
-							<span>
-								{quake?.runtime
-									? fill(t.quakeElsewhere, { name: quake.runtime })
-									: t.quakeHere}
+							<span
+								className="cw-quake-note"
+								data-actionable={quake?.runtime ? true : undefined}
+							>
+								<span aria-hidden="true">·</span>
+								<span>
+									{quake?.runtime
+										? fill(t.quakeElsewhere, { name: quake.runtime })
+										: t.quakeHere}
+								</span>
+								{quake?.runtime && (
+									<button
+										type="button"
+										className="cw-inline-action"
+										disabled={quake.busy}
+										onClick={quake.useDirect}
+									>
+										{t.useDirectForQuake}
+									</button>
+								)}
 							</span>
-							{quake?.runtime && (
-								<button
-									type="button"
-									className="cw-inline-action"
-									disabled={quake.busy}
-									onClick={quake.useDirect}
-								>
-									{t.useDirectForQuake}
-								</button>
-							)}
 						</p>
 					</div>
 					<div className="cw-header-actions">
