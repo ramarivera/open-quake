@@ -13,6 +13,7 @@ import type { AgentConnectionDiscovery } from "../../../../shared/agent-connecti
 import type { AgentConversationsBridge } from "../../../../shared/agent-conversations";
 import { parseRichText } from "../../strip/tiles/clawBot/rich-text";
 import { Composer } from "../chat/Composer";
+import { revealEnd } from "../chat/follow";
 import { fill } from "../chat/format";
 import { Icon } from "../chat/icons";
 import { Prose } from "../chat/Prose";
@@ -69,6 +70,8 @@ export function ConversationPanel({
 	const input = useRef<HTMLTextAreaElement>(null);
 	const log = useRef<HTMLDivElement>(null);
 	const follow = useRef(true);
+	const reveal = useRef(false);
+	const shown = useRef<string | undefined>(undefined);
 	const active = Boolean(conversation.active);
 	const busy = active || conversation.pending !== undefined;
 	const session = conversation.history.find(
@@ -85,15 +88,25 @@ export function ConversationPanel({
 	const lastTurn = session?.turns.at(-1);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: Follow new text only while the reader stays at the bottom.
 	useLayoutEffect(() => {
-		if (follow.current && log.current)
-			log.current.scrollTop = log.current.scrollHeight;
-	}, [lastTurn?.answer, lastTurn?.requestId, conversation.tools.length]);
+		// Opening another conversation always lands on its newest message.
+		const opened = shown.current !== conversation.sessionId;
+		shown.current = conversation.sessionId;
+		if (log.current)
+			revealEnd(log.current, follow.current, reveal.current || opened);
+		reveal.current = false;
+	}, [
+		lastTurn?.answer,
+		lastTurn?.requestId,
+		conversation.tools.length,
+		conversation.sessionId,
+	]);
 	const open = (url: string) => {
 		void window.quakeVoice?.request({ _tag: "OpenLink", url });
 	};
 	const send = () => {
 		const sent = message;
 		follow.current = true;
+		reveal.current = true;
 		void conversation.send(sent).then((accepted) => {
 			if (accepted) setMessage((current) => (current === sent ? "" : current));
 		});

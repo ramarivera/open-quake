@@ -73,6 +73,14 @@
 .agent-workbench > .mc-tabs {
 	margin-bottom: 20px;
 }
+@media (max-width: 760px) {
+	.aw-header > div > p:not(.mc-page-kicker) {
+		display: none;
+	}
+	.agent-workbench > .mc-tabs {
+		margin-bottom: 14px;
+	}
+}
 .agent-workbench > [role="tabpanel"] {
 	min-width: 0;
 }
@@ -83,7 +91,7 @@
 	flex: 1 1 auto;
 	display: flex;
 	flex-direction: column;
-	min-height: 480px;
+	min-height: 360px;
 }
 
 /* ---- Workspace grid --------------------------------------------------- */
@@ -698,6 +706,9 @@
 	gap: 12px;
 	padding: 6px 8px 8px 14px;
 }
+.cw-composer-bar > .mc-button {
+	margin-left: auto;
+}
 .cw-composer-hint {
 	margin: 0;
 	min-width: 0;
@@ -818,32 +829,45 @@
 	font-weight: 600;
 }
 
-/* ---- Narrow: one column, rail condensed above the conversation --------- */
+/* ---- Narrow: the page scrolls, the composer stays reachable ------------
+   Below 720px a nested fixed-height transcript leaves almost no reading
+   room, so the conversation flows in the page and the composer is sticky at
+   the bottom of the scroll viewport. The rail condenses to source chips and
+   a conversations disclosure. */
 @container workspace (max-width: 720px) {
 	.cw-view {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
-		height: auto;
+		gap: 14px;
 	}
 	.cw-rail {
 		flex: none;
 		overflow: visible;
-		gap: 12px;
+		gap: 10px;
 		padding: 0 0 12px;
 		border-right: 0;
 		border-bottom: 1px solid var(--cw-hairline);
+	}
+	.cw-rail-heading {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 	.cw-sources ul {
 		flex-direction: row;
 		flex-wrap: wrap;
 		gap: 6px;
+		margin: 0 0 6px;
 	}
 	.cw-sources li {
-		flex: 1 1 150px;
+		flex: 1 1 220px;
 		min-width: 0;
 	}
 	.cw-source {
+		padding: 6px 10px;
 		border: 1px solid var(--cw-hairline);
 	}
 	.cw-source[aria-current="true"] {
@@ -851,7 +875,7 @@
 	}
 	.cw-sessions-head .cw-list-toggle {
 		display: inline-flex;
-		margin-left: auto;
+		margin-right: auto;
 	}
 	.cw-sessions-head h3 {
 		position: absolute;
@@ -865,14 +889,26 @@
 	.cw-session-list:not([data-open]) + .cw-refresh {
 		display: none;
 	}
-	.cw-session-list {
-		max-height: 40vh;
-		overflow-y: auto;
-	}
 	.cw-main {
+		display: block;
 		padding-left: 0;
-		flex: 1 1 auto;
-		min-height: 420px;
+	}
+	.cw-header {
+		flex-direction: column;
+		gap: 8px;
+		padding-bottom: 12px;
+	}
+	.cw-header-title {
+		flex-basis: auto;
+		width: 100%;
+	}
+	.cw-title,
+	.cw-title-input {
+		font-size: var(--mc-font-title);
+	}
+	.cw-header-actions {
+		flex-wrap: wrap;
+		justify-content: flex-start;
 	}
 	.cw-route,
 	.agent-workbench .cw-route-field,
@@ -887,29 +923,27 @@
 		max-width: 100%;
 		flex: 1 1 140px;
 	}
-	.cw-header {
-		flex-direction: column;
-		gap: 8px;
-	}
-	.cw-header-title {
-		flex-basis: auto;
-		width: 100%;
-	}
-	.cw-header-actions {
-		flex-wrap: wrap;
-		justify-content: flex-start;
-	}
 	.cw-transcript {
-		padding-top: 16px;
-		min-height: 260px;
+		overflow: visible;
+		padding: 16px 0 8px;
+	}
+	.cw-transcript > * {
+		scroll-margin-bottom: 150px;
 	}
 	.cw-bubble {
 		max-width: 92%;
+	}
+	.cw-composer {
+		position: sticky;
+		bottom: 8px;
+		z-index: 1;
+		/* Masks transcript text scrolling beneath; not an elevation shadow. */
+		box-shadow: 0 8px 0 0 var(--cw-bg);
 	}
 	.cw-composer-hint:not([data-notice]) {
 		display: none;
 	}
 	.cw-empty {
-		padding-top: 4vh;
+		padding: 24px 0;
 	}
 }
