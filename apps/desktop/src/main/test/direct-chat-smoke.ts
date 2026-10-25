@@ -145,7 +145,7 @@ async function run() {
 		true,
 	);
 	await click(win, "OpenClaw");
-	await click(win, "Agent sessions");
+	await evaluate(win, "document.querySelector('#agents-tab-sessions').click()");
 	await wait(
 		win,
 		"Boolean(document.querySelector('.direct-chat textarea:not(:disabled)'))",

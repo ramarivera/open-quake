@@ -112,7 +112,7 @@ async function run() {
 	// Navigate with the real sidebar and session tab, rather than mounting a
 	// test component or invoking a fake service.
 	await button(win, "OpenClaw");
-	await button(win, "Agent sessions");
+	await evaluate(win, "document.querySelector('#agents-tab-sessions').click()");
 	await wait(win, "Boolean(document.querySelector('.agent-http'))");
 	const token = process.env.OPEN_QUAKE_E2E_RUNTIME_TOKEN;
 	assert(token, "Disposable API bearer required");
