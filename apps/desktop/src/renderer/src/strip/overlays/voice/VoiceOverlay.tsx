@@ -1,18 +1,53 @@
 import { Option } from "effect";
 import "../../css-properties";
+import { BAR_HEIGHT, BAR_WIDTH } from "./level-meter";
 import { MarqueeText } from "./MarqueeText";
-import { BAR_HEIGHT, BAR_WIDTH } from "./mountain-bar";
 import type { StripLocale } from "./strings";
-import { MountainCanvas, WaveformCanvas } from "./VoiceCanvases";
+import { LevelMeterCanvas } from "./VoiceCanvases";
 import { overlayLine, toastText, voiceTextString } from "./voice-context";
 import type { VoiceView } from "./voice-state";
 import "./voice.css";
 
-const CANVAS = { width: 1920, height: 480 } as const;
+export type VoicePhase = "listening" | "processing" | "error" | "notice";
+
+/** What the overlay is telling the user, for its glyph and tone. */
+export function voicePhase(view: VoiceView): VoicePhase {
+	if (Option.isSome(view.overlay.countdown)) return "error";
+	if (view.bar.visible) return "listening";
+	const text = Option.getOrUndefined(view.overlay.text);
+	if (text?._tag === "string" && text.key === "aiAudio.processing")
+		return "processing";
+	if (text?._tag === "transcript") return "processing";
+	if (text?._tag === "errorCode") return "error";
+	return "notice";
+}
+
+function PhaseGlyph({ phase }: { phase: VoicePhase }): React.JSX.Element {
+	return (
+		<span className="voice-glyph" data-phase={phase} aria-hidden="true">
+			<svg viewBox="0 0 24 24" aria-hidden="true">
+				{phase === "listening" ? (
+					<>
+						<rect x="9" y="3" width="6" height="11" rx="3" />
+						<path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+					</>
+				) : phase === "processing" ? (
+					<>
+						<circle cx="6" cy="12" r="1.6" />
+						<circle cx="12" cy="12" r="1.6" />
+						<circle cx="18" cy="12" r="1.6" />
+					</>
+				) : (
+					<path d="M12 7v6M12 16.8v.2" />
+				)}
+			</svg>
+		</span>
+	);
+}
 
 /**
- * The full-screen voice backdrop and the mic bar, above the grid and every
- * tile overlay, with no pointer events (QSV:161-182, 441-460).
+ * The full-screen voice sheet and the mic meter, above the grid and every
+ * tile overlay, with no pointer events.
  */
 export function VoiceOverlay({
 	view,
@@ -29,17 +64,16 @@ export function VoiceOverlay({
 		bar.visible && !overlay.visible
 			? Option.map(bar.text, (text) => voiceTextString(locale, text))
 			: Option.none<string>();
+	const phase = voicePhase(view);
 	return (
 		<div className="voice-overlay" data-bar={bar.visible || undefined}>
 			{overlay.visible ? (
 				<div
 					className="voice-backdrop"
+					data-phase={phase}
 					data-countdown={Option.isSome(overlay.countdown) || undefined}
 				>
-					<div className="voice-waveform" aria-hidden="true">
-						<WaveformCanvas {...CANVAS} motion={motion} />
-					</div>
-					<div className="voice-dim" />
+					<PhaseGlyph phase={phase} />
 					<MarqueeText
 						className="voice-subtitle"
 						text={overlayLine(view, locale)}
@@ -62,7 +96,7 @@ export function VoiceOverlay({
 							motion={motion}
 						/>
 					) : null}
-					<MountainCanvas
+					<LevelMeterCanvas
 						width={BAR_WIDTH}
 						height={BAR_HEIGHT}
 						rms={bar.rms}
@@ -75,7 +109,7 @@ export function VoiceOverlay({
 	);
 }
 
-/** Element UI's warning `$message`, enlarged for the strip (ACV:1420-1437, QSC:5514-5598). */
+/** Strip toasts: an opaque raised pill with a state glyph and readable text. */
 export function StripToasts({
 	view,
 	locale,

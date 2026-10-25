@@ -52,7 +52,7 @@ describe("voice tiles on the strip", () => {
 		);
 		expect(markup.match(/voice-cancel-indicator/g)).toHaveLength(1);
 		expect(markup).toContain('data-cancel="true"');
-		expect(markup).toContain('fill="#8B0000"');
+		expect(markup).toContain('fill="#f08a78"');
 		expect(markup).toContain("Press ");
 	});
 

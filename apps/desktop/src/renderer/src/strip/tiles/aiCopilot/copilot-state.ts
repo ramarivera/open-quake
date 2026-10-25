@@ -200,18 +200,28 @@ export function reduceCopilot(
 	}
 }
 
-/** GlowEnergyOrb speed by status (ACV:267-290). */
-export function orbSpeed(status: Option.Option<TileStatus>): number {
+export type CopilotTone = "idle" | "active" | "success" | "warning" | "danger";
+
+/** The status tone for the presence ring and status dot. */
+export function copilotTone(
+	status: Option.Option<TileStatus>,
+	text: Option.Option<CopilotStatusText>,
+): CopilotTone {
+	if (Option.isSome(text) && text.value._tag === "errorCode") return "danger";
 	switch (Option.getOrUndefined(status)) {
+		case -1:
+			return "danger";
+		case 5:
+			return "warning";
+		case 2:
+			return "success";
 		case 0:
-			return 3;
 		case 1:
-			return 10;
 		case 3:
 		case 4:
-			return 6;
+			return "active";
 		default:
-			return 1;
+			return "idle";
 	}
 }
 

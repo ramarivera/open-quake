@@ -22,7 +22,10 @@ export const STRIP_PALETTE = {
 	warningSoft: "rgba(231, 177, 83, 0.14)",
 	danger: "#f08a78",
 	dangerSoft: "rgba(240, 138, 120, 0.14)",
-	font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif',
+	/** Agent identity rings in a multi-agent chat; identity, not state. */
+	agentBlue: "#7fb2f0",
+	agentViolet: "#b9a2f2",
+	font: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
 } as const;
 
 export const stripPaletteProperties = (): Record<string, string> =>

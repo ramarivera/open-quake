@@ -1,11 +1,10 @@
 import { useEffect, useRef } from "react";
 import {
 	type BarMotion,
-	drawMountainBar,
+	drawLevelMeter,
 	initialBarMotion,
 	stepBarMotion,
-} from "./mountain-bar";
-import { drawWaveform, WAVE_TIME_STEP } from "./waveform";
+} from "./level-meter";
 
 /** A canvas sized in strip pixels, backed at the window's pixel ratio. */
 function useStripCanvas(width: number, height: number) {
@@ -26,47 +25,11 @@ function useStripCanvas(width: number, height: number) {
 	return { ref, context };
 }
 
-/** WFV: animates at ≈60 fps; reduced motion draws one still frame. */
-export function WaveformCanvas({
-	width,
-	height,
-	motion,
-}: {
-	width: number;
-	height: number;
-	motion: "full" | "reduce";
-}): React.JSX.Element {
-	const { ref, context } = useStripCanvas(width, height);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: context reads the ref.
-	useEffect(() => {
-		let frame = 0;
-		let t = 0;
-		const draw = (): void => {
-			const ctx = context();
-			if (ctx) drawWaveform(ctx, width, height, t, Math.random);
-		};
-		if (motion === "reduce") {
-			draw();
-			return;
-		}
-		const loop = (): void => {
-			t += WAVE_TIME_STEP;
-			draw();
-			frame = requestAnimationFrame(loop);
-		};
-		frame = requestAnimationFrame(loop);
-		return () => cancelAnimationFrame(frame);
-	}, [width, height, motion]);
-	return (
-		<canvas ref={ref} className="voice-canvas" style={{ width, height }} />
-	);
-}
-
 /**
- * SMB: one frame per animation frame, smoothing toward the latest real level.
- * Under reduced motion it redraws on each level instead, unsmoothed.
+ * The level meter: one frame per animation frame, smoothing toward the latest
+ * real level. Under reduced motion it redraws on each level instead, unsmoothed.
  */
-export function MountainCanvas({
+export function LevelMeterCanvas({
 	width,
 	height,
 	rms,
@@ -94,7 +57,7 @@ export function MountainCanvas({
 				level.current.speaking,
 			);
 			const ctx = context();
-			if (ctx) drawMountainBar(ctx, width, height, state.current);
+			if (ctx) drawLevelMeter(ctx, width, height, state.current);
 			frame = requestAnimationFrame(loop);
 		};
 		frame = requestAnimationFrame(loop);
@@ -108,7 +71,7 @@ export function MountainCanvas({
 			phase: state.current.phase,
 		};
 		const ctx = context();
-		if (ctx) drawMountainBar(ctx, width, height, state.current);
+		if (ctx) drawLevelMeter(ctx, width, height, state.current);
 	}, [rms, speaking, motion, width, height]);
 	return (
 		<canvas ref={ref} className="voice-canvas" style={{ width, height }} />

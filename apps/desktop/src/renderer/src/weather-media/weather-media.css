@@ -94,10 +94,6 @@
 .oq-music-card {
 	gap: 22px;
 }
-.oq-music-card[data-state="unavailable"] .oq-music-cover,
-.oq-music-card[data-state="unavailable"] .oq-music-meta > div {
-	opacity: 0.55;
-}
 .oq-music-cover {
 	flex: none;
 	display: grid;
@@ -139,6 +135,10 @@
 .oq-music-meta > .oq-music-tip {
 	color: var(--strip-warning);
 	font-weight: 550;
+}
+.oq-music-card[data-state="unavailable"] .oq-music-cover,
+.oq-music-card[data-state="unavailable"] .oq-music-meta > div {
+	opacity: 0.55;
 }
 .oq-music-controls {
 	flex: none;
