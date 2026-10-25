@@ -78,9 +78,12 @@ export function ManagementShell({
 	appearance,
 	contentRef,
 	deviceReady,
+	setupEntry,
+	setupLabel = "Setup",
 	children,
 }: {
-	page: ManagementPage;
+	/** "setup" is a route outside the nav sections (settings-and-wizard). */
+	page: ManagementPage | "setup";
 	onOpen: (page: ManagementPage) => void;
 	connection: ConnectionSummary;
 	runtimeStatus: string;
@@ -90,13 +93,20 @@ export function ManagementShell({
 	appearance: AppearanceController;
 	contentRef: React.RefObject<HTMLElement | null>;
 	deviceReady: boolean;
+	/** Optional sidebar entry shown while setup is unfinished. */
+	setupEntry?: ReactNode;
+	/** Localized name for the setup route in the breadcrumb and top bar. */
+	setupLabel?: string;
 	children?: ReactNode;
 }): React.JSX.Element {
 	const narrow = useNarrow();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const menuButton = useRef<HTMLButtonElement>(null);
 	const sidebar = useRef<HTMLElement>(null);
-	const location = pageLocation(page);
+	const location =
+		page === "setup"
+			? { section: null, label: setupLabel }
+			: pageLocation(page);
 	const drawer = narrow && drawerOpen;
 
 	const closeDrawer = useCallback((): void => {
@@ -240,6 +250,7 @@ export function ManagementShell({
 							</div>
 						))}
 					</nav>
+					{setupEntry}
 					<footer className="mc-sidebar-footer">
 						<UiSettings controller={appearance} />
 					</footer>
@@ -254,7 +265,7 @@ export function ManagementShell({
 						<div
 							className="content-inner"
 							data-page={page}
-							data-layout={pageLayouts[page]}
+							data-layout={page === "setup" ? "default" : pageLayouts[page]}
 						>
 							{children}
 						</div>

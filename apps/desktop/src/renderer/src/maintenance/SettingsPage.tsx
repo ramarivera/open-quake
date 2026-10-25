@@ -23,8 +23,11 @@ const permissionNames: Readonly<Record<PermissionKey, string>> = {
 };
 export function SettingsPage({
 	controller: c,
+	children,
 }: {
 	controller: MaintenanceController;
+	/** App-wide preferences (settings-and-wizard), shown first. */
+	children?: React.ReactNode;
 }): React.JSX.Element {
 	const [reset, setReset] = useState(false);
 	const [recoverySerial, setRecoverySerial] = useState("");
@@ -39,6 +42,7 @@ export function SettingsPage({
 				</p>
 			) : null}
 			{c.message ? <p role="status">{c.message}</p> : null}
+			{children}
 			{!view ? (
 				<p role="status">Loading settings…</p>
 			) : (
@@ -135,7 +139,7 @@ export function SettingsPage({
 						) : null}
 					</Group>
 					<SpeechSettingsPanel />
-					<Group title="General">
+					<Group title="Updates and backups">
 						<Row
 							label="Version"
 							hint={
