@@ -28,12 +28,7 @@ import {
 	parseStripSettings,
 	validateStripSettings,
 } from "./stripSettings";
-import {
-	accentFromPixels,
-	genericTileMetrics,
-	isInlineIcon,
-	truncateTitle,
-} from "./tileMetrics";
+import { genericTileMetrics, isInlineIcon, truncateTitle } from "./tileMetrics";
 import { stripTileFor, stripTileRegistry } from "./tileRegistry";
 import { GenericTile } from "./tiles/GenericTile";
 import { type StripProfiles, subscribeStripProfiles } from "./useStripProfiles";
@@ -261,50 +256,46 @@ describe("strip screen", () => {
 });
 
 describe("generic tile", () => {
-	it("matches DK's icon and title metrics", () => {
+	it("centres the artwork above a readable bottom label", () => {
 		expect(
 			genericTileMetrics(
 				{ width: 220, height: 220 },
-				{ width: 1, height: 1 },
-				"commonBaseTheme",
-				{ pos: "bot", style: "bold|italic|underline" },
+				{ pos: "top", style: "bold|italic|underline" },
 			),
 		).toMatchObject({
-			iconSize: 107,
-			fontSize: 27,
-			titleAnchor: "top",
-			titleOffset: 0.09,
-			fontWeight: 400,
+			iconSize: 92,
+			padding: 20,
+			fontSize: 24,
+			titleAnchor: "bottom",
+			fontWeight: 550,
 			italic: false,
-			ringFade: [0.05, 0.02],
+			titleWidth: 180,
 		});
-		expect(
-			genericTileMetrics(
-				{ width: 460, height: 460 },
-				{ width: 2, height: 2 },
-				"commonBaseTheme",
-				{ pos: "top", style: "" },
-			),
-		).toMatchObject({ iconSize: 225, fontSize: 40, ringFade: [0.18, 0.18] });
+		const wide = genericTileMetrics(
+			{ width: 460, height: 460 },
+			{ pos: "bot", style: "" },
+		);
+		expect(wide).toMatchObject({ iconSize: 168, fontSize: 34 });
+		expect(wide.iconCenter).toBeLessThan(0.5);
 		expect(
 			genericTileMetrics(
 				{ width: 236, height: 236 },
-				{ width: 1, height: 1 },
-				"meetingAssistantTheme",
-				{ pos: "bot", style: "bold|italic" },
+				{ pos: "top", style: "bold|italic", userModifiedStyle: true },
 			),
 		).toMatchObject({
-			iconSize: 115,
-			fontSize: 33,
-			titleAnchor: "bottom",
-			fontWeight: 900,
+			fontSize: 26,
+			titleAnchor: "top",
+			fontWeight: 700,
 			italic: true,
-			innerGap: 9,
-			layers: "none",
 		});
+		// Labels never drop below the strip's 22 px reading floor.
+		expect(
+			genericTileMetrics({ width: 120, height: 120 }, { pos: "bot", style: "" })
+				.fontSize,
+		).toBe(22);
 	});
 
-	it("draws the accent glow, ring, icon and title in common base", () => {
+	it("draws a flat plate with artwork and a bottom label", () => {
 		const envelope = decode(stripFixtureEnvelope());
 		const { profile, page } = selectStripPage(envelope, undefined);
 		const key = page.keys.find((entry) => entry.keyCode === "2,1");
@@ -337,15 +328,12 @@ describe("generic tile", () => {
 			}),
 		);
 		expect(profile.name).toBe("Quick");
-		expect(markup).toContain('data-layers="commonBase"');
-		expect(markup).toContain("--strip-accent-rgb:116, 128, 239");
-		expect(markup).toContain('cx="110" cy="244" rx="44" ry="27"');
-		expect(markup).toContain("strip-tile-ring");
-		expect(markup).toContain(
-			"width:107px;height:107px;transform:translateY(16.67%)",
-		);
-		expect(markup).toContain("font-size:27px;font-weight:400");
-		expect(markup).toContain("top:9%");
+		expect(markup).not.toContain("strip-tile-ring");
+		expect(markup).not.toContain("<filter");
+		expect(markup).not.toContain("--strip-accent-rgb");
+		expect(markup).toContain("width:92px;height:92px");
+		expect(markup).toContain("font-size:24px;font-weight:550");
+		expect(markup).toContain("bottom:20px");
 		expect(markup).toContain(">Lock Screen</p>");
 		expect(markup).toContain('<img src="data:image/svg+xml,');
 	});
@@ -400,32 +388,12 @@ describe("generic tile", () => {
 		expect(isInlineIcon("data:text/html,<script>")).toBe(false);
 	});
 
-	it("cuts titles like DK's binary search", () => {
+	it("cuts titles with an ellipsis by binary search", () => {
 		const width = (value: string): number => value.length * 10;
 		expect(truncateTitle("Lock", 100, width)).toBe("Lock");
-		expect(truncateTitle("Mission Control", 100, width)).toBe("Mission...");
-		expect(truncateTitle("Anything", 20, width)).toBe("...");
+		expect(truncateTitle("Mission Control", 100, width)).toBe("Mission C…");
+		expect(truncateTitle("Anything", 5, width)).toBe("…");
 		expect(truncateTitle("", 100, width)).toBe("");
-	});
-
-	it("averages saturated mid-brightness pixels and lifts them by 1.2", () => {
-		const pixel = (r: number, g: number, b: number, a = 255) => [r, g, b, a];
-		expect(
-			accentFromPixels([
-				...pixel(100, 50, 200),
-				...pixel(100, 50, 200),
-				...pixel(255, 255, 255),
-				...pixel(5, 5, 5),
-				...pixel(120, 120, 122),
-				...pixel(200, 0, 0, 10),
-			]),
-		).toEqual({ r: 120, g: 60, b: 240 });
-		expect(accentFromPixels([...pixel(250, 250, 250)])).toBeUndefined();
-		expect(accentFromPixels([...pixel(220, 230, 10)])).toEqual({
-			r: 255,
-			g: 255,
-			b: 12,
-		});
 	});
 });
 

@@ -1,71 +1,62 @@
 import type { ProfileTitle } from "../../../shared/profiles";
-import {
-	DEFAULT_ACCENT,
-	type Rgb,
-	STRIP_THEMES,
-	type StripLayers,
-	type StripThemeName,
-} from "./geometry";
 
 /**
- * DK-Suite UnitControl's generic icon-and-title tile, as the strip draws it
- * (UnitControl.vue currentIconSize, calcPosition, subBoxStyle).
+ * The flat icon-and-label key tile (independent-device-design, "Flat key
+ * tiles and state feedback"): artwork centred above a bottom label.
  */
 export interface GenericTileMetrics {
 	readonly iconSize: number;
-	/** Vertical icon shift in percent of the icon's own height. */
-	readonly iconShift: number;
+	/** Inner padding in px; the label sits this far from its anchored edge. */
+	readonly padding: number;
 	readonly fontSize: number;
-	readonly titleAnchor: "top" | "bottom";
-	/** Distance from the anchored edge as a fraction of the tile height. */
-	readonly titleOffset: number;
-	readonly fontWeight: 400 | 900;
+	readonly titleAnchor: "top" | "mid" | "bottom";
+	readonly fontWeight: 550 | 700;
 	readonly italic: boolean;
-	/** Titles are cut to 94 % of the tile width. */
 	readonly titleWidth: number;
-	readonly layers: StripLayers;
-	/** Background-layer inset in px. */
-	readonly innerGap: number;
-	/** Alpha at the ring's 75 % and 100 % stops. */
-	readonly ringFade: readonly [number, number];
+	/** Icon centre as a fraction of the tile height. */
+	readonly iconCenter: number;
 }
-
-const CONTENT_SCALE = 0.7;
-const ICON_FILL = 0.7;
-const FONT_RATIO = 0.2;
 
 export function genericTileMetrics(
 	box: { readonly width: number; readonly height: number },
-	span: { readonly width: number; readonly height: number },
-	theme: StripThemeName,
-	title: Pick<ProfileTitle, "pos" | "style">,
+	title: Pick<ProfileTitle, "pos" | "style"> & {
+		readonly userModifiedStyle?: boolean | undefined;
+	},
 ): GenericTileMetrics {
 	const base = Math.min(box.width, box.height);
-	const commonBase = theme === "commonBaseTheme";
-	const sizeScale =
-		(span.width === 2 && span.height === 2 ? 0.7 : 1) * (commonBase ? 0.9 : 1);
+	const padding = Math.round(base * 0.09);
+	const fontSize = Math.min(34, Math.max(22, Math.round(base * 0.11)));
 	const styles = title.style.split("|");
-	const wide = span.width >= 2;
+	const explicit = title.userModifiedStyle === true;
+	const titleAnchor = !explicit
+		? "bottom"
+		: title.pos === "top"
+			? "top"
+			: title.pos === "mid"
+				? "mid"
+				: "bottom";
+	// The icon centres in the space the label leaves free.
+	const label = (fontSize * 1.25 + padding) / box.height;
 	return {
-		iconSize: Math.floor(base * ICON_FILL * CONTENT_SCALE),
-		iconShift: commonBase ? 16.67 : -10,
-		fontSize: Math.floor(base * FONT_RATIO * CONTENT_SCALE * sizeScale),
-		titleAnchor: commonBase || title.pos === "top" ? "top" : "bottom",
-		titleOffset: commonBase ? 0.09 : 0.1,
-		fontWeight: !commonBase && styles.includes("bold") ? 900 : 400,
-		italic: !commonBase && styles.includes("italic"),
-		titleWidth: box.width * 0.94,
-		layers: STRIP_THEMES[theme].layers,
-		innerGap: Math.round(
-			(box.height / span.height) * STRIP_THEMES[theme].unitInnerGap,
-		),
-		ringFade: wide ? [0.18, 0.18] : [0.05, 0.02],
+		iconSize: Math.round(Math.min(base * 0.42, 168)),
+		padding,
+		fontSize,
+		titleAnchor,
+		fontWeight: explicit && styles.includes("bold") ? 700 : 550,
+		italic: explicit && styles.includes("italic"),
+		titleWidth: box.width - 2 * padding,
+		iconCenter:
+			titleAnchor === "bottom"
+				? (1 - label) / 2
+				: titleAnchor === "top"
+					? (1 + label) / 2
+					: 0.5,
 	};
 }
 
 /**
- * DK's measureAndTruncateText: the longest prefix that fits with `...`
- * appended, found by binary search over code units.
+ * The longest prefix that fits with an ellipsis appended, found by binary
+ * search over code units.
  */
 export function truncateTitle(
 	text: string,
@@ -73,8 +64,8 @@ export function truncateTitle(
 	measure: (value: string) => number,
 ): string {
 	if (!text || maxWidth <= 0 || measure(text) <= maxWidth) return text;
-	const available = maxWidth - measure("...");
-	if (available <= 0) return "...";
+	const available = maxWidth - measure("…");
+	if (available <= 0) return "…";
 	let low = 0;
 	let high = text.length;
 	let fit = "";
@@ -86,44 +77,8 @@ export function truncateTitle(
 			low = middle + 1;
 		} else high = middle - 1;
 	}
-	return `${fit}...`;
+	return `${fit.trimEnd()}…`;
 }
-
-/**
- * DK's setAccentFromImage over a 12×12 RGBA sample: average the opaque,
- * mid-brightness, saturated pixels and lift them by 1.2.
- */
-export function accentFromPixels(data: ArrayLike<number>): Rgb | undefined {
-	let r = 0;
-	let g = 0;
-	let b = 0;
-	let count = 0;
-	for (let index = 0; index + 3 < data.length; index += 4) {
-		const red = data[index] ?? 0;
-		const green = data[index + 1] ?? 0;
-		const blue = data[index + 2] ?? 0;
-		if ((data[index + 3] ?? 0) < 50) continue;
-		const max = Math.max(red, green, blue);
-		const min = Math.min(red, green, blue);
-		const brightness = (red + green + blue) / 3;
-		if (brightness < 30 || brightness > 225) continue;
-		if ((max === 0 ? 0 : (max - min) / max) < 0.1) continue;
-		r += red;
-		g += green;
-		b += blue;
-		count++;
-	}
-	if (count === 0) return undefined;
-	const lift = (sum: number): number =>
-		Math.min(255, Math.round(Math.round(sum / count) * 1.2));
-	return { r: lift(r), g: lift(g), b: lift(b) };
-}
-
-export const themeAccent = (theme: StripThemeName): Rgb =>
-	STRIP_THEMES[theme].colorScheme ?? DEFAULT_ACCENT;
-
-export const rgbText = ({ r, g, b }: Rgb, alpha = 1): string =>
-	alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
 
 /** Inline image data only; other artwork references wait for the artwork adapter. */
 export const isInlineIcon = (icon: string): boolean =>
