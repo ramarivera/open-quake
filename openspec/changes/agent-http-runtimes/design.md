@@ -27,4 +27,8 @@ Expose a small schema-first HTTP runtime domain without depending on Electron or
 
 ## Migration Plan
 
+## Disposable acceptance extension
+
+Ramiro authorized real Docker Compose runtime tests and merging reviewed PRs on 2026-10-25. The acceptance runner owns its project, temporary volumes and ports, never mounts user homes or the Docker socket, and always removes its containers, network and state. Runtime versions are pinned. Toolsets and messaging stay disabled. Provider base URL, optional API key and model come from environment variables, with no personal endpoint default. The runner uses actual production adapters and bounded HTTP transport, and distinguishes stream/session assertions from physical speech acceptance. Live calls in this effort use the authorized gpt-6.1-sol route only. Production microphone/STT/TTS binding remains separately tracked; this test extension does not manufacture speech evidence.
+
 Introduce additive contracts and connection storage. No existing workspace migration is required. With no connection selected, existing local behavior remains. Parent integrates lane commits, runs targeted and composition checks, and opens one reviewed PR. Rollback removes selected HTTP routing while preserving local workspaces and stored user data.
