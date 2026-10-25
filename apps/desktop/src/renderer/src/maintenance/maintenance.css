@@ -169,6 +169,7 @@
 
 .maintenance-settings .button-primary,
 .maintenance-dialog .button-primary {
-	background: var(--quake-accent);
-	color: var(--quake-background);
+	color: var(--oq-accent-text);
+	background: var(--oq-accent);
+	border-color: transparent;
 }

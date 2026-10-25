@@ -1,10 +1,11 @@
 /*
- * open-quake design system.
+ * open-quake design system ("quiet workbench", open-quake-nyd.2).
  *
  * Contract: the nine `--quake-*` color tokens from theme/tokens.ts, set on the
  * root element by useAppearance (built-in or imported custom theme). Every
- * other color below is derived from them, so a custom palette restyles the
- * whole app without naming each shade.
+ * other color is derived from them, so a custom palette restyles the whole app
+ * without naming each shade. Lanes consume the semantic `--oq-*` layer below;
+ * the older `--quake-*` derivations stay for existing stylesheets.
  */
 :root {
 	--quake-motion-feedback: none;
@@ -12,57 +13,101 @@
 	--quake-motion-pulse: none;
 	--quake-motion-press: none;
 
-	/* Derived surfaces and tints. `light-dark` follows the theme's base. */
-	--quake-hairline: color-mix(
-		in srgb,
-		var(--quake-foreground) 10%,
-		transparent
-	);
-	--quake-fill: color-mix(in srgb, var(--quake-foreground) 6%, transparent);
-	--quake-fill-strong: color-mix(
-		in srgb,
-		var(--quake-foreground) 11%,
-		transparent
-	);
-	--quake-raised: light-dark(
+	/* Surfaces. Light themes keep white groups on a warm page; dark themes lift
+	 * groups slightly above the window. */
+	--oq-bg: var(--quake-background);
+	--oq-surface: var(--quake-surface);
+	--oq-raised: light-dark(
 		var(--quake-surface),
-		color-mix(in srgb, var(--quake-surface) 86%, var(--quake-foreground))
+		color-mix(in srgb, var(--quake-surface) 92%, var(--quake-foreground))
 	);
-	--quake-field: light-dark(var(--quake-surface), var(--quake-background));
-	--quake-sidebar: color-mix(
-		in srgb,
-		var(--quake-background) 95%,
-		var(--quake-foreground)
+	--oq-sunken: light-dark(
+		color-mix(in srgb, var(--quake-background) 55%, var(--quake-surface)),
+		color-mix(in srgb, var(--quake-background) 70%, black)
 	);
-	--quake-accent-soft: color-mix(in srgb, var(--quake-accent) 16%, transparent);
-	--quake-success-soft: color-mix(
-		in srgb,
-		var(--quake-success) 15%,
-		transparent
+	--oq-sidebar: light-dark(
+		color-mix(in srgb, var(--quake-background) 94%, var(--quake-foreground)),
+		color-mix(in srgb, var(--quake-background) 82%, black)
 	);
-	--quake-warning-soft: color-mix(
-		in srgb,
-		var(--quake-warning) 15%,
-		transparent
+	--oq-hover: color-mix(in srgb, var(--quake-foreground) 6%, transparent);
+	--oq-pressed: color-mix(in srgb, var(--quake-foreground) 10%, transparent);
+
+	/* Lines. Hairlines separate; borders bound interactive controls (3:1). */
+	--oq-hairline: color-mix(in srgb, var(--quake-foreground) 11%, transparent);
+	--oq-border: var(--quake-border);
+
+	/* Text. */
+	--oq-text: var(--quake-foreground);
+	--oq-text-muted: var(--quake-muted);
+	--oq-text-subtle: color-mix(in srgb, var(--quake-muted) 78%, var(--oq-bg));
+
+	/* Accent: primary action, current selection, focus. Nothing decorative. */
+	--oq-accent: var(--quake-accent);
+	--oq-accent-text: var(--quake-accent-text);
+	--oq-accent-ink: light-dark(
+		var(--quake-accent),
+		color-mix(in srgb, var(--quake-accent) 88%, white)
 	);
-	--quake-shadow: light-dark(
-		0 0.5px 1.5px rgb(0 0 0 / 0.12),
-		0 1px 2px rgb(0 0 0 / 0.4)
-	);
+	--oq-accent-soft: color-mix(in srgb, var(--quake-accent) 15%, transparent);
+
+	/* State colors, always paired with text. Danger is derived, not themed. */
+	--oq-success: var(--quake-success);
+	--oq-warning: var(--quake-warning);
+	--oq-danger: light-dark(#b42318, #f08a78);
+	--oq-success-soft: color-mix(in srgb, var(--quake-success) 14%, transparent);
+	--oq-warning-soft: color-mix(in srgb, var(--quake-warning) 16%, transparent);
+	--oq-danger-soft: color-mix(in srgb, var(--oq-danger) 14%, transparent);
+
+	--oq-focus-ring:
+		0 0 0 2px var(--oq-bg),
+		0 0 0 4px color-mix(in srgb, var(--quake-accent) 85%, transparent);
+
+	--oq-radius-sm: 6px;
+	--oq-radius-md: 8px;
+	--oq-radius-lg: 12px;
+
+	--oq-space-1: 4px;
+	--oq-space-2: 8px;
+	--oq-space-3: 12px;
+	--oq-space-4: 16px;
+	--oq-space-5: 20px;
+	--oq-space-6: 24px;
+	--oq-space-7: 32px;
+	--oq-space-8: 48px;
+
+	/* Only floating layers (menus, popovers, dialogs, drawers) cast shadows. */
+	--oq-shadow-pop:
+		0 0 0 1px var(--oq-hairline), 0 2px 4px rgb(0 0 0 / 0.12),
+		0 16px 40px -12px rgb(0 0 0 / 0.42);
+
+	/* Legacy derived names used by existing lane stylesheets. */
+	--quake-hairline: var(--oq-hairline);
+	--quake-fill: var(--oq-hover);
+	--quake-fill-strong: var(--oq-pressed);
+	--quake-raised: var(--oq-raised);
+	--quake-field: var(--oq-sunken);
+	--quake-sidebar: var(--oq-sidebar);
+	--quake-accent-soft: var(--oq-accent-soft);
+	--quake-success-soft: var(--oq-success-soft);
+	--quake-warning-soft: var(--oq-warning-soft);
+	--quake-error: var(--oq-danger);
+	--quake-shadow: 0 0 #0000;
 
 	/* Type: the platform UI face; mono only for codes, serials and JSON. */
 	--font-sans:
-		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
-		sans-serif;
-	--font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+		"Segoe UI", system-ui, sans-serif;
+	--font-mono:
+		ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 
-	--radius-control: 6px;
-	--radius-group: 10px;
+	--radius-control: var(--oq-radius-md);
+	--radius-group: var(--oq-radius-lg);
 
-	font: 13px / 1.45 var(--font-sans);
-	color: var(--quake-foreground);
-	background: var(--quake-background);
+	font: 14px / 1.5 var(--font-sans);
+	color: var(--oq-text);
+	background: var(--oq-bg);
 	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
 }
 
 * {
@@ -81,9 +126,17 @@ textarea {
 	color: inherit;
 }
 
+button {
+	cursor: default;
+}
+
 :focus-visible {
-	outline: 2px solid var(--quake-accent);
+	outline: 2px solid var(--oq-accent);
 	outline-offset: 2px;
+}
+
+::selection {
+	background: color-mix(in srgb, var(--quake-accent) 32%, transparent);
 }
 
 .visually-hidden {
@@ -100,74 +153,98 @@ textarea {
 
 .mono {
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: 0.92em;
 }
 
 .muted {
-	color: var(--quake-muted);
+	color: var(--oq-text-muted);
 }
 
-/* Page header */
+/* Page header: section kicker, title, one line of purpose, actions. */
 
 .page-header {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: flex-end;
 	justify-content: space-between;
-	gap: 16px;
-	margin-bottom: 20px;
+	gap: var(--oq-space-3) var(--oq-space-6);
+	margin-bottom: var(--oq-space-6);
+}
+
+.page-header > div:first-child {
+	flex: 1 1 320px;
+	min-width: 0;
 }
 
 .page-header h1 {
 	margin: 0;
-	font-size: 22px;
-	font-weight: 650;
+	font-size: var(--mc-font-display, 24px);
+	font-weight: 600;
 	line-height: 1.2;
-	letter-spacing: -0.012em;
+	letter-spacing: -0.015em;
+	text-wrap: balance;
 }
 
 .page-description {
-	margin: 4px 0 0;
-	color: var(--quake-muted);
+	max-width: 62ch;
+	margin: 6px 0 0;
+	color: var(--oq-text-muted);
+	text-wrap: pretty;
 }
 
-/* Grouped form sections: label left, control right, hairline rows. */
+.page-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--oq-space-2);
+}
+
+/* Grouped settings: heading outside, hairline-separated rows inside one box. */
 
 .group {
-	margin-top: 28px;
+	margin-top: var(--oq-space-7);
+}
+
+.page-header + .group,
+.group:first-child {
+	margin-top: 0;
 }
 
 .group-heading {
-	margin: 0 0 8px;
-	padding: 0 4px;
+	margin: 0 0 var(--oq-space-3);
 }
 
 .group-heading h2 {
 	margin: 0;
-	font-size: 13px;
+	font-size: var(--mc-font-subtitle, 15px);
 	font-weight: 600;
+	line-height: 1.3;
 }
 
 .group-description {
-	margin: 2px 0 0;
-	color: var(--quake-muted);
-	font-size: 12px;
+	max-width: 68ch;
+	margin: 3px 0 0;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta, 12.5px);
 }
 
 .group-box {
-	background: var(--quake-surface);
-	border: 1px solid var(--quake-hairline);
-	border-radius: var(--radius-group);
-	box-shadow: var(--quake-shadow);
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-lg);
 }
 
 .group-box > * + * {
-	border-top: 1px solid var(--quake-hairline);
+	border-top: 1px solid var(--oq-hairline);
 }
 
 .group-footer {
-	padding: 8px 4px 0;
-	color: var(--quake-muted);
-	font-size: 12px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--oq-space-2);
+	padding: var(--oq-space-3) 0 0;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta, 12.5px);
 }
 
 .group-footer p {
@@ -178,10 +255,10 @@ textarea {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 16px;
-	min-height: 44px;
+	gap: var(--oq-space-4);
+	min-height: 52px;
 	margin: 0;
-	padding: 8px 14px;
+	padding: 10px var(--oq-space-4);
 }
 
 .row[data-align="start"] {
@@ -192,13 +269,15 @@ textarea {
 	display: flex;
 	flex: 1 1 auto;
 	flex-direction: column;
-	gap: 1px;
+	gap: 2px;
 	min-width: 0;
+	font-weight: 500;
 }
 
 .row-hint {
-	color: var(--quake-muted);
-	font-size: 12px;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta, 12.5px);
+	font-weight: 400;
 }
 
 .row-control {
@@ -207,13 +286,14 @@ textarea {
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: flex-end;
-	gap: 8px;
+	gap: var(--oq-space-2);
 	/* Controls never shrink under the label; the label wraps instead. */
 	min-width: min-content;
 }
 
 .value {
-	color: var(--quake-muted);
+	color: var(--oq-text-muted);
+	font-variant-numeric: tabular-nums;
 	overflow-wrap: anywhere;
 	text-align: right;
 }
@@ -222,51 +302,109 @@ textarea {
 	white-space: nowrap;
 }
 
-/* Controls */
+/* Buttons. `.button` and `.mc-button` share one vocabulary:
+ * secondary (default), primary, quiet, danger. */
 
-.button {
+.button,
+.mc-button {
 	position: relative;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	min-height: 28px;
-	padding: 0 12px;
-	color: var(--quake-foreground);
-	font-weight: 500;
+	min-height: 32px;
+	padding: 0 14px;
+	color: var(--oq-text);
+	font-size: var(--mc-font-button, 13.5px);
+	font-weight: 550;
+	line-height: 1.2;
 	white-space: nowrap;
-	background: var(--quake-raised);
-	border: 1px solid var(--quake-border);
-	border-radius: var(--radius-control);
-	box-shadow: var(--quake-shadow);
+	text-decoration: none;
+	background: var(--oq-surface);
+	border: 1px solid var(--oq-border);
+	border-radius: var(--oq-radius-md);
 	transition: var(--quake-motion-control);
 }
 
-.button:hover:not(:disabled, [data-disabled="true"]) {
-	background: color-mix(
-		in srgb,
-		var(--quake-raised) 90%,
-		var(--quake-foreground)
-	);
+.button:hover:not(:disabled, [data-disabled="true"]),
+.mc-button:hover:not(:disabled, [data-disabled="true"]) {
+	background: color-mix(in srgb, var(--oq-surface) 92%, var(--oq-text));
 }
 
-.button:active:not(:disabled, [data-disabled="true"]) {
-	background: color-mix(
-		in srgb,
-		var(--quake-raised) 82%,
-		var(--quake-foreground)
-	);
+.button:active:not(:disabled, [data-disabled="true"]),
+.mc-button:active:not(:disabled, [data-disabled="true"]) {
+	background: color-mix(in srgb, var(--oq-surface) 86%, var(--oq-text));
+}
+
+.button[data-primary],
+.mc-button[data-primary],
+.button[data-variant="primary"],
+.mc-button[data-variant="primary"] {
+	color: var(--oq-accent-text);
+	background: var(--oq-accent);
+	border-color: transparent;
+}
+
+.button[data-primary]:hover:not(:disabled, [data-disabled="true"]),
+.mc-button[data-primary]:hover:not(:disabled, [data-disabled="true"]),
+.button[data-variant="primary"]:hover:not(:disabled, [data-disabled="true"]),
+.mc-button[data-variant="primary"]:hover:not(
+	:disabled,
+	[data-disabled="true"]
+) {
+	background: color-mix(in srgb, var(--oq-accent) 88%, var(--oq-text));
+}
+
+.button[data-variant="quiet"],
+.mc-button[data-variant="quiet"] {
+	color: var(--oq-accent-ink);
+	background: transparent;
+	border-color: transparent;
+}
+
+.button[data-variant="quiet"]:hover:not(:disabled, [data-disabled="true"]),
+.mc-button[data-variant="quiet"]:hover:not(:disabled, [data-disabled="true"]) {
+	background: var(--oq-hover);
+}
+
+.button[data-variant="danger"],
+.mc-button[data-variant="danger"] {
+	color: var(--oq-danger);
+	border-color: color-mix(in srgb, var(--oq-danger) 55%, transparent);
+}
+
+.button[data-variant="danger"][data-primary],
+.mc-button[data-variant="danger"][data-primary] {
+	color: light-dark(#ffffff, #2a0d08);
+	background: var(--oq-danger);
+	border-color: transparent;
 }
 
 .button:disabled,
-.button[data-disabled="true"] {
+.button[data-disabled="true"],
+.mc-button:disabled,
+.mc-button[data-disabled="true"] {
 	opacity: 0.45;
+	cursor: default;
+}
+
+.button:focus-visible,
+.mc-button:focus-visible {
+	outline: none;
+	box-shadow: var(--oq-focus-ring);
+}
+
+.button[aria-pressed="true"],
+.mc-button[aria-pressed="true"] {
+	color: var(--oq-text);
+	background: var(--oq-accent-soft);
+	border-color: color-mix(in srgb, var(--oq-accent) 60%, transparent);
 }
 
 .button-row {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 8px;
+	gap: var(--oq-space-2);
 }
 
 /* A file input that looks like a push button but keeps its native semantics. */
@@ -279,36 +417,67 @@ textarea {
 }
 
 .file-button:has(input:focus-visible) {
-	outline: 2px solid var(--quake-accent);
-	outline-offset: 2px;
+	outline: none;
+	box-shadow: var(--oq-focus-ring);
+}
+
+/* Fields */
+
+.text-field,
+.management-window select:not([multiple]) {
+	min-height: 32px;
+	color: var(--oq-text);
+	background: var(--oq-sunken);
+	border: 1px solid var(--oq-border);
+	border-radius: var(--oq-radius-md);
 }
 
 .text-field {
-	width: 200px;
+	width: 220px;
 	max-width: 100%;
-	min-height: 28px;
-	padding: 0 8px;
-	color: var(--quake-foreground);
-	background: var(--quake-field);
-	border: 1px solid var(--quake-border);
-	border-radius: var(--radius-control);
+	padding: 0 10px;
 }
 
-.text-field::placeholder {
-	color: var(--quake-muted);
+.management-window select:not([multiple]) {
+	max-width: 100%;
+	padding: 0 8px;
+}
+
+.text-field::placeholder,
+.management-window input::placeholder,
+.management-window textarea::placeholder {
+	color: var(--oq-text-subtle);
+}
+
+.text-field:focus-visible,
+.management-window
+	input:not([type="checkbox"], [type="radio"], [type="range"]):focus-visible,
+.management-window select:focus-visible,
+.management-window textarea:focus-visible {
+	outline: none;
+	border-color: var(--oq-accent);
+	box-shadow: 0 0 0 3px var(--oq-accent-soft);
 }
 
 .text-field:disabled {
 	opacity: 0.6;
 }
 
+.management-window input[type="checkbox"],
+.management-window input[type="radio"],
+.management-window input[type="range"] {
+	accent-color: var(--oq-accent);
+}
+
+/* Segmented control: native radios. */
+
 .segmented {
 	display: inline-flex;
 	gap: 2px;
-	padding: 2px;
-	background: var(--quake-fill);
-	border: 1px solid var(--quake-border);
-	border-radius: 8px;
+	padding: 3px;
+	background: var(--oq-sunken);
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-md);
 }
 
 .segment {
@@ -325,90 +494,94 @@ textarea {
 
 .segment span {
 	display: flex;
+	flex: 1;
 	align-items: center;
-	min-height: 22px;
+	justify-content: center;
+	min-height: 26px;
 	padding: 0 12px;
-	color: var(--quake-muted);
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-button, 13.5px);
 	font-weight: 500;
 	white-space: nowrap;
-	border-radius: 6px;
+	border-radius: var(--oq-radius-sm);
 	transition: var(--quake-motion-control);
 }
 
 .segment:hover input:not(:checked, :disabled) + span {
-	color: var(--quake-foreground);
+	color: var(--oq-text);
 }
 
 .segment input:checked + span {
-	color: var(--quake-foreground);
-	background: var(--quake-raised);
-	box-shadow: var(--quake-shadow);
+	color: var(--oq-text);
+	font-weight: 600;
+	background: var(--oq-raised);
+	box-shadow:
+		0 0 0 1px var(--oq-hairline),
+		0 1px 2px rgb(0 0 0 / 0.12);
 }
 
 .segment input:focus-visible + span {
-	outline: 2px solid var(--quake-accent);
-	outline-offset: 1px;
+	box-shadow: var(--oq-focus-ring);
 }
 
 .segment input:disabled + span {
 	opacity: 0.45;
 }
 
-/* Status */
+/* Status: a dot is never the only signal; text sits beside it. */
 
 .status-dot {
 	flex: none;
 	width: 8px;
 	height: 8px;
-	background: var(--quake-muted);
+	background: var(--oq-text-muted);
 	border-radius: 50%;
 }
 
 .status-dot[data-tone="connected"] {
-	background: var(--quake-success);
-	box-shadow: 0 0 0 3px var(--quake-success-soft);
+	background: var(--oq-success);
 }
 
 .status-dot[data-tone="simulated"] {
-	background: var(--quake-accent);
-	box-shadow: 0 0 0 3px var(--quake-accent-soft);
+	background: var(--oq-accent);
 }
 
 .status-dot[data-tone="error"] {
-	background: var(--quake-warning);
+	background: var(--oq-danger);
 }
 
 .status-dot[data-tone="offline"],
 .status-dot[data-tone="unavailable"] {
 	background: transparent;
-	box-shadow: inset 0 0 0 1.5px var(--quake-muted);
+	box-shadow: inset 0 0 0 1.5px var(--oq-text-muted);
 }
 
 .status-dot[data-tone="checking"] {
+	background: var(--oq-warning);
 	animation: var(--quake-motion-pulse);
 }
 
 .callout {
 	margin: 0;
-	padding: 8px 12px;
-	color: var(--quake-foreground);
-	font-size: 12px;
-	background: var(--quake-fill);
-	border-radius: 8px;
+	padding: 10px 14px;
+	color: var(--oq-text);
+	font-size: var(--mc-font-meta, 12.5px);
+	background: var(--oq-hover);
+	border-radius: var(--oq-radius-md);
 }
 
 .callout[data-tone="warning"] {
-	background: var(--quake-warning-soft);
+	background: var(--oq-warning-soft);
 }
 
 .disclosure {
-	padding: 10px 14px;
+	padding: 12px var(--oq-space-4);
 }
 
 .disclosure summary {
 	width: fit-content;
-	color: var(--quake-accent);
-	font-weight: 500;
+	color: var(--oq-accent-ink);
+	font-weight: 550;
 }
 
 .disclosure pre {
@@ -416,15 +589,15 @@ textarea {
 	padding: 12px;
 	overflow-x: auto;
 	font: 12px / 1.5 var(--font-mono);
-	background: var(--quake-field);
-	border: 1px solid var(--quake-hairline);
-	border-radius: 8px;
+	background: var(--oq-sunken);
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-md);
 }
 
 .disclosure p {
 	margin: 0;
-	color: var(--quake-muted);
-	font-size: 12px;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta, 12.5px);
 }
 
 /* Feedback motion. Values are `none` unless motion is allowed (below). */
@@ -464,10 +637,10 @@ textarea {
 
 @media (prefers-reduced-motion: no-preference) {
 	:root[data-motion="full"] {
-		--quake-motion-feedback: value-reveal 180ms ease-out;
+		--quake-motion-feedback: value-reveal 160ms ease-out;
 		--quake-motion-control:
-			transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-			background-color 120ms ease-out;
+			transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+			background-color 120ms ease-out, color 120ms ease-out;
 		--quake-motion-pulse: status-pulse 1.6s ease-in-out infinite;
 		--quake-motion-press: knob-press 420ms ease-out;
 	}

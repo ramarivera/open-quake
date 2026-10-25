@@ -13,7 +13,13 @@ import {
 	parseCustomTheme,
 	validateCustomTheme,
 } from "./customTheme";
-import { themes, themeTokenNames, toThemeProperties } from "./tokens";
+import {
+	builtinThemeOrder,
+	themeLabels,
+	themes,
+	themeTokenNames,
+	toThemeProperties,
+} from "./tokens";
 
 const custom = {
 	version: 1,
@@ -23,7 +29,7 @@ const custom = {
 };
 
 describe("theme properties", () => {
-	it.each(["dark", "light"] as const)(
+	it.each(["dark", "grey", "light"] as const)(
 		"generates every semantic property for %s without extra CSS",
 		(name) => {
 			const palette = themes[name];
@@ -36,6 +42,19 @@ describe("theme properties", () => {
 		},
 	);
 
+	it("names the built-in themes independently of DK-Suite", () => {
+		expect(builtinThemeOrder.map((id) => themeLabels[id])).toEqual([
+			"Graphite",
+			"Midnight",
+			"Paper",
+		]);
+		// One accent hue across the dark themes; it is not DK's white or grey.
+		expect(themes.grey.accent).toBe(themes.dark.accent);
+		for (const name of ["dark", "grey"] as const) {
+			expect(themes[name].accent).not.toMatch(/^#(ffffff|5a5a5a)$/i);
+		}
+	});
+
 	it("replaces the complete palette when switching themes", () => {
 		const dark = toThemeProperties(themes.dark);
 		const light = toThemeProperties(themes.light);
@@ -45,7 +64,7 @@ describe("theme properties", () => {
 		}
 	});
 
-	it.each(["dark", "light"] as const)(
+	it.each(["dark", "grey", "light"] as const)(
 		"keeps %s text, status, and control labels at WCAG AA contrast",
 		(name) => {
 			const palette = themes[name];
@@ -84,6 +103,12 @@ describe("theme properties", () => {
 			expect(
 				contrast(palette["accent-text"], palette.accent),
 			).toBeGreaterThanOrEqual(4.5);
+			// Body text stays comfortably above AA; muted copy is still body copy.
+			for (const background of ["background", "surface"] as const) {
+				expect(
+					contrast(palette.foreground, palette[background]),
+				).toBeGreaterThanOrEqual(7);
+			}
 			// WCAG 1.4.11: control boundaries (the select border) need 3:1.
 			for (const background of ["background", "surface"] as const) {
 				expect(
@@ -104,7 +129,7 @@ describe("custom theme validation", () => {
 			...themes.light,
 			...custom.colors,
 		});
-		expect(themes.light.accent).toBe("#0369a1");
+		expect(themes.light.accent).toBe("#0b7466");
 	});
 
 	it("accepts a complete palette without dropping tokens", () => {

@@ -20,42 +20,60 @@ export type ThemeToken = (typeof themeTokenNames)[number];
 export type ThemeTokens = Readonly<Record<ThemeToken, string>>;
 export type BuiltinTheme = "dark" | "light" | "grey";
 
-// CENTER-004 fallbacks and MGMT-434 installed CSS, read without launching DK-Suite.
+/**
+ * open-quake's own palettes (nyd.2, superseding the recovered DK-Suite values).
+ * Neutral surfaces with one jade accent for primary action, selection and
+ * focus; green/amber stay state colours. Ids are stable stored values; the
+ * user-facing names live in themeLabels.
+ */
 export const themes = {
 	dark: {
-		background: "#0a0a0b",
-		surface: "#131316",
-		foreground: "#f4f4f5",
-		muted: "#a8a8b0",
-		border: "#75757e",
-		accent: "#ffffff",
-		"accent-text": "#0b0b0d",
-		success: "#4ade80",
-		warning: "#f5b547",
+		background: "#0f1011",
+		surface: "#17181a",
+		foreground: "#f0efec",
+		muted: "#9f9e99",
+		border: "#67686b",
+		accent: "#5fcab5",
+		"accent-text": "#062520",
+		success: "#62c98a",
+		warning: "#e7b153",
 	},
 	grey: {
-		background: "#282828",
-		surface: "#2f2f2f",
-		foreground: "#f0f0f0",
-		muted: "#a8a8a8",
-		border: "#8a8a8a",
-		accent: "#5a5a5a",
-		"accent-text": "#fafafa",
-		success: "#10b981",
-		warning: "#f5b547",
+		background: "#1c1d1f",
+		surface: "#242528",
+		foreground: "#ecebe8",
+		muted: "#a6a5a0",
+		border: "#727274",
+		accent: "#5fcab5",
+		"accent-text": "#062520",
+		success: "#62c98a",
+		warning: "#e7b153",
 	},
 	light: {
-		background: "#f6f4f0",
+		background: "#f5f4f1",
 		surface: "#ffffff",
-		foreground: "#211e1a",
-		muted: "#6e6960",
-		border: "#858078",
-		accent: "#0369a1",
+		foreground: "#1c1b19",
+		muted: "#5d5c57",
+		border: "#8c8b85",
+		accent: "#0b7466",
 		"accent-text": "#ffffff",
-		success: "#18733a",
-		warning: "#885500",
+		success: "#1d7a3e",
+		warning: "#8a5a00",
 	},
 } as const satisfies Record<BuiltinTheme, ThemeTokens>;
+
+export const themeLabels: Readonly<Record<BuiltinTheme, string>> = {
+	grey: "Graphite",
+	dark: "Midnight",
+	light: "Paper",
+};
+
+/** Display order for theme pickers: default first, then dark to light. */
+export const builtinThemeOrder: ReadonlyArray<BuiltinTheme> = [
+	"grey",
+	"dark",
+	"light",
+];
 
 export function toThemeProperties(
 	tokens: ThemeTokens,

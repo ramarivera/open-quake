@@ -143,7 +143,7 @@ export function useAppearance() {
 		const payload = {
 			base: base === "light" ? ("light" as const) : ("dark" as const),
 			background: tokens.background,
-			titlebar: base === "dark" ? "#0e1015" : tokens.background,
+			titlebar: tokens.background,
 			symbol: tokens.foreground,
 		};
 		const encoded = JSON.stringify(payload);
