@@ -7,7 +7,7 @@ import {
 	ProfileValidationFailed,
 } from "./profile-errors.js";
 import type { ProfileFunctionContract } from "./profile-function-contracts.js";
-import { inspectProfileText } from "./profile-import.js";
+import { inspectProfileText, remapImportedProfile } from "./profile-import.js";
 import { editProfilePages, type PageEdit } from "./profile-pages.js";
 import {
 	type ProfileCommitGuard,
@@ -54,15 +54,9 @@ export class ProfileService extends Effect.Service<ProfileService>()(
 									envelope.profiles.length >= 30
 								)
 									return yield* ProfileValidationFailed.fromCause(undefined);
-								const decoded = yield* Schema.decodeUnknown(Profile)({
-									...report.profile,
-									id,
-									revision: 0,
-									pages: report.profile.pages.map((page, i) => ({
-										...page,
-										id: `${id}-page-${i + 1}`,
-									})),
-								}).pipe(
+								const decoded = yield* Schema.decodeUnknown(Profile)(
+									remapImportedProfile(report.profile, id),
+								).pipe(
 									Effect.catchTag("ParseError", (cause) =>
 										Effect.fail(ProfileValidationFailed.fromCause(cause)),
 									),
