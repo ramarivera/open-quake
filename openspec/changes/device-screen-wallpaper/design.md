@@ -74,3 +74,11 @@ Import only user-selected settings, convert local references through the media a
 ## Approval and remaining verification
 
 Approved (Ramiro, 2026-10-23): all recommendations in this design, including first-release static-image/clock scope, serial scoping, empty-background policy, resource bounds, explicit hardware gate, and later event/binding behavior. Full-panel A2 targeting, actual panel output, USB timing/acks, and multi-display binding remain unverified. These cannot be closed by fake transport or renderer tests.
+
+## Cluster 18
+
+Retain the version-1 envelope and default a missing enableSound to false. Import into the existing hashed asset store; validate decoded video metadata with a hidden, always-muted Electron probe. A reorder command carries indices and an expected revision, never new paths. Playback selection lives in the existing media controller so both renderers receive the same active item. Renderer video sound is eligible only in the panel, with previews always muted. Existing AudioOutput remains the application playback owner; soundboard uses its existing conductor. This covers the sound and ordering portions of `WIDGETS-128/130`; crossfade art/geometry and proprietary defaults are not claimed.
+
+### Playlist deadlines
+
+The media controller runs the one-second display clock and the playlist deadline loop as concurrent children of the existing tick owner. A bounded wake queue cancels an old wait when the selected serial or ordered path/duration list changes. Each transition adds the next item's duration to the previous deadline, so late work catches up without discarding elapsed time. The existing semaphore serializes requests with playlist transitions, and stopping the tick owner interrupts both loops. Snapshots include the current item start time in host epoch milliseconds, derived from the same transition deadline. Newly mounted videos seek after metadata loads using the current elapsed time; singleton videos wrap that offset by duration. The audio-output owner is unchanged.

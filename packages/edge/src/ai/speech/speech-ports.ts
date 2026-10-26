@@ -40,6 +40,8 @@ export class SpeechOutput extends Context.Tag("@open-quake/edge/SpeechOutput")<
 		readonly acquire: Effect.Effect<
 			{
 				readonly ready: Effect.Effect<void, AiError>;
+				readonly contextState?: Effect.Effect<string, AiError>;
+				readonly resume?: Effect.Effect<void, AiError>;
 				readonly play: (audio: GeneratedAudio) => Effect.Effect<void, AiError>;
 				readonly stop: Effect.Effect<void>;
 			},

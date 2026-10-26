@@ -43,6 +43,7 @@ class Window extends EventEmitter {
 	}
 	url = "";
 	webContents = {
+		setAudioMuted: () => {},
 		send: (channel, event) => events.push({ channel, event }),
 		isDestroyed: () => false,
 		getURL: () => this.url,

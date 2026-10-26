@@ -2,7 +2,10 @@ import { Option } from "effect";
 import { memo, useCallback, useLayoutEffect, useRef } from "react";
 import "../../css-properties";
 import { type StripLocale, stripText } from "../../overlays/voice/strings";
-import { useSubTouchMessages } from "../../overlays/voice/sub-touch";
+import {
+	useSubTouchMessages,
+	useSubTouchTap,
+} from "../../overlays/voice/sub-touch";
 import type { StripTileProps } from "../../tileRegistry";
 import type {
 	ChatGroup,
@@ -323,6 +326,17 @@ export function ClawBotTile({
 	const scale = clawBotScale(width, height);
 	const state = view.conversation;
 	const request = context.voice.request;
+	const pill = useRef<HTMLButtonElement>(null);
+	const readKey = Option.getOrElse(state.activeKey, () => tile.keyCode);
+	const readAloud = (): void => {
+		if (surface !== "panel") return;
+		void request({ _tag: "ReadAloud", keyCode: readKey });
+	};
+	useSubTouchTap(pill, readAloud);
+	const readPhase =
+		context.voice.surface === "panel"
+			? (context.voice.view.readAloud.get(readKey)?.phase ?? "idle")
+			: "idle";
 	const open = useCallback(
 		(url: string) => {
 			void request({ _tag: "OpenLink", url });
@@ -360,14 +374,14 @@ export function ClawBotTile({
 				</div>
 				<button
 					type="button"
+					ref={pill}
 					className="clawbot-pill"
+					data-read-aloud={readPhase}
+					aria-label="Read aloud"
+					aria-pressed={readPhase !== "idle"}
+					disabled={context.voice.surface !== "panel"}
 					data-quake-sub-touch="quakeBotHeaderTouchIcon"
-					onClick={() => {
-						void context.voice.request({
-							_tag: "ReadAloud",
-							keyCode: tile.keyCode,
-						});
-					}}
+					onClick={readAloud}
 					style={{
 						minHeight: 32 * scale,
 						padding: `${6 * scale}px ${16 * scale}px`,
@@ -381,9 +395,20 @@ export function ClawBotTile({
 						aria-hidden="true"
 						style={{ height: 26 * scale }}
 					>
-						<span className="clawbot-dot-idle" />
-						<span className="clawbot-dot-idle" />
-						<span className="clawbot-dot-idle" />
+						{["a", "b", "c", "d", "e", "f", "g"]
+							.slice(0, readPhase === "speaking" ? 7 : 3)
+							.map((id) => (
+								<span
+									key={id}
+									className={
+										readPhase === "speaking"
+											? "clawbot-wave-bar"
+											: readPhase === "thinking"
+												? "clawbot-think-dot"
+												: "clawbot-dot-idle"
+									}
+								/>
+							))}
 					</span>
 					<span
 						className="clawbot-badge"

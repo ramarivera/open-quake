@@ -43,6 +43,14 @@ export class ProfileStorage extends Context.Tag(
 	"@open-quake/device/ProfileStorage",
 )<ProfileStorage, ProfileStoragePort>() {}
 
+/** Runs after publication while the commit lock is held. Must not reenter the repository. */
+export class ProfileSelectionCommit extends Context.Tag(
+	"@open-quake/device/ProfileSelectionCommit",
+)<
+	ProfileSelectionCommit,
+	{ readonly changed: (deviceId: string) => Effect.Effect<void> }
+>() {}
+
 export interface ProfileLoadResult {
 	readonly envelope: ProfileEnvelope;
 	readonly repairedSelections: readonly string[];
@@ -91,9 +99,30 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 		effect: Effect.gen(function* () {
 			const storage = yield* ProfileStorage;
 			const functions = yield* ProfileFunctionContracts;
+			const selectionCommit = yield* Effect.serviceOption(
+				ProfileSelectionCommit,
+			);
 			const mutex = yield* Effect.makeSemaphore(1);
 			const committed = yield* SubscriptionRef.make(
 				Option.none<ProfileEnvelope>(),
+			);
+			const publishCommitted = Effect.fn("ProfileRepository.publishCommitted")(
+				function* (previous: ProfileEnvelope, next: ProfileEnvelope) {
+					yield* SubscriptionRef.set(committed, Option.some(next));
+					if (Option.isNone(selectionCommit)) return;
+					for (const deviceId of new Set([
+						...Object.keys(previous.activeByDevice),
+						...Object.keys(next.activeByDevice),
+					])) {
+						const before = previous.activeByDevice[deviceId];
+						const after = next.activeByDevice[deviceId];
+						if (
+							before?.profileId !== after?.profileId ||
+							before?.pageId !== after?.pageId
+						)
+							yield* selectionCommit.value.changed(deviceId);
+					}
+				},
 			);
 			const loadUnlocked = Effect.fn("ProfileRepository.loadUnlocked")(
 				function* (): Effect.fn.Return<
@@ -224,7 +253,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							]);
 						yield* write(candidate);
 						// No draft or failed write reaches subscribers.
-						yield* SubscriptionRef.set(committed, Option.some(candidate));
+						yield* publishCommitted(envelope, candidate);
 						return candidate;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
 			);
@@ -265,7 +294,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							},
 						};
 						yield* write(candidate, guard);
-						yield* SubscriptionRef.set(committed, Option.some(candidate));
+						yield* publishCommitted(envelope, candidate);
 						return candidate;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
 			);
@@ -286,7 +315,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							),
 						);
 						yield* write(snapshot, guard);
-						yield* SubscriptionRef.set(committed, Option.some(snapshot));
+						yield* publishCommitted(envelope, snapshot);
 						return snapshot;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
 			);

@@ -3,7 +3,10 @@ import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters";
-import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import {
+	type KeyActivation,
+	KeyRuntime,
+} from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
@@ -19,6 +22,8 @@ import {
 import {
 	ProfileDeliveryFailed,
 	ProfileNotFound,
+	ProfileSelectionResetFailed,
+	ProfileSelectionResetTimedOut,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
@@ -29,6 +34,7 @@ import type {
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
 	ProfileRepository,
+	ProfileSelectionCommit,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
@@ -50,6 +56,7 @@ import { prepareDesktopModule } from "../diagnostics/module";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
+import { encodeRendererProfile } from "./clock-profile-projection";
 import { makeScopedForegroundProbe } from "./foreground-app";
 import {
 	canonicalProfileAppPath,
@@ -75,9 +82,14 @@ export function prepareProfiles(
 	managementURL = renderer,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
-	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	executeOwned?: (
+		key: ProfileKey,
+		signal: AbortSignal,
+		activation: KeyActivation,
+	) => Promise<boolean>,
 	diagnostics?: DesktopDiagnostics,
 	mediaActions?: MediaActionAdapter,
+	resetOwned?: (deviceId?: string) => Promise<void>,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -88,29 +100,19 @@ export function prepareProfiles(
 	const root = join(app.getPath("userData"), "profiles");
 	const data = createDesktopProfileStorage(
 		join(app.getPath("userData"), "profiles-v1.json"),
+		undefined,
+		() =>
+			encodeProfileEnvelope(
+				Schema.decodeUnknownSync(ProfileEnvelope)({
+					schemaVersion: 1,
+					profiles: builtinProfiles(platform).map((p) =>
+						Schema.encodeSync(Profile)(p),
+					),
+					activeByDevice: {},
+				}),
+			),
 	);
-	const storage = {
-		...data,
-		read: async (): Promise<unknown> => {
-			const raw = await data.read();
-			// Only an adapter-created fresh seed is replaced. Existing users keep their custom profiles.
-			if (data.recoveries.at(-1)?.reason === "seeded") {
-				const profiles = builtinProfiles(platform);
-				const first = profiles[0];
-				if (first)
-					return {
-						...encodeProfileEnvelope(
-							Schema.decodeUnknownSync(ProfileEnvelope)({
-								schemaVersion: 1,
-								profiles: profiles.map((p) => Schema.encodeSync(Profile)(p)),
-								activeByDevice: {},
-							}),
-						),
-					};
-			}
-			return raw;
-		},
-	};
+	const storage = data;
 	const broadcast = (channel: string, value: unknown): void => {
 		for (const win of BrowserWindow.getAllWindows())
 			if (!win.isDestroyed() && !win.webContents.isDestroyed())
@@ -125,6 +127,32 @@ export function prepareProfiles(
 			ProfileRepository.DefaultWithoutDependencies.pipe(
 				Layer.provide(profileStorageLayer(storage)),
 				Layer.provide(ManagementProfileContractsLive),
+				Layer.provide(
+					Layer.succeed(ProfileSelectionCommit, {
+						changed: (serial) =>
+							resetOwned
+								? Effect.tryPromise({
+										try: () => resetOwned(serial),
+										catch: ProfileSelectionResetFailed.fromCause,
+									}).pipe(
+										// Repository commits are uninterruptible. Only this
+										// post-publication promise wait must be interruptible.
+										Effect.interruptible,
+										Effect.timeoutFail({
+											duration: "5 seconds",
+											onTimeout: () =>
+												ProfileSelectionResetTimedOut.fromCause(undefined),
+										}),
+										Effect.catchAll((error) =>
+											Effect.logWarning("profiles.selection.reset.failed", {
+												code: error.code,
+												diagnosticCause: error.diagnosticCause,
+											}),
+										),
+									)
+								: Effect.void,
+					}),
+				),
 			),
 		),
 		Layer.provide(
@@ -146,7 +174,7 @@ export function prepareProfiles(
 									guard?.();
 									broadcast(PROFILE_SELECTION, {
 										serial,
-										profile: Schema.encodeSync(Profile)(profile),
+										profile: encodeRendererProfile(profile),
 										hardware: "unverified",
 									});
 								},
@@ -169,6 +197,7 @@ export function prepareProfiles(
 						undefined,
 						executeOwned,
 						mediaActions,
+						resetOwned,
 					),
 				),
 			),

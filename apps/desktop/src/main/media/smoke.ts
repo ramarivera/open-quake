@@ -11,6 +11,11 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
+	createEmptyProfileKey,
+	ProfileEnvelope,
+	ProfileKey,
+} from "../../../../../packages/device/src/profiles/profile-contracts";
+import {
 	ProfileRepository,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
@@ -20,6 +25,9 @@ import {
 	SYNTHETIC_TOUCH_EMPTY,
 	SYNTHETIC_TOUCH_MOVE,
 } from "../../../../../packages/device/src/touch/touch-fixtures";
+import { fakeObsServer } from "../../../../../packages/edge/src/obs/fake-server.test-support";
+import { emptyObsSaved } from "../../../../../packages/edge/src/obs/obs-contracts";
+import { openObsConnection } from "../../../../../packages/edge/src/obs/obs-transport";
 import { AGENTS_REQUEST, type AgentReply } from "../../shared/agents";
 import { KEY_RUNTIME } from "../../shared/key-library";
 import { PROFILES_SNAPSHOT } from "../../shared/profile-snapshot-contracts";
@@ -41,7 +49,10 @@ import { registerManagementAppearance } from "../management/appearance";
 import { registerMeetings } from "../meetings";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
+import { prepareObs } from "../obs";
+import { visibleObsKeys } from "../obs/visibility";
 import { registerProfiles } from "../profiles/profile-ipc";
+import { registerAppLocale } from "../settings/registration";
 import { makeDisplay } from "../test/display";
 import {
 	clockProfile,
@@ -67,6 +78,7 @@ assert.equal(
 );
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
+if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 // The clock tile reads its own store, as in the app.
 registerClockScheme();
 const pngPath = join(directory, "checkerboard.png");
@@ -94,6 +106,7 @@ let managementWindow: BrowserWindow | undefined;
 /** Serves one committed fixture to both snapshot and key-runtime consumers. */
 function serveProfiles(envelope: EncodedProfileEnvelope): {
 	dispose: () => Promise<void>;
+	read: () => Promise<ProfileEnvelope>;
 } {
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -127,6 +140,12 @@ function serveProfiles(envelope: EncodedProfileEnvelope): {
 	const snapshots = registerProfiles(runtime, renderer, false);
 	const keys = registerKeyLibrary(runtime, () => managementWindow, renderer);
 	return {
+		read: () =>
+			runtime.runPromise(
+				ProfileService.loadProfiles().pipe(
+					Effect.map(({ envelope }) => envelope),
+				),
+			),
 		dispose: async () => {
 			await keys.dispose();
 			await snapshots.dispose();
@@ -172,6 +191,14 @@ async function smoke(): Promise<void> {
 	const management = new BrowserWindow(options);
 	managementWindow = management;
 	const panel = new BrowserWindow(options);
+	const locale = registerAppLocale({
+		directory,
+		osLocale: "en-US",
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		windows: () => [management, panel],
+	});
+	management.webContents.setAudioMuted(true);
+	panel.webContents.setAudioMuted(true);
 	// This media-only fixture has no agent service; the management smoke owns it.
 	ipcMain.handle(
 		AGENTS_REQUEST,
@@ -412,6 +439,72 @@ async function smoke(): Promise<void> {
 		width: "480",
 		height: "480",
 	});
+	const actionLabels: unknown = await management.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.button-row button')].map(button => button.textContent)`,
+	);
+	assert(
+		Array.isArray(actionLabels) &&
+			actionLabels.includes("Add Media…") &&
+			actionLabels.includes("Remove All"),
+	);
+	// Cluster 18: exercise the mounted playlist editor without foreground input.
+	selectedPath = pngPath;
+	await request(management, {
+		_tag: "import",
+		serial: "smoke-A",
+		revision: (await request(management, { _tag: "read" })).saved.revision,
+		append: true,
+	});
+	await settle(150);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('button[aria-label="Move checkerboard.png up"]').click(); null;`,
+	);
+	await settle(150);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.settings
+			.displayMediaList[0]?.name,
+		"checkerboard.png",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+ const rows = document.querySelectorAll('.wallpaper-playlist li'); const dataTransfer = new DataTransfer();
+ rows[0].dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+ rows[1].dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer }));
+ rows[1].dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer }));
+ return null;
+ })()`);
+	await settle(150);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.settings
+			.displayMediaList[0]?.name,
+		"second.jpg",
+	);
+	const beforeNoop = await request(management, { _tag: "read" });
+	await management.webContents.executeJavaScript(`(() => {
+ const row = document.querySelector('.wallpaper-playlist li'); const dataTransfer = new DataTransfer();
+ row.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+ row.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer })); return null;
+ })()`);
+	await settle(150);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.revision,
+		beforeNoop.saved.revision,
+	);
+	for (const enabled of [true, false]) {
+		await management.webContents.executeJavaScript(
+			`(() => { const row = [...document.querySelectorAll('.row')].find(row => row.textContent.includes('Video Sound')); row.querySelector('input[value="${enabled ? "on" : "off"}"]').click(); return null; })()`,
+		);
+		await settle(150);
+		assert.equal(
+			(await request(management, { _tag: "read" })).saved.settings.enableSound,
+			enabled,
+		);
+	}
+	assert.equal(management.webContents.isAudioMuted(), true);
+	assert.equal(panel.webContents.isAudioMuted(), true);
+	process.stdout.write(
+		"Cluster 18 renderer PASS: move buttons, drag reorder, persisted order, sound on/off, muted windows.\n",
+	);
+
 	const errors: unknown = await management.webContents.executeJavaScript(
 		"document.body.innerText",
 	);
@@ -421,6 +514,52 @@ async function smoke(): Promise<void> {
 	const artifacts = process.argv[2];
 	if (artifacts) await mkdir(artifacts, { recursive: true });
 	management.setSize(1100, 1000);
+	await settle(150);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "wallpaper-playlist.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await management.webContents.executeJavaScript(
+		"window.quakeLocale.set('de')",
+	);
+	await settle(150);
+	const germanLabels: unknown = await management.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.button-row button')].map(button => button.textContent)`,
+	);
+	assert(
+		Array.isArray(germanLabels) &&
+			germanLabels.includes("Medien hinzufügen…") &&
+			germanLabels.includes("Alle entfernen"),
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "wallpaper-playlist-de.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await management.webContents.executeJavaScript(
+		"window.quakeLocale.set('en')",
+	);
+	await settle(150);
+	if (artifacts) {
+		management.setSize(390, 844);
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.wallpaper-playlist').scrollIntoView(); null;",
+		);
+		await settle(150);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				"document.documentElement.scrollWidth > innerWidth",
+			),
+			false,
+		);
+		await writeFile(
+			join(artifacts, "wallpaper-playlist-narrow.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+		management.setSize(1100, 1000);
+	}
+
 	// Exercise the production diagnostic preload/handler/controller with synthetic topology.
 	await management.webContents.executeJavaScript(
 		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
@@ -622,6 +761,464 @@ async function smoke(): Promise<void> {
 		);
 	await lifecycleRuntime.runPromise(lifecycle.topology());
 	// Built-in-like profiles on the panel, swapped through the read-only channel.
+	const obsServer = await fakeObsServer({
+		scenes: [
+			{ sceneUuid: "scene-1", sceneName: "Main" },
+			{ sceneUuid: "scene-2", sceneName: "Second scene" },
+		],
+		sceneItems: {
+			"scene-1": [{ sceneItemId: 7, sourceName: "Camera" }],
+			"scene-2": [{ sceneItemId: 42, sourceName: "Second camera" }],
+		},
+		silentInputs: ["image-1"],
+		inputs: [
+			{
+				inputUuid: "media-1",
+				inputName: "Media clips",
+				inputKind: "ffmpeg_source",
+			},
+			{
+				inputUuid: "vlc-1",
+				inputName: "VLC playlist",
+				inputKind: "vlc_source",
+			},
+			{
+				inputUuid: "capture-1",
+				inputName: "Windows microphone",
+				inputKind: "wasapi_input_capture",
+			},
+			{
+				inputUuid: "plugin-1",
+				inputName: "Plugin audio",
+				inputKind: "custom_source",
+			},
+			{
+				inputUuid: "image-1",
+				inputName: "Still image",
+				inputKind: "image_source",
+			},
+		],
+	});
+	const jpeg = nativeImage
+		.createFromBitmap(Buffer.alloc(128 * 128 * 4, 180), {
+			width: 128,
+			height: 128,
+		})
+		.toJPEG(50)
+		.toString("base64");
+	let obsSaved: unknown = {
+		...emptyObsSaved,
+		port: obsServer.port,
+		manualOverride: true,
+	};
+	// The fake server supplies a valid jpeg for the real Chromium decoder.
+	const obsRegistration = prepareObs({
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		management: () => management,
+		panel: () => panel,
+		visibleKeys: async () => visibleObsKeys(await profiles.read(), "smoke-A"),
+		mock: true,
+		storage: {
+			store: {
+				read: async () => obsSaved,
+				write: async (value) => {
+					obsSaved = value;
+				},
+			},
+			vault: {
+				put: async () => "fixture-reference",
+				get: async () => "",
+				remove: async () => {},
+			},
+			detect: async () => undefined,
+		},
+		open: openObsConnection,
+	}).standalone();
+	obsServer.screenshot(`data:image/jpeg;base64,${jpeg}`);
+	const obsKey = (type: string, code: string, settings: unknown) => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code));
+		return {
+			...empty,
+			childrenName: type,
+			config: {
+				...empty.config,
+				type,
+				display: true,
+				actions: [{ type: "configData", value: JSON.stringify(settings) }],
+			},
+		};
+	};
+	const obsProfile = {
+		schemaVersion: 1,
+		profiles: [
+			{
+				id: "obs",
+				name: "OBS",
+				revision: 0,
+				pages: [
+					{
+						id: "one",
+						keys: [
+							obsKey("obsStream", "1,1", { mode: "toggle" }),
+							obsKey("obsStats", "1,2", {}),
+							obsKey("obsScreenshot", "1,4", {
+								sourceName: "Main",
+								sceneUuid: "deleted-scene",
+							}),
+						],
+					},
+				],
+			},
+		],
+		activeByDevice: { "smoke-A": { profileId: "obs", pageId: "one" } },
+	};
+	await profiles.dispose();
+	profiles = serveProfiles(
+		Schema.encodeSync(ProfileEnvelope)(
+			Schema.decodeUnknownSync(ProfileEnvelope)(obsProfile),
+		),
+	);
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
+	await settle(2500);
+	const obsView: unknown = await panel.webContents.executeJavaScript(
+		`(() => ({ count: document.querySelectorAll('.obs-tile').length, text: [...document.querySelectorAll('.obs-tile')].map((node) => node.textContent), image: !!document.querySelector('.obs-screenshot')?.naturalWidth, hidden: document.hidden }))()`,
+	);
+	assert(
+		Schema.is(
+			Schema.Struct({
+				count: Schema.Number,
+				text: Schema.Array(Schema.String),
+				image: Schema.Boolean,
+				hidden: Schema.Boolean,
+			}),
+		)(obsView),
+	);
+	assert.equal(obsView.count, 3);
+	assert(
+		obsView.text.some((text) => text.includes("LIVE")),
+		JSON.stringify(obsView),
+	);
+	assert(
+		obsView.text.some((text) => text.includes("CPU 12.3%")),
+		JSON.stringify(obsView),
+	);
+	assert(obsView.image, JSON.stringify(obsView));
+	assert.equal(
+		await panel.webContents.executeJavaScript(`(() => {
+		const tile = document.querySelector('.obs-tile');
+		const label = tile.querySelector('span');
+		const a = tile.getBoundingClientRect(), b = label.getBoundingClientRect();
+		return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 2;
+	})()`),
+		true,
+		"OBS state text must be vertically centered",
+	);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Keys"]').click(); null;`,
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('.keys-cells') !== null",
+	);
+	await management.webContents.executeJavaScript(
+		`([...document.querySelectorAll('.keys-cells button')].find(button => button.textContent === '1,4')).click(); null;`,
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('#obs-scene option[value=\"scene-1\"]') !== null",
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('.keys-preview .obs-screenshot')?.naturalWidth > 0",
+	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('.keys-preview .obs-tile')].some(tile => tile.textContent.includes('CPU 12.3%'))`,
+		),
+		true,
+		"Read-only management preview must show live OBS stats and decoded screenshots",
+	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('#obs-scene option[value="deleted-scene"]').disabled`,
+		),
+		true,
+		"Missing saved scene must remain as an unavailable option alongside replacements",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#obs-scene');
+		select.value = 'scene-1'; select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await settle(100);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.key-editor .button-primary').click(); null;`,
+	);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(`(async () => {
+		const reply = await window.quakeKeyLibrary.request({type:'read',locale:'en'});
+		const key = reply.envelope?.profiles[0]?.pages[0]?.keys.find(key => key.keyCode === '1,4');
+		const settings = JSON.parse(key?.config.actions[0]?.value || '{}');
+		return settings.sceneUuid === 'scene-1' && settings.sourceName === 'Main' && !('sceneName' in settings);
+	})()`),
+		true,
+		"Screenshot editor must save the selected scene through production IPC",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "management-obs.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await waitForVoice(
+		panel,
+		"document.querySelector('.obs-screenshot')?.naturalWidth > 0",
+	);
+	await management.webContents.executeJavaScript(
+		`([...document.querySelectorAll('.keys-cells button')].find(button => button.textContent === '1,6')).click(); null;`,
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('#key-function') !== null",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#key-function'); select.value = 'obsVolume';
+		select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await waitForVoice(
+		management,
+		"document.querySelector('#obs-input option[value=\"Desktop Audio\"]') !== null",
+	);
+	for (const type of ["obsMute", "obsVolume", "obsAudioMonitor", "obsMedia"]) {
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#key-function'); select.value = ${JSON.stringify(type)};
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await settle(100);
+		const values = await management.webContents.executeJavaScript(
+			`Array.from(document.querySelector('#obs-input').options, option => option.value)`,
+		);
+		for (const id of type === "obsMedia"
+			? ["media-1", "vlc-1"]
+			: ["media-1", "vlc-1", "capture-1", "plugin-1", "Desktop Audio"])
+			assert(
+				values.includes(id),
+				`${type} must list ${id}, got ${JSON.stringify(values)}`,
+			);
+		assert(
+			!values.includes("image-1"),
+			"Silent images must not appear in audio controls",
+		);
+	}
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#key-function'); select.value = 'obsVolume';
+		select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await settle(100);
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#obs-input'); select.value = 'Desktop Audio';
+		select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await settle(100);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.key-editor .button-primary').click(); null;`,
+	);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(`(async () => {
+		const reply = await window.quakeKeyLibrary.request({type:'read',locale:'en'});
+		const key = reply.envelope?.profiles[0]?.pages[0]?.keys.find(key => key.keyCode === '1,6');
+		return key?.config.type === 'obsVolume' && key.config.supportKnob === true && JSON.parse(key.config.actions[0].value).inputUuid === 'Desktop Audio';
+	})()`),
+		true,
+		"Volume editor must save a knob-enabled special audio input",
+	);
+	await waitForVoice(
+		panel,
+		"document.querySelector('.obs-screenshot')?.naturalWidth > 0",
+	);
+	assert.deepEqual(
+		await panel.webContents.executeJavaScript(
+			`window.quakeObs.request({type:'configure', config:{host:'localhost',port:4455,autoConnect:false},password:'fixture-only'})`,
+		),
+		{
+			type: "error",
+			code: "OBS.IPC.REJECTED",
+			message: "OBS request was rejected",
+		},
+		"Panel cannot mutate OBS credentials or connection settings",
+	);
+	assert.equal(
+		(
+			await panel.webContents.executeJavaScript(
+				`window.quakeObs.request({type:'visible', lease:'forged', tiles:[{id:'1,4',command:{type:'obsScreenshot',settings:{sourceName:'Private'}}}]})`,
+			)
+		).type,
+		"error",
+		"Panel cannot request an uncommitted screenshot source",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "panel-obs.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
+	const replacementObs = await fakeObsServer({
+		scenes: [
+			{ sceneUuid: "replacement-scene", sceneName: "Replacement scene" },
+		],
+		transitions: [{ transitionName: "Replacement transition" }],
+		inputs: [
+			{
+				inputUuid: "replacement-input",
+				inputName: "Replacement input",
+				inputKind: "wasapi_input_capture",
+			},
+		],
+	});
+	const changeObsFunction = async (type: string) => {
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#key-function'); select.value = ${JSON.stringify(type)};
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await settle(100);
+	};
+	const reconnectObs = async (host: string, port: number) => {
+		await management.webContents.executeJavaScript(`(() => {
+			const toggle = document.querySelector('.obs-controls button');
+			if (toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+		})()`);
+		await waitForVoice(
+			management,
+			"document.querySelector('#obs-port') !== null",
+		);
+		await management.webContents.executeJavaScript(`(() => {
+			const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+			for (const [id, value] of [['obs-host', ${JSON.stringify(host)}], ['obs-port', '${port}']]) {
+				const input = document.getElementById(id); set.call(input, value);
+				input.dispatchEvent(new Event('input', {bubbles:true}));
+			}
+		})()`);
+		await settle(50);
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('.obs-connection button')].find(button => button.textContent === 'Connect').click(); null;`,
+		);
+		await waitForVoice(
+			management,
+			`document.querySelector('.obs-controls [role="status"]').textContent === 'Connected' && [...document.querySelectorAll('.obs-connection button')].some(button => button.textContent === 'Connect' && !button.disabled)`,
+		);
+	};
+	try {
+		await changeObsFunction("obsSource");
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#obs-scene'); select.value = 'scene-1';
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-item option[value="7"]') !== null`,
+		);
+		obsServer.delay("GetSceneItemList", 600);
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#obs-scene'); select.value = 'scene-2';
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-scene').value === 'scene-2'`,
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				`document.querySelector('#obs-item option[value="7"]') === null && document.querySelector('#obs-item option[value="42"]') === null`,
+			),
+			true,
+			"Changing scenes clears source choices before the delayed new catalog arrives",
+		);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-item option[value="42"]') !== null`,
+		);
+		obsServer.delay("GetSceneItemList", 0);
+		process.stdout.write(
+			"OBS scene regression PASS: old sources clear during delayed scene-item loading.\n",
+		);
+		await changeObsFunction("obsSceneTransitionOverride");
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-scene option[value="scene-1"]') !== null`,
+		);
+		await reconnectObs("localhost", replacementObs.port);
+		assert.equal(
+			replacementObs.connections(),
+			1,
+			"Connect must actually establish the replacement endpoint",
+		);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-scene option[value="replacement-scene"]') !== null`,
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(`(() => {
+				const values = [...document.querySelectorAll('.obs-connection select option')].map(option => option.value);
+				return values.includes('Replacement transition') && !values.includes('scene-1') && !values.includes('Fade');
+			})()`),
+			true,
+			"Connected-to-connected reconnect must replace scene and transition choices",
+		);
+		await changeObsFunction("obsVolume");
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-input option[value="replacement-input"]') !== null`,
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				`document.querySelector('#obs-input option[value="plugin-1"]') === null`,
+			),
+			true,
+			"Reconnect must remove the previous instance's input choices",
+		);
+		const catalogCalls = obsServer.calls.filter(
+			(call) => call.type === "GetSceneList",
+		).length;
+		obsServer.fail(["GetSceneList"]);
+		await reconnectObs("127.0.0.1", obsServer.port);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-input option[value="replacement-input"]') === null`,
+		);
+		assert(
+			obsServer.calls.filter((call) => call.type === "GetSceneList").length >
+				catalogCalls,
+			"Reconnect must attempt a fresh catalog even when loading fails",
+		);
+		if (artifacts)
+			await writeFile(
+				join(artifacts, "management-obs-reconnect.png"),
+				(await management.webContents.capturePage()).toPNG(),
+			);
+		process.stdout.write(
+			"OBS reconnect regression PASS: changed host/port replaces scenes, inputs and transitions; failed reload clears old targets.\n",
+		);
+	} finally {
+		obsServer.fail([]);
+		await replacementObs.close();
+	}
+	await panel.loadURL("about:blank");
+	await management.loadURL("about:blank");
+	await settle(50);
+	const obsCalls = obsServer.calls.length;
+	await settle(2100);
+	assert.equal(
+		obsServer.calls.length,
+		obsCalls,
+		"Released OBS profile must stop polling",
+	);
+	await obsRegistration.dispose();
+	await obsServer.close();
+	await management.loadFile(resolve("out/renderer/index.html"));
+	process.stdout.write(
+		"OBS native smoke PASS: production preload, status/stats/jpeg tiles, fixed spans, renderer navigation stops polling.\n",
+	);
 	const fixtures = [
 		["quick", quickProfile, "commonBaseTheme"],
 		["meetai", meetAiProfile, "meetingAssistantTheme"],
@@ -644,6 +1241,60 @@ async function smoke(): Promise<void> {
 			vivid: theme === undefined ? "true" : "false",
 			clock: name === "clock",
 		});
+		if (name === "vivid" && process.env.OPEN_QUAKE_SMOKE_VIDEO) {
+			selectedPath = process.env.OPEN_QUAKE_SMOKE_VIDEO;
+			const imported = await request(management, {
+				_tag: "import",
+				serial: "smoke-A",
+				revision: (await request(management, { _tag: "read" })).saved.revision,
+			});
+			assert.equal(imported.saved.settings.displayMediaList[0]?.type, "video");
+			assert.equal(imported.asset._tag, "ready");
+			await request(management, {
+				_tag: "sound",
+				serial: "smoke-A",
+				revision: imported.saved.revision,
+				enableSound: true,
+			});
+			await settle(3600);
+			const video: unknown = await panel.webContents.executeJavaScript(`(() => {
+    const video = document.querySelector('.wallpaper-canvas video');
+    return { loop: video?.loop, playing: video && !video.paused, advanced: video?.currentTime > 0, ready: video?.readyState >= 2 };
+   })()`);
+			assert.deepEqual(video, {
+				loop: true,
+				playing: true,
+				advanced: true,
+				ready: true,
+			});
+			// A late panel mount must join the controller's existing playback position.
+			const running = await request(management, { _tag: "read" });
+			assert.notEqual(running.playbackStartedAt, undefined);
+			await panel.reload();
+			await settle(1200);
+			const timing: { position: number; duration: number } =
+				await panel.webContents.executeJavaScript(`(() => {
+        const video = document.querySelector('.wallpaper-canvas video');
+        return { position: video?.currentTime, duration: video?.duration };
+      })()`);
+			const stillRunning = await request(management, { _tag: "read" });
+			assert.equal(stillRunning.playbackStartedAt, running.playbackStartedAt);
+			assert.equal(stillRunning.playbackId, running.playbackId);
+			const expected =
+				((Date.now() - (running.playbackStartedAt ?? 0)) / 1000) %
+				timing.duration;
+			const drift = Math.abs(timing.position - expected);
+			assert(
+				Math.min(drift, timing.duration - drift) < 0.7,
+				`Late mount drift ${drift}s`,
+			);
+			assert.equal(panel.webContents.isAudioMuted(), true);
+			assert.equal(management.webContents.isAudioMuted(), true);
+			process.stdout.write(
+				"Cluster 18 native video PASS: managed import, metadata, real renderer playback and singleton loop; all windows muted.\n",
+			);
+		}
+
 		if (artifacts)
 			await writeFile(
 				join(artifacts, `panel-${name}.png`),
@@ -853,6 +1504,7 @@ async function smoke(): Promise<void> {
 	removeLifecycle();
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
+	await locale.dispose();
 	await clock.dispose();
 	await meetings.dispose();
 	await voice.dispose();
@@ -863,6 +1515,16 @@ async function smoke(): Promise<void> {
 		"W6 Electron smoke PASS: spoofed panel mutations rejected, native PNG/JPEG decoding, isolated serials, real preload/IPC, three fill modes, synchronized one-second clock, light theme/reduced motion, hidden panel/preview, strip key grid for five built-in-like profiles. Hardware unverified.\n",
 	);
 }
+
+// Fail headlessly on native callback errors instead of opening Electron's modal dialog.
+const fatal = (cause: unknown): void => {
+	process.stderr.write(
+		`${cause instanceof Error ? cause.stack : String(cause)}\n`,
+	);
+	app.exit(1);
+};
+process.on("uncaughtException", fatal);
+process.on("unhandledRejection", fatal);
 
 smoke()
 	.then(async () => {

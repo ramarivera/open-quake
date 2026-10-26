@@ -408,3 +408,52 @@ It SHALL call no provider and SHALL mark itself mock. Without mock mode and with
 - **WHEN** cancellation or release targets another key or a stale generation
 - **THEN** the current mock capture continues with its original key and capture ID
 - **AND** cancellation of its owning key and generation closes that capture and its mic bar
+
+
+### Requirement: Capture consumer parity
+
+The production capture consumer SHALL feed floating-point RMS and absolute peak into the level meter, reset meter timestamp and VAD state per capture, and publish speaking/listening stage changes on VAD transitions without stopping capture. Meter speaking and VAD detection SHALL remain separate signals. Covers KNOB-050, KNOB-054.
+
+#### Scenario: Quiet hysteresis and successor capture
+
+- **WHEN** a peak above 15 percent is followed by 14 quiet buffers and then a fifteenth quiet buffer
+- **THEN** VAD remains speaking through buffer 14 and returns to listening on buffer 15 without stopping capture
+- **AND** the next capture starts listening and can emit its first level immediately
+
+### Requirement: Scoped strip input blur recovery
+
+Decision adopted by the lead on 2026-10-26: the strip chat textarea SHALL refocus 100 ms after blur only while its panel chat surface remains active and owns the same selected assistant. Preview surfaces SHALL never refocus. Closing the surface, opening an ownership-taking overlay, changing profile or selected assistant, and unmounting SHALL cancel pending recovery and focus handovers. Covers AI-183.
+
+#### Scenario: Blur then close or transfer
+
+- **WHEN** an owned textarea blurs
+- **THEN** it remains unfocused at 99 ms and refocuses at 100 ms
+- **AND** closing the surface or changing its owner before 100 ms prevents refocus, including completion of a delayed FocusPanel reply
+
+### Requirement: Read-aloud toggle and watchdog feedback
+
+A ReadAloud request SHALL toggle the session for its serial and key. A second tap while synthesis or playback is active SHALL stop and flush that session without starting another synthesis. A different key SHALL cancel the old owner before starting. Main SHALL publish correlated idle, thinking and speaking feedback to the read-aloud pill. Idle SHALL show three static dots, thinking three bouncing dots and speaking seven wave bars, respecting reduced motion. Covers AI-155, AI-156.
+
+#### Scenario: Second tap during synthesis or playback
+
+- **WHEN** the same key is tapped again while thinking or speaking
+- **THEN** synthesis/playback is canceled, the pill returns to idle and no replacement synthesis starts
+- **AND** stale feedback from an earlier session cannot change a newer owner
+
+#### Scenario: Playback stalls
+
+- **WHEN** no synthesized audio arrives for 12 seconds
+- **THEN** the session finishes with a speech-only failure and retains chat text
+- **WHEN** audio has arrived but the context is not running after 8 seconds
+- **THEN** resume is attempted once, with the playback deadline restarted after recovery
+- **AND** a segment still stalled at its expected duration plus 5 seconds, or 30 seconds for unknown duration, is released and the pill returns to idle
+
+### Requirement: Correlated meeting strip stages
+
+The real meeting pipeline SHALL publish MeetingStage events for recording 0, recorded/merge 1, upload 2, ASR 3, transcript 4 and summary 5, with failed/idle status 0, running 1 and done 2. Each event SHALL retain the meeting identity and originating serial/key. Production UUID identities SHALL remain intact rather than being converted to numeric hashes. Cancellation or interruption SHALL publish status 0 for the current stage; stale completion SHALL not revive it. The strip meeting display SHALL consume these events for its active main or temporary meeting, reject events for another meeting, and clear event state on reset. Covers AI-267.
+
+#### Scenario: Real pipeline to mounted strip
+
+- **WHEN** fake capture and provider ports drive the production meeting pipeline through recording, merge, upload, ASR, transcript and summary
+- **THEN** the mounted display shows the correlated stage and status, with recording, processing, failure and success animation states
+- **AND** another meeting's late event, a canceled job's completion and a profile reset cannot overwrite the active display

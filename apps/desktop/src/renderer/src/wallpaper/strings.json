@@ -1,0 +1,24 @@
+{
+	"en": {
+		"addMedia": "Add Media…",
+		"removeAll": "Remove All",
+		"media": "Media",
+		"loading": "Loading saved wallpaper…",
+		"customMedia": "Custom media",
+		"unreadableMedia": "Unreadable media",
+		"noMedia": "None · neutral background",
+		"savedUnreadable": "The saved media can't be read. Choose it again or remove it.",
+		"importedUrl": "Imported the file URL as an app-managed media reference."
+	},
+	"de": {
+		"addMedia": "Medien hinzufügen…",
+		"removeAll": "Alle entfernen",
+		"media": "Medien",
+		"loading": "Gespeicherten Hintergrund laden…",
+		"customMedia": "Eigene Medien",
+		"unreadableMedia": "Medien nicht lesbar",
+		"noMedia": "Keine · neutraler Hintergrund",
+		"savedUnreadable": "Die gespeicherten Medien können nicht gelesen werden. Wähle sie erneut aus oder entferne sie.",
+		"importedUrl": "Die Datei-URL wurde als von der App verwalteter Medienverweis importiert."
+	}
+}

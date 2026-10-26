@@ -4,6 +4,7 @@ import {
 	ACTION_REGISTRY,
 	createActionDraft,
 } from "../../../../../../packages/device/src/actions/action-registry.js";
+import { isObsId } from "../../../../../../packages/device/src/actions/obs-contracts";
 import {
 	editKeyTitle,
 	type KeyTarget,
@@ -14,6 +15,7 @@ import {
 	resetKeyIcons,
 	titleWeight,
 } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import type { KeyGeometry } from "../../../../../../packages/device/src/profiles/key-geometry.js";
 import {
 	builtinProfiles,
 	profileLabel,
@@ -24,6 +26,7 @@ import {
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
+import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
@@ -31,6 +34,9 @@ import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { editableFocus } from "./editor-input";
 import { NativeIconPicker } from "./IconPicker";
+import { KeyGeometryControls } from "./KeyGeometryControls";
+import { KeyImport } from "./KeyImport";
+import { KeyPageControls } from "./KeyPageControls";
 import { KeyTitleSettings } from "./KeyTitleSettings";
 import { KnobEditor } from "./KnobEditor";
 import { keyArtwork } from "./key-artwork";
@@ -38,14 +44,14 @@ import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
-type Selection = { readonly target: KeyTarget; readonly key: ProfileKey };
+type Selection = {
+	readonly target: KeyTarget;
+	readonly key: ProfileKey;
+	readonly geometry: KeyGeometry;
+	readonly savedKey: ProfileKey;
+};
 export function KeyEditor(): React.JSX.Element {
-	const {
-		snapshot: wallpaper,
-		request: configureWallpaper,
-		busy: clockBusy,
-		notice: clockNotice,
-	} = useWallpaper();
+	const { snapshot: wallpaper } = useWallpaper();
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
 		[profileId, setProfileId] = useState(""),
@@ -55,7 +61,8 @@ export function KeyEditor(): React.JSX.Element {
 		[icons, setIcons] = useState(false),
 		[alternate, setAlternate] = useState(false),
 		[status, setStatus] = useState(""),
-		[saving, setSaving] = useState(false);
+		[saving, setSaving] = useState(false),
+		[overlaps, setOverlaps] = useState<readonly string[]>([]);
 	const savePending = useRef(false);
 	const epoch = useRef(0);
 	const current = useRef<Selection | undefined>(undefined),
@@ -85,6 +92,7 @@ export function KeyEditor(): React.JSX.Element {
 		setSelection(undefined);
 		setIcons(false);
 		setAlternate(false);
+		setOverlaps([]);
 		if (old)
 			await window.quakeKeyLibrary.request({
 				type: "revert",
@@ -112,12 +120,25 @@ export function KeyEditor(): React.JSX.Element {
 	}, [accept]);
 	const profile =
 		envelope?.profiles.find((p) => p.id === profileId) ?? envelope?.profiles[0];
-	const page = profile?.pages.find((p) => p.id === pageId) ?? profile?.pages[0];
-	const update = async (key: ProfileKey, token?: string): Promise<void> => {
+	const page =
+		profile?.pages.find((p) => p.id === pageId) ??
+		profile?.pages.find(
+			(p) => p.id === envelope?.activeByDevice[serial]?.pageId,
+		) ??
+		profile?.pages[0];
+	const update = async (
+		key: ProfileKey,
+		token?: string,
+		geometry?: KeyGeometry,
+	): Promise<void> => {
 		const old = current.current;
 		if (savePending.current || !old || (token && old.target.token !== token))
 			return;
-		const next = { ...old, key };
+		const next = {
+			...old,
+			key,
+			geometry: geometry ?? { ...old.geometry, replaceOverlaps: false },
+		};
 		current.current = next;
 		setSelection(next);
 		setStatus("");
@@ -125,12 +146,23 @@ export function KeyEditor(): React.JSX.Element {
 			type: "preview",
 			target: next.target,
 			key: Schema.encodeSync(ProfileKey)(key),
+			geometry: next.geometry,
 		});
+		if (current.current !== next) return;
+		setOverlaps(reply._tag === "rejected" ? (reply.keyCodes ?? []) : []);
 		if (
 			reply._tag === "rejected" &&
 			current.current?.target.token === next.target.token
 		)
-			setStatus(reply.reason);
+			setStatus(
+				reply.keyCodes
+					? ""
+					: locale === "de" && reply.reason === "layout-locked-or-invalid"
+						? "Diese Änderung ist gesperrt oder überlappt andere Tasten."
+						: reply.reason === "layout-locked-or-invalid"
+							? "This edit is locked or overlaps other keys."
+							: reply.reason,
+			);
 	};
 	const selectPage = async (
 		nextProfile: string,
@@ -154,6 +186,39 @@ export function KeyEditor(): React.JSX.Element {
 		setProfileId(nextProfile);
 		setPageId(nextPage);
 		if (reply.envelope) accept(reply.envelope);
+	};
+	const editPage = async (
+		type: "add-page" | "delete-page",
+		id: string,
+	): Promise<void> => {
+		if (!profile || savePending.current) return;
+		await revert();
+		savePending.current = true;
+		setSaving(true);
+		setStatus("");
+		try {
+			const reply = await window.quakeKeyLibrary.request({
+				type,
+				profileId: profile.id,
+				pageId: id,
+				revision: profile.revision,
+				deviceId: serial,
+			});
+			if (reply._tag === "rejected") setStatus(reply.reason);
+			else if (reply._tag === "success" && reply.envelope) {
+				accept(reply.envelope);
+				const selected = reply.envelope.activeByDevice[serial];
+				setPageId(
+					selected?.profileId === profile.id
+						? selected.pageId
+						: (reply.envelope.profiles.find((p) => p.id === profile.id)
+								?.pages[0].id ?? ""),
+				);
+			}
+		} finally {
+			savePending.current = false;
+			setSaving(false);
+		}
 	};
 	const choose = async (keyCode: string): Promise<void> => {
 		if (savePending.current) return;
@@ -185,6 +250,8 @@ export function KeyEditor(): React.JSX.Element {
 		);
 		const next = {
 			key,
+			geometry: {},
+			savedKey: key,
 			target: {
 				token: crypto.randomUUID(),
 				profileId: p.id,
@@ -211,6 +278,7 @@ export function KeyEditor(): React.JSX.Element {
 				type: "preview",
 				target: old.target,
 				key: Schema.encodeSync(ProfileKey)(old.key),
+				geometry: old.geometry,
 			});
 			if (!ownsSave()) {
 				// Unmount may have reverted before this delayed preview reached main.
@@ -220,8 +288,9 @@ export function KeyEditor(): React.JSX.Element {
 				});
 				return;
 			}
-			if (preview._tag === "rejected") {
-				setStatus(preview.reason);
+			if (preview._tag !== "success") {
+				setOverlaps(preview.keyCodes ?? []);
+				if (!preview.keyCodes) setStatus(preview.reason);
 				return;
 			}
 			const reply = await window.quakeKeyLibrary.request({
@@ -238,10 +307,16 @@ export function KeyEditor(): React.JSX.Element {
 				const p = reply.envelope.profiles.find(
 					(p) => p.id === old.target.profileId,
 				);
+				const destination = old.geometry.destination ?? old.target.keyCode;
+				const savedKey = { ...old.key, keyCode: destination };
 				const next = {
 					...old,
+					key: savedKey,
+					geometry: {},
+					savedKey,
 					target: {
 						...old.target,
+						keyCode: destination,
 						revision: p?.revision ?? old.target.revision,
 					},
 				};
@@ -249,6 +324,7 @@ export function KeyEditor(): React.JSX.Element {
 				setSelection(next);
 			}
 			setIcons(false);
+			setOverlaps([]);
 			setStatus(keyText("savedSuccessfully", locale));
 		} finally {
 			savePending.current = false;
@@ -416,6 +492,14 @@ export function KeyEditor(): React.JSX.Element {
 							))}
 						</select>
 					</Row>
+					<KeyPageControls
+						key={`${profile.id}:${page.id}`}
+						profile={profile}
+						pageId={page.id}
+						locale={locale}
+						select={(id) => void selectPage(profile.id, id)}
+						edit={(type, id) => void editPage(type, id)}
+					/>
 					<Row label="Language" htmlFor="keys-language">
 						<select
 							id="keys-language"
@@ -499,6 +583,14 @@ export function KeyEditor(): React.JSX.Element {
 							keyTitle(key, locale) || key.config.type || "Select Function"
 						}
 					>
+						{Option.isSome(key.compatibility) &&
+							key.compatibility.value.unsupported === true && (
+								<p role="status" className="key-unsupported">
+									{locale === "de"
+										? "Nicht unterstützte Funktion. Die Originaldaten bleiben erhalten und werden nicht ausgeführt."
+										: "Unsupported function. Original data is preserved and won't execute."}
+								</p>
+							)}
 						<Row label="Function" htmlFor="key-function">
 							<select
 								id="key-function"
@@ -525,7 +617,7 @@ export function KeyEditor(): React.JSX.Element {
 										config: {
 											...raw.config,
 											...createActionDraft(entry.id),
-											supportKnob: false,
+											supportKnob: entry.id === "obsVolume",
 											supportTouchEffect: entry.supportTouchEffect,
 										},
 									});
@@ -535,7 +627,9 @@ export function KeyEditor(): React.JSX.Element {
 								}}
 							>
 								<option value={key.config.type}>
-									{key.config.type || "Select Function"}
+									{key.config.type
+										? keyText(key.config.type, locale)
+										: "Select Function"}
 								</option>
 								{ACTION_REGISTRY.filter((a) => a.id !== key.config.type).map(
 									(a) => (
@@ -563,6 +657,46 @@ export function KeyEditor(): React.JSX.Element {
 								{titleWeight(keyTitle(key, locale, alternate))}/20
 							</small>
 						</Row>
+						<KeyGeometryControls
+							keyValue={key}
+							geometry={selection?.geometry ?? {}}
+							locale={locale}
+							onChange={(next, geometry) =>
+								void update(next, undefined, geometry)
+							}
+						/>
+						{overlaps.length > 0 && (
+							<div
+								role="alertdialog"
+								aria-label={
+									locale === "de"
+										? "Ersetzung bestätigen"
+										: "Replace Confirmation"
+								}
+							>
+								<p>
+									{locale === "de"
+										? "Diese Felder werden ersetzt"
+										: "Placing here will replace the existing component(s)"}
+									: {overlaps.join(", ")}
+								</p>
+								<button
+									type="button"
+									id="key-confirm-overlap"
+									onClick={() =>
+										void update(key, undefined, {
+											...selection?.geometry,
+											replaceOverlaps: true,
+										})
+									}
+								>
+									{locale === "de" ? "Ersetzen bestätigen" : "Confirm Replace"}
+								</button>
+								<button type="button" onClick={() => void revert()}>
+									{keyText("cancel", locale)}
+								</button>
+							</div>
+						)}
 						<KeyTitleSettings
 							keyValue={key}
 							alternate={alternate}
@@ -610,40 +744,21 @@ export function KeyEditor(): React.JSX.Element {
 								Reset to default
 							</button>
 						</Row>
-						{key.config.type === "dkDesktopClock" && (
-							<Row
-								label={keyText("settings.clockHourFormat", locale)}
-								htmlFor="key-clock-format"
-							>
-								<select
-									id="key-clock-format"
-									disabled={!wallpaper || clockBusy}
-									value={wallpaper?.saved.clock.actions[0].value ?? "24h"}
-									onChange={(event) => {
-										if (wallpaper)
-											void configureWallpaper({
-												_tag: "configure",
-												serial: wallpaper.saved.serial,
-												revision: wallpaper.saved.revision,
-												fillMode: wallpaper.saved.settings.bgFillMode,
-												hourFormat:
-													event.target.value === "12h" ? "12h" : "24h",
-											});
-									}}
-								>
-									<option value="24h">
-										{keyText("settings.clockHourFormat24h", locale)}
-									</option>
-									<option value="12h">
-										{keyText("settings.clockHourFormat12h", locale)}
-									</option>
-								</select>
-								{clockNotice && <span role="status">{clockNotice}</span>}
-							</Row>
-						)}
 
+						{isObsId(key.config.type) && (
+							<ObsSettings
+								key={key.config.type}
+								keyValue={key}
+								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						{key.config.actions
-							.filter(() => key.config.type !== "dkDesktopClock")
+							.filter(
+								() =>
+									key.config.type !== "dkDesktopClock" &&
+									!isObsId(key.config.type),
+							)
 							.map((action, index) => (
 								<Row
 									key={`${action.type}:${action.type === "key" ? (index === 0 ? "primary" : "alternate") : "setting"}`}
@@ -707,6 +822,22 @@ export function KeyEditor(): React.JSX.Element {
 				) : (
 					<p>Select a key to edit.</p>
 				)}
+				<KeyImport
+					locale={locale}
+					accept={(reply) => {
+						if (
+							reply._tag !== "success" ||
+							!reply.envelope ||
+							!reply.importedProfileId
+						)
+							return;
+						accept(reply.envelope);
+						const imported = reply.envelope.profiles.find(
+							(p) => p.id === reply.importedProfileId,
+						);
+						if (imported) void selectPage(imported.id, imported.pages[0].id);
+					}}
+				/>
 				{icons && key && selection && (
 					<NativeIconPicker
 						key={`${selection.target.token}:${alternate}:${key.config.type}`}
@@ -745,7 +876,29 @@ export function KeyEditor(): React.JSX.Element {
 				)}
 				{key?.config.type === "dkDesktopClock" && (
 					<ClockSettings
-						hourFormat={wallpaper?.saved.clock.actions[0].value ?? "24h"}
+						beforeWrite={async () => {
+							const old = current.current;
+							if (!old || savePending.current) return false;
+							if (
+								JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
+								JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
+							)
+								return true;
+							await save();
+							return old !== current.current;
+						}}
+						onSaved={() => {
+							if (selection) void choose(selection.key.keyCode);
+						}}
+						target={
+							selection
+								? {
+										profileId: selection.target.profileId,
+										pageId: selection.target.pageId,
+										keyCode: selection.key.keyCode,
+									}
+								: undefined
+						}
 					/>
 				)}
 			</fieldset>

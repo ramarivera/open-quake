@@ -11,6 +11,11 @@ import type {
 	CredentialVault,
 	JsonStore,
 } from "../../../../../packages/edge/src/channels/channel-contracts";
+import { SoundboardRepository } from "../../../../../packages/edge/src/soundboard/soundboard-repository";
+import { makeSoundboardService } from "../../../../../packages/edge/src/soundboard/soundboard-service";
+import { SoundboardFilesLive } from "../soundboard/files";
+import { soundboardKeyActions } from "../soundboard/key-actions";
+import { SoundboardPlayerLive } from "../soundboard/player";
 import type { CaptureDriver } from "./capture";
 import { createSpeechCredentials } from "./credentials";
 import {
@@ -47,6 +52,13 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 		Effect.provide(AudioOutput.Default),
 	);
 	yield* Effect.addFinalizer(() => audioOutput.close());
+	const soundboard = yield* makeSoundboardService.pipe(
+		Effect.provide(SoundboardRepository.Default),
+		Effect.provide(SoundboardPlayerLive),
+		Effect.provide(SoundboardFilesLive),
+		Effect.provideService(AudioOutput, audioOutput),
+	);
+	const soundboardKeys = soundboardKeyActions(soundboard);
 	const credentials = yield* createSpeechCredentials(options.credentials);
 	const layer = AiSpeechService.Default.pipe(
 		Layer.provide(
@@ -76,5 +88,5 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 		profiles: settings.profiles,
 	});
 	reset = controller.reset();
-	return { ...controller, settings, audioOutput };
+	return { ...controller, settings, audioOutput, soundboardKeys };
 });

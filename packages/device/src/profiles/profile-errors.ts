@@ -3,6 +3,18 @@ import { toSafeDiagnosticCause } from "../device-errors.js";
 
 /** Domain additions to the package catalog; never includes user payloads. */
 export const ProfileErrors = {
+	ProfileSelectionResetFailed: {
+		code: "QUAKE.PROFILE.SELECTION_RESET_FAILED",
+		category: "dependency",
+		message: "Resetting playback after profile selection failed",
+		policy: { userFacing: false, userRecoverable: true, retry: "manual" },
+	},
+	ProfileSelectionResetTimedOut: {
+		code: "QUAKE.PROFILE.SELECTION_RESET_TIMED_OUT",
+		category: "dependency",
+		message: "Resetting playback after profile selection timed out",
+		policy: { userFacing: false, userRecoverable: true, retry: "manual" },
+	},
 	ProfileValidationFailed: {
 		code: "QUAKE.PROFILE.VALIDATION_FAILED",
 		category: "validation",
@@ -301,6 +313,32 @@ export class ProfileDeliveryFailed extends Schema.TaggedError<ProfileDeliveryFai
 	static fromCause(cause: unknown): ProfileDeliveryFailed {
 		const error = new ProfileDeliveryFailed(
 			props(ProfileErrors.ProfileDeliveryFailed, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
+export class ProfileSelectionResetFailed extends Schema.TaggedError<ProfileSelectionResetFailed>()(
+	"ProfileSelectionResetFailed",
+	fields(ProfileErrors.ProfileSelectionResetFailed),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileSelectionResetFailed {
+		const error = new ProfileSelectionResetFailed(
+			props(ProfileErrors.ProfileSelectionResetFailed, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
+export class ProfileSelectionResetTimedOut extends Schema.TaggedError<ProfileSelectionResetTimedOut>()(
+	"ProfileSelectionResetTimedOut",
+	fields(ProfileErrors.ProfileSelectionResetTimedOut),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): ProfileSelectionResetTimedOut {
+		const error = new ProfileSelectionResetTimedOut(
+			props(ProfileErrors.ProfileSelectionResetTimedOut, cause),
 		);
 		retain(error, cause);
 		return error;

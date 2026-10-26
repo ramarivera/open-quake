@@ -4,6 +4,7 @@ import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../packages/device/src/profiles/profile-contracts.js";
+import { ProfileImportReport } from "../../../../packages/device/src/profiles/profile-import.js";
 import { ProfileLocale } from "../../../../packages/device/src/profiles/profile-manager-contracts.js";
 
 export const KEY_REQUEST = "keys:request",
@@ -24,6 +25,19 @@ export const KeyRequest = Schema.Union(
 		knob: KnobResource,
 	}),
 	Schema.Struct({
+		type: Schema.Literal("add-page", "delete-page"),
+		profileId: Schema.NonEmptyString,
+		pageId: Schema.NonEmptyString,
+		revision: Schema.Int.pipe(Schema.nonNegative()),
+		deviceId: Schema.NonEmptyString.pipe(
+			Schema.filter((id) => id !== "__proto__"),
+		),
+	}),
+	Schema.Struct({
+		type: Schema.Literal("inspect-import", "import-profile"),
+		source: Schema.String.pipe(Schema.maxLength(8 * 1024 * 1024)),
+	}),
+	Schema.Struct({
 		type: Schema.Literal("select"),
 		deviceId: Schema.String,
 		profileId: Schema.String,
@@ -34,6 +48,12 @@ export const KeyRequest = Schema.Union(
 		type: Schema.Literal("preview"),
 		target: KeyTarget,
 		key: Schema.encodedSchema(ProfileKey),
+		geometry: Schema.optional(
+			Schema.Struct({
+				destination: Schema.optional(Schema.String),
+				replaceOverlaps: Schema.optional(Schema.Boolean),
+			}),
+		),
 	}),
 	Schema.Struct({
 		type: Schema.Literal("save", "revert"),
@@ -112,12 +132,18 @@ export const KeyReply = Schema.Union(
 	Schema.Struct({
 		_tag: Schema.Literal("success"),
 		envelope: Schema.optional(Schema.encodedSchema(ProfileEnvelope)),
+		importReport: Schema.optional(ProfileImportReport),
+		importedProfileId: Schema.optional(Schema.String),
 		packs: Schema.optional(Schema.Array(LibraryPack)),
 		states: Schema.optional(Schema.Array(KeyRuntimeState)),
 		icon: Schema.optional(Schema.String),
 		iconSource: Schema.optional(Schema.String),
 	}),
-	Schema.Struct({ _tag: Schema.Literal("rejected"), reason: Schema.String }),
+	Schema.Struct({
+		_tag: Schema.Literal("rejected"),
+		reason: Schema.String,
+		keyCodes: Schema.optional(Schema.Array(Schema.String)),
+	}),
 );
 export type KeyReply = typeof KeyReply.Type;
 export const KeyPreview = Schema.Struct({

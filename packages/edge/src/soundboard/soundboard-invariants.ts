@@ -24,7 +24,7 @@ const PathList = Schema.Array(Schema.String.pipe(Schema.maxLength(32768))).pipe(
 	Schema.maxItems(MAX_PLAYLIST_ENTRIES),
 );
 const LegacyKey = Schema.Struct({
-	type: Schema.Literal("playAudio"),
+	type: Schema.Literal("playAudio", "playAudioLegacy"),
 	actions: Schema.Array(
 		Schema.Struct({
 			type: Schema.Literal("sound", "audioAction", "audioFade", "volume"),

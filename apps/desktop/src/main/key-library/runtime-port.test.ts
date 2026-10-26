@@ -320,7 +320,7 @@ it.each([false, true])(
 );
 
 it.each([true, false])(
-	"keeps imported local sound inert through production dispatch, quarantined=%s",
+	"routes local sound on release only and preserves quarantine, quarantined=%s",
 	async (quarantined) => {
 		const builtin = builtinProfiles("darwin").find(
 			(profile) => profile.id === "1-6",
@@ -374,12 +374,8 @@ it.each([true, false])(
 					const result = yield* runtime
 						.activate("device", "1,1", "press")
 						.pipe(Effect.either);
-					expect(result._tag).toBe(quarantined ? "Right" : "Left");
-					if (result._tag === "Left")
-						expect(result.left).toMatchObject({
-							_tag: "KeyFunctionUnavailable",
-							code: "QUAKE.ACTION.UNAVAILABLE",
-						});
+					expect(result._tag).toBe("Right");
+					expect(owned).not.toHaveBeenCalled();
 					expect(yield* speech.current).toBe(true);
 					expect(speechStops).toBe(0);
 					yield* runtime.activate("device", "1,1", "release");
@@ -388,7 +384,7 @@ it.each([true, false])(
 					expect(os.openExternal).not.toHaveBeenCalled();
 					expect(os.clipboard).not.toHaveBeenCalled();
 					expect(media.sendMedia).not.toHaveBeenCalled();
-					expect(owned).not.toHaveBeenCalled();
+					expect(owned).toHaveBeenCalledTimes(quarantined ? 0 : 1);
 					expect(publish).not.toHaveBeenCalled();
 					expect(os.worker).not.toHaveBeenCalled();
 					for (const probe of Object.values(files))

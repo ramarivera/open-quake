@@ -132,7 +132,15 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 					config: MeetingConfig,
 					audioRef: string,
 					durationMs: number,
-				) => transcribeMeeting(meetingAdapter, config, audioRef, durationMs),
+					progress?: (stage: 2 | 3, status: 1 | 2) => Effect.Effect<void>,
+				) =>
+					transcribeMeeting(
+						meetingAdapter,
+						config,
+						audioRef,
+						durationMs,
+						progress,
+					),
 				translateMeeting: Effect.fn("AiProviderService.translateMeeting")(
 					(config: MeetingConfig, pcm: Uint8Array) =>
 						Option.isSome(meetingAdapter)

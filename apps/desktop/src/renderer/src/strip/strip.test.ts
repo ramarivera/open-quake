@@ -405,17 +405,34 @@ describe("tile registry", () => {
 		expect(stripTileFor("dkDesktopClock")).not.toBe(GenericTile);
 	});
 
-	it("draws the clock with the wallpaper session's hour format", () => {
+	it("draws the clock with the profile key's hour format", () => {
 		const at = (value: "24h" | "12h") =>
 			render({
-				profiles: ready(clockProfile),
+				profiles: ready({
+					...clockProfile,
+					id: `clock-format-${value}`,
+					pages: [
+						{
+							...clockProfile.pages[0],
+							keys: clockProfile.pages[0].keys.map((key) => ({
+								...key,
+								config: {
+									...key.config,
+									actions: [{ type: "hourFormat", value }],
+								},
+							})),
+						},
+					],
+				}),
 				wallpaper: {
 					...wallpaper,
 					saved: {
 						...wallpaper.saved,
 						clock: {
 							...wallpaper.saved.clock,
-							actions: [{ type: "hourFormat", value }],
+							actions: [
+								{ type: "hourFormat", value: value === "12h" ? "24h" : "12h" },
+							],
 						},
 					},
 				},

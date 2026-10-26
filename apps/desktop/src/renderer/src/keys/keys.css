@@ -194,3 +194,36 @@
 .key-title-settings input[type="number"] {
 	width: 90px;
 }
+
+#keys-page-number {
+	width: 76px;
+}
+.keys-import {
+	margin-block: var(--oq-space-5);
+}
+.keys-import > summary {
+	cursor: pointer;
+	padding-block: var(--oq-space-3);
+}
+#keys-import-json {
+	width: 100%;
+	min-height: 120px;
+	font: 12px monospace;
+	resize: vertical;
+}
+.keys-import-report {
+	max-height: 240px;
+	overflow: auto;
+	overflow-wrap: anywhere;
+}
+.key-editor [role="alertdialog"] {
+	margin: 12px 16px;
+	padding: 12px;
+	border: 1px solid var(--oq-warning);
+	border-radius: var(--oq-radius-md);
+}
+
+.keys-import .row-control:has(textarea) {
+	width: min(100%, 680px);
+	flex: 1;
+}

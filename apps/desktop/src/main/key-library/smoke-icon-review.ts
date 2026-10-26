@@ -129,6 +129,10 @@ export async function verifyIconReview(
 	);
 	await select(manager, "#keys-profile", fixture.id);
 	await click(manager, ".keys-cells button:first-child");
+	await ready(
+		manager,
+		"document.querySelector('#key-function')?.value === 'hotkeySwitch'",
+	);
 	const save = async () => {
 		await button(manager, "Save");
 		await ready(

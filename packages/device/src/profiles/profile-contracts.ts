@@ -215,6 +215,8 @@ export type ProfileSelection = typeof ProfileSelection.Type;
 /** Reference repair is explicit in the repository, not a lossy Schema transform. */
 export const ProfileEnvelope = Schema.Struct({
 	schemaVersion: Schema.Literal(1),
+	/** Atomic completion marker for desktop legacy clock configuration migration. */
+	clockConfigVersion: Schema.optionalWith(Schema.Literal(1), { exact: true }),
 	manager: optional(ProfileManagerState),
 	profiles: Schema.NonEmptyArray(Profile).pipe(
 		Schema.filter(

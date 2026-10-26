@@ -2,6 +2,7 @@ import { useId } from "react";
 import { stripPaletteProperties } from "../../palette";
 import type { StripTileProps } from "../../tileRegistry";
 import { GenericTile } from "../GenericTile";
+import { soundboardConfigured } from "./soundboard-state";
 import { soundboardLabels as labels } from "./strings";
 import "./soundboard.css";
 
@@ -12,6 +13,20 @@ export function SoundboardUnavailableTile(
 ): React.JSX.Element {
 	const { tile } = props;
 	const detailId = useId();
+	const configured = soundboardConfigured(tile.key.config);
+	if (configured)
+		return (
+			<fieldset
+				className="oq-soundboard-unavailable"
+				data-state="configured"
+				data-testid="soundboard-local"
+				aria-label="Local Music"
+				style={{ ...palette, width: tile.box.width, height: tile.box.height }}
+			>
+				<GenericTile {...props} />
+				<span className="strip-key-chip">Play Audio</span>
+			</fieldset>
+		);
 	return (
 		<fieldset
 			className="oq-soundboard-unavailable"

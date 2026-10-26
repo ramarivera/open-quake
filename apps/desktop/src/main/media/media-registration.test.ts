@@ -2,14 +2,19 @@ import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Option } from "effect";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
+import { defaultClockTile, defaultWallpaper } from "../../shared/display";
 import {
+	WALLPAPER_AUDIO,
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
 } from "../../shared/wallpaper-contracts";
 import { MediaLive, registerMedia } from "./index";
+import type { DecodedMedia } from "./media-decoder";
+import { MediaRepository } from "./media-repository";
 
 vi.mock("electron", async () => {
 	const { EventEmitter } = await import("node:events");
@@ -28,19 +33,158 @@ class TestWindow extends EventEmitter {
 		getURL: () => "file:///app/index.html?surface=management",
 		isDestroyed: () => false,
 		send: vi.fn(),
+		setAudioMuted: vi.fn(),
 	};
 	isDestroyed = () => false;
+	visible = true;
+	isVisible = () => this.visible;
 }
 
 describe("explicit media registration", () => {
 	afterEach(() => {
 		app.removeAllListeners();
+		vi.unstubAllEnvs();
 	});
 
 	it("has no import side effects", () => {
 		expect(ipcMain.handle).not.toHaveBeenCalled();
 		expect(app.listenerCount("ready")).toBe(0);
 	});
+
+	it.each(["settings change", "panel hide"])(
+		"cancels pending audio validation and revokes the active lease on %s",
+		async (reason) => {
+			vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "0");
+			const panel = new TestWindow(),
+				management = new TestWindow();
+			vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+				panel as unknown as BrowserWindow,
+			]);
+			vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(
+				management as unknown as BrowserWindow,
+			);
+			let enabled = true;
+			let entered: () => void = () => {};
+			const ready = new Promise<void>((resolve) => {
+				entered = resolve;
+			});
+			let resume: () => void = () => {};
+			const blocked = new Promise<void>((resolve) => {
+				resume = resolve;
+			});
+			let media: Effect.Effect<Option.Option<DecodedMedia>> = Effect.promise(
+				async () => {
+					entered();
+					await blocked;
+					return Option.none();
+				},
+			);
+			const saved = () => ({
+				version: 1 as const,
+				serial: "desktop-preview",
+				revision: 0,
+				clock: defaultClockTile,
+				settings: {
+					...defaultWallpaper,
+					enableSound: enabled,
+					displayMediaList: [
+						{
+							name: "silent.webm",
+							type: "video" as const,
+							format: "video/webm" as const,
+							filePath: `media:${"a".repeat(64)}`,
+							duration: 3000,
+						},
+					],
+				},
+			});
+			const runtime = ManagedRuntime.make(
+				Layer.succeed(
+					MediaRepository,
+					MediaRepository.make({
+						load: () =>
+							Effect.sync(() => ({ saved: saved(), recovered: false })),
+						resolve: () => media,
+						save: () => Effect.die("unused"),
+						restore: () => Effect.die("unused"),
+						importLocal: () => Effect.die("unused"),
+					}),
+				),
+			);
+			const output = await Effect.runPromise(makeAudioOutput);
+			const acquire = vi.fn((mute: () => Promise<void>) =>
+				Effect.runPromise(output.acquire("wallpaper", Effect.promise(mute))),
+			);
+			const registration = registerMedia(
+				runtime,
+				() => management as unknown as BrowserWindow,
+				"file:///app/index.html",
+				false,
+				() => panel as unknown as BrowserWindow,
+				acquire,
+			);
+			const handler = vi
+				.mocked(ipcMain.handle)
+				.mock.calls.filter((call) => call[0] === WALLPAPER_AUDIO)
+				.at(-1)?.[1];
+			const request = vi
+				.mocked(ipcMain.handle)
+				.mock.calls.filter((call) => call[0] === WALLPAPER_REQUEST)
+				.at(-1)?.[1];
+			if (!handler || !request) throw new Error("missing handlers");
+			const event = (window: TestWindow) =>
+				({
+					sender: window.webContents,
+					senderFrame: window.webContents.mainFrame,
+				}) as unknown as Electron.IpcMainInvokeEvent;
+			const command = {
+				id: "a",
+				serial: "desktop-preview",
+				revision: 0,
+				active: true,
+			};
+			try {
+				expect(await handler(event(management), command)).toBe(false);
+				const start = handler(event(panel), command);
+				await ready;
+				if (reason === "panel hide") {
+					panel.visible = false;
+					panel.emit("hide");
+				} else await handler(event(panel), { ...command, active: false });
+				resume();
+				expect(await start).toBe(false);
+				expect(acquire).not.toHaveBeenCalled();
+				panel.visible = true;
+				media = Effect.succeed(
+					Option.some({
+						format: "video/webm",
+						dataUrl: "data:video/webm;base64,YQ==",
+						width: 320,
+						height: 80,
+						durationMs: 3000,
+					}),
+				);
+				expect(await handler(event(panel), { ...command, id: "b" })).toBe(true);
+				expect(panel.webContents.setAudioMuted).toHaveBeenLastCalledWith(false);
+				if (reason === "panel hide") {
+					panel.visible = false;
+					panel.emit("hide");
+				} else enabled = false;
+				await request(event(management), { _tag: "read" });
+				expect(panel.webContents.setAudioMuted).toHaveBeenLastCalledWith(true);
+				if (reason === "panel hide") {
+					expect(
+						await handler(event(panel), { ...command, id: "hidden" }),
+					).toBe(false);
+					expect(acquire).toHaveBeenCalledTimes(1);
+				}
+			} finally {
+				resume();
+				await registration.dispose();
+				await Effect.runPromise(output.close());
+			}
+		},
+	);
 
 	it("authorizes by window identity and disposes its injected runtime before quitting", async () => {
 		const root = await mkdtemp(join(tmpdir(), "open-quake-registration-"));
@@ -75,6 +219,8 @@ describe("explicit media registration", () => {
 			runtime,
 			() => management as unknown as BrowserWindow,
 			"file:///app/index.html",
+			true,
+			() => panel as unknown as BrowserWindow,
 		);
 		try {
 			const handler = vi
@@ -112,7 +258,12 @@ describe("explicit media registration", () => {
 			await vi.waitFor(() => expect(runFork).toHaveBeenCalledTimes(1));
 			const promisesBeforeClose = runPromise.mock.calls.length;
 			windows = [];
-			panel.emit("closed");
+			Object.defineProperty(panel, "webContents", {
+				get: () => {
+					throw new Error("Object has been destroyed");
+				},
+			});
+			expect(() => panel.emit("closed")).not.toThrow();
 			management.emit("closed");
 			expect(runPromise.mock.calls.length).toBe(promisesBeforeClose + 1);
 			const oldManagement = management;

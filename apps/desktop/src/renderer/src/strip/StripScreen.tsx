@@ -80,7 +80,11 @@ function StripGrid({
 	tileOverlay,
 	interactive,
 	runtime,
+	clockSelection,
 }: {
+	clockSelection?:
+		| { readonly profileId: string; readonly pageId: string }
+		| undefined;
 	runtime: (keyCode: string) => KeyRuntimeState | undefined;
 	layout: StripLayout;
 	pressedKeyCode: string | undefined;
@@ -137,7 +141,15 @@ function StripGrid({
 					>
 						<Tile
 							tile={tile}
-							context={{ now, hourFormat, voice, interactive }}
+							context={{
+								now,
+								hourFormat,
+								voice,
+								interactive,
+								clockTarget: clockSelection
+									? { ...clockSelection, keyCode: tile.keyCode }
+									: undefined,
+							}}
 						/>
 						<KeyState state={runtime(tile.keyCode)} />
 						{tileOverlay?.(tile)}
@@ -180,12 +192,14 @@ export function StripScreen({
 	previewSerial,
 	titles = "key-locale",
 	interactive = true,
+	wallpaperSound = false,
 }: {
 	profiles: StripProfiles;
 	/** Profile Manager and the editor already resolve their own title locale. */
 	titles?: "key-locale" | "provided";
 	/** Selection previews paint live state but cannot operate nested controls. */
 	interactive?: boolean;
+	wallpaperSound?: boolean;
 	previewSerial?: string;
 	/** Reports the layout actually painted for the panel input adapter. */
 	onLayout?: (layout: StripLayout | undefined) => void;
@@ -338,7 +352,7 @@ export function StripScreen({
 		>
 			{vivid && wallpaper?.asset._tag === "ready" ? (
 				<div className="strip-wallpaper">
-					<WallpaperCanvas snapshot={wallpaper} />
+					<WallpaperCanvas snapshot={wallpaper} sound={wallpaperSound} />
 				</div>
 			) : null}
 			{!vivid && layout ? (
@@ -351,6 +365,11 @@ export function StripScreen({
 					tileOverlay={tileOverlay}
 					interactive={interactive}
 					runtime={runtime}
+					clockSelection={
+						selection
+							? { profileId: selection.profile.id, pageId: selection.page.id }
+							: undefined
+					}
 				/>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (

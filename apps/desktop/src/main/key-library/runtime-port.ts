@@ -17,6 +17,7 @@ import {
 } from "../../../../../packages/device/src/actions/action-errors.js";
 import { executeActionLeaf } from "../../../../../packages/device/src/actions/action-service.js";
 import {
+	type KeyActivation,
 	type KeyFeedback,
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
@@ -32,8 +33,13 @@ export const desktopKeyRuntimePort = (
 	hardware: () => HardwareSession | undefined,
 	publish: (state: KeyFeedback) => void,
 	mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
-	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	executeOwned?: (
+		key: ProfileKey,
+		signal: AbortSignal,
+		activation: KeyActivation,
+	) => Promise<boolean>,
 	mediaActions?: MediaActionAdapter,
+	resetOwned?: (deviceId?: string) => Promise<void>,
 ) =>
 	Layer.effect(
 		KeyRuntimePort,
@@ -160,13 +166,15 @@ export const desktopKeyRuntimePort = (
 					}),
 				),
 				execute: (config) => executeActionLeaf(config, adapters),
-				executeOwned: (key) =>
+				executeOwned: (key, activation) =>
 					mock || !executeOwned
 						? Effect.succeed(false)
 						: Effect.tryPromise({
-								try: (signal) => executeOwned(key, signal),
+								try: (signal) => executeOwned(key, signal, activation),
 								catch: (cause) => new HostActionFailed(cause),
 							}),
+				resetOwned: (deviceId) =>
+					resetOwned ? Effect.promise(() => resetOwned(deviceId)) : Effect.void,
 				publish: (state) => Effect.sync(() => publish(state)),
 				select: (deviceId, profileId, pageId) =>
 					profiles.selectProfile({ deviceId, profileId, pageId }).pipe(

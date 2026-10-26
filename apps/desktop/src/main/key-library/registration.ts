@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Effect, Fiber, Option, Schema, Stream } from "effect";
@@ -8,11 +8,9 @@ import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runti
 import { saveProfileKnob } from "../../../../../packages/device/src/knob/knob-profile.js";
 import { iconInUse } from "../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
-import {
-	encodeProfileEnvelope,
-	ProfileEnvelope,
-} from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileRepositoryError } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { inspectProfileText } from "../../../../../packages/device/src/profiles/profile-import.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
 	KEY_PREVIEW,
@@ -21,6 +19,11 @@ import {
 	KeyRequest,
 } from "../../shared/key-library";
 import type { DesktopRuntime } from "../diagnostics/module";
+import { managementProfileContracts } from "../management/profile-contracts";
+import {
+	encodeRendererProfiles,
+	restoreClockMediaReferences,
+} from "../profiles/clock-profile-projection";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { applicationIconLibrary } from "./application-icons";
 import { renderFontIcons } from "./font-renderer";
@@ -73,7 +76,7 @@ export function registerKeyLibrary<R>(
 	const lock = runtime.runSync(Effect.makeSemaphore(1));
 	const publish = Effect.gen(function* () {
 		const envelope = yield* KeyEditing.read();
-		const value = { envelope: encodeProfileEnvelope(envelope) };
+		const value = { envelope: encodeRendererProfiles(envelope) };
 		for (const win of BrowserWindow.getAllWindows())
 			if (!win.isDestroyed() && !win.webContents.isDestroyed())
 				win.webContents.send(KEY_PREVIEW, value);
@@ -308,7 +311,7 @@ export function registerKeyLibrary<R>(
 						case "read":
 							return {
 								_tag: "success",
-								envelope: encodeProfileEnvelope(yield* KeyEditing.read()),
+								envelope: encodeRendererProfiles(yield* KeyEditing.read()),
 								states: yield* KeyRuntime.snapshot,
 							};
 						case "select":
@@ -320,9 +323,29 @@ export function registerKeyLibrary<R>(
 							});
 							yield* KeyRuntime.refresh(command.deviceId);
 							break;
-						case "preview":
-							yield* KeyEditing.preview(command.target, command.key);
+						case "preview": {
+							const profile = yield* ProfileService.getProfile(
+								command.target.profileId,
+							);
+							const original = profile.pages
+								.find((page) => page.id === command.target.pageId)
+								?.keys.find((key) => key.keyCode === command.target.keyCode);
+							const result = yield* KeyEditing.preview(
+								command.target,
+								restoreClockMediaReferences(command.key, original),
+								command.geometry,
+							);
+							if (result._tag !== "ready") yield* publish;
+							if (result._tag === "confirmation")
+								return {
+									_tag: "rejected",
+									reason: "overlap-confirmation",
+									keyCodes: result.keyCodes,
+								};
+							if (result._tag === "rejected")
+								return { _tag: "rejected", reason: "layout-locked-or-invalid" };
 							break;
+						}
 						case "save-knob": {
 							const draft = yield* KeyEditing.pending;
 							if (
@@ -340,6 +363,32 @@ export function registerKeyLibrary<R>(
 								command.knob,
 							);
 							break;
+						}
+						case "add-page":
+						case "delete-page":
+							yield* ProfileService.editPages(command);
+							yield* KeyEditing.discard();
+							break;
+						case "inspect-import":
+							return {
+								_tag: "success",
+								importReport: inspectProfileText(
+									command.source,
+									managementProfileContracts,
+								),
+							};
+						case "import-profile": {
+							const id = randomUUID();
+							const envelope = yield* ProfileService.importProfile(
+								command.source,
+								id,
+								managementProfileContracts,
+							);
+							return {
+								_tag: "success",
+								envelope: encodeRendererProfiles(envelope),
+								importedProfileId: id,
+							};
 						}
 						case "save":
 							yield* KeyEditing.save(command.token);
@@ -426,7 +475,7 @@ export function registerKeyLibrary<R>(
 					yield* publish;
 					return {
 						_tag: "success",
-						envelope: encodeProfileEnvelope(yield* KeyEditing.read()),
+						envelope: encodeRendererProfiles(yield* KeyEditing.read()),
 					};
 				});
 			return track(

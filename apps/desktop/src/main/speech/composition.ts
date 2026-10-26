@@ -1,5 +1,8 @@
 import { Effect, Layer } from "effect";
+import type { KeyActivation } from "../../../../../packages/device/src/actions/key-runtime-service";
+import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts";
 import { AiConfigInvalid } from "../../../../../packages/edge/src/ai/ai-errors";
+import type { AudioOutputLease } from "../../../../../packages/edge/src/audio/output-service";
 import {
 	GridVoiceRuntime,
 	type VoiceSurface,
@@ -98,14 +101,50 @@ export function createSpeechVoiceBinding(options: {
 		decorate,
 		reconcileProfiles: (ids: readonly string[]): Promise<void> =>
 			speech ? options.run(speech.reconcileProfiles(ids)) : Promise.resolve(),
+		acquireWallpaperSound: (
+			mute: () => Promise<void>,
+		): Promise<AudioOutputLease | undefined> =>
+			speech
+				? Effect.runPromise(
+						speech.audioOutput.acquire("wallpaper", Effect.promise(mute)).pipe(
+							Effect.catchTags({
+								AudioOutputBusy: () => Effect.succeed(undefined),
+								AudioOutputFailed: (error) =>
+									Effect.logWarning(error).pipe(Effect.as(undefined)),
+							}),
+						),
+					)
+				: Promise.resolve(undefined),
+		executeSoundKey: (
+			key: ProfileKey,
+			signal: AbortSignal,
+			activation: KeyActivation,
+		): Promise<boolean> =>
+			speech
+				? Effect.runPromise(speech.soundboardKeys.execute(key, activation), {
+						signal,
+					})
+				: Promise.resolve(false),
+		resetSoundKeys: (deviceId?: string): Promise<void> =>
+			speech
+				? Effect.runPromise(speech.soundboardKeys.reset(deviceId))
+				: Promise.resolve(),
 		settings,
+		stopReadAloud: async (owner: {
+			readonly serial: string;
+			readonly keyCode: string;
+		}): Promise<boolean> =>
+			speech ? options.run(speech.stopReadAloud(owner)) : false,
 		onEvent: (event: VoiceSurfaceEvent): void => {
 			if (speech)
 				void options.run(speech.observe(event)).catch(() => undefined);
 		},
-		readAloud: async (text: string): Promise<VoiceSurfaceReply> => {
+		readAloud: async (
+			text: string,
+			owner?: { readonly serial: string; readonly keyCode: string },
+		): Promise<VoiceSurfaceReply> => {
 			if (!speech) return { _tag: "rejected", code: "VOICE.TTS.UNAVAILABLE" };
-			const outcome = await options.run(speech.readAloud(text));
+			const outcome = await options.run(speech.readAloud(text, owner));
 			return outcome._tag === "completed"
 				? { _tag: "ok" }
 				: {
