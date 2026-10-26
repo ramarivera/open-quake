@@ -55,7 +55,13 @@ const decodeReply = Schema.decodeUnknownSync(VoiceSurfaceReply);
 const decodeEvent = Schema.decodeUnknownEither(VoiceSurfaceEvent);
 type Handler = (event: unknown, raw: unknown) => Promise<unknown>;
 
-function setup(mock = false, diagnostics?: DesktopDiagnostics) {
+function setup(
+	mock = false,
+	diagnostics?: DesktopDiagnostics,
+	windows: Partial<
+		Pick<Parameters<typeof registerVoiceSurface>[0], "management" | "panel">
+	> = {},
+) {
 	const tones = createToneRecorder();
 	const registration = registerVoiceSurface({
 		mock,
@@ -65,6 +71,7 @@ function setup(mock = false, diagnostics?: DesktopDiagnostics) {
 		panel: () => undefined,
 		management: () => undefined,
 		renderer: RENDERER,
+		...windows,
 	});
 	const handler = electron.ipcMain.handle.mock.calls.find(
 		([channel]) => channel === VOICE_REQUEST_CHANNEL,
@@ -656,6 +663,42 @@ it("AI-185: cancelled picker returns no paths and dispatches no turn", async () 
 			paths: [],
 		});
 		expect(sent()).toHaveLength(0);
+	} finally {
+		await registration.dispose();
+	}
+});
+
+it("MAIN-148 explicit focus raises management before panel, and canceled picker returns no paths", async () => {
+	const order: string[] = [];
+	const management = {
+		...electron.window,
+		focus: () => {
+			order.push("management");
+		},
+	};
+	const panel = {
+		...electron.window,
+		focus: () => {
+			order.push("panel");
+		},
+	};
+	const { request, registration } = setup(false, undefined, {
+		management: () => management as unknown as import("electron").BrowserWindow,
+		panel: () => panel as unknown as import("electron").BrowserWindow,
+	});
+	try {
+		expect(await request({ _tag: "FocusPanel" })).toEqual({ _tag: "ok" });
+		expect(order).toEqual(["management", "panel"]);
+		order.length = 0;
+		electron.dialog.showOpenDialog.mockResolvedValueOnce({
+			canceled: true,
+			filePaths: ["/discard"],
+		});
+		expect(await request({ _tag: "PickFiles" })).toEqual({
+			_tag: "files",
+			paths: [],
+		});
+		expect(order).toEqual(["management"]);
 	} finally {
 		await registration.dispose();
 	}

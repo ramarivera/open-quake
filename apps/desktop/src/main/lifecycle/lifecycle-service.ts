@@ -77,6 +77,9 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 				let checking = false;
 				let topologyPending = false;
 				const pendingConnections = new Set<string>();
+				const manualBinds = new Set<string>();
+				const manualActive = new Set<string>();
+				let manualQueued = false;
 				let generation = 0;
 				let topologyFiber: Fiber.RuntimeFiber<void, never> | undefined;
 				let recovery: Fiber.RuntimeFiber<void, never> | undefined;
@@ -547,6 +550,49 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						yield* edges.activeCount?.(0) ?? Effect.void;
 					}),
 				);
+				const rebind = Effect.fn("DeviceLifecycle.rebind")(function* (
+					serial?: string,
+				) {
+					if (
+						locked ||
+						(serial !== undefined && !sessions.get(serial)?.connected)
+					)
+						return false;
+					for (const [id, state] of sessions)
+						if (state.connected && (serial === undefined || id === serial)) {
+							if (!manualActive.has(id)) manualBinds.add(id);
+						}
+					if (!manualBinds.size) return manualActive.size > 0;
+					if (!manualQueued) {
+						manualQueued = true;
+						yield* Effect.gen(function* () {
+							yield* Effect.yieldNow();
+							while (manualBinds.size) {
+								while (checking) yield* Effect.sleep(50);
+								for (const id of manualBinds) manualActive.add(id);
+								for (const id of manualBinds) {
+									const state = sessions.get(id);
+									if (!state?.connected) continue;
+									edges.disposePanel?.(id);
+									state.bound = undefined;
+									state.stable = undefined;
+									state.requireBlanking = true;
+								}
+								manualBinds.clear();
+								yield* redetect(false);
+								manualActive.clear();
+							}
+						}).pipe(
+							Effect.ensuring(
+								Effect.sync(() => {
+									manualQueued = false;
+								}),
+							),
+							Effect.forkIn(scope),
+						);
+					}
+					return true;
+				});
 				yield* Effect.forever(
 					Effect.sleep(1000).pipe(
 						Effect.zipRight(
@@ -557,6 +603,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					),
 				).pipe(Effect.forkScoped);
 				return {
+					rebind,
 					status,
 					redetect,
 					onStatus,

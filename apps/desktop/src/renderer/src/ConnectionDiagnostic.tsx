@@ -42,7 +42,9 @@ export function DiagnosticView({
 }: {
 	status: ConnectionDiagnostic | undefined;
 	notice: string;
-	run: (action: Exclude<LifecycleCommand["action"], "wizard">) => void;
+	run: (
+		action: Exclude<LifecycleCommand["action"], "wizard" | "restart">,
+	) => void;
 	displaySettingsAvailable?: boolean;
 	layoutRepairAvailable?: boolean;
 }): React.JSX.Element {
@@ -180,7 +182,7 @@ export function ConnectionCheck({
 	const [notice, setNotice] = useState("");
 	const run = useCallback(
 		async (
-			action: Exclude<LifecycleCommand["action"], "wizard">,
+			action: Exclude<LifecycleCommand["action"], "wizard" | "restart">,
 		): Promise<void> => {
 			const bridge = window.quakeLifecycle;
 			if (!bridge) {
