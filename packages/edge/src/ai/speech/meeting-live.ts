@@ -43,11 +43,17 @@ export const makeLiveMeetingAdapter = Effect.fn("AiMeetingAdapter.live")(
 						!state.segments &&
 						state.config.asrProvider === "dashscope"
 					) {
-						yield* dashscope.call(
-							state.config,
-							`tasks/${encodeURIComponent(state.task)}/cancel`,
-							{},
-						);
+						yield* dashscope
+							.call(
+								state.config,
+								`tasks/${encodeURIComponent(state.task)}/cancel`,
+								{},
+							)
+							.pipe(
+								Effect.catchAll((error) =>
+									Effect.logWarning("Meeting task cancellation skipped", error),
+								),
+							);
 						yield* options.resources.save(ref, { ...state, task: undefined });
 					}
 					yield* files.cleanup(ref);

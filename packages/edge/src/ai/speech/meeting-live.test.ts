@@ -1324,3 +1324,38 @@ it.scoped(
 			).toMatchObject([{ id: "1:new", text: "fresh paragraph" }]);
 		}),
 );
+
+it.scoped(
+	"continues owned file cleanup when DashScope rejects cancellation",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				task: "running-task",
+				remoteFiles: ["owned-file"],
+				cleanupPending: true,
+			});
+			const s = yield* fakeSocket();
+			const adapter = yield* makeLiveMeetingAdapter({
+				...f,
+				socket: s.transport,
+				http: {
+					fetch: async (url, init) =>
+						url.endsWith("/cancel")
+							? Response.json({ code: "UnsupportedOperation" }, { status: 400 })
+							: f.http.fetch(url, init),
+				},
+			});
+			yield* adapter.cleanup?.("meeting");
+			expect(
+				f.requests.filter((r) => r.init.method === "DELETE").map((r) => r.url),
+			).toEqual(["http://127.0.0.1:1234/api/v1/files/owned-file"]);
+			expect(f.states.get("meeting")).toMatchObject({
+				task: undefined,
+				remoteFiles: [],
+				cleanupPending: false,
+			});
+		}),
+);
