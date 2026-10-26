@@ -594,11 +594,11 @@ export function AgentsPage({
 					hidden={tab === "sessions"}
 					className="mc-panel"
 					aria-busy={!error}
-					aria-label={t.loadingAgentMd}
+					aria-label={t.loadingAgents}
 				>
-					<p role="status">{error ? t.retry : t.loadingAgentMd}</p>
+					<p role="status">{error ? t.retry : t.loadingAgents}</p>
 					{!error && (
-						<ul className="aw-rows" aria-label="Loading agents">
+						<ul className="aw-rows" aria-label={t.loadingAgents}>
 							{[0, 1, 2, 3].map((row) => (
 								<li className="aw-skeleton" key={row} aria-hidden="true" />
 							))}

@@ -10,6 +10,7 @@ import type {
 	RuntimeState,
 } from "../../../../shared/agents";
 import { AgentId } from "../../../../shared/agents";
+import { AppLocaleProvider } from "../../i18n";
 import { button, click, element, mount } from "../dom-test";
 import { AgentsPage } from "./AgentsPage";
 import { RuntimeIndicator } from "./RuntimeIndicator";
@@ -157,12 +158,29 @@ it("CENTER-042 only shows the inert diagnostic card when the explicit gate is on
 		element('[aria-label="Local model diagnostic"]').querySelectorAll("button"),
 	).toHaveLength(0);
 });
-it("CENTER-055 displays four loading rows", async () => {
-	const bridge: AgentsBridge = {
-		request: () => new Promise(() => {}),
-		onSnapshot: () => () => {},
-		onProgress: () => () => {},
-	};
-	await mount(<AgentsPage bridge={bridge} initialTab="agents" />);
-	expect(document.querySelectorAll(".aw-skeleton")).toHaveLength(4);
-});
+it.each(["en", "de"] as const)(
+	"CENTER-055 displays four loading rows with localized roster labels in %s",
+	async (locale) => {
+		const bridge: AgentsBridge = {
+			request: () => new Promise(() => {}),
+			onSnapshot: () => () => {},
+			onProgress: () => () => {},
+		};
+		await mount(
+			<AppLocaleProvider initialLocale={locale} bridge={null}>
+				<AgentsPage bridge={bridge} initialTab="agents" />
+			</AppLocaleProvider>,
+			false,
+		);
+		const label =
+			locale === "de" ? "Agenten werden geladen…" : "Loading agents…";
+		expect(element(".aw-rows").getAttribute("aria-label")).toBe(label);
+		expect(element("section[aria-busy=true]").getAttribute("aria-label")).toBe(
+			label,
+		);
+		expect(element("section[aria-busy=true] [role=status]").textContent).toBe(
+			label,
+		);
+		expect(document.querySelectorAll(".aw-skeleton")).toHaveLength(4);
+	},
+);

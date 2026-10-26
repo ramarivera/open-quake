@@ -109,7 +109,8 @@
 			"agentsList": "Agents",
 			"filter": "Filter agents",
 			"workspace": "Workspace files",
-			"draftingUnavailable": "AI drafting needs a configured provider."
+			"draftingUnavailable": "AI drafting needs a configured provider.",
+			"loadingAgents": "Loading agents…"
 		},
 		"clawAIConfig": {
 			"title": "Models",
@@ -355,7 +356,8 @@
 			"agentsList": "Agenten",
 			"filter": "Agenten filtern",
 			"workspace": "Arbeitsbereichsdateien",
-			"draftingUnavailable": "KI-Entwürfe benötigen einen konfigurierten Anbieter."
+			"draftingUnavailable": "KI-Entwürfe benötigen einen konfigurierten Anbieter.",
+			"loadingAgents": "Agenten werden geladen…"
 		},
 		"clawAIConfig": {
 			"title": "Modelle",
