@@ -87,6 +87,27 @@ async function smoke() {
 			await js("document.querySelector('.emoji-composer textarea').value"),
 			defaultMotion("en"),
 		);
+		assert.equal(
+			await js("document.querySelectorAll('.emoji-assets button').length"),
+			16,
+		);
+		await js(
+			"document.querySelector('.emoji-assets').dispatchEvent(new WheelEvent('wheel',{deltaY:200,bubbles:true}));null;",
+		);
+		assert.equal(
+			await js("document.querySelector('.emoji-assets').scrollLeft > 0"),
+			true,
+		);
+		await js(
+			"document.querySelector('.emoji-assets button:last-child').click();null;",
+		);
+		await wait(
+			"document.querySelector('.emoji-assets button:last-child').getAttribute('aria-selected') === 'true'",
+		);
+		await js(
+			"document.querySelector('.emoji-assets button').click();document.querySelector('.emoji-assets').scrollLeft=0;null;",
+		);
+		await settle();
 		await js("window.quakeLocale.set('de')");
 		await wait(
 			`document.querySelector('.emoji-composer textarea').value === ${JSON.stringify(defaultMotion("de"))}`,
@@ -192,6 +213,25 @@ async function smoke() {
 			await js("window.laneTest.store().packages[0].emojiIds[0]"),
 			await js("window.laneTest.store().items[0].id"),
 		);
+		await js(
+			"document.querySelector('.emoji-pack > button').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));null;",
+		);
+		await wait("document.querySelector('.emoji-pack input')");
+		await input(".emoji-pack input", "Cancelled");
+		await js(
+			"document.querySelector('.emoji-pack input').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));null;",
+		);
+		await settle();
+		assert.equal(await js("window.laneTest.store().packages[0].name"), "Dance");
+		await js(
+			"document.querySelector('.emoji-pack > button').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));null;",
+		);
+		await wait("document.querySelector('.emoji-pack input')");
+		await input(".emoji-pack input", "Dance two");
+		await js(
+			"document.querySelector('.emoji-pack input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));null;",
+		);
+		await wait("window.laneTest.store().packages[0].name === 'Dance two'");
 		await screenshot("emoji-en");
 		await js("window.quakeLocale.set('de')");
 		await settle();

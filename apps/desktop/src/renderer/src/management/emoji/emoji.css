@@ -373,3 +373,6 @@
 	overflow-x: auto;
 	flex-wrap: nowrap;
 }
+.emoji-assets > .emoji-thumb {
+	flex-shrink: 0;
+}

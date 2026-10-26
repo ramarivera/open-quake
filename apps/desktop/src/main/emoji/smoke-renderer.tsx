@@ -63,7 +63,11 @@ canvas.getContext("2d")?.putImageData(new ImageData(pixels(210), 80, 80), 0, 0);
 const png = canvas.toDataURL();
 let store: typeof emptyEmojiStore = {
 	...emptyEmojiStore,
-	staticAssets: [{ hash, name: "Smile.png", format: "image/png" as const }],
+	staticAssets: Array.from({ length: 16 }, (_, index) => ({
+		hash: index === 0 ? hash : index.toString(16).padStart(64, "0"),
+		name: index === 0 ? "Smile.png" : `Template ${index + 1}.png`,
+		format: "image/png" as const,
+	})),
 	items: [],
 	drafts: [],
 	packages: [],

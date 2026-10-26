@@ -62,6 +62,30 @@ function setup() {
 	};
 }
 describe("emoji profile placement", () => {
+	it.each([0, 1, 2] as const)(
+		"pins edited per-key mode %s during placement",
+		async (mode) => {
+			const f = setup();
+			try {
+				const place = placeEmojiPackage({
+					runtime: f.runtime,
+					select: async () => {},
+				});
+				const id = await place("daily", {
+					...fixture,
+					items: fixture.items.map((item) => ({ ...item, mode })),
+				});
+				const key = (await f.read()).envelope.profiles.find((p) => p.id === id)
+					?.pages[0].keys[0];
+				expect(
+					key?.config.actions.find((action) => action.type === "emojiAction")
+						?.value,
+				).toBe(mode);
+			} finally {
+				await f.runtime.dispose();
+			}
+		},
+	);
 	it("places in row order, pins hashes, and updates the same profile on repeat", async () => {
 		const f = setup();
 		let selected = "";
