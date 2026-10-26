@@ -19,22 +19,38 @@ export function meetingFileHygiene(
 			const state = yield* resources.load(ref);
 			if (!state || state.config.asrProvider === "openai") return [];
 			const c = yield* resolve(state.config);
-			const raw = yield* meetingRequest(
-				http,
-				providerUrl("files", c.files ?? c.api),
-				{
-					headers: { Authorization: `Bearer ${c.key}` },
-				},
-			).pipe(Effect.flatMap(responseJson));
-			const files = object(raw).data;
-			if (!Array.isArray(files))
-				return yield* meetingError("TranscriptionFailed");
-			return files
-				.map(object)
-				.filter(
-					(file) =>
-						typeof file.id === "string" && state.remoteFiles.includes(file.id),
+			if (!state.remoteFiles.length) return [];
+			const owned = new Set(state.remoteFiles);
+			const found = new Map<string, Record<string, unknown>>();
+			const cursors = new Set<string>();
+			let after: string | undefined;
+			for (let page = 0; page < 1000; page++) {
+				const url = new URL(providerUrl("files", c.files ?? c.api));
+				if (after) url.searchParams.set("after", after);
+				const raw = object(
+					yield* meetingRequest(http, url.href, {
+						headers: { Authorization: `Bearer ${c.key}` },
+					}).pipe(Effect.flatMap(responseJson)),
 				);
+				if (!Array.isArray(raw.data))
+					return yield* meetingError("TranscriptionFailed");
+				const files = raw.data.map(object);
+				for (const file of files)
+					if (typeof file.id === "string" && owned.has(file.id))
+						found.set(file.id, file);
+				if (raw.has_more !== true || found.size === owned.size)
+					return [...found.values()];
+				const cursor = raw.last_id ?? files.at(-1)?.id;
+				if (
+					typeof cursor !== "string" ||
+					!/^[a-zA-Z0-9_-]{1,200}$/.test(cursor) ||
+					cursors.has(cursor)
+				)
+					return yield* meetingError("TranscriptionFailed");
+				cursors.add(cursor);
+				after = cursor;
+			}
+			return yield* meetingError("TranscriptionFailed");
 		});
 	const upload = (ref: string, text: string) =>
 		Effect.gen(function* () {

@@ -1490,3 +1490,43 @@ it.scoped(
 			expect(f.states.get("meeting")?.task).toBeUndefined();
 		}),
 );
+
+it.effect(
+	"follows provider file cursors and filters ownership on later pages",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				remoteFiles: ["owned-file"],
+				cleanupPending: true,
+			});
+			const urls: string[] = [];
+			const files = meetingFileHygiene(
+				{
+					fetch: async (url) => {
+						urls.push(url);
+						return Response.json(
+							url.includes("after=")
+								? {
+										data: [{ id: "owned-file" }, { id: "unowned-two" }],
+										has_more: false,
+									}
+								: {
+										data: [{ id: "unowned-one" }],
+										has_more: true,
+										last_id: "unowned-one",
+									},
+						);
+					},
+				},
+				f.resources,
+				f.resolve,
+			);
+			expect(yield* files.list("meeting")).toEqual([{ id: "owned-file" }]);
+			expect(
+				new URL(urls[1] ?? "http://missing").searchParams.get("after"),
+			).toBe("unowned-one");
+		}),
+);
