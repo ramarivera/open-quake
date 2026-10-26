@@ -374,6 +374,14 @@ async function smoke() {
 			),
 			before,
 		);
+		await js("window.laneTest.confirm(false)");
+		await click("Delete", "document.querySelector('aside')");
+		assert.equal(await js("window.laneTest.libraries().length"), 1);
+		await js("window.laneTest.confirm(true)");
+		await click("Delete", "document.querySelector('aside')");
+		await wait(
+			"window.laneTest.libraries().length === 0 && document.querySelectorAll('tbody tr').length === 0",
+		);
 		await js("window.laneTest.show('tile')");
 		await wait(
 			"document.querySelector('[data-emoji-asset-state=ready] img')?.naturalWidth > 0",
