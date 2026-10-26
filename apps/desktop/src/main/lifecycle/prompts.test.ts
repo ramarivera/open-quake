@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, TestClock } from "effect";
 import { vi } from "vitest";
+import { resolveAppLocale } from "../../../../../packages/edge/src/settings/settings-invariants";
 import strings from "../../shared/lifecycle-strings.json";
 import { makeDisplay } from "../test/display";
 import {
@@ -279,6 +280,41 @@ describe("display prompts", () => {
 });
 
 it.scoped(
+	"SETTINGS-064: a saved live locale change localizes the next native prompt without rebuilding the service",
+	() =>
+		Effect.gen(function* () {
+			let locale = "en";
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(1));
+			const service = yield* makeDisplayPrompts(
+				edges({ platform: "darwin", locale: () => locale, prompt }),
+			);
+			for (const next of [
+				"zh",
+				"en",
+				"es",
+				"fr",
+				"ko",
+				"de",
+				"it",
+				"ja",
+				"unsupported",
+			]) {
+				locale = next;
+				yield* service.repair(portrait);
+				const expected = strings.locales[resolveAppLocale(next)].displayMode;
+				expect(prompt).toHaveBeenLastCalledWith(
+					expect.objectContaining({
+						title: expected.title,
+						message: expected.farRight,
+						detail: `\n\n${expected.placementDetail}`,
+						buttons: [expected.switch, expected.orientationLater],
+					}),
+				);
+			}
+		}),
+);
+
+it.scoped(
 	"MAIN-044 Windows extend obeys accepted, declined, failed and mock consent",
 	() =>
 		Effect.gen(function* () {
@@ -431,5 +467,75 @@ it.scoped(
 				"probe",
 				"fix",
 			]);
+		}),
+);
+
+it.scoped(
+	"SETTINGS-064: Windows consent uses the saved live locale on every action",
+	() =>
+		Effect.gen(function* () {
+			let locale = "en";
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(1));
+			const extend = vi.fn(() => Effect.void);
+			const service = yield* makeDisplayPrompts(
+				edges({
+					platform: "win32",
+					locale: () => locale,
+					prompt,
+					windowsExtend: extend,
+				}),
+			);
+			for (const next of [...Object.keys(strings.locales), "unsupported"]) {
+				locale = next;
+				expect(yield* service.prepareWindows()).toBe(false);
+				const text = strings.locales[resolveAppLocale(next)].displayMode;
+				expect(prompt).toHaveBeenLastCalledWith(
+					expect.objectContaining({
+						title: text.title,
+						message: text.message,
+						detail: text.windowsExtendDetail,
+						buttons: [text.switch, text.orientationLater],
+					}),
+				);
+			}
+			expect(extend).not.toHaveBeenCalled();
+		}),
+);
+
+it.scoped(
+	"SETTINGS-064: hidden mirror reminders retain localized Disconnect after a live switch",
+	() =>
+		Effect.gen(function* () {
+			let locale = "en";
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(2));
+			const disconnect = vi.fn(() => Effect.void);
+			const service = yield* makeDisplayPrompts(
+				edges({
+					platform: "darwin",
+					locale: () => locale,
+					prompt,
+					disconnect,
+					hiddenMirroring: () => Effect.succeed(true),
+				}),
+			);
+			for (const next of [...Object.keys(strings.locales), "unsupported"]) {
+				locale = next;
+				yield* service.check(undefined, false);
+				const text = strings.locales[resolveAppLocale(next)].displayMode;
+				expect(prompt).toHaveBeenLastCalledWith(
+					expect.objectContaining({
+						title: text.title,
+						message: text.message,
+						detail: `${text.message}. ${text.laterDetail}`,
+						buttons: [
+							text.openDisplaySettings,
+							text.orientationLater,
+							text.disconnect,
+						],
+					}),
+				);
+				yield* TestClock.adjust(600000);
+			}
+			expect(disconnect).toHaveBeenCalledTimes(9);
 		}),
 );

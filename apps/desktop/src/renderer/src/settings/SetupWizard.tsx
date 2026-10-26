@@ -10,6 +10,8 @@ import {
 } from "react";
 import type { WizardDisplay } from "../../../../../../packages/edge/src/settings/wizard-contracts";
 import { DeviceReadyReply } from "../../../shared/hardware-contracts";
+import type { AppLocale } from "../../../shared/locale";
+import { WIZARD_LANGUAGES } from "../../../shared/locale";
 import { useAppLocale, useAppTranslations } from "../i18n";
 import { PageHeader, Segmented } from "../ui/Form";
 import type { SettingsUiFailure, WizardSnapshot } from "./bridge";
@@ -44,13 +46,11 @@ import type {
 	DisplayOrientation,
 	LifecycleBridge,
 } from "../../../shared/lifecycle-contracts";
+import { RegionSuggestions } from "./RegionSuggestions";
 
 type T = ReturnType<typeof useAppTranslations>;
 /** Languages are always offered in their own name. */
-const languages = [
-	{ value: "en", label: "English" },
-	{ value: "de", label: "Deutsch" },
-] as const;
+const languages = WIZARD_LANGUAGES;
 
 export function useSetupState(store: SetupStore): SetupState {
 	return useSyncExternalStore(store.subscribe, store.getState, store.getState);
@@ -72,7 +72,7 @@ export function failureText(t: T, failure: SettingsUiFailure): string {
 }
 
 /** Owner reads for the flow. Reads only; re-run on explicit request. */
-function useOwnerChoices(locale: "en" | "de") {
+function useOwnerChoices(locale: AppLocale) {
 	const [devices, setDevices] = useState<DisplayChoices | null>(null);
 	const [profiles, setProfiles] = useState<ProfileChoices | null>(null);
 	const [deviceRead] = useState(() => latestRead(setDevices));
@@ -450,7 +450,7 @@ function StepBody({
 	t: T;
 	step: SetupStep;
 	snapshot: WizardSnapshot;
-	locale: "en" | "de";
+	locale: AppLocale;
 	choices: SetupChoices;
 	setChoices: (update: (current: SetupChoices) => SetupChoices) => void;
 	devices: DisplayChoices | null;
@@ -459,7 +459,7 @@ function StepBody({
 	busy: boolean;
 	onCheckDevices: () => void;
 	onCheckProfiles: () => void;
-	onLanguage: (locale: "en" | "de") => void;
+	onLanguage: (locale: AppLocale) => void;
 	onEdit: (step: SetupStep) => void;
 }): React.JSX.Element {
 	const id = useId();
@@ -523,6 +523,7 @@ function StepBody({
 							</span>
 						</div>
 					</div>
+					<RegionSuggestions region={choices.region} />
 				</>
 			);
 		case "display":
@@ -915,7 +916,7 @@ function Summary({
 }: {
 	t: T;
 	snapshot: WizardSnapshot;
-	locale: "en" | "de";
+	locale: AppLocale;
 	profiles: ProfileChoices | null;
 	runtime: RuntimeChoice;
 	onEdit?: ((step: SetupStep) => void) | undefined;

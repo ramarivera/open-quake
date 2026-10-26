@@ -4,6 +4,7 @@ import type {
 	KnobRequest,
 	MenuProfile,
 } from "../../../../../shared/knob-contracts";
+import { useLocaleText } from "../../../i18n";
 import { cardRect, pickerLayout } from "./geometry";
 import { mountPickerTouch } from "./picker-touch";
 
@@ -16,6 +17,7 @@ export function ProfilePicker({
 	entries: readonly MenuProfile[];
 	request: (command: KnobRequest) => Promise<void>;
 }): React.JSX.Element {
+	const t = useLocaleText("picker");
 	const { context, selector } = snapshot;
 	const sessionId = context.session.sessionId;
 	const layout = pickerLayout(entries.length);
@@ -53,7 +55,7 @@ export function ProfilePicker({
 			className="knob-picker"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Switch profile"
+			aria-label={t("title")}
 			data-testid="profile-picker"
 			onKeyDown={(event) => {
 				if (event.key === "Escape")
@@ -61,13 +63,11 @@ export function ProfilePicker({
 			}}
 		>
 			<header>
-				<span>Switch profile</span>
+				<span>{t("title")}</span>
 				<span className="knob-current-label">
-					Current · <em>{current?.name}</em>
+					{t("currentPrefix")} · <em>{current?.name}</em>
 				</span>
-				<span className="knob-picker-hint">
-					Rotate to choose · press to confirm
-				</span>
+				<span className="knob-picker-hint">{t("knobHint")}</span>
 			</header>
 			{entries
 				.slice(selector.page * 15, (selector.page + 1) * 15)
@@ -105,7 +105,7 @@ export function ProfilePicker({
 							<span className="knob-card-scrim" />
 							<span className="knob-card-name">{entry.name}</span>
 							{entry.id === context.session.profileId && !layout.paged ? (
-								<span className="knob-current-badge">Current</span>
+								<span className="knob-current-badge">{t("currentBadge")}</span>
 							) : null}
 						</button>
 					);
@@ -124,7 +124,7 @@ export function ProfilePicker({
 						<button
 							type="button"
 							className="knob-page-arrow knob-page-previous"
-							aria-label="Previous page"
+							aria-label={t("previousPage")}
 							onClick={(event) => {
 								if (event.detail === 0)
 									void request({ _tag: "Page", sessionId, delta: -1 });
@@ -137,7 +137,7 @@ export function ProfilePicker({
 						<button
 							type="button"
 							className="knob-page-arrow knob-page-next"
-							aria-label="Next page"
+							aria-label={t("nextPage")}
 							onClick={(event) => {
 								if (event.detail === 0)
 									void request({ _tag: "Page", sessionId, delta: 1 });
@@ -150,7 +150,7 @@ export function ProfilePicker({
 						<span>
 							{selector.page + 1} / {Math.ceil(entries.length / 15)}
 						</span>
-						<span>Tap to switch, or it switches automatically on timeout</span>
+						<span>{t("pageHint")}</span>
 					</footer>
 				</>
 			) : null}

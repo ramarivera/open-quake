@@ -149,3 +149,54 @@ Sampling implementation, 2026-10-26: the approved optional finite fields flow th
 PR77 review found that the editor accepted OpenAI overrides which the provider workflow rejected. The new real desktop RPC/SDK regressions reproduced that failure on all three original GPT-4o cases before the correction. A shared pure policy now enables documented GPT-4o and GPT-4.1 text model overrides, preserves the existing default-only policy for other OpenAI models, and validates Kimi mandatory values consistently at save and inference time. Unsupported drafts show an en/de explanation, remain editable and block manual and role-triggered saves before credential or state writes. Clearing both fields restores defaults.
 
 Verification after correction: 46 focused edge tests and 32 focused desktop tests pass, both typechecks and the production build pass, scoped Biome and strict OpenSpec validation pass. The hidden production-root run uses an OpenAI-labelled GPT-4o row and a synthetic local HTTP provider. It confirms persisted zero/one values reach the actual SDK request, unsupported model edits block both save paths without changing revision, the explanation switches live to German, clearing permits saving again, and 1180x625/390x625 layouts have no horizontal overflow or unlabelled fields. The run leaves real device, microphone, login preferences and live providers untouched. Screenshots and logs remain external under `open-quake-finish/provider-sampling`. Reviewed delivery remains pending; broader task 3.2 is incomplete.
+
+
+## 6. Locale burn-down lane
+
+- [x] 6.1 Bundle eight recovered locales, normalization/endonyms, mounted window/strip/profile/picker/voice/native propagation and all-six-role precedence tests. Rows AI-149, CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064. Bead open-quake-def.23.
+- [x] 6.2 Add local regional chat/speech suggestions, explicit-choice-safe legacy migration/bootstrap and eighteen translation languages through real settings controls/owners. Rows AI-015, SETTINGS-065, SETTINGS-067, SETTINGS-098, SETTINGS-099, SETTINGS-111. Bead open-quake-def.24.
+- [x] 6.3 Localize all clock/settings/enrichment labels, verify rendered eight-locale copy and independent weather/spoken routing, run lane gates and mock native EN/DE smoke. Row WIDGETS-063. Bead open-quake-def.23.
+- [x] 6.4 Preserve pending mounted city verification across app language changes, with debounce and in-flight regressions. PR #105 comment 4379719107, bead open-quake-def.23.1.
+- [x] 6.5 Propagate the validated profile capture locale before passive clock rendering, with a non-English mounted capture regression. PR #105 comment 4379719124, bead open-quake-def.23.2.
+
+
+Locale lane implementation, 2026-10-26: all fifteen assigned software rows now
+have requirements/scenarios, production consumers and regression coverage. Eight
+UI languages propagate without replacing mounted drafts; translation has its own
+eighteen-code catalog; local region suggestions never switch configured providers;
+bootstrap preserves explicit/unknown settings and removes only documented transient
+keys. Main lifecycle prompts and the macOS Dock background menu use saved locale.
+The supported Qwen ASR suggestion is 3.1 rather than the recovered retired 3.0 name.
+
+Final integration includes main `97ab6656`. Windows Extend consent, arrangement
+persistence and explicit Disconnect remain intact and read the saved locale at
+action time. Live macOS/Windows/hidden-mirror prompt and startup tests pass 61
+cases. Main's newly expanded provider catalog required the existing agent-picker
+test to expect its five added providers and Flash-before-Pro DeepSeek order;
+production provider behavior is unchanged. That isolated regression passes all
+three tests after reconciliation.
+
+Verification: the required root Turbo command with `--env-mode=loose` and SSD
+TMPDIR passes 3,853 tests with four existing skips: desktop 2,413, edge 865,
+device 512 and protocol 63. Six package typechecks pass. Biome checks 1,346 files
+with no errors and 14 existing warnings. Production build, both bundle smoke
+cases and all 47 strict OpenSpec items pass. The unmodified hidden native media
+smoke passes eight groups on the merged renderer with mock devices and muted
+windows. Its 22 screenshots include EN/DE wallpaper controls. Earlier additional
+Settings captures show en/de at 1180px and 390px with all eight controls and no
+horizontal overflow; the German clock capture shows localized seconds, theme
+and enrichment copy. The extended capture script later hit the known OBS
+scene-selector timeout, so its extra captures are separate from the passing
+unmodified smoke gate.
+
+Evidence stays under the SSD lane scratch directory
+`open-quake-parity/burndown/locale/`, including `merge-root-tests-verified.log`,
+`merge-native-smoke.log`, `screenshots-merged/` and `screenshots/`. Physical
+hardware, live microphone, paid-provider, OS-login and foreground native-menu
+acceptance remain unverified. PR #105 carries all fifteen row mappings. Beads
+open-quake-def.23 and open-quake-def.24 remain open for lead merge; the parent
+change's unrelated incomplete tasks are unchanged.
+
+PR #105 review fix 4379719107 keeps the mounted city verifier across locale changes and reads the current language when a lookup starts. Two mounted offline regressions fail on the previous implementation, covering a debounce that would be cancelled and an in-flight result that would be discarded. All 28 focused city/weather/live-locale cases pass.
+
+PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated profile capture locale before mounting App. The real renderer-entry regression fails with English MON on the preceding implementation and passes with German MO, OKT 26 and localized theme navigation, including every observed ready preview. Fourteen focused profile/live-locale cases and desktop typecheck pass. Capture windows still use no management/panel locale bridge.

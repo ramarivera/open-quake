@@ -545,3 +545,89 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it("AI-149: six AI role titles use eight recovered locales with explicit edit, i18n and legacy precedence without persisting display copy", () => {
+	const roles = {
+		"Content Writer": "contentWriter",
+		Translate: "translate",
+		Term: "term",
+		Math: "math",
+		Search: "search",
+		Compliance: "compliance",
+	};
+	for (const [label, role] of Object.entries(roles)) {
+		const original: ProfileKey = {
+			...key,
+			childrenName: Option.some("aiChat"),
+			compatibility: Option.none(),
+			config: {
+				...key.config,
+				type: "aiChat",
+				title: { ...key.config.title, text: label },
+			},
+		};
+		const encoded = Schema.encodeSync(ProfileKey)(original);
+		for (const locale of [
+			"zh",
+			"en",
+			"es",
+			"fr",
+			"ko",
+			"de",
+			"it",
+			"ja",
+		] as const) {
+			const expected = keyText(`defaultAiCopilotChatConfig.${role}`, locale);
+			expect(expected).not.toBe(`defaultAiCopilotChatConfig.${role}`);
+			expect(keyTitle(original, locale)).toBe(expected);
+			const multilingual: ProfileKey = {
+				...original,
+				config: {
+					...original.config,
+					title: {
+						...original.config.title,
+						text: "untranslated fallback",
+						multiLanguage: true,
+						i18nKey: `defaultAiCopilotChatConfig.${role}`,
+					},
+				},
+			};
+			expect(keyTitle(multilingual, locale)).toBe(expected);
+			for (const edit of [label, "My <title>", ""]) {
+				const edited = editKeyTitle(multilingual, edit);
+				const roundtrip = Schema.decodeUnknownSync(ProfileKey)(
+					Schema.encodeSync(ProfileKey)(edited),
+				);
+				expect(keyTitle(roundtrip, locale)).toBe(edit);
+			}
+			expect(
+				keyTitle(
+					{
+						...original,
+						config: {
+							...original.config,
+							title: { ...original.config.title, text: "Raw custom title" },
+						},
+					},
+					locale,
+				),
+			).toBe("Raw custom title");
+			expect(
+				keyTitle(
+					{
+						...multilingual,
+						config: {
+							...multilingual.config,
+							title: {
+								...multilingual.config.title,
+								i18nKey: "missing.translation",
+							},
+						},
+					},
+					locale,
+				),
+			).toBe("untranslated fallback");
+		}
+		expect(Schema.encodeSync(ProfileKey)(original)).toEqual(encoded);
+	}
+});

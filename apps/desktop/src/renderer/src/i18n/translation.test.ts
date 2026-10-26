@@ -39,7 +39,7 @@ describe("bundled General Translation", () => {
 			expect(render("de")).toContain("Senden|Source fallback");
 			expect(fetch).not.toHaveBeenCalled();
 			expect(resolveAppLocale("de-CH")).toBe("de");
-			expect(resolveAppLocale("es-ES")).toBe("en");
+			expect(resolveAppLocale("es-ES")).toBe("es");
 		} finally {
 			vi.unstubAllGlobals();
 		}
@@ -81,6 +81,11 @@ it("bundles the approved chat, runtime and agent namespaces offline", () => {
 		expect(render("de")).toContain("Senden|");
 		expect(render("de")).not.toContain("addTitle");
 		expect(render("de")).not.toContain("clawAIConfig");
+		for (const locale of ["zh", "es", "fr", "ko", "it", "ja"]) {
+			expect(render(locale)).toContain("Send|");
+			expect(render(locale)).not.toContain("addTitle");
+			expect(render(locale)).not.toContain("clawAIConfig");
+		}
 		expect(fetch).not.toHaveBeenCalled();
 	} finally {
 		vi.unstubAllGlobals();

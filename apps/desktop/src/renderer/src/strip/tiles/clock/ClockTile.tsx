@@ -5,6 +5,7 @@ import {
 	type ThemeId,
 } from "../../../../../shared/clock-style";
 import type { HourFormat } from "../../../../../shared/display";
+import { useAppLocale } from "../../../i18n";
 import { stripPaletteProperties } from "../../palette";
 import type { ClockMediaSource } from "./backgroundLoader";
 import { ClockBackground } from "./ClockBackground";
@@ -69,6 +70,7 @@ export function ClockTile({
 	weather,
 	nowPlaying,
 }: ClockTileProps): React.JSX.Element {
+	const appLocale = useAppLocale().locale;
 	const systemReducedMotion = useReducedMotion();
 	const reduced = reducedMotion ?? systemReducedMotion;
 	const [preview, setPreview] = useState<ThemeId | null>(null);
@@ -90,9 +92,7 @@ export function ClockTile({
 	useEffect(() => () => controller.dispose(), [controller]);
 
 	const active = preview ?? persistedTheme(theme);
-	const lang = normalizeClockLocale(
-		locale ?? (typeof navigator === "undefined" ? "en" : navigator.language),
-	);
+	const lang = normalizeClockLocale(locale ?? appLocale);
 	const strings = CLOCK_STRINGS[lang];
 	const digits = clockDigits(now, hourFormat, lang);
 	const name = active ? strings.themes[active] : "—";
