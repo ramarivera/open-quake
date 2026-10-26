@@ -466,4 +466,93 @@ describe("profile-removal speech isolation", () => {
 			expect(yield* Fiber.join(reading)).toEqual({ _tag: "cancelled" });
 		}),
 	);
+	it.scoped(
+		"profile removal preserves a newer same-device grid capture after knob cancellation",
+		() =>
+			Effect.gen(function* () {
+				const f = yield* fixture();
+				yield* f.runtime.startCapture(request);
+				yield* Queue.take(f.opened);
+				yield* Queue.take(f.listening);
+				yield* f.runtime.cancelFlow("one", "0,1");
+				const grid: CaptureRequest = {
+					serial: "one",
+					keyCode: "1,5",
+					captureId: "grid/2",
+					generation: 2,
+					type: "aiChat",
+					agentId: Option.none(),
+				};
+				yield* f.runtime.startCapture(grid);
+				yield* Queue.take(f.opened);
+				yield* Queue.take(f.listening);
+				const closes = f.counts().closes;
+				const cancels = f.cancels.length;
+				yield* f.reconcileProfiles([]);
+				expect(f.counts().closes).toBe(closes);
+				expect(f.cancels).toHaveLength(cancels);
+				yield* f.runtime.releaseCapture("one", "1,5", 2);
+				yield* tick;
+				expect(f.sent).toHaveLength(1);
+				expect(f.sent[0]?.keyCode).toBe("1,5");
+				expect(f.sent[0]?.knob).toBeUndefined();
+			}),
+	);
+	for (const source of ["voice", "typed"] as const) {
+		it.scoped(
+			`profile removal preserves a newer same-device ${source} answer`,
+			() =>
+				Effect.gen(function* () {
+					const f = yield* fixture();
+					yield* f.runtime.startCapture(request);
+					yield* Queue.take(f.opened);
+					yield* Queue.take(f.listening);
+					yield* f.runtime.releaseCapture("one", "0,1", 1);
+					yield* tick;
+					if (source === "voice") {
+						const grid: CaptureRequest = {
+							serial: "one",
+							keyCode: "1,5",
+							captureId: "grid/2",
+							generation: 2,
+							type: "aiChat",
+							agentId: Option.none(),
+						};
+						yield* f.runtime.startCapture(grid);
+						yield* Queue.take(f.opened);
+						yield* Queue.take(f.listening);
+						yield* f.runtime.releaseCapture("one", "1,5", 2);
+						yield* tick;
+					}
+					yield* f.observe({
+						_tag: "TurnStarted",
+						serial: "one",
+						keyCode: "1,5",
+						sessionId,
+						turnId,
+						prompt: "newer input",
+						source,
+					});
+					yield* f.observe({
+						_tag: "Chunk",
+						serial: "one",
+						keyCode: "1,5",
+						chunk: {
+							version: 1,
+							sessionId,
+							turnId,
+							seq: 0,
+							type: "answer",
+							textDelta: "Newer answer.",
+						},
+					});
+					expect(yield* Queue.take(f.spoken)).toBe("Newer answer.");
+					const cancels = f.cancels.length;
+					yield* f.reconcileProfiles([]);
+					expect(f.cancelledSpeech).toEqual([]);
+					expect(f.cancels).toHaveLength(cancels);
+					yield* f.cancelSpeech();
+				}),
+		);
+	}
 });

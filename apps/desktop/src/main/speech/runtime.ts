@@ -90,7 +90,12 @@ export const createProductionVoiceRuntime = Effect.fn(
 	let cancelReadAloud: (() => Effect.Effect<void>) | undefined;
 	const turns = new Map<
 		string,
-		{ readonly id: string; readonly speech: OrderedSpeech; seq: number }
+		{
+			readonly id: string;
+			readonly speech: OrderedSpeech;
+			readonly capture: CaptureRequest | undefined;
+			seq: number;
+		}
 	>();
 	const stage = (owner: Active, value: VoiceStage) =>
 		active === owner && !owner.terminal
@@ -180,6 +185,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 					const start = yield* Effect.makeLatch();
 					let owner: Active;
 					if (request.knob) knobProfiles.set(request.serial, request);
+					else knobProfiles.delete(request.serial);
 					const body = Effect.gen(function* () {
 						yield* stage(owner, { _tag: "recording", status: "preparing" });
 						const [directModel] = yield* Effect.all(
@@ -398,6 +404,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 						active.request.keyCode === keyCode
 					)
 						yield* stop();
+					if (knobProfiles.get(serial)?.keyCode === keyCode)
+						knobProfiles.delete(serial);
 					yield* cancelSpeech();
 					yield* options.cancelText?.(serial, keyCode) ?? Effect.void;
 				}),
@@ -415,10 +423,11 @@ export const createProductionVoiceRuntime = Effect.fn(
 							if (request.knob && ids.includes(request.knob.profileId))
 								continue;
 							knobProfiles.delete(serial);
-							if (active?.request.serial === serial) yield* stop();
-							yield* options.cancelText?.(serial, "0,1") ?? Effect.void;
+							if (active?.request === request) yield* stop();
+							yield* options.cancelText?.(serial, request.keyCode) ??
+								Effect.void;
 							const turn = turns.get(serial);
-							if (turn) {
+							if (turn?.capture === request) {
 								turns.delete(serial);
 								yield* turn.speech.cancel();
 							}
@@ -481,6 +490,11 @@ export const createProductionVoiceRuntime = Effect.fn(
 							return;
 						}
 						if (event._tag === "TurnStarted") {
+							const capture =
+								event.source === "voice" && event.keyCode === "0,1"
+									? knobProfiles.get(event.serial)
+									: undefined;
+							if (!capture) knobProfiles.delete(event.serial);
 							const old = turns.get(event.serial);
 							if (old) yield* old.speech.cancel();
 							turns.delete(event.serial);
@@ -504,7 +518,12 @@ export const createProductionVoiceRuntime = Effect.fn(
 									turns.delete(oldest);
 								}
 							}
-							turns.set(event.serial, { id: event.turnId, speech, seq: -1 });
+							turns.set(event.serial, {
+								id: event.turnId,
+								speech,
+								capture,
+								seq: -1,
+							});
 							return;
 						}
 						if (event._tag !== "Chunk") return;
