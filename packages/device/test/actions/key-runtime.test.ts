@@ -538,3 +538,69 @@ it.effect("held release failure retains its owner for reset cleanup", () =>
 		}).pipe(Effect.provide(f.layer));
 	}),
 );
+
+it.effect(
+	"reset reports the catalog release error and retries the original held owner",
+	() =>
+		Effect.gen(function* () {
+			let releases = 0;
+			const source = new Error("private /Users/test/key.txt token=secret");
+			const failure = new HostActionFailed(source);
+			const f = fixture(
+				{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+				false,
+				0,
+				{
+					holdHotkey: () =>
+						Effect.succeed(
+							Effect.suspend(() =>
+								++releases === 1 ? Effect.fail(failure) : Effect.void,
+							),
+						),
+				},
+			);
+			yield* Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				yield* runtime.activate("device", "1,1", "down");
+				f.switch();
+				const result = yield* Effect.either(runtime.reset("device"));
+				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") {
+					expect(result.left._tag).toBe("HostActionFailed");
+					expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+					expect(result.left.originalCause).toBe(source);
+					expect(JSON.stringify(result.left)).not.toContain("secret");
+					expect(JSON.stringify(result.left)).not.toContain("key.txt");
+				}
+				yield* runtime.reset("device");
+				expect(releases).toBe(2);
+				yield* runtime.reset("device");
+				expect(releases).toBe(2);
+			}).pipe(Effect.provide(f.layer));
+		}),
+);
+it.effect("scope disposal retries a failed held-key release", () =>
+	Effect.gen(function* () {
+		let releases = 0;
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.succeed(
+						Effect.suspend(() =>
+							++releases === 1
+								? Effect.fail(new HostActionFailed("release-failed"))
+								: Effect.void,
+						),
+					),
+			},
+		);
+		yield* Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+		}).pipe(Effect.provide(f.layer));
+		expect(releases).toBe(2);
+	}),
+);

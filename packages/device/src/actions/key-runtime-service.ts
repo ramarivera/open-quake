@@ -1,4 +1,13 @@
-import { Clock, Context, Effect, Fiber, Layer, Option, Schema } from "effect";
+import {
+	Clock,
+	Context,
+	Effect,
+	Either,
+	Fiber,
+	Layer,
+	Option,
+	Schema,
+} from "effect";
 import { pageIndex } from "../profiles/key-editing-invariants.js";
 import {
 	type ProfileEnvelope,
@@ -588,14 +597,18 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 
 			const reset = Effect.fn("KeyRuntime.reset")(function* (
 				deviceId?: string,
-			): Effect.fn.Return<void> {
+			): Effect.fn.Return<void, ActionError> {
+				let releaseError: ActionError | undefined;
 				for (const [id, contact] of contacts) {
 					if (deviceId && contact.activation.deviceId !== deviceId) continue;
+					if (contact.release) {
+						const result = yield* Effect.either(contact.release);
+						if (Either.isLeft(result)) {
+							releaseError ??= result.left;
+							continue;
+						}
+					}
 					contacts.delete(id);
-					if (contact.release)
-						yield* contact.release.pipe(
-							Effect.catchAll((error) => Effect.logWarning(error)),
-						);
 				}
 				for (const [id, press] of audioPresses)
 					if (!deviceId || press.deviceId === deviceId) audioPresses.delete(id);
@@ -625,13 +638,19 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				for (const key of alternates.keys())
 					if (!deviceId || JSON.parse(key)[0] === deviceId)
 						alternates.delete(key);
+				if (releaseError) return yield* Effect.fail(releaseError);
 			});
 			const prepareActivation = (...args: Parameters<typeof activate>) =>
 				activate(...args).pipe(
 					lock.withPermits(1),
 					Effect.map((work) => work ?? Effect.void),
 				);
-			yield* Effect.addFinalizer(() => reset());
+			yield* Effect.addFinalizer(() =>
+				reset().pipe(
+					Effect.retry({ times: 1 }),
+					Effect.catchAll((error) => Effect.logWarning(error)),
+				),
+			);
 			return {
 				/** Reserve guarded input; await its completion after caller locks release. */
 				prepareActivation,
