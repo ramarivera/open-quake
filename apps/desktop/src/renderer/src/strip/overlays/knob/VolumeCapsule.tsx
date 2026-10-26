@@ -1,5 +1,7 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { KnobModelSnapshot } from "../../../../../shared/knob-contracts";
+
+import { mountTouchTarget } from "../../touch-gestures";
 
 export function VolumeCapsule({
 	volume,
@@ -10,24 +12,34 @@ export function VolumeCapsule({
 	toggle: () => void;
 	readOnly?: boolean;
 }): React.JSX.Element {
-	const suppressClickUntil = useRef(0);
+	const ref = useRef<HTMLButtonElement>(null);
+	const latest = useRef({ toggle, readOnly, phase: volume.phase });
+	latest.current = { toggle, readOnly, phase: volume.phase };
+	useEffect(() => {
+		if (!ref.current) return;
+		return mountTouchTarget(ref.current, {
+			tap: () => latest.current.toggle(),
+			disabled: () =>
+				latest.current.readOnly ||
+				latest.current.phase === "activating" ||
+				latest.current.phase === "unavailable",
+		});
+	}, []);
 	const phase = readOnly ? "inactive" : volume.phase;
 	return (
 		<button
+			ref={ref}
+			data-quake-sub-touch="volumeOsd"
+			data-quake-overlay-touch="true"
 			type="button"
 			className="knob-volume"
 			data-phase={phase}
 			aria-pressed={phase === "active"}
 			aria-label={volume.muted ? "Mute" : `Volume ${volume.level}`}
 			disabled={readOnly || phase === "activating" || phase === "unavailable"}
-			onPointerUp={(event) => {
-				if (event.pointerType === "touch") {
-					suppressClickUntil.current = Date.now() + 600;
-					toggle();
-				}
-			}}
 			onClick={() => {
-				if (Date.now() >= suppressClickUntil.current) toggle();
+				if (!readOnly && phase !== "activating" && phase !== "unavailable")
+					toggle();
 			}}
 		>
 			<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">

@@ -5,6 +5,7 @@ import {
 	Exit,
 	Fiber,
 	Layer,
+	Logger,
 	Option,
 	Ref,
 	Scope,
@@ -327,3 +328,52 @@ describe("scoped vendor input", () => {
 			}),
 	);
 });
+
+it.scoped(
+	"MAIN-036 logs safe counters every 60 seconds and stops diagnostics on disposal",
+	() => {
+		const records: unknown[] = [];
+		const logger = Logger.make(({ message }) => {
+			records.push(message);
+		});
+		return Effect.gen(function* () {
+			const scope = yield* Scope.make();
+			const fake = yield* makeFakeHidTransport([info]);
+			const source = yield* Scope.extend(
+				startTouchSource(fake.transport, () => Effect.void),
+				scope,
+			);
+			yield* TestClock.adjust(2000);
+			yield* fake.emit(SYNTHETIC_TOUCH_DOWN);
+			yield* TestClock.adjust(0);
+			yield* fake.failRead(new Error("Bearer PRIVATE sk-secret DevSrvsID:123"));
+			yield* TestClock.adjust(57999);
+			expect(
+				records.filter(
+					(record) => Array.isArray(record) && record[0] === "touch.health",
+				),
+			).toHaveLength(0);
+			yield* TestClock.adjust(1);
+			const health = records.filter(
+				(record) => Array.isArray(record) && record[0] === "touch.health",
+			);
+			expect(health).toHaveLength(1);
+			expect(health[0]).toEqual([
+				"touch.health",
+				expect.objectContaining({ reports: 1, frames: 1 }),
+			]);
+			expect(records).toContainEqual([
+				"touch.state",
+				{ previous: "TOUCH_OK", state: "HID_READ_FAILED" },
+			]);
+			expect(JSON.stringify(records)).not.toMatch(
+				/PRIVATE|sk-secret|DevSrvsID|fake:touch/,
+			);
+			expect((yield* source.health).reports).toBe(1);
+			yield* Scope.close(scope, Exit.void);
+			const count = records.length;
+			yield* TestClock.adjust(120000);
+			expect(records).toHaveLength(count);
+		}).pipe(Effect.provide(Logger.replace(Logger.defaultLogger, logger)));
+	},
+);

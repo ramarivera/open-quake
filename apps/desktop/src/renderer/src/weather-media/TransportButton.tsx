@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
+import { mountTouchTarget } from "../strip/touch-gestures";
 
 export function TransportButton({
 	id,
@@ -18,52 +19,24 @@ export function TransportButton({
 	const ref = useRef<HTMLButtonElement>(null);
 	const action = useRef({ disabled, onPress });
 	action.current = { disabled, onPress };
-	const [pressed, setPressed] = useState(false);
 	useEffect(() => {
 		const button = ref.current;
 		if (!button) return;
-		const start = (event: Event) => {
-			event.stopPropagation();
-			if (!action.current.disabled) setPressed(true);
-		};
-		const end = (event: Event) => {
-			event.stopPropagation();
-			setPressed(false);
-			const detail: unknown =
-				event instanceof CustomEvent ? event.detail : null;
-			if (
-				!action.current.disabled &&
-				typeof detail === "object" &&
-				detail !== null &&
-				"isEffective" in detail &&
-				detail.isEffective === true
-			)
-				action.current.onPress();
-		};
-		button.addEventListener("quake-sub-touch-start", start);
-		button.addEventListener("quake-sub-touch-end", end);
-		return () => {
-			button.removeEventListener("quake-sub-touch-start", start);
-			button.removeEventListener("quake-sub-touch-end", end);
-		};
+		return mountTouchTarget(button, {
+			tap: () => action.current.onPress(),
+			disabled: () => action.current.disabled,
+		});
 	}, []);
 	return (
 		<button
 			ref={ref}
 			type="button"
-			className={`${className}${pressed ? " is-pressed" : ""}`}
+			className={className}
 			disabled={disabled}
 			data-quake-sub-touch={id}
 			data-testid={id}
 			data-support-quake-move="false"
 			aria-label={label}
-			onPointerDown={(event) => {
-				event.stopPropagation();
-				setPressed(true);
-			}}
-			onPointerUp={() => setPressed(false)}
-			onPointerCancel={() => setPressed(false)}
-			onPointerLeave={() => setPressed(false)}
 			onClick={(event) => {
 				event.stopPropagation();
 				if (!disabled) onPress();

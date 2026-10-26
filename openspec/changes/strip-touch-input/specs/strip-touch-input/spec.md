@@ -83,3 +83,72 @@ OPEN_QUAKE_MOCK_DEVICE=1 SHALL supply synthetic vendor frames through the parser
 #### Scenario: Built mock run
 - **WHEN** a built app starts with mock mode
 - **THEN** synthetic touch events reach subscribers without loading native HID
+
+
+### Requirement: Scoped touch diagnostics
+The touch source SHALL emit a structured health record every 60000 ms through the application diagnostic owner. Records SHALL contain only the enumerated state, bounded nonnegative report/frame/bind/recovery counters and allowlisted catalog error codes. State changes SHALL emit previous/current enum states. Native paths, serials, error messages and causes SHALL never enter these records. Scope disposal SHALL stop both diagnostics and recovery. Source: MAIN-036.
+
+#### Scenario: Health deadline and private failure
+- **WHEN** a fake source reads reports, suffers a native error containing private data, and reaches 60000 ms
+- **THEN** one safe health record contains its counters and state transitions, no private data, and no records arrive after disposal
+
+### Requirement: Held key edges and cancellation
+Panel contact down SHALL immediately enter the committed key runtime. Ordinary actions SHALL execute once on successful release; cancelled contacts SHALL release held resources without executing an ordinary action. Hotkeys SHALL send a down edge at contact start and an up edge to the same keyboard owner on release, cancellation, profile replacement or disposal. Directional-only volume/luminance/brightness keys SHALL ignore ordinary press/release. Repeated moves and duplicate releases SHALL do nothing. Physical lift SHALL retain the 10 ms release delay; DOM fallback SHALL use 100 ms. Sources: MAIN-065, SCREEN-057, SCREEN-060.
+
+#### Scenario: Lift anywhere and cancel after replacement
+- **WHEN** an independently encoded vendor frame presses a hotkey, moves and lifts outside its original tile
+- **THEN** host down occurs before lift and exactly one up occurs 10 ms after lift
+- **AND** cancellation or a replaced profile releases the original owner without activating a different key
+
+### Requirement: One mounted touch owner
+The mounted strip SHALL route physical and DOM pointer/touch gestures through the same controller, suppressing duplicate DOM input for 600 ms after physical input and suppressing synthetic clicks after a handled gesture. Child controls SHALL own their gesture before the underlying key. Registration SHALL refresh moving rectangles and discover late targets. Registrations SHALL expose idle/requesting/registered/failed states, retry at most five times at intervals of at least 2000 ms, and share at most three fallback full scans separated by at least 3000 ms. Element delivery SHALL confirm registration. Configured local-player controls SHALL route committed previous/toggle/next/stop intents to the existing soundboard owner, preserving revision guards and never falling back to system media. Sources: SCREEN-060, SCREEN-066, KNOB-089.
+
+#### Scenario: Late child and duplicate input
+- **WHEN** a player child appears after mount, a physical contact taps it and a synthetic DOM click follows
+- **THEN** only that child activates once and the underlying key remains idle
+
+#### Scenario: Registration exhaustion
+- **WHEN** a registration host is unavailable across five timed attempts
+- **THEN** it reports failed, full scans obey the three-attempt/3000 ms gate, and disposal cancels all retries and handlers
+
+### Scenario: Camera fallback requires its actual consumer
+- **WHEN** a cameraView tile has no verified camera gateway consumer
+- **THEN** shared pointer/touch routing SHALL remain cancellation safe and SHALL NOT fabricate a running stream or claim camera toggle parity
+- **AND** SCREEN-060 remains partial until camera-and-printer-views supplies and tests the real toggle consumer
+
+### Requirement: Focus and volume touch ownership
+Physical and DOM taps SHALL toggle one supported knob focus, repeat taps SHALL clear it, and unsupported tile taps SHALL clear the previous focus. Dragged or cancelled focus gestures SHALL never acquire focus. Assistant completion SHALL restore focus only for the captured focus generation and session; late completion SHALL preserve a newer focus. Page/profile replacement SHALL reset focus. The volume capsule SHALL use the same child touch route, activate only on effective release, refuse unavailable/reentrant activation, suppress synthetic clicks for 600 ms, and support Enter/Space. Management previews SHALL remain read-only. Profile commit SHALL disarm volume before another detent. Sources: KNOB-014, KNOB-015, KNOB-075, KNOB-080, KNOB-089.
+
+#### Scenario: Focus replacement and assistant completion
+- **WHEN** supported, repeated and unsupported taps arrive through the mounted native path
+- **THEN** focus follows the toggle rules, drag cancellation preserves focus, and an old assistant restore cannot clear a newer focus generation
+
+#### Scenario: Volume release and preview
+- **WHEN** native down/up and its synthetic click target the capsule
+- **THEN** exactly one toggle occurs, cancelled presses and read-only previews make zero mutations, and unavailable drivers never arm
+
+### Requirement: Scaled child touch feedback
+Reusable chat touch targets SHALL use a minimum height of 44 times explicit scale, 16 times scale slop, a 500 ms tap cutoff, brightness 1.08 while pressed, and press-start/tap/press-end semantics. Mount/update SHALL refresh registration. Strip native events SHALL enter through the shared owner once. Sources: SCREEN-065.
+
+#### Scenario: Scaled drag cancellation
+- **WHEN** a scaled chat target is pressed, crosses its scaled slop and returns
+- **THEN** pressed feedback clears and press-end reports no tap, without a duplicate strip action
+
+### Requirement: Scroll completion and current bounds
+Monitor disk lists SHALL admit vertical drag at 8 px and 1.2 axis ratio, render overscroll using translated content capped at 32 px, return over 200 ms, and stop fling by 600 ms or at bounds. Physical drag completion SHALL be distinct from tap effectiveness and cancellation. Chat SHALL resynchronize child hit rectangles after drag/fling completion, cancellation and reduced-motion completion. New contact and disposal SHALL stop old animation. Sources: AI-163, SCREEN-067, WIDGETS-078.
+
+#### Scenario: Native scroll followed by child tap
+- **WHEN** native contact drags and releases a scroll region and subsequently taps a moved child
+- **THEN** inertia continues after release, the refreshed child activates once, and no underlying key activates
+- **AND** reduced motion stops at release and cancellation starts no fling
+
+### Requirement: Scoped panel teardown and inert grid gestures
+Unmount, pagehide and beforeunload SHALL dispose the mounted touch owner, observers, retries, pending lifts, animations and active panel resources idempotently. Profile replacement SHALL cancel the old gesture and delayed callbacks. Strip swipes SHALL remain inert as in DK-Suite 0.4.95 and SHALL never navigate or create another key activation. Double-click SHALL be a safe no-op without extra device actions or folder navigation. Management mirror cells whose basicEditableItems.allowDrag is false SHALL suppress press/drag feedback and movement while remaining inspectable. Sources: SCREEN-010, SCREEN-069, SCREEN-070, SCREEN-141.
+
+#### Scenario: Hide or replace during activity
+- **WHEN** pagehide/unmount or profile replacement occurs with a held key, overlay and animation active
+- **THEN** old resources stop once, no stale callbacks activate keys, and observers and subscriptions detach
+
+#### Scenario: Swipe, double-click and locked mirror
+- **WHEN** a directional swipe, a double-click or a drag on a locked mirror cell occurs
+- **THEN** no navigation, duplicate action, locked animation or movement occurs, while inspection remains available

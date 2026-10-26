@@ -323,7 +323,7 @@ describe("knob model uses the real domain ports", () => {
 				for (const key of modelContext().keys) {
 					yield* send({ _tag: "TapTile", keyCode: key.keyCode });
 					yield* send({ _tag: "Rotate", delta: -1 });
-					expect((yield* KnobModel.snapshot()).focus).toEqual({
+					expect((yield* KnobModel.snapshot()).focus).toMatchObject({
 						_tag: "tile",
 						keyCode: key.keyCode,
 						angle: -12,
@@ -497,3 +497,35 @@ describe("knob model uses the real domain ports", () => {
 		},
 	);
 });
+
+it.effect(
+	"KNOB-015 restore clears only the captured focus generation and session",
+	() => {
+		const h = harness();
+		return Effect.gen(function* () {
+			yield* KnobModel.configure(modelContext());
+			yield* send({ _tag: "TapTile", keyCode: "1,1" });
+			const focused = (yield* KnobModel.snapshot()).focus;
+			if (focused._tag !== "tile" || focused.generation === undefined)
+				throw new Error("Missing focus generation");
+			yield* send({
+				_tag: "RestoreFocus",
+				keyCode: focused.keyCode,
+				generation: focused.generation,
+			});
+			expect((yield* KnobModel.snapshot()).focus._tag).toBe("none");
+			yield* send({ _tag: "TapTile", keyCode: "1,1" });
+			yield* send({
+				_tag: "RestoreFocus",
+				keyCode: focused.keyCode,
+				generation: focused.generation,
+			});
+			expect((yield* KnobModel.snapshot()).focus._tag).toBe("tile");
+			yield* KnobModel.configure({
+				...modelContext(),
+				session: { ...modelContext().session, sessionId: "new" },
+			});
+			expect((yield* KnobModel.snapshot()).focus._tag).toBe("none");
+		}).pipe(Effect.provide(h.layer));
+	},
+);

@@ -37,7 +37,6 @@ type HoldKind = GridVoiceInput["kind"];
  * applies every timing rule.
  */
 function useHoldInput(
-	root: React.RefObject<HTMLElement | null>,
 	layout: StripLayout | undefined,
 	send: (input: GridVoiceInput) => void,
 ): (event: StripKeyEvent) => void {
@@ -53,36 +52,7 @@ function useHoldInput(
 		if (Option.isNone(key)) return;
 		latest.current.send(key.value);
 	}, []);
-	useEffect(() => {
-		const element = root.current;
-		if (!element) return;
-		let pressed: string | undefined;
-		const onPointerDown = (event: PointerEvent): void => {
-			const target = event.target instanceof Element ? event.target : null;
-			const keyCode = target?.closest<HTMLElement>(
-				'.strip-slot[data-state="tile"]',
-			)?.dataset.keyCode;
-			if (!keyCode) return;
-			pressed = keyCode;
-			input(keyCode, "down");
-		};
-		const onPointerUp = (event: PointerEvent): void => {
-			if (!pressed) return;
-			input(
-				pressed,
-				event.type === "pointercancel" ? "touchCancel" : "touchEnd",
-			);
-			pressed = undefined;
-		};
-		element.addEventListener("pointerdown", onPointerDown);
-		window.addEventListener("pointerup", onPointerUp);
-		window.addEventListener("pointercancel", onPointerUp);
-		return () => {
-			element.removeEventListener("pointerdown", onPointerDown);
-			window.removeEventListener("pointerup", onPointerUp);
-			window.removeEventListener("pointercancel", onPointerUp);
-		};
-	}, [root, input]);
+
 	return useCallback(
 		(event: StripKeyEvent): void => {
 			if (event.keyAction === 0) input(event.keyCode, "down");
@@ -98,7 +68,7 @@ function useHoldInput(
  * strip, with touch bound to its rendered layout, feedback above it, and the
  * voice overlay on top (strip-voice-ui).
  */
-export function StripPanel(): React.JSX.Element {
+function ActiveStripPanel(): React.JSX.Element {
 	const target = useRef<PanelKeyTarget | undefined>(undefined);
 	const emojiSelection = useRef<
 		| {
@@ -111,9 +81,7 @@ export function StripPanel(): React.JSX.Element {
 	>(undefined);
 	const layout = useRef<StripLayout | undefined>(undefined);
 	const [pressedKeyCode, setPressedKeyCode] = useState<string>();
-	const onLayout = useCallback((current: StripLayout | undefined) => {
-		layout.current = current;
-	}, []);
+	const committedLayoutIdentity = useRef<string | undefined>(undefined);
 	const { snapshot } = useWallpaper();
 	const feedback = usePanelFeedback(useQuakeEvents());
 	const observeSelection = (next: StripProfiles): void => {
@@ -139,6 +107,27 @@ export function StripPanel(): React.JSX.Element {
 	const { settings } = useStripSettings();
 	const serial = snapshot?.saved.serial;
 	const stripLayout = useStripLayout(profiles, serial);
+	const onLayout = useCallback(
+		(current: StripLayout | undefined) => {
+			if (current) {
+				// StripScreen clears its layout before replacement and also repaints
+				// runtime state. Compare committed keys, retaining identity across cleanup.
+				const identity = JSON.stringify(
+					stripLayout?.tiles.map((tile) => tile.key),
+				);
+				if (
+					committedLayoutIdentity.current !== undefined &&
+					committedLayoutIdentity.current !== identity
+				)
+					document
+						.getElementById("root")
+						?.dispatchEvent(new Event("quake-strip-reset"));
+				committedLayoutIdentity.current = identity;
+			}
+			layout.current = current;
+		},
+		[stripLayout],
+	);
 	const voice = useVoiceSurface(stripLayout);
 	const motion = useStripMotion();
 	// Chat cards go opaque while the FunctionWheel or picker is open (AI-207).
@@ -146,7 +135,7 @@ export function StripPanel(): React.JSX.Element {
 	const wheelOpen = knobSelector !== undefined && knobSelector !== "closed";
 	const main = useRef<HTMLElement>(null);
 	const { request, view, locale } = voice.context;
-	const onHoldKey = useHoldInput(main, stripLayout, (input) => {
+	const onHoldKey = useHoldInput(stripLayout, (input) => {
 		void request({ _tag: "Input", input });
 	});
 	const holdKey = useRef(onHoldKey);
@@ -217,16 +206,7 @@ export function StripPanel(): React.JSX.Element {
 						})
 						.catch(() => invalid(event.keyCode));
 				},
-				(direction) => {
-					dispatch.cancel();
-					heldEmoji.clear();
-					if (!target.current) return;
-					void window.quakeKeyLibrary?.request({
-						type: "navigate",
-						deviceId: target.current.deviceId,
-						direction,
-					});
-				},
+				undefined,
 				() => {
 					dispatch.cancel();
 					heldEmoji.clear();
@@ -267,6 +247,9 @@ export function StripPanel(): React.JSX.Element {
 		const changed = previous.current !== undefined;
 		previous.current = selection;
 		if (!changed) return;
+		document
+			.getElementById("root")
+			?.dispatchEvent(new Event("quake-strip-reset"));
 		dispatch({ _tag: "profileReset" });
 		void request({ _tag: "Reset", reason: "profileChanged" });
 	}, [selection, dispatch, request]);
@@ -303,4 +286,19 @@ export function StripPanel(): React.JSX.Element {
 			</StripViewport>
 		</main>
 	);
+}
+
+/** Window lifecycle unmounts every panel hook and child resource together. */
+export function StripPanel(): React.JSX.Element | null {
+	const [active, setActive] = useState(true);
+	useEffect(() => {
+		const hide = () => setActive(false);
+		window.addEventListener("pagehide", hide);
+		window.addEventListener("beforeunload", hide);
+		return () => {
+			window.removeEventListener("pagehide", hide);
+			window.removeEventListener("beforeunload", hide);
+		};
+	}, []);
+	return active ? <ActiveStripPanel /> : null;
 }

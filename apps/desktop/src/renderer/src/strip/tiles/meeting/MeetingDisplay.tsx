@@ -204,7 +204,10 @@ export function MeetingDisplay({
 				>
 					{tab === "live" ? (
 						snapshot?.translations.length ? (
-							<div className="meeting-translations">
+							<div
+								className="meeting-translations"
+								lang={snapshot?.config.targetLanguage}
+							>
 								<aside>
 									{slots.map((time) => (
 										<time key={time}>
@@ -238,6 +241,10 @@ export function MeetingDisplay({
 								</p>
 							</div>
 						)
+					) : tab === "temp" && record?.state === "recording" ? (
+						<div className="meeting-viewer-empty">
+							<p>Start Recording</p>
+						</div>
 					) : record &&
 						((progress && record.state !== "completed") ||
 							record.state === "processing" ||
