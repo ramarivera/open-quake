@@ -20,6 +20,10 @@ export interface KnobModelPort {
 		delta: -1 | 1,
 		context: KnobModelContext,
 	) => Effect.Effect<void, KnobError>;
+	readonly focusedPress?: (
+		key: FocusKey,
+		context: KnobModelContext,
+	) => Effect.Effect<void, KnobError>;
 	readonly voice: (input: KnobVoiceInput) => Effect.Effect<void, KnobError>;
 	readonly readVolume: Effect.Effect<VolumeReading, KnobError>;
 	readonly writeVolume: (

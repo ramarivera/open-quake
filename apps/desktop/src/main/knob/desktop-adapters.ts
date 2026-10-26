@@ -19,6 +19,7 @@ import {
 	encodeProfileEnvelope,
 	type Profile,
 	ProfileEnvelope,
+	type ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { visibleProfiles } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
@@ -30,6 +31,7 @@ import { nativeBrightness } from "./brightness";
 import type { BrightnessAdapter } from "./brightness/controller";
 import { focusedBrightness } from "./focused-brightness";
 import { focusedHotkey } from "./focused-hotkey";
+import { committedFocusedKey } from "./focused-key";
 import { macVolume, script } from "./native-volume";
 import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
 
@@ -58,6 +60,12 @@ export interface DesktopKnobBindings {
 	readonly readVolume?: KnobModelPort["readVolume"];
 	readonly writeVolume?: KnobModelPort["writeVolume"];
 	readonly brightness?: BrightnessAdapter;
+	readonly obs?: (
+		key: ProfileKey,
+		delta: -1 | 1 | undefined,
+		signal: AbortSignal,
+		beforeWrite: () => Promise<void>,
+	) => Promise<void>;
 }
 const unavailable = Effect.fail(KnobCapabilityUnavailable.fromCause());
 const keys = (profile: Profile, pageId: string): KnobModelContext["keys"] =>
@@ -68,7 +76,8 @@ const keys = (profile: Profile, pageId: string): KnobModelContext["keys"] =>
 		return kind === "vol" ||
 			kind === "luminance" ||
 			kind === "brightness" ||
-			kind === "hotkey"
+			kind === "hotkey" ||
+			kind === "obsVolume"
 			? [
 					{
 						keyCode: key.keyCode,
@@ -236,6 +245,12 @@ export function desktopKnobAdapters(
 		{ read, deviceId, context: () => context, profiles: () => catalog },
 		bindings.brightness ?? nativeBrightness(),
 	);
+	const resolveObs = committedFocusedKey({
+		read,
+		deviceId,
+		context: () => context,
+		profiles: () => catalog,
+	});
 	const ports: KnobModelPort = {
 		alert: () => withHardware((session) => session.playTone("error")),
 		selectProfile: Effect.fn("DesktopKnob.selectProfile")(
@@ -282,24 +297,58 @@ export function desktopKnobAdapters(
 				return context;
 			},
 		),
+		focusedPress: (key, snapshot) =>
+			key.kind === "obsVolume" && bindings.obs
+				? resolveObs(key, snapshot).pipe(
+						Effect.flatMap((committed) =>
+							Effect.tryPromise({
+								try: (signal) =>
+									bindings.obs
+										? bindings.obs(committed, undefined, signal, () =>
+												Effect.runPromise(
+													resolveObs(key, snapshot).pipe(Effect.asVoid),
+												),
+											)
+										: Promise.reject(KnobCapabilityUnavailable.fromCause()),
+								catch: (cause) => KnobDispatchFailed.fromCause(cause),
+							}),
+						),
+					)
+				: unavailable,
 		voice: bindings.voice ?? (() => unavailable),
 		focusedTurn:
 			bindings.focusedTurn ??
 			((key, delta, snapshot) =>
-				key.kind === "vol"
-					? readVolume.pipe(
-							Effect.flatMap((reading) => {
-								const level = volumeStep(reading.level, delta);
-								return writeVolume({ level, muted: level === 0 });
-							}),
+				key.kind === "obsVolume" && bindings.obs
+					? resolveObs(key, snapshot).pipe(
+							Effect.flatMap((committed) =>
+								Effect.tryPromise({
+									try: (signal) =>
+										bindings.obs
+											? bindings.obs(committed, delta, signal, () =>
+													Effect.runPromise(
+														resolveObs(key, snapshot).pipe(Effect.asVoid),
+													),
+												)
+											: Promise.reject(KnobCapabilityUnavailable.fromCause()),
+									catch: (cause) => KnobDispatchFailed.fromCause(cause),
+								}),
+							),
 						)
-					: key.kind === "luminance"
-						? withHardware((session) => session.stepBrightness(delta))
-						: key.kind === "hotkey"
-							? hotkey(key, delta, snapshot)
-							: key.kind === "brightness"
-								? brightness(key, delta, snapshot)
-								: unavailable),
+					: key.kind === "vol"
+						? readVolume.pipe(
+								Effect.flatMap((reading) => {
+									const level = volumeStep(reading.level, delta);
+									return writeVolume({ level, muted: level === 0 });
+								}),
+							)
+						: key.kind === "luminance"
+							? withHardware((session) => session.stepBrightness(delta))
+							: key.kind === "hotkey"
+								? hotkey(key, delta, snapshot)
+								: key.kind === "brightness"
+									? brightness(key, delta, snapshot)
+									: unavailable),
 		readVolume,
 		writeVolume,
 		warmThumbnails,

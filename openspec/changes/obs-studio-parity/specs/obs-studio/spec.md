@@ -1,0 +1,50 @@
+## ADDED Requirements
+
+### Requirement: Recovered OBS command catalog
+The system SHALL register all 21 recovered ids and configuration parameters enumerated in design.md through the existing action registry, preserving configData imports and enforcing executable validation. It SHALL expose target editing and explicit Save. Stats SHALL occupy 2x1 cells and screenshot 2x2. Audit rows MGMT-173 through MGMT-193, MGMT-282 and WIDGETS-123.
+
+#### Scenario: Configure and execute saved OBS keys
+- **WHEN** a valid committed OBS key activates through the existing key runtime
+- **THEN** the owning OBS service sends its corresponding v5 requests with the saved target parameters exactly once
+- **AND** invalid or incomplete keys cannot perform OBS requests
+
+#### Scenario: Display-only functions
+- **WHEN** a stats or screenshot key activates
+- **THEN** it performs no write action and its display retains the fixed footprint
+
+### Requirement: Protected connection and local detection
+The system SHALL use obs-websocket v5 at loopback by default, host 127.0.0.1 and port 4455, or an explicitly configured host. It SHALL protect the password using the existing OS credential vault and never serialize it into profiles, public state, errors or logs. Auto-connect SHALL default on. Local detection SHALL read OBS configuration without starting OBS and SHALL respect manual overrides. Authentication and RPC version failures SHALL have distinct catalog errors and suppress automatic retry until explicit reconnection. Audit row WIDGETS-122.
+
+#### Scenario: Detect local configuration
+- **WHEN** local OBS websocket settings are enabled and no manual override exists
+- **THEN** detection supplies its loopback port and securely stores its password, reporting the source and result without disclosing the password
+
+#### Scenario: Authenticate and reconnect
+- **WHEN** OBS sends a v5 challenge
+- **THEN** the client sends the specified SHA256/base64 authentication response
+- **AND** a lost connection retries without replaying the last command
+- **AND** auth failure remains visible until an explicit connect or configuration change
+
+#### Scenario: Dropping an OBS function while disconnected
+- **WHEN** the user selects an OBS function in the existing editor
+- **THEN** the app attempts a connection and shows the connection dialog/help after 2000 ms if disconnected
+
+### Requirement: OBS knob volume binding
+The system SHALL route focused obsVolume rotation through the existing knob action path. It SHALL adjust current inputVolumeMul by the configured step, default 0.05, clamp between zero and one when allowGain is false and toggle mute on press. Audit rows MGMT-181, MGMT-219 and WIDGETS-123.
+
+#### Scenario: Volume turn and press
+- **WHEN** the knob turns clockwise or counterclockwise on a committed focused OBS volume key
+- **THEN** it increases or decreases only that OBS input volume
+- **AND** pressing the key toggles that input mute
+- **AND** a stale profile/session cannot change OBS volume
+
+### Requirement: Visible live tiles and teardown
+The system SHALL refresh visible OBS status, stats and screenshot tiles every 2000 ms and unregister their ownership when hidden, profile/page changes or renderer closes. Status SHALL use recovered text/color states, 28px weight 800; stats SHALL show CPU, output skipped frames and render skipped/total at 14px weight 700; screenshots SHALL request jpeg at 128x128. Text SHALL be localized with missing values shown as unavailable. Audit rows WIDGETS-124 through WIDGETS-127.
+
+#### Scenario: Two-second refresh
+- **WHEN** a visible profile contains OBS status, stats and screenshot keys
+- **THEN** after 2000 ms the service fetches current status, GetStats and GetSourceScreenshot and publishes only matching visible tiles
+
+#### Scenario: Visibility and release
+- **WHEN** the profile changes, page hides or renderer is destroyed
+- **THEN** its old tiles receive no further updates and no polls remain when there are no visible OBS tiles

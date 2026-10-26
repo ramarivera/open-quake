@@ -1,3 +1,4 @@
+import "../main/obs/preload";
 import { createSettingsBackendBridge } from "../main/settings/backend-preload";
 import { createAppLocaleBridge } from "../main/settings/preload";
 import "../main/meetings/preload";

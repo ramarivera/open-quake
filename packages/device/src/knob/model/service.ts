@@ -539,6 +539,16 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 								return;
 							}
 							if (event.code === 1) {
+								if (state.focus._tag === "tile" && ports.focusedPress) {
+									const focusedCode = state.focus.keyCode;
+									const key = state.context.keys.find(
+										(candidate) =>
+											candidate.keyCode === focusedCode &&
+											candidate.kind === "obsVolume" &&
+											canFocus(candidate),
+									);
+									if (key) return yield* ports.focusedPress(key, state.context);
+								}
 								hold = Option.none();
 								voiceOwned = Option.none();
 								return yield* ports.voice({

@@ -1,5 +1,7 @@
+import { OBS_IDS } from "../../../../../../packages/device/src/actions/obs-contracts";
 import type { HourFormat } from "../../../shared/display";
 import { EmojiTile } from "../management/emoji/EmojiTile";
+import { ObsTile } from "../obs/ObsTile";
 import {
 	ClockMusicCard,
 	ClockMusicSlot,
@@ -168,6 +170,7 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
+		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
 		["playAudio", PlayerSlot],
 		["playAudioLegacy", SoundboardUnavailableTile],

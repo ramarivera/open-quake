@@ -1,7 +1,8 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`FirmwareSession.load AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
+	`ObsService.initialize ObsService.status ObsService.configure ObsService.detect ObsService.connect ObsService.connectUnlocked ObsService.disconnect ObsService.execute ObsService.executeCommand ObsService.setVisible ObsService.release ObsService.poll ObsService.readTile ObsService.catalog ObsRepository.read ObsRepository.save ObsRepository.saveUnlocked ObsRepository.password ObsRepository.detect
+FirmwareSession.load AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
 SoundboardService.play SoundboardService.start SoundboardService.stopNow SoundboardService.pause SoundboardService.resume SoundboardService.previous SoundboardService.next SoundboardService.rescan SoundboardService.setVolume SoundboardService.stopProfile SoundboardService.execute SoundboardService.stop SoundboardService.stopAll SoundboardService.naturalEnd SoundboardService.close SoundboardService.snapshot SoundboardRepository.list SoundboardRepository.put SoundboardPlayer.open
 SystemMedia.nativeProcess SystemMedia.macRead SystemMedia.macControl SystemMedia.windowsRead SystemMedia.windowsControl SystemMedia.nativeRead SystemMedia.nativeControl SystemMedia.keyAction SystemMediaService.send
 GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
@@ -120,7 +121,8 @@ WeatherService.verifyCity`.split(/\s+/),
 );
 
 export const knownSourceFiles = new Set(
-	`composition.ts capture.ts electron-audio.ts audio-worker.ts pcm.ts factory.ts settings.ts settings-ipc.ts websocket.ts ordered.ts runtime.ts errors.ts
+	`obs-contracts.ts obs-errors.ts obs-repository.ts obs-service.ts obs-actions.ts obs-tiles.ts obs-transport.ts detection.ts
+composition.ts capture.ts electron-audio.ts audio-worker.ts pcm.ts factory.ts settings.ts settings-ipc.ts websocket.ts ordered.ts runtime.ts errors.ts
 general-service.ts general-invariants.ts general-contracts.ts wizard-service.ts wizard-invariants.ts wizard-contracts.ts backend-rpc.ts backend-preload.ts os-adapter.ts wizard-owners.ts window-binding.ts
 native-volume.ts thumbnail-binding.ts volume-observer.ts profile-thumbnail-key.ts profile-thumbnails.ts profile-thumbnail-retention.ts
 windows-foreground.ts windows-foreground-script.ts

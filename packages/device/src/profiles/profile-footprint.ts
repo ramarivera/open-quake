@@ -21,6 +21,8 @@ export interface Footprint {
  * disagreeing copies (MGMT-065). A Map keeps `__proto__` and friends inert.
  */
 export const FORCED_TILE_SPANS: ReadonlyMap<string, TileSpan> = new Map([
+	["obsStats", [2, 1]],
+	["obsScreenshot", [2, 2]],
 	["playAudio", [8, 2]],
 	["dkDesktopClock", [8, 2]],
 	["systemMonitorPanel", [8, 2]],

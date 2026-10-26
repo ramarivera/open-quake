@@ -11,6 +11,11 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
+	createEmptyProfileKey,
+	ProfileEnvelope,
+	ProfileKey,
+} from "../../../../../packages/device/src/profiles/profile-contracts";
+import {
 	ProfileRepository,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
@@ -20,6 +25,9 @@ import {
 	SYNTHETIC_TOUCH_EMPTY,
 	SYNTHETIC_TOUCH_MOVE,
 } from "../../../../../packages/device/src/touch/touch-fixtures";
+import { fakeObsServer } from "../../../../../packages/edge/src/obs/fake-server.test-support";
+import { emptyObsSaved } from "../../../../../packages/edge/src/obs/obs-contracts";
+import { openObsConnection } from "../../../../../packages/edge/src/obs/obs-transport";
 import { AGENTS_REQUEST, type AgentReply } from "../../shared/agents";
 import { KEY_RUNTIME } from "../../shared/key-library";
 import { PROFILES_SNAPSHOT } from "../../shared/profile-snapshot-contracts";
@@ -41,6 +49,7 @@ import { registerManagementAppearance } from "../management/appearance";
 import { registerMeetings } from "../meetings";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
+import { prepareObs } from "../obs";
 import { registerProfiles } from "../profiles/profile-ipc";
 import { makeDisplay } from "../test/display";
 import {
@@ -67,6 +76,7 @@ assert.equal(
 );
 const directory = mkdtempSync(join(tmpdir(), "open-quake-w6-smoke-"));
 app.setPath("userData", directory);
+if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 // The clock tile reads its own store, as in the app.
 registerClockScheme();
 const pngPath = join(directory, "checkerboard.png");
@@ -622,6 +632,227 @@ async function smoke(): Promise<void> {
 		);
 	await lifecycleRuntime.runPromise(lifecycle.topology());
 	// Built-in-like profiles on the panel, swapped through the read-only channel.
+	const obsServer = await fakeObsServer();
+	const jpeg = nativeImage
+		.createFromBitmap(Buffer.alloc(128 * 128 * 4, 180), {
+			width: 128,
+			height: 128,
+		})
+		.toJPEG(50)
+		.toString("base64");
+	// The fake server supplies a valid jpeg for the real Chromium decoder.
+	const obsRegistration = prepareObs({
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		management: () => management,
+		panel: () => panel,
+		mock: true,
+		storage: {
+			store: {
+				read: async () => ({
+					...emptyObsSaved,
+					port: obsServer.port,
+					manualOverride: true,
+				}),
+				write: async () => {},
+			},
+			vault: {
+				put: async () => "fixture-reference",
+				get: async () => "",
+				remove: async () => {},
+			},
+			detect: async () => undefined,
+		},
+		open: openObsConnection,
+	}).standalone();
+	obsServer.screenshot(`data:image/jpeg;base64,${jpeg}`);
+	const obsKey = (type: string, code: string, settings: unknown) => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code));
+		return {
+			...empty,
+			childrenName: type,
+			config: {
+				...empty.config,
+				type,
+				display: true,
+				actions: [{ type: "configData", value: JSON.stringify(settings) }],
+			},
+		};
+	};
+	const obsProfile = {
+		schemaVersion: 1,
+		profiles: [
+			{
+				id: "obs",
+				name: "OBS",
+				revision: 0,
+				pages: [
+					{
+						id: "one",
+						keys: [
+							obsKey("obsStream", "1,1", { mode: "toggle" }),
+							obsKey("obsStats", "1,2", {}),
+							obsKey("obsScreenshot", "1,4", { sourceName: "Main" }),
+						],
+					},
+				],
+			},
+		],
+		activeByDevice: { "smoke-A": { profileId: "obs", pageId: "one" } },
+	};
+	await profiles.dispose();
+	profiles = serveProfiles(
+		Schema.encodeSync(ProfileEnvelope)(
+			Schema.decodeUnknownSync(ProfileEnvelope)(obsProfile),
+		),
+	);
+	await panel.loadFile(resolve("out/renderer/index.html"), {
+		query: { surface: "panel" },
+	});
+	await settle(2500);
+	const obsView: unknown = await panel.webContents.executeJavaScript(
+		`(() => ({ count: document.querySelectorAll('.obs-tile').length, text: [...document.querySelectorAll('.obs-tile')].map((node) => node.textContent), image: !!document.querySelector('.obs-screenshot')?.naturalWidth, hidden: document.hidden }))()`,
+	);
+	assert(
+		Schema.is(
+			Schema.Struct({
+				count: Schema.Number,
+				text: Schema.Array(Schema.String),
+				image: Schema.Boolean,
+				hidden: Schema.Boolean,
+			}),
+		)(obsView),
+	);
+	assert.equal(obsView.count, 3);
+	assert(
+		obsView.text.some((text) => text.includes("LIVE")),
+		JSON.stringify(obsView),
+	);
+	assert(
+		obsView.text.some((text) => text.includes("CPU 12.3%")),
+		JSON.stringify(obsView),
+	);
+	assert(obsView.image, JSON.stringify(obsView));
+	assert.equal(
+		await panel.webContents.executeJavaScript(`(() => {
+		const tile = document.querySelector('.obs-tile');
+		const label = tile.querySelector('span');
+		const a = tile.getBoundingClientRect(), b = label.getBoundingClientRect();
+		return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 2;
+	})()`),
+		true,
+		"OBS state text must be vertically centered",
+	);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.nav-item[title="Keys"]').click(); null;`,
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('.keys-cells') !== null",
+	);
+	await management.webContents.executeJavaScript(
+		`([...document.querySelectorAll('.keys-cells button')].find(button => button.textContent === '1,4')).click(); null;`,
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('#obs-scene option[value=\"scene-1\"]') !== null",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#obs-scene');
+		select.value = 'scene-1'; select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await settle(100);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.key-editor .button-primary').click(); null;`,
+	);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(`(async () => {
+		const reply = await window.quakeKeyLibrary.request({type:'read',locale:'en'});
+		const key = reply.envelope?.profiles[0]?.pages[0]?.keys.find(key => key.keyCode === '1,4');
+		const settings = JSON.parse(key?.config.actions[0]?.value || '{}');
+		return settings.sceneUuid === 'scene-1' && settings.sourceName === 'Main' && !('sceneName' in settings);
+	})()`),
+		true,
+		"Screenshot editor must save the selected scene through production IPC",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "management-obs.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await waitForVoice(
+		panel,
+		"document.querySelector('.obs-screenshot')?.naturalWidth > 0",
+	);
+	await management.webContents.executeJavaScript(
+		`([...document.querySelectorAll('.keys-cells button')].find(button => button.textContent === '1,6')).click(); null;`,
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('#key-function') !== null",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#key-function'); select.value = 'obsVolume';
+		select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await waitForVoice(
+		management,
+		"document.querySelector('#obs-input option[value=\"Desktop Audio\"]') !== null",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#obs-input'); select.value = 'Desktop Audio';
+		select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await settle(100);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.key-editor .button-primary').click(); null;`,
+	);
+	await settle(100);
+	assert.equal(
+		await management.webContents.executeJavaScript(`(async () => {
+		const reply = await window.quakeKeyLibrary.request({type:'read',locale:'en'});
+		const key = reply.envelope?.profiles[0]?.pages[0]?.keys.find(key => key.keyCode === '1,6');
+		return key?.config.type === 'obsVolume' && key.config.supportKnob === true && JSON.parse(key.config.actions[0].value).inputUuid === 'Desktop Audio';
+	})()`),
+		true,
+		"Volume editor must save a knob-enabled special audio input",
+	);
+	await waitForVoice(
+		panel,
+		"document.querySelector('.obs-screenshot')?.naturalWidth > 0",
+	);
+	assert.deepEqual(
+		await panel.webContents.executeJavaScript(
+			`window.quakeObs.request({type:'configure', config:{host:'localhost',port:4455,autoConnect:false},password:'fixture-only'})`,
+		),
+		{
+			type: "error",
+			code: "OBS.IPC.REJECTED",
+			message: "OBS request was rejected",
+		},
+		"Panel cannot mutate OBS credentials or connection settings",
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "panel-obs.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
+	await panel.loadURL("about:blank");
+	await management.loadURL("about:blank");
+	await settle(50);
+	const obsCalls = obsServer.calls.length;
+	await settle(2100);
+	assert.equal(
+		obsServer.calls.length,
+		obsCalls,
+		"Released OBS profile must stop polling",
+	);
+	await obsRegistration.dispose();
+	await obsServer.close();
+	await management.loadFile(resolve("out/renderer/index.html"));
+	process.stdout.write(
+		"OBS native smoke PASS: production preload, status/stats/jpeg tiles, fixed spans, renderer navigation stops polling.\n",
+	);
 	const fixtures = [
 		["quick", quickProfile, "commonBaseTheme"],
 		["meetai", meetAiProfile, "meetingAssistantTheme"],

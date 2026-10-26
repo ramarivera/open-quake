@@ -20,6 +20,7 @@ import {
 } from "./action-errors.js";
 import { validateAction } from "./action-invariants.js";
 import type { ActionConfig } from "./action-registry.js";
+import { isObsId } from "./obs-contracts.js";
 export interface KeyFeedback {
 	readonly deviceId: string;
 	readonly profileId: string;
@@ -380,7 +381,15 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					running.set(identity, fiber);
 					return;
 				}
-				if (type === "homeAssistant" && port.executeOwned) {
+				if ((type === "homeAssistant" || isObsId(type)) && port.executeOwned) {
+					if (isObsId(type)) {
+						const validated = validateAction(
+							Option.getOrElse(key.childrenName, () => type),
+							input,
+						);
+						if (validated._tag === "Left")
+							return yield* Effect.fail(validated.left);
+					}
 					// Reserve the committed press atomically, then await network work
 					// outside the input lock. Reset owns the scoped fiber's lifetime.
 					const execute = port.executeOwned;

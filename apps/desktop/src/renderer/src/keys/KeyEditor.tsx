@@ -4,6 +4,7 @@ import {
 	ACTION_REGISTRY,
 	createActionDraft,
 } from "../../../../../../packages/device/src/actions/action-registry.js";
+import { isObsId } from "../../../../../../packages/device/src/actions/obs-contracts";
 import {
 	editKeyTitle,
 	type KeyTarget,
@@ -24,6 +25,7 @@ import {
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
+import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
@@ -518,7 +520,7 @@ export function KeyEditor(): React.JSX.Element {
 										config: {
 											...raw.config,
 											...createActionDraft(entry.id),
-											supportKnob: false,
+											supportKnob: entry.id === "obsVolume",
 											supportTouchEffect: entry.supportTouchEffect,
 										},
 									});
@@ -635,8 +637,20 @@ export function KeyEditor(): React.JSX.Element {
 							</Row>
 						)}
 
+						{isObsId(key.config.type) && (
+							<ObsSettings
+								key={key.config.type}
+								keyValue={key}
+								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						{key.config.actions
-							.filter(() => key.config.type !== "dkDesktopClock")
+							.filter(
+								() =>
+									key.config.type !== "dkDesktopClock" &&
+									!isObsId(key.config.type),
+							)
 							.map((action, index) => (
 								<Row
 									key={`${action.type}:${action.type === "key" ? (index === 0 ? "primary" : "alternate") : "setting"}`}

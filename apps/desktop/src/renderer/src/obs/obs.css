@@ -1,0 +1,59 @@
+.obs-tile {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	padding: 12px;
+	overflow: hidden;
+	font-size: 28px;
+	font-weight: 800;
+	line-height: 1.2;
+}
+.obs-tile-stats {
+	flex-direction: column;
+	font-size: 14px;
+	font-weight: 700;
+	color: #fff;
+}
+.obs-offline {
+	color: #888;
+	font-size: 18px;
+}
+.obs-screenshot {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+.obs-connection {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	padding-block: 12px;
+}
+.obs-connection input,
+.obs-connection select {
+	max-width: 100%;
+}
+.obs-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+}
+.obs-guide {
+	padding-inline-start: 20px;
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.8;
+}
+.obs-error {
+	color: var(--error, #ff7777);
+	overflow-wrap: anywhere;
+}
+.obs-source {
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
