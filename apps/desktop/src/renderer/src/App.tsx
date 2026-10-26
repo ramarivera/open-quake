@@ -118,30 +118,38 @@ function ManagementSurface({
 		const active = initialActivation;
 		return pages.find((id) => id === active?.page) ?? "overview";
 	});
-	useEffect(
-		() =>
-			window.quakeManagement?.onActivate((name) => {
-				const next = managementActivation(name);
-				const item = pages.find((id) => id === next?.page);
-				if (item) {
-					navigated.current = true;
-					setPage(item);
-					if (item === "meetings")
-						setMeetingActivation((sequence) => sequence + 1);
-					if (next?.agentTab) {
-						const tab = next.agentTab;
-						setAgentActivation((previous) => ({
-							tab,
-							sequence: previous.sequence + 1,
-						}));
-					}
-					content.current?.scrollTo({ top: 0 });
-				} else {
-					console.warn("Unknown Management Center tab activation ignored");
+	useEffect(() => {
+		const activate = (name: string) => {
+			const next = managementActivation(name);
+			const item = pages.find((id) => id === next?.page);
+			if (item) {
+				navigated.current = true;
+				setPage(item);
+				if (item === "meetings")
+					setMeetingActivation((sequence) => sequence + 1);
+				if (next?.agentTab) {
+					const tab = next.agentTab;
+					setAgentActivation((previous) => ({
+						tab,
+						sequence: previous.sequence + 1,
+					}));
 				}
-			}),
-		[],
-	);
+				content.current?.scrollTo({ top: 0 });
+			} else {
+				console.warn("Unknown Management Center tab activation ignored");
+			}
+		};
+		const off = window.quakeManagement?.onActivate(activate);
+		const navigate = (event: Event) => {
+			if (event instanceof CustomEvent && typeof event.detail === "string")
+				activate(event.detail);
+		};
+		window.addEventListener("open-quake:navigate", navigate);
+		return () => {
+			off?.();
+			window.removeEventListener("open-quake:navigate", navigate);
+		};
+	}, []);
 	const [deviceReady, setDeviceReady] = useState(false);
 	const wasReady = useRef(false);
 	const onReady = useCallback((ready: boolean): void => {

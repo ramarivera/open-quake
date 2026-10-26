@@ -218,6 +218,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 			lock.withPermits(1)(
 				Effect.gen(function* () {
 					if (closed) return yield* new VoiceRuntimeUnavailable();
+					if (request.knob?.assistantSettings?.enableVoiceInput === false)
+						return yield* new VoiceKnobRejected("RouteUnavailable");
 					if (
 						cleanup &&
 						cleanupSerial !== request.serial &&

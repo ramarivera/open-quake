@@ -1089,3 +1089,68 @@ for (const finishAt of [90000, 300000])
 			);
 		},
 	);
+
+for (const seconds of [5, 10, 15, 20, 25, 30]) {
+	it.effect(`AI-057 expires assistant context after ${seconds} seconds`, () => {
+		const requests: InferenceRequest[] = [];
+		return Effect.gen(function* () {
+			const service = yield* initialize;
+			const submit = (n: number) =>
+				service.submit(
+					"assistant",
+					input(n, { contextTimeoutSeconds: seconds, historyCount: 2 }),
+				);
+			const first = yield* submit(1);
+			yield* chunks(first.events);
+			yield* TestClock.adjust(`${seconds - 1} seconds`);
+			const second = yield* submit(2);
+			yield* chunks(second.events);
+			expect(
+				requests[1]?.messages.filter((m) => m.role === "user"),
+			).toHaveLength(2);
+			yield* TestClock.adjust(`${seconds} seconds`);
+			const third = yield* submit(3);
+			yield* chunks(third.events);
+			expect(
+				requests[2]?.messages.filter((m) => m.role === "user"),
+			).toHaveLength(1);
+		}).pipe(
+			Effect.provide(
+				testLayer({
+					open: ({ request }) =>
+						Effect.sync(() => {
+							requests.push(request);
+							return Stream.make(text("answer"), complete);
+						}),
+				}),
+			),
+		);
+	});
+}
+it.effect("AI-060 keeps only the requested completed history exchanges", () => {
+	const requests: InferenceRequest[] = [];
+	return Effect.gen(function* () {
+		const service = yield* initialize;
+		for (const n of [1, 2, 3]) {
+			const turn = yield* service.submit(
+				"assistant",
+				input(n, { historyCount: n === 2 ? 0 : 1 }),
+			);
+			yield* chunks(turn.events);
+		}
+		expect(requests[1]?.messages).toHaveLength(1);
+		expect(requests[2]?.messages.filter((m) => m.role === "user")).toHaveLength(
+			2,
+		);
+	}).pipe(
+		Effect.provide(
+			testLayer({
+				open: ({ request }) =>
+					Effect.sync(() => {
+						requests.push(request);
+						return Stream.make(text("answer"), complete);
+					}),
+			}),
+		),
+	);
+});

@@ -12,6 +12,7 @@ import type { MaintenanceController } from "./useMaintenance";
 import "./maintenance.css";
 import { SpeechSettingsPanel } from "../speech/SpeechSettings";
 
+import { AssistantProviderSettings } from "./AssistantProviderSettings";
 import { firmwareHint } from "./firmware-guidance";
 
 export { firmwareHint } from "./firmware-guidance";
@@ -40,6 +41,7 @@ export function SettingsPage({
 			) : null}
 			{c.message ? <p role="status">{c.message}</p> : null}
 			{children}
+			<AssistantProviderSettings />
 			{!view ? (
 				<p role="status">Loading settings…</p>
 			) : (

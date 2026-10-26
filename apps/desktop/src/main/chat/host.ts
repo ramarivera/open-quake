@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { isIPv4 } from "node:net";
-import { Cause, Effect, Either, Exit, Layer, Schema } from "effect";
+import { Cause, Effect, Either, Exit, Layer, Option, Schema } from "effect";
 import { net } from "electron";
+import { AssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { resolveModelRows } from "../../../../../packages/edge/src/agents/agents-invariants";
 import { AiCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/adapter";
@@ -27,6 +28,12 @@ import {
 import { PublicFileRequest } from "../../../../../packages/edge/src/ai/ai-file-contracts";
 import { validateProfile } from "../../../../../packages/edge/src/ai/ai-invariants";
 import { AiRepository } from "../../../../../packages/edge/src/ai/ai-repository";
+import { ROLE_PRESETS } from "../../../../../packages/edge/src/ai/ai-role-presets";
+import {
+	AiVoiceService,
+	AiVoiceTargets,
+} from "../../../../../packages/edge/src/ai/ai-router-service";
+import { providerSamplingValid } from "../../../../../packages/edge/src/ai/ai-sampling";
 import { AiProviderService } from "../../../../../packages/edge/src/ai/ai-service";
 import {
 	inferenceProvider,
@@ -52,9 +59,11 @@ import {
 import { ChatService } from "../../../../../packages/edge/src/chat/chat-service";
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type { PinnedDirectModel } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
+import { reconcileAssistantProvider } from "../../shared/assistant-provider";
 import { connectSpark } from "../credentials/spark-socket";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
+import { type AssistantHaPort, executeAssistantHa } from "./assistant-ha";
 import { shortcutDraft } from "./shortcut-draft";
 
 const OWNER = "desktop-user";
@@ -159,6 +168,11 @@ function profileMetadataFromModel(row: ModelRow): ProviderProfile {
 }
 export interface DirectChatOptions {
 	readonly directory: string;
+	readonly homeAssistant?: AssistantHaPort;
+	readonly keySettings?: (
+		serial: string,
+		keyCode: string,
+	) => Effect.Effect<AssistantSettings | undefined, AiError>;
 	readonly credentials: typeof AiCredentials.Service;
 	readonly models: (
 		scope: string,
@@ -189,17 +203,20 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			),
 		),
 	);
+	const providerDependencies = Layer.mergeAll(
+		Layer.succeed(
+			AiCompatibleAdapter,
+			makeProviderAdapter(options.fetch, options.sparkConnect ?? connectSpark),
+		),
+		Layer.succeed(AiCredentials, options.credentials),
+		Layer.succeed(AiFileAdapter, makeFileAdapter(options.fetch)),
+		Layer.succeed(AiConnectivity, {
+			online: () => Effect.sync(() => options.online?.() ?? net.isOnline()),
+		}),
+	);
 	const facade = AiProviderService.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(profiles),
-		Layer.provide(
-			Layer.mergeAll(
-				Layer.succeed(AiCredentials, options.credentials),
-				Layer.succeed(AiFileAdapter, makeFileAdapter(options.fetch)),
-				Layer.succeed(AiConnectivity, {
-					online: () => Effect.sync(() => options.online?.() ?? net.isOnline()),
-				}),
-			),
-		),
+		Layer.provide(providerDependencies),
 	);
 	const dependencies = Layer.mergeAll(
 		facade,
@@ -221,14 +238,77 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			let drafting = false;
 			let disposal: Promise<void> | undefined;
 			const submit = Effect.fn("DesktopChat.submit")(
-				(input: ChatInput, scope = "main", pinned?: PinnedDirectModel) =>
+				(
+					input: ChatInput,
+					scope = "main",
+					pinned?: PinnedDirectModel,
+					assistant?: AssistantSettings,
+					isCurrent: () => boolean = () => true,
+				) =>
 					selectionLock.withPermits(1)(
 						Effect.gen(function* () {
+							const assertCurrent = Effect.suspend(() =>
+								isCurrent() ? Effect.void : Effect.fail(new AiUnavailable()),
+							);
+							const savedSettings = assistant
+								? yield* Schema.decodeUnknown(AssistantSettings, {
+										onExcessProperty: "error",
+									})(assistant).pipe(
+										Effect.mapError((cause) => new AiConfigInvalid(cause)),
+									)
+								: undefined;
 							const selected =
 								pinned ??
 								(yield* Effect.gen(function* () {
-									const rows = yield* options.models(scope);
-									const row = rows.find((r) => r.role === "default");
+									const rows = yield* options.models(
+										savedSettings ? "default" : scope,
+									);
+									const eligible = resolveModelRows(rows);
+									const saved = savedSettings?.modelRowId
+										? eligible.find((r) => r.id === savedSettings.modelRowId)
+										: eligible.find((r) => r.role === "default");
+									const settings = savedSettings
+										? reconcileAssistantProvider(savedSettings, saved)
+										: undefined;
+									let row =
+										saved && settings
+											? {
+													...saved,
+													model: settings.modelId || saved.model,
+													controls: {
+														thinking: settings.thinking,
+														webSearch: settings.webSearch,
+													},
+													...(providerSamplingValid({
+														provider: saved.provider,
+														model: settings.modelId || saved.model,
+														temperature: settings.temperature,
+														topP: settings.topP,
+													})
+														? {
+																temperature: settings.temperature,
+																topP: settings.topP,
+															}
+														: {}),
+												}
+											: saved;
+									if (
+										row &&
+										settings &&
+										!providerSamplingValid({
+											provider: row.provider,
+											model: row.model,
+											temperature: settings.temperature,
+											topP: settings.topP,
+										})
+									) {
+										const {
+											temperature: _temperature,
+											topP: _topP,
+											...withoutSampling
+										} = row;
+										row = withoutSampling;
+									}
 									if (!row?.model.trim()) return yield* new AiConfigInvalid();
 									if (!row.credentialRef) return yield* new AiAuthRequired();
 									const profile = yield* Effect.try({
@@ -237,19 +317,146 @@ export function prepareDirectChat(options: DirectChatOptions) {
 									});
 									return { profile, maxTokens: row.maxTokens };
 								}));
-							const { profile } = selected;
+							const baseProfile = selected.profile;
+							const settings =
+								savedSettings && pinned
+									? reconcileAssistantProvider(savedSettings, {
+											provider: baseProfile.provider ?? "generic",
+											model: baseProfile.modelId,
+										})
+									: savedSettings;
+							const profile: ProviderProfile =
+								settings && pinned
+									? {
+											...baseProfile,
+											controls: {
+												thinking: settings.thinking,
+												webSearch: settings.webSearch,
+											},
+											sampling: {
+												maxOutputTokens: baseProfile.sampling.maxOutputTokens,
+												...(providerSamplingValid({
+													provider: baseProfile.provider ?? "generic",
+													model: baseProfile.modelId,
+													temperature: settings.temperature,
+													topP: settings.topP,
+												})
+													? {
+															temperature: settings.temperature,
+															topP: settings.topP,
+														}
+													: {}),
+											},
+										}
+									: baseProfile;
 							yield* AiRepository.put(profile);
-							return yield* ChatService.submit(OWNER, {
-								...input,
-								profileId: profile.id,
-								modelId: profile.modelId,
-								authGeneration: profile.authGeneration,
-								mode: "normal",
-								contextWindowTokens: 8192,
-								// The model setting is an upper bound. Until context metadata is
-								// available, reserve at most 1024 inside the conservative 8192 window.
-								outputReserveTokens: Math.min(selected.maxTokens, 1024),
+							const submitChat = (
+								beforeInference: Effect.Effect<void, AiError> = Effect.void,
+							) =>
+								ChatService.submit(
+									OWNER,
+									{
+										...input,
+										...(settings
+											? {
+													contextTimeoutSeconds: settings.contextTimeoutSeconds,
+													historyCount: settings.chatHistoryCount,
+													systemPrompt:
+														settings.roleId === -1
+															? settings.customPrompt
+															: (ROLE_PRESETS.find(
+																	(r) => r.id === settings.roleId,
+																)?.prompt ?? ""),
+												}
+											: {}),
+										profileId: profile.id,
+										modelId: profile.modelId,
+										authGeneration: profile.authGeneration,
+										mode: "normal",
+										contextWindowTokens: 8192,
+										// The model setting is an upper bound. Until context metadata is
+										// available, reserve at most 1024 inside the conservative 8192 window.
+										outputReserveTokens: Math.min(selected.maxTokens, 1024),
+									},
+									beforeInference,
+								);
+							if (!settings?.useAgent) return yield* submitChat();
+							// Classification may select chat. Unsupported host actions fail explicitly;
+							// classification cannot grant device or Home Assistant permissions.
+							const routedProfile = {
+								...profile,
+								models: { ...profile.models, routing: profile.modelId },
+							};
+							const repository = AiRepository.make({
+								get: (id) =>
+									Effect.succeed(
+										id === routedProfile.id
+											? Option.some(routedProfile)
+											: Option.none(),
+									),
+								put: () => Effect.fail(new AiConfigInvalid()),
 							});
+							const providerLayer =
+								AiProviderService.DefaultWithoutDependencies.pipe(
+									Layer.provide(
+										Layer.mergeAll(
+											Layer.succeed(AiRepository, repository),
+											providerDependencies,
+										),
+									),
+								);
+							return yield* submitChat(
+								Effect.gen(function* () {
+									const providers = yield* AiProviderService;
+									return yield* AiVoiceService.submit({
+										requestId: input.turnId,
+										profileId: profile.id,
+										text: input.text,
+										mode: "auto",
+										homeAssistantEnabled:
+											settings.homeAssistantControl &&
+											Boolean(options.homeAssistant),
+									})
+										.pipe(
+											Effect.provide(
+												AiVoiceService.DefaultWithoutDependencies.pipe(
+													Layer.provide(
+														Layer.mergeAll(
+															Layer.succeed(AiProviderService, providers),
+															Layer.succeed(AiRepository, repository),
+														),
+													),
+													Layer.provide(
+														Layer.succeed(AiVoiceTargets, {
+															dispatch: Effect.fn("DesktopAssistant.dispatch")(
+																function* (dispatch) {
+																	if (dispatch.route === "normal")
+																		return { operationId: input.turnId };
+																	if (dispatch.route !== "operateEquipment")
+																		return yield* new AiUnavailable();
+																	yield* executeAssistantHa(
+																		options.homeAssistant,
+																		settings,
+																		profile.id,
+																		input.text,
+																		isCurrent,
+																	).pipe(
+																		Effect.provideService(
+																			AiProviderService,
+																			providers,
+																		),
+																	);
+																	return { operationId: input.turnId };
+																},
+															),
+														}),
+													),
+												),
+											),
+										)
+										.pipe(Effect.asVoid, Effect.zipLeft(assertCurrent));
+								}).pipe(Effect.provide(providerLayer)),
+							);
 						}),
 					),
 			);
@@ -339,9 +546,12 @@ export function prepareDirectChat(options: DirectChatOptions) {
 					});
 				}),
 				submit,
+				keySettings: (serial: string, keyCode: string) =>
+					options.keySettings?.(serial, keyCode) ?? Effect.succeed(undefined),
 				pinKnobModel: Effect.fn("DesktopChat.pinKnobModel")(function* (
 					providerId: string,
 					modelId: string,
+					_assistant?: AssistantSettings,
 				): Effect.fn.Return<PinnedDirectModel, VoiceKnobRejected> {
 					const rows = yield* options
 						.models("default")
@@ -353,9 +563,8 @@ export function prepareDirectChat(options: DirectChatOptions) {
 					const matches = resolveModelRows(rows).filter(
 						(r) =>
 							r.id === providerId &&
-							modelOptions(r.provider, [r.model]).some(
-								(option) => option.id === modelId,
-							),
+							modelId.trim().length > 0 &&
+							modelId.length <= 200,
 					);
 					const row = matches.length === 1 ? matches[0] : undefined;
 					if (!row?.model.trim() || !row.credentialRef)
