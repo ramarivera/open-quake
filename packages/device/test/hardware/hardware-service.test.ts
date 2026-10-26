@@ -66,7 +66,9 @@ describe("hardware controls over actual device connection with fake transport", 
 									),
 								],
 				});
-				const before = yield* fake.writes;
+				const before = (yield* fake.writes).filter(
+					(bytes) => bytes[4] !== 0xef,
+				);
 				const sending = yield* session
 					.send({ _tag: "Dfu" })
 					.pipe(Effect.either, Effect.fork);
@@ -75,7 +77,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				expect(Either.isLeft(result) && result.left.code).toBe(
 					"QUAKE.HARDWARE.COMMAND_REJECTED",
 				);
-				expect(yield* fake.writes).toEqual(before);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toEqual(before);
 				expect((yield* session.snapshot()).available).toBe(true);
 				expect(yield* session.readVersion()).toBe("1.0.21");
 				yield* session.enterDfu();
@@ -177,7 +181,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				expect(Either.isLeft(result) && result.left.code).toBe(
 					"QUAKE.HARDWARE.REPLY_TIMEOUT",
 				);
-				const n = (yield* fake.writes).length;
+				const n = (yield* fake.writes).filter(
+					(bytes) => bytes[4] !== 0xef,
+				).length;
 				yield* fake.emit(fakeHardwareReply(0, [0x90]));
 				expect(
 					Either.isLeft(
@@ -186,7 +192,9 @@ describe("hardware controls over actual device connection with fake transport", 
 							.pipe(Effect.either),
 					),
 				).toBe(true);
-				expect((yield* fake.writes).length).toBe(n);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef).length,
+				).toBe(n);
 			}),
 	);
 	it.scoped(
@@ -206,7 +214,9 @@ describe("hardware controls over actual device connection with fake transport", 
 						yield* session.send({ _tag: "Mic", on: false }).pipe(Effect.either),
 					),
 				).toBe(true);
-				expect(yield* fake.writes).toHaveLength(1);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(1);
 			}),
 	);
 	it.scoped(
@@ -255,7 +265,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				const { fake, connection, session } = yield* setup();
 				yield* session.setLocked(true);
 				yield* session.setLocked(false);
-				expect(yield* fake.writes).toHaveLength(0);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(0);
 				yield* session.configure({
 					...defaultHardwarePreferences,
 					knobLedAlwaysOn: false,
@@ -302,7 +314,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				yield* session.setInputMode("host");
 				yield* keyboard.pressChord("control+a");
 				expect(yield* Ref.get(hostCalls)).toEqual(["control+a"]);
-				expect(yield* fake.writes).toHaveLength(2);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(2);
 			}),
 	);
 	it.scoped(
@@ -314,7 +328,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				yield* settle;
 				expect(yield* commands(fake)).toEqual([[1, 2, 84]]);
 				yield* TestClock.adjust(99);
-				expect(yield* fake.writes).toHaveLength(1);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(1);
 				yield* TestClock.adjust(1);
 				expect(yield* commands(fake)).toEqual([
 					[1, 2, 84],
@@ -353,7 +369,9 @@ describe("hardware controls over actual device connection with fake transport", 
 					alertVolume: 100,
 				});
 				yield* TestClock.adjust(299);
-				expect(yield* fake.writes).toHaveLength(0);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(0);
 				yield* TestClock.adjust(1);
 				expect(yield* commands(fake)).toEqual([[1, 2, 100]]);
 				yield* TestClock.adjust(500);

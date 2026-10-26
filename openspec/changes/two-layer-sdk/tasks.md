@@ -134,3 +134,8 @@ No dependencies were added. Parent should attach this evidence to
 `open-quake-l86.9`; hardware acceptance in task 3.2 remains open.
 
 Root graph delivery, 2026-10-26: PR73 squash merged as f147032 after current-head Codex review with no findings, all threads reconciled, validation, five native package jobs and the complete download matrix. Source includes awaited persistence finalizers before reset/import, failed HTTP repository direct-voice fallback, actual-root shutdown, and corrupt-store acceptance documented in verification-service-graph.md. A thumbnail cleanup test timed out in the first hosted run; its seven-test file passed twice locally and the exact failed-job rerun passed without changing assertions or source. Bead open-quake-l86.10 is delivered.
+
+## Device burn-down lane 2026-10-26
+
+- [ ] Implement device lane requirements with fixture/TestClock/native mock coverage. Beads open-quake-lih.11.20-.22.
+- [ ] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.

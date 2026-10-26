@@ -193,7 +193,22 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 								yield* rawWrite(command);
 								// A connection-scoped timer can fail the deferred even when the
 								// caller masks interruption to commit an atomic lock transition.
-								const timeout = yield* Effect.sleep(3000).pipe(
+								const timeout = yield* (
+									command._tag === "Query" && command.feature === "version"
+										? Effect.gen(function* () {
+												for (let attempt = 1; attempt < 10; attempt++) {
+													yield* Effect.sleep(300);
+													if (yield* Deferred.isDone(result)) return;
+													yield* rawWrite(command);
+												}
+												yield* Effect.sleep(300);
+											}).pipe(
+												Effect.catchTag("HardwareUnavailable", (error) =>
+													Deferred.fail(result, error),
+												),
+											)
+										: Effect.sleep(3000)
+								).pipe(
 									Effect.zipRight(
 										Deferred.fail(result, new HardwareReplyTimeout()),
 									),
