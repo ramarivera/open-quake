@@ -46,8 +46,13 @@ import { registerKnob } from "../knob";
 import { MediaLive, registerMedia } from "../media";
 import { mockMeetingAdapter, registerMeetings } from "../meetings";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
+import { registerAppLocale } from "../settings/registration";
 import { createProductionVoiceRuntime } from "../speech/runtime";
-import { dkClawProfile, voiceFixtureEnvelope } from "../test/voice-fixtures";
+import {
+	copilotProfile,
+	dkClawProfile,
+	voiceFixtureEnvelope,
+} from "../test/voice-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "./index";
 import { waitForVoice } from "./smoke-wait";
 
@@ -89,6 +94,13 @@ async function smoke(): Promise<void> {
 			(await panel.webContents.capturePage()).toPNG(),
 		);
 	};
+	const locale = registerAppLocale({
+		directory,
+		osLocale: "en",
+		renderer,
+		windows: () => [panel],
+	});
+	panel.webContents.setAudioMuted(true);
 	const knob = registerKnob(
 		() => panel,
 		() => [panel],
@@ -140,6 +152,10 @@ async function smoke(): Promise<void> {
 				management: () => undefined,
 				renderer,
 				speech: {
+					toggleReader: async (owner, settings) => {
+						assert(controller);
+						await Effect.runPromise(controller.toggleReader(owner, settings));
+					},
 					stopReadAloud: async (owner) => {
 						assert(controller);
 						return Effect.runPromise(controller.stopReadAloud(owner));
@@ -218,6 +234,7 @@ async function smoke(): Promise<void> {
 	let meetings: ReturnType<typeof registerMeetings> | undefined;
 	try {
 		await voice.ready;
+		await locale.locale();
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		});
@@ -296,7 +313,7 @@ async function smoke(): Promise<void> {
 			"assistant ownership cancels blur recovery",
 		);
 		await js(
-			`document.querySelector('.clawbot-input-box').dispatchEvent(new CustomEvent('quake-sub-touch-end', { detail: { phase: 'end', y: 0, startY: 0, confirmedTap: true } }))`,
+			`document.querySelector('.clawbot-input-box').dispatchEvent(new CustomEvent('quake-sub-touch-start', { detail: { phase: 'start', y: 0, startY: 0 } })); document.querySelector('.clawbot-input-box').dispatchEvent(new CustomEvent('quake-sub-touch-end', { detail: { phase: 'end', y: 0, startY: 0, confirmedTap: true } }))`,
 		);
 		await settle();
 		await select("1,5");
@@ -363,7 +380,7 @@ async function smoke(): Promise<void> {
 		// A confirmed sub-touch is one toggle, without a duplicate synthesized click.
 		const tap = () =>
 			js(
-				"document.querySelector('.clawbot-pill').dispatchEvent(new CustomEvent('quake-sub-touch-end', { detail: { phase: 'end', y: 0, startY: 0, confirmedTap: true } }))",
+				"document.querySelector('.clawbot-pill').dispatchEvent(new CustomEvent('quake-sub-touch-start', { detail: { phase: 'start', y: 0, startY: 0 } })); document.querySelector('.clawbot-pill').dispatchEvent(new CustomEvent('quake-sub-touch-end', { detail: { phase: 'end', y: 0, startY: 0, confirmedTap: true } }))",
 			);
 		await tap();
 		await waitForVoice(
@@ -433,6 +450,196 @@ async function smoke(): Promise<void> {
 			"closing the chat surface unmounts and cancels recovery",
 		);
 		await js("parityFocus.advance(100); parityFocus.restore()");
+		await profiles.dispose();
+		// Voice-runtime: real renderer -> preload -> IPC -> owned queue, fake synthesis/output.
+		const readerProfile = Schema.encodeSync(Profile)(
+			Schema.decodeUnknownSync(Profile)({
+				...copilotProfile,
+				pages: copilotProfile.pages.map((page) => ({
+					...page,
+					keys: page.keys.map((key) =>
+						key.keyCode !== "2,8"
+							? key
+							: {
+									...key,
+									childrenName: "audioBot",
+									config: {
+										...key.config,
+										type: "audioBot",
+										title: { ...key.config.title, text: "Voice Bot" },
+										actions: [{ type: "ttsEngine", value: "qwen" }],
+									},
+								},
+					),
+				})),
+			}),
+		);
+		profiles = registerProfiles(
+			ManagedRuntime.make(
+				ProfilesLive({
+					read: async () => ({
+						schemaVersion: 1,
+						profiles: [readerProfile],
+						activeByDevice: {},
+					}),
+					write: async () => undefined,
+				}),
+			),
+			renderer,
+		);
+		await panel.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "panel" },
+		});
+		await waitForVoice(panel, "!!document.querySelector('.audio-bot-key')");
+		const toggleReader = () =>
+			js(
+				"document.querySelector('.audio-bot-key').dispatchEvent(new CustomEvent('quake-sub-touch-start', { detail: { phase: 'start', y: 0, startY: 0 } })); document.querySelector('.audio-bot-key').dispatchEvent(new CustomEvent('quake-sub-touch-end', { detail: { phase: 'end', y: 0, startY: 0, confirmedTap: true } }))",
+			);
+		assert.equal(
+			await js(
+				"getComputedStyle(document.querySelector('.audio-bot-key .strip-tile-icon')).visibility",
+			),
+			"visible",
+		);
+		await capture("runtime-reader-idle");
+		await toggleReader();
+		await waitForVoice(
+			panel,
+			"document.querySelector('.audio-bot-key')?.dataset.phase === 'thinking'",
+		);
+		await capture("runtime-reader-thinking");
+		await voice.publish({
+			_tag: "TurnStarted",
+			serial,
+			keyCode: "1,6",
+			sessionId,
+			turnId,
+			prompt: "Synthetic reader",
+			source: "typed",
+		});
+		await voice.publish({
+			_tag: "Chunk",
+			serial,
+			keyCode: "1,6",
+			chunk: {
+				type: "answer",
+				version: 1,
+				sessionId,
+				turnId,
+				seq: 1,
+				textDelta: "Synthetic queue segment.",
+			},
+		});
+		await waitForVoice(
+			panel,
+			"document.querySelector('.audio-bot-key')?.dataset.phase === 'thinking'",
+		);
+		for (let attempt = 0; requests < 3 && attempt < 500; attempt++)
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		assert.equal(requests, 3, "reader starts exactly one synthetic segment");
+		releaseAudio();
+		await waitForVoice(
+			panel,
+			"document.querySelector('.audio-bot-key')?.dataset.phase === 'speaking'",
+		);
+		assert.equal(
+			await js("document.querySelectorAll('.audio-bot-state i').length"),
+			7,
+		);
+		assert.equal(
+			await js(
+				"getComputedStyle(document.querySelector('.audio-bot-key .strip-tile-icon')).visibility",
+			),
+			"hidden",
+		);
+		await capture("runtime-reader-speaking");
+		await toggleReader();
+		await waitForVoice(
+			panel,
+			"document.querySelector('.audio-bot-key')?.dataset.phase === 'idle'",
+		);
+		await voice.publish({ _tag: "Reset", serial, reason: "profileChanged" });
+		for (const language of ["en", "de"] as const) {
+			await js(`window.quakeLocale.set('${language}')`);
+			await waitForVoice(
+				panel,
+				`document.documentElement.lang === '${language}'`,
+			);
+			await voice.publish({
+				_tag: "Stage",
+				serial,
+				keyCode: "0,1",
+				captureId: `runtime-${language}`,
+				stage: { _tag: "recording", status: "listening" },
+			});
+			await voice.publish({
+				_tag: "Level",
+				serial,
+				keyCode: "0,1",
+				captureId: `runtime-${language}`,
+				rms: 0.75,
+				speaking: true,
+			});
+			await capture(`runtime-${language}-knob`);
+			await voice.publish({ _tag: "Reset", serial, reason: "profileChanged" });
+			await voice.publish({
+				_tag: "Stage",
+				serial,
+				keyCode: "1,6",
+				captureId: `grid-${language}`,
+				stage: {
+					_tag: "recording",
+					status: "speaking",
+					transcript:
+						language === "de"
+							? "Eine synthetische Aufnahme"
+							: "A synthetic capture",
+				},
+			});
+			await voice.publish({
+				_tag: "Level",
+				serial,
+				keyCode: "1,6",
+				captureId: `grid-${language}`,
+				rms: 0.8,
+				speaking: true,
+			});
+			await capture(`runtime-${language}-grid-energy`);
+			await voice.publish({
+				_tag: "Toast",
+				serial,
+				messageKey: "meetingAssistantPrompt.meetingActive",
+			});
+			await waitForVoice(panel, "!!document.querySelector('.voice-toast')");
+			assert.equal(
+				await js(
+					"getComputedStyle(document.querySelector('.voice-toast')).fontSize",
+				),
+				"24px",
+			);
+			assert.equal(
+				await js(
+					"getComputedStyle(document.querySelector('.voice-toast-icon')).width",
+				),
+				"28px",
+			);
+			await new Promise((resolve) => setTimeout(resolve, 200));
+			await capture(`runtime-${language}-warning`);
+			await voice.publish({
+				_tag: "Toast",
+				serial,
+				messageKey: "unknown.runtime",
+				fallback:
+					language === "de"
+						? "Diese lange synthetische Fehlermeldung prüft den Umbruch auf dem Gerät. Kein Mikrofon und keine Lautsprecher wurden verwendet."
+						: "This long synthetic error checks wrapping on the device. No microphone or speakers were used.",
+				type: "error",
+			});
+			await new Promise((resolve) => setTimeout(resolve, 200));
+			await capture(`runtime-${language}-error`);
+			await voice.publish({ _tag: "Reset", serial, reason: "profileChanged" });
+		}
+		await js("window.quakeLocale.set('en')");
 		await profiles.dispose();
 		const meetingProfile = builtinProfiles("darwin").find(
 			(p) => p.id === "1-1",
@@ -633,7 +840,7 @@ async function smoke(): Promise<void> {
 			),
 		);
 		process.stdout.write(
-			"Voice parity native smoke PASS: 99/100 ms blur; reset, assistant, overlay and delayed-focus ownership cancellation; meter; idle/thinking/speaking pill, second-tap stop, stale TTS session; 12 real meeting transitions, minutes reveal, stale IDs, cancellation and reset. Fake devices/capture/output only.\n",
+			"Voice parity native smoke PASS: AudioBot queue and EN/DE voice-runtime captures; 99/100 ms blur; reset, assistant, overlay and delayed-focus ownership cancellation; meter; idle/thinking/speaking pill, second-tap stop, stale TTS session; 12 real meeting transitions, minutes reveal, stale IDs, cancellation and reset. Fake devices/capture/output only.\n",
 		);
 	} catch (cause) {
 		process.stderr.write(`${String(cause)}\n`);
@@ -644,11 +851,14 @@ async function smoke(): Promise<void> {
 		);
 		throw cause;
 	} finally {
+		releaseFocus();
+		releaseAudio();
 		await meetings?.dispose();
 		await voice.dispose();
 		await profiles.dispose();
 		await media.dispose();
 		await knob.dispose();
+		await locale.dispose();
 		panel.destroy();
 		await rm(directory, { recursive: true, force: true });
 	}

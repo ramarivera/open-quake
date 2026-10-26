@@ -14,6 +14,10 @@
 	opacity: 1;
 	cursor: default;
 }
+.audio-bot-key[data-phase="thinking"] .strip-tile-icon,
+.audio-bot-key[data-phase="speaking"] .strip-tile-icon {
+	visibility: hidden;
+}
 .audio-bot-state {
 	position: absolute;
 	left: 50%;
