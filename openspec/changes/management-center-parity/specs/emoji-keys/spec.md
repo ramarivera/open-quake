@@ -55,6 +55,11 @@ An emoji key SHALL be `{type: "emoji", size: [1,1], supportKnob: false}` with ac
 - **WHEN** the key's GIF asset is missing from the emoji store
 - **THEN** the key shows the invalid alert and no keystroke is sent
 
+#### Scenario: Moved contact release and cancellation
+- **WHEN** a held emoji contact moves beyond tap slop and releases normally
+- **THEN** the original emoji copies exactly once on release, with no slide-off cancellation or swipe navigation, as required by SCREEN-057 and SCREEN-069
+- **AND** if the mounted gesture resets after movement before lift, the pending emoji is discarded and the late lift never copies or sends keystrokes
+
 ### Requirement: App match settings
 "App Match Settings" SHALL open a dialog with an enable toggle (default on), the three match rules, and the app list with a count. "Add App" SHALL pick from installed applications (deduplicated, searchable by identifier, path or name) or from a file: a macOS `.app` or a Windows `.exe`. Entries SHALL be deduplicated by identifier or path. Deleting an app SHALL need no confirmation. The settings SHALL persist with the global emoji mode. Source: CENTER-089.
 
