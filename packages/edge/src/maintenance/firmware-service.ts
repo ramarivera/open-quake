@@ -349,12 +349,18 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 						FirmwarePersistenceFailed
 					> {
 						yield* initialize;
-						if (
-							["success", "failed", "needs_recovery"].includes(state.state) &&
-							(yield* Clock.currentTimeMillis) - state.endedAt >= timing.ttl
-						)
-							yield* set(idleFirmware);
-						return state;
+						return yield* lock.withPermits(1)(
+							Effect.gen(function* () {
+								if (
+									["success", "failed", "needs_recovery"].includes(
+										state.state,
+									) &&
+									(yield* Clock.currentTimeMillis) - state.endedAt >= timing.ttl
+								)
+									yield* set(idleFirmware);
+								return state;
+							}),
+						);
 					},
 				),
 				cancel: Effect.fn("FirmwareUpdates.cancel")(
@@ -380,7 +386,8 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 						FirmwarePersistenceFailed
 					> {
 						yield* initialize;
-						const serial = state.serial;
+						const closing = state;
+						const serial = closing.serial;
 						const reconciled = serial
 							? yield* port.version(serial).pipe(
 									Effect.timeoutOption(timing.versionTimeout),
@@ -389,7 +396,16 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 									),
 								)
 							: Option.none<string>();
-						if (!runningFirmware(state)) yield* set({ ...idleFirmware });
+						yield* lock.withPermits(1)(
+							Effect.gen(function* () {
+								if (
+									state === closing &&
+									state.state !== "idle" &&
+									!runningFirmware(state)
+								)
+									yield* set({ ...idleFirmware });
+							}),
+						);
 						return { serial, version: Option.getOrUndefined(reconciled) };
 					},
 				),

@@ -14,6 +14,7 @@ import {
 function fixture(
 	options: {
 		loaded?: FirmwareSnapshot;
+		saveDelay?: Effect.Effect<void>;
 		partial?: boolean;
 		offline?: boolean;
 		hanging?: boolean;
@@ -66,7 +67,8 @@ function fixture(
 					}),
 				load: () => Effect.succeed(options.loaded),
 				save: (snapshot) =>
-					Effect.sync(() => {
+					Effect.gen(function* () {
+						if (options.saveDelay) yield* options.saveDelay;
 						saved.push(snapshot);
 					}),
 			} satisfies typeof FirmwarePort.Service;
@@ -213,7 +215,7 @@ it.scoped(
 			yield* TestClock.adjust(200);
 			expect(f.saved).toHaveLength(initial + 2);
 			const loaded = f.saved.at(-1);
-			expect(loaded).toBeDefined();
+			if (!loaded) throw new Error("Missing persisted snapshot");
 			yield* s.shutdown();
 			const restarted = fixture({ loaded });
 			const restored = yield* Effect.gen(function* () {
@@ -225,6 +227,28 @@ it.scoped(
 				copied: 9500,
 				reason: "interrupted",
 			});
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.scoped(
+	"serializes concurrent terminal expiry reads so exactly one state save occurs",
+	() => {
+		const f = fixture({
+			loaded: { ...idleFirmware, state: "success", endedAt: 0 },
+			saveDelay: Effect.yieldNow(),
+		});
+		return Effect.gen(function* () {
+			const s = yield* FirmwareUpdates;
+			yield* TestClock.adjust(600000);
+			const snapshots = yield* Effect.all(
+				[s.snapshot(), s.snapshot(), s.snapshot()],
+				{ concurrency: "unbounded" },
+			);
+			expect(snapshots.every((snapshot) => snapshot.state === "idle")).toBe(
+				true,
+			);
+			expect(f.saved).toHaveLength(1);
 		}).pipe(Effect.provide(f.layer));
 	},
 );
