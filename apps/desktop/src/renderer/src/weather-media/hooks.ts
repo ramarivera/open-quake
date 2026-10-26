@@ -4,6 +4,7 @@ import type {
 	WeatherResult,
 	WeatherSettings,
 } from "../../../shared/weather-media-contracts";
+import { useAppLocale } from "../i18n";
 import { WeatherMediaClient } from "./client";
 import { WeatherRefresh } from "./refresh";
 
@@ -22,7 +23,7 @@ export const useWeatherMedia = (enabled = true) => ({
 });
 export const rendererWeatherLocale = () =>
 	normalizeWeatherLocale(
-		typeof navigator === "undefined" ? "en" : navigator.language,
+		typeof document === "undefined" ? "en" : document.documentElement.lang,
 	);
 export function useWeather(
 	enabled: boolean,
@@ -38,7 +39,7 @@ export function useWeather(
 		result: WeatherResult;
 		loading: boolean;
 	}>({ result: { _tag: "empty" }, loading: false });
-	const locale = rendererWeatherLocale();
+	const locale = useAppLocale().locale;
 	const settings = override ?? snapshot?.settings;
 	const refreshRevision = snapshot?.refreshRevision;
 	const key = JSON.stringify([enabled, settings, locale, refreshRevision]);

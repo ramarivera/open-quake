@@ -1,4 +1,5 @@
 import type { WizardDisplay } from "../../../../../../packages/edge/src/settings/wizard-contracts";
+import type { AppLocale } from "../../../shared/locale";
 import type { WizardDraft, WizardSnapshot } from "./bridge";
 import { isRegion } from "./regions";
 import type {
@@ -42,12 +43,12 @@ export function resumeStep(
  */
 export function liveLocale(
 	app: {
-		readonly locale: "en" | "de";
+		readonly locale: AppLocale;
 		readonly loading: boolean;
 		readonly error: string;
 	},
-	saved: "en" | "de",
-): "en" | "de" {
+	saved: AppLocale,
+): AppLocale {
 	return app.loading ||
 		[
 			"QUAKE.SETTINGS.READ_FAILED",
@@ -137,7 +138,7 @@ export function canContinue(
 export function continueDraft(
 	step: Exclude<SetupStep, "review">,
 	choices: SetupChoices,
-	locale: "en" | "de",
+	locale: AppLocale,
 ): WizardDraft {
 	switch (step) {
 		case "welcome":

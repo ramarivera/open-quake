@@ -5,9 +5,10 @@ import {
 	type WeatherSettings,
 } from "../../../shared/weather-media-contracts";
 import { WEATHER_MEDIA_STRINGS } from "../../../shared/weather-media-strings";
+import { useAppLocale, useLocaleText } from "../i18n";
 import { Callout, Group, Row } from "../ui/Form";
 import { type CityStatus, CityVerifier } from "./city-verifier";
-import { rendererWeatherLocale, useWeatherMedia } from "./hooks";
+import { useWeatherMedia } from "./hooks";
 import { mediaErrorText } from "./PlayerCard";
 import "./weather-media.css";
 
@@ -22,7 +23,8 @@ export function ClockEnrichmentSettings({
 	const settings = onSave ? initial : (snapshot?.settings ?? initial);
 	const saveHandler = useRef(onSave);
 	saveHandler.current = onSave;
-	const locale = rendererWeatherLocale();
+	const locale = useAppLocale().locale;
+	const t = useLocaleText("clock");
 	const strings = WEATHER_MEDIA_STRINGS[locale].settings;
 	const id = useId();
 	const [city, setCity] = useState(initial.city);
@@ -81,11 +83,7 @@ export function ClockEnrichmentSettings({
 	return (
 		<div className="weather-settings">
 			<Group title={strings.clockWeatherCard} description="">
-				{failure ? (
-					<Callout tone="warning">
-						Settings could not be saved. Please retry.
-					</Callout>
-				) : null}
+				{failure ? <Callout tone="warning">{t("saveFailed")}</Callout> : null}
 				<Row label={strings.weatherShow}>
 					<input
 						type="checkbox"
@@ -138,21 +136,19 @@ export function ClockEnrichmentSettings({
 						<option value="fahrenheit">°F</option>
 					</select>
 				</Row>
-				<Row label="Find my city from my IP address">
+				<Row label={t("ipLookup")}>
 					<div className="weather-field">
 						<input
 							type="checkbox"
 							checked={settings.ipLookup}
-							aria-label="Find my city from my IP address"
+							aria-label={t("ipLookup")}
 							aria-describedby={`${id}-consent`}
 							onChange={(event) =>
 								save({ ipLookup: event.currentTarget.checked })
 							}
 						/>
 						<p id={`${id}-consent`} className="weather-consent">
-							Off by default. With an empty city, this sends your public IP
-							address to ipapi.co, or ipwho.is if that fails, to estimate your
-							city. Enter a city above to use weather without IP lookup.
+							{t("ipConsent")}
 						</p>
 					</div>
 				</Row>

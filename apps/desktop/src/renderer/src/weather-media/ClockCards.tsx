@@ -8,8 +8,9 @@ import type {
 	WeatherSettings,
 } from "../../../shared/weather-media-contracts";
 import { WEATHER_MEDIA_STRINGS } from "../../../shared/weather-media-strings";
+import { useAppLocale, useLocaleText } from "../i18n";
 import type { ClockWeatherCardProps } from "../strip/tiles/clock/clockCards";
-import { rendererWeatherLocale, useWeather, useWeatherMedia } from "./hooks";
+import { useWeather, useWeatherMedia } from "./hooks";
 import { TransportButton, TransportGlyph } from "./TransportButton";
 import "./weather-media.css";
 
@@ -59,12 +60,15 @@ export function ClockWeatherCard({
 	city,
 	unit,
 	state,
-	locale = "en",
+	locale: requestedLocale,
 	loading = state.kind === "loading",
 }: ClockWeatherCardProps & {
 	locale?: WeatherLocale;
 	loading?: boolean;
 }): React.JSX.Element {
+	const appLocale = useAppLocale().locale;
+	const locale = requestedLocale ?? appLocale;
+	const t = useLocaleText("clock", locale);
 	const strings = WEATHER_MEDIA_STRINGS[locale].clock;
 	const ready = state.kind === "ready" ? state : null;
 	const text =
@@ -72,7 +76,9 @@ export function ClockWeatherCard({
 			? state.reason === "city-not-found"
 				? strings.weatherCityNotFound
 				: strings.weatherUnavailable
-			: ready?.description || "—";
+			: state.kind === "loading"
+				? strings.weatherLoading
+				: ready?.description || "—";
 	return (
 		<div
 			className="oq-weather-card"
@@ -96,15 +102,15 @@ export function ClockWeatherCard({
 				</span>
 				<span className="oq-weather-meta">
 					°{unit === "fahrenheit" ? "F" : "C"}
-					{ready?.stale ? " · Cached" : ""}
+					{ready?.stale ? ` · ${t("cached")}` : ""}
 				</span>
 			</div>
 			<div className="oq-weather-range">
 				<div>
-					<span>H</span> {ready?.high ?? "--"}°
+					<span>{t("high")}</span> {ready?.high ?? "--"}°
 				</div>
 				<div>
-					<span>L</span> {ready?.low ?? "--"}°
+					<span>{t("low")}</span> {ready?.low ?? "--"}°
 				</div>
 			</div>
 		</div>
@@ -114,13 +120,15 @@ export function ClockWeatherCard({
 export function ClockMusicCard({
 	snapshot,
 	control,
-	locale = "en",
+	locale: requestedLocale,
 }: {
 	snapshot: MediaSnapshot;
 	control: (intent: MediaIntent) => Promise<boolean>;
 	locale?: WeatherLocale;
 }): React.JSX.Element {
 	const session = snapshot.session;
+	const appLocale = useAppLocale().locale;
+	const locale = requestedLocale ?? appLocale;
 	const strings = WEATHER_MEDIA_STRINGS[locale].clock;
 	const [broken, setBroken] = useState(false);
 	const [tip, setTip] = useState(false);
@@ -212,6 +220,7 @@ export function ClockWeatherSlot({
 	side?: "panel" | "edit" | undefined;
 } = {}): React.JSX.Element | null {
 	const { snapshot } = useWeatherMedia();
+	const locale = useAppLocale().locale;
 	const settings = ownSettings ?? snapshot?.settings;
 	const enabled = settings?.enabled ?? false;
 	const { result, loading } = useWeather(
@@ -232,7 +241,7 @@ export function ClockWeatherSlot({
 			city={result._tag === "ready" ? result.data.city : settings.city}
 			unit={settings.unit}
 			state={state}
-			locale={rendererWeatherLocale()}
+			locale={locale}
 			loading={loading}
 		/>
 	);
@@ -243,11 +252,12 @@ export function ClockMusicSlot({
 	enabled?: boolean;
 } = {}): React.JSX.Element | null {
 	const { snapshot, client } = useWeatherMedia();
+	const locale = useAppLocale().locale;
 	return snapshot && (enabled ?? snapshot.settings.musicEnabled) ? (
 		<ClockMusicCard
 			snapshot={snapshot.media}
 			control={client.control}
-			locale={rendererWeatherLocale()}
+			locale={locale}
 		/>
 	) : null;
 }

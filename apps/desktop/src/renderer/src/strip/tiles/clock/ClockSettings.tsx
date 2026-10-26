@@ -5,6 +5,7 @@ import type {
 } from "../../../../../shared/clock-contracts";
 import { THEME_IDS } from "../../../../../shared/clock-style";
 import type { WeatherSettings } from "../../../../../shared/weather-media-contracts";
+import { useAppLocale, useLocaleText } from "../../../i18n";
 import {
 	Callout,
 	Group,
@@ -42,11 +43,6 @@ function usePreviewWidth(
 	}, [ref]);
 	return width;
 }
-
-const secondsOptions: ReadonlyArray<SegmentOption<"off" | "on">> = [
-	{ value: "off", label: "Off" },
-	{ value: "on", label: "On" },
-];
 
 /** Use the same serial-scoped page as StripScreen; never edit a different profile. */
 export function ScreenClockSettings({
@@ -108,18 +104,21 @@ export function ClockSettings({
 	};
 
 	const ids = useId();
-	const strings =
-		CLOCK_STRINGS[
-			normalizeClockLocale(
-				typeof navigator === "undefined" ? "en" : navigator.language,
-			)
-		];
+	const locale = useAppLocale().locale;
+	const t = useLocaleText("clock");
+	const strings = CLOCK_STRINGS[normalizeClockLocale(locale)];
+	const secondsOptions: ReadonlyArray<SegmentOption<"off" | "on">> = [
+		{ value: "off", label: t("off") },
+		{ value: "on", label: t("on") },
+	];
 	const modeOptions: ReadonlyArray<SegmentOption<"theme" | "none">> = [
-		{ value: "theme", label: "Theme" },
+		{ value: "theme", label: t("theme") },
 		{ value: "none", label: strings.settings.themeNone },
 	];
 	const [busy, setBusy] = useState(false);
-	const [notice, setNotice] = useState("");
+	const [notice, setNotice] = useState<
+		"" | "unavailable" | "saveFailed" | "mediaUnusable"
+	>("");
 	const previewRef = useRef<HTMLDivElement>(null);
 	const width = usePreviewWidth(previewRef);
 	const now = useClockNow(snapshot?.showSeconds ?? false);
@@ -129,17 +128,17 @@ export function ClockSettings({
 		try {
 			const reply = await request(command);
 			if (!reply) {
-				setNotice("Clock service is unavailable. Reload the window.");
+				setNotice("unavailable");
 				return;
 			}
 			if (reply._tag === "failure") {
-				setNotice(reply.message);
+				setNotice("saveFailed");
 				return;
 			}
 			if (reply._tag === "candidate") {
 				const duration = await probeVideoDuration(reply.url);
 				if (duration === null) {
-					setNotice(strings.settings.mediaUnusable);
+					setNotice("mediaUnusable");
 					return;
 				}
 				const committed = await request({
@@ -147,7 +146,7 @@ export function ClockSettings({
 					token: reply.token,
 					durationMs: duration,
 				});
-				if (committed?._tag === "failure") setNotice(committed.message);
+				if (committed?._tag === "failure") setNotice("saveFailed");
 				if (committed?._tag === "success") onSaved?.();
 			}
 			if (reply._tag === "success") onSaved?.();
@@ -160,22 +159,23 @@ export function ClockSettings({
 	return (
 		<div className="page clock-settings" aria-busy={busy}>
 			<Group
-				title="Desktop clock"
-				description="The clock key on your strip. Its ‹ and › buttons switch and save the theme too."
+				title={t("title")}
+				description={t("description")}
 				footer={
 					<div role="status" aria-live="polite" className="status-notes">
 						{!available ? (
-							<Callout tone="warning">
-								Open the desktop app to change clock settings.
-							</Callout>
+							<Callout tone="warning">{t("openDesktop")}</Callout>
 						) : null}
 						{snapshot?.recovered ? (
+							<Callout tone="warning">{t("recovered")}</Callout>
+						) : null}
+						{notice ? (
 							<Callout tone="warning">
-								Saved clock settings couldn't be read, so defaults are shown.
-								Any change saves new settings.
+								{notice === "mediaUnusable"
+									? strings.settings.mediaUnusable
+									: t(notice)}
 							</Callout>
 						) : null}
-						{notice ? <Callout tone="warning">{notice}</Callout> : null}
 					</div>
 				}
 			>
@@ -225,9 +225,9 @@ export function ClockSettings({
 					/>
 				</Row>
 				<Row
-					label="Seconds"
+					label={t("seconds")}
 					labelId={`${ids}-seconds`}
-					hint="Off shows hours and minutes only."
+					hint={t("secondsHint")}
 				>
 					<Segmented
 						name={`${ids}-seconds`}
@@ -244,7 +244,7 @@ export function ClockSettings({
 
 			<Group
 				title={strings.settings.themeSection}
-				description="Built-in art, or your own image or video (at least 2 seconds) per theme."
+				description={t("themeDescription")}
 			>
 				<Row label={strings.settings.themeSection} labelId={`${ids}-mode`}>
 					<Segmented
@@ -310,7 +310,10 @@ export function ClockSettings({
 								<span className="clock-theme-name">
 									{strings.themes[id]}
 									{selected ? (
-										<span className="clock-theme-selected"> · Selected</span>
+										<span className="clock-theme-selected">
+											{" "}
+											· {t("selected")}
+										</span>
 									) : null}
 								</span>
 								<div className="button-row">

@@ -153,6 +153,31 @@ Verification after correction: 46 focused edge tests and 32 focused desktop test
 
 ## 6. Locale burn-down lane
 
-- [ ] 6.1 Bundle eight recovered locales, normalization/endonyms, mounted window/strip/profile/picker/voice/native propagation and all-six-role precedence tests. Rows AI-149, CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064. Bead open-quake-def.23.
-- [ ] 6.2 Add local regional chat/speech suggestions, explicit-choice-safe legacy migration/bootstrap and eighteen translation languages through real settings controls/owners. Rows AI-015, SETTINGS-065, SETTINGS-067, SETTINGS-098, SETTINGS-099, SETTINGS-111. Bead open-quake-def.24.
-- [ ] 6.3 Localize all clock/settings/enrichment labels, verify rendered eight-locale copy and independent weather/spoken routing, run lane gates and mock native EN/DE smoke. Row WIDGETS-063. Bead open-quake-def.23.
+- [x] 6.1 Bundle eight recovered locales, normalization/endonyms, mounted window/strip/profile/picker/voice/native propagation and all-six-role precedence tests. Rows AI-149, CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064. Bead open-quake-def.23.
+- [x] 6.2 Add local regional chat/speech suggestions, explicit-choice-safe legacy migration/bootstrap and eighteen translation languages through real settings controls/owners. Rows AI-015, SETTINGS-065, SETTINGS-067, SETTINGS-098, SETTINGS-099, SETTINGS-111. Bead open-quake-def.24.
+- [x] 6.3 Localize all clock/settings/enrichment labels, verify rendered eight-locale copy and independent weather/spoken routing, run lane gates and mock native EN/DE smoke. Row WIDGETS-063. Bead open-quake-def.23.
+
+
+Locale lane implementation, 2026-10-26: all fifteen assigned software rows now
+have requirements/scenarios, production consumers and regression coverage. Eight
+UI languages propagate without replacing mounted drafts; translation has its own
+eighteen-code catalog; local region suggestions never switch configured providers;
+bootstrap preserves explicit/unknown settings and removes only documented transient
+keys. Main lifecycle prompts and the macOS Dock background menu use saved locale.
+The supported Qwen ASR suggestion is 3.1 rather than the recovered retired 3.0 name.
+
+Verification: root Turbo tests pass 3,541 tests with four existing skips across
+protocol/device/edge/desktop, six package typechecks pass, Biome reports no errors
+and 14 existing warnings, production build and both bundle smoke cases pass, and
+strict OpenSpec validation passes all 47 items. The unmodified hidden native media
+smoke passes with mock devices and muted windows. Additional Settings captures
+show en/de at 1180px and 390px with all eight controls and no horizontal overflow;
+the German clock capture shows localized seconds, theme and enrichment copy.
+The extended capture script later hits the known OBS scene-selector timeout, so
+its extra screenshots are separate from the passing unmodified smoke gate.
+Evidence stays under the SSD lane scratch directory
+`open-quake-parity/burndown/locale/`, including `root-tests-final.log`,
+`native-smoke-final.log` and `screenshots/`. Physical hardware, live microphone,
+paid-provider, OS-login and foreground native-menu acceptance remain unverified.
+Beads open-quake-def.23 and open-quake-def.24 remain open for lead merge; the parent
+change's unrelated incomplete tasks are unchanged.
