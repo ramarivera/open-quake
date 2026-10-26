@@ -939,7 +939,7 @@ async function smoke(): Promise<void> {
 	);
 	await waitForVoice(
 		management,
-		"document.querySelector('.keys-cells') !== null",
+		`document.querySelector("#keys-profile")?.value === "obs" && document.querySelector('.keys-preview [data-key-code="1,4"] .obs-tile') !== null`,
 	);
 	await management.webContents.executeJavaScript(
 		`([...document.querySelectorAll('.keys-cells button')].find(button => button.textContent === '1,4')).click(); null;`,
