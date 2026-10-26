@@ -15,10 +15,12 @@ import {
 	truncateProfileName,
 	weightedNameLength,
 } from "../../../../../../packages/device/src/profiles/profile-manager-invariants.js";
+import { APP_LANGUAGES } from "../../../shared/locale";
 import type {
 	ProfileRequest,
 	ProfileView,
 } from "../../../shared/profile-manager";
+import { resolveAppLocale, useAppLocale, useLocaleText } from "../i18n";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { selectedManagerProfile, subscribeManagerView } from "./manager-view";
 import "./profiles.css";
@@ -107,7 +109,9 @@ function ProfileNameInput({
 }
 export function ProfilesManager(): React.JSX.Element {
 	const [view, setView] = useState<ProfileView>();
-	const [locale, setLocale] = useState<ProfileLocale>("en");
+	const { locale, setLocale } = useAppLocale();
+	const localeText = useLocaleText("picker");
+
 	const text = (key: string): string => profileText(key, locale);
 	const [status, setStatus] = useState("");
 	const [refreshing, setRefreshing] = useState<readonly string[]>([]);
@@ -292,15 +296,15 @@ export function ProfilesManager(): React.JSX.Element {
 			<header>
 				<h2>{text("functionWheelEditor.title")}</h2>
 				<label>
-					Language{" "}
+					{localeText("language")}
 					<select
 						value={locale}
-						onChange={(e) =>
-							setLocale(Schema.decodeUnknownSync(ProfileLocale)(e.target.value))
-						}
+						onChange={(e) => void setLocale(resolveAppLocale(e.target.value))}
 					>
-						{["en", "zh", "de", "fr", "it", "es", "ja", "ko"].map((l) => (
-							<option key={l}>{l}</option>
+						{APP_LANGUAGES.map((l) => (
+							<option key={l.value} value={l.value}>
+								{l.label}
+							</option>
 						))}
 					</select>
 				</label>

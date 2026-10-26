@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { visibleProfiles } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
+import { regionSuggestions } from "../../../../../packages/edge/src/settings/region-invariants";
 import { WizardIncomplete } from "../../../../../packages/edge/src/settings/settings-errors";
 import type { WizardOwners } from "../../../../../packages/edge/src/settings/settings-ports";
 
@@ -38,6 +39,6 @@ export function createWizardOwners(options: {
 		runtimeSupported: Effect.sync(options.runtimeSupported),
 		runtimeConfigured: read(options.runtimeConfigured),
 		// Region remains advisory. No automatic provider or credential selection.
-		regionSuggestions: () => Effect.succeed({}),
+		regionSuggestions: (region) => Effect.succeed(regionSuggestions(region)),
 	};
 }
