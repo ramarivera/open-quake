@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, Option, Schema } from "effect";
 import { beforeEach, expect, it, vi } from "vitest";
-import { MeetingStore } from "../../../../../packages/edge/src/meetings/meeting-contracts";
+import {
+	type MeetingConfig,
+	MeetingStore,
+} from "../../../../../packages/edge/src/meetings/meeting-contracts";
 import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
 	CAPTURE_CHUNK,
@@ -66,9 +69,10 @@ vi.mock("./capture-port", () => ({
 		return {
 			port: {
 				mic: () => Effect.succeed(Option.none()),
-				start: (id: string) =>
+				start: (id: string, config: MeetingConfig) =>
 					Effect.sync(() => {
 						capture.id = id;
+						return config;
 					}),
 				drain: () => Effect.void,
 				stop: () =>

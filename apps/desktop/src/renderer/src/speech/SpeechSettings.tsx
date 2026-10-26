@@ -1,10 +1,14 @@
 import { Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	type MicrophoneIdentity,
+	normalizeMicrophone,
+	recoverMicrophone,
 	type SpeechSettings,
 	SpeechSettingsReply,
 	type SpeechSettingsView,
 } from "../../../shared/speech";
+import { useAppLocale } from "../i18n";
 import { Group, Row } from "../ui/Form";
 
 export function SpeechSettingsPanel(): React.JSX.Element | null {
@@ -71,6 +75,11 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 	};
 	return (
 		<Group title="Speech">
+			<MicrophonePicker
+				value={normalizeMicrophone(draft.defaultMic)}
+				disabled={!view || busy}
+				onChange={(defaultMic) => setDraft({ ...draft, defaultMic })}
+			/>
 			{error ? <p role="alert">{error}</p> : null}
 			{error && !view ? (
 				<>
@@ -336,5 +345,138 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 				{saved ? <span role="status">Speech settings saved.</span> : null}
 			</Row>
 		</Group>
+	);
+}
+
+/** Enumerates only. Permission and physical acquisition belong to capture. */
+export function MicrophonePicker({
+	value,
+	onChange,
+	disabled = false,
+}: {
+	value: MicrophoneIdentity | undefined;
+	onChange: (value: MicrophoneIdentity) => void;
+	disabled?: boolean;
+}): React.JSX.Element {
+	const { locale } = useAppLocale();
+	const de = locale === "de";
+	const [devices, setDevices] = useState<readonly MicrophoneIdentity[]>([]);
+	const [error, setError] = useState(false);
+	const version = useRef(0);
+	const refresh = useCallback(async () => {
+		const request = ++version.current;
+		try {
+			const inputs = (await navigator.mediaDevices.enumerateDevices()).filter(
+				(d) => d.kind === "audioinput",
+			);
+			if (request !== version.current) return;
+			setDevices(inputs);
+			setError(false);
+		} catch {
+			if (request === version.current) {
+				setDevices([]);
+				setError(true);
+			}
+		}
+	}, []);
+	useEffect(() => {
+		void refresh();
+		const changed = () => {
+			void refresh();
+		};
+		navigator.mediaDevices?.addEventListener("devicechange", changed);
+		return () => {
+			version.current++;
+			navigator.mediaDevices?.removeEventListener("devicechange", changed);
+		};
+	}, [refresh]);
+	const chosen = recoverMicrophone(value, devices);
+	return (
+		<Row label={de ? "Eingabemikrofon" : "Input Microphone"}>
+			<select
+				aria-label={de ? "Eingabemikrofon" : "Input Microphone"}
+				disabled={disabled}
+				value={chosen?.deviceId ?? ""}
+				onFocus={() => {
+					void refresh();
+				}}
+				onPointerDown={() => {
+					void refresh();
+				}}
+				onChange={(event) => {
+					const input = devices.find((d) => d.deviceId === event.target.value);
+					if (input) {
+						version.current++;
+						onChange({
+							deviceId: input.deviceId,
+							label: input.label,
+							groupId: input.groupId,
+						});
+					}
+				}}
+			>
+				<option value="" disabled>
+					{de ? "Mikrofon auswählen" : "Select Microphone"}
+				</option>
+				{devices.map((input, i) => (
+					<option key={input.deviceId} value={input.deviceId}>
+						{input.label ||
+							(input.deviceId === "default"
+								? de
+									? "Systemstandard"
+									: "System default"
+								: `${de ? "Mikrofon" : "Microphone"} ${i + 1}`)}
+					</option>
+				))}
+			</select>
+			{error || (value && !chosen) ? (
+				<p role="status">
+					{de
+						? "Das gespeicherte Mikrofon ist nicht verfügbar. Wähle ein Mikrofon aus."
+						: "The saved microphone is unavailable. Select a microphone."}
+				</p>
+			) : null}
+		</Row>
+	);
+}
+/** Meetings save only the shared input field, preserving current provider settings. */
+export function SharedMicrophonePicker(): React.JSX.Element {
+	const [settings, setSettings] = useState<SpeechSettings>();
+	const [error, setError] = useState("");
+	useEffect(() => {
+		let live = true;
+		void window.quakeSpeech
+			?.request({ _tag: "Get" })
+			.then((raw) => {
+				const reply = Schema.decodeUnknownSync(SpeechSettingsReply)(raw);
+				if (live && reply._tag === "success") setSettings(reply.view.settings);
+			})
+			.catch(() => {
+				if (live) setError("Microphone settings are unavailable");
+			});
+		return () => {
+			live = false;
+		};
+	}, []);
+	return (
+		<>
+			<MicrophonePicker
+				value={normalizeMicrophone(settings?.defaultMic)}
+				disabled={!settings}
+				onChange={(microphone) => {
+					void window.quakeSpeech
+						?.request({ _tag: "SelectMicrophone", microphone })
+						.then((raw) => {
+							const reply = Schema.decodeUnknownSync(SpeechSettingsReply)(raw);
+							if (reply._tag === "success") {
+								setSettings(reply.view.settings);
+								setError("");
+							} else setError(reply.code);
+						})
+						.catch(() => setError("Microphone settings couldn't be saved"));
+				}}
+			/>
+			{error ? <p role="alert">{error}</p> : null}
+		</>
 	);
 }

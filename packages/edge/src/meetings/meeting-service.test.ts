@@ -25,7 +25,11 @@ import {
 	type MeetingAdapter,
 	type MeetingAsrRequest,
 } from "../ai/meeting-adapter.js";
-import { MeetingStore, type TemplateId } from "./meeting-contracts.js";
+import {
+	type MeetingConfig,
+	MeetingStore,
+	type TemplateId,
+} from "./meeting-contracts.js";
 import { defaultMeetingConfig } from "./meeting-defaults.js";
 import { meetingError } from "./meeting-errors.js";
 import {
@@ -58,7 +62,7 @@ const selected = {
 	modelId: "qwen3.6-flash",
 	credentialRef: CredentialRef.make("00000000-0000-4000-8000-000000000002"),
 } satisfies typeof MOCK_PROFILE;
-function setup(recoveredDuration = 2500) {
+function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 	const progress: MeetingProgressEvent[] = [];
 	const translationRequests: {
 		config: typeof defaultMeetingConfig;
@@ -110,10 +114,13 @@ function setup(recoveredDuration = 2500) {
 	};
 	const capture: CapturePort = {
 		mic: () => Effect.succeed(Option.some(true)),
-		start: (id, _, parent) =>
+		start: (id, requestedConfig, parent) =>
 			Effect.sync(() => {
 				calls.push(`start:${parent ? "side" : "main"}:${id}`);
-			}).pipe(Effect.zipRight(Effect.suspend(() => nextStart))),
+			}).pipe(
+				Effect.zipRight(Effect.suspend(() => nextStart)),
+				Effect.as(effectiveConfig ?? requestedConfig),
+			),
 		drain: (id) =>
 			Effect.sync(() => {
 				calls.push(`drain:${id}`);
@@ -1321,6 +1328,30 @@ it.effect(
 			expect(state.translations.at(-1)?.id).toBe("t-204");
 			yield* MeetingService.clear();
 			expect((yield* MeetingService.snapshot()).translations).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"persists effective microphone-only capture settings without changing the user's system-audio preference",
+	() => {
+		const effectiveConfig = {
+			...defaultMeetingConfig,
+			profileId: selected.id,
+			minutesModel: selected.modelId,
+			systemAudio: false,
+		};
+		const f = setup(2500, effectiveConfig);
+		return Effect.gen(function* () {
+			yield* configure;
+			yield* MeetingService.configure({
+				...effectiveConfig,
+				systemAudio: true,
+			});
+			const state = yield* MeetingService.action("meetingMinutes");
+			expect(state.records[0]?.config).toEqual(effectiveConfig);
+			expect(f.saved().records[0]?.config).toEqual(effectiveConfig);
+			expect(state.config.systemAudio).toBe(true);
 		}).pipe(Effect.provide(f.layer));
 	},
 );

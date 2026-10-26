@@ -96,6 +96,9 @@ export const mockMeetingAdapter: MeetingAdapter = {
 export function prepareMeetings(
 	options: {
 		diagnostics?: DesktopDiagnostics;
+		microphone?: () => Effect.Effect<
+			import("../../shared/speech").MicrophoneIdentity | undefined
+		>;
 		userData: string;
 		hardware: () => HardwareSession | undefined;
 		mock: boolean;
@@ -152,6 +155,7 @@ export function prepareMeetings(
 					root,
 					renderer,
 					hardware: options.hardware,
+					microphone: options.microphone,
 					mock: options.mock,
 					ffmpeg: options.ffmpeg ?? process.env.OPEN_QUAKE_FFMPEG ?? "ffmpeg",
 					onNoWindows: () => {
