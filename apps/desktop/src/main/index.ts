@@ -24,6 +24,7 @@ import { ProfileService } from "../../../../packages/device/src/profiles/profile
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import { MeetingService } from "../../../../packages/edge/src/meetings/meeting-service";
 import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
 import { GridVoice } from "../../../../packages/edge/src/voice/surface/grid-voice-service";
 import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
@@ -109,6 +110,7 @@ import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { registerStripTransport } from "./strip-transport";
 import { createToneRecorder, prepareVoiceSurface, toneSinks } from "./voice";
+import { meetingAdmission } from "./voice/admission";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 import { HostVolume } from "./weather-media/host-volume";
 import {
@@ -400,6 +402,13 @@ if (!app.requestSingleInstanceLock()) {
 							run: (effect) => background.runPromise(effect),
 						});
 						const voiceModule = prepareVoiceSurface({
+							profiles: () =>
+								profiles.runtime
+									.runPromise(ProfileService.loadProfiles())
+									.then(({ envelope }) => envelope),
+							admission: meetingAdmission(() =>
+								meetingsModule.runtime.runPromise(MeetingService.snapshot()),
+							),
 							diagnostics,
 							runtime: speech.decorate,
 							knobRoute: (serial) =>
@@ -417,6 +426,7 @@ if (!app.requestSingleInstanceLock()) {
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 							tones: toneSinks(createToneRecorder(), {
 								play: (serial, tone) => {
+									if (tone === "busy") void speech.playHostTone(serial, tone);
 									const hardware = bus?.device
 										? bus.device(serial)?.hardware?.()
 										: currentHardware();
@@ -450,6 +460,7 @@ if (!app.requestSingleInstanceLock()) {
 									obs.execute(command, signal),
 								)(key, signal)) ||
 								(await speech.executeSoundKey(key, signal, activation)) ||
+								(await speech.executeReaderKey(key, activation)) ||
 								(isSystemPlayerKey(key)
 									? await weatherModule.runtime
 											.runPromise(SystemMediaService.control("toggle"), {

@@ -1419,8 +1419,10 @@ async function smoke(): Promise<void> {
 		await management.webContents.executeJavaScript(
 			`window.quakeLocale.set('${language}')`,
 		);
-		await panel.reload();
-		await settle(600);
+		await waitForVoice(
+			panel,
+			"!!document.querySelector('[data-testid=dk-player]')",
+		);
 		const player = await panel.webContents.executeJavaScript(
 			`(() => ({card:!!document.querySelector('[data-testid="dk-player"]'),source:document.querySelector('.oq-player-source')?.textContent,title:document.querySelector('.oq-player-title')?.textContent,clamp:getComputedStyle(document.querySelector('.oq-player-error') || document.body).webkitLineClamp}))()`,
 		);
@@ -1459,11 +1461,13 @@ async function smoke(): Promise<void> {
 		),
 	);
 	for (const language of ["en", "de"]) {
+		await panel.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "panel" },
+		});
 		await management.webContents.executeJavaScript(
 			`window.quakeLocale.set('${language}')`,
 		);
-		await panel.reload();
-		await settle(600);
+		await waitForVoice(panel, "!!document.querySelector('.oq-player-error')");
 		const status = await panel.webContents.executeJavaScript(
 			"document.querySelector('.oq-player-error')?.textContent",
 		);

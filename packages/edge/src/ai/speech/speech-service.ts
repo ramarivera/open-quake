@@ -31,7 +31,12 @@ import {
 } from "./speech-contracts.js";
 import { SpeechPhaseTimeout } from "./speech-errors.js";
 import { type SynthesisError, synthesizeHttp } from "./speech-http.js";
-import { SpeechHttp, SpeechOutput, SpeechWebSocket } from "./speech-ports.js";
+import {
+	SpeechHttp,
+	SpeechOutput,
+	type SpeechOutputTarget,
+	SpeechWebSocket,
+} from "./speech-ports.js";
 import { validAdditionalTts, validStt } from "./speech-profile.js";
 import { recognizeSocket, type Transcript } from "./speech-stt.js";
 import { playbackWatchdog } from "./speech-watchdog.js";
@@ -240,6 +245,7 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 					onPhase: (
 						phase: "thinking" | "speaking",
 					) => Effect.Effect<void> = () => Effect.void,
+					target: SpeechOutputTarget = { kind: "assistant" },
 				): Effect.fn.Return<SpeechTurn> {
 					const cancelled = yield* Deferred.make<void>();
 					const consumed = yield* Ref.make(false);
@@ -278,7 +284,9 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 								let playbackStarted = false;
 								const playback = Effect.gen(function* () {
 									const player = yield* Effect.acquireRelease(
-										output.value.acquire.pipe(
+										(
+											output.value.acquireFor?.(target) ?? output.value.acquire
+										).pipe(
 											Effect.interruptible,
 											Effect.timeoutFail({
 												duration: "10 seconds",

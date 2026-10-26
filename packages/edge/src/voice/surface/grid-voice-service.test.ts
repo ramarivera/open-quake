@@ -18,6 +18,7 @@ import type {
 import { VoiceRuntimeUnavailable } from "./voice-surface-errors.js";
 import {
 	GridVoiceRuntime,
+	VoiceAdmission,
 	VoiceSurfacePublisher,
 	VoiceTonePort,
 } from "./voice-surface-ports.js";
@@ -84,6 +85,107 @@ const input = (
 	kind: GridVoiceInput["kind"],
 ): GridVoiceInput => ({ keyCode, kind, type: "aiChat" });
 const at = (ms: number) => TestClock.adjust(Duration.millis(ms));
+
+for (const blocker of ["meeting", "translation", "foreign"] as const)
+	it.scoped(
+		`same-key chat cancellation bypasses ${blocker} admission while new captures remain blocked`,
+		() => {
+			const rec = recorder();
+			let busy = false;
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1000);
+				yield* GridVoice.input("QK", input("1,6", "touchEnd"));
+				yield* at(350);
+				yield* VoiceSurface.reserve("QK", "1,6", "turn/pre-meeting");
+				busy = true;
+				if (blocker === "foreign")
+					yield* VoiceSurface.reserve("OTHER", "1,7", "turn/foreign");
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				expect(
+					rec.calls.filter((call) => call.startsWith("cancelFlow")),
+				).toEqual(["cancelFlow 1,6"]);
+				expect(rec.tones).toEqual([]);
+				yield* GridVoice.input("QK", input("1,7", "down"));
+				yield* at(1500);
+				expect(rec.calls).not.toContain("select 1,7");
+				expect(rec.calls.filter((call) => call.startsWith("start"))).toEqual([
+					"start 1,6 #1",
+				]);
+				expect(rec.tones).toEqual(["busy"]);
+			}).pipe(
+				Effect.provide(
+					stack(rec, fakeRuntime(rec)).pipe(
+						Layer.provide(
+							Layer.succeed(VoiceAdmission, {
+								check: () =>
+									Effect.sync(() =>
+										busy && blocker !== "foreign"
+											? Option.some(
+													blocker === "meeting"
+														? ("meetingAssistantPrompt.meetingActive" as const)
+														: ("meetingAssistantPrompt.liveTranslateActive" as const),
+												)
+											: Option.none(),
+									),
+							}),
+						),
+					),
+				),
+			);
+		},
+	);
+
+for (const replacement of [false, true])
+	it.scoped(
+		`knob interrupt cancels an early grid chat once and preserves successor=${replacement}`,
+		() => {
+			const rec = recorder();
+			const runtime = fakeRuntime(rec);
+			const cancelling = Layer.effect(
+				GridVoiceRuntime,
+				Effect.gen(function* () {
+					const original = yield* GridVoiceRuntime;
+					const surface = yield* VoiceSurface;
+					return {
+						...original,
+						cancelCapture: (
+							serial: string,
+							keyCode: string,
+							generation: number,
+						) =>
+							original
+								.cancelCapture(serial, keyCode, generation)
+								.pipe(
+									Effect.zipRight(
+										replacement
+											? surface.reserve(serial, keyCode, "turn/successor")
+											: Effect.void,
+									),
+								),
+					};
+				}),
+			).pipe(Layer.provide(runtime));
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1000);
+				yield* VoiceSurface.reserve("QK", "1,6", "turn/early-chat");
+				yield* GridVoice.knob("QK", "interrupt", 1);
+				if (!replacement) yield* GridVoice.knob("QK", "interrupt", 1);
+				yield* GridVoice.input("QK", input("1,6", "touchEnd"));
+				yield* at(1000);
+				expect(rec.calls).toEqual([
+					"select 1,6",
+					"start 1,6 #1",
+					"cancel 1,6 #1",
+					...(!replacement ? ["cancelFlow 1,6"] : []),
+				]);
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(
+					replacement ? Option.some("1,6") : Option.none(),
+				);
+			}).pipe(Effect.provide(stack(rec, cancelling)));
+		},
+	);
 
 describe("GridVoice", () => {
 	for (const knobFirst of [true, false])
@@ -422,7 +524,7 @@ describe("knob voice seam", () => {
 
 describe("mock voice runtime", () => {
 	it.scoped(
-		"keeps the grid capture on knob interrupt, wrong-key release and stale cancellation",
+		"interrupts the grid capture once and ignores wrong-key release and stale cancellation",
 		() => {
 			const rec = recorder();
 			return Effect.gen(function* () {
@@ -439,16 +541,13 @@ describe("mock voice runtime", () => {
 					rec.events
 						.slice(before)
 						.some((event) => event._tag === "Level" && event.keyCode === "1,6"),
-				).toBe(true);
-				expect(
-					rec.events.some(
-						(event) =>
-							event._tag === "Stage" && event.stage._tag !== "recording",
-					),
 				).toBe(false);
-				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(
-					Option.some("1,6"),
-				);
+				expect(
+					rec.events.filter(
+						(event) => event._tag === "Stage" && event.stage._tag === "idle",
+					),
+				).toHaveLength(1);
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(Option.none());
 				yield* runtime.cancelCapture("QK", "1,6", 1);
 				expect(rec.events.at(-1)).toMatchObject({
 					keyCode: "1,6",
@@ -548,3 +647,93 @@ describe("mock voice runtime", () => {
 		}).pipe(Effect.provide(stack(rec, MockVoiceRuntimeLive)));
 	});
 });
+
+for (const reason of [
+	"meetingAssistantPrompt.meetingActive",
+	"meetingAssistantPrompt.liveTranslateActive",
+	"aiAudio.openClawGatewayStarting",
+	"aiAudio.prevTurnBusy",
+] as const) {
+	it.scoped(
+		`admission ${reason} blocks grid selection and knob capture before acquisition`,
+		() => {
+			const rec = recorder();
+			let busy = true;
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1400);
+				yield* GridVoice.knob("QK", "holdStart", 1);
+				expect(rec.calls).toEqual([]);
+				expect(rec.tones).toEqual(["busy", "busy"]);
+				expect(
+					rec.events.filter((e) => e._tag === "Toast").map((e) => e.messageKey),
+				).toEqual([reason, reason]);
+				busy = false;
+				yield* GridVoice.knob("QK", "holdStart", 2);
+				expect(rec.calls).toEqual(["start 0,1 #2"]);
+				yield* GridVoice.knob("QK", "interrupt", 1);
+				expect(rec.calls).toEqual(["start 0,1 #2"]);
+			}).pipe(
+				Effect.provide(
+					stack(rec, fakeRuntime(rec)).pipe(
+						Layer.provide(
+							Layer.succeed(VoiceAdmission, {
+								check: () =>
+									Effect.sync(() =>
+										busy ? Option.some(reason) : Option.none(),
+									),
+							}),
+						),
+					),
+				),
+			);
+		},
+	);
+}
+it.scoped(
+	"interrupt disarms a grid reservation and cancels a running chat owner once",
+	() => {
+		const rec = recorder();
+		return Effect.gen(function* () {
+			yield* GridVoice.input("QK", input("1,6", "down"));
+			yield* GridVoice.knob("QK", "interrupt", 0);
+			yield* at(2000);
+			expect(rec.calls).toEqual(["select 1,6"]);
+			yield* VoiceSurface.reserve("QK", "1,7", "turn/test");
+			yield* GridVoice.knob("QK", "interrupt", 1);
+			yield* GridVoice.knob("QK", "interrupt", 1);
+			expect(rec.calls).toEqual(["select 1,6", "cancelFlow 1,7"]);
+		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+	},
+);
+
+it.scoped(
+	"KNOB-008/064 SCREEN-050: production gateway/foreign-owner gates reject before capture and recover after release",
+	() => {
+		const rec = recorder();
+		return Effect.gen(function* () {
+			yield* VoiceSurface.publish({ _tag: "AgentStatus", state: "connecting" });
+			yield* GridVoice.input("QK", {
+				...input("1,6", "down"),
+				type: "clawbot",
+			});
+			yield* at(1400);
+			expect(rec.calls).toEqual([]);
+			expect(rec.events.at(-1)).toMatchObject({
+				_tag: "Toast",
+				messageKey: "aiAudio.openClawGatewayStarting",
+			});
+			yield* VoiceSurface.publish({ _tag: "AgentStatus", state: "connected" });
+			yield* VoiceSurface.reserve("foreign", "1,7", "foreign/1");
+			yield* GridVoice.knob("QK", "holdStart", 1);
+			expect(rec.calls).toEqual([]);
+			expect(rec.events.at(-1)).toMatchObject({
+				_tag: "Toast",
+				messageKey: "aiAudio.prevTurnBusy",
+			});
+			yield* VoiceSurface.clearFlow("foreign", "1,7");
+			yield* GridVoice.knob("QK", "holdStart", 2);
+			expect(rec.calls).toEqual(["start 0,1 #2"]);
+		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+	},
+);

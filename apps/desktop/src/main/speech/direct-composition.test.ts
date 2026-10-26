@@ -335,6 +335,9 @@ describe("production direct chat to ordered speech", () => {
 				"final tail",
 			]);
 			await f.drain(2);
+			await vi.waitFor(() => expect(f.playbacks).toHaveLength(4));
+			expect(f.speechRequests.at(-1)?.input).toBe("Finished");
+			await f.drain(3);
 			await vi.waitFor(() =>
 				expect(f.playbacks.every((p) => !p.active && p.stops === 1)).toBe(true),
 			);
@@ -421,7 +424,11 @@ describe("production direct chat to ordered speech", () => {
 			await vi.waitFor(() => expect(f.reported).toHaveLength(1));
 			expect(f.answer()).toBe("Readable answer. It still continues.");
 			expect(f.playbacks).toHaveLength(0);
-			expect(f.speechRequests).toHaveLength(1);
+			expect(f.speechRequests.map((r) => r.input)).toEqual([
+				"Readable answer.",
+				" It still continues.",
+				"Finished",
+			]);
 			const logs = await f.logs();
 			expect(logs).toContain('"span_name":"speech.playback"');
 			expect(logs).toContain('"outcome":"failure"');

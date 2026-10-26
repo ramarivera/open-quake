@@ -36,6 +36,7 @@ import {
 	isMonitorKey,
 	MonitorKeySettings,
 } from "../strip/tiles/monitor/MonitorKeySettings";
+import { AudioBotSettings } from "../strip/tiles/voiceKey/AudioBotSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
@@ -899,6 +900,11 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						<AudioBotSettings
+							keyValue={key}
+							locale={locale}
+							onChange={(next) => void update(next)}
+						/>
 						{key.config.type === "clawbot" && (
 							<AgentKeyFields
 								value={key}

@@ -15,6 +15,7 @@ import { createOrderedSpeech } from "./ordered";
 const speechLayer = (
 	texts: string[],
 	play: Effect.Effect<void> = Effect.void,
+	httpFailures = 0,
 ) =>
 	AiSpeechService.Default.pipe(
 		Layer.provide(
@@ -27,6 +28,8 @@ const speechLayer = (
 					fetch: async (_url, init) => {
 						const input = JSON.parse(String(init.body)) as { input: string };
 						texts.push(input.input);
+						if (texts.length <= httpFailures)
+							return new Response(null, { status: 500 });
 						return new Response(wav(), {
 							headers: { "Content-Type": "audio/wav" },
 						});
@@ -192,4 +195,30 @@ it.effect(
 				}).pipe(Effect.provide(speechLayer(texts)));
 			}),
 		),
+);
+
+it.scoped(
+	"AI-092 KNOB-074 WIDGETS-108: failed segments release, continue in order and cancellation invalidates the pending timer",
+	() =>
+		Effect.gen(function* () {
+			const texts: string[] = [],
+				codes: string[] = [];
+			yield* Effect.gen(function* () {
+				const queue = yield* createOrderedSpeech({
+					speech: yield* AiSpeechService,
+					profile: ttsProfile,
+					report: (error) =>
+						Effect.sync(() => {
+							codes.push(error.code);
+						}),
+				});
+				yield* queue.push("First. Second. tail");
+				yield* queue.settled;
+				expect(texts).toEqual(["First.", " Second."]);
+				expect(codes).toHaveLength(1);
+				yield* queue.cancel();
+				yield* TestClock.adjust(10000);
+				expect(texts).toHaveLength(2);
+			}).pipe(Effect.provide(speechLayer(texts, Effect.void, 1)));
+		}),
 );

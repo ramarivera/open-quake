@@ -9,6 +9,7 @@ import {
 } from "effect";
 import { HostActionFailed } from "../../src/actions/action-errors.js";
 import type { ActionConfig } from "../../src/actions/action-registry.js";
+import { createActionDraft } from "../../src/actions/action-registry.js";
 import {
 	type KeyFeedback,
 	KeyRuntime,
@@ -671,6 +672,32 @@ it.effect(
 				yield* runtime.activate("device", "1,1", finish);
 			}
 			expect(acquisitions).toBe(0);
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MGMT-149 KNOB-073: committed AudioBot dispatches exactly once on release and preserves default agent/model",
+	() => {
+		let toggles = 0;
+		const draft = createActionDraft("audioBot");
+		const f = fixture(draft, false, 0, {
+			executeOwned: (key, owner) =>
+				Effect.sync(() => {
+					expect(owner.deviceId).toBe("device");
+					expect(key.config.actions).toEqual(draft.actions);
+					toggles++;
+					return true;
+				}),
+		});
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "press");
+			expect(toggles).toBe(0);
+			yield* runtime.activate("device", "1,1", "release");
+			yield* runtime.activate("device", "1,1", "release");
+			expect(toggles).toBe(1);
 			expect(f.calls).toEqual([]);
 		}).pipe(Effect.provide(f.layer));
 	},

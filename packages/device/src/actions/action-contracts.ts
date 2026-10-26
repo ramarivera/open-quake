@@ -404,3 +404,25 @@ export const EmojiConfig = Schema.Struct({
 		}),
 	),
 });
+
+/** MGMT-149/301: reader settings remain portable profile actions. */
+export const AudioBotConfig = Schema.Struct({
+	type: Schema.Literal("audioBot"),
+	actions: Schema.Array(ProfileAction).pipe(
+		Schema.filter(
+			(actions) =>
+				new Set(actions.map((a) => a.type)).size === actions.length &&
+				actions.some(
+					(a) => a.type === "agentId" && typeof a.value === "string",
+				) &&
+				actions.some(
+					(a) =>
+						a.type === "ttsEngine" &&
+						(a.value === "qwen" || a.value === "webSpeech"),
+				) &&
+				actions.some(
+					(a) => a.type === "modeltype" && typeof a.value === "string",
+				),
+		),
+	),
+});

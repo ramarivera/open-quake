@@ -47,6 +47,7 @@ import type {
 	KeyRequest,
 } from "../../../shared/key-library";
 import type { MeetingsBridge } from "../../../shared/meeting-bridge";
+import { readerSettings } from "../../../shared/reader-settings";
 import { selectStripPage } from "../../../shared/strip-selection";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { button, click, input, mount, query, settle } from "../../test/dom";
@@ -718,6 +719,7 @@ for (const [profileId, type] of [
 			expect(request).toHaveBeenCalledWith({
 				_tag: "ReadAloud",
 				keyCode: tile.keyCode,
+				settings: readerSettings(tile.key.config.actions),
 			});
 		if (type === "liveAudioTranslateDisplay")
 			expect(meeting).toHaveBeenCalledWith({ _tag: "tab", tab: "live" });
