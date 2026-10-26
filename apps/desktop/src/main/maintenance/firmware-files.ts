@@ -190,57 +190,74 @@ export function firmwareFiles(
 		bundled: (
 			directories: readonly string[],
 		): Effect.Effect<FirmwareImage | undefined, FirmwareImageInvalid> =>
-			Effect.tryPromise({
-				try: async () => {
-					let best: { path: string; image: FirmwareImage } | undefined;
-					for (const directory of directories) {
-						const names = await readdir(directory).catch((cause: unknown) => {
-							if (
+			Effect.gen(function* () {
+				const sources = yield* Effect.forEach(directories, (directory) =>
+					Effect.tryPromise({
+						try: () => readdir(directory),
+						catch: (cause) => new FirmwareImageInvalid(cause),
+					}).pipe(
+						Effect.map((names) => ({ directory, names })),
+						Effect.catchTag("FirmwareImageInvalid", (error) => {
+							const cause = error.originalCause;
+							const missing =
 								typeof cause === "object" &&
 								cause !== null &&
 								"code" in cause &&
-								cause.code === "ENOENT"
-							)
-								return [];
-							throw cause;
-						});
-						for (const name of names.sort()) {
-							const match =
-								/^QUAKE_(\d+)\.(\d+)\.(\d+)(?:_[A-Za-z0-9_-]+)?\.uf2$/i.exec(
-									name,
-								);
-							if (!match) continue;
-							const version = match.slice(1, 4).map(Number).join(".");
-							if (!descriptors.some((d) => d.version === version)) continue;
-							const path = join(directory, name);
-							let next: FirmwareImage;
-							try {
-								next = validateFirmware(
-									await readFirmware(path),
-									name,
-									descriptors,
-								);
-							} catch {
-								continue;
+								cause.code === "ENOENT";
+							const names: string[] = [];
+							return (
+								missing
+									? Effect.void
+									: Effect.logWarning(
+											"Optional bundled firmware unavailable",
+											error,
+										)
+							).pipe(Effect.as({ directory, names }));
+						}),
+					),
+				);
+				return yield* Effect.tryPromise({
+					try: async () => {
+						let best: { path: string; image: FirmwareImage } | undefined;
+						for (const { directory, names } of sources) {
+							for (const name of names.sort()) {
+								const match =
+									/^QUAKE_(\d+)\.(\d+)\.(\d+)(?:_[A-Za-z0-9_-]+)?\.uf2$/i.exec(
+										name,
+									);
+								if (!match) continue;
+								const version = match.slice(1, 4).map(Number).join(".");
+								if (!descriptors.some((d) => d.version === version)) continue;
+								const path = join(directory, name);
+								let next: FirmwareImage;
+								try {
+									next = validateFirmware(
+										await readFirmware(path),
+										name,
+										descriptors,
+									);
+								} catch {
+									continue;
+								}
+								if (
+									next.trusted &&
+									next.version === version &&
+									(!best || newerVersion(next.version, best.image.version))
+								)
+									best = { path, image: next };
 							}
-							if (
-								next.trusted &&
-								next.version === version &&
-								(!best || newerVersion(next.version, best.image.version))
-							)
-								best = { path, image: next };
 						}
-					}
-					if (best) {
-						imagePath = resolve(best.path);
-						image = best.image;
-					}
-					return best?.image;
-				},
-				catch: (cause) =>
-					cause instanceof FirmwareImageInvalid
-						? cause
-						: new FirmwareImageInvalid(cause),
+						if (best) {
+							imagePath = resolve(best.path);
+							image = best.image;
+						}
+						return best?.image;
+					},
+					catch: (cause) =>
+						cause instanceof FirmwareImageInvalid
+							? cause
+							: new FirmwareImageInvalid(cause),
+				});
 			}),
 		selected: (): Effect.Effect<FirmwareImage, FirmwareTargetMismatch> =>
 			image ? Effect.succeed(image) : Effect.fail(new FirmwareTargetMismatch()),

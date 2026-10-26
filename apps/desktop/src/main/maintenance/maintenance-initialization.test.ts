@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	chmod,
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, ManagedRuntime } from "effect";
@@ -149,6 +156,50 @@ it("persists firmware recovery failures through the production diagnostics owner
 	} finally {
 		await owner.dispose().catch(() => undefined);
 		await diagnostics.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("keeps Settings available and logs a scrubbed diagnostic when an optional bundled directory is unreadable", async () => {
+	const root = await mkdtemp(join(tmpdir(), "unreadable-bundle-"));
+	const directory = join(root, "private-fixture-secret");
+	await mkdir(directory, { mode: 0o000 });
+	const diagnosticRoot = join(root, "diagnostics");
+	const diagnostics = createDesktopDiagnostics({ directory: diagnosticRoot });
+	const owner = registerMaintenance({
+		root,
+		mock: true,
+		renderer: "https://fixture.invalid",
+		hardware: () => undefined,
+		management: () => undefined,
+		stopWriters: async () => {},
+		diagnostics,
+		fixture: {
+			roots: [],
+			descriptors: [],
+			bundledDirectories: [directory, join(root, "missing")],
+		},
+	});
+	try {
+		await owner.ready;
+		expect(await owner.request({ action: "read" })).toMatchObject({
+			ok: true,
+			view: { firmwareAvailability: "no_device" },
+		});
+		await owner.dispose();
+		await diagnostics.close();
+		const saved = await readFile(
+			join(diagnosticRoot, "diagnostics.0.ndjson"),
+			"utf8",
+		);
+		expect(saved).toContain("Optional bundled firmware unavailable");
+		expect(saved).toContain("QUAKE.FIRMWARE.IMAGE_INVALID");
+		expect(saved).not.toContain(directory);
+		expect(saved).not.toContain("private-fixture-secret");
+	} finally {
+		await owner.dispose().catch(() => undefined);
+		await diagnostics.close();
+		await chmod(directory, 0o700);
 		await rm(root, { recursive: true, force: true });
 	}
 });

@@ -30,7 +30,7 @@ Tracked by open-quake-18d.8. Each finding gets a regression, commit, push and re
 
 - [x] 5.1 Replace installer path handoff with a verified private descriptor-backed copy and refuse cache swaps, review 4379260349.
 - [x] 5.2 Stream bounded downloads and verification, review 4379258894.
-- [ ] 5.3 Keep Settings available with unreadable optional firmware directories, review 4379259396.
+- [x] 5.3 Keep Settings available with unreadable optional firmware directories, review 4379259396.
 - [ ] 5.4 Accept newer hardware version observations, review 4379259164.
 - [ ] 5.5 Finish normally returning installs, review 4379259656.
 - [ ] 5.6 Prune superseded update artifacts, review 4379259888.
