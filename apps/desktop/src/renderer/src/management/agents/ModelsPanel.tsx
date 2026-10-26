@@ -264,15 +264,18 @@ function ModelTable({
 											<input
 												aria-label={`${t.botId} ${scope} ${index + 1}`}
 												value={row.settings?.botId ?? ""}
-												onChange={(event) =>
+												onChange={(event) => {
+													const { botId: _botId, ...settings } =
+														row.settings ?? {};
+													const botId = event.target.value.trim();
 													update({
 														...row,
 														settings: {
-															...row.settings,
-															botId: event.target.value,
+															...settings,
+															...(botId ? { botId } : {}),
 														},
-													})
-												}
+													});
+												}}
 											/>
 										</label>
 									)}
