@@ -142,6 +142,13 @@ The lifecycle SHALL retain bindings and last stable bounds by device serial. A p
 - **WHEN** lock or a newer wake interrupts discovery or a delayed recovery
 - **THEN** the older generation cannot commit a binding or write to a replaced hardware session, and unlock pumps the remaining serials after exactly 2500 ms
 
+### Requirement: Serial-owned panel renderers
+Every strip renderer SHALL receive its owning serial during initialization. Wallpaper state and playback SHALL remain independent of the management selection. Profile selection and key activation SHALL use the renderer's serial, and main SHALL reject a panel's activation for another serial using the registered window identity. Sources: MAIN-046, MAIN-047, SCREEN-146.
+
+#### Scenario: Two strips and a changing management selection
+- **WHEN** panels A and B are connected and management selects either device
+- **THEN** each panel keeps its own wallpaper and selected profile, receives its own input, and submits activations for its own serial only
+
 ### Requirement: Native display evidence and bounded Windows preparation
 Read-only Windows probes SHALL inspect Windows Forms screens and WMI monitor names, retaining wmi-name or forms-size evidence separately from Electron bindings. Probe and extend failures SHALL retain their catalog identity in diagnostics. Native-only evidence SHALL never place a window on an unconfirmed display. Explicit Re-detect SHALL offer Windows extend consent, make zero native mutation calls on decline or in mock mode, poll Electron every 500 ms through 5000 ms, collect native evidence, and publish the final diagnostic after a further 1500 ms. Sources: MAIN-043, MAIN-044, MAIN-059.
 

@@ -58,7 +58,7 @@ const electron = vi.hoisted(() => {
 			),
 			isDestroyed: () => this.destroyed,
 		};
-		loadURL = vi.fn(() => {
+		loadURL = vi.fn((_url: string) => {
 			this.contentListeners.get("did-finish-load")?.();
 		});
 		loadFile = vi.fn(() => {
@@ -644,7 +644,7 @@ describe("desktop window lifecycle", () => {
 				"screen-saver",
 			);
 			expect(fallback.loadURL).toHaveBeenLastCalledWith(
-				"http://localhost:5173?surface=panel&rotation=0",
+				"http://localhost:5173?surface=panel&rotation=0&serial=desktop-preview",
 			);
 			electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
 			displayEvent("display-added");
@@ -671,7 +671,7 @@ describe("desktop window lifecycle", () => {
 				process.platform === "darwin" ? 1 : 0,
 			);
 			expect(strip?.loadURL).toHaveBeenLastCalledWith(
-				"http://localhost:5173?surface=panel&rotation=90",
+				"http://localhost:5173?surface=panel&rotation=90&serial=desktop-preview",
 			);
 			electron.screen.getAllDisplays.mockReturnValue([primary]);
 			displayEvent("display-removed");
@@ -686,7 +686,7 @@ describe("desktop window lifecycle", () => {
 				height: 480,
 			});
 			expect(restored?.loadURL).toHaveBeenLastCalledWith(
-				"http://localhost:5173?surface=panel&rotation=0",
+				"http://localhost:5173?surface=panel&rotation=0&serial=desktop-preview",
 			);
 			expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
 		},
@@ -710,7 +710,7 @@ describe("desktop window lifecycle", () => {
 			title: "open-quake panel",
 		});
 		expect(replacement?.loadURL).toHaveBeenCalledWith(
-			"http://localhost:5173?surface=panel&rotation=90",
+			"http://localhost:5173?surface=panel&rotation=90&serial=desktop-preview",
 		);
 		vi.advanceTimersByTime(1500);
 		expect(panel.webContents.send).not.toHaveBeenCalled();
@@ -762,7 +762,7 @@ describe("desktop window lifecycle", () => {
 		);
 		expect(panel.setBounds).toHaveBeenLastCalledWith(rotated.bounds);
 		expect(panel.loadURL).toHaveBeenLastCalledWith(
-			"http://localhost:5173?surface=panel&rotation=0",
+			"http://localhost:5173?surface=panel&rotation=0&serial=desktop-preview",
 		);
 	});
 
@@ -1232,6 +1232,16 @@ describe("desktop main with the real device service and fake HID", () => {
 		try {
 			const { two, first, second } = await startTwoStrips();
 			expect(second).not.toBe(first);
+			for (const [win, serial] of [
+				[first, "A"],
+				[second, "B"],
+			] as const) {
+				expect(
+					new URL(
+						win.loadURL.mock.calls.at(-1)?.[0] ?? "http://missing",
+					).searchParams.get("serial"),
+				).toBe(serial);
+			}
 			const knob = vi.mocked(registerKnob).mock.results.at(-1)?.value;
 			first?.webContents.send.mockClear();
 			second?.webContents.send.mockClear();

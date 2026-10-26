@@ -70,7 +70,7 @@ Bead `open-quake-lih.11.18` owns this final-round scope.
 
 - [x] 10.1 Merge current main, preserving touch, meeting, icon and clock changes. Merge `abedad5`.
 - [x] 10.2 Fix the suspected shutdown deadlock without weakening the smoke. Cancel knob registration work before the bus joins its input queue. The deterministic main-entrypoint test failed before this ordering change.
-- [ ] 10.3 Bind each renderer's state, profile and activation to its owning serial. Codex4378546825.
+- [x] 10.3 Bind each renderer's state, profile and activation to its owning serial. Codex4378546825. Two-panel media regression failed before; mounted serial A/B and IPC ownership tests pass.
 - [ ] 10.4 Use live bound-display position and rotation during concurrent pairing. Codex4378546838.
 - [ ] 10.5 Refresh secondary HID paths by serial after re-enumeration. Codex4378546848.
 - [ ] 10.6 Run full gates and native media smoke, push and reply per fix, remove build output. Leave threads unresolved and PR unmerged.

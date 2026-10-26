@@ -107,8 +107,13 @@ function loadSurface(
 	win: BrowserWindow,
 	surface: "management" | "panel",
 	rotation: PanelRotation = 0,
+	serial?: string,
 ): void {
-	const query = { surface, rotation: String(rotation) };
+	const query = {
+		surface,
+		rotation: String(rotation),
+		...(serial ? { serial } : {}),
+	};
 	if (isDev) {
 		win.loadURL(
 			`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`,
@@ -206,6 +211,13 @@ if (!app.requestSingleInstanceLock()) {
 						let activeSerial: string | undefined;
 						const connectedSerials = new Set<string>();
 						const activeDeviceId = () => activeSerial ?? "desktop-preview";
+						const panelSerial = (
+							sender: Electron.WebContents,
+						): string | undefined =>
+							[...stripWindows.entries()].find(
+								([, entry]) =>
+									!entry.win.isDestroyed() && entry.win.webContents === sender,
+							)?.[0];
 						const currentHardware = () =>
 							bus?.device
 								? bus.device(activeDeviceId())?.hardware?.()
@@ -381,6 +393,7 @@ if (!app.requestSingleInstanceLock()) {
 							diagnostics,
 							mediaActions,
 							speech.resetSoundKeys,
+							panelSerial,
 						);
 						const agentsModule = prepareAgents({
 							diagnostics,
@@ -454,6 +467,7 @@ if (!app.requestSingleInstanceLock()) {
 									false,
 									() => panelWin,
 									speech.acquireWallpaperSound,
+									panelSerial,
 								),
 							diagnostics,
 						);
@@ -1114,18 +1128,21 @@ if (!app.requestSingleInstanceLock()) {
 									win,
 									"panel",
 									panelRotation(target.display, target.isPanel),
+									serial,
 								);
 								if (old && !old.isDestroyed()) destroyPanel(old);
 							} else {
 								placePanel(win, target);
 								if (
+									!owned ||
 									panelRotation(target.display, target.isPanel) !==
-									panelRotation(previous.display, previous.isPanel)
+										panelRotation(previous.display, previous.isPanel)
 								)
 									loadSurface(
 										win,
 										"panel",
 										panelRotation(target.display, target.isPanel),
+										serial,
 									);
 							}
 							stripWindows.set(serial, { win, target });
@@ -1169,7 +1186,12 @@ if (!app.requestSingleInstanceLock()) {
 						startBus();
 						// Preload asks after registering its listener, including after reloads.
 						const sendStatus = (event: Electron.IpcMainEvent): void => {
-							const status = bus?.currentStatus();
+							const serial = panelSerial(event.sender);
+							const status = (
+								serial && serial !== "desktop-preview" && bus?.device
+									? bus.device(serial)
+									: bus
+							)?.currentStatus();
 							if (status && !event.sender.isDestroyed()) {
 								event.sender.send(QUAKE_EVENT_CHANNEL, status);
 							}

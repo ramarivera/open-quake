@@ -70,6 +70,7 @@ export function registerKeyLibrary<R>(
 	managementURL = renderer,
 	panelWindow: () => BrowserWindow | undefined = () => undefined,
 	captureOwner: (sender: Electron.WebContents) => boolean = () => false,
+	panelSerial?: (sender: Electron.WebContents) => string | undefined,
 ) {
 	const store = iconStore(join(app.getPath("userData"), "key-library-v1.json"));
 	const picker = createIconPicker(management, renderer);
@@ -149,7 +150,9 @@ export function registerKeyLibrary<R>(
 		if (command.type === "read") return true;
 		if (
 			(command.type === "icons" || command.type === "application-icons") &&
-			(event.sender === panelWindow()?.webContents ||
+			((panelSerial
+				? panelSerial(event.sender) !== undefined
+				: event.sender === panelWindow()?.webContents) ||
 				captureOwner(event.sender))
 		)
 			return true;
@@ -168,7 +171,10 @@ export function registerKeyLibrary<R>(
 			(command.type === "activate" ||
 				command.type === "navigate" ||
 				command.type === "player-control") &&
-			event.sender === panelWindow()?.webContents &&
+			(panelSerial
+				? panelSerial(event.sender) !== undefined &&
+					panelSerial(event.sender) === command.deviceId
+				: event.sender === panelWindow()?.webContents) &&
 			new URL(event.sender.getURL()).searchParams.get("surface") === "panel"
 		);
 	};

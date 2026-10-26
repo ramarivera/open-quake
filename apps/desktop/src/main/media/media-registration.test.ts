@@ -11,6 +11,7 @@ import {
 	WALLPAPER_AUDIO,
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
+	WALLPAPER_SNAPSHOT,
 } from "../../shared/wallpaper-contracts";
 import { MediaLive, registerMedia } from "./index";
 import type { DecodedMedia } from "./media-decoder";
@@ -49,6 +50,101 @@ describe("explicit media registration", () => {
 	it("has no import side effects", () => {
 		expect(ipcMain.handle).not.toHaveBeenCalled();
 		expect(app.listenerCount("ready")).toBe(0);
+	});
+
+	it("keeps two panel snapshots pinned to their serial when management selects another strip", async () => {
+		const root = await mkdtemp(join(tmpdir(), "open-quake-two-panels-"));
+		const runtime = ManagedRuntime.make(MediaLive(root));
+		const a = new TestWindow(),
+			b = new TestWindow(),
+			management = new TestWindow();
+		const windows = [a, b, management];
+		vi.mocked(BrowserWindow.getAllWindows).mockReturnValue(
+			windows as unknown as BrowserWindow[],
+		);
+		vi.mocked(BrowserWindow.fromWebContents).mockImplementation(
+			(sender) =>
+				(windows.find((w) =>
+					Object.is(w.webContents, sender),
+				) as unknown as BrowserWindow) ?? null,
+		);
+		const registration = registerMedia(
+			runtime,
+			() => management as unknown as BrowserWindow,
+			"file:///app/index.html",
+			false,
+			() => a as unknown as BrowserWindow,
+			undefined,
+			(sender) =>
+				Object.is(sender, a.webContents)
+					? "A"
+					: Object.is(sender, b.webContents)
+						? "B"
+						: undefined,
+		);
+		const handler = vi
+			.mocked(ipcMain.handle)
+			.mock.calls.filter(([channel]) => channel === WALLPAPER_REQUEST)
+			.at(-1)?.[1];
+		if (!handler) throw new Error("Missing media handler");
+		const invoke = (w: TestWindow, input: unknown) =>
+			handler(
+				{
+					sender: w.webContents,
+					senderFrame: w.webContents.mainFrame,
+				} as unknown as Electron.IpcMainInvokeEvent,
+				input,
+			);
+		try {
+			for (const [panel, serial] of [
+				[a, "A"],
+				[b, "B"],
+			] as const)
+				expect(await invoke(panel, { _tag: "read" })).toMatchObject({
+					_tag: "success",
+					snapshot: { saved: { serial } },
+				});
+			await invoke(management, { _tag: "select", serial: "A" });
+			expect(await invoke(b, { _tag: "read" })).toMatchObject({
+				snapshot: { saved: { serial: "B" } },
+			});
+			await invoke(management, { _tag: "select", serial: "B" });
+			expect(await invoke(a, { _tag: "read" })).toMatchObject({
+				snapshot: { saved: { serial: "A" } },
+			});
+			await invoke(management, {
+				_tag: "configure",
+				serial: "B",
+				revision: 0,
+				fillMode: "contain",
+				hourFormat: "12h",
+			});
+			expect(await invoke(b, { _tag: "read" })).toMatchObject({
+				snapshot: {
+					saved: {
+						serial: "B",
+						revision: 1,
+						settings: { bgFillMode: "contain" },
+					},
+				},
+			});
+			for (const [panel, serial] of [
+				[a, "A"],
+				[b, "B"],
+			] as const) {
+				const snapshots = panel.webContents.send.mock.calls.filter(
+					([channel]) => channel === WALLPAPER_SNAPSHOT,
+				);
+				expect(snapshots.length).toBeGreaterThan(0);
+				expect(
+					snapshots.every(([, value]) => value.saved.serial === serial),
+				).toBe(true);
+			}
+			expect(await registration.selectionSerial()).toBe("B");
+		} finally {
+			await registration.dispose();
+			await rm(root, { recursive: true, force: true });
+		}
 	});
 
 	it.each(["settings change", "panel hide"])(
