@@ -214,6 +214,8 @@ for (const state of ["malformed", "unreadable"] as const) {
 		else await mkdir(path);
 		const stop = vi.fn(async () => {});
 		const exit = vi.fn();
+		const releasePermission = vi.fn();
+		const permissionFlow = vi.fn(() => releasePermission);
 		const owner = registerMaintenance({
 			root,
 			mock: true,
@@ -222,6 +224,7 @@ for (const state of ["malformed", "unreadable"] as const) {
 			management: () => undefined,
 			stopWriters: stop,
 			exit,
+			permissionFlow,
 		});
 		try {
 			await expect(owner.ready).resolves.toBeUndefined();
@@ -232,6 +235,8 @@ for (const state of ["malformed", "unreadable"] as const) {
 			expect(
 				await owner.request({ action: "permission", key: "accessibility" }),
 			).toMatchObject({ ok: true });
+			expect(permissionFlow).toHaveBeenCalledOnce();
+			expect(releasePermission).toHaveBeenCalledOnce();
 			const retained = (await readdir(root)).find((name) =>
 				name.startsWith("firmware-session-v1.json.recovery-"),
 			);

@@ -151,6 +151,18 @@ PR77 review found that the editor accepted OpenAI overrides which the provider w
 Verification after correction: 46 focused edge tests and 32 focused desktop tests pass, both typechecks and the production build pass, scoped Biome and strict OpenSpec validation pass. The hidden production-root run uses an OpenAI-labelled GPT-4o row and a synthetic local HTTP provider. It confirms persisted zero/one values reach the actual SDK request, unsupported model edits block both save paths without changing revision, the explanation switches live to German, clearing permits saving again, and 1180x625/390x625 layouts have no horizontal overflow or unlabelled fields. The run leaves real device, microphone, login preferences and live providers untouched. Screenshots and logs remain external under `open-quake-finish/provider-sampling`. Reviewed delivery remains pending; broader task 3.2 is incomplete.
 
 
+## 8. Burn-down shell lane
+
+Beads open-quake-lih.17.14, open-quake-lih.17.15, open-quake-lih.17.16 and open-quake-lih.17.17 remain open for lead merge.
+
+- [x] 8.1 Implement owned startup, tray recovery, authenticated shell commands, close-to-hide and drained restart/quit with production-root tests.
+- [x] 8.2 Implement settings deep links, keyboard tab focus, global Help/Exit, serial selection, danger variants, icon stages, route/chrome and timer-lifetime tests using the existing visual system, including SETTINGS-002 macOS privacy-flow close/hide pinning.
+- [x] 8.3 Implement daily bounded diagnostics and document retained capability ownership. Broad catalog rows remain incomplete under 8.5.
+- [x] 8.4 Merge latest main, run repository gates and native mock EN/DE captures, publish row-by-row PR evidence and exclusions. Draft PR #113 delivers 22 rows with five approved exclusions and six partial rows retained under 8.5. Main 4aa4a9f1 is integrated; root tests 4141 passed with four existing skips, six typecheck tasks, Biome with zero errors, production build, both bundle modes and strict validation of 47 changes passed. Hidden mock native EN/DE settings, device selection, Help and privacy handoff passed. Beads open-quake-lih.17.14/.15/.16/.17 remain open for lead review and merge.
+- [x] 8.6 Restrict PR113 external project navigation to exact shipped destinations and trusted isolated-preload clicks from the management main frame, with regressions for rejected URLs, synthetic events and child frames. Devin 4380606591, open-quake-lih.17.14.1.
+- [x] 8.7 Retain tray and Dock activation until the authenticated replacement management renderer subscribes; cover Settings after recreation, stale/child ready messages, reload and preload subscription order. Devin 4380606237, open-quake-lih.17.14.1.
+- [x] 8.8 Complete the bundle-smoke BrowserWindow/WebContents fake and exercise minimized management activation, reproducing hosted validate run 40371650334 before correction; align production-root regressions with the external-link policy and renderer-ready handshake. open-quake-lih.17.14.1.
+- [ ] 8.5 Finish retained assistant/report/plugin window behavior, PluginConfigs and ChatHistory migration, the complete device/IPC/outgoing event inventories and gaming hooks. Rows MAIN-124/129/130/133/134 and SCREEN-012 remain partial. Canonical plugin protocol/schema work is open-quake-a5u.2; camera/printer protocol prerequisite is open-quake-rtk.1; game-mode provider is open-quake-lih.10.15. No exclusions were inferred for these rows.
 ## 6. Locale burn-down lane
 
 - [x] 6.1 Bundle eight recovered locales, normalization/endonyms, mounted window/strip/profile/picker/voice/native propagation and all-six-role precedence tests. Rows AI-149, CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064. Bead open-quake-def.23.
@@ -202,3 +214,6 @@ PR #105 review fix 4379719107 keeps the mounted city verifier across locale chan
 PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated profile capture locale before mounting App. The real renderer-entry regression fails with English MON on the preceding implementation and passes with German MO, OKT 26 and localized theme navigation, including every observed ready preview. Fourteen focused profile/live-locale cases and desktop typecheck pass. Capture windows still use no management/panel locale bridge.
 
 - [x] PR105 locale follow-up 4379841253: system/local player consumers now subscribe to application locale context instead of its passive DOM mirror. Mounted locale-switch and independent capture regressions live in weather-media/player-locale.test.tsx; existing thumbnail-locale.test.tsx retains explicit German capture coverage. Owning scenarios and execution task 11.9 live in weather-media-parity. Bead open-quake-def.25 remains in_progress for lead review/merge.
+
+
+Shell scope decision, 2026-10-26: Ramiro explicitly excluded dormant vendor features and ARIS-only flows. MGMT-008, MGMT-014, MGMT-432, MGMT-433 and SETTINGS-017 are approved exclusions, not implemented parity. The corresponding decision remains open in open-quake-lih.17.17 for lead reconciliation.

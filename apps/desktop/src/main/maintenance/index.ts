@@ -84,6 +84,7 @@ interface MaintenanceOptions {
 	readonly hardware: () => HardwareSession | undefined;
 	readonly management: () => BrowserWindow | undefined;
 	readonly stopWriters: () => Promise<void>;
+	readonly permissionFlow?: () => () => void;
 	readonly exit?: (code?: number) => void | Promise<void>;
 	readonly fixture?: {
 		readonly bundledDirectories?: readonly string[];
@@ -661,9 +662,13 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									}
 									break;
 								}
-								case "permission":
-									if (!mock) yield* openPermission(input.key);
+								case "permission": {
+									const release = options.permissionFlow?.();
+									yield* (mock ? Effect.void : openPermission(input.key)).pipe(
+										Effect.ensuring(Effect.sync(() => release?.())),
+									);
 									break;
+								}
 								case "check-update":
 									yield* update.check();
 									break;
