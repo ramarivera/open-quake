@@ -53,4 +53,6 @@ Task 5.2 proof: 1310 uncached tests, six forced/fresh gates with loose Turbo env
 
 ## speech-capture burn-down lane
 
-- [ ] Implement the platform capture, deliberate fallback and setup-help requirements above with production consumer fixtures. Beads open-quake-c5w.16; physical audio and driver installation remain unverified.
+- [x] Implement platform capture, deliberate microphone-only/cancel fallback and setup help with production consumer fixtures. Evidence: renderer capture platform/partial-acquisition tests, trusted host permission/fallback tests, and mounted setup missing/installed/refresh-error/cancel checks. Bead open-quake-c5w.16 stays open for lead merge.
+- [ ] Complete AI-283 driver installation and macOS multi-output configuration after separate host approval, then verify physical system audio on Windows/macOS/Linux. The lane only detects installed virtual inputs and provides manual setup help.
+- [ ] Reconcile the required media native smoke failure tracked by open-quake-c5w.16.1. Two hidden mock runs timed out on the OBS panel screenshot after configuration save. Capture-specific EN/DE UI and native typed-start-error checks passed. Logs and screenshots remain external under open-quake-parity/burndown/speech-capture.

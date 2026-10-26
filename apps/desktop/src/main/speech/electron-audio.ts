@@ -20,9 +20,18 @@ import { DesktopSpeechError } from "./errors";
 import { desktopWebSocket } from "./websocket";
 
 export interface AudioWorker {
-	readonly invoke: <A>(method: string, args?: readonly unknown[]) => Promise<A>;
+	readonly invoke: (
+		method: string,
+		args?: readonly unknown[],
+	) => Promise<unknown>;
 	readonly close: () => Promise<void>;
 }
+const WorkerReply = Schema.Union(
+	Schema.TaggedStruct("success", { value: Schema.Unknown }),
+	Schema.TaggedStruct("failure", {
+		cause: Schema.Struct({ name: Schema.String.pipe(Schema.maxLength(64)) }),
+	}),
+);
 /** No window exists until a user starts capture/playback. The worker never shows or focuses. */
 export async function openAudioWorker(
 	signal: AbortSignal,
@@ -98,7 +107,7 @@ export async function openAudioWorker(
 		await window.webContents.executeJavaScript(audioWorkerSource());
 		if (closed) throw new AiUnavailable();
 		return {
-			invoke: (method, args = []) => {
+			invoke: async (method, args = []) => {
 				if (
 					closed ||
 					!window ||
@@ -107,9 +116,14 @@ export async function openAudioWorker(
 					)
 				)
 					return Promise.reject(new AiUnavailable());
-				return window.webContents.executeJavaScript(
-					`globalThis.__quakeSpeech.${method}(...${JSON.stringify(args)})`,
+				// Native DOMException rejections lose their properties in Electron.
+				// Project the reason inside the worker before crossing that boundary.
+				const result: unknown = await window.webContents.executeJavaScript(
+					`Promise.resolve().then(() => globalThis.__quakeSpeech.${method}(...${JSON.stringify(args)})).then(value => ({_tag:"success", value}), cause => ({_tag:"failure", cause:{name:["NotAllowedError","NotFoundError","OverconstrainedError","NotReadableError","SecurityError","AbortError"].includes(cause?.name) ? cause.name : "Error"}}))`,
 				);
+				const reply = Schema.decodeUnknownSync(WorkerReply)(result);
+				if (reply._tag === "failure") throw reply.cause;
+				return reply.value;
 			},
 			close,
 		};
@@ -186,18 +200,21 @@ export function createElectronCaptureDriver(
 						await value.invoke("capture", [id, selected, exportRecording]);
 						return value;
 					},
-					catch: (cause) =>
-						cause instanceof Error && cause.name === "NotAllowedError"
+					catch: (cause) => {
+						const name =
+							cause && typeof cause === "object" && "name" in cause
+								? cause.name
+								: undefined;
+						return name === "NotAllowedError"
 							? new DesktopSpeechError("PermissionDenied", "permission", cause)
-							: cause instanceof Error &&
-									(cause.name === "NotFoundError" ||
-										cause.name === "OverconstrainedError")
+							: name === "NotFoundError" || name === "OverconstrainedError"
 								? new DesktopSpeechError("NoDevice", "recorder", cause)
 								: new DesktopSpeechError(
 										"RecorderUnavailable",
 										"recorder",
 										cause,
-									),
+									);
+					},
 				}).pipe(
 					// Startup hasn't returned a CaptureSession yet, so captureFrames'
 					// acquisition finalizer can't close it. Own failed acquisition here.
@@ -225,7 +242,7 @@ export function createElectronCaptureDriver(
 						Effect.asVoid,
 					),
 					export: (format) =>
-						boundary(() => worker.invoke<unknown>("export", [format])).pipe(
+						boundary(() => worker.invoke("export", [format])).pipe(
 							Effect.flatMap(
 								Schema.decodeUnknown(
 									Schema.Array(Schema.Int.pipe(Schema.between(0, 255))).pipe(
@@ -236,7 +253,7 @@ export function createElectronCaptureDriver(
 							Effect.map((bytes) => Uint8Array.from(bytes)),
 							Effect.mapError((cause) => new AiUnavailable(cause)),
 						),
-					pull: boundary(() => worker.invoke<unknown>("pull")).pipe(
+					pull: boundary(() => worker.invoke("pull")).pipe(
 						Effect.flatMap(Schema.decodeUnknown(Batch)),
 						Effect.mapError((cause) => new AiUnavailable(cause)),
 						Effect.flatMap((batch) =>
@@ -307,11 +324,14 @@ export function createDesktopAudioOutput(
 			const lease = {
 				ready: ready().pipe(Effect.onError(() => reservation.release)),
 				contextState: boundary(() =>
-					worker ? worker.invoke<string>("state") : Promise.resolve("closed"),
+					worker ? worker.invoke("state") : Promise.resolve("closed"),
+				).pipe(
+					Effect.flatMap(Schema.decodeUnknown(Schema.String)),
+					Effect.mapError((cause) => new AiUnavailable(cause)),
 				),
 				resume: boundary(() =>
-					worker ? worker.invoke<void>("resume") : Promise.resolve(),
-				),
+					worker ? worker.invoke("resume") : Promise.resolve(),
+				).pipe(Effect.asVoid),
 				play: (audio: GeneratedAudio) =>
 					Effect.gen(function* () {
 						const verified = verifiedAudio(audio.bytes, audio.format);

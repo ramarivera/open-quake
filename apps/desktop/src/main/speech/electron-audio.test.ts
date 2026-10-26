@@ -16,6 +16,7 @@ const native = vi.hoisted(() => ({
 	end: () => {},
 	failWindow: false,
 	failWrite: false,
+	captureError: "",
 	windows: [] as { url: string; destroyed: boolean }[],
 	contents: [] as unknown[],
 	sessions: [] as {
@@ -52,6 +53,17 @@ vi.mock("electron", () => ({
 	},
 	BrowserWindow: class {
 		context = {
+			DOMException,
+			navigator: {
+				mediaDevices: {
+					getUserMedia: async () => {
+						throw new DOMException(
+							"private input details",
+							native.captureError,
+						);
+					},
+				},
+			},
 			AudioBufferSourceNode: class {},
 			AudioContext: class {
 				get state() {
@@ -91,8 +103,15 @@ vi.mock("electron", () => ({
 			setWindowOpenHandler: () => {},
 			on: () => {},
 			getURL: () => this.state.url,
-			executeJavaScript: async (code: string) =>
-				runInNewContext(code, this.context),
+			executeJavaScript: async (code: string) => {
+				try {
+					return await runInNewContext(code, this.context);
+				} catch (cause) {
+					// Electron drops DOMException properties across executeJavaScript.
+					if (cause instanceof DOMException) throw {};
+					throw cause;
+				}
+			},
 		};
 		isDestroyed() {
 			return this.state.destroyed;
@@ -106,7 +125,11 @@ vi.mock("electron", () => ({
 	},
 }));
 
-import { createDesktopAudioOutput, openAudioWorker } from "./electron-audio";
+import {
+	createDesktopAudioOutput,
+	createElectronCaptureDriver,
+	openAudioWorker,
+} from "./electron-audio";
 
 beforeEach(async () => {
 	native.root = await mkdtemp(join(tmpdir(), "oq-audio-test-"));
@@ -115,6 +138,7 @@ beforeEach(async () => {
 	native.end = () => {};
 	native.failWrite = false;
 	native.failWindow = false;
+	native.captureError = "";
 	native.windows.length = 0;
 	native.sessions.length = 0;
 	native.contents.length = 0;
@@ -123,6 +147,24 @@ afterEach(async () => {
 	await rm(native.root, { recursive: true });
 });
 describe("owned Electron audio worker", () => {
+	it.each([
+		["NotAllowedError", "VOICE.CAPTURE.PERMISSION_DENIED"],
+		["NotFoundError", "VOICE.CAPTURE.NO_DEVICE"],
+		["OverconstrainedError", "VOICE.CAPTURE.NO_DEVICE"],
+		["NotReadableError", "VOICE.CAPTURE.RECORDER_UNAVAILABLE"],
+	])(
+		"preserves %s across the native rejection boundary",
+		async (name, code) => {
+			native.captureError = name;
+			const result = await Effect.runPromise(
+				createElectronCaptureDriver().open("capture").pipe(Effect.either),
+			);
+			expect(result).toMatchObject({ _tag: "Left", left: { code } });
+			expect(JSON.stringify(result)).not.toContain("private input details");
+			expect(native.windows.every((window) => window.destroyed)).toBe(true);
+			expect(await readdir(native.root)).toEqual([]);
+		},
+	);
 	it.each(["write", "window"])(
 		"removes its private directory when %s setup fails",
 		async (failure) => {

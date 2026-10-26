@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { Effect, Either, Fiber } from "effect";
+import { Effect, Either, Fiber, Schema } from "effect";
 import { app, BrowserWindow } from "electron";
 import { PCM_24K } from "../../../../../packages/edge/src/ai/speech/speech-contracts";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
@@ -64,15 +64,19 @@ async function run() {
 			let frames = 0;
 			let signal = false;
 			for (let index = 0; index < 100 && (frames < 3 || !signal); index++) {
-				const batch = await worker.invoke<{
-					frames: {
-						captureId: string;
-						seq: number;
-						bytes: number[];
-						rms: number;
-					}[];
-					failed: false | string;
-				}>("pull");
+				const batch = Schema.decodeUnknownSync(
+					Schema.Struct({
+						frames: Schema.Array(
+							Schema.Struct({
+								captureId: Schema.String,
+								seq: Schema.Int,
+								bytes: Schema.Array(Schema.Int),
+								rms: Schema.Number,
+							}),
+						),
+						failed: Schema.Union(Schema.Literal(false), Schema.String),
+					}),
+				)(await worker.invoke("pull"));
 				assert.equal(batch.failed, false);
 				for (const frame of batch.frames) {
 					assert.equal(frame.captureId, "synthetic-capture");

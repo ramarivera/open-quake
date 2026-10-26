@@ -53,6 +53,7 @@ const fixture = Effect.fn("SpeechTest.fixture")(function* (
 		| "final"
 		| "empty"
 		| "auto"
+		| "completed"
 		| "denied",
 ) {
 	const packets = yield* Queue.unbounded<unknown>();
@@ -136,13 +137,30 @@ const fixture = Effect.fn("SpeechTest.fixture")(function* (
 									task_id: value.header.task_id,
 								},
 							});
-						} else if (mode !== "final")
+						} else if (mode !== "final") {
+							if (mode === "completed")
+								yield* Queue.offer(packets, {
+									header: {
+										event: "result-generated",
+										task_id: value.header.task_id,
+									},
+									payload: {
+										output: {
+											sentence: {
+												text: "Private synthetic transcript",
+												begin_time: 0,
+												sentence_end: true,
+											},
+										},
+									},
+								});
 							yield* Queue.offer(packets, {
 								header: {
 									event: "task-finished",
 									task_id: value.header.task_id,
 								},
 							});
+						}
 					}),
 			}),
 	};
@@ -439,6 +457,58 @@ it.effect(
 					yield* controller.runtime.releaseCapture("fixture", "0,1", 1);
 					yield* TestClock.adjust(2000);
 					expect(recorded).toHaveLength(1);
+				}).pipe(Effect.provide(f.layer));
+			}),
+		),
+);
+it.effect(
+	"completed runtime metrics exclude recognized text after releasing capture and socket",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const f = yield* fixture("completed");
+				const metrics = yield* Queue.unbounded<CaptureMetrics>();
+				const submitted: string[] = [];
+				yield* Effect.gen(function* () {
+					const controller = yield* createProductionVoiceRuntime({
+						speech: yield* AiSpeechService,
+						capture: f.driver,
+						profiles: f.profiles,
+						sendText: () => Effect.void,
+						sendTranscript: (request) =>
+							Effect.sync(() => {
+								expect(f.counts()).toEqual({
+									opened: 1,
+									closed: 1,
+									socketClosed: 1,
+								});
+								submitted.push(request.message);
+							}),
+						diagnostics: {
+							layer: Layer.empty,
+							instrument: (effect) => effect,
+							recordCapture: (value) =>
+								Queue.offer(metrics, value).pipe(Effect.asVoid),
+						},
+					});
+					yield* controller.runtime.startCapture(captureRequest);
+					yield* Deferred.await(f.listening);
+					yield* TestClock.adjust(100);
+					yield* controller.runtime.releaseCapture("fixture", "1,5", 1);
+					const result = yield* Queue.take(metrics);
+					expect(result).toEqual({
+						terminal: "completed",
+						startupMs: 100,
+						readyLatencyMs: 0,
+						firstFrameLatencyMs: 0,
+						captureDurationMs: 100,
+						hasAudioFrame: true,
+						stopBeforeReady: false,
+					});
+					expect(submitted).toEqual(["Private synthetic transcript"]);
+					expect(JSON.stringify(result)).not.toMatch(
+						/Private|transcript|fixture|bytes/,
+					);
 				}).pipe(Effect.provide(f.layer));
 			}),
 		),

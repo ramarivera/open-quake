@@ -24,8 +24,10 @@ export function MeetingSettings({
 			<p>
 				{mock
 					? "Mock mode uses synthetic audio and fake providers."
-					: "Choose a microphone and an explicitly configured AI profile. System audio requires screen recording permission."}
+					: "Choose a microphone and an explicitly configured AI profile. System audio uses Windows loopback or a configured BlackHole or Monitor input."}
 			</p>
+			<SharedMicrophonePicker />
+			<SystemAudioSetup />
 			<form
 				onSubmit={(event) => {
 					event.preventDefault();
@@ -49,8 +51,6 @@ export function MeetingSettings({
 					);
 				}}
 			>
-				<SharedMicrophonePicker />
-				<SystemAudioSetup />
 				<label className="meeting-checkbox">
 					<input
 						type="checkbox"

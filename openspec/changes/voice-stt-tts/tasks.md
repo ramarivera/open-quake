@@ -116,4 +116,5 @@ acceptance is claimed.
 
 ## speech-capture burn-down lane
 
-- [ ] Implement the shared identity, recorder format/control, runtime timing/error and knob duration requirements above with production consumer fixtures. Beads open-quake-c5w.14 and open-quake-c5w.15; physical audio and driver installation remain unverified.
+- [x] Implement the shared identity, recorder format/control, runtime timing/error and knob duration requirements above with production consumer fixtures. Evidence: shared microphone/settings/worker tests, supported PCM input-rate and stereo fixtures, recorder lifetime/native rejection boundary tests, runtime TestClock level/deadline/terminal metrics fixtures, and mounted EN/DE picker checks. Beads open-quake-c5w.14 and open-quake-c5w.15 stay open for lead merge.
+- [ ] Complete physical microphone, OS permission/unplug/reconnect, provider and device acceptance under the lead's authorization. No physical recording or playback was performed by the speech-capture lane.
