@@ -20,12 +20,15 @@ export function knobThumbnailReader(
 		locale: ProfileLocale,
 	): Effect.fn.Return<MenuProfile, KnobError> {
 		const profile = translateProfile(source, locale);
+		const border = bindings.thumbnailBorder?.() ?? true;
 		const data = yield* Effect.tryPromise({
 			try: async (signal) => {
-				const cached = await thumbnails.read(profile, locale);
+				const cached = await thumbnails.read(profile, locale, border);
 				if (Option.isSome(cached)) return cached.value;
 				await bindings.thumbnail?.(menu.id, locale, signal);
-				return Option.getOrUndefined(await thumbnails.read(profile, locale));
+				return Option.getOrUndefined(
+					await thumbnails.read(profile, locale, border),
+				);
 			},
 			catch: knobBoundaryFailure,
 		});

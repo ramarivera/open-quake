@@ -96,3 +96,56 @@ it("renders a German thumbnail clock from the capture locale before marking the 
 		vi.unstubAllGlobals();
 	}
 });
+
+it("pins hidden thumbnail borders to capture identity despite saved and live setting changes", async () => {
+	const { ProfileThumbnail } = await import("./ProfileViews");
+	const { mount } = await import("../../test/dom");
+	const url = location.href;
+	const storageKey = "open-quake.strip.v1";
+	localStorage.setItem(
+		storageKey,
+		JSON.stringify({ version: 1, showEmptyGridDashedBorder: true }),
+	);
+	history.replaceState(
+		null,
+		"",
+		`/?surface=profile-thumbnail&profile=${clockProfile.id}&locale=en&emptyBorders=false`,
+	);
+	vi.stubGlobal("quakeProfileManager", {
+		request: async () => ({
+			_tag: "success",
+			view: {
+				envelope: stripFixtureEnvelope(clockProfile),
+				serials: [],
+				apps: [],
+				thumbnails: {},
+				progress: { running: false, done: 0, total: 0, failed: 0 },
+			},
+		}),
+	});
+	const { host, close } = await mount(<ProfileThumbnail />);
+	try {
+		expect(
+			host.querySelector(".strip-screen")?.getAttribute("data-dashed"),
+		).toBe("false");
+		await act(async () => {
+			window.dispatchEvent(
+				new StorageEvent("storage", {
+					key: storageKey,
+					newValue: JSON.stringify({
+						version: 1,
+						showEmptyGridDashedBorder: true,
+					}),
+				}),
+			);
+		});
+		expect(
+			host.querySelector(".strip-screen")?.getAttribute("data-dashed"),
+		).toBe("false");
+	} finally {
+		await close();
+		history.replaceState(null, "", url);
+		localStorage.clear();
+		vi.unstubAllGlobals();
+	}
+});
