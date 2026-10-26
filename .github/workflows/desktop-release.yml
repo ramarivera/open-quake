@@ -39,13 +39,19 @@ jobs:
       - name: Install FFmpeg
         timeout-minutes: 5
         env:
-          FFMPEG_URL: https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64.gz
-          FFMPEG_SHA256: 17c1ae10b52ac499180679fe6ba77e17642390c4eedb0f1e3b0ac045da55128f
+          FFMPEG_RELEASE: https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0
         run: |
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/ffmpeg.gz" "$FFMPEG_URL"
-          echo "$FFMPEG_SHA256  $RUNNER_TEMP/ffmpeg.gz" | sha256sum -c -
-          gunzip -c "$RUNNER_TEMP/ffmpeg.gz" | sudo tee /usr/local/bin/ffmpeg >/dev/null
-          sudo chmod 755 /usr/local/bin/ffmpeg
+          # ffprobe is used by the meeting provider tests and smoke to inspect output.
+          while read -r tool sha; do
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/$tool.gz" "$FFMPEG_RELEASE/$tool-linux-x64.gz"
+            echo "$sha  $RUNNER_TEMP/$tool.gz" | sha256sum -c -
+            gunzip -c "$RUNNER_TEMP/$tool.gz" | sudo tee "/usr/local/bin/$tool" >/dev/null
+            sudo chmod 755 "/usr/local/bin/$tool"
+          done <<'TOOLS'
+          ffmpeg 17c1ae10b52ac499180679fe6ba77e17642390c4eedb0f1e3b0ac045da55128f
+          ffprobe 88ca6818d82a70e87de2bb6166026ad411528c72eda0e4e11ed25d185116ee17
+          TOOLS
+          ffprobe -hide_banner -version > "$RUNNER_TEMP/ffprobe-version.txt"
           ffmpeg -hide_banner -encoders > "$RUNNER_TEMP/ffmpeg-encoders.txt"
           grep ' libmp3lame ' "$RUNNER_TEMP/ffmpeg-encoders.txt"
       - run: pnpm install --frozen-lockfile
