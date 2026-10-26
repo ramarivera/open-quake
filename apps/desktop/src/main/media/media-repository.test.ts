@@ -71,6 +71,19 @@ describe("desktop media repository and actual disk adapter", () => {
 		layer = MediaRepository.Default.pipe(
 			Layer.provide(Layer.succeed(MediaRoot, root)),
 		);
+		// Existing scenarios start with an explicitly saved empty custom playlist.
+		await fs.mkdir(join(root, "settings"), { recursive: true });
+		for (const serial of ["A", "B", "loop"])
+			await fs.writeFile(
+				settingsFile(serial),
+				JSON.stringify({
+					version: 1,
+					serial,
+					revision: 0,
+					settings: defaultWallpaper,
+					clock: defaultClockTile,
+				}),
+			);
 		native.decode.mockImplementation(() => ({
 			isEmpty: () => false,
 			getSize: () => ({ width: 480, height: 480 }),
@@ -381,7 +394,8 @@ describe("desktop media repository and actual disk adapter", () => {
 					chooseImage: Effect.succeed(Option.none()),
 					publish: (snapshot) =>
 						Effect.sync(() => {
-							shown.push(snapshot.activeIndex ?? 0);
+							if (shown.at(-1) !== (snapshot.activeIndex ?? 0))
+								shown.push(snapshot.activeIndex ?? 0);
 						}),
 					publishClock: () => Effect.void,
 				}).pipe(
@@ -397,11 +411,11 @@ describe("desktop media repository and actual disk adapter", () => {
 				);
 				yield* controller.request({ _tag: "select", serial: "loop" });
 				const fiber = yield* Effect.forkScoped(controller.ticks);
-				yield* TestClock.adjust(4999);
+				yield* TestClock.adjust(4199);
 				expect(shown).toEqual([0]);
 				yield* TestClock.adjust(1);
 				expect(shown).toEqual([0, 1]);
-				yield* TestClock.adjust(15000);
+				yield* TestClock.adjust(12600);
 				expect(shown).toEqual([0, 1, 0, 1, 0]);
 				yield* Fiber.interrupt(fiber);
 				yield* TestClock.adjust(5000);
@@ -841,6 +855,204 @@ describe("desktop media repository and actual disk adapter", () => {
 					).toBe(true);
 				expect(native.decode).not.toHaveBeenCalled();
 			}).pipe(Effect.provide(ImageDecoder.Default)),
+		);
+	});
+	it("WIDGETS-129 SCREEN-104 new serials get five owned silent videos and reset publishes once without touching another serial", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const fresh = (yield* repo.load("NEW")).saved;
+				expect(fresh.settings).toMatchObject({
+					isTransparent: false,
+					enableSound: false,
+					bgFillMode: "cover",
+					gapInterval: 5,
+					gapIntervalUnit: 0,
+					playMode: "sequential",
+				});
+				expect(fresh.settings.displayMediaList).toHaveLength(5);
+				expect(
+					new Set(fresh.settings.displayMediaList.map((m) => m.filePath)).size,
+				).toBe(5);
+				for (let index = 0; index < 5; index++)
+					expect(
+						Option.getOrThrow(yield* repo.resolve(fresh, index)),
+					).toMatchObject({
+						format: "video/webm",
+						durationMs: 5000,
+						width: 960,
+						height: 240,
+					});
+				const beforeB = (yield* repo.load("B")).saved;
+				const a = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				const published: unknown[] = [];
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publishClock: () => Effect.void,
+					publish: (next) =>
+						Effect.sync(() => {
+							published.push(next);
+						}),
+				});
+				yield* controller.request({ _tag: "select", serial: "A" });
+				published.length = 0;
+				const reset = yield* controller.request({
+					_tag: "factory",
+					serial: "A",
+					revision: a.revision,
+				});
+				expect(reset.saved.settings).toEqual(fresh.settings);
+				expect(reset.saved.revision).toBe(2);
+				expect(published).toHaveLength(1);
+				expect((yield* repo.load("B")).saved).toEqual(beforeB);
+				expect((yield* repo.restore("A", 2)).settings).toEqual(a.settings);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+	it("MAIN-150 WIDGETS-128 prepends decoded media, retains serial options and stages picker changes until Save", async () => {
+		const videoPath = join(directory, "insert.webm");
+		await fs.writeFile(videoPath, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const a = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				const published: unknown[] = [];
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.some(videoPath)),
+					publishClock: () => Effect.void,
+					publish: (next) =>
+						Effect.sync(() => {
+							published.push(next);
+						}),
+				});
+				yield* controller.request({ _tag: "select", serial: "A" });
+				const saved = yield* controller.request({
+					_tag: "save",
+					serial: "A",
+					revision: 1,
+					settings: {
+						...a.settings,
+						gapInterval: 2,
+						displayMediaList: a.settings.displayMediaList.map((m) => ({
+							...m,
+							duration: 120000,
+						})),
+						gapIntervalUnit: 1,
+						playMode: "random",
+						isTransparent: true,
+					},
+				});
+				expect(saved.asset._tag).toBe("empty");
+				expect(saved.saved.settings.displayMediaList[0]?.duration).toBe(120000);
+				published.length = 0;
+				const staged = yield* controller.request({
+					_tag: "pick",
+					serial: "A",
+					revision: 2,
+				});
+				expect(staged.saved.settings.displayMediaList[0]).toMatchObject({
+					type: "video",
+					format: "video/webm",
+				});
+				expect((yield* repo.load("A")).saved).toEqual(saved.saved);
+				expect(published).toHaveLength(0);
+				const inserted = yield* controller.request({
+					_tag: "insert",
+					serial: "A",
+					revision: 2,
+				});
+				expect(
+					inserted.saved.settings.displayMediaList.map((m) => m.type),
+				).toEqual(["video", "image"]);
+				expect(inserted.saved.settings).toMatchObject({
+					isTransparent: true,
+					gapInterval: 2,
+					gapIntervalUnit: 1,
+					playMode: "random",
+				});
+				expect(published).toHaveLength(1);
+				expect((yield* repo.load("B")).saved.settings.displayMediaList).toEqual(
+					[],
+				);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+	it("MGMT-250 failed factory reset rolls back primary and backup and publishes nothing", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const a = (yield* repo.importLocal("A", 0, imagePath)).saved;
+				const published = vi.fn();
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publishClock: () => Effect.void,
+					publish: () =>
+						Effect.sync(() => {
+							published();
+						}),
+				});
+				yield* controller.request({ _tag: "select", serial: "A" });
+				published.mockClear();
+				vi.mocked(fs.rename).mockRejectedValueOnce(new Error("disk-full"));
+				const failed = yield* controller
+					.request({ _tag: "factory", serial: "A", revision: 1 })
+					.pipe(Effect.either);
+				expect(failed._tag).toBe("Left");
+				expect((yield* repo.load("A")).saved).toEqual(a);
+				expect(published).not.toHaveBeenCalled();
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+	it("WIDGETS-128 migrates a legacy ws_ record on read and writes only the canonical serial", async () => {
+		const legacyHash = createHash("sha256").update(png).digest("hex");
+		await fs.mkdir(assetsDirectory("ws_LEGACY"), { recursive: true });
+		await fs.writeFile(join(assetsDirectory("ws_LEGACY"), legacyHash), png);
+		const old = {
+			version: 1,
+			serial: "ws_LEGACY",
+			revision: 4,
+			settings: {
+				...defaultWallpaper,
+				isTransparent: true,
+				displayMediaList: [
+					{
+						name: "legacy.png",
+						type: "image",
+						format: "image/png",
+						duration: 5000,
+						filePath: `media:${legacyHash}`,
+					},
+				],
+			},
+			clock: defaultClockTile,
+		};
+		await fs.writeFile(settingsFile(old.serial), JSON.stringify(old));
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const loaded = (yield* repo.load("LEGACY")).saved;
+				expect(loaded.serial).toBe("LEGACY");
+				expect(loaded.settings.isTransparent).toBe(true);
+				expect(Option.isSome(yield* repo.resolve(loaded))).toBe(true);
+				yield* repo.save(
+					"LEGACY",
+					4,
+					{ ...loaded.settings, playMode: "random" },
+					loaded.clock,
+				);
+				expect(
+					JSON.parse(
+						yield* Effect.promise(() =>
+							fs.readFile(settingsFile(old.serial), "utf8"),
+						),
+					),
+				).toEqual(old);
+				expect((yield* repo.load("LEGACY")).saved).toMatchObject({
+					serial: "LEGACY",
+					revision: 5,
+					settings: { playMode: "random" },
+				});
+			}).pipe(Effect.provide(layer)),
 		);
 	});
 });

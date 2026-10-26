@@ -116,3 +116,18 @@ desktop types, build and both bundle scenarios pass afterward.
 - [x] 5.9 Publish the controller's item start time and seek late-mounted panel/preview videos after metadata loads; cover unchanged deadlines and singleton wrapping. Evidence: WIDGETS-130; open-quake-lih.19.9, review 4376428352.
 
 Final playback verification: controller timestamp and both late-mount regressions fail before the fix and pass afterward. The 56 focused media/wallpaper tests, desktop typecheck and production build pass. Hidden mock native smoke passes including late panel reload timing; screenshots and logs stay in the external lane scratch directory under wallpaper-soundboard/final. No hardware, DK-Suite or audible playback.
+
+## 6. Wallpaper burn-down lane
+
+- [x] 6.1 Complete serial settings Save, prepend insertion, factory pack/reset and transparent native/renderer state (MAIN-051/150, SCREEN-007/104, WIDGETS-128/129/131; open-quake-lih.9.6).
+- [x] 6.2 Add A/B preload/crossfade, readiness/errors and hidden/teardown coverage (SCREEN-105, WIDGETS-130; open-quake-lih.9.7).
+- [x] 6.3 Delegate selected-serial vivid editor with explicit Save/reset and prove clock theme migration (MGMT-098/250/286, SCREEN-123; open-quake-lih.9.8).
+- [x] 6.4 Add explicit focus and scoped queued rebind commands using existing owners (MAIN-148/149; open-quake-lih.9.9).
+- [ ] 6.5 Merge latest main and run all suites, bundle and silent mock native EN/DE smoke; open PR and leave beads open for lead.
+
+Wallpaper burn-down implementation evidence: the root command with
+`--env-mode=loose -- --maxWorkers=2` and SSD TMPDIR passed 4,126 tests with
+four existing skips. The hidden mock native smoke exercised explicit draft Save,
+transparent/opaque panel and preview transitions, preserved native bounds and
+real playback of the five original silent factory videos. Current-main gates
+and final PR evidence follow task 6.5. No real hardware or audible output ran.

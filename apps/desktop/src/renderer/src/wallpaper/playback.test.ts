@@ -1,128 +1,113 @@
-import { isValidElement, type ReactNode } from "react";
-import { expect, it, vi } from "vitest";
+// @vitest-environment happy-dom
+import { act, createElement } from "react";
+import { afterEach, expect, it, vi } from "vitest";
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
+import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
+import { mount } from "../../test/dom";
 import { WallpaperCanvas } from "./WallpaperCanvas";
 
-const hooks = vi.hoisted(
-	(): {
-		video: { currentTime: number } | null;
-		effects: Array<() => undefined | (() => void)>;
-	} => ({ video: null, effects: [] }),
-);
-
-vi.mock("react", async (load) => ({
-	...(await load<typeof import("react")>()),
-	useRef: () => ({ current: hooks.video }),
-	useMemo: (factory: () => unknown) => factory(),
-	useEffect: (effect: () => undefined | (() => void)) =>
-		hooks.effects.push(effect),
-}));
-
-function videoKey(node: ReactNode): string | null | undefined {
-	if (Array.isArray(node))
-		return node.map(videoKey).find((key) => key !== undefined);
-	if (!isValidElement<{ children?: ReactNode }>(node)) return undefined;
-	return node.type === "video" ? node.key : videoKey(node.props.children);
-}
-const snapshot = {
+const snapshot: WallpaperSnapshot = {
 	saved: {
-		version: 1 as const,
+		version: 1,
 		serial: "A",
 		revision: 0,
 		clock: defaultClockTile,
 		settings: {
 			...defaultWallpaper,
-			displayMediaList: [
-				{
-					name: "a.webm",
-					type: "video" as const,
-					format: "video/webm" as const,
-					filePath: `media:${"a".repeat(64)}`,
-					duration: 60000,
-				},
-			],
+			enableSound: true,
+			displayMediaList: ["a", "b"].map((id) => ({
+				name: id,
+				type: "video",
+				format: "video/webm",
+				filePath: `media:${id.repeat(64)}`,
+				duration: 60000,
+			})),
 		},
 	},
 	asset: {
-		_tag: "ready" as const,
+		_tag: "ready",
 		dataUrl: "data:video/webm;base64,YQ==",
 		width: 320,
 		height: 80,
 	},
+	clock: { epochMillis: 0, hour: 0, minute: 0, second: 0 },
 	recovered: false,
 	normalizedFileUrl: false,
-	deviceDelivery: "unverified" as const,
-	clock: { epochMillis: 0, hour: 0, minute: 0, second: 0 },
+	deviceDelivery: "unverified",
+	activeIndex: 0,
 	playbackId: 1,
+	playbackStartedAt: 0,
 };
-it("remounts an unchanged video URL only when playback identity changes", () => {
-	const key = videoKey(WallpaperCanvas({ snapshot }));
-	expect(key).toBeTruthy();
-	expect(
-		videoKey(WallpaperCanvas({ snapshot: { ...snapshot, playbackId: 2 } })),
-	).not.toBe(key);
-	expect(
-		videoKey(
-			WallpaperCanvas({
-				snapshot: { ...snapshot, saved: { ...snapshot.saved, revision: 1 } },
-			}),
-		),
-	).toBe(key);
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
-
-for (const singleton of [false, true]) {
-	it(`seeks a late-mounted ${singleton ? "singleton loop" : "playlist video"} after metadata arrives`, () => {
-		let now = 50000;
-		vi.spyOn(Date, "now").mockImplementation(() => now);
-		const listeners = new Map<string, () => void>();
-		const first = snapshot.saved.settings.displayMediaList[0];
-		if (!first) throw new Error("Video fixture missing");
-		const video = {
-			currentTime: 0,
-			duration: 60,
-			readyState: 0,
-			play: vi.fn(async () => {}),
-			pause: vi.fn(),
-			removeAttribute: vi.fn(),
-			load: vi.fn(),
-			addEventListener: vi.fn((name: string, callback: () => void) =>
-				listeners.set(name, callback),
-			),
-			removeEventListener: vi.fn((name: string) => listeners.delete(name)),
-		};
-		// A media-element fake exercises the component's mount and cleanup effects.
-		hooks.video = video;
-		hooks.effects = [];
-		WallpaperCanvas({
+it("WIDGETS-130 seeks late mounts, waits for media readiness and retains unchanged-list video elements", async () => {
+	vi.spyOn(Date, "now").mockReturnValue(50000);
+	vi.spyOn(HTMLMediaElement.prototype, "duration", "get").mockReturnValue(60);
+	const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+	const pause = vi
+		.spyOn(HTMLMediaElement.prototype, "pause")
+		.mockImplementation(() => {});
+	const load = vi
+		.spyOn(HTMLMediaElement.prototype, "load")
+		.mockImplementation(() => {});
+	const mounted = await mount(createElement(WallpaperCanvas, { snapshot }));
+	const video = mounted.host.querySelector("video");
+	if (!video) throw new Error("Missing video");
+	expect(play).not.toHaveBeenCalled();
+	await act(async () => video.dispatchEvent(new Event("canplaythrough")));
+	expect(video.currentTime).toBe(50);
+	expect(play).toHaveBeenCalled();
+	video.currentTime = 51;
+	await act(async () => video.dispatchEvent(new Event("canplaythrough")));
+	expect(video.currentTime).toBe(51);
+	expect(play).toHaveBeenCalledTimes(1);
+	await mounted.render(
+		createElement(WallpaperCanvas, {
+			snapshot: { ...snapshot, saved: { ...snapshot.saved, revision: 1 } },
+		}),
+	);
+	expect(mounted.host.querySelector("video")).toBe(video);
+	await mounted.close();
+	expect(pause).toHaveBeenCalled();
+	expect(load).toHaveBeenCalled();
+	expect(video.hasAttribute("src")).toBe(false);
+});
+it("SCREEN-007 WIDGETS-131 unmounts media and neutral fill when transparency changes and releases audio", async () => {
+	const audio = vi.fn<
+		NonNullable<NonNullable<Window["quakeWallpaper"]>["audio"]>
+	>(async () => true);
+	window.quakeWallpaper = {
+		request: async () => undefined,
+		audio,
+		onSnapshot: () => () => {},
+		onClock: () => () => {},
+	};
+	vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+	vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+	const mounted = await mount(
+		createElement(WallpaperCanvas, { snapshot, sound: true }),
+	);
+	expect(
+		mounted.host.querySelectorAll("video:not([muted])").length,
+	).toBeLessThanOrEqual(1);
+	await mounted.render(
+		createElement(WallpaperCanvas, {
 			snapshot: {
 				...snapshot,
-				playbackStartedAt: 0,
 				saved: {
 					...snapshot.saved,
-					settings: {
-						...snapshot.saved.settings,
-						displayMediaList: singleton
-							? snapshot.saved.settings.displayMediaList
-							: [
-									...snapshot.saved.settings.displayMediaList,
-									{
-										...first,
-										filePath: `media:${"b".repeat(64)}`,
-									},
-								],
-					},
+					settings: { ...snapshot.saved.settings, isTransparent: true },
 				},
 			},
-		});
-		const cleanups = hooks.effects.map((effect) => effect());
-		expect(hooks.video?.currentTime).toBe(0);
-		now = singleton ? 125000 : 51000;
-		listeners.get("loadedmetadata")?.();
-		expect(hooks.video?.currentTime).toBe(singleton ? 5 : 51);
-		expect(video.play).toHaveBeenCalledOnce();
-		for (const cleanup of cleanups) cleanup?.();
-		expect(listeners.size).toBe(0);
-		expect(video.pause).toHaveBeenCalledOnce();
-		hooks.video = null;
-	});
-}
+			sound: true,
+		}),
+	);
+	expect(mounted.host.querySelector("video, image, rect")).toBeNull();
+	expect(audio.mock.calls.some(([command]) => command.active === false)).toBe(
+		true,
+	);
+	await mounted.close();
+	delete window.quakeWallpaper;
+});

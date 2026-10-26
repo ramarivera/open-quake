@@ -11,6 +11,7 @@ import {
 	WALLPAPER_SNAPSHOT,
 	WallpaperAudioCommand,
 	type WallpaperReply,
+	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
 import type { DesktopRuntime } from "../diagnostics/module";
 import { type MediaController, makeMediaController } from "./media-controller";
@@ -52,6 +53,7 @@ export function registerMedia(
 	) => Promise<AudioOutputLease | undefined> = async () => undefined,
 	panelSerial: (sender: Electron.WebContents) => string | undefined = () =>
 		undefined,
+	applyBackground: (snapshot: WallpaperSnapshot) => void = () => {},
 ): { dispose: () => Promise<void>; selectionSerial: () => Promise<string> } {
 	const audio = wallpaperAudioSession(acquireSound);
 	let audioEpoch = 0;
@@ -124,31 +126,40 @@ export function registerMedia(
 	const scopedControllers = new Map<string, Promise<MediaController>>();
 	const scopedClocks = new Map<string, Fiber.RuntimeFiber<void>>();
 	const panelReaders = new Map<Electron.WebContents, string>();
+	const chooseImages = Effect.tryPromise({
+		try: () =>
+			dialog.showOpenDialog({
+				title: "Choose wallpaper",
+				properties: ["openFile", "multiSelections"],
+				filters: [
+					{
+						name: "Wallpaper media",
+						extensions: [
+							"jpg",
+							"jpeg",
+							"png",
+							"gif",
+							"mp4",
+							"mov",
+							"mkv",
+							"webm",
+							"avi",
+						],
+					},
+				],
+			}),
+		catch: (cause) => new MediaUnreadable(cause),
+	}).pipe(Effect.map((result) => (result.canceled ? [] : result.filePaths)));
 	const makeController = (serial?: string) =>
 		runtime.runPromise(
 			makeMediaController({
-				chooseImage: Effect.tryPromise({
-					try: () =>
-						dialog.showOpenDialog({
-							title: "Choose wallpaper",
-							properties: ["openFile"],
-							filters: [
-								{
-									name: "Wallpaper media",
-									extensions: ["jpg", "jpeg", "png", "mp4", "mov", "webm"],
-								},
-							],
-						}),
-					catch: (cause) => new MediaUnreadable(cause),
-				}).pipe(
-					Effect.map((result) =>
-						result.canceled
-							? Option.none()
-							: Option.fromNullable(result.filePaths[0]),
-					),
+				chooseImages,
+				chooseImage: chooseImages.pipe(
+					Effect.map((paths) => Option.fromNullable(paths[0])),
 				),
 				publish: (snapshot) =>
 					Effect.gen(function* () {
+						yield* Effect.sync(() => applyBackground(snapshot));
 						const key = JSON.stringify([
 							snapshot.saved.serial,
 							snapshot.saved.revision,
@@ -305,6 +316,21 @@ export function registerMedia(
 					message: "Wallpaper request was rejected",
 				};
 			const serial = panelSerial(event.sender);
+
+			if (
+				typeof input === "object" &&
+				input !== null &&
+				"_tag" in input &&
+				input._tag === "failed" &&
+				(serial === undefined ||
+					!("serial" in input) ||
+					input.serial !== serial)
+			)
+				return {
+					_tag: "failure",
+					code: "QUAKE.DISPLAY.INVALID_WALLPAPER",
+					message: "Wallpaper request was rejected",
+				};
 			if (serial !== undefined) panelReaders.set(event.sender, serial);
 			const service = await controllerFor(serial);
 			return runtime.runPromise(

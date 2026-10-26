@@ -4,7 +4,6 @@ import {
 	type DesktopClockTile,
 	DisplayIdentity,
 	defaultClockTile,
-	defaultWallpaper,
 	InvalidWallpaper,
 	intervalMillis,
 	type MediaPersistenceFailed,
@@ -12,6 +11,7 @@ import {
 	SavedWallpaper,
 	type WallpaperSettings,
 } from "../../shared/display";
+import { factoryMedia, factoryWallpaper } from "./factory-wallpaper";
 import { normalizeLocalSelection } from "./image-decoder";
 import { type DecodedMedia, MediaDecoder } from "./media-decoder";
 import { MediaFiles } from "./media-files";
@@ -45,6 +45,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					InvalidWallpaper | MediaPersistenceFailed
 				> =>
 					Effect.gen(function* () {
+						serial = serial.replace(/^ws_/, "");
 						if (!Schema.is(DisplayIdentity)(serial))
 							return yield* new InvalidWallpaper(undefined);
 						const current = yield* files
@@ -61,7 +62,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 								version: 1,
 								serial,
 								revision: 0,
-								settings: defaultWallpaper,
+								settings: factoryWallpaper,
 								clock: defaultClockTile,
 							},
 							recovered: false,
@@ -76,7 +77,35 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					Effect.gen(function* () {
 						const media = saved.settings.displayMediaList[index];
 						if (!media) return Option.none();
-						const bytes = yield* files.readAsset(saved.serial, media.filePath);
+						const bundled = factoryMedia(media.filePath);
+						if (bundled) {
+							if (media.type !== "video" || media.format !== "video/webm")
+								return yield* new MediaUnreadable(undefined);
+							return Option.some({
+								format: "video/webm" as const,
+								width: 960,
+								height: 240,
+								durationMs: 5000,
+								dataUrl: `data:video/webm;base64,${bundled.toString("base64")}`,
+							});
+						}
+						const bytes = yield* files
+							.readAsset(saved.serial, media.filePath)
+							.pipe(
+								Effect.catchTag("MediaUnreadable", (error) =>
+									files.readSettings(`ws_${saved.serial}`).pipe(
+										Effect.mapError((cause) => new MediaUnreadable(cause)),
+										Effect.flatMap((legacy) =>
+											Option.isSome(legacy) &&
+											legacy.value.settings.displayMediaList.some(
+												(item) => item.filePath === media.filePath,
+											)
+												? files.readAsset(`ws_${saved.serial}`, media.filePath)
+												: Effect.fail(error),
+										),
+									),
+								),
+							);
 						const decoded = yield* decoder.decode(bytes);
 						if (decoded.format !== media.format)
 							return yield* new MediaUnreadable(undefined);
@@ -91,6 +120,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					clock: DesktopClockTile,
 				): Effect.Effect<SavedWallpaper, MediaRepositoryError> =>
 					Effect.gen(function* () {
+						serial = serial.replace(/^ws_/, "");
 						const { saved: previous } = yield* load(serial);
 						if (previous.revision !== revision)
 							return yield* new InvalidWallpaper(undefined);
@@ -100,6 +130,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 							clock,
 							revision: revision + 1,
 						});
+
 						// Decode newly introduced assets before committing. Reordering never probes removed files.
 						for (const [
 							index,
@@ -143,12 +174,15 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					revision: number,
 					selection: string,
 					append = false,
+					prepend = false,
+					persist = true,
 				): Effect.Effect<
 					{ saved: SavedWallpaper; normalizedFileUrl: boolean },
 					MediaRepositoryError
 				> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
+							serial = serial.replace(/^ws_/, "");
 							const { saved: previous } = yield* load(serial);
 							if (previous.revision !== revision)
 								return yield* new InvalidWallpaper(undefined);
@@ -161,7 +195,8 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 								name: basename(path),
 								filePath: reference,
 								...(decoded.format === "image/png" ||
-								decoded.format === "image/jpeg"
+								decoded.format === "image/jpeg" ||
+								decoded.format === "image/gif"
 									? {
 											type: "image" as const,
 											format: decoded.format,
@@ -180,8 +215,9 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 							const settings: WallpaperSettings = {
 								...previous.settings,
 								displayMediaList: [
+									...(prepend ? [media] : []),
 									...(append ? previous.settings.displayMediaList : []),
-									media,
+									...(prepend ? [] : [media]),
 								],
 							};
 							if (
@@ -191,12 +227,14 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 								)
 							)
 								return { saved: previous, normalizedFileUrl };
-							const saved = yield* saveUnlocked(
-								serial,
-								revision,
-								settings,
-								previous.clock,
-							);
+							const saved = persist
+								? yield* saveUnlocked(
+										serial,
+										revision,
+										settings,
+										previous.clock,
+									)
+								: yield* validate({ ...previous, settings });
 							return { saved, normalizedFileUrl };
 						}),
 					),
@@ -208,6 +246,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 				): Effect.Effect<SavedWallpaper, MediaRepositoryError> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
+							serial = serial.replace(/^ws_/, "");
 							const backup = yield* files.readSettings(serial, true);
 							if (Option.isNone(backup))
 								return yield* new InvalidWallpaper(undefined);

@@ -43,7 +43,17 @@ export class MediaFiles extends Effect.Service<MediaFiles>()("MediaFiles", {
 				InvalidWallpaper | MediaPersistenceFailed
 			> =>
 				Effect.tryPromise({
-					try: () => readFile(settingsPath(serial, backup), "utf8"),
+					try: async () => {
+						try {
+							return await readFile(settingsPath(serial, backup), "utf8");
+						} catch (cause) {
+							if (!absent(cause) || serial.startsWith("ws_")) throw cause;
+							return await readFile(
+								settingsPath(`ws_${serial}`, backup),
+								"utf8",
+							);
+						}
+					},
 					catch: (cause) => new MediaPersistenceFailed(cause),
 				}).pipe(
 					Effect.map(Option.some),
@@ -68,10 +78,12 @@ export class MediaFiles extends Effect.Service<MediaFiles>()("MediaFiles", {
 										),
 									),
 									Effect.filterOrFail(
-										(saved) => saved.serial === serial,
+										(saved) =>
+											saved.serial === serial ||
+											saved.serial === `ws_${serial}`,
 										() => new InvalidWallpaper(undefined),
 									),
-									Effect.map(Option.some),
+									Effect.map((saved) => Option.some({ ...saved, serial })),
 								),
 						}),
 					),

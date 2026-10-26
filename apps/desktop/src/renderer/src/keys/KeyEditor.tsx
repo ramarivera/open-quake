@@ -38,6 +38,7 @@ import {
 } from "../strip/tiles/monitor/MonitorKeySettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
+import { WallpaperSettings } from "../wallpaper/WallpaperViews";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
 import { editableFocus } from "./editor-input";
 import { GridEditor, type Selection } from "./GridEditor";
@@ -839,6 +840,9 @@ export function KeyEditor(): React.JSX.Element {
 							locale={locale}
 							onChange={(next) => void update(next)}
 						/>
+						{key.config.type === "colorfulScreenSettings" && (
+							<WallpaperSettings embedded wallpaper={wallpaperController} />
+						)}
 						{key.config.type === "hotkeySwitch" && (
 							<Row label="State">
 								<button

@@ -4,6 +4,7 @@ import {
 	defaultClockTile,
 	displayClock,
 	InvalidWallpaper,
+	intervalMillis,
 	nextWallpaperIndex,
 	reorderWallpaper,
 } from "../../shared/display";
@@ -11,11 +12,16 @@ import {
 	WallpaperCommand,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { factoryWallpaper } from "./factory-wallpaper";
 import { MediaRepository, type MediaRepositoryError } from "./media-repository";
 
 export interface MediaDesktopEdge {
 	readonly chooseImage: Effect.Effect<
 		Option.Option<string>,
+		MediaRepositoryError
+	>;
+	readonly chooseImages?: Effect.Effect<
+		readonly string[],
 		MediaRepositoryError
 	>;
 	readonly publish: (snapshot: WallpaperSnapshot) => Effect.Effect<void>;
@@ -49,6 +55,8 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 			let playbackId = 0;
 			let playbackStartedAt = 0;
 			let deadline = 0;
+			let preloadIndex: number | undefined;
+			const failed = new Set<number>();
 			const playlistChanged = yield* Queue.sliding<void>(1);
 			let playlistKey = "";
 			const synchronizePlaylist = Effect.fn(
@@ -56,6 +64,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 			)(function* (serial: string, saved: WallpaperSnapshot["saved"]) {
 				const key = JSON.stringify([
 					serial,
+					saved.settings.isTransparent,
 					saved.settings.displayMediaList.map((media) => [
 						media.filePath,
 						media.duration,
@@ -64,16 +73,43 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 				if (key !== playlistKey) {
 					playlistKey = key;
 					playbackId++;
-					activeIndex = 0;
+					preloadIndex = undefined;
+					failed.clear();
+					activeIndex =
+						saved.settings.playMode === "random"
+							? Math.floor(
+									Math.random() * saved.settings.displayMediaList.length,
+								) || 0
+							: 0;
 					playbackStartedAt = yield* Effect.clockWith(
 						(source) => source.currentTimeMillis,
 					);
 					deadline =
 						playbackStartedAt +
-						(saved.settings.displayMediaList[0]?.duration ?? 5000);
+						(saved.settings.displayMediaList[activeIndex]?.duration ?? 5000);
 					yield* Queue.offer(playlistChanged, undefined);
 				}
 			});
+			const nextPlayable = (saved: WallpaperSnapshot["saved"]) => {
+				const candidates = saved.settings.displayMediaList
+					.map((_, index) => index)
+					.filter((index) => !failed.has(index));
+				if (!candidates.includes(activeIndex))
+					return (
+						candidates.find((index) => index > activeIndex) ??
+						candidates[0] ??
+						activeIndex
+					);
+				return (
+					candidates[
+						nextWallpaperIndex(
+							Math.max(0, candidates.indexOf(activeIndex)),
+							candidates.length,
+							saved.settings.playMode,
+						)
+					] ?? activeIndex
+				);
+			};
 			const snapshot = Effect.fn("MediaController.snapshot")(
 				(
 					serial: string,
@@ -94,6 +130,14 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 							recovered,
 							normalizedFileUrl,
 							deviceDelivery: "unverified",
+							...(preloadIndex === undefined
+								? {}
+								: {
+										preload: {
+											index: preloadIndex,
+											asset: { _tag: "empty" as const },
+										},
+									}),
 							clock: yield* Ref.get(clock),
 						};
 					}),
@@ -105,20 +149,54 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 					Effect.gen(function* () {
 						let base = initial;
 						while (true) {
-							const asset = yield* repository
-								.resolve(base.saved, base.activeIndex ?? 0)
-								.pipe(
-									Effect.map(
-										Option.match({
-											onNone: () => ({ _tag: "empty" as const }),
-											onSome: (media) => ({ _tag: "ready" as const, ...media }),
-										}),
-									),
-									Effect.catchTag("MediaUnreadable", () =>
-										Effect.succeed({ _tag: "unreadable" as const }),
-									),
-								);
-							const next: WallpaperSnapshot = { ...base, asset };
+							const asset =
+								failed.size >= base.saved.settings.displayMediaList.length &&
+								failed.size > 0
+									? { _tag: "unreadable" as const }
+									: base.saved.settings.isTransparent
+										? { _tag: "empty" as const }
+										: yield* repository
+												.resolve(base.saved, base.activeIndex ?? 0)
+												.pipe(
+													Effect.map(
+														Option.match({
+															onNone: () => ({ _tag: "empty" as const }),
+															onSome: (media) => ({
+																_tag: "ready" as const,
+																...media,
+															}),
+														}),
+													),
+													Effect.catchTag("MediaUnreadable", () =>
+														Effect.succeed({ _tag: "unreadable" as const }),
+													),
+												);
+							const preload =
+								base.preload && !base.saved.settings.isTransparent
+									? yield* repository
+											.resolve(base.saved, base.preload.index)
+											.pipe(
+												Effect.map(
+													Option.match({
+														onNone: () => ({ _tag: "empty" as const }),
+														onSome: (media) => ({
+															_tag: "ready" as const,
+															...media,
+														}),
+													}),
+												),
+												Effect.catchTag("MediaUnreadable", () =>
+													Effect.succeed({ _tag: "unreadable" as const }),
+												),
+											)
+									: undefined;
+							const next: WallpaperSnapshot = {
+								...base,
+								asset,
+								...(base.preload && preload
+									? { preload: { index: base.preload.index, asset: preload } }
+									: {}),
+							};
 							const published = yield* semaphore.withPermits(1)(
 								Effect.gen(function* () {
 									const serial = yield* Ref.get(activeSerial);
@@ -130,6 +208,45 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 										activeIndex !== base.activeIndex
 									)
 										return false;
+
+									if (
+										asset._tag === "unreadable" &&
+										!saved.settings.isTransparent &&
+										!failed.has(activeIndex)
+									) {
+										failed.add(activeIndex);
+										preloadIndex = undefined;
+										yield* Queue.offer(playlistChanged, undefined);
+										if (failed.size < saved.settings.displayMediaList.length) {
+											activeIndex = nextPlayable(saved);
+											playbackId++;
+											playbackStartedAt = yield* Effect.clockWith(
+												(c) => c.currentTimeMillis,
+											);
+											deadline =
+												playbackStartedAt +
+												(saved.settings.displayMediaList[activeIndex]
+													?.duration ?? 5000);
+											return false;
+										}
+									}
+									if (preload?._tag === "unreadable" && base.preload) {
+										failed.add(base.preload.index);
+										preloadIndex = undefined;
+										yield* Queue.offer(playlistChanged, undefined);
+									}
+
+									if (
+										asset._tag === "ready" &&
+										"durationMs" in asset &&
+										typeof asset.durationMs === "number"
+									) {
+										const actualDeadline = playbackStartedAt + asset.durationMs;
+										if (deadline !== actualDeadline) {
+											deadline = actualDeadline;
+											yield* Queue.offer(playlistChanged, undefined);
+										}
+									}
 									yield* edge.publish(next);
 									return true;
 								}),
@@ -168,18 +285,124 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						// Repository transactions serialize revision checks and commits. Native
 						// probes stay outside the controller lock, including cold snapshot reads.
 						let normalizedFileUrl = false;
-						if (command._tag === "import") {
+						if (command._tag === "failed") {
+							const next = yield* semaphore.withPermits(1)(
+								Effect.gen(function* () {
+									const { saved } = yield* repository.load(serial);
+									if (
+										saved.revision !== command.revision ||
+										command.playbackId !== playbackId ||
+										command.index !== activeIndex
+									)
+										return yield* new InvalidWallpaper(undefined);
+									failed.add(activeIndex);
+									preloadIndex = undefined;
+									if (failed.size < saved.settings.displayMediaList.length) {
+										activeIndex = nextPlayable(saved);
+										playbackId++;
+										playbackStartedAt = yield* Effect.clockWith(
+											(c) => c.currentTimeMillis,
+										);
+										deadline =
+											playbackStartedAt +
+											(saved.settings.displayMediaList[activeIndex]?.duration ??
+												5000);
+									}
+									yield* Queue.offer(playlistChanged, undefined);
+									return yield* snapshot(serial);
+								}),
+							);
+							return yield* publishSnapshot(next);
+						}
+						if (command._tag === "pick") {
+							const paths = edge.chooseImages
+								? yield* edge.chooseImages
+								: Option.match(yield* edge.chooseImage, {
+										onNone: () => [],
+										onSome: (path) => [path],
+									});
+							const base = yield* snapshot(serial);
+							if (!paths.length) return { ...base, asset: { _tag: "empty" } };
+							let staged = base.saved;
+							const items: WallpaperSnapshot["saved"]["settings"]["displayMediaList"][number][] =
+								[];
+							let normalizedFileUrl = false;
+							for (const path of paths.slice(0, 128)) {
+								const imported = yield* repository.importLocal(
+									serial,
+									command.revision,
+									path,
+									false,
+									false,
+									false,
+								);
+								normalizedFileUrl ||= imported.normalizedFileUrl;
+								staged = imported.saved;
+								const media = staged.settings.displayMediaList[0];
+								if (
+									media &&
+									!items.some((item) => item.filePath === media.filePath)
+								)
+									items.push(media);
+							}
+							staged = {
+								...staged,
+								settings: { ...staged.settings, displayMediaList: items },
+							};
+							const asset = yield* repository.resolve(staged);
+							return {
+								...base,
+								saved: staged,
+								normalizedFileUrl,
+								asset: Option.isSome(asset)
+									? { _tag: "ready", ...asset.value }
+									: { _tag: "empty" },
+							};
+						}
+						if (command._tag === "import" || command._tag === "insert") {
 							const path = yield* edge.chooseImage;
 							if (Option.isSome(path))
 								normalizedFileUrl = (yield* repository.importLocal(
 									serial,
 									command.revision,
 									path.value,
-									command.append,
+									command._tag === "insert" || command.append,
+									command._tag === "insert",
 								)).normalizedFileUrl;
 						} else if (command._tag === "restore")
 							yield* repository.restore(serial, command.revision);
-						else if (
+						else if (command._tag === "factory" || command._tag === "save") {
+							const { saved } = yield* repository.load(serial);
+							const settings =
+								command._tag === "factory"
+									? factoryWallpaper
+									: command.settings;
+							const synchronized = {
+								...settings,
+								displayMediaList: (settings.displayMediaList.length
+									? settings.displayMediaList
+									: factoryWallpaper.displayMediaList
+								).map((item) => ({
+									...item,
+									duration: intervalMillis(
+										settings.gapInterval,
+										settings.gapIntervalUnit,
+									),
+								})),
+							};
+							if (saved.revision !== command.revision)
+								return yield* new InvalidWallpaper(undefined);
+							if (
+								command._tag === "factory" ||
+								JSON.stringify(saved.settings) !== JSON.stringify(synchronized)
+							)
+								yield* repository.save(
+									serial,
+									command.revision,
+									synchronized,
+									saved.clock,
+								);
+						} else if (
 							command._tag === "configure" ||
 							command._tag === "clear" ||
 							command._tag === "reorder" ||
@@ -253,7 +476,11 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						const { saved } = yield* repository.load(serial);
 						yield* synchronizePlaylist(serial, saved);
 						const list = saved.settings.displayMediaList;
-						if (list.length <= 1)
+						if (
+							saved.settings.isTransparent ||
+							failed.size >= list.length ||
+							list.length <= 1
+						)
 							return {
 								wait: Option.none<number>(),
 								next: Option.none<Omit<WallpaperSnapshot, "asset">>(),
@@ -263,15 +490,16 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						);
 						// Retain the prior deadline even when IO or a suspended host wakes late.
 						let next = Option.none<Omit<WallpaperSnapshot, "asset">>();
-						if (now >= deadline) {
-							activeIndex = nextWallpaperIndex(
-								activeIndex,
-								list.length,
-								saved.settings.playMode,
-							);
-							playbackStartedAt = deadline;
-							deadline += list[activeIndex]?.duration ?? 5000;
+						if (now >= deadline - 800) {
+							activeIndex = preloadIndex ?? nextPlayable(saved);
+							preloadIndex = undefined;
+							playbackStartedAt = deadline - 800;
+							deadline =
+								playbackStartedAt + (list[activeIndex]?.duration ?? 5000);
 							playbackId++;
+							next = Option.some(yield* snapshot(serial));
+						} else if (now >= deadline - 1000 && preloadIndex === undefined) {
+							preloadIndex = nextPlayable(saved);
 							next = Option.some(yield* snapshot(serial));
 						}
 						return {
@@ -280,6 +508,9 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 								Math.max(
 									0,
 									deadline -
+										(preloadIndex === undefined && now < deadline - 1000
+											? 1000
+											: 800) -
 										(yield* Effect.clockWith(
 											(source) => source.currentTimeMillis,
 										)),

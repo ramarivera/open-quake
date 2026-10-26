@@ -149,7 +149,7 @@ When multi-display binding is enabled, a confirmed association SHALL bind a devi
 
 ### Requirement: Wallpaper playlist editing and sound
 
-The wallpaper editor SHALL persist enableSound per serial with default false for old records, and SHALL display the saved ordered media list. Dragging a media card or using its keyboard-accessible move controls SHALL save a permutation without adding, losing or duplicating assets. Removing one card SHALL retain the others. Adding the same managed asset twice SHALL preserve its original position. Stale revisions and invalid indices SHALL retain the previous revision. Sequential playback SHALL follow the saved order and wrap; singleton videos SHALL loop. Only the active panel video SHALL be eligible for sound, never a management preview or inactive video. This covers `WIDGETS-128/130`; proprietary factory media and crossfade visual parity remain outside cluster 18.
+The wallpaper editor SHALL persist enableSound per serial with default false for old records, and SHALL display the saved ordered media list. Dragging a media card or using its keyboard-accessible move controls SHALL save a permutation without adding, losing or duplicating assets. Removing one card SHALL retain the others. Adding the same managed asset twice SHALL preserve its original position. Stale revisions and invalid indices SHALL retain the previous revision. Sequential playback SHALL follow the saved order and wrap; singleton videos SHALL loop. Only the active panel video SHALL be eligible for sound, never a management preview or inactive video. This covers `WIDGETS-128/130`; factory media SHALL use app-owned replacements rather than proprietary artwork.
 
 #### Scenario: Reorder survives reload
 
@@ -168,14 +168,77 @@ The wallpaper editor SHALL persist enableSound per serial with default false for
 
 ### Requirement: Exact playlist transition deadlines
 
-The shared media controller SHALL advance videos at their metadata duration in milliseconds, independently of the one-second display clock. Each deadline SHALL build on the prior deadline so delayed work retains elapsed time and processes every overdue interval. Playlist replacement or selected-device changes SHALL reset the deadline; stopping the tick owner SHALL cancel transitions. Evidence: WIDGETS-128/130; recovered WallpaperView.vue metadata-driven video scheduling.
+The shared media controller SHALL preload videos 1000 ms before their metadata duration and begin the 800 ms fade 200 ms after preload, independently of the one-second display clock. Each deadline SHALL build on the prior deadline so delayed work retains elapsed time and processes every overdue interval. Playlist replacement or selected-device changes SHALL reset the deadline; stopping the tick owner SHALL cancel transitions. Evidence: WIDGETS-128/130; recovered WallpaperView.vue metadata-driven video scheduling.
 
 #### Scenario: Fractional video durations
 
 - **WHEN** a two-item playlist contains two 2500 ms videos
-- **THEN** selection changes at 2500 ms and 5000 ms and continues every 2500 ms without rounding or drift
+- **THEN** preload occurs at 1500 ms and selection changes at 1700 ms and 3400 ms, preserving each fade deadline without rounding or drift
 
 #### Scenario: Late video mount
 
 - **WHEN** the panel enters vivid mode or a management preview mounts 50 seconds into a running 60-second video interval
 - **THEN** its video seeks to the controller's elapsed position after metadata loads and the existing playlist deadline stays unchanged
+
+### Requirement: Complete serial wallpaper configuration
+
+For MAIN-150, SCREEN-104 and WIDGETS-128, the owner SHALL accept one atomic settings Save, validate interval bounds and synchronize every media placeholder duration to the selected seconds or minutes. Video playback SHALL prefer decoded metadata duration. A typed local insertion SHALL prepend a decoded, deduplicated asset, retain other settings and publish the selected serial once. Unchanged lists SHALL retain playback. Legacy ws_ identity SHALL normalize once at the migration boundary, with canonical serial storage as the only writer.
+
+#### Scenario: Two serials and insertion
+
+- **WHEN** A saves random playback with a two-minute interval and B saves sequential playback with five seconds, then a valid video is inserted for A
+- **THEN** the video is first in A's list, A retains its settings, B is unchanged, and A receives one committed publication
+
+### Requirement: Factory media and confirmed reset
+
+For WIDGETS-129 and MGMT-250, new serials and Restore factory SHALL use five app-owned muted video wallpapers, cover, five seconds, sequential and nontransparent. Restore factory SHALL require confirmation, commit one revision and publish once; cancellation or a failed write SHALL preserve the prior settings. Backup restore SHALL remain a separate operation.
+
+#### Scenario: Selected-serial factory reset
+
+- **WHEN** A confirms Restore factory while B has custom settings
+- **THEN** A gets the five factory videos and default fields in one revision, B stays unchanged, and canceling the same action writes nothing
+
+### Requirement: Native and renderer transparency
+
+For MAIN-051, SCREEN-007 and WIDGETS-131, per-serial transparency SHALL suppress every wallpaper layer, neutral fill and playback timer while retaining the playlist. A transparent-capable panel SHALL apply transparent or black native backgrounds on updates, reconnect and rebind, preserving its bounds and stacking policy. Management previews SHALL show the same empty wallpaper state.
+
+#### Scenario: Transparent then opaque
+
+- **WHEN** A switches from playing media to transparent and back to opaque, including after rebind
+- **THEN** native background and renderer agree, no hidden media keeps playing, A's stored list survives and panel bounds remain unchanged
+
+### Requirement: Two-layer wallpaper playback
+
+For SCREEN-105 and WIDGETS-130, the controller and shared canvas SHALL preload the next media at duration minus 1000 ms, begin an 800 ms ease-in-out crossfade 200 ms later, and retain at most two layers. Videos SHALL wait for canplaythrough before activation; failed items SHALL skip with bounded retries and fall back when no playable item remains. Only the active panel layer may sound. Random starts SHALL choose a random index and subsequent choices SHALL avoid immediate repeats. Single images stay and single videos loop. Hidden windows SHALL pause both layers, resume at the current timeline and release timers, listeners and media on teardown. Display-size changes SHALL remount the active media without changing saved settings.
+
+#### Scenario: Preload and fade
+
+- **WHEN** two five-second items play
+- **THEN** B preloads at 4000 ms, becomes active at 4200 ms when ready, A releases at 5000 ms, and only B may sound during the fade
+
+### Requirement: Vivid editor delegation
+
+For MGMT-098 and MGMT-286, vivid profiles SHALL hide the key grid, expose the localized configure-vivid affordance, reject replacement of the colorfulScreen tile and host the selected serial's wallpaper editor. Wallpaper edits SHALL have their own explicit Save and Cancel, independent of key Save. Reset SHALL use the same confirmed factory command.
+
+#### Scenario: Leave unsaved wallpaper settings
+
+- **WHEN** an editor opens for A, changes transparency and cancels or changes device before Save
+- **THEN** neither A nor the newly selected device changes, and key Save cannot commit the abandoned wallpaper draft
+
+### Requirement: Explicit focus and serial rebind
+
+For MAIN-148 and MAIN-149, explicit user commands SHALL focus management before the panel, return canceled file picking without paths, and queue bind requests for all connected serials or restart one validated connected serial. Concurrent requests SHALL coalesce under the existing lifecycle queue and SHALL reuse the HID owner.
+
+#### Scenario: Restart one connected serial
+
+- **WHEN** A and B are connected and concurrent restart commands target A
+- **THEN** one queued restart recreates A's panel through the existing lifecycle owner, B's panel remains and no additional HID handle opens
+
+### Requirement: Independent clock theme media
+
+For SCREEN-123, the desktop-clock contract SHALL retain five independent app-owned theme scenes instead of vendor JPGs, migrate legacy per-theme image/video slots and music, and apply strip cycling as a theme-only write. Unsupported or unavailable custom media SHALL fall back to that theme's owned art without deleting the saved slot.
+
+#### Scenario: Migrate and cycle all themes
+
+- **WHEN** legacy background slots and music migrate, then season, cyber, anime, tactical and aurora are selected in turn
+- **THEN** the renderer uses each retained custom slot or its theme fallback, music remains saved and cycling changes only theme identity and mode

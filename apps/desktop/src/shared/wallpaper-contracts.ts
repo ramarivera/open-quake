@@ -6,6 +6,7 @@ import {
 	HourFormat,
 	PositiveDimension,
 	SavedWallpaper,
+	WallpaperSettings,
 } from "./display";
 
 export const WALLPAPER_REQUEST = "wallpaper:request";
@@ -20,10 +21,14 @@ export const WallpaperAudioCommand = Schema.Struct({
 export type WallpaperAudioCommand = typeof WallpaperAudioCommand.Type;
 export const WALLPAPER_CLOCK = "wallpaper:clock";
 const Revision = Schema.Int.pipe(Schema.nonNegative());
-const Selection = { serial: DisplayIdentity, revision: Revision };
+const WallpaperSerial = Schema.transform(DisplayIdentity, DisplayIdentity, {
+	decode: (serial) => serial.replace(/^ws_/, ""),
+	encode: (serial) => serial,
+});
+const Selection = { serial: WallpaperSerial, revision: Revision };
 export const WallpaperCommand = Schema.Union(
 	Schema.TaggedStruct("read", {}),
-	Schema.TaggedStruct("select", { serial: DisplayIdentity }),
+	Schema.TaggedStruct("select", { serial: WallpaperSerial }),
 	Schema.TaggedStruct("import", {
 		...Selection,
 		append: Schema.optional(Schema.Boolean),
@@ -40,6 +45,15 @@ export const WallpaperCommand = Schema.Union(
 	}),
 	Schema.TaggedStruct("clear", Selection),
 	Schema.TaggedStruct("restore", Selection),
+	Schema.TaggedStruct("factory", Selection),
+	Schema.TaggedStruct("save", { ...Selection, settings: WallpaperSettings }),
+	Schema.TaggedStruct("insert", Selection),
+	Schema.TaggedStruct("pick", Selection),
+	Schema.TaggedStruct("failed", {
+		...Selection,
+		index: Revision,
+		playbackId: Revision,
+	}),
 	Schema.TaggedStruct("configure", {
 		...Selection,
 		fillMode: FillMode,
@@ -47,19 +61,26 @@ export const WallpaperCommand = Schema.Union(
 	}),
 );
 export type WallpaperCommand = typeof WallpaperCommand.Type;
+const WallpaperAsset = Schema.Union(
+	Schema.TaggedStruct("empty", {}),
+	Schema.TaggedStruct("unreadable", {}),
+	Schema.TaggedStruct("ready", {
+		dataUrl: Schema.String.pipe(
+			Schema.pattern(
+				/^data:(image\/(png|jpeg|gif)|video\/(mp4|webm|quicktime|x-matroska|x-msvideo));base64,[A-Za-z0-9+/]+=*$/,
+			),
+		),
+		width: PositiveDimension,
+		height: PositiveDimension,
+	}),
+);
 export const WallpaperSnapshot = Schema.Struct({
 	saved: SavedWallpaper,
-	asset: Schema.Union(
-		Schema.TaggedStruct("empty", {}),
-		Schema.TaggedStruct("unreadable", {}),
-		Schema.TaggedStruct("ready", {
-			dataUrl: Schema.String.pipe(
-				Schema.pattern(
-					/^data:(image\/(png|jpeg)|video\/(mp4|webm|quicktime));base64,[A-Za-z0-9+/]+=*$/,
-				),
-			),
-			width: PositiveDimension,
-			height: PositiveDimension,
+	asset: WallpaperAsset,
+	preload: Schema.optional(
+		Schema.Struct({
+			index: Schema.Int.pipe(Schema.nonNegative()),
+			asset: WallpaperAsset,
 		}),
 	),
 	playbackId: Schema.optional(Revision),
