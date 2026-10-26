@@ -7,6 +7,7 @@ import { MeetingStore } from "../../../../../packages/edge/src/meetings/meeting-
 import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
 	CAPTURE_CHUNK,
+	CAPTURE_LOST,
 	CAPTURE_PCM,
 	MEETING_REQUEST,
 	MeetingReply,
@@ -496,6 +497,12 @@ it("rejects requests safely when capture acquisition itself throws", async () =>
 		).rejects.toThrow("Meeting PCM rejected");
 	} finally {
 		await meetings.dispose();
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(false);
+		expect(ipc.handlers.has(CAPTURE_PCM)).toBe(false);
+		expect(ipc.removeListener).toHaveBeenCalledWith(
+			CAPTURE_LOST,
+			expect.any(Function),
+		);
 		await rm(root, { recursive: true, force: true });
 	}
 });

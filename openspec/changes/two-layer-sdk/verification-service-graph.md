@@ -172,3 +172,22 @@ direct-native-reviewed.log, corrupt-http-voice2.log, shortcut-native-reviewed.lo
 shortcut-phase-reviewed.log, media-native-reviewed.log, corrupt-root-reviewed.log,
 and root-{export,import,reset}-reviewed.log under the scratch directory above.
 Review delivery and hosted checks remain pending; task 2.9 stays unchecked.
+
+
+PR72 failed-capture and firmware-access corrections, 2026-10-26: a failed
+capture acquisition has no resource finalizer, so registration disposal now
+removes the audio IPC handlers and closes its unused capture scope explicitly.
+Successful acquisition retains the existing graph-owned lifetime. Firmware
+security-scoped access is now owned by the scoped FirmwarePort layer, which
+closes after its dependent firmware worker. Registration teardown can no longer
+release access during the settle delay or an in-flight uninterruptible copy.
+The existing bookmark suite now exercises both standalone and shared owners.
+Three assertions fail on 58764b3 and pass after the correction, including
+registration disposal before copy opens the destination and graph disposal
+waiting for an in-flight copy. All 153 desktop maintenance/meeting tests,
+desktop typecheck and scoped Biome pass. Ports are synthetic; no actual drive,
+firmware write, microphone or hardware acceptance is claimed.
+
+The integrated maintenance registration explicitly shuts down its firmware
+worker before graph disposal. Its shared-owner case therefore keeps disposal
+pending during a copy, while graph disposal releases remaining access.

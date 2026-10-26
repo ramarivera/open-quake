@@ -214,75 +214,83 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 		Layer.mergeAll(
 			FirmwareUpdates.Default.pipe(
 				Layer.provide(
-					Layer.succeed(FirmwarePort, {
-						current: () =>
-							Effect.gen(function* () {
-								const current = options.hardware();
-								if (!current) return yield* new FirmwareUnavailable();
-								const snapshot = yield* current.snapshot();
-								return {
-									serial: snapshot.serial,
-									session: snapshot.session,
-									version: yield* version(snapshot.serial),
-								};
-							}),
-						version,
-						image: files.selected,
-						enter: (serial, session) =>
-							Effect.gen(function* () {
-								const current = options.hardware();
-								if (!current) return yield* new FirmwareUnavailable();
-								const snapshot = yield* current.snapshot();
-								if (
-									snapshot.serial !== serial ||
-									snapshot.session !== session ||
-									!snapshot.available
-								)
-									return yield* new FirmwareUnavailable();
-								if (mock) {
-									yield* Effect.tryPromise({
-										try: async () => {
-											await mkdir(join(mockRoot, "QUAKE DFU"), {
-												recursive: true,
-											});
-											await writeFile(
-												join(mockRoot, "QUAKE DFU", "INFO_UF2.TXT"),
-												"UF2 Bootloader\nBoard-ID: QUAKE RP2040\n",
-											);
-										},
-										catch: (cause) => new FirmwareUnavailable(cause),
-									});
-									return;
-								}
-								yield* current
-									.enterDfu()
-									.pipe(
-										Effect.mapError((cause) => new FirmwareUnavailable(cause)),
-									);
-							}),
-						volumes: files.discover,
-						copy: (image, volume, progress) =>
-							files.copy(image, volume, progress).pipe(
-								// A native copy cannot be cancelled safely; await it before releasing access.
-								Effect.uninterruptible,
-								Effect.tap(() =>
-									Effect.sync(() => {
-										if (mock) mockVersion = image.version;
+					Layer.scoped(
+						FirmwarePort,
+						Effect.acquireRelease(
+							Effect.succeed({
+								current: () =>
+									Effect.gen(function* () {
+										const current = options.hardware();
+										if (!current) return yield* new FirmwareUnavailable();
+										const snapshot = yield* current.snapshot();
+										return {
+											serial: snapshot.serial,
+											session: snapshot.session,
+											version: yield* version(snapshot.serial),
+										};
 									}),
-								),
-								Effect.ensuring(Effect.sync(releaseBookmarks)),
-							),
-						load: () =>
-							Effect.tryPromise({
-								try: sessions.load,
-								catch: (cause) => new FirmwarePersistenceFailed(cause),
+								version,
+								image: files.selected,
+								enter: (serial, session) =>
+									Effect.gen(function* () {
+										const current = options.hardware();
+										if (!current) return yield* new FirmwareUnavailable();
+										const snapshot = yield* current.snapshot();
+										if (
+											snapshot.serial !== serial ||
+											snapshot.session !== session ||
+											!snapshot.available
+										)
+											return yield* new FirmwareUnavailable();
+										if (mock) {
+											yield* Effect.tryPromise({
+												try: async () => {
+													await mkdir(join(mockRoot, "QUAKE DFU"), {
+														recursive: true,
+													});
+													await writeFile(
+														join(mockRoot, "QUAKE DFU", "INFO_UF2.TXT"),
+														"UF2 Bootloader\nBoard-ID: QUAKE RP2040\n",
+													);
+												},
+												catch: (cause) => new FirmwareUnavailable(cause),
+											});
+											return;
+										}
+										yield* current
+											.enterDfu()
+											.pipe(
+												Effect.mapError(
+													(cause) => new FirmwareUnavailable(cause),
+												),
+											);
+									}),
+								volumes: files.discover,
+								copy: (image, volume, progress) =>
+									files.copy(image, volume, progress).pipe(
+										// A native copy cannot be cancelled safely; await it before releasing access.
+										Effect.uninterruptible,
+										Effect.tap(() =>
+											Effect.sync(() => {
+												if (mock) mockVersion = image.version;
+											}),
+										),
+										Effect.ensuring(Effect.sync(releaseBookmarks)),
+									),
+								load: () =>
+									Effect.tryPromise({
+										try: sessions.load,
+										catch: (cause) => new FirmwarePersistenceFailed(cause),
+									}),
+								save: (snapshot) =>
+									Effect.tryPromise({
+										try: () => sessions.save(snapshot),
+										catch: (cause) => new FirmwarePersistenceFailed(cause),
+									}).pipe(Effect.uninterruptible),
 							}),
-						save: (snapshot) =>
-							Effect.tryPromise({
-								try: () => sessions.save(snapshot),
-								catch: (cause) => new FirmwarePersistenceFailed(cause),
-							}).pipe(Effect.uninterruptible),
-					}),
+							() => Effect.sync(releaseBookmarks),
+						),
+					),
 				),
 			),
 			AppUpdates.Default.pipe(
@@ -706,13 +714,6 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 							await runtime.dispose();
 						} catch (cause) {
 							failures.push(cause);
-						}
-						for (const release of [...bookmarkReleases]) {
-							try {
-								release();
-							} catch (cause) {
-								failures.push(cause);
-							}
 						}
 						if (failures.length)
 							throw new MaintenanceShutdownFailed(new AggregateError(failures));
