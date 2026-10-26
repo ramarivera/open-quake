@@ -5,9 +5,13 @@ import {
 	Layer,
 	ManagedRuntime,
 	Queue,
+	Schema,
 	Stream,
 } from "effect";
+import { AiErrors } from "../../../../../packages/edge/src/ai/ai-errors";
+import { ChatErrors } from "../../../../../packages/edge/src/chat/chat-errors";
 import {
+	ChatRpcFailure,
 	ChatRpcs,
 	type FromServerEncoded,
 	RpcClient,
@@ -86,9 +90,29 @@ export function createDirectChatBridge(
 	const run = <A, E>(f: (client: Client) => Effect.Effect<A, E>) =>
 		runtime
 			.runPromise(Effect.flatMap(ClientTag, f).pipe(Effect.either))
-			.then((result) =>
-				result._tag === "Right" ? result.right : Promise.reject(result.left),
-			);
+			.then((result) => {
+				if (result._tag === "Right") return result.right;
+				const failure = result.left;
+				const entry = Schema.is(ChatRpcFailure)(failure)
+					? [...Object.values(ChatErrors), ...Object.values(AiErrors)].find(
+							(entry) => entry.code === failure.code,
+						)
+					: undefined;
+				// Error subclasses lose custom fields across Electron contextBridge.
+				return Promise.reject(
+					entry
+						? {
+								_tag: "ChatRpcFailure",
+								code: entry.code,
+								message: entry.message,
+							}
+						: {
+								_tag: "ChatTransportUnavailable",
+								code: "CHAT.TRANSPORT.UNAVAILABLE",
+								message: "Chat transport unavailable",
+							},
+				);
+			});
 	let disposed = false;
 	return {
 		submit: (input) => run((client) => client.chat.submit(input)),

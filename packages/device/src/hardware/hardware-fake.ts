@@ -46,6 +46,7 @@ export const makeFakeHardwareTransport = (
 			},
 		]);
 		let mic = 1;
+		let knobLed = 1;
 		let luminance = 255;
 		const transport: HidTransport["Type"] = {
 			discover: fake.transport.discover,
@@ -73,9 +74,13 @@ export const makeFakeHardwareTransport = (
 										yield* fake.emit(fakeHardwareReply(3, [mic]));
 									if (command.cmdId === 5)
 										yield* fake.emit(fakeHardwareReply(5, [luminance]));
+									if (command.cmdId === 6)
+										yield* fake.emit(fakeHardwareReply(6, [knobLed]));
 									if (command.cmdId === 46)
 										yield* fake.emit(fakeHardwareReply(46, [1, 1, 0, 21]));
 								} else if (command.opCode === 1) {
+									if (command.cmdId === 6)
+										knobLed = command.subData[0] ?? knobLed;
 									if (command.cmdId === 3) mic = command.subData[0] ?? mic;
 									if (command.cmdId === 5)
 										luminance = command.subData[0] ?? luminance;

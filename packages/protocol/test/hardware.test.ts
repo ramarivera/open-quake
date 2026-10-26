@@ -43,6 +43,7 @@ const fixtures: readonly (readonly [HardwareCommand, readonly number[]])[] = [
 		{ _tag: "Keyboard", action: 2, modifiers: 0, usage: 82 },
 		[0, 0xa3, 5, 1, 16, 2, 0, 82, 101],
 	],
+	[{ _tag: "Query", feature: "knobLed" }, [0, 0xa3, 2, 2, 6, 8]],
 	[{ _tag: "Query", feature: "mic" }, [0, 0xa3, 2, 2, 3, 5]],
 	[{ _tag: "Query", feature: "luminance" }, [0, 0xa3, 2, 2, 5, 7]],
 	[{ _tag: "Query", feature: "version" }, [0, 0xa3, 2, 2, 46, 48]],
@@ -58,6 +59,8 @@ describe("hardware golden reports", () => {
 	});
 	it.each([
 		[[0xa3, 3, 0x55, 0, 0x90, 0xe5], { _tag: "Ack", status: 0x90 }],
+		[[0xa3, 3, 0x55, 6, 0, 91], { _tag: "KnobLedState", on: false }],
+		[[0xa3, 3, 0x55, 6, 1, 92], { _tag: "KnobLedState", on: true }],
 		[[0xa3, 3, 0x55, 3, 1, 89], { _tag: "MicState", on: true }],
 		[[0xa3, 3, 0x55, 5, 255, 90], { _tag: "LuminanceState", value: 255 }],
 		[
@@ -70,6 +73,8 @@ describe("hardware golden reports", () => {
 	it("rejects malformed and invalid known data, ignores unknown commands", () => {
 		for (const bytes of [
 			[0xa3, 2, 85, 3, 88],
+			[0xa3, 2, 85, 6, 91],
+			[0xa3, 3, 85, 6, 2, 93],
 			[0xa3, 3, 85, 3, 2, 90],
 			[0xa3, 3, 85, 46, 1, 132],
 		])

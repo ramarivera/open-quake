@@ -102,6 +102,8 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				let firmware: HardwareSnapshot["firmware"];
 				let active = true;
 				let firmwareLocked = false;
+				let lockCycle = false;
+				let restoreKnobLed = false;
 				let poisoned = false;
 				let dirty = false;
 				let errorCode: string | undefined;
@@ -179,17 +181,27 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 									: reply._tag ===
 										{
 											mic: "MicState",
+											knobLed: "KnobLedState",
 											luminance: "LuminanceState",
 											version: "FirmwareVersion",
 										}[command.feature];
 							pending = Option.some({ matches, result });
 							return yield* Effect.gen(function* () {
 								yield* rawWrite(command);
+								// A connection-scoped timer can fail the deferred even when the
+								// caller masks interruption to commit an atomic lock transition.
+								const timeout = yield* Effect.sleep(3000).pipe(
+									Effect.zipRight(
+										Deferred.fail(result, new HardwareReplyTimeout()),
+									),
+									Effect.interruptible,
+									Effect.ensuring(
+										Deferred.fail(result, new HardwareUnavailable()),
+									),
+									Effect.forkIn(scope),
+								);
 								const reply = yield* Deferred.await(result).pipe(
-									Effect.timeoutFail({
-										duration: 3000,
-										onTimeout: () => new HardwareReplyTimeout(),
-									}),
+									Effect.ensuring(Fiber.interrupt(timeout)),
 								);
 								if (reply._tag === "Ack" && reply.status !== 0x90)
 									return yield* new HardwareCommandRejected(reply.status);
@@ -465,9 +477,30 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					}),
 					setLocked: Effect.fn("HardwareControls.setLocked")(
 						(locked: boolean): Effect.Effect<void, HardwareError> =>
-							preferences.knobLedAlwaysOn
-								? ensureActive()
-								: send({ _tag: "KnobLed", on: !locked }),
+							mutationLock.withPermits(1)(
+								Effect.gen(function* () {
+									yield* ensureActive();
+									if (locked) {
+										if (lockCycle) return;
+										lockCycle = true;
+										if (preferences.knobLedAlwaysOn) return;
+										const reply = yield* exchange({
+											_tag: "Query",
+											feature: "knobLed",
+										});
+										if (reply._tag !== "KnobLedState")
+											return yield* new HardwareUnavailable();
+										if (!reply.on) return;
+										yield* send({ _tag: "KnobLed", on: false });
+										restoreKnobLed = true;
+									} else {
+										if (restoreKnobLed)
+											yield* send({ _tag: "KnobLed", on: true });
+										restoreKnobLed = false;
+										lockCycle = false;
+									}
+								}).pipe(Effect.uninterruptible),
+							),
 					),
 					send,
 					pressChord: Effect.fn("HardwareControls.pressChord")(

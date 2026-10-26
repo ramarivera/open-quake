@@ -2,7 +2,7 @@
 
 ### Requirement: Typed hardware command catalog
 
-The protocol SHALL encode opcode 1 commands 0x02 buzzer [0 or 32..128], 0x03 mic [0|1], 0x04 screen power [0|1], 0x05 luminance [25..255], 0x06 knob LED [0|1], 0x10 keyboard [action, modifierMask, usage], and opcode 2 queries 0x03, 0x05, 0x2E with no payload. Keyboard actions SHALL be 0 release, 1 press, 2 tap; modifierMask and usage SHALL be bytes. Replies SHALL decode opcode 0x55: 0x00 ack success only at 0x90, 0x03 mic, 0x05 luminance and 0x2E [deviceName,major,minor,patch]. Frames SHALL use existing A3 length/checksum/report padding. Evidence MAIN-015,018..026 and SETTINGS-077,078.
+The protocol SHALL encode opcode 1 commands 0x02 buzzer [0 or 32..128], 0x03 mic [0|1], 0x04 screen power [0|1], 0x05 luminance [25..255], 0x06 knob LED [0|1], 0x10 keyboard [action, modifierMask, usage], and opcode 2 queries 0x03, 0x05, 0x06, 0x2E with no payload. Keyboard actions SHALL be 0 release, 1 press, 2 tap; modifierMask and usage SHALL be bytes. Replies SHALL decode opcode 0x55: 0x00 ack success only at 0x90, 0x03 mic, 0x05 luminance, 0x06 knob LED boolean state and 0x2E [deviceName,major,minor,patch]. Frames SHALL use existing A3 length/checksum/report padding. Evidence MAIN-015,018..026 and SETTINGS-077,078.
 
 #### Scenario: Independent byte fixtures
 - **WHEN** each typed command is encoded and independently constructed replies are decoded
@@ -46,7 +46,7 @@ Per serial defaults SHALL be buzzer enabled, alert volume 84 and LED always-on t
 
 ### Requirement: LED lock and settings
 
-The Device settings SHALL show Firmware Version, Knob LED stays on, and Device Alert Volume using locale-en.json strings verbatim. Volume SHALL show the mapped value or X at zero; firmware SHALL show -- until a reply. OS lock SHALL send op1 cmd0x06 [0] and unlock [1] only for serials whose LED stays-on preference is false; true SHALL send nothing. UI SHALL expose disconnected, pending and failure states and prevent stale sessions from mutating a replacement device. Screen power SHALL be an explicit typed command available to the lifecycle owner. Evidence MAIN-018,024,025, SETTINGS-021,022,085.
+The Device settings SHALL show Firmware Version, Knob LED stays on, and Device Alert Volume using locale-en.json strings verbatim. Volume SHALL show the mapped value or X at zero; firmware SHALL show -- until a reply. OS lock SHALL query opcode 2 cmd0x06 before disabling lighting for a serial whose LED stays-on preference is false. It SHALL send op1 cmd0x06 [0] only when the ring was on, and unlock SHALL send [1] only once after that disable succeeded. A true preference SHALL leave the ring unchanged on lock. Changing the preference during a lock SHALL NOT discard an already-recorded restoration. A failed query SHALL leave lighting untouched through unlock. Duplicate lock events SHALL preserve the original state and duplicate unlock events SHALL send nothing. UI SHALL expose disconnected, pending and failure states and prevent stale sessions from mutating a replacement device. Screen power SHALL be an explicit typed command available to the lifecycle owner. Evidence MAIN-018,024,025, SETTINGS-021,022,085.
 
 #### Scenario: Serial-specific lock policy
 - **WHEN** lock and unlock run for one serial with the preference false and another with it true
@@ -55,3 +55,11 @@ The Device settings SHALL show Firmware Version, Knob LED stays on, and Device A
 #### Scenario: Continuous volume adjustment and polling recovery
 - **WHEN** the user drags through several volume positions while a request is pending, then polling recovers from a transient failure
 - **THEN** the range stays enabled for the available session, shows the latest desired position, coalesces requests, previews the final value after 300 ms, and clears the transient failure message
+
+#### Scenario: Ring already off or unreadable
+- **WHEN** the ring is off before locking, or its state cannot be read
+- **THEN** lock and subsequent unlock send no knob LED writes
+
+#### Scenario: Duplicate lock and changed preference
+- **WHEN** a previously-on ring was successfully disabled, another lock arrives, and the always-on preference changes before unlock
+- **THEN** the original restoration is retained and unlock restores the ring once

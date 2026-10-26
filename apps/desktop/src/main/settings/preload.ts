@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { LocaleSnapshot } from "../../../../../packages/edge/src/settings/settings-contracts";
+import { SettingsFailure } from "../../../../../packages/edge/src/settings/settings-errors";
 import {
 	type FromServerEncoded,
 	RpcClient,
@@ -57,7 +58,21 @@ export function createAppLocaleBridge(ipc: ChatRendererIPC): AppLocaleBridge {
 		runtime
 			.runPromise(Effect.flatMap(ClientTag, f).pipe(Effect.either))
 			.then((result) =>
-				result._tag === "Right" ? result.right : Promise.reject(result.left),
+				result._tag === "Right"
+					? result.right
+					: Promise.reject(
+							Schema.is(SettingsFailure)(result.left)
+								? {
+										_tag: result.left._tag,
+										code: result.left.code,
+										message: result.left.message,
+									}
+								: {
+										_tag: "SettingsTransportUnavailable",
+										code: "QUAKE.SETTINGS.UNAVAILABLE",
+										message: "Settings transport unavailable",
+									},
+						),
 			);
 	const subscriptions = new Set<() => void>();
 	return {
