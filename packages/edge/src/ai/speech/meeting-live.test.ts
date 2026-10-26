@@ -1359,3 +1359,31 @@ it.scoped(
 			});
 		}),
 );
+
+it.scoped("omits output language from OpenAI source transcription hints", () =>
+	Effect.gen(function* () {
+		const f = fixture();
+		const s = yield* fakeSocket();
+		const adapter = yield* makeLiveMeetingAdapter({
+			...f,
+			socket: s.transport,
+		});
+		const task = yield* adapter
+			.submit({
+				...f.request,
+				config: {
+					...f.request.config,
+					asrProvider: "openai",
+					asrModel: "gpt-realtime-mini",
+					outputLanguage: "yue",
+				},
+			})
+			.pipe(Effect.fork);
+		yield* TestClock.adjust(700);
+		yield* Fiber.join(task);
+		const audio = object(object(s.events[0]?.session).audio);
+		expect(object(object(audio.input).transcription)).toEqual({
+			model: "gpt-4o-transcribe",
+		});
+	}),
+);
