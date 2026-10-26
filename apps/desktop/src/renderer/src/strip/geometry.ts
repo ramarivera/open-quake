@@ -52,6 +52,18 @@ export interface StripTheme {
 }
 
 export const STRIP_CANVAS = PANEL_CANVAS;
+/** One logical canvas for wallpaper, overlays, hit testing and every host. */
+export function stripViewportScale(width: number, height: number): number {
+	return Number.isFinite(width) &&
+		Number.isFinite(height) &&
+		width > 0 &&
+		height > 0
+		? Math.min(width / STRIP_CANVAS.width, height / STRIP_CANVAS.height)
+		: 1;
+}
+
+/** Runtime empty slots carry coordinates only, independently of editor key defaults. */
+export const runtimePlaceholder = (keyCode: string) => ({ keyCode });
 /** DK's default tile accent, rgb(116,128,239) = #7480EF. */
 export const DEFAULT_ACCENT: Rgb = { r: 116, g: 128, b: 239 };
 
@@ -232,6 +244,7 @@ export interface StripTile {
 /** A grid cell no visible tile covers. */
 export interface StripCell {
 	readonly keyCode: string;
+	readonly placeholder: ReturnType<typeof runtimePlaceholder>;
 	readonly rect: Rect;
 	/** Empty slots draw the dashed border; hidden ones are plain and inert. */
 	readonly state: "empty" | "hidden";
@@ -278,7 +291,10 @@ function placeTile(
 		type,
 		footprint,
 		slot,
-		slotRadius: type === "playAudio" ? 0 : profileTheme.borderRadius,
+		slotRadius:
+			type === "playAudio" || type === "systemMonitorPanel"
+				? 0
+				: profileTheme.borderRadius,
 		box: slot,
 		// The strip draws the clock and the player square (UC:2683-2688, QSC:1092-1096).
 		tileRadius: fullBleed ? 0 : STRIP_THEMES[tileTheme].borderRadius,
@@ -363,6 +379,7 @@ export function stripLayout(
 			const key = byCell.get(code);
 			cells.push({
 				keyCode: code,
+				placeholder: runtimePlaceholder(code),
 				rect: footprintRect(theme, { row, column, width: 1, height: 1 }),
 				state: key === undefined || key.config.type === "" ? "empty" : "hidden",
 			});

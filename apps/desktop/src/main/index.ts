@@ -555,6 +555,7 @@ if (!app.requestSingleInstanceLock()) {
 									(...args) => profiles.select(...args),
 								),
 								thumbnail: (...args) => profiles.thumbnail(...args),
+								thumbnailBorder: () => profiles.currentThumbnailBorder(),
 								obs: (key, delta, signal, beforeWrite) =>
 									obs.turn(key, delta, signal, beforeWrite),
 								hardware: currentHardware,
@@ -628,6 +629,19 @@ if (!app.requestSingleInstanceLock()) {
 						const runtime = hardwareModule.runtime;
 						const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 						const meetingsModule = prepareMeetings({
+							management: () => managementWin,
+							renderer: rendererURL,
+							provider: {
+								credentials: modelCredentials.ai,
+								models: () =>
+									Effect.tryPromise({
+										try: () =>
+											agentsModule.runtime.runPromise(
+												AgentsService.resolve("default"),
+											),
+										catch: (cause) => new AiConfigInvalid(cause),
+									}),
+							},
 							microphone: speech.settings.microphone,
 							diagnostics,
 							userData: app.getPath("userData"),
@@ -932,6 +946,9 @@ if (!app.requestSingleInstanceLock()) {
 									// The instrumented knob runtime retains the failed exit.
 								});
 						};
+						const removeKnobThumbnailStyle = profiles.onLocaleChanged(() => {
+							void knob.refresh().catch(() => {});
+						});
 						const removeKnobLocale = localeRegistration.onLocaleChanged(
 							synchronizeKnobLocale,
 						);
@@ -1444,6 +1461,7 @@ if (!app.requestSingleInstanceLock()) {
 							removeLifecycle();
 							removeManagementAppearance();
 							removeKnobLocale();
+							removeKnobThumbnailStyle();
 							disposeHardware();
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 							removeDeviceReady();

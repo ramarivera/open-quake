@@ -20,6 +20,8 @@ export class MeetingProvider extends Effect.Service<MeetingProvider>()(
 			const profiles = yield* AiRepository;
 			return {
 				requireTranslation: facade.requireMeetingTranslation,
+				cleanup: facade.cleanupMeeting,
+				files: facade.meetingFiles,
 				transcribe: facade.transcribeMeeting,
 				translate: facade.translateMeeting,
 				stopTranslation: facade.stopMeetingTranslation,
@@ -28,6 +30,7 @@ export class MeetingProvider extends Effect.Service<MeetingProvider>()(
 					transcript: readonly Segment[],
 					template: TemplateId,
 				): Effect.fn.Return<string, MeetingError> {
+					yield* facade.prepareMeeting(config);
 					const profile = yield* profiles.get(config.profileId);
 					if (
 						Option.isNone(profile) ||

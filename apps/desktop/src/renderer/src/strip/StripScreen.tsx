@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { KeyRuntimeState } from "../../../shared/key-library";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
@@ -12,6 +12,7 @@ import {
 	type StripLayout,
 	type StripTile,
 	stripLayout,
+	stripViewportScale,
 } from "./geometry";
 import {
 	previewVoiceContext,
@@ -100,12 +101,16 @@ function StripGrid({
 	interactive: boolean;
 }): React.JSX.Element {
 	return (
-		<div className="strip-grid" data-theme={layout.theme.name}>
+		<div
+			className="strip-grid"
+			data-theme={layout.theme.name}
+			inert={!interactive}
+		>
 			{layout.cells.map((cell) => (
 				<div
 					key={cell.keyCode}
 					className="strip-slot"
-					data-key-code={cell.keyCode}
+					data-key-code={cell.placeholder.keyCode}
 					data-state={cell.state}
 					style={{
 						left: cell.rect.x,
@@ -206,9 +211,12 @@ export function StripScreen({
 	titles = "key-locale",
 	interactive = true,
 	wallpaperSound = false,
+	pendingProfile = false,
 	rows = 2,
 }: {
 	profiles: StripProfiles;
+	/** Committed profile is waiting for its matching grid snapshot. */
+	pendingProfile?: boolean;
 	rows?: 1 | 2;
 	/** Profile Manager and the editor already resolve their own title locale. */
 	titles?: "key-locale" | "provided";
@@ -233,6 +241,14 @@ export function StripScreen({
 	children?: React.ReactNode;
 }): React.JSX.Element {
 	const runtimeStates = useKeyRuntime();
+	const [feedbackKey, setFeedbackKey] = useState(pressedKeyCode);
+	useEffect(() => {
+		setFeedbackKey(pressedKeyCode);
+		if (pressedKeyCode === undefined) return;
+		// Bound the visual pulse independently of the input's held/action lifetime.
+		const timer = setTimeout(() => setFeedbackKey(undefined), 200);
+		return () => clearTimeout(timer);
+	}, [pressedKeyCode]);
 	const serial = previewSerial ?? wallpaper?.saved.serial;
 	const screen = useRef<HTMLDivElement>(null);
 	const { locale } = useAppLocale();
@@ -326,9 +342,9 @@ export function StripScreen({
 	}, [profiles, serial, locale, runtimeStates, titles, rows]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
 	useLayoutEffect(() => {
-		onLayout?.(vivid ? undefined : layout);
+		onLayout?.(vivid || pendingProfile ? undefined : layout);
 		return () => onLayout?.(undefined);
-	}, [layout, vivid, onLayout]);
+	}, [layout, vivid, pendingProfile, onLayout]);
 	const selection =
 		profiles._tag === "ready"
 			? selectStripPage(profiles.envelope, serial)
@@ -352,9 +368,11 @@ export function StripScreen({
 			inert={!interactive}
 			aria-hidden={!interactive || undefined}
 			className="strip-screen"
+			data-surface={interactive ? "panel" : "preview"}
 			data-vivid={vivid}
 			data-dashed={showEmptyGridDashedBorder}
 			data-profiles={profiles._tag}
+			data-wheel-open={voice.wheelOpen || undefined}
 			style={{ ...palette, ...STRIP_CANVAS }}
 		>
 			{vivid && wallpaper?.asset._tag === "ready" ? (
@@ -365,12 +383,14 @@ export function StripScreen({
 			{!vivid && layout ? (
 				<StripGrid
 					layout={layout}
-					pressedKeyCode={pressedKeyCode}
+					pressedKeyCode={
+						feedbackKey === pressedKeyCode ? feedbackKey : undefined
+					}
 					now={now}
 					hourFormat={hourFormat}
 					voice={voice}
 					tileOverlay={tileOverlay}
-					interactive={interactive}
+					interactive={interactive && !pendingProfile}
 					runtime={runtime}
 					clockSelection={
 						selection
@@ -418,10 +438,7 @@ export function StripViewport({
 		const update = (): void => {
 			// Layout size, not the bounding box: the panel window may rotate #root.
 			const { clientWidth: width, clientHeight: height } = element;
-			if (width > 0 && height > 0)
-				setScale(
-					Math.min(width / STRIP_CANVAS.width, height / STRIP_CANVAS.height),
-				);
+			setScale(stripViewportScale(width, height));
 		};
 		update();
 		const observer = new ResizeObserver(update);

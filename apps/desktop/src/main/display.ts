@@ -1,6 +1,7 @@
 import type { Display, Rectangle } from "electron";
+import { PANEL_CANVAS } from "../shared/display";
 
-export const PANEL_SIZE = { width: 1920, height: 480 } as const;
+export const PANEL_SIZE = PANEL_CANVAS;
 const PANEL_LABEL = "DK-QUAKE";
 
 /** Degrees the renderer rotates its logical 1920x480 canvas by. */
