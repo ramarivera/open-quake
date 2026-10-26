@@ -78,3 +78,64 @@ it("MGMT-098/250/286 hosts selected-serial wallpaper Save, Cancel and confirmed 
 	await mounted.close();
 	vi.unstubAllGlobals();
 });
+
+it("WIDGETS-128 releases picked assets on Cancel and unmount using separate draft identities", async () => {
+	const calls: WallpaperCommand[] = [];
+	const snapshot = {
+		saved: {
+			version: 1 as const,
+			serial: "A",
+			revision: 0,
+			clock: defaultClockTile,
+			settings: defaultWallpaper,
+		},
+		asset: { _tag: "empty" as const },
+		clock: { epochMillis: 0, hour: 0, minute: 0, second: 0 },
+		recovered: false,
+		normalizedFileUrl: false,
+		deviceDelivery: "unverified" as const,
+	};
+	window.quakeWallpaper = {
+		request: async (command) => {
+			calls.push(command);
+			return { _tag: "success", snapshot };
+		},
+		onSnapshot: () => () => {},
+		onClock: () => () => {},
+	};
+	const mounted = await mount(
+		<GTProvider
+			locale="en"
+			translations={{ en: {}, de: {} }}
+			dictionaries={appDictionaries}
+			_reload={() => {}}
+		>
+			<WallpaperSettings
+				embedded
+				wallpaper={{
+					snapshot,
+					busy: false,
+					notice: "",
+					request: async () => {},
+				}}
+			/>
+		</GTProvider>,
+	);
+	try {
+		await click(button(mounted.host, "Add Media…"));
+		const first = calls[0];
+		expect(first).toMatchObject({
+			_tag: "pick",
+			serial: "A",
+			draftId: expect.any(String),
+		});
+		await click(button(mounted.host, "Cancel"));
+		expect(calls[1]).toEqual({ ...first, _tag: "discard" });
+		await click(button(mounted.host, "Add Media…"));
+		expect(calls[2]).not.toEqual(first);
+		await mounted.close();
+		expect(calls[3]).toEqual({ ...calls[2], _tag: "discard" });
+	} finally {
+		delete window.quakeWallpaper;
+	}
+});

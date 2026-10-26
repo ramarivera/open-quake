@@ -93,6 +93,75 @@ describe("desktop media repository and actual disk adapter", () => {
 		await fs.rm(directory, { recursive: true, force: true });
 	});
 
+	it("WIDGETS-128 collects canceled picks while preserving other drafts and committed revisions", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.some(imagePath)),
+					publish: () => Effect.void,
+					publishClock: () => Effect.void,
+				});
+				yield* controller.request({ _tag: "select", serial: "A" });
+				const one = yield* controller.request({
+					_tag: "pick",
+					serial: "A",
+					revision: 0,
+					draftId: "one",
+				});
+				yield* controller.request({
+					_tag: "pick",
+					serial: "A",
+					revision: 0,
+					draftId: "two",
+				});
+				yield* controller.request({
+					_tag: "discard",
+					serial: "A",
+					revision: 0,
+					draftId: "one",
+				});
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toHaveLength(1);
+				yield* controller.request({
+					_tag: "discard",
+					serial: "A",
+					revision: 0,
+					draftId: "two",
+				});
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toEqual([]);
+				yield* controller.request({
+					_tag: "pick",
+					serial: "A",
+					revision: 0,
+					draftId: "saved",
+				});
+				yield* controller.request({
+					_tag: "save",
+					serial: "A",
+					revision: 0,
+					settings: one.saved.settings,
+				});
+				// Discard after Save carries the old revision and must preserve committed bytes.
+				yield* controller.request({
+					_tag: "discard",
+					serial: "A",
+					revision: 0,
+					draftId: "saved",
+				});
+				expect(
+					yield* Effect.promise(() => fs.readdir(assetsDirectory("A"))),
+				).toHaveLength(1);
+				const repo = yield* MediaRepository;
+				expect(
+					Option.isSome(yield* repo.resolve((yield* repo.load("A")).saved)),
+				).toBe(true);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+
 	it("probes video once across import, duplicate import, save and snapshots while verifying managed bytes", async () => {
 		const videoPath = join(directory, "silent.webm");
 		await fs.writeFile(videoPath, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));

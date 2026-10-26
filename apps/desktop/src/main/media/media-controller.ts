@@ -286,12 +286,20 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						if (
 							command._tag !== "select" &&
 							command._tag !== "read" &&
+							command._tag !== "discard" &&
 							serial !== (yield* Ref.get(activeSerial))
 						)
 							return yield* new InvalidWallpaper(undefined);
 						// Repository transactions serialize revision checks and commits. Native
 						// probes stay outside the controller lock, including cold snapshot reads.
 						let normalizedFileUrl = false;
+						if (command._tag === "discard") {
+							yield* repository.discard(serial, command.draftId);
+							return {
+								...(yield* snapshot(yield* Ref.get(activeSerial))),
+								asset: { _tag: "empty" },
+							};
+						}
 						if (command._tag === "failed") {
 							const next = yield* semaphore.withPermits(1)(
 								Effect.gen(function* () {
@@ -342,6 +350,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 									false,
 									false,
 									false,
+									command.draftId,
 								);
 								normalizedFileUrl ||= imported.normalizedFileUrl;
 								staged = imported.saved;

@@ -247,3 +247,8 @@ For SCREEN-123, the desktop-clock contract SHALL retain five independent app-own
 
 - **WHEN** SCREEN-105 and WIDGETS-130 media errors leave one playable video in a multi-item saved playlist
 - **THEN** its retained element loops at native duration and the controller stops redundant preload and transition work until the playlist changes
+
+#### Scenario: Discard staged local picks
+
+- **WHEN** a WIDGETS-128 or MGMT-286 editor picks local media and then cancels, unmounts or changes serial before Save
+- **THEN** its draft identity releases unreferenced files under the repository lock, including late picker responses, while current and backup revisions and other active drafts keep their assets

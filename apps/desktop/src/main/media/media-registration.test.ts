@@ -225,6 +225,7 @@ describe("explicit media registration", () => {
 						save: () => Effect.die("unused"),
 						restore: () => Effect.die("unused"),
 						importLocal: () => Effect.die("unused"),
+						discard: () => Effect.void,
 					}),
 				),
 			);

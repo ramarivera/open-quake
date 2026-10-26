@@ -25,6 +25,7 @@ const WallpaperSerial = Schema.transform(DisplayIdentity, DisplayIdentity, {
 	decode: (serial) => serial.replace(/^ws_/, ""),
 	encode: (serial) => serial,
 });
+const DraftId = Schema.String.pipe(Schema.minLength(1), Schema.maxLength(128));
 const Selection = { serial: WallpaperSerial, revision: Revision };
 export const WallpaperCommand = Schema.Union(
 	Schema.TaggedStruct("read", {}),
@@ -48,7 +49,11 @@ export const WallpaperCommand = Schema.Union(
 	Schema.TaggedStruct("factory", Selection),
 	Schema.TaggedStruct("save", { ...Selection, settings: WallpaperSettings }),
 	Schema.TaggedStruct("insert", Selection),
-	Schema.TaggedStruct("pick", Selection),
+	Schema.TaggedStruct("pick", {
+		...Selection,
+		draftId: Schema.optional(DraftId),
+	}),
+	Schema.TaggedStruct("discard", { ...Selection, draftId: DraftId }),
 	Schema.TaggedStruct("failed", {
 		...Selection,
 		index: Revision,

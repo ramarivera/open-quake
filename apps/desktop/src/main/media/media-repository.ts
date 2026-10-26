@@ -29,6 +29,25 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 			const files = yield* MediaFiles;
 			const decoder = yield* MediaDecoder;
 			const lock = yield* Effect.makeSemaphore(1);
+			const drafts = new Map<string, Map<string, Set<string>>>();
+			const stagedReferences = (serial: string) =>
+				[...(drafts.get(serial)?.values() ?? [])].flatMap((refs) => [...refs]);
+			const discard = Effect.fn("MediaRepository.discard")(
+				(
+					serial: string,
+					draftId: string,
+				): Effect.Effect<void, MediaRepositoryError> =>
+					lock.withPermits(1)(
+						Effect.gen(function* () {
+							serial = serial.replace(/^ws_/, "");
+							if (!Schema.is(DisplayIdentity)(serial))
+								return yield* new InvalidWallpaper(undefined);
+							drafts.get(serial)?.delete(draftId);
+							if (!drafts.get(serial)?.size) drafts.delete(serial);
+							yield* files.collectAssets(serial, stagedReferences(serial));
+						}),
+					),
+			);
 			const validate = Effect.fn("MediaRepository.validate")(
 				(input: unknown): Effect.Effect<SavedWallpaper, InvalidWallpaper> =>
 					Schema.decodeUnknown(SavedWallpaper)(input).pipe(
@@ -144,7 +163,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 								yield* resolve(next, index);
 						yield* files.writeSettings(previous, next);
 						// Cleanup cannot turn an already committed save into a failed request.
-						yield* files.collectAssets(serial).pipe(
+						yield* files.collectAssets(serial, stagedReferences(serial)).pipe(
 							Effect.catchTags({
 								InvalidWallpaper: () =>
 									Effect.logWarning(
@@ -176,6 +195,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					append = false,
 					prepend = false,
 					persist = true,
+					draftId = "legacy",
 				): Effect.Effect<
 					{ saved: SavedWallpaper; normalizedFileUrl: boolean },
 					MediaRepositoryError
@@ -191,6 +211,19 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 							const bytes = yield* files.readLocal(path);
 							const decoded = yield* decoder.decode(bytes);
 							const reference = yield* files.storeAsset(serial, bytes);
+							if (!persist) {
+								let sessions = drafts.get(serial);
+								if (!sessions) {
+									sessions = new Map();
+									drafts.set(serial, sessions);
+								}
+								let refs = sessions.get(draftId);
+								if (!refs) {
+									refs = new Set();
+									sessions.set(draftId, refs);
+								}
+								refs.add(reference);
+							}
 							const media = {
 								name: basename(path),
 								filePath: reference,
@@ -260,6 +293,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					),
 			);
 			return {
+				discard,
 				load,
 				resolve,
 				save,

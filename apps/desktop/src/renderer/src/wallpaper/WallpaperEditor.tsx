@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	intervalMillis,
 	reorderWallpaper,
@@ -24,11 +24,29 @@ export function WallpaperEditor({
 	const [message, setMessage] = useState("");
 	const gate = useRef(false);
 	const generation = useRef(0);
+	const draftId = useRef(crypto.randomUUID());
+	const staged = useRef(false);
+	const owner = useRef(initial);
+	const discard = useCallback(() => {
+		const initial = owner.current;
+		if (initial && staged.current) {
+			void window.quakeWallpaper
+				?.request({
+					_tag: "discard",
+					serial: initial.serial,
+					revision: initial.revision,
+					draftId: draftId.current,
+				})
+				.catch(() => {});
+			staged.current = false;
+		}
+	}, []);
 	useEffect(
 		() => () => {
 			generation.current++;
+			discard();
 		},
-		[],
+		[discard],
 	);
 	const selected = initial
 		? { serial: initial.serial, revision: initial.revision }
@@ -38,6 +56,8 @@ export function WallpaperEditor({
 	const pick = async () => {
 		if (!selected || !draft || gate.current) return;
 		const ticket = generation.current;
+		const session = draftId.current;
+		staged.current = true;
 		gate.current = true;
 		setBusy(true);
 		setMessage("");
@@ -45,8 +65,14 @@ export function WallpaperEditor({
 			const raw = await window.quakeWallpaper?.request({
 				_tag: "pick",
 				...selected,
+				draftId: session,
 			});
-			if (ticket !== generation.current) return;
+			if (ticket !== generation.current) {
+				void window.quakeWallpaper
+					?.request({ _tag: "discard", ...selected, draftId: session })
+					.catch(() => {});
+				return;
+			}
 			if (!Schema.is(WallpaperReply)(raw) || raw._tag === "failure") {
 				setMessage(t("savedUnreadable"));
 				return;
@@ -232,6 +258,8 @@ export function WallpaperEditor({
 						className="button"
 						onClick={() => {
 							generation.current++;
+							discard();
+							draftId.current = crypto.randomUUID();
 							setDraft(initial?.settings);
 							setMessage("");
 						}}
