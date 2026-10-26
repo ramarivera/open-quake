@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeviceReadySnapshot } from "../../../shared/hardware-contracts";
 import {
 	initialStripProfile,
+	isTransientStripPage,
 	selectStripPage,
 } from "../../../shared/strip-selection";
 import type { StripMessage } from "../../../shared/strip-transport";
@@ -115,7 +116,14 @@ export function useDeviceReady(
 				}))
 			)
 				return;
-			if (report.current !== identity) return;
+			if (
+				report.current !== identity ||
+				isTransientStripPage(
+					profile,
+					profiles.envelope.activeByDevice[snapshot.serialNumber]?.pageId,
+				)
+			)
+				return;
 			await send({
 				type: "reportActiveProfile",
 				resourceId: profile.id,

@@ -30,6 +30,7 @@ import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/v
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import { MANAGEMENT_ACTIVATE } from "../shared/management";
+import { isTransientStripPage } from "../shared/strip-selection";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
 import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
@@ -1349,6 +1350,17 @@ if (!app.requestSingleInstanceLock()) {
 										)
 									)
 										throw new Error("Stale profile report");
+									const reported = envelope.profiles.find(
+										(profile) => profile.id === id,
+									);
+									if (
+										reported &&
+										isTransientStripPage(
+											reported,
+											envelope.activeByDevice[serial]?.pageId,
+										)
+									)
+										return;
 									if (envelope.activeByDevice[serial]?.profileId !== id)
 										await profiles.select(id, {
 											deviceId: serial,

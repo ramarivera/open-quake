@@ -56,3 +56,13 @@ export function initialStripProfile(envelope: ProfileEnvelope): Profile {
 		envelope.profiles[0]
 	);
 }
+
+/** Emoji folder screens are temporary; reconnect restores the committed page. */
+export function isTransientStripPage(
+	profile: Profile,
+	pageId?: string,
+): boolean {
+	const page =
+		profile.pages.find((page) => page.id === pageId) ?? profile.pages[0];
+	return page.keys.some((key) => key.config.type === "emojiBack");
+}

@@ -261,3 +261,44 @@ it("SCREEN-018/144 chooses a visible colorful profile and filters only the negot
 	);
 	expect(JSON.stringify(page)).toBe(before);
 });
+
+it("SCREEN-018 never reports a transient emoji-back page as a persisted active profile", async () => {
+	vi.stubGlobal("openQuake", events());
+	vi.stubGlobal("quakeDeviceReady", {
+		read: async () => ({ _tag: "ready", snapshot: snapshot() }),
+	});
+	const send = vi.fn(async () => ({ ok: true }));
+	vi.stubGlobal("quakeStripTransport", { send });
+	const source = decode(envelope(2));
+	const transient = {
+		...source,
+		profiles: source.profiles.map((profile) =>
+			profile.id !== quickProfile.id
+				? profile
+				: {
+						...profile,
+						pages: profile.pages.map((page) => ({
+							...page,
+							keys: page.keys.map((key, index) =>
+								index
+									? key
+									: { ...key, config: { ...key.config, type: "emojiBack" } },
+							),
+						})),
+					},
+		),
+	};
+	function Panel() {
+		useDeviceReady("A", { _tag: "ready", envelope: transient });
+		return null;
+	}
+	const { root } = host();
+	await act(async () => {
+		root.render(<Panel />);
+	});
+	expect(send).toHaveBeenCalledExactlyOnceWith("session-A", {
+		type: "reportConfig",
+		keyMatrix: { row: 2, col: 8 },
+		appVersion: "0.0.0",
+	});
+});
