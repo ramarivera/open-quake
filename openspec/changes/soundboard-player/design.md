@@ -111,3 +111,20 @@ legacy keys retain their artwork with a neutral Unavailable chip. No file paths,
 names or counts appear. Native media transport/card and strip geometry stay with
 their owners. Source of the design decision is delegated task
 `oq-soundboard-boundary-design-20261025-r1`; artifacts stay outside git.
+
+## Playback implementation boundary, 2026-10-26
+
+The runtime repository owns bounded session snapshots, not a second copy of the
+profile configuration on disk. The profile owner supplies a validated playlist
+revision for each explicit request. Public snapshots contain file IDs and entry
+status, never private paths. A scoped player port owns native resource cleanup;
+the conductor owns per-key instances, track generations and the one soundboard
+output reservation shared with production speech.
+
+Commands serialize, while output preemption invalidates the entire group before
+awaiting cleanup. Pending native acquisition has its own closeable scope so voice
+can cancel readiness without waiting for the command lock. Natural-end tokens
+carry instance and track generation; consumed and stale tokens do nothing. The
+ten-second readiness deadline includes native acquisition and readiness. These
+modules remain uncomposed behind the first-release boundary until their native
+adapter and consumer acceptance are delivered.

@@ -9,7 +9,7 @@ Implementation tasks. Configuration import and the first-release boundary have v
 
 ## 2. Playback lifecycle (macOS first)
 
-- [ ] 2.1 Implement soundboard repository/conductor and audio adapter with per-key generation IDs and catalog errors; verify explicit-play replacement, PLAY_ADD independent instances, stale and duplicate natural-end rejection, independent keys, stop-all and the 10 s readiness timeout.
+- [x] 2.1 Implement soundboard repository/conductor and audio adapter with per-key generation IDs and catalog errors; verify explicit-play replacement, PLAY_ADD independent instances, stale and duplicate natural-end rejection, independent keys, stop-all and the 10 s readiness timeout.
 - [ ] 2.2 Implement pause/resume/navigation, linear gain ramps, rescan and teardown; verify position continuity, first/last wrap, indefinitely looping playlists, bounded missing-file skip and all-unavailable stop (`KNOB-086`), interrupted ramps, zero gain, rescan without restart and no host-volume mutation with a fake player and TestClock.
 - [ ] 2.3 Integrate the shared AudioOutput lease; verify voice preemption of all sessions without fade, no auto-resume, busy while speech owns output, and a delayed soundboard stop leaving TTS intact against the real output service.
 
@@ -86,6 +86,46 @@ the same transition gate as acquisition. Two deterministic regressions fail on
 the previous source and cover both completed and timed-out prior cleanup, with
 no replacement lease granted after shutdown.
 
+## Gated playback lifecycle verification, 2026-10-26
+
+Task 2.1 now has a scoped conductor, bounded detached runtime repository and a
+sandboxed desktop MP3 adapter. Independent real-service tests verify same-key
+replacement, additional instances, different keys, wrapping/loop-track behavior,
+stale/duplicate native completions, missing-file skipping, stop-all, remembered
+track identity and the total ten-second acquisition/readiness/start deadline.
+The configured path-data and opaque-ID bounds precede IO; unsupported fades are
+rejected rather than ignored while task 2.2 remains open.
+
+Five initial consumer regressions reproduced failure-state, remembered-track,
+preempted-load, delayed Stop and mutable-snapshot defects before their fixes.
+Additional tests cover concurrent Stop/capture/close, interrupted readiness,
+native-end transitions, 128 active sessions, 256 terminal snapshots, shutdown
+and a stalled native finalizer. The real AudioOutput service fails closed at its
+two-second deadline and doesn't grant replacement output after unsafe cleanup.
+Native teardown defects publish failed observations. Actual diagnostic storage
+preserves correlated conductor/player catalog errors and original EACCES identity
+without local paths or raw error text.
+
+A hidden native Electron run decodes a generated MP3 with muted output, pauses
+and resumes at the same position, consumes natural completion through the real
+conductor, preempts two key instances for capture, isolates stale Stop from
+replacement speech, and reports corrupt MP3 decode failure. Final cleanup found
+zero player windows and zero worker directories. The harness first needed two
+corrections: avoid top-level app-readiness await, and retain the scoped Layer
+instead of returning an already-finalized service. Both are external harness
+issues; the final run passes. Artifacts and full-suite logs stay external under
+`open-quake-finish/soundboard-playback/` in the project scratch directory.
+
+Task 2.1 source is complete; reviewed delivery remains tracked by uv9.3. This
+doesn't enable release playback. Task 2.3 has actual conductor/shared-output and
+native muted evidence, but remains open for production composition and completed
+fade semantics. Tasks 2.2 and 3.x, audible output, physical triggers and Linux
+audio acceptance remain open. The full edge suite passes 573 tests, including
+the final unsupported-fade and queued ownership regressions. The full desktop
+suite passes 1,567 tests. Existing skips are three external edge cases and one
+native desktop case. Both typechecks, lint, production build, both bundle smoke
+modes and strict validation are required for delivery.
+
 PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
 allowlists retain both native-media and importer names; the final diff contains
 only the importer scope. All 53 importer tests, 16 filesystem/diagnostics tests,
@@ -94,3 +134,33 @@ initially lacked generated Husky shims; installing frozen dependencies restored
 them, and the first merge's commit-message/post-commit consumers were checked
 explicitly before the normal final merge and push gates. Reviewed delivery is
 still pending; no playback is enabled by this restack.
+
+PR58 lifecycle review follow-up, 2026-10-26: three regressions first failed on
+the reviewed source. A native teardown defect during natural advancement now
+uses the existing slot cleanup, publishes AudioOutputFailed, retains unsafe
+teardown ownership and prevents capture from acquiring output. Releasing an
+empty idle group no longer invalidates another key already queued at the gate;
+both decode failure and the ten-second load timeout are covered. All 89 focused
+soundboard/shared-output tests, both typechecks, scoped Biome and strict
+soundboard validation pass. The release gate stays unchanged.
+
+PR58 interrupted teardown review: Stop and capture during natural advancement
+reproduced a mutual wait before the fix. Cleanup now waits for shared native
+teardown before interrupting its watcher, and the watcher does not re-enter
+cleanup after its slot has been removed. Both operations finish successfully
+once native teardown settles, without falsely poisoning the output owner. All
+91 focused soundboard/audio tests pass, including the original native-defect
+and bounded-stalled-teardown cases. Release playback remains disabled.
+
+PR58 native-worker cleanup review: the late-acquisition regression now waits
+for an explicit callback checkpoint before interrupting. Temporary HTML-file
+deletion uses three bounded retries after the audio window is destroyed. A
+residual deletion failure emits an allowlisted warning through the owning
+runtime with the existing scrubbed catalog error, without poisoning shared
+audio ownership or replacing an acquisition failure. The deletion regression
+failed before the fix; 25 desktop player/diagnostics tests and 91 shared-output
+tests, desktop typecheck, scoped Biome and strict validation pass. A fresh
+hidden, muted Electron MP3 run proves native playback/pause/end, two-key capture
+preemption, corrupt-file rejection and zero remaining windows/workers. External
+evidence is under `soundboard-controls/review-r2/cleanup-native` in project
+scratch. Real window-destruction failures still fail closed.
