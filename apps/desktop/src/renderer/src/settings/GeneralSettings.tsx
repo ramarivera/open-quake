@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { useAppTranslations } from "../i18n";
 import { LanguageControl } from "../management/LanguageControl";
+import type { ManagementPage } from "../management/navigation";
 import { Group, Row } from "../ui/Form";
 import {
 	type SettingsUiBridge,
@@ -8,6 +9,7 @@ import {
 	settingsBridge,
 } from "./bridge";
 import { subscribeGeneralRefresh } from "./general-refresh";
+import { QuakeGuideEntry } from "./QuakeGuide";
 import { useSetupState } from "./SetupWizard";
 import {
 	createGeneralStore,
@@ -34,14 +36,17 @@ export function generalFailureText(t: T, failure: SettingsUiFailure): string {
 	}
 }
 
-/** Language, login and background start, plus the explicit setup entry. */
+/** Language, login and background start, plus the setup and guide entries. */
 export function GeneralSettings({
 	setup,
 	onOpenSetup,
+	onOpenPage,
 	bridge = settingsBridge(),
 }: {
 	setup: SetupStore;
 	onOpenSetup: () => void;
+	/** Lets the guide open a sidebar page; the guide lists places as text without it. */
+	onOpenPage?: ((page: ManagementPage) => void) | undefined;
 	bridge?: SettingsUiBridge | undefined;
 }): React.JSX.Element {
 	const t = useAppTranslations("settings");
@@ -195,6 +200,9 @@ export function GeneralSettings({
 						{generalFailureText(t, setupState.failure)}
 					</span>
 				) : null}
+			</Row>
+			<Row label={t("guide.rowLabel")} hint={t("guide.rowHint")}>
+				<QuakeGuideEntry onOpenPage={onOpenPage} />
 			</Row>
 		</Group>
 	);
