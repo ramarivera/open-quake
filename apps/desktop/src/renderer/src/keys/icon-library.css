@@ -17,6 +17,7 @@
 	flex-direction: column;
 }
 .icon-picker-surface button {
+	color: inherit;
 	border: 1px solid #27272a;
 	border-radius: 6px;
 	background: #18181b;
@@ -38,6 +39,7 @@
 	border-bottom: 1px solid #27272a;
 }
 .icon-library-toolbar input {
+	color: inherit;
 	flex: 1;
 	min-width: 0;
 	padding: 8px 12px;
@@ -56,7 +58,7 @@
 }
 .icon-picker-surface .icon-library-body {
 	display: grid;
-	grid-template-columns: 150px minmax(0, 1fr);
+	grid-template-columns: 200px minmax(0, 1fr);
 	height: 100%;
 	border: 0;
 }
@@ -86,7 +88,8 @@
 .icon-picker-surface .icon-library-body aside small {
 	color: #a1a1aa;
 }
-.icon-picker-surface button[aria-pressed="true"] {
+.icon-picker-surface button[aria-pressed="true"],
+.icon-picker-surface .icon-library-cell > button[aria-pressed="true"] {
 	background: rgb(95 202 181 / 0.14);
 	color: #5fcab5;
 	border-color: rgb(95 202 181 / 0.45);
@@ -121,6 +124,13 @@
 	right: 0;
 	padding: 0 5px;
 	color: #f08a78;
+}
+.icon-picker-surface button[aria-label^="Uninstall"] {
+	color: #f08a78;
+}
+.icon-picker-surface :is(button, input):focus-visible {
+	outline: 2px solid #5fcab5;
+	outline-offset: 2px;
 }
 .icon-library-empty {
 	grid-column: 1 / -1;
@@ -173,6 +183,9 @@
 	padding: 8px 12px;
 	color: #fca5a5;
 	border-top: 1px solid #3f3f46;
+}
+.icon-library-notice[role="status"] {
+	color: #5fcab5;
 }
 @media (prefers-reduced-motion: reduce) {
 	.icon-library-loading {

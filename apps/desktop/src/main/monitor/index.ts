@@ -83,8 +83,7 @@ export function prepareMonitor(
 								for (const win of new Set([management(), panel()])) {
 									if (win && !win.isDestroyed() && trusted(win.webContents)) {
 										// Only the live panel and management may see this shared state, never thumbnail windows.
-										if (win === management())
-											win.webContents.send(MONITOR_STATE, snapshot);
+										win.webContents.send(MONITOR_STATE, snapshot);
 										if (watchers.has(win.webContents))
 											win.webContents.send(MONITOR_METRICS, snapshot.metrics);
 									}

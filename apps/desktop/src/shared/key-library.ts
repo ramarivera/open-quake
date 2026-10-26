@@ -109,6 +109,7 @@ export const LibraryIcon = Schema.Struct({
 	id: Schema.String,
 	name: Schema.String,
 	tags: Schema.Array(Schema.String),
+	extraData: Schema.optional(Schema.Array(Schema.String)),
 	data: Schema.String,
 });
 export const LibraryPack = Schema.Struct({
@@ -138,6 +139,7 @@ export const KeyReply = Schema.Union(
 		states: Schema.optional(Schema.Array(KeyRuntimeState)),
 		icon: Schema.optional(Schema.String),
 		iconSource: Schema.optional(Schema.String),
+		notice: Schema.optional(Schema.String),
 	}),
 	Schema.Struct({
 		_tag: Schema.Literal("rejected"),

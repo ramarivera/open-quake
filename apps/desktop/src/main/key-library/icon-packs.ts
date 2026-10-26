@@ -10,6 +10,7 @@ export const IconAsset = Schema.Struct({
 	id: Schema.String,
 	name: Schema.String,
 	tags: Schema.Array(Schema.String),
+	extraData: Schema.optional(Schema.Array(Schema.String)),
 	data: Schema.String,
 });
 export type IconAsset = typeof IconAsset.Type;
@@ -70,13 +71,20 @@ export async function parseIconPack(
 					tags: Schema.optionalWith(Schema.Array(Schema.String), {
 						default: () => [],
 					}),
+					extraData: Schema.optional(Schema.Array(Schema.String)),
 				}),
 			),
 		)(json("icons.json"));
 		icons = entries.map((e) => {
 			const path = raw.has(prefix + e.path) ? e.path : `icons/${e.path}`;
 			const data = decodeAsset(path);
-			return { id: hash(data), name: e.name, tags: e.tags, data };
+			return {
+				id: hash(data),
+				name: e.name,
+				tags: e.tags,
+				...(e.extraData ? { extraData: e.extraData } : {}),
+				data,
+			};
 		});
 	} else {
 		const font = Schema.decodeUnknownSync(

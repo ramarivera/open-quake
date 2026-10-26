@@ -1494,3 +1494,48 @@ it("redacts clock media paths from imported profile replies", async () => {
 		await f.runtime.dispose();
 	}
 });
+
+it("binds target and locale before readiness, ignores late readiness and starts fresh on reopen", async () => {
+	const f = fixture();
+	try {
+		const first = f.request(f.manager, {
+			type: "open-icons",
+			token: "before-ready",
+			locale: "de",
+		});
+		const child = BrowserWindow.getAllWindows().at(-1);
+		if (!child) throw new Error("Missing picker");
+		const url = new URL(child.webContents.getURL());
+		expect(url.searchParams.get("token")).toBe("before-ready");
+		expect(url.searchParams.get("locale")).toBe("de");
+		expect(child.options).toMatchObject({
+			width: 600,
+			height: 550,
+			minWidth: 600,
+			minHeight: 550,
+			resizable: true,
+			show: false,
+		});
+		await f.request(f.manager, { type: "cancel-icons", token: "before-ready" });
+		child.emit("ready-to-show");
+		expect(child.show).not.toHaveBeenCalled();
+		expect(child.showInactive).not.toHaveBeenCalled();
+		expect(await first).toEqual({ _tag: "success" });
+		const second = f.request(f.manager, {
+			type: "open-icons",
+			token: "reopen",
+			locale: "en",
+		});
+		const reopened = BrowserWindow.getAllWindows().at(-1);
+		expect(reopened).not.toBe(child);
+		expect(
+			new URL(reopened?.webContents.getURL() ?? "about:blank").searchParams.get(
+				"token",
+			),
+		).toBe("reopen");
+		await f.registration.dispose();
+		expect(await second).toEqual({ _tag: "success" });
+	} finally {
+		await f.runtime.dispose();
+	}
+});
