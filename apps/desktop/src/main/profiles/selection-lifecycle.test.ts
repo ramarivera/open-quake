@@ -1,4 +1,12 @@
-import { Schema } from "effect";
+import {
+	Effect,
+	Fiber,
+	Logger,
+	Option,
+	Schema,
+	TestClock,
+	TestContext,
+} from "effect";
 import { BrowserWindow } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service";
@@ -8,6 +16,7 @@ import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { KEY_REQUEST } from "../../shared/key-library";
 import { registerProfiles } from "./index";
@@ -213,6 +222,126 @@ it("preserves audio when the selection guard expires during persistence", async 
 		await rejected;
 		expect(await f.selection()).toEqual({ profileId: "a", pageId: "1" });
 		expect(f.reset).not.toHaveBeenCalled();
+	} finally {
+		release();
+		await f.profiles.dispose();
+	}
+});
+
+it("keeps a durable multi-device commit successful when one reset rejects", async () => {
+	const f = await fixture();
+	const warnings: { level: string; message: unknown }[] = [];
+	f.reset.mockRejectedValueOnce(
+		Object.assign(new Error("private /user/audio.mp3"), { code: "EIO" }),
+	);
+	try {
+		await f.profiles.runtime.runPromise(
+			Effect.gen(function* () {
+				const repository = yield* ProfileRepository;
+				const committed = yield* repository.transact((envelope) =>
+					Effect.succeed({
+						...envelope,
+						activeByDevice: {
+							...envelope.activeByDevice,
+							A: { profileId: "b", pageId: "1" },
+							B: { profileId: "b", pageId: "1" },
+						},
+					}),
+				);
+				expect(committed.activeByDevice.A?.profileId).toBe("b");
+				expect(committed.activeByDevice.B?.profileId).toBe("b");
+				expect(f.reset.mock.calls).toEqual([["A"], ["B"]]);
+				yield* repository.select({ deviceId: "A", profileId: "a" });
+			}).pipe(
+				Effect.provide(
+					Logger.replace(
+						Logger.defaultLogger,
+						Logger.make(({ logLevel, message }) =>
+							warnings.push({ level: logLevel.label, message }),
+						),
+					),
+				),
+			),
+		);
+		const persisted = Schema.decodeUnknownSync(ProfileEnvelope)(
+			await storage.read(),
+		);
+		expect(persisted.activeByDevice.B?.profileId).toBe("b");
+		expect(warnings).toMatchObject([
+			{
+				level: "WARN",
+				message: [
+					"profiles.selection.reset.failed",
+					{
+						code: "QUAKE.PROFILE.SELECTION_RESET_FAILED",
+						diagnosticCause: { sourceCode: "EIO" },
+					},
+				],
+			},
+		]);
+		expect(JSON.stringify(warnings)).not.toContain("private");
+		expect(JSON.stringify(warnings)).not.toContain("audio.mp3");
+	} finally {
+		await f.profiles.dispose();
+	}
+});
+
+it("releases the commit mutex after a five-second reset timeout", async () => {
+	const f = await fixture();
+	const warnings: { level: string; message: unknown }[] = [];
+	let release = () => {};
+	let entered = false;
+	const pending = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	f.reset.mockImplementationOnce(() => {
+		entered = true;
+		return pending;
+	});
+	try {
+		await f.profiles.runtime.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const repository = yield* ProfileRepository;
+					const first = yield* repository
+						.select({ deviceId: "A", profileId: "b" })
+						.pipe(Effect.forkScoped);
+					yield* TestClock.adjust(4999);
+					expect(entered).toBe(true);
+					expect(Option.isNone(yield* Fiber.poll(first))).toBe(true);
+					const queued = yield* repository
+						.select({ deviceId: "B", profileId: "b" })
+						.pipe(Effect.forkScoped);
+					yield* TestClock.adjust(1);
+					expect(Option.isSome(yield* Fiber.poll(first))).toBe(true);
+					const committed = yield* Fiber.join(first);
+					expect(committed.activeByDevice.A?.profileId).toBe("b");
+					expect((yield* Fiber.join(queued)).activeByDevice.B?.profileId).toBe(
+						"b",
+					);
+					expect(f.reset.mock.calls).toEqual([["A"], ["B"]]);
+				}).pipe(Effect.ensuring(Effect.sync(() => release()))),
+			).pipe(
+				Effect.provide(TestContext.TestContext),
+				Effect.provide(
+					Logger.replace(
+						Logger.defaultLogger,
+						Logger.make(({ logLevel, message }) =>
+							warnings.push({ level: logLevel.label, message }),
+						),
+					),
+				),
+			),
+		);
+		expect(warnings).toMatchObject([
+			{
+				level: "WARN",
+				message: [
+					"profiles.selection.reset.failed",
+					{ code: "QUAKE.PROFILE.SELECTION_RESET_TIMED_OUT" },
+				],
+			},
+		]);
 	} finally {
 		release();
 		await f.profiles.dispose();

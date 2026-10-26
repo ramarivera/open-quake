@@ -189,3 +189,7 @@ The main application supplies one AudioOutput instance to speech and SoundboardS
 ### Selection commit ownership
 
 The shared ProfileRepository compares committed device selections after persistence and publication, under its transaction lock. An injected ProfileSelectionCommit callback invalidates that device's soundboard owner only when its profile or page changes. Direct ProfileService selections and manager/automatic transactions share this path. Fallible delivery, rejected writes and expired guards never reach the callback; redelivery and unchanged selections don't invalidate playback. The desktop callback doesn't reenter the repository. The recovered KNOB-086 lifecycle evidence and profile/page decision are cited in the Cluster 18 requirement.
+
+### Bounded committed-selection cleanup
+
+The desktop selection commit callback wraps resetOwned in a recoverable Effect with a five-second timeout. Only the post-publication promise wait is interruptible because the repository holds an uninterruptible commit lock. Failures and timeouts log catalog codes and scrubbed diagnostic causes without device identifiers or upstream messages. Recovery continues cleanup for later devices and preserves the already durable commit. A timed-out promise may still finish its underlying cleanup; it no longer holds the repository lock.

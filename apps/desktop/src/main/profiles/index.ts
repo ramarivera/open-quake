@@ -22,6 +22,8 @@ import {
 import {
 	ProfileDeliveryFailed,
 	ProfileNotFound,
+	ProfileSelectionResetFailed,
+	ProfileSelectionResetTimedOut,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
@@ -129,7 +131,25 @@ export function prepareProfiles(
 					Layer.succeed(ProfileSelectionCommit, {
 						changed: (serial) =>
 							resetOwned
-								? Effect.promise(() => resetOwned(serial))
+								? Effect.tryPromise({
+										try: () => resetOwned(serial),
+										catch: ProfileSelectionResetFailed.fromCause,
+									}).pipe(
+										// Repository commits are uninterruptible. Only this
+										// post-publication promise wait must be interruptible.
+										Effect.interruptible,
+										Effect.timeoutFail({
+											duration: "5 seconds",
+											onTimeout: () =>
+												ProfileSelectionResetTimedOut.fromCause(undefined),
+										}),
+										Effect.catchAll((error) =>
+											Effect.logWarning("profiles.selection.reset.failed", {
+												code: error.code,
+												diagnosticCause: error.diagnosticCause,
+											}),
+										),
+									)
 								: Effect.void,
 					}),
 				),

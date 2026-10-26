@@ -285,3 +285,9 @@ No renderer UI changes, real QUAKE access, DK-Suite execution or audible playbac
 ## PR79 round 2
 
 - [x] 4.4 Dispatch configured local soundboard touches through the strip controller while retaining native-media preset sub-controls. Evidence: KNOB-082/086; open-quake-lih.19.8, review 4375809599.
+
+## PR79 final cleanup
+
+- [x] 4.5 Recover selection reset failures and bound cleanup to five seconds, logging catalog-coded scrubbed warnings; prove durable commit success, later-device invalidation and mutex release with failure and TestClock timeout regressions. Evidence: KNOB-086; open-quake-lih.19.9, review 4376403434.
+
+Final reset verification: rejection and five-second timeout regressions both fail before the fix. The seven production-composition lifecycle cases pass afterward, including later-device invalidation, queued repository progress and scrubbed warning codes. All 127 focused profile/soundboard tests and all six package typechecks pass. No physical playback or device access.

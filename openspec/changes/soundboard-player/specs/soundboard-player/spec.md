@@ -189,3 +189,8 @@ Committed local playAudio and playAudioLegacy keys SHALL execute on a guarded re
 - **AND** a repeated selection, failed delivery/write, or invalidated transaction leaves current playback intact
 
 Selection cleanup SHALL run after durable publication under the same repository transaction lock, never in the fallible delivery port. This follows `KNOB-086`'s device/key/multi-action session ownership and the recovered lifecycle. Evidence: `~/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95/app-resources/background.js:2`, `Dn` at character 988931 keys sessions by serial plus keyCode/multiActionIndex; `Wi` at characters 1032317..1033459 destroys non-timer players and calls `bn` to clear that device's sessions. Both profile switching `Yi` and page/folder switching `$i` call `Wi`, with `$i` at character 1043825 returning early for an unchanged page. Therefore DK-Suite stops soundboard audio on both profile and page changes; timer-player preservation is outside soundboard scope.
+
+#### Scenario: Selection cleanup failure or timeout
+
+- **WHEN** owned playback reset rejects or exceeds five seconds after a durable profile/page commit
+- **THEN** the commit still succeeds, a catalog-coded warning with scrubbed diagnostics records failure or timeout, later device cleanup proceeds and repository operations can continue
