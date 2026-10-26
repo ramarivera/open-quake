@@ -102,6 +102,7 @@ function ManagementSurface({
 		tab: initialActivation?.agentTab ?? "sessions",
 		sequence: 0,
 	}));
+	const [meetingActivation, setMeetingActivation] = useState(0);
 	const [page, setPage] = useState<Page>(() => {
 		const active = initialActivation;
 		return pages.find((id) => id === active?.page) ?? "overview";
@@ -114,6 +115,8 @@ function ManagementSurface({
 				if (item) {
 					navigated.current = true;
 					setPage(item);
+					if (item === "meetings")
+						setMeetingActivation((sequence) => sequence + 1);
 					if (next?.agentTab) {
 						const tab = next.agentTab;
 						setAgentActivation((previous) => ({
@@ -163,6 +166,7 @@ function ManagementSurface({
 	const open = (next: Page): void => {
 		navigated.current = true;
 		setPage(next);
+		if (next === "meetings") setMeetingActivation((sequence) => sequence + 1);
 		content.current?.scrollTo({ top: 0 });
 	};
 	return (
@@ -220,7 +224,7 @@ function ManagementSurface({
 						<MonitorSettings />
 					</>
 				) : page === "meetings" ? (
-					<MeetingHistory />
+					<MeetingHistory activation={meetingActivation} />
 				) : page === "controls" ? (
 					<HardwareSettings />
 				) : page === "agents" ? (

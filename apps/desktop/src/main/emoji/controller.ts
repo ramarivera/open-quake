@@ -26,10 +26,25 @@ export interface EmojiGenerationPort {
 		readonly bytes: Uint8Array;
 		readonly format: "image/png" | "image/jpeg";
 		readonly prompt: string;
+		readonly signal?: AbortSignal;
 	}) => Promise<Uint8Array>;
+	readonly suggest?: (
+		prompt: string,
+		locale: string,
+		signal: AbortSignal,
+	) => Promise<string>;
 }
 export interface EmojiControllerPort {
 	readonly generation?: EmojiGenerationPort;
+	readonly references?: () => Promise<{
+		readonly ids: readonly string[];
+		readonly hashes: readonly string[];
+	}>;
+	readonly renameLinked?: (
+		id: string,
+		name: string,
+		save: () => Promise<void>,
+	) => Promise<void>;
 	readonly files: ReturnType<typeof emojiFiles>;
 	readonly management: () => BrowserWindow;
 	readonly place: (
@@ -38,12 +53,26 @@ export interface EmojiControllerPort {
 		persistLink: (profileId: string) => Promise<void>,
 	) => Promise<string>;
 }
+// Profile adapters cross an Effect runtime/Promise boundary. Keep catalog
+// validation identity while retaining unexpected failures as private causes.
+const profileFailure = (cause: unknown): EmojiInvalid | EmojiLibraryFailed => {
+	const error = Runtime.isFiberFailure(cause)
+		? Option.getOrElse(
+				Cause.failureOption(cause[Runtime.FiberFailureCauseId]),
+				() => cause,
+			)
+		: cause;
+	return error instanceof EmojiInvalid || error instanceof EmojiLibraryFailed
+		? error
+		: new EmojiLibraryFailed(cause);
+};
 export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 	function* (port: EmojiControllerPort) {
 		const imageDecoder = yield* ImageDecoder;
 		const repository = yield* EmojiRepository;
 		const library = yield* EmojiLibrary;
 		const lock = yield* Effect.makeSemaphore(1);
+		let generationAbort = new AbortController();
 		const io = <A>(
 			operation: () => Promise<A>,
 		): Effect.Effect<A, EmojiLibraryFailed> =>
@@ -103,11 +132,87 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 			input: EmojiRequest,
 		): Effect.fn.Return<EmojiReply, EmojiLibraryFailed | EmojiInvalid> {
 			switch (input.type) {
-				case "read":
+				case "read": {
+					if (port.references) {
+						const references = port.references;
+						const maintenance = Effect.gen(function* () {
+							const refs = yield* io(references);
+							const current = yield* repository.read();
+							const liveIds = new Set([
+								...current.drafts,
+								...current.packages.flatMap((p) => p.emojiIds),
+								...refs.ids,
+							]);
+							const items = current.items.filter(
+								(i) =>
+									liveIds.has(i.id) ||
+									refs.hashes.includes(i.rendered) ||
+									refs.hashes.includes(i.original),
+							);
+							if (items.length !== current.items.length)
+								yield* repository.transact((state) =>
+									Effect.succeed({
+										...state,
+										revision: state.revision + 1,
+										items,
+									}),
+								);
+							yield* io(() => port.files.collect(refs.hashes));
+						});
+						const cleaned = yield* maintenance.pipe(
+							Effect.as(true),
+							Effect.catchAll(() => Effect.succeed(false)),
+						);
+						if (!cleaned)
+							return yield* snapshot(
+								"Saved library retained. Asset cleanup was deferred; reopen the library to retry.",
+							);
+					}
 					return yield* snapshot();
+				}
+				case "cancel-generation":
+					generationAbort.abort();
+					return yield* snapshot("Generation cancelled.");
+				case "suggest-caption": {
+					const suggest = port.generation?.suggest;
+					if (
+						!suggest ||
+						!input.prompt.trim() ||
+						Buffer.byteLength(input.prompt, "utf8") > 1000
+					)
+						return yield* new EmojiInvalid(
+							"Caption suggestion is unavailable or the prompt is too long.",
+						);
+					const cancellation = new AbortController();
+					generationAbort = cancellation;
+					const text = yield* io(() =>
+						suggest(input.prompt, input.locale, cancellation.signal),
+					);
+					if (cancellation.signal.aborted)
+						return yield* new EmojiInvalid("Generation cancelled.");
+					return { _tag: "caption-suggestion", text };
+				}
 				case "command":
-					yield* library.command(input.command);
-					return yield* snapshot();
+					if (input.command.type === "rename-package" && port.renameLinked) {
+						const command = input.command;
+						const state = yield* repository.read();
+						const linked = state.packages.find(
+							(p) => p.id === command.id,
+						)?.profileId;
+						const run = Runtime.runPromise(yield* Effect.runtime<never>());
+						if (linked)
+							yield* Effect.tryPromise({
+								try: () =>
+									port.renameLinked?.(
+										linked,
+										command.name.trim() || "Unnamed Pack",
+										() => run(library.command(command)).then(() => {}),
+									) ?? Promise.resolve(),
+								catch: profileFailure,
+							});
+						else yield* library.command(command);
+					} else yield* library.command(input.command);
+					return yield* request({ type: "read" });
 				case "generate": {
 					const generation = port.generation;
 					if (!generation)
@@ -118,18 +223,27 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 					const asset = state.staticAssets.find(
 						(a) => a.hash === input.assetId,
 					);
-					if (!asset || !input.prompt.trim() || input.prompt.length > 180)
+					if (
+						!asset ||
+						!input.prompt.trim() ||
+						Buffer.byteLength(input.prompt, "utf8") > 1000
+					)
 						return yield* new EmojiInvalid(
-							"Select an image and describe the motion in at most 180 characters.",
+							"Select an image and describe the motion in at most 1000 UTF-8 bytes.",
 						);
 					const bytes = yield* io(() => port.files.get(asset.hash));
+					const cancellation = new AbortController();
+					generationAbort = cancellation;
 					const generated = yield* io(() =>
 						generation.generate({
 							bytes,
 							format: asset.format,
 							prompt: input.prompt,
+							signal: cancellation.signal,
 						}),
 					);
+					if (cancellation.signal.aborted)
+						return yield* new EmojiInvalid("Generation cancelled.");
 					yield* validateGif(generated);
 					const name = input.name?.trim() || asset.name.slice(0, 30);
 					const caption = input.caption ?? defaultCaption;
@@ -236,6 +350,7 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 				}
 				case "caption": {
 					if (
+						(input.name?.length ?? 0) > 30 ||
 						input.base64.length > 12 * 1024 * 1024 ||
 						weightedLength(input.caption.text) > 50
 					)
@@ -269,11 +384,18 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 							revision: state.revision + 1,
 							items: state.items.map((item) =>
 								item.id === input.id
-									? { ...item, rendered: hash, caption: input.caption }
+									? {
+											...item,
+											name: input.name?.trim() ?? item.name,
+											...(input.mode === undefined ? {} : { mode: input.mode }),
+											rendered: hash,
+											caption: input.caption,
+										}
 									: item,
 							),
 						}),
 					);
+					yield* request({ type: "read" });
 					return yield* snapshot("Caption saved.");
 				}
 				case "asset": {
@@ -357,17 +479,7 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 									),
 								).then(() => undefined),
 							),
-						catch: (cause) => {
-							const error = Runtime.isFiberFailure(cause)
-								? Option.getOrElse(
-										Cause.failureOption(cause[Runtime.FiberFailureCauseId]),
-										() => cause,
-									)
-								: cause;
-							return error instanceof EmojiInvalid
-								? error
-								: new EmojiLibraryFailed(cause);
-						},
+						catch: profileFailure,
 					});
 					return yield* snapshot("Added to Quake main settings screen");
 				}
@@ -421,8 +533,11 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 			}
 		});
 		return {
+			cancel: () => generationAbort.abort(),
 			request: (input: EmojiRequest) =>
-				request(input).pipe(lock.withPermits(1), Effect.uninterruptible),
+				input.type === "cancel-generation"
+					? request(input)
+					: request(input).pipe(lock.withPermits(1), Effect.uninterruptible),
 			snapshot,
 		};
 	},

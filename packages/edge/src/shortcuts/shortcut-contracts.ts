@@ -1,9 +1,20 @@
 import { Schema } from "effect";
+import {
+	ProfileAction,
+	ProfileJsonObject,
+} from "../../../device/src/profiles/profile-contracts.js";
+export const ShortcutConfig = Schema.Struct({
+	type: Schema.String,
+	actions: Schema.Array(ProfileAction),
+	subActions: Schema.optional(Schema.Array(ProfileJsonObject)),
+});
 export const ShortcutRow = Schema.Struct({
 	id: Schema.String,
 	name: Schema.String,
 	app: Schema.String,
 	chord: Schema.String,
+	config: Schema.optional(ShortcutConfig),
+	icon: Schema.optional(Schema.String),
 });
 export type ShortcutRow = typeof ShortcutRow.Type;
 export const ShortcutLibrary = Schema.Struct({
@@ -23,9 +34,11 @@ export const GeneratedConfig = Schema.Struct({
 	ConfigData: Schema.Array(
 		Schema.Struct({
 			title: Schema.String,
+			icon: Schema.optional(Schema.String),
 			config: Schema.Struct({
 				functionType: Schema.String,
 				actions: Schema.Array(Schema.Unknown),
+				subActions: Schema.optional(Schema.Array(ProfileJsonObject)),
 			}),
 		}),
 	),

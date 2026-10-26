@@ -52,7 +52,7 @@ describe("meeting history consumers", () => {
 			[...dom.host.querySelectorAll(".meeting-record-title")].map(
 				(e) => e.textContent,
 			),
-		).toEqual(["Meeting 2", "Meeting 3"]);
+		).toEqual(["Meeting 3", "Meeting 2"]);
 		expect(element(".meeting-record[aria-current=true]").textContent).toContain(
 			"Meeting 3",
 		);
@@ -132,8 +132,8 @@ describe("meeting history consumers", () => {
 		expect(element("[role=tab][aria-selected=true]").textContent).toBe(
 			"Summary",
 		);
-		expect(element(".meeting-document-body pre").textContent).toBe(
-			record.minutes,
+		expect(element(".meeting-markdown").textContent).toBe(
+			"Decisions\nShip Friday.",
 		);
 		await click(".meeting-copy");
 		expect(dom.clipboard).toHaveBeenLastCalledWith(
@@ -266,7 +266,7 @@ describe("meeting history consumers", () => {
 	it("AI-316 retains selection/newest state through stale pushes and permits saving after a failed request", async () => {
 		const record = meetingRecord(2);
 		await mount([meetingRecord(), record]);
-		await click(".meeting-record:nth-of-type(2)");
+		await click(".meeting-record:nth-of-type(1)");
 		const old = dom.ready();
 		await dom.push({
 			records: [
@@ -340,7 +340,9 @@ it("AI-275 AI-296 template selection preserves the applied summary until regener
 		true,
 	);
 	expect(body().textContent).toContain("Current template: Project weekly");
-	expect(element("pre").textContent).toBe(record.minutes);
+	expect(element(".meeting-markdown").textContent).toBe(
+		"Decisions\nShip Friday.",
+	);
 	await click(".meeting-inspector > button:last-child");
 	expect(dom.request).toHaveBeenLastCalledWith({
 		_tag: "regenerate",
