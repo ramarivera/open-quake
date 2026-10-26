@@ -102,12 +102,17 @@ Local administration SHALL use typed revision-checked commands for rename, confi
 - **THEN** persisted settings and runtime environment remain unchanged
 
 ### Requirement: Local agent key editing and isolated context reset
-The key editor SHALL expose local Agent, Model with Default Agent and Default (Agent) fallbacks, Voice Input, Task Prompt when voice is disabled, and Reset Context for clawbot keys (MGMT-302). Gateway settings SHALL reuse the saved HTTP connection facade and native credential storage, with masked transient input and no credential-bearing URLs. Reset SHALL forget only the selected device/key's HTTP conversation contexts, cancelling that key's active turn, and SHALL report unsupported owners truthfully. Local workspace identities SHALL NOT become external runtime identities implicitly.
+The key editor SHALL expose local Agent, Model with Default Agent and Default (Agent) fallbacks, Voice Input, Task Prompt when voice is disabled, and Reset Context for clawbot keys (MGMT-302). Gateway settings SHALL reuse the saved HTTP connection facade and native credential storage, with masked transient input and no credential-bearing URLs. Reset SHALL forget only the selected device/key's conversation contexts in the selected backend, cancelling that key's active turn, and SHALL report unsupported owners truthfully. Local workspace identities SHALL NOT become external runtime identities implicitly.
 
 #### Scenario: Save a typed-only key and reset its context
 - **WHEN** a user selects an agent and model, disables Voice Input, edits Task Prompt, and saves
 - **THEN** the saved profile retains the typed payload
 - **AND** Reset Context cancels and clears that key's runtime sessions without clearing another key's sessions
+
+#### Scenario: Reset a direct conversation without an external selection
+- **WHEN** no HTTP connection is selected and the user resets a key's context
+- **THEN** the HTTP decorator forwards to the direct-chat owner, which cancels that key's turn and forgets its sessions
+- **AND** the next message starts fresh, another key retains its context, and an owner without reset support returns unavailable
 
 ### Requirement: Owned service state administration
 The owned runtime SHALL allow a port, log level, opt-in autostart and a private data directory selected as its root or a named child of its data folder (CENTER-047, CENTER-048, MAIN-144). Directory switches SHALL retain the prior state, reject escapes and symlinks, and require restart consent while running. Confirmed clear SHALL remove the selected runtime's config, channels, credentials and sessions only while stopped, preserving service preferences and local agent/model workspaces. Runtime and channel updates SHALL share one atomic config owner and preserve unrelated fields. Diagnostics SHALL include at most 64 allowlisted lifecycle records without raw process output or secrets (CENTER-104).

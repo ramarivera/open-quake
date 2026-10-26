@@ -315,6 +315,15 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 			resetContext: (serial, keyCode) =>
 				lock.withPermits(1)(
 					Effect.gen(function* () {
+						const selected = yield* options
+							.selected()
+							.pipe(
+								Effect.mapError((cause) => new VoiceRuntimeUnavailable(cause)),
+							);
+						if (!selected)
+							return yield* fallback.resetContext
+								? fallback.resetContext(serial, keyCode)
+								: new VoiceRuntimeUnavailable();
 						const clear = options.clear;
 						if (!clear) return yield* new VoiceRuntimeUnavailable();
 						yield* stop(serial, keyCode);

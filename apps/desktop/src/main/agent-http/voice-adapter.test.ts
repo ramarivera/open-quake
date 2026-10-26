@@ -704,3 +704,19 @@ it("MGMT-302 clears only one key's HTTP context and starts its next turn without
 		await f.dispose();
 	}
 });
+
+it("MGMT-302 reports unavailable when the selected fallback cannot reset context", async () => {
+	const f = await setup();
+	try {
+		f.select(undefined);
+		const runtime = await f.runtime.runPromise(GridVoiceRuntime);
+		if (!runtime.resetContext) throw new Error("missing reset");
+		expect(
+			await f.runtime.runPromise(
+				Effect.flip(runtime.resetContext(request.serial, request.keyCode)),
+			),
+		).toMatchObject({ _tag: "VoiceRuntimeUnavailable" });
+	} finally {
+		await f.dispose();
+	}
+});
