@@ -65,3 +65,5 @@ Final local gates on 2026-10-26: Biome checked 1173 files with no errors and 14 
 The branch includes current main thumbnail-retention changes via a conflict-free merge. All six gates, bundle checks and the hidden native smoke passed again after that sync.
 
 PR80 target repair uses GetInputVolume to discover audio support instead of guessing from kind names. Recovered OBSConnectionConfig.vue:217-229 used media/audio substrings and special inputs. That vendor heuristic misses FFmpeg/VLC/platform/plugin sources. The editor retains special inputs, admits all inputs whose audio request succeeds, and explicitly includes FFmpeg/VLC for media controls. Unsupported-input request errors only remove that capability; network/auth failures still fail the catalog. Audit rows MGMT-180,181,184,187,219.
+
+PR80 panel live requests match the decoded committed command and key id on the active device page. Authorization runs before each poll and after IO, revoking stale leases and withholding in-flight images after profile replacement. Management retains draft preview rights. Tiles retry on committed profile snapshots so saving an unchanged draft restores its subscription.

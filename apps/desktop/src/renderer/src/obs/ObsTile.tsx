@@ -54,10 +54,13 @@ export function ObsTile({ tile, context }: StripTileProps): React.JSX.Element {
 						visible();
 					});
 		if (host.current) observer?.observe(host.current);
+		// A draft preview can precede its committed authorization in main.
+		const offProfiles = window.quakeProfiles?.onSnapshot(visible);
 		document.addEventListener("visibilitychange", visible);
 		visible();
 		return () => {
 			off();
+			offProfiles?.();
 			observer?.disconnect();
 			document.removeEventListener("visibilitychange", visible);
 			void bridge

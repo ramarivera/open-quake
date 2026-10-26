@@ -71,6 +71,7 @@ import { prepareMeetings } from "./meetings";
 import { prepareMonitor } from "./monitor";
 import { prepareObs } from "./obs";
 import { obsKeyAction } from "./obs/key-action";
+import { visibleObsKeys } from "./obs/visibility";
 import { prepareProfiles } from "./profiles";
 import { createSettingsOsAdapter } from "./settings/os-adapter";
 import { prepareAppLocale } from "./settings/registration";
@@ -375,6 +376,14 @@ if (!app.requestSingleInstanceLock()) {
 							renderer: rendererURL,
 							management: () => managementWin,
 							panel: () => panelWin,
+							visibleKeys: () =>
+								profilesModule.runtime.runPromise(
+									ProfileService.loadProfiles().pipe(
+										Effect.map(({ envelope }) =>
+											visibleObsKeys(envelope, activeDeviceId()),
+										),
+									),
+								),
 							diagnostics,
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 						});

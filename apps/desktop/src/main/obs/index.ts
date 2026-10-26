@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { Effect, Fiber, Layer, Redacted, Schema } from "effect";
 import { app, type BrowserWindow, ipcMain, type WebContents } from "electron";
 import {
@@ -9,6 +10,7 @@ import type { ProfileKey } from "../../../../../packages/device/src/profiles/pro
 import {
 	emptyObsSaved,
 	type ObsTile,
+	type ObsVisible,
 } from "../../../../../packages/edge/src/obs/obs-contracts";
 import {
 	ObsConfigurationRejected,
@@ -35,6 +37,7 @@ export function prepareObs(options: {
 	readonly renderer: string;
 	readonly management: () => BrowserWindow | undefined;
 	readonly panel: () => BrowserWindow | undefined;
+	readonly visibleKeys: () => Promise<readonly ObsVisible[]>;
 	readonly diagnostics?: DesktopDiagnostics;
 	readonly mock?: boolean;
 	readonly storage?: ObsStorage["Type"];
@@ -60,6 +63,24 @@ export function prepareObs(options: {
 					},
 				),
 				Layer.succeed(ObsPorts, {
+					authorizeVisible: async (owner, tiles) => {
+						const target = owners.get(owner);
+						if (!target || target.sender.isDestroyed()) return false;
+						if (target.sender === options.management()?.webContents)
+							return true;
+						if (target.sender !== options.panel()?.webContents) return false;
+						const committed = await options.visibleKeys();
+						return (
+							owners.get(owner) === target &&
+							tiles.every((tile) =>
+								committed.some(
+									(key) =>
+										key.id === tile.id &&
+										isDeepStrictEqual(key.command, tile.command),
+								),
+							)
+						);
+					},
 					open:
 						options.open ??
 						(options.mock
@@ -136,11 +157,20 @@ export function prepareObs(options: {
 							event.sender.on("destroyed", clear);
 							event.sender.on("did-start-navigation", clear);
 						}
-						if (request.tiles.length)
-							owners.set(owner, { sender: event.sender, lease: request.lease });
+						const entry = { sender: event.sender, lease: request.lease };
+						if (request.tiles.length) owners.set(owner, entry);
 						else owners.delete(owner);
 						return runtime.runPromise(
 							ObsService.setVisible(owner, request.tiles).pipe(
+								Effect.onError(() =>
+									owners.get(owner) === entry
+										? ObsService.release(owner).pipe(
+												Effect.zipRight(
+													Effect.sync(() => owners.delete(owner)),
+												),
+											)
+										: Effect.void,
+								),
 								Effect.match({
 									onSuccess: (): ObsReply => ({ type: "ok" }),
 									onFailure: (error): ObsReply => ({

@@ -104,6 +104,7 @@ const fixture = (
 				detect,
 			}),
 			Layer.succeed(ObsPorts, {
+				authorizeVisible: async () => true,
 				open: openObsConnection,
 				publish: (owner, tiles) => {
 					published.push({ owner, tiles });

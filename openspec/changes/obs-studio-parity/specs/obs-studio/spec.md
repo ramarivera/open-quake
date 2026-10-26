@@ -59,3 +59,10 @@ The system SHALL refresh visible OBS status, stats and screenshot tiles every 20
 #### Scenario: Visibility and release
 - **WHEN** the profile changes, page hides or renderer is destroyed
 - **THEN** its old tiles receive no further updates and no polls remain when there are no visible OBS tiles
+
+#### Scenario: Panel screenshot authorization
+- **WHEN** a panel requests live OBS tiles
+- **THEN** every key id and decoded command matches a displayed committed key on its active device page
+- **AND** uncommitted sources are rejected before OBS IO
+- **AND** profile changes revoke polling and prevent publication of in-flight screenshots
+- **AND** management can preview unsaved targets and a panel retries after Save

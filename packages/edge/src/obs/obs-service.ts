@@ -35,6 +35,10 @@ export class ObsPorts extends Context.Tag("obs/Ports")<
 			signal: AbortSignal,
 		) => Promise<ObsConnection>;
 		readonly publish: (owner: string, tiles: readonly ObsTile[]) => void;
+		readonly authorizeVisible: (
+			owner: string,
+			tiles: readonly ObsVisible[],
+		) => Promise<boolean>;
 	}
 >() {}
 export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
@@ -218,6 +222,15 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 					lock.withPermits(1),
 				),
 		);
+		const authorized = (owner: string, tiles: readonly ObsVisible[]) =>
+			Effect.tryPromise({
+				try: () => ports.authorizeVisible(owner, tiles),
+				catch: (cause) => new ObsConfigurationRejected(cause),
+			}).pipe(
+				Effect.catchTag("ObsConfigurationRejected", () =>
+					Effect.succeed(false),
+				),
+			);
 		const setVisible = Effect.fn("ObsService.setVisible")(
 			(owner: string, input: unknown): Effect.Effect<void, ObsError> =>
 				Effect.gen(function* () {
@@ -228,6 +241,8 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 							Effect.fail(new ObsConfigurationRejected()),
 						),
 					);
+					if (tiles.length && !(yield* authorized(owner, tiles)))
+						return yield* new ObsConfigurationRejected();
 					if (tiles.length) visible.set(owner, tiles);
 					else visible.delete(owner);
 				}),
@@ -257,8 +272,24 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 						).pipe(Effect.tapError(failure), Effect.ignore);
 					const current = generation;
 					for (const [owner, entries] of visible) {
+						const revoke = () => {
+							if (visible.get(owner) !== entries) return;
+							visible.delete(owner);
+							ports.publish(
+								owner,
+								entries.map((entry) =>
+									unavailableObsTile(entry.id, entry.command.type),
+								),
+							);
+						};
+						if (!(yield* authorized(owner, entries))) {
+							revoke();
+							continue;
+						}
 						const tiles: ObsTile[] = [];
 						for (const entry of entries) {
+							if (!(yield* authorized(owner, entries))) break;
+							if (visible.get(owner) !== entries) break;
 							const tile = connection?.connected()
 								? yield* readObsTile(
 										entry.id,
@@ -281,8 +312,14 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 								: unavailableObsTile(entry.id, entry.command.type);
 							tiles.push(tile);
 						}
-						if (generation === current && visible.get(owner) === entries)
-							yield* Effect.sync(() => ports.publish(owner, tiles));
+						if (generation === current && visible.get(owner) === entries) {
+							if (yield* authorized(owner, entries))
+								yield* Effect.sync(() => {
+									if (generation === current && visible.get(owner) === entries)
+										ports.publish(owner, tiles);
+								});
+							else revoke();
+						}
 					}
 				}).pipe(lock.withPermits(1)),
 		);

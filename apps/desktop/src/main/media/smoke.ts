@@ -50,6 +50,7 @@ import { registerMeetings } from "../meetings";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
 import { prepareObs } from "../obs";
+import { visibleObsKeys } from "../obs/visibility";
 import { registerProfiles } from "../profiles/profile-ipc";
 import { makeDisplay } from "../test/display";
 import {
@@ -104,6 +105,7 @@ let managementWindow: BrowserWindow | undefined;
 /** Serves one committed fixture to both snapshot and key-runtime consumers. */
 function serveProfiles(envelope: EncodedProfileEnvelope): {
 	dispose: () => Promise<void>;
+	read: () => Promise<ProfileEnvelope>;
 } {
 	const renderer = pathToFileURL(resolve("out/renderer/index.html")).href;
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -137,6 +139,12 @@ function serveProfiles(envelope: EncodedProfileEnvelope): {
 	const snapshots = registerProfiles(runtime, renderer, false);
 	const keys = registerKeyLibrary(runtime, () => managementWindow, renderer);
 	return {
+		read: () =>
+			runtime.runPromise(
+				ProfileService.loadProfiles().pipe(
+					Effect.map(({ envelope }) => envelope),
+				),
+			),
 		dispose: async () => {
 			await keys.dispose();
 			await snapshots.dispose();
@@ -645,6 +653,7 @@ async function smoke(): Promise<void> {
 		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
 		management: () => management,
 		panel: () => panel,
+		visibleKeys: async () => visibleObsKeys(await profiles.read(), "smoke-A"),
 		mock: true,
 		storage: {
 			store: {
