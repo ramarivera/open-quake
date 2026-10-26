@@ -89,3 +89,21 @@
 - [x] Implement grid-editor placement, movement, selection, navigation, sizing, hints and scheduling with mounted consumer tests. Beads open-quake-lih.10.7/.8/.9.
 
 Lane evidence: 45 mounted editor regressions in `key-editor-interactions.test.tsx`, four canonical placement/overflow regressions in `profile-grid-placement.test.ts`, and the hidden mock native `smoke-geometry.ts` scenarios cover the new rows. Native checks include English/German replacement, 680px multi-action and knob layouts, folder entry and Space activation of vivid configuration. The full media smoke passes after scrolling the new editor layout into view before its visibility-gated OBS assertion. No hardware, microphone or audible audio was used. Gate totals and all 25 spec/code/test mappings accompany the lane PR.
+
+
+## 12. app-library burn-down
+
+- [x] 12.1 Persist app preset groups, idempotent defaults, locks, default-only localization and app icon scoring. Rows MGMT-110, MGMT-122, MGMT-123, MGMT-386, MGMT-387, MGMT-388, MGMT-391. Bead open-quake-lih.10.16.
+- [x] 12.2 Mount grouped translated search, app/generated/emoji composition, management activation and shared validated placement; verify English/German native mock screenshots and existing grid regressions. Rows MGMT-047, MGMT-107, MGMT-109, MGMT-115, MGMT-117, MGMT-119, MGMT-121, MGMT-124, MGMT-125. Bead open-quake-lih.10.17.
+- [x] 12.3 Share recovered sequence allowlist and plugin SupportedInMultiActions filtering with the function library while retaining runtime validation. Row MGMT-127. Bead open-quake-lih.10.18.
+
+Lane verification: exact root turbo command passes 4131 tests with four existing skips, including 50 key-editor interactions with the 47 inherited regressions intact. Types pass all six tasks; Biome has zero errors and 16 existing warnings plus one info; build and both bundle smoke modes pass; strict OpenSpec validation passes all 47 items. Hidden native app-library acceptance passes saved preset placement and translated search with six EN/DE wide/narrow captures. Beads remain open for lead acceptance. Assigned software rows have spec/code/test coverage; Game Mode/plugin execution and hardware remain outside this lane.
+
+## 13. PR117 review fixes
+
+- [x] 13.1 Enforce one UTF-8 snapshot size limit on read, save and migration, preserve existing storage on rejection and return typed user-visible feedback. Comments 4380858790 and 4380870003. Bead open-quake-lih.10.19.
+- [x] 13.2 Block grouped-library sequence additions at capacity with mounted feedback and saveability regression coverage. Comment 4380859220. Bead open-quake-lih.10.19.
+- [x] 13.3 Recover unmarked renamed preset titles against localized defaults and preserve them through placement. Comment 4380869996. Bead open-quake-lih.10.19.
+- [x] 13.4 Bound generated shortcut placement titles while retaining full searchable library labels. Comment 4381332353. Bead open-quake-lih.10.19.
+- [x] 13.5 Convert normalized Windows modifier chords for generated grid and sequence placement. Comment 4381332361. Bead open-quake-lih.10.19.
+- [x] 13.6 Disable directional hotkey presets in sequences while preserving ordinary grid placement. Comment 4381332371. Bead open-quake-lih.10.19.

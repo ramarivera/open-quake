@@ -3,6 +3,13 @@ import { toSafeDiagnosticCause } from "../device-errors.js";
 
 /** Domain additions to the package catalog; never includes user payloads. */
 export const ProfileErrors = {
+	AppLibrarySizeLimitExceeded: {
+		code: "QUAKE.APP_LIBRARY.SIZE_LIMIT_EXCEEDED",
+		category: "validation",
+		message:
+			"The app library exceeds 8 MiB. Remove some presets or artwork and try again.",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
 	ProfileSelectionResetFailed: {
 		code: "QUAKE.PROFILE.SELECTION_RESET_FAILED",
 		category: "dependency",
@@ -360,3 +367,17 @@ export type ProfileDesktopError =
 	| ProfileCommandFailed
 	| ProfileThumbnailFailed
 	| ProfileThumbnailUnsupported;
+
+export class AppLibrarySizeLimitExceeded extends Schema.TaggedError<AppLibrarySizeLimitExceeded>()(
+	"AppLibrarySizeLimitExceeded",
+	fields(ProfileErrors.AppLibrarySizeLimitExceeded),
+) {
+	declare readonly originalCause: unknown;
+	static fromCause(cause: unknown): AppLibrarySizeLimitExceeded {
+		const error = new AppLibrarySizeLimitExceeded(
+			props(ProfileErrors.AppLibrarySizeLimitExceeded, cause),
+		);
+		retain(error, cause);
+		return error;
+	}
+}
