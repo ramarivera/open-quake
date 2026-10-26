@@ -2142,7 +2142,6 @@ it("MGMT-286 selected-key wallpaper host preserves serial and keeps key Save out
 	expect(f.calls.filter((command) => command.type === "save")).toEqual([]);
 });
 
-
 it("MGMT-386/387/388 places reusable presets through validated profile publication without consuming the library", async () => {
 	const f = await gridFixture([]);
 	await libraryPlace(f.host, "apps:Discord:2", "1,2");
