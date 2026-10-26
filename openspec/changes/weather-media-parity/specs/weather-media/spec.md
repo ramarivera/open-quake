@@ -237,3 +237,9 @@ The local player SHALL keep card controls scoped to the committed playback owner
 
 - **WHEN** two local keys play and one card receives Stop twice
 - **THEN** only its session stops and the other key keeps playing
+
+#### Scenario: Explicit legacy system source
+
+- **WHEN** a playAudioLegacy key explicitly selects System Media
+- **THEN** physical activation routes to the shared media owner, while local and implicit legacy keys retain local ownership
+- **AND** unrelated key types cannot claim system-player ownership, covering PR103 comment 4379453327 and bead open-quake-lih.7.5
