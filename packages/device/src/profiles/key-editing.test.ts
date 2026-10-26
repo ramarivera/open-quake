@@ -12,13 +12,14 @@ import {
 	editKeyTitle,
 	editKeyTitleStyle,
 	iconInUse,
+	keyText,
 	keyTitle,
 	resetKeyIcons,
 	titleWeight,
 	truncateKeyTitle,
 } from "./key-editing-invariants.js";
 import { KeyEditing } from "./key-editing-service.js";
-import { builtinProfiles } from "./profile-catalog.js";
+import { builtinProfiles, profileText } from "./profile-catalog.js";
 import {
 	createEmptyProfileKey,
 	encodeProfileEnvelope,
@@ -417,3 +418,130 @@ it("preserves imported source identity independently for reset states without de
 		Option.getOrThrow(alternate.config.compatibility).alternateIconSource,
 	).toBe("alternate-default");
 });
+
+it("MGMT-100 recovers polluted hotkey and agent titles from all eight locales without changing custom text", () => {
+	for (const origin of [
+		"en",
+		"zh",
+		"de",
+		"fr",
+		"it",
+		"es",
+		"ja",
+		"ko",
+	] as const) {
+		const hotkey = {
+			...key,
+			config: {
+				...key.config,
+				title: { ...key.config.title, text: keyText("hotkey", origin) },
+			},
+		};
+		for (const locale of [
+			"en",
+			"zh",
+			"de",
+			"fr",
+			"it",
+			"es",
+			"ja",
+			"ko",
+		] as const) {
+			expect(keyTitle(hotkey, locale)).toBe(keyText("hotkey", locale));
+			const agent = {
+				...key,
+				config: {
+					...key.config,
+					type: "clawbot",
+					title: { ...key.config.title, text: keyText("clawbot", origin) },
+					actions: [{ type: "agentId", value: "materialfinder" }],
+				},
+			};
+			expect(keyTitle(agent, locale)).toBe(
+				profileText("openclawAgents.materialfinder.name", locale),
+			);
+			expect(
+				keyTitle(
+					{ ...agent, config: { ...agent.config, userModifiedTitle: true } },
+					locale,
+				),
+			).toBe(agent.config.title.text);
+		}
+		expect(
+			keyTitle(
+				{ ...hotkey, config: { ...hotkey.config, userModifiedTitle: true } },
+				"en",
+			),
+		).toBe(hotkey.config.title.text);
+	}
+});
+
+it("MGMT-100 keeps a localized generic label when a custom agent has no catalog name", () => {
+	const custom = {
+		...key,
+		config: {
+			...key.config,
+			type: "clawbot",
+			title: { ...key.config.title, text: keyText("clawbot", "en") },
+			actions: [{ type: "agentId", value: "my-local-agent" }],
+		},
+	};
+	expect(keyTitle(custom, "de")).toBe(keyText("clawbot", "de"));
+});
+// AI-318: go through the editor owner with the decoded shipped profile.
+it.effect(
+	"AI-318 enforces every MeetAI action-key lock through preview/remove",
+	() => {
+		const envelope = {
+			...seed(),
+			profiles: [seed().profiles[0], ...builtinProfiles("darwin")],
+		} satisfies typeof ProfileEnvelope.Type;
+		const f = setup(false, envelope);
+		return Effect.gen(function* () {
+			const editor = yield* KeyEditing;
+			const profile = yield* ProfileService.getProfile("1-1");
+			for (const source of profile.pages[0].keys.filter(
+				(k) => k.config.type && k.config.type !== "liveAudioTranslateDisplay",
+			)) {
+				const t = {
+					token: source.keyCode,
+					profileId: profile.id,
+					pageId: profile.pages[0].id,
+					keyCode: source.keyCode,
+					revision: profile.revision,
+				};
+				const encoded = Schema.encodeSync(ProfileKey)(source);
+				for (const config of [
+					{
+						...encoded.config,
+						title: { ...encoded.config.title, text: "Changed" },
+					},
+					{ ...encoded.config, icon: "changed-icon" },
+					{ ...encoded.config, type: "hotkey" },
+				]) {
+					const result = yield* Effect.either(
+						editor.preview(t, { ...encoded, config }),
+					);
+					expect(result._tag === "Left" && result.left._tag).toBe(
+						"ProfileValidationFailed",
+					);
+				}
+				expect(
+					yield* editor.preview(t, {
+						...encoded,
+						config: { ...encoded.config, size: [2, 1] },
+					}),
+				).toEqual({ _tag: "rejected" });
+				expect(
+					yield* editor.preview(t, encoded, { destination: "1,2" }),
+				).toEqual({ _tag: "rejected" });
+				const removed = yield* Effect.either(editor.remove(t));
+				expect(removed._tag === "Left" && removed.left._tag).toBe(
+					"ProfileValidationFailed",
+				);
+			}
+			expect(f.writes()).toBe(0);
+			expect(yield* ProfileService.getProfile("1-1")).toEqual(profile);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

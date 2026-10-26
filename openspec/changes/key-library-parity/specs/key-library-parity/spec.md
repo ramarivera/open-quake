@@ -166,3 +166,24 @@ The committed key runtime SHALL route configured Home Assistant keys to the dire
 - **AND** reset interrupts scoped pending integration work without waiting for the network response
 - **AND** cancellation crosses the desktop Promise boundary into the integration runtime so queued service actions cannot execute after reset
 - **AND** committed-key validation and held-press deduplication remain atomic
+
+### Requirement: Mounted profile editor regressions
+The Keys editor SHALL follow active-device profile and page publications, refresh externally changed profile labels and committed configuration, and resolve locale labels without saving translated text. Repeated publications SHALL retain an unchanged draft; a change to the selected device's profile/page SHALL discard it. Foreign-device selection SHALL not move the editor. Sources: MGMT-049, MGMT-096, MGMT-097.
+
+#### Scenario: Device selection and external updates
+- **WHEN** a draft is open and another device changes profile, then the current device selects a subfolder
+- **THEN** only the current-device selection moves the editor and discards the draft, while later name/configuration and locale publications refresh labels without rewriting saved titles
+
+### Requirement: Sequence removal and deletion ownership
+The selected multi-action operation SHALL be removed through the real editor Save path while preserving the other operations and persisted revision. Delete outside fields SHALL respect edit locks, and nested contenteditable and textbox controls SHALL own their Delete input. Sources: MGMT-083, MGMT-249.
+
+#### Scenario: Remove middle step and protect editable controls
+- **WHEN** the middle of three operations is removed and saved
+- **THEN** a repository reload contains only the first and third operations, and Delete in input, textarea, select, textbox or nested contenteditable cannot remove the selected key
+
+### Requirement: Recovery of generic translated titles
+Generic hotkey titles polluted with a default from any recovered locale SHALL resolve to the selected locale, and generic ClawBot titles SHALL resolve to the configured agent name. Explicit user text SHALL remain literal. Source: MGMT-100.
+
+#### Scenario: Eight-locale default recovery
+- **WHEN** a legacy generic hotkey or ClawBot title is localized without a user-origin marker
+- **THEN** the selected locale or configured agent supplies the title, while a title marked as user-modified survives unchanged

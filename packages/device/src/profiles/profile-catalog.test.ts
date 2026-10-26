@@ -1,13 +1,33 @@
-import { Array as EffectArray } from "effect";
+import {
+	Effect,
+	Array as EffectArray,
+	Layer,
+	ManagedRuntime,
+	Option,
+} from "effect";
 import { describe, expect, it } from "vitest";
+import {
+	stripLayout,
+	tileAt,
+} from "../../../../apps/desktop/src/renderer/src/strip/geometry";
+import { executeActionLeaf } from "../actions/action-service";
+import { KeyRuntime, KeyRuntimePort } from "../actions/key-runtime-service";
+import { QuakeDevice } from "../device-service";
+import { makeFakeHardwareTransport } from "../hardware/hardware-fake";
+import { hardwareKeyboardAdapter } from "../hardware/hardware-keyboard";
+import { HardwareControls } from "../hardware/hardware-service";
+import { keyEditable } from "./key-editing-invariants";
+import { editKeyLayout } from "./key-geometry";
 import {
 	builtinProfiles,
 	profileText,
 	translateProfile,
 } from "./profile-catalog.js";
 import {
+	createEmptyProfileKey,
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	type ProfileEnvelope,
 } from "./profile-contracts.js";
 import {
 	applyManagerCommand,
@@ -133,4 +153,492 @@ describe("recovered catalog", () => {
 			reason: "limit",
 		});
 	});
+});
+
+// Exact recovered data goes through the canonical catalog and actual strip layout.
+// Source: DefaultProfileData.js 141-564, 1336-1755, 3037-3353, 3901-4419.
+it("AI-146 retains DKClaw agents, voice flags, TTS settings and the saved knob route", () => {
+	const claw = builtinProfiles("win32").find((p) => p.id === "1-8");
+	if (!claw) throw new Error("Missing DKClaw");
+	const cell = (code: string) =>
+		claw.pages[0].keys.find((k) => k.keyCode === code);
+	expect(cell("1,1")?.config.actions).toEqual([
+		{ type: "agentId", value: "default" },
+		{ type: "ttsEngine", value: "qwen" },
+		{ type: "modeltype", value: "qwen-audio-3.1-tts-flash" },
+	]);
+	for (const [code, agent] of [
+		["1,5", "materialfinder"],
+		["1,6", "stockmaster"],
+		["2,5", "dataorganizer"],
+		["2,6", "techex"],
+	]) {
+		expect(cell(code ?? "")?.config.type).toBe("clawbot");
+		expect(cell(code ?? "")?.config.actions).toEqual([
+			{ type: "voiceInput", value: true },
+			{ type: "taskPrompt", value: "" },
+			{ type: "agentId", value: agent },
+		]);
+	}
+	const knob = Option.getOrThrow(claw.knob);
+	expect(knob).toMatchObject({
+		keyCode: "0,1",
+		config: {
+			type: "knob",
+			subActions: [
+				{
+					childrenName: "assistant",
+					config: {
+						type: "assistant",
+						actions: [
+							{ type: "voiceRoute", value: "dkclaw" },
+							{ type: "agentId", value: "main" },
+						],
+					},
+				},
+			],
+		},
+	});
+});
+
+it("MGMT-351 / MGMT-357 use exact catalog footprints and hit-test covered and hidden placeholders", () => {
+	for (const [id, anchors, covered] of [
+		[
+			"1-8",
+			["1,1", "1,5", "1,6", "1,7", "2,5", "2,6"],
+			["1,2", "1,3", "1,4", "2,1", "2,2", "2,3", "2,4", "1,8", "2,7", "2,8"],
+		],
+		[
+			"1-5",
+			["1,1", "1,6", "1,7", "1,8", "2,6", "2,7", "2,8"],
+			["1,2", "1,3", "1,4", "1,5", "2,1", "2,2", "2,3", "2,4", "2,5"],
+		],
+	] as const) {
+		const profile = builtinProfiles("win32").find((p) => p.id === id);
+		if (!profile) throw new Error("Missing preset");
+		const layout = stripLayout(profile, profile.pages[0]);
+		expect(layout.tiles.map((t) => t.keyCode)).toEqual(anchors);
+		expect(new Set(layout.covered)).toEqual(new Set(covered));
+		for (const tile of layout.tiles)
+			expect(
+				tileAt({ x: tile.slot.x + 30, y: tile.slot.y + 30 }, layout)?.keyCode,
+			).toBe(tile.keyCode);
+		const hidden = profile.pages[0].keys.filter((k) => !k.config.display);
+		if (id === "1-8") {
+			expect(hidden.map((k) => k.keyCode)).toEqual(["1,8", "2,7", "2,8"]);
+			for (const code of ["1,4", "2,4", "1,8", "2,7", "2,8"]) {
+				const placeholder = profile.pages[0].keys.find(
+					(key) => key.keyCode === code,
+				);
+				if (!placeholder) throw new Error("Missing locked placeholder");
+				expect(keyEditable(placeholder, "grid")).toBe(false);
+				expect(keyEditable(placeholder, "icon")).toBe(false);
+			}
+		}
+		const view = layout.tiles[0];
+		if (!view) throw new Error("Missing AI panel");
+		expect(view?.footprint).toMatchObject({
+			width: id === "1-8" ? 4 : 5,
+			height: 2,
+		});
+		if (id === "1-5") {
+			expect(view).toMatchObject({
+				hasTouchableSubElements: true,
+				supportTouchEffect: false,
+				pressFeedback: false,
+			});
+			for (const field of [
+				"title",
+				"grid",
+				"icon",
+				"allowDrag",
+				"allowDelete",
+			] as const)
+				expect(keyEditable(view.key, field)).toBe(false);
+		}
+	}
+});
+
+it("AI-147 retains all six saved Copilot roles and independent thinking/search controls", () => {
+	const p = builtinProfiles("win32").find((p) => p.id === "1-5");
+	if (!p) throw new Error("Missing AI Chat");
+	expect(
+		p.pages[0].keys
+			.filter((k) => k.config.type === "aiChat")
+			.map((k) => ({
+				code: k.keyCode,
+				icon: k.config.icon,
+				actions: k.config.actions,
+			})),
+	).toMatchObject([
+		{
+			code: "1,6",
+			icon: "0-112",
+			actions: [
+				{ type: "enableThinking", value: true },
+				{ type: "enableSearch", value: true },
+				{ type: "roleConfig", value: { roleId: 128 } },
+			],
+		},
+		{
+			code: "1,7",
+			icon: "0-113",
+			actions: [
+				{ type: "enableThinking", value: false },
+				{ type: "enableSearch", value: true },
+				{ type: "roleConfig", value: { roleId: 6 } },
+			],
+		},
+		{
+			code: "1,8",
+			icon: "0-114",
+			actions: [
+				{ type: "enableThinking", value: false },
+				{ type: "enableSearch", value: true },
+				{ type: "roleConfig", value: { roleId: 8 } },
+			],
+		},
+		{
+			code: "2,6",
+			icon: "0-115",
+			actions: [
+				{ type: "enableThinking", value: false },
+				{ type: "enableSearch", value: true },
+				{ type: "roleConfig", value: { roleId: 93 } },
+			],
+		},
+		{
+			code: "2,7",
+			icon: "0-116",
+			actions: [
+				{ type: "enableThinking", value: false },
+				{ type: "enableSearch", value: true },
+				{ type: "roleConfig", value: { roleId: 129 } },
+			],
+		},
+		{
+			code: "2,8",
+			icon: "0-117",
+			actions: [
+				{ type: "enableThinking", value: false },
+				{ type: "enableSearch", value: true },
+				{ type: "roleConfig", value: { roleId: 84 } },
+			],
+		},
+	]);
+});
+
+it("MGMT-353 prevents moving or overwriting the vivid preset while retaining its type-zero profile", () => {
+	const vivid = builtinProfiles("linux").find((p) => p.id === "1-4");
+	if (!vivid) throw new Error("Missing Vivid");
+	const key = vivid.pages[0].keys[0];
+	if (!key) throw new Error("Missing vivid cell");
+	expect(Option.getOrThrow(vivid.compatibility).mode).toBe(0);
+	expect(key.config).toMatchObject({
+		type: "colorfulScreen",
+		icon: "",
+		actions: [],
+	});
+	expect(keyEditable(key, "allowDrag")).toBe(false);
+	expect(
+		editKeyLayout(vivid.pages[0].keys, key, { destination: "1,2" })._tag,
+	).toBe("rejected");
+	expect(
+		editKeyLayout(vivid.pages[0].keys, createEmptyProfileKey("1,1"), {
+			replaceOverlaps: true,
+		})._tag,
+	).toBe("rejected");
+});
+
+for (const platform of ["win32", "darwin", "linux"] as const) {
+	it(`MGMT-370 / MGMT-371 dispatches committed project and Help keys on ${platform}`, async () => {
+		const p = builtinProfiles(platform).find((p) => p.id === "1-2");
+		if (!p) throw new Error("Missing Quick");
+		const urls: string[] = [];
+		const envelope: ProfileEnvelope = {
+			...createInitialProfileEnvelope(),
+			profiles: [p],
+			activeByDevice: { test: { profileId: p.id, pageId: "1" } },
+		};
+		const runtime = ManagedRuntime.make(
+			KeyRuntime.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					Layer.succeed(KeyRuntimePort, {
+						read: Effect.succeed(envelope),
+						execute: (config) =>
+							executeActionLeaf(config, {
+								keyboard: Option.none(),
+								text: Option.none(),
+								application: Option.none(),
+								media: Option.none(),
+								website: Option.some({
+									openUrl: (url) =>
+										Effect.sync(() => {
+											urls.push(url);
+										}),
+								}),
+							}),
+						publish: () => Effect.void,
+						select: () => Effect.void,
+						alarm: () => Effect.void,
+					}),
+				),
+			),
+		);
+		try {
+			for (const [code, title, url, icon] of [
+				[
+					"1,4",
+					"open-quake",
+					"https://github.com/ramarivera/open-quake",
+					"0-93",
+				],
+				[
+					"1,5",
+					"Help",
+					"https://github.com/ramarivera/open-quake/issues",
+					platform === "darwin" ? "0-11" : "0-94",
+				],
+			]) {
+				const key = p.pages[0].keys.find((k) => k.keyCode === code);
+				expect(key?.config).toMatchObject({
+					type: "website",
+					title: { text: title },
+					icon,
+					actions: [{ type: "url", value: url }],
+				});
+				if (!key) throw new Error("Missing website");
+				for (const field of [
+					"title",
+					"grid",
+					"icon",
+					"allowDelete",
+					"allowDrag",
+				] as const)
+					expect(keyEditable(key, field)).toBe(false);
+				await runtime.runPromise(
+					KeyRuntime.activate("test", code ?? "", "press", {
+						profileId: p.id,
+						pageId: "1",
+						revision: 0,
+					}),
+				);
+				await runtime.runPromise(
+					KeyRuntime.activate("test", code ?? "", "release"),
+				);
+			}
+			expect(urls).toEqual([
+				"https://github.com/ramarivera/open-quake",
+				"https://github.com/ramarivera/open-quake/issues",
+			]);
+		} finally {
+			await runtime.dispose();
+		}
+	});
+	it(`MGMT-381 / MGMT-382 encodes immutable Clipboard and Mac Expose presets on ${platform}`, async () => {
+		const p = builtinProfiles(platform).find((p) => p.id === "1-2");
+		if (!p) throw new Error("Missing Quick");
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const fake = yield* makeFakeHardwareTransport();
+					const device = yield* QuakeDevice.pipe(
+						Effect.provide(
+							QuakeDevice.DefaultWithoutDependencies.pipe(
+								Layer.provide(fake.layer),
+							),
+						),
+					);
+					const connection = yield* device.connect();
+					const controls = yield* HardwareControls.pipe(
+						Effect.provide(HardwareControls.Default),
+					);
+					const session = yield* controls.create(connection, {
+						serial: "test",
+						session: "test-1",
+					});
+					const runtime = yield* KeyRuntime.pipe(
+						Effect.provide(
+							KeyRuntime.DefaultWithoutDependencies.pipe(
+								Layer.provide(
+									Layer.succeed(KeyRuntimePort, {
+										read: Effect.succeed<ProfileEnvelope>({
+											...createInitialProfileEnvelope(),
+											profiles: [p],
+											activeByDevice: {
+												test: { profileId: p.id, pageId: "1" },
+											},
+										}),
+										execute: (config) =>
+											executeActionLeaf(config, {
+												website: Option.none(),
+												text: Option.none(),
+												application: Option.none(),
+												media: Option.none(),
+												keyboard: Option.some(hardwareKeyboardAdapter(session)),
+											}),
+										publish: () => Effect.void,
+										select: () => Effect.void,
+										alarm: () => Effect.void,
+									}),
+								),
+							),
+						),
+					);
+					const clipboard = p.pages[0].keys.find((k) => k.keyCode === "2,7");
+					if (!clipboard) throw new Error("Missing Clipboard");
+					expect(clipboard.config.actions).toEqual([
+						{
+							type: "key",
+							value:
+								platform === "darwin"
+									? "command+shift+v"
+									: platform === "win32"
+										? "command+v"
+										: "control+v",
+						},
+					]);
+					expect(clipboard.config.icon).toBe("0-85");
+					for (const field of [
+						"title",
+						"grid",
+						"icon",
+						"allowDelete",
+						"allowDrag",
+					] as const)
+						expect(keyEditable(clipboard, field)).toBe(false);
+					yield* runtime.activate("test", "2,7", "press");
+					yield* runtime.activate("test", "2,7", "release");
+					const mask =
+						platform === "darwin" ? 10 : platform === "win32" ? 8 : 1;
+					const expected = [
+						[1, 16, 1, mask, 25],
+						[1, 16, 0, mask, 25],
+					];
+					if (platform === "darwin") {
+						const expose = p.pages[0].keys.find((k) => k.keyCode === "2,8");
+						expect(expose?.config).toMatchObject({
+							type: "hotkey",
+							icon: "0-92",
+							actions: [{ type: "key", value: "control+down" }],
+						});
+						yield* runtime.activate("test", "2,8", "press");
+						yield* runtime.activate("test", "2,8", "release");
+						expected.push([1, 16, 1, 1, 81], [1, 16, 0, 1, 81]);
+					}
+					expect((yield* fake.writes).map((b) => [...b.slice(3, 8)])).toEqual(
+						expected,
+					);
+				}),
+			),
+		);
+	});
+}
+
+// AI-265, AI-318, MGMT-360, MGMT-365: independent fixture, not copied from the shipped JSON.
+describe("MeetAI recovered control contract", () => {
+	it.each(["darwin", "win32", "linux"] as const)(
+		"pins all six controls on %s",
+		(platform) => {
+			const profile = builtinProfiles(platform).find((p) => p.id === "1-1");
+			expect(profile?.name).toBe("MeetAI");
+			expect(profile && Option.getOrNull(profile.compatibility)).toMatchObject({
+				resourceId: "1-1",
+				builtin: "meetingAssistant",
+				mode: 1,
+			});
+			const keys = profile?.pages[0].keys.filter((k) => k.config.type);
+			expect(
+				keys?.map((k) => ({
+					keyCode: k.keyCode,
+					type: k.config.type,
+					title: k.config.title.text,
+					size: k.config.size,
+					icon: k.config.icon,
+					actions: k.config.actions,
+					alternateIcon: Option.getOrNull(k.config.alterIcon),
+				})),
+			).toEqual([
+				{
+					keyCode: "1,1",
+					type: "liveAudioTranslateDisplay",
+					title: "",
+					size: [5, 2],
+					icon: "0-80",
+					actions: [{ type: "targetLanguage", value: "zh" }],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "1,6",
+					type: "meetingMinutes",
+					title: "Start",
+					size: [1, 2],
+					icon: "0-61",
+					actions: [{ type: "generateReport", value: true }],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "1,7",
+					type: "tempMeetingMinutes",
+					title: "Record",
+					size: [1, 1],
+					icon: "0-99",
+					actions: [],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "1,8",
+					type: "mic",
+					title: "Mic Mute",
+					size: [1, 1],
+					icon: "0-59",
+					actions: [
+						{ type: "toggle", value: 0 },
+						{ type: "toggle", value: 1 },
+					],
+					alternateIcon: "0-100",
+				},
+				{
+					keyCode: "2,7",
+					type: "liveAudioTranslate",
+					title: "Translate",
+					size: [1, 1],
+					icon: "0-98",
+					actions: [{ type: "targetLanguage", value: "zh" }],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "2,8",
+					type: "meetingRecordMark",
+					title: "Mark",
+					size: [1, 1],
+					icon: "0-99",
+					actions: [],
+					alternateIcon: null,
+				},
+			]);
+			expect(profile?.pages[0].keys).toHaveLength(16);
+			expect(keys?.[0]?.compatibility).toMatchObject({
+				value: {
+					source: {
+						config: {
+							hasTouchableSubElements: true,
+							supportTouchEffect: false,
+						},
+					},
+				},
+			});
+			for (const key of keys ?? []) {
+				for (const field of [
+					"title",
+					"grid",
+					"icon",
+					"allowDelete",
+					"allowDrag",
+				] as const)
+					expect(keyEditable(key, field)).toBe(key.keyCode === "1,1");
+				expect(key.config.supportKnob).toBe(false);
+			}
+		},
+	);
 });

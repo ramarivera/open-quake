@@ -152,7 +152,7 @@ describe("registered soundboard rendering", () => {
 	});
 });
 
-it("renders configured recovered local keys without native OS controls", () => {
+it("renders configured local keys with disabled preview transport and no private paths", () => {
 	for (const value of [0, 1, 2, 3, 4, 5, 6]) {
 		const html = render([
 			{ type: "sound", value: "/private/secret.mp3" },
@@ -162,7 +162,9 @@ it("renders configured recovered local keys without native OS controls", () => {
 		]);
 		expect(html).toContain('data-testid="soundboard-local"');
 		expect(html).not.toMatch(
-			/secret|private|data-quake-sub-touch|data-testid="soundboard-unavailable"/,
+			/secret|private|data-testid="soundboard-unavailable"/,
 		);
+		expect(html).toContain('data-quake-sub-touch="playStop"');
+		expect(html.match(/disabled=""/g)).toHaveLength(4);
 	}
 });

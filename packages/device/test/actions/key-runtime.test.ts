@@ -21,7 +21,12 @@ import {
 	ProfileKey,
 } from "../../src/profiles/profile-contracts.js";
 
-function fixture(config: unknown, unsupported = false, delay = 0) {
+function fixture(
+	config: unknown,
+	unsupported = false,
+	delay = 0,
+	overrides: Partial<KeyRuntimePort["Type"]> = {},
+) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const rawConfig = Schema.decodeUnknownSync(ProfileJsonObject)(config);
 	const key = Schema.decodeUnknownSync(ProfileKey)({
@@ -84,6 +89,7 @@ function fixture(config: unknown, unsupported = false, delay = 0) {
 							},
 						};
 					}),
+				...overrides,
 			}),
 		),
 	);
@@ -435,6 +441,237 @@ it.effect(
 			yield* press;
 			yield* TestClock.adjust(0);
 			expect(f.feedback.at(-1)?.progress).toBe(0);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MAIN-065 held contact executes ordinary actions only on successful up, ignores directional keys",
+	() => {
+		const f = fixture({ type: "nextPage", actions: [] });
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			expect(f.selection()?.pageId).toBe("one");
+			yield* runtime.activate("device", "1,1", "cancel");
+			expect(f.selection()?.pageId).toBe("one");
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.selection()?.pageId).toBe("two");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.selection()?.pageId).toBe("two");
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MAIN-065 hotkey down precedes lift and cancellation releases the original owner after profile change",
+	() => {
+		const edges: string[] = [];
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "hotkey", value: "control+a" }] },
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.sync(() => {
+						edges.push("down");
+						return Effect.sync(() => {
+							edges.push("up");
+						});
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "down");
+			expect(edges).toEqual(["down"]);
+			f.switch();
+			yield* runtime.activate("device", "1,1", "cancel");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(edges).toEqual(["down", "up"]);
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MAIN-065 directional contact edges never execute a normal action",
+	() => {
+		const f = fixture({ type: "vol", actions: [] });
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect("held release failure retains its owner for reset cleanup", () =>
+	Effect.gen(function* () {
+		let releases = 0;
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.succeed(
+						Effect.suspend(() =>
+							++releases === 1
+								? Effect.fail(new HostActionFailed("release-failed"))
+								: Effect.void,
+						),
+					),
+			},
+		);
+		yield* Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			expect(
+				(yield* Effect.either(runtime.activate("device", "1,1", "up")))._tag,
+			).toBe("Left");
+			yield* runtime.reset("device");
+			expect(releases).toBe(2);
+		}).pipe(Effect.provide(f.layer));
+	}),
+);
+
+it.effect(
+	"reset reports the catalog release error and retries the original held owner",
+	() =>
+		Effect.gen(function* () {
+			let releases = 0;
+			const source = new Error("private /Users/test/key.txt token=secret");
+			const failure = new HostActionFailed(source);
+			const f = fixture(
+				{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+				false,
+				0,
+				{
+					holdHotkey: () =>
+						Effect.succeed(
+							Effect.suspend(() =>
+								++releases === 1 ? Effect.fail(failure) : Effect.void,
+							),
+						),
+				},
+			);
+			yield* Effect.gen(function* () {
+				const runtime = yield* KeyRuntime;
+				yield* runtime.activate("device", "1,1", "down");
+				f.switch();
+				const result = yield* Effect.either(runtime.reset("device"));
+				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") {
+					expect(result.left._tag).toBe("HostActionFailed");
+					expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+					expect(result.left.originalCause).toBe(source);
+					expect(JSON.stringify(result.left)).not.toContain("secret");
+					expect(JSON.stringify(result.left)).not.toContain("key.txt");
+				}
+				yield* runtime.reset("device");
+				expect(releases).toBe(2);
+				yield* runtime.reset("device");
+				expect(releases).toBe(2);
+			}).pipe(Effect.provide(f.layer));
+		}),
+);
+it.effect("scope disposal retries a failed held-key release", () =>
+	Effect.gen(function* () {
+		let releases = 0;
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.succeed(
+						Effect.suspend(() =>
+							++releases === 1
+								? Effect.fail(new HostActionFailed("release-failed"))
+								: Effect.void,
+						),
+					),
+			},
+		);
+		yield* Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+		}).pipe(Effect.provide(f.layer));
+		expect(releases).toBe(2);
+	}),
+);
+
+it.effect(
+	"a failed synchronous contact press does not consume the next tap",
+	() => {
+		let attempts = 0;
+		const failure = new HostActionFailed("transient-open-failure");
+		const f = fixture(
+			{
+				type: "website",
+				actions: [{ type: "url", value: "https://example.com" }],
+			},
+			false,
+			0,
+			{
+				execute: () =>
+					Effect.suspend(() =>
+						++attempts === 1 ? Effect.fail(failure) : Effect.void,
+					),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			const first = yield* Effect.either(
+				runtime.activate("device", "1,1", "up"),
+			);
+			expect(first._tag).toBe("Left");
+			if (first._tag === "Left")
+				expect(first.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+			expect(attempts).toBe(1);
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(attempts).toBe(2);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"touching directional knob hotkeys never acquires or executes a chord",
+	() => {
+		let acquisitions = 0;
+		const f = fixture(
+			{
+				type: "hotkey",
+				supportKnob: true,
+				actions: [
+					{ type: "key", value: "a" },
+					{ type: "key", value: "b" },
+				],
+			},
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.sync(() => {
+						acquisitions++;
+						return Effect.void;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			for (const finish of ["up", "cancel"] as const) {
+				yield* runtime.activate("device", "1,1", "down");
+				yield* runtime.activate("device", "1,1", finish);
+			}
+			expect(acquisitions).toBe(0);
+			expect(f.calls).toEqual([]);
 		}).pipe(Effect.provide(f.layer));
 	},
 );

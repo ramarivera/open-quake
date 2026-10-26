@@ -93,6 +93,50 @@ afterEach(async () => {
 });
 
 describe("production Effect diagnostics", () => {
+	it("MAIN-036 persists closed touch counters and states without native payloads", async () => {
+		const { directory, diagnostics } = await fixture();
+		const app = runtime(diagnostics);
+		await app.runPromise(
+			Effect.gen(function* () {
+				yield* Effect.logInfo("touch.health", {
+					state: "TOUCH_OK",
+					reports: 9,
+					frames: 7,
+					bindAttempts: 1,
+					recoveryCycle: 0,
+					errorCode: "secret-native-error",
+					message: "private-device-path",
+					serial: "private-serial",
+				});
+				yield* Effect.logInfo("touch.state", {
+					previous: "TOUCH_OK",
+					state: "UNKNOWN",
+					path: "private-device-path",
+				});
+			}),
+		);
+		await diagnostics.flush();
+		const lines = await records(directory);
+		expect(lines.find((line) => line.event === "touch.health")).toMatchObject({
+			touch: {
+				state: "TOUCH_OK",
+				reports: 9,
+				frames: 7,
+				bindAttempts: 1,
+				recoveryCycle: 0,
+			},
+		});
+		expect(lines.find((line) => line.event === "touch.state")).toMatchObject({
+			touch: { previous: "TOUCH_OK", state: "UNKNOWN" },
+		});
+		for (const privateValue of [
+			"secret-native-error",
+			"private-device-path",
+			"private-serial",
+		])
+			expect(JSON.stringify(lines)).not.toContain(privateValue);
+	});
+
 	it("retains the named chat turn span and interrupted error identity with its parent trace", async () => {
 		const { directory, diagnostics } = await fixture();
 		const app = runtime(diagnostics);
@@ -685,8 +729,9 @@ describe("process-owned runtime diagnostics", () => {
 	});
 });
 
-it("retains the firmware shutdown diagnostic span", () => {
-	expect(safeSpanName("FirmwareUpdates.shutdown")).toBe(
-		"FirmwareUpdates.shutdown",
-	);
-});
+it.each(["FirmwareUpdates.shutdown", "HardwareControls.holdChord"])(
+	"retains the %s diagnostic span",
+	(name) => {
+		expect(safeSpanName(name)).toBe(name);
+	},
+);
