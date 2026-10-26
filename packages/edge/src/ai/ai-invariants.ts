@@ -83,7 +83,8 @@ export function validateProfile(
 		if (
 			range &&
 			(range.min > range.max ||
-				(key === "topP" && (range.min < 0 || range.max > 1)))
+				range.min < 0 ||
+				range.max > (key === "temperature" ? 2 : 1))
 		)
 			return Either.left({ reason: "config" });
 	}
@@ -110,6 +111,8 @@ function validSampling(
 		if (
 			value !== undefined &&
 			(!Number.isFinite(value) ||
+				value < 0 ||
+				value > (key === "temperature" ? 2 : 1) ||
 				!range ||
 				value < range.min ||
 				value > range.max)

@@ -73,6 +73,59 @@ const compatibleLayer = (
 
 describe("mock-default provider facade", () => {
 	it.effect(
+		"rejects invalid sampling before credentials or provider dispatch",
+		() =>
+			Effect.gen(function* () {
+				const repository = yield* AiRepository;
+				const service = yield* AiProviderService;
+				const selected: ProviderProfile = {
+					...profile,
+					samplingLimits: {
+						temperature: { min: 0, max: 2 },
+						topP: { min: 0, max: 1 },
+					},
+				};
+				yield* repository.put(selected);
+				const invalidProfile = yield* Effect.either(
+					repository.put({
+						...selected,
+						samplingLimits: { temperature: { min: -1, max: 3 } },
+					}),
+				);
+				expect(invalidProfile).toMatchObject({
+					_tag: "Left",
+					left: { _tag: "AiConfigInvalid", code: "AI.PROVIDER.CONFIG_INVALID" },
+				});
+				for (const sampling of [
+					{ temperature: -0.1 },
+					{ temperature: 2.1 },
+					{ topP: -0.1 },
+					{ topP: 1.1 },
+				]) {
+					const result = yield* Effect.either(
+						service.generate({ ...request, sampling }),
+					);
+					expect(result).toMatchObject({
+						_tag: "Left",
+						left: {
+							_tag: "AiConfigInvalid",
+							code: "AI.PROVIDER.CONFIG_INVALID",
+						},
+					});
+				}
+			}).pipe(
+				Effect.provide(
+					compatibleLayer(
+						{ open: () => Effect.die("adapter must not run") },
+						{
+							resolve: () => Effect.die("credentials must not run"),
+							revoked: () => Effect.never,
+						},
+					),
+				),
+			),
+	);
+	it.effect(
 		"rejects mock image requests and false capability declarations before dispatch",
 		() =>
 			Effect.gen(function* () {
