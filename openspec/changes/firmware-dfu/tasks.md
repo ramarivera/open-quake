@@ -20,6 +20,6 @@ Implementation is tracked by open-quake-18d under open-quake-lih.13. Checked tas
 
 ## 4. Firmware burn-down lane
 
-- [ ] 4.1 Implement trusted bundled discovery and retained availability with synthetic fixtures, tracked by open-quake-lih.13.1.
-- [ ] 4.2 Implement bounded progress, Windows lookup cadence, close reconciliation and renderer lifecycle/guidance tests, tracked by open-quake-lih.13.2.
+- [x] 4.1 Implement trusted bundled discovery and retained availability with synthetic fixtures, tracked by open-quake-lih.13.1.
+- [x] 4.2 Implement bounded progress, Windows lookup cadence, close reconciliation and renderer lifecycle/guidance tests, tracked by open-quake-lih.13.2.
 - [ ] 4.3 Validate the actual audited production image. Blocked by this lane's synthetic-only instruction; no real firmware binary may be opened or downloaded.

@@ -1,7 +1,6 @@
 import { Schema } from "effect";
 import { useEffect, useRef, useState } from "react";
 import {
-	type FirmwareSnapshot,
 	newerVersion,
 	type PermissionKey,
 	RecoverySerial,
@@ -12,6 +11,10 @@ import { Group, PageHeader, Row } from "../ui/Form";
 import type { MaintenanceController } from "./useMaintenance";
 import "./maintenance.css";
 import { SpeechSettingsPanel } from "../speech/SpeechSettings";
+
+import { firmwareHint } from "./firmware-guidance";
+
+export { firmwareHint } from "./firmware-guidance";
 
 const fw = strings.firmwareUpgrade;
 const permissionNames: Readonly<Record<PermissionKey, string>> = {
@@ -55,7 +58,11 @@ export function SettingsPage({
 									? fw.rowStatus.deviceOffline
 									: running
 										? fw.rowStatus.upgradingInBackground
-										: "Manual firmware updates"
+										: view.firmwareAvailability === "no_bundled_firmware"
+											? fw.error.no_bundled_firmware
+											: view.firmwareAvailability === "device_version_unknown"
+												? "Device firmware version is unknown"
+												: "Manual firmware updates"
 							}
 						>
 							<span className="firmware-version">
@@ -307,27 +314,6 @@ function ResetDialog({
 		</Modal>
 	);
 }
-export function firmwareHint(snapshot: FirmwareSnapshot): string {
-	if (snapshot.state === "success")
-		return fw.success.replace("{version}", snapshot.to);
-	if (snapshot.state === "needs_recovery")
-		return "Update unverified. Reconnect the intended QUAKE, enter its bootloader manually, and select the trusted image again. Do not unplug during writing.";
-	if (snapshot.state === "failed")
-		return (
-			Object.entries(fw.error).find(([key]) => key === snapshot.reason)?.[1] ??
-			`Firmware upgrade failed (${snapshot.reason}).`
-		);
-	const hints: Readonly<Record<string, string>> = {
-		checking: fw.hint.checking,
-		entering_download_mode: fw.hint.enteringDownloadMode,
-		waiting_volume: fw.hint.waitingVolume,
-		ready_to_write: "Select the QUAKE DFU drive and confirm writing firmware.",
-		copying: fw.hint.copying,
-		written_unverified: fw.hint.verifying,
-		verifying: fw.hint.verifying,
-	};
-	return hints[snapshot.state] ?? fw.hint.checking;
-}
 export function FirmwareDialog({
 	controller: c,
 }: {
@@ -473,9 +459,18 @@ export function AppUpdateDialog({
 			<h2>Newer version available</h2>
 			<p>Newer version available {update.version} Upgrade now?</p>
 			{update.state === "downloading" ? (
-				<progress value={update.progress} max={1} />
+				<progress
+					aria-label="App update download progress"
+					value={update.progress}
+					max={1}
+				/>
 			) : null}
-			{update.reason ? <p role="alert">{update.reason}</p> : null}
+			{update.reason ? (
+				<p role="alert">Upgrade failed, please retry later.</p>
+			) : null}
+			{update.state === "failed" && c.error ? (
+				<p role="alert">{c.error}</p>
+			) : null}
 			<footer>
 				<button
 					type="button"
@@ -487,7 +482,7 @@ export function AppUpdateDialog({
 				<button
 					type="button"
 					className="button button-primary"
-					disabled={c.busy}
+					disabled={c.busy || update.state === "downloading"}
 					onClick={() =>
 						void c.request({
 							action:
