@@ -716,3 +716,63 @@ it.scoped(
 			expect(result.every((u) => u.text.length <= 4000)).toBe(true);
 		}),
 );
+
+for (const target of [
+	"http://127.0.0.1:1234/result",
+	"https://127.0.0.1/result",
+	"https://10.1.2.3/result",
+	"https://172.16.0.1/result",
+	"https://192.168.1.1/result",
+	"https://169.254.169.254/latest/meta-data",
+	"https://[::1]/result",
+	"https://[::ffff:7f00:1]/result",
+	"https://[fd00::1]/result",
+	"https://[fe80::1]/result",
+	"https://localhost/result",
+	"https://metadata.google.internal/result",
+	"https://2130706433/result",
+	"https://attacker.example/result",
+]) {
+	it.effect(
+		`rejects provider-supplied transcript URL ${target} before fetching`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				f.states.set("meeting", {
+					version: 1,
+					config: f.request.config,
+					task: "task",
+					remoteFiles: [],
+					cleanupPending: false,
+				});
+				const http: typeof SpeechHttp.Service = {
+					fetch: async (url, init) => {
+						if (url.endsWith("/tasks/task"))
+							return Response.json({
+								output: {
+									task_id: "task",
+									task_status: "SUCCEEDED",
+									results: [
+										{ subtask_status: "SUCCEEDED", transcription_url: target },
+									],
+								},
+							});
+						return f.http.fetch(url, init);
+					},
+				};
+				const adapter = dashscopeFiletrans({
+					...f,
+					http,
+					resolve: () =>
+						Effect.succeed({
+							key: "fake",
+							api: "https://dashscope.aliyuncs.com/api/v1/",
+							realtime: "wss://dashscope.aliyuncs.com/realtime",
+						}),
+				});
+				const result = yield* Effect.either(adapter.poll("meeting"));
+				expect(Either.isLeft(result)).toBe(true);
+				expect(f.requests).toEqual([]);
+			}),
+	);
+}

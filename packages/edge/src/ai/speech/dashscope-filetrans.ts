@@ -5,7 +5,12 @@ import type {
 	MeetingAsrRequest,
 	MeetingAsrResult,
 } from "../meeting-adapter.js";
-import { meetingRequest, providerUrl, responseJson } from "./meeting-http.js";
+import {
+	meetingRequest,
+	providerUrl,
+	responseJson,
+	transcriptUrl,
+} from "./meeting-http.js";
 import type {
 	MeetingResource,
 	MeetingResources,
@@ -233,7 +238,10 @@ export function dashscopeFiletrans(options: {
 				return yield* meetingError("TranscriptionFailed");
 			const body = yield* meetingRequest(
 				http,
-				providerUrl(entry.transcription_url),
+				yield* transcriptUrl(
+					entry.transcription_url,
+					(yield* resolve(state.config)).api,
+				),
 			).pipe(Effect.flatMap(responseJson));
 			bodies.push(body);
 			const transcripts = object(body).transcripts;

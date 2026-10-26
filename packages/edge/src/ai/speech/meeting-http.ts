@@ -60,3 +60,31 @@ export const responseJson = (response: Response) =>
 		},
 		catch: (cause) => meetingError("TranscriptionFailed", cause),
 	});
+
+/** Untrusted result URLs stay on public Alibaba OSS. A deliberately configured
+ * loopback provider may only return its own exact origin, for offline providers. */
+export const transcriptUrl = (value: string, api: string) =>
+	Effect.try({
+		try: () => {
+			const url = new URL(providerUrl(value));
+			const base = new URL(api);
+			if (
+				base.protocol === "http:" &&
+				["localhost", "127.0.0.1", "[::1]"].includes(base.hostname) &&
+				url.origin === base.origin
+			)
+				return url.href;
+			// Reject arbitrary DNS names as well as IP literals. This also prevents
+			// rebinding through attacker-controlled domains, without a DNS-check/fetch race.
+			if (
+				url.protocol !== "https:" ||
+				url.port ||
+				!/^[-a-z0-9]+\.oss-(?:cn-beijing|cn-shanghai|cn-hangzhou|ap-southeast-1|us-east-1|eu-central-1)\.aliyuncs\.com$/.test(
+					url.hostname,
+				)
+			)
+				throw meetingError("Invalid");
+			return url.href;
+		},
+		catch: (cause) => meetingError("TranscriptionFailed", cause),
+	});
