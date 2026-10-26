@@ -20,7 +20,7 @@ import {
 } from "../renderer/src/useQuakeEvents";
 import { DEVICE_RECONNECT_MS, startDeviceBus } from "./deviceBus";
 import { createEventForwarder } from "./eventForwarding";
-import { report } from "./test/hid";
+import { makeTwoStrips, report } from "./test/hid";
 
 const makeHarness = Effect.gen(function* () {
 	const scope = yield* Scope.make();
@@ -63,6 +63,41 @@ const missing = {
 		category: "unavailable",
 	},
 };
+
+it.scoped(
+	"reconnects a secondary serial at its current HID path without crossing into another strip",
+	() =>
+		Effect.gen(function* () {
+			const two = yield* makeTwoStrips;
+			two.devices.push(two.b);
+			yield* Effect.gen(function* () {
+				const h = yield* makeHarness;
+				yield* h.next;
+				yield* TestClock.adjust(1000);
+				const child = h.bus.device?.("B");
+				expect(child?.currentStatus()?.state).toBe("connected");
+				const events: QuakeEvent[] = [];
+				child?.on((event) => events.push(event));
+				two.b.path = "fake:B:re-enumerated";
+				yield* two.second.failRead(new Error("re-enumerated"));
+				yield* TestClock.adjust(1000);
+				yield* child?.recover?.() ?? Effect.void;
+				yield* TestClock.adjust(1);
+				expect(yield* two.second.opens).toBe(2);
+				expect(yield* two.first.opens).toBe(1);
+				expect(h.bus.device?.("B")).toBe(child);
+				expect(child?.currentStatus()?.state).toBe("connected");
+				yield* two.second.emit(report(3, 1, [1]));
+				yield* TestClock.adjust(1);
+				expect(events.at(-1)).toMatchObject({ kind: "rotate", direction: 1 });
+				two.b.path = "fake:B:again";
+				yield* child?.recover?.(true) ?? Effect.void;
+				yield* TestClock.adjust(1000);
+				expect(yield* two.second.opens).toBe(3);
+				expect(yield* two.first.opens).toBe(1);
+			}).pipe(Effect.provide(withTransport(two.layer)));
+		}),
+);
 
 const withTransport = (transport: Layer.Layer<HidTransport>) =>
 	QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(transport));

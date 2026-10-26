@@ -138,6 +138,10 @@ The lifecycle SHALL retain bindings and last stable bounds by device serial. A p
 - **WHEN** a prior strip ID now belongs to a desktop and two strips need binding
 - **THEN** the desktop stays unbound, uniquely matching stable bounds reserve their serial, and remaining ambiguous serials park and receive the same targeted multi-screen alert
 
+#### Scenario: Secondary serial re-enumerates its control interface
+- **WHEN** a secondary device keeps its serial but changes HID path between presence scans
+- **THEN** every reconnect attempt resolves that serial's current path, explicit recovery remains effective, and the primary strip keeps its independent connection and input
+
 #### Scenario: Lock invalidates pending recovery
 - **WHEN** lock or a newer wake interrupts discovery or a delayed recovery
 - **THEN** the older generation cannot commit a binding or write to a replaced hardware session, and unlock pumps the remaining serials after exactly 2500 ms

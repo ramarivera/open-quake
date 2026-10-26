@@ -37,7 +37,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	attachHardware?: (
 		connection: QuakeConnection,
 	) => Effect.Effect<HardwareSession, HardwareError, Scope.Scope>,
-	selection?: { readonly path: string },
+	selection?: { readonly serial: string },
 ): Effect.fn.Return<DeviceBus, never, QuakeDevice | Scope.Scope> {
 	const device = yield* QuakeDevice;
 	const ownerScope = yield* Effect.scope;
@@ -131,7 +131,14 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		Effect.gen(function* () {
 			// QuakeDevice filters VID/PID and usagePage/usage, selecting FF60/61
 			// rather than the system, consumer or keyboard HID collections.
-			if (selection) selectedPath = selection.path;
+			if (selection) {
+				const present = yield* device.discover();
+				const current = present.find(
+					(info) => info.serialNumber === selection.serial,
+				);
+				if (!current) return yield* new QuakeDeviceNotFound();
+				selectedPath = current.path;
+			}
 			if (!selection && !selectedPath && lastSerial) {
 				const present = yield* device.discover();
 				const prior =
@@ -292,7 +299,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 								continue;
 							const childScope = yield* Scope.make();
 							const child = yield* Scope.extend(
-								startDeviceBus(attachHardware, { path: info.path }),
+								startDeviceBus(attachHardware, { serial }),
 								childScope,
 							);
 							secondary.set(serial, { bus: child, scope: childScope });
