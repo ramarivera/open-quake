@@ -1348,6 +1348,85 @@ describe("desktop main with the real device service and fake HID", () => {
 		if (!first || !second) throw new Error("Two panels required");
 		return { two, primary, a, b, first, second };
 	}
+
+	it("SETTINGS-018 pins explicit device selection despite input from another serial and rejects stale selections", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two } = await startTwoStrips();
+			const { management } = windows();
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([name]) => name === "management:devices",
+			)?.[1];
+			if (!handler) throw new Error("Device picker missing");
+			const event = {
+				sender: management.webContents,
+				senderFrame: management.webContents.mainFrame,
+			};
+			const read = await Reflect.apply(handler, undefined, [
+				event,
+				{ action: "read" },
+			]);
+			const { DeviceChoices } = await import("../shared/management");
+			const choices = Schema.decodeUnknownSync(DeviceChoices)(read);
+			expect(choices.devices.map((device) => device.serial)).toEqual([
+				"A",
+				"B",
+			]);
+			const device = choices.devices.find((device) => device.serial === "B");
+			if (!device) throw new Error("B missing");
+			expect(
+				await Reflect.apply(handler, undefined, [
+					event,
+					{ action: "select", device: { ...device, session: "old" } },
+				]),
+			).toBeNull();
+			await Reflect.apply(handler, undefined, [
+				event,
+				{ action: "select", device },
+			]);
+			await Effect.runPromise(two.first.emit(report(3, 1, [1])));
+			const hardware = electron.ipcMain.handle.mock.calls.find(
+				([name]) => name === "hardware:request",
+			)?.[1];
+			if (!hardware) throw new Error("Hardware owner missing");
+			const response = await Reflect.apply(hardware, undefined, [
+				{
+					...event,
+					sender: {
+						...management.webContents,
+						getURL: () => "http://localhost:5173/?surface=management",
+					},
+				},
+				{ _tag: "read" },
+			]);
+			expect(response).toEqual({
+				_tag: "failure",
+				code: "QUAKE.HARDWARE.REQUEST_DENIED",
+			});
+			const view = await Reflect.apply(handler, undefined, [
+				event,
+				{ action: "read" },
+			]);
+			expect(Schema.decodeUnknownSync(DeviceChoices)(view).selected).toBe("B");
+			Object.assign(management.webContents, {
+				getURL: () => "http://localhost:5173/?surface=management",
+			});
+			expect(
+				await Reflect.apply(hardware, undefined, [event, { _tag: "read" }]),
+			).toMatchObject({ _tag: "ready", snapshot: { serial: "B" } });
+			expect(
+				await Reflect.apply(handler, undefined, [
+					{ ...event, senderFrame: {} },
+					{ action: "read" },
+				]),
+			).toBeNull();
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
 	it("routes secondary touch and knob input to its own panel and input consumers", async () => {
 		vi.useFakeTimers();
 		try {
@@ -1865,6 +1944,28 @@ describe("desktop main with the real device service and fake HID", () => {
 });
 
 describe("single-instance startup and release policy", () => {
+	it("MAIN-119 prepares Chromium and privileged protocols before the lock, readiness and windows", async () => {
+		vi.resetModules();
+		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
+		electron.app.requestSingleInstanceLock.mockReturnValueOnce(false);
+		const switches = electron.app.commandLine.appendSwitch.mock.calls.length;
+		const locks = electron.app.requestSingleInstanceLock.mock.calls.length;
+		await import("./index");
+		const { registerClockScheme } = await import("./clock");
+		const flagOrder =
+			electron.app.commandLine.appendSwitch.mock.invocationCallOrder[switches];
+		const lockOrder =
+			electron.app.requestSingleInstanceLock.mock.invocationCallOrder[locks];
+		expect(electron.app.commandLine.appendSwitch.mock.calls[switches]).toEqual([
+			"disable-features",
+			"CalculateNativeWinOcclusion",
+		]);
+		expect(flagOrder).toBeLessThan(lockOrder ?? 0);
+		expect(
+			vi.mocked(registerClockScheme).mock.invocationCallOrder.at(-1),
+		).toBeLessThan(lockOrder ?? 0);
+	});
+
 	it("refuses startup before readiness, windows, discovery or HID open", async () => {
 		vi.resetModules();
 		const fake = await Effect.runPromise(makeFakeHidTransport());

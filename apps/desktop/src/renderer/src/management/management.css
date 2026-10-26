@@ -1108,3 +1108,14 @@ fieldset.mc-tabs button {
 .mc-sidebar-footer > .guide-entry {
 	min-width: 0;
 }
+
+.shell-device-picker {
+	display: grid;
+	gap: 8px;
+	max-width: 420px;
+	margin: 0 0 24px;
+}
+.shell-device-picker select {
+	width: 100%;
+	min-width: 0;
+}

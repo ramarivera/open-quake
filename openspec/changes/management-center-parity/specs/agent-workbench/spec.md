@@ -123,3 +123,12 @@ Audit regression coverage: CENTER-070.
 #### Scenario: Slot is not a clawbot key
 - **WHEN** the user has replaced key `2,6` with a hotkey
 - **THEN** sync stops at preflight with the invalid-slot error and nothing is written
+
+### Requirement: Retired entry points reach local sessions
+
+Saved ClawDashboard and ClawInstall entry points SHALL open the current local Sessions tab in the management workbench. Removed vendor installer and dashboard components SHALL remain retired. Evidence: CENTER-105.
+
+#### Scenario: Open a retired saved entry point
+
+- **WHEN** a management activation or saved URL names ClawDashboard or ClawInstall
+- **THEN** the workbench selects Sessions and retains the management navigation and chrome

@@ -79,6 +79,7 @@ import {
 	registerManagementAppearance,
 } from "./management/appearance";
 import { createDesktopShell } from "./management/desktop-shell";
+import { registerDevicePicker } from "./management/device-picker";
 import { prepareDesktopStartup } from "./management/startup";
 import { MediaLive, registerMedia } from "./media";
 import { prepareMeetings } from "./meetings";
@@ -271,6 +272,10 @@ if (!app.requestSingleInstanceLock()) {
 							bus?.device
 								? bus.device(activeDeviceId())?.hardware?.()
 								: bus?.hardware?.();
+						let settingsSerial: string | undefined;
+						let settingsHardware: ReturnType<typeof currentHardware>;
+						const selectedHardware = () =>
+							settingsSerial ? settingsHardware : currentHardware();
 						const hardwareSessions = () =>
 							bus?.device
 								? [...connectedSerials].flatMap((serial) => {
@@ -946,6 +951,48 @@ if (!app.requestSingleInstanceLock()) {
 							},
 						});
 						managementReachable = desktopShell.recoverable;
+						const removeDevicePicker = registerDevicePicker({
+							management: () => managementWin,
+							renderer: rendererURL,
+							read: async () => {
+								const sessions = hardwareSessions();
+								const devices = await Promise.all(
+									sessions.map((session) =>
+										Effect.runPromise(session.snapshot()),
+									),
+								);
+								settingsSerial ??= devices[0]?.serial;
+								const selected = devices.findIndex(
+									(device) => device.serial === settingsSerial,
+								);
+								if (selected >= 0) settingsHardware = sessions[selected];
+								return {
+									selected: settingsSerial ?? null,
+									devices: devices
+										.filter((device) => device.available)
+										.map(({ serial, session }) => ({ serial, session })),
+								};
+							},
+							select: async (serial, session) => {
+								const target = bus?.device
+									? bus.device(serial)?.hardware?.()
+									: currentHardware();
+								if (!target) return false;
+								const snapshot = await Effect.runPromise(target.snapshot());
+								if (
+									snapshot.serial !== serial ||
+									snapshot.session !== session ||
+									!snapshot.available ||
+									(bus?.device
+										? bus.device(serial)?.hardware?.()
+										: currentHardware()) !== target
+								)
+									return false;
+								settingsSerial = serial;
+								settingsHardware = target;
+								return true;
+							},
+						});
 						const profileUpdates = profiles.runtime.runFork(
 							ProfileService.subscribeCommittedProfiles().pipe(
 								Effect.flatMap((snapshots) =>
@@ -1029,7 +1076,7 @@ if (!app.requestSingleInstanceLock()) {
 									);
 								});
 						const disposeHardware = registerHardware(
-							currentHardware,
+							selectedHardware,
 							() => managementWin,
 							mock,
 							rendererURL,
@@ -1313,6 +1360,7 @@ if (!app.requestSingleInstanceLock()) {
 							removeLifecycle();
 							removeManagementAppearance();
 							desktopShell.dispose();
+							removeDevicePicker();
 							removeKnobLocale();
 							disposeHardware();
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);

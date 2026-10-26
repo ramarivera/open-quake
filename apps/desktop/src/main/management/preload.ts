@@ -2,12 +2,14 @@ import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
 	MANAGEMENT_ACTIVATE,
 	MANAGEMENT_COMMAND,
+	MANAGEMENT_DEVICES,
 	MANAGEMENT_THEME,
 	type ManagementBridge,
 } from "../../shared/management";
 
 const bridge: ManagementBridge = {
 	platform: process.platform,
+	devices: (request) => ipcRenderer.invoke(MANAGEMENT_DEVICES, request),
 	command: (command) => ipcRenderer.invoke(MANAGEMENT_COMMAND, command),
 	setTheme: (theme) => ipcRenderer.invoke(MANAGEMENT_THEME, theme),
 	onActivate: (receive) => {

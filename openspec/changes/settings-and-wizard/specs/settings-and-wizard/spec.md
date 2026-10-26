@@ -357,3 +357,35 @@ Privacy-scrubbed local diagnostics SHALL rotate on the first write after local m
 
 - **WHEN** records cross local midnight or the 10 MiB boundary
 - **THEN** each record is retained once in order within the size and 30-file limits, and no secret-bearing raw application data enters diagnostics
+
+### Requirement: Explicit device selection
+
+Device settings SHALL list connected QUAKE serial numbers and let the user select a specific live serial/session. Controls SHALL retain that selection when input arrives from another device. Focus and connection polling SHALL refresh the list. Disconnect SHALL retain an offline selection instead of redirecting writes; reconnect and selection changes SHALL remount controls to invalidate queued mutations. Only the authenticated management top frame may read or change selection. Stale sessions, malformed requests and disposed owners SHALL reject requests without changing selection. Evidence: SETTINGS-018, MAIN-130, MGMT-005.
+
+#### Scenario: Select the second device and disconnect it
+
+- **GIVEN** devices A and B are connected and A is selected
+- **WHEN** the user selects B and B disconnects
+- **THEN** controls retain B as disconnected, never write to A, and refresh the available choices on focus
+- **AND** unmounting cancels polling and suppresses pending replies
+
+### Requirement: Icon loading stages
+
+The icon picker SHALL announce distinct library, local application and Material Design stages with progress tied to completed work. Search SHALL remain editable while loading. Completion or failure SHALL dismiss the loading overlay, and failure SHALL retain an actionable error. Evidence: MGMT-423.
+
+#### Scenario: Complete icon preparation
+
+- **WHEN** library and local application icon reads complete in order
+- **THEN** progress advances and the stage changes before Material icons load
+- **AND** the overlay disappears when preparation finishes
+
+
+### Requirement: General settings use the independent form system
+
+General settings SHALL use the management form measure, grouped sections, label-left rows with a 52px minimum height, wrapping controls at narrow widths, semantic theme colors and keyboard focus treatment. The vendor fixed card dimensions and colors SHALL yield to the approved independent management design. Clear all data and erase without backup SHALL use the shared danger variant. The confirmation SHALL keep Cancel and backup-first actions distinct, and Cancel SHALL perform no mutation. Evidence: SETTINGS-005.
+
+#### Scenario: Review destructive settings at narrow width
+
+- **WHEN** settings render in the minimum management width and the user opens Clear all data
+- **THEN** rows and controls remain inside the content area and destructive actions use the danger treatment
+- **AND** Cancel closes the confirmation without a reset request
