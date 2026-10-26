@@ -57,6 +57,7 @@ export const ProviderListing = Schema.Array(
 		modelId: Schema.String,
 		available: Schema.Boolean,
 		directCapable: Schema.Boolean,
+		state: Schema.optional(Schema.Literal("ready", "needs-key", "invalid")),
 		options: Schema.Array(
 			Schema.Struct({ id: Schema.String, label: Schema.String }),
 		),

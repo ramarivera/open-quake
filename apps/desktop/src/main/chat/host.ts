@@ -12,10 +12,10 @@ import {
 import { makeProviderAdapter } from "../../../../../packages/edge/src/ai/adapters/provider-adapter";
 import type { SparkConnect } from "../../../../../packages/edge/src/ai/adapters/xfy";
 import { AiConnectivity } from "../../../../../packages/edge/src/ai/ai-connectivity";
-import type {
+import {
 	CredentialRef,
-	ProfileId,
-	ProviderProfile,
+	type ProfileId,
+	type ProviderProfile,
 } from "../../../../../packages/edge/src/ai/ai-contracts";
 import { AiCredentials } from "../../../../../packages/edge/src/ai/ai-credentials";
 import {
@@ -60,6 +60,13 @@ import { shortcutDraft } from "./shortcut-draft";
 const OWNER = "desktop-user";
 /** Endpoint changes create a different profile. A turn never reads mutable renderer settings. */
 export function profileFromModel(row: ModelRow): ProviderProfile {
+	return {
+		...profileMetadataFromModel(row),
+		credentialRef: Schema.decodeUnknownSync(CredentialRef)(row.credentialRef),
+	};
+}
+/** Listing metadata is independent of whether the host has a usable key. */
+function profileMetadataFromModel(row: ModelRow): ProviderProfile {
 	const hex = createHash("sha256")
 		.update(
 			JSON.stringify([
@@ -120,9 +127,6 @@ export function profileFromModel(row: ModelRow): ProviderProfile {
 				? selectedProvider
 				: "generic",
 		auth: "apiKey",
-		credentialRef: Schema.decodeUnknownSync(Schema.UUID)(
-			row.credentialRef,
-		) as CredentialRef,
 		authGeneration: 0,
 		capabilities: {
 			text: "supported",
@@ -261,7 +265,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 					const rows = yield* options.models("default");
 					return yield* Effect.forEach(rows, (row) =>
 						Effect.gen(function* () {
-							const parsed = Either.try(() => profileFromModel(row));
+							const parsed = Either.try(() => profileMetadataFromModel(row));
 							if (
 								Either.isLeft(parsed) ||
 								Either.isLeft(validateProfile(parsed.right))
@@ -272,9 +276,18 @@ export function prepareDirectChat(options: DirectChatOptions) {
 									modelId: row.model,
 									available: false,
 									directCapable: false,
-									options: [],
+									state: "invalid" as const,
+									options: modelOptions(row.provider, [row.model]),
 								};
-							const profile = parsed.right;
+							const reference = Schema.decodeUnknownEither(CredentialRef)(
+								row.credentialRef,
+							);
+							const profile = {
+								...parsed.right,
+								...(Either.isRight(reference)
+									? { credentialRef: reference.right }
+									: {}),
+							};
 							const listing = localProviderListing(
 								[profile],
 								["openai-compatible", "coze", "xfy", "dashscope-media"],
@@ -292,8 +305,11 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								...listing,
 								id: row.id,
 								available: listing.available && ready,
+								state: ready ? ("ready" as const) : ("needs-key" as const),
 								directCapable:
-									listing.directCapable && resolveModelRows([row]).length === 1,
+									listing.directCapable &&
+									ready &&
+									resolveModelRows([row]).length === 1,
 							};
 						}),
 					);

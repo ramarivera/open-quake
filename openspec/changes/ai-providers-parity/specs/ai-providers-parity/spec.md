@@ -115,6 +115,11 @@ The catalog SHALL preserve all twelve legacy engine dispositions and every retai
 - **WHEN** assistant or direct consumers request models, including DeepSeek's four retained IDs
 - **THEN** both receive the same local options including their saved custom choice and truthful configured/unavailable state
 
+#### Scenario: Missing credentials retain catalog options
+- **WHEN** a saved row has an empty, malformed or unavailable credential reference
+- **THEN** its validated model metadata and catalog including the custom model remain listed with needs-key state
+- **AND** availability and direct readiness are false, without resolving malformed credential references or exposing secrets
+
 #### Scenario: Inactive model rows cannot provide a direct voice route
 - **WHEN** a saved row has role none
 - **THEN** the provider listing and knob pinning both report no usable direct route using the shared role readiness rule

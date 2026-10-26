@@ -6,6 +6,7 @@ import { expect, it } from "vitest";
 import { emptyKnobResource } from "../../../../../packages/device/src/knob/knob-invariants";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { initialAgentState } from "../../../../../packages/edge/src/agents/agents-invariants";
+import { AiAuthRequired } from "../../../../../packages/edge/src/ai/ai-errors";
 import {
 	editKnobSlot,
 	knobVoiceReady,
@@ -93,3 +94,50 @@ it("AI-005/048 direct knob selects a catalog model and pins it independently of 
 		await rm(directory, { recursive: true, force: true });
 	}
 });
+
+it.each(["", "not-a-credential-uuid", "00000000-0000-4000-8000-000000000001"])(
+	"retains catalog and custom options while needing a key: %s",
+	async (credentialRef) => {
+		const directory = await mkdtemp(join(tmpdir(), "keyless-catalog-"));
+		let resolutions = 0;
+		const host = createDirectChat({
+			directory,
+			models: () =>
+				Effect.succeed([
+					{
+						id: "saved",
+						role: "default",
+						provider: "qwen",
+						model: "custom-qwen-model",
+						baseUrl: "https://selected.invalid/v1",
+						maxTokens: 1024,
+						credentialRef,
+					},
+				]),
+			credentials: {
+				resolve: () => {
+					resolutions++;
+					return Effect.fail(new AiAuthRequired());
+				},
+				revoked: () => Effect.never,
+			},
+		});
+		try {
+			const [listing] = await host.runtime.runPromise(host.providers());
+			expect(listing).toMatchObject({
+				id: "saved",
+				available: false,
+				directCapable: false,
+				state: "needs-key",
+			});
+			expect(listing?.options.map((option) => option.id)).toEqual(
+				expect.arrayContaining(["qwen3.6-plus", "custom-qwen-model"]),
+			);
+			expect(resolutions).toBe(credentialRef.startsWith("00000000") ? 1 : 0);
+			expect(JSON.stringify(listing)).not.toContain("credentialRef");
+		} finally {
+			await host.dispose();
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
