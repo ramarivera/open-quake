@@ -83,3 +83,9 @@
 ## Agents burn-down lane, 2026-10-26
 
 - [x] A.1 Expose sequence count, Add step focus and Back navigation for MGMT-280. Bead `open-quake-lih.17.12`; production `SequenceEditor.tsx`, mounted `key-editor-interactions.test.tsx` verifies the saved sequence survives the return flow.
+
+## Grid-editor burn-down lane
+
+- [x] Implement grid-editor placement, movement, selection, navigation, sizing, hints and scheduling with mounted consumer tests. Beads open-quake-lih.10.7/.8/.9.
+
+Lane evidence: 45 mounted editor regressions in `key-editor-interactions.test.tsx`, four canonical placement/overflow regressions in `profile-grid-placement.test.ts`, and the hidden mock native `smoke-geometry.ts` scenarios cover the new rows. Native checks include English/German replacement, 680px multi-action and knob layouts, folder entry and Space activation of vivid configuration. The full media smoke passes after scrolling the new editor layout into view before its visibility-gated OBS assertion. No hardware, microphone or audible audio was used. Gate totals and all 25 spec/code/test mappings accompany the lane PR.

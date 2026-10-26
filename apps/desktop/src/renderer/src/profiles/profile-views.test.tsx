@@ -32,6 +32,7 @@ import { makeProfileController } from "../../../main/profiles/profile-controller
 import type { EmojiBridge } from "../../../shared/emoji";
 import type { IntegrationsBridge } from "../../../shared/integrations";
 import type { KeyReply, KeyRequest } from "../../../shared/key-library";
+import type { AppLocaleBridge, LocaleSnapshot } from "../../../shared/locale";
 import type {
 	ProfileReply,
 	ProfileView,
@@ -209,14 +210,25 @@ async function fixture(
 		};
 		vi.stubGlobal("quakeEmoji", emojiBridge);
 	}
+	let locale: LocaleSnapshot = { locale: "en", revision: 0 };
+	const listeners = new Set<(snapshot: LocaleSnapshot) => void>();
+	const localeBridge: AppLocaleBridge = {
+		read: async () => locale,
+		set: async (value) => {
+			locale = { locale: value, revision: locale.revision + 1 };
+			for (const listener of listeners) listener(locale);
+			return locale;
+		},
+		subscribe: (listener) => {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+		dispose: async () => {},
+	};
 	const mounted = await mount(
-		navigation ? (
-			<AppLocaleProvider>
-				<App />
-			</AppLocaleProvider>
-		) : (
-			<ProfilesManager />
-		),
+		<AppLocaleProvider bridge={localeBridge}>
+			{navigation ? <App /> : <ProfilesManager />}
+		</AppLocaleProvider>,
 	);
 	cleanup.push(mounted.close);
 	await settle(() =>

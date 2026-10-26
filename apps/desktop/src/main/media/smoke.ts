@@ -938,6 +938,11 @@ async function smoke(): Promise<void> {
 		management,
 		"document.querySelector('#obs-scene option[value=\"scene-1\"]') !== null",
 	);
+	// Live previews subscribe only while visible; the action library adds scrollable content.
+	await management.webContents.executeJavaScript(
+		`document.querySelector('.keys-preview').scrollIntoView({block:'center'}); null;`,
+	);
+
 	await waitForVoice(
 		management,
 		"document.querySelector('.keys-preview .obs-screenshot')?.naturalWidth > 0",

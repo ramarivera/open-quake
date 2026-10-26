@@ -1,4 +1,4 @@
-import { Option } from "effect";
+import { Option, Predicate } from "effect";
 import type { ProfileKey } from "./profile-contracts.js";
 import {
 	effectiveSpan,
@@ -58,6 +58,67 @@ export const occupiedCells = (key: ProfileKey): readonly string[] =>
 		onNone: () => [],
 		onSome: footprintCells,
 	});
+
+/** Inspect raw import records before Profile's layout refinement rejects them. */
+export function profileOverflow(input: unknown): readonly {
+	readonly id: string;
+	readonly page: string;
+	readonly keyCode: string;
+	readonly name: string;
+	readonly width: number;
+	readonly height: number;
+}[] {
+	const pages = Array.isArray(input)
+		? [{ id: "import-page", keys: input }]
+		: Predicate.isRecord(input) && Array.isArray(input.pages)
+			? input.pages
+			: [];
+	return pages.flatMap((page, pageIndex) => {
+		if (!Predicate.isRecord(page) || !Array.isArray(page.keys)) return [];
+		const seen = new Set<string>();
+		let invalid =
+			page.keys.filter(
+				(key) =>
+					key !== null && (!Predicate.isRecord(key) || key.keyCode !== "0,1"),
+			).length > 16;
+		let itemNumber = 0;
+		const items = page.keys.flatMap((key) => {
+			if (!Predicate.isRecord(key) || key.keyCode === "0,1") return [];
+			const config = Predicate.isRecord(key.config) ? key.config : {};
+			const code = typeof key.keyCode === "string" ? key.keyCode : "?";
+			const type = typeof config.type === "string" ? config.type : "";
+			const size = Array.isArray(config.size) ? config.size : [];
+			const [width, height] = effectiveSpan(type, [
+				typeof size[0] === "number" ? size[0] : 1,
+				typeof size[1] === "number" ? size[1] : 1,
+			]);
+			const footprint = Option.flatMap(parseProfileCoordinate(code), (anchor) =>
+				footprintAt(anchor, [width, height]),
+			);
+			if (Option.isNone(footprint)) invalid = true;
+			if (type && config.display !== false && Option.isSome(footprint))
+				for (const cell of footprintCells(footprint.value)) {
+					if (seen.has(cell)) invalid = true;
+					seen.add(cell);
+				}
+			return [
+				{
+					id: `${pageIndex}:${itemNumber++}`,
+					page: typeof page.id === "string" ? page.id : String(pageIndex + 1),
+					keyCode: code,
+					name:
+						Predicate.isRecord(config.title) &&
+						typeof config.title.text === "string"
+							? config.title.text
+							: type,
+					width,
+					height,
+				},
+			];
+		});
+		return invalid ? items : [];
+	});
+}
 
 export const layoutIssues = (
 	keys: readonly ProfileKey[],

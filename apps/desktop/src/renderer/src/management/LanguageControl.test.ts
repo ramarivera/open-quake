@@ -33,7 +33,17 @@ it("offers each language by its own name with the saved locale selected", () => 
 		/<input type="radio" name="lang" value="en" checked=""|checked="" value="en"|value="en"[^>]*checked=""/,
 	);
 	expect(html).toContain("<span>English</span>");
-	expect(html).toContain("<span>Deutsch</span>");
+	for (const label of [
+		"中文",
+		"English",
+		"Español",
+		"Français",
+		"한국어",
+		"Deutsch",
+		"Italiano",
+		"日本語",
+	])
+		expect(html).toContain(`<span>${label}</span>`);
 	expect(html).not.toContain('role="alert"');
 });
 
@@ -47,5 +57,5 @@ it("disables the choice while the saved language loads from main", () => {
 	vi.stubGlobal("window", {});
 	const html = renderToStaticMarkup(withLocale(bridge));
 	expect(html).toMatch(/aria-disabled="true"/);
-	expect(html.match(/disabled=""/g)).toHaveLength(2);
+	expect(html.match(/disabled=""/g)).toHaveLength(8);
 });

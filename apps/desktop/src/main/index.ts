@@ -9,6 +9,7 @@ import {
 	type Display,
 	dialog,
 	ipcMain,
+	Menu,
 	nativeTheme,
 	powerMonitor,
 	powerSaveBlocker,
@@ -26,6 +27,7 @@ import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/sett
 import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
+import { MANAGEMENT_ACTIVATE } from "../shared/management";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
 import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
@@ -90,6 +92,7 @@ import { obsKeyAction } from "./obs/key-action";
 import { visibleObsKeys } from "./obs/visibility";
 import { prepareProfiles } from "./profiles";
 import { activeClockTarget } from "./profiles/clock-profile-binding";
+import { nativeLocaleMenu } from "./settings/native-locale";
 import { createSettingsOsAdapter } from "./settings/os-adapter";
 import { prepareAppLocale } from "./settings/registration";
 import { bindSettingsWindow } from "./settings/window-binding";
@@ -272,6 +275,7 @@ if (!app.requestSingleInstanceLock()) {
 									? [currentHardware()].filter((s) => s !== undefined)
 									: [];
 						let knobLocale: LocaleSnapshot["locale"] = "en";
+						let refreshNativeMenu = () => {};
 						let resetVoice = (): Promise<void> => Promise.resolve();
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 							Promise.resolve();
@@ -706,6 +710,7 @@ if (!app.requestSingleInstanceLock()) {
 												win.webContents.send(LIFECYCLE_STATUS, status);
 								},
 								prompts: {
+									locale: () => knobLocale,
 									disconnect: () => Effect.sync(() => app.quit()),
 									arrangement: arrangementState(
 										join(
@@ -916,6 +921,7 @@ if (!app.requestSingleInstanceLock()) {
 							const changed = knobLocale !== snapshot.locale;
 							knobLocale = snapshot.locale;
 							knobLocaleRevision = snapshot.revision;
+							refreshNativeMenu();
 							if (changed)
 								void knob.refresh().catch(() => {
 									// The instrumented knob runtime retains the failed exit.
@@ -946,6 +952,33 @@ if (!app.requestSingleInstanceLock()) {
 								target.focus();
 							});
 						};
+						refreshNativeMenu = () => {
+							if (app.dock?.setMenu)
+								app.dock.setMenu(
+									Menu.buildFromTemplate(
+										nativeLocaleMenu(knobLocale, {
+											resume: focusManagement,
+											settings: () => {
+												focusManagement();
+												const target = managementWin;
+												void managementReady.then(() => {
+													if (
+														!quitting &&
+														!target.isDestroyed() &&
+														target === managementWin
+													)
+														target.webContents.send(
+															MANAGEMENT_ACTIVATE,
+															"settings",
+														);
+												});
+											},
+											exit: () => app.quit(),
+										}),
+									),
+								);
+						};
+						refreshNativeMenu();
 						app.on("second-instance", focusManagement);
 						const profileUpdates = profiles.runtime.runFork(
 							ProfileService.subscribeCommittedProfiles().pipe(

@@ -43,7 +43,10 @@ describe("wizard canonical owner probes", () => {
 		).toBe(true);
 		expect(await Effect.runPromise(owners.runtimeSupported)).toBe(true);
 		expect(await Effect.runPromise(owners.runtimeConfigured)).toBe(false);
-		expect(await Effect.runPromise(owners.regionSuggestions("DE"))).toEqual({});
+		expect(await Effect.runPromise(owners.regionSuggestions("DE"))).toEqual({
+			provider: "OpenAI",
+			speech: "OpenAI",
+		});
 	});
 	it("rejects hidden installed profiles using the manager's selection rules", async () => {
 		const envelope = installProfileCatalog(
