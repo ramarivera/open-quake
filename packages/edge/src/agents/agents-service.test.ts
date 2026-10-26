@@ -1027,6 +1027,71 @@ it.effect(
 );
 
 it.effect(
+	"AI-043 preserves source endpoints and credentials when saving a named copy",
+	() => {
+		const f = fixture();
+		return Effect.gen(function* () {
+			const service = yield* AgentsService;
+			let view = yield* service.view();
+			const save = (
+				row: ReturnType<typeof model> & { name: string },
+				secret = "",
+			) =>
+				service.request({
+					type: "save-model",
+					scope: "default",
+					row,
+					secret,
+					revision: view.revision,
+				});
+			view = (yield* save(
+				{ ...model("initial", "default"), name: "Source" },
+				"source-key",
+			)).view;
+			const source = f
+				.state()
+				.models.default?.find((row) => row.id === "initial");
+			view = (yield* save({
+				...model("copy", "fallback", "openai", "https://copy.invalid/v1"),
+				name: "Source copy",
+			})).view;
+			expect(
+				f.state().models.default?.find((row) => row.id === "initial"),
+			).toEqual(source);
+			expect(
+				view.models.default?.find((row) => row.id === "copy")
+					?.credentialAvailable,
+			).toBe(false);
+			expect(f.keys.size).toBe(1);
+			view = (yield* save(
+				{
+					...model("copy", "fallback", "openai", "https://copy.invalid/v1"),
+					name: "Source copy",
+				},
+				"copy-key",
+			)).view;
+			const copy = f.state().models.default?.find((row) => row.id === "copy");
+			view = (yield* save({
+				...model("initial", "default", "openai", "https://source.invalid/v1"),
+				name: "Source",
+			})).view;
+			expect(
+				f.state().models.default?.find((row) => row.id === "copy"),
+			).toEqual(copy);
+			expect(
+				view.models.default?.find((row) => row.id === "initial")
+					?.credentialAvailable,
+			).toBe(false);
+			expect(
+				view.models.default?.find((row) => row.id === "copy")
+					?.credentialAvailable,
+			).toBe(true);
+			expect(f.keys.size).toBe(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
 	"AI-043 bounds names, isolates credentials, protects built-ins and selects a delete fallback",
 	() => {
 		const f = fixture();

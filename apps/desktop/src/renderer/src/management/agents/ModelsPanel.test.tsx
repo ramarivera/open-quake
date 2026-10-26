@@ -172,3 +172,26 @@ it("AI-043 locks built-in names and deletion while allowing an isolated copy", a
 		query(f.host, '[aria-label="Name default 2"]', HTMLInputElement).disabled,
 	).toBe(false);
 });
+
+it("AI-043 keeps source and copy endpoints independent while editing and saving", async () => {
+	const f = await fixture("openai", { name: "Source", settings: undefined });
+	const endpoint = (index: number) =>
+		query(
+			f.host,
+			`[aria-label="${agentsStrings.clawAIConfig.baseUrlCol} default ${index}"]`,
+			HTMLInputElement,
+		);
+	await click(button(f.host, "Copy"));
+	await input(endpoint(2), "https://copy.invalid/v1");
+	expect(endpoint(1).value).toBe("https://selected.invalid/v1");
+	const copy = endpoint(2).closest("tr");
+	if (!copy) throw new Error("Missing copied model row");
+	await click(button(copy, agentsStrings.clawAIConfig.saveRow));
+	const command = f.calls.at(-1);
+	if (command?.type !== "save-model") throw new Error("Expected save-model");
+	expect(command.row.baseUrl).toBe("https://copy.invalid/v1");
+	expect(command.secret).toBe("");
+	expect(endpoint(1).value).toBe("https://selected.invalid/v1");
+	await input(endpoint(1), "https://source.invalid/v1");
+	expect(endpoint(2).value).toBe("https://copy.invalid/v1");
+});

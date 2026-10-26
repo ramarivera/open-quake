@@ -230,6 +230,7 @@ Models SHALL support Add, Rename, Copy and confirmed Delete. Names SHALL contain
 #### Scenario: Isolated copy and delete fallback
 - **WHEN** a named model is copied, renamed and saved
 - **THEN** editing the copy leaves its source unchanged and the copy has no credentials until explicitly saved
+- **AND** editing or saving either named row's endpoint preserves the other row's endpoint and credentials; legacy unnamed provider siblings retain their existing URL propagation
 - **WHEN** its default is deleted with confirmation
 - **THEN** a remaining configured model becomes default and built-in protections remain enforced
 
