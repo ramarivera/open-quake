@@ -133,6 +133,50 @@ export const ACTION_REGISTRY = [
 		binding: "open",
 		defaults: { actions: [{ type: "path", value: "" }] },
 	}),
+	define("vol", C.VolumeConfig, {
+		submenu: "deviceControl",
+		requiredAdapter: "host.volume",
+		binding: "media",
+		supportKnob: true,
+		defaults: {
+			supportKnob: true,
+			actions: [
+				{ type: "key", value: "audio_vol_down" },
+				{ type: "key", value: "audio_vol_up" },
+			],
+		},
+	}),
+	define("mute", C.MuteConfig, {
+		submenu: "deviceControl",
+		requiredAdapter: "host.volume",
+		binding: "media",
+		alternateState: true,
+		defaults: {
+			actions: [
+				{ type: "key", value: "audio_mute" },
+				{ type: "key", value: "audio_mute" },
+			],
+		},
+	}),
+	define("brightness", C.BrightnessConfig, {
+		submenu: "deviceControl",
+		requiredAdapter: "host.brightness",
+		binding: "delegate",
+		supportKnob: true,
+		defaults: {
+			supportKnob: true,
+			actions: [
+				{ type: "level", value: 1 },
+				{ type: "level", value: 0 },
+			],
+		},
+	}),
+	define("media", C.MediaConfig, {
+		submenu: "multiMedia",
+		requiredAdapter: "host.media",
+		binding: "media",
+		defaults: { actions: [{ type: "key", value: "audio_play" }] },
+	}),
 	media("playPause", "audio_play"),
 	media("stopPlay", "audio_stop"),
 	media("skipBackward", "audio_prev"),

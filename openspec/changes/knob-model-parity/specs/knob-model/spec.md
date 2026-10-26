@@ -86,3 +86,35 @@ Focused screen luminance SHALL use the hardware session's typed Luminance comman
 
 - **WHEN** a physical detent targets an unavailable focused control or a hold cannot start voice
 - **THEN** the panel receives the sanitized failure code and displays the warning, and an available hardware session plays the error tone without changing the selected profile
+
+### Requirement: Saved host volume, mute and brightness
+
+The action catalog SHALL register legacy vol with audio_vol_down/up and supportKnob, mute with two audio_mute actions and actual-state alternate artwork, and host brightness with directional level values 1/0 and supportKnob. Quick 2,1/2,2/2,3 SHALL activate these same owners. Volume SHALL clamp at 0/100 and skip redundant native writes. A single shared native volume/mute observation SHALL feed matching active key states every 2000 ms even when player volume is unarmed; reads SHALL serialize with writes and teardown with the owner. Armed knob observation SHALL consume that shared reading. Covers MAIN-073, MAIN-089, MGMT-167, MGMT-168, MGMT-169, MGMT-375, MGMT-376, MGMT-377.
+
+#### Scenario: Save and activate Quick controls
+
+- **WHEN** saved Quick volume/brightness keys receive directional input and mute is activated
+- **THEN** the shared host owner changes only the intended control, respects bounds and publishes the actual mute alternate state to every matching active tile
+
+#### Scenario: External mute and shutdown
+
+- **WHEN** the OS changes mute while the player is unarmed and two consumers subscribe
+- **THEN** one native sample updates both consumers and disposal stops further native reads
+
+### Requirement: Bounded host brightness transitions
+
+Host brightness SHALL retain every logical 5 percent detent while coalescing concurrent bursts. The first write SHALL begin after 1 ms; later write batches SHALL start no more often than 500 ms. Smooth native targets SHALL ease by 20 percent of the remaining distance every 16 ms until within 0.5 percent, then write the exact target. Discrete native targets SHALL use their reported quantum. Every write SHALL recheck the target and validate readback; unavailable or failed native reads SHALL remain unavailable rather than invent 100 percent. Covers MAIN-074.
+
+#### Scenario: Burst and unsupported adapter
+
+- **WHEN** multiple detents arrive in a burst or the native adapter is unavailable
+- **THEN** bounded writes reach the retained target with the specified fake-clock timing, or return the catalog failure without a fabricated reading
+
+### Requirement: Twelve audio operations and composite media leaves
+
+The hotkey Audio group and Media selector SHALL retain exactly mute, volume down/up, play, pause, stop, previous, next, rewind, forward, repeat and random. Pause SHALL be explicit and playPause SHALL retain fresh toggle semantics. Media tokens SHALL route to the same native media/host-volume owners and reject unsupported commands. Composite actions SHALL validate and execute mute and all eight media leaves in order, preserve corrected next-track identity and stop at the first native failure. Covers MGMT-208, MGMT-209, MGMT-226, MGMT-290.
+
+#### Scenario: Sequence stops on failure
+
+- **WHEN** a saved sequence contains mute and transport steps and one native command rejects
+- **THEN** prior steps run once in order and subsequent steps never run

@@ -85,6 +85,10 @@ export interface PlayerCardProps {
 	locale?: WeatherLocale;
 	volumeOverlay?: ReactNode;
 	reducedMotion?: boolean;
+	source?: "local" | "system";
+	statusText?: string;
+	pending?: boolean;
+	stop?: (() => void) | undefined;
 }
 
 export function PlayerCard({
@@ -95,6 +99,10 @@ export function PlayerCard({
 	locale = "en",
 	volumeOverlay,
 	reducedMotion,
+	source = "system",
+	statusText = "",
+	pending = false,
+	stop,
 }: PlayerCardProps): React.JSX.Element {
 	const session = snapshot.session;
 	const [broken, setBroken] = useState(false);
@@ -125,19 +133,21 @@ export function PlayerCard({
 		};
 	}, []);
 	useEffect(() => {
-		guide.current?.update(hasSession, available);
-	}, [hasSession, available]);
+		if (source === "system") guide.current?.update(hasSession, available);
+	}, [hasSession, available, source]);
 	useEffect(() => {
 		void cover;
+		void session?.id;
+		void session?.title;
 		setBroken(false);
-	}, [cover]);
+	}, [cover, session?.id, session?.title]);
 	useEffect(() => {
 		if (!failed) return;
 		const timer = setTimeout(() => setFailed(false), 1800);
 		return () => clearTimeout(timer);
 	}, [failed]);
 	const send = (intent: MediaIntent) => {
-		if (!session && !snapshot.error) {
+		if (source === "system" && !session && !snapshot.error) {
 			guide.current?.show(true);
 			return;
 		}
@@ -179,19 +189,36 @@ export function PlayerCard({
 					)}
 				</div>
 				<div className="oq-player-info">
-					{snapshot.error || failed ? (
+					{snapshot.error || failed || statusText ? (
 						<div className="oq-player-error" role="status">
-							{failed
-								? strings.media.transport
-								: mediaErrorText(snapshot, locale)}
+							{statusText ||
+								(failed
+									? strings.media.transport
+									: mediaErrorText(snapshot, locale))}
 						</div>
 					) : null}
 					<div
 						className="oq-player-source"
 						data-active={!!session}
+						data-source={source}
+						data-kind={
+							source === "local"
+								? "local"
+								: /chrome|firefox|safari|edge|browser/i.test(
+											session?.appId ?? "",
+										)
+									? "browser"
+									: "app"
+						}
 						title={session?.appId}
 					>
-						<span>{session?.appName || "System Media"}</span>
+						<span>
+							{source === "local"
+								? locale === "de"
+									? "Lokale Musik"
+									: "Local Music"
+								: session?.appName || "System Media"}
+						</span>
 					</div>
 					<div className="oq-player-title" title={session?.title}>
 						{session?.title || "—"}
@@ -223,12 +250,12 @@ export function PlayerCard({
 						</div>
 					) : null}
 				</div>
-				<div className="oq-player-controls">
+				<div className="oq-player-controls" data-local={source === "local"}>
 					<TransportButton
 						className="oq-player-previous"
 						id="audioPlayerViewBackwards"
 						label={strings.clock.musicPrev}
-						disabled={!available || !session?.canPrevious}
+						disabled={pending || !available || !session?.canPrevious}
 						onPress={() => send("previous")}
 					>
 						<TransportGlyph kind="previous" />
@@ -238,7 +265,10 @@ export function PlayerCard({
 						id={playing ? "playStopActive" : "playStop"}
 						label={strings.clock.musicPlayPause}
 						disabled={
-							!available || (!!session && !canControlMedia(snapshot, "toggle"))
+							pending ||
+							(source === "local" && !session) ||
+							!available ||
+							(!!session && !canControlMedia(snapshot, "toggle"))
 						}
 						onPress={() => send("toggle")}
 					>
@@ -248,11 +278,21 @@ export function PlayerCard({
 						className="oq-player-next"
 						id="audioPlayerViewForwards"
 						label={strings.clock.musicNext}
-						disabled={!available || !session?.canNext}
+						disabled={pending || !available || !session?.canNext}
 						onPress={() => send("next")}
 					>
 						<TransportGlyph kind="next" />
 					</TransportButton>
+					{stop ? (
+						<TransportButton
+							id="localStop"
+							label={locale === "de" ? "Stopp" : "Stop"}
+							disabled={pending || !session?.playing}
+							onPress={stop}
+						>
+							<TransportGlyph kind="stop" />
+						</TransportButton>
+					) : null}
 				</div>
 				<div className="oq-player-volume-slot" data-volume-overlay-slot="">
 					{volumeOverlay}

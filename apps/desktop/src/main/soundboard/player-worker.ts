@@ -40,6 +40,15 @@ export function installSoundboardWorker(url: string) {
 				check();
 				audio.pause();
 			},
+			seek: (positionMs: number) => {
+				check();
+				if (!Number.isFinite(positionMs) || positionMs < 0)
+					throw new Error("Invalid local audio position");
+				audio.currentTime = Math.min(
+					Number.isFinite(audio.duration) ? audio.duration : Infinity,
+					positionMs / 1000,
+				);
+			},
 			position: () => {
 				check();
 				return audio.currentTime * 1000;

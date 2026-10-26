@@ -28,6 +28,7 @@ export interface SoundStartOptions {
 	readonly initialGain?: number | undefined;
 	readonly expectedEpoch?: number;
 	readonly initialIndex?: number;
+	readonly initialPositionMs?: number;
 	readonly accept?: () => boolean;
 }
 export type StartSound = (

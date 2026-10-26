@@ -10,7 +10,14 @@ import { SoundboardDecodeFailed } from "../../../../../packages/edge/src/soundbo
 import { isLocalSoundPath } from "../../../../../packages/edge/src/soundboard/soundboard-invariants.js";
 import { soundboardWorkerSource } from "./player-worker";
 
-type Method = "ready" | "play" | "pause" | "position" | "gain" | "ended";
+type Method =
+	| "ready"
+	| "play"
+	| "pause"
+	| "position"
+	| "gain"
+	| "ended"
+	| "seek";
 export interface SoundboardWorker {
 	readonly invoke: (
 		method: Method,
@@ -100,7 +107,7 @@ export async function openSoundboardWorker(
 				if (
 					!window ||
 					window.isDestroyed() ||
-					!/^(ready|play|pause|position|gain|ended)$/.test(method)
+					!/^(ready|play|pause|position|gain|ended|seek)$/.test(method)
 				)
 					throw new SoundboardDecodeFailed();
 				return window.webContents.executeJavaScript(
@@ -180,6 +187,8 @@ export function createSoundboardPlayer(
 					ready: invoke("ready").pipe(Effect.asVoid),
 					play: invoke("play").pipe(Effect.asVoid),
 					pause: invoke("pause").pipe(Effect.asVoid),
+					seek: (positionMs: number) =>
+						invoke("seek", [positionMs]).pipe(Effect.asVoid),
 					position: invoke("position").pipe(
 						Effect.flatMap(
 							Schema.decodeUnknown(

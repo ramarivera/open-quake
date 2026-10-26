@@ -100,3 +100,65 @@ it("controller cache read/clear isolates instances and sides, refresh keeps key 
 		await runtime.dispose();
 	}
 });
+
+it("MGMT-271 retains selected session and launcher through controller restart", async () => {
+	let settings: import("../../shared/weather-media-contracts").WeatherSettings =
+		{
+			...DEFAULT_WEATHER_SETTINGS,
+			mediaTarget: "player-b",
+			mediaLauncher: "apple",
+		};
+	const targets: (string | null | undefined)[] = [];
+	const { SystemMediaAdapter } = await import("./system-media");
+	const make = () =>
+		ManagedRuntime.make(
+			WeatherMediaController.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(WeatherSettingsRepository, {
+							load: () => Effect.succeed(settings),
+							save: (next) =>
+								Effect.sync(() => {
+									settings = next;
+								}),
+						}),
+						Layer.succeed(SystemMediaAdapter, {
+							read: (target) =>
+								Effect.sync(() => {
+									targets.push(target);
+									return { session: null, error: null };
+								}),
+							control: () => Effect.succeed(false),
+						}),
+						Layer.succeed(WeatherNetwork, {
+							json: () => Effect.die("media settings must not fetch weather"),
+						}),
+					),
+				),
+			),
+		);
+	const first = make();
+	await first.runPromise(
+		WeatherMediaController.request({
+			_tag: "configure",
+			settings: {
+				...settings,
+				mediaTarget: "saved-target",
+				mediaLauncher: "qq",
+			},
+		}),
+	);
+	await first.dispose();
+	const second = make();
+	try {
+		const snapshot = await second.runPromise(WeatherMediaController.read());
+		expect(snapshot.settings).toMatchObject({
+			mediaTarget: "saved-target",
+			mediaLauncher: "qq",
+		});
+		expect(targets.at(-1)).toBe("saved-target");
+		expect(snapshot.media.error).toBe("SESSION_LOST");
+	} finally {
+		await second.dispose();
+	}
+});

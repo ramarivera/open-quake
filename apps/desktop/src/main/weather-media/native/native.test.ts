@@ -314,7 +314,11 @@ describe("native system-media consumers", () => {
 				platform: "darwin",
 				enabled: true,
 				cover,
-				run: (_file, args) => {
+				run: (file, args) => {
+					if (file === "/usr/bin/osascript")
+						return Effect.succeed(
+							'{"sessions":[],"session":null,"source":"","commands":[]}',
+						);
 					if (args[2] === "get")
 						return Effect.succeed(
 							JSON.stringify({ ...payload, supportedCommands: [0] }),
@@ -390,7 +394,10 @@ describe("native system-media consumers", () => {
 			);
 		};
 		const adapter = makeWindowsMedia(run);
-		expect(await Effect.runPromise(adapter.read())).toBeNull();
+		expect(await Effect.runPromise(adapter.read())).toMatchObject({
+			session: null,
+			sessions: [],
+		});
 		const reading = await Effect.runPromise(
 			parseMacMedia(JSON.stringify(payload), cover),
 		);

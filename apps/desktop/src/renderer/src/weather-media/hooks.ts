@@ -22,7 +22,12 @@ export const useWeatherMedia = (enabled = true) => ({
 });
 export const rendererWeatherLocale = () =>
 	normalizeWeatherLocale(
-		typeof navigator === "undefined" ? "en" : navigator.language,
+		typeof localStorage === "undefined"
+			? typeof navigator === "undefined"
+				? "en"
+				: navigator.language
+			: (localStorage.getItem("open-quake-key-locale") ??
+					(typeof navigator === "undefined" ? "en" : navigator.language)),
 	);
 export function useWeather(
 	enabled: boolean,

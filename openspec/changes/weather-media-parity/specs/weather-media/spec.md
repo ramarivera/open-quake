@@ -165,3 +165,45 @@ Weather and music controls SHALL save only the selected clock key's weather acti
 
 - **WHEN** clock A changes city, units, forecast URL and music switch
 - **THEN** its valid actions survive restart, clock B remains unchanged, invalid URLs/timeouts show the expected status, and mounted live cards refresh using their own current settings
+
+### Requirement: Retained system sessions and player sources
+
+The shared media owner SHALL expose current sessions, an explicit target or Follow Current, selected launcher, and truthful lyrics/artwork availability. It SHALL persist target and launcher preferences, re-read before every command, retain a missing explicit target as SESSION_LOST rather than control another session, and reconcile native rejection. Launchers SHALL use fixed platform application identifiers or HTTPS URLs. Lyrics SHALL be unavailable when the native port supplies none. No Spotify account API is retained. Covers MAIN-145 and MGMT-271.
+
+#### Scenario: Target replacement and follow-current
+
+- **WHEN** a selected session disappears and another becomes current
+- **THEN** transport rejects with SESSION_LOST until the target returns or Follow Current is saved, after which commands use the fresh current session
+
+#### Scenario: Optional native data and launch failures
+
+- **WHEN** a fake platform supplies multiple sessions, lyrics/artwork or rejects a launcher/transport request
+- **THEN** selection controls reflect those sessions, absent optional data stays unavailable, and failures never become successful controls
+
+### Requirement: Authoritative local player and persistent source
+
+Saved playAudio configuration SHALL explicitly distinguish local and system ownership while preserving legacy empty-sound system presets. A configured local key SHALL never send an OS transport command. Local cards SHALL read the existing SoundboardService through the committed device/profile/page/key identity and show its authoritative track, playback/error state and Local Music source. Navigation SHALL require playing state and more than one available entry, wrap through the owner, suppress overlapping switches and reconcile stale responses. Source and resume selection SHALL survive restart without autoplay or acquiring a second AudioOutput owner. Covers KNOB-092, KNOB-096, KNOB-097, WIDGETS-111, WIDGETS-112, WIDGETS-113.
+
+#### Scenario: Local transport and isolation
+
+- **WHEN** a local player starts, pauses, resumes, stops or changes tracks through its registered card
+- **THEN** the existing soundboard owner receives that key's command, the card follows its published state, singleton navigation is disabled and no unrelated system session changes
+
+#### Scenario: Source and resume restoration
+
+- **WHEN** saved local/system selection and local resume state reload
+- **THEN** the same scoped source and position restore without autoplay and another device's key remains unchanged
+
+### Requirement: Player artwork and retained errors
+
+The mounted player SHALL replace broken artwork with the neutral note and reset that failure for the next cover or track. Local unconfigured/playback-failed states and every retained native failure SHALL render readable error text. Local, system-session, browser and idle System Media indicators SHALL be noninteractive. Covers KNOB-095, WIDGETS-114, WIDGETS-117 and the source clauses of KNOB-097 and WIDGETS-112.
+
+#### Scenario: Cover recovery
+
+- **WHEN** a cover emits an image error and the next track supplies a valid cover
+- **THEN** the first becomes the neutral note and the next renders its image without retaining the broken source
+
+#### Scenario: Error matrix
+
+- **WHEN** each retained native or local error is supplied to the mounted card
+- **THEN** it displays the corresponding hint and source-indicator touches dispatch no transport

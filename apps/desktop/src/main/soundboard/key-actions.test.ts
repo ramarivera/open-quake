@@ -216,3 +216,73 @@ it.scoped(
 			}).pipe(Effect.provide(layer));
 		}),
 );
+
+it.scoped(
+	"KNOB-096 WIDGETS-111 persists per-device resume without autoplay and seeks the canonical player on intent",
+	() =>
+		Effect.gen(function* () {
+			let stored: unknown = {};
+			const store = {
+				read: async () => stored,
+				write: async (value: unknown) => {
+					stored = value;
+				},
+			};
+			const intent = (value: string) => {
+				const original = key(0);
+				return {
+					...original,
+					config: {
+						...original.config,
+						actions: [
+							...original.config.actions,
+							{ type: "musicSource", value: "local" },
+							{ type: "playerIntent", value },
+						],
+					},
+				};
+			};
+			const first = yield* rig(),
+				keys = soundboardKeyActions(first.service, store);
+			yield* keys.execute(intent("toggle"), activation);
+			if (!first.tracks[0]) throw new Error("missing fake track");
+			first.tracks[0].positionMs = 4321;
+			expect((yield* keys.read(key(0), activation)).positionMs).toBe(4321);
+			yield* keys.reset();
+			const second = yield* rig(),
+				restarted = soundboardKeyActions(second.service, store);
+			expect((yield* restarted.read(key(0), activation)).positionMs).toBe(4321);
+			expect(second.tracks).toHaveLength(0);
+			expect(
+				(yield* restarted.read(key(0), { ...activation, deviceId: "other" }))
+					.positionMs,
+			).toBe(0);
+			yield* restarted.execute(intent("toggle"), activation);
+			expect(second.tracks[0]?.positionMs).toBe(4321);
+			expect(second.tracks[0]?.plays).toBe(1);
+			yield* restarted.execute(intent("toggle"), activation);
+			expect((yield* restarted.read(key(0), activation)).state).toBe("paused");
+			const before = second.tracks.length;
+			yield* restarted.execute(intent("next"), activation);
+			expect(second.tracks).toHaveLength(before);
+			yield* restarted.execute(intent("toggle"), activation);
+			yield* restarted.execute(intent("next"), activation);
+			yield* restarted.execute(intent("next"), activation);
+			expect((yield* restarted.read(key(0), activation)).trackIndex).toBe(0);
+			const system = intent("toggle");
+			expect(
+				yield* restarted.execute(
+					{
+						...system,
+						config: {
+							...system.config,
+							actions: system.config.actions.map((a) =>
+								a.type === "musicSource" ? { ...a, value: "system" } : a,
+							),
+						},
+					},
+					activation,
+				),
+			).toBe(false);
+		}),
+);
