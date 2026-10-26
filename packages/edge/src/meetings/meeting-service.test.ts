@@ -25,7 +25,7 @@ import {
 	type MeetingAdapter,
 	type MeetingAsrRequest,
 } from "../ai/meeting-adapter.js";
-import { MeetingStore } from "./meeting-contracts.js";
+import { MeetingStore, type TemplateId } from "./meeting-contracts.js";
 import { defaultMeetingConfig } from "./meeting-defaults.js";
 import { meetingError } from "./meeting-errors.js";
 import {
@@ -40,6 +40,7 @@ import {
 	type MeetingStorage,
 } from "./meeting-repository.js";
 import { MeetingService } from "./meeting-service.js";
+import { summaryTemplates } from "./meeting-templates.js";
 
 const segments = [
 	{
@@ -59,6 +60,12 @@ const selected = {
 } satisfies typeof MOCK_PROFILE;
 function setup(recoveredDuration = 2500) {
 	const progress: MeetingProgressEvent[] = [];
+	const translationRequests: {
+		config: typeof defaultMeetingConfig;
+		pcm: Uint8Array;
+	}[] = [];
+	let translationUpdates: readonly import("./meeting-contracts.js").Translation[] =
+		[];
 	const calls: string[] = [],
 		requests: MeetingAsrRequest[] = [],
 		prompts: Parameters<CompatibleAdapter["open"]>[0][] = [];
@@ -169,7 +176,11 @@ function setup(recoveredDuration = 2500) {
 			Effect.sync(() => {
 				calls.push(`cancel-task:${id}`);
 			}),
-		translate: () => Effect.succeed([]),
+		translate: (config, pcm) =>
+			Effect.sync(() => {
+				translationRequests.push({ config, pcm });
+				return translationUpdates;
+			}),
 		stopTranslation: () => Effect.suspend(() => translationStop),
 	};
 	const ai = AiProviderService.DefaultWithoutDependencies.pipe(
@@ -228,6 +239,10 @@ function setup(recoveredDuration = 2500) {
 		storage,
 		capture,
 		adapter,
+		translationRequests,
+		translations: (updates: typeof translationUpdates) => {
+			translationUpdates = updates;
+		},
 		calls,
 		requests,
 		prompts,
@@ -1187,6 +1202,125 @@ it.effect(
 				stage: 0,
 				status: 0,
 			});
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+// AI-275/AI-296: pin complete provider request sections and durable restart behavior.
+describe("meeting history persistence regressions", () => {
+	const templates = [
+		[
+			"project-weekly",
+			"Project weekly",
+			"Outcomes, decisions, actions, and risks",
+			"### Project Progress (last week / current blockers)\n### Key Decisions (decision + rationale + owner)\n### Action Items (task | owner | deadline | related decision)\n### Risks & Dependencies (risk + impact + mitigation)\nEvery action item must include an owner and a deadline.",
+		],
+		[
+			"standard",
+			"Standard minutes",
+			"Topics, discussion points, and next steps",
+			"### Meeting Info (time / participants)\n### Topic Discussion (per topic: background → discussion points → conclusion)\n### Next Actions (task | owner | deadline)\n### Open Items\nRecord each topic with key discussion details.",
+		],
+		[
+			"executive",
+			"Executive decision brief",
+			"Outcome-first with decisions and owners",
+			"### Decision Summary (conclusion-first, one line per decision)\n### Decision Details (decision + owner + impact + timeline)\n### Management Attention (risks / resources / escalations)\n### Action Items (task | owner | deadline)\nCompress process details; prioritize conclusions and owners.",
+		],
+		[
+			"interview",
+			"User interview",
+			"Insights, quotes, opportunities, validation",
+			"### Interview Overview (participant / context / time)\n### Key Insights (insight + evidence)\n### Key Quotes (direct quotes, attributed)\n### Opportunity Points (opportunity + related insight)\n### Validation Plan (plan + owner + timeline)\nPreserve direct quotes as evidence; insights must be traceable.",
+		],
+	] satisfies ReadonlyArray<readonly [TemplateId, string, string, string]>;
+	for (const [template, name, description, sections] of templates) {
+		it.effect(
+			`AI-275 AI-296 persists ${template} and renamed title through service restart`,
+			() => {
+				const f = setup();
+				return Effect.gen(function* () {
+					const id = yield* recordOnce;
+					expect((yield* MeetingService.snapshot()).records[0]?.template).toBe(
+						"project-weekly",
+					);
+					yield* MeetingService.process(id);
+					yield* MeetingService.rename(id, "Saved review title");
+					yield* MeetingService.template(id, template);
+					let saved = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					expect(saved.records[0]?.template).toBe(template);
+					expect(saved.records[0]?.appliedTemplate).toEqual(
+						Option.some("project-weekly"),
+					);
+					yield* MeetingService.regenerate(id, template);
+					const prompt = f.prompts.at(-1)?.request.messages;
+					expect(prompt?.[0]?.content).toEqual([
+						{
+							_tag: "text",
+							text: `You are a Professional Meeting Analyst. Produce generated meeting minutes from the transcript. Do not invent participants, decisions, owners or deadlines. Mark missing details as not recorded.\n${sections}\nPlease output the final meeting minutes in English. Do not wrap the answer in Markdown code fences.`,
+						},
+					]);
+					saved = yield* Schema.decodeUnknown(MeetingStore)(f.saved());
+					expect(saved.records[0]).toMatchObject({
+						title: "Saved review title",
+						template,
+						appliedTemplate: Option.some(template),
+						minutes: "## Saved summary 2",
+					});
+					const reloaded = yield* MeetingService.snapshot().pipe(
+						Effect.provide(Layer.fresh(f.layer)),
+					);
+					expect(reloaded.records[0]).toEqual(saved.records[0]);
+					expect(f.requests).toHaveLength(1);
+					expect(f.calls.filter((c) => c.startsWith("start:"))).toHaveLength(1);
+					expect(summaryTemplates.find((t) => t.id === template)).toMatchObject(
+						{ name, description },
+					);
+				}).pipe(Effect.provide(f.layer));
+			},
+		);
+	}
+});
+
+// MGMT-152/MGMT-360: provider configuration and bounded stream enter the real snapshot owner.
+it.effect(
+	"MGMT-152 MGMT-360 bounds live content and forwards the chosen target language",
+	() => {
+		const f = setup();
+
+		const translations = Array.from({ length: 205 }, (_, i) => ({
+			id: `t-${i}`,
+			speaker: "1",
+			text: "x".repeat(4001),
+			final: true,
+			at: i * 3000,
+		}));
+		f.translations(translations);
+		return Effect.gen(function* () {
+			yield* configure;
+			yield* MeetingService.configure({
+				...defaultMeetingConfig,
+				profileId: selected.id,
+				minutesModel: selected.modelId,
+				targetLanguage: "de",
+			});
+			yield* MeetingService.action("liveAudioTranslate");
+			yield* MeetingService.translate(new Uint8Array(14400));
+			const state = yield* MeetingService.snapshot();
+			expect(
+				f.translationRequests.map(
+					(r) => `${r.config.targetLanguage}:${r.pcm.length}`,
+				),
+			).toEqual(["de:14400"]);
+			expect(state.config.targetLanguage).toBe("de");
+			expect(state.translations.length).toBeLessThanOrEqual(200);
+			expect(state.translations.reduce((n, p) => n + p.text.length, 0)).toBe(
+				64000,
+			);
+			expect(state.translations.at(-1)?.text).toHaveLength(4000);
+			expect(state.translations.at(-1)?.id).toBe("t-204");
+			yield* MeetingService.clear();
+			expect((yield* MeetingService.snapshot()).translations).toEqual([]);
 		}).pipe(Effect.provide(f.layer));
 	},
 );
