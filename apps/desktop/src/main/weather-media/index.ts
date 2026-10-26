@@ -11,6 +11,8 @@ import {
 import { canRequestClock } from "../clock/clock-ipc";
 import type { DesktopRuntime } from "../diagnostics/module";
 import { WeatherMediaController } from "./controller";
+import { HostVolume } from "./host-volume";
+import { LocalPlayerPort, noLocalPlayer } from "./local-player";
 import { nativeSystemMedia } from "./native";
 import { boundedCoverBytes } from "./native/cover";
 import { weatherSettingsLive } from "./settings-repository";
@@ -18,7 +20,11 @@ import { SystemMediaService } from "./system-media";
 import { weatherNetworkLive } from "./weather-network";
 import { WeatherService } from "./weather-service";
 
-export const weatherMediaLive = (root: string, platform: string) => {
+export const weatherMediaLive = (
+	root: string,
+	platform: string,
+	local?: typeof LocalPlayerPort.Service,
+) => {
 	const directory = import.meta.dirname.includes("app.asar/")
 		? join(process.resourcesPath, "app.asar.unpacked/out/native-media")
 		: join(import.meta.dirname, "../native-media");
@@ -50,6 +56,10 @@ export const weatherMediaLive = (root: string, platform: string) => {
 	);
 	return WeatherMediaController.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(media),
+		Layer.provide(
+			local ? Layer.succeed(LocalPlayerPort, local) : noLocalPlayer,
+		),
+		Layer.provideMerge(HostVolume.Default),
 		Layer.provide(WeatherService.Default),
 		Layer.provide(
 			Layer.mergeAll(weatherSettingsLive(root), weatherNetworkLive),
@@ -70,7 +80,8 @@ export const canRequestWeatherMedia = (
 		return false;
 	return (
 		management ||
-		(input._tag !== "configure" &&
+		(input._tag !== "launch" &&
+			input._tag !== "configure" &&
 			input._tag !== "verifyCity" &&
 			input._tag !== "clearCache" &&
 			input._tag !== "configChanged")

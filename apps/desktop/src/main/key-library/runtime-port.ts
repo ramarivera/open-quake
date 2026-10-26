@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { platform } from "node:os";
 import { promisify } from "node:util";
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Queue, Schema } from "effect";
 import { clipboard, shell } from "electron";
 import type {
 	ActionHostAdapters,
@@ -11,6 +11,7 @@ import {
 	HOTKEY_KEYS,
 	HOTKEY_MODIFIERS,
 	HotkeyConfig,
+	MediaCommand,
 } from "../../../../../packages/device/src/actions/action-contracts.js";
 import {
 	ActionSnapshotFailed,
@@ -44,7 +45,7 @@ export const desktopKeyRuntimePort = (
 	mediaActions?: MediaActionAdapter,
 	resetOwned?: (deviceId?: string) => Promise<void>,
 ) =>
-	Layer.effect(
+	Layer.scoped(
 		KeyRuntimePort,
 		Effect.gen(function* () {
 			const profiles = yield* ProfileService;
@@ -62,6 +63,48 @@ export const desktopKeyRuntimePort = (
 					yield* hardwareKeyboardAdapter(session).pressChord(chord);
 				}),
 			};
+			if (!mock && mediaActions?.observe) {
+				const changes = yield* Queue.sliding<{
+					readonly level: number;
+					readonly muted: boolean;
+				}>(1);
+				yield* Effect.acquireRelease(
+					Effect.sync(() =>
+						mediaActions.observe?.((reading) => changes.unsafeOffer(reading)),
+					),
+					(off) => Effect.sync(() => off?.()),
+				);
+				yield* Effect.forkScoped(
+					Effect.forever(
+						Effect.gen(function* () {
+							const reading = yield* Queue.take(changes);
+							const { envelope } = yield* profiles.loadProfiles();
+							for (const [deviceId, selection] of Object.entries(
+								envelope.activeByDevice,
+							)) {
+								const page = envelope.profiles
+									.find((p) => p.id === selection.profileId)
+									?.pages.find((p) => p.id === selection.pageId);
+								for (const key of page?.keys ?? [])
+									if (
+										key.config.display &&
+										(key.config.type === "mute" || key.config.type === "vol")
+									)
+										publish({
+											deviceId,
+											...selection,
+											keyCode: key.keyCode,
+											volume: reading.level,
+											muted: reading.muted,
+											...(key.config.type === "mute"
+												? { alternate: reading.muted ? 1 : 0 }
+												: {}),
+										});
+							}
+						}).pipe(Effect.catchAll((error) => Effect.logWarning(error))),
+					),
+				);
+			}
 			const textLock = yield* Effect.makeSemaphore(1);
 			const adapters: ActionHostAdapters["Type"] = {
 				keyboard: Option.some(keyboard),
@@ -177,6 +220,11 @@ export const desktopKeyRuntimePort = (
 						if (decoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(decoded.left));
 						const chord = decoded.right.actions[0].value;
+						if (Schema.is(MediaCommand)(chord))
+							return executeActionLeaf(
+								{ type: "hotkey", actions: [{ type: "key", value: chord }] },
+								adapters,
+							);
 						const encoded = encodeDeviceChord(chord);
 						if (encoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(encoded.left));

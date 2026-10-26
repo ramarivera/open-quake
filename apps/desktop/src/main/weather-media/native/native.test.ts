@@ -158,6 +158,82 @@ describe("native system-media consumers", () => {
 		expect(decodeCalls).toBe(0);
 	});
 
+	it.each(["com.apple.Music", "com.spotify.client"])(
+		"retains native artwork when selecting current %s without leaking it to another session",
+		async (appId) => {
+			const directory = await fixture();
+			const target = `${appId}:23`;
+			const other = `${appId}:24`;
+			const artwork = "data:image/png;base64,fixture";
+			const selected = (id: string) => ({
+				id,
+				appId,
+				appName: "Player",
+				title: "Selected title",
+				artist: "Artist",
+				playing: true,
+				coverUrl: null,
+				durationMs: 120000,
+				positionMs: 2000,
+				canPlay: true,
+				canPause: true,
+				canPrevious: true,
+				canNext: true,
+			});
+			const targets: (string | undefined)[] = [];
+			const run: MediaProcess = (file, _args, env) =>
+				Effect.sync(() => {
+					if (file === "/usr/bin/perl")
+						return JSON.stringify({
+							...payload,
+							bundleIdentifier: appId,
+							artworkData: "fixture",
+							artworkMimeType: "image/png",
+						});
+					targets.push(env?.OPEN_QUAKE_MEDIA_TARGET);
+					return JSON.stringify({
+						sessions: [selected(target), selected(other)],
+						session: env?.OPEN_QUAKE_MEDIA_TARGET
+							? selected(env.OPEN_QUAKE_MEDIA_TARGET)
+							: null,
+						source: appId,
+						commands: [0, 1],
+						lyrics: "Selected lyrics",
+					});
+				});
+			try {
+				await Effect.runPromise(
+					Effect.gen(function* () {
+						const adapter = yield* SystemMediaAdapter;
+						expect((yield* adapter.read(null)).session?.coverUrl).toBe(artwork);
+						expect(yield* adapter.read(target)).toMatchObject({
+							session: {
+								id: target,
+								title: "Selected title",
+								coverUrl: artwork,
+							},
+							lyrics: { _tag: "available", text: "Selected lyrics" },
+						});
+						expect((yield* adapter.read(other)).session?.coverUrl).toBeNull();
+					}).pipe(
+						Effect.provide(
+							nativeSystemMedia({
+								directory,
+								platform: "darwin",
+								enabled: true,
+								run,
+								cover: () => artwork,
+							}),
+						),
+					),
+				);
+				expect(targets).toContain(target);
+			} finally {
+				await rm(directory, { recursive: true, force: true });
+			}
+		},
+	);
+
 	it("serializes real native-adapter controls through the shared service and pins the source without shell interpolation", async () => {
 		const directory = await fixture();
 		const calls: {
@@ -314,7 +390,11 @@ describe("native system-media consumers", () => {
 				platform: "darwin",
 				enabled: true,
 				cover,
-				run: (_file, args) => {
+				run: (file, args) => {
+					if (file === "/usr/bin/osascript")
+						return Effect.succeed(
+							'{"sessions":[],"session":null,"source":"","commands":[]}',
+						);
 					if (args[2] === "get")
 						return Effect.succeed(
 							JSON.stringify({ ...payload, supportedCommands: [0] }),
@@ -390,7 +470,10 @@ describe("native system-media consumers", () => {
 			);
 		};
 		const adapter = makeWindowsMedia(run);
-		expect(await Effect.runPromise(adapter.read())).toBeNull();
+		expect(await Effect.runPromise(adapter.read())).toMatchObject({
+			session: null,
+			sessions: [],
+		});
 		const reading = await Effect.runPromise(
 			parseMacMedia(JSON.stringify(payload), cover),
 		);
