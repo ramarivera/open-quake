@@ -47,6 +47,10 @@ export const openaiMeeting = (
 							>();
 							let flushing = false;
 							const flushId = crypto.randomUUID();
+							const timings = new Map<
+								string,
+								{ startMs: number; endMs?: number }
+							>();
 							const items = new Map<
 								string,
 								{
@@ -101,18 +105,20 @@ export const openaiMeeting = (
 										typeof event.audio_start_ms === "number"
 									) {
 										lastStart = Math.max(0, Math.round(event.audio_start_ms));
-										if (typeof event.item_id === "string" && items.size < 20000)
-											items.set(event.item_id, {
-												startMs: lastStart,
-												endMs: lastStart,
-											});
+										if (typeof event.item_id === "string") {
+											if (timings.size >= 20000)
+												return yield* new AiProtocolInvalid();
+											// VAD IDs are provisional. A manual EOF commit can replace them.
+											timings.set(event.item_id, { startMs: lastStart });
+										}
 									}
 									if (
 										event.type === "input_audio_buffer.speech_stopped" &&
 										typeof event.item_id === "string" &&
 										typeof event.audio_end_ms === "number"
 									) {
-										const item = items.get(event.item_id);
+										const item =
+											timings.get(event.item_id) ?? items.get(event.item_id);
 										if (item)
 											item.endMs = Math.max(
 												item.startMs,
@@ -125,10 +131,14 @@ export const openaiMeeting = (
 											items.size >= 20000
 										)
 											return yield* new AiProtocolInvalid();
+										const timing = timings.get(event.item_id);
+										timings.delete(event.item_id);
 										if (!items.has(event.item_id))
 											items.set(event.item_id, {
-												startMs: lastStart,
-												endMs: Math.max(lastStart, sentMs),
+												startMs: timing?.startMs ?? lastStart,
+												endMs:
+													timing?.endMs ??
+													Math.max(timing?.startMs ?? lastStart, sentMs),
 												...(typeof event.previous_item_id === "string"
 													? { previous: event.previous_item_id }
 													: {}),

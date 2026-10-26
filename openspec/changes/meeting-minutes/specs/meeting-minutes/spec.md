@@ -545,3 +545,8 @@ Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, 
 
 - **WHEN** AI-269, AI-270 or AI-137 selects a saved Qwen endpoint
 - **THEN** the adapter SHALL accept HTTPS dashscope.aliyuncs.com, dashscope-intl.aliyuncs.com and one valid workspace DNS label under cn-beijing.maas.aliyuncs.com or ap-southeast-1.maas.aliyuncs.com, reject other remote hosts and nondefault ports before transport, and retain explicitly configured loopback providers for offline use
+
+#### Scenario: EOF replaces provisional VAD identity
+
+- **WHEN** AI-272 reaches EOF during speech and the explicit commit uses the pending VAD ID or a different ID
+- **THEN** only committed items SHALL require final transcripts or appear in saved segments; provisional speech timing SHALL survive into the committed segment and an unstopped segment SHALL end at the submitted audio duration

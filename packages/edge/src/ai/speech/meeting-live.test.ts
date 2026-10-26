@@ -348,6 +348,61 @@ function fakeSocket(transcript = "file transcript") {
 		};
 	});
 }
+for (const provisionalId of ["vad-provisional", "one"]) {
+	it.scoped(
+		`OpenAI EOF waits only for committed items after speech_started ${provisionalId}`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				const s = yield* fakeSocket();
+				const adapter = yield* makeLiveMeetingAdapter({
+					...f,
+					socket: {
+						connect: () =>
+							Effect.succeed({
+								...s.socket,
+								send: (raw) =>
+									s.socket
+										.send(raw)
+										.pipe(
+											Effect.zipRight(
+												object(JSON.parse(String(raw))).type ===
+													"input_audio_buffer.append"
+													? Queue.offer(s.queue, {
+															type: "input_audio_buffer.speech_started",
+															item_id: provisionalId,
+															audio_start_ms: 30,
+														}).pipe(Effect.asVoid)
+													: Effect.void,
+											),
+										),
+							}),
+					},
+				});
+				const config = {
+					...f.request.config,
+					asrProvider: "openai" as const,
+					asrModel: "gpt-realtime-mini",
+				};
+				const job = yield* adapter
+					.submit({ ...f.request, config })
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(10600);
+				expect(Either.isRight(yield* Fiber.join(job))).toBe(true);
+				expect(f.states.get("meeting")?.segments).toEqual([
+					{
+						id: "one",
+						speaker: "",
+						startMs: 30,
+						endMs: 100,
+						text: "file transcript",
+					},
+				]);
+				expect(f.released()).toBe(1);
+				expect(s.closed()).toBe(1);
+			}),
+	);
+}
 describe("file and live realtime ownership", () => {
 	it.scoped(
 		"uses documented LiveTranslate PCM settings and sends resampled 16 kHz signed audio",
