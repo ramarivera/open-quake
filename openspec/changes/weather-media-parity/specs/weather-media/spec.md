@@ -279,3 +279,17 @@ A held hotkey containing a media command SHALL dispatch once on activation and S
 - **WHEN** a shorter playlist is committed while an old-revision session is still active
 - **THEN** card Stop, Toggle, Previous and Next reject the stale session before controlling it or saving its position under the new playlist fingerprint
 - **AND** the new playlist still reads track zero, covering PR103 comment 4379836847 and bead open-quake-lih.7.5
+
+### Requirement: Reactive player locale
+
+Mounted weather and media consumers SHALL read the application locale context, with supported-language normalization, rather than the passive document language mirror. A saved locale switch SHALL update local-player status, system-player labels and weather copy without waiting for polling or remounting. Independent profile-thumbnail capture SHALL honor its explicit initial locale without reading the main locale bridge. Covers WIDGETS-111, WIDGETS-114, WIDGETS-117, PR105 comment 4379841253 and bead open-quake-def.25.
+
+#### Scenario: Mounted language switch
+
+- **WHEN** the saved language changes from English to German while system, local and weather cards remain mounted
+- **THEN** their copy changes in the same locale update, without another media read or replacing their controls
+
+#### Scenario: Independent capture locale
+
+- **WHEN** a profile-thumbnail capture starts with an explicit German context while the document mirror still says English
+- **THEN** the first player render uses German and the capture keeps its independent locale

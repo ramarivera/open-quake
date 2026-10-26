@@ -33,7 +33,7 @@ const fake = vi.hoisted(() => ({
 	},
 }));
 vi.mock("./hooks", () => ({
-	rendererWeatherLocale: () => "en",
+	useWeatherLocale: () => "en",
 	useWeatherMedia: () => fake,
 }));
 const cleanups: (() => Promise<void>)[] = [];

@@ -13,7 +13,7 @@ import { type StripTileContext, stripTileFor } from "../../tileRegistry";
 import { soundboardOwned } from "./soundboard-state";
 
 vi.mock("../../../weather-media/hooks", () => ({
-	rendererWeatherLocale: () => "en",
+	useWeatherLocale: () => "en",
 	useWeatherMedia: () => ({
 		snapshot: {
 			revision: 1,

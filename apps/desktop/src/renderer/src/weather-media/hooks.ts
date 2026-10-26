@@ -21,10 +21,8 @@ export const useWeatherMedia = (enabled = true) => ({
 		() => null,
 	),
 });
-export const rendererWeatherLocale = () =>
-	normalizeWeatherLocale(
-		typeof document === "undefined" ? "en" : document.documentElement.lang,
-	);
+export const useWeatherLocale = () =>
+	normalizeWeatherLocale(useAppLocale().locale);
 export function useWeather(
 	enabled: boolean,
 	override?: WeatherSettings,

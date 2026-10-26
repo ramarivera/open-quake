@@ -15,7 +15,7 @@ import {
 	ClockWeatherCard,
 	ClockWeatherSlot,
 } from "../weather-media/ClockCards";
-import { rendererWeatherLocale, useWeatherMedia } from "../weather-media/hooks";
+import { useWeatherLocale, useWeatherMedia } from "../weather-media/hooks";
 import { LocalPlayerCard } from "../weather-media/LocalPlayerCard";
 import { PlayerCard } from "../weather-media/PlayerCard";
 import type { StripTile } from "./geometry";
@@ -181,6 +181,7 @@ function PlayerSlot({
 	context,
 }: StripTileProps): React.JSX.Element | null {
 	const { snapshot, client } = useWeatherMedia();
+	const locale = useWeatherLocale();
 	// Local soundboard execution stays with its owner. A configured local key
 	// must never turn into an unrelated OS transport action.
 	if (soundboardOwned(tile.key.config))
@@ -197,7 +198,7 @@ function PlayerSlot({
 			control={
 				context.interactive === false ? async () => false : client.control
 			}
-			locale={rendererWeatherLocale()}
+			locale={locale}
 		/>
 	) : null;
 }
