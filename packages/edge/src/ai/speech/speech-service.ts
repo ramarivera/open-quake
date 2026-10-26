@@ -18,6 +18,9 @@ import {
 	AiProtocolInvalid,
 	AiUnavailable,
 } from "../ai-errors.js";
+import { recognizeAzure, synthesizeAzure } from "./azure.js";
+import { recognizeOpenAI } from "./openai-realtime.js";
+import { synthesizeQwenRealtime } from "./qwen-realtime.js";
 import {
 	type GeneratedAudio,
 	OPENAI_TTS_SHUTDOWN,
@@ -29,8 +32,10 @@ import {
 import { SpeechPhaseTimeout } from "./speech-errors.js";
 import { type SynthesisError, synthesizeHttp } from "./speech-http.js";
 import { SpeechHttp, SpeechOutput, SpeechWebSocket } from "./speech-ports.js";
+import { validAdditionalTts, validStt } from "./speech-profile.js";
 import { recognizeSocket, type Transcript } from "./speech-stt.js";
 import { playbackWatchdog } from "./speech-watchdog.js";
+import { recognizeXfy, synthesizeXfy } from "./xfy.js";
 
 export type SpeechFailure = SynthesisError | SpeechPhaseTimeout;
 export type SpeechOutcome =
@@ -74,6 +79,8 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 						(yield* Clock.currentTimeMillis) >= OPENAI_TTS_SHUTDOWN
 					)
 						return yield* new AiUnavailable();
+				} else if (profile.provider !== "dashscope") {
+					if (!validAdditionalTts(profile)) return yield* new AiConfigInvalid();
 				} else if (
 					!validWorkspaceUrl(profile.baseUrl, "https:") ||
 					profile.format !== "pcm" ||
@@ -91,7 +98,11 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 				const profile = yield* validate(input);
 				if (!text.trim() || text.length > 4000)
 					return yield* new AiConfigInvalid();
-				if (Option.isNone(http)) return yield* new AiUnavailable();
+				if (
+					(profile.provider === "openai" || profile.provider === "dashscope") &&
+					Option.isNone(http)
+				)
+					return yield* new AiUnavailable();
 				if (Option.isNone(credentials)) return yield* new AiAuthRequired();
 				const store = credentials.value;
 				return yield* Effect.raceFirst(
@@ -100,6 +111,21 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 							profile.credentialRef,
 							profile.authGeneration,
 						);
+						const secret = Redacted.value(key);
+						if (profile.provider === "azure")
+							return yield* synthesizeAzure(profile, secret, text, onAudio);
+						if (
+							profile.provider === "xfy" ||
+							profile.provider === "qwen-realtime"
+						) {
+							if (Option.isNone(ws)) return yield* new AiUnavailable();
+							return yield* (
+								profile.provider === "xfy"
+									? synthesizeXfy
+									: synthesizeQwenRealtime
+							)(ws.value, profile, secret, text, onAudio);
+						}
+						if (Option.isNone(http)) return yield* new AiUnavailable();
 						return yield* synthesizeHttp(
 							http.value,
 							profile,
@@ -127,12 +153,14 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 					const decoded = Schema.decodeUnknownEither(SttProfile, {
 						onExcessProperty: "error",
 					})(input);
-					if (
-						Either.isLeft(decoded) ||
-						!validWorkspaceUrl(decoded.right.baseUrl, "wss:")
-					)
+					if (Either.isLeft(decoded) || !validStt(decoded.right))
 						return yield* new AiConfigInvalid();
-					if (Option.isNone(ws)) return yield* new AiUnavailable();
+					if (
+						Either.isRight(decoded) &&
+						decoded.right.provider !== "azure" &&
+						Option.isNone(ws)
+					)
+						return yield* new AiUnavailable();
 					if (Option.isNone(credentials)) return yield* new AiAuthRequired();
 					const profile = decoded.right;
 					const store = credentials.value;
@@ -164,6 +192,31 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 											profile.credentialRef,
 											profile.authGeneration,
 										);
+										const secret = Redacted.value(key);
+										if (profile.provider === "azure")
+											return yield* recognizeAzure(
+												profile,
+												secret,
+												frames,
+												onTranscript,
+											);
+										if (Option.isNone(ws)) return yield* new AiUnavailable();
+										if (profile.provider === "openai")
+											return yield* recognizeOpenAI(
+												ws.value,
+												profile,
+												secret,
+												frames,
+												onTranscript,
+											);
+										if (profile.provider === "xfy")
+											return yield* recognizeXfy(
+												ws.value,
+												profile,
+												secret,
+												frames,
+												onTranscript,
+											);
 										return yield* recognizeSocket(
 											ws.value,
 											profile,

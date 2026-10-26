@@ -130,3 +130,9 @@ acceptance is claimed.
 - [x] Bound opt-in archives to the first 60 seconds without failing Stop/export, and close the audio context in a finalizer when graph teardown rejects. Serialized-worker regressions cover partial-frame/full-frame overflow and failing disconnect; all fail before the fix. Tracked in open-quake-c5w.17.
 
 - [x] Count validated final-tail PCM after release for the current owner before suppressing level/activity events. A short-press production STT/runtime regression fails before the fix and verifies unclear rather than noAudio, first-frame metrics, transmitted PCM and no post-release recording activity. Tracked in open-quake-c5w.17.
+
+
+## 6. speech-adapters burn-down
+
+- [ ] 6.1 Implement independent OpenAI STT, Azure STT/TTS, XFY STT/TTS and gated Qwen realtime synthesis with fake conformance fixtures. Rows AI-002/090/097/098/099/100/104/106/107/245, KNOB-072. Bead open-quake-c5w.20 remains open for lead merge.
+- [ ] 6.2 Implement typed Azure catalog, secure independent settings, seeding disposition and reload-safe ownership with restart/replacement tests. Rows AI-044/045/046/047/109/246. Bead open-quake-c5w.21 remains open for lead merge.

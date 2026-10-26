@@ -171,3 +171,62 @@ Evidence: AI-254, AI-255, KNOB-053, KNOB-055. Missing input SHALL report VOICE.C
 #### Scenario: Knob duration boundary
 - **WHEN** a knob recorder reaches 57999ms then 58000ms after readiness
 - **THEN** it remains open before the boundary and stops once at 58000ms, finalizes nonempty audio once and closes all capture resources
+
+
+### Requirement: Independent retained speech engines
+
+Evidence: AI-002, AI-044, AI-090, KNOB-072. Explicit STT choices SHALL include DashScope, OpenAI transcription, Azure and XFY; explicit TTS choices SHALL include HTTP DashScope, OpenAI, Azure and XFY. Chat model or credential changes SHALL never change speech selections. Unsupported models, voices or transports SHALL fail before provider IO. All adapters SHALL own scoped instances and close them on completion, cancellation, replacement and error, under the existing deadlines.
+
+#### Scenario: Independent engine round trip
+- **WHEN** independent recognition and synthesis profiles are saved and the controller restarts
+- **THEN** provider, model, language, voice and credential reference remain selected independently of chat, and changing providers requires explicit speech credentials
+
+### Requirement: OpenAI transcription session
+
+Evidence: AI-097, AI-098. OpenAI STT SHALL use the direct transcription WebSocket endpoint, session.update with transcription-only session type, explicit gpt-transcribe model, source language and mono 24kHz PCM. It SHALL wait for session.updated without an echoed event ID, never request response generation or tools, and correlate transcript items. Delta text SHALL be provisional, completed text SHALL replace it once, and committed item ordering SHALL determine final text. Empty captures SHALL send no commit. Nonempty uncommitted audio SHALL commit once; already server-committed audio SHALL not commit again. Final results SHALL wait at most 15s, and cancelled or stale events SHALL never complete another capture.
+
+#### Scenario: Completion before release
+- **WHEN** server VAD commits and completes the current item before capture is released with no further audio
+- **THEN** finish returns its completed text once without an empty duplicate commit or response.create
+
+### Requirement: Azure speech and recovered voice catalog
+
+Evidence: AI-045, AI-046, AI-099, AI-106, AI-245. Azure SHALL use a main-owned subscription key, explicit region defaulting to eastasia, source language and a typed catalog containing every recovered en-US, zh-CN and zh-TW voice. A language change SHALL choose that language's first voice unless an explicitly selected compatible voice exists. Recognition SHALL push explicit PCM frames into a scoped recognizeOnce session after readiness and await its result. Synthesis SHALL use explicit raw mono 24kHz signed PCM and a push output stream, never a default speaker. Initialization failures, provider cancellation and physical SDK close SHALL propagate through the speech facade; per-session closure SHALL isolate concurrent and stale callbacks.
+
+#### Scenario: Azure cancellation
+- **WHEN** recognition or synthesis is cancelled before its provider result
+- **THEN** all SDK stream, configuration and recognizer or synthesizer resources close, and a late callback cannot deliver a result or audio
+
+### Requirement: XFY signed speech protocols
+
+Evidence: AI-047, AI-100, AI-107. XFY SHALL resolve APPID, API key and secret only inside the main-owned adapter from one encrypted write-only bundle. HMAC-SHA256 signing SHALL use the exact host, RFC1123 date and request line. IAT SHALL convert 24kHz PCM to 16kHz with streaming phase preserved, send status 0 then 1 then one status 2 only after nonempty audio, use explicit en_us or zh_cn language and wpgs revisions, replacing the entire inclusive revision range. TTS SHALL send UTF8 base64 text, selected aisxping voice, raw 16kHz output, and convert it to the shared 24kHz descriptor. Both SHALL reject provider errors, malformed or oversized audio, enforce final deadlines and close on cancellation.
+
+#### Scenario: Inclusive correction
+- **WHEN** an IAT revision replaces segments one through three
+- **THEN** all three old segments disappear, the revision appears once, and only status 2 yields final text
+
+### Requirement: Explicit gated Qwen realtime synthesis
+
+Evidence: AI-104. An explicitly enabled qualified realtime profile SHALL send session.update, wait for session.updated before text append and commit, collect correlated response.audio.delta frames and require response.done before completing synthesis. Cancellation SHALL clear the text buffer, finish the session and close the socket within bounded cleanup. The default SHALL remain HTTP synthesis; realtime SHALL require its own explicit enablement and SHALL never be inferred from chat.
+
+#### Scenario: Readiness and clear
+- **WHEN** realtime synthesis waits for readiness then is cancelled after append
+- **THEN** no text is sent before readiness and cancellation clears and closes the owned session without playback
+
+### Requirement: Secure settings and geographic seeding disposition
+
+Evidence: AI-044, AI-046, AI-047, AI-109. Settings SHALL return only public provider configuration and credential-presence booleans. Azure keys and all three XFY credential fields SHALL be write-only, encrypted through the existing vault, and absent from persisted settings, renderer reads, diagnostics and chat credentials. Explicit saved STT, TTS and live-translation choices SHALL survive startup unchanged. Geographic seeding SHALL be an opt-in suggestion only, without network lookup or automatic provider activation: China suggests DashScope and qwen3.5-livetranslate-flash-realtime; other known countries suggest OpenAI and gpt-4o-transcribe. Unknown or failed lookups SHALL produce no suggestion. Repeated startup SHALL never overwrite a saved selection or live-translation model.
+
+#### Scenario: Lookup failure with explicit selections
+- **WHEN** a geographic lookup is unavailable or the app restarts in another country
+- **THEN** existing speech and live-translation choices remain unchanged, no provider is enabled and no location request is sent
+
+### Requirement: Reload-safe speech ownership
+
+Evidence: AI-246. Speech settings SHALL persist configuration in main rather than a renderer engine registry. Renderer reload SHALL replay public saved configuration without credentials; a changed profile SHALL cancel and await all active capture and output before publication. Each subsequent session SHALL resolve the latest profile and own a fresh scoped engine. Repeated profile replacement and stale callbacks SHALL never reuse destroyed engines or report results into a newer session.
+
+#### Scenario: Replacement and restart
+- **WHEN** active speech is replaced twice and the settings renderer reloads
+- **THEN** old sessions close before the new settings become visible, the latest selected profile replays, and stale old events cannot alter it
+
+The direct committed-turn model and endpoint follow [official OpenAI realtime transcription documentation](https://developers.openai.com/api/docs/guides/realtime-transcription), accessed 2026-10-26. This replaces the recovered gpt-4o-transcribe configuration with the documented gpt-transcribe profile and transcription-only transport. The geographic suggestion retains its historical live-translation model string as an inert suggestion, never an activated profile.
