@@ -82,3 +82,5 @@ production renderer URL and disables macOS app activation. No hardware IO.
 ## PR84 fix1
 
 - [x] 6.1 Refuse knob saves while a grid key editor is open, explain how to save and close that editor, and retain the key draft without advancing its revision. Bead open-quake-a74.14, review 4376058979. Main IPC independently rejects same-profile pending drafts under its existing request lock. Registration and renderer regressions failed before the fix; they verify the unchanged revision, successful key save with the original target/title, and subsequent knob save.
+
+- [x] 6.2 Share configured default/fallback model selection between the knob editor and production model resolution. Bead open-quake-a74.15, review 4376059141. The extracted readiness check reproduced role `none` reporting ready while the actual `pinKnobModel` rejected it. `knob-model-readiness.test.ts` verifies readiness and production pinning agree for `none`, `default` and `fallback`, using synthetic credentials without opening capture or sending inference requests.

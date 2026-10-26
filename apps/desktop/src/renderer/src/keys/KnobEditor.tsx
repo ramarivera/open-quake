@@ -9,9 +9,15 @@ import type {
 	Profile,
 	ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
+import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import type { PublicModelRow } from "../../../shared/agents";
 import { Group, Row } from "../ui/Form";
-import { editKnobSlot, knobAssignment, profileKnobDraft } from "./knob-draft";
+import {
+	editKnobSlot,
+	knobAssignment,
+	knobVoiceReady,
+	profileKnobDraft,
+} from "./knob-draft";
 
 /** Mounted with the profile ID as key. Page selection leaves this draft intact. */
 export function KnobEditor({
@@ -26,7 +32,7 @@ export function KnobEditor({
 	const [draft, setDraft] = useState(() => profileKnobDraft(profile));
 	const [revision, setRevision] = useState(profile.revision);
 	const [slotName, setSlotName] = useState<KnobSlotName>("center");
-	const [models, setModels] = useState<readonly PublicModelRow[]>([]);
+	const [savedModels, setModels] = useState<readonly PublicModelRow[]>([]);
 	const [catalogState, setCatalogState] = useState("Loading saved providers…");
 	const [notice, setNotice] = useState("");
 	const [saving, setSaving] = useState(false);
@@ -59,6 +65,7 @@ export function KnobEditor({
 			off();
 		};
 	}, []);
+	const models = resolveModelRows(savedModels);
 	const slot = draft.config.subActions[KNOB_SLOT_INDEX[slotName]];
 	const value = (type: string) =>
 		slot.config.actions.find((a) => a.type === type)?.value;
@@ -67,25 +74,11 @@ export function KnobEditor({
 	const model = value("directModel");
 	const selected = models.find((m) => m.id === provider && m.model === model);
 	const center = draft.config.subActions[0];
-	const centerProvider = center.config.actions.find(
-		(a) => a.type === "directProvider",
-	)?.value;
-	const centerModel = center.config.actions.find(
-		(a) => a.type === "directModel",
-	)?.value;
 	const centerDirect =
 		center.config.type === "assistant" &&
 		center.config.actions.find((a) => a.type === "voiceRoute")?.value ===
 			"direct";
-	const ready =
-		centerDirect &&
-		models.some(
-			(m) =>
-				m.id === centerProvider &&
-				m.model === centerModel &&
-				m.credentialAvailable &&
-				m.model.trim(),
-		);
+	const ready = knobVoiceReady(draft, models);
 	const sourceCenter = Option.isSome(profile.knob)
 		? profile.knob.value.config.subActions
 		: undefined;

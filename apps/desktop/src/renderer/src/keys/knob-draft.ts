@@ -11,6 +11,8 @@ import {
 	replaceKnobSlot,
 } from "../../../../../../packages/device/src/knob/knob-invariants.js";
 import type { Profile } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
+import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
+import type { PublicModelRow } from "../../../shared/agents";
 
 export const profileKnobDraft = (profile: Profile): KnobResource => {
 	if (Option.isNone(profile.knob)) return emptyKnobResource();
@@ -51,3 +53,23 @@ export const editKnobSlot = (
 		subActions: replaceKnobSlot(knob.config.subActions, name, slot),
 	},
 });
+
+/** Reflects capture readiness for the center direct-route assignment. */
+export const knobVoiceReady = (
+	knob: KnobResource,
+	models: readonly PublicModelRow[],
+): boolean => {
+	const center = knob.config.subActions[0];
+	const value = (type: string) =>
+		center.config.actions.find((a) => a.type === type)?.value;
+	return (
+		center.config.type === "assistant" &&
+		value("voiceRoute") === "direct" &&
+		resolveModelRows(models).some(
+			(m) =>
+				m.id === value("directProvider") &&
+				m.model === value("directModel") &&
+				m.credentialAvailable,
+		)
+	);
+};
