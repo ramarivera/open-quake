@@ -78,6 +78,7 @@ export class MonitorStore extends Effect.Service<MonitorStore>()(
 				});
 				return {
 					read,
+					resolveMedia: (slot: MediaSlot) => mediaView(slot),
 					configuration: Effect.fn("MonitorStore.configuration")(
 						(): Effect.Effect<MonitorRecord> => Effect.sync(() => record),
 					),

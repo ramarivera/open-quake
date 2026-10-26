@@ -164,6 +164,7 @@ export function prepareMonitor(
 						command._tag !== "read" &&
 						command._tag !== "watch" &&
 						command._tag !== "artwork" &&
+						command._tag !== "resolveMedia" &&
 						!isManagement
 					)
 						return reject();
@@ -206,6 +207,12 @@ export function prepareMonitor(
 					const execute = Effect.gen(function* () {
 						const store = yield* MonitorStore;
 						switch (command._tag) {
+							case "resolveMedia":
+								return {
+									_tag: "media",
+									slot: command.slot,
+									view: yield* store.resolveMedia(command.slot),
+								} as const;
 							case "read":
 								return {
 									_tag: "success",

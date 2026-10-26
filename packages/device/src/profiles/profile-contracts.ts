@@ -108,6 +108,10 @@ export const ProfileAction = Schema.Struct({
 	value: ProfileJson,
 });
 const KeyConfigFields = Schema.Struct({
+	temperatureUnit: Schema.optionalWith(
+		Schema.Literal("celsius", "fahrenheit"),
+		{ exact: true },
+	),
 	userModifiedTitle: Schema.optional(Schema.Boolean),
 	userModifiedAlterTitle: Schema.optional(Schema.Boolean),
 	type: Schema.String,

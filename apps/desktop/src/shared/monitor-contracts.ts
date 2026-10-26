@@ -35,6 +35,7 @@ const slots = <A, I>(value: Schema.Schema<A, I>) =>
 		wasteland: Schema.optionalWith(value, { exact: true }),
 	});
 export const MonitorSettings = Schema.Struct({
+	gameModeMonitorConfig: Schema.optionalWith(Schema.Unknown, { exact: true }),
 	styleId: StyleId,
 	background: Schema.Literal("style", "none", "custom"),
 	media: slots(MediaSlot),
@@ -91,6 +92,7 @@ export const MonitorCommand = Schema.Union(
 		settings: MonitorSettings,
 	}),
 	Schema.TaggedStruct("chooseMedia", { styleId: StyleId }),
+	Schema.TaggedStruct("resolveMedia", { slot: MediaSlot }),
 	Schema.TaggedStruct("watch", { active: Schema.Boolean }),
 );
 export type MonitorCommand = typeof MonitorCommand.Type;
