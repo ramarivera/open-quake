@@ -1,4 +1,8 @@
 import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
+import {
+	canonicalProvider,
+	migrateLegacySelection,
+} from "../../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../../shared/agents";
 
 /** Apply committed field changes while preserving edits made against the previous snapshot. */
@@ -104,5 +108,20 @@ export function selectQwenGeneration(
 			kind === "chat"
 				? "https://dashscope.aliyuncs.com/compatible-mode/v1"
 				: "https://dashscope.aliyuncs.com/api/v1",
+	};
+}
+
+/** Apply a provider edit without carrying controls for a different protocol. */
+export function selectModelProvider(
+	row: PublicModelRow,
+	provider: string,
+): PublicModelRow {
+	const changed =
+		canonicalProvider(row.provider) !== canonicalProvider(provider);
+	const { controls: _controls, settings: _settings, ...metadata } = row;
+	return {
+		...(changed ? metadata : row),
+		provider,
+		model: migrateLegacySelection({ provider, modelId: row.model }).modelId,
 	};
 }

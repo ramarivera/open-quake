@@ -134,6 +134,11 @@ Volc Ark SHALL select inference or agent entry method with explicit endpoint or 
 - **THEN** only its selected endpoint and credential are used and fixtures assert its exact request and stream framing
 - **AND** Spark uses generalv3.5, generalv3 or 4.0Ultra with HMAC SHA256 signing and a 60 second deadline, closes on failure or cancellation and rejects tools
 
+#### Scenario: Provider changes clear incompatible options
+- **WHEN** the provider input or model selection changes a row to a different provider
+- **THEN** provider-specific controls and settings are cleared so unsupported Qwen search options cannot block OpenAI or DeepSeek
+- **AND** aliases of the same provider preserve the selected controls
+
 #### Scenario: Qwen chat and media endpoints coexist
 - **WHEN** a scope saves Qwen chat and media rows or changes either endpoint
 - **THEN** endpoint propagation and credential invalidation affect only rows using the same protocol

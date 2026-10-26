@@ -6,7 +6,6 @@ import {
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
 import {
-	migrateLegacySelection,
 	modelOptions,
 	volcBaseUrl,
 } from "../../../../../../../packages/edge/src/ai/provider-catalog";
@@ -19,6 +18,7 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectModelProvider,
 	selectQwenGeneration,
 } from "./model-drafts";
 import type { AgentRequest } from "./useAgents";
@@ -156,12 +156,7 @@ function ModelTable({
 										onChange={(event) => {
 											const provider = event.target.value;
 											update({
-												...row,
-												provider,
-												model: migrateLegacySelection({
-													provider,
-													modelId: row.model,
-												}).modelId,
+												...selectModelProvider(row, provider),
 												baseUrl:
 													row.baseUrl ||
 													providerDefaults.find((p) => p.id === provider)
@@ -191,9 +186,11 @@ function ModelTable({
 												(m) => m.id === model,
 											);
 											update({
-												...row,
+												...selectModelProvider(
+													row,
+													provider?.id ?? row.provider,
+												),
 												model,
-												provider: provider?.id ?? row.provider,
 												maxTokens: entry?.maxTokens ?? row.maxTokens,
 												baseUrl: row.baseUrl || provider?.baseUrl || "",
 											});

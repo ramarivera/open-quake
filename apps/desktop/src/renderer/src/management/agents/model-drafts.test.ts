@@ -5,6 +5,7 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectModelProvider,
 	selectQwenGeneration,
 } from "./model-drafts";
 
@@ -161,3 +162,25 @@ it("selects a Qwen model for each new generation kind and preserves explicit sam
 	expect(selectQwenGeneration(custom, "image")).toEqual(custom);
 	expect(chat.model).toBe("qwen3.6-plus");
 });
+
+it.each(["openai", "deepseek"])(
+	"clears incompatible Qwen controls and settings when switching to %s",
+	(provider) => {
+		const row: PublicModelRow = {
+			...first,
+			provider: "qwen",
+			model: "qwen3.6-plus",
+			controls: {
+				webSearch: true,
+				searchOptions: { enable_source: true },
+				thinking: true,
+			},
+			settings: { mediaKind: "image" },
+		};
+		const switched = selectModelProvider(row, provider);
+		expect(switched.controls).toBeUndefined();
+		expect(switched.settings).toBeUndefined();
+		expect(selectModelProvider(row, "Qwen").controls).toEqual(row.controls);
+		expect(row.controls?.searchOptions).toEqual({ enable_source: true });
+	},
+);
