@@ -25,3 +25,9 @@ Cluster open-quake-lih.8 and delivery epic open-quake-lih.8.1 remain open until 
 ## 6. Physical acceptance
 
 - [ ] 6.1 Verify all five layouts, supported live readouts, display placement/readability and physical disk-list touch scrolling on the real QUAKE. Capture screenshots and obtain confirmation for hands-on gestures. Bead open-quake-lih.8.1.6; shared hardware checklist open-quake-lih.24. Mock screenshots do not close this task.
+
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: retained anime/tactical/wasteland groups, truthful values, gauges and disk drag lifecycle.
+- [ ] test-device-widgets remainder WIDGETS-071/072/073: reconcile device palette/readability, anime value motion and wasteland warning lamp/wobble; no artwork rewrite in this coverage lane.

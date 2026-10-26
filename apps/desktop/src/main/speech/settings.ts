@@ -7,9 +7,7 @@ import {
 	AiCredentialStoreFailed,
 } from "../../../../../packages/edge/src/ai/ai-errors";
 import {
-	PCM_24K,
 	SttProfile,
-	speechInstructions,
 	TtsProfile,
 } from "../../../../../packages/edge/src/ai/speech/speech-contracts";
 import type { JsonStore } from "../../../../../packages/edge/src/channels/channel-contracts";
@@ -20,6 +18,12 @@ import {
 	type SpeechSettingsView,
 } from "../../shared/speech";
 import type { CredentialVault } from "../credentials/keychain";
+import {
+	normalizeSpeechSettings,
+	regionSuggestion,
+	sttConfiguration,
+	ttsConfiguration,
+} from "./profile-settings";
 import type { SpeechProfiles } from "./runtime";
 
 const Stored = Schema.Struct({
@@ -36,8 +40,7 @@ const initial: Stored = {
 	version: 1,
 	settings: { version: 1, speakAnswers: false },
 };
-const host = (workspace: string, region: string) =>
-	`${workspace}.${region}.maas.aliyuncs.com`;
+
 export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 	function* (options: {
 		readonly storage: JsonStore;
@@ -93,6 +96,9 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 					settings: state.settings,
 					sttCredential: yield* available(state.stt),
 					ttsCredential: yield* available(state.tts),
+					...(regionSuggestion(state.settings)
+						? { regionSuggestion: regionSuggestion(state.settings) }
+						: {}),
 				};
 			},
 		);
@@ -101,11 +107,13 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 				Effect.sync(() => normalizeMicrophone(state.settings.defaultMic)),
 			profiles: Effect.fn("DesktopSpeech.profiles")(
 				(): Effect.Effect<SpeechProfiles> =>
-					Effect.sync(() => ({
-						...(state.stt ? { stt: state.stt } : {}),
-						...(state.tts ? { tts: state.tts } : {}),
-						speakAnswers: state.settings.speakAnswers,
-					})),
+					lock.withPermits(1)(
+						Effect.sync(() => ({
+							...(state.stt ? { stt: state.stt } : {}),
+							...(state.tts ? { tts: state.tts } : {}),
+							speakAnswers: state.settings.speakAnswers,
+						})),
+					),
 			),
 			request: Effect.fn("DesktopSpeech.configure")(
 				(input: unknown): Effect.Effect<SpeechSettingsView, AiError> =>
@@ -129,6 +137,8 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 									? {
 											_tag: "Save" as const,
 											sttKey: undefined,
+											sttXfy: undefined,
+											ttsXfy: undefined,
 											ttsKey: undefined,
 											settings: {
 												...state.settings,
@@ -146,69 +156,71 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 											},
 										};
 							const previous = state;
-							const created: Array<SttProfile | TtsProfile> = [];
+							const created: CredentialRef[] = [];
 							const build = Effect.gen(function* () {
-								let stt: SttProfile | undefined;
-								if (request.settings.stt) {
-									const config = request.settings.stt;
-									const baseUrl = `wss://${host(config.workspace, config.region)}`;
-									const identity = request.sttKey
-										? yield* options.credentials.store(
-												Redacted.make(request.sttKey),
-											)
-										: previous.stt?.baseUrl === baseUrl
-											? {
-													reference: previous.stt.credentialRef,
-													authGeneration: previous.stt.authGeneration,
-												}
-											: undefined;
-									if (!identity) return yield* new AiAuthRequired();
-									stt = {
-										provider: "dashscope",
-										baseUrl,
-										model: "qwen-audio-3.1-asr-flash-streaming",
-										descriptor: PCM_24K,
-										credentialRef: identity.reference,
-										authGeneration: identity.authGeneration,
-									};
-									if (request.sttKey) created.push(stt);
-								}
-								let tts: TtsProfile | undefined;
-								if (request.settings.tts) {
-									const config = request.settings.tts;
-									const baseUrl =
-										config.provider === "openai"
-											? "https://api.openai.com/v1"
-											: `https://${host(config.workspace, config.region)}`;
-									const identity = request.ttsKey
-										? yield* options.credentials.store(
-												Redacted.make(request.ttsKey),
-											)
-										: previous.tts?.baseUrl === baseUrl &&
-												previous.tts.provider === config.provider
-											? {
-													reference: previous.tts.credentialRef,
-													authGeneration: previous.tts.authGeneration,
-												}
-											: undefined;
-									if (!identity) return yield* new AiAuthRequired();
-									tts = {
-										provider: config.provider,
-										baseUrl,
-										model:
-											config.provider === "openai"
-												? "gpt-4o-mini-tts"
-												: "qwen-audio-3.1-tts-flash",
-										voice: config.voice,
-										language: config.language,
-										instructions: speechInstructions(config.language),
-										format: config.provider === "openai" ? "wav" : "pcm",
-										descriptor: PCM_24K,
-										credentialRef: identity.reference,
-										authGeneration: identity.authGeneration,
-									};
-									if (request.ttsKey) created.push(tts);
-								}
+								const publicSettings = normalizeSpeechSettings(
+									request.settings,
+								);
+								const buildProfile = <P extends SttProfile | TtsProfile>(
+									config: Omit<P, "credentialRef" | "authGeneration">,
+									old: P | undefined,
+									key: string | undefined,
+								) =>
+									Effect.gen(function* () {
+										const same =
+											old?.provider === config.provider &&
+											old?.baseUrl === config.baseUrl &&
+											old?.region === config.region;
+										const identity = key
+											? yield* options.credentials.store(Redacted.make(key))
+											: same && old
+												? {
+														reference: old.credentialRef,
+														authGeneration: old.authGeneration,
+													}
+												: undefined;
+										if (!identity) return yield* new AiAuthRequired();
+										const profile = {
+											...config,
+											credentialRef: identity.reference,
+											authGeneration: identity.authGeneration,
+										};
+										if (key) created.push(profile.credentialRef);
+										return profile;
+									});
+								const sttSecret =
+									publicSettings.stt?.provider === "xfy"
+										? request.sttXfy
+											? JSON.stringify(request.sttXfy)
+											: undefined
+										: request.sttKey;
+								const ttsSecret =
+									publicSettings.tts?.provider === "xfy"
+										? request.ttsXfy
+											? JSON.stringify(request.ttsXfy)
+											: undefined
+										: request.ttsKey;
+								if (
+									(request.sttXfy && publicSettings.stt?.provider !== "xfy") ||
+									(request.ttsXfy && publicSettings.tts?.provider !== "xfy") ||
+									(request.sttKey && publicSettings.stt?.provider === "xfy") ||
+									(request.ttsKey && publicSettings.tts?.provider === "xfy")
+								)
+									return yield* new AiConfigInvalid();
+								const stt = publicSettings.stt
+									? yield* buildProfile<SttProfile>(
+											sttConfiguration(publicSettings.stt),
+											previous.stt,
+											sttSecret,
+										)
+									: undefined;
+								const tts = publicSettings.tts
+									? yield* buildProfile<TtsProfile>(
+											ttsConfiguration(publicSettings.tts),
+											previous.tts,
+											ttsSecret,
+										)
+									: undefined;
 								const retired = [
 									...new Set([
 										...(previous.retired ?? []),
@@ -228,7 +240,7 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 								const next: Stored = {
 									version: 1,
 									retired,
-									settings: request.settings,
+									settings: publicSettings,
 									...(stt ? { stt } : {}),
 									...(tts ? { tts } : {}),
 								};
@@ -242,8 +254,8 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 							});
 							const result = yield* build.pipe(Effect.either);
 							if (Either.isLeft(result)) {
-								for (const profile of created)
-									yield* options.credentials.remove(profile.credentialRef);
+								for (const reference of created)
+									yield* options.credentials.remove(reference);
 								return yield* result.left;
 							}
 							yield* cleanup();

@@ -52,7 +52,7 @@ The service SHALL expose EMPTY, ONGOING, PROCESSING, and IDLE states with the me
 
 ### Requirement: Absolute response deadlines
 
-Direct normal chat SHALL have a 60,000ms absolute deadline from turn acceptance. An explicitly enabled long mode or agent run MAY use 300,000ms. Deltas SHALL NOT extend deadlines. On a direct-chat deadline the service SHALL abort upstream work, emit one end timedOut with `CHAT.RESPONSE.TIMEOUT`, and ignore late completion. Agent runtime SHALL own its run deadline and emit its one corresponding end. Idle context expiry SHALL default to 30 minutes and SHALL NOT delete saved history.
+Direct normal chat SHALL have a 60,000ms absolute deadline from turn acceptance. An explicitly enabled long mode, DashScope media profile or agent run MAY use 300,000ms. Deltas SHALL NOT extend deadlines. On a direct-chat deadline the service SHALL abort upstream work, emit one end timedOut with `CHAT.RESPONSE.TIMEOUT`, and ignore late completion. Agent runtime SHALL own its run deadline and emit its one corresponding end. Idle context expiry SHALL default to 30 minutes and SHALL NOT delete saved history.
 
 #### Scenario: Stream never finishes
 - **WHEN** a normal turn keeps emitting tokens past 59,999ms without completion

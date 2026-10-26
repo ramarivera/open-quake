@@ -31,6 +31,7 @@ import {
 	normalizeRoles,
 	ownModelRows,
 	resolveModels,
+	sharesModelEndpoint,
 	skillFrontMatter,
 	workspaceTemplates,
 } from "./agents-invariants.js";
@@ -537,7 +538,7 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 									? rows.map((r) => (r.id === row.id ? row : r))
 									: [...rows, row];
 								const withUrl = next.map((r) =>
-									r.provider === provider && r.baseUrl !== row.baseUrl
+									sharesModelEndpoint(r, row) && r.baseUrl !== row.baseUrl
 										? { ...r, baseUrl: row.baseUrl, credentialRef: "" }
 										: r,
 								);

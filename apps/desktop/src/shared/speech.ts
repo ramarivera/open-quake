@@ -58,30 +58,81 @@ export function recoverMicrophone(
 	const labeled = inputs.filter((d) => saved.label && d.label === saved.label);
 	return labeled.length === 1 ? labeled[0] : undefined;
 }
-export const SttSettings = Schema.Struct({
-	workspace: Workspace,
-	region: Region,
-});
+const Language = Schema.String.pipe(
+	Schema.pattern(/^[a-z]{2,3}(?:-[A-Z]{2})?$/),
+);
+const AzureRegion = Schema.String.pipe(Schema.pattern(/^[a-z][a-z0-9]{1,63}$/));
+export const SttSettings = Schema.Union(
+	Schema.Struct({
+		provider: Schema.optional(Schema.Literal("dashscope")),
+		workspace: Workspace,
+		region: Region,
+	}),
+	Schema.Struct({ provider: Schema.Literal("openai"), language: Language }),
+	Schema.Struct({
+		provider: Schema.Literal("azure"),
+		region: Schema.optional(AzureRegion),
+		language: Schema.Literal("en-US", "zh-CN", "zh-TW"),
+	}),
+	Schema.Struct({
+		provider: Schema.Literal("xfy"),
+		language: Schema.Literal("en_us", "zh_cn"),
+	}),
+);
+export type SttSettings = typeof SttSettings.Type;
 export const TtsSettings = Schema.Union(
 	Schema.Struct({
 		provider: Schema.Literal("openai"),
-		language: Schema.String.pipe(Schema.maxLength(32)),
+		language: Language,
 		voice: Schema.NonEmptyTrimmedString.pipe(
 			Schema.maxLength(64),
-			Schema.filter((voice) => OPENAI_VOICES.includes(voice)),
+			Schema.filter((v) => OPENAI_VOICES.includes(v)),
 		),
 	}),
 	Schema.Struct({
 		provider: Schema.Literal("dashscope"),
 		workspace: Workspace,
 		region: Region,
-		language: Schema.String.pipe(Schema.maxLength(32)),
+		language: Language,
 		voice: Schema.Literal("longanlingxin_v3.1"),
 	}),
+	Schema.Struct({
+		provider: Schema.Literal("azure"),
+		region: Schema.optional(AzureRegion),
+		language: Schema.Literal("en-US", "zh-CN", "zh-TW"),
+		voice: Schema.String,
+	}),
+	Schema.Struct({
+		provider: Schema.Literal("xfy"),
+		language: Schema.Literal("en_us", "zh_cn"),
+		voice: Schema.Literal("aisxping"),
+	}),
+	Schema.Struct({
+		provider: Schema.Literal("qwen-realtime"),
+		language: Language,
+		voice: Schema.Literal("Cherry"),
+		realtimeEnabled: Schema.Literal(true),
+	}),
 );
+export type TtsSettings = typeof TtsSettings.Type;
+const XfyCredentials = Schema.Struct({
+	appId: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(256)),
+	apiKey: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(1024)),
+	apiSecret: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(1024)),
+});
 export const SpeechSettings = Schema.Struct({
 	version: Schema.Literal(1),
 	speakAnswers: Schema.Boolean,
+	geographicSeed: Schema.optional(
+		Schema.Struct({
+			country: Schema.optional(
+				Schema.String.pipe(Schema.pattern(/^[A-Z]{2}$/)),
+			),
+		}),
+	),
+	liveTranslationModel: Schema.optional(
+		Schema.String.pipe(Schema.maxLength(128)),
+	),
 	defaultMic: Schema.optional(MicrophonePreference),
 	stt: Schema.optional(SttSettings),
 	tts: Schema.optional(TtsSettings),
@@ -92,6 +143,8 @@ export const SpeechSettingsRequest = Schema.Union(
 	Schema.TaggedStruct("SelectMicrophone", { microphone: MicrophonePreference }),
 	Schema.TaggedStruct("Save", {
 		settings: SpeechSettings,
+		sttXfy: Schema.optional(XfyCredentials),
+		ttsXfy: Schema.optional(XfyCredentials),
 		sttKey: Schema.optional(
 			Schema.String.pipe(Schema.minLength(1), Schema.maxLength(16384)),
 		),
@@ -104,6 +157,12 @@ export const SpeechSettingsView = Schema.Struct({
 	settings: SpeechSettings,
 	sttCredential: Schema.Boolean,
 	ttsCredential: Schema.Boolean,
+	regionSuggestion: Schema.optional(
+		Schema.Struct({
+			provider: Schema.Literal("dashscope", "openai"),
+			liveTranslationModel: Schema.String,
+		}),
+	),
 });
 export type SpeechSettingsView = typeof SpeechSettingsView.Type;
 export const SpeechSettingsReply = Schema.Union(

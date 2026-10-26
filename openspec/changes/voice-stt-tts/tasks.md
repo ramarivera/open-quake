@@ -130,3 +130,24 @@ acceptance is claimed.
 - [x] Bound opt-in archives to the first 60 seconds without failing Stop/export, and close the audio context in a finalizer when graph teardown rejects. Serialized-worker regressions cover partial-frame/full-frame overflow and failing disconnect; all fail before the fix. Tracked in open-quake-c5w.17.
 
 - [x] Count validated final-tail PCM after release for the current owner before suppressing level/activity events. A short-press production STT/runtime regression fails before the fix and verifies unclear rather than noAudio, first-frame metrics, transmitted PCM and no post-release recording activity. Tracked in open-quake-c5w.17.
+
+
+## 6. speech-adapters burn-down
+
+- [x] 6.1 Implement independent OpenAI STT, Azure STT/TTS, XFY STT/TTS and gated Qwen realtime synthesis with fake conformance fixtures. Rows AI-002/090/097/098/099/100/104/106/107/245, KNOB-072. Bead open-quake-c5w.20 remains open for lead merge.
+- [x] 6.2 Implement typed Azure catalog, secure independent settings, seeding disposition and reload-safe ownership with restart/replacement tests. Rows AI-044/045/046/047/109/246. Bead open-quake-c5w.21 remains open for lead merge.
+
+The provider conformance suite drives AiSpeechService with fake sockets and a
+fake Azure SDK, including early XFY finalization, inclusive revisions,
+resampling, every adapter's cancellation/deadline cleanup, Qwen control-event
+identities and stale response rejection. The production desktop factory tests
+drive active capture and Read Aloud through profile replacement, await physical
+port teardown and verify fresh engines and stale transcript exclusion. Public
+settings round-trip through restart independently of chat, retain Azure voice
+selection and keep keys and XFY credential bundles write-only. Mounted EN/DE
+settings checks use a hidden mock Electron window and synthetic enumeration.
+
+These checkboxes describe software implementation and synthetic acceptance.
+Live provider, physical microphone/speaker and QUAKE acceptance remain open.
+The required broad test and native-media gates are reported separately in the
+lane PR, including unresolved failures; they don't establish complete delivery.

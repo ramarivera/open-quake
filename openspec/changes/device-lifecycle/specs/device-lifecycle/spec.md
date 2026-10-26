@@ -78,7 +78,7 @@ The device SHALL count transient EIO errors within a rolling ten-second window a
 - **THEN** the first passive scan compares with presence observed before that wait and starts a new connection burst without another topology change or explicit recovery
 
 ### Requirement: Disconnect grace and wake recovery
-The panel SHALL hide immediately on display or USB loss and preserve the existing strip window for a 3000 ms USB disconnect grace. A return within grace SHALL reuse it. Lock SHALL defer heavy display recovery; unlock and resume SHALL reset backoff and schedule recovery after 2500 ms. All work and listeners SHALL stop on quit. Sources: MAIN-011, MAIN-012, MAIN-060, SETTINGS-079, SETTINGS-085.
+The panel SHALL park immediately on display or USB loss and preserve the existing strip window for a 3000 ms USB disconnect grace. A return within grace SHALL reuse it. At 3000 ms the binding and active-device suspension lease SHALL release; at 5000 ms the parked window SHALL be destroyed unless a reconnect cancelled its close. Display removal SHALL park immediately and dispose the orphan after the 1500 ms topology debounce. Voice and key holds SHALL stop immediately on link loss. Lock SHALL defer heavy display recovery; unlock and resume SHALL reset backoff and schedule recovery after 2500 ms. All work and listeners SHALL stop on quit. Sources: MAIN-011, MAIN-012, MAIN-050, MAIN-053, MAIN-060, SETTINGS-079, SETTINGS-085.
 
 #### Scenario: Brief disconnect
 - **WHEN** the same device returns within three seconds
@@ -116,8 +116,20 @@ Management SHALL expose a USB and HDMI diagnostic with the recovered quakeDiagno
 - **THEN** management returns to Connection to show checking or failure, and a later passing check enters Screen again
 - **AND** Screen remains available as a deliberate desktop preview while offline
 
+Audit regression coverage: MGMT-023, MGMT-027, MGMT-028, MGMT-036, MGMT-043.
+
+#### Scenario: Connection transitions use both channels
+- **WHEN** USB arrives before a valid landscape or portrait display, repeats, and is later lost
+- **THEN** management enters Screen only after both channels pass, ignores repeated pass notifications, returns to Connection after loss, and still permits explicit desktop preview
+
+Audit regression coverage: MGMT-032, MGMT-033, MGMT-035, MGMT-040.
+
+#### Scenario: Diagnostic details remain accessible
+- **WHEN** a completed check reports USB failure, missing HDMI, resolution mismatch or both passing
+- **THEN** the first failed row expands, keyboard activation exposes each troubleshooting branch or stable-connection advice, and narrow layout, focus visibility and reduced motion remain supported
+
 ### Requirement: Display prompts and explicit host consent
-The app SHALL detect mirroring and portrait orientation, using displayMode English strings. Portrait SHALL persist 2500 ms and be ignored within 6000 ms of landscape. Later SHALL snooze prompts for ten minutes. macOS arrangement remediation SHALL require explicit consent describing a CoreGraphics call to make QUAKE non-primary, disable mirroring if requested, and move it to the far right. No host change SHALL occur before consent or in mock mode. Windows SHALL open display settings; DisplaySwitch /extend is a future platform-gated consent action. Sources: MAIN-056-058, SETTINGS-087-089.
+The app SHALL detect mirroring and portrait orientation, using displayMode English strings. Portrait SHALL persist 2500 ms and be ignored within 6000 ms of landscape. The setup wizard SHALL suppress automatic orientation prompts while open. Later SHALL snooze prompts for ten minutes and keep the device connected. Mirroring dialogs SHALL also expose an explicit Disconnect choice that requests the existing graceful application shutdown. macOS arrangement remediation SHALL require explicit consent to make QUAKE non-primary, disable mirroring if requested, and move it to the far right. Only a successful consented repair SHALL persist the first-run arrangement result. No host change SHALL occur before consent or in mock mode. Windows SHALL offer consented DisplaySwitch.exe /extend and display settings. Sources: MAIN-044, MAIN-057, MAIN-058, SETTINGS-087-089.
 
 #### Scenario: Portrait prompt snoozed
 - **WHEN** confirmed portrait is dismissed with Later
@@ -130,3 +142,73 @@ The app SHALL detect mirroring and portrait orientation, using displayMode Engli
 #### Scenario: Consented layout repair fails
 - **WHEN** an accepted automatic layout repair fails at the native boundary
 - **THEN** management keeps the diagnostic visible instead of entering Screen, receives a safe native-failed diagnostic with recovery text and automatic layout consent prompts snooze for ten minutes from failure, while an explicit repair remains available and preserves the catalog failure identity
+
+### Requirement: Serial-safe stable display recovery
+The lifecycle SHALL retain bindings and last stable bounds by device serial. A pure planner SHALL reserve unique existing candidate IDs first, then unique equal stable bounds, then a sole remaining candidate for a sole remaining device. Reused IDs on unrelated displays SHALL never bind. Unresolved devices SHALL park and enter serialized screen-power discovery. Multiple unresolved candidates SHALL publish a typed multi-screen alert with every active serial as targets. Meaningful display bursts SHALL debounce for 1500 ms; workArea-only changes SHALL not schedule recovery. Lock SHALL cancel pending generations and park windows; wake SHALL park immediately and recover all queued bindings after 2500 ms, without stale-session writes. Sources: MAIN-046, MAIN-047, MAIN-053, MAIN-060, SETTINGS-085.
+
+#### Scenario: Reused ID and multiple unresolved strips
+- **WHEN** a prior strip ID now belongs to a desktop and two strips need binding
+- **THEN** the desktop stays unbound, uniquely matching stable bounds reserve their serial, and remaining ambiguous serials park and receive the same targeted multi-screen alert
+
+#### Scenario: Secondary serial re-enumerates its control interface
+- **WHEN** a secondary device keeps its serial but changes HID path between presence scans
+- **THEN** every reconnect attempt resolves that serial's current path, explicit recovery remains effective, and the primary strip keeps its independent connection and input
+
+#### Scenario: Lock invalidates pending recovery
+- **WHEN** lock or a newer wake interrupts discovery or a delayed recovery
+- **THEN** the older generation cannot commit a binding or write to a replaced hardware session, and unlock pumps the remaining serials after exactly 2500 ms
+
+### Requirement: Serial-owned panel renderers
+Every strip renderer SHALL receive its owning serial during initialization. Wallpaper state and playback SHALL remain independent of the management selection. Profile selection and key activation SHALL use the renderer's serial, and main SHALL reject a panel's activation for another serial using the registered window identity. Sources: MAIN-046, MAIN-047, SCREEN-146.
+
+#### Scenario: Two strips and a changing management selection
+- **WHEN** panels A and B are connected and management selects either device
+- **THEN** each panel keeps its own wallpaper and selected profile, receives its own input, and submits activations for its own serial only
+
+### Requirement: Native display evidence and bounded Windows preparation
+Read-only Windows probes SHALL inspect Windows Forms screens and WMI monitor names, retaining wmi-name or forms-size evidence separately from Electron bindings. Probe and extend failures SHALL retain their catalog identity in diagnostics. Native-only evidence SHALL never place a window on an unconfirmed display. Explicit Re-detect SHALL offer Windows extend consent, make zero native mutation calls on decline or in mock mode, poll Electron every 500 ms through 5000 ms, collect native evidence, and publish the final diagnostic after a further 1500 ms. Sources: MAIN-043, MAIN-044, MAIN-059.
+
+#### Scenario: Electron misses a Windows strip
+- **WHEN** Electron has no candidate but WMI reports DK-QUAKE
+- **THEN** diagnostics retain native presence and source while HDMI remains unbound, polling stops at 5000 ms, and the final diagnostic arrives at 6500 ms
+
+#### Scenario: Windows preparation refused or failed
+- **WHEN** extend consent is declined or an accepted native operation fails
+- **THEN** decline performs no DisplaySwitch call, failure remains visible and retryable, and mock mode performs neither probes nor host changes
+
+### Requirement: Scaled layout and orientation snapshots
+Diagnostics SHALL project every display's physical bounds using its scale factor, preserve negative origins and report strip order. Every confirmed serial binding SHALL publish rotation, isVertical and horizontal or vertical orientation on bind and after debounced topology recovery. Setup SHALL subscribe while mounted and refresh connected-device orientation every 2000 ms, show portrait and landscape diagrams and platform Display Settings remediation, and require connected landscape for hardware continuation. Valid display dimensions SHALL determine orientation, with rotation used only when dimensions are unavailable. A transition from connected hardware to USB loss SHALL leave setup without completing or erasing saved progress. Desktop preview SHALL remain available independently. Sources: MAIN-054, SCREEN-147, SETTINGS-058.
+
+#### Scenario: Rotated strip with mixed DPI
+- **WHEN** a bound serial rotates on a desktop with mixed scale factors and negative display origins
+- **THEN** reads use its live orientation and physical bounds, recovery reassignment waits for the 1500 ms burst debounce, physical bounds retain their scaled negative origins, and another serial's orientation remains independent
+
+#### Scenario: Bound strip moves during another serial's pairing
+- **WHEN** a bound strip changes position or rotation while another serial is pairing
+- **THEN** the first strip's display lookup and the pairing finalizer use the live display metrics, while the saved binding remains separate for recovery
+
+#### Scenario: Wizard owns orientation remediation
+- **WHEN** setup is open with a connected portrait strip
+- **THEN** it shows orientation guidance and diagrams, hardware continuation waits for landscape, desktop preview still continues, and automatic orientation prompts resume only after setup closes
+
+### Requirement: Scoped native strip window policy
+Strip windows SHALL be frameless, fixed-size, transparent, non-focusable, excluded from taskbars and native mouse input, with context isolation and typed preload. Fallback preview SHALL retain mouse interaction. Native strip content SHALL reveal only after load readiness, use display-derived zoom and bounds, and remain above normal windows. macOS SHALL own a black boot shield until 350 ms after reveal and destroy it on park, replacement or quit, including slow loads. Windows SHALL refresh topmost position every 1000 ms while visible. Linux SHALL use a dock window visible across workspaces. Minimize SHALL restore after 10 ms only while presentation is still requested. Hide and close SHALL retain separate last visible bounds. Only windows owned by this panel owner SHALL be swept. Sources: MAIN-048, MAIN-049, MAIN-050, SCREEN-146.
+
+#### Scenario: Slow load or replacement leaves no shield
+- **WHEN** a macOS strip loads slowly, parks, is replaced or quits
+- **THEN** no content appears before readiness and every shield and delayed reveal callback is disposed with its owner
+
+#### Scenario: Disconnect deadline and reconnect cancellation
+- **WHEN** USB disappears
+- **THEN** the panel parks immediately, stays reusable at 2999 ms, releases its binding at 3000 ms, exists at 4999 ms and is destroyed at 5000 ms unless reconnect cancels the deadline
+
+### Requirement: Active-device app suspension lease
+The app SHALL start exactly one prevent-app-suspension blocker when the first device becomes active, retain it during USB grace, and stop it after the last active device leaves or on quit. Duplicate events and reconnects SHALL not leak blockers. Failed start SHALL retain a retryable safe failure without losing cleanup ownership. Display sleep SHALL remain under OS policy. Sources: MAIN-061, SETTINGS-084.
+
+#### Scenario: First and last strip
+- **WHEN** two devices connect, one disconnects, the other reconnects within grace, and finally both leave
+- **THEN** one blocker spans their active lifetimes, stops after the last grace expires, and quit releases any remaining blocker
+
+#### Scenario: Explicit mirroring disconnect
+- **WHEN** the user chooses Disconnect in a mirroring dialog instead of Switch or Later
+- **THEN** the existing graceful quit path tears down device, voice, window and suspension owners, while Later alone keeps them connected

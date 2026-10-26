@@ -690,3 +690,46 @@ for (const type of ["import-gif", "import-static"] as const) {
 		}
 	});
 }
+
+it.each([
+	["darwin", "/Applications/Synthetic.app", "/Applications/not-an-app.txt"],
+	["win32", "C:\\Apps\\Synthetic.EXE", "C:\\Apps\\not-an-app.txt"],
+])(
+	"CENTER-089 validates %s native app-picker results and retains settings on cancel",
+	async (platform, accepted, invalid) => {
+		const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+		const f = await setup();
+		try {
+			Object.defineProperty(process, "platform", {
+				configurable: true,
+				value: platform,
+			});
+			for (const path of [accepted, invalid, undefined]) {
+				vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+					canceled: path === undefined,
+					filePaths: path ? [path] : [],
+				});
+				const result = await f.runtime.runPromise(
+					f.controller.request({ type: "pick-app" }).pipe(Effect.either),
+				);
+				if (path === invalid)
+					expect(result).toMatchObject({
+						_tag: "Left",
+						left: { _tag: "EmojiInvalid" },
+					});
+				else
+					expect(result).toMatchObject({
+						_tag: "Right",
+						right: {
+							_tag: "ready",
+							apps: path ? [expect.objectContaining({ path })] : [],
+						},
+					});
+			}
+			expect((await f.files.read())?.apps).toEqual([]);
+		} finally {
+			if (descriptor) Object.defineProperty(process, "platform", descriptor);
+			await f.close();
+		}
+	},
+);

@@ -43,15 +43,17 @@ export function ClockBackground({
 	}, [key]);
 	// Video pauses while the strip window is hidden (BR-04).
 	useEffect(() => {
+		void state.generation;
 		const onVisibility = (): void => {
 			const element = video.current;
 			if (!element) return;
 			if (document.hidden) element.pause();
 			else if (element.paused) void element.play().catch(() => {});
 		};
+		if (document.hidden) onVisibility();
 		document.addEventListener("visibilitychange", onVisibility);
 		return () => document.removeEventListener("visibilitychange", onVisibility);
-	}, []);
+	}, [state.generation]);
 	const generation = state.generation;
 	const ready = (): void => loader.current?.ready(generation);
 	const failed = (): void => loader.current?.failed(generation);
@@ -93,8 +95,8 @@ export function ClockBackground({
 				preload="auto"
 				onCanPlay={(event) => {
 					const element = event.currentTarget;
-					if (!document.hidden && element.paused)
-						void element.play().catch(() => {});
+					if (document.hidden) element.pause();
+					else if (element.paused) void element.play().catch(() => {});
 				}}
 				onPlaying={ready}
 				onError={failed}

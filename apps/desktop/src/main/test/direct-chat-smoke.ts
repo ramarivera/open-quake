@@ -46,6 +46,10 @@ const server = createServer(async (req, res) => {
 	const packet = (text: string, finish: string | null) =>
 		`data: ${JSON.stringify({ id: "fixture", model: input.model, object: "chat.completion.chunk", created: 1, choices: [{ index: 0, delta: { content: text }, finish_reason: finish }] })}\n\n`;
 	res.write(packet(answer, null));
+	if (input.enable_search)
+		res.write(
+			`data: ${JSON.stringify({ choices: [], search_info: { search_results: [{ title: "Fixture search evidence", link: "https://evidence.invalid/source" }] } })}\n\n`,
+		);
 	if (input.messages.at(-1)?.content === "block") {
 		res.on("close", () => {
 			blockedClosed = true;
@@ -337,6 +341,78 @@ async function run() {
 		"document.querySelectorAll('.direct-chat-history button').length===0",
 	);
 	assert.deepEqual(await evaluate(win, "window.quakeChat.list()"), []);
+
+	step = "selected Qwen search reaches real renderer";
+	assert.equal(
+		await evaluate(
+			win,
+			`(async()=>{const read=await window.quakeAgents.request({type:'read'});const row=read.view.models.default.find(row=>row.id==='smoke');const {credentialAvailable,...savedRow}=row;const saved=await window.quakeAgents.request({type:'save-model',scope:'default',row:{...savedRow,provider:'qwen',controls:{webSearch:true,searchOptions:{enable_source:true}}},secret:${JSON.stringify(secret)},revision:read.view.revision});return saved._tag==='success';})()`,
+		),
+		true,
+	);
+	await send(win, "search fixture");
+	await wait(
+		win,
+		"Boolean(Array.from(document.querySelectorAll('.direct-chat .cw-link')).find(el=>el.title.includes('https://evidence.invalid/source'))) && !document.querySelector('.direct-chat textarea').disabled",
+	);
+	assert.equal(
+		await evaluate(
+			win,
+			"document.querySelector('.direct-chat-transcript').textContent.includes('Sources from provider search')",
+		),
+		true,
+	);
+	step = "provider catalog settings and search provenance";
+	win.setContentSize(1180, 900);
+	assert.equal(
+		await evaluate(
+			win,
+			`(async()=>{const read=await window.quakeAgents.request({type:'read'});const saved=await window.quakeAgents.request({type:'save-model',scope:'default',row:{id:'deepseek-fixture',role:'none',provider:'deepseek',model:'deepseek-v4-pro',baseUrl:'https://selected.invalid/v1',maxTokens:512},secret:'',revision:read.view.revision});return saved._tag==='success'&&saved.view.models.default.some(row=>row.model==='deepseek-v4-pro');})()`,
+		),
+		true,
+	);
+	await evaluate(win, "document.querySelector('#agents-tab-ai').click()");
+	await wait(
+		win,
+		"Boolean(document.querySelector('.aw-models datalist option[value=\"deepseek-v4-pro\"]'))",
+	);
+	for (const enabled of [false, true]) {
+		await evaluate(
+			win,
+			"(()=>{const row=Array.from(document.querySelectorAll('.aw-table tbody tr')).find(row=>Array.from(row.querySelectorAll('input')).some(input=>input.value==='synthetic-model'));row.querySelectorAll('.aw-provider-option input')[1].click();})()",
+		);
+		await delay(50);
+		await evaluate(
+			win,
+			"(()=>{const row=Array.from(document.querySelectorAll('.aw-table tbody tr')).find(row=>Array.from(row.querySelectorAll('input')).some(input=>input.value==='synthetic-model'));row.querySelector('.aw-table-actions button').click();})()",
+		);
+		await wait(
+			win,
+			`window.quakeAgents.request({type:'read'}).then(reply=>reply._tag==='success'&&reply.view.models.default.find(row=>row.id==='smoke')?.controls?.webSearch===${enabled})`,
+		);
+		assert.equal(
+			await evaluate(
+				win,
+				"(()=>{const row=Array.from(document.querySelectorAll('.aw-table tbody tr')).find(row=>Array.from(row.querySelectorAll('input')).some(input=>input.value==='synthetic-model'));return row.querySelectorAll('.aw-provider-option input')[1].checked;})()",
+			),
+			enabled,
+		);
+	}
+	for (const locale of ["en", "de"]) {
+		await evaluate(win, `window.quakeLocale.set('${locale}')`);
+		await wait(win, `document.documentElement.lang==='${locale}'`);
+		await evaluate(
+			win,
+			"Array.from(document.querySelectorAll('.aw-table tbody tr')).find(row=>Array.from(row.querySelectorAll('input')).some(input=>input.value==='synthetic-model')).scrollIntoView({block:'center'})",
+		);
+		await delay(100);
+		await writeFile(
+			join(directory, `providers-${locale}.png`),
+			(await win.webContents.capturePage()).toPNG(),
+		);
+	}
+	await evaluate(win, "window.quakeLocale.set('en')");
+	await wait(win, "document.documentElement.lang==='en'");
 	step = "diagnostics";
 	// Completed spans are flushed on a bounded timer, without logging prompt/key content.
 	await delay(400);

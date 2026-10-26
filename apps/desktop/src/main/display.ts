@@ -62,3 +62,57 @@ export function panelBounds(display: Display, isPanel: boolean): Rectangle {
 		height: Math.min(PANEL_SIZE.height, display.workArea.height),
 	};
 }
+
+/** Project physical sizes through adjacent DIP origins, as the native display diagnostic does. */
+export function physicalLayout(displays: readonly Display[]) {
+	const origin =
+		displays.find((d) => d.bounds.x === 0 && d.bounds.y === 0) ?? displays[0];
+	return displays
+		.map((display) => {
+			let x = display.bounds.x;
+			let y = display.bounds.y;
+			for (const other of displays) {
+				if (other.id === display.id) continue;
+				const dx = other.bounds.width * (other.scaleFactor - 1);
+				const dy = other.bounds.height * (other.scaleFactor - 1);
+				if (
+					origin &&
+					display.bounds.x >= origin.bounds.x &&
+					other.bounds.x >= origin.bounds.x &&
+					display.bounds.x >= other.bounds.x + other.bounds.width
+				)
+					x += dx;
+				if (
+					origin &&
+					display.bounds.x + display.bounds.width <= origin.bounds.x &&
+					other.bounds.x + other.bounds.width <= origin.bounds.x &&
+					display.bounds.x + display.bounds.width <= other.bounds.x
+				)
+					x -= dx;
+				if (
+					origin &&
+					display.bounds.y >= origin.bounds.y &&
+					other.bounds.y >= origin.bounds.y &&
+					display.bounds.y >= other.bounds.y + other.bounds.height
+				)
+					y += dy;
+				if (
+					origin &&
+					display.bounds.y + display.bounds.height <= origin.bounds.y &&
+					other.bounds.y + other.bounds.height <= origin.bounds.y &&
+					display.bounds.y + display.bounds.height <= other.bounds.y
+				)
+					y -= dy;
+			}
+			return {
+				id: display.id,
+				x: Math.round(x),
+				y: Math.round(y),
+				width: Math.round(display.bounds.width * display.scaleFactor),
+				height: Math.round(display.bounds.height * display.scaleFactor),
+				strip: isPanelCandidate(display),
+			};
+		})
+		.sort((a, b) => a.x - b.x || a.y - b.y || a.id - b.id)
+		.map((display, order) => ({ ...display, order }));
+}

@@ -1,4 +1,6 @@
 import { Schema } from "effect";
+import { ProviderSettings } from "../ai/ai-contracts.js";
+import { GenerationControls } from "../ai/ai-workflow-contracts.js";
 export const AgentId = Schema.String.pipe(
 	Schema.pattern(/^[a-z][a-z0-9-]*$/),
 	Schema.maxLength(48),
@@ -43,6 +45,8 @@ export const ModelRow = Schema.Struct({
 		Schema.Number.pipe(Schema.finite(), Schema.between(0, 1)),
 	),
 	credentialRef: Schema.String,
+	settings: Schema.optional(ProviderSettings),
+	controls: Schema.optional(GenerationControls),
 });
 export type ModelRow = typeof ModelRow.Type;
 export const Slots = Schema.Struct({
