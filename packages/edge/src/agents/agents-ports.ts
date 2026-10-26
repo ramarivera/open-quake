@@ -7,6 +7,8 @@ import type {
 } from "./agents-contracts.js";
 import type { AgentError, AgentStorageFailed } from "./agents-errors.js";
 export interface AgentDraftAdapter {
+	/** Optional late-acquired backend capability. Omitted adapters remain available. */
+	readonly available?: () => boolean;
 	readonly agent: (input: {
 		readonly agent: Agent;
 		readonly prompt: string;

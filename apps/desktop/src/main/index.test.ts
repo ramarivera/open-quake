@@ -613,11 +613,7 @@ describe("desktop window lifecycle", () => {
 		);
 		electron.screen.getAllDisplays.mockReturnValue([primary]);
 		displayEvent("display-removed");
-		await vi.waitFor(() =>
-			expect(
-				electron.BrowserWindow.windows.at(-1)?.options.type,
-			).toBeUndefined(),
-		);
+		await vi.waitFor(() => expect(strip?.destroy).toHaveBeenCalledOnce());
 		const restored = electron.BrowserWindow.windows.at(-1);
 		expect(strip?.destroy).toHaveBeenCalledOnce();
 		expect(restored?.options.type).toBeUndefined();

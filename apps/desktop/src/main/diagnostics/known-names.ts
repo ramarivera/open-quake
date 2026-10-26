@@ -55,7 +55,7 @@ EmojiDesktop.addGif EmojiDesktop.controller EmojiDesktop.request EmojiDesktop.sn
 EmojiLibrary.command EmojiPress.press EmojiRepository.read EmojiRepository.transact
 FakeHidTransport.close FakeHidTransport.discover FakeHidTransport.open FakeHidTransport.write
 FirmwareUpdates.cancel FirmwareUpdates.close FirmwareUpdates.recover FirmwareUpdates.snapshot
-FirmwareUpdates.start FirmwareUpdates.write ForegroundApp.probe GridVoice.input GridVoice.knob
+FirmwareUpdates.start FirmwareUpdates.shutdown FirmwareUpdates.write ForegroundApp.probe GridVoice.input GridVoice.knob
 GridVoice.reset GridVoice.sendText HardwareControls.configure HardwareControls.create
 HardwareControls.enterDfu HardwareControls.flush HardwareControls.playTone
 HardwareControls.pressChord HardwareControls.readVersion HardwareControls.refresh

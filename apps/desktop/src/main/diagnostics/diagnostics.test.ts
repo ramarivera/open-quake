@@ -39,7 +39,7 @@ import { createAgentConnections } from "../agent-http/connections.js";
 import { createDesktopDiagnostics, type DesktopDiagnostics } from "./index.js";
 import { prepareDesktopModule } from "./module.js";
 import { createDiagnosticStorage } from "./persistence.js";
-import { safeCause, safeError } from "./privacy.js";
+import { safeCause, safeError, safeSpanName } from "./privacy.js";
 import { makeDesktopRuntime } from "./runtime.js";
 
 const scratch =
@@ -683,4 +683,10 @@ describe("process-owned runtime diagnostics", () => {
 			controller.dispose();
 		}
 	});
+});
+
+it("retains the firmware shutdown diagnostic span", () => {
+	expect(safeSpanName("FirmwareUpdates.shutdown")).toBe(
+		"FirmwareUpdates.shutdown",
+	);
 });

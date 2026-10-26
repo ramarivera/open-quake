@@ -167,9 +167,7 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 		}).pipe(
 			Effect.zipRight(
 				Effect.suspend(() =>
-					repository
-						? repository.selected()
-						: Effect.fail(new RuntimeUnavailable()),
+					repository ? repository.selected() : Effect.succeed(undefined),
 				),
 			),
 		);
@@ -202,7 +200,7 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 				registry ? registry.refresh() : Effect.fail(new RuntimeUnavailable()),
 			),
 	});
-	const drafting = createAgentDraftAdapter({
+	const draftAdapter = createAgentDraftAdapter({
 		resolve,
 		selected: () =>
 			selected().pipe(
@@ -218,6 +216,10 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 				),
 			),
 	});
+	const drafting = {
+		...draftAdapter,
+		available: () => repository !== undefined,
+	};
 	const prepared = prepareDesktopModule(
 		layer,
 		async (background) => {

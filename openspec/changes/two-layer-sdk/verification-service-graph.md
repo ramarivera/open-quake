@@ -85,8 +85,11 @@ physical device, live provider or OS preference mutation was used.
   full-root fixture.
 
 The shortcut/corrupt runs can log macOS task_policy_set invalid-argument messages
-after their success markers. No missing IPC handlers appeared in the actual-root
-runs. A separate existing contextBridge limitation strips class error fields from
+after their success markers. One repeated shortcut run logged an intermittent
+missing maintenance handler while still passing stream cancellation and shutdown.
+An instrumented repeat did not reproduce it; open-quake-buc tracks investigation.
+The corrupt-store and direct-chat root runs reported no missing handlers.
+A separate existing contextBridge limitation strips class error fields from
 locale/direct-chat rejections. General settings preserves its plain-object code,
 and meeting/HTTP response values retain their codes. This is tracked separately
 as open-quake-ca2; graph error identity is covered at the main-process boundary.
@@ -127,3 +130,45 @@ and integration suites pass, 54 tests. The preparation edge suite passes,
 647 tests with three existing skips. The full preparation desktop suite passes,
 1650 tests with one existing skip, and both typechecks pass. These checks
 use synthetic ports and isolated stores; no microphone, HID or OS input runs.
+
+
+## PR73 review corrections and repeated acceptance, 2026-10-26
+
+A failed HTTP connection-store acquisition now leaves voice's selected HTTP route
+empty so typed text and normalized transcripts reach the direct fallback.
+Agent draft adapters may expose late availability; AgentsService checks it on
+both views and draft requests. A missing HTTP repository therefore reports
+unavailable drafting and returns the existing unavailable code. Explicit HTTP
+selection/read failures still fail normally. No schema or bridge changed.
+The firmware shutdown span now retains its diagnostic name.
+
+The production meeting quit concern is addressed by parent 15c12c1. The real
+prepared-registration test adds no quit listener, and the hidden normal-root
+launcher measures exactly one before-quit listener. The graph's capture finalizer
+drains an active second consumer's last write with IPC still installed.
+
+The HTTP fallback, late drafting availability and diagnostic-name regressions
+fail on the previous integration commit in scratch archives. The current full
+desktop suite passes 1654 tests with one existing skip; the edge suite passes
+653 tests with three existing skips. Both typechecks, production build, scoped
+Biome and all 46 strict OpenSpec items pass. Hosted validation exposed a Linux
+test timing bug: waiting for an undefined window type succeeded before the
+asynchronous swap. That test now waits for the old window's destruction, then
+checks the replacement's type, geometry and renderer URL. All 33 root tests pass
+with the hosted worker limit.
+
+Repeated hidden native checks passed the unmodified direct-chat smoke,
+active-stream shortcut cancellation, native media smoke, four-corrupt-store
+startup, and normal-root export/import/reset. A scratch variant of the direct
+smoke additionally seeds a corrupt HTTP file, drives SendText through the real
+voice preload, observes a completed response from the saved synthetic direct
+model, checks drafting is unavailable and verifies corrupt bytes are retained.
+This proves text dispatch through the real root; normalized transcript fallback
+is covered through the graph consumer test, not microphone capture.
+
+Evidence is in desktop-reviewed-final.log, edge-reviewed-final2.log,
+root-ci-timing-fix.log, pr73-review-baseline-{desktop,edge}.log,
+direct-native-reviewed.log, corrupt-http-voice2.log, shortcut-native-reviewed.log,
+shortcut-phase-reviewed.log, media-native-reviewed.log, corrupt-root-reviewed.log,
+and root-{export,import,reset}-reviewed.log under the scratch directory above.
+Review delivery and hosted checks remain pending; task 2.9 stays unchecked.
