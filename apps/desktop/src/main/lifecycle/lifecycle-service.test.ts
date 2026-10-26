@@ -531,3 +531,44 @@ it.scoped(
 			);
 		}),
 );
+
+it.scoped(
+	"MGMT-028 derives diagnostics from USB and the paired display in both orientations",
+	() =>
+		Effect.gen(function* () {
+			for (const usb of [false, true]) {
+				for (const size of [
+					undefined,
+					{ width: 1920, height: 480 },
+					{ width: 480, height: 1920 },
+					{ width: 960, height: 240 },
+				]) {
+					const display = size
+						? makeDisplay({ id: 2, label: "DK-QUAKE", size })
+						: undefined;
+					const displays = display ? [primary, display] : [primary];
+					yield* withRealPairing(displays, (h) =>
+						Effect.gen(function* () {
+							h.onPower((on) => h.change(on ? displays : [primary]));
+							if (usb) {
+								yield* h.service.onStatus(connected);
+								yield* TestClock.adjust(30_001);
+							}
+							const correct =
+								size !== undefined &&
+								(size.width === 1920 || size.width === 480);
+							expect(h.service.status()).toMatchObject({
+								usb: usb ? "pass" : "fail",
+								hdmi: usb && correct ? "pass" : "fail",
+								checking: false,
+								width: size?.width ?? 0,
+								height: size?.height ?? 0,
+								resolutionMismatch: size !== undefined && !correct,
+							});
+							if (usb) expect(h.notices.at(-1)).toEqual(h.service.status());
+						}),
+					);
+				}
+			}
+		}),
+);

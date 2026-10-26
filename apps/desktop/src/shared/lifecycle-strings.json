@@ -42,7 +42,7 @@
 				},
 				"failResolution": "Display detected, but resolution is incorrect (current {width}x{height}, expected 1920x480)",
 				"resolutionSteps": {
-					"1": "Open Windows Settings \u2192 System \u2192 Display and select the DK-QUAKE screen",
+					"1": "Open your system display settings and select the DK-QUAKE screen",
 					"2": "Set the display resolution to 1920x480",
 					"3": "If 1920x480 is not listed, reconnect the QUAKE HDMI cable and re-detect"
 				}

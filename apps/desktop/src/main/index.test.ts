@@ -583,6 +583,33 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
+	it("CENTER-002 recreates Windows management with native caption controls and theme overlay", async () => {
+		const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+		try {
+			Object.defineProperty(process, "platform", {
+				configurable: true,
+				value: "win32",
+			});
+			windows().management.destroy();
+			appEvent("activate");
+			const replacement = electron.BrowserWindow.windows.at(-1);
+			expect(replacement?.options).toMatchObject({
+				titleBarStyle: "hidden",
+				titleBarOverlay: { height: 55 },
+			});
+			for (const option of [
+				"frame",
+				"minimizable",
+				"maximizable",
+				"closable",
+				"resizable",
+			] as const)
+				expect(replacement?.options[option]).not.toBe(false);
+		} finally {
+			if (descriptor) Object.defineProperty(process, "platform", descriptor);
+		}
+	});
+
 	it("focuses and restores the existing management window on second launch", async () => {
 		const { management } = windows();
 		expect(management.options.show).toBe(false);
