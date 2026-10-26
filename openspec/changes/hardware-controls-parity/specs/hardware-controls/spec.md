@@ -63,3 +63,48 @@ The Device settings SHALL show Firmware Version, Knob LED stays on, and Device A
 #### Scenario: Duplicate lock and changed preference
 - **WHEN** a previously-on ring was successfully disabled, another lock arrives, and the always-on preference changes before unlock
 - **THEN** the original restoration is retained and unlock restores the ring once
+
+### Requirement: Recovered state and confirmed live state
+
+For MAIN-013, SETTINGS-080 and SETTINGS-081, each serial SHALL retain its last acknowledged microphone and luminance values alongside buzzer, volume and LED preferences. A new session SHALL expose recovered defaults mic on and luminance 255 separately from live values. Live values SHALL remain unknown until queried or acknowledged. Synchronization flags SHALL reset per session and SHALL never persist. Missing replies and failed acknowledgments SHALL NOT promote recovered or requested values to confirmed state. Only a complete mic and luminance refresh SHALL mark synchronization successful. Legacy colon-serial migration SHALL preserve all persisted controls.
+
+#### Scenario: Restart and failed writes
+- **WHEN** an acknowledged mic or luminance change is saved and the application restarts
+- **THEN** the same serial recovers those values, another serial gets defaults, and neither becomes live until its own replies arrive
+- **AND** a rejected or missing acknowledgment leaves the saved and confirmed values unchanged
+
+### Requirement: Bounded tones and meeting feedback
+
+For AI-076, MAIN-021, MAIN-022, MGMT-408 and SETTINGS-082, the hardware session SHALL accept at most 64 tone pairs, each with a valid buzzer level and duration from 0 to 60000 ms, with total duration at most 120000 ms. Nonzero levels SHALL use the saved alert volume. Firework SHALL be [[80,50]]. Success SHALL be five [80,50] pulses separated by [0,1000]. Playback SHALL retain the existing per-step trailing silence and 10 ms gaps. A long tone SHALL use level 120 and SHALL stop on explicit stop, master disable, interruption or teardown. Disabled or zero-volume preferences SHALL suppress audible writes. Meeting mark and completed processing transitions SHALL each emit their corresponding tone once, without replay on reads or reloads.
+
+#### Scenario: Cancellation and master disable
+- **WHEN** arbitrary playback or a long tone is interrupted, disabled, stopped or disconnected
+- **THEN** it sends trailing silence, releases the tone owner and cannot resume on a replacement session
+
+#### Scenario: Full tone table
+- **WHEN** each named tone runs under a fake clock with a configured alert volume
+- **THEN** the ordered levels and durations match the declared pairs, including firework and success, and zero-volume or disabled playback sends no audible command
+
+### Requirement: Saved hardware control keys and hydration
+
+For MAIN-080, MGMT-139, MGMT-140, MGMT-141, MGMT-205, MGMT-363, MGMT-367, MGMT-368, MGMT-369, SCREEN-037 and SCREEN-150, saved luminance, buzzer and mic keys SHALL execute through the validated action registry. Luminance directional actions SHALL preserve recovered level 1 clockwise and level 0 counterclockwise mapping. Buzzer and mic SHALL toggle the selected serial only. Every visible key of a type SHALL hydrate from that serial's confirmed state on load, profile change, reconnect and external change. On means default artwork and off means alternate artwork. Unknown live values SHALL remain unknown. Multi-action leaf controls SHALL disable grid editing and preserve cancellation and validation before effects.
+
+#### Scenario: Multiple saved controls
+- **WHEN** a saved Quick or meeting mic key executes, or a hardware state changes externally
+- **THEN** every matching visible key reflects the acknowledged state and a stale or rejected session changes no artwork or hardware
+
+### Requirement: Gaming mode and registered tile
+
+For MAIN-096, MGMT-300, MGMT-355, SCREEN-107 and WIDGETS-016, gaming SHALL mean device keyboard output and normal SHALL mean native host keyboard output. Device output SHALL be the per-launch default. Mode changes SHALL update every gameMode consumer. Missing native permission SHALL fail explicitly. Held chords SHALL release their original route on cancellation. A gameMode tile SHALL preserve its 4 by 2 footprint and covered placeholders, expose active, inactive and failure states, and optionally show the foreground application's icon. Entering animation SHALL last 0.6 seconds, active pulse 2 seconds and appearance 0.2 seconds, respecting reduced motion. Saved configuration SHALL retain application, file or folder target and monitorAppView, and monitoring SHALL end when its owner ends.
+
+#### Scenario: Two mode consumers
+- **WHEN** a tile or device event changes input mode
+- **THEN** both consumers show the same mode, and a new application lifetime starts in device mode
+
+### Requirement: QUAKE lighting and permission ownership
+
+For MAIN-107, MAIN-108 and SETTINGS-024, lighting operations SHALL use an explicit serial and session with the existing HID owner. Only the exact QUAKE VID 0x4158 PID 0x514B usagePage 0xFF60 usage 0x61 SHALL be eligible. VIA permission SHALL be restricted to its configured loopback origin and selected serial. Other origins, collections and devices SHALL be denied. QMK protocol, menu probe, bindings and lighting batches SHALL serialize with hardware transactions, reject stale targets and restore delivery after exclusive work. Settings SHALL expose refresh, target selection and only source-qualified lighting controls. HUB2 and DISK2 remain excluded under GAP-MAP decision 10. MGMT-406's ARIS-68 identity remains a separate device compatibility obligation and SHALL NOT broaden QUAKE discovery.
+
+#### Scenario: Denied origin and stale session
+- **WHEN** another origin or collection requests permission, or a target is replaced before a batch
+- **THEN** it acquires no handle and emits no command

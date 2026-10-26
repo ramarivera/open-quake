@@ -23,6 +23,7 @@ import {
 	type HardwareSnapshot,
 	InputMode,
 	type ToneName,
+	ToneSequence,
 } from "./hardware-contracts.js";
 import {
 	HardwareCommandRejected,
@@ -54,6 +55,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 			// This is app-lifetime state. It deliberately is not persisted per serial.
 			const inputMode = yield* Ref.make<InputMode>("device");
 			const preferenceLock = yield* Effect.makeSemaphore(1);
+			const owners = new Map<string, string>();
 			const create = Effect.fn("HardwareControls.create")(function* (
 				connection: QuakeConnection,
 				identity: { readonly serial: string; readonly session: string },
@@ -85,6 +87,12 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					readonly pressChord: (
 						chord: string,
 					) => Effect.Effect<void, HardwareError>;
+					readonly playSequence: (
+						input: unknown,
+					) => Effect.Effect<void, HardwareError>;
+					readonly setLongTone: (
+						on: boolean,
+					) => Effect.Effect<void, HardwareError>;
 					readonly playTone: (
 						name: ToneName,
 					) => Effect.Effect<void, HardwareError>;
@@ -95,11 +103,16 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				if (!identity.serial || !identity.session)
 					return yield* new HardwareUnavailable();
 				const scope = yield* Effect.scope;
-				const initial = yield* store.read(identity.serial);
+				const initial = yield* preferenceLock.withPermits(1)(
+					store.read(identity.serial),
+				);
+				owners.set(identity.serial, identity.session);
 				let preferences = Option.getOrElse(
 					initial,
 					() => defaultHardwarePreferences,
 				);
+				let pendingStateSync = false;
+				let stateSyncSuccess = false;
 				let mic: boolean | undefined;
 				let luminance: number | undefined;
 				let firmware: HardwareSnapshot["firmware"];
@@ -121,10 +134,15 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 				const toneLock = yield* Effect.makeSemaphore(1);
 				let preview: Option.Option<Fiber.RuntimeFiber<void, never>> =
 					Option.none();
+				let longTone: Option.Option<Fiber.RuntimeFiber<void, never>> =
+					Option.none();
 				let saving: Option.Option<Fiber.RuntimeFiber<void, never>> =
 					Option.none();
 				const ensureActive = (): Effect.Effect<void, HardwareUnavailable> =>
-					active && !poisoned && !firmwareLocked
+					active &&
+					owners.get(identity.serial) === identity.session &&
+					!poisoned &&
+					!firmwareLocked
 						? Effect.void
 						: Effect.fail(new HardwareUnavailable());
 				const rawWrite = (
@@ -291,10 +309,13 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 						? rawWrite({ _tag: "Buzzer", level: 0 })
 						: send({ _tag: "Buzzer", level: 0 }),
 				).pipe(Effect.ignore);
-				const playTone = Effect.fn("HardwareControls.playTone")(
-					(name: ToneName): Effect.Effect<void, HardwareError> =>
-						toneLock
-							.withPermits(1)(
+				const playSequence = Effect.fn("HardwareControls.playSequence")(
+					(input: unknown): Effect.Effect<void, HardwareError> =>
+						Effect.gen(function* () {
+							const decoded = Schema.decodeUnknownEither(ToneSequence)(input);
+							if (Either.isLeft(decoded))
+								return yield* new HardwareCommandRejected();
+							yield* toneLock.withPermits(1)(
 								Effect.gen(function* () {
 									yield* ensureActive();
 									if (
@@ -303,7 +324,12 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 									)
 										return;
 									const volume = preferences.alertVolume;
-									for (const [level, duration] of buzzerTones[name]) {
+									for (const [level, duration] of decoded.right) {
+										if (
+											!preferences.buzzerEnabled ||
+											preferences.alertVolume === 0
+										)
+											break;
 										yield* send({
 											_tag: "Buzzer",
 											level: level === 0 ? 0 : volume,
@@ -314,19 +340,58 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										);
 										yield* Effect.sleep(10);
 									}
-								}),
-							)
-							.pipe(
-								Effect.onExit((exit) =>
-									Exit.isFailure(exit) ? silence : Effect.void,
+								}).pipe(
+									Effect.onExit((exit) =>
+										Exit.isFailure(exit) ? silence : Effect.void,
+									),
 								),
-							),
+							);
+						}),
+				);
+				const playTone = Effect.fn("HardwareControls.playTone")(
+					(name: ToneName): Effect.Effect<void, HardwareError> =>
+						playSequence(buzzerTones[name]),
+				);
+				const setLongTone = Effect.fn("HardwareControls.setLongTone")(
+					function* (on: boolean): Effect.fn.Return<void, HardwareError> {
+						yield* ensureActive();
+						if (Option.isSome(longTone)) {
+							yield* Fiber.interrupt(longTone.value);
+							longTone = Option.none();
+						}
+						if (
+							!on ||
+							!preferences.buzzerEnabled ||
+							preferences.alertVolume === 0
+						)
+							return;
+						const started = yield* Deferred.make<void, HardwareError>();
+						longTone = Option.some(
+							yield* toneLock
+								.withPermits(1)(
+									Effect.gen(function* () {
+										yield* send({ _tag: "Buzzer", level: 120 }).pipe(
+											Effect.uninterruptible,
+										);
+										yield* Deferred.succeed(started, undefined);
+										yield* Effect.never;
+									}).pipe(Effect.ensuring(silence)),
+								)
+								.pipe(
+									Effect.tapError((error) => Deferred.fail(started, error)),
+									Effect.ignore,
+									Effect.forkIn(scope),
+								),
+						);
+						yield* Deferred.await(started);
+					},
 				);
 				const flush = Effect.fn("HardwareControls.flush")(
 					(): Effect.Effect<void, HardwarePreferencesFailed> =>
 						preferenceLock.withPermits(1)(
 							Effect.gen(function* () {
-								if (!dirty) return;
+								if (!dirty || owners.get(identity.serial) !== identity.session)
+									return;
 								const savingPreferences = preferences;
 								yield* store.write(identity.serial, savingPreferences);
 								if (preferences === savingPreferences) dirty = false;
@@ -334,9 +399,35 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 							}).pipe(Effect.uninterruptible),
 						),
 				);
+				const saveSoon = Effect.fn("HardwareControls.saveSoon")(function* () {
+					dirty = true;
+					if (Option.isSome(saving)) yield* Fiber.interrupt(saving.value);
+					saving = Option.some(
+						yield* Effect.sleep(500).pipe(
+							Effect.zipRight(flush()),
+							Effect.catchTag("HardwarePreferencesFailed", (error) =>
+								Effect.sync(() => {
+									backgroundError = Option.some(error);
+								}),
+							),
+							Effect.forkIn(scope),
+						),
+					);
+				});
+				const rememberLive = Effect.fn("HardwareControls.rememberLive")(
+					function* () {
+						preferences = {
+							...preferences,
+							...(mic === undefined ? {} : { mic }),
+							...(luminance === undefined ? {} : { luminance }),
+						};
+						yield* saveSoon();
+					},
+				);
 				yield* Effect.addFinalizer(() =>
 					Effect.gen(function* () {
 						if (Option.isSome(preview)) yield* Fiber.interrupt(preview.value);
+						if (Option.isSome(longTone)) yield* Fiber.interrupt(longTone.value);
 						if (Option.isSome(saving)) yield* Fiber.interrupt(saving.value);
 						yield* flush().pipe(
 							Effect.catchTag("HardwarePreferencesFailed", (error) =>
@@ -392,7 +483,11 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 						function* (): Effect.fn.Return<HardwareSnapshot> {
 							return {
 								...identity,
-								available: active && !poisoned && !firmwareLocked,
+								available:
+									active &&
+									owners.get(identity.serial) === identity.session &&
+									!poisoned &&
+									!firmwareLocked,
 								preferenceStatus: Option.isSome(backgroundError)
 									? "failed"
 									: dirty
@@ -401,6 +496,12 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 								...(errorCode ? { errorCode } : {}),
 								preferences,
 								inputMode: yield* Ref.get(inputMode),
+								recovered: {
+									mic: preferences.mic ?? true,
+									luminance: preferences.luminance ?? 255,
+								},
+								pendingStateSync,
+								stateSyncSuccess,
 								...(mic === undefined ? {} : { mic }),
 								...(luminance === undefined ? {} : { luminance }),
 								...(firmware ? { firmware } : {}),
@@ -411,6 +512,8 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 						(): Effect.Effect<void, HardwareError> =>
 							mutationLock.withPermits(1)(
 								Effect.gen(function* () {
+									pendingStateSync = true;
+									stateSyncSuccess = false;
 									for (const feature of [
 										"version",
 										"mic",
@@ -438,7 +541,15 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 												patch: reply.patch,
 											};
 									}
-								}),
+									stateSyncSuccess = true;
+									yield* rememberLive();
+								}).pipe(
+									Effect.ensuring(
+										Effect.sync(() => {
+											pendingStateSync = false;
+										}),
+									),
+								),
 							),
 					),
 					toggleMic: Effect.fn("HardwareControls.toggleMic")(
@@ -450,6 +561,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 									const next = !mic;
 									yield* send({ _tag: "Mic", on: next });
 									mic = next;
+									yield* rememberLive();
 								}),
 							),
 					),
@@ -464,6 +576,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 									if (next !== luminance)
 										yield* send({ _tag: "Luminance", value: next });
 									luminance = next;
+									yield* rememberLive();
 								}),
 							),
 					),
@@ -478,7 +591,24 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										return yield* new HardwareUnavailable(decoded.left);
 									const volumeChanged =
 										preferences.alertVolume !== decoded.right.alertVolume;
-									preferences = decoded.right;
+									preferences = {
+										...decoded.right,
+										...(preferences.mic === undefined
+											? {}
+											: { mic: preferences.mic }),
+										...(preferences.luminance === undefined
+											? {}
+											: { luminance: preferences.luminance }),
+									};
+									if (
+										!preferences.buzzerEnabled ||
+										preferences.alertVolume === 0
+									) {
+										if (Option.isSome(longTone)) {
+											yield* Fiber.interrupt(longTone.value);
+											longTone = Option.none();
+										}
+									}
 									dirty = true;
 									if (Option.isSome(preview))
 										yield* Fiber.interrupt(preview.value);
@@ -509,17 +639,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 												Effect.forkIn(scope),
 											),
 										);
-									saving = Option.some(
-										yield* Effect.sleep(500).pipe(
-											Effect.zipRight(flush()),
-											Effect.catchTag("HardwarePreferencesFailed", (error) =>
-												Effect.sync(() => {
-													backgroundError = Option.some(error);
-												}),
-											),
-											Effect.forkIn(scope),
-										),
-									);
+									yield* saveSoon();
 									if (Option.isSome(backgroundError))
 										return yield* backgroundError.value;
 								}),
@@ -608,6 +728,8 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 								}),
 							),
 					),
+					playSequence,
+					setLongTone,
 					playTone,
 				};
 			});

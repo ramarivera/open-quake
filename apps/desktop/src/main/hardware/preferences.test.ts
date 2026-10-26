@@ -39,6 +39,8 @@ const legacy = {
 	buzzerEnabled: false,
 	knobLedAlwaysOn: false,
 	alertVolume: 32,
+	mic: false,
+	luminance: 77,
 };
 
 async function migrationFixture() {
