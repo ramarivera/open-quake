@@ -23,6 +23,12 @@ The graph SHALL preserve catalog errors and operation-specific diagnostics.
 - **THEN** they observe the same acquired service instance
 - **AND** stopping one registration does not dispose the application graph
 
+#### Scenario: Reset or import after meeting history is loaded
+- **WHEN** the user confirms clearing data or importing a backup
+- **THEN** main finishes the graph-bound request and stops writers and graph finalizers before changing owned data
+- **AND** no finalizer recreates deleted history or overwrites the replacement
+- **AND** a cleanup failure retains the existing data and reports its catalog identity before exit
+
 ### Requirement: Protocol layer is pure
 `packages/protocol` SHALL perform no I/O. Its deterministic plain functions
 SHALL return typed `Either` failures for invalid inputs, and its Effect Schema

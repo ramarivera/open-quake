@@ -191,3 +191,25 @@ firmware write, microphone or hardware acceptance is claimed.
 The integrated maintenance registration explicitly shuts down its firmware
 worker before graph disposal. Its shared-owner case therefore keeps disposal
 pending during a copy, while graph disposal releases remaining access.
+
+
+## Reset/import finalizers review correction, 2026-10-26
+
+PR73 finding 4374801604 reproduced: meeting capture's graph finalizer can
+persist the loaded history after reset clears userData. Confirmed destructive
+operations now leave the graph-bound request before main stops writers and
+awaits graph finalizers. Data clear/import commit runs only after that completes.
+An IO-only diagnostic effect outside the disposed graph retains failure codes
+and scrubbed causes; no new service owner is constructed. Import preflight
+failure still leaves the app running. Concurrent reads cannot consume the
+pending mutation, and interrupted requests discard their unexecuted replacement.
+
+Both new reset/import ordering regressions fail on the preceding source. The
+188 maintenance/meeting/root tests pass, as does desktop typecheck. The actual
+hidden production root loads meeting history before reset and proves the file
+is still absent at native exit. Import after a loaded meeting store also exits
+successfully without trying to use a disposed runtime. All data is synthetic,
+windows stay hidden, and no hardware, microphone or provider is used. Evidence
+is reset-finalizers-{baseline,suite,types,build,native}.log plus
+import-finalizers-native.log beneath the external service-graph scratch folder.
+Reviewed delivery of task 2.9 remains pending.
