@@ -80,3 +80,9 @@ The first probe attempted Rotate IPC, correctly denied by the existing renderer 
 - PR52 delivery, 2026-10-26: brightness squash merged as 8a4e51a after current-head completed Codex review without findings, zero review threads and the full native package/download matrix. open-quake-lih.4.2.2 is closed. PR53 now composes on main while preserving current root/profile/thumbnail/setup fixes; aggregate physical and voice acceptance remains separate.
 
 - PR53 composition verification, 2026-10-26: normal main merge ed75785 retains exactly the five intended Num Lock source/test/spec files against main. Nineteen real focused-knob tests and 25 hardware contract/consumer tests pass, along with desktop/device typechecks and strict validation. Current-head Codex review completed without findings and there are no review threads. GitHub initially retained a conflicting merge cache after retargeting despite main being an ancestor and local merge-tree succeeding; hosted validation must rerun on the composed head before merge.
+
+## 8. Wheel-selector burn-down
+
+- [ ] 8.1 Deliver SCREEN-078/079/090/100/106 committed timing, transition and menu reconciliation with domain and renderer tests. Bead open-quake-lih.4.3.
+- [ ] 8.2 Deliver SCREEN-075/076/077/080/081/084 recovered dimensions with independent flat rendering, motion, clipping and compositor tests. Bead open-quake-lih.4.4.
+- [ ] 8.3 Deliver SCREEN-087/088/089/094 localized picker states, exact shared paging bounds and incomplete-page centering tests. Bead open-quake-lih.4.5.
