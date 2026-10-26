@@ -3,6 +3,7 @@ import {
 	Deferred,
 	Effect,
 	Layer,
+	Option,
 	Queue,
 	Redacted,
 	Schema,
@@ -299,6 +300,82 @@ for (const locale of ["en", "zh", "de", "es", "fr", "it", "ja", "ko"] as const)
 						SPOKEN_STATUS[locale].finishedOutput,
 					);
 					expect(spokenStatus("unknown", "finishedOutput")).toBe("Finished");
+				}).pipe(
+					Effect.provide(
+						Layer.mergeAll(surface(events), AiSpeechService.Default),
+					),
+				);
+			}),
+	);
+
+for (const action of ["interrupt", "selection", "cancel-all"] as const)
+	it.scoped(
+		`AudioBot ${action} cancels its queue and returns the armed reader to thinking`,
+		() =>
+			Effect.gen(function* () {
+				const events: VoiceSurfaceEvent[] = [];
+				const entered = yield* Queue.unbounded<void>();
+				const texts: string[] = [];
+				let stops = 0;
+				yield* Effect.gen(function* () {
+					const c = yield* createProductionVoiceRuntime({
+						speech: yield* AiSpeechService,
+						localSpeech: () => ({
+							createSpeech: (_profile, text, phase) =>
+								Effect.succeed({
+									cancel: () =>
+										Effect.sync(() => {
+											stops++;
+										}),
+									result: Effect.sync(() => {
+										texts.push(text);
+									}).pipe(
+										Effect.zipRight(phase?.("speaking") ?? Effect.void),
+										Effect.zipRight(Queue.offer(entered, undefined)),
+										Effect.zipRight(Effect.never),
+									),
+								}),
+						}),
+						capture: {
+							permission: Effect.succeed(false),
+							open: () => Effect.never,
+						},
+						profiles: () => Effect.succeed({ speakAnswers: false }),
+						sendText: () => Effect.void,
+						sendTranscript: () => Effect.void,
+					});
+					yield* c.toggleReader(
+						{ serial: "QK", keyCode: "1,9" },
+						{ ...settings, engine: "webSpeech" },
+					);
+					yield* c.observe(started());
+					yield* c.observe(delta("First.", 0));
+					yield* Queue.take(entered);
+					const speaking = events
+						.filter((e) => e._tag === "ReadAloudState")
+						.at(-1);
+					expect(speaking).toMatchObject({ keyCode: "1,9", phase: "speaking" });
+					yield* c.runtime.cancelFlow("foreign", "1,5");
+					expect(stops).toBe(0);
+					yield* action === "interrupt"
+						? c.runtime.cancelFlow("QK", "1,5")
+						: action === "selection"
+							? c.runtime.select("QK", "1,6", "aiChat", Option.none())
+							: c.cancelSpeech();
+					expect(stops).toBe(1);
+					expect(
+						events.filter((e) => e._tag === "ReadAloudState").at(-1),
+					).toEqual({ ...speaking, phase: "thinking" });
+					yield* c.observe(delta("Stale.", 1));
+					yield* tick;
+					expect(texts).toEqual(["First."]);
+					yield* c.observe(started());
+					yield* c.observe(delta("Next.", 0));
+					yield* Queue.take(entered);
+					expect(texts).toEqual(["First.", "Next."]);
+					expect(
+						events.filter((e) => e._tag === "ReadAloudState").at(-1),
+					).toEqual(speaking);
 				}).pipe(
 					Effect.provide(
 						Layer.mergeAll(surface(events), AiSpeechService.Default),

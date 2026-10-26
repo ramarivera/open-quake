@@ -173,6 +173,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 			if (!serial || id === serial) {
 				turns.delete(id);
 				yield* turn.speech.cancel();
+				yield* readerPhase(id, "thinking");
 			}
 
 		const reader = readAloud;

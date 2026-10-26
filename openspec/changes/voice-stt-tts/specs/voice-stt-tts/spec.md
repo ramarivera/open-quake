@@ -299,3 +299,8 @@ The long, PC and analysis runners are not implemented: ChatService rejects every
 - **WHEN** normal speech text stops arriving for two seconds or a PC/analysis action stalls
 - **THEN** normal speech flushes its pending remainder while the stalled action fails truthfully under its runner policy
 - **AND** an otherwise successful normal turn speaks finishedOutput exactly once in the selected TTS language after answer drain
+
+#### Scenario: Interrupting an armed AudioBot reader
+- **WHEN** a knob interrupt, selection change or shared speech cancellation stops an AudioBot-owned queue
+- **THEN** main stops playback, drops stale chunks and publishes thinking for the still-armed reader with the same key and session
+- **AND** the next answer can speak without toggling the reader again, while disarming or reset publishes idle
