@@ -187,16 +187,7 @@ function ActiveStripPanel(): React.JSX.Element {
 			() => target.current,
 			(request) => window.quakeKeyLibrary.request(request),
 		);
-		const offMatrix = window.openQuake?.onQuakeEvent((event) => {
-			if (event.kind !== "matrix") return;
-			const index = event.matrix.states.indexOf(1);
-			if (index < 0) return;
-			const keyCode = `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
-			if (!layout.current?.tiles.some((tile) => tile.keyCode === keyCode))
-				return;
-			dispatch.key({ keyAction: 0, keyCode });
-			dispatch.key({ keyAction: 1, keyCode, voiceTouchEnd: true });
-		});
+
 		const timers = new Set<ReturnType<typeof setTimeout>>();
 		const heldEmoji = new Map<
 			string,
@@ -218,51 +209,79 @@ function ActiveStripPanel(): React.JSX.Element {
 			}, 160);
 			timers.add(timer);
 		};
+		let matrixKey: string | undefined;
+		const handleKey = (event: StripKeyEvent, matrix = false): void => {
+			if (event.keyAction === 1 && matrixKey === event.keyCode)
+				matrixKey = undefined;
+			setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
+			dispatch.key(event);
+			holdKey.current(event);
+			const activation: StripKeyEvent = matrix
+				? { ...event, keyAction: 1 as const, voiceTouchEnd: true }
+				: event;
+			const action = meetingTouchAction(activation, layout.current);
+			if (action) void meetingRequest({ _tag: "action", action });
+			const current = emojiSelection.current;
+			if (event.keyAction === 0 && !matrix) {
+				if (current?.emojiKeys.includes(event.keyCode))
+					heldEmoji.set(event.keyCode, current);
+				else heldEmoji.delete(event.keyCode);
+				return;
+			}
+			const owner =
+				matrix && current?.emojiKeys.includes(event.keyCode)
+					? current
+					: heldEmoji.get(event.keyCode);
+			heldEmoji.delete(event.keyCode);
+			if (
+				!activation.voiceTouchEnd ||
+				!owner ||
+				owner.generation !== current?.generation
+			)
+				return;
+			void window.quakeEmoji
+				?.press({
+					profileId: owner.profileId,
+					pageId: owner.pageId,
+					keyCode: event.keyCode,
+					keyAction: activation.keyAction,
+				})
+				.then((reply) => {
+					if (reply._tag === "invalid") invalid(event.keyCode);
+				})
+				.catch(() => invalid(event.keyCode));
+		};
+		const cancel = (): void => {
+			if (matrixKey) holdKey.current({ keyCode: matrixKey, keyAction: 1 });
+			matrixKey = undefined;
+			dispatch.cancel();
+			heldEmoji.clear();
+			setPressedKeyCode(undefined);
+		};
+		const offMatrix = window.openQuake?.onQuakeEvent((event) => {
+			if (event.kind !== "matrix") return;
+			const index = event.matrix.states.indexOf(1);
+			if (index < 0) return;
+			const keyCode = `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
+			if (
+				matrixKey === keyCode ||
+				!layout.current?.tiles.some((tile) => tile.keyCode === keyCode)
+			)
+				return;
+			// DK-Suite checkDataValid case 1 emits only down. Empty matrices aren't releases.
+			cancel();
+			matrixKey = keyCode;
+			handleKey({ keyAction: 0, keyCode }, true);
+		});
 		if (root && window.openQuake) {
 			const off = mountStripTouch(
 				root,
 				window.openQuake,
 				Number(new URLSearchParams(location.search).get("rotation") ?? 0),
 				() => layout.current,
-				(event) => {
-					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
-					dispatch.key(event);
-					holdKey.current(event);
-					const action = meetingTouchAction(event, layout.current);
-					if (action) void meetingRequest({ _tag: "action", action });
-					const current = emojiSelection.current;
-					if (event.keyAction === 0) {
-						if (current?.emojiKeys.includes(event.keyCode))
-							heldEmoji.set(event.keyCode, current);
-						else heldEmoji.delete(event.keyCode);
-						return;
-					}
-					const owner = heldEmoji.get(event.keyCode);
-					heldEmoji.delete(event.keyCode);
-					if (
-						!event.voiceTouchEnd ||
-						!owner ||
-						owner.generation !== current?.generation
-					)
-						return;
-					void window.quakeEmoji
-						?.press({
-							profileId: owner.profileId,
-							pageId: owner.pageId,
-							keyCode: event.keyCode,
-							keyAction: event.keyAction,
-						})
-						.then((reply) => {
-							if (reply._tag === "invalid") invalid(event.keyCode);
-						})
-						.catch(() => invalid(event.keyCode));
-				},
+				handleKey,
 				undefined,
-				() => {
-					dispatch.cancel();
-					heldEmoji.clear();
-					setPressedKeyCode(undefined);
-				},
+				cancel,
 			);
 			return () => {
 				disposed = true;
@@ -271,6 +290,10 @@ function ActiveStripPanel(): React.JSX.Element {
 				for (const timer of timers) clearTimeout(timer);
 			};
 		}
+		return () => {
+			offMatrix?.();
+			cancel();
+		};
 	}, []);
 	if (profiles._tag === "ready") {
 		const { profile, page } = selectStripPage(profiles.envelope, serial);

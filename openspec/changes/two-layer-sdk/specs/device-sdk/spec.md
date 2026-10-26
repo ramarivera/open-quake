@@ -129,6 +129,22 @@ row `floor(index/5)+1`, column `(index%5)+1`, keyCode `row,column`, and keyActio
 zero. It SHALL expose the states and preserve remaining report bytes.
 It SHALL NOT invent a release event or a physical layout from an empty matrix.
 
+The panel SHALL route legacy matrix presses through its complete strip key handler.
+The recovered DK-Suite v0.4.95 `app-resources/background.js`, character offset
+642254, `checkDataValid` case 1, emits only keyAction 0 for the first pressed
+state and an empty result for an empty matrix. Audit rows MAIN-008/028 and
+SCREEN-144 do not establish a release edge. Repeated downs SHALL be suppressed;
+held actions SHALL remain held until a confirmed release or lifecycle cancel.
+Momentary delegated emoji and meeting actions SHALL activate once on a matrix
+press without fabricating a release for held actions. Loss, selection reset,
+unmount or a different matrix key SHALL cancel the prior held action.
+
+#### Scenario: Legacy matrix hold and emoji
+- **WHEN** repeated matrix reports select a held key, followed by an empty report
+- **THEN** the key receives one down and no up, and link loss cancels it
+- **WHEN** a matrix press selects an emoji tile
+- **THEN** the owning emoji handler executes once despite repeated reports
+
 #### Scenario: Last matrix cell pressed
 - **WHEN** only state index 14 is one
 - **THEN** the first press is key `3,5`
