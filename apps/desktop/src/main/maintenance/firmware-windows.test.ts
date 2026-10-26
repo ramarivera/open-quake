@@ -2,7 +2,7 @@ import { win32 } from "node:path";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { firmwareFiles } from "./firmware-files";
-import { windowsDfuPaths } from "./volume-discovery";
+import { windowsDfuDiscovery, windowsDfuPaths } from "./volume-discovery";
 
 // No Windows drive is touched. Only the filesystem calls used by discovery are supplied.
 vi.mock("node:path", async (original) => {
@@ -40,7 +40,7 @@ describe("synthetic Windows boot drives", () => {
 		expect(await Effect.runPromise(files.discover())).toEqual([]);
 		expect(await Effect.runPromise(files.discover())).toEqual([]);
 		expect(await Effect.runPromise(files.discover())).toHaveLength(1);
-		expect(probe).toHaveBeenLastCalledWith(true);
+		expect(probe).toHaveBeenLastCalledWith(false);
 	});
 
 	it("carries recognizable drive letters from discovery to distinct volume choices", async () => {
@@ -63,3 +63,28 @@ describe("synthetic Windows boot drives", () => {
 			expect(files.pathFor(volume.id)).toBe(win32.resolve(paths[index] ?? ""));
 	});
 });
+
+for (const failFirst of [false, true]) {
+	it(`caches 500ms discovery polls for 5s, including failed probes=${failFirst}`, async () => {
+		let time = 0;
+		const query = vi.fn(
+			async () => '[{"DeviceID":"E:","VolumeName":"QUAKE DFU","DriveType":2}]',
+		);
+		if (failFirst) query.mockRejectedValueOnce(new Error("synthetic timeout"));
+		const discover = windowsDfuDiscovery(query, () => time);
+		const first = discover();
+		const concurrent = discover();
+		expect(concurrent).toBe(first);
+		await first.catch(() => []);
+		for (time = 500; time < 5000; time += 500) await discover();
+		expect(query).toHaveBeenCalledTimes(1);
+		time = 4999;
+		await discover();
+		expect(query).toHaveBeenCalledTimes(1);
+		time = 5000;
+		expect(await discover()).toEqual(["E:\\"]);
+		expect(query).toHaveBeenCalledTimes(2);
+		await discover(true);
+		expect(query).toHaveBeenCalledTimes(3);
+	});
+}

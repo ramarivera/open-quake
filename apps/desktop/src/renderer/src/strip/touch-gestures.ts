@@ -156,7 +156,11 @@ export function mountTouchTarget(
 		minHeight: element.style.minHeight,
 		filter: element.style.filter,
 	};
-	element.style.minHeight = `${44 * scale}px`;
+	// Registration supplies a minimum target; it must not shrink a larger consumer target.
+	const minimum = `${44 * scale}px`;
+	element.style.minHeight = original.minHeight
+		? `max(${original.minHeight}, ${minimum})`
+		: minimum;
 	element.dataset.quakeTouchScale = String(scale);
 	let active = false;
 	let suppressUntil = 0;

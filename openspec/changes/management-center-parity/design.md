@@ -8,7 +8,7 @@ Bead map: cluster `open-quake-lih.17`, redesign epic `open-quake-nyd`, title bar
 
 Goals: one coherent Management Center that restyles every existing page without changing its behaviour, and delivers the ten AUDIT_CENTER gaps plus the shell.
 
-Non-goals (decision 9): DecoKee account login and its nags (CENTER-014–016), Agent Market browse, share and install (CENTER-056, 061–064), the bundled OpenClaw installer, offline packs, upgrades and scene editions (CENTER-027, 029–039, 035, 043, 044), the cloud model catalog and region policy (CENTER-069, 071), and the dev-only and dead legacy UIs (CENTER-042, 091, 097). The embedded OpenClaw WebChat (CENTER-023, 041) is not shipped: it is a third-party UI that needs the gateway token in the URL ("Don't copy"). Service port, log level, autostart and data directory (CENTER-047, 048) and the unused OpenClaw IPC surface (CENTER-104) rank 11th and 12th, outside AUDIT_CENTER's top ten; follow-up beads track them.
+Non-goals (decision 9): DecoKee account login and its nags (CENTER-014–016), Agent Market browse, share and install (CENTER-056, 061–064), the bundled OpenClaw installer, offline packs, upgrades and scene editions (CENTER-027, 029–039, 035, 043, 044), the cloud model catalog and region policy (CENTER-069, 071), and the dev-only UI (CENTER-042). The embedded OpenClaw WebChat (CENTER-023, 041) is not shipped: it is a third-party UI that needs the gateway token in the URL ("Don't copy"). Service port, log level, autostart and data directory (CENTER-047, 048) and the unused OpenClaw IPC surface (CENTER-104) rank 11th and 12th, outside AUDIT_CENTER's top ten; follow-up beads track them.
 
 ## Decisions
 
@@ -102,7 +102,7 @@ Requests use a dedicated Node HTTPS agent for each HA origin. Its TLS connection
 
 ## Migration plan
 
-Appearance migrates from version 1 to version 2 in memory (Decision 3). The new stores are versioned JSON under `userData`: `emoji-v1/`, `agents-v1/` and `integrations-v1/`. Emoji uses a validated primary and backup plus immutable hashed assets. Agents commit a generation pointer for the catalog and workspace Markdown together. Integration JSON files use a temporary file and atomic rename. Secrets use Electron safeStorage encryption backed by the OS credential store; unavailable encryption and Linux basic_text are refused. Public replies contain a mask or availability flag. Saved strip keys retain asset references after package removal, so assets are retained rather than collected automatically.
+Appearance migrates from version 1 to version 2 in memory (Decision 3). The new stores are versioned JSON under `userData`: `emoji-v1/`, `agents-v1/` and `integrations-v1/`. Emoji uses a validated primary and backup plus immutable hashed assets. Agents commit a generation pointer for the catalog and workspace Markdown together. Integration JSON files use a temporary file and atomic rename. Secrets use Electron safeStorage encryption backed by the OS credential store; unavailable encryption and Linux basic_text are refused. Public replies contain a mask or availability flag. Collection retains saved profile ids and hashes after package removal and reclaims them after the final package, draft and profile reference disappears.
 
 ## Verification
 
@@ -114,12 +114,17 @@ The existing shortcut generation control will use the same saved default model,
 production credentials and Vercel facade as direct chat. The host pins that row
 for one stateless generation. It does not create a chat session or enable tools.
 An authored system instruction requests the existing GeneratedConfig format;
-ShortcutService remains the sole output decoder and drops non-hotkey actions.
+ShortcutService remains the sole output decoder and validates retained safe action types with the canonical registry.
 No generated content saves a library, syncs a profile or executes an action.
 
-One draft may run at a time. The full operation has a 60-second deadline and a
-32 KiB UTF-8 output limit, with at most 4096 output tokens or the saved model's
+One draft may run at a time. The full operation has a 300-second deadline and a
+32 KiB UTF-8 output limit, with at most 16384 output tokens or the saved model's
 lower bound. Provider failures retain catalog identity privately and project
 through the existing integration failure. Shutdown interrupts active generation
-and joins it before disposing inference. No shared wire schema, dependency or UI
-layout changes are needed. The existing Generate action is the inference opt-in.
+and joins it before disposing inference. The existing Generate action is the inference opt-in.
+Generated configurations remain inert until explicitly saved and synced.
+
+
+## Emoji and shortcut burn-down, 2026-10-26
+
+CENTER-091 and CENTER-097 retain their interactions through the current pages rather than reinstating unreachable layouts. Direct Qwen motion generation uses the saved Qwen credential and a hidden muted browser decoder, without ffmpeg or a vendor proxy. Caption suggestions are explicit and require acceptance. Reference collection retains profile-pinned hashes. Linked package rename coordinates the existing profile repository with rollback before publication. The reverse emojiFolder-title path remains blocked on the absent folder editor/runtime owner; MGMT-101 is not complete. The retained ConfigDetail subset does not close AI-121 or retire its remaining action types. Beads open-quake-lih.17.2 and open-quake-lih.17.3 remain open for lead-owned merge acceptance.

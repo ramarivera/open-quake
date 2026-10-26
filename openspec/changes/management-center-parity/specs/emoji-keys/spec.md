@@ -85,3 +85,77 @@ Deleting an emoji SHALL clear its slot. Its stored assets SHALL be removed only 
 #### Scenario: Delete a placed emoji
 - **WHEN** an emoji on the active profile is deleted from its package
 - **THEN** its slot is empty in the package, and its GIF stays on disk and keeps working from that key until no saved profile references it
+
+### Requirement: Retained composer and legacy interactions
+The active composer SHALL replace the legacy emoji pane while retaining package context-menu and double-click rename, a horizontally scrollable template selector, and an explicit legacy generation dialog with a 1000-byte UTF-8 prompt limit and warning at 900 bytes. The modern motion field SHALL retain its 180-character limit. Untouched default motion text SHALL follow the app locale; user edits and preset selections SHALL survive locale changes. Six localized presets SHALL remain available with required-image and nonblank-prompt validation. Source: CENTER-082, CENTER-091.
+
+#### Scenario: Locale changes after editing
+- **WHEN** the locale changes from English to German
+- **THEN** the untouched default changes language, while an edited motion prompt remains unchanged, and all six preset buttons and field counters remain available
+
+#### Scenario: Legacy prompt byte boundary
+- **WHEN** a selected template has a 1000-byte prompt and another multibyte character is entered
+- **THEN** generation is rejected without truncating the text, and cancelling the dialog leaves drafts and packages unchanged
+
+### Requirement: Direct generated motion and caption suggestions
+Production composition SHALL supply direct BYO-key Qwen image-to-video generation, using the saved Qwen credential, 480P, five seconds, prompt extension and no watermark. It SHALL create and poll the task, download the result without forwarding credentials to the asset origin, and decode it into a bounded animated GIF in a hidden muted worker. Downloads SHALL use HTTPS only and an exact allowlist of documented DashScope result origins. Connection-time DNS resolution SHALL reject non-public IPv4/IPv6 answers and pin the socket to validated addresses. Redirects SHALL be rejected, with a 32 MiB download limit and a 30-second download deadline. The full job SHALL abort after 300 seconds, explicit cancellation or shutdown. No vendor proxy SHALL be used. Failed or cancelled jobs SHALL preserve the static source, user caption, drafts and saved renderings. An explicit caption suggestion SHALL use the saved daily/default text model, temperature 0.1, at most 2048 tokens and no thinking, and SHALL validate at most ten Unicode characters in zh/en/ja/ko/de/fr/es/it. Suggestions SHALL be shown separately until accepted. Source: AI-134, AI-135, CENTER-083, CENTER-087.
+
+#### Scenario: Provider creates and completes a task
+- **WHEN** fake HTTP returns a task id, pending status, success and video bytes
+- **THEN** the production adapter returns a validated GIF candidate while preserving the entered caption and original asset
+
+#### Scenario: Provider failure or cancellation
+- **WHEN** creation, polling, download or decoding fails, the deadline expires, or the user cancels
+- **THEN** provider work stops and saved media is unchanged, and public errors expose no credentials or provider response body
+
+#### Scenario: Eight caption languages
+- **WHEN** caption suggestion is requested in each supported locale
+- **THEN** the model instruction names that language and output beyond ten Unicode characters is rejected without replacing entered text
+
+### Requirement: Draft editing and emoji metadata
+Every draft and packaged emoji SHALL open the same caption editor with a name field of at most 30 characters and an explicit 0/1/2 key mode. Saving SHALL atomically update name, mode, caption and rendered hash while retaining the immutable original. Cancel and failure SHALL preserve all saved fields. Creating a package from the no-package dialog SHALL retain selected drafts for first-vacant-slot insertion. Source: CENTER-084, CENTER-087, MGMT-284.
+
+#### Scenario: Edit and reload a draft
+- **WHEN** a draft is renamed, captioned and assigned copy-only mode before any package exists
+- **THEN** reload retains those edits and creating a package preserves the draft and its selection
+
+### Requirement: Reference-aware reclamation
+Collection SHALL retain every static asset, package/draft item and saved-profile emoji id/hash, including old renderings pinned by profiles. It SHALL delete unreferenced item metadata and asset files only after the last package, draft or profile reference disappears. Published clipboard GIF files SHALL remain outside normal asset collection because the system clipboard can still refer to them after library references disappear or the app restarts. Their collection SHALL be deferred until native clipboard ownership can be observed. Collection failure SHALL preserve committed library state and report a retryable notice. Source: CENTER-088.
+
+#### Scenario: Last placed reference disappears
+- **WHEN** a package is deleted while a saved profile pins one of its GIFs
+- **THEN** the pinned item and hash survive, and a later collection after deleting that profile reclaims them
+
+### Requirement: Linked package title updates
+Renaming an emoji package SHALL rename its linked profile and publish a profile refresh only after the emoji library save succeeds. It SHALL roll back the profile update if the emoji library save fails. Duplicate profile names or invalid profile names SHALL reject before either store changes, preserving the catalog validation code `QUAKE.EMOJI.INVALID` and its actionable reason across the profile runtime boundary. Unexpected storage failures SHALL retain their private original cause under `QUAKE.EMOJI.LIBRARY_FAILED`. A deleted linked profile SHALL leave an independent package whose name can still be saved under the package limit without recreating, writing or refreshing a profile. Saving an emoji-folder tile title SHALL also rename its referenced package and publish the title-sync change only after both writes succeed. Source: MGMT-101.
+
+#### Scenario: Linked rename save failure
+- **WHEN** the linked profile rename succeeds but the emoji library save fails
+- **THEN** the previous package and profile titles remain, and a conflicting existing profile name never changes either store
+
+#### Scenario: Folder title drives package rename
+- **WHEN** a saved emoji-folder title changes and its package exists
+- **THEN** the package title follows and the title-sync change publishes after successful persistence; failure or an existing-name conflict leaves both saved titles unchanged
+
+### Requirement: Emoji strip artwork
+Emoji tiles SHALL use app-owned flat artwork sizing: a contained square at 80 percent of the shorter tile edge, centered with the saved label retained. The tile SHALL load the saved immutable hash and display a stable unavailable fallback for missing/deleted assets. It SHALL never activate on down or hold; release SHALL reach EmojiPress with the committed key mode, overridden by a non-null global default. Source: WIDGETS-106, MGMT-284.
+
+#### Scenario: Missing pinned artwork
+- **WHEN** a mounted tile cannot load its pinned hash
+- **THEN** it shows unavailable artwork without requesting a replacement hash or changing its saved key
+
+#### Scenario: Three release modes
+- **WHEN** committed mode 0, 1 or 2 keys are pressed down, held and released with no global override
+- **THEN** only release copies, mode 1 also pastes after 100 ms, and mode 2 also sends Enter after another 100 ms
+
+#### Scenario: Untrusted provider media URL
+- **WHEN** a provider returns an internal URL, an approved hostname resolving to private addresses, or a redirect to internal metadata
+- **THEN** the adapter rejects it before contacting the internal destination or decoding any video
+
+#### Scenario: Clipboard still references a removed emoji
+- **WHEN** a copied emoji loses its last library/profile reference and the library reopens
+- **THEN** its source assets are collected but the published clipboard GIF remains readable, including after reopening the file store
+
+#### Scenario: Rename after generated profile deletion
+- **WHEN** the user deletes a generated profile and then renames its package to a valid independent package name
+- **THEN** the package save succeeds without a profile write or refresh, and a package save failure preserves the original library failure

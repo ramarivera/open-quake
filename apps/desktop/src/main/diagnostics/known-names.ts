@@ -20,6 +20,7 @@ DesktopSpeech.profiles DesktopSpeech.configure DesktopSpeech.cancelSpeech Deskto
 DesktopSpeech.credentials DesktopSpeech.resolveCredential DesktopSpeech.credentialRevoked
 DesktopSpeech.storeCredential DesktopSpeech.removeCredential DesktopSpeech.ordered
 DesktopSpeech.cancelOrdered DesktopSpeech.flushOrdered DesktopSpeech.pushOrdered DesktopSpeech.finishOrdered
+ArrangementState.read ArrangementState.save
 ActionService.activate ActionService.execute AgentConnections.create AgentConnections.get
 AgentConnections.remove AgentConnections.resolveCredential AgentConnections.save
 AgentConnections.select AgentConnections.selected AgentConnections.view AgentHttp.connect
@@ -51,7 +52,7 @@ CredentialVault.remove CredentialVault.resolve CredentialVault.revoked Credentia
 DataReset.run DesktopBackup.export DesktopDeviceBus.recover DesktopDeviceBus.start
 DesktopKeys.insertText DesktopKeys.launchApplication DesktopKeys.pressChord DesktopMaintenance.view
 DeviceLifecycle.lock DeviceLifecycle.onStatus DeviceLifecycle.redetect DeviceLifecycle.topology
-DeviceLifecycle.wake DisplayPrompts.check DisplayPrompts.make DisplayPrompts.repair
+DeviceLifecycle.wake DisplayPrompts.check DisplayPrompts.make DisplayPrompts.repair DisplayPrompts.prepareWindows
 EmojiDesktop.addGif EmojiDesktop.controller EmojiDesktop.request EmojiDesktop.snapshot
 EmojiLibrary.command EmojiPress.press EmojiRepository.read EmojiRepository.transact
 FakeHidTransport.close FakeHidTransport.discover FakeHidTransport.open FakeHidTransport.write
@@ -92,6 +93,7 @@ MeetingService.subscribe MeetingService.suspend MeetingService.tab MeetingServic
 MeetingService.translate MeetingService.translationLost MockHardwareBus.start MonitorService.watch
 MonitoringService.snapshot MonitoringService.subscribe MonitoringService.configure MonitorForeground.query MonitorForeground.stop
 MonitorStore.configuration MonitorStore.read MonitorStore.save MonitorStore.stage NativeDisplay.call
+NativeDisplay.runTool NativeDisplay.windowsProbe NativeDisplay.windowsExtend PanelPower.setCount
 NativeDisplay.hiddenMirroring NodeHidTransport.close NodeHidTransport.discover NodeHidTransport.open
 NodeHidTransport.write OpenClawAdapter.authenticated OpenClawAdapter.capabilities
 OpenClawAdapter.catalog OpenClawAdapter.health OpenClawAdapter.listAgents
@@ -197,6 +199,7 @@ export const knownLogEvents = new Set([
 	"Agent credential cleanup failed; retry pending",
 	"Application shutdown failed",
 	"Firmware session requires recovery",
+	"Optional bundled firmware unavailable",
 	"Foreground profile probe failed",
 	"HTTP runtime setup failed",
 	"HTTP runtime state update failed",

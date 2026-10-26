@@ -9,9 +9,11 @@ import {
 } from "../shared/lifecycle-contracts";
 
 const bridge: LifecycleBridge = {
+	platform: process.platform,
 	displaySettingsAvailable:
 		process.platform === "darwin" || process.platform === "win32",
-	layoutRepairAvailable: process.platform === "darwin",
+	layoutRepairAvailable:
+		process.platform === "darwin" || process.platform === "win32",
 	request: async (command) => {
 		const reply: unknown = await ipcRenderer.invoke(LIFECYCLE_CHANNEL, command);
 		return Schema.is(LifecycleReply)(reply)

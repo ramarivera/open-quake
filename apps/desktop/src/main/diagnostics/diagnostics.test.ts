@@ -729,9 +729,16 @@ describe("process-owned runtime diagnostics", () => {
 	});
 });
 
-it.each(["FirmwareUpdates.shutdown", "HardwareControls.holdChord"])(
-	"retains the %s diagnostic span",
-	(name) => {
-		expect(safeSpanName(name)).toBe(name);
-	},
-);
+it.each([
+	"FirmwareUpdates.shutdown",
+	"HardwareControls.holdChord",
+	"ArrangementState.read",
+	"ArrangementState.save",
+	"NativeDisplay.runTool",
+	"NativeDisplay.windowsProbe",
+	"NativeDisplay.windowsExtend",
+	"PanelPower.setCount",
+	"DisplayPrompts.prepareWindows",
+])("retains the allowlisted diagnostic span %s", (name) => {
+	expect(safeSpanName(name)).toBe(name);
+});

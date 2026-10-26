@@ -98,11 +98,11 @@ function ManagementSurface({
 			new URLSearchParams(location.search),
 		),
 	);
-	const [meetingActivation, setMeetingActivation] = useState(0);
 	const [agentActivation, setAgentActivation] = useState(() => ({
 		tab: initialActivation?.agentTab ?? "sessions",
 		sequence: 0,
 	}));
+	const [meetingActivation, setMeetingActivation] = useState(0);
 	const [page, setPage] = useState<Page>(() => {
 		const active = initialActivation;
 		return pages.find((id) => id === active?.page) ?? "overview";

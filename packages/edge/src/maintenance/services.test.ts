@@ -268,6 +268,7 @@ describe("firmware session", () => {
 				yield* TestClock.adjust(firmwareTiming.settle);
 				yield* flush;
 				expect(f.calls).toEqual([
+					"version:chosen",
 					"enter:chosen",
 					"copy:second",
 					"version:chosen",

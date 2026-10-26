@@ -104,7 +104,10 @@ export function meetingDom(
 				case "delete":
 					snapshot = {
 						...snapshot,
-						records: snapshot.records.filter((r) => r.id !== command.id),
+						records: snapshot.records.filter(
+							(r) =>
+								r.id !== command.id && !Option.contains(r.parentId, command.id),
+						),
 					};
 					break;
 			}

@@ -4,149 +4,46 @@ import {
 	duration,
 	formatTimer,
 	type MeetingRecord,
-	marked,
+	type MeetingStageState,
 	summaryTemplates,
-	type TaskState,
 	transcriptText,
 } from "../../../shared/meeting-bridge";
 import { PageHeader } from "../ui/Form";
+import {
+	attendeeLabel,
+	durationLabel,
+	sortedMeetings,
+	stageLabel,
+	statusLabel,
+} from "./history-presentation";
 import { MeetingSettings } from "./MeetingSettings";
-import { meetingRequest, useMeetingNow, useMeetings } from "./useMeetings";
+import { MeetingTranscript } from "./MeetingTranscript";
+import { SummaryMarkdown } from "./SummaryMarkdown";
+import { TaskInspector } from "./TaskInspector";
+import { TitleEditor } from "./TitleEditor";
+import {
+	meetingRequest,
+	useMeetingActivation,
+	useMeetingNow,
+	useMeetings,
+} from "./useMeetings";
 import "./meetings.css";
 
-const taskLabels: Record<TaskState, string> = {
-	pending: "Pending",
-	processing: "Processing",
-	complete: "Complete",
-	failed: "Needs attention",
-	interrupted: "Needs attention",
-};
-function TaskInspector({
-	record,
-	onTab,
-}: {
-	record: MeetingRecord;
-	onTab: (tab: "summary" | "transcript") => void;
-}): React.JSX.Element {
-	const tasks = [
-		{ id: "audio", name: "Audio and upload", state: record.audio },
-		{ id: "transcript", name: "Live transcript", state: record.transcription },
-		{ id: "summary", name: "AI Summary", state: record.summary },
-	] satisfies readonly { id: string; name: string; state: TaskState }[];
-	return (
-		<aside
-			className="meeting-inspector"
-			aria-label="Task health and template selection"
-		>
-			<h2>Task health</h2>
-			{record.state === "recorded" ? (
-				<button
-					type="button"
-					className="button"
-					onClick={() => {
-						void meetingRequest({ _tag: "retry", id: record.id });
-					}}
-				>
-					Generate minutes
-				</button>
-			) : null}
-			{tasks.map((task) => (
-				<div className="meeting-task" key={task.id} data-state={task.state}>
-					<span className="meeting-state-dot" />
-					<div>
-						<h3>{task.name}</h3>
-						<p>{taskLabels[task.state]}</p>
-						{task.state === "complete" ? (
-							<button
-								type="button"
-								onClick={() => {
-									if (task.id === "audio")
-										void meetingRequest({ _tag: "reveal", id: record.id });
-									else onTab(task.id === "summary" ? "summary" : "transcript");
-								}}
-							>
-								{task.id === "audio"
-									? "View audio file"
-									: task.id === "summary"
-										? "View summary"
-										: "View transcript"}
-							</button>
-						) : task.state === "failed" || task.state === "interrupted" ? (
-							<button
-								type="button"
-								onClick={() => {
-									void meetingRequest({ _tag: "retry", id: record.id });
-								}}
-							>
-								Retry task
-							</button>
-						) : null}
-					</div>
-				</div>
-			))}
-			<fieldset className="meeting-template-picker">
-				<legend>Summary template</legend>
-				{summaryTemplates.map((template) => (
-					<label key={template.id}>
-						<input
-							type="radio"
-							name={`template-${record.id}`}
-							value={template.id}
-							checked={record.template === template.id}
-							onChange={() => {
-								void meetingRequest({
-									_tag: "template",
-									id: record.id,
-									template: template.id,
-								});
-							}}
-						/>
-						<span>
-							<strong>{template.name}</strong>
-							<small>{template.description}</small>
-						</span>
-					</label>
-				))}
-			</fieldset>
-			<p className="meeting-hint">
-				Changing the template does not alter the current summary until you
-				regenerate.
-			</p>
-			<button
-				type="button"
-				className="button"
-				disabled={
-					!record.transcript.length ||
-					record.state === "processing" ||
-					record.state === "recording"
-				}
-				onClick={() => {
-					void meetingRequest({
-						_tag: "regenerate",
-						id: record.id,
-						template: record.template,
-					});
-				}}
-			>
-				Regenerate with template
-			</button>
-		</aside>
-	);
-}
 function MeetingDocument({
 	record,
 	now,
 	onDelete,
+	progress,
 }: {
 	record: MeetingRecord;
 	now: number;
 	onDelete: () => void;
+	progress?: MeetingStageState | undefined;
 }): React.JSX.Element {
 	const [tab, setTab] = useState<"summary" | "transcript">(
 		record.minutes ? "summary" : "transcript",
 	);
 	const [editing, setEditing] = useState(false),
-		[title, setTitle] = useState(record.title),
 		[message, setMessage] = useState("");
 	const appliedId = Option.getOrElse(
 		record.appliedTemplate,
@@ -175,54 +72,26 @@ function MeetingDocument({
 		<>
 			<article className="meeting-document">
 				<header>
-					{editing ? (
-						<form
-							onSubmit={(event) => {
-								event.preventDefault();
-								if (!title.trim()) return;
-								void meetingRequest({
-									_tag: "rename",
-									id: record.id,
-									title: title.trim(),
-								}).then((ok) => {
-									if (ok) setEditing(false);
-								});
-							}}
+					<h2>
+						{record.title}
+						<button
+							type="button"
+							aria-label="Edit meeting title"
+							onClick={() => setEditing(true)}
 						>
-							<label>
-								Edit Meeting Title
-								<input
-									value={title}
-									maxLength={100}
-									required
-									onChange={(event) => setTitle(event.target.value)}
-								/>
-							</label>
-							<button className="button" type="submit">
-								Save
-							</button>
-							<button type="button" onClick={() => setEditing(false)}>
-								Cancel
-							</button>
-						</form>
-					) : (
-						<h2>
-							{record.title}
-							<button
-								type="button"
-								aria-label="Edit meeting title"
-								onClick={() => {
-									setTitle(record.title);
-									setEditing(true);
-								}}
-							>
-								✎
-							</button>
-						</h2>
-					)}
+							✎
+						</button>
+					</h2>
+					{editing ? (
+						<TitleEditor
+							record={record}
+							onClose={() => setEditing(false)}
+							onSaved={() => setMessage("Meeting title updated successfully")}
+						/>
+					) : null}
 					<p className="meeting-meta">
 						{new Date(record.startedAt).toLocaleString()} ·{" "}
-						{formatTimer(duration(record, now))} · Attendees not recorded
+						{formatTimer(duration(record, now))} · {attendeeLabel(record)}
 					</p>
 					<div className="meeting-document-actions">
 						<button type="button" onClick={onDelete}>
@@ -238,7 +107,11 @@ function MeetingDocument({
 									_tag: "export",
 									id: record.id,
 									artifact: tab,
-								});
+								}).then((ok) =>
+									setMessage(
+										ok ? "Export dialog closed" : "Meeting export failed",
+									),
+								);
 							}}
 						>
 							Export
@@ -291,7 +164,7 @@ function MeetingDocument({
 					<p className="meeting-processing" role="status">
 						{record.state === "recording"
 							? "Start Recording"
-							: "Processing, please wait..."}
+							: `Processing, please wait... · ${stageLabel(record, progress)}`}
 						<small>
 							Tasks run independently. See current status on the right.
 						</small>
@@ -325,7 +198,7 @@ function MeetingDocument({
 								<p className="meeting-generated">
 									Generated minutes · Current template: {applied}
 								</p>
-								<pre>{record.minutes}</pre>
+								<SummaryMarkdown text={record.minutes} />
 							</>
 						) : (
 							<div className="meeting-empty">
@@ -334,19 +207,7 @@ function MeetingDocument({
 							</div>
 						)
 					) : record.transcript.length ? (
-						record.transcript.map((segment) => (
-							<div
-								key={segment.id}
-								className="meeting-transcript-segment"
-								data-marked={marked(record, segment)}
-							>
-								<p>
-									<time>{formatTimer(segment.startMs)}</time>{" "}
-									<strong>Speaker {segment.speaker}</strong>
-								</p>
-								<p>{segment.text}</p>
-							</div>
-						))
+						<MeetingTranscript record={record} now={now} />
 					) : (
 						<div className="meeting-empty">No meeting minutes content</div>
 					)}
@@ -362,15 +223,28 @@ export function MeetingHistory({
 }: {
 	readonly activation?: number;
 }): React.JSX.Element {
-	useEffect(() => {
-		if (activation > 0) void meetingRequest({ _tag: "read" });
-	}, [activation]);
+	useMeetingActivation(activation);
 	const { snapshot, error } = useMeetings();
 	const now = useMeetingNow();
 	const [filter, setFilter] = useState(""),
 		[mode, setMode] = useState("records"),
 		[selected, setSelected] = useState<string>(),
-		[deleting, setDeleting] = useState<MeetingRecord>();
+		[deleting, setDeleting] = useState<MeetingRecord>(),
+		[refreshing, setRefreshing] = useState(false),
+		[deletingBusy, setDeletingBusy] = useState(false);
+	const deletingRef = useRef(false);
+	const refreshRef = useRef(false);
+	const refresh = async () => {
+		if (refreshRef.current) return;
+		refreshRef.current = true;
+		setRefreshing(true);
+		await Promise.all([
+			meetingRequest({ _tag: "read" }),
+			new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+		]);
+		refreshRef.current = false;
+		setRefreshing(false);
+	};
 	const dialog = useRef<HTMLDialogElement>(null);
 	useEffect(() => {
 		if (!deleting) return;
@@ -378,18 +252,21 @@ export function MeetingHistory({
 		element?.showModal();
 		return () => element?.close();
 	}, [deleting]);
-	const records = (snapshot?.records ?? []).filter(
+	const records = sortedMeetings(snapshot?.records ?? []).filter(
 		(r) =>
 			(mode !== "progress" ||
 				r.state === "recording" ||
 				r.state === "processing") &&
 			`${r.title} ${new Date(r.startedAt).toLocaleString()}`
 				.toLowerCase()
-				.includes(filter.toLowerCase()),
+				.includes(filter.trim().toLowerCase()),
 	);
 	const record = records.find((r) => r.id === selected) ?? records[0];
+	useEffect(() => {
+		if (selected === undefined && record) setSelected(record.id);
+	}, [record, selected]);
 	return (
-		<section className="meetings-page">
+		<section className="meetings-page" data-revision={snapshot?.revision}>
 			<PageHeader
 				title="Meeting"
 				description="View and manage your meeting minutes records"
@@ -451,13 +328,19 @@ export function MeetingHistory({
 						<button
 							type="button"
 							aria-label="Refresh"
+							aria-busy={refreshing}
+							disabled={refreshing}
 							onClick={() => {
-								void meetingRequest({ _tag: "read" });
+								void refresh();
 							}}
 						>
 							↻
 						</button>
 					</div>
+					<p className="meeting-list-heading">
+						{mode === "progress" ? "Active meetings" : "Recent meetings"}
+					</p>
+					{refreshing ? <p role="status">Refreshing meetings...</p> : null}
 					{!records.length ? (
 						<p className="meeting-empty">
 							{filter ? "No matching meetings" : "No meeting minutes records"}
@@ -468,13 +351,14 @@ export function MeetingHistory({
 								type="button"
 								key={r.id}
 								className="meeting-record"
+								data-record-id={r.id}
 								aria-current={record?.id === r.id}
 								onClick={() => setSelected(r.id)}
 							>
 								<span className="meeting-record-title">{r.title}</span>
 								<time>{new Date(r.startedAt).toLocaleDateString()}</time>
 								<span>
-									{Math.max(1, Math.round(duration(r, now) / 60000))} min ·{" "}
+									{durationLabel(r, now)} ·{" "}
 									{Option.isSome(r.parentId)
 										? "Temporary Record"
 										: "Main Meeting"}
@@ -483,9 +367,7 @@ export function MeetingHistory({
 									<i className="meeting-state-dot" />
 									{r.state === "completed"
 										? "Success"
-										: r.state === "failed"
-											? "Failed"
-											: r.state}
+										: `${statusLabel(r)} · ${stageLabel(r, snapshot?.progress?.[r.id])}`}
 								</span>
 							</button>
 						))
@@ -495,6 +377,7 @@ export function MeetingHistory({
 					<MeetingDocument
 						key={record.id}
 						record={record}
+						progress={snapshot?.progress?.[record.id]}
 						now={now}
 						onDelete={() => setDeleting(record)}
 					/>
@@ -511,7 +394,10 @@ export function MeetingHistory({
 			{deleting ? (
 				<dialog
 					ref={dialog}
-					onCancel={() => setDeleting(undefined)}
+					onCancel={(event) => {
+						if (deletingRef.current) event.preventDefault();
+						else setDeleting(undefined);
+					}}
 					aria-labelledby="meeting-delete-title"
 					className="meeting-dialog"
 				>
@@ -524,6 +410,7 @@ export function MeetingHistory({
 					<button
 						type="button"
 						className="button"
+						disabled={deletingBusy}
 						onClick={() => setDeleting(undefined)}
 					>
 						Cancel
@@ -531,13 +418,28 @@ export function MeetingHistory({
 					<button
 						type="button"
 						className="button"
+						disabled={deletingBusy}
 						onClick={() => {
+							if (deletingRef.current) return;
+							deletingRef.current = true;
+							setDeletingBusy(true);
+							const deletingId = deleting.id;
+							const index = records.findIndex((item) => item.id === deletingId);
+							const neighbours = [
+								...records.slice(index + 1),
+								...records.slice(0, index).reverse(),
+							].filter((item) => !Option.contains(item.parentId, deletingId));
 							void meetingRequest({
 								_tag: "delete",
 								id: deleting.id,
 								confirmed: true,
 							}).then((ok) => {
-								if (ok) setDeleting(undefined);
+								deletingRef.current = false;
+								setDeletingBusy(false);
+								if (ok) {
+									setDeleting(undefined);
+									setSelected(neighbours[0]?.id);
+								}
 							});
 						}}
 					>

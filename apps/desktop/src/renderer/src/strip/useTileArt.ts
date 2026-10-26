@@ -114,7 +114,9 @@ export async function resolveTileArtwork(
 			: "";
 	}
 	// Only bundled names are aliases. Legacy absolute paths and URLs stay rejected.
-	const mdiName = /^@mdi\/(?:svg\/)?([a-z0-9-]+)(?:\.svg)?$/.exec(source)?.[1];
+	const mdiName =
+		/^@mdi\/(?:svg\/)?([a-z0-9-]+)(?:\.svg)?$/.exec(source)?.[1] ??
+		/^mdi-([a-z0-9-]{1,80})$/.exec(source)?.[1];
 	const appName = /^@\/icon\/([a-z0-9-]+)\.svg$/.exec(source)?.[1];
 	if (mdiName || appName) {
 		const catalog = await import("virtual:mdi-icons");

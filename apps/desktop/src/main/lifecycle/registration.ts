@@ -26,7 +26,7 @@ export function registerLifecycle(
 	runtime: DesktopRuntime<DeviceLifecycle, never>,
 	management: () => BrowserWindow,
 	renderer: string,
-): () => void {
+): (() => void) & { bindManagement(): void } {
 	ipcMain.handle(
 		LIFECYCLE_CHANNEL,
 		async (event, input: unknown): Promise<LifecycleReply> => {
@@ -55,6 +55,9 @@ export function registerLifecycle(
 						case "display-settings":
 							yield* lifecycle.openSettings();
 							break;
+						case "wizard":
+							yield* lifecycle.wizard(input.open);
+							break;
 						case "read":
 							break;
 					}
@@ -73,5 +76,31 @@ export function registerLifecycle(
 			);
 		},
 	);
-	return () => ipcMain.removeHandler(LIFECYCLE_CHANNEL);
+	const clearWizard = () => {
+		void runtime.runPromise(
+			DeviceLifecycle.pipe(
+				Effect.flatMap((lifecycle) => lifecycle.wizard(false)),
+			),
+		);
+	};
+	let removeOwner = () => {};
+	const bindManagement = () => {
+		removeOwner();
+		clearWizard();
+		const owner = management().webContents;
+		owner.on("did-start-loading", clearWizard);
+		owner.on("destroyed", clearWizard);
+		removeOwner = () => {
+			owner.removeListener("did-start-loading", clearWizard);
+			owner.removeListener("destroyed", clearWizard);
+		};
+	};
+	bindManagement();
+	return Object.assign(
+		() => {
+			ipcMain.removeHandler(LIFECYCLE_CHANNEL);
+			removeOwner();
+		},
+		{ bindManagement },
+	);
 }

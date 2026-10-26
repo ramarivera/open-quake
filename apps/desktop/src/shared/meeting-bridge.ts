@@ -74,6 +74,7 @@ export {
 	duration,
 	formatTimer,
 	marked,
+	markRanges,
 	timeline,
 	transcriptText,
 } from "../../../../packages/edge/src/meetings/meeting-invariants";

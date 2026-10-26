@@ -9,8 +9,9 @@ import {
 interface MeetingView {
 	readonly snapshot: MeetingSnapshot | undefined;
 	readonly error: string;
+	readonly failureVersion: number;
 }
-let view: MeetingView = { snapshot: undefined, error: "" };
+let view: MeetingView = { snapshot: undefined, error: "", failureVersion: 0 };
 const listeners = new Set<() => void>();
 let stop: (() => void) | undefined;
 function accept(value: unknown): void {
@@ -23,10 +24,18 @@ function accept(value: unknown): void {
 	)
 		return;
 	view = Either.isLeft(decoded)
-		? { ...view, error: "Meeting response was invalid" }
+		? {
+				...view,
+				error: "Meeting response was invalid",
+				failureVersion: view.failureVersion + 1,
+			}
 		: decoded.right._tag === "failure"
-			? { ...view, error: decoded.right.message }
-			: { snapshot: decoded.right.snapshot, error: "" };
+			? {
+					...view,
+					error: decoded.right.message,
+					failureVersion: view.failureVersion + 1,
+				}
+			: { ...view, snapshot: decoded.right.snapshot, error: "" };
 	for (const listener of listeners) listener();
 }
 export async function meetingRequest(
@@ -66,6 +75,7 @@ function subscribe(listener: () => void): () => void {
 		if (!listeners.size) {
 			stop?.();
 			stop = undefined;
+			view = { snapshot: undefined, error: "", failureVersion: 0 };
 		}
 	};
 }
@@ -82,4 +92,31 @@ export function useMeetingNow(): number {
 		return () => clearInterval(timer);
 	}, []);
 	return now;
+}
+
+/** Mount reads are owned by the store; subsequent host activations refresh again. */
+export function useMeetingActivation(activation: number): void {
+	const mounted = useState(() => ({ activation }))[0];
+	useEffect(() => {
+		if (mounted.activation !== activation) {
+			mounted.activation = activation;
+			void meetingRequest({ _tag: "read" });
+		}
+	}, [activation, mounted]);
+	useEffect(() => {
+		const focus = () => {
+			void meetingRequest({ _tag: "read" });
+		};
+		const shown = () => {
+			if (document.visibilityState === "visible") focus();
+		};
+		window.addEventListener("focus", focus);
+		document.addEventListener("visibilitychange", shown);
+		// CaptureHost can keep the store subscribed while the history page is absent.
+		void meetingRequest({ _tag: "read" });
+		return () => {
+			window.removeEventListener("focus", focus);
+			document.removeEventListener("visibilitychange", shown);
+		};
+	}, []);
 }

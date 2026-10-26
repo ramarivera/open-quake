@@ -22,3 +22,8 @@ W7 implements the approved foundation described in verification.md. Integration 
 
 - [ ] 3.1 Add Linux secure credential/helper adapters; verify isolated storage, missing Secret Service, explicit in-memory fallback, and the same provider/auth conformance suite, and document Linux setup.
 - [ ] 3.2 Add optional provider presets/dedicated adapters only from verified capability evidence; verify each accepted sampling/modality request and every unsupported branch with fixtures, and document the twelve-engine import/disposition map.
+
+## Conversation burn-down lane test-conversation
+
+- [x] AI-010 chat and speech consumers retain an accepted request's generation and read edited settings on the next request; removed chat credentials terminate the active request. Evidence: desktop `main/chat/transport.test.ts` and `main/speech/factory.test.ts`. Bead open-quake-cby.10 remains open for lead delivery.
+- [ ] AI-010 live media and meeting refresh remains blocked. Main has no live AI media generator adapter, and `main/meetings/index.ts` selects an injected adapter or the mock only. Implementing live provider adapters exceeds this test lane's minimal fixes. Chat/speech coverage does not close this row.

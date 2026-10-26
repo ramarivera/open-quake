@@ -23,7 +23,13 @@ export function ClawBotInputTile({
 	const state = voice.view.input;
 	const interactive = voice.surface === "panel";
 	const [text, setText] = useState("");
-	const [warning, setWarning] = useState<StripStringKey | undefined>();
+	const [warning, setWarning] = useState<
+		{ readonly key: StripStringKey } | undefined
+	>();
+	const [pressed, setPressed] = useState<string>();
+	const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+		undefined,
+	);
 	const box = useRef<HTMLTextAreaElement>(null);
 	const recovery = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const focusOwner = useRef<object | undefined>(undefined);
@@ -63,9 +69,17 @@ export function ClawBotInputTile({
 		const timer = setTimeout(() => setWarning(undefined), WARNING_MS);
 		return () => clearTimeout(timer);
 	}, [warning]);
+	useEffect(() => () => clearTimeout(flashTimer.current), []);
+	const flash = (action: string): void => {
+		clearTimeout(flashTimer.current);
+		setPressed(action);
+		flashTimer.current = setTimeout(() => setPressed(undefined), 150);
+	};
 	const onSend = (): void => {
 		const check = checkSend(state, text);
-		if (check._tag === "warn") setWarning(check.key);
+		if (check._tag === "warn") {
+			setWarning({ key: check.key });
+		}
 		if (check._tag !== "send") return;
 		void voice
 			.request({
@@ -99,8 +113,26 @@ export function ClawBotInputTile({
 			})
 			.catch(() => undefined);
 	};
-	useSubTouchTap(send, onSend);
-	useSubTouchTap(attach, onAttach);
+	useSubTouchTap(
+		send,
+		() => {
+			if (interactive) {
+				flash("send");
+				onSend();
+			}
+		},
+		s,
+	);
+	useSubTouchTap(
+		attach,
+		() => {
+			if (interactive) {
+				flash("attach");
+				onAttach();
+			}
+		},
+		s,
+	);
 	useSubTouchTap(box, onFocusRequest);
 	const agent = Option.getOrElse(state.agentName, () => "");
 	return (
@@ -180,6 +212,9 @@ export function ClawBotInputTile({
 							ref={ref}
 							type="button"
 							className="clawbot-input-button"
+							data-pressed={
+								pressed === (ref === send ? "send" : "attach") || undefined
+							}
 							data-quake-sub-touch={label}
 							disabled={!interactive}
 							onClick={action}
@@ -208,7 +243,7 @@ export function ClawBotInputTile({
 						borderRadius: 12 * s,
 					}}
 				>
-					{stripText(voice.locale, warning)}
+					{stripText(voice.locale, warning.key)}
 				</div>
 			) : null}
 		</div>

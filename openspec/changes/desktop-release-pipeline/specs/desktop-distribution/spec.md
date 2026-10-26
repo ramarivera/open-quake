@@ -32,3 +32,22 @@ The system SHALL document unsigned installation and Linux HID access. It SHALL d
 #### Scenario: Record without an audio converter
 - **WHEN** recording is requested without an executable FFmpeg with the libmp3lame encoder
 - **THEN** the app SHALL reject the request before capture begins and explain how to install or configure the required converter
+
+### Requirement: Disabled-by-default trusted owned updater
+
+The updater SHALL remain disabled without an explicit owned feed, artifact origin, trusted signing key and installer policy. It SHALL NOT use vendor endpoints or assume a real feed. An explicitly configured adapter SHALL verify signed release metadata, app/version/platform/architecture, HTTPS origins, bounded artifact length and SHA-256 before marking ready, revalidate cached bytes immediately before installation, and require native consent to install. Evidence: MAIN-114, SETTINGS-006, SETTINGS-049, SETTINGS-050. Production delivery remains blocked pending the owned feed/signing/installer decision.
+
+#### Scenario: Synthetic owned release
+
+- **WHEN** fake HTTP returns signed synthetic metadata and synthetic artifact bytes
+- **THEN** the production adapter checks identity and origin, reports progress, rejects mutation or invalid signatures and only invokes the fake installer for the verified selected release
+
+#### Scenario: Later, Now and failure
+
+- **WHEN** the user defers, downloads, approves installation or encounters a download/install failure
+- **THEN** the renderer sends the matching typed action, shows bounded progress and readable failure guidance, keeps install single-flight and never installs from background checks
+
+#### Scenario: Unconfigured production build
+
+- **WHEN** no owned update policy has been supplied
+- **THEN** manual checks remain disabled and no network request, artifact download or installer invocation occurs
