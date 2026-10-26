@@ -195,9 +195,46 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 						Effect.ensuring(Effect.sync(() => controller.abort())),
 					);
 				}),
-				requireMeetingTranslation: () =>
+				prepareMeeting: (config: MeetingConfig) =>
+					Option.isSome(meetingAdapter) && meetingAdapter.value.prepare
+						? meetingAdapter.value.prepare(config)
+						: Effect.void,
+				cleanupMeeting: (ref: string) =>
+					Option.isSome(meetingAdapter) && meetingAdapter.value.cleanup
+						? meetingAdapter.value.cleanup(ref)
+						: Effect.void,
+				meetingFiles: (
+					ref: string,
+					operation: "list" | "upload" | "delete",
+					value: string,
+				) => {
+					if (Option.isNone(meetingAdapter) || !meetingAdapter.value.files)
+						return Effect.fail(meetingError("Unavailable"));
+					const files = meetingAdapter.value.files;
+					switch (operation) {
+						case "list":
+							return files
+								.list(ref)
+								.pipe(
+									Effect.map((items) =>
+										items.flatMap((item) =>
+											typeof item.id === "string" ? [item.id] : [],
+										),
+									),
+								);
+						case "upload":
+							return files.upload(ref, value).pipe(Effect.map((id) => [id]));
+						case "delete":
+							return files
+								.remove(ref, value)
+								.pipe(Effect.as([] as readonly string[]));
+					}
+				},
+				requireMeetingTranslation: (config?: MeetingConfig) =>
 					Option.isSome(meetingAdapter)
-						? Effect.void
+						? config && meetingAdapter.value.prepareTranslation
+							? meetingAdapter.value.prepareTranslation(config)
+							: Effect.void
 						: Effect.fail(meetingError("Unavailable")),
 				transcribeMeeting: (
 					config: MeetingConfig,

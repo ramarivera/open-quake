@@ -195,3 +195,13 @@ Opt-in file operations SHALL use only the profile pinned by the requesting windo
 - **THEN** it fails before credentials or provider I/O
 - **WHEN** multibyte text fits both limits, including the exact byte boundary
 - **THEN** an upload and content retrieval round trip preserves it
+
+
+### Requirement: Existing facade owns production meeting transports
+
+Meeting ASR, upload and live translation SHALL compose the existing AiProviderService and AiMeetingAdapter with saved model profiles, credential references and managed meeting audio UUIDs. The meeting-minutes requirements own task expiry, artifacts, cancellation, mono normalization and bounded translation. No account gateway or second credential store SHALL be introduced. Evidence: AI-136, AI-137, AI-269, AI-270, AI-272, AI-278.
+
+#### Scenario: Saved credentials reach real adapters through fake servers
+
+- **WHEN** a saved Qwen or OpenAI profile processes synthetic managed audio through the production meeting facade and loopback HTTP or WebSocket servers
+- **THEN** only its selected credential authenticates the expected direct adapter, the resulting transcript feeds the existing summary facade, and all temporary audio and sockets close without hardware or paid requests
