@@ -503,6 +503,11 @@ Evidence: AI-266, AI-273, AI-276, AI-278, AI-279. Upload location, expiry, task 
 - **WHEN** cancellation of a running provider task and deletion of its owned files both fail, then cleanup retries after the adapter restarts
 - **THEN** the private failed-cleanup record retains the task and file identities, retry cancels that task before deleting its files, and a task already cancelled successfully is not cancelled again
 
+#### Scenario: Processing completes during failed deletion
+
+- **WHEN** deletion overlaps processing and the job completes or fails while remote cleanup later fails or times out
+- **THEN** the retained processing record is durably cancelled before remote cleanup, its original recording end time survives, another meeting can start, and deletion can retry without a stale job restoring processing or completion
+
 ### Requirement: Continuous encoded capture and deterministic mixing
 
 Evidence: AI-285, AI-286, AI-288, AI-294. Main and side records SHALL isolate mic_N.webm and system_N.webm under their own UUID directories, use audio/webm;codecs=opus and ten-second slices, and rotate hourly by starting replacement recorders before stopping old ones. Finalization SHALL concatenate numeric segment order, mix usable mic/system tracks at 48 kHz with longest duration and mono MP3 output, and use mic-only output for empty or unusable optional system tracks. Upload SHALL submit the mono artifact, reject failed conversion and clean private temporary files.

@@ -824,11 +824,14 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									yield* repo.update((current) =>
 										current.map((r) =>
 											records.some((item) => item.id === r.id) &&
-											r.state === "recording"
+											(r.state === "recording" || r.state === "processing")
 												? {
 														...r,
 														state: "cancelled",
-														endedAt: Option.some(now),
+														endedAt:
+															r.state === "recording"
+																? Option.some(now)
+																: r.endedAt,
 													}
 												: r,
 										),

@@ -226,5 +226,5 @@ with the PR link; parent owns hosted review/check reconciliation and merge.
 Execution: open-quake-lih.16.15.1, left open for parent acceptance and merge.
 
 - [x] 14.1 Fix Devin 4381700721 by retaining failed cancellation and file cleanup identities across retries, with fake consumer regressions.
-- [ ] 14.2 Fix CodeRabbit 4381802226 by persisting processing cancellation before remote deletion, preserving recording end times and covering late completion with cleanup failure or timeout.
+- [x] 14.2 Fix CodeRabbit 4381802226 by persisting processing cancellation before remote deletion, preserving recording end times and covering late completion with cleanup failure or timeout.
 - [ ] 14.3 Run the requested full gates and hidden meetings smoke, reply after each fix, and reconcile unanswered GraphQL threads without resolving or merging.
