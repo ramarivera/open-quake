@@ -575,10 +575,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									return record;
 								}),
 							);
-							if (
+							const transcribe =
 								record.transcription !== "complete" ||
-								!record.transcript.length
-							) {
+								!record.transcript.length;
+							if (transcribe) {
 								const transcript = yield* provider.transcribe(
 									record.config,
 									id,
@@ -590,10 +590,19 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									...r,
 									transcript,
 									transcription: "complete",
+									// Prior minutes belong to the replaced transcript.
+									summary: "pending",
+									minutes: "",
+									appliedTemplate: Option.none(),
+									provenance: Option.none(),
 								}));
 								yield* stage(id, 4, 2);
 							}
-							if (record.summary !== "complete" || !record.minutes)
+							if (
+								transcribe ||
+								record.summary !== "complete" ||
+								!record.minutes
+							)
 								yield* generate(id, record.template, false);
 							else {
 								yield* patchWork(id, (r) => ({

@@ -74,6 +74,7 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 		requests: MeetingAsrRequest[] = [],
 		prompts: Parameters<CompatibleAdapter["open"]>[0][] = [];
 	let stored: typeof MeetingStore.Encoded = { version: 1, records: [] };
+	let asrSegments = segments;
 	let failSummary = false,
 		pending = 0,
 		failSave = false,
@@ -177,7 +178,7 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 				calls.push("poll");
 				return pending-- > 0
 					? { status: "pending" }
-					: { status: "complete", segments };
+					: { status: "complete", segments: asrSegments };
 			}),
 		cancel: (id) =>
 			Effect.sync(() => {
@@ -247,6 +248,9 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 		capture,
 		adapter,
 		translationRequests,
+		segments: (next: typeof segments) => {
+			asrSegments = next;
+		},
 		translations: (updates: typeof translationUpdates) => {
 			translationUpdates = updates;
 		},
@@ -1462,7 +1466,7 @@ it.effect(
 
 for (const task of ["audio", "transcription"] as const) {
 	it.effect(
-		`AI-311 SETTINGS-106 retries ${task} while preserving a completed summary`,
+		`AI-311 SETTINGS-106 retries ${task} and preserves minutes only when reusing transcription`,
 		() => {
 			const f = setup();
 			return Effect.gen(function* () {
@@ -1482,12 +1486,70 @@ for (const task of ["audio", "transcription"] as const) {
 				const retried = (yield* MeetingService.snapshot()).records[0];
 				expect(retried?.state).toBe("completed");
 				expect(retried?.[task]).toBe("complete");
-				expect(retried?.minutes).toBe(original?.minutes);
+				expect(retried?.minutes).toBe(
+					task === "transcription" ? "## Saved summary 2" : original?.minutes,
+				);
 				expect(retried?.appliedTemplate).toEqual(original?.appliedTemplate);
-				expect(f.prompts).toHaveLength(summaries);
+				expect(f.prompts).toHaveLength(
+					summaries + (task === "transcription" ? 1 : 0),
+				);
 				expect(f.requests).toHaveLength(
 					transcriptions + (task === "transcription" ? 1 : 0),
 				);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+
+for (const failRegeneration of [false, true]) {
+	it.effect(
+		`regenerates minutes for replaced transcription and invalidates stale minutes on failure=${failRegeneration}`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* MeetingService.process(id);
+				yield* MeetingRepository.update((records) =>
+					records.map((record) =>
+						record.id === id
+							? { ...record, state: "failed", transcription: "failed" }
+							: record,
+					),
+				);
+				const replacement = [
+					{
+						...segments[0],
+						id: "new",
+						speaker: "2",
+						startMs: 0,
+						endMs: 1000,
+						text: "Blair moved delivery to Monday.",
+					},
+				];
+				f.segments(replacement);
+				f.failSummary(failRegeneration);
+				const result = yield* Effect.either(MeetingService.process(id));
+				expect(Either.isLeft(result)).toBe(failRegeneration);
+				const retried = (yield* MeetingService.snapshot()).records[0];
+				expect(retried?.transcript).toEqual(replacement);
+				expect(retried?.transcription).toBe("complete");
+				expect(f.prompts).toHaveLength(2);
+				expect(JSON.stringify(f.prompts[1])).toContain(replacement[0]?.text);
+				expect(JSON.stringify(f.prompts[1])).not.toContain(segments[0]?.text);
+				expect(retried?.summary).toBe(failRegeneration ? "failed" : "complete");
+				expect(retried?.minutes).toBe(
+					failRegeneration ? "" : "## Saved summary 2",
+				);
+				if (failRegeneration) {
+					expect(retried?.appliedTemplate).toEqual(Option.none());
+					expect(retried?.provenance).toEqual(Option.none());
+					f.failSummary(false);
+					yield* MeetingService.process(id);
+					expect(f.requests).toHaveLength(2);
+					expect((yield* MeetingService.snapshot()).records[0]?.minutes).toBe(
+						"## Saved summary 3",
+					);
+				}
 			}).pipe(Effect.provide(f.layer));
 		},
 	);

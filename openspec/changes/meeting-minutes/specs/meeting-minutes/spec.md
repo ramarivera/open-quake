@@ -419,12 +419,17 @@ Evidence: AI-310, AI-317. Main and side tags SHALL remain explicit. A present le
 
 ### Requirement: Independent task actions and regeneration feedback
 
-Evidence: AI-311, AI-312, SETTINGS-106. Audio, transcript and summary tasks SHALL show Complete, Processing, Needs attention or Pending independently. Completed actions SHALL reveal managed audio only after checking a real regular file under the managed UUID directory, or switch to the corresponding document tab. Missing audio SHALL report Audio file not found. Retry SHALL restart only unfinished processing, retain completed artifacts, and show pending/failure feedback. Regeneration SHALL show Regenerating with the selected template until the asynchronous job finishes, then Summary regenerated or Failed to regenerate summary. Stale pushes SHALL NOT clear pending work.
+Evidence: AI-311, AI-312, SETTINGS-106. Audio, transcript and summary tasks SHALL show Complete, Processing, Needs attention or Pending independently. Completed actions SHALL reveal managed audio only after checking a real regular file under the managed UUID directory, or switch to the corresponding document tab. Missing audio SHALL report Audio file not found. Retry SHALL restart only unfinished processing, retain completed artifacts that still match their inputs, and show pending/failure feedback. Replacing a transcript SHALL atomically invalidate prior minutes, applied template and provenance, then regenerate minutes from the replacement. Regeneration SHALL show Regenerating with the selected template until the asynchronous job finishes, then Summary regenerated or Failed to regenerate summary. Stale pushes SHALL NOT clear pending work.
 
 #### Scenario: Summary retry fails after completed audio and transcript
 
 - **WHEN** the user retries only failed summary generation
 - **THEN** completed audio/transcript remain readable, no microphone or transcription restarts, and a failed summary retains the prior saved summary and applied template
+
+#### Scenario: Transcription retry replaces the source of completed minutes
+
+- **WHEN** failed transcription is retried on a meeting with completed minutes
+- **THEN** the replacement transcript invalidates the old minutes and triggers generation from the new text; a generation failure leaves a failed summary that can retry without repeating transcription
 
 #### Scenario: Missing managed audio
 
