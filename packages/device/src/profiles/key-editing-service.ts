@@ -11,6 +11,11 @@ import {
 	titleWeight,
 } from "./key-editing-invariants.js";
 import {
+	editKeyLayout,
+	type KeyGeometry,
+	type KeyLayoutResult,
+} from "./key-geometry.js";
+import {
 	createEmptyProfileKey,
 	Profile,
 	ProfileKey,
@@ -55,7 +60,10 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 			const preview = Effect.fn("KeyEditing.preview")(function* (
 				target: KeyTarget,
 				input: unknown,
-			): Effect.fn.Return<void, ProfileRepositoryError> {
+				geometry: KeyGeometry = {},
+			): Effect.fn.Return<KeyLayoutResult, ProfileRepositoryError> {
+				// A rejected edit must never leave an earlier draft available to Save.
+				yield* Ref.set(pending, Option.none());
 				const profile = yield* locate(target);
 				const decoded = Schema.decodeUnknownEither(ProfileKey)(input);
 				if (decoded._tag === "Left" || decoded.right.keyCode !== target.keyCode)
@@ -108,14 +116,33 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 						);
 				}
 
+				const result = editKeyLayout(
+					profile.pages.find((p) => p.id === target.pageId)?.keys ?? [],
+					key,
+					geometry,
+				);
+				if (result._tag !== "ready") {
+					yield* Ref.set(pending, Option.none());
+					return result;
+				}
+				const next = {
+					...profile,
+					pages: EffectArray.map(profile.pages, (page) =>
+						page.id === target.pageId ? { ...page, keys: result.keys } : page,
+					),
+				};
 				const valid = Schema.decodeUnknownEither(Schema.typeSchema(Profile))(
-					replaceProfileKey(profile, target.pageId, key),
+					next,
 				);
 				if (valid._tag === "Left")
 					return yield* Effect.fail(
 						ProfileValidationFailed.fromCause(valid.left),
 					);
-				yield* Ref.set(pending, Option.some({ target, key }));
+				yield* Ref.set(
+					pending,
+					Option.some({ target, key, pageKeys: result.keys }),
+				);
+				return result;
 			});
 			const revert = Effect.fn("KeyEditing.revert")(
 				(token: string): Effect.Effect<void> =>
@@ -128,6 +155,7 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 			const commit = Effect.fn("KeyEditing.commit")(function* (
 				target: KeyTarget,
 				key: ProfileKey,
+				pageKeys?: readonly ProfileKey[],
 			): Effect.fn.Return<void, ProfileRepositoryError> {
 				yield* repository.transact((envelope) =>
 					Effect.gen(function* () {
@@ -168,7 +196,16 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 								);
 						}
 						const next = {
-							...replaceProfileKey(profile, target.pageId, key),
+							...(pageKeys
+								? {
+										...profile,
+										pages: EffectArray.map(profile.pages, (page) =>
+											page.id === target.pageId
+												? { ...page, keys: pageKeys }
+												: page,
+										),
+									}
+								: replaceProfileKey(profile, target.pageId, key)),
 							revision: profile.revision + 1,
 						};
 						return {
@@ -186,8 +223,8 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 				const draft = yield* Ref.get(pending);
 				if (Option.isNone(draft) || draft.value.target.token !== token)
 					return yield* Effect.fail(ProfileNotFound.fromCause(undefined));
-				const { target, key } = draft.value;
-				yield* commit(target, key);
+				const { target, key, pageKeys } = draft.value;
+				yield* commit(target, key, pageKeys);
 				yield* Ref.set(pending, Option.none());
 			});
 			const remove = Effect.fn("KeyEditing.remove")(function* (

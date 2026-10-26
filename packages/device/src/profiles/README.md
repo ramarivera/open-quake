@@ -94,16 +94,11 @@ compatibility records are excluded. Filtering never writes the projection to
 storage or changes a revision. Knob configuration remains opaque and must be
 validated by its owning domain before execution.
 
-This is the fail-closed boundary for tasks 1.1–1.5. Automatic conversion of
-unknown imports to flagged compatibility records, import diagnostics, and
-normalization of legacy sentinels remain task 2.4. Stored unknown keys cannot
-execute through the dispatch subscription while that task is pending. An
-unrelated save containing an unflagged unknown key still fails validation;
-task 2.4 will provide the import path that preserves it as explicitly inert.
+The Keys editor imports one canonical profile object or one legacy flat key array, including knob `0,1`. The user chooses a JSON file or pastes JSON, inspects the report, then explicitly imports a new local profile. Fresh profile/page IDs keep the source identifiers separate in compatibility data. The complete source JSON remains inert in `profile.compatibility.source` and each key's `compatibility.source`. Unknown functions and invalid registered actions receive `unsupported:true` and never enter dispatch. Invalid required fields block import. Missing optional fields and normalized null/empty-action sentinels produce field-path diagnostics. No DK-Suite storage or hardware is accessed.
 
-Window IPC, real action dispatch, import normalization, and knob validation
-remain their owning tasks. The desktop adapter imports this module directly
-to keep this lane inside its assigned paths without changing manifests.
+Inspection and dispatch share `profileKeyFunctionIssues` and the caller-provided function contracts, including `childrenName` and alternate-visual validation. The desktop supplies `managementProfileContracts` to both inspection and import so supported Home Assistant and agent keys remain dispatchable. Device-only callers default to the action contracts. A mismatch reports its field path as `invalid-action` and marks the retained key unsupported. Raw action validation also runs before schema normalization so unsupported action fields cannot disappear before inspection.
+
+The typed Keys boundary adds `preview.geometry` for move/swap and confirmed span replacement, `add-page`/`delete-page` with expected revision, and `inspect-import`/`import-profile`. Preview does not persist. Save commits the complete page once; failed or unconfirmed edits cannot save a stale preview. Both swap participants honor drag locks, covered keys honor delete/drag locks, forced spans cannot be resized, and the existing title/icon/delete locks remain enforced in main. Page creation selects the new page for the requesting device; deletion repairs all affected selections atomically while retaining the profile knob. Previous/next wrap and explicit go-to clamps, as specified in `key-library-parity`.
 
 Verification lives beside the implementation:
 
@@ -126,6 +121,6 @@ Verification lives beside the implementation:
 - The desktop adapter tests use real temporary directories and inject primary
   and backup write/rename failures, corruption, and permission failures.
 
-Only tasks 1.1–1.5 may be closed from this evidence. Editor/window delivery,
-page navigation commands, physical mapping, device delivery, and later profile
-features remain open.
+`profile-editor-scenarios.test.ts` covers geometry, all five locks, replacement confirmation, page repair, diagnosed imports and dispatch exclusion. Desktop `key-library/registration.test.ts` drives typed IPC authority and mutation paths. `key-library/smoke-geometry.ts` drives mounted editor controls through preload/main with hidden mock windows and records English/German screenshots. Run its existing smoke entry with `OPEN_QUAKE_KEY_REVIEW_PROBE=geometry-pages-import`.
+
+Physical mapping, device delivery, folders and broader profile/knob/display integration remain separate acceptance work.

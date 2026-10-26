@@ -30,7 +30,7 @@ export function KeyTitleSettings({
 		onChange(editKeyTitleStyle(keyValue, { ...title, ...patch }, alternate));
 	return (
 		<details className="key-title-settings">
-			<summary>{keyText("title", locale)} · Style</summary>
+			<summary>{keyText("editor.titleStyle", locale)}</summary>
 			<fieldset disabled={!keyEditable(keyValue, "title")}>
 				<Row label={keyText("showHeading", locale)} htmlFor="key-title-display">
 					<input
