@@ -26,6 +26,7 @@ import { VolumeCapsule } from "./overlays/knob/VolumeCapsule";
 import { previewVoiceContext } from "./overlays/voice/voice-context";
 import { StripPanel } from "./StripPanel";
 import { StripScreen } from "./StripScreen";
+import { AiCopilotTile } from "./tiles/aiCopilot/AiCopilotTile";
 import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
 import { SoundboardUnavailableTile } from "./tiles/soundboard/SoundboardUnavailableTile";
 import type { StripKeyEvent } from "./touch-controller";
@@ -594,6 +595,85 @@ describe("touch production components", () => {
 			);
 		});
 		expect(request).toHaveBeenCalledWith({ _tag: "FocusPanel" });
+	});
+	it("Copilot binds conditional copy buttons across appearance, repaint and recreation", async () => {
+		const { root, node } = host();
+		const base = fixtureProfile();
+		const tile = stripLayout(base, base.pages[0]).tiles[0];
+		if (!tile) throw new Error("Missing copilot tile");
+		const request = vi.fn(async () => ({ _tag: "ok" as const }));
+		const render = async (text: string) =>
+			act(async () =>
+				root.render(
+					<AiCopilotTile
+						tile={tile}
+						context={{
+							now: undefined,
+							hourFormat: "24h",
+							voice: {
+								...previewVoiceContext,
+								surface: "panel",
+								request,
+								view: {
+									...previewVoiceContext.view,
+									copilot: { ...previewVoiceContext.view.copilot, text },
+								},
+							},
+						}}
+					/>,
+				),
+			);
+		const start = (button: HTMLElement) =>
+			button.dispatchEvent(
+				new CustomEvent("quake-sub-touch-start", {
+					detail: { phase: "start" },
+				}),
+			);
+		const end = (button: HTMLElement) =>
+			button.dispatchEvent(
+				new CustomEvent("quake-sub-touch-end", {
+					detail: { confirmedTap: true },
+				}),
+			);
+		await render("");
+		expect(node.querySelector(".copilot-copy")).toBeNull();
+		await render("first transcript");
+		const button = node.querySelector<HTMLButtonElement>(".copilot-copy");
+		if (!button) throw new Error("Missing copy button");
+		await act(async () => {
+			start(button);
+			end(button);
+		});
+		expect(request).toHaveBeenLastCalledWith({
+			_tag: "CopyText",
+			text: "first transcript",
+		});
+		start(button);
+		await render("updated transcript");
+		await act(async () => {
+			end(button);
+		});
+		expect(request).toHaveBeenLastCalledWith({
+			_tag: "CopyText",
+			text: "updated transcript",
+		});
+		await render("");
+		start(button);
+		end(button);
+		expect(request).toHaveBeenCalledTimes(2);
+		await render("second transcript");
+		const next = node.querySelector<HTMLButtonElement>(".copilot-copy");
+		if (!next) throw new Error("Missing recreated button");
+		await act(async () => {
+			start(next);
+			end(next);
+			next.click();
+		});
+		expect(request).toHaveBeenCalledTimes(3);
+		expect(request).toHaveBeenLastCalledWith({
+			_tag: "CopyText",
+			text: "second transcript",
+		});
 	});
 	it("SCREEN-010 cancels held keys after same-page content replacement but preserves runtime repaint ownership", async () => {
 		const { node, root } = host();

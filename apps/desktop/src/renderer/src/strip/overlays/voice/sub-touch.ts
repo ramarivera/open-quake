@@ -54,15 +54,41 @@ export function useSubTouchTap(
 ): void {
 	const latest = useRef(onTap);
 	latest.current = onTap;
+	const binding = useRef<
+		| {
+				element: HTMLElement;
+				scale: number;
+				dispose: () => void;
+		  }
+		| undefined
+	>(undefined);
 	useEffect(() => {
 		const element = ref.current;
-		if (!element) return;
-		return mountTouchTarget(element, {
-			scale,
-			tap: () => latest.current(),
-			disabled: () => element.matches(":disabled"),
-		});
-	}, [ref, scale]);
+		if (
+			binding.current?.element === element &&
+			binding.current?.scale === scale
+		)
+			return;
+		binding.current?.dispose();
+		binding.current = element
+			? {
+					element,
+					scale,
+					dispose: mountTouchTarget(element, {
+						scale,
+						tap: () => latest.current(),
+						disabled: () => element.matches(":disabled"),
+					}),
+				}
+			: undefined;
+	});
+	useEffect(
+		() => () => {
+			binding.current?.dispose();
+			binding.current = undefined;
+		},
+		[],
+	);
 }
 
 /**
