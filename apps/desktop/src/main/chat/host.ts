@@ -235,7 +235,6 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			Layer.provideMerge(dependencies),
 		),
 		(runtime) => {
-			const completedActions = new Set<string>();
 			const selectionLock = Effect.runSync(Effect.makeSemaphore(1));
 			const draftLifetime = new AbortController();
 			const drafts = new Set<Promise<string>>();
@@ -339,30 +338,36 @@ export function prepareDirectChat(options: DirectChatOptions) {
 										}
 									: baseProfile;
 							yield* AiRepository.put(profile);
-							const submitChat = () =>
-								ChatService.submit(OWNER, {
-									...input,
-									...(settings
-										? {
-												contextTimeoutSeconds: settings.contextTimeoutSeconds,
-												historyCount: settings.chatHistoryCount,
-												systemPrompt:
-													settings.roleId === -1
-														? settings.customPrompt
-														: (ROLE_PRESETS.find(
-																(r) => r.id === settings.roleId,
-															)?.prompt ?? ""),
-											}
-										: {}),
-									profileId: profile.id,
-									modelId: profile.modelId,
-									authGeneration: profile.authGeneration,
-									mode: "normal",
-									contextWindowTokens: 8192,
-									// The model setting is an upper bound. Until context metadata is
-									// available, reserve at most 1024 inside the conservative 8192 window.
-									outputReserveTokens: Math.min(selected.maxTokens, 1024),
-								});
+							const submitChat = (
+								beforeInference: Effect.Effect<void, AiError> = Effect.void,
+							) =>
+								ChatService.submit(
+									OWNER,
+									{
+										...input,
+										...(settings
+											? {
+													contextTimeoutSeconds: settings.contextTimeoutSeconds,
+													historyCount: settings.chatHistoryCount,
+													systemPrompt:
+														settings.roleId === -1
+															? settings.customPrompt
+															: (ROLE_PRESETS.find(
+																	(r) => r.id === settings.roleId,
+																)?.prompt ?? ""),
+												}
+											: {}),
+										profileId: profile.id,
+										modelId: profile.modelId,
+										authGeneration: profile.authGeneration,
+										mode: "normal",
+										contextWindowTokens: 8192,
+										// The model setting is an upper bound. Until context metadata is
+										// available, reserve at most 1024 inside the conservative 8192 window.
+										outputReserveTokens: Math.min(selected.maxTokens, 1024),
+									},
+									beforeInference,
+								);
 							if (!settings?.useAgent) return yield* submitChat();
 							// Classification may select chat. Unsupported host actions fail explicitly;
 							// classification cannot grant device or Home Assistant permissions.
@@ -373,67 +378,57 @@ export function prepareDirectChat(options: DirectChatOptions) {
 							yield* AiRepository.put(routedProfile);
 							const repository = yield* AiRepository;
 							const providers = yield* AiProviderService;
-							yield* AiVoiceService.submit({
-								requestId: input.turnId,
-								profileId: profile.id,
-								text: input.text,
-								mode: "auto",
-								homeAssistantEnabled:
-									settings.homeAssistantControl &&
-									Boolean(options.homeAssistant),
-							}).pipe(
-								Effect.provide(
-									AiVoiceService.DefaultWithoutDependencies.pipe(
-										Layer.provide(
-											Layer.mergeAll(
-												Layer.succeed(
-													AiProviderService,
-													yield* AiProviderService,
+							return yield* submitChat(
+								AiVoiceService.submit({
+									requestId: input.turnId,
+									profileId: profile.id,
+									text: input.text,
+									mode: "auto",
+									homeAssistantEnabled:
+										settings.homeAssistantControl &&
+										Boolean(options.homeAssistant),
+								})
+									.pipe(
+										Effect.provide(
+											AiVoiceService.DefaultWithoutDependencies.pipe(
+												Layer.provide(
+													Layer.mergeAll(
+														Layer.succeed(
+															AiProviderService,
+															yield* AiProviderService,
+														),
+														Layer.succeed(AiRepository, repository),
+													),
 												),
-												Layer.succeed(AiRepository, repository),
+												Layer.provide(
+													Layer.succeed(AiVoiceTargets, {
+														dispatch: Effect.fn("DesktopAssistant.dispatch")(
+															function* (dispatch) {
+																if (dispatch.route === "normal")
+																	return { operationId: input.turnId };
+																if (dispatch.route !== "operateEquipment")
+																	return yield* new AiUnavailable();
+																yield* executeAssistantHa(
+																	options.homeAssistant,
+																	settings,
+																	profile.id,
+																	input.text,
+																).pipe(
+																	Effect.provideService(
+																		AiProviderService,
+																		providers,
+																	),
+																);
+																return { operationId: input.turnId };
+															},
+														),
+													}),
+												),
 											),
 										),
-										Layer.provide(
-											Layer.succeed(AiVoiceTargets, {
-												dispatch: Effect.fn("DesktopAssistant.dispatch")(
-													function* (dispatch) {
-														if (dispatch.route === "normal")
-															return { operationId: input.turnId };
-														if (dispatch.route !== "operateEquipment")
-															return yield* new AiUnavailable();
-														const identity = JSON.stringify([
-															input.sessionId,
-															input.turnId,
-														]);
-														if (!completedActions.has(identity)) {
-															yield* executeAssistantHa(
-																options.homeAssistant,
-																settings,
-																profile.id,
-																input.text,
-															).pipe(
-																Effect.provideService(
-																	AiProviderService,
-																	providers,
-																),
-															);
-															completedActions.add(identity);
-															if (completedActions.size > 128) {
-																const oldest = completedActions
-																	.values()
-																	.next().value;
-																if (oldest) completedActions.delete(oldest);
-															}
-														}
-														return { operationId: input.turnId };
-													},
-												),
-											}),
-										),
-									),
-								),
+									)
+									.pipe(Effect.asVoid),
 							);
-							return yield* submitChat();
 						}),
 					),
 			);

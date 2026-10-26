@@ -372,6 +372,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 				turn: ActiveTurn,
 				profile: ProviderProfile,
 				request: InferenceRequest,
+				beforeInference: Effect.Effect<void, AiError>,
 			): Effect.Effect<void> =>
 				Effect.uninterruptibleMask((restore) =>
 					Effect.gen(function* () {
@@ -399,6 +400,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 								sessionId: turn.selection.sessionId,
 								turnId: turn.selection.turnId,
 							});
+							yield* beforeInference;
 							const generation = yield* inference.open(profile, request);
 							turn.generation = Option.some(generation);
 							let completed = false;
@@ -476,6 +478,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 				(
 					owner: string,
 					unknownInput: unknown,
+					beforeInference: Effect.Effect<void, AiError> = Effect.void,
 				): Effect.Effect<ChatTurn, ChatError | AiError> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
@@ -686,7 +689,9 @@ export class ChatService extends Effect.Service<ChatService>()(
 							active.set(id, turn);
 							const subscription = yield* attach(turn);
 							yield* Effect.forkIn(
-								run(turn, profile, request).pipe(Effect.interruptible),
+								run(turn, profile, request, beforeInference).pipe(
+									Effect.interruptible,
+								),
 								scope,
 							);
 							return { ...subscription, selection };

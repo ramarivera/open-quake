@@ -1105,7 +1105,14 @@ it("AI-053/058 router switch classifies chat and blocks equipment without dispat
 				)
 				.pipe(Effect.either),
 		);
-		expect(blocked._tag).toBe("Left");
+		if (blocked._tag === "Left") throw blocked.left;
+		const chunks = await f.host.runtime.runPromise(
+			Stream.runCollect(blocked.right.events),
+		);
+		expect(Array.from(chunks).at(-1)).toMatchObject({
+			type: "end",
+			outcome: "failed",
+		});
 		expect(f.endpoint.calls).toHaveLength(3);
 	} finally {
 		await f.close();
@@ -1168,7 +1175,14 @@ it.each(["allowed", "denied", "revoked"] as const)(
 				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
 				expect(executed).toEqual(["light.allowed"]);
 			} else {
-				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") throw result.left;
+				const chunks = await f.host.runtime.runPromise(
+					Stream.runCollect(result.right.events),
+				);
+				expect(Array.from(chunks).at(-1)).toMatchObject({
+					type: "end",
+					outcome: "failed",
+				});
 				expect(executed).toEqual([]);
 			}
 			const prompt = f.endpoint.calls[1]?.body.messages[0]?.content ?? "";
@@ -1310,3 +1324,77 @@ it("MGMT-302 resets only the selected key through the production HTTP and direct
 		await f.close();
 	}
 });
+
+it.each(["busy", "duplicate"] as const)(
+	"rejected HA turn never executes equipment: %s",
+	async (reason) => {
+		const executed: string[] = [];
+		const f = await fixture({}, "generic", "fixture-model", {
+			snapshot: () =>
+				Effect.succeed({
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected",
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: [
+						{
+							entity_id: "light.allowed",
+							name: "Fake",
+							state: "off",
+							area: "",
+							attributes: {},
+						},
+					],
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist: ["light.allowed"],
+				}),
+			execute: (key) =>
+				Effect.sync(() => {
+					executed.push(key.entity_id);
+				}),
+		});
+		try {
+			const sid = sessionId();
+			const tid = turnId();
+			const first = await f.host.runtime.runPromise(
+				f.host.submit({
+					sessionId: sid,
+					turnId: tid,
+					text: reason === "busy" ? "block" : "hello",
+				}),
+			);
+			if (reason === "busy")
+				await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+			else await f.host.runtime.runPromise(Stream.runDrain(first.events));
+			const result = await f.host.runtime.runPromise(
+				f.host
+					.submit(
+						{
+							sessionId: sid,
+							turnId: reason === "busy" ? turnId() : tid,
+							text: "operate HA",
+						},
+						"main",
+						undefined,
+						{
+							...defaultAssistantSettings(),
+							homeAssistantControl: true,
+							entityIds: ["light.allowed"],
+						},
+					)
+					.pipe(Effect.either),
+			);
+			expect(result._tag).toBe("Left");
+			expect(executed).toEqual([]);
+			expect(f.endpoint.calls).toHaveLength(1);
+			if (reason === "busy")
+				await f.host.runtime.runPromise(f.host.cancel(sid, tid));
+		} finally {
+			await f.close();
+		}
+	},
+);

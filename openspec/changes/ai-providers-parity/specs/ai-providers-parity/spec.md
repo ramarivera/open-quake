@@ -235,3 +235,8 @@ Assistant settings SHALL link the existing Models and Speech settings consumers 
 #### Scenario: Configure a retained provider
 - **WHEN** a user follows assistant provider or speech configuration
 - **THEN** the existing protected settings editor is reachable and subsequent assistant turns use the saved model configuration without copying secrets into keys
+
+#### Scenario: Equipment dispatch requires accepted turn ownership
+- **WHEN** an Auto assistant request is busy, duplicates a saved turn ID or fails chat admission
+- **THEN** no classification or Home Assistant executor runs
+- **AND** accepted routing and equipment work run inside the turn worker, with terminal failure/cancellation recorded and no automatic action replay (AI-058)
