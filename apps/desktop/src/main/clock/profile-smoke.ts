@@ -238,6 +238,25 @@ async function smoke(): Promise<void> {
 			weatherCalls === 0,
 			"first-install cards perform no IP or forecast lookup",
 		);
+		await evaluate(management, "new Promise(r=>setTimeout(r,850))");
+		check(
+			!calls.some((call) => call.sender === management.webContents.id),
+			"Overview clock preview makes no clock/weather requests",
+		);
+		calls.length = 0;
+		await evaluate(
+			management,
+			"document.querySelector('[data-nav-page=profiles]').click()",
+		);
+		await wait(
+			management,
+			"!!document.querySelector('.profile-preview .oq-clock')",
+		);
+		await evaluate(management, "new Promise(r=>setTimeout(r,850))");
+		check(
+			!calls.some((call) => call.sender === management.webContents.id),
+			"profile previews make no clock/weather requests",
+		);
 		calls.length = 0;
 		await evaluate(
 			management,

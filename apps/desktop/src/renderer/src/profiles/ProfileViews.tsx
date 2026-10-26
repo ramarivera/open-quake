@@ -39,6 +39,7 @@ export function ProfilePreview({
 		>
 			<StripViewport>
 				<StripScreen
+					interactive={false}
 					titles="provided"
 					profiles={{
 						_tag: "ready",
