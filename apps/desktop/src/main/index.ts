@@ -1196,6 +1196,9 @@ if (!app.requestSingleInstanceLock()) {
 								const failures: unknown[] = [];
 								// Keep dependency order, but never skip the remaining cleanup after a failure.
 								for (const stop of [
+									// Bus teardown joins input work owned by the knob registration.
+									// Cancel its loads/dispatches before waiting for that queue.
+									() => knob.dispose(),
 									() => stopBus(),
 									() => weatherMedia.dispose(),
 									() => meetings.dispose(),
@@ -1205,7 +1208,6 @@ if (!app.requestSingleInstanceLock()) {
 										profiles.runtime.runPromise(
 											Fiber.interrupt(profileUpdates),
 										),
-									() => knob.dispose(),
 									() => agents.dispose(),
 									() => integrations.dispose(),
 									() => obs.dispose(),

@@ -596,6 +596,27 @@ describe("desktop window lifecycle", () => {
 		expect(management.focus).toHaveBeenCalledOnce();
 	});
 
+	it("cancels pending knob input before draining the bus on quit", async () => {
+		const knob = vi.mocked(registerKnob).mock.results.at(-1)?.value;
+		const bus = vi.mocked(startMockDeviceBus).mock.results.at(-1)?.value;
+		if (!knob || !bus) throw new Error("Missing mock input owners");
+		let release = () => {};
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		vi.mocked(knob.onDevice).mockImplementationOnce(() => pending);
+		vi.mocked(knob.dispose).mockImplementationOnce(async () => release());
+		try {
+			bus.emitStatus({ source: "mock", kind: "status", state: "connected" });
+			await vi.waitFor(() => expect(knob.onDevice).toHaveReturnedWith(pending));
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			expect(knob.dispose).toHaveBeenCalledOnce();
+		} finally {
+			release();
+		}
+	});
+
 	it("replays connected mock status when either preload requests it", () => {
 		const handler = electron.ipcMain.on.mock.calls.find(
 			([channel]) => channel === "quake:status",
