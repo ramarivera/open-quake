@@ -232,7 +232,11 @@ function ManagementSurface({
 					<HomeAssistantPage />
 				) : page === "settings" ? (
 					<SettingsPage controller={maintenance}>
-						<GeneralSettings setup={setup} onOpenSetup={() => open("setup")} />
+						<GeneralSettings
+							setup={setup}
+							onOpenSetup={() => open("setup")}
+							onOpenPage={open}
+						/>
 					</SettingsPage>
 				) : page === "setup" ? (
 					<SetupWizard
