@@ -102,7 +102,7 @@ Each canvas SHALL register its disk list as smDiskList with move support through
 
 ### Requirement: Profile-owned monitor presentation
 
-Visual settings SHALL belong to the selected profile key. systemMonitorPanel SHALL read monitorStyle and temperatureUnit from that key, backfilling glass, style background and Celsius. cpuInfo and gpuInfo SHALL backfill Celsius and offer Fahrenheit. Per-style managed image/video slots SHALL remain isolated by key. Global settings SHALL own collector enablement, metric selection and rate only. Management key edits SHALL preview a draft without collecting; existing profile Save and Revert SHALL commit or discard that draft. Live panels SHALL use committed profile settings. Evidence: MGMT-265, MGMT-283, SCREEN-121, WIDGETS-064, WIDGETS-081.
+Visual settings SHALL belong to the selected profile key. systemMonitorPanel SHALL read monitorStyle and temperatureUnit from that key, backfilling glass, style background and Celsius. cpuInfo and gpuInfo SHALL backfill Celsius and offer Fahrenheit. Per-style managed image/video slots SHALL remain isolated by key. On upgrade, a valid saved global presentation SHALL seed existing legacy monitor keys whose per-key unit is absent. Catalog-default presentation inherits the saved global style, background and media; explicit per-key presentation wins. Migration SHALL persist owned fields and a compatibility marker once, preserving active selections and global sampling. Global settings SHALL own collector enablement, metric selection and rate only after this migration. Management key edits SHALL preview a draft without collecting; existing profile Save and Revert SHALL commit or discard that draft. Live panels SHALL use committed profile settings. Evidence: MGMT-265, MGMT-283, SCREEN-121, WIDGETS-064, WIDGETS-081.
 
 #### Scenario: Two keys and restart
 
@@ -118,6 +118,18 @@ Visual settings SHALL belong to the selected profile key. systemMonitorPanel SHA
 
 - **WHEN** a custom video fails, does not start within five visible seconds, changes source or its document hides
 - **THEN** it falls back on failure, never reuses an older source, pauses while hidden and releases its media element on unmount
+
+
+#### Scenario: Panel media reads enforce committed selected-key ownership
+
+- **WHEN** a live panel requests media for a key code and opaque slot
+- **THEN** main resolves the key from the committed active profile and page, verifies the active custom style's exact slot, and refuses cross-profile, other-key, missing-key and forged-slot requests before reading bytes
+- **AND** panel settings reads and broadcasts contain metadata only; an allowed same-key request returns its media bytes
+
+#### Scenario: Upgrade keeps saved global presentation
+
+- **WHEN** an existing legacy panel or untouched SysView grid loads with saved cyber, Fahrenheit and custom media settings
+- **THEN** the committed panel keeps that presentation after migration and restart; explicit per-key choices, active selections and sampling settings remain intact, and another restart performs no write
 
 ### Requirement: Conservative installed SysView migration
 
@@ -150,9 +162,3 @@ The gameModeMonitorConfig compatibility field SHALL round-trip in monitor storag
 
 - **WHEN** an imported record contains an active gameModeMonitorConfig and is saved and restarted
 - **THEN** the legacy value survives as inert data while only the explicit current override controls monitoring
-
-#### Scenario: Panel media reads enforce committed selected-key ownership
-
-- **WHEN** a live panel requests media for a key code and opaque slot
-- **THEN** main resolves the key from the committed active profile and page, verifies the active custom style's exact slot, and refuses cross-profile, other-key, missing-key and forged-slot requests before reading bytes
-- **AND** panel settings reads and broadcasts contain metadata only; an allowed same-key request returns its media bytes

@@ -7,7 +7,8 @@ design stage scales to that slot, matching the recovered Vue stageStyle.
 Management's Keys page edits each panel's style, background, per-style managed
 media and temperature unit through profile draft, Save and Cancel. Individual CPU
 and GPU keys have the same unit control. Two profile keys retain independent
-presentation across restart. The Screen page owns global sampling controls and
+presentation across restart. Existing legacy monitor keys inherit saved global
+presentation once before per-key ownership begins; explicit owned settings win. The Screen page owns global sampling controls and
 shows a labelled sample preview alongside saved live status.
 
 `packages/edge/src/monitor` owns metric schemas, module IDs and scoped workers.

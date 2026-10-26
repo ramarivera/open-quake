@@ -48,3 +48,5 @@ fixture-tested only. All three burn-down beads stay open for lead merge.
 ## 8. PR #100 review round
 
 - [x] 8.1 Enforce committed selected-key media ownership in main with failing-before IPC regression coverage. Bead open-quake-lih.8.5; review 4378998297.
+
+- [x] 8.2 Preserve upgraded global presentation with idempotent per-key migration and restart regressions. Bead open-quake-lih.8.5; review 4378997492.

@@ -56,6 +56,7 @@ import { prepareDesktopModule } from "../diagnostics/module";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
+import { monitorStorage } from "../monitor/monitor-store";
 import { monitorProfileStorage } from "../monitor/profile-migration";
 import { encodeRendererProfile } from "./clock-profile-projection";
 import { makeScopedForegroundProbe } from "./foreground-app";
@@ -113,7 +114,10 @@ export function prepareProfiles(
 				}),
 			),
 	);
-	const storage = monitorProfileStorage(data);
+	const storage = monitorProfileStorage(
+		data,
+		monitorStorage(app.getPath("userData")).load,
+	);
 	const broadcast = (channel: string, value: unknown): void => {
 		for (const win of BrowserWindow.getAllWindows())
 			if (!win.isDestroyed() && !win.webContents.isDestroyed())

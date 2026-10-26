@@ -1,9 +1,8 @@
-import { Schema } from "effect";
 import type {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
-import { MonitorSettings, StyleId } from "../../shared/monitor-contracts";
+import { monitorKeySettings } from "../../shared/monitor-key-settings";
 import { selectStripPage } from "../../shared/strip-selection";
 export function activeMonitorKey(
 	envelope: ProfileEnvelope,
@@ -21,19 +20,8 @@ export function activeMonitorKey(
 
 export function monitorPanelSlot(key: ProfileKey | undefined) {
 	if (key?.config.type !== "systemMonitorPanel" || !key.config.display) return;
-	const action = key.config.actions.find(
-		(action) => action.type === "monitorStyle",
-	);
-	const parsed = Schema.decodeUnknownEither(
-		Schema.Struct({
-			styleId: StyleId,
-			background: Schema.Struct({
-				mode: Schema.Literal("style", "none", "custom"),
-				themes: MonitorSettings.fields.media,
-			}),
-		}),
-	)(action?.value);
-	if (parsed._tag === "Left" || parsed.right.background.mode !== "custom")
-		return;
-	return parsed.right.background.themes[parsed.right.styleId];
+	const settings = monitorKeySettings(key);
+	return settings.background === "custom"
+		? settings.media[settings.styleId]
+		: undefined;
 }
