@@ -1,5 +1,6 @@
 import { Clock, Effect, type Scope } from "effect";
 import type { Display } from "electron";
+import { resolveAppLocale } from "../../../../../packages/edge/src/settings/settings-invariants";
 import type { NativeDisplayEvidence } from "../../shared/lifecycle-contracts";
 import strings from "../../shared/lifecycle-strings.json";
 import { DisplayOperationFailed, farRightOrigins } from "./native-display";
@@ -28,6 +29,7 @@ export interface PromptEdges {
 		boolean,
 		DisplayOperationFailed
 	>;
+	readonly locale?: () => string;
 	readonly platform: string;
 	readonly mock: boolean;
 	readonly displays: () => readonly Display[];
@@ -74,11 +76,10 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 			seedLoaded = true;
 		}
 	});
-	const text = strings.displayMode;
-	const mirrorDetail = text.detail.replace(
-		"Declining will disconnect the device.",
-		"Later keeps the device connected and reminds you in 10 minutes.",
-	);
+	const copy = () =>
+		strings.locales[resolveAppLocale(edges.locale?.() ?? "en")].displayMode;
+	const mirrorDetail = (text: ReturnType<typeof copy>) =>
+		`${text.message}. ${text.laterDetail}`;
 	const repair = Effect.fn("DisplayPrompts.repair")(function* (
 		display: Display | undefined,
 		mirrored = false,
@@ -87,14 +88,13 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 		if (!display || edges.mock || edges.platform !== "darwin" || busy)
 			return false;
 		busy = true;
+		const text = copy();
 		return yield* Effect.gen(function* () {
 			yield* loadSeed;
 			const response = yield* edges.prompt({
 				title: text.title,
-				message: mirrored ? text.message : "Move Quake to the far right",
-				detail:
-					(mirrored ? mirrorDetail : "") +
-					"\n\nopen-quake will use Quake as a separate display and place it to the far right of your other screens. If Quake is your main display, another screen will become the main display. Your other screens will keep their positions relative to each other. You can change this arrangement later in System Settings > Displays.",
+				message: mirrored ? text.message : text.farRight,
+				detail: `${mirrored ? mirrorDetail(text) : ""}\n\n${text.placementDetail}`,
 				buttons: [
 					text.switch,
 					text.orientationLater,
@@ -143,6 +143,7 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 	): Effect.fn.Return<boolean, DisplayOperationFailed> {
 		if (locked || wizardOpen || edges.mock || busy) return false;
 		const now = yield* Clock.currentTimeMillis;
+		const text = copy();
 		if (!display) {
 			if (
 				edges.platform !== "darwin" ||
@@ -158,7 +159,7 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 				.prompt({
 					title: text.title,
 					message: text.message,
-					detail: mirrorDetail,
+					detail: mirrorDetail(text),
 					buttons: [
 						text.openDisplaySettings,
 						text.orientationLater,
@@ -281,12 +282,12 @@ export const makeDisplayPrompts = Effect.fn("DisplayPrompts.make")(function* (
 			)
 				return false;
 			busy = true;
+			const text = copy();
 			return yield* Effect.gen(function* () {
 				const response = yield* edges.prompt({
 					title: text.title,
 					message: text.message,
-					detail:
-						"open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected.",
+					detail: text.windowsExtendDetail,
 					buttons: [text.switch, text.orientationLater],
 					defaultId: 1,
 					cancelId: 1,

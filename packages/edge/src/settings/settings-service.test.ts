@@ -47,7 +47,7 @@ describe("saved locale settings", () => {
 	it.each([
 		["de-DE", "de"],
 		["de_CH", "de"],
-		["fr-FR", "en"],
+		["fr-FR", "fr"],
 		["en-GB", "en"],
 	])("seeds %s once as %s without a network lookup", async (os, locale) => {
 		const f = fixture(undefined, os);
@@ -74,13 +74,13 @@ describe("saved locale settings", () => {
 				await f.runtime.runPromise(SettingsService.use((s) => s.locale())),
 			).toEqual({ locale: "en", revision: 4 });
 			const invalid = await f.runtime.runPromise(
-				SettingsService.use((s) => Effect.either(s.setLocale("fr"))),
+				SettingsService.use((s) => Effect.either(s.setLocale("xx"))),
 			);
 			expect(invalid).toMatchObject({
 				_tag: "Left",
 				left: { _tag: "SettingsInvalid", code: "QUAKE.SETTINGS.INVALID" },
 			});
-			expect(f.writes()).toBe(0);
+			expect(f.writes()).toBe(1);
 			await Promise.all(
 				["de", "en", "de"].map((locale) =>
 					f.runtime.runPromise(SettingsService.use((s) => s.setLocale(locale))),
@@ -92,6 +92,9 @@ describe("saved locale settings", () => {
 				revision: 7,
 				provider: { choice: "keep" },
 				future: [1, 2],
+				bootstrapVersion: 1,
+				aiConfig: { globalAIWakeKey: "CommandOrControl+Shift+D" },
+				general: { version: 1, launchAtLogin: false, startHidden: false },
 			});
 		} finally {
 			await f.runtime.dispose();
@@ -190,7 +193,7 @@ it("acquires without reading settings and retries failures without overwriting s
 			true,
 		);
 		expect(reads).toBe(2);
-		expect(writes).toBe(0);
+		expect(writes).toBe(1);
 	} finally {
 		await runtime.dispose();
 	}

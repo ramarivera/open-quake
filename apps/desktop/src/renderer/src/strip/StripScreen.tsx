@@ -1,9 +1,9 @@
 import { Option } from "effect";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { KeyRuntimeState } from "../../../shared/key-library";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
-import { storedKeyLocale } from "../keys/key-locale";
+import { useAppLocale } from "../i18n";
 import { useKeyRuntime } from "../keys/useKeyRuntime";
 import { WallpaperCanvas } from "../wallpaper/WallpaperCanvas";
 import "./css-properties";
@@ -241,9 +241,7 @@ export function StripScreen({
 	}, [pressedKeyCode]);
 	const serial = previewSerial ?? wallpaper?.saved.serial;
 	const screen = useRef<HTMLDivElement>(null);
-	const [locale, setLocale] = useState(() =>
-		titles === "key-locale" ? storedKeyLocale() : "en",
-	);
+	const { locale } = useAppLocale();
 	useLayoutEffect(() => {
 		const element = screen.current;
 		if (interactive || !element) return;
@@ -292,17 +290,7 @@ export function StripScreen({
 				element.removeEventListener(event, stop, true);
 		};
 	}, [interactive]);
-	useEffect(() => {
-		if (titles === "provided") return;
-		const update = (): void => setLocale(storedKeyLocale());
-		update();
-		window.addEventListener("storage", update);
-		window.addEventListener("key-locale", update);
-		return () => {
-			window.removeEventListener("storage", update);
-			window.removeEventListener("key-locale", update);
-		};
-	}, [titles]);
+
 	const layout = useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);

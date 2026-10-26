@@ -5,7 +5,11 @@ import { Layer } from "effect";
 import type { BrowserWindow, IpcMainInvokeEvent } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsService } from "../../../../../packages/edge/src/settings/settings-service";
-import { LOCALE_CHANGED, LOCALE_REQUEST } from "../../shared/locale";
+import {
+	APP_LANGUAGES,
+	LOCALE_CHANGED,
+	LOCALE_REQUEST,
+} from "../../shared/locale";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { createAppLocaleBridge } from "./preload";
@@ -98,94 +102,116 @@ describe("production locale IPC registration and durable storage", () => {
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
-	it("authenticates frames, broadcasts only to trusted windows, and keeps language across restart with changed OS seed", async () => {
-		const directory = await mkdtemp(join(tmpdir(), "oq-locale-"));
-		const management = windowFixture(1, "management"),
-			panel = windowFixture(2, "panel"),
-			foreign = windowFixture(3, "foreign");
-		foreign.sender.mainFrame.url = "https://foreign.example/index.html";
-		const options = {
-			directory,
-			osLocale: "en-US",
-			renderer,
-			windows: () => [management.window, panel.window, foreign.window],
-		};
-		let registration = registerAppLocale(options);
-		const mainLocales: unknown[] = [];
-		const removeLocale = registration.onLocaleChanged((snapshot) => {
-			mainLocales.push(snapshot);
-		});
-		const handler = () => {
-			const fn = [...ipc.handle.mock.calls]
-				.reverse()
-				.find(([name]) => name === LOCALE_REQUEST)?.[1];
-			if (!fn) throw new Error("Missing locale IPC");
-			return fn;
-		};
-		const bridge = createAppLocaleBridge({
-			invoke: (_channel, input) => handler()(management.event(), input),
-			on: () => {},
-			removeListener: () => {},
-		});
-		try {
-			expect(await registration.locale()).toEqual({
-				locale: "en",
-				revision: 0,
-			});
-			expect(await bridge.read()).toEqual({ locale: "en", revision: 0 });
-			expect(await bridge.set("de")).toEqual({ locale: "de", revision: 1 });
-			expect(await registration.locale()).toEqual({
-				locale: "de",
-				revision: 1,
-			});
-			expect(mainLocales).toEqual([{ locale: "de", revision: 1 }]);
-			removeLocale();
-			expect(management.sender.send).toHaveBeenLastCalledWith(LOCALE_CHANGED, {
-				locale: "de",
-				revision: 1,
-			});
-			expect(panel.sender.send).toHaveBeenLastCalledWith(LOCALE_CHANGED, {
-				locale: "de",
-				revision: 1,
-			});
-			expect(foreign.sender.send).not.toHaveBeenCalled();
-			const payload = {
-				_tag: "Request",
-				id: "7",
-				tag: "settings.setLocale",
-				payload: { locale: "en" },
+	it.each(APP_LANGUAGES)(
+		"SETTINGS-007/064: $value authenticates frames, broadcasts to both trusted windows and survives restart",
+		async ({ value: selectedLocale }) => {
+			const revision = selectedLocale === "en" ? 0 : 1;
+			const directory = await mkdtemp(join(tmpdir(), "oq-locale-"));
+			const management = windowFixture(1, "management"),
+				panel = windowFixture(2, "panel"),
+				foreign = windowFixture(3, "foreign");
+			foreign.sender.mainFrame.url = "https://foreign.example/index.html";
+			const options = {
+				directory,
+				osLocale: "en-US",
+				renderer,
+				windows: () => [management.window, panel.window, foreign.window],
 			};
-			await expect(
-				handler()(
-					{
-						...management.event(),
-						senderFrame: { url: management.sender.mainFrame.url },
-					} as IpcMainInvokeEvent,
-					payload,
-				),
-			).rejects.toThrow("QUAKE.SETTINGS.UNAUTHORIZED");
-			await expect(handler()(foreign.event(), payload)).rejects.toThrow(
-				"QUAKE.SETTINGS.UNAUTHORIZED",
-			);
-			expect(
-				JSON.parse(await readFile(join(directory, "settings-v1.json"), "utf8")),
-			).toEqual({ version: 1, locale: "de", revision: 1 });
-			expect(
-				(await stat(join(directory, "settings-v1.json"))).mode & 0o777,
-			).toBe(0o600);
-			await registration.dispose();
-			registration = registerAppLocale({ ...options, osLocale: "fr-FR" });
-			expect(await bridge.read()).toEqual({ locale: "de", revision: 1 });
-			expect(await registration.locale()).toEqual({
-				locale: "de",
-				revision: 1,
+			let registration = registerAppLocale(options);
+			const mainLocales: unknown[] = [];
+			const removeLocale = registration.onLocaleChanged((snapshot) => {
+				mainLocales.push(snapshot);
 			});
-		} finally {
-			await bridge.dispose();
-			await registration.dispose();
-			await rm(directory, { recursive: true, force: true });
-		}
-	});
+			const handler = () => {
+				const fn = [...ipc.handle.mock.calls]
+					.reverse()
+					.find(([name]) => name === LOCALE_REQUEST)?.[1];
+				if (!fn) throw new Error("Missing locale IPC");
+				return fn;
+			};
+			const bridge = createAppLocaleBridge({
+				invoke: (_channel, input) => handler()(management.event(), input),
+				on: () => {},
+				removeListener: () => {},
+			});
+			try {
+				expect(await registration.locale()).toEqual({
+					locale: "en",
+					revision: 0,
+				});
+				expect(await bridge.read()).toEqual({ locale: "en", revision: 0 });
+				expect(await bridge.set(selectedLocale)).toEqual({
+					locale: selectedLocale,
+					revision,
+				});
+				expect(await registration.locale()).toEqual({
+					locale: selectedLocale,
+					revision,
+				});
+				expect(mainLocales).toEqual([{ locale: selectedLocale, revision }]);
+				removeLocale();
+				expect(management.sender.send).toHaveBeenLastCalledWith(
+					LOCALE_CHANGED,
+					{
+						locale: selectedLocale,
+						revision,
+					},
+				);
+				expect(panel.sender.send).toHaveBeenLastCalledWith(LOCALE_CHANGED, {
+					locale: selectedLocale,
+					revision,
+				});
+				expect(foreign.sender.send).not.toHaveBeenCalled();
+				const payload = {
+					_tag: "Request",
+					id: "7",
+					tag: "settings.setLocale",
+					payload: { locale: "en" },
+				};
+				await expect(
+					handler()(
+						{
+							...management.event(),
+							senderFrame: { url: management.sender.mainFrame.url },
+						} as IpcMainInvokeEvent,
+						payload,
+					),
+				).rejects.toThrow("QUAKE.SETTINGS.UNAUTHORIZED");
+				await expect(handler()(foreign.event(), payload)).rejects.toThrow(
+					"QUAKE.SETTINGS.UNAUTHORIZED",
+				);
+				expect(
+					JSON.parse(
+						await readFile(join(directory, "settings-v1.json"), "utf8"),
+					),
+				).toEqual({
+					version: 1,
+					locale: selectedLocale,
+					revision,
+					bootstrapVersion: 1,
+					aiConfig: { globalAIWakeKey: "CommandOrControl+Shift+D" },
+					general: { version: 1, launchAtLogin: false, startHidden: false },
+				});
+				expect(
+					(await stat(join(directory, "settings-v1.json"))).mode & 0o777,
+				).toBe(0o600);
+				await registration.dispose();
+				registration = registerAppLocale({ ...options, osLocale: "fr-FR" });
+				expect(await bridge.read()).toEqual({
+					locale: selectedLocale,
+					revision,
+				});
+				expect(await registration.locale()).toEqual({
+					locale: selectedLocale,
+					revision,
+				});
+			} finally {
+				await bridge.dispose();
+				await registration.dispose();
+				await rm(directory, { recursive: true, force: true });
+			}
+		},
+	);
 	it("preserves corrupt settings and surfaces read failure rather than overwriting choices", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "oq-locale-corrupt-"));
 		const path = join(directory, "settings-v1.json"),
