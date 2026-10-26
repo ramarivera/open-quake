@@ -72,3 +72,10 @@ Pages SHALL render inside the Management Center's content card (radius 10, 1 px 
 #### Scenario: Device disconnects
 - **WHEN** the device status changes to disconnected
 - **THEN** the footer card announces the new state through a live region without moving focus
+
+### Requirement: Creation workflow entry points
+Management navigation SHALL expose Emoji and AI Shortcuts as direct replacements for the recovered library plus-menu destinations. Each entry SHALL open the real creation workflow. Source: MGMT-118.
+
+#### Scenario: Navigate to creation
+- **WHEN** the user activates Emoji or AI Shortcuts from Keys
+- **THEN** the corresponding mounted page permits creating an emoji package or adding a shortcut without losing the existing selected profile
