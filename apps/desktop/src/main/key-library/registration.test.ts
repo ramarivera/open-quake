@@ -691,6 +691,7 @@ function fixture(
 	execute: () => Effect.Effect<void> = () => Effect.void,
 	executeOwned?: (key: ProfileKey) => Effect.Effect<boolean>,
 	extraKeys: readonly ProfileKey[] = [],
+	twoPanels = false,
 ) {
 	let pause: Promise<void> | undefined;
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
@@ -791,6 +792,15 @@ function fixture(
 		"file:///app/index.html",
 		undefined,
 		() => panel,
+		undefined,
+		twoPanels
+			? (sender) =>
+					sender === panel.webContents
+						? "device"
+						: sender === impostor.webContents
+							? "other"
+							: undefined
+			: undefined,
 	);
 	const handler = [...electron.ipcMain.handle.mock.calls]
 		.reverse()
@@ -835,6 +845,28 @@ function fixture(
 		published,
 	};
 }
+it("authorizes each serial-owned panel and rejects activation for the other serial", async () => {
+	const f = fixture({}, undefined, undefined, [], true);
+	try {
+		for (const [panel, deviceId] of [
+			[f.panel, "device"],
+			[f.impostor, "other"],
+		] as const) {
+			expect(
+				await f.request(panel, {
+					...f.activation,
+					deviceId: deviceId === "device" ? "other" : "device",
+				}),
+			).toEqual({ _tag: "rejected", reason: "unauthorized" });
+			expect(
+				await f.request(panel, { ...f.activation, deviceId }),
+			).toMatchObject({ _tag: "success" });
+		}
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
 it("requires the owned panel and top-level app document, including at queued execution", async () => {
 	const f = fixture();
 	try {

@@ -1,4 +1,4 @@
-import { Context, type Effect, type Redacted, type Stream } from "effect";
+import { Context, type Effect, type Redacted, Stream } from "effect";
 import type {
 	InferenceRequest,
 	NormalizedEvent,
@@ -23,3 +23,28 @@ export interface CompatibleAdapter {
 export class AiCompatibleAdapter extends Context.Tag(
 	"@open-quake/edge/AiCompatibleAdapter",
 )<AiCompatibleAdapter, CompatibleAdapter>() {}
+
+/** Abort IO before async-generator return, which waits for an outstanding next(). */
+export function abortableStream<A, E>(
+	source: AsyncIterable<A>,
+	onError: (cause: unknown) => E,
+	abort: () => void,
+): Stream.Stream<A, E> {
+	return Stream.fromAsyncIterable(
+		{
+			[Symbol.asyncIterator]() {
+				const iterator = source[Symbol.asyncIterator]();
+				return {
+					next: () => iterator.next(),
+					return: async () => {
+						abort();
+						return iterator.return
+							? iterator.return()
+							: { done: true, value: undefined };
+					},
+				};
+			},
+		},
+		onError,
+	);
+}

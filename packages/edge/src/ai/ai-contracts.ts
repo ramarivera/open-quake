@@ -53,14 +53,30 @@ export const Sampling = Schema.Struct({
 	topP: Schema.optional(Finite),
 	maxOutputTokens: Schema.optional(Schema.Int.pipe(Schema.positive())),
 });
+export const ProviderSettings = Schema.Struct({
+	mediaKind: Schema.optional(Schema.Literal("image", "video")),
+	botId: Schema.optional(
+		Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(256)),
+	),
+	entryMethod: Schema.optional(Schema.Literal("inference", "agent")),
+	filesEnabled: Schema.optional(Schema.Boolean),
+});
 export const ProviderProfile = Schema.Struct({
 	version: Schema.Literal(1),
 	id: ProfileId,
-	adapter: Schema.Literal("mock", "openai-compatible", "codex"),
+	adapter: Schema.Literal(
+		"mock",
+		"openai-compatible",
+		"codex",
+		"coze",
+		"xfy",
+		"dashscope-media",
+	),
 	baseUrl: Schema.NonEmptyTrimmedString,
 	endpointPolicy: Schema.Literal("remote", "loopback"),
 	modelId: Schema.NonEmptyTrimmedString,
 	provider: Schema.optional(ProviderKind),
+	settings: Schema.optional(ProviderSettings),
 	models: Schema.optional(ModelRoles),
 	controls: Schema.optional(GenerationControls),
 	auth: Schema.Literal("none", "apiKey", "codexDevice"),
@@ -87,14 +103,42 @@ export const ProfileSummary = Schema.Struct({
 	controls: ProviderProfile.fields.controls,
 });
 export type ProfileSummary = typeof ProfileSummary.Type;
+export const ToolCall = Schema.Struct({
+	id: Schema.NonEmptyString.pipe(Schema.maxLength(256)),
+	name: Schema.NonEmptyString.pipe(Schema.pattern(/^[a-zA-Z0-9_-]{1,64}$/)),
+	arguments: Schema.String.pipe(Schema.maxLength(32768)),
+});
+export const ToolDefinition = Schema.Struct({
+	name: ToolCall.fields.name,
+	description: Schema.String.pipe(Schema.maxLength(4096)),
+	properties: Schema.Record({
+		key: Schema.String,
+		value: Schema.Struct({
+			type: Schema.Literal("string", "number", "boolean"),
+			description: Schema.optional(Schema.String),
+		}),
+	}),
+	required: Schema.Array(Schema.String),
+});
 export const InferenceRequest = Schema.Struct({
 	profileId: ProfileId,
 	modelRole: Schema.optional(ModelRole),
 	persona: Schema.optional(RoleSelection),
+	tools: Schema.optional(
+		Schema.Array(ToolDefinition).pipe(Schema.maxItems(16)),
+	),
 	controls: Schema.optional(GenerationControls),
 	messages: Schema.Array(
 		Schema.Struct({
-			role: Schema.Literal("system", "user", "assistant"),
+			role: Schema.Literal("system", "user", "assistant", "tool"),
+			reasoningContent: Schema.optional(
+				Schema.String.pipe(Schema.maxLength(65536)),
+			),
+			toolCalls: Schema.optional(
+				Schema.Array(ToolCall).pipe(Schema.maxItems(16)),
+			),
+			toolCallId: Schema.optional(Schema.NonEmptyString),
+			toolName: Schema.optional(ToolCall.fields.name),
 			content: Schema.Array(
 				Schema.Union(
 					Schema.TaggedStruct("text", { text: Schema.String }),

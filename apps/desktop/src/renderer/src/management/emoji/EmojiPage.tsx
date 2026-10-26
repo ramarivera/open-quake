@@ -8,20 +8,14 @@ import {
 } from "../../../../../../../packages/edge/src/emoji/emoji-contracts";
 import { weightedLength } from "../../../../../../../packages/edge/src/emoji/emoji-invariants";
 import type { EmojiReply, EmojiRequest } from "../../../../shared/emoji";
+import { useAppLocale } from "../../i18n";
 import { PageHeader } from "../../ui/Form";
 import { captionGif, stillImageGif } from "./caption";
+import { defaultMotion, motionPresets, utf8Length } from "./composer";
 import { EmojiImage, useEmojiAsset } from "./EmojiImage";
 import "./emoji.css";
 
 type Ready = Extract<EmojiReply, { _tag: "ready" }>;
-const motionPresets = [
-	"Wave happily and blink",
-	"Sway side to side to celebrate",
-	"Shyly cover the face",
-	"Jump in surprise",
-	"Nod",
-	"Make a heart with hands",
-];
 const swatches = [
 	"ffffff",
 	"000000",
@@ -50,6 +44,14 @@ const bytesOf = (url: string): Uint8Array =>
 		value.charCodeAt(0),
 	);
 export function EmojiPage(): React.JSX.Element {
+	const { locale } = useAppLocale();
+	const promptTouched = useRef(false);
+	const suggestionVersion = useRef(0);
+	const renameCancelled = useRef(false);
+	const generationVersion = useRef(0);
+	const [legacy, setLegacy] = useState(false);
+	const [legacyPrompt, setLegacyPrompt] = useState("");
+	const [suggestion, setSuggestion] = useState("");
 	const [view, setView] = useState<Ready>();
 	const [message, setMessage] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -57,9 +59,10 @@ export function EmojiPage(): React.JSX.Element {
 	const [staticHash, setStaticHash] = useState("");
 	const [title, setTitle] = useState("");
 	const [caption, setCaption] = useState("");
-	const [prompt, setPrompt] = useState(
-		"Wave happily twice, bounce lightly, then blink",
-	);
+	const [prompt, setPrompt] = useState(defaultMotion(locale));
+	useEffect(() => {
+		if (!promptTouched.current) setPrompt(defaultMotion(locale));
+	}, [locale]);
 	const [selected, setSelected] = useState<readonly string[]>([]);
 	const [rename, setRename] = useState<{ id: string; name: string } | null>(
 		null,
@@ -75,6 +78,7 @@ export function EmojiPage(): React.JSX.Element {
 	const staticSource = useEmojiAsset(staticHash);
 	const editingSource = useEmojiAsset(editing?.original ?? "");
 	const mounted = useRef(true);
+	const viewDrafts = useRef<readonly string[]>([]);
 	const run = useCallback(
 		async (input: EmojiRequest): Promise<Ready | undefined> => {
 			const bridge = window.quakeEmoji;
@@ -83,11 +87,20 @@ export function EmojiPage(): React.JSX.Element {
 				return;
 			}
 			setBusy(true);
+			const version = suggestionVersion.current;
+			const generation = generationVersion.current;
 			try {
 				let reply = await bridge.request(input);
+				if (reply._tag === "caption-suggestion") {
+					if (mounted.current && version === suggestionVersion.current)
+						setSuggestion(reply.text);
+					return;
+				}
 				if (reply._tag === "generated") {
 					const original = bytesOf(`data:image/gif;base64,${reply.base64}`);
 					const rendered = await captionGif(original, reply.caption);
+					if (!mounted.current || generation !== generationVersion.current)
+						return;
 					reply = await bridge.request({
 						type: "create-result",
 						name: reply.name,
@@ -103,6 +116,16 @@ export function EmojiPage(): React.JSX.Element {
 					setMessage(`${reply.message} (${reply.code})`);
 					return;
 				}
+				const added = reply.store.drafts.filter(
+					(id) => !viewDrafts.current.includes(id),
+				);
+				setSelected((ids) => [
+					...new Set([
+						...ids.filter((id) => reply.store.drafts.includes(id)),
+						...added,
+					]),
+				]);
+				viewDrafts.current = reply.store.drafts;
 				setView(reply);
 				setMessage(reply.notice);
 				setPackId((id) =>
@@ -143,11 +166,19 @@ export function EmojiPage(): React.JSX.Element {
 		});
 		if (reply) {
 			setPackId(id);
+			renameCancelled.current = false;
 			setRename({ id, name: "Unnamed Pack" });
 		}
 	};
+	const edit = (item: EmojiItem): void => {
+		suggestionVersion.current++;
+		setSuggestion("");
+		setEditing(item);
+	};
 	const saveName = (): void => {
+		if (renameCancelled.current) return;
 		if (rename) {
+			renameCancelled.current = true;
 			void run({
 				type: "command",
 				command: { type: "rename-package", ...rename },
@@ -240,6 +271,13 @@ export function EmojiPage(): React.JSX.Element {
 						{view?.store.staticAssets.length ? (
 							<div
 								className="emoji-assets"
+								onWheel={(event) => {
+									if (
+										event.currentTarget.scrollWidth >
+										event.currentTarget.clientWidth
+									)
+										event.currentTarget.scrollLeft += event.deltaY;
+								}}
 								role="listbox"
 								aria-label="Static Emoji assets"
 							>
@@ -317,7 +355,10 @@ export function EmojiPage(): React.JSX.Element {
 										value={prompt}
 										maxLength={180}
 										placeholder="Describe what motion or emotion you want the character to perform…"
-										onChange={(e) => setPrompt(e.target.value)}
+										onChange={(e) => {
+											promptTouched.current = true;
+											setPrompt(e.target.value);
+										}}
 									/>
 									<small>{prompt.length}/180</small>
 								</label>
@@ -325,18 +366,29 @@ export function EmojiPage(): React.JSX.Element {
 									Quick Actions (click to fill the description)
 								</p>
 								<div className="emoji-presets">
-									{motionPresets.map((text) => (
+									{motionPresets(locale).map((text) => (
 										<button
 											className="mc-button"
 											key={text}
 											type="button"
-											onClick={() => setPrompt(text)}
+											onClick={() => {
+												promptTouched.current = true;
+												setPrompt(text);
+											}}
 										>
 											{text}
 										</button>
 									))}
 								</div>
 								<div className="emoji-actions">
+									<button
+										className="mc-button"
+										type="button"
+										disabled={busy}
+										onClick={() => setLegacy(true)}
+									>
+										Generate from template
+									</button>
 									<button
 										className="mc-button"
 										data-primary
@@ -390,23 +442,33 @@ export function EmojiPage(): React.JSX.Element {
 								{view.store.drafts.map((id) => {
 									const item = view.store.items.find((item) => item.id === id);
 									return item ? (
-										<button
-											key={id}
-											type="button"
-											role="option"
-											aria-selected={selected.includes(id)}
-											className="emoji-thumb"
-											onClick={() =>
-												setSelected((list) =>
-													list.includes(id)
-														? list.filter((entry) => entry !== id)
-														: [...list, id],
-												)
-											}
-										>
-											<EmojiImage hash={item.rendered} alt={item.name} />
-											<span>{item.name}</span>
-										</button>
+										<div key={id} className="emoji-draft">
+											<button
+												key={id}
+												type="button"
+												role="option"
+												aria-selected={selected.includes(id)}
+												className="emoji-thumb"
+												onClick={() =>
+													setSelected((list) =>
+														list.includes(id)
+															? list.filter((entry) => entry !== id)
+															: [...list, id],
+													)
+												}
+											>
+												<EmojiImage hash={item.rendered} alt={item.name} />
+												<span>{item.name}</span>
+											</button>
+											<button
+												className="mc-button"
+												type="button"
+												aria-label={`Edit draft ${item.name}`}
+												onClick={() => edit(item)}
+											>
+												Edit
+											</button>
+										</div>
 									) : null;
 								})}
 							</div>
@@ -481,11 +543,26 @@ export function EmojiPage(): React.JSX.Element {
 											onBlur={saveName}
 											onKeyDown={(e) => {
 												if (e.key === "Enter") saveName();
-												if (e.key === "Escape") setRename(null);
+												if (e.key === "Escape") {
+													renameCancelled.current = true;
+													setRename(null);
+												}
 											}}
 										/>
 									) : (
-										<button type="button" onClick={() => setPackId(entry.id)}>
+										<button
+											type="button"
+											onClick={() => setPackId(entry.id)}
+											onDoubleClick={() => {
+												renameCancelled.current = false;
+												setRename({ id: entry.id, name: entry.name });
+											}}
+											onContextMenu={(e) => {
+												e.preventDefault();
+												renameCancelled.current = false;
+												setRename({ id: entry.id, name: entry.name });
+											}}
+										>
 											<span className="emoji-pack-mark">▦</span>
 											<span>
 												<strong>{entry.name}</strong>
@@ -499,9 +576,10 @@ export function EmojiPage(): React.JSX.Element {
 										<button
 											type="button"
 											title={`Rename ${entry.name}`}
-											onClick={() =>
-												setRename({ id: entry.id, name: entry.name })
-											}
+											onClick={() => {
+												renameCancelled.current = false;
+												setRename({ id: entry.id, name: entry.name });
+											}}
 										>
 											Edit
 										</button>
@@ -555,7 +633,7 @@ export function EmojiPage(): React.JSX.Element {
 											<button
 												type="button"
 												title={`Edit ${item.name}`}
-												onClick={() => setEditing(item)}
+												onClick={() => edit(item)}
 											>
 												<EmojiImage hash={item.rendered} alt={item.name} />
 											</button>
@@ -607,6 +685,62 @@ export function EmojiPage(): React.JSX.Element {
 			<p className="emoji-notice" role="status">
 				{busy ? "Working…" : message}
 			</p>
+			{busy ? (
+				<button
+					className="mc-button"
+					type="button"
+					onClick={() => {
+						generationVersion.current++;
+						suggestionVersion.current++;
+						void window.quakeEmoji?.request({ type: "cancel-generation" });
+					}}
+				>
+					Cancel generation
+				</button>
+			) : null}
+			{legacy ? (
+				<Modal title="Generate Emoji" close={() => setLegacy(false)}>
+					<label className="mc-field">
+						Motion description
+						<textarea
+							value={legacyPrompt}
+							onChange={(e) => setLegacyPrompt(e.target.value)}
+						/>
+					</label>
+					<p role={utf8Length(legacyPrompt) >= 900 ? "status" : undefined}>
+						{utf8Length(legacyPrompt)}/1000 bytes
+					</p>
+					<button
+						className="mc-button"
+						type="button"
+						disabled={
+							busy ||
+							!staticHash ||
+							!legacyPrompt.trim() ||
+							utf8Length(legacyPrompt) > 1000
+						}
+						onClick={() => {
+							setLegacy(false);
+							void run({
+								type: "generate",
+								assetId: staticHash,
+								prompt: legacyPrompt,
+								name: title || "Emoji",
+								caption: { ...defaultCaption, text: caption },
+							});
+						}}
+					>
+						Generate Emoji
+					</button>
+					<button
+						className="mc-button"
+						type="button"
+						onClick={() => setLegacy(false)}
+					>
+						Cancel
+					</button>
+				</Modal>
+			) : null}
 			{needsPack ? (
 				<Modal title="Create a package first" close={() => setNeedsPack(false)}>
 					<p>Create a package to collect the selected emoji.</p>
@@ -622,13 +756,29 @@ export function EmojiPage(): React.JSX.Element {
 			) : null}
 			{editing && view ? (
 				<CaptionDialog
+					key={editing.id}
 					item={editing}
 					source={editingSource}
-					close={() => setEditing(null)}
-					save={async (settings, bytes) => {
+					close={() => {
+						suggestionVersion.current++;
+						setSuggestion("");
+						setEditing(null);
+					}}
+					suggestion={suggestion}
+					suggest={() => {
+						setSuggestion("");
+						void run({
+							type: "suggest-caption",
+							prompt: editing.name || editing.caption.text || prompt,
+							locale,
+						});
+					}}
+					save={async (settings, bytes, name, mode) => {
 						const next = await run({
 							type: "caption",
 							id: editing.id,
+							name,
+							mode,
 							caption: settings,
 							base64: base64(bytes),
 						});
@@ -715,13 +865,24 @@ function CaptionDialog({
 	source,
 	close,
 	save,
+	suggestion,
+	suggest,
 }: {
+	suggestion: string;
+	suggest: () => void;
 	item: EmojiItem;
 	source: string;
 	close: () => void;
-	save: (caption: EmojiCaption, bytes: Uint8Array) => Promise<void>;
+	save: (
+		caption: EmojiCaption,
+		bytes: Uint8Array,
+		name: string,
+		mode: EmojiMode,
+	) => Promise<void>;
 }): React.JSX.Element {
 	const [settings, setSettings] = useState(item.caption);
+	const [name, setName] = useState(item.name);
+	const [mode, setMode] = useState<EmojiMode>(item.mode ?? 1);
 	const [preview, setPreview] = useState(source);
 	useEffect(() => setPreview(source), [source]);
 	const [message, setMessage] = useState("");
@@ -731,7 +892,7 @@ function CaptionDialog({
 		try {
 			const bytes = await captionGif(bytesOf(source), settings);
 			setPreview(`data:image/gif;base64,${base64(bytes)}`);
-			if (commit) await save(settings, bytes);
+			if (commit) await save(settings, bytes, name, mode);
 		} catch {
 			setMessage("Caption could not be rendered. The saved GIF was kept.");
 		} finally {
@@ -740,6 +901,44 @@ function CaptionDialog({
 	};
 	return (
 		<Modal title={`Edit ${item.name}`} close={close}>
+			<label className="mc-field">
+				Emoji Name
+				<input
+					type="text"
+					value={name}
+					maxLength={30}
+					onChange={(e) => setName(e.target.value)}
+				/>
+				<small>{name.length}/30</small>
+			</label>
+			<label className="mc-field">
+				Emoji Action
+				<select
+					value={mode}
+					onChange={(e) =>
+						setMode(e.target.value === "0" ? 0 : e.target.value === "2" ? 2 : 1)
+					}
+				>
+					<option value="0">Copy only</option>
+					<option value="1">Copy and paste</option>
+					<option value="2">Copy, paste and send</option>
+				</select>
+			</label>
+			<button className="mc-button" type="button" onClick={suggest}>
+				Suggest caption
+			</button>
+			{suggestion ? (
+				<p role="status">
+					{suggestion}{" "}
+					<button
+						className="mc-button"
+						type="button"
+						onClick={() => setSettings({ ...settings, text: suggestion })}
+					>
+						Use suggestion
+					</button>
+				</p>
+			) : null}
 			<div className="emoji-caption-layout">
 				<img src={preview || undefined} alt="Caption preview" />
 				<div>

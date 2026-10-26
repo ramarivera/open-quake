@@ -15,6 +15,10 @@ export function registerHardware(
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	diagnostics?: DesktopDiagnostics,
+	sessions: () => readonly HardwareSession[] = () => {
+		const session = current();
+		return session ? [session] : [];
+	},
 ): () => void {
 	const observe = <A, E>(work: Effect.Effect<A, E>) =>
 		diagnostics
@@ -32,8 +36,7 @@ export function registerHardware(
 		return Effect.runPromise(observe(hardwareRequest(input, current(), mock)));
 	});
 	const setLocked = (locked: boolean): void => {
-		const session = current();
-		if (session)
+		for (const session of sessions())
 			void Effect.runPromise(
 				observe(session.setLocked(locked)).pipe(
 					Effect.matchEffect({

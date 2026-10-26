@@ -84,7 +84,10 @@ function ActiveStripPanel(): React.JSX.Element {
 	const [pressedKeyCode, setPressedKeyCode] = useState<string>();
 	const committedLayoutIdentity = useRef<string | undefined>(undefined);
 	const { snapshot } = useWallpaper();
-	const serial = snapshot?.saved.serial ?? "desktop-preview";
+	const serial =
+		new URLSearchParams(window.location.search).get("serial") ??
+		snapshot?.saved.serial ??
+		"desktop-preview";
 	const feedback = usePanelFeedback(useQuakeEvents());
 	const observeSelection = (next: StripProfiles): void => {
 		if (next._tag === "ready") {

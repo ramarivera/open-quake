@@ -1,12 +1,19 @@
 import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	AZURE_VOICES,
+	azureVoice,
+} from "../../../../../../packages/edge/src/ai/speech/speech-catalog";
+import { OPENAI_VOICES } from "../../../../../../packages/edge/src/ai/speech/speech-contracts";
+import {
 	type MicrophoneIdentity,
 	normalizeMicrophone,
 	recoverMicrophone,
 	type SpeechSettings,
 	SpeechSettingsReply,
 	type SpeechSettingsView,
+	SttSettings,
+	TtsSettings,
 } from "../../../shared/speech";
 import { useAppLocale } from "../i18n";
 import { Group, Row } from "../ui/Form";
@@ -19,10 +26,25 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 	});
 	const [sttKey, setSttKey] = useState("");
 	const [ttsKey, setTtsKey] = useState("");
+	const [sttXfy, setSttXfy] = useState({
+		appId: "",
+		apiKey: "",
+		apiSecret: "",
+	});
+	const [ttsXfy, setTtsXfy] = useState({
+		appId: "",
+		apiKey: "",
+		apiSecret: "",
+	});
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
 	const [savedSettings, setSavedSettings] = useState<SpeechSettings>();
-	const saved = savedSettings === draft && !sttKey && !ttsKey;
+	const saved =
+		savedSettings === draft &&
+		!sttKey &&
+		!ttsKey &&
+		!Object.values(sttXfy).some(Boolean) &&
+		!Object.values(ttsXfy).some(Boolean);
 	const [loading, setLoading] = useState<Promise<unknown>>();
 	useEffect(() => {
 		setLoading(window.quakeSpeech?.request({ _tag: "Get" }));
@@ -57,6 +79,8 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 				settings: draft,
 				...(sttKey ? { sttKey } : {}),
 				...(ttsKey ? { ttsKey } : {}),
+				...(Object.values(sttXfy).some(Boolean) ? { sttXfy } : {}),
+				...(Object.values(ttsXfy).some(Boolean) ? { ttsXfy } : {}),
 			});
 			const reply = Schema.decodeUnknownSync(SpeechSettingsReply)(raw);
 			if (reply._tag === "rejected") setError(reply.code);
@@ -66,6 +90,8 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 				setSavedSettings(reply.view.settings);
 				setSttKey("");
 				setTtsKey("");
+				setSttXfy({ appId: "", apiKey: "", apiSecret: "" });
+				setTtsXfy({ appId: "", apiKey: "", apiSecret: "" });
 			}
 		} catch {
 			setError("Speech settings couldn't be saved.");
@@ -121,85 +147,43 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 			{!view && !error ? <p role="status">Loading speech settings…</p> : null}
 			<Row
 				label="Recognition"
-				hint="DashScope streaming ASR. Speech credentials are separate from chat."
+				hint="Speech credentials are separate from chat."
 			>
 				<select
 					aria-label="Recognition provider"
-					value={draft.stt ? "dashscope" : "disabled"}
+					value={draft.stt ? (draft.stt.provider ?? "dashscope") : "disabled"}
 					disabled={busy || !view}
 					onChange={(e) => {
-						setSavedSettings(undefined);
-						setDraft({
-							...draft,
-							stt:
-								e.target.value === "disabled"
-									? undefined
-									: { workspace: "", region: "ap-southeast-1" },
-						});
+						setDraft({ ...draft, stt: initialStt(e.target.value) });
+						setSttKey("");
+						setSttXfy({ appId: "", apiKey: "", apiSecret: "" });
 					}}
 				>
 					<option value="disabled">Disabled</option>
 					<option value="dashscope">DashScope</option>
+					<option value="openai">OpenAI</option>
+					<option value="azure">Microsoft Azure</option>
+					<option value="xfy">XFY</option>
 				</select>
 			</Row>
 			{draft.stt ? (
 				<>
-					<Row label="ASR workspace">
-						<input
-							aria-label="ASR workspace"
-							value={draft.stt.workspace}
-							disabled={busy}
-							onChange={(e) =>
-								setDraft({
-									...draft,
-									stt: {
-										...draft.stt,
-										workspace: e.target.value,
-										region: draft.stt?.region ?? "ap-southeast-1",
-									},
-								})
-							}
-						/>
-					</Row>
-					<Row label="ASR region">
-						<select
-							aria-label="ASR region"
-							value={draft.stt.region}
-							disabled={busy}
-							onChange={(e) =>
-								setDraft({
-									...draft,
-									stt: {
-										workspace: draft.stt?.workspace ?? "",
-										region:
-											e.target.value === "cn-beijing"
-												? "cn-beijing"
-												: "ap-southeast-1",
-									},
-								})
-							}
-						>
-							<option value="ap-southeast-1">Singapore</option>
-							<option value="cn-beijing">Beijing</option>
-						</select>
-					</Row>
-					<Row
-						label="ASR API key"
-						hint={
-							view?.sttCredential
-								? "Key stored. Leave blank to keep it for this workspace and region."
-								: "A region-matching key is required."
-						}
-					>
-						<input
-							aria-label="ASR API key"
-							type="password"
-							autoComplete="new-password"
-							value={sttKey}
-							disabled={busy}
-							onChange={(e) => setSttKey(e.target.value)}
-						/>
-					</Row>
+					<ProviderFields
+						config={draft.stt}
+						kind="ASR"
+						disabled={busy}
+						onChange={(config) => setDraft({ ...draft, stt: config })}
+					/>
+					<SecretFields
+						kind="ASR"
+						xfy={draft.stt.provider === "xfy"}
+						value={sttKey}
+						onChange={setSttKey}
+						bundle={sttXfy}
+						onBundle={setSttXfy}
+						stored={view?.sttCredential ?? false}
+						disabled={busy}
+					/>
 				</>
 			) : null}
 			<Row
@@ -210,27 +194,18 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 					aria-label="Synthesis provider"
 					value={draft.tts?.provider ?? "disabled"}
 					disabled={busy || !view}
-					onChange={(e) =>
-						setDraft({
-							...draft,
-							tts:
-								e.target.value === "openai"
-									? { provider: "openai", language: "en", voice: "marin" }
-									: e.target.value === "dashscope"
-										? {
-												provider: "dashscope",
-												workspace: "",
-												region: "ap-southeast-1",
-												language: "en",
-												voice: "longanlingxin_v3.1",
-											}
-										: undefined,
-						})
-					}
+					onChange={(e) => {
+						setDraft({ ...draft, tts: initialTts(e.target.value) });
+						setTtsKey("");
+						setTtsXfy({ appId: "", apiKey: "", apiSecret: "" });
+					}}
 				>
 					<option value="disabled">Disabled</option>
 					<option value="openai">OpenAI Speech API</option>
 					<option value="dashscope">DashScope</option>
+					<option value="azure">Microsoft Azure</option>
+					<option value="xfy">XFY</option>
+					<option value="qwen-realtime">Qwen realtime, opt in</option>
 				</select>
 			</Row>
 			{draft.tts ? (
@@ -240,88 +215,53 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 							Compatibility model gpt-4o-mini-tts. This route disables on
 							January 6, 2027.
 						</p>
-					) : (
-						<>
-							<Row label="TTS workspace">
-								<input
-									aria-label="TTS workspace"
-									value={draft.tts.workspace}
-									disabled={busy}
-									onChange={(e) => {
-										if (draft.tts?.provider === "dashscope")
-											setDraft({
-												...draft,
-												tts: { ...draft.tts, workspace: e.target.value },
-											});
-									}}
-								/>
-							</Row>
-							<Row label="TTS region">
-								<select
-									aria-label="TTS region"
-									value={draft.tts.region}
-									disabled={busy}
-									onChange={(e) => {
-										if (draft.tts?.provider === "dashscope")
-											setDraft({
-												...draft,
-												tts: {
-													...draft.tts,
-													region:
-														e.target.value === "cn-beijing"
-															? "cn-beijing"
-															: "ap-southeast-1",
-												},
-											});
-									}}
-								>
-									<option value="ap-southeast-1">Singapore</option>
-									<option value="cn-beijing">Beijing</option>
-								</select>
-							</Row>
-						</>
-					)}
-					<Row label="Speech language">
-						<select
-							aria-label="Speech language"
-							value={draft.tts.language}
-							disabled={busy}
-							onChange={(e) => {
-								if (draft.tts)
-									setDraft({
-										...draft,
-										tts: { ...draft.tts, language: e.target.value },
-									});
-							}}
-						>
-							{["en", "zh", "ja", "ko", "de", "fr", "es", "it"].map(
-								(language) => (
-									<option key={language} value={language}>
-										{language}
-									</option>
-								),
-							)}
-						</select>
-					</Row>
-					<Row
-						label="TTS API key"
-						hint={
-							view?.ttsCredential
-								? "Key stored. Leave blank to keep it for this provider and workspace."
-								: "A speech API key is required."
-						}
-					>
-						<input
-							aria-label="TTS API key"
-							type="password"
-							autoComplete="new-password"
-							value={ttsKey}
-							disabled={busy}
-							onChange={(e) => setTtsKey(e.target.value)}
-						/>
-					</Row>
+					) : null}
+					<ProviderFields
+						config={draft.tts}
+						kind="TTS"
+						disabled={busy}
+						onChange={(config) => setDraft({ ...draft, tts: config })}
+					/>
+					<SecretFields
+						kind="TTS"
+						xfy={draft.tts.provider === "xfy"}
+						value={ttsKey}
+						onChange={setTtsKey}
+						bundle={ttsXfy}
+						onBundle={setTtsXfy}
+						stored={view?.ttsCredential ?? false}
+						disabled={busy}
+					/>
 				</>
 			) : null}
+			<Row
+				label="Region suggestions"
+				hint="Uses the country you choose. Doesn't look up your location or activate speech."
+			>
+				<select
+					aria-label="Region suggestions"
+					disabled={busy || !view}
+					value={draft.geographicSeed?.country ?? ""}
+					onChange={(e) =>
+						setDraft({
+							...draft,
+							geographicSeed: e.target.value
+								? { country: e.target.value }
+								: undefined,
+						})
+					}
+				>
+					<option value="">Off</option>
+					<option value="CN">China</option>
+					<option value="US">Outside China</option>
+				</select>
+				{view?.regionSuggestion ? (
+					<p>
+						{view.regionSuggestion.provider},{" "}
+						{view.regionSuggestion.liveTranslationModel}
+					</p>
+				) : null}
+			</Row>
 			<Row label="Speak answers">
 				<input
 					aria-label="Speak answers"
@@ -345,6 +285,248 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 				{saved ? <span role="status">Speech settings saved.</span> : null}
 			</Row>
 		</Group>
+	);
+}
+
+function initialStt(provider: string): SttSettings | undefined {
+	switch (provider) {
+		case "dashscope":
+			return { provider, workspace: "", region: "ap-southeast-1" };
+		case "openai":
+			return { provider, language: "en" };
+		case "azure":
+			return { provider, region: "eastasia", language: "en-US" };
+		case "xfy":
+			return { provider, language: "zh_cn" };
+		default:
+			return undefined;
+	}
+}
+function initialTts(provider: string): TtsSettings | undefined {
+	switch (provider) {
+		case "openai":
+			return { provider, language: "en", voice: "marin" };
+		case "dashscope":
+			return {
+				provider,
+				workspace: "",
+				region: "ap-southeast-1",
+				language: "en",
+				voice: "longanlingxin_v3.1",
+			};
+		case "azure":
+			return {
+				provider,
+				region: "eastasia",
+				language: "en-US",
+				voice: azureVoice("en-US"),
+			};
+		case "xfy":
+			return { provider, language: "zh_cn", voice: "aisxping" };
+		case "qwen-realtime":
+			return {
+				provider,
+				language: "en",
+				voice: "Cherry",
+				realtimeEnabled: true,
+			};
+		default:
+			return undefined;
+	}
+}
+type ProviderFieldProps = { disabled: boolean } & (
+	| {
+			kind: "ASR";
+			config: SttSettings;
+			onChange: (config: SttSettings) => void;
+	  }
+	| {
+			kind: "TTS";
+			config: TtsSettings;
+			onChange: (config: TtsSettings) => void;
+	  }
+);
+function ProviderFields(props: ProviderFieldProps) {
+	const { config, disabled, kind } = props;
+	const update = (patch: object) => {
+		if (props.kind === "ASR") {
+			const decoded = Schema.decodeUnknownEither(SttSettings)({
+				...config,
+				...patch,
+			});
+			if (decoded._tag === "Right") props.onChange(decoded.right);
+		} else {
+			const decoded = Schema.decodeUnknownEither(TtsSettings)({
+				...config,
+				...patch,
+			});
+			if (decoded._tag === "Right") props.onChange(decoded.right);
+		}
+	};
+	const languages =
+		config.provider === "azure"
+			? Object.keys(AZURE_VOICES)
+			: config.provider === "xfy"
+				? ["zh_cn", "en_us"]
+				: ["en", "zh", "ja", "ko", "de", "fr", "es", "it"];
+	return (
+		<>
+			{"workspace" in config ? (
+				<>
+					<Row label={`${kind} workspace`}>
+						<input
+							aria-label={`${kind} workspace`}
+							disabled={disabled}
+							value={config.workspace}
+							onChange={(e) => {
+								if (props.kind === "ASR" && "workspace" in props.config)
+									props.onChange({
+										...props.config,
+										workspace: e.target.value,
+									});
+								if (
+									props.kind === "TTS" &&
+									props.config.provider === "dashscope"
+								)
+									props.onChange({
+										...props.config,
+										workspace: e.target.value,
+									});
+							}}
+						/>
+					</Row>
+					<Row label={`${kind} region`}>
+						<select
+							aria-label={`${kind} region`}
+							disabled={disabled}
+							value={config.region}
+							onChange={(e) => update({ region: e.target.value })}
+						>
+							<option value="ap-southeast-1">Singapore</option>
+							<option value="cn-beijing">Beijing</option>
+						</select>
+					</Row>
+				</>
+			) : null}
+			{config.provider === "azure" ? (
+				<Row label={`${kind} Azure region`}>
+					<input
+						aria-label={`${kind} Azure region`}
+						disabled={disabled}
+						value={config.region ?? "eastasia"}
+						onChange={(e) => {
+							if (props.kind === "ASR" && props.config.provider === "azure")
+								props.onChange({ ...props.config, region: e.target.value });
+							if (props.kind === "TTS" && props.config.provider === "azure")
+								props.onChange({ ...props.config, region: e.target.value });
+						}}
+					/>
+				</Row>
+			) : null}
+			{"language" in config ? (
+				<Row
+					label={kind === "TTS" ? "Speech language" : "Recognition language"}
+				>
+					<select
+						aria-label={
+							kind === "TTS" ? "Speech language" : "Recognition language"
+						}
+						disabled={disabled}
+						value={config.language}
+						onChange={(e) =>
+							update({
+								language: e.target.value,
+								...(config.provider === "azure" && "voice" in config
+									? { voice: azureVoice(e.target.value) }
+									: {}),
+							})
+						}
+					>
+						{languages.map((l) => (
+							<option key={l} value={l}>
+								{l}
+							</option>
+						))}
+					</select>
+				</Row>
+			) : null}
+			{"voice" in config ? (
+				<Row label="Voice">
+					<select
+						aria-label="Voice"
+						disabled={disabled}
+						value={config.voice}
+						onChange={(e) => update({ voice: e.target.value })}
+					>
+						{(config.provider === "azure"
+							? (AZURE_VOICES[config.language] ?? [])
+							: config.provider === "openai"
+								? OPENAI_VOICES
+								: [config.voice]
+						).map((v) => (
+							<option key={v} value={v}>
+								{v}
+							</option>
+						))}
+					</select>
+				</Row>
+			) : null}
+		</>
+	);
+}
+type SecretBundle = { appId: string; apiKey: string; apiSecret: string };
+function SecretFields({
+	kind,
+	xfy,
+	value,
+	onChange,
+	bundle,
+	onBundle,
+	stored,
+	disabled,
+}: {
+	kind: string;
+	xfy: boolean;
+	value: string;
+	onChange: (s: string) => void;
+	bundle: SecretBundle;
+	onBundle: (b: SecretBundle) => void;
+	stored: boolean;
+	disabled: boolean;
+}) {
+	const hint = stored
+		? "Credentials stored. Leave blank to keep them for this provider and region."
+		: "Speech credentials are required.";
+	return xfy ? (
+		<>
+			{(["appId", "apiKey", "apiSecret"] as const).map((field) => (
+				<Row
+					key={field}
+					label={`${kind} XFY ${field}`}
+					hint={field === "appId" ? hint : undefined}
+				>
+					<input
+						aria-label={`${kind} XFY ${field}`}
+						type="password"
+						autoComplete="new-password"
+						disabled={disabled}
+						value={bundle[field]}
+						onChange={(e) => onBundle({ ...bundle, [field]: e.target.value })}
+					/>
+				</Row>
+			))}
+		</>
+	) : (
+		<Row label={`${kind} API key`} hint={hint}>
+			<input
+				aria-label={`${kind} API key`}
+				type="password"
+				autoComplete="new-password"
+				disabled={disabled}
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+			/>
+		</Row>
 	);
 }
 

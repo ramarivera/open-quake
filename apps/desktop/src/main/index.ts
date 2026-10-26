@@ -11,6 +11,7 @@ import {
 	ipcMain,
 	nativeTheme,
 	powerMonitor,
+	powerSaveBlocker,
 	screen,
 	shell,
 } from "electron";
@@ -38,13 +39,9 @@ import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import { createDesktopDiagnostics } from "./diagnostics";
 import { prepareDesktopModule } from "./diagnostics/module";
 import { makeDesktopRuntime } from "./diagnostics/runtime";
-import {
-	findPanelDisplay,
-	type PanelRotation,
-	panelBounds,
-	panelRotation,
-} from "./display";
+import { findPanelDisplay, type PanelRotation, panelRotation } from "./display";
 import { prepareEmoji } from "./emoji";
+import { createEmojiGeneration } from "./emoji/generation";
 import { createEventForwarder } from "./eventForwarding";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
@@ -56,13 +53,25 @@ import { resetKeysOnLinkLoss } from "./key-library/device-status";
 import { prepareKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
 import { pinKnobProfile } from "./knob/voice-route";
+import { arrangementState } from "./lifecycle/arrangement-state";
 import { DeviceLifecycle } from "./lifecycle/lifecycle-service";
 import {
 	callDisplayTool,
 	DisplayOperationFailed,
+	extendWindowsDisplays,
 	farRightOrigins,
 	probeHiddenMirroring,
+	probeWindowsDisplays,
 } from "./lifecycle/native-display";
+import {
+	createPanelWindow,
+	destroyPanel,
+	type PanelTarget,
+	parkPanel,
+	placePanel,
+	showPanel,
+} from "./lifecycle/panel-window";
+import { makePowerOwner } from "./lifecycle/power-owner";
 import { registerLifecycle } from "./lifecycle/registration";
 import { prepareMaintenance } from "./maintenance";
 import {
@@ -94,20 +103,18 @@ const rendererURL =
 		? process.env.ELECTRON_RENDERER_URL
 		: pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
 registerClockScheme();
-const PANEL_TITLE = "open-quake panel";
-
-interface PanelTarget {
-	readonly display: Display;
-	/** True when the display is the QUAKE strip, not a fallback. */
-	readonly isPanel: boolean;
-}
 
 function loadSurface(
 	win: BrowserWindow,
 	surface: "management" | "panel",
 	rotation: PanelRotation = 0,
+	serial?: string,
 ): void {
-	const query = { surface, rotation: String(rotation) };
+	const query = {
+		surface,
+		rotation: String(rotation),
+		...(serial ? { serial } : {}),
+	};
 	if (isDev) {
 		win.loadURL(
 			`${process.env.ELECTRON_RENDERER_URL}?${new URLSearchParams(query)}`,
@@ -117,42 +124,6 @@ function loadSurface(
 			query,
 		});
 	}
-}
-
-function placePanel(win: BrowserWindow, { display, isPanel }: PanelTarget) {
-	win.setBounds(panelBounds(display, isPanel));
-	// Cover the menu bar macOS draws on every display; only on the strip itself.
-	win.setAlwaysOnTop(isPanel, "screen-saver");
-}
-
-function createPanelWindow(target: PanelTarget): BrowserWindow {
-	const win = new BrowserWindow({
-		...panelBounds(target.display, target.isPanel),
-		title: PANEL_TITLE,
-		show: !target.isPanel && isDev,
-		frame: false,
-		roundedCorners: false,
-		// An NSPanel is not a standard window, so tiling managers leave the strip
-		// alone. The fallback stays a normal window on the current Space.
-		...(target.isPanel && process.platform === "darwin"
-			? { type: "panel" }
-			: {}),
-		resizable: false,
-		enableLargerThanScreen: true,
-		fullscreenable: true,
-		autoHideMenuBar: true,
-		webPreferences: {
-			preload: join(import.meta.dirname, "../preload/index.mjs"),
-			sandbox: false,
-			contextIsolation: true,
-			nodeIntegration: false,
-		},
-	});
-	win.webContents.setAudioMuted(true);
-	// OmniWM matches this title even while HTML/navigation titles change.
-	win.on("page-title-updated", (event) => event.preventDefault());
-	placePanel(win, target);
-	return win;
 }
 
 function createManagementWindow(): BrowserWindow {
@@ -209,7 +180,11 @@ if (!app.requestSingleInstanceLock()) {
 								: { display: screen.getPrimaryDisplay(), isPanel: false };
 						};
 						let panelTarget = getPanelTarget();
-						let panelWin = createPanelWindow(panelTarget);
+						let panelWin = createPanelWindow(panelTarget, isDev);
+						const stripWindows = new Map<
+							string,
+							{ win: BrowserWindow; target: PanelTarget }
+						>();
 						let managementWin = createManagementWindow();
 						const removeManagementAppearance = registerManagementAppearance(
 							() => managementWin,
@@ -235,7 +210,28 @@ if (!app.requestSingleInstanceLock()) {
 						);
 						let bus: DeviceBus | undefined;
 						let activeSerial: string | undefined;
+						const connectedSerials = new Set<string>();
 						const activeDeviceId = () => activeSerial ?? "desktop-preview";
+						const panelSerial = (
+							sender: Electron.WebContents,
+						): string | undefined =>
+							[...stripWindows.entries()].find(
+								([, entry]) =>
+									!entry.win.isDestroyed() && entry.win.webContents === sender,
+							)?.[0];
+						const currentHardware = () =>
+							bus?.device
+								? bus.device(activeDeviceId())?.hardware?.()
+								: bus?.hardware?.();
+						const hardwareSessions = () =>
+							bus?.device
+								? [...connectedSerials].flatMap((serial) => {
+										const session = bus?.device?.(serial)?.hardware?.();
+										return session ? [session] : [];
+									})
+								: currentHardware()
+									? [currentHardware()].filter((s) => s !== undefined)
+									: [];
 						let knobLocale: LocaleSnapshot["locale"] = "en";
 						let resetVoice = (): Promise<void> => Promise.resolve();
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
@@ -292,7 +288,7 @@ if (!app.requestSingleInstanceLock()) {
 								}),
 								owners: createWizardOwners({
 									deviceId: async () => {
-										const hardware = bus?.hardware?.();
+										const hardware = currentHardware();
 										return hardware
 											? background.runPromise(
 													hardware
@@ -358,8 +354,10 @@ if (!app.requestSingleInstanceLock()) {
 							speech,
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 							tones: toneSinks(createToneRecorder(), {
-								play: (_serial, tone) => {
-									const hardware = bus?.hardware?.();
+								play: (serial, tone) => {
+									const hardware = bus?.device
+										? bus.device(serial)?.hardware?.()
+										: currentHardware();
 									if (hardware)
 										runtime.runFork(
 											hardware.playTone(tone).pipe(
@@ -383,7 +381,7 @@ if (!app.requestSingleInstanceLock()) {
 							rendererURL,
 							undefined,
 							managementURL.href,
-							() => bus?.hardware?.(),
+							currentHardware,
 							() => panelWin,
 							async (key, signal, activation) =>
 								(await obsKeyAction((command, signal) =>
@@ -396,6 +394,7 @@ if (!app.requestSingleInstanceLock()) {
 							diagnostics,
 							mediaActions,
 							speech.resetSoundKeys,
+							panelSerial,
 						);
 						const agentsModule = prepareAgents({
 							diagnostics,
@@ -430,6 +429,15 @@ if (!app.requestSingleInstanceLock()) {
 							draftShortcuts: (...args) => directChat.draftShortcuts(...args),
 						});
 						const emojiModule = prepareEmoji({
+							generation: createEmojiGeneration({
+								models: () =>
+									agentsModule.runtime.runPromise(
+										AgentsService.resolve("default"),
+									),
+								credentials: modelCredentials.ai,
+								infer: (effect, signal) =>
+									directModule.runtime.runPromise(effect, { signal }),
+							}),
 							diagnostics,
 							selectionSerial: () => media.selectionSerial(),
 							management: () => managementWin,
@@ -454,7 +462,7 @@ if (!app.requestSingleInstanceLock()) {
 								thumbnail: (...args) => profiles.thumbnail(...args),
 								obs: (key, delta, signal, beforeWrite) =>
 									obs.turn(key, delta, signal, beforeWrite),
-								hardware: () => bus?.hardware?.(),
+								hardware: currentHardware,
 								voice: (...args) => voice.knobVoice(...args),
 							},
 							diagnostics,
@@ -469,6 +477,7 @@ if (!app.requestSingleInstanceLock()) {
 									false,
 									() => panelWin,
 									speech.acquireWallpaperSound,
+									panelSerial,
 								),
 							diagnostics,
 						);
@@ -521,17 +530,49 @@ if (!app.requestSingleInstanceLock()) {
 							microphone: speech.settings.microphone,
 							diagnostics,
 							userData: app.getPath("userData"),
-							hardware: () => bus?.hardware?.(),
+							hardware: currentHardware,
 							mock,
 							serial: activeDeviceId,
 							publishVoice: (event) => publishVoice(event),
 						});
+						const panelPower = makePowerOwner(powerSaveBlocker);
 						const lifecycleModule = prepareDesktopModule(
 							DeviceLifecycle.Default({
 								mock,
 								development: isDev,
+								activeCount: (count) =>
+									panelPower
+										.setCount(count)
+										.pipe(
+											Effect.catchTag("DisplayOperationFailed", (error) =>
+												Effect.logWarning(error),
+											),
+										),
+								disposePanel: (serial) => {
+									const owned = serial ? stripWindows.get(serial) : undefined;
+									if (owned) {
+										destroyPanel(owned.win);
+										stripWindows.delete(serial ?? "");
+										if (
+											panelWin === owned.win ||
+											panelWin.isDestroyed() ||
+											!activeSerial
+										) {
+											const remaining = [...stripWindows.entries()].find(
+												([id, entry]) =>
+													connectedSerials.has(id) && !entry.win.isDestroyed(),
+											);
+											if (remaining) {
+												activeSerial = remaining[0];
+												panelWin = remaining[1].win;
+												panelTarget = remaining[1].target;
+											}
+										}
+									} else if (!stripWindows.size) destroyPanel(panelWin);
+								},
 								displays: () => screen.getAllDisplays(),
 								bus: () => bus,
+								busFor: (serial) => bus?.device?.(serial) ?? bus,
 								watch: (changed) => {
 									screen.on("display-added", changed);
 									screen.on("display-removed", changed);
@@ -542,19 +583,58 @@ if (!app.requestSingleInstanceLock()) {
 										screen.removeListener("display-metrics-changed", changed);
 									};
 								},
-								panel: (display, visible, fallback) => {
+								panel: (
+									display,
+									visible,
+									fallback,
+									serial = activeDeviceId(),
+								) => {
+									const owned = stripWindows.get(serial);
 									if (!visible) {
-										if (!panelWin.isDestroyed()) panelWin.hide();
+										if (owned) parkPanel(owned.win);
+										else if (!stripWindows.size && !panelWin.isDestroyed())
+											parkPanel(panelWin);
 										return;
 									}
-									if (display || fallback) syncPanelDisplay(display);
-									if (!panelWin.isDestroyed()) panelWin.showInactive();
+									if (display || fallback) syncPanelDisplay(display, serial);
+									const win = stripWindows.get(serial)?.win;
+									if (win && !win.isDestroyed()) showPanel(win);
+								},
+								alert: (serial, alert) => {
+									const win = stripWindows.get(serial)?.win;
+									if (win && !win.isDestroyed())
+										win.webContents.send("quake:lifecycle-alert", alert);
 								},
 								notify: (status) => {
 									if (!managementWin.isDestroyed())
 										managementWin.webContents.send(LIFECYCLE_STATUS, status);
+									if (status.alert)
+										for (const { win } of stripWindows.values())
+											if (!win.isDestroyed())
+												win.webContents.send(LIFECYCLE_STATUS, status);
 								},
 								prompts: {
+									disconnect: () => Effect.sync(() => app.quit()),
+									arrangement: arrangementState(
+										join(
+											app.getPath("userData"),
+											"display-arrangement-v1.json",
+										),
+									),
+									windowsProbe: () =>
+										mock || process.platform !== "win32"
+											? Effect.succeed({
+													source: "none",
+													present: false,
+													width: 0,
+													height: 0,
+													failed: false,
+												})
+											: probeWindowsDisplays(),
+									windowsExtend: () =>
+										mock || process.platform !== "win32"
+											? Effect.void
+											: extendWindowsDisplays(),
 									hiddenMirroring: () =>
 										mock || process.platform !== "darwin"
 											? Effect.succeed(false)
@@ -609,7 +689,7 @@ if (!app.requestSingleInstanceLock()) {
 							root: app.getPath("userData"),
 							mock,
 							renderer: rendererURL,
-							hardware: () => bus?.hardware?.(),
+							hardware: currentHardware,
 							management: () => managementWin,
 							stopWriters: async () => {
 								const failures: unknown[] = [];
@@ -809,7 +889,8 @@ if (!app.requestSingleInstanceLock()) {
 											if (serial)
 												yield* Effect.acquireRelease(
 													Effect.sync(() => {
-														activeSerial = serial;
+														connectedSerials.add(serial);
+														activeSerial ??= serial;
 													}),
 													() =>
 														Effect.promise(() =>
@@ -822,6 +903,7 @@ if (!app.requestSingleInstanceLock()) {
 														).pipe(
 															Effect.ensuring(
 																Effect.sync(() => {
+																	connectedSerials.delete(serial);
 																	if (activeSerial === serial)
 																		activeSerial = undefined;
 																}),
@@ -856,11 +938,12 @@ if (!app.requestSingleInstanceLock()) {
 									);
 								});
 						const disposeHardware = registerHardware(
-							() => bus?.hardware?.(),
+							currentHardware,
 							() => managementWin,
 							mock,
 							rendererURL,
 							diagnostics,
+							hardwareSessions,
 						);
 						let running:
 							| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
@@ -878,12 +961,15 @@ if (!app.requestSingleInstanceLock()) {
 									join(import.meta.dirname, "../renderer/index.html"),
 								).href,
 						);
+						let screenLocked = false;
 						const onLock = (): void => {
+							screenLocked = true;
 							void lifecycle.then((service) =>
 								lifecycleRuntime.runPromise(service.lock()),
 							);
 						};
 						const onWake = (): void => {
+							screenLocked = false;
 							void lifecycle.then((service) =>
 								lifecycleRuntime.runPromise(service.wake()),
 							);
@@ -891,6 +977,13 @@ if (!app.requestSingleInstanceLock()) {
 						powerMonitor.on("lock-screen", onLock);
 						powerMonitor.on("unlock-screen", onWake);
 						const onResume = (): void => {
+							const sessions = screenLocked ? [] : hardwareSessions();
+							for (const session of sessions)
+								void runtime.runPromise(
+									session
+										.setLocked(false)
+										.pipe(Effect.catchAll((error) => Effect.logWarning(error))),
+								);
 							void lifecycle.then((service) =>
 								lifecycleRuntime.runPromise(service.wake(false)),
 							);
@@ -906,36 +999,87 @@ if (!app.requestSingleInstanceLock()) {
 									Effect.scoped(
 										Effect.gen(function* () {
 											bus = yield* source;
-											const forward = createEventForwarder(
-												() => [panelWin, managementWin],
-												() => [panelWin],
-											);
-											bus.on((event) => {
-												// Gate new holds synchronously and cancel in main before
-												// renderer touch teardown can synthesize a normal release.
-												void voice.onDevice(event);
-												forward(event);
-												if (event.kind === "status") {
+											if (bus.onLifecycleStatus) {
+												const off = bus.onLifecycleStatus((event, serial) => {
 													void lifecycle.then((service) =>
 														lifecycleRuntime.runPromise(
-															service.onStatus(event),
+															service.onStatus(event, serial),
 														),
 													);
-													if (!mock)
-														void resetKeysOnLinkLoss(
-															event,
-															profiles.resetKeys,
-														).catch(() => {});
-													if (mock) {
-														const operation =
-															event.state === "connected"
-																? profiles.connect("desktop-preview")
-																: profiles.disconnect("desktop-preview");
-														void operation.catch(() => {});
+												});
+												yield* Effect.addFinalizer(() => Effect.sync(off));
+											}
+											const owner = bus;
+											let input = Promise.resolve();
+											bus.on(
+												(
+													event,
+													serial = owner.serial?.() ?? activeDeviceId(),
+												) => {
+													// Gate new holds synchronously and cancel in main before
+													// renderer touch teardown can synthesize a normal release.
+													if (event.kind === "status")
+														void voice.onDevice(event);
+													const target =
+														stripWindows.get(serial)?.win ??
+														(serial === (owner.serial?.() ?? activeDeviceId())
+															? panelWin
+															: undefined);
+													createEventForwarder(
+														() =>
+															target
+																? [target, managementWin]
+																: [managementWin],
+														() => (target ? [target] : []),
+													)(event);
+													if (event.kind !== "keepalive") {
+														input = input
+															.then(async () => {
+																if (bus !== owner) return;
+																const changed = activeDeviceId() !== serial;
+																if (
+																	event.kind !== "status" ||
+																	event.state === "connected"
+																) {
+																	activeSerial = serial;
+																	const owned = stripWindows.get(serial);
+																	if (owned) {
+																		panelWin = owned.win;
+																		panelTarget = owned.target;
+																	}
+																	if (changed) await knob.refresh();
+																}
+																if (event.kind !== "status")
+																	await voice.onDevice(event);
+																await knob.onDevice(event);
+															})
+															.catch(() => {});
 													}
-												}
-											});
-											bus.on(knob.onDevice);
+													if (event.kind === "status") {
+														if (!bus?.onLifecycleStatus)
+															void lifecycle.then((service) =>
+																lifecycleRuntime.runPromise(
+																	service.onStatus(event, serial),
+																),
+															);
+														if (!mock)
+															void resetKeysOnLinkLoss(
+																event,
+																profiles.resetKeys,
+															).catch(() => {});
+														if (mock) {
+															const operation =
+																event.state === "connected"
+																	? profiles.connect("desktop-preview")
+																	: profiles.disconnect("desktop-preview");
+															void operation.catch(() => {});
+														}
+													}
+												},
+											);
+											yield* Effect.addFinalizer(() =>
+												Effect.promise(() => input),
+											);
 											yield* Effect.never;
 										}),
 									),
@@ -972,54 +1116,77 @@ if (!app.requestSingleInstanceLock()) {
 							}
 							return stopping;
 						};
-						const syncPanelDisplay = (display?: Display): void => {
-							const previous = panelTarget;
-							panelTarget = display
+						const syncPanelDisplay = (
+							display?: Display,
+							serial = activeDeviceId(),
+						): void => {
+							const owned = stripWindows.get(serial);
+							const previous = owned?.target ?? panelTarget;
+							const target: PanelTarget = display
 								? { display, isPanel: true }
 								: { display: screen.getPrimaryDisplay(), isPanel: false };
-							if (panelWin.isDestroyed()) {
-								panelWin = createPanelWindow(panelTarget);
+							let win =
+								owned?.win ?? (stripWindows.size === 0 ? panelWin : undefined);
+							if (
+								!win ||
+								win.isDestroyed() ||
+								target.isPanel !== previous.isPanel
+							) {
+								const old = win;
+								win = createPanelWindow(target, isDev);
 								loadSurface(
-									panelWin,
+									win,
 									"panel",
-									panelRotation(panelTarget.display, panelTarget.isPanel),
+									panelRotation(target.display, target.isPanel),
+									serial,
 								);
-							} else if (panelTarget.isPanel !== previous.isPanel) {
-								// The window type is fixed at creation; swap before closing the old one
-								// so the bus never sees zero windows.
-								const old = panelWin;
-								panelWin = createPanelWindow(panelTarget);
-								loadSurface(
-									panelWin,
-									"panel",
-									panelRotation(panelTarget.display, panelTarget.isPanel),
-								);
-								old.destroy();
+								if (old && !old.isDestroyed()) destroyPanel(old);
 							} else {
-								placePanel(panelWin, panelTarget);
-								const rotation = panelRotation(
-									panelTarget.display,
-									panelTarget.isPanel,
-								);
+								placePanel(win, target);
 								if (
-									rotation !== panelRotation(previous.display, previous.isPanel)
+									!owned ||
+									panelRotation(target.display, target.isPanel) !==
+										panelRotation(previous.display, previous.isPanel)
 								)
-									loadSurface(panelWin, "panel", rotation);
+									loadSurface(
+										win,
+										"panel",
+										panelRotation(target.display, target.isPanel),
+										serial,
+									);
+							}
+							stripWindows.set(serial, { win, target });
+							if (serial === activeDeviceId() || stripWindows.size === 1) {
+								panelWin = win;
+								panelTarget = target;
 							}
 							startBus();
 						};
-						const topologyChanged = (): void => {
-							// Hide synchronously so an OS relocation cannot expose the strip on primary.
-							if (
-								panelTarget.isPanel &&
-								!screen
-									.getAllDisplays()
-									.some((d) => d.id === panelTarget.display.id) &&
-								!panelWin.isDestroyed()
-							)
-								panelWin.hide();
+						const topologyChanged = (
+							_event?: unknown,
+							_display?: Display,
+							metrics?: string[],
+						): void => {
+							// Hide synchronously so an OS relocation cannot expose any serial's strip on primary.
+							let lostStrip = false;
+							for (const { win, target } of stripWindows.values())
+								if (
+									target.isPanel &&
+									!screen
+										.getAllDisplays()
+										.some((d) => d.id === target.display.id) &&
+									!win.isDestroyed()
+								) {
+									parkPanel(win);
+									lostStrip = true;
+								}
+							if (lostStrip) {
+								void voice.reset();
+								void profiles.resetKeys().catch(() => {});
+							}
+
 							void lifecycle.then((service) =>
-								lifecycleRuntime.runPromise(service.topology()),
+								lifecycleRuntime.runPromise(service.topology(metrics)),
 							);
 						};
 						screen.on("display-added", topologyChanged);
@@ -1029,7 +1196,12 @@ if (!app.requestSingleInstanceLock()) {
 						startBus();
 						// Preload asks after registering its listener, including after reloads.
 						const sendStatus = (event: Electron.IpcMainEvent): void => {
-							const status = bus?.currentStatus();
+							const serial = panelSerial(event.sender);
+							const status = (
+								serial && serial !== "desktop-preview" && bus?.device
+									? bus.device(serial)
+									: bus
+							)?.currentStatus();
 							if (status && !event.sender.isDestroyed()) {
 								event.sender.send(QUAKE_EVENT_CHANNEL, status);
 							}
@@ -1056,6 +1228,9 @@ if (!app.requestSingleInstanceLock()) {
 								const failures: unknown[] = [];
 								// Keep dependency order, but never skip the remaining cleanup after a failure.
 								for (const stop of [
+									// Bus teardown joins input work owned by the knob registration.
+									// Cancel its loads/dispatches before waiting for that queue.
+									() => knob.dispose(),
 									() => stopBus(),
 									() => weatherMedia.dispose(),
 									() => meetings.dispose(),
@@ -1065,7 +1240,6 @@ if (!app.requestSingleInstanceLock()) {
 										profiles.runtime.runPromise(
 											Fiber.interrupt(profileUpdates),
 										),
-									() => knob.dispose(),
 									() => agents.dispose(),
 									() => integrations.dispose(),
 									() => obs.dispose(),
@@ -1094,7 +1268,9 @@ if (!app.requestSingleInstanceLock()) {
 										managementWin.webContents.session.flushStorageData();
 										managementWin.destroy();
 									}
-									if (!panelWin.isDestroyed()) panelWin.destroy();
+									for (const owned of stripWindows.values())
+										destroyPanel(owned.win);
+									if (!panelWin.isDestroyed()) destroyPanel(panelWin);
 								}
 								if (failures.length)
 									throw new MaintenanceShutdownFailed(
@@ -1158,6 +1334,7 @@ if (!app.requestSingleInstanceLock()) {
 								if (panelWin.isDestroyed())
 									syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
 								managementWin = createManagementWindow();
+								removeLifecycle.bindManagement();
 								loadSurface(managementWin, "management");
 								managementReady = settingsWindow.initialize(
 									managementWin,

@@ -112,6 +112,31 @@ const chunks = (events: Stream.Stream<ChatChunk, unknown>) =>
 	Stream.runCollect(events).pipe(Effect.map(Chunk.toReadonlyArray));
 
 describe("ChatService real facade consumers", () => {
+	for (const answer of ["", " \t\n"])
+		it.effect(
+			`AI-093 rejects completed blank answer ${JSON.stringify(answer)} once`,
+			() =>
+				Effect.gen(function* () {
+					const service = yield* initialize;
+					const turn = yield* service.submit("window-a", input());
+					const actual = yield* chunks(turn.events);
+					expect(actual.filter((event) => event.type === "end")).toMatchObject([
+						{ outcome: "failed", errorCode: "AI.PROVIDER.PROTOCOL_INVALID" },
+					]);
+					const history = yield* service.history("window-a", sid);
+					expect(history.turns[0]?.status).toBe("failed");
+					expect(yield* service.session("window-a", sid)).toMatchObject({
+						state: "EMPTY",
+						hasCompletedExchange: false,
+					});
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							open: () => Effect.succeed(Stream.make(text(answer), complete)),
+						}),
+					),
+				),
+		);
 	it.effect(
 		"assembles exact chunks once, persists partial text and fans out through real reducers",
 		() => {
@@ -1010,3 +1035,57 @@ describe("bounded provider output", () => {
 			),
 	);
 });
+
+for (const finishAt of [90000, 300000])
+	it.effect(
+		`media turns use the selected transport budget at ${finishAt}ms`,
+		() => {
+			const queue = Effect.runSync(Queue.unbounded<NormalizedEvent>());
+			const opened = Effect.runSync(Deferred.make<void>());
+			let signal: AbortSignal | undefined;
+			return Effect.gen(function* () {
+				yield* AiRepository.put({
+					...workflowProfile,
+					adapter: "dashscope-media",
+					settings: { mediaKind: "image" },
+					capabilities: {
+						...workflowProfile.capabilities,
+						imageGeneration: "supported",
+					},
+				});
+				const service = yield* ChatService;
+				const turn = yield* service.submit("window-a", input());
+				const consumer = yield* chunks(turn.events).pipe(Effect.fork);
+				yield* Deferred.await(opened);
+				yield* TestClock.adjust(finishAt === 300000 ? 299999 : finishAt);
+				expect(signal?.aborted).toBe(false);
+				if (finishAt === 300000) yield* TestClock.adjust(1);
+				if (finishAt < 300000) {
+					expect(signal?.aborted).toBe(false);
+					yield* Queue.offerAll(queue, [
+						text("https://result.invalid/image.png"),
+						complete,
+					]);
+				}
+				const events = yield* Fiber.join(consumer);
+				expect(events.at(-1)).toMatchObject(
+					finishAt < 300000
+						? { outcome: "completed" }
+						: { outcome: "timedOut", errorCode: "CHAT.RESPONSE.TIMEOUT" },
+				);
+				expect(events.filter((event) => event.type === "end")).toHaveLength(1);
+				expect(signal?.aborted).toBe(true);
+			}).pipe(
+				Effect.provide(
+					testLayer({
+						open: (value) => {
+							signal = value.signal;
+							return Deferred.succeed(opened, undefined).pipe(
+								Effect.as(Stream.fromQueue(queue)),
+							);
+						},
+					}),
+				),
+			);
+		},
+	);

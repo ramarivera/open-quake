@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { findPanelDisplay, panelBounds, panelRotation } from "./display";
+import {
+	findPanelDisplay,
+	panelBounds,
+	panelRotation,
+	physicalLayout,
+} from "./display";
 import { makeDisplay } from "./test/display";
 
 const portrait = makeDisplay({
@@ -96,4 +101,31 @@ describe("panel geometry", () => {
 			height: 400,
 		});
 	});
+});
+
+it("MAIN-054 projects mixed DPI adjacency and negative origins without scaling DIP window positions", () => {
+	const left = makeDisplay({
+		id: 4,
+		bounds: { x: -960, y: -100, width: 960, height: 600 },
+		scaleFactor: 2,
+	});
+	const center = makeDisplay({
+		id: 1,
+		bounds: { x: 0, y: 0, width: 1280, height: 720 },
+		scaleFactor: 2,
+	});
+	const right = makeDisplay({
+		id: 2,
+		label: "DK-QUAKE",
+		bounds: { x: 1280, y: 0, width: 1920, height: 480 },
+	});
+	const layout = physicalLayout([center, right, left]);
+	expect(
+		layout.map((d) => [d.id, d.x, d.y, d.width, d.height, d.order]),
+	).toEqual([
+		[4, -960, -100, 1920, 1200, 0],
+		[1, 0, 0, 2560, 1440, 1],
+		[2, 2560, 0, 1920, 480, 2],
+	]);
+	expect(right.bounds.x).toBe(1280);
 });
