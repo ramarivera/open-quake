@@ -2,17 +2,31 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
-import { Deferred, Effect, Either, Fiber, Schema, TestClock } from "effect";
+import { Deferred, Effect, Either, Fiber, Logger, Schema } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const native = vi.hoisted(() => ({
 	root: "",
 	failLoad: false,
+	cleanupFailure: undefined as Error | undefined,
+	removals: [] as unknown[],
 	windows: [] as { destroyed: boolean; url: string; options: unknown }[],
 	permission: (() => true) as (...args: unknown[]) => unknown,
 	request: (() => {}) as (...args: unknown[]) => unknown,
 	network: (() => {}) as (...args: unknown[]) => unknown,
 }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs/promises")>();
+	return {
+		...actual,
+		rm: (...args: Parameters<typeof actual.rm>) => {
+			native.removals.push(args[1]);
+			return native.cleanupFailure
+				? Promise.reject(native.cleanupFailure)
+				: actual.rm(...args);
+		},
+	};
+});
 vi.mock("electron", () => ({
 	app: { getPath: () => native.root },
 	session: {
@@ -71,8 +85,11 @@ beforeEach(async () => {
 	native.root = await mkdtemp(join(tmpdir(), "oq-sound-player-"));
 	native.windows.length = 0;
 	native.failLoad = false;
+	native.cleanupFailure = undefined;
+	native.removals.length = 0;
 });
 afterEach(async () => {
+	native.cleanupFailure = undefined;
 	await rm(native.root, { recursive: true, force: true });
 });
 
@@ -122,6 +139,66 @@ describe("native MP3 boundary", () => {
 			SoundboardDecodeFailed,
 		);
 	});
+	test("keeps stopped audio and the original acquisition failure independent of residual file cleanup", async () => {
+		const controller = new AbortController();
+		const report = vi.fn();
+		const worker = await openSoundboardWorker(
+			"file:///local.mp3",
+			controller.signal,
+			report,
+		);
+		native.cleanupFailure = Object.assign(new Error("private cleanup failed"), {
+			code: "EPERM",
+		});
+		await expect(worker.close()).resolves.toBeUndefined();
+		await expect(worker.close()).resolves.toBeUndefined();
+		expect(report).toHaveBeenCalledExactlyOnceWith(native.cleanupFailure);
+		expect(native.windows[0]?.destroyed).toBe(true);
+		expect(native.removals).toEqual([
+			{ recursive: true, force: true, maxRetries: 3, retryDelay: 50 },
+		]);
+		native.failLoad = true;
+		await expect(
+			openSoundboardWorker(
+				"file:///local.mp3",
+				new AbortController().signal,
+				report,
+			),
+		).rejects.toThrow("native load failed");
+		expect(report).toHaveBeenCalledTimes(2);
+		expect(native.windows[1]?.destroyed).toBe(true);
+	});
+	it.effect(
+		"reports residual cleanup through the owning runtime with a scrubbed cause",
+		() => {
+			const messages: unknown[] = [];
+			return Effect.gen(function* () {
+				yield* createSoundboardPlayer().open(entry);
+				native.cleanupFailure = Object.assign(
+					new Error("/private/music/secret.mp3 Bearer secret"),
+					{ code: "EPERM" },
+				);
+			}).pipe(
+				Effect.scoped,
+				Effect.provide(
+					Logger.replace(
+						Logger.defaultLogger,
+						Logger.make(({ message }) => messages.push(message)),
+					),
+				),
+				Effect.tap(() =>
+					Effect.sync(() => {
+						expect(native.windows[0]?.destroyed).toBe(true);
+						const raw = JSON.stringify(messages);
+						expect(raw).toContain("soundboard.worker.cleanup.failed");
+						expect(raw).toContain("QUAKE.AUDIO.DECODE_FAILED");
+						expect(raw).toContain("EPERM");
+						expect(raw).not.toMatch(/private|music|secret|Bearer/);
+					}),
+				),
+			);
+		},
+	);
 	test("cleans failed and already-aborted acquisition", async () => {
 		native.failLoad = true;
 		await expect(
@@ -151,14 +228,13 @@ describe("native MP3 boundary", () => {
 					});
 					return new Promise((resolve) => {
 						finish = resolve;
+						Effect.runSync(Deferred.succeed(entered, undefined));
 					});
 				});
-				const pending = yield* backend.open(entry).pipe(
-					Effect.tap(() => Deferred.succeed(entered, undefined)),
-					Effect.scoped,
-					Effect.fork,
-				);
-				yield* TestClock.adjust(1);
+				const pending = yield* backend
+					.open(entry)
+					.pipe(Effect.scoped, Effect.fork);
+				yield* Deferred.await(entered);
 				yield* Fiber.interrupt(pending);
 				expect(aborted).toBe(true);
 				finish({

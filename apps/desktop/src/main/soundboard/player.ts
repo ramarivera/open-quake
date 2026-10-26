@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Runtime, Schema } from "effect";
 import { app, BrowserWindow, session } from "electron";
 import { SoundboardPlayer } from "../../../../../packages/edge/src/soundboard/playback-ports.js";
 import type { SoundEntry } from "../../../../../packages/edge/src/soundboard/soundboard-contracts.js";
@@ -19,10 +19,18 @@ export interface SoundboardWorker {
 	readonly close: () => Promise<void>;
 }
 
+const cleanupWarning = (cause: unknown) =>
+	Effect.logWarning(
+		"soundboard.worker.cleanup.failed",
+		new SoundboardDecodeFailed(cause),
+	);
+
 /** Opens only on an explicit playback request. Never shows, focuses, or requests permission. */
 export async function openSoundboardWorker(
 	url: string,
 	signal: AbortSignal,
+	onCleanupError: (cause: unknown) => void = (cause) =>
+		Effect.runSync(cleanupWarning(cause)),
 ): Promise<SoundboardWorker> {
 	const directory = await mkdtemp(
 		join(app.getPath("sessionData"), "soundboard-worker-"),
@@ -35,7 +43,13 @@ export async function openSoundboardWorker(
 		if (closing) return closing;
 		signal.removeEventListener("abort", abort);
 		if (window && !window.isDestroyed()) window.destroy();
-		closing = rm(directory, { recursive: true, force: true });
+		// Audio is already destroyed. A leftover private HTML file must not poison output ownership.
+		closing = rm(directory, {
+			recursive: true,
+			force: true,
+			maxRetries: 3,
+			retryDelay: 50,
+		}).catch(onCleanupError);
 		return closing;
 	};
 	const abort = () => {
@@ -116,6 +130,7 @@ export function createSoundboardPlayer(
 					!entry.path.toLowerCase().endsWith(".mp3")
 				)
 					return yield* new SoundboardDecodeFailed();
+				const runtime = yield* Effect.runtime<never>();
 				const controller = new AbortController();
 				let worker: SoundboardWorker | undefined;
 				yield* Effect.addFinalizer(() =>
@@ -135,6 +150,7 @@ export function createSoundboardPlayer(
 							const result = await open(
 								pathToFileURL(entry.path).href,
 								controller.signal,
+								(cause) => Runtime.runSync(runtime)(cleanupWarning(cause)),
 							);
 							if (controller.signal.aborted) {
 								await result.close();

@@ -186,6 +186,7 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 );
 
 export const knownLogEvents = new Set([
+	"soundboard.worker.cleanup.failed",
 	"soundboard.file.inspection.failed",
 	"soundboard.player.failed",
 	"Native media request failed",
