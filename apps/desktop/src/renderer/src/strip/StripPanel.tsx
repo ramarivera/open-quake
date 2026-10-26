@@ -81,16 +81,7 @@ function ActiveStripPanel(): React.JSX.Element {
 	>(undefined);
 	const layout = useRef<StripLayout | undefined>(undefined);
 	const [pressedKeyCode, setPressedKeyCode] = useState<string>();
-	const onLayout = useCallback((current: StripLayout | undefined) => {
-		const previous = layout.current;
-		const identity = (value: StripLayout | undefined) =>
-			JSON.stringify(value?.tiles.map((tile) => tile.key));
-		if (previous && current && identity(previous) !== identity(current))
-			document
-				.getElementById("root")
-				?.dispatchEvent(new Event("quake-strip-reset"));
-		layout.current = current;
-	}, []);
+	const committedLayoutIdentity = useRef<string | undefined>(undefined);
 	const { snapshot } = useWallpaper();
 	const feedback = usePanelFeedback(useQuakeEvents());
 	const observeSelection = (next: StripProfiles): void => {
@@ -116,6 +107,27 @@ function ActiveStripPanel(): React.JSX.Element {
 	const { settings } = useStripSettings();
 	const serial = snapshot?.saved.serial;
 	const stripLayout = useStripLayout(profiles, serial);
+	const onLayout = useCallback(
+		(current: StripLayout | undefined) => {
+			if (current) {
+				// StripScreen clears its layout before replacement and also repaints
+				// runtime state. Compare committed keys, retaining identity across cleanup.
+				const identity = JSON.stringify(
+					stripLayout?.tiles.map((tile) => tile.key),
+				);
+				if (
+					committedLayoutIdentity.current !== undefined &&
+					committedLayoutIdentity.current !== identity
+				)
+					document
+						.getElementById("root")
+						?.dispatchEvent(new Event("quake-strip-reset"));
+				committedLayoutIdentity.current = identity;
+			}
+			layout.current = current;
+		},
+		[stripLayout],
+	);
 	const voice = useVoiceSurface(stripLayout);
 	const motion = useStripMotion();
 	// Chat cards go opaque while the FunctionWheel or picker is open (AI-207).

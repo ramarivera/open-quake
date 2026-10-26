@@ -7,6 +7,7 @@ import { KnobModelPorts } from "../../../../../../packages/device/src/knob/model
 import { KnobModel } from "../../../../../../packages/device/src/knob/model/service";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import type { QuakeEvent } from "../../../preload/quake";
+import type { KeyRequest, KeyRuntimeState } from "../../../shared/key-library";
 import type {
 	KnobModelContext,
 	KnobRequest,
@@ -15,6 +16,7 @@ import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 	type Profile,
+	type ProfileEnvelope,
 } from "../../../shared/profiles";
 import { TransportButton } from "../weather-media/TransportButton";
 import { stripLayout } from "./geometry";
@@ -524,6 +526,139 @@ describe("touch production components", () => {
 			controls[0]?.click();
 		});
 		expect(request).toHaveBeenCalledTimes(4);
+	});
+	it("SCREEN-010 cancels held keys after same-page content replacement but preserves runtime repaint ownership", async () => {
+		const { node, root } = host();
+		const base = fixtureProfile();
+		const profile: Profile = {
+			...base,
+			pages: [
+				{
+					...base.pages[0],
+					keys: base.pages[0].keys.map((key) => ({
+						...key,
+						config: {
+							...key.config,
+							type: "hotkeySwitch",
+							actions: [{ type: "hotkey", value: "control+a" }],
+						},
+					})),
+				},
+			],
+		};
+		const events = new Set<(event: QuakeEvent) => void>();
+		let snapshot: ((value: unknown) => void) | undefined;
+		let runtime: ((state: KeyRuntimeState) => void) | undefined;
+		const envelope: ProfileEnvelope = {
+			...createInitialProfileEnvelope(),
+			profiles: [profile],
+		};
+		const request = vi.fn(async (_command: KeyRequest) => ({
+			_tag: "success" as const,
+		}));
+		window.openQuake = {
+			version: "test",
+			onQuakeEvent: (listener) => {
+				events.add(listener);
+				return () => {
+					events.delete(listener);
+				};
+			},
+		};
+		window.quakeProfiles = {
+			read: async () => ({
+				_tag: "ready",
+				envelope: encodeProfileEnvelope(envelope),
+			}),
+			onSnapshot: (listener) => {
+				snapshot = listener;
+				return () => {};
+			},
+		};
+		window.quakeKeyLibrary = {
+			request,
+			onPreview: () => () => {},
+			onRuntime: (listener) => {
+				runtime = listener;
+				return () => {};
+			},
+		};
+		await act(async () => root.render(<StripPanel />));
+		await flush();
+		const reset = vi.fn();
+		node.addEventListener("quake-strip-reset", reset);
+		const frame = (action: 0 | 1) => {
+			for (const listener of events)
+				listener({
+					source: "mock",
+					kind: "touch",
+					points: [{ x: 100, y: 380, action }],
+				});
+		};
+		await act(async () => frame(1));
+		expect(
+			request.mock.calls
+				.filter(([command]) => command.type === "activate")
+				.map(([command]) => command),
+		).toEqual([
+			expect.objectContaining({ kind: "down", revision: profile.revision }),
+		]);
+		await act(async () =>
+			runtime?.({
+				deviceId: "desktop-preview",
+				profileId: profile.id,
+				pageId: "page",
+				keyCode: "1,1",
+				alternate: 1,
+			}),
+		);
+		expect(reset).not.toHaveBeenCalled();
+		const changed: Profile = {
+			...profile,
+			revision: profile.revision + 1,
+			pages: [
+				{
+					...profile.pages[0],
+					keys: profile.pages[0].keys.map((key) => ({
+						...key,
+						config: {
+							...key.config,
+							actions: [{ type: "hotkey", value: "control+b" }],
+						},
+					})),
+				},
+			],
+		};
+		await act(async () =>
+			snapshot?.({
+				_tag: "ready",
+				envelope: encodeProfileEnvelope({ ...envelope, profiles: [changed] }),
+			}),
+		);
+		await flush();
+		expect(reset).toHaveBeenCalledOnce();
+		expect(
+			request.mock.calls
+				.filter(([command]) => command.type === "activate")
+				.map(([command]) => command),
+		).toEqual([
+			expect.objectContaining({ kind: "down", revision: profile.revision }),
+			expect.objectContaining({ kind: "cancel", revision: profile.revision }),
+		]);
+		await act(async () => frame(1));
+		expect(
+			request.mock.calls.filter(([command]) => command.type === "activate"),
+		).toHaveLength(2);
+		await act(async () => frame(0));
+		await act(async () => frame(1));
+		expect(request.mock.calls.at(-1)?.[0]).toEqual(
+			expect.objectContaining({
+				type: "activate",
+				kind: "down",
+				revision: changed.revision,
+			}),
+		);
+		delete window.openQuake;
 	});
 	it("SCREEN-010 pagehide unmounts the whole production panel and releases active subscriptions and timers", async () => {
 		vi.useFakeTimers();
