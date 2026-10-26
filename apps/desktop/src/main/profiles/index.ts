@@ -90,6 +90,7 @@ export function prepareProfiles(
 	diagnostics?: DesktopDiagnostics,
 	mediaActions?: MediaActionAdapter,
 	resetOwned?: (deviceId?: string) => Promise<void>,
+	panelSerial?: (sender: Electron.WebContents) => string | undefined,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -211,6 +212,7 @@ export function prepareProfiles(
 				managementURL,
 				panel,
 				(sender) => captureProfiles.has(sender),
+				panelSerial,
 			);
 			const snapshots = registerProfileSnapshots(runtime, renderer, false);
 			const localeListeners = new Set<() => void>();

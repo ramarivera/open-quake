@@ -362,3 +362,113 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+.meeting-markdown {
+	font-size: 13px;
+	line-height: 1.8;
+	overflow-wrap: anywhere;
+	overflow-x: auto;
+}
+.meeting-markdown table {
+	border-collapse: collapse;
+	width: 100%;
+}
+.meeting-markdown th,
+.meeting-markdown td {
+	border: 1px solid var(--quake-border);
+	padding: 6px 10px;
+	text-align: left;
+}
+.meeting-markdown a {
+	color: var(--quake-accent);
+}
+.meeting-markdown input[type="checkbox"] {
+	width: auto;
+	accent-color: var(--quake-accent);
+}
+.meeting-list-heading {
+	color: var(--quake-muted);
+	font-size: 11px;
+	margin: 18px 10px 8px;
+}
+.meeting-title-dialog {
+	width: min(400px, calc(100vw - 40px));
+	box-sizing: border-box;
+}
+.meeting-title-dialog form {
+	display: block;
+}
+.meeting-title-dialog input {
+	width: 100%;
+	box-sizing: border-box;
+	margin-top: 8px;
+}
+.meeting-title-dialog output {
+	display: block;
+	text-align: right;
+	font-size: 12px;
+}
+.meeting-dialog button {
+	cursor: pointer;
+}
+.meeting-task-feedback {
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--quake-muted);
+}
+.meeting-transcript-word[data-marked="true"] {
+	background: rgb(255 152 0 / 0.3);
+}
+.meeting-transcript-text {
+	white-space: pre-wrap;
+}
+.meeting-transcript-word[data-selected="true"] {
+	background: rgb(255 152 0 / 0.6);
+	color: var(--quake-foreground);
+}
+.meeting-mark-line {
+	display: block;
+	color: var(--oq-warning);
+	font-size: 11px;
+}
+.meeting-bookmark {
+	position: relative;
+	display: inline-block;
+	vertical-align: middle;
+	width: 20px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--oq-warning);
+}
+.meeting-bookmark span {
+	position: absolute;
+	inset: 0;
+	font-size: 9px;
+	text-align: center;
+	line-height: 16px;
+	color: var(--quake-background);
+}
+.meeting-bookmark[aria-pressed="true"] {
+	color: var(--quake-accent);
+}
+.meeting-mark-tooltip {
+	position: fixed;
+	z-index: 100;
+	box-sizing: border-box;
+	padding: 10px;
+	border: 1px solid var(--quake-border);
+	border-radius: 6px;
+	background: var(--quake-surface);
+	color: var(--quake-foreground);
+	font-size: 12px;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+	max-height: calc(100vh - 40px);
+	overflow: hidden;
+}
+.meeting-search [aria-busy="true"] {
+	color: var(--quake-accent);
+}

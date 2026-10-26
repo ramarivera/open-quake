@@ -140,7 +140,7 @@ export function registerKnobRuntime(
 		},
 	);
 	return {
-		onDevice(event: QuakeEvent): void {
+		onDevice(event: QuakeEvent): Promise<void> {
 			if (event.kind === "status") connected = event.state === "connected";
 			if (
 				disposed ||
@@ -148,7 +148,7 @@ export function registerKnobRuntime(
 				event.kind === "touch" ||
 				(event.kind === "status" && event.state !== "connected" && !initialized)
 			)
-				return;
+				return Promise.resolve();
 			pending = pending
 				.then(async () => {
 					if (disposed) return;
@@ -188,6 +188,7 @@ export function registerKnobRuntime(
 				.catch(() => {
 					// runPromise diagnostics retain the failed exit; a dispatch failure must not restart owned observers.
 				});
+			return pending;
 		},
 		async refresh(): Promise<void> {
 			if (disposed) return;

@@ -74,6 +74,7 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 		requests: MeetingAsrRequest[] = [],
 		prompts: Parameters<CompatibleAdapter["open"]>[0][] = [];
 	let stored: typeof MeetingStore.Encoded = { version: 1, records: [] };
+	let asrSegments = segments;
 	let failSummary = false,
 		pending = 0,
 		failSave = false,
@@ -177,7 +178,7 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 				calls.push("poll");
 				return pending-- > 0
 					? { status: "pending" }
-					: { status: "complete", segments };
+					: { status: "complete", segments: asrSegments };
 			}),
 		cancel: (id) =>
 			Effect.sync(() => {
@@ -247,6 +248,9 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 		capture,
 		adapter,
 		translationRequests,
+		segments: (next: typeof segments) => {
+			asrSegments = next;
+		},
 		translations: (updates: typeof translationUpdates) => {
 			translationUpdates = updates;
 		},
@@ -1355,3 +1359,249 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"SETTINGS-107 default template survives restart and applies to new main/side recordings without changing saved summaries",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.process(id);
+			const original = (yield* MeetingService.snapshot()).records[0];
+			yield* MeetingService.template(id, "interview");
+			expect(f.saved().summaryTemplate).toBe("interview");
+			expect(f.saved().records[0]?.minutes).toBe(original?.minutes);
+			expect(f.saved().records[0]?.appliedTemplate).toBe("project-weekly");
+			yield* Effect.gen(function* () {
+				const main = (yield* MeetingService.action("meetingMinutes"))
+					.records[0];
+				expect(main?.template).toBe("interview");
+				const side = (yield* MeetingService.action("tempMeetingMinutes"))
+					.records[0];
+				expect(side?.template).toBe("interview");
+				expect(Option.getOrUndefined(side?.parentId ?? Option.none())).toBe(
+					main?.id,
+				);
+				expect(
+					(yield* MeetingService.snapshot()).records.find((r) => r.id === id)
+						?.minutes,
+				).toBe(original?.minutes);
+			}).pipe(Effect.provide(Layer.fresh(f.layer)));
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"SETTINGS-107 failed template save preserves both record choice and next-record default",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.template(id, "standard");
+			f.failSave();
+			const result = yield* Effect.either(
+				MeetingService.template(id, "interview"),
+			);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"QUAKE.MEETING.STORAGE_FAILED",
+			);
+			expect(f.saved().summaryTemplate).toBe("standard");
+			expect((yield* MeetingService.snapshot()).records[0]?.template).toBe(
+				"standard",
+			);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"AI-313 SETTINGS-108 rejects blank and overweight titles at the conductor, saves trimmed CJK and reloads",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			const original = (yield* MeetingService.snapshot()).records[0]?.title;
+			for (const title of [
+				" ",
+				"汉".repeat(51),
+				"a".repeat(101),
+				"😀".repeat(51),
+			]) {
+				const rejected = yield* Effect.either(MeetingService.rename(id, title));
+				expect(rejected._tag === "Left" && rejected.left.code).toBe(
+					"QUAKE.MEETING.INVALID",
+				);
+				expect((yield* MeetingService.snapshot()).records[0]?.title).toBe(
+					original,
+				);
+			}
+			yield* MeetingService.rename(id, `  ${"汉".repeat(50)}  `);
+			const restarted = yield* MeetingService.snapshot().pipe(
+				Effect.provide(Layer.fresh(f.layer)),
+			);
+			expect(restarted.records[0]?.title).toBe("汉".repeat(50));
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"AI-312 persists a new processing attempt even when immediate regeneration failure keeps identical prior content",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.process(id);
+			const original = (yield* MeetingService.snapshot()).records[0];
+			f.failSummary(true);
+			yield* Effect.either(MeetingService.regenerate(id, "interview"));
+			const failed = (yield* MeetingService.snapshot()).records[0];
+			expect(failed?.processingAttempt).toBe(
+				(original?.processingAttempt ?? 0) + 1,
+			);
+			expect(failed?.minutes).toBe(original?.minutes);
+			expect(failed?.appliedTemplate).toEqual(original?.appliedTemplate);
+			expect(f.requests).toHaveLength(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const task of ["audio", "transcription"] as const) {
+	it.effect(
+		`AI-311 SETTINGS-106 retries ${task} and preserves minutes only when reusing transcription`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* MeetingService.process(id);
+				const original = (yield* MeetingService.snapshot()).records[0];
+				yield* MeetingRepository.update((records) =>
+					records.map((record) =>
+						record.id === id
+							? { ...record, state: "failed", [task]: "failed" }
+							: record,
+					),
+				);
+				const transcriptions = f.requests.length;
+				const summaries = f.prompts.length;
+				yield* MeetingService.process(id);
+				const retried = (yield* MeetingService.snapshot()).records[0];
+				expect(retried?.state).toBe("completed");
+				expect(retried?.[task]).toBe("complete");
+				expect(retried?.minutes).toBe(
+					task === "transcription" ? "## Saved summary 2" : original?.minutes,
+				);
+				expect(retried?.appliedTemplate).toEqual(original?.appliedTemplate);
+				expect(f.prompts).toHaveLength(
+					summaries + (task === "transcription" ? 1 : 0),
+				);
+				expect(f.requests).toHaveLength(
+					transcriptions + (task === "transcription" ? 1 : 0),
+				);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+
+for (const failRegeneration of [false, true]) {
+	it.effect(
+		`regenerates minutes for replaced transcription and invalidates stale minutes on failure=${failRegeneration}`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* MeetingService.process(id);
+				yield* MeetingRepository.update((records) =>
+					records.map((record) =>
+						record.id === id
+							? { ...record, state: "failed", transcription: "failed" }
+							: record,
+					),
+				);
+				const replacement = [
+					{
+						...segments[0],
+						id: "new",
+						speaker: "2",
+						startMs: 0,
+						endMs: 1000,
+						text: "Blair moved delivery to Monday.",
+					},
+				];
+				f.segments(replacement);
+				f.failSummary(failRegeneration);
+				const result = yield* Effect.either(MeetingService.process(id));
+				expect(Either.isLeft(result)).toBe(failRegeneration);
+				const retried = (yield* MeetingService.snapshot()).records[0];
+				expect(retried?.transcript).toEqual(replacement);
+				expect(retried?.transcription).toBe("complete");
+				expect(f.prompts).toHaveLength(2);
+				expect(JSON.stringify(f.prompts[1])).toContain(replacement[0]?.text);
+				expect(JSON.stringify(f.prompts[1])).not.toContain(segments[0]?.text);
+				expect(retried?.summary).toBe(failRegeneration ? "failed" : "complete");
+				expect(retried?.minutes).toBe(
+					failRegeneration ? "" : "## Saved summary 2",
+				);
+				if (failRegeneration) {
+					expect(retried?.appliedTemplate).toEqual(Option.none());
+					expect(retried?.provenance).toEqual(Option.none());
+					f.failSummary(false);
+					yield* MeetingService.process(id);
+					expect(f.requests).toHaveLength(2);
+					expect((yield* MeetingService.snapshot()).records[0]?.minutes).toBe(
+						"## Saved summary 3",
+					);
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+
+for (const audio of ["failed", "interrupted"] as const) {
+	it.effect(
+		`interrupts ${audio} audio retry conversion and preserves retry after restart`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* MeetingService.process(id);
+				const original = (yield* MeetingService.snapshot()).records[0];
+				yield* MeetingRepository.update((records) =>
+					records.map((record) =>
+						record.id === id ? { ...record, state: audio, audio } : record,
+					),
+				);
+				const converting = yield* Deferred.make<void>();
+				f.pauseStop(
+					Deferred.succeed(converting, undefined).pipe(
+						Effect.zipRight(Effect.never),
+					),
+				);
+				const retry = yield* Effect.fork(MeetingService.process(id));
+				yield* Deferred.await(converting);
+				expect((yield* MeetingService.snapshot()).records[0]?.audio).toBe(
+					"processing",
+				);
+				yield* Fiber.interrupt(retry);
+				const interrupted = (yield* MeetingService.snapshot()).records[0];
+				expect(interrupted?.state).toBe("interrupted");
+				expect(interrupted?.audio).toBe("interrupted");
+				expect(interrupted?.transcription).toBe("complete");
+				expect(interrupted?.summary).toBe("complete");
+				expect(interrupted?.minutes).toBe(original?.minutes);
+				expect(f.saved().records[0]?.audio).toBe("interrupted");
+				const restarted = yield* MeetingRepository.list().pipe(
+					Effect.provide(MeetingRepository.Default(f.storage)),
+				);
+				expect(restarted[0]?.audio).toBe("interrupted");
+				f.pauseStop(Effect.void);
+				yield* MeetingService.process(id);
+				expect((yield* MeetingService.snapshot()).records[0]).toMatchObject({
+					state: "completed",
+					audio: "complete",
+					minutes: original?.minutes,
+				});
+				expect(f.requests).toHaveLength(1);
+				expect(f.prompts).toHaveLength(1);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}

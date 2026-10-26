@@ -8,7 +8,7 @@ import {
 	QuakeDevice,
 	QuakeDeviceNotFound,
 } from "@open-quake/device";
-import { Clock, Deferred, Effect, Exit, type Scope, Stream } from "effect";
+import { Clock, Deferred, Effect, Exit, Scope, Stream } from "effect";
 import type {
 	DeviceStatusError,
 	DeviceStatusEvent,
@@ -18,8 +18,13 @@ import type {
 export type { QuakeEvent } from "../preload/quake";
 
 export type DeviceBus = {
-	on(listener: (event: QuakeEvent) => void): () => void;
+	on(listener: (event: QuakeEvent, serial?: string) => void): () => void;
 	currentStatus(): DeviceStatusEvent | undefined;
+	serial?(): string | undefined;
+	onLifecycleStatus?: (
+		listener: (event: DeviceStatusEvent, serial: string) => void,
+	) => () => void;
+	device?: (serial: string) => DeviceBus | undefined;
 	setScreenPower?: (on: boolean) => Effect.Effect<boolean, DeviceStreamError>;
 	hardware?(): HardwareSession | undefined;
 	recover?: (reopen?: boolean) => Effect.Effect<void>;
@@ -32,10 +37,29 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	attachHardware?: (
 		connection: QuakeConnection,
 	) => Effect.Effect<HardwareSession, HardwareError, Scope.Scope>,
+	selection?: { readonly serial: string },
 ): Effect.fn.Return<DeviceBus, never, QuakeDevice | Scope.Scope> {
 	const device = yield* QuakeDevice;
-	const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
+	const ownerScope = yield* Effect.scope;
+	const lifecycleListeners = new Set<
+		(event: DeviceStatusEvent, serial: string) => void
+	>();
+	const secondary = new Map<
+		string,
+		{ bus: DeviceBus; scope: Scope.CloseableScope }
+	>();
+	const publishLifecycle = (
+		event: DeviceStatusEvent,
+		serial: string | undefined,
+	) => {
+		if (serial)
+			for (const listener of lifecycleListeners) listener(event, serial);
+	};
+	const emitter = new EventEmitter<{
+		event: [event: QuakeEvent, serial?: string];
+	}>();
 	let status: DeviceStatusEvent | undefined;
+	let lastSerial: string | undefined;
 	let sequence = 0;
 	let hardware: HardwareSession | undefined;
 	let connectionNow: QuakeConnection | undefined;
@@ -58,8 +82,11 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	);
 	const publish = (event: QuakeEvent): Effect.Effect<void> =>
 		Effect.sync(() => {
-			if (event.kind === "status") status = event;
-			emitter.emit("event", event);
+			if (event.kind === "status") {
+				status = event;
+				publishLifecycle(event, lastSerial ?? "desktop-preview");
+			}
+			emitter.emit("event", event, lastSerial);
 		});
 	const reportError = (error: DeviceStatusError): Effect.Effect<void> =>
 		publish({
@@ -104,9 +131,28 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		Effect.gen(function* () {
 			// QuakeDevice filters VID/PID and usagePage/usage, selecting FF60/61
 			// rather than the system, consumer or keyboard HID collections.
+			if (selection) {
+				const present = yield* device.discover();
+				const current = present.find(
+					(info) => info.serialNumber === selection.serial,
+				);
+				if (!current) return yield* new QuakeDeviceNotFound();
+				selectedPath = current.path;
+			}
+			if (!selection && !selectedPath && lastSerial) {
+				const present = yield* device.discover();
+				const prior =
+					present.find((info) => info.serialNumber === lastSerial) ??
+					present.find(
+						(info) => !info.serialNumber || !secondary.has(info.serialNumber),
+					);
+				if (!prior) return yield* new QuakeDeviceNotFound();
+				selectedPath = prior.path;
+			}
 			if (selectedPath) {
 				const present = yield* device.discover();
 				if (!present.some((info) => info.path === selectedPath)) {
+					if (selection) return yield* new QuakeDeviceNotFound();
 					selectedPath = undefined;
 					return yield* new QuakeDeviceNotFound();
 				}
@@ -115,6 +161,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 				selectedPath ? { path: selectedPath } : {},
 			);
 			connectionNow = connection;
+			lastSerial = connection.info.serialNumber;
 			selectedPath = connection.info.path;
 			const openedAt = yield* Clock.currentTimeMillis;
 			yield* Effect.addFinalizer(() =>
@@ -210,13 +257,92 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 			yield* wait(delay);
 		}),
 	).pipe(Effect.forkScoped);
-	return {
+	if (!selection)
+		yield* Effect.forever(
+			Effect.sleep(1000).pipe(
+				Effect.zipRight(
+					Effect.gen(function* () {
+						const scan = yield* device.discover().pipe(Effect.either);
+						if (scan._tag === "Left") {
+							yield* Effect.logWarning(scan.left);
+							return;
+						}
+						const discovered = scan.right;
+						const primarySerial =
+							discovered.find((info) => info.serialNumber === lastSerial)
+								?.serialNumber ?? discovered[0]?.serialNumber;
+						const promote = primarySerial
+							? secondary.get(primarySerial)
+							: undefined;
+						if (promote && primarySerial) {
+							secondary.delete(primarySerial);
+							yield* Scope.close(promote.scope, Exit.void);
+						}
+						for (const [serial, entry] of secondary) {
+							if (!discovered.some((info) => info.serialNumber === serial)) {
+								publishLifecycle(
+									{
+										source: "hid",
+										kind: "status",
+										state: "disconnected",
+										reason: "scope-closed",
+									},
+									serial,
+								);
+								secondary.delete(serial);
+								yield* Scope.close(entry.scope, Exit.void);
+							}
+						}
+						for (const info of discovered) {
+							const serial = info.serialNumber;
+							if (!serial || serial === primarySerial || secondary.has(serial))
+								continue;
+							const childScope = yield* Scope.make();
+							const child = yield* Scope.extend(
+								startDeviceBus(attachHardware, { serial }),
+								childScope,
+							);
+							secondary.set(serial, { bus: child, scope: childScope });
+							child.on((event) => {
+								if (event.kind === "status") publishLifecycle(event, serial);
+								emitter.emit("event", event, serial);
+							});
+						}
+					}),
+				),
+				Effect.asVoid,
+			),
+		).pipe(Effect.forkIn(ownerScope));
+	yield* Effect.addFinalizer(() =>
+		Effect.gen(function* () {
+			for (const entry of secondary.values())
+				yield* Scope.close(entry.scope, Exit.void);
+			secondary.clear();
+			lifecycleListeners.clear();
+		}),
+	);
+	const primary: DeviceBus = {
 		on(listener) {
 			emitter.on("event", listener);
-			if (status) listener(status);
+			if (status) listener(status, lastSerial);
 			return () => emitter.off("event", listener);
 		},
 		currentStatus: () => status,
+		serial: () => connectionNow?.info.serialNumber ?? lastSerial,
+		onLifecycleStatus: (listener) => {
+			lifecycleListeners.add(listener);
+			if (status) listener(status, lastSerial ?? "desktop-preview");
+			for (const [serial, entry] of secondary) {
+				const now = entry.bus.currentStatus();
+				if (now) listener(now, serial);
+			}
+			return () => {
+				lifecycleListeners.delete(listener);
+			};
+		},
+		device: (serial) =>
+			secondary.get(serial)?.bus ??
+			(serial === lastSerial ? primary : undefined),
 		hardware: () => hardware,
 		recover: resetBackoff,
 		setScreenPower: (on) =>
@@ -226,4 +352,5 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 					: Effect.succeed(false),
 			),
 	};
+	return primary;
 });

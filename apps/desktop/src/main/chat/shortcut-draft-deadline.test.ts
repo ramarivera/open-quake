@@ -6,7 +6,7 @@ import { profileFromModel } from "./host";
 import { shortcutDraft } from "./shortcut-draft";
 
 it.effect(
-	"ends a blocked generation at exactly 60 seconds and cancels its provider",
+	"ends a blocked generation at exactly 300 seconds and cancels its provider",
 	() =>
 		Effect.gen(function* () {
 			const opened = yield* Deferred.make<void>();
@@ -41,7 +41,7 @@ it.effect(
 				Effect.fork,
 			);
 			yield* Deferred.await(opened);
-			yield* TestClock.adjust("59999 millis");
+			yield* TestClock.adjust("299999 millis");
 			expect(Option.isNone(yield* Fiber.poll(fiber))).toBe(true);
 			yield* TestClock.adjust("1 millis");
 			expect(yield* Fiber.join(fiber)).toMatchObject({

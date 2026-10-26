@@ -45,6 +45,7 @@ import { copyGifFile } from "./clipboard";
 import { type EmojiGenerationPort, makeEmojiController } from "./controller";
 import { emojiFiles } from "./files";
 import { placeEmojiPackage } from "./profile-placement";
+import { renameLinkedEmojiProfile } from "./profile-rename";
 export function prepareEmoji<R>(options: {
 	readonly diagnostics?: DesktopDiagnostics;
 	readonly management: () => BrowserWindow;
@@ -146,6 +147,36 @@ export function prepareEmoji<R>(options: {
 					files,
 					management: options.management,
 					place: placeEmojiPackage(options.profiles),
+					renameLinked: renameLinkedEmojiProfile(options.profiles),
+					references: async () => {
+						const { envelope } = await options.profiles.runtime.runPromise(
+							ProfileService.loadProfiles(),
+						);
+						const keys = envelope.profiles
+							.flatMap((p) => p.pages.flatMap((page) => page.keys))
+							.filter((key) => key.config.type === "emoji");
+						return {
+							hashes: keys.flatMap((key) => {
+								const ref = Schema.decodeUnknownOption(EmojiKeyReference)(
+									key.config.actions.find((a) => a.type === "emojiConfig")
+										?.value,
+								);
+								return [
+									...(key.config.icon.startsWith("emoji:")
+										? [key.config.icon.slice(6)]
+										: []),
+									...(Option.isSome(ref) ? [ref.value.hash] : []),
+								];
+							}),
+							ids: keys.flatMap((key) => {
+								const ref = Schema.decodeUnknownOption(EmojiKeyReference)(
+									key.config.actions.find((a) => a.type === "emojiConfig")
+										?.value,
+								);
+								return Option.isSome(ref) ? [ref.value.emojiId] : [];
+							}),
+						};
+					},
 					...(options.generation ? { generation: options.generation } : {}),
 				}),
 			);
@@ -313,7 +344,8 @@ export function prepareEmoji<R>(options: {
 					ipcMain.removeHandler(EMOJI_REQUEST);
 					ipcMain.removeHandler(EMOJI_PRESS);
 					shutdown = (async () => {
-						await Promise.allSettled([controller, ...pending]);
+						(await controller).cancel();
+						await Promise.allSettled([...pending]);
 						await runtime.dispose();
 					})();
 					return shutdown;

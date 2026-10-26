@@ -83,10 +83,13 @@ function ActiveStripPanel(): React.JSX.Element {
 	const [pressedKeyCode, setPressedKeyCode] = useState<string>();
 	const committedLayoutIdentity = useRef<string | undefined>(undefined);
 	const { snapshot } = useWallpaper();
+	const serial =
+		new URLSearchParams(window.location.search).get("serial") ??
+		snapshot?.saved.serial;
 	const feedback = usePanelFeedback(useQuakeEvents());
 	const observeSelection = (next: StripProfiles): void => {
 		if (next._tag === "ready") {
-			const current = selectStripPage(next.envelope, snapshot?.saved.serial);
+			const current = selectStripPage(next.envelope, serial);
 			const previous = emojiSelection.current;
 			emojiSelection.current = {
 				profileId: current.profile.id,
@@ -105,7 +108,6 @@ function ActiveStripPanel(): React.JSX.Element {
 	const profiles = useStripProfiles(observeSelection);
 	observeSelection(profiles);
 	const { settings } = useStripSettings();
-	const serial = snapshot?.saved.serial;
 	const stripLayout = useStripLayout(profiles, serial);
 	const onLayout = useCallback(
 		(current: StripLayout | undefined) => {
@@ -221,12 +223,9 @@ function ActiveStripPanel(): React.JSX.Element {
 		}
 	}, []);
 	if (profiles._tag === "ready") {
-		const { profile, page } = selectStripPage(
-			profiles.envelope,
-			snapshot?.saved.serial,
-		);
+		const { profile, page } = selectStripPage(profiles.envelope, serial);
 		target.current = {
-			deviceId: snapshot?.saved.serial ?? "desktop-preview",
+			deviceId: serial ?? "desktop-preview",
 			profileId: profile.id,
 			pageId: page.id,
 			revision: profile.revision,
@@ -257,6 +256,7 @@ function ActiveStripPanel(): React.JSX.Element {
 		<main ref={main} className="strip-panel" aria-label="Quake device panel">
 			<StripViewport>
 				<StripScreen
+					{...(serial === undefined ? {} : { previewSerial: serial })}
 					onLayout={onLayout}
 					pressedKeyCode={pressedKeyCode}
 					profiles={profiles}
