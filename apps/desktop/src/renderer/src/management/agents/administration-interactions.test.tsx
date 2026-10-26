@@ -407,8 +407,8 @@ it("CENTER-047 pack export follows the visible agent after roster replacement", 
 		publish({
 			...view,
 			agents: [
-				view.agents[0],
-				{ ...view.agents[1], id: replacement, name: "Reviewer" },
+				...view.agents.filter((a) => a.id === "main"),
+				{ id: replacement, name: "Reviewer", emoji: "", files: {} },
 			],
 		}),
 	);
@@ -418,7 +418,9 @@ it("CENTER-047 pack export follows the visible agent after roster replacement", 
 		type: "export-pack",
 		id: "reviewer",
 	});
-	await act(async () => publish({ ...view, agents: [view.agents[0]] }));
+	await act(async () =>
+		publish({ ...view, agents: view.agents.filter((a) => a.id === "main") }),
+	);
 	expect(element<HTMLSelectElement>("details select").value).toBe("main");
 	await click(button("Export pack"));
 	expect(request).toHaveBeenLastCalledWith({ type: "export-pack", id: "main" });
@@ -432,9 +434,9 @@ it("CENTER-052 skill agent scope follows additions and deletions in the roster",
 		draft: "",
 	}));
 	function Panel() {
-		const [current, setCurrent] = useState({
+		const [current, setCurrent] = useState<AgentView>({
 			...view,
-			agents: [view.agents[0]],
+			agents: view.agents.filter((a) => a.id === "main"),
 		});
 		publish = setCurrent;
 		return <SkillsPanel view={current} request={request} busy={false} />;
@@ -455,13 +457,14 @@ it("CENTER-052 skill agent scope follows additions and deletions in the roster",
 		publish({
 			...view,
 			agents: [
-				view.agents[0],
-				{ ...view.agents[1], id: reviewer, name: "Reviewer" },
+				...view.agents.filter((a) => a.id === "main"),
+				{ id: reviewer, name: "Reviewer", emoji: "", files: {} },
 			],
 			skills: [
 				...view.skills,
 				{
-					...view.skills[1],
+					description: "Review drafts",
+					content: "---\nname: Review\n---\nReview",
 					owner: "reviewer",
 					folder: "review",
 					name: "Review",
@@ -474,7 +477,9 @@ it("CENTER-052 skill agent scope follows additions and deletions in the roster",
 	);
 	expect(element(".aw-skill-list").textContent).toContain("Review");
 	expect(element(".aw-skill-list").textContent).not.toContain("Draft");
-	await act(async () => publish({ ...view, agents: [view.agents[0]] }));
+	await act(async () =>
+		publish({ ...view, agents: view.agents.filter((a) => a.id === "main") }),
+	);
 	expect(element<HTMLSelectElement>('select[aria-label="Agent"]').value).toBe(
 		"",
 	);
