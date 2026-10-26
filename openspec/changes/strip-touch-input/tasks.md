@@ -38,7 +38,7 @@ Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the le
 - [x] 6.2 Release held keys when committed page content changes through StripScreen's layout cleanup/replacement, preserving runtime-only repaint ownership. Devin 4377896158, SCREEN-010 and SCREEN-057.
 - [x] 6.3 Preserve failed held-key releases for reset retry and expose the catalog error. Devin 4377896467, MAIN-065 and SCREEN-057.
 - [x] 6.4 Verify local-player body fallback and exclusive child buttons. Devin 4377895969, KNOB-089. The mounted consumer test passes before any routing change: unmatched hits retain supportTouchEffect and already emit tile down/up. Retain regression coverage; decline the reported behavior bug with source/test evidence.
-- [ ] 6.5 Reply to the known SCREEN-060 camera-gateway blocker, run all six gates, audit unanswered review threads including new Codex findings, and remove generated build output. Do not resolve threads or merge.
+- [x] 6.5 Reply to the known SCREEN-060 camera-gateway blocker, run all six gates, audit unanswered review threads including new Codex findings, and remove generated build output. Do not resolve threads or merge.
 
 - [x] 6.6 Preserve text-entry Space/Enter on textarea touch targets. Codex 4378002610.
 - [x] 6.7 Bind conditional copy buttons when they mount. Codex 4378002633.
@@ -46,3 +46,5 @@ Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the le
 - [x] 6.9 Start disk gestures from native scroll position. Codex 4378002645.
 - [x] 6.10 Preserve running knob focus capture through busy rejection. Codex 4378002652.
 - [x] 6.11 Keep the hardware fail-safe keyboard release after a lost acknowledgement. Codex 4378002655.
+
+Review verification: protocol 63, edge 729 with 3 existing skips, device 491, desktop 1889 with 1 existing skip. Unbounded concurrent runs hit wall-clock timeouts; the complete desktop rerun with two workers passed. The subsequent diagnostics allowlist regression and all 16 diagnostics tests pass. All 6 package typechecks, Biome 1227 files with 14 existing warnings, build, bundle smoke in default-HID and explicit-mock modes, and 47 strict OpenSpec items pass. Native hidden mock media smoke reaches the known OBS screenshot selector timeout owned by PR #90; do not treat that smoke as passed. Current main was already an ancestor, the player body finding was disproven by mounted tests, and SCREEN-060 remains blocked. All 10 review threads have replies and remain unresolved. No real QUAKE or DK-Suite was opened. Logs and screenshots: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/touch/fix1/.

@@ -729,8 +729,9 @@ describe("process-owned runtime diagnostics", () => {
 	});
 });
 
-it("retains the firmware shutdown diagnostic span", () => {
-	expect(safeSpanName("FirmwareUpdates.shutdown")).toBe(
-		"FirmwareUpdates.shutdown",
-	);
-});
+it.each(["FirmwareUpdates.shutdown", "HardwareControls.holdChord"])(
+	"retains the %s diagnostic span",
+	(name) => {
+		expect(safeSpanName(name)).toBe(name);
+	},
+);

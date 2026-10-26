@@ -58,7 +58,7 @@ FakeHidTransport.close FakeHidTransport.discover FakeHidTransport.open FakeHidTr
 FirmwareUpdates.cancel FirmwareUpdates.close FirmwareUpdates.recover FirmwareUpdates.snapshot
 FirmwareUpdates.start FirmwareUpdates.shutdown FirmwareUpdates.write ForegroundApp.probe GridVoice.input GridVoice.knob
 GridVoice.reset GridVoice.sendText HardwareControls.configure HardwareControls.create
-HardwareControls.enterDfu HardwareControls.flush HardwareControls.playTone
+HardwareControls.enterDfu HardwareControls.flush HardwareControls.holdChord HardwareControls.playTone
 HardwareControls.pressChord HardwareControls.readVersion HardwareControls.refresh
 HardwareControls.send HardwareControls.setInputMode HardwareControls.setLocked
 HardwareControls.snapshot HardwareControls.stepBrightness HardwareControls.toggleMic
