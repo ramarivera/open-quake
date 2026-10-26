@@ -10,7 +10,7 @@ import {
 	Stream,
 	TestClock,
 } from "effect";
-import { describe, expect } from "vitest";
+import { describe, expect, vi } from "vitest";
 import { defaultMeetingConfig } from "../../meetings/meeting-defaults.js";
 import { meetingError } from "../../meetings/meeting-errors.js";
 import { AiProtocolInvalid } from "../ai-errors.js";
@@ -1530,3 +1530,56 @@ it.effect(
 			).toBe("unowned-one");
 		}),
 );
+
+it("allows a size-appropriate slow recording upload beyond thirty seconds", async () => {
+	vi.useFakeTimers();
+	vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+		const controller = new AbortController();
+		setTimeout(() => controller.abort(), ms);
+		return controller.signal;
+	});
+	const f = fixture();
+	const resources: MeetingResources = {
+		...f.resources,
+		audio: () =>
+			Effect.succeed({
+				blob: new Blob([new Uint8Array(30_000_000)]),
+				release: Effect.void,
+			}),
+	};
+	let entered: () => void = () => {};
+	const uploading = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const http: typeof SpeechHttp.Service = {
+		fetch: (url, init) => {
+			if (!url.endsWith("/oss")) return f.http.fetch(url, init);
+			entered();
+			return new Promise<Response>((resolve, reject) => {
+				const timer = setTimeout(() => resolve(new Response("")), 45000);
+				init.signal?.addEventListener(
+					"abort",
+					() => {
+						clearTimeout(timer);
+						reject(new Error("upload aborted"));
+					},
+					{ once: true },
+				);
+			});
+		},
+	};
+	try {
+		const result = Effect.runPromise(
+			dashscopeFiletrans({ ...f, resources, http })
+				.submit(f.request)
+				.pipe(Effect.either),
+		);
+		await uploading;
+		await vi.advanceTimersByTimeAsync(45000);
+		expect(Either.isRight(await result)).toBe(true);
+		expect(f.states.get("meeting")?.task).toBeDefined();
+	} finally {
+		vi.restoreAllMocks();
+		vi.useRealTimers();
+	}
+});

@@ -21,13 +21,14 @@ export const meetingRequest = (
 	http: typeof SpeechHttp.Service,
 	url: string,
 	init: RequestInit = {},
+	timeoutMs = 30000,
 ) =>
 	Effect.tryPromise({
 		try: (signal) =>
 			http.fetch(providerUrl(url), {
 				...init,
 				redirect: "error",
-				signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
+				signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
 			}),
 		catch: (cause) => meetingError("TranscriptionFailed", cause),
 	});
