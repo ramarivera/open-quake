@@ -60,7 +60,10 @@ import {
 	launchProfileCommand,
 	profileApplicationDialog,
 } from "./native-actions";
-import { makeProfileController } from "./profile-controller";
+import {
+	makeProfileController,
+	type ProfileSelectionScope,
+} from "./profile-controller";
 import { registerProfiles as registerProfileSnapshots } from "./profile-ipc";
 import { profileRequestAllowed } from "./profile-permissions";
 import { createProfileThumbnailStore } from "./profile-thumbnails";
@@ -135,10 +138,12 @@ export function registerProfiles(
 					return {
 						platform,
 						foreground,
-						push: (serial, profile) =>
+						push: (serial, profile, guard) =>
 							Effect.tryPromise({
 								try: async () => {
+									guard?.();
 									await deliver?.(serial, profile);
+									guard?.();
 									broadcast(PROFILE_SELECTION, {
 										serial,
 										profile: Schema.encodeSync(Profile)(profile),
@@ -420,14 +425,20 @@ export function registerProfiles(
 		thumbnailProfile: (sender: Electron.WebContents): Profile | undefined =>
 			captureProfiles.get(sender),
 		/** Shared knob mutations use the manager's visibility, anchor and delivery rules. */
-		select: (id: string): Promise<ProfileEnvelope> =>
+		select: (
+			id: string,
+			scope?: ProfileSelectionScope,
+		): Promise<ProfileEnvelope> =>
 			runtime.runPromise(
 				controller.pipe(
 					Effect.flatMap((service) =>
-						service.request({
-							type: "manage",
-							command: { type: "select", id },
-						}),
+						service.request(
+							{
+								type: "manage",
+								command: { type: "select", id },
+							},
+							scope,
+						),
 					),
 					Effect.flatMap((reply) =>
 						reply._tag === "rejected"
