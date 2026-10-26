@@ -13,6 +13,10 @@ export const PROFILE_SELECTION = "profiles:selection";
 export const PROFILE_PROGRESS = "profiles:thumbnail-progress";
 export const ProfileRequest = Schema.Union(
 	Schema.Struct({
+		type: Schema.Literal("thumbnail-style"),
+		showEmptyGridDashedBorder: Schema.Boolean,
+	}),
+	Schema.Struct({
 		type: Schema.Literal("read"),
 		locale: ProfileLocale,
 		preview: Schema.optional(Schema.Boolean),

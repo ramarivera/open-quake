@@ -344,3 +344,10 @@ The registry SHALL dispatch recovered monitor types to metric renderers consumin
 
 - **WHEN** a CPU, GPU, memory, disk, power, network, Bluetooth or process tile receives a valid metric snapshot
 - **THEN** its specialized body shows the relevant available fields and explicit unavailable state, rejects malformed updates, and retains passive preview behavior
+
+#### Scenario: Border preference invalidates manager and knob thumbnails
+
+- **GIVEN** a profile has cached thumbnail pixels captured with empty borders on
+- **WHEN** the saved empty-border preference changes without a profile edit
+- **THEN** manager and knob cache identities include the new preference, existing manager captures are regenerated, and each hidden capture pins the preference used for its cache key even if it changes while rendering
+- **AND** old captures from before border-aware cache identity are never reused

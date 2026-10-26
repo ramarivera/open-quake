@@ -30,8 +30,10 @@ const decode = (view: ProfileView): ProfileEnvelope =>
 	Schema.decodeUnknownSync(ProfileEnvelope)(view.envelope);
 export function ProfilePreview({
 	profile,
+	showEmptyGridDashedBorder,
 }: {
 	profile: Profile;
+	showEmptyGridDashedBorder?: boolean | undefined;
 }): React.JSX.Element {
 	const { settings } = useStripSettings();
 	return (
@@ -54,7 +56,9 @@ export function ProfilePreview({
 							manager: Option.none(),
 						},
 					}}
-					showEmptyGridDashedBorder={settings.showEmptyGridDashedBorder}
+					showEmptyGridDashedBorder={
+						showEmptyGridDashedBorder ?? settings.showEmptyGridDashedBorder
+					}
 				/>
 			</StripViewport>
 		</div>
@@ -78,7 +82,17 @@ export function ProfileThumbnail(): React.JSX.Element {
 					);
 			});
 	}, []);
-	return profile ? <ProfilePreview profile={profile} /> : <p>No preview</p>;
+	const border = new URLSearchParams(location.search).get("emptyBorders");
+	return profile ? (
+		<ProfilePreview
+			profile={profile}
+			showEmptyGridDashedBorder={
+				border === null ? undefined : border === "true"
+			}
+		/>
+	) : (
+		<p>No preview</p>
+	);
 }
 function ProfileNameInput({
 	name,
@@ -110,6 +124,7 @@ function ProfileNameInput({
 	);
 }
 export function ProfilesManager(): React.JSX.Element {
+	const { settings } = useStripSettings();
 	const [view, setView] = useState<ProfileView>();
 	const { locale, setLocale } = useAppLocale();
 	const localeText = useLocaleText("picker");
@@ -200,6 +215,7 @@ export function ProfilesManager(): React.JSX.Element {
 			<ProfileThumbnailCell
 				profile={p}
 				locale={locale}
+				showEmptyGridDashedBorder={settings.showEmptyGridDashedBorder}
 				source={view.thumbnails[p.id] ?? ""}
 				retained={retained.current}
 				updating={refreshing.includes(p.id) || view.progress.running}
@@ -514,6 +530,7 @@ export function ProfilesManager(): React.JSX.Element {
 function ProfileThumbnailCell({
 	profile,
 	locale,
+	showEmptyGridDashedBorder,
 	source,
 	retained,
 	updating,
@@ -524,6 +541,7 @@ function ProfileThumbnailCell({
 }: {
 	profile: Profile;
 	locale: ProfileLocale;
+	showEmptyGridDashedBorder: boolean;
 	source: string;
 	retained: Map<string, { source: string; signature: string }>;
 	updating: boolean;
@@ -532,7 +550,12 @@ function ProfileThumbnailCell({
 	text: (key: string) => string;
 	refresh: () => void;
 }): React.JSX.Element {
-	const signature = JSON.stringify([locale, profile.pages, profile.knob]);
+	const signature = JSON.stringify([
+		locale,
+		showEmptyGridDashedBorder,
+		profile.pages,
+		profile.knob,
+	]);
 	const [failedImage, setFailedImage] = useState("");
 	useEffect(() => {
 		if (updating) setFailedImage("");

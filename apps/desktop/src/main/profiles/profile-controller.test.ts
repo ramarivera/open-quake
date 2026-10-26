@@ -76,6 +76,40 @@ const port = (): ProfileDesktopPort => ({
 });
 describe("real profile desktop controller", () => {
 	it.effect(
+		"recaptures thumbnails for a changed border preference without editing the profile",
+		() =>
+			Effect.gen(function* () {
+				const captured: boolean[] = [];
+				const controller = yield* makeProfileController({
+					...port(),
+					capture: async (_p, _l, _r, border) => {
+						captured.push(border);
+						return `data:image/png;base64,borders-${border}`;
+					},
+				});
+				yield* controller.request({
+					type: "thumbnail",
+					id: "1-2",
+					locale: "en",
+				});
+				const before = yield* controller.request({
+					type: "read",
+					locale: "en",
+				});
+				expect(
+					before._tag === "success" && before.view.thumbnails["1-2"],
+				).toContain("borders-true");
+				const changed = yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				expect(
+					changed._tag === "success" && changed.view.thumbnails["1-2"],
+				).toContain("borders-false");
+				expect(captured).toEqual([true, false]);
+			}).pipe(Effect.provide(layer())),
+	);
+	it.effect(
 		"does not commit or publish a manager selection when delivery fails",
 		() => {
 			let failing = false;

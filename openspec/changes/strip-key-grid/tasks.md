@@ -81,3 +81,8 @@ local audio remains truthfully unavailable. This is not a hardware-only gap.
 No real QUAKE, camera, microphone or audio playback was used. Physical display
 colour, USB delivery, touch and frame timing remain unverified. All three lane
 beads remain open for lead integration.
+
+## PR #110 review round one
+
+- [x] Merge main grid-editor while preserving both branches' interactions and all tests. Bead open-quake-lih.10.11.1.
+- [x] Include saved empty borders in manager and knob thumbnail identity, pin captures to that preference, and regenerate existing manager thumbnails. Failing-first controller/storage regressions, knob handoff and mounted capture tests cover Devin 4380317254.

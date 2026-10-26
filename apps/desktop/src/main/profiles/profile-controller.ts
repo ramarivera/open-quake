@@ -44,10 +44,12 @@ export interface ProfileDesktopPort {
 		profile: Profile,
 		locale: ProfileLocale,
 		refresh: boolean,
+		showEmptyGridDashedBorder: boolean,
 	) => Promise<string>;
 	readonly cachedThumbnail: (
 		profile: Profile,
 		locale: ProfileLocale,
+		showEmptyGridDashedBorder: boolean,
 	) => Promise<Option.Option<string>>;
 	readonly publish: (view: ProfileView) => void;
 	readonly progress: (progress: ThumbnailProgress) => void;
@@ -69,6 +71,8 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		};
 		let cancelled = false;
 		let locale: ProfileLocale = "en";
+		let showEmptyGridDashedBorder = true;
+		const thumbnailStyleLock = yield* Effect.makeSemaphore(1);
 		const thumbnails = new Map<string, string>();
 		const native = <A>(
 			operation: () => Promise<A>,
@@ -91,12 +95,13 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		const view = Effect.fn("ProfileDesktop.view")(function* (
 			requestedLocale: ProfileLocale = locale,
 		): Effect.fn.Return<ProfileView, ProfileDesktopError> {
+			const border = showEmptyGridDashedBorder;
 			const envelope = yield* manager.read();
 			const profiles = EffectArray.map(envelope.profiles, (p) =>
 				translateProfile(p, requestedLocale),
 			);
 			const loaded = yield* Effect.forEach(profiles, (p) =>
-				thumbnail(() => port.cachedThumbnail(p, requestedLocale)).pipe(
+				thumbnail(() => port.cachedThumbnail(p, requestedLocale, border)).pipe(
 					Effect.map(
 						(value) =>
 							[
@@ -104,8 +109,9 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 								Option.getOrElse(
 									value,
 									() =>
-										thumbnails.get(profileThumbnailKey(p, requestedLocale)) ??
-										"",
+										thumbnails.get(
+											profileThumbnailKey(p, requestedLocale, border),
+										) ?? "",
 								),
 							] as const,
 					),
@@ -133,17 +139,20 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 			const envelope = yield* manager.read();
 			const p = envelope.profiles.find((p) => p.id === id);
 			if (!p) return;
+			const border = showEmptyGridDashedBorder;
 			const data = yield* thumbnail(() =>
 				port.capture(
 					translateProfile(p, requestedLocale),
 					requestedLocale,
 					true,
+					border,
 				),
 			);
 			thumbnails.set(
 				profileThumbnailKey(
 					translateProfile(p, requestedLocale),
 					requestedLocale,
+					border,
 				),
 				data,
 			);
@@ -192,6 +201,18 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 					}
 				: undefined;
 			switch (input.type) {
+				case "thumbnail-style":
+					return yield* Effect.gen(function* () {
+						if (showEmptyGridDashedBorder === input.showEmptyGridDashedBorder)
+							return { _tag: "success", view: yield* view() } as const;
+						const previous = yield* view();
+						showEmptyGridDashedBorder = input.showEmptyGridDashedBorder;
+						yield* Effect.sync(() => port.localeChanged?.(locale));
+						yield* publish();
+						for (const [id, data] of Object.entries(previous.thumbnails))
+							if (data) yield* capture(id, locale);
+						return { _tag: "success", view: yield* publish() } as const;
+					}).pipe(thumbnailStyleLock.withPermits(1));
 				case "read":
 					if (!input.preview && locale !== input.locale) {
 						locale = input.locale;
@@ -369,6 +390,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 			publish,
 			progress: () => progress,
 			currentLocale: (): ProfileLocale => locale,
+			currentThumbnailBorder: (): boolean => showEmptyGridDashedBorder,
 		};
 	},
 );
