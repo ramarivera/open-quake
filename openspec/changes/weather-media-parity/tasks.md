@@ -63,3 +63,5 @@ PR54 review reproduced oversized optional artwork rejecting an otherwise playabl
 ## 9. Clock burn-down integration
 
 - [x] 9.1 Save selected-clock weather/music through the profile owner, retain city verification/error states, isolate per-instance/side caches and expose typed read/clear/configuration refresh fan-out. Covers MAIN-142, MGMT-278/279 and WIDGETS-056. Shared execution beads `open-quake-lih.6.2` and `open-quake-lih.6.3` reference both owning changes and remain open for lead review/merge. Evidence: `main/weather-media/controller.test.ts`, `registration.test.ts`, `main/profiles/clock-profile-binding.test.ts` and mounted `main/clock/profile-smoke.ts`. Native/provider and physical acceptance remain open. Scratch evidence: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/clock/`.
+
+- [x] Add test-device-widgets mounted consumer regressions for clock visibility/activation and weather/music states. Bead open-quake-lih.8.2; hardware remains unverified.

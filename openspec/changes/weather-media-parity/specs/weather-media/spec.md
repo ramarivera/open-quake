@@ -165,3 +165,13 @@ Weather and music controls SHALL save only the selected clock key's weather acti
 
 - **WHEN** clock A changes city, units, forecast URL and music switch
 - **THEN** its valid actions survive restart, clock B remains unchanged, invalid URLs/timeouts show the expected status, and mounted live cards refresh using their own current settings
+
+### Requirement: Weather group and card state consumers
+
+The rendered weather card SHALL use clear codes 0/1, partly cloudy 2, cloudy 3, fog 45/48, drizzle 51/53/55/56/57, rain 61/63/65/66/67/80/81/82, snow 71/73/75/77/85/86 and thunder 95/96/99. Other numbers and null SHALL render the default cloud outline. The clock music card SHALL replace a broken cover with its note fallback, reset that failure for a different cover, reconcile transport capabilities, and remove a rejected-control tip after 1800 ms. Passive strip previews SHALL send no control requests. Sources: SCREEN-124, WIDGETS-041, WIDGETS-055.
+
+#### Scenario: Weather code and music reconciliation
+
+- **WHEN** every documented WMO code or an unknown/null code reaches a weather card and a music cover fails or transport is rejected
+- **THEN** the card renders the corresponding SVG geometry, the music cover falls back, and the transient tip clears after 1800 ms
+- **AND** subsequent snapshots update disabled capabilities while idle and unavailable remain distinct and passive previews cannot mutate playback
