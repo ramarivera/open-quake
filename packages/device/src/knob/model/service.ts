@@ -87,6 +87,12 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 			let lastTurn = Number.NEGATIVE_INFINITY;
 			let lastProbe = Number.NEGATIVE_INFINITY;
 			const timers = new Map<string, Fiber.RuntimeFiber<void, never>>();
+			const brightnessTurns = new Set<Fiber.RuntimeFiber<void, KnobError>>();
+			const stopBrightness = Effect.suspend(() => {
+				const pending = [...brightnessTurns];
+				brightnessTurns.clear();
+				return Fiber.interruptAll(pending);
+			});
 			const emit = (patch: Partial<KnobModelSnapshot>): Effect.Effect<void> =>
 				Effect.suspend(() => {
 					state = { ...state, ...patch, revision: state.revision + 1 };
@@ -201,6 +207,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 				Effect.gen(function* () {
 					contextGeneration++;
 					configured = true;
+					yield* stopBrightness;
 					yield* stopSelection;
 					yield* stopVolume;
 					// Route edits are future-capture changes. Keep a held generation alive
@@ -457,6 +464,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						case "Rotate":
 							return yield* rotate(event.delta);
 						case "TapTile": {
+							yield* stopBrightness;
 							focusGeneration++;
 							const key = state.context.keys.find(
 								(k) => k.keyCode === event.keyCode,
@@ -483,8 +491,10 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 								state.focus._tag === "tile" &&
 								state.focus.keyCode === event.keyCode &&
 								state.focus.generation === event.generation
-							)
+							) {
+								yield* stopBrightness;
 								yield* emit({ focus: { _tag: "none" } });
+							}
 							return;
 						case "ToggleVolume": {
 							if (!state.context.player) return;
@@ -555,6 +565,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						case "Disconnect":
 							connected = false;
 							contextGeneration++;
+							yield* stopBrightness;
 							yield* stopVolume;
 							yield* stopSelection;
 							yield* emit({
@@ -762,6 +773,77 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 								),
 							),
 						),
+				),
+				/** Physical brightness enqueues under the dispatcher, but drains outside it. */
+				preparePhysicalRotation: Effect.fn("KnobModel.preparePhysicalRotation")(
+					(
+						sessionId: string,
+						delta: -1 | 1,
+					): Effect.Effect<Effect.Effect<void, KnobError>, KnobError> =>
+						mutex.withPermits(1)(
+							Effect.gen(function* () {
+								if (sessionId !== state.context.session.sessionId || !connected)
+									return yield* KnobSessionStale.fromCause();
+								const focus = state.focus;
+								const key =
+									focus._tag === "tile"
+										? state.context.keys.find(
+												(key) =>
+													key.keyCode === focus.keyCode &&
+													key.kind === "brightness" &&
+													canFocus(key),
+											)
+										: undefined;
+								if (!key || focus._tag !== "tile") {
+									yield* handle({ _tag: "Rotate", sessionId, delta });
+									return Effect.void;
+								}
+								const context = state.context;
+								const epoch = contextGeneration;
+								const current = () =>
+									connected &&
+									epoch === contextGeneration &&
+									state.focus._tag === "tile" &&
+									state.focus.keyCode === key.keyCode &&
+									state.focus.generation === focus.generation;
+								let fiber: Fiber.RuntimeFiber<void, KnobError> | undefined;
+								const work = ports.focusedTurn(key, delta, context).pipe(
+									Effect.tap(() =>
+										mutex.withPermits(1)(
+											Effect.suspend(() =>
+												current() && state.focus._tag === "tile"
+													? emit({
+															focus: {
+																...state.focus,
+																angle: state.focus.angle + delta * 12,
+															},
+														})
+													: Effect.void,
+											),
+										),
+									),
+									Effect.tapError((error) =>
+										mutex.withPermits(1)(
+											Effect.suspend(() =>
+												current() ? report(error) : Effect.void,
+											),
+										),
+									),
+									Effect.ensuring(
+										Effect.sync(() => {
+											if (fiber) brightnessTurns.delete(fiber);
+										}),
+									),
+								);
+								fiber = yield* Effect.forkIn(work, scope);
+								brightnessTurns.add(fiber);
+								return Fiber.join(fiber);
+							}).pipe(Effect.tapError(report)),
+						),
+				),
+
+				cancelPhysicalRotations: Effect.fn("KnobModel.cancelPhysicalRotations")(
+					(): Effect.Effect<void> => mutex.withPermits(1)(stopBrightness),
 				),
 				dispatch: Effect.fn("KnobModel.dispatch")(
 					(input: unknown): Effect.Effect<void, KnobError> =>

@@ -5,6 +5,7 @@ import {
 	SpeechOutput,
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
+import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import { wav } from "../../../../../packages/edge/src/ai/speech/speech-test-fixtures";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import {
@@ -171,4 +172,118 @@ describe("turnkey production factory with synthetic ports", () => {
 			),
 		);
 	});
+});
+
+it("AI-103 AI-010: ignores blank read-aloud and refreshes saved voice/key on the next request", async () => {
+	const keys = new Map<string, string>();
+	let stored: unknown = emptySpeechSettings;
+	const requests: { authorization: string | null; body: unknown }[] = [];
+	let outputs = 0;
+	let playing: (() => void) | undefined;
+	const played = new Promise<void>((resolve) => {
+		playing = resolve;
+	});
+	const ports = Layer.mergeAll(
+		Layer.succeed(SpeechHttp, {
+			fetch: async (_url, init) => {
+				requests.push({
+					authorization: new Headers(init.headers).get("Authorization"),
+					body: JSON.parse(String(init.body)),
+				});
+				return new Response(wav(), {
+					headers: { "Content-Type": "audio/wav" },
+				});
+			},
+		}),
+		Layer.succeed(SpeechWebSocket, {
+			connect: () => Effect.die("no microphone"),
+		}),
+		Layer.succeed(SpeechOutput, {
+			suspendForCapture: Effect.void,
+			acquire: Effect.sync(() => {
+				outputs++;
+				return {
+					ready: Effect.void,
+					play: () =>
+						Effect.suspend(() => {
+							playing?.();
+							return outputs === 1 ? Effect.never : Effect.void;
+						}),
+					stop: Effect.void,
+				};
+			}),
+		}),
+	);
+	await Effect.runPromise(
+		Effect.scoped(
+			Effect.gen(function* () {
+				const controller = yield* createDesktopSpeech({
+					storage: {
+						read: async () => stored,
+						write: async (value) => {
+							stored = value;
+						},
+					},
+					credentials: {
+						put: async (value) => {
+							const id = crypto.randomUUID();
+							keys.set(id, value);
+							return id;
+						},
+						get: async (id) => keys.get(id) ?? "",
+						remove: async (id) => {
+							keys.delete(id);
+						},
+					},
+					ports,
+					capture: {
+						permission: Effect.die("no microphone"),
+						open: () => Effect.die("no microphone"),
+					},
+					sendText: () => Effect.void,
+					sendTranscript: () => Effect.die("no microphone"),
+				});
+				let active: Fiber.RuntimeFiber<SpeechOutcome> | undefined;
+				for (const [voice, key] of [
+					["marin", "old-synthetic-key"],
+					["cedar", "new-synthetic-key"],
+				] as const) {
+					yield* controller.settings.request({
+						_tag: "Save",
+						settings: {
+							version: 1,
+							speakAnswers: false,
+							tts: { provider: "openai", voice, language: "en" },
+						},
+						ttsKey: key,
+					});
+					if (active)
+						expect(yield* Fiber.join(active)).toEqual({ _tag: "cancelled" });
+					for (const blank of ["", " ", "\n \t"]) {
+						expect(yield* controller.readAloud(blank)).toMatchObject({
+							_tag: "textOnly",
+						});
+					}
+					expect(requests).toHaveLength(outputs);
+					if (voice === "marin") {
+						active = yield* controller
+							.readAloud("whole utterance")
+							.pipe(Effect.fork);
+						yield* Effect.promise(() => played);
+						expect(Option.isNone(yield* Fiber.poll(active))).toBe(true);
+					} else {
+						expect(yield* controller.readAloud("whole utterance")).toEqual({
+							_tag: "completed",
+						});
+					}
+					expect(requests.at(-1)).toMatchObject({
+						authorization: `Bearer ${key}`,
+						body: { voice, input: "whole utterance", model: "gpt-4o-mini-tts" },
+					});
+				}
+				expect(requests).toHaveLength(2);
+				expect(outputs).toBe(2);
+			}),
+		).pipe(Effect.provide(surface)),
+	);
 });

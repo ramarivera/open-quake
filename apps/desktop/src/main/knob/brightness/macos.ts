@@ -38,6 +38,7 @@ export function macBrightness(
 			...args,
 		]).pipe(Effect.flatMap(decodeBrightness));
 	return {
+		smooth: true,
 		read: Effect.fn("DesktopBrightness.macRead")(() => call([]))(),
 		write: Effect.fn("DesktopBrightness.macWrite")((before, percent) =>
 			call([before.target, String(percent)]).pipe(

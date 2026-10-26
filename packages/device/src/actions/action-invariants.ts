@@ -70,8 +70,14 @@ export function actionAvailability(
 				: "unsupported-on-platform";
 		case "media":
 			return adapters.media._tag === "Some" &&
-				"mediaCommand" in entry &&
-				adapters.media.value.supportedCommands.has(entry.mediaCommand)
+				("mediaCommand" in entry
+					? adapters.media.value.supportedCommands.has(entry.mediaCommand)
+					: entry.id === "mute"
+						? adapters.media.value.supportedCommands.has("audio_mute")
+						: entry.id === "vol"
+							? adapters.media.value.supportedCommands.has("audio_vol_down") &&
+								adapters.media.value.supportedCommands.has("audio_vol_up")
+							: adapters.media.value.supportedCommands.size > 0)
 				? "available"
 				: "unsupported-on-platform";
 	}

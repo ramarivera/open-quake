@@ -364,6 +364,13 @@
 	height: 152px;
 	padding: 48px;
 }
+.oq-player-controls[data-local="true"] [data-testid="localStop"] {
+	position: absolute;
+	bottom: -64px;
+	width: 64px;
+	height: 64px;
+	padding: 20px;
+}
 .oq-player-volume-slot {
 	position: absolute;
 	left: 1471px;

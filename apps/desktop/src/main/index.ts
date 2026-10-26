@@ -81,6 +81,7 @@ import {
 import { MediaLive, registerMedia } from "./media";
 import { prepareMeetings } from "./meetings";
 import { prepareMonitor } from "./monitor";
+import { activeMonitorKey } from "./monitor/panel-media";
 import { prepareObs } from "./obs";
 import { obsKeyAction } from "./obs/key-action";
 import { visibleObsKeys } from "./obs/visibility";
@@ -94,7 +95,12 @@ import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { createToneRecorder, prepareVoiceSurface, toneSinks } from "./voice";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
-import { systemMediaKeyActions } from "./weather-media/key-actions";
+import { HostVolume } from "./weather-media/host-volume";
+import {
+	isSystemPlayerKey,
+	systemMediaKeyActions,
+} from "./weather-media/key-actions";
+import { committedLocalPlayer } from "./weather-media/local-player";
 import { SystemMediaService } from "./weather-media/system-media";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
@@ -198,15 +204,45 @@ if (!app.requestSingleInstanceLock()) {
 						);
 						const background = backgroundModule.runtime;
 						const weatherModule = prepareDesktopModule(
-							weatherMediaLive(app.getPath("userData"), process.platform),
+							weatherMediaLive(
+								app.getPath("userData"),
+								process.platform,
+								committedLocalPlayer(
+									(signal) =>
+										profilesModule.runtime
+											.runPromise(ProfileService.loadProfiles(), { signal })
+											.then((result) => result.envelope),
+									(key, target) => speech.readSoundKey(key, target),
+								),
+							),
 							(runtime) => registerWeatherMedia(runtime, () => managementWin),
 							diagnostics,
 						);
-						const mediaActions = systemMediaKeyActions((command, signal) =>
-							weatherModule.runtime.runPromise(
-								SystemMediaService.send(command),
-								{ signal },
-							),
+						const mediaActions = systemMediaKeyActions(
+							(command, signal) =>
+								weatherModule.runtime.runPromise(
+									command === "audio_mute" ||
+										command === "audio_vol_down" ||
+										command === "audio_vol_up"
+										? HostVolume.command(command).pipe(
+												Effect.as({ accepted: true as boolean }),
+											)
+										: SystemMediaService.send(command),
+									{ signal },
+								),
+							(listener) => {
+								let disposed = false;
+								let off: (() => void) | undefined;
+								void weatherModule.runtime
+									.runPromise(HostVolume)
+									.then((owner) => {
+										if (!disposed) off = owner.observe(listener);
+									});
+								return () => {
+									disposed = true;
+									off?.();
+								};
+							},
 						);
 						let bus: DeviceBus | undefined;
 						let activeSerial: string | undefined;
@@ -308,6 +344,11 @@ if (!app.requestSingleInstanceLock()) {
 						const speech = createSpeechVoiceBinding({
 							direct: (fallback) => createDirectChatVoice(directChat, fallback),
 							speech: {
+								localResume: fileStore(
+									app.getPath("userData"),
+									"local-player-resume-v1.json",
+									{},
+								),
 								storage: fileStore(
 									app.getPath("userData"),
 									"speech-v1.json",
@@ -388,6 +429,13 @@ if (!app.requestSingleInstanceLock()) {
 									obs.execute(command, signal),
 								)(key, signal)) ||
 								(await speech.executeSoundKey(key, signal, activation)) ||
+								(isSystemPlayerKey(key)
+									? await weatherModule.runtime
+											.runPromise(SystemMediaService.control("toggle"), {
+												signal,
+											})
+											.then((result) => result.accepted)
+									: false) ||
 								integrationKeyAction((key, signal) =>
 									integrations.executeHaFromKey(key, signal),
 								)(key, signal),
@@ -453,6 +501,22 @@ if (!app.requestSingleInstanceLock()) {
 							() => panelWin,
 							() => [panelWin, managementWin],
 							{
+								readVolume: Effect.tryPromise({
+									try: (signal) =>
+										weatherModule.runtime.runPromise(HostVolume.read, {
+											signal,
+										}),
+									catch: KnobDispatchFailed.fromCause,
+								}),
+								writeVolume: (reading) =>
+									Effect.tryPromise({
+										try: (signal) =>
+											weatherModule.runtime.runPromise(
+												HostVolume.write(reading),
+												{ signal },
+											),
+										catch: KnobDispatchFailed.fromCause,
+									}),
 								deviceId: activeDeviceId,
 								locale: () => knobLocale,
 								profiles: knobProfileBinding(
@@ -507,6 +571,12 @@ if (!app.requestSingleInstanceLock()) {
 							undefined,
 							rendererURL,
 							diagnostics,
+							async (keyCode) => {
+								const { envelope } = await profilesModule.runtime.runPromise(
+									ProfileRepository.load(),
+								);
+								return activeMonitorKey(envelope, activeDeviceId(), keyCode);
+							},
 						);
 						const hardwareModule = prepareDesktopModule(
 							Layer.merge(

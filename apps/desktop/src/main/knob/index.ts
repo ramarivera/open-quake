@@ -147,6 +147,10 @@ export function registerKnobRuntime(
 				(event.kind === "status" && event.state !== "connected" && !initialized)
 			)
 				return Promise.resolve();
+			let completion: Effect.Effect<
+				void,
+				import("../../../../../packages/device/src/knob/knob-errors.js").KnobError
+			> = Effect.void;
 			pending = pending
 				.then(async () => {
 					if (disposed) return;
@@ -157,11 +161,10 @@ export function registerKnobRuntime(
 							const { context } = yield* KnobModel.snapshot();
 							const sessionId = context.session.sessionId;
 							if (event.kind === "rotate")
-								yield* KnobModel.dispatch({
-									_tag: "Rotate",
+								completion = yield* KnobModel.preparePhysicalRotation(
 									sessionId,
-									delta: event.direction,
-								});
+									event.direction,
+								);
 							else if (
 								event.kind === "press" &&
 								[1, 2, 5, 255].includes(event.state ?? 1)
@@ -186,6 +189,8 @@ export function registerKnobRuntime(
 				.catch(() => {
 					// runPromise diagnostics retain the failed exit; a dispatch failure must not restart owned observers.
 				});
+			// Observe native completion separately so the root bus can enqueue the next event.
+			void pending.then(() => run(completion)).catch(() => {});
 			return pending;
 		},
 		async refresh(): Promise<void> {
@@ -201,6 +206,7 @@ export function registerKnobRuntime(
 			// Interrupt registration-owned loads/dispatches before draining the queue.
 			lifetime.abort();
 			await pending;
+			await runtime.runPromise(KnobModel.cancelPhysicalRotations());
 			if (observer) await runtime.runPromise(Fiber.interrupt(observer));
 			if (stream) await runtime.runPromise(Fiber.interrupt(stream));
 			await runtime.dispose();

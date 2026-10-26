@@ -46,6 +46,14 @@ export const WeatherSettings = Schema.Struct({
 	ipLookup: Schema.Boolean,
 	forecastUrl: ForecastUrl,
 	musicEnabled: Schema.Boolean,
+	mediaTarget: Schema.optionalWith(
+		Schema.NullOr(Schema.String.pipe(Schema.maxLength(500))),
+		{ exact: true },
+	),
+	mediaLauncher: Schema.optionalWith(
+		Schema.Literal("apple", "spotify", "qq", "netease"),
+		{ exact: true },
+	),
 });
 export type WeatherSettings = typeof WeatherSettings.Type;
 export const DEFAULT_WEATHER_SETTINGS: WeatherSettings = {
@@ -115,7 +123,51 @@ export const MediaSession = Schema.Struct({
 	canPause: Schema.Boolean,
 });
 export type MediaSession = typeof MediaSession.Type;
+export const MediaSource = Schema.Struct({
+	id: Schema.String.pipe(Schema.maxLength(500)),
+	appId: Schema.String.pipe(Schema.maxLength(300)),
+	appName: Schema.String.pipe(Schema.maxLength(200)),
+	playing: Schema.Boolean,
+});
+export const MediaLyrics = Schema.Union(
+	Schema.TaggedStruct("unavailable", {}),
+	Schema.TaggedStruct("available", {
+		text: Schema.String.pipe(Schema.maxLength(100000)),
+	}),
+);
+export const LocalPlayerTarget = Schema.Struct({
+	deviceId: Schema.NonEmptyString,
+	profileId: Schema.NonEmptyString,
+	pageId: Schema.NonEmptyString,
+	keyCode: Schema.NonEmptyString,
+	revision: Schema.Int.pipe(Schema.nonNegative()),
+});
+export type LocalPlayerTarget = typeof LocalPlayerTarget.Type;
+export const LocalPlayerSnapshot = Schema.Struct({
+	revision: Schema.Int.pipe(Schema.nonNegative()),
+	state: Schema.Literal(
+		"unconfigured",
+		"ready",
+		"loading",
+		"playing",
+		"paused",
+		"stopped",
+		"failed",
+	),
+	title: Schema.String,
+	trackIndex: Schema.Int.pipe(Schema.nonNegative()),
+	total: Schema.Int.pipe(Schema.nonNegative()),
+	positionMs: Schema.Finite.pipe(Schema.nonNegative()),
+	errorCode: Schema.NullOr(Schema.String),
+});
+export type LocalPlayerSnapshot = typeof LocalPlayerSnapshot.Type;
 export const MediaSnapshot = Schema.Struct({
+	sessions: Schema.optionalWith(
+		Schema.Array(MediaSource).pipe(Schema.maxItems(128)),
+		{ exact: true },
+	),
+	target: Schema.optionalWith(Schema.NullOr(Schema.String), { exact: true }),
+	lyrics: Schema.optionalWith(MediaLyrics, { exact: true }),
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 	session: Schema.NullOr(MediaSession),
 	error: Schema.NullOr(MediaFailure),
@@ -153,9 +205,15 @@ export const WeatherMediaCommand = Schema.Union(
 	Schema.TaggedStruct("clearCache", { ...weatherScope }),
 	Schema.TaggedStruct("configChanged", {}),
 	Schema.TaggedStruct("media", { intent: MediaIntent }),
+	Schema.TaggedStruct("launch", {
+		id: Schema.Literal("apple", "spotify", "qq", "netease"),
+	}),
+	Schema.TaggedStruct("localPlayer", { target: LocalPlayerTarget }),
 );
 export type WeatherMediaCommand = typeof WeatherMediaCommand.Type;
 export const WeatherMediaReply = Schema.Union(
+	Schema.TaggedStruct("localPlayer", { snapshot: LocalPlayerSnapshot }),
+	Schema.TaggedStruct("launched", { accepted: Schema.Boolean }),
 	Schema.TaggedStruct("snapshot", { snapshot: WeatherMediaSnapshot }),
 	Schema.TaggedStruct("city", { result: CityResult }),
 	Schema.TaggedStruct("cache", { result: WeatherResult }),

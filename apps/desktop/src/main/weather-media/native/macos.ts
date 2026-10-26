@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Effect } from "effect";
 import type { NativeMediaAction } from "../system-media";
 import { MediaHelperUnavailable } from "./errors";
+import { controlMacSession, macSessions } from "./mac-sessions";
 import {
 	type CoverDecoder,
 	type NativeMediaReading,
@@ -37,19 +38,73 @@ export const makeMacMedia = (
 		catch: MediaHelperUnavailable.fromCause,
 	});
 	return {
-		read: Effect.fn("SystemMedia.macRead")(function* () {
+		read: Effect.fn("SystemMedia.macRead")(function* (target?: string | null) {
 			yield* check;
-			return yield* run("/usr/bin/perl", [
+			const reading = yield* run("/usr/bin/perl", [
 				script,
 				framework,
 				"get",
 				"--now",
 			]).pipe(Effect.flatMap((text) => parseMacMedia(text, cover)));
+			const listed = yield* macSessions(run).pipe(
+				Effect.catchAll(() => Effect.succeed(null)),
+			);
+			const sessions = [...(listed?.sessions ?? [])].map((s) =>
+				s.id === reading?.session.id
+					? { ...s, playing: reading.session.playing }
+					: s,
+			);
+			if (reading && !sessions.some((s) => s.id === reading.session.id))
+				sessions.push(reading.session);
+			if (
+				target &&
+				(target !== reading?.session.id ||
+					/^(com\.apple\.Music|com\.spotify\.client):/.test(target))
+			) {
+				if (!sessions.some((s) => s.id === target))
+					return {
+						session: null,
+						source: "",
+						commands: new Set<number>(),
+						sessions,
+					};
+				const selected = yield* macSessions(run, target);
+				return {
+					...selected,
+					session: selected.session && {
+						...selected.session,
+						coverUrl:
+							selected.session.coverUrl ??
+							(selected.session.id === reading?.session.id
+								? reading.session.coverUrl
+								: null),
+					},
+					sessions,
+				};
+			}
+			if (!reading)
+				return {
+					session: null,
+					source: "",
+					commands: new Set<number>(),
+					sessions,
+				};
+			return { ...reading, sessions };
 		}),
 		control: Effect.fn("SystemMedia.macControl")(function* (
 			action: NativeMediaAction,
 			reading: NativeMediaReading,
 		) {
+			if (
+				!reading.processId &&
+				/^(com\.apple\.Music|com\.spotify\.client):[0-9]+$/.test(
+					reading.session.id,
+				)
+			) {
+				const command = commands[action];
+				if (!reading.commands.has(command)) return false;
+				return yield* controlMacSession(run, reading.session.id, action);
+			}
 			yield* check;
 			const command = commands[action];
 			if (!reading.commands.has(command) || !reading.processId) return false;

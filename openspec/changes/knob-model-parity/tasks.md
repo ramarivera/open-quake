@@ -32,6 +32,8 @@
 
 - [x] 7.1 Resolve accepted thumbnail invalidation, corrupt-cache recovery and device-session selection findings with real backend consumer regressions. Tracked by open-quake-lih.4.2. Parent retains review delivery and task 5.1 acceptance.
 
+- [x] 7.2 Release the physical device-event queue while bounded native brightness drains, retaining every detent and observing native completion outside the queue. Cancel pending writes on disconnect, focus/context replacement and registration disposal. PR103 review 4379605856, bead open-quake-lih.7.2.1. Production registration/model/controller TestClock regressions reproduce blocked presses before the fix.
+
 ## Evidence
 
 - 1.1: reconciled knob-configuration and knob-push-to-talk; strict OpenSpec validation passes all 30 changes.
@@ -80,6 +82,7 @@ The first probe attempted Rotate IPC, correctly denied by the existing renderer 
 - PR52 delivery, 2026-10-26: brightness squash merged as 8a4e51a after current-head completed Codex review without findings, zero review threads and the full native package/download matrix. open-quake-lih.4.2.2 is closed. PR53 now composes on main while preserving current root/profile/thumbnail/setup fixes; aggregate physical and voice acceptance remains separate.
 
 - PR53 composition verification, 2026-10-26: normal main merge ed75785 retains exactly the five intended Num Lock source/test/spec files against main. Nineteen real focused-knob tests and 25 hardware contract/consumer tests pass, along with desktop/device typechecks and strict validation. Current-head Codex review completed without findings and there are no review threads. GitHub initially retained a conflicting merge cache after retargeting despite main being an ancestor and local merge-tree succeeding; hosted validation must rerun on the composed head before merge.
+
 
 ## 8. Wheel-selector burn-down
 

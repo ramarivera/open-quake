@@ -39,6 +39,7 @@ export interface DesktopSpeechOptions
 		| "pinDirectModel"
 	> {
 	readonly storage: JsonStore;
+	readonly localResume?: JsonStore;
 	/** The existing app-owned safeStorage vault, e.g. systemCredentialVault(userData/credentials). */
 	readonly credentials: CredentialVault;
 	readonly capture?: CaptureDriver;
@@ -58,7 +59,7 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 		Effect.provide(SoundboardFilesLive),
 		Effect.provideService(AudioOutput, audioOutput),
 	);
-	const soundboardKeys = soundboardKeyActions(soundboard);
+	const soundboardKeys = soundboardKeyActions(soundboard, options.localResume);
 	const credentials = yield* createSpeechCredentials(options.credentials);
 	const layer = AiSpeechService.Default.pipe(
 		Layer.provide(

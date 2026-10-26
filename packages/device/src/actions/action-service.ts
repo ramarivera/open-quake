@@ -2,6 +2,7 @@ import { Effect, Either, Layer, Option, Ref, Schema } from "effect";
 import { ActionHostAdapters, ActionProfileSource } from "./action-adapters.js";
 import {
 	ActionActivation,
+	AUDIO_OPERATIONS,
 	type CommittedActionSnapshot,
 	MediaCommand,
 } from "./action-contracts.js";
@@ -48,6 +49,21 @@ export const executeActionLeaf = Effect.fn("ActionService.execute")(function* (
 				return yield* Effect.fail(new InvalidKeyAction("config.type"));
 			if (config.supportKnob)
 				return yield* Effect.fail(new KeyFunctionUnavailable("knob-routing"));
+			const token = config.actions[0].value;
+			const audio = Schema.decodeUnknownEither(MediaCommand)(token);
+			if (
+				AUDIO_OPERATIONS.some((value) => value === token) &&
+				Either.isRight(audio)
+			) {
+				if (
+					Option.isNone(adapters.media) ||
+					!adapters.media.value.supportedCommands.has(audio.right)
+				)
+					return yield* Effect.fail(
+						new KeyFunctionUnavailable("unsupported-command"),
+					);
+				return yield* adapters.media.value.sendMedia(audio.right);
+			}
 			if (Option.isNone(adapters.keyboard))
 				return yield* Effect.fail(missing());
 			const chord = config.actions[0].value;
@@ -91,6 +107,8 @@ export const executeActionLeaf = Effect.fn("ActionService.execute")(function* (
 			);
 		}
 		case "media": {
+			if (config.type === "vol")
+				return yield* Effect.fail(new KeyFunctionUnavailable("knob-routing"));
 			const decoded = Schema.decodeUnknownEither(
 				Schema.Struct({ type: Schema.Literal("key"), value: MediaCommand }),
 			)("actions" in config ? config.actions[0] : undefined);

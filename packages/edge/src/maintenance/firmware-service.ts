@@ -31,6 +31,8 @@ export interface FirmwareVolume {
 export class FirmwarePort extends Context.Tag("FirmwarePort")<
 	FirmwarePort,
 	{
+		readonly timing?: Partial<Record<keyof typeof firmwareTiming, number>>;
+		readonly publish?: (snapshot: FirmwareSnapshot) => void;
 		current: () => Effect.Effect<
 			{
 				readonly serial: string;
@@ -71,6 +73,8 @@ export const firmwareTiming = {
 	versionPoll: 2000,
 	versionTimeout: 3000,
 	ttl: 600000,
+	progressInterval: 200,
+	progressDelta: 0.01,
 } as const;
 
 export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
@@ -79,6 +83,22 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 		scoped: Effect.gen(function* () {
 			const port = yield* FirmwarePort;
 			const scope = yield* Effect.scope;
+			const clock = yield* Effect.clock;
+			const timing = { ...firmwareTiming, ...port.timing };
+			if (
+				Object.values(timing).some(
+					(value) => !Number.isFinite(value) || value <= 0,
+				) ||
+				timing.progressDelta > 1
+			)
+				return yield* new FirmwareTargetMismatch();
+			let publishedAt = 0;
+			let publishedBytes = 0;
+			const publish = (snapshot: FirmwareSnapshot) => {
+				publishedAt = clock.unsafeCurrentTimeMillis();
+				publishedBytes = snapshot.copied;
+				port.publish?.(snapshot);
+			};
 			const lock = yield* Effect.makeSemaphore(1);
 			let state = idleFirmware;
 			let worker = Option.none<Fiber.RuntimeFiber<void, never>>();
@@ -109,6 +129,7 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 					const committed = { ...state, ...next };
 					yield* port.save(committed);
 					state = committed;
+					publish(state);
 				});
 			const failed = (error: MaintenanceError): Effect.Effect<void> =>
 				Effect.gen(function* () {
@@ -123,6 +144,7 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 						reason: state.reason || error.code,
 						endedAt: yield* Clock.currentTimeMillis,
 					};
+					publish(state);
 					yield* port
 						.save(state)
 						.pipe(
@@ -131,13 +153,13 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				});
 			const discover = Effect.gen(function* () {
 				const begin = yield* Clock.currentTimeMillis;
-				while ((yield* Clock.currentTimeMillis) - begin < firmwareTiming.wait) {
+				while ((yield* Clock.currentTimeMillis) - begin < timing.wait) {
 					const volumes = yield* port.volumes();
 					if (volumes.length) {
 						yield* set({ state: "ready_to_write", volumes });
 						return;
 					}
-					yield* Effect.sleep(firmwareTiming.poll);
+					yield* Effect.sleep(timing.poll);
 				}
 				yield* set({ reason: "dfu_volume_timeout" });
 				return yield* new FirmwareVolumeInvalid();
@@ -210,11 +232,38 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 						worker = Option.some(
 							yield* run(
 								Effect.gen(function* () {
-									yield* Effect.sleep(firmwareTiming.settle);
-									// Adapter revalidates the mount and the original bytes, not renderer metadata.
-									yield* port.copy(image, volume, (copied) => {
-										state = { ...state, copied };
+									yield* Effect.sleep(timing.settle);
+									// Periodically persist the latest byte count independently of UI deltas.
+									// Racing with copy joins the writer before terminal state saves.
+									let persistedBytes = state.copied;
+									const persistProgress = Effect.gen(function* () {
+										while (true) {
+											yield* Effect.sleep(timing.progressInterval);
+											if (state.copied === persistedBytes) continue;
+											const snapshot = { ...state };
+											yield* port.save(snapshot);
+											persistedBytes = snapshot.copied;
+										}
 									});
+									// Adapter revalidates the mount and the original bytes, not renderer metadata.
+									yield* port
+										.copy(image, volume, (copied) => {
+											if (
+												!Number.isSafeInteger(copied) ||
+												copied < state.copied ||
+												copied > image.bytes
+											)
+												return;
+											state = { ...state, copied };
+											if (
+												clock.unsafeCurrentTimeMillis() - publishedAt >=
+													timing.progressInterval ||
+												copied - publishedBytes >=
+													image.bytes * timing.progressDelta
+											)
+												publish(state);
+										})
+										.pipe(Effect.raceFirst(persistProgress));
 									yield* set({
 										state: "written_unverified",
 										copied: image.bytes,
@@ -223,10 +272,10 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 									const begin = yield* Clock.currentTimeMillis;
 									while (
 										(yield* Clock.currentTimeMillis) - begin <
-										firmwareTiming.verify
+										timing.verify
 									) {
 										const version = yield* port.version(state.serial).pipe(
-											Effect.timeoutOption(firmwareTiming.versionTimeout),
+											Effect.timeoutOption(timing.versionTimeout),
 											Effect.catchTag("FirmwareUnavailable", () =>
 												Effect.succeed(Option.none<string>()),
 											),
@@ -243,7 +292,7 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 											});
 											return;
 										}
-										yield* Effect.sleep(firmwareTiming.versionPoll);
+										yield* Effect.sleep(timing.versionPoll);
 									}
 									yield* set({ reason: "verify_timeout" });
 									return yield* new FirmwareVerificationFailed();
@@ -300,13 +349,18 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 						FirmwarePersistenceFailed
 					> {
 						yield* initialize;
-						if (
-							state.endedAt &&
-							(yield* Clock.currentTimeMillis) - state.endedAt >=
-								firmwareTiming.ttl
-						)
-							state = idleFirmware;
-						return state;
+						return yield* lock.withPermits(1)(
+							Effect.gen(function* () {
+								if (
+									["success", "failed", "needs_recovery"].includes(
+										state.state,
+									) &&
+									(yield* Clock.currentTimeMillis) - state.endedAt >= timing.ttl
+								)
+									yield* set(idleFirmware);
+								return state;
+							}),
+						);
 					},
 				),
 				cancel: Effect.fn("FirmwareUpdates.cancel")(
@@ -327,9 +381,32 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 					},
 				),
 				close: Effect.fn("FirmwareUpdates.close")(
-					function* (): Effect.fn.Return<void, FirmwarePersistenceFailed> {
+					function* (): Effect.fn.Return<
+						{ readonly serial: string; readonly version: string | undefined },
+						FirmwarePersistenceFailed
+					> {
 						yield* initialize;
-						if (!runningFirmware(state)) yield* set({ ...idleFirmware });
+						const closing = state;
+						const serial = closing.serial;
+						const reconciled = serial
+							? yield* port.version(serial).pipe(
+									Effect.timeoutOption(timing.versionTimeout),
+									Effect.catchTag("FirmwareUnavailable", () =>
+										Effect.succeed(Option.none<string>()),
+									),
+								)
+							: Option.none<string>();
+						yield* lock.withPermits(1)(
+							Effect.gen(function* () {
+								if (
+									state === closing &&
+									state.state !== "idle" &&
+									!runningFirmware(state)
+								)
+									yield* set({ ...idleFirmware });
+							}),
+						);
+						return { serial, version: Option.getOrUndefined(reconciled) };
 					},
 				),
 			};
