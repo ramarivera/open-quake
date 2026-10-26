@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Layer, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime, Option } from "effect";
 import { createElement } from "react";
 import { expect, it, vi } from "vitest";
 import {
@@ -10,15 +10,49 @@ import {
 	EmojiRepository,
 	emojiStorageLayer,
 } from "../../../../../../../packages/edge/src/emoji/emoji-repository";
-import { EmojiLibrary } from "../../../../../../../packages/edge/src/emoji/emoji-service";
+import {
+	EmojiLibrary,
+	EmojiPress,
+	EmojiPressAdapters,
+} from "../../../../../../../packages/edge/src/emoji/emoji-service";
 import type { EmojiBridge, EmojiReply } from "../../../../shared/emoji";
 import { button, click, element, input, mount } from "../dom-test";
 import { EmojiPage } from "./EmojiPage";
 
 it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and removes through the real library", async () => {
-	let saved: EmojiStore = { ...emptyEmojiStore, appMatch: false };
+	const slack = {
+		name: "Slack",
+		path: "/Applications/Slack.app",
+		identifier: "slack",
+	};
+	const finder = {
+		name: "Finder",
+		path: "/System/Library/CoreServices/Finder.app",
+		identifier: "com.apple.finder",
+	};
+	const hash = "a".repeat(64);
+	const ref = { packageId: "pack", emojiId: "wave", hash };
+	let saved: EmojiStore = {
+		...emptyEmojiStore,
+		appMatch: false,
+		items: [
+			{
+				id: ref.emojiId,
+				name: "Wave",
+				original: hash,
+				rendered: hash,
+				caption: { text: "", size: 48, color: "0xffffffff", position: "bot" },
+			},
+		],
+	};
+	const foreground = vi.fn(() => Effect.succeed(Option.some(slack)));
+	const copyGif = vi.fn(() => Effect.void);
+	const keyboard = vi.fn(() => Effect.void);
 	const runtime = ManagedRuntime.make(
-		EmojiLibrary.DefaultWithoutDependencies.pipe(
+		Layer.mergeAll(
+			EmojiLibrary.DefaultWithoutDependencies,
+			EmojiPress.DefaultWithoutDependencies,
+		).pipe(
 			Layer.provideMerge(
 				EmojiRepository.Default.pipe(
 					Layer.provide(
@@ -31,13 +65,16 @@ it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and remo
 					),
 				),
 			),
+			Layer.provide(
+				Layer.succeed(EmojiPressAdapters, {
+					platform: "darwin",
+					foreground,
+					copyGif,
+					keyboard,
+				}),
+			),
 		),
 	);
-	const slack = {
-		name: "Slack",
-		path: "/Applications/Slack.app",
-		identifier: "slack",
-	};
 	let picked = [slack];
 	const request = vi.fn<EmojiBridge["request"]>(
 		async (command): Promise<EmojiReply> => {
@@ -90,12 +127,15 @@ it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and remo
 		picked = [];
 		await click(button("Choose file…"));
 		expect(element("dialog").textContent).toContain("Apps (1)");
+		picked = [finder];
+		await click(button("Choose file…"));
+		expect(element("dialog").textContent).toContain("Apps (2)");
 		await click(element<HTMLInputElement>("dialog input[type=checkbox]"));
 		await input(element<HTMLSelectElement>("dialog select"), "0");
 		await click(button("Save", element("dialog")));
 		expect(saved).toMatchObject({
 			appMatch: true,
-			apps: [slack],
+			apps: [slack, finder],
 			globalMode: 0,
 		});
 		await page.unmount();
@@ -105,9 +145,21 @@ it("CENTER-089 cancels app drafts, saves deduplicated settings, reloads and remo
 			element<HTMLInputElement>("dialog input[type=checkbox]").checked,
 		).toBe(true);
 		expect(element("dialog").textContent).toContain("Slack.app");
+		expect(await runtime.runPromise(EmojiPress.press(ref, 2, 1))).toBe(
+			"copied",
+		);
+		expect(foreground).toHaveBeenCalledOnce();
+		expect(copyGif).toHaveBeenCalledExactlyOnceWith(hash);
+		expect(keyboard).not.toHaveBeenCalled();
 		await click(button("Delete", element("dialog")));
 		await click(button("Save", element("dialog")));
-		expect(saved.apps).toEqual([]);
+		expect(saved.apps).toEqual([finder]);
+		expect(await runtime.runPromise(EmojiPress.press(ref, 2, 1))).toBe(
+			"ignored",
+		);
+		expect(foreground).toHaveBeenCalledTimes(2);
+		expect(copyGif).toHaveBeenCalledTimes(1);
+		expect(keyboard).not.toHaveBeenCalled();
 		await page.unmount();
 	} finally {
 		Reflect.deleteProperty(window, "quakeEmoji");
