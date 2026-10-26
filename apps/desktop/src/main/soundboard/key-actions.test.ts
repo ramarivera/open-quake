@@ -216,3 +216,140 @@ it.scoped(
 			}).pipe(Effect.provide(layer));
 		}),
 );
+
+it.scoped(
+	"KNOB-096 WIDGETS-111 persists per-device resume without autoplay and seeks the canonical player on intent",
+	() =>
+		Effect.gen(function* () {
+			let stored: unknown = {};
+			const store = {
+				read: async () => stored,
+				write: async (value: unknown) => {
+					stored = value;
+				},
+			};
+			const intent = (value: string) => {
+				const original = key(0);
+				return {
+					...original,
+					config: {
+						...original.config,
+						actions: [
+							...original.config.actions,
+							{ type: "musicSource", value: "local" },
+							{ type: "playerIntent", value },
+						],
+					},
+				};
+			};
+			const first = yield* rig(),
+				keys = soundboardKeyActions(first.service, store);
+			yield* keys.execute(intent("toggle"), activation);
+			if (!first.tracks[0]) throw new Error("missing fake track");
+			first.tracks[0].positionMs = 4321;
+			expect((yield* keys.read(key(0), activation)).positionMs).toBe(4321);
+			yield* keys.reset();
+			const second = yield* rig(),
+				restarted = soundboardKeyActions(second.service, store);
+			expect((yield* restarted.read(key(0), activation)).positionMs).toBe(4321);
+			expect(second.tracks).toHaveLength(0);
+			expect(
+				(yield* restarted.read(key(0), { ...activation, deviceId: "other" }))
+					.positionMs,
+			).toBe(0);
+			yield* restarted.execute(intent("toggle"), activation);
+			expect(second.tracks[0]?.positionMs).toBe(4321);
+			expect(second.tracks[0]?.plays).toBe(1);
+			yield* restarted.execute(intent("toggle"), activation);
+			expect((yield* restarted.read(key(0), activation)).state).toBe("paused");
+			const before = second.tracks.length;
+			yield* restarted.execute(intent("next"), activation);
+			expect(second.tracks).toHaveLength(before);
+			yield* restarted.execute(intent("toggle"), activation);
+			yield* restarted.execute(intent("next"), activation);
+			yield* restarted.execute(intent("next"), activation);
+			expect((yield* restarted.read(key(0), activation)).trackIndex).toBe(0);
+			const system = intent("toggle");
+			expect(
+				yield* restarted.execute(
+					{
+						...system,
+						config: {
+							...system.config,
+							actions: system.config.actions.map((a) =>
+								a.type === "musicSource" ? { ...a, value: "system" } : a,
+							),
+						},
+					},
+					activation,
+				),
+			).toBe(false);
+		}),
+);
+
+for (const terminal of ["stop", "preempt", "reset"] as const) {
+	it.scoped(
+		`retains sampled resume across ${terminal}, repeated polls and restart`,
+		() =>
+			Effect.gen(function* () {
+				let stored: unknown = {};
+				const store = {
+					read: async () => stored,
+					write: async (value: unknown) => {
+						stored = value;
+					},
+				};
+				const original = key(0);
+				const intent = (value: string) => ({
+					...original,
+					config: {
+						...original.config,
+						actions: [
+							...original.config.actions.map((a) =>
+								a.type === "audioAction" && value === "next"
+									? { ...a, value: 6 }
+									: a,
+							),
+							{ type: "musicSource", value: "local" },
+							{ type: "playerIntent", value },
+						],
+					},
+				});
+				const f = yield* rig();
+				const keys = soundboardKeyActions(f.service, store);
+				yield* keys.execute(intent("toggle"), activation);
+				yield* keys.execute(intent("next"), activation);
+				const track = f.tracks.at(-1);
+				if (!track) throw new Error("missing fake track");
+				track.positionMs = 4321;
+				expect(yield* keys.read(original, activation)).toMatchObject({
+					trackIndex: 1,
+					positionMs: 4321,
+				});
+				if (terminal === "stop")
+					yield* keys.execute(intent("stop"), activation);
+				else if (terminal === "preempt")
+					yield* f.output.acquire("speech", Effect.void);
+				else yield* keys.reset();
+				for (let i = 0; i < 2; i++)
+					expect(yield* keys.read(original, activation)).toMatchObject({
+						state: "stopped",
+						trackIndex: 1,
+						positionMs: 4321,
+					});
+				const second = yield* rig();
+				const restarted = soundboardKeyActions(second.service, store);
+				expect(yield* restarted.read(original, activation)).toMatchObject({
+					trackIndex: 1,
+					positionMs: 4321,
+				});
+				expect(second.tracks).toHaveLength(0);
+				yield* restarted.execute(intent("toggle"), activation);
+				expect(second.tracks[0]).toMatchObject({
+					fileId: "sound-1",
+					positionMs: 4321,
+					plays: 1,
+				});
+			}),
+	);
+}

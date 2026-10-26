@@ -1,5 +1,8 @@
 import { Effect, Schema } from "effect";
-import { MediaSession } from "../../../shared/weather-media-contracts";
+import {
+	MediaSession,
+	type MediaSource,
+} from "../../../shared/weather-media-contracts";
 import { MediaResponseInvalid } from "./errors";
 
 const OptionalNumber = Schema.optional(Schema.NullOr(Schema.Finite));
@@ -23,10 +26,15 @@ export const MacMedia = Schema.Struct({
 export type MacMedia = typeof MacMedia.Type;
 export interface NativeMediaReading {
 	readonly session: MediaSession;
+	readonly sessions?: readonly (typeof MediaSource.Type)[];
+	readonly lyrics?: string;
 	readonly commands: ReadonlySet<number>;
 	readonly source: string;
 	readonly processId?: number;
 }
+export type NativeMediaResult = Omit<NativeMediaReading, "session"> & {
+	readonly session: MediaSession | null;
+};
 export type CoverDecoder = (base64: string, mime: string) => string | null;
 export const parseMacMedia = (
 	text: string,

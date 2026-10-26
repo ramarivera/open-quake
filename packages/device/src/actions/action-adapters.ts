@@ -24,6 +24,13 @@ export interface ApplicationActionAdapter {
 	) => Effect.Effect<void, HostActionError>;
 }
 export interface MediaActionAdapter {
+	readonly observe?: (
+		listener: (reading: {
+			readonly level: number;
+			readonly muted: boolean;
+		}) => void,
+	) => () => void;
+
 	readonly supportedCommands: ReadonlySet<MediaCommand>;
 	readonly sendMedia: (
 		command: MediaCommand,

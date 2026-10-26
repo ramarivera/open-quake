@@ -9,10 +9,16 @@ export function systemMediaKeyActions(
 		command: MediaCommand,
 		signal: AbortSignal,
 	) => Promise<{ accepted: boolean }>,
+	observe?: MediaActionAdapter["observe"],
 ): MediaActionAdapter {
 	return {
+		...(observe ? { observe } : {}),
 		supportedCommands: new Set([
 			"audio_play",
+			"audio_pause",
+			"audio_mute",
+			"audio_vol_down",
+			"audio_vol_up",
 			"audio_stop",
 			"audio_prev",
 			"audio_next",
@@ -30,4 +36,23 @@ export function systemMediaKeyActions(
 				return yield* new HostActionFailed("system-media-control-rejected");
 		}),
 	};
+}
+
+/** The saved empty preset is system-owned; explicit local never falls through. */
+export function isSystemPlayerKey(
+	key: import("../../../../../packages/device/src/profiles/profile-contracts").ProfileKey,
+): boolean {
+	if (key.config.type !== "playAudio") return false;
+	const source = key.config.actions.find(
+		(a) => a.type === "musicSource",
+	)?.value;
+	if (source) return source === "system";
+	const sounds = key.config.actions.filter((a) => a.type === "sound");
+	const actions = key.config.actions.filter((a) => a.type === "audioAction");
+	return (
+		sounds.length === 1 &&
+		sounds[0]?.value === "" &&
+		actions.length === 1 &&
+		actions[0]?.value === 0
+	);
 }

@@ -5,6 +5,9 @@ import type { ProfileKey } from "../../../../../shared/profiles";
 export function soundboardOwned(
 	config: Pick<ProfileKey["config"], "type" | "actions">,
 ): boolean {
+	const source = config.actions.find((a) => a.type === "musicSource")?.value;
+	if (source === "local") return true;
+	if (source === "system") return false;
 	if (config.type === "playAudioLegacy") return true;
 	if (config.type !== "playAudio") return false;
 	const sounds = config.actions.filter((action) => action.type === "sound");
@@ -22,7 +25,10 @@ export function soundboardOwned(
 export function soundboardConfigured(
 	config: Pick<ProfileKey["config"], "type" | "actions">,
 ): boolean {
-	const parsed = importSoundConfig(config);
+	const parsed = importSoundConfig({
+		...config,
+		actions: config.actions.filter((a) => a.type !== "musicSource"),
+	});
 	return (
 		soundboardOwned(config) &&
 		parsed._tag === "Right" &&

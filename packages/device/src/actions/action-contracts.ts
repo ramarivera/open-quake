@@ -1,6 +1,21 @@
 import { Schema } from "effect";
 import { ProfileAction } from "../profiles/profile-contracts.js";
 
+export const AUDIO_OPERATIONS = [
+	"audio_mute",
+	"audio_vol_down",
+	"audio_vol_up",
+	"audio_play",
+	"audio_pause",
+	"audio_stop",
+	"audio_prev",
+	"audio_next",
+	"audio_rewind",
+	"audio_forward",
+	"audio_repeat",
+	"audio_random",
+] as const;
+
 export const HOTKEY_MODIFIERS = [
 	"shift",
 	"right_shift",
@@ -51,6 +66,7 @@ export const HOTKEY_KEYS = [
 
 /** Grammar is finite; the host must additionally advertise each supported token. */
 export function isHotkeyChord(value: string): boolean {
+	if (AUDIO_OPERATIONS.some((token) => token === value)) return true;
 	const tokens = value.split("+");
 	const key = tokens.at(-1);
 	return (
@@ -138,6 +154,10 @@ export const OpenAppConfig = Schema.Struct({
 	),
 });
 export const MediaCommand = Schema.Literal(
+	"audio_mute",
+	"audio_vol_down",
+	"audio_vol_up",
+	"audio_pause",
 	"audio_play",
 	"audio_stop",
 	"audio_prev",
@@ -164,6 +184,48 @@ export const mediaConfig = <
 			}),
 		),
 	});
+
+export const VolumeConfig = Schema.Struct({
+	type: Schema.Literal("vol"),
+	supportKnob: Schema.Literal(true),
+	actions: Schema.Tuple(
+		Schema.Struct({
+			type: Schema.Literal("key"),
+			value: Schema.Literal("audio_vol_down"),
+		}),
+		Schema.Struct({
+			type: Schema.Literal("key"),
+			value: Schema.Literal("audio_vol_up"),
+		}),
+	),
+});
+export const MuteConfig = Schema.Struct({
+	type: Schema.Literal("mute"),
+	actions: Schema.Tuple(
+		Schema.Struct({
+			type: Schema.Literal("key"),
+			value: Schema.Literal("audio_mute"),
+		}),
+		Schema.Struct({
+			type: Schema.Literal("key"),
+			value: Schema.Literal("audio_mute"),
+		}),
+	),
+});
+export const BrightnessConfig = Schema.Struct({
+	type: Schema.Literal("brightness"),
+	supportKnob: Schema.Literal(true),
+	actions: Schema.Tuple(
+		Schema.Struct({ type: Schema.Literal("level"), value: Schema.Literal(1) }),
+		Schema.Struct({ type: Schema.Literal("level"), value: Schema.Literal(0) }),
+	),
+});
+export const MediaConfig = Schema.Struct({
+	type: Schema.Literal("media"),
+	actions: Schema.Tuple(
+		Schema.Struct({ type: Schema.Literal("key"), value: MediaCommand }),
+	),
+});
 
 /** Schemas at the integration seam, execution remains with the owning domain. */
 export const GoToPageConfig = Schema.Struct({
@@ -255,6 +317,16 @@ export const TimerConfig = Schema.Struct({
 	),
 });
 export const SequenceLeaf = Schema.Union(
+	MuteConfig,
+	MediaConfig,
+	mediaConfig("playPause", "audio_play"),
+	mediaConfig("stopPlay", "audio_stop"),
+	mediaConfig("skipBackward", "audio_prev"),
+	mediaConfig("skipForward", "audio_next"),
+	mediaConfig("fastBackward", "audio_rewind"),
+	mediaConfig("fastForward", "audio_forward"),
+	mediaConfig("repeatPlay", "audio_repeat"),
+	mediaConfig("randomPlay", "audio_random"),
 	WebsiteConfig,
 	HotkeyConfig,
 	TextConfig,
