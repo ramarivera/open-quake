@@ -85,3 +85,17 @@ PR #103 integration normally merges main `88eaf029`. Both additive spec/task con
 - [x] 10.4 Preserve sampled local resume positions across terminal session polls, explicit stop, preemption and reset. PR103 review 4379605831, bead open-quake-lih.7.4.1. Fake canonical-player regressions fail before and pass after, including repeated polls, restart without autoplay and explicit resume of the saved track/position.
 
 - [x] 10.5 Retain decoded native artwork when explicitly selecting the matching current Apple Music/Spotify session, keeping selected metadata/lyrics and isolating other sessions. PR103 review 4379605846, bead open-quake-lih.7.3.1. Two injected-native-port regressions fail before and pass after.
+
+## 11. PR103 and PR105 follow-ups
+
+- [x] 11.1 Keep local-card Stop scoped to its playback owner, including idle Stop. PR103 4379453311; fake-player regression in main/soundboard/key-actions.test.ts. Bead open-quake-lih.7.5.
+- [x] 11.2 Route explicitly system-owned legacy keys without changing implicit legacy ownership. PR103 4379453327; main/weather-media/local-player.test.ts. Bead open-quake-lih.7.5.
+- [x] 11.3 Retain pending local polling across equivalent committed targets. PR103 4379453339; mounted weather-media/card-interactions.test.tsx. Bead open-quake-lih.7.5.
+- [x] 11.4 Consume observed mute alternate title and icon in StripScreen. PR103 4379453347; mounted strip/touch-components.test.tsx. Bead open-quake-lih.7.5.
+- [x] 11.5 Dispatch media hotkeys on activation, with inert up/cancel/reset cleanup. PR103 4379737934; real KeyRuntime fake-adapter regressions in main/key-library/runtime-port.test.ts. Bead open-quake-lih.7.5.
+- [x] 11.6 Preserve additive playback selection order during position sampling. PR103 4379737951; fake canonical player through main/soundboard/key-actions.test.ts. Bead open-quake-lih.7.5.
+- [x] 11.7 Reject active stale-playlist card controls before playback/resume mutation. PR103 4379836847; four fake-player regressions in main/soundboard/key-actions.test.ts. Bead open-quake-lih.7.5.
+- [x] 11.8 Route both knob audio-hotkey directions through the shared media adapter. PR103 4379836858; main/knob/focused-hotkey.test.ts. Owning requirement also in knob-model-parity. Bead open-quake-lih.7.5.
+- [x] 11.9 Read reactive application locale for local/system players, retaining independent thumbnail context. PR105 4379841253; mounted weather-media/player-locale.test.tsx and profiles/thumbnail-locale.test.tsx. Bead open-quake-def.25, shared with settings-and-wizard.
+
+All regressions use fakes and no audio output, host player or physical HID. Beads remain in_progress for lead review and merge. The stale German hidden-media-smoke fixture remains owned by PR115 and is deliberately unchanged in this effort.

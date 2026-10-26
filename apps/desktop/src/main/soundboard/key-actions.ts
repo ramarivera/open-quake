@@ -67,7 +67,10 @@ export function soundboardKeyActions(
 			parsed.issues.some((issue) => issue !== "unverifiedFiles")
 		)
 			return yield* new SoundboardConfigInvalid();
-		if (parsed.operation === "STOP_ALL") {
+		const intent = key.config.actions.find(
+			(a) => a.type === "playerIntent",
+		)?.value;
+		if (parsed.operation === "STOP_ALL" && !intent) {
 			yield* service.stopAll(parsed.fade);
 			return true;
 		}
@@ -103,14 +106,20 @@ export function soundboardKeyActions(
 					s.owner.keyCode === owner.keyCode,
 			)
 			.at(-1);
-		const intent = key.config.actions.find(
-			(a) => a.type === "playerIntent",
-		)?.value;
+		if (
+			intent &&
+			active &&
+			active.playlistRevision !== activation.revision &&
+			active.state !== "stopped" &&
+			active.state !== "failed"
+		)
+			return yield* new SoundboardConfigInvalid();
 		if (intent === "previous" || intent === "next") {
 			if (active?.state !== "playing" || parsed.entries.length < 2) return true;
 		}
-		if (intent === "stop" && active) yield* service.stop(active.playbackId);
-		else if (intent === "toggle" && active?.state === "playing")
+		if (intent === "stop") {
+			if (active) yield* service.stop(active.playbackId);
+		} else if (intent === "toggle" && active?.state === "playing")
 			yield* service.pause(active.playbackId);
 		else if (intent === "toggle" && active?.state === "paused")
 			yield* service.resume(active.playbackId);
@@ -128,7 +137,8 @@ export function soundboardKeyActions(
 			.filter(
 				(s) =>
 					s.owner.profileId === owner.profileId &&
-					s.owner.keyCode === owner.keyCode,
+					s.owner.keyCode === owner.keyCode &&
+					s.playlistRevision === activation.revision,
 			)
 			.at(-1);
 		if (latest && (latest.state === "playing" || latest.state === "paused"))

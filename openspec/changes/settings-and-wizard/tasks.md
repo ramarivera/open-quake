@@ -213,6 +213,7 @@ PR #105 review fix 4379719107 keeps the mounted city verifier across locale chan
 
 PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated profile capture locale before mounting App. The real renderer-entry regression fails with English MON on the preceding implementation and passes with German MO, OKT 26 and localized theme navigation, including every observed ready preview. Fourteen focused profile/live-locale cases and desktop typecheck pass. Capture windows still use no management/panel locale bridge.
 
+- [x] PR105 locale follow-up 4379841253: system/local player consumers now subscribe to application locale context instead of its passive DOM mirror. Mounted locale-switch and independent capture regressions live in weather-media/player-locale.test.tsx; existing thumbnail-locale.test.tsx retains explicit German capture coverage. Owning scenarios and execution task 11.9 live in weather-media-parity. Bead open-quake-def.25 remains in_progress for lead review/merge.
 
 
 Shell scope decision, 2026-10-26: Ramiro explicitly excluded dormant vendor features and ARIS-only flows. MGMT-008, MGMT-014, MGMT-432, MGMT-433 and SETTINGS-017 are approved exclusions, not implemented parity. The corresponding decision remains open in open-quake-lih.17.17 for lead reconciliation.

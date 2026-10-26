@@ -220,11 +220,13 @@ export const desktopKeyRuntimePort = (
 						if (decoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(decoded.left));
 						const chord = decoded.right.actions[0].value;
-						if (Schema.is(MediaCommand)(chord))
-							return executeActionLeaf(
+						if (Schema.is(MediaCommand)(chord)) {
+							yield* executeActionLeaf(
 								{ type: "hotkey", actions: [{ type: "key", value: chord }] },
 								adapters,
 							);
+							return Effect.void;
+						}
 						const encoded = encodeDeviceChord(chord);
 						if (encoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(encoded.left));
