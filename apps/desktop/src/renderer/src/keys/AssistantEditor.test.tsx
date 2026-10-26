@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { Option, Schema } from "effect";
-import { useState } from "react";
+import { act, useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { KnobSlot } from "../../../../../../packages/device/src/knob/knob-contracts";
 import { defaultAssistantSettings } from "../../../../../../packages/device/src/profiles/assistant-contracts";
@@ -656,6 +656,81 @@ it("canonical knob provider and model changes clear incompatible assistant contr
 			webSearch: false,
 		},
 	});
+	expect(field(f.host, "Enable Thinking").checked).toBe(false);
+	expect(field(f.host, "Web Search").checked).toBe(false);
+});
+
+it("followed General provider changes reconcile checked controls and cross-provider model IDs before save and reopen", async () => {
+	let publish: (value: AgentView) => void = () => {};
+	const models = (provider: string): readonly PublicModelRow[] =>
+		rows.map((r) => ({
+			...r,
+			role: r.provider === provider ? "default" : "fallback",
+		}));
+	vi.stubGlobal("quakeAgents", {
+		request: async () => ({
+			_tag: "success",
+			view: view(models("qwen")),
+			draft: "",
+		}),
+		onSnapshot: (listener: typeof publish) => {
+			publish = listener;
+			return () => {};
+		},
+	});
+	const saved = {
+		...defaultAssistantSettings(),
+		thinking: true,
+		webSearch: true,
+		modelId: "qwen3.6-plus",
+	};
+	const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+	let key = Schema.decodeUnknownSync(ProfileKey)({
+		...base,
+		childrenName: "aiChat",
+		config: { ...base.config, type: "aiChat", assistantSettings: saved },
+	});
+	function KeyConsumer() {
+		const [current, setCurrent] = useState(key);
+		return (
+			<>
+				<AssistantEditor keyValue={current} onChange={setCurrent} />
+				<button
+					type="button"
+					onClick={() => {
+						key = current;
+					}}
+				>
+					Save key
+				</button>
+			</>
+		);
+	}
+	const f = await mount(<KeyConsumer />);
+	closes.push(f.close);
+	await settle(() =>
+		expect(field(f.host, "Enable Thinking").checked).toBe(true),
+	);
+	expect(field(f.host, "Web Search").checked).toBe(true);
+	await act(async () => publish(view(models("deepseek"))));
+	await settle(() =>
+		expect(
+			query(f.host, 'select[id$="-engine"]', HTMLSelectElement).value,
+		).toBe("deepseek"),
+	);
+	expect(field(f.host, "Enable Thinking").checked).toBe(false);
+	expect(field(f.host, "Web Search").checked).toBe(false);
+	expect(query(f.host, 'input[id$="-model-id"]', HTMLInputElement).value).toBe(
+		"",
+	);
+	await click(button(f.host, "Save key"));
+	expect(key.config.assistantSettings).toMatchObject({
+		modelRowId: "",
+		modelId: "",
+		thinking: false,
+		webSearch: false,
+	});
+	await f.render(<AssistantEditor keyValue={key} onChange={() => {}} />);
 	expect(field(f.host, "Enable Thinking").checked).toBe(false);
 	expect(field(f.host, "Web Search").checked).toBe(false);
 });

@@ -11,9 +11,11 @@ import { providerSamplingValid } from "../../../../../../packages/edge/src/ai/ai
 import {
 	canonicalProvider,
 	modelOptions,
+	supportsThinking,
 	supportsWebSearch,
 } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { AgentView, PublicModelRow } from "../../../shared/agents";
+import { reconcileAssistantProvider } from "../../../shared/assistant-provider";
 import { useAppLocale } from "../i18n";
 import { Row } from "../ui/Form";
 import { AssistantLink } from "./AssistantLink";
@@ -62,7 +64,7 @@ export function useAssistantCatalog() {
 	return { view, status, setView };
 }
 export function AssistantControls({
-	value,
+	value: storedValue,
 	onChange,
 	rows,
 	disabled = false,
@@ -79,15 +81,15 @@ export function AssistantControls({
 	const [entities, setEntities] = useState<readonly string[]>([]);
 	const [haStatus, setHaStatus] = useState("");
 	const eligible = resolveModelRows(rows);
-	const row = value.modelRowId
-		? eligible.find((r) => r.id === value.modelRowId)
+	const row = storedValue.modelRowId
+		? eligible.find((r) => r.id === storedValue.modelRowId)
 		: eligible.find((r) => r.role === "default");
+	const value = reconcileAssistantProvider(storedValue, row);
+	useEffect(() => {
+		if (!disabled && value !== storedValue) onChange(value);
+	}, [disabled, value, storedValue, onChange]);
 	const model = value.modelId || row?.model || "";
-	const thinking =
-		row &&
-		(canonicalProvider(row.provider) === "qwen" ||
-			(canonicalProvider(row.provider) === "openai" && model === "gpt-5.1") ||
-			(canonicalProvider(row.provider) === "kimi" && model === "kimi-k2.6"));
+	const thinking = row && supportsThinking(row.provider, model);
 	const sampling =
 		row &&
 		providerSamplingValid({

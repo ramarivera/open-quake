@@ -59,6 +59,7 @@ import {
 import { ChatService } from "../../../../../packages/edge/src/chat/chat-service";
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type { PinnedDirectModel } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
+import { reconcileAssistantProvider } from "../../shared/assistant-provider";
 import { connectSpark } from "../credentials/spark-socket";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
@@ -249,7 +250,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 							const assertCurrent = Effect.suspend(() =>
 								isCurrent() ? Effect.void : Effect.fail(new AiUnavailable()),
 							);
-							const settings = assistant
+							const savedSettings = assistant
 								? yield* Schema.decodeUnknown(AssistantSettings, {
 										onExcessProperty: "error",
 									})(assistant).pipe(
@@ -260,12 +261,15 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								pinned ??
 								(yield* Effect.gen(function* () {
 									const rows = yield* options.models(
-										settings ? "default" : scope,
+										savedSettings ? "default" : scope,
 									);
 									const eligible = resolveModelRows(rows);
-									const saved = settings?.modelRowId
-										? eligible.find((r) => r.id === settings.modelRowId)
+									const saved = savedSettings?.modelRowId
+										? eligible.find((r) => r.id === savedSettings.modelRowId)
 										: eligible.find((r) => r.role === "default");
+									const settings = savedSettings
+										? reconcileAssistantProvider(savedSettings, saved)
+										: undefined;
 									let row =
 										saved && settings
 											? {
@@ -314,6 +318,13 @@ export function prepareDirectChat(options: DirectChatOptions) {
 									return { profile, maxTokens: row.maxTokens };
 								}));
 							const baseProfile = selected.profile;
+							const settings =
+								savedSettings && pinned
+									? reconcileAssistantProvider(savedSettings, {
+											provider: baseProfile.provider ?? "generic",
+											model: baseProfile.modelId,
+										})
+									: savedSettings;
 							const profile: ProviderProfile =
 								settings && pinned
 									? {

@@ -223,6 +223,11 @@ General Settings SHALL expose AI Model Provider using saved local rows in QWen, 
 - **WHEN** providers load or a user chooses another saved provider
 - **THEN** the fixed engine order is retained, unconfigured choices explain why, the saved default changes, and reopening uses it without cloud/account calls
 
+#### Scenario: Saved assistant follows a changed General provider
+- **WHEN** an assistant follows General Settings default and the provider changes from Qwen to DeepSeek
+- **THEN** subsequent turns and the reopened editor clear unsupported Thinking and Web Search controls and discard known cross-provider model overrides before using the current default model
+- **AND** compatible controls, custom model IDs, explicitly selected rows and unrelated assistant preferences remain intact (AI-005, AI-041, AI-048, AI-062)
+
 ### Requirement: Named assistant models
 
 Models SHALL support Add, Rename, Copy and confirmed Delete. Names SHALL contain 1..30 trimmed characters. Copies SHALL own a fresh ID and independent settings with no credential or pending secret. Built-in rows SHALL disallow rename/delete. Deleting the default SHALL select a remaining row through existing default-role normalization; deleting the last global row SHALL fail (AI-043).

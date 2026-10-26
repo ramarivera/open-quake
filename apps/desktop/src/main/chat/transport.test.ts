@@ -183,6 +183,7 @@ async function fixture(
 	const reference = await Effect.runPromise(
 		creds.management.store(Redacted.make("fixture-key")),
 	);
+	let selectedProvider = provider;
 	let model = initialModel;
 	let role: "none" | "default" | "fallback" = "default";
 	let maxTokens = 512;
@@ -197,7 +198,7 @@ async function fixture(
 				{
 					id: "configured",
 					role,
-					provider,
+					provider: selectedProvider,
 					model,
 					baseUrl,
 					maxTokens,
@@ -241,6 +242,9 @@ async function fixture(
 		},
 		changeRole: (value: typeof role) => {
 			role = value;
+		},
+		changeProvider: (value: string) => {
+			selectedProvider = value;
 		},
 		changeModel: (value: string) => {
 			model = value;
@@ -1944,6 +1948,58 @@ it.each(["cancelled", "superseded"] as const)(
 			await holding;
 			await f.close();
 			await integrations.runtime.dispose();
+		}
+	},
+);
+
+it.each(["", "qwen3.6-plus", "my-custom-model"])(
+	"followed General Settings provider reconciles saved Qwen controls and model on the next turn: %s",
+	async (modelId) => {
+		const f = await fixture({}, "qwen", "qwen3.6-plus");
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			thinking: true,
+			webSearch: true,
+			modelId,
+		};
+		try {
+			const submit = async () => {
+				const turn = await f.host.runtime.runPromise(
+					f.host.submit(
+						{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+						"main",
+						undefined,
+						settings,
+					),
+				);
+				return Array.from(
+					await f.host.runtime.runPromise(Stream.runCollect(turn.events)),
+				).at(-1);
+			};
+			expect(await submit()).toMatchObject({
+				type: "end",
+				outcome: "completed",
+			});
+			expect(f.endpoint.calls[0]?.body).toMatchObject({
+				model: modelId || "qwen3.6-plus",
+				enable_thinking: true,
+				enable_search: true,
+			});
+			f.changeProvider("deepseek");
+			f.changeModel("deepseek-v4-flash");
+			expect(await submit()).toMatchObject({
+				type: "end",
+				outcome: "completed",
+			});
+			expect(f.endpoint.calls).toHaveLength(2);
+			expect(f.endpoint.calls[1]?.body.model).toBe(
+				modelId === "my-custom-model" ? modelId : "deepseek-v4-flash",
+			);
+			expect(f.endpoint.calls[1]?.body.enable_thinking).toBeUndefined();
+			expect(f.endpoint.calls[1]?.body.enable_search).toBeUndefined();
+		} finally {
+			await f.close();
 		}
 	},
 );
