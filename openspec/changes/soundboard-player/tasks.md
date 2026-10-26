@@ -24,3 +24,12 @@ Implementation tasks. Only the verified configuration-import task is complete; p
 Task 1.2 now has a version-1 review-only preview, actual saved playAudio action-shape import, exact recovered action/fade mappings, pure bounded-path/configuration checks, an Effect importer with bounded metadata probes, and a read-only desktop filesystem adapter. Unit/property tests cover order, duplicate entries, all controls, malformed JSON, boundaries, no remote-path probing, stable migration and fresh availability. Native filesystem tests cover missing files, directory/non-MP3 status and real permission denial. A real diagnostics runtime retains fault catalog identity and correlated importer/probe spans without paths, raw messages or credentials. Import performs no persistence, decoding, audio acquisition, player start or OS-volume mutation. Task 1.2 remains in progress in Beads pending reviewed PR delivery; all playback, shared output, UI and native/physical acceptance tasks remain open.
 
 PR55 review found that trimming a legacy single-file value could inspect a different path. The targeted regression failed before the fix; single-file values now retain exact whitespace while JSON detection and deliberate empty values retain syntax trimming. Missing production UI/IPC consumers are explicitly tracked by task 3.1 and open-quake-uv9.5; source import completion does not claim desktop availability.
+
+PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
+allowlists retain both native-media and importer names; the final diff contains
+only the importer scope. All 53 importer tests, 16 filesystem/diagnostics tests,
+both typechecks, scoped Biome and strict OpenSpec pass. This disposable worktree
+initially lacked generated Husky shims; installing frozen dependencies restored
+them, and the first merge's commit-message/post-commit consumers were checked
+explicitly before the normal final merge and push gates. Reviewed delivery is
+still pending; no playback is enabled by this restack.
