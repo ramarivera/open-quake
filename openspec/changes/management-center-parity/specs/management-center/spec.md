@@ -44,6 +44,12 @@ The sidebar footer's settings button SHALL open a popover (placement top-start, 
 - **WHEN** the user picks Large in the popover
 - **THEN** every `--mc-font-*` role switches to the Large value without a reload and the choice persists
 
+Audit regression coverage: CENTER-005.
+
+#### Scenario: Dismiss and clean up the display popover
+- **WHEN** the display popover opens and the user presses Escape or points outside it
+- **THEN** the popover closes, focus returns to Display, and dismissal listeners are removed after closing or unmounting
+
 ### Requirement: Deep-link tab activation
 Main SHALL be able to open the management window on a page through one typed command, and the renderer SHALL accept the same vocabulary from its launch URL. The aliases SHALL map as DK does: `claw`, `openclaw`, `clawcontrolpanel`, `agents` and `openclaw-agents` to Agents; `openclaw-ai` to Agents › AI Config; `meeting` and `meetingminutes` to Meeting; `emoji` to Emoji; `ai`, `aiplugin`, `shortcut`, `shortcuts` and `aishortcut` to Shortcuts; plus open-quake's own page IDs. Unknown names SHALL leave the current page and log a warning. Source: CENTER-013, MGMT-118.
 
@@ -66,12 +72,24 @@ The management window's title bar SHALL follow the selected theme instead of the
 - **WHEN** a window other than the management window sends a title bar theme
 - **THEN** main ignores it
 
+Audit regression coverage: CENTER-002.
+
+#### Scenario: Windows overlay follows each theme
+- **WHEN** the Windows management window starts and receives valid theme updates
+- **THEN** it uses the native 55 px title bar overlay and updates its background and symbol colors without replacing native window controls
+
 ### Requirement: Content panels and status card
 Pages SHALL render inside the Management Center's content card (radius 10, 1 px border, surface colour). The footer status card SHALL show "QUAKE" with the live connection label, replacing DK's account card (account login is out of scope by decision 9). The product mark SHALL show the agent runtime state when Agents are enabled. Source: CENTER-007, CENTER-014 (replaced), CENTER-017.
 
 #### Scenario: Device disconnects
 - **WHEN** the device status changes to disconnected
 - **THEN** the footer card announces the new state through a live region without moving focus
+
+Audit regression coverage: CENTER-017.
+
+#### Scenario: Workbench reflows after navigation
+- **WHEN** Emoji, Shortcuts and Meetings are opened at narrow and wide viewport sizes
+- **THEN** each content panel fits its scroll container without horizontal document overflow
 
 ### Requirement: Creation workflow entry points
 Management navigation SHALL expose Emoji and AI Shortcuts as direct replacements for the recovered library plus-menu destinations. Each entry SHALL open the real creation workflow. Source: MGMT-118.

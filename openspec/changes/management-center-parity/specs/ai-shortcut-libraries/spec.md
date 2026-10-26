@@ -17,6 +17,12 @@ The Shortcuts page SHALL offer the five sample chips (Photoshop, Illustrator, Fi
 - **THEN** it fails without changing stored libraries or profiles, aborts its provider work and joins pending generation before inference disposal
 - **AND** generation uses at most the saved output-token budget or 16384 tokens, whichever is lower
 
+Audit regression coverage: CENTER-093.
+
+#### Scenario: Generator controls submit the chosen application
+- **WHEN** the user toggles a preset, chooses a custom application and submits with Enter
+- **THEN** the chip can clear, the 180-character counter tracks input, empty input receives focus with an error, and the generated request uses the exact selected application prefix
+
 ### Requirement: Schema-decoded generation results
 Model output SHALL be parsed by taking the text from its first `{` to its last `}`, running `JSON.parse`, and decoding the result with a Schema of `{ConfigTitle, ConfigData: [{title, config: {functionType, actions}}]}`. It SHALL never be evaluated. Canonical registry-validated hotkey, hotkeySwitch, website, text, timer, panelBrightness and media action types SHALL become editable inert rows. Each SHALL preserve its validated actions and localized label for explicit library save and profile sync. Unsupported function types, command lines, model-supplied local application paths and multi-actions SHALL be dropped and counted. Nothing from the output SHALL execute during generation or save. These retained types implement part of AI-121; its remaining recovered types are still required and this subset does not retire them. Generation SHALL select the saved daily/default model and use temperature 0.1, top-p 0.2, thinking and optional search through the existing provider quirk adapter. Output that fails decoding SHALL report an invalid configuration and leave the table as it was. Source: CENTER-094; GAP-MAP "Don't copy" (`eval` on AI shortcut output).
 

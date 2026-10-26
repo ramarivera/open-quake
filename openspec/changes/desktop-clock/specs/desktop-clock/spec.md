@@ -392,3 +392,13 @@ Screen SHALL expose one weather/music control set backed by the selected clock k
 
 - **WHEN** Screen displays clock B while clock A and the legacy global weather settings differ
 - **THEN** it shows exactly one weather/music control set, saves city and music to B, and leaves A and global settings unchanged
+
+### Requirement: Clock visibility and activation consumers
+
+Clock media SHALL pause when mounted or replaced while the document is hidden, resume on visibility when paused, and remove visibility listeners on disposal. Theme navigation SHALL release pressed feedback on cancellation, save once per effective native touch or browser activation, and ignore compatibility clicks within 500 ms of a native end or pointer cancellation unless a new pointer or keyboard action starts. Sources: WIDGETS-035, WIDGETS-039.
+
+#### Scenario: Hidden media and duplicate activation
+
+- **WHEN** a hidden clock mounts or replaces a video and a theme button receives an effective native release followed by a compatibility click
+- **THEN** the video stays paused and only one theme selection is saved
+- **AND** a new pointer or keyboard activation remains usable, cancelled releases save nothing, and unmount removes listeners and timers
