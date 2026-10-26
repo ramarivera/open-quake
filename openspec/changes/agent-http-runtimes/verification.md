@@ -103,3 +103,21 @@ checkpoints, `desktop-e2e-GwsCbT/`, `cleanup-probes.json` and
 `interruption-ready.json`.
 Review, hosted release checks and merge remain pending under task 6.2 and
 `open-quake-hwn.12`. Physical speech acceptance remains separately open.
+
+
+## Delivery reconciliation, 2026-10-26
+
+PR43 merged as `578b4a8` with the save-and-select controller transaction.
+Automatic discovery cannot enter between connection save and selection, and
+selection failure retains the completed save without duplicating a connection.
+The real workspace calls that transaction through useConnections. The focused
+controller regression was rerun during reconciliation and passes. This closes
+open-quake-hbe.8.
+
+PR70 merged as `32ee8b7` after current-head review, resolved findings and the
+complete native package/download matrix. Its saved-profile production-root
+acceptance supersedes the historical environment-provider evidence above.
+Both runtime routes assert the exact selected connection and remote continuity,
+then clean up their owned containers, network, volumes and profile snapshot.
+This closes duplicate acceptance tracker open-quake-hbe.4 alongside the already
+closed open-quake-hwn.12. Physical microphone/hearing remains separate.

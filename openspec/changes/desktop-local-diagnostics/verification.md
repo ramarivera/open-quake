@@ -77,5 +77,6 @@ desktop-to-runtime run also retain complete zero-loss shutdown evidence.
 These paths are relative to the project's external `open-quake-finish` scratch
 folder. They prove retained software evidence, not physical keys, microphone
 permission, hearing or strip readability. Those acceptance obligations remain
-open in their owning changes. Reviewed delivery of this last reporting fix is
-still required before closing the two diagnostic integration beads.
+open in their owning changes. PR61 merged as `695ba82` after current-head review, all handled threads and
+the complete five-platform package/download matrix. Both diagnostic integration
+beads are closed.

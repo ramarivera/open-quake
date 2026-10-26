@@ -77,3 +77,14 @@ individual labels clip locally, and the narrow popover fits its drawer footer.
 The actual-root popover geometry, hit tests, locale switches and focus behavior
 were rerun successfully on the combined source in
 `redesign/integrated/popover-combined/` under the external scratch root.
+
+
+Delivery reconciliation, 2026-10-26: PR47 merged as `3acd5f7` after current-head
+review and the complete native package/download matrix. Management, conversation
+and device redesign tasks are complete; the actual-display evidence is recorded
+in independent-device-design/tasks.md. This supersedes the earlier three-change
+visual pass tracked by open-quake-hbe.6. Windows/Linux visual checks, physical
+legibility, gestures and audio remain with their separate acceptance tasks.
+The broader management feature-parity epic is not a prerequisite for closing
+this completed visual redesign. Its remaining implementation obligations remain
+open under open-quake-lih.17.1 and the parent finish goal.
