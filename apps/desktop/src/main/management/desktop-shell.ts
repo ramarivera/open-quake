@@ -132,6 +132,7 @@ export function createDesktopShell(options: {
 	}
 	const attach = (win: ShellWindow) => {
 		if (disposed || attached.has(win)) return;
+		const contents = win.webContents;
 		const close = (event: { preventDefault(): void }) => {
 			if (!disposed && !options.quitting() && options.keepVisible?.()) {
 				event.preventDefault();
@@ -152,12 +153,12 @@ export function createDesktopShell(options: {
 		const detach = () => {
 			ready.delete(win);
 			pending.delete(win);
-			win.webContents.removeListener("did-start-navigation", navigating);
+			contents.removeListener("did-start-navigation", navigating);
 			win.removeListener("close", close);
 			win.removeListener("closed", detach);
 			attached.delete(win);
 		};
-		win.webContents.on("did-start-navigation", navigating);
+		contents.on("did-start-navigation", navigating);
 		win.on("close", close);
 		win.on("closed", detach);
 		attached.set(win, detach);

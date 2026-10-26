@@ -370,3 +370,16 @@ it("Settings survives window recreation until the replacement renderer subscribe
 	f.shell.dispose();
 	expect(native.listeners.has(MANAGEMENT_READY)).toBe(false);
 });
+
+it("closed cleanup never reads BrowserWindow.webContents after native destruction", () => {
+	const f = fixture();
+	const contents = f.win.webContents;
+	Object.defineProperty(f.win, "webContents", {
+		get() {
+			throw new Error("Object has been destroyed");
+		},
+	});
+	expect(() => f.win.emit("closed")).not.toThrow();
+	expect(contents.listenerCount("did-start-navigation")).toBe(0);
+	f.shell.dispose();
+});
