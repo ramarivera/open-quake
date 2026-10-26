@@ -15,6 +15,9 @@ const directory = realpathSync(
 const mockMode = process.argv.includes("--mock");
 const app = new EventEmitter();
 app.isPackaged = true;
+app.commandLine = { appendSwitch() {} };
+app.setAppUserModelId = () => {};
+app.relaunch = () => {};
 app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
@@ -42,15 +45,14 @@ class Window extends EventEmitter {
 		Window.windows.push(this);
 	}
 	url = "";
-	webContents = {
+	webContents = Object.assign(new EventEmitter(), {
+		setWindowOpenHandler: () => {},
 		setAudioMuted: () => {},
 		setZoomFactor: () => {},
-		on: () => {},
-		removeListener: () => {},
 		send: (channel, event) => events.push({ channel, event }),
 		isDestroyed: () => false,
 		getURL: () => this.url,
-	};
+	});
 	isDestroyed() {
 		return false;
 	}
@@ -61,6 +63,23 @@ class Window extends EventEmitter {
 		this.url = url;
 	}
 	hide() {
+		this.shown = false;
+	}
+	isMinimized() {
+		return this.minimized;
+	}
+	restores = 0;
+	restore() {
+		this.minimized = false;
+		this.restores++;
+	}
+	focused = false;
+	focus() {
+		this.focused = true;
+	}
+	minimized = false;
+	minimize() {
+		this.minimized = true;
 		this.shown = false;
 	}
 	shown = false;
@@ -90,6 +109,13 @@ class Window extends EventEmitter {
 	setVisibleOnAllWorkspaces() {}
 	destroy() {}
 }
+class Tray extends EventEmitter {
+	setToolTip() {}
+	setContextMenu() {}
+	destroy() {
+		this.removeAllListeners();
+	}
+}
 const screen = new EventEmitter();
 const display = {
 	id: 1,
@@ -115,6 +141,7 @@ const dialog = {
 	showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }),
 };
 const nativeImage = {
+	createFromBitmap: () => ({ setTemplateImage() {} }),
 	createFromBuffer: () => {
 		throw new Error("Bundle smoke must not decode images");
 	},
@@ -168,6 +195,7 @@ globalThis.openQuakeBundleSmoke = {
 	ipcMain,
 	dialog,
 	nativeImage,
+	Tray,
 	protocol,
 	net,
 	session,
@@ -187,7 +215,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, Menu, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, Menu, Tray, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.
@@ -266,6 +294,21 @@ try {
 			(window) => window.options.title?.includes("management") && window.shown,
 		),
 	);
+	const management = Window.windows.find((window) =>
+		window.options.title?.includes("management"),
+	);
+	assert(management, "Management BrowserWindow exists");
+	management.minimize();
+	app.emit("activate");
+	await until(() => management.shown);
+	assert.equal(
+		management.isMinimized(),
+		false,
+		"Activation restores a minimized BrowserWindow",
+	);
+	assert.equal(management.restores, 1);
+	assert.equal(management.focused, true);
+
 	app.quit();
 	await until(() => quit);
 	for (const channel of [

@@ -85,7 +85,8 @@
 			"trayMenu": {
 				"resume": "Resume",
 				"setting": "Settings",
-				"exit": "Exit"
+				"exit": "Exit",
+				"management": "Management Center"
 			}
 		},
 		"de": {
@@ -110,7 +111,8 @@
 			"trayMenu": {
 				"resume": "Fortsetzen",
 				"setting": "Einstellungen",
-				"exit": "Beenden"
+				"exit": "Beenden",
+				"management": "Verwaltungszentrum"
 			}
 		},
 		"zh": {
@@ -135,7 +137,8 @@
 			"trayMenu": {
 				"resume": "恢复窗口",
 				"setting": "设置",
-				"exit": "退出"
+				"exit": "退出",
+				"management": "管理中心"
 			}
 		},
 		"es": {
@@ -160,7 +163,8 @@
 			"trayMenu": {
 				"resume": "Reanudar",
 				"setting": "Configuración",
-				"exit": "Salir"
+				"exit": "Salir",
+				"management": "Centro de gestión"
 			}
 		},
 		"fr": {
@@ -185,7 +189,8 @@
 			"trayMenu": {
 				"resume": "Reprendre",
 				"setting": "Paramètres",
-				"exit": "Quitter"
+				"exit": "Quitter",
+				"management": "Centre de gestion"
 			}
 		},
 		"ko": {
@@ -210,7 +215,8 @@
 			"trayMenu": {
 				"resume": "재개",
 				"setting": "설정",
-				"exit": "종료"
+				"exit": "종료",
+				"management": "관리 센터"
 			}
 		},
 		"it": {
@@ -235,7 +241,8 @@
 			"trayMenu": {
 				"resume": "Riprendi",
 				"setting": "Impostazioni",
-				"exit": "Esci"
+				"exit": "Esci",
+				"management": "Centro di gestione"
 			}
 		},
 		"ja": {
@@ -260,7 +267,8 @@
 			"trayMenu": {
 				"resume": "再開",
 				"setting": "設定",
-				"exit": "終了"
+				"exit": "終了",
+				"management": "管理センター"
 			}
 		}
 	}

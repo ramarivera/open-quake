@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { constants } from "node:fs";
-import { open, readdir } from "node:fs/promises";
+import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect } from "effect";
 import { meetingError } from "../../../../../packages/edge/src/meetings/meeting-errors";
@@ -25,10 +25,14 @@ const run = (executable: string, args: readonly string[], timeout?: number) =>
 					output = (output + chunk.toString("utf8")).slice(-16384);
 				});
 				process.once("error", reject);
-				process.once("exit", (code) =>
+				process.once("exit", (code, signal) =>
 					code === 0
 						? resolve(output)
-						: reject(new Error("Audio conversion failed")),
+						: reject(
+								Object.assign(new Error("Audio conversion failed"), {
+									code: signal ? "ETIMEDOUT" : "INVALID_MEDIA",
+								}),
+							),
 				);
 			}),
 		catch: (cause) => meetingError("CaptureFailed", cause),
@@ -110,7 +114,47 @@ export function audioFiles(root: string, ffmpeg: string) {
 						output = `merged_${index}.mp3`;
 					const inputs = ["-y", "-i", join(directory, name)];
 					const system = `system_${index}.webm`;
-					if (names.includes(system))
+					const systemPath = join(directory, system);
+					const usable =
+						names.includes(system) &&
+						(yield* Effect.tryPromise({
+							try: async () => {
+								const stat = await lstat(systemPath);
+								return stat.isFile() && stat.size > 0;
+							},
+							catch: (cause) => meetingError("CaptureFailed", cause),
+						}));
+					const validSystem =
+						usable &&
+						(yield* run(
+							ffmpeg,
+							[
+								"-nostdin",
+								"-v",
+								"error",
+								"-i",
+								systemPath,
+								"-t",
+								"1",
+								"-map",
+								"0:a:0",
+								"-f",
+								"null",
+								"-",
+							],
+							8000,
+						).pipe(
+							Effect.as(true),
+							Effect.catchTag("MeetingCaptureFailed", (error) =>
+								typeof error.originalCause === "object" &&
+								error.originalCause !== null &&
+								"code" in error.originalCause &&
+								error.originalCause.code === "INVALID_MEDIA"
+									? Effect.succeed(false)
+									: Effect.fail(error),
+							),
+						));
+					if (validSystem)
 						inputs.push(
 							"-i",
 							join(directory, system),

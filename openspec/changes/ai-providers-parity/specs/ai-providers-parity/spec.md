@@ -266,3 +266,12 @@ Assistant settings SHALL link the existing Models and Speech settings consumers 
 - **THEN** readiness and runtime pinning both accept it using the selected eligible credentialed row, without requiring duplicate assistant settings
 - **WHEN** its model selection changes to General Settings default
 - **THEN** directProvider and directModel resolve the new default before saving, never the previous row (AI-005, AI-048, AI-062)
+
+### Requirement: Existing facade owns production meeting transports
+
+Meeting ASR, upload and live translation SHALL compose the existing AiProviderService and AiMeetingAdapter with saved model profiles, credential references and managed meeting audio UUIDs. The meeting-minutes requirements own task expiry, artifacts, cancellation, mono normalization and bounded translation. No account gateway or second credential store SHALL be introduced. Evidence: AI-136, AI-137, AI-269, AI-270, AI-272, AI-278.
+
+#### Scenario: Saved credentials reach real adapters through fake servers
+
+- **WHEN** a saved Qwen or OpenAI profile processes synthetic managed audio through the production meeting facade and loopback HTTP or WebSocket servers
+- **THEN** only its selected credential authenticates the expected direct adapter, the resulting transcript feeds the existing summary facade, and all temporary audio and sockets close without hardware or paid requests

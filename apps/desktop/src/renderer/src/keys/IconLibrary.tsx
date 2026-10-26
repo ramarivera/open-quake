@@ -79,6 +79,7 @@ export function IconLibrary({
 		[limit, setLimit] = useState(0),
 		[loading, setLoading] = useState(true),
 		[progress, setProgress] = useState(8),
+		[stage, setStage] = useState("iconLib.loadingGroups"),
 		[status, setStatus] = useState(""),
 		[notice, setNotice] = useState(""),
 		[selectedIcon, setSelectedIcon] = useState(""),
@@ -106,6 +107,7 @@ export function IconLibrary({
 		const isLive = (): boolean => live && loadGeneration.current === ticket;
 		setLoading(true);
 		setProgress(8);
+		setStage("iconLib.loadingGroups");
 		setStatus("");
 		setNotice("");
 		void (async () => {
@@ -115,6 +117,7 @@ export function IconLibrary({
 				if (library._tag === "rejected") throw new Error(library.reason);
 				setPacks(library.packs ?? []);
 				setProgress(28);
+				setStage("iconLib.loadingCustom");
 				const apps = await window.quakeKeyLibrary.request({
 					type: "application-icons",
 				});
@@ -122,10 +125,10 @@ export function IconLibrary({
 				if (apps._tag === "success") setApplications(apps.packs ?? []);
 				else setStatus(apps.reason);
 				setProgress(48);
+				setStage("iconLib.loadingMaterial");
 				const module = await import("virtual:mdi-icons");
 				if (!isLive()) return;
 				setMdi(module.default);
-				setProgress(88);
 				setProgress(100);
 			} catch (cause) {
 				if (isLive())
@@ -224,6 +227,8 @@ export function IconLibrary({
 		)
 			return;
 		setLoading(true);
+		setProgress(8);
+		setStage("iconLib.loadingGroups");
 		setStatus("");
 		setNotice("");
 		try {
@@ -258,6 +263,7 @@ export function IconLibrary({
 	const upload = async (type: "import-pack" | "import-icon"): Promise<void> => {
 		setLoading(true);
 		setProgress(8);
+		setStage("iconLib.loadingGroups");
 		setStatus("");
 		setNotice("");
 		try {
@@ -285,6 +291,7 @@ export function IconLibrary({
 		setSelectedIcon(id);
 		setLoading(true);
 		setProgress(88);
+		setStage("iconLib.loadingIcons");
 		setStatus("");
 		try {
 			const pixels = await rasterizeIcon(data);
@@ -416,7 +423,7 @@ export function IconLibrary({
 				</div>
 				{loading && !choosing.current && (
 					<div className="icon-library-loading" role="status">
-						<span>{t("iconLib.loadingIcons")}</span>
+						<span>{t(stage)}</span>
 						<progress
 							max={100}
 							value={progress}

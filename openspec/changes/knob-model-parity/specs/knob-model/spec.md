@@ -24,7 +24,7 @@ The system SHALL consume source-confirmed press codes 1 short, 2 double, 5 hold 
 
 ### Requirement: Idle profile selectors
 
-Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. The picker SHALL use only ready thumbnails in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent and hide after 3000 ms; the ring SHALL NOT render while the picker is open. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
+Each detent SHALL route once, in order: visible knob-capable tile, available armed player volume, thumbnail picker, FunctionWheel. Stored center/left/right slots SHALL NOT run on idle rotation. Profiles SHALL wrap in menu order. Selection SHALL serialize with profile edits, publish only after persistence, and reach the strip and management preview through the same committed snapshot. Failed writes SHALL retain the prior selection. The picker SHALL list profiles with ready thumbnails plus the committed active profile, using a placeholder when its thumbnail is missing, in menu order, 15 per page, open one detent from the active profile, follow focus across pages, and auto-commit 5000 ms after the last detent or page arrow. Focus equal to current SHALL close without a write. Cold or empty thumbnail caches SHALL fall through to the ring and warm asynchronously without consuming or replaying that detent. The ring SHALL commit 200 ms after the last detent; unchanged selection SHALL hide after 3000 ms from input, and successful commits SHALL keep feedback for 1200 ms after commit; the ring SHALL NOT render while the picker is open. Logical deltas SHALL be retained when visual updates coalesce at 16 ms. Audit KNOB-010..012/024, SCREEN-072/074/078/079/085/086/090/091.
 
 #### Scenario: Deadline restarts
 
@@ -87,6 +87,81 @@ Focused screen luminance SHALL use the hardware session's typed Luminance comman
 - **WHEN** a physical detent targets an unavailable focused control or a hold cannot start voice
 - **THEN** the panel receives the sanitized failure code and displays the warning, and an available hardware session plays the error tone without changing the selected profile
 
+
+### Requirement: Source-aware wheel visibility and menu reconciliation
+
+SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative committed context containing the ordered menu and active profile. Boot synchronization SHALL remain closed. A real external profile ID change SHALL show ring feedback at its new index for 1200 ms without selecting again. An own-commit publication SHALL NOT reopen or extend feedback. Added, edited or deleted entries SHALL retain the active ID when present; deletion of the active ID SHALL use the repository's first visible profile. An open selector SHALL rescan to the committed active ID and restart its settle deadline on a catalog edit, without opening a closed selector. The committed active profile SHALL remain a picker entry with a placeholder when its thumbnail is missing. Catalog edits SHALL NOT invoke persistence for a different profile. Ready thumbnails with matching content keys SHALL survive unrelated edits. Active page/content changes SHALL clear focus and disarm volume; inactive-only edits SHALL preserve them. A committed snapshot received before the initial read SHALL take precedence over that late read. Canonical model revisions and 16 ms renderer coalescing SHALL replace repeated nextTick/150 ms index resynchronization.
+
+#### Scenario: External change versus boot and own commit
+
+- **WHEN** the model first synchronizes, then receives a different committed profile, then its unchanged publication
+- **THEN** boot remains closed, the real change shows feedback for exactly 1200 ms, no selection port runs, and the unchanged publication does not extend the deadline
+
+#### Scenario: Menu mutation during selection
+
+- **WHEN** a profile is added, renamed, reordered or deleted while the picker or ring is open
+- **THEN** the menu order and active ID come from the same context, focus rescans to that ID and page, the new settle deadline selects no stale entry, and a closed selector remains closed
+
+#### Scenario: Missing active thumbnail during a catalog edit
+
+- **WHEN** the active thumbnail is missing or invalidated while another ready profile is highlighted, then a catalog edit publishes
+- **THEN** the picker rescans to the active profile's placeholder, expiry retains the committed profile without persistence, and a subsequent deliberate detent can select another ready profile
+
+#### Scenario: Coalesced multi-page movement
+
+- **WHEN** rapid detents cross multiple 15-entry page boundaries before a render
+- **THEN** every delta contributes to the canonical index and the rendered card, page and single focus rectangle agree with the latest model revision
+
+### Requirement: Committed profile frame transition
+
+SCREEN-079 SHALL reveal a committed colorful profile immediately. When committed knob truth switches from colorful to a grid profile before its profile snapshot arrives, the panel SHALL retain the colorful frame, disable stale grid input, then reveal only the matching committed grid. After 2000 ms without matching configuration, it SHALL show a bounded unavailable frame rather than expose the previous profile's controls. The transition SHALL be canceled by a newer switch or unmount. Same-profile confirmation SHALL not write or reset voice. Failed persistence SHALL retain committed profile truth. A successful profile switch SHALL cancel owned voice and disarm volume once; publication of its committed snapshot SHALL NOT repeat those effects.
+
+#### Scenario: Delayed and missing grid snapshot
+
+- **WHEN** colorful switches to a committed grid profile whose snapshot is delayed
+- **THEN** colorful remains until the matching snapshot arrives, or for at most 2000 ms before an unavailable frame, and no old-profile grid action is enabled
+
+#### Scenario: Failed persistence
+
+- **WHEN** selecting a different profile fails storage
+- **THEN** the old committed profile remains visible and the failure code remains sanitized
+
+### Requirement: Independent wheel presentation with recovered dimensions
+
+SCREEN-075, SCREEN-076, SCREEN-077 and SCREEN-080 SHALL use the independent-device-design flat list and palette, with the recovered 423 by 470 right-edge footprint centered within 1920 by 480. Five wrapped labels SHALL use vertical offsets -166.81, -88.37, 0, 88.37, 166.81; 40 px type with 48 px line height and center scale 1.404. All labels SHALL truncate within the canvas, including the center, with a 600 px maximum measured label width. The opaque legibility sheet SHALL expand to max(480, widest center/adjacent label plus 400) when that measured label exceeds 240 px, bounded to 1920. It SHALL not capture input. The flat direction indicator SHALL expire after 300 ms and the interrupted direction nudge SHALL reset after 200 ms easeInOutQuad. OS or app reduced motion SHALL remove motion without changing selection deadlines. The dormant cyan arc, radial vignette, halo/glow and glass blur SHALL remain replaced by flat surfaces as required by independent-device-design; their compositor internals SHALL NOT return.
+
+#### Scenario: Long names and small menus
+
+- **WHEN** one, two or many profiles include a title wider than 600 px and the active index wraps
+- **THEN** exactly five names render, the center and neighbours stay clipped to the canvas and their legibility sheet, and the sheet leaves underlying grid input available
+
+#### Scenario: Interrupted nudge and reduced motion
+
+- **WHEN** consecutive detents arrive within 200 ms, or reduced motion is enabled
+- **THEN** direction and names update immediately, prior animation is canceled, the final nudge resets by 200 ms, and reduced motion renders a stable final frame
+
+### Requirement: Picker presentation and shared input geometry
+
+SCREEN-087, SCREEN-088, SCREEN-089 and SCREEN-094 SHALL retain the recovered 58 px header inset 20, 38 px footer, 370 px card band, 16 px gaps, strict 4:1 count-based cards, 40 px radii and fixed 300 by 75 cards above 15 entries. Incomplete pages SHALL center their actual row count within the band. A single 3 px accent focus rectangle SHALL move in 140 ms; cards SHALL transition in 120 ms, show thumbnail or neutral 8 by 2 placeholder, distinguish current/focus/pressed with a word or outline, hide the current badge when paged, and shrink to .97 when pressed. The backdrop and name legibility band SHALL be opaque flat surfaces under independent-device-design. Header title/current/hint and footer page hint/current badge SHALL use shared source strings in en, de, es, fr, it, ja, ko and zh, with English fallback. Long current names SHALL ellipsize without hiding hints. Paged arrows SHALL derive both rendered bounds and hit rectangles from one source: 160 by 220 at x=0 or 1760, y=130. First/last unavailable arrows SHALL retain bounds with visibility hidden and no input. The settle bar SHALL be 3 px and reflect canonical progress; page indicator/hint SHALL appear only for paged lists.
+
+#### Scenario: Paging boundary and incomplete last page
+
+- **WHEN** a 16-entry picker advances to its last page
+- **THEN** its one card and focus ring center in the 370 px band, previous arrow accepts input only inside its rendered rectangle, and the hidden next arrow cannot select a page
+
+#### Scenario: Localized header and current states
+
+- **WHEN** any of the eight source locales renders one or several pages
+- **THEN** source title, current prefix/badge and hints render with the correct current name, page fraction and settle progress without overlapping the card band
+
+### Requirement: Complete painting and deliberate management entry omission
+
+SCREEN-081 SHALL keep tile painting complete before, during and after selector visibility. Clock and chat SHALL retain their existing flat surfaces. Monitor cards SHALL use opaque, blur-free fallbacks while a selector is visible, restoring their selected theme on exit. The shared selector visibility state SHALL replace private compositor events and repaint nudges. SCREEN-084 SHALL deliberately omit the source's dormant management button from both strip selector and management preview; existing management navigation remains the accessible route and selector rendering SHALL NOT invoke management opening.
+
+#### Scenario: Selector compositor and management preview
+
+- **WHEN** clock, monitor and chat tiles render before, during and after a wheel session in the strip and in management preview
+- **THEN** all tile content paints completely, no glass blur is introduced by the selector, and neither selector offers or calls a management-opening button
 ### Requirement: Saved host volume, mute and brightness
 
 The action catalog SHALL register legacy vol with audio_vol_down/up and supportKnob, mute with two audio_mute actions and actual-state alternate artwork, and host brightness with directional level values 1/0 and supportKnob. Quick 2,1/2,2/2,3 SHALL activate these same owners. Volume SHALL clamp at 0/100 and skip redundant native writes. A single shared native volume/mute observation SHALL feed matching active key states every 2000 ms even when player volume is unarmed; reads SHALL serialize with writes and teardown with the owner. Armed knob observation SHALL consume that shared reading. Covers MAIN-073, MAIN-089, MGMT-167, MGMT-168, MGMT-169, MGMT-375, MGMT-376, MGMT-377.

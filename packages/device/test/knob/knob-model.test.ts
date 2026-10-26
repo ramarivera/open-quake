@@ -9,7 +9,11 @@ import type {
 	KnobVoiceInput,
 	VolumeReading,
 } from "../../src/knob/model/contracts.js";
-import { volumeStep, wrapIndex } from "../../src/knob/model/invariants.js";
+import {
+	selectorProfiles,
+	volumeStep,
+	wrapIndex,
+} from "../../src/knob/model/invariants.js";
 import {
 	type KnobModelPort,
 	KnobModelPorts,
@@ -526,6 +530,297 @@ it.effect(
 				session: { ...modelContext().session, sessionId: "new" },
 			});
 			expect((yield* KnobModel.snapshot()).focus._tag).toBe("none");
+		}).pipe(Effect.provide(h.layer));
+	},
+);
+
+describe("wheel-selector committed state and menu mutations", () => {
+	it.effect(
+		"catalog edits keep the active placeholder selected and never commit a different ready profile",
+		() => {
+			const base = modelContext();
+			const context: KnobModelContext = {
+				...base,
+				profiles: base.profiles.map((profile) => ({
+					...profile,
+					thumbnail:
+						profile.id === "p0" ? { _tag: "missing" } : profile.thumbnail,
+				})),
+			};
+			const h = harness(context);
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(context);
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* send({ _tag: "Rotate", delta: 1 });
+				const changed = {
+					...context,
+					profiles: context.profiles.map((profile) => ({
+						...profile,
+						name: profile.id === "p1" ? "Edited ready profile" : profile.name,
+					})),
+				};
+				yield* KnobModel.synchronize(changed);
+				const snapshot = yield* KnobModel.snapshot();
+				expect(snapshot.selector.mode).toBe("picker");
+				expect(
+					selectorProfiles(snapshot)[snapshot.selector.index],
+				).toMatchObject({
+					id: "p0",
+					thumbnail: { _tag: "missing" },
+				});
+				yield* TestClock.adjust(5000);
+				expect(h.selections).toEqual([]);
+				expect((yield* KnobModel.snapshot()).context.session.profileId).toBe(
+					"p0",
+				);
+				// A subsequent deliberate detent can still commit a ready profile.
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* TestClock.adjust(5000);
+				expect(h.selections).toEqual(["p1"]);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	it.effect(
+		"an active thumbnail invalidated during selection cannot replace the committed profile",
+		() => {
+			const context = modelContext();
+			const h = harness(context);
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(context);
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* KnobModel.synchronize({
+					...context,
+					profiles: context.profiles.map((profile) => ({
+						...profile,
+						thumbnailKey:
+							profile.id === "p0" ? "edited-active" : profile.thumbnailKey,
+						thumbnail:
+							profile.id === "p0" ? { _tag: "missing" } : profile.thumbnail,
+					})),
+				});
+				yield* TestClock.adjust(5000);
+				expect(h.selections).toEqual([]);
+				const state = yield* KnobModel.snapshot();
+				expect(state.context.session.profileId).toBe("p0");
+				expect(state.selector.mode).toBe("closed");
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+
+	it.effect(
+		"SCREEN-078: boot stays closed, external feedback expires at 1200ms and unchanged publication cannot extend it",
+		() => {
+			const h = harness(modelContext(false));
+			return Effect.gen(function* () {
+				const initial = modelContext(false);
+				yield* KnobModel.synchronize(initial);
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+				const external = {
+					...initial,
+					session: { ...initial.session, sessionId: "s2", profileId: "p2" },
+				};
+				yield* KnobModel.synchronize(external);
+				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+					mode: "ring",
+					index: 2,
+					ringVisible: true,
+				});
+				yield* TestClock.adjust(1199);
+				yield* KnobModel.synchronize(external);
+				expect((yield* KnobModel.snapshot()).selector.ringVisible).toBe(true);
+				yield* TestClock.adjust(1);
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+				expect(h.selections).toEqual([]);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	it.effect(
+		"SCREEN-078/079: own settled commit retains feedback for 1200ms and publication doesn't reset voice twice",
+		() => {
+			const context = modelContext(false);
+			const h = harness(context);
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(context);
+				yield* send({ _tag: "Key", code: 5 });
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* TestClock.adjust(199);
+				expect(h.selections).toEqual([]);
+				yield* TestClock.adjust(1);
+				const committed = (yield* KnobModel.snapshot()).context;
+				expect(committed.session.profileId).toBe("p1");
+				expect(h.voice.map((event) => event.action)).toEqual([
+					"holdStart",
+					"cancel",
+				]);
+				yield* TestClock.adjust(1000);
+				yield* KnobModel.synchronize(committed);
+				yield* TestClock.adjust(199);
+				expect((yield* KnobModel.snapshot()).selector.ringVisible).toBe(true);
+				yield* TestClock.adjust(1);
+				expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+				expect(h.selections).toEqual(["p1"]);
+				expect(h.voice).toHaveLength(2);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	it.effect(
+		"SCREEN-079: failed persistence retains profile and owned voice",
+		() => {
+			const h = harness(modelContext(), {
+				selectProfile: () =>
+					Effect.fail(KnobDispatchFailed.fromCause(new Error("private-write"))),
+			});
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(modelContext());
+				yield* send({ _tag: "Key", code: 5 });
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* send({ _tag: "Select", profileId: "p1" }).pipe(Effect.either);
+				const snapshot = yield* KnobModel.snapshot();
+				expect(snapshot.context.session.profileId).toBe("p0");
+				expect(snapshot.notice).toBe("QUAKE.KNOB.DISPATCH_FAILED");
+				expect(h.voice.map((event) => event.action)).toEqual(["holdStart"]);
+				expect(JSON.stringify(snapshot)).not.toContain("private-write");
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	it.effect(
+		"SCREEN-090: rapid multi-page detents keep exact focus, page and settle target",
+		() => {
+			const context = modelContext(true, 46);
+			const h = harness(context);
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(context);
+				for (let i = 0; i < 47; i++) yield* send({ _tag: "Rotate", delta: 1 });
+				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+					index: 1,
+					page: 0,
+				});
+				for (let i = 0; i < 30; i++) yield* send({ _tag: "Rotate", delta: 1 });
+				expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+					index: 31,
+					page: 2,
+				});
+				yield* TestClock.adjust(4999);
+				expect(h.selections).toEqual([]);
+				yield* TestClock.adjust(1);
+				expect(h.selections).toEqual(["p31"]);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	for (const ready of [true, false])
+		it.effect(
+			`SCREEN-100/106: ${ready ? "picker" : "ring"} rescans add/edit/delete to active ID without stale selection`,
+			() => {
+				const context = modelContext(ready, 17);
+				const h = harness(context);
+				return Effect.gen(function* () {
+					yield* KnobModel.configure(context);
+					yield* send({ _tag: "Rotate", delta: -1 });
+					const changed = {
+						...context,
+						profiles: [context.profiles[16], ...context.profiles.slice(0, 16)]
+							.filter((profile) => profile !== undefined)
+							.map((profile) => ({
+								...profile,
+								name: profile.id === "p0" ? "Renamed" : profile.name,
+							})),
+					};
+					yield* KnobModel.synchronize(changed);
+					expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+						mode: ready ? "picker" : "ring",
+						index: 1,
+						page: 0,
+						progress: 0,
+					});
+					const added = {
+						...changed,
+						profiles: [
+							...changed.profiles,
+							...modelContext(ready, 18).profiles.slice(17),
+						],
+					};
+					yield* KnobModel.synchronize(added);
+					expect((yield* KnobModel.snapshot()).context.profiles).toHaveLength(
+						18,
+					);
+					expect((yield* KnobModel.snapshot()).selector.index).toBe(1);
+					yield* TestClock.adjust(ready ? 5000 : 200);
+					expect(h.selections).toEqual([]);
+					yield* send({ _tag: "Dismiss" });
+					yield* KnobModel.synchronize({
+						...changed,
+						profiles: changed.profiles.slice(1),
+					});
+					expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+					const deleted = {
+						...changed,
+						session: { ...context.session, profileId: "p16" },
+						profiles: changed.profiles.filter((profile) => profile.id !== "p0"),
+					};
+					yield* KnobModel.synchronize(deleted);
+					expect((yield* KnobModel.snapshot()).selector).toMatchObject({
+						mode: "ring",
+						index: 0,
+					});
+					expect(h.selections).toEqual([]);
+				}).pipe(Effect.provide(h.layer));
+			},
+		);
+});
+
+it.effect(
+	"SCREEN-106: inactive edits preserve focused controls and cached thumbnails, active content resets focus and volume",
+	() => {
+		const base = modelContext();
+		const context = {
+			...base,
+			profiles: base.profiles.map((p) => ({
+				...p,
+				thumbnailKey: `key-${p.id}`,
+			})),
+		};
+		const h = harness(context);
+		return Effect.gen(function* () {
+			yield* KnobModel.configure(context);
+			yield* send({ _tag: "TapTile", keyCode: "1,1" });
+			const focus = (yield* KnobModel.snapshot()).focus;
+			const inactive = {
+				...context,
+				profiles: context.profiles.map((p) =>
+					p.id === "p1"
+						? { ...p, name: "Changed inactive", thumbnailKey: "new-key" }
+						: { ...p, thumbnail: { _tag: "missing" as const } },
+				),
+			};
+			yield* KnobModel.synchronize(inactive);
+			expect((yield* KnobModel.snapshot()).focus).toEqual(focus);
+			expect(
+				(yield* KnobModel.snapshot()).context.profiles[0]?.thumbnail._tag,
+			).toBe("ready");
+			expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+			const active = {
+				...inactive,
+				session: { ...context.session, revision: 1 },
+				keys: context.keys.slice(1),
+			};
+			yield* KnobModel.synchronize(active);
+			expect((yield* KnobModel.snapshot()).focus._tag).toBe("none");
+			yield* send({ _tag: "ToggleVolume" });
+			yield* TestClock.adjust(1);
+			expect((yield* KnobModel.snapshot()).volume.phase).toBe("active");
+			yield* KnobModel.synchronize({
+				...active,
+				profiles: active.profiles.map((p) => ({
+					...p,
+					name: p.name + " edited",
+				})),
+			});
+			expect((yield* KnobModel.snapshot()).volume.phase).toBe("active");
+			yield* KnobModel.synchronize({
+				...active,
+				session: { ...active.session, revision: 2 },
+			});
+			expect((yield* KnobModel.snapshot()).volume.phase).toBe("inactive");
 		}).pipe(Effect.provide(h.layer));
 	},
 );
