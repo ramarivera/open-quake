@@ -199,6 +199,7 @@ export const knownLogEvents = new Set([
 	"Agent credential cleanup failed; retry pending",
 	"Application shutdown failed",
 	"Firmware session requires recovery",
+	"Optional bundled firmware unavailable",
 	"Foreground profile probe failed",
 	"HTTP runtime setup failed",
 	"HTTP runtime state update failed",

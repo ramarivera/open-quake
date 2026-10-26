@@ -173,3 +173,55 @@ Discovery SHALL poll at 500ms for 90000ms and recognize QUAKE DFU on supported p
 
 - **WHEN** a caller submits DFU through generic hardware send
 - **THEN** it is rejected before I/O without poisoning the session, and only the locked enterDfu transition can send DFU without waiting for an acknowledgement
+
+### Requirement: Trusted bundled discovery and retained availability
+
+The desktop SHALL search resources/firmware, resources/app/firmware, appPath/firmware and development public/firmware for QUAKE_<major>.<minor>.<patch> UF2 names. It SHALL select the highest version whose content, filename version and compiled QUAKE descriptor agree. Invalid UF2, renamed images and bin/hex files SHALL NOT authorize an update. Missing files SHALL remain an explicit no_bundled_firmware state. This change SHALL NOT bundle or download a vendor image. Evidence: MAIN-109, SETTINGS-020, SETTINGS-034, SETTINGS-035, SETTINGS-047.
+
+#### Scenario: Highest trusted image
+
+- **WHEN** synthetic bundled directories contain multiple versions, malformed names, unknown fingerprints and invalid UF2
+- **THEN** only the highest structurally valid descriptor-matched image is selected and missing trusted images produce no_bundled_firmware
+
+#### Scenario: Retained selected version
+
+- **WHEN** a known serial disconnects, reconnects, changes selection or the dialog closes
+- **THEN** its last known version remains visible with an offline label, another serial never inherits it, and availability distinguishes no_device, no_bundled_firmware, device_version_unknown, newer_bundled and up_to_date
+
+#### Scenario: Production descriptor without vendor bytes
+
+- **WHEN** synthetic bytes are checked against the compiled 01.00.21 descriptor
+- **THEN** they cannot impersonate the audited hash, and the descriptor retains version 1.0.21 and payload bounds 0x12000 through 0x6e7ff
+
+### Requirement: Bounded progress and native lookup
+
+The conductor SHALL publish copy progress after at least 200ms OR one percent of total bytes since its last publication. State and step transitions SHALL publish immediately. Its timing configuration SHALL be injectable with validated positive finite values while production keeps the recovered defaults. Windows label lookup SHALL be shared across discovery polls for 5000ms, with one in-flight native query and a fresh pre-write revalidation. Writes SHALL remain single-attempt even after partial failure. Evidence: MAIN-111, SCREEN-125, SETTINGS-037, SETTINGS-045.
+
+#### Scenario: Progress thresholds and terminal lifetime
+
+- **WHEN** progress advances below one percent at 199ms, reaches 200ms, or advances one percent sooner
+- **THEN** only the latter two publish, state transitions always publish, and terminal state survives 599999ms but expires at 600000ms including a terminal timestamp of zero
+
+#### Scenario: Cached Windows lookup
+
+- **WHEN** discovery polls every 500ms
+- **THEN** native lookup runs initially and at 5000ms, concurrent polls share its result, and a final copy requires a fresh successful query
+
+### Requirement: Reconciled dialog ownership and readable recovery
+
+The app-owned renderer SHALL restore every retained non-idle session, survive Settings tab changes, reconcile running work every 1000ms and show a hidden-dialog terminal toast for 6000ms. Close SHALL query the intended serial with a 3000ms limit without cancelling running work, tolerate absent devices and failed reads, and clear only a terminal session. The four-step dialog SHALL support Escape and explicit close, determinate copy progress, indeterminate waits, reduced motion and readable guidance for every emitted reason. Evidence: SETTINGS-004, SETTINGS-042, SETTINGS-043, SETTINGS-044.
+
+#### Scenario: Hidden completion across tabs
+
+- **WHEN** the user changes tabs, hides and reopens a running dialog, or remounts the controller
+- **THEN** reconciliation retains main-owned progress without a new DFU or copy, and hidden terminal completion produces one six-second toast
+
+#### Scenario: Close reconciliation failure
+
+- **WHEN** the intended serial is absent or its version read fails on close
+- **THEN** the last known version and running session remain intact, another device cannot supply its version, and no retry or copy starts
+
+#### Scenario: Stage-specific guidance
+
+- **WHEN** any emitted catalog reason, timeout, cancellation or interrupted record appears
+- **THEN** the dialog and hidden failure toast explain the failed stage and safe manual recovery without exposing a raw catalog code as the explanation
