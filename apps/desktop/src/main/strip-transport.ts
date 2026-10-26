@@ -1,7 +1,10 @@
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { HardwareSession } from "@open-quake/device";
 import { Effect, Schema } from "effect";
 import { ipcMain } from "electron";
 import { STRIP_MESSAGE, StripMessage } from "../shared/strip-transport";
+import { agentRequestAllowed } from "./agents/controller";
 
 export interface StripMessageOwners {
 	readonly press: (
@@ -53,10 +56,15 @@ export async function dispatchStripMessage(
 	return true;
 }
 export function registerStripTransport(options: {
+	readonly renderer?: string;
 	readonly serial: (sender: Electron.WebContents) => string | undefined;
 	readonly hardware: (serial: string) => HardwareSession | undefined;
 	readonly owners: StripMessageOwners;
 }) {
+	const renderer =
+		options.renderer ??
+		process.env.ELECTRON_RENDERER_URL ??
+		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
 	const configured = new WeakMap<
 		Electron.WebContents,
 		{ hardware: HardwareSession; session: string }
@@ -67,7 +75,15 @@ export function registerStripTransport(options: {
 			const serial = options.serial(event.sender);
 			if (
 				!serial ||
-				event.senderFrame !== event.sender.mainFrame ||
+				!agentRequestAllowed(
+					{
+						senderId: event.sender.id,
+						frameURL: event.senderFrame?.url ?? "",
+						mainFrame: event.senderFrame === event.sender.mainFrame,
+					},
+					event.sender.id,
+					renderer,
+				) ||
 				typeof session !== "string"
 			)
 				return { ok: false };

@@ -3,7 +3,10 @@ import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
 import { Effect, Exit, Layer, Scope } from "effect";
 import { expect, it, vi } from "vitest";
 
-type InvokeEvent = { sender: { mainFrame: object }; senderFrame: object };
+type InvokeEvent = {
+	sender: { id: number; mainFrame: { url: string } };
+	senderFrame: object;
+};
 const ipc = vi.hoisted(() => ({
 	handlers: new Map<
 		string,
@@ -123,23 +126,28 @@ it("SCREEN-015 authenticates the renderer/session and requires configuration bef
 			management: vi.fn(async () => {}),
 		};
 		const dispose = registerStripTransport({
+			renderer: "file:///app/index.html",
 			serial: () => "A",
 			hardware: () => hardware,
 			owners,
 		});
 		const invoke = ipc.handlers.get("quake:strip-message");
 		if (!invoke) throw new Error("Missing strip IPC");
-		const mainFrame = {};
-		const sender = { mainFrame };
+		const mainFrame = { url: "file:///app/index.html?surface=panel" };
+		const sender = { id: 42, mainFrame };
 		const event = { sender, senderFrame: mainFrame };
 		const press = { type: "press", keyAction: 0, keyCode: "1,1" };
 		expect(await invoke(event, "session-A", press)).toEqual({ ok: false });
 		expect(
-			await invoke({ ...event, senderFrame: {} }, "session-A", {
-				type: "reportConfig",
-				keyMatrix: { row: 2, col: 8 },
-				appVersion: "0.0.0",
-			}),
+			await invoke(
+				{ ...event, senderFrame: { url: mainFrame.url } },
+				"session-A",
+				{
+					type: "reportConfig",
+					keyMatrix: { row: 2, col: 8 },
+					appVersion: "0.0.0",
+				},
+			),
 		).toEqual({ ok: false });
 		expect(
 			await invoke(event, "session-A", {
@@ -155,6 +163,10 @@ it("SCREEN-015 authenticates the renderer/session and requires configuration bef
 		expect(owners.press).toHaveBeenLastCalledWith("A", "1,1", 3);
 		expect(await invoke(event, "old-session", press)).toEqual({ ok: false });
 		expect(owners.press).toHaveBeenCalledTimes(4);
+		mainFrame.url = "file:///foreign.html";
+		expect(await invoke(event, "session-A", press)).toEqual({ ok: false });
+		expect(owners.press).toHaveBeenCalledTimes(4);
+
 		dispose();
 		expect(ipc.handlers.size).toBe(0);
 	} finally {

@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { type HardwareSession, HardwareUnavailable } from "@open-quake/device";
 import { Effect } from "effect";
 import { ipcMain } from "electron";
@@ -6,6 +8,7 @@ import {
 	type DeviceReadyReply,
 	type DeviceReadySnapshot,
 } from "../shared/hardware-contracts";
+import { agentRequestAllowed } from "./agents/controller";
 import type { DeviceBus } from "./deviceBus";
 
 export function createDeviceReadyReader(options: {
@@ -22,14 +25,12 @@ export function createDeviceReadyReader(options: {
 		let refresh = syncing.get(hardware);
 		if (!refresh) {
 			refresh = Effect.runPromise(
-				hardware
-					.refresh()
-					.pipe(
-						Effect.match({
-							onSuccess: () => undefined,
-							onFailure: (error) => error.code,
-						}),
-					),
+				hardware.refresh().pipe(
+					Effect.match({
+						onSuccess: () => undefined,
+						onFailure: (error) => error.code,
+					}),
+				),
 			);
 			syncing.set(hardware, refresh);
 		}
@@ -79,13 +80,28 @@ export function createDeviceReadyReader(options: {
 }
 export function registerDeviceReady(
 	options: Parameters<typeof createDeviceReadyReader>[0] & {
+		readonly renderer?: string;
 		readonly panelSerial: (sender: Electron.WebContents) => string | undefined;
 		readonly management: () => Electron.WebContents;
 	},
 ) {
 	const read = createDeviceReadyReader(options);
+	const renderer =
+		options.renderer ??
+		process.env.ELECTRON_RENDERER_URL ??
+		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
 	ipcMain.handle(DEVICE_READY, (event, input: unknown) => {
-		if (event.senderFrame !== event.sender.mainFrame)
+		if (
+			!agentRequestAllowed(
+				{
+					senderId: event.sender.id,
+					frameURL: event.senderFrame?.url ?? "",
+					mainFrame: event.senderFrame === event.sender.mainFrame,
+				},
+				event.sender.id,
+				renderer,
+			)
+		)
 			return { _tag: "failure", code: "QUAKE.HARDWARE.REQUEST_DENIED" };
 		const serial = options.panelSerial(event.sender);
 		if (serial) return read(serial);

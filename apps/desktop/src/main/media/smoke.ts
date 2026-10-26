@@ -1282,6 +1282,8 @@ async function smoke(): Promise<void> {
 			query: { surface: "panel" },
 		});
 		await settle();
+		if (name === "clock")
+			await waitForVoice(panel, "!!document.querySelector('.oq-clock')");
 		const shown: unknown = await panel.webContents.executeJavaScript(
 			`(() => ({ theme: document.querySelector('.strip-grid')?.dataset.theme, vivid: document.querySelector('.strip-screen')?.dataset.vivid, clock: !!document.querySelector('.oq-clock') }))()`,
 		);

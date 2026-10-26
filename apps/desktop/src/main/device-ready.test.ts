@@ -11,7 +11,8 @@ vi.mock("electron", () => ({
 	ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
 }));
 
-import { createDeviceReadyReader } from "./device-ready";
+import { ipcMain } from "electron";
+import { createDeviceReadyReader, registerDeviceReady } from "./device-ready";
 import type { DeviceBus } from "./deviceBus";
 
 it("refreshes real hardware commands and returns one coherent serial/version/rotation snapshot", async () => {
@@ -128,4 +129,39 @@ it("suppresses an old serial/session reply when its device is replaced during re
 	} finally {
 		await Effect.runPromise(Scope.close(scope, Exit.void));
 	}
+});
+
+it("SETTINGS-090 rejects foreign renderer documents and never defaults management to another serial", async () => {
+	vi.mocked(ipcMain.handle).mockClear();
+	const sender = {
+		id: 42,
+		mainFrame: { url: "file:///app/index.html?surface=panel" },
+	};
+	const dispose = registerDeviceReady({
+		renderer: "file:///app/index.html",
+		bus: () => undefined,
+		rotation: () => undefined,
+		mock: true,
+		panelSerial: () => "A",
+		management: () => {
+			throw new Error("Unexpected management fallback");
+		},
+	});
+	const handler = vi.mocked(ipcMain.handle).mock.calls[0]?.[1];
+	if (!handler) throw new Error("Missing readiness handler");
+	expect(
+		await Reflect.apply(handler, undefined, [
+			{ sender, senderFrame: sender.mainFrame },
+			"B",
+		]),
+	).toEqual({ _tag: "offline" });
+	sender.mainFrame.url = "file:///foreign.html";
+	expect(
+		await Reflect.apply(handler, undefined, [
+			{ sender, senderFrame: sender.mainFrame },
+			"B",
+		]),
+	).toEqual({ _tag: "failure", code: "QUAKE.HARDWARE.REQUEST_DENIED" });
+	dispose();
+	expect(ipcMain.removeHandler).toHaveBeenCalledWith("quake:device-ready");
 });
