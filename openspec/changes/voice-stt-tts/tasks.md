@@ -130,3 +130,7 @@ acceptance is claimed.
 - [x] Bound opt-in archives to the first 60 seconds without failing Stop/export, and close the audio context in a finalizer when graph teardown rejects. Serialized-worker regressions cover partial-frame/full-frame overflow and failing disconnect; all fail before the fix. Tracked in open-quake-c5w.17.
 
 - [x] Count validated final-tail PCM after release for the current owner before suppressing level/activity events. A short-press production STT/runtime regression fails before the fix and verifies unclear rather than noAudio, first-frame metrics, transmitted PCM and no post-release recording activity. Tracked in open-quake-c5w.17.
+
+## Conversation burn-down lane test-conversation
+
+- [x] AI-103 blank synthesis policy and AI-108 OpenAI/DashScope model derivation through save, switch and reload. Evidence: desktop `main/speech/factory.test.ts` and `main/speech/settings.test.ts`. Bead open-quake-cby.10 remains open for lead delivery.
