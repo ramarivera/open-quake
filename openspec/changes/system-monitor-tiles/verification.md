@@ -79,6 +79,11 @@ both package typechecks, production build, scoped Biome and strict OpenSpec.
 Artifacts are under `review/after-created/` in the external monitoring scratch.
 These checks use hidden mock windows and don't establish physical acceptance.
 
+A later shutdown regression confirms configuration after scope closure succeeds
+as a no-op without collectors or state changes. It failed before the fix with
+an inaccurate invalid-settings error. Valid configuration no longer reports a
+validation failure solely because shutdown won the lifecycle lock.
+
 ## Remaining acceptance
 
 - Physical QUAKE display placement, orientation, touch direction and readability.

@@ -109,7 +109,7 @@ export class MonitoringService extends Effect.Service<MonitoringService>()(
 								).pipe(
 									Effect.mapError((cause) => new MonitorConfigInvalid(cause)),
 								);
-								if (closed) return yield* new MonitorConfigInvalid();
+								if (closed) return;
 								const effective = effectiveMonitoring(config);
 								const collect =
 									demand && effective.enabled && effective.metrics.length > 0;

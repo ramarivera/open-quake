@@ -88,6 +88,34 @@ describe("shared monitoring lifecycle", () => {
 			).toBe(false);
 	});
 	it.scoped(
+		"configuration after shutdown is a no-op without starting collectors",
+		() =>
+			Effect.gen(function* () {
+				let calls = 0;
+				const scope = yield* Scope.make();
+				const context = yield* Layer.build(
+					makeLayer({
+						collect: () =>
+							Effect.sync(() => {
+								calls++;
+								return { state: "available" as const, values: {} };
+							}),
+					}),
+				).pipe(Effect.provideService(Scope.Scope, scope));
+				const service = Context.get(context, MonitoringService);
+				yield* Scope.close(scope, Exit.void);
+				const before = yield* service.snapshot();
+				const result = yield* Effect.either(
+					service.configure(monitoringDefaults(), true),
+				);
+				yield* TestClock.adjust(10000);
+				expect(result).toMatchObject({ _tag: "Right", right: undefined });
+				expect(calls).toBe(0);
+				expect(yield* service.snapshot()).toEqual(before);
+			}),
+	);
+
+	it.scoped(
 		"shares one metric worker across subscribers and ignores normal edits during override",
 		() =>
 			Effect.gen(function* () {
