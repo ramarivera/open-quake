@@ -1493,7 +1493,7 @@ async function smoke(): Promise<void> {
 			query: { surface: "panel" },
 		});
 		await panel.webContents.executeJavaScript(
-			`localStorage.setItem('open-quake-key-locale', '${language}')`,
+			`window.quakeLocale.set('${language}')`,
 		);
 		await panel.reload();
 		await settle(600);
@@ -1536,7 +1536,7 @@ async function smoke(): Promise<void> {
 	);
 	for (const language of ["en", "de"]) {
 		await panel.webContents.executeJavaScript(
-			`localStorage.setItem('open-quake-key-locale','${language}')`,
+			`window.quakeLocale.set('${language}')`,
 		);
 		await panel.reload();
 		await settle(600);

@@ -322,6 +322,7 @@ export function registerMedia(
 				input !== null &&
 				"_tag" in input &&
 				input._tag === "failed" &&
+				event.sender !== managementWindow()?.webContents &&
 				(serial === undefined ||
 					!("serial" in input) ||
 					input.serial !== serial)

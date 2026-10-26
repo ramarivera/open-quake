@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Layer, ManagedRuntime, Option } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
@@ -12,6 +12,7 @@ import {
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
 	WALLPAPER_SNAPSHOT,
+	WallpaperReply,
 } from "../../shared/wallpaper-contracts";
 import { MediaLive, registerMedia } from "./index";
 import type { DecodedMedia } from "./media-decoder";
@@ -111,6 +112,26 @@ describe("explicit media registration", () => {
 			await invoke(management, { _tag: "select", serial: "B" });
 			expect(await invoke(a, { _tag: "read" })).toMatchObject({
 				snapshot: { saved: { serial: "A" } },
+			});
+			const selected = Schema.decodeUnknownSync(WallpaperReply)(
+				await invoke(management, { _tag: "read" }),
+			);
+			if (selected._tag !== "success")
+				throw new Error("Missing selected snapshot");
+			const failed = {
+				_tag: "failed",
+				serial: "B",
+				revision: selected.snapshot.saved.revision,
+				playbackId: selected.snapshot.playbackId,
+				index: selected.snapshot.activeIndex,
+			};
+			expect(await invoke(a, failed)).toMatchObject({ _tag: "failure" });
+			expect(await invoke(management, failed)).toMatchObject({
+				_tag: "success",
+				snapshot: { activeIndex: 1 },
+			});
+			expect(await invoke(management, failed)).toMatchObject({
+				_tag: "failure",
 			});
 			await invoke(management, {
 				_tag: "configure",
