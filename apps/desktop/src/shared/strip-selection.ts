@@ -32,7 +32,10 @@ export function selectStripPage(
 	// The manager keeps at least one built-in visible. Retain a safe fallback
 	// for envelopes that predate or bypass that invariant.
 	const first =
-		serial !== undefined && !Object.hasOwn(envelope.activeByDevice, serial)
+		serial !== undefined &&
+		serial !== "desktop-preview" &&
+		serial !== "__proto__" &&
+		!Object.hasOwn(envelope.activeByDevice, serial)
 			? initialStripProfile(envelope)
 			: (visible[0] ?? envelope.profiles[0]);
 	const fallback = {

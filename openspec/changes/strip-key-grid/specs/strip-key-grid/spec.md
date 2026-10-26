@@ -234,8 +234,8 @@ requests. Failures SHALL expose only the catalog code and message. The page SHAL
 be the device's `activeByDevice` selection. A newly enrolled serial without a
 startup, reported or saved selection SHALL commit the first visible colorful
 profile before publishing connection readiness. Until enrollment publishes, its
-panel and handshake SHALL use that same fallback. A preview without a serial
-and an invalid saved reference SHALL retain the first visible profile's first page. Covers SCREEN-134, MGMT-051, SCREEN-018.
+panel and handshake SHALL use that same fallback. A preview without a serial or using the `desktop-preview` sentinel, a reserved
+prototype identity, and an invalid saved reference SHALL retain the first visible profile's first page. Covers SCREEN-134, MGMT-051, SCREEN-018.
 
 #### Scenario: Saved profile reaches both windows
 
