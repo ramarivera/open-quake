@@ -53,3 +53,29 @@ describe("capture PCM", () => {
 		expect(expected.length).toBe(4800);
 	});
 });
+
+for (const rate of [
+	8000, 11025, 16000, 22050, 24000, 44100, 48000, 96000, 192000,
+]) {
+	it(`frames mono and stereo ${rate}Hz into fixed 24kHz s16le without losing split-block phase`, () => {
+		for (const channels of [1, 2]) {
+			const framer = new PcmFramer("rates", rate);
+			const samples = Math.round(rate / 10);
+			const frames = [];
+			for (let i = 0; i < samples; i += 137)
+				frames.push(
+					...framer.push(
+						Array.from({ length: channels }, () =>
+							new Float32Array(Math.min(137, samples - i)).fill(0.5),
+						),
+					),
+				);
+			frames.push(...framer.flush());
+			expect(frames.flatMap((f) => Array.from(f.bytes))).toHaveLength(
+				Math.floor((samples * 24000) / rate) * 2,
+			);
+			expect(frames.map((f) => f.seq)).toEqual(frames.map((_, i) => i));
+			expect(frames.every((f) => f.peak === 0.5 && f.rms === 0.5)).toBe(true);
+		}
+	});
+}

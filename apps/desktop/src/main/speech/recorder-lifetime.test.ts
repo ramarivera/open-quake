@@ -22,7 +22,12 @@ function gate() {
 }
 
 describe("production recorder startup lifetime", () => {
-	for (const name of ["NotAllowedError", "NotReadableError"]) {
+	for (const name of [
+		"NotAllowedError",
+		"NotReadableError",
+		"NotFoundError",
+		"OverconstrainedError",
+	]) {
 		it.effect(
 			`awaits worker cleanup and retains ${name} on failed startup`,
 			() =>
@@ -58,7 +63,9 @@ describe("production recorder startup lifetime", () => {
 							code:
 								name === "NotAllowedError"
 									? "VOICE.CAPTURE.PERMISSION_DENIED"
-									: "VOICE.CAPTURE.RECORDER_UNAVAILABLE",
+									: name === "NotFoundError" || name === "OverconstrainedError"
+										? "VOICE.CAPTURE.NO_DEVICE"
+										: "VOICE.CAPTURE.RECORDER_UNAVAILABLE",
 						},
 					});
 					if (result._tag === "Left")
@@ -67,7 +74,12 @@ describe("production recorder startup lifetime", () => {
 				}),
 		);
 	}
-	for (const name of ["NotAllowedError", "NotReadableError"]) {
+	for (const name of [
+		"NotAllowedError",
+		"NotReadableError",
+		"NotFoundError",
+		"OverconstrainedError",
+	]) {
 		it.effect(`retains ${name} when awaited worker cleanup rejects`, () =>
 			Effect.gen(function* () {
 				const cause = Object.assign(new Error("private recorder failure"), {
@@ -100,7 +112,9 @@ describe("production recorder startup lifetime", () => {
 						code:
 							name === "NotAllowedError"
 								? "VOICE.CAPTURE.PERMISSION_DENIED"
-								: "VOICE.CAPTURE.RECORDER_UNAVAILABLE",
+								: name === "NotFoundError" || name === "OverconstrainedError"
+									? "VOICE.CAPTURE.NO_DEVICE"
+									: "VOICE.CAPTURE.RECORDER_UNAVAILABLE",
 					},
 				});
 				if (result._tag === "Left")

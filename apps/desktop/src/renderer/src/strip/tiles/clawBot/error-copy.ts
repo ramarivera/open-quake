@@ -26,6 +26,15 @@ const COPY: ReadonlyMap<string, StripStringKey> = new Map<
 	["2014", "quakeBotIconView.chatFailed"],
 	["VOICE.GRID.RUNTIME_UNAVAILABLE", "quakeBotIconView.voiceStartFailed"],
 	["VOICE.KNOB.ROUTE_UNAVAILABLE", "quakeBotIconView.voiceStartFailed"],
+	["VOICE.CAPTURE.NO_DEVICE", "quakeBotIconView.sttErrorNoAudioCapture"],
+	[
+		"VOICE.CAPTURE.PERMISSION_DENIED",
+		"quakeBotIconView.sttErrorNoAudioCapture",
+	],
+	[
+		"VOICE.CAPTURE.RECORDER_UNAVAILABLE",
+		"quakeBotIconView.sttErrorNoAudioCapture",
+	],
 	["VOICE.CAPTURE.PHASE_TIMEOUT", "quakeBotIconView.sttErrorNoAudioCapture"],
 	["CHAT.RESPONSE.TIMEOUT", "quakeBotIconView.chatResponseError"],
 	["CHAT.SESSION.BUSY", "quakeBotIconView.chatFailed"],

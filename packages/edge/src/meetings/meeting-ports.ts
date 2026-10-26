@@ -3,11 +3,12 @@ import type { MeetingConfig, MeetingId } from "./meeting-contracts.js";
 import type { MeetingError } from "./meeting-errors.js";
 
 export interface CapturePort {
+	/** Effective settings after acquisition, including an explicit source fallback. */
 	readonly start: (
 		id: MeetingId,
 		config: MeetingConfig,
 		parent: MeetingId | undefined,
-	) => Effect.Effect<void, MeetingError>;
+	) => Effect.Effect<MeetingConfig, MeetingError>;
 	/** Stop MediaRecorders and drain writes without converting audio. */
 	readonly drain: (id: MeetingId) => Effect.Effect<void, MeetingError>;
 	readonly duration: (id: MeetingId) => Effect.Effect<number, MeetingError>;

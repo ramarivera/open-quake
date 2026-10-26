@@ -299,3 +299,53 @@ it.effect(
 			expect(keys.size).toBe(0);
 		}),
 );
+
+for (const legacy of [
+	" selected ",
+	{ deviceId: "selected" },
+	{ deviceId: " selected ", label: " Desk ", groupId: " g " },
+]) {
+	it.effect(
+		"loads a legacy shared mic and persists normalized identity only on explicit selection",
+		() =>
+			Effect.gen(function* () {
+				let stored: unknown = {
+					...emptySpeechSettings,
+					settings: { version: 1, speakAnswers: false, defaultMic: legacy },
+				};
+				let writes = 0;
+				const controller = yield* createSpeechSettings({
+					storage: {
+						read: async () => stored,
+						write: async (next) => {
+							stored = next;
+							writes++;
+						},
+					},
+					credentials: yield* CredentialVault,
+					changed: Effect.void,
+				});
+				expect((yield* controller.microphone())?.deviceId).toBe("selected");
+				expect(writes).toBe(0);
+				yield* controller.request({
+					_tag: "SelectMicrophone",
+					microphone: { deviceId: "new", label: "Desk", groupId: "g" },
+				});
+				expect(yield* controller.microphone()).toEqual({
+					deviceId: "new",
+					label: "Desk",
+					groupId: "g",
+				});
+				expect(stored).toMatchObject({
+					settings: {
+						defaultMic: { deviceId: "new", label: "Desk", groupId: "g" },
+					},
+				});
+				yield* controller.request({
+					_tag: "Save",
+					settings: { version: 1, speakAnswers: false },
+				});
+				expect((yield* controller.microphone())?.deviceId).toBe("new");
+			}).pipe(Effect.provide(layer())),
+	);
+}

@@ -84,7 +84,9 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 	const controller = yield* createProductionVoiceRuntime({
 		...options,
 		speech,
-		capture: options.capture ?? createElectronCaptureDriver(),
+		capture:
+			options.capture ??
+			createElectronCaptureDriver(undefined, settings.microphone),
 		profiles: settings.profiles,
 	});
 	reset = controller.reset();
