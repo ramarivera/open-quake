@@ -31,6 +31,10 @@ import {
 } from "../../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../../packages/device/src/profiles/profile-service";
 import type { QuakeEvent } from "../../../preload/quake";
+import type {
+	ClockCommand,
+	ClockSnapshot,
+} from "../../../shared/clock-contracts";
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import type {
 	KeyPreview,
@@ -49,6 +53,7 @@ import {
 	type StripVoiceContext,
 } from "../strip/overlays/voice/voice-context";
 import { StripScreen } from "../strip/StripScreen";
+import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 
 import { KeyEditor } from "./KeyEditor";
 
@@ -1433,4 +1438,77 @@ it("MGMT-068 placed hotkeys retain held input through KeyRuntime activation", as
 	expect(f.stored().profiles[0].pages[0].keys[0]?.config.supportKnob).toBe(
 		false,
 	);
+});
+
+it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved revision", async () => {
+	let snapshot: ClockSnapshot = {
+		target: { profileId: "p", pageId: "one", keyCode: "1,1" },
+		revision: 0,
+		keyCode: "1,1",
+		mode: "theme",
+		themeId: "season",
+		showSeconds: true,
+		media: {},
+		recovered: false,
+	};
+	let saveTheme = async (_command: ClockCommand): Promise<void> => {};
+	vi.stubGlobal("quakeClock", {
+		request: async (command: ClockCommand) => {
+			if (command._tag === "setTheme") await saveTheme(command);
+			return { _tag: "success", snapshot };
+		},
+		onSnapshot: () => () => {},
+	});
+	const f = await gridFixture([gridKey("1,1", "dkDesktopClock")]);
+	saveTheme = async (command) => {
+		if (command._tag !== "setTheme" || command.themeId !== "cyber")
+			throw new Error("Expected next clock theme");
+		snapshot = {
+			...snapshot,
+			revision: snapshot.revision + 1,
+			themeId: "cyber",
+			change: "setTheme",
+		};
+		await f.runtime.runPromise(
+			ProfileRepository.transact((envelope) =>
+				Effect.succeed({
+					...envelope,
+					profiles: EffectArray.map(envelope.profiles, (profile) =>
+						profile.id !== "p"
+							? profile
+							: {
+									...profile,
+									revision: snapshot.revision,
+									pages: EffectArray.map(profile.pages, (page) => ({
+										...page,
+										keys: page.keys.map((key) =>
+											patchClockEditorKey(key, snapshot),
+										),
+									})),
+								},
+					),
+				}),
+			),
+		);
+	};
+	await f.select();
+	await settle(() =>
+		expect(button(f.host, "Next clock theme").disabled).toBe(false),
+	);
+	await click(button(f.host, "Next clock theme"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	await settle(() => expect(f.host.querySelector("#key-title")).not.toBeNull());
+	expect(button(f.host, "1,1").getAttribute("aria-pressed")).toBe("true");
+	expect(button(f.host, "Next clock theme").disabled).toBe(false);
+	await input(
+		query(f.host, "#key-title", HTMLInputElement),
+		"Clock after theme",
+	);
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(2));
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.title.text).toBe(
+		"Clock after theme",
+	);
+	await click(button(f.host, "1,1"));
+	expect(f.host.querySelector("#key-title")).toBeNull();
 });

@@ -322,7 +322,10 @@ export function KeyEditor(): React.JSX.Element {
 			setSaving(false);
 		}
 	};
-	const choose = async (keyCode: string): Promise<void> => {
+	const selectKey = async (
+		keyCode: string,
+		intent: "click" | "refresh",
+	): Promise<void> => {
 		if (savePending.current) return;
 		const anchor = page?.keys.find(
 			(key) =>
@@ -331,7 +334,8 @@ export function KeyEditor(): React.JSX.Element {
 				occupiedCells(key).includes(keyCode),
 		);
 		keyCode = anchor?.keyCode ?? keyCode;
-		const deselect = current.current?.target.keyCode === keyCode;
+		const deselect =
+			intent === "click" && current.current?.target.keyCode === keyCode;
 		const pickerOpen = icons;
 		const ticket = epoch.current + 1;
 		await revert();
@@ -382,6 +386,8 @@ export function KeyEditor(): React.JSX.Element {
 		setSelection(next);
 		if (pickerOpen && keyEditable(key, "icon")) setIcons(true);
 	};
+	const choose = (keyCode: string): Promise<void> =>
+		selectKey(keyCode, "click");
 	const save = async (): Promise<void> => {
 		const old = current.current;
 		if (!old || savePending.current) return;
@@ -705,7 +711,7 @@ export function KeyEditor(): React.JSX.Element {
 									await save();
 									return old !== current.current;
 								}}
-								onSaved={() => choose(key.keyCode)}
+								onSaved={() => selectKey(key.keyCode, "refresh")}
 								isCurrent={() =>
 									current.current?.target.token === selection.target.token
 								}
