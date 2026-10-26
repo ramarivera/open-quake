@@ -17,17 +17,17 @@ import {
 import "./aiCopilot.css";
 
 /** DK's one-letter highlight loop on the idle hint (ACV:1043-1076). */
-function usePushToTalkHint(length: number, active: boolean): number {
+function usePushToTalkHint(text: string, active: boolean): number {
 	const [index, setIndex] = useState(0);
 	useEffect(() => {
 		setIndex(0);
-		if (!active || length === 0) return;
+		if (!active || text.length === 0) return;
 		const timer = setInterval(
-			() => setIndex((value) => (value + 1) % length),
+			() => setIndex((value) => (value + 1) % text.length),
 			100,
 		);
 		return () => clearInterval(timer);
-	}, [active, length]);
+	}, [active, text]);
 	return index;
 }
 
@@ -71,7 +71,7 @@ export function AiCopilotTile({
 	const hint = onStrip && showsPushToTalkHint(state);
 	const cancel = onStrip && showsCancelHint(state);
 	const hintText = stripText(locale, "aiIconViewTxt.pushToTalkHint");
-	const letter = usePushToTalkHint(hintText.length, hint && motion === "full");
+	const letter = usePushToTalkHint(hintText, hint && motion === "full");
 	const status = Option.match(state.statusText, {
 		onNone: () => "",
 		onSome: (text: CopilotStatusText) =>
