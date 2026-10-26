@@ -32,6 +32,8 @@
 
 - [x] 7.1 Resolve accepted thumbnail invalidation, corrupt-cache recovery and device-session selection findings with real backend consumer regressions. Tracked by open-quake-lih.4.2. Parent retains review delivery and task 5.1 acceptance.
 
+- [x] 7.2 Release the physical device-event queue while bounded native brightness drains, retaining every detent and observing native completion outside the queue. Cancel pending writes on disconnect, focus/context replacement and registration disposal. PR103 review 4379605856, bead open-quake-lih.7.2.1. Production registration/model/controller TestClock regressions reproduce blocked presses before the fix.
+
 ## Evidence
 
 - 1.1: reconciled knob-configuration and knob-push-to-talk; strict OpenSpec validation passes all 30 changes.
@@ -81,4 +83,18 @@ The first probe attempted Rotate IPC, correctly denied by the existing renderer 
 
 - PR53 composition verification, 2026-10-26: normal main merge ed75785 retains exactly the five intended Num Lock source/test/spec files against main. Nineteen real focused-knob tests and 25 hardware contract/consumer tests pass, along with desktop/device typechecks and strict validation. Current-head Codex review completed without findings and there are no review threads. GitHub initially retained a conflicting merge cache after retargeting despite main being an ancestor and local merge-tree succeeding; hosted validation must rerun on the composed head before merge.
 
-- [x] 7.2 Release the physical device-event queue while bounded native brightness drains, retaining every detent and observing native completion outside the queue. Cancel pending writes on disconnect, focus/context replacement and registration disposal. PR103 review 4379605856, bead open-quake-lih.7.2.1. Production registration/model/controller TestClock regressions reproduce blocked presses before the fix.
+
+## 8. Wheel-selector burn-down
+
+- [x] 8.1 Deliver SCREEN-078/079/090/100/106 committed timing, transition and menu reconciliation with domain and renderer tests. Bead open-quake-lih.4.3.
+- [x] 8.2 Deliver SCREEN-075/076/077/080/081/084 recovered dimensions with independent flat rendering, motion, clipping and compositor tests. Bead open-quake-lih.4.4.
+- [x] 8.3 Deliver SCREEN-087/088/089/094 localized picker states, exact shared paging bounds and incomplete-page centering tests. Bead open-quake-lih.4.5.
+
+## 9. PR #106 single review fix round
+
+- [x] 9.1 Keep the committed active profile in picker entries with a missing-thumbnail placeholder; prove catalog edits never persist a different profile. Finding 4379652095, bead open-quake-lih.4.3.1. Two domain regressions fail before the fix.
+- [x] 9.2 Route production registration catalog refreshes through reconciliation and verify add/edit/reorder/delete with the real registration. Finding 4379654632, same bead. Twelve failing-before registration cases cover the four catalog mutations while picker, focus or volume is active, preserving unchanged thumbnails and invalidating renamed content.
+- [x] 9.3 Run full lane gates and hidden mock smoke, reconcile unanswered review threads once, push and reply to each finding without resolving threads. No hardware acceptance.
+
+- PR #106 review round evidence, 2026-10-26: merged main cb9b3307 with merge commit 51f574eb, retaining both sides and PR #104's CENTER-070 test correction. Finding 4379652095 is fixed in 8b40cfd4 with two failing-before missing-thumbnail regressions; finding 4379654632 is fixed in 22601861 with twelve failing-before real-registration catalog mutation cases. Each fix was separately committed, pushed and replied to with Codex gpt-6.1-sol attribution. GraphQL reports zero unanswered and two answered unresolved threads; none were resolved and the PR was not merged.
+- Final functional head 22601861 passes the exact root two-worker command with 3,880 tests and four existing skips: desktop 2,432 plus one skip, device 520, edge 865 plus three skips, protocol 63 cached. All six typecheck tasks, Biome across 1,339 files with zero errors and 14 existing warnings, production build, both built-app smoke modes, and all 47 strict OpenSpec changes pass. Hidden media smoke passes OBS, wallpaper, strip input and runtime disposal. Hidden knob smoke passes native preload/renderer input, English/German picker states, compositor variants and an active missing-thumbnail catalog refresh whose expiry makes no profile write. Screenshots were inspected. Its first scratch build lacked the production renderer URL and timed out before the new regression; supplying ELECTRON_RENDERER_URL for the scratch build fixes that fixture prerequisite. No product assertion or gate was weakened. Logs and screenshots remain external under /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/wheel-selector/fix1/. Real QUAKE, DK-Suite, OS volume, microphone and provider calls were not used. Aggregate lane beads remain open for the lead's review and merge; open-quake-lih.4.3.1 owns this completed fix round.

@@ -413,3 +413,38 @@ it("meetings use the shared recovered identity instead of the old per-meeting se
 	capture.dispose();
 	f.capture.dispose();
 });
+
+it("starts replacement mic/system recorders before stopping old ones and isolates side segment names", async () => {
+	vi.useFakeTimers();
+	const f = setup();
+	try {
+		await f.capture.handle(request("start", "main", { systemAudio: true }));
+		await f.capture.handle(request("start", "side", { parentId: "main" }));
+		for (const recorder of Recorder.all.slice(0, 4)) {
+			const original = recorder.stop;
+			recorder.stop = vi.fn(() => {
+				expect(
+					Recorder.all.filter((r) => r.state === "recording").length,
+				).toBeGreaterThanOrEqual(3);
+				original();
+			});
+		}
+		await vi.advanceTimersByTimeAsync(3600000);
+		expect(Recorder.all).toHaveLength(8);
+		for (const recorder of Recorder.all) {
+			expect(recorder.options.mimeType).toBe("audio/webm;codecs=opus");
+			expect(recorder.start).toHaveBeenCalledWith(10000);
+		}
+		await f.capture.handle(request("stop", "side"));
+		await f.capture.handle(request("stop", "main"));
+		for (const id of ["main", "side"])
+			for (const track of ["mic", "system"])
+				for (const segment of [0, 1])
+					expect(f.bridge.writeChunk).toHaveBeenCalledWith(
+						expect.objectContaining({ id, track, segment }),
+					);
+	} finally {
+		f.capture.dispose();
+		vi.useRealTimers();
+	}
+});

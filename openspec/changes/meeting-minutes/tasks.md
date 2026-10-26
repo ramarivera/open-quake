@@ -126,3 +126,80 @@ Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptanc
 - [x] Fix Codex 4378948029 by marking processing audio interrupted on job interruption. Two fake-backed service regressions fail before the fix and cover failed/interrupted audio, persisted restart state and retry without repeating completed ASR/summary.
 
 - [x] Repair the native smoke fixture after main integration: honor inherited post-touch click suppression and await the selected main-tab recording animation. The required native smoke failed before the fixture correction and passes after it, without changing production behavior or assertions.
+
+
+## 10. meeting-provider burn-down
+
+- [x] 10.1 AI-266,269,270,273,276,278,279,294: production saved-profile ASR composition, private resources/artifacts, expiry and owned remote cleanup. Bead open-quake-lih.16.9.
+- [x] 10.2 AI-272: per-job OpenAI realtime PCM, finality, timing and cleanup. Bead open-quake-lih.16.10.
+- [x] 10.3 AI-136,137,292,327,338,SCREEN-110: bounded live transport, resampling, reconnect, cancellation and display consumers. Bead open-quake-lih.16.11.
+- [x] 10.4 AI-285,286,288,294: encoded continuous rollover, optional-track fallback, numeric merge order and mono submission. Bead open-quake-lih.16.12.
+- [x] 10.5 Run lane gates and desktop suite after current main merge, open PR. Leave beads open for lead merge; list physical/provider acceptance separately.
+
+Tasks 10.1-10.4 are implemented and tested to fake boundaries. Latest main
+`aab428f7` is merged without conflicts. All six gates pass: root loose-environment
+suite 4,036 passing / four existing skips, six package typechecks, Biome 1,388
+files / 14 existing warnings, production build, both bundle modes, and 47 strict
+OpenSpec items. Desktop passes 2,570 tests after the main merge. Native meetings
+and baseline media smokes pass with 28 and 22 EN/DE captures. Actual local HTTP,
+masked WebSocket and SSE fixtures verify saved-vault composition, mono uploaded
+bytes, OpenAI per-job PCM and existing summary generation. Final/interim queue
+protection and total adapter text bounds have direct regressions.
+
+Physical acceptance remains open for AI-285, AI-286, AI-288, AI-292, AI-294,
+AI-327, AI-338 and SCREEN-110. Paid-provider qualification for AI-136, AI-137,
+AI-269, AI-270, AI-272 and AI-278 remains unverified. No real microphone/system
+capture, HID or DK-Suite was opened. Beads stay open for lead merge. Evidence,
+row mappings, logs and screenshots are external under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/`.
+
+
+## 11. PR #109 single bot-review fix round
+
+Execution: open-quake-lih.16.9 through .12, left open for lead-owned merge and physical acceptance.
+
+- [x] 11.1 Merge current main and install FFmpeg in Linux validation so the three real-codec/fake-provider integration tests run rather than skip.
+- [x] 11.2 Enforce management-window file IPC ownership, public provider transcript destinations and documented DashScope temporary upload buckets. Regressions reject unauthorized frames and 18 malicious URL/policy cases before transport.
+- [x] 11.3 Fix late-VAD EOF finality, completed ASR replacement in both providers, long-file pacing, remote transcript rollback/interruption safety, reconnect isolation, optional system validation timeouts and transient-only conversion retries. Every code fix has a fail-before regression; both duplicate system-audio findings receive replies.
+- [x] 11.4 Reconcile root loose-environment tests, six package typechecks, Biome, build, both bundle modes, strict OpenSpec and the hidden meetings mock smoke; inspect final unanswered GraphQL threads. Do not resolve threads or merge. Evidence stays under external SSD meeting-provider/fix1.
+
+
+Round 11 evidence: main `246c0b576de4a634e3fbfcfccc370d4c9e5578b3` merged in
+`f7732fa1`; all ten accepted code findings pushed and all 11 original review
+threads answered separately with commit/model attribution. Root exact requested
+loose-environment command passes 4,097 tests with four existing skips across
+417 passing files and two skipped files. Six package typechecks, Biome 1,403
+files with 14 existing warnings and one info, build, both bundle modes, 11 release
+script tests and 47 strict OpenSpec items pass. Hidden muted meetings smoke
+passes, exits and leaves 28 captures; Chromium cache/process-policy diagnostics
+remain in its log. Final GraphQL inventory has zero unanswered threads, all 11
+left unresolved. Hosted checks remain owned by the lead; no fresh bot round,
+thread resolution or merge was requested. No physical or paid-provider
+qualification is implied. External logs and captures remain under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/fix1/`.
+
+## 12. PR #109 final bot-review fix round
+
+Execution: open-quake-lih.16.13, left open for lead merge.
+
+- [x] 12.1 Fix 4380327521 with documented pcm/16 kHz session settings and actual resampled wire audio; fail-before regression checks signed samples, length and invalid capture blocks.
+- [x] 12.2 Fix 4380327514 with the documented Beijing/Singapore workspace and legacy hosts, preserving URL rejection cases.
+- [x] 12.3 Fix 4380327483 by waiting only for committed OpenAI items, preserving VAD timing.
+- [x] 12.4 Fix 4380327495 by cancelling active OpenAI transcription when its saved credential is revoked.
+- [x] 12.5 Fix 4380327502 by invalidating rejected uploads on failed DashScope subtasks.
+- [x] 12.6 Run full gates and hidden meetings mock smoke, list unanswered GraphQL threads and track further valid findings without another review round.
+
+Final round evidence: exact root suite 4162 passing tests and four existing skips,
+six package typechecks, Biome 1415 files with zero errors, 14 existing warnings
+and one info, production build, both bundle modes and 47 strict OpenSpec items
+pass. Hidden muted meetings mock passes and exits with 28 captures. Five findings
+were fixed and replied to separately, each with a fail-before regression.
+
+Further valid bot findings 4380486754 and 4380486762 are tracked as follow-up
+in open-quake-lih.16.14 and receive replies without another implementation round.
+The supplemental media smoke fails its German local-player label because the
+fixture still selects the retired localStorage locale while main now reads the
+document locale; that fixture repair is in the same follow-up bead. No product
+assertion or safety gate was weakened. Evidence stays in SSD meeting-provider/fix2.
+No thread resolution or merge; execution bead open-quake-lih.16.13 stays open for
+the lead. Physical and paid-provider qualification remains unverified.
