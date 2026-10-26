@@ -1806,6 +1806,65 @@ it("MGMT-109/124 generated placement confirms replacements and refuses locked re
 		).toEqual([{ type: "key", value: "control+s" }]),
 	);
 });
+it("MGMT-124 bounds generated placement titles while retaining searchable full library names", async () => {
+	const names = [
+		"Toggle Full Screen Mode",
+		"一二三四五六七八九十十一",
+		"123456789012345678😀tail",
+	];
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: names.map((name, i) => ({
+						id: String(i),
+						name,
+						app: "Editor",
+						chord: "control+s",
+					})),
+				},
+			],
+		}),
+	});
+	const f = await gridFixture([]);
+	const expected = [
+		"Toggle Full Screen M",
+		"一二三四五六七八九十",
+		"123456789012345678😀",
+	];
+	for (const [i, name] of names.entries()) {
+		const selector = `[data-library-type="generated:g:${i}"]`;
+		expect(query(f.host, selector, HTMLButtonElement).textContent).toContain(
+			name,
+		);
+		await pointerMove(
+			f.host,
+			query(f.host, selector, HTMLButtonElement),
+			`1,${i + 1}`,
+		);
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(i + 1));
+		expect(
+			f
+				.stored()
+				.profiles[0].pages[0].keys.find((key) => key.keyCode === `1,${i + 1}`)
+				?.config.title.text,
+		).toBe(expected[i]);
+	}
+	await input(query(f.host, "#keys-library-search", HTMLInputElement), "Mode");
+	await settle(() => {
+		expect(
+			f.host.querySelector('[data-library-type="generated:g:1"]'),
+		).toBeNull();
+		expect(
+			f.host.querySelector('[data-library-type="generated:g:0"]')?.textContent,
+		).toContain(names[0]);
+	});
+});
 it("MGMT-109 registry placement retains OBS default locks rather than empty-cell defaults", async () => {
 	const f = await gridFixture([]);
 	await libraryPlace(f.host, "obsStats", "1,1");

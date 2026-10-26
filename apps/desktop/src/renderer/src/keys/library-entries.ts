@@ -13,7 +13,10 @@ import {
 	appLibraryKey,
 	appLibraryLabel,
 } from "../../../../../../packages/device/src/profiles/app-library.js";
-import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import {
+	keyText,
+	truncateKeyTitle,
+} from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import {
 	createEmptyProfileKey,
 	ProfileJsonObject,
@@ -28,6 +31,7 @@ import { keyArtwork } from "./key-artwork";
 export type LibraryEntry = {
 	readonly id: string;
 	readonly key: ProfileKey;
+	readonly label?: string;
 	readonly activation?: "shortcuts" | "emoji";
 	readonly disabled?: boolean;
 };
@@ -166,6 +170,7 @@ export function appGroups(
 				);
 				return {
 					id: `generated:${library.id}:${row.id}`,
+					label: row.name,
 					activation: "shortcuts",
 					key: Schema.decodeUnknownSync(ProfileKey)({
 						...empty,
@@ -177,7 +182,10 @@ export function appGroups(
 								actions: [{ type: "key", value: row.chord }],
 							}),
 							icon: row.icon ?? "",
-							title: { ...empty.config.title, text: row.name },
+							title: {
+								...empty.config.title,
+								text: truncateKeyTitle(row.name),
+							},
 							userModifiedTitle: true,
 						},
 					}),
@@ -298,7 +306,7 @@ export function filterLibrary(
 		.map((group) => ({
 			...group,
 			entries: group.entries.filter((entry) =>
-				`${Option.getOrElse(entry.key.childrenName, () => entry.key.config.type)} ${appLibraryLabel(entry.key, locale)}`
+				`${Option.getOrElse(entry.key.childrenName, () => entry.key.config.type)} ${entry.label ?? appLibraryLabel(entry.key, locale)}`
 					.toLowerCase()
 					.includes(term),
 			),

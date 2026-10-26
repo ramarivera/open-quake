@@ -243,7 +243,7 @@ export function FunctionLibrary({
 														: entry.key.config.type,
 													locale,
 												)
-											: appLibraryLabel(entry.key, locale);
+											: (entry.label ?? appLibraryLabel(entry.key, locale));
 									const icon =
 										entry.key.config.icon.startsWith("emoji:") &&
 										emoji?._tag === "ready"
@@ -301,7 +301,7 @@ export function FunctionLibrary({
 						width={20}
 						height={20}
 					/>
-					{appLibraryLabel(dragged.key, locale)}
+					{dragged.label ?? appLibraryLabel(dragged.key, locale)}
 				</div>
 			)}
 		</section>

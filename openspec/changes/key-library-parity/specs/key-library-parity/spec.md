@@ -286,6 +286,11 @@ All library items SHALL use the merged GridEditor placement/replacement path wit
 - **WHEN** a generated key, emoji key or preset is dropped on an empty, occupied, locked or return cell
 - **THEN** valid empty placement publishes, occupied placement waits for confirmation, cancellation leaves profiles unchanged, and locked/return cells reject placement
 
+#### Scenario: Generated shortcut title bounds
+- **WHEN** a saved generated shortcut name exceeds 20 weighted title units
+- **THEN** placement SHALL truncate the key title with the shared MGMT-258 rule while preserving the complete name in the searchable library label and drag preview
+- **AND** multibyte CJK and surrogate-pair boundaries SHALL remain valid. Sources: MGMT-124 and PR117 comment 4381332353.
+
 ### Requirement: Multi-action library allowlist
 The sequence library SHALL use the same translated search and groups and SHALL declare the 21 recovered active MULTIACTIONS_SIDEBAR entries: buzzer, mic, homeAssistant, website, hotkey, open, close, text, playAudioLegacy, stopAudio, delay, mute, playPause, stopPlay, skipBackward, skipForward, fastBackward, fastForward, repeatPlay, randomPlay and cmd. The commented-out playAudio entry SHALL be excluded. Plugin entries SHALL be included unless SupportedInMultiActions is false. Unavailable runtime actions SHALL remain visibly unavailable and SHALL not bypass executable schema validation. Sources: MGMT-127, KeyConfiguration.js:1805-2617 and MainScreen.vue:1179-1225.
 
