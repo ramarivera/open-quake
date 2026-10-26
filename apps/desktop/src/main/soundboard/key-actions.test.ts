@@ -421,3 +421,61 @@ it.scoped(
 			expect(f.tracks[1]?.plays).toBe(2);
 		}),
 );
+
+for (const intent of ["stop", "toggle", "previous", "next"] as const) {
+	it.scoped(
+		`ignores stale playlist sessions for ${intent} and never persists them under a new playlist`,
+		() =>
+			Effect.gen(function* () {
+				let stored: unknown = {};
+				const store = {
+					read: async () => stored,
+					write: async (next: unknown) => {
+						stored = next;
+					},
+				};
+				const f = yield* rig();
+				const keys = soundboardKeyActions(f.service, store);
+				yield* keys.execute(key(0), activation);
+				yield* keys.execute(key(6), activation);
+				const old = (yield* keys.snapshot()).at(-1);
+				if (!old) throw new Error("missing session");
+				const oldTrack = f.tracks.at(-1);
+				const before = JSON.stringify(stored);
+				const original = key(0);
+				const changed = {
+					...original,
+					config: {
+						...original.config,
+						actions: [
+							...original.config.actions.map((a) =>
+								a.type === "sound"
+									? { ...a, value: JSON.stringify(["/private/music/new.mp3"]) }
+									: a,
+							),
+							{ type: "playerIntent", value: intent },
+						],
+					},
+				};
+				expect(
+					yield* keys
+						.execute(changed, { ...activation, revision: 2 })
+						.pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.SOUNDBOARD.CONFIG_INVALID" },
+				});
+				expect(oldTrack?.pauses).toBe(0);
+				expect(oldTrack?.plays).toBe(1);
+				expect(JSON.stringify(stored)).toBe(before);
+				expect(
+					(yield* keys.snapshot()).find((s) => s.playbackId === old.playbackId)
+						?.state,
+				).toBe("playing");
+				expect(
+					(yield* keys.read(changed, { ...activation, revision: 2 }))
+						.trackIndex,
+				).toBe(0);
+			}),
+	);
+}

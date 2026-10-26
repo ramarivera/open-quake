@@ -273,3 +273,9 @@ A held hotkey containing a media command SHALL dispatch once on activation and S
 - **WHEN** a key has two additive sessions and its newest session is paused while the older session keeps playing
 - **THEN** position sampling preserves session selection order, the card stays paused and Toggle resumes the newest session
 - **AND** the older session receives no pause or resume, covering PR103 comment 4379737951 and bead open-quake-lih.7.5
+
+#### Scenario: Stale playlist controls cannot corrupt resume state
+
+- **WHEN** a shorter playlist is committed while an old-revision session is still active
+- **THEN** card Stop, Toggle, Previous and Next reject the stale session before controlling it or saving its position under the new playlist fingerprint
+- **AND** the new playlist still reads track zero, covering PR103 comment 4379836847 and bead open-quake-lih.7.5

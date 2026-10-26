@@ -106,6 +106,14 @@ export function soundboardKeyActions(
 					s.owner.keyCode === owner.keyCode,
 			)
 			.at(-1);
+		if (
+			intent &&
+			active &&
+			active.playlistRevision !== activation.revision &&
+			active.state !== "stopped" &&
+			active.state !== "failed"
+		)
+			return yield* new SoundboardConfigInvalid();
 		if (intent === "previous" || intent === "next") {
 			if (active?.state !== "playing" || parsed.entries.length < 2) return true;
 		}
@@ -129,7 +137,8 @@ export function soundboardKeyActions(
 			.filter(
 				(s) =>
 					s.owner.profileId === owner.profileId &&
-					s.owner.keyCode === owner.keyCode,
+					s.owner.keyCode === owner.keyCode &&
+					s.playlistRevision === activation.revision,
 			)
 			.at(-1);
 		if (latest && (latest.state === "playing" || latest.state === "paused"))
