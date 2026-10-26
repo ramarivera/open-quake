@@ -16,6 +16,7 @@ import agentHttp from "../management/agent-http/strings.json";
 import agents from "../management/agents/strings.json";
 import chat from "../management/chat/strings.json";
 import settings from "../settings/strings.json";
+import { localeFailureCode } from "./locale-error";
 
 export { resolveAppLocale } from "../../../../../../packages/edge/src/settings/settings-invariants";
 export type { AppLocale, AppLocaleBridge, LocaleSnapshot };
@@ -89,8 +90,9 @@ export function AppLocaleProvider({
 		void bridge
 			.read()
 			.then(receive)
-			.catch(() => {
-				if (active) setError("QUAKE.SETTINGS.READ_FAILED");
+			.catch((failure: unknown) => {
+				if (active)
+					setError(localeFailureCode(failure, "QUAKE.SETTINGS.READ_FAILED"));
 			})
 			.finally(() => {
 				if (active) setLoading(false);
@@ -109,8 +111,8 @@ export function AppLocaleProvider({
 			const next = await bridge.set(locale);
 			update((current) => (next.revision >= current.revision ? next : current));
 			setError("");
-		} catch {
-			setError("QUAKE.SETTINGS.PERSIST_FAILED");
+		} catch (failure) {
+			setError(localeFailureCode(failure, "QUAKE.SETTINGS.PERSIST_FAILED"));
 		}
 	};
 	useEffect(() => {

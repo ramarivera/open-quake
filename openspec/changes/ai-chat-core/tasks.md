@@ -41,3 +41,34 @@ fallback output. Actual production Electron root/preload/React updates both
 windows without document reload using mock hardware and a local provider. Final
 Opus-owned chat copy/control integration and its rendered acceptance remain open,
 so task 2.3 remains unchecked.
+
+
+Preload error identity correction, 2026-10-26, open-quake-ca2: direct-chat
+unary failures and locale failures now reject with plain objects because
+Electron contextBridge strips custom fields from Error subclasses. Chat
+accepts only catalog codes from ChatErrors/AiErrors and uses their canonical
+messages. Locale validates SettingsFailure before projecting its tag, code
+and canonical message. Neither exposes diagnostics, causes, provider text or
+transport details. Transport and unknown chat failures use fixed unavailable
+projections. Six new regressions cover plain-object identity, canonical copy,
+unknown codes and transport failure, with five original cases failing before
+the fix. The real hidden production-root contextBridge read now retains
+QUAKE.SETTINGS.READ_FAILED / SettingsReadFailed and
+CHAT.HISTORY.STORAGE_FAILED / ChatRpcFailure in the renderer. Four corrupt
+feature files stay byte-identical, maintenance remains usable and normal quit
+completes. Evidence is error-identity-{baseline,fixed,types,build,native}.log
+under the external open-quake-finish/service-graph scratch directory.
+This addresses the failure boundary within 2.2/2.3; their broader unchecked
+acceptance requirements remain open. No physical device, microphone, live
+provider or OS preference mutation was used.
+
+PR74 review correction: AppLocaleProvider now retains the four allowlisted
+locale error codes instead of replacing every read/save failure. Setup uses
+its saved locale while the live locale cannot be read, including unavailable
+and invalid replies. The focused settings/i18n/preload suites pass 123 tests
+and desktop typecheck/build pass. In the hidden production renderer, removing
+only the locale IPC handler and reloading shows the existing localized
+"Language settings are unavailable here." message. The earlier corrupt-store
+checks still pass. The expected missing-handler log is induced by this test,
+not a startup-order observation. No window is shown or focused. Evidence:
+service-graph/error-identity-consumer{,-types,-build,-native}.log.

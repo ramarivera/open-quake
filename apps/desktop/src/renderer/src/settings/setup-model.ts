@@ -48,7 +48,12 @@ export function liveLocale(
 	},
 	saved: "en" | "de",
 ): "en" | "de" {
-	return app.loading || app.error === "QUAKE.SETTINGS.READ_FAILED"
+	return app.loading ||
+		[
+			"QUAKE.SETTINGS.READ_FAILED",
+			"QUAKE.SETTINGS.INVALID",
+			"QUAKE.SETTINGS.UNAVAILABLE",
+		].includes(app.error)
 		? saved
 		: app.locale;
 }
