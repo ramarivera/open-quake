@@ -39,3 +39,22 @@ physical microphone/speaker. The parent composition test drives one finalized
 transcript through the selected external ConversationService into ordered
 answer speech, including original-fallback exclusion and retained safe failures.
 Direct ChatService answer consumption in 2.4 remains open.
+
+
+## Linux native-worker evidence, 2026-10-26
+
+Task 3.1 remains open. On Linux x64, Electron 43.4.1 and PipeWire 1.6.10, the
+actual capture driver consumed synthetic Chromium input and produced 28 ordered
+960-byte PCM frames with nonzero RMS. The production hidden sandboxed worker
+and output owner passed repeated readiness, natural drain, busy rejection,
+capture preemption, stale soundboard Stop isolation, aborted acquisition and
+complete cleanup. Generated PCM reached a private PipeWire sink with measured
+peak RMS 0.173887. No raw PCM was persisted. Default input/output and host volume
+were unchanged; all owned windows, workers, recorders and virtual sinks closed.
+
+This proves Linux worker execution and native output routing, with synthetic
+input. Physical microphone capture, portal denial and unplugged-device behavior
+remain unverified, as do live STT/TTS credentials and physical hearing. The
+source and result artifacts remain external under `open-quake-finish/linux-audio/`
+in project scratch. The existing macOS synthetic smoke was reused with actual
+production driver capture and a nonzero generated output tone.
