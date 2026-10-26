@@ -21,29 +21,83 @@ const decode = Schema.decodeUnknownEither(ProfileSnapshotReply);
 export function subscribeStripProfiles(
 	bridge: ProfilesBridge,
 	update: (next: StripProfiles) => void,
-): () => void {
+	serial?: string,
+): (() => void) & { refresh(resourceId: string): void } {
 	let live = true;
+	let pushed = false;
+	let epoch = 0;
+	let current: ProfileEnvelope | undefined;
 	const accept = (value: unknown): void => {
 		const reply = decode(value);
-		if (live && Either.isRight(reply)) update(reply.right);
+		if (!live || Either.isLeft(reply)) return;
+		if (reply.right._tag === "ready") {
+			const next = reply.right.envelope;
+			if (
+				current &&
+				((current.manager._tag === "Some" &&
+					next.manager._tag === "Some" &&
+					next.manager.value.revision < current.manager.value.revision) ||
+					next.profiles.some(
+						(p) =>
+							(current?.profiles.find((old) => old.id === p.id)?.revision ??
+								-1) > p.revision,
+					))
+			)
+				return;
+			current = next;
+		}
+		update(reply.right);
 	};
-	const off = bridge.onSnapshot(accept);
-	bridge.read().then(accept, () => {
-		if (live)
-			update({
-				_tag: "failure",
-				code: "QUAKE.PROFILE.READ_FAILED",
-				message: "Reading local profiles failed",
-			});
+	const off = bridge.onSnapshot((value) => {
+		if (decode(value)._tag !== "Right") return;
+		pushed = true;
+		epoch++;
+		accept(value);
 	});
-	return () => {
-		live = false;
-		off();
-	};
+	bridge.read().then(
+		(value) => {
+			if (!pushed) accept(value);
+		},
+		() => {
+			if (live && !pushed)
+				update({
+					_tag: "failure",
+					code: "QUAKE.PROFILE.READ_FAILED",
+					message: "Reading local profiles failed",
+				});
+		},
+	);
+	return Object.assign(
+		() => {
+			live = false;
+			epoch++;
+			off();
+		},
+		{
+			refresh(resourceId: string): void {
+				if (!live) return;
+				const requested = epoch;
+				void bridge.read().then(
+					(value) => {
+						if (!live || epoch !== requested) return;
+						const reply = decode(value);
+						if (reply._tag !== "Right" || reply.right._tag !== "ready") return;
+						const active = serial
+							? (current ?? reply.right.envelope).activeByDevice[serial]
+									?.profileId
+							: undefined;
+						if (active === resourceId) accept(value);
+					},
+					() => {},
+				);
+			},
+		},
+	);
 }
 
 export function useStripProfiles(
 	onSnapshot?: (next: StripProfiles) => void,
+	serial?: string,
 ): StripProfiles {
 	const observer = useRef(onSnapshot);
 	observer.current = onSnapshot;
@@ -55,7 +109,24 @@ export function useStripProfiles(
 			observer.current?.(next);
 			setProfiles(next);
 		};
-		const off = subscribeStripProfiles(bridge, update);
+		const off = subscribeStripProfiles(bridge, update, serial);
+		const offMessages = window.openQuake?.onQuakeEvent((event) => {
+			if (
+				event.kind !== "json" ||
+				typeof event.value !== "object" ||
+				event.value === null ||
+				Array.isArray(event.value)
+			)
+				return;
+			const message = Schema.decodeUnknownOption(
+				Schema.Struct({
+					type: Schema.Literal("configSync"),
+					resourceId: Schema.String,
+				}),
+			)(event.value);
+			if (message._tag === "None") return;
+			off.refresh(message.value.resourceId);
+		});
 		const preview = window.quakeKeyLibrary?.onPreview((snapshot) => {
 			const decoded = Schema.decodeUnknownEither(ProfileEnvelope)(
 				snapshot.envelope,
@@ -65,8 +136,9 @@ export function useStripProfiles(
 		});
 		return () => {
 			off();
+			offMessages?.();
 			preview?.();
 		};
-	}, []);
+	}, [serial]);
 	return profiles;
 }

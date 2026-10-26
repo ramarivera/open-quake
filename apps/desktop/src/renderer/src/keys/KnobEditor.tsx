@@ -13,6 +13,7 @@ import { resolveModelRows } from "../../../../../../packages/edge/src/agents/age
 import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
 import { Group, Row } from "../ui/Form";
+import { AgentRouteFields } from "./AgentRouteFields";
 import {
 	editKnobSlot,
 	knobAssignment,
@@ -212,12 +213,23 @@ export function KnobEditor({
 							<select
 								id="knob-route"
 								value={String(route ?? "")}
-								onChange={() => {
-									changeDirect("", "");
+								onChange={(e) => {
+									if (e.target.value === "dkclaw")
+										replace({
+											childrenName: "assistant",
+											config: {
+												type: "assistant",
+												actions: [
+													{ type: "voiceRoute", value: "dkclaw" },
+													{ type: "agentId", value: "main" },
+												],
+											},
+										});
+									else changeDirect("", "");
 									setReviewed(true);
 								}}
 							>
-								{route !== "direct" && (
+								{route !== "direct" && route !== "dkclaw" && (
 									<option value={String(route ?? "")} disabled>
 										{route === "dkclaw"
 											? "DK Claw (OpenClaw)"
@@ -226,8 +238,44 @@ export function KnobEditor({
 									</option>
 								)}
 								<option value="direct">Direct chat</option>
+								<option value="dkclaw">DK Claw (OpenClaw)</option>
 							</select>
 						</Row>
+						{route === "dkclaw" && (
+							<AgentRouteFields
+								idPrefix="knob"
+								agent={String(value("agentId") || "main")}
+								model={String(value("dkclawModel") || "")}
+								onAgent={(id) =>
+									replace({
+										...slot,
+										config: {
+											...slot.config,
+											actions: [
+												...slot.config.actions.filter(
+													(a) => a.type !== "agentId",
+												),
+												{ type: "agentId", value: id || "main" },
+											],
+										},
+									})
+								}
+								onModel={(id) =>
+									replace({
+										...slot,
+										config: {
+											...slot.config,
+											actions: [
+												...slot.config.actions.filter(
+													(a) => a.type !== "dkclawModel",
+												),
+												...(id ? [{ type: "dkclawModel", value: id }] : []),
+											],
+										},
+									})
+								}
+							/>
+						)}
 						{route === "direct" && (
 							<>
 								<Row label="Chat provider:" htmlFor="knob-provider">

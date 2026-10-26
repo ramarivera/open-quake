@@ -1,20 +1,26 @@
 import "./integrations.css";
 import { useCallback, useEffect, useState } from "react";
-import { CHANNEL_CATALOG } from "../../../../../../../packages/edge/src/channels/channel-catalog";
+import { localizedChannelCatalog } from "../../../../../../../packages/edge/src/channels/channel-catalog";
 import type {
 	ChannelDescriptor,
 	ChannelView,
 } from "../../../../../../../packages/edge/src/channels/channel-contracts";
+import { useAppLocale } from "../../i18n";
 import { ChannelSetupDrawer } from "./ChannelSetupDrawer";
 import { channelDeleteConfirm, channelStrings as s } from "./strings";
 import { useIntegrations } from "./useIntegrations";
 export function ChannelsPage() {
+	const { locale } = useAppLocale();
+	const catalog = localizedChannelCatalog(locale);
 	const { request, error, busy } = useIntegrations();
 	const [channels, setChannels] = useState<readonly ChannelView[]>([]);
 	const [selected, setSelected] = useState<ChannelDescriptor>();
 	const refresh = useCallback(async () => {
 		const reply = await request({ type: "channels.list" });
-		if (reply?.type === "channels") setChannels(reply.channels);
+		if (reply?.type === "channels") {
+			setChannels(reply.channels);
+			window.dispatchEvent(new Event("agents:settings-invalidated"));
+		}
 	}, [request]);
 	useEffect(() => {
 		void refresh();
@@ -49,7 +55,7 @@ export function ChannelsPage() {
 					{s.hub.connectedTitle.replace("{count}", String(connected.length))}
 				</h3>
 				{connected.map((channel) => {
-					const descriptor = CHANNEL_CATALOG.find((d) => d.id === channel.id);
+					const descriptor = catalog.find((d) => d.id === channel.id);
 					return (
 						<div className="mc-toolbar" key={channel.id}>
 							<span
@@ -86,7 +92,12 @@ export function ChannelsPage() {
 											id: channel.id,
 											enabled: event.target.checked,
 										});
-										if (reply?.type === "channels") setChannels(reply.channels);
+										if (reply?.type === "channels") {
+											setChannels(reply.channels);
+											window.dispatchEvent(
+												new Event("agents:settings-invalidated"),
+											);
+										}
 									}}
 								/>
 								Enabled
@@ -109,7 +120,12 @@ export function ChannelsPage() {
 										type: "channels.remove",
 										id: channel.id,
 									});
-									if (reply?.type === "channels") setChannels(reply.channels);
+									if (reply?.type === "channels") {
+										setChannels(reply.channels);
+										window.dispatchEvent(
+											new Event("agents:settings-invalidated"),
+										);
+									}
 								}}
 							>
 								Delete
@@ -122,8 +138,9 @@ export function ChannelsPage() {
 				<section key={region} aria-label={region}>
 					<h3>{region}</h3>
 					<div className="mc-grid mc-channel-grid">
-						{CHANNEL_CATALOG.filter((d) => d.region === region).map(
-							(descriptor) => {
+						{catalog
+							.filter((d) => d.region === region)
+							.map((descriptor) => {
 								const channel = channels.find((c) => c.id === descriptor.id);
 								const state = channel?.state ?? "Not configured";
 								return (
@@ -171,8 +188,7 @@ export function ChannelsPage() {
 										</div>
 									</article>
 								);
-							},
-						)}
+							})}
 					</div>
 				</section>
 			))}

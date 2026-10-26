@@ -318,6 +318,22 @@ describe("scoped vendor input", () => {
 					yield* connection.disconnect();
 					expect(yield* touch.closes).toBe(1);
 					expect(yield* control.closes).toBe(1);
+					const replacement = yield* (yield* QuakeDevice).connect();
+					expect(yield* replacement.touch.health).toMatchObject({
+						state: "UNKNOWN",
+						reports: 0,
+						frames: 0,
+					});
+					yield* TestClock.adjust(2000);
+					expect(yield* replacement.touch.health).toMatchObject({
+						state: "TOUCH_OK",
+						reports: 0,
+						frames: 0,
+					});
+					expect(yield* touch.opens).toBe(2);
+					yield* replacement.disconnect();
+					expect(yield* control.closes).toBe(2);
+					expect(yield* touch.closes).toBe(2);
 				}).pipe(
 					Effect.provide(
 						QuakeDevice.DefaultWithoutDependencies.pipe(

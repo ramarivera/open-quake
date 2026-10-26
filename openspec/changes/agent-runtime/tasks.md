@@ -43,3 +43,10 @@ Biome, the production build, bundle smoke, and strict OpenSpec validation pass.
 No real runtime process, provider, device, UI interaction, or host action ran.
 Task 2.5 remains open, including the local tool loop and its UI/approval work.
 Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
+
+## Agents burn-down lane, 2026-10-26
+
+- [x] A.1 Add optional owned OpenClaw service administration with private state, loopback token auth, bounded lifecycle, consented restart, stopped-only clear, validated settings and opt-in autostart. Sources CENTER-047/048, MAIN-144. Bead `open-quake-lih.17.10`; production `apps/desktop/src/main/agents/{owned-runtime,local-state}.ts`, verified by `owned-runtime.test.ts` and `administration.test.ts` with fake process drivers only.
+- [x] A.2 Add revision-checked rename/template reset, portable pack round-trip, bounded authored-workspace backup export, redacted diagnostics and managed log-level environment updates. Sources CENTER-050/104, MAIN-144. Same bead; service and real controller/storage tests in `administration.test.ts`, mounted settings/wizard tests in `administration-interactions.test.tsx`.
+- [x] A.3 Add local agent/model/voice/task editing and key-scoped HTTP context reset using existing credentials and conversation owners. Source MGMT-302. Bead `open-quake-lih.17.12`; mounted `key-editor-interactions.test.tsx` and `agent-http/voice-adapter.test.ts` verify persistence and cross-key isolation.
+- [ ] A.4 Lead acceptance: launch a selected installed OpenClaw executable and verify its supported plugin versions, readiness/restart, real messaging authentication and physical key behavior. No live external service was used. This lane does not complete the in-process tool-loop tasks above.

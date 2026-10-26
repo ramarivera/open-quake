@@ -232,8 +232,11 @@ The panel window and the management `DeviceScreen` preview SHALL render the same
 strip component from the same profile snapshot, wallpaper snapshot and setting.
 Main SHALL push every committed profile envelope to both windows and answer read
 requests. Failures SHALL expose only the catalog code and message. The page SHALL
-be the device's `activeByDevice` selection, otherwise the first profile's first
-page. Covers SCREEN-134, MGMT-051, SCREEN-018.
+be the device's `activeByDevice` selection. A newly enrolled serial without a
+startup, reported or saved selection SHALL commit the first visible colorful
+profile before publishing connection readiness. Until enrollment publishes, its
+panel and handshake SHALL use that same fallback. A preview without a serial or using the `desktop-preview` sentinel, a reserved
+prototype identity, and an invalid saved reference SHALL retain the first visible profile's first page. Covers SCREEN-134, MGMT-051, SCREEN-018.
 
 #### Scenario: Saved profile reaches both windows
 
@@ -279,6 +282,11 @@ AI Chat, DKClaw and live translation panels SHALL suppress host-cell touch effec
 #### Scenario: Child interaction without host feedback
 - **WHEN** a touch begins and ends on a nested AI panel control
 - **THEN** the child receives its event, the host receives no key activation and has no pressed state, and the AI Chat copy control dispatches its saved text
+
+#### Scenario: First HID connection without a saved profile
+- **WHEN** a new serial connects without a configured startup, reported or saved profile
+- **THEN** enrollment commits the visible colorful profile before hardware readiness
+- **AND** the rendered grid and reportActiveProfile use that same profile
 
 ### Requirement: Logical viewport updates and mirror fitting
 

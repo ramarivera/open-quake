@@ -325,6 +325,7 @@ const cellCode = (row: number, column: number): string => `${row},${column}`;
 export function stripLayout(
 	profile: Pick<Profile, "name" | "compatibility">,
 	page: Pick<ProfilePage, "keys">,
+	rows: 1 | 2 = 2,
 ): StripLayout {
 	const theme = STRIP_THEMES[resolveProfileTheme(profile)];
 	const meetingPage = page.keys.some((key) =>
@@ -335,7 +336,10 @@ export function stripLayout(
 		.flatMap((key) =>
 			Option.match(keyFootprint(key), {
 				onNone: () => [],
-				onSome: (footprint) => [{ key, footprint }],
+				onSome: (footprint) =>
+					footprint.row + footprint.height - 1 <= rows
+						? [{ key, footprint }]
+						: [],
 			}),
 		)
 		.sort(
@@ -364,7 +368,7 @@ export function stripLayout(
 	);
 	const cells: StripCell[] = [];
 	const covered: string[] = [];
-	for (let row = 1; row <= QUAKE_LOGICAL_GRID.rows; row++)
+	for (let row = 1; row <= rows; row++)
 		for (let column = 1; column <= QUAKE_LOGICAL_GRID.columns; column++) {
 			const code = cellCode(row, column);
 			const owner = claimed.get(code);
