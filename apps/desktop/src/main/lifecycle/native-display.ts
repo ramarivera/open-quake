@@ -161,3 +161,82 @@ export const probeHiddenMirroring = Effect.fn("NativeDisplay.hiddenMirroring")(
 			catch: (cause) => new DisplayOperationFailed(cause),
 		}),
 );
+
+export const WINDOWS_DISPLAY_PROBE = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+$screens = @([System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
+  @{ width = $_.Bounds.Width; height = $_.Bounds.Height }
+})
+$names = @(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorID | ForEach-Object {
+  -join ($_.UserFriendlyName | Where-Object { $_ -ne 0 } | ForEach-Object { [char]$_ })
+})
+@{ screens = $screens; names = $names } | ConvertTo-Json -Compress -Depth 4
+`;
+const WindowsProbe = Schema.Struct({
+	screens: Schema.Array(
+		Schema.Struct({ width: Schema.Number, height: Schema.Number }),
+	),
+	names: Schema.Array(Schema.String),
+});
+export type NativeTool = (
+	file: string,
+	args: readonly string[],
+) => Effect.Effect<string, DisplayOperationFailed>;
+export const runNativeTool: NativeTool = Effect.fn("NativeDisplay.runTool")(
+	(file, args) =>
+		Effect.tryPromise({
+			try: (signal) =>
+				new Promise<string>((resolve, reject) =>
+					execFile(
+						file,
+						[...args],
+						{ signal, timeout: 8000, windowsHide: true, maxBuffer: 1_048_576 },
+						(error, stdout) => (error ? reject(error) : resolve(stdout.trim())),
+					),
+				),
+			catch: (cause) => new DisplayOperationFailed(cause),
+		}),
+);
+export const probeWindowsDisplays = Effect.fn("NativeDisplay.windowsProbe")(
+	function* (run: NativeTool = runNativeTool) {
+		const raw = yield* run("powershell.exe", [
+			"-NoLogo",
+			"-NoProfile",
+			"-NonInteractive",
+			"-Command",
+			WINDOWS_DISPLAY_PROBE,
+		]);
+		const probe = yield* Effect.try({
+			try: () => Schema.decodeUnknownSync(Schema.parseJson(WindowsProbe))(raw),
+			catch: (cause) => new DisplayOperationFailed(cause),
+		});
+		const screen = probe.screens.find((d) =>
+			[
+				[1920, 480],
+				[480, 1920],
+			].some(
+				([w = 0, h = 0]) =>
+					Math.abs(d.width - w) < 10 && Math.abs(d.height - h) < 10,
+			),
+		);
+		const named = probe.names.some((name) =>
+			name.trim().toUpperCase().includes("DK-QUAKE"),
+		);
+		return {
+			source: named
+				? ("wmi-name" as const)
+				: screen
+					? ("forms-size" as const)
+					: ("none" as const),
+			present: named || !!screen,
+			width: screen?.width ?? 0,
+			height: screen?.height ?? 0,
+			failed: false,
+		};
+	},
+);
+export const extendWindowsDisplays = Effect.fn("NativeDisplay.windowsExtend")(
+	(run: NativeTool = runNativeTool) =>
+		run("DisplaySwitch.exe", ["/extend"]).pipe(Effect.asVoid),
+);

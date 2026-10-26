@@ -41,3 +41,9 @@
 - [x] Bind an exact-label, exact-size sole DK-QUAKE display while preserving blanking identification for ambiguous candidates. Release discovery reservations when disconnect cancels a never-started fiber. Prove live EDID-retaining startup, settled resume/reopen and strict ambiguity regressions. Shared bead `open-quake-lih.10.2.21`; key-library-parity task8.2 tracks profile enrollment in the same fix. Evidence: `../key-library-parity/verification-quiet-startup.md`; source `451f108`.
 
 - [x] Repair the CoreGraphics JXA binding crash exposed by consented live arrangement, and verify the actual helper on macOS plus the single-owner panel after movement. Shared bead `open-quake-lih.10.2.20.1`; key-library-parity task8.7. Evidence: `../key-library-parity/verification-quiet-keyboard-display.md`.
+
+## 8. Lifecycle burn-down lane
+
+- [ ] 8.1 Implement scoped native strip windows, 3s/5s disposal and app suspension lease. Bead open-quake-lih.11.3. Rows MAIN-012,048,049,050,061; SCREEN-146; SETTINGS-079,084.
+- [ ] 8.2 Implement serial-safe recovery, ambiguity, scaled layout, debounced orientation and wake generations. Bead open-quake-lih.11.4. Rows MAIN-046,047,053,054,060; SCREEN-147; SETTINGS-085.
+- [ ] 8.3 Implement consented Windows probe/extend, arrangement persistence and wizard orientation ownership. Bead open-quake-lih.11.5. Rows MAIN-043,044,057,058,059; SETTINGS-058,087.

@@ -36,6 +36,12 @@ import {
 import type { SetupState, SetupStore } from "./stores";
 import "./settings.css";
 
+import type {
+	ConnectionDiagnostic,
+	DisplayOrientation,
+	LifecycleBridge,
+} from "../../../shared/lifecycle-contracts";
+
 type T = ReturnType<typeof useAppTranslations>;
 /** Languages are always offered in their own name. */
 const languages = [
@@ -98,6 +104,13 @@ export function SetupWizard({
 	onLeave: () => void;
 }): React.JSX.Element {
 	const t = useAppTranslations("settings");
+	useEffect(() => {
+		const bridge = window.quakeLifecycle;
+		void bridge?.request({ action: "wizard", open: true }).catch(() => {});
+		return () => {
+			void bridge?.request({ action: "wizard", open: false }).catch(() => {});
+		};
+	}, []);
 	const state = useSetupState(store);
 	if (state.status === "unavailable" || state.status === "failed")
 		return (
@@ -181,6 +194,12 @@ function SetupFlow({
 	);
 	const locale = liveLocale(useAppLocale(), snapshot.locale);
 	const owners = useOwnerChoices(locale);
+	const hardwareSerial =
+		choices.display?._tag === "quake" ? choices.display.deviceId : undefined;
+	const orientation = useOrientation(hardwareSerial, onLeave);
+	const hardwareReady =
+		choices.display?._tag !== "quake" ||
+		(!!orientation?.connected && !orientation.isVertical);
 	const heading = useRef<HTMLHeadingElement>(null);
 	const shown = useRef(step);
 	const headingId = useId();
@@ -228,7 +247,8 @@ function SetupFlow({
 				(step === "review" ||
 					canContinue(step, current, devices, profiles, runtime))
 			: step === "display"
-				? owners.devices !== null &&
+				? hardwareReady &&
+					owners.devices !== null &&
 					canContinue(step, current, devices, profiles, runtime)
 				: canContinue(step, current, devices, profiles, runtime);
 
@@ -650,6 +670,14 @@ export function DisplayStep({
 	onCheckDevices: () => void;
 }): React.JSX.Element {
 	const id = useId();
+	const locale = useAppLocale().locale === "de" ? "de" : "en";
+	const serial =
+		choices.display?._tag === "quake"
+			? choices.display.deviceId
+			: devices?.state === "connected"
+				? devices.serial
+				: undefined;
+	const orientation = useOrientation(serial);
 	const choose = (display: WizardDisplay) =>
 		setChoices((current) => ({ ...current, display }));
 	const saved =
@@ -719,6 +747,20 @@ export function DisplayStep({
 					onChange={() => choose({ _tag: "desktop-preview" })}
 				/>
 			</div>
+			{connected ? (
+				<OrientationConfirmation
+					locale={locale}
+					orientation={orientation}
+					platform={
+						typeof window === "undefined"
+							? undefined
+							: window.quakeLifecycle?.platform
+					}
+					openSettings={() => {
+						void window.quakeLifecycle?.request({ action: "display-settings" });
+					}}
+				/>
+			) : null}
 			{saved && saved !== connected?.serial ? (
 				<p className="setup-meta" role="status">
 					{t("setup.display.savedMissing", { serial: saved })}
@@ -991,5 +1033,210 @@ export function SetupResumeEntry({
 				</span>
 			</span>
 		</button>
+	);
+}
+
+export function observeOrientation(
+	bridge: LifecycleBridge,
+	serial: string,
+	publish: (value: DisplayOrientation | undefined) => void,
+	disconnected?: () => void,
+): () => void {
+	let live = true;
+	let version = 0;
+	let wasConnected = false;
+	const accept = (status: ConnectionDiagnostic) => {
+		const orientation = status.orientations?.find(
+			(o) => o.serialNumber === serial && o.connected,
+		);
+		publish(orientation);
+		if (orientation) wasConnected = true;
+		else if (wasConnected && status.usb === "fail") {
+			wasConnected = false;
+			disconnected?.();
+		}
+	};
+	const off = bridge.onStatus((status) => {
+		version++;
+		if (live) accept(status);
+	});
+	const poll = async () => {
+		const requested = ++version;
+		try {
+			const result = await bridge.request({ action: "read" });
+			if (live && requested === version) {
+				if (result.ok) accept(result.status);
+				else publish(undefined);
+			}
+		} catch {
+			if (live && requested === version) publish(undefined);
+		}
+	};
+	void poll();
+	const timer = setInterval(() => {
+		void poll();
+	}, 2000);
+	return () => {
+		live = false;
+		version++;
+		clearInterval(timer);
+		off();
+	};
+}
+function useOrientation(
+	serial: string | undefined,
+	disconnected?: () => void,
+): DisplayOrientation | undefined {
+	const [value, setValue] = useState<DisplayOrientation>();
+	const onDisconnect = useRef(disconnected);
+	onDisconnect.current = disconnected;
+	useEffect(() => {
+		setValue(undefined);
+		const bridge = window.quakeLifecycle;
+		if (!serial || !bridge) return;
+		return observeOrientation(bridge, serial, setValue, () =>
+			onDisconnect.current?.(),
+		);
+	}, [serial]);
+	return value?.serialNumber === serial ? value : undefined;
+}
+const orientationCopy = {
+	en: {
+		title: "Display Orientation Confirmation",
+		portrait: "Portrait (not recommended)",
+		landscape: "Landscape (recommended)",
+		recommended: "Recommended",
+		success: "Congratulations! Your display settings are configured correctly.",
+		disconnected: "Device not connected",
+		connected: "Device connected",
+		vertical: "Orientation: portrait",
+		horizontal: "Orientation: landscape",
+		unknown: "Checking display orientation…",
+		open: "Open Display Settings",
+		darwin:
+			"Quake display is in standard orientation. In macOS Displays settings, set Quake screen Rotation to 270°.",
+		win32:
+			"Quake display is in portrait orientation. In Windows Display settings, set Quake screen Orientation to Landscape.",
+		other:
+			"Portrait orientation detected. Please set the Quake display to landscape in your PC display settings.",
+	},
+	de: {
+		title: "Anzeigeausrichtung bestätigen",
+		portrait: "Hochformat (nicht empfohlen)",
+		landscape: "Querformat (empfohlen)",
+		recommended: "Empfohlen",
+		success: "Glückwunsch! Ihre Anzeigeeinstellungen sind korrekt.",
+		disconnected: "Gerät nicht verbunden",
+		connected: "Gerät verbunden",
+		vertical: "Ausrichtung: Hochformat",
+		horizontal: "Ausrichtung: Querformat",
+		unknown: "Anzeigeausrichtung wird geprüft…",
+		open: "Anzeigeeinstellungen öffnen",
+		darwin:
+			"Das Quake-Display ist in Standardausrichtung. Stellen Sie in den macOS-Monitor-Einstellungen die Drehung des Quake-Bildschirms auf 270° ein.",
+		win32:
+			"Das Quake-Display ist im Hochformat. Stellen Sie in den Windows-Anzeigeeinstellungen die Ausrichtung des Quake-Bildschirms auf Querformat ein.",
+		other:
+			"Hochformat erkannt. Bitte stellen Sie das Quake-Display in den PC-Anzeigeeinstellungen auf Querformat.",
+	},
+};
+export function OrientationConfirmation({
+	locale,
+	orientation,
+	platform,
+	openSettings,
+}: {
+	locale: "en" | "de";
+	orientation: DisplayOrientation | undefined;
+	platform: string | undefined;
+	openSettings: () => void;
+}): React.JSX.Element {
+	const text = orientationCopy[locale];
+	const ready = orientation?.connected && !orientation.isVertical;
+	return (
+		<section className="setup-orientation" aria-label={text.title}>
+			<h3>{text.title}</h3>
+			<div className="setup-choices">
+				{[true, false].map((vertical) => (
+					<div
+						key={String(vertical)}
+						className="setup-choice"
+						data-ready={(!vertical && ready) || undefined}
+						style={
+							!vertical && ready
+								? {
+										borderColor: "var(--success)",
+										borderWidth: 1,
+										borderStyle: "solid",
+									}
+								: undefined
+						}
+					>
+						<div>
+							<span>{vertical ? text.portrait : text.landscape}</span>
+							{!vertical && ready ? (
+								<span className="mc-badge" data-tone="success">
+									{text.recommended}
+								</span>
+							) : null}
+							<svg
+								viewBox="0 0 320 160"
+								width="100%"
+								height="120"
+								aria-hidden="true"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+							>
+								<rect x="30" y="18" width="160" height="100" rx="6" />
+								<rect
+									x="40"
+									y="28"
+									width="140"
+									height="80"
+									rx="2"
+									opacity="0.6"
+								/>
+								<path d="M110 118v18m-30 0h60" />
+								<rect
+									x="196"
+									y="18"
+									width={vertical ? 36 : 100}
+									height={vertical ? 100 : 36}
+									rx="6"
+								/>
+							</svg>
+						</div>
+					</div>
+				))}
+			</div>
+			<p role="status">
+				{!orientation
+					? text.unknown
+					: ready
+						? text.success
+						: platform === "darwin"
+							? text.darwin
+							: platform === "win32"
+								? text.win32
+								: text.other}
+			</p>
+			<p>
+				<span
+					className="mc-badge"
+					data-tone={orientation?.connected ? "success" : "neutral"}
+				>
+					{orientation?.connected ? text.connected : text.disconnected}
+				</span>
+				{orientation
+					? ` · ${orientation.isVertical ? text.vertical : text.horizontal}`
+					: null}
+			</p>
+			{!ready && (platform === "darwin" || platform === "win32") ? (
+				<button type="button" className="mc-button" onClick={openSettings}>
+					{text.open}
+				</button>
+			) : null}
+		</section>
 	);
 }

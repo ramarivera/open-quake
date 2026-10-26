@@ -20,6 +20,7 @@ import { registerKnob } from "./knob";
 import { registerMaintenance } from "./maintenance";
 import { registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
+import { startMockDeviceBus } from "./mockDeviceBus";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
@@ -46,15 +47,29 @@ const electron = vi.hoisted(() => {
 		}
 
 		destroyed = false;
+		contentListeners = new Map<string, () => void>();
 		webContents = {
 			send: vi.fn(),
 			setAudioMuted: vi.fn(),
+			setZoomFactor: vi.fn(),
+			removeListener: vi.fn(),
+			on: vi.fn((event: string, listener: () => void) =>
+				this.contentListeners.set(event, listener),
+			),
 			isDestroyed: () => this.destroyed,
 		};
-		loadURL = vi.fn();
-		loadFile = vi.fn();
+		loadURL = vi.fn(() => {
+			this.contentListeners.get("did-finish-load")?.();
+		});
+		loadFile = vi.fn(() => {
+			this.contentListeners.get("did-finish-load")?.();
+		});
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
 		hide = vi.fn();
+		setOpacity = vi.fn();
+		setIgnoreMouseEvents = vi.fn();
+		setVisibleOnAllWorkspaces = vi.fn();
+		moveTop = vi.fn();
 		showInactive = vi.fn();
 		show = vi.fn();
 		focus = vi.fn();
@@ -77,7 +92,8 @@ const electron = vi.hoisted(() => {
 			>();
 
 		constructor(readonly options: BrowserWindowConstructorOptions) {
-			Window.windows.push(this);
+			if (options.title !== "open-quake panel shield")
+				Window.windows.push(this);
 		}
 
 		isDestroyed() {
@@ -110,6 +126,7 @@ const electron = vi.hoisted(() => {
 		},
 		nativeTheme: { themeSource: "system" },
 		safeStorage: { isEncryptionAvailable: () => false },
+		powerSaveBlocker: { start: vi.fn(() => 7), stop: vi.fn() },
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
 		shell: { openExternal: vi.fn() },
@@ -123,6 +140,10 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./mockDeviceBus", async (original) => {
+	const actual = await original<typeof import("./mockDeviceBus")>();
+	return { ...actual, startMockDeviceBus: vi.fn(actual.startMockDeviceBus) };
+});
 vi.mock("./diagnostics/runtime", async (original) => {
 	const actual = await original<typeof import("./diagnostics/runtime")>();
 	return { ...actual, makeDesktopRuntime: vi.fn(actual.makeDesktopRuntime) };
@@ -618,6 +639,7 @@ describe("desktop window lifecycle", () => {
 		expect(strip?.setAlwaysOnTop).toHaveBeenLastCalledWith(
 			true,
 			"screen-saver",
+			process.platform === "darwin" ? 1 : 0,
 		);
 		expect(strip?.loadURL).toHaveBeenLastCalledWith(
 			"http://localhost:5173?surface=panel&rotation=90",
@@ -724,6 +746,62 @@ describe("desktop window lifecycle", () => {
 		listener?.({ preventDefault });
 		expect(preventDefault).toHaveBeenCalledTimes(1);
 		expect(panel.options.title).toBe("open-quake panel");
+	});
+
+	it("MAIN-012 SETTINGS-079 owns final close, voice teardown and the first/last suspension blocker", async () => {
+		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
+		displayEvent("display-added");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows.at(-1)?.showInactive,
+			).toHaveBeenCalled(),
+		);
+		const panel = electron.BrowserWindow.windows.at(-1);
+		const bus = vi.mocked(startMockDeviceBus).mock.results.at(-1)?.value;
+		const voice = vi.mocked(registerVoiceSurface).mock.results.at(-1)?.value;
+		if (!panel || !bus || !voice)
+			throw new Error("Missing active strip owners");
+		expect(electron.powerSaveBlocker.start).toHaveBeenCalledExactlyOnceWith(
+			"prevent-app-suspension",
+		);
+		const lose = () =>
+			bus.emitStatus({
+				source: "mock",
+				kind: "status",
+				state: "disconnected",
+				reason: "error",
+			});
+		const reconnect = () =>
+			bus.emitStatus({ source: "mock", kind: "status", state: "connected" });
+		lose();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(panel.hide).toHaveBeenCalled();
+		expect(voice.onDevice).toHaveBeenCalledWith(
+			expect.objectContaining({ state: "disconnected" }),
+		);
+		await vi.advanceTimersByTimeAsync(2999);
+		expect(panel.destroy).not.toHaveBeenCalled();
+		expect(electron.powerSaveBlocker.stop).not.toHaveBeenCalled();
+		reconnect();
+		await vi.advanceTimersByTimeAsync(2001);
+		expect(panel.destroy).not.toHaveBeenCalled();
+		expect(electron.powerSaveBlocker.start).toHaveBeenCalledOnce();
+		lose();
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(2999);
+		expect(electron.powerSaveBlocker.stop).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(electron.powerSaveBlocker.stop).toHaveBeenCalledExactlyOnceWith(7);
+		await vi.advanceTimersByTimeAsync(1999);
+		expect(panel.destroy).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(panel.destroy).toHaveBeenCalledOnce();
+		reconnect();
+		await vi.advanceTimersByTimeAsync(0);
+		const replacement = electron.BrowserWindow.windows.at(-1);
+		expect(replacement).not.toBe(panel);
+		expect(replacement?.showInactive).toHaveBeenCalled();
+		expect(electron.powerSaveBlocker.start).toHaveBeenCalledTimes(2);
 	});
 
 	it("restores both windows on macOS activation and forwards to the new windows", () => {

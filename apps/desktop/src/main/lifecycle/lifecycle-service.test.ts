@@ -201,7 +201,7 @@ describe("desktop lifecycle", () => {
 					});
 					h.onPower((on) => h.change(on ? [primary, strip] : [primary]));
 					yield* h.change([primary, strip]);
-					yield* TestClock.adjust(1);
+					yield* TestClock.adjust(1500);
 					expect(h.power).toEqual([false, true]);
 					expect(h.service.status()).toMatchObject({
 						hdmi: "pass",
@@ -459,11 +459,75 @@ describe("desktop lifecycle", () => {
 					yield* TestClock.adjust(3000);
 					expect(panels).toHaveLength(count);
 					yield* service.wake();
+					expect(panels.at(-1)?.visible).toBe(false);
+					const parked = panels.length;
 					yield* TestClock.adjust(2499);
-					expect(panels).toHaveLength(count);
+					expect(panels).toHaveLength(parked);
 					yield* TestClock.adjust(1);
 					expect(panels.at(-1)?.visible).toBe(false);
 				}),
 			),
 	);
 });
+
+it.scoped(
+	"MAIN-012 SETTINGS-079 releases at 3000ms and disposes at 5000ms, with reconnect cancellation",
+	() =>
+		Effect.gen(function* () {
+			const disposePanel = vi.fn();
+			const activeCount = vi.fn(() => Effect.void);
+			yield* Effect.gen(function* () {
+				const service = yield* DeviceLifecycle;
+				yield* service.onStatus(connected);
+				yield* service.onStatus({
+					source: "hid",
+					kind: "status",
+					state: "disconnected",
+					reason: "error",
+				});
+				yield* TestClock.adjust(2999);
+				expect(activeCount).toHaveBeenLastCalledWith(1);
+				expect(disposePanel).not.toHaveBeenCalled();
+				yield* TestClock.adjust(1);
+				expect(activeCount).toHaveBeenLastCalledWith(0);
+				yield* TestClock.adjust(1999);
+				expect(disposePanel).not.toHaveBeenCalled();
+				yield* service.onStatus(connected);
+				yield* TestClock.adjust(1);
+				expect(disposePanel).not.toHaveBeenCalled();
+				yield* service.onStatus({
+					source: "hid",
+					kind: "status",
+					state: "disconnected",
+					reason: "error",
+				});
+				yield* TestClock.adjust(4999);
+				expect(disposePanel).not.toHaveBeenCalled();
+				yield* TestClock.adjust(1);
+				expect(disposePanel).toHaveBeenCalledOnce();
+			}).pipe(
+				Effect.provide(
+					DeviceLifecycle.Default({
+						mock: true,
+						development: false,
+						displays: () => [primary, strip],
+						bus: () => undefined,
+						watch: () => () => {},
+						notify: () => {},
+						panel: () => {},
+						disposePanel,
+						activeCount,
+						prompts: {
+							platform: "linux",
+							mock: true,
+							displays: () => [primary, strip],
+							primaryId: () => 1,
+							prompt: () => Effect.succeed(1),
+							openSettings: () => Effect.void,
+							native: () => Effect.succeed("unavailable"),
+						},
+					}),
+				),
+			);
+		}),
+);

@@ -470,3 +470,44 @@ describe("HID desktop bus", () => {
 		);
 	}
 });
+
+it.scoped(
+	"MAIN-046 MAIN-047 opens one scoped lifecycle owner per serial and releases removed serials",
+	() =>
+		Effect.gen(function* () {
+			const second = {
+				...FAKE_QUAKE_DEVICE,
+				path: "fake-quake-second",
+				serialNumber: "FAKE-QUAKE-SECOND",
+			};
+			const devices = [FAKE_QUAKE_DEVICE, second];
+			const fake = yield* makeFakeHidTransport(devices);
+			yield* Effect.gen(function* () {
+				const harness = yield* makeHarness;
+				yield* harness.next;
+				const events: { serial: string; state: string }[] = [];
+				const off = harness.bus.onLifecycleStatus?.((event, serial) =>
+					events.push({ serial, state: event.state }),
+				);
+				yield* TestClock.adjust(1000);
+				expect(yield* fake.opens).toBe(2);
+				expect(events).toContainEqual({
+					serial: second.serialNumber,
+					state: "connected",
+				});
+				expect(harness.bus.device?.(second.serialNumber)?.serial?.()).toBe(
+					second.serialNumber,
+				);
+				devices.splice(1, 1);
+				yield* TestClock.adjust(1000);
+				expect(events).toContainEqual({
+					serial: second.serialNumber,
+					state: "disconnected",
+				});
+				expect(yield* fake.closes).toBe(1);
+				off?.();
+				yield* harness.close;
+				expect(yield* fake.closes).toBe(2);
+			}).pipe(Effect.provide(withTransport(fake.layer)));
+		}),
+);
