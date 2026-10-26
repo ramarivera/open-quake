@@ -592,15 +592,17 @@ describe("desktop window lifecycle", () => {
 			sender: management.webContents,
 			senderFrame: management.webContents.mainFrame,
 		});
-		await vi.waitFor(() =>
+		// Renderer route delivery and native focus await different readiness owners.
+		// A delivered route doesn't mean persisted window startup has finished.
+		await vi.waitFor(() => {
 			expect(management.webContents.send).toHaveBeenCalledWith(
 				MANAGEMENT_ACTIVATE,
 				"claw",
-			),
-		);
-		expect(management.restore).toHaveBeenCalledOnce();
-		expect(management.show).toHaveBeenCalled();
-		expect(management.focus).toHaveBeenCalled();
+			);
+			expect(management.restore).toHaveBeenCalledOnce();
+			expect(management.show).toHaveBeenCalled();
+			expect(management.focus).toHaveBeenCalled();
+		});
 	});
 
 	it("SETTINGS-064: saved locale refreshes the native Dock menu and Settings activates the existing management route", async () => {
