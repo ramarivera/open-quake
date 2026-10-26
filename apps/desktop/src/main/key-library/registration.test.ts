@@ -9,6 +9,7 @@ import {
 	KeyRuntime,
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import { emptyKnobResource } from "../../../../../packages/device/src/knob/knob-invariants.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
 	createEmptyProfileKey,
@@ -303,6 +304,70 @@ it("saves only profile knob data through management IPC and rejects panel, forei
 		expect(after.name).toBe(before.name);
 		expect(after.revision).toBe(1);
 		expect((await f.request(f.manager, command))._tag).toBe("rejected");
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it("refuses knob saves without stranding an unsaved key draft", async () => {
+	const f = fixture();
+	try {
+		const profile = await f.runtime.runPromise(ProfileService.getProfile("p"));
+		const original = profile.pages[0]?.keys[0];
+		if (!original) throw new Error("Missing fixture key");
+		const key = Schema.encodeSync(ProfileKey)({
+			...original,
+			config: {
+				...original.config,
+				title: { ...original.config.title, text: "Unsaved title" },
+				userModifiedTitle: true,
+			},
+		});
+		const target = {
+			token: "draft",
+			profileId: "p",
+			pageId: "one",
+			keyCode: "1,1",
+			revision: 0,
+		};
+		expect(
+			(await f.request(f.manager, { type: "preview", target, key }))._tag,
+		).toBe("success");
+		const knob = emptyKnobResource();
+		const blocked = await f.request(f.manager, {
+			type: "save-knob",
+			profileId: "p",
+			revision: 0,
+			knob,
+		});
+		expect(blocked).toEqual({
+			_tag: "rejected",
+			reason:
+				"Save or cancel the selected key edit before saving knob settings.",
+		});
+		expect(
+			(await f.runtime.runPromise(ProfileService.getProfile("p"))).revision,
+		).toBe(0);
+		expect(
+			(await f.request(f.manager, { type: "preview", target, key }))._tag,
+		).toBe("success");
+		expect(
+			(await f.request(f.manager, { type: "save", token: "draft" }))._tag,
+		).toBe("success");
+		const saved = await f.runtime.runPromise(ProfileService.getProfile("p"));
+		expect(saved.pages[0]?.keys[0]?.config.title.text).toBe("Unsaved title");
+		expect(saved.revision).toBe(1);
+		expect(
+			(
+				await f.request(f.manager, {
+					type: "save-knob",
+					profileId: "p",
+					revision: 1,
+					knob,
+				})
+			)._tag,
+		).toBe("success");
 	} finally {
 		await f.registration.dispose();
 		await f.runtime.dispose();

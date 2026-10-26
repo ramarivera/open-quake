@@ -78,3 +78,7 @@ strict OpenSpec validation passed. Hidden mock native acceptance produced
 `delivery-screenshots/knob-{migration-preview,missing-credentials,saved-wide,saved-narrow}.png`
 under the lane scratch directory. Its scratch-built entry explicitly sets the
 production renderer URL and disables macOS app activation. No hardware IO.
+
+## PR84 fix1
+
+- [x] 6.1 Refuse knob saves while a grid key editor is open, explain how to save and close that editor, and retain the key draft without advancing its revision. Bead open-quake-a74.14, review 4376058979. Main IPC independently rejects same-profile pending drafts under its existing request lock. Registration and renderer regressions failed before the fix; they verify the unchanged revision, successful key save with the original target/title, and subsequent knob save.

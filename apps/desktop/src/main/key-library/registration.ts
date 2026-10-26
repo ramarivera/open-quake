@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Effect, Fiber, Schema, Stream } from "effect";
+import { Effect, Fiber, Option, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import type { ActionError } from "../../../../../packages/device/src/actions/action-errors.js";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
@@ -323,13 +323,24 @@ export function registerKeyLibrary<R>(
 						case "preview":
 							yield* KeyEditing.preview(command.target, command.key);
 							break;
-						case "save-knob":
+						case "save-knob": {
+							const draft = yield* KeyEditing.pending;
+							if (
+								Option.isSome(draft) &&
+								draft.value.target.profileId === command.profileId
+							)
+								return {
+									_tag: "rejected",
+									reason:
+										"Save or cancel the selected key edit before saving knob settings.",
+								};
 							yield* saveProfileKnob(
 								command.profileId,
 								command.revision,
 								command.knob,
 							);
 							break;
+						}
 						case "save":
 							yield* KeyEditing.save(command.token);
 							break;

@@ -432,7 +432,12 @@ export function KeyEditor(): React.JSX.Element {
 						</select>
 					</Row>
 				</Group>
-				<KnobEditor key={profile.id} profile={profile} accept={accept} />
+				<KnobEditor
+					key={profile.id}
+					profile={profile}
+					accept={accept}
+					keyEditOpen={selection !== undefined || saving}
+				/>
 				<fieldset
 					className="keys-preview"
 					onKeyDown={(event) => {

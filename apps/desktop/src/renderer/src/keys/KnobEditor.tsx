@@ -17,8 +17,10 @@ import { editKnobSlot, knobAssignment, profileKnobDraft } from "./knob-draft";
 export function KnobEditor({
 	profile,
 	accept,
+	keyEditOpen = false,
 }: {
 	readonly profile: Profile;
+	readonly keyEditOpen?: boolean;
 	readonly accept: (envelope: typeof ProfileEnvelope.Encoded) => void;
 }): React.JSX.Element {
 	const [draft, setDraft] = useState(() => profileKnobDraft(profile));
@@ -132,7 +134,7 @@ export function KnobEditor({
 			},
 		});
 	const save = async () => {
-		if (pending.current) return;
+		if (pending.current || keyEditOpen) return;
 		pending.current = true;
 		setSaving(true);
 		setNotice("");
@@ -381,11 +383,19 @@ export function KnobEditor({
 								: "Unavailable. Choose a saved provider and model with credentials."}
 					</span>
 				</Row>
+				{keyEditOpen && (
+					<Row label="Key edit">
+						<span role="status">
+							Save your key changes, then close the key editor with Cancel
+							before saving knob settings.
+						</span>
+					</Row>
+				)}
 				<Row label="">
 					<button
 						type="button"
 						className="button-primary"
-						disabled={needsReview || (centerDirect && !ready)}
+						disabled={keyEditOpen || needsReview || (centerDirect && !ready)}
 						onClick={() => void save()}
 					>
 						{saving ? "Saving…" : "Save knob"}
