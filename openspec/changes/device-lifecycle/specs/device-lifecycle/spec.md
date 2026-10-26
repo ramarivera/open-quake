@@ -245,3 +245,8 @@ with stale host values. The SDK handle SHALL connect immediately, with its first
 - **WHEN** ten version requests get no reply but mic and luminance queries succeed
 - **THEN** refresh continues those queries, preserves the usable session, and readiness omits version
 - **AND** an actual write failure, disconnect or missing mandatory state still fails readiness
+
+#### Scenario: Refresh fails after a session replacement
+- **WHEN** an old readiness refresh fails or defects after its bus or hardware session is replaced
+- **THEN** the reader checks current bus, hardware identity and connection status first and returns offline
+- **AND** it never reports the obsolete session's failure to the replacement

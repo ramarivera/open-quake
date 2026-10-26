@@ -1,5 +1,6 @@
 import {
 	HardwareControls,
+	HardwareReplyTimeout,
 	type HardwareSession,
 	QuakeDevice,
 } from "@open-quake/device";
@@ -105,58 +106,72 @@ it.each([true, false])(
 		}
 	},
 );
-it("suppresses an old serial/session reply when its device is replaced during refresh", async () => {
-	let release = () => {};
-	const pending = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	let hardware: HardwareSession;
-	const first = { refresh: () => Effect.promise(() => pending) };
-	const second = { refresh: () => Effect.void };
-	// Build the full session by using a real conductor, then override just the delayed refresh boundary.
-	const scope = await Effect.runPromise(Scope.make());
-	try {
-		const real = await Effect.runPromise(
-			Scope.extend(
-				Effect.gen(function* () {
-					const fake = yield* makeFakeHardwareTransport({ serial: "A" });
-					const device = yield* QuakeDevice.pipe(
-						Effect.provide(
-							QuakeDevice.DefaultWithoutDependencies.pipe(
-								Layer.provide(fake.layer),
-							),
-						),
-					);
-					return yield* (yield* HardwareControls.pipe(
-						Effect.provide(HardwareControls.Default),
-					)).create(yield* device.connect(), { serial: "A", session: "old" });
-				}),
-				scope,
-			),
-		);
-		hardware = { ...real, ...first };
-		const bus: DeviceBus = {
-			on: () => () => {},
-			currentStatus: () => ({
-				source: "mock",
-				kind: "status",
-				state: "connected",
-			}),
-			hardware: () => hardware,
-		};
-		const read = createDeviceReadyReader({
-			bus: () => bus,
-			rotation: () => 0,
-			mock: true,
+it.each(["success", "failure", "defect"])(
+	"suppresses obsolete %s when its device is replaced during refresh",
+	async (outcome) => {
+		let release = () => {};
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
 		});
-		const old = read("A");
-		hardware = { ...real, ...second };
-		release();
-		expect(await old).toEqual({ _tag: "offline" });
-	} finally {
-		await Effect.runPromise(Scope.close(scope, Exit.void));
-	}
-});
+		let hardware: HardwareSession;
+		const first = {
+			refresh: () =>
+				Effect.promise(() => pending).pipe(
+					Effect.zipRight(
+						outcome === "failure"
+							? Effect.fail(new HardwareReplyTimeout())
+							: outcome === "defect"
+								? Effect.die("obsolete refresh defect")
+								: Effect.void,
+					),
+				),
+		};
+		const second = { refresh: () => Effect.void };
+		// Build the full session by using a real conductor, then override just the delayed refresh boundary.
+		const scope = await Effect.runPromise(Scope.make());
+		try {
+			const real = await Effect.runPromise(
+				Scope.extend(
+					Effect.gen(function* () {
+						const fake = yield* makeFakeHardwareTransport({ serial: "A" });
+						const device = yield* QuakeDevice.pipe(
+							Effect.provide(
+								QuakeDevice.DefaultWithoutDependencies.pipe(
+									Layer.provide(fake.layer),
+								),
+							),
+						);
+						return yield* (yield* HardwareControls.pipe(
+							Effect.provide(HardwareControls.Default),
+						)).create(yield* device.connect(), { serial: "A", session: "old" });
+					}),
+					scope,
+				),
+			);
+			hardware = { ...real, ...first };
+			const bus: DeviceBus = {
+				on: () => () => {},
+				currentStatus: () => ({
+					source: "mock",
+					kind: "status",
+					state: "connected",
+				}),
+				hardware: () => hardware,
+			};
+			const read = createDeviceReadyReader({
+				bus: () => bus,
+				rotation: () => 0,
+				mock: true,
+			});
+			const old = read("A");
+			hardware = { ...real, ...second };
+			release();
+			expect(await old).toEqual({ _tag: "offline" });
+		} finally {
+			await Effect.runPromise(Scope.close(scope, Exit.void));
+		}
+	},
+);
 
 it("SETTINGS-090 rejects foreign renderer documents and never defaults management to another serial", async () => {
 	vi.mocked(ipcMain.handle).mockClear();

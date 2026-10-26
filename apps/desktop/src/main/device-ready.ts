@@ -34,11 +34,11 @@ export function createDeviceReadyReader(options: {
 			);
 			syncing.set(hardware, refresh);
 		}
+		let failure: string | undefined;
 		try {
-			const failure = await refresh;
-			if (failure) return { _tag: "failure", code: failure };
+			failure = await refresh;
 		} catch (cause) {
-			return { _tag: "failure", code: new HardwareUnavailable(cause).code };
+			failure = new HardwareUnavailable(cause).code;
 		} finally {
 			if (syncing.get(hardware) === refresh) syncing.delete(hardware);
 		}
@@ -48,6 +48,7 @@ export function createDeviceReadyReader(options: {
 			bus.currentStatus()?.state !== "connected"
 		)
 			return { _tag: "offline" };
+		if (failure) return { _tag: "failure", code: failure };
 		const state = await Effect.runPromise(hardware.snapshot());
 		if (!state.available || state.serial !== serial) return { _tag: "offline" };
 		const rotation = options.rotation(serial);
