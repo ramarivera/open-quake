@@ -140,6 +140,18 @@ function ManagementSurface({
 		wasReady.current = ready;
 	}, []);
 	const content = useRef<HTMLElement>(null);
+	const [guideDestination, setGuideDestination] =
+		useState<ManagementPage | null>(null);
+	useEffect(() => {
+		if (guideDestination !== page) return;
+		setGuideDestination(null);
+		// Pages can replace their loading heading after async reads. The stable
+		// content container keeps keyboard focus through that replacement.
+		if (content.current) {
+			content.current.tabIndex = -1;
+			content.current.focus({ preventScroll: true });
+		}
+	}, [guideDestination, page]);
 	const bridge = window.openQuake;
 	const connection = describeConnection(quake.connection, bridge !== undefined);
 	useEffect(() => {
@@ -232,7 +244,14 @@ function ManagementSurface({
 					<HomeAssistantPage />
 				) : page === "settings" ? (
 					<SettingsPage controller={maintenance}>
-						<GeneralSettings setup={setup} onOpenSetup={() => open("setup")} />
+						<GeneralSettings
+							setup={setup}
+							onOpenSetup={() => open("setup")}
+							onOpenPage={(next) => {
+								setGuideDestination(next);
+								open(next);
+							}}
+						/>
 					</SettingsPage>
 				) : page === "setup" ? (
 					<SetupWizard

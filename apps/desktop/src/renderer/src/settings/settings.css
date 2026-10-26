@@ -335,3 +335,325 @@
 .general-error {
 	color: var(--oq-danger);
 }
+
+/* QUAKE guide: a reading dialog. Topic rail + one topic at a time; at narrow
+ * widths it becomes a full-window sheet with a topic picker. */
+.guide-dialog {
+	box-sizing: border-box;
+	width: min(780px, calc(100vw - 32px));
+	max-width: none;
+	height: min(620px, calc(100vh - 48px));
+	max-height: none;
+	padding: 0;
+	overflow: hidden;
+	color: var(--oq-text);
+	background: var(--oq-raised);
+	border: 1px solid var(--oq-hairline);
+	border-radius: var(--oq-radius-lg);
+	box-shadow: var(--oq-shadow-pop);
+}
+.guide-dialog::backdrop {
+	background: rgb(0 0 0 / 0.45);
+}
+@media (prefers-reduced-motion: no-preference) {
+	:root[data-motion="full"] .guide-dialog[open] {
+		animation: guide-enter 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+}
+@keyframes guide-enter {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+@media (max-width: 520px) {
+	.guide-dialog {
+		width: 100vw;
+		height: 100vh;
+		margin: 0;
+		border: 0;
+		border-radius: 0;
+	}
+}
+
+.guide-frame {
+	container: guide / inline-size;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+.guide-header {
+	display: flex;
+	flex: none;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--oq-space-3);
+	padding: var(--oq-space-4) var(--oq-space-3) var(--oq-space-3)
+		var(--oq-space-6);
+	border-bottom: 1px solid var(--oq-hairline);
+}
+.guide-heading {
+	min-width: 0;
+}
+.guide-heading h2 {
+	margin: 0;
+	font-size: var(--mc-font-subtitle, 15px);
+	font-weight: 600;
+	line-height: 1.3;
+}
+.guide-heading p {
+	margin: 2px 0 0;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta);
+}
+.guide-close {
+	flex: none;
+	width: 32px;
+	padding: 0;
+	color: var(--oq-text-muted);
+	font-size: 20px;
+	font-weight: 400;
+}
+
+.guide-layout {
+	display: grid;
+	flex: 1;
+	grid-template-columns: 188px minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
+	min-height: 0;
+}
+
+/* Topic rail: the current topic carries aria-current; the marker repeats it. */
+.guide-rail {
+	overflow-y: auto;
+	padding: var(--oq-space-3) var(--oq-space-2);
+	border-right: 1px solid var(--oq-hairline);
+}
+.guide-rail ol {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.guide-rail button {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 32px;
+	padding: 6px 10px;
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-body-sm);
+	text-align: left;
+	background: transparent;
+	border: 0;
+	border-radius: var(--oq-radius-md);
+}
+.guide-rail button:hover {
+	color: var(--oq-text);
+	background: var(--oq-hover);
+}
+.guide-rail button:focus-visible {
+	outline: none;
+	box-shadow: var(--oq-focus-ring);
+}
+.guide-rail button[aria-current="true"] {
+	color: var(--oq-text);
+	font-weight: 600;
+	background: var(--oq-accent-soft);
+}
+.guide-rail-index {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	font-size: var(--mc-font-caption);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	border: 1px solid var(--oq-border);
+	border-radius: 50%;
+}
+.guide-rail button[aria-current="true"] .guide-rail-index {
+	color: var(--oq-accent-text);
+	background: var(--oq-accent);
+	border-color: var(--oq-accent);
+}
+.guide-rail-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.guide-picker {
+	display: none;
+}
+.guide-picker-select {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 32px;
+}
+
+.guide-body {
+	overflow-y: auto;
+	padding: var(--oq-space-5) var(--oq-space-6) var(--oq-space-6);
+	overscroll-behavior: contain;
+}
+.guide-article {
+	max-width: 62ch;
+}
+.guide-progress {
+	margin: 0 0 var(--oq-space-1);
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta);
+	font-variant-numeric: tabular-nums;
+}
+.guide-article h3 {
+	margin: 0 0 var(--oq-space-3);
+	font-size: var(--mc-font-title-lg, 19px);
+	font-weight: 600;
+	line-height: 1.3;
+}
+.guide-article h3:focus {
+	outline: none;
+}
+.guide-text {
+	margin: 0 0 var(--oq-space-3);
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.55;
+}
+.guide-section {
+	margin-top: var(--oq-space-5);
+}
+.guide-section h4 {
+	margin: 0 0 var(--oq-space-2);
+	font-size: var(--mc-font-body-sm);
+	font-weight: 600;
+}
+.guide-list {
+	margin: 0;
+	padding: 0 0 0 18px;
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.55;
+}
+.guide-list li + li {
+	margin-top: var(--oq-space-2);
+}
+.guide-note {
+	margin-top: var(--oq-space-5);
+}
+.guide-note .callout {
+	line-height: 1.5;
+}
+
+/* Gestures: a term column beside its effect; stacks when narrow. */
+.guide-terms {
+	margin: var(--oq-space-2) 0 var(--oq-space-4);
+}
+.guide-term {
+	display: grid;
+	grid-template-columns: 136px minmax(0, 1fr);
+	gap: var(--oq-space-3);
+	padding: var(--oq-space-3) 0;
+	border-top: 1px solid var(--oq-hairline);
+}
+.guide-term:last-child {
+	border-bottom: 1px solid var(--oq-hairline);
+}
+.guide-term dt {
+	font-size: var(--mc-font-body-sm);
+	font-weight: 600;
+}
+.guide-term dd {
+	margin: 0;
+	font-size: var(--mc-font-body-sm);
+	line-height: 1.55;
+}
+
+.guide-places {
+	margin: var(--oq-space-2) 0 0;
+	padding: 0;
+	list-style: none;
+}
+.guide-places li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--oq-space-3);
+	min-height: 44px;
+	padding: var(--oq-space-2) 0;
+	border-top: 1px solid var(--oq-hairline);
+}
+.guide-places li:last-child {
+	border-bottom: 1px solid var(--oq-hairline);
+}
+.guide-place-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+.guide-place-name {
+	font-size: var(--mc-font-body-sm);
+	font-weight: 550;
+	overflow-wrap: anywhere;
+}
+.guide-place-detail {
+	color: var(--oq-text-muted);
+	font-size: var(--mc-font-meta);
+	overflow-wrap: anywhere;
+}
+.guide-places .mc-button {
+	flex: none;
+}
+
+.guide-footer {
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	gap: var(--oq-space-2);
+	justify-content: flex-end;
+	padding: var(--oq-space-3) var(--oq-space-4);
+	border-top: 1px solid var(--oq-hairline);
+}
+.guide-footer > :first-child:not(:last-child) {
+	margin-right: auto;
+}
+.guide-footer .mc-button {
+	min-width: 0;
+	white-space: normal;
+	text-align: center;
+}
+
+@container guide (max-width: 560px) {
+	.guide-layout {
+		display: flex;
+		flex-direction: column;
+	}
+	.guide-rail {
+		display: none;
+	}
+	.guide-picker {
+		display: block;
+		flex: none;
+		padding: var(--oq-space-3) var(--oq-space-4) 0;
+	}
+	.guide-body {
+		flex: 1;
+		min-height: 0;
+		padding: var(--oq-space-4) var(--oq-space-4) var(--oq-space-5);
+	}
+	.guide-header {
+		padding-left: var(--oq-space-4);
+	}
+	/* The picker already numbers the topic. */
+	.guide-progress {
+		display: none;
+	}
+	.guide-term {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 2px;
+	}
+}

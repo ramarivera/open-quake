@@ -21,6 +21,8 @@ Execution is tracked by open-quake-def under open-quake-lih.14. Section 5 is the
 - [ ] 3.1 Wire resumable local wizard, explicit desktop preview, idempotent profile selection and optional runtime skip; verify close/relaunch/replay, failed completion writes and offline completion through actual controls.
 - [ ] 3.2 Wire locale/general/AI/device settings and local QUAKE guide with support-state documentation; verify hot locale updates, numeric provider bounds, unavailable adapters and no ARIS-68 calibration call.
 
+  Local guide evidence (Opus 5.5, 2026-10-26): Settings › General opens a bundled, reopenable QUAKE guide with en/de copy (`settings/QuakeGuide.tsx`, `guide-content.ts`). Focused tests cover dictionary completeness and placeholder parity, offline rendering with no images or links, guide controls limited to reading and navigation, clamped topic movement, sidebar-label places, the optional navigation seam, availability without the settings service, and focus restoration. A hidden production-root Electron run used a mock device and isolated userData, with presentation and focus suppressed, at `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/settings-guide/run-2/`. It captured 33 screenshots at 1180x625 and 390x625 in Graphite, Midnight and Paper, in English and German. The dialog was modal, fit the window and had no horizontal overflow, unnamed controls or console errors. Focus moved to the topic heading when the guide opened, and Esc and × returned focus to Open guide. Reopening resumed at the last topic. Switching the language with the guide open re-rendered it in German, and the OS login item was unchanged. The hidden capture doesn't paint the modal backdrop, but its computed style was checked. Provider sampling bounds, unavailable adapters and lighting remain open (see design.md), so 3.2 stays unchecked. The parent now passes the shell navigation callback to GeneralSettings. A fresh hidden production-root run on the main-based integration captured 34 states, rechecked all guide states, language/focus/reopening, and clicked the guide link to Device › Keys. It confirms navigation closes the dialog and opens the destination, no horizontal overflow or unnamed controls, no console errors, and unchanged OS login settings. Evidence stays external at settings-guide/parent-run/. Parent checks pass all 52 settings tests, desktop typecheck, scoped Biome, strict validation and the production-root build.
+
 ## 4. Acceptance and handoff
 
 - [ ] 4.1 Run all settings-and-wizard scenarios through real consumers with fake OS/device/repository layers; verify pending/unverified device state is not shown as confirmed.
@@ -89,3 +91,15 @@ Combined verification passes 1,450 desktop tests, typecheck, production build an
 These controls do not prove physical HID swapping, real OS login-item mutation, providers, microphone capture or packaged attribution. The refreshed full-theme run at `settings-ui/review-full/shots/` also passes with 54 screenshots and 57 audits across Graphite, Midnight and Paper, desktop and narrow widths, English/German, normal initialized offline Hermes, simulated QUAKE and explicit preview completion, resume/replay and General controls. Reviewed delivery remains pending. Task 3.2 and the aggregate remain incomplete.
 
 PR50 current-head review found that the sidebar Resume setup action bypassed drawer dismissal. It now receives the shell's existing navigation callback, so it closes the narrow drawer and returns focus through the same path as ordinary navigation. A hidden production-root Electron run at `settings-ui/resume-drawer-HLbt7Q` opened Menu at 390x625, resumed setup, and confirmed the sidebar is closed and inert, the scrim is absent, focus is on Menu and setup is visible without horizontal overflow. The launcher used an isolated mock device and no microphone, provider, OS login change or foreground input. Shutdown emitted existing missing-handler messages for in-flight meetings/maintenance reads after disposal; this run proves the navigation path only.
+
+PR62 keyboard navigation review: guide destination links now move focus to the
+stable destination page container after navigation, including Settings-to-Settings
+links. The first attempted heading query found the mounted-but-hidden connection
+heading, so the actual-root check rejected it. The stable content container keeps
+focus through asynchronous page loads. A fresh hidden production-root run on
+reviewed main passes 35 states across all themes and widths, en/de, focus return,
+live locale, reopening, Device Keys navigation and same-page Settings navigation.
+No overflow, unnamed controls or console errors; OS login item unchanged. The
+external final evidence is settings-guide/final-run2/. The design note now
+describes the integrated callback. All52 settings tests, desktop typecheck, scoped
+Biome and strict validation pass. Task3.2 remains incomplete for its other gaps.
