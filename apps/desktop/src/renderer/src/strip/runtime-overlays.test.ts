@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
 	Effect,
 	Layer,
@@ -112,6 +114,12 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 			interactive: false,
 			previewSerial: "desktop-preview",
 		});
+	const css = document.createElement("style");
+	css.textContent = readFileSync(
+		resolve("src/renderer/src/strip/strip.css"),
+		"utf8",
+	);
+	document.head.append(css);
 	const view = await mount(render());
 	const chip = () => view.container.querySelector('[data-kind="countdown"]');
 	try {
@@ -121,6 +129,9 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 			);
 		});
 		expect(chip()?.textContent).toBe("2");
+		const countdown = chip();
+		if (!countdown) throw new Error("Missing countdown");
+		expect(getComputedStyle(countdown).backgroundColor).toBe("#1e2124");
 		expect(
 			view.container.querySelector('[data-key-code="1,2"] .strip-key-state'),
 		).toBeNull();
@@ -181,6 +192,12 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 				.querySelector('[data-key-code="1,2"] [role="progressbar"]')
 				?.getAttribute("aria-valuenow"),
 		).toBe("42");
+		const progress = view.container.querySelector('[role="progressbar"]');
+		if (!progress) throw new Error("Missing progress");
+		expect(getComputedStyle(progress).height).toBe("6px");
+		expect(progress.firstElementChild?.getAttribute("style")).toBe(
+			"width: 42%;",
+		);
 		expect(
 			view.container.querySelector(
 				'[data-key-code="1,2"] [data-kind="invalid"]',
@@ -214,5 +231,6 @@ it("WIDGETS-107: real timer feedback expires, stays scoped, and link loss clears
 	} finally {
 		await view.unmount();
 		await runtime.dispose();
+		css.remove();
 	}
 });
