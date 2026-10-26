@@ -69,13 +69,19 @@ const count = (markup: string, needle: string): number =>
 
 describe("strip screen", () => {
 	it("keeps actual catalog geometry stable across eight locales and legacy metadata", () => {
+		// Build each real localized catalog once and reuse it for both presets.
+		const locales = ["en", "zh", "de", "fr", "it", "es", "ja", "ko"] as const;
+		const catalogs = locales.map((locale) => ({
+			locale,
+			profiles: builtinProfiles("darwin", locale),
+		}));
+		const english = catalogs.find((catalog) => catalog.locale === "en");
+		if (!english) throw new Error("Missing English catalog fixture");
 		for (const [id, theme] of [
 			["1-1", "meetingAssistantTheme"],
 			["1-3", "systemInfoTheme"],
 		] as const) {
-			const source = builtinProfiles("darwin").find(
-				(profile) => profile.id === id,
-			);
+			const source = english.profiles.find((profile) => profile.id === id);
 			if (!source) throw new Error("Missing catalog fixture");
 			const geometry = (profile: typeof source) =>
 				stripLayout(profile, profile.pages[0]).tiles.map((tile) => ({
@@ -84,19 +90,8 @@ describe("strip screen", () => {
 					cellTheme: tile.cellTheme,
 				}));
 			const baseline = geometry(source);
-			for (const locale of [
-				"en",
-				"zh",
-				"de",
-				"fr",
-				"it",
-				"es",
-				"ja",
-				"ko",
-			] as const) {
-				const localized = builtinProfiles("darwin", locale).find(
-					(profile) => profile.id === id,
-				);
+			for (const { locale, profiles } of catalogs) {
+				const localized = profiles.find((profile) => profile.id === id);
 				if (!localized) throw new Error("Missing localized fixture");
 				const legacy = {
 					...source,

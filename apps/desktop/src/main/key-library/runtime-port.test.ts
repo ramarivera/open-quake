@@ -1,6 +1,14 @@
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
-import { Deferred, Effect, Layer, Schema } from "effect";
+import {
+	Deferred,
+	Effect,
+	Fiber,
+	Layer,
+	Schema,
+	TestClock,
+	TestContext,
+} from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
 import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
@@ -442,9 +450,11 @@ it.each([false, true])(
 					yield* Effect.gen(function* () {
 						const runtime = yield* KeyRuntime;
 						if (lostAck) {
-							const result = yield* Effect.either(
-								runtime.activate("device", "1,1", "down"),
-							);
+							const pending = yield* runtime
+								.activate("device", "1,1", "down")
+								.pipe(Effect.either, Effect.fork);
+							yield* TestClock.adjust(3000);
+							const result = yield* Fiber.join(pending);
 							expect(result._tag).toBe("Left");
 							if (result._tag === "Left")
 								expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
@@ -482,7 +492,7 @@ it.each([false, true])(
 						),
 					);
 				}),
-			),
+			).pipe(Effect.provide(TestContext.TestContext)),
 		);
 	},
 );

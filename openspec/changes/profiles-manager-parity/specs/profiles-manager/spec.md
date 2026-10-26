@@ -21,6 +21,12 @@ The app SHALL install Discord, MeetAI, Vivid, Quick, SysView, AI Chat, Music, Cl
 - **WHEN** MeetAI or SysView is previewed or captured in any of the eight locales, including from an older installed catalog
 - **THEN** stable resource identity preserves its strip theme and tile geometry
 
+#### Scenario: Deterministic desktop consumer regressions
+- **GIVEN** thumbnail, backup, localized geometry and agent consumer tests run on a loaded host
+- **WHEN** they exercise cache cleanup, corrupt cache recovery, owned artwork readiness, encrypted archive restoration or preset geometry
+- **THEN** they synchronize on explicit completion signals and controlled clocks, use only the fixture data needed for the behavior, and retain real filesystem and authenticated encryption coverage
+- **AND** all eight locales retain their geometry assertions without repeated catalog reconstruction, timeout increases or test retries. Regression bead `open-quake-lih.9.13`.
+
 #### Scenario: Fresh macOS preview
 - **WHEN** macOS has no saved preview selection, or its saved selection references hidden Discord
 - **THEN** the strip renders the first visible profile, matching the manager, and valid visible saved selections remain active

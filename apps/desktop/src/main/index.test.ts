@@ -1335,6 +1335,7 @@ describe("desktop main with the real device service and fake HID", () => {
 
 	beforeEach(async () => {
 		vi.resetModules();
+		vi.useFakeTimers();
 		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "");
 		vi.stubEnv("ELECTRON_RENDERER_URL", "http://localhost:5173");
 		fake = await Effect.runPromise(makeFakeHidTransport());
@@ -1346,8 +1347,13 @@ describe("desktop main with the real device service and fake HID", () => {
 	});
 
 	afterEach(async () => {
-		appEvent("before-quit");
-		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+		const priorQuits = electron.app.quit.mock.calls.length;
+		const event = appEvent("before-quit");
+		if (event.preventDefault.mock.calls.length > 0)
+			await vi.waitFor(() =>
+				expect(electron.app.quit.mock.calls.length).toBeGreaterThan(priorQuits),
+			);
+		vi.useRealTimers();
 		vi.unstubAllEnvs();
 	});
 
@@ -2073,6 +2079,33 @@ describe("desktop main with the real device service and fake HID", () => {
 });
 
 describe("single-instance startup and release policy", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		electron.app.requestSingleInstanceLock.mockReset().mockReturnValue(true);
+	});
+
+	afterEach(async () => {
+		try {
+			// Lock refusal never registers shutdown. Successful startup must finish it.
+			if (
+				electron.app.on.mock.calls.some(([event]) => event === "before-quit")
+			) {
+				const priorQuits = electron.app.quit.mock.calls.length;
+				const event = appEvent("before-quit");
+				if (event.preventDefault.mock.calls.length > 0)
+					await vi.waitFor(() =>
+						expect(electron.app.quit.mock.calls.length).toBeGreaterThan(
+							priorQuits,
+						),
+					);
+			}
+		} finally {
+			electron.app.requestSingleInstanceLock.mockReset().mockReturnValue(true);
+			electron.app.isPackaged = false;
+			vi.useRealTimers();
+			vi.unstubAllEnvs();
+		}
+	});
 	it("MAIN-119 prepares Chromium and privileged protocols before the lock, readiness and windows", async () => {
 		vi.resetModules();
 		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
@@ -2148,10 +2181,6 @@ describe("single-instance startup and release policy", () => {
 			} else expect(reopened).toBe(management);
 			if (state === "minimized")
 				expect(management.restore).toHaveBeenCalledOnce();
-			appEvent("before-quit");
-			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
-			electron.app.isPackaged = false;
-			vi.unstubAllEnvs();
 		},
 	);
 });

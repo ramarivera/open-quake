@@ -1,7 +1,14 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Deferred, Effect, Layer, Redacted } from "effect";
+import {
+	Deferred,
+	Effect,
+	Layer,
+	Redacted,
+	TestClock,
+	TestContext,
+} from "effect";
 import { describe, expect, it, vi } from "vitest";
 import {
 	SpeechHttp,
@@ -42,7 +49,7 @@ async function fixture(synthesisFails = false) {
 	const diagnostics = createDesktopDiagnostics({
 		directory: join(directory, "diagnostics"),
 	});
-	const background = makeDesktopRuntime(Layer.empty, diagnostics);
+	const background = makeDesktopRuntime(TestContext.TestContext, diagnostics);
 	const events: VoiceSurfaceEvent[] = [];
 	const reported: string[] = [];
 	const speechRequests: { input: string }[] = [];
@@ -227,6 +234,8 @@ async function fixture(synthesisFails = false) {
 			.join("");
 	return {
 		directory,
+		advance: (millis: number) =>
+			background.runPromise(TestClock.adjust(millis)),
 		closeVoice: () => voice.dispose(),
 		events,
 		reported,
@@ -354,9 +363,10 @@ describe("production direct chat to ordered speech", () => {
 			f.delta("pending fragment");
 			await vi.waitFor(() => expect(f.answer()).toBe("pending fragment"));
 			expect(f.speechRequests).toHaveLength(0);
-			await vi.waitFor(() => expect(f.playbacks).toHaveLength(1), {
-				timeout: 4000,
-			});
+			await f.advance(1999);
+			expect(f.playbacks).toHaveLength(0);
+			await f.advance(1);
+			await vi.waitFor(() => expect(f.playbacks).toHaveLength(1));
 			expect(f.ended()).toBe(false);
 			expect(f.speechRequests.map((r) => r.input)).toEqual([
 				"pending fragment",
