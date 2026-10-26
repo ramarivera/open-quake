@@ -1433,3 +1433,29 @@ it.scoped(
 			]);
 		}),
 );
+
+it.scoped(
+	"does not let source ASR consume translation history under a long source stream",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			const live = yield* makeMeetingTranslation(s.transport, f.resolve);
+			yield* live.prepareTranslation(f.request.config);
+			for (let i = 0; i < 205; i++)
+				yield* Queue.offer(s.queue, {
+					type: "conversation.item.input_audio_transcription.completed",
+					item_id: `source-${i}`,
+					transcript: "source words",
+				});
+			yield* Queue.offer(s.queue, {
+				type: "response.text.done",
+				item_id: "target",
+				text: "translated words",
+			});
+			yield* Effect.yieldNow();
+			expect(
+				yield* live.translate(f.request.config, new Uint8Array(14400)),
+			).toMatchObject([{ id: "0:target", text: "translated words" }]);
+		}),
+);
