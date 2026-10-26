@@ -51,11 +51,13 @@ import {
 	MEETING_SNAPSHOT,
 } from "../../shared/meeting-bridge";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
+import { agentRequestAllowed } from "../agents/controller";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { createCapturePort } from "./capture-port";
 import { writePrivateFile } from "./private-files";
+import { liveMeetingProviders, type MeetingProviderOptions } from "./provider";
 import { meetingStorage } from "./storage";
 
 /** Explicit mock only. No live request or real capture is made in mock mode. */
@@ -104,8 +106,12 @@ export function prepareMeetings(
 		hardware: () => HardwareSession | undefined;
 		mock: boolean;
 		renderer?: string;
+		management?: () =>
+			| { readonly webContents: { readonly id: number } }
+			| undefined;
 		ffmpeg?: string;
 		adapter?: MeetingAdapter;
+		provider?: MeetingProviderOptions;
 		serial?: () => string;
 		publishVoice?: (event: VoiceSurfaceEvent) => Promise<void>;
 	},
@@ -210,11 +216,19 @@ export function prepareMeetings(
 	);
 	const supplied =
 		options.adapter ?? (options.mock ? mockMeetingAdapter : undefined);
+	const live =
+		!supplied && options.provider
+			? liveMeetingProviders(
+					root,
+					options.ffmpeg ?? process.env.OPEN_QUAKE_FFMPEG ?? "ffmpeg",
+					options.provider,
+				)
+			: undefined;
 	const providers = supplied
 		? MeetingProvider.Default.pipe(
 				Layer.provide(Layer.succeed(AiMeetingAdapter, supplied)),
 			)
-		: MeetingProvider.Default;
+		: (live?.layer ?? MeetingProvider.Default);
 
 	const prepared = prepareDesktopModule(
 		MeetingService.DefaultWithoutDependencies.pipe(
@@ -284,16 +298,19 @@ export function prepareMeetings(
 				}
 			};
 			const ready = runtime.runPromiseExit(
-				MeetingService.configure(
-					options.mock
-						? defaultMeetingConfig
-						: {
-								...defaultMeetingConfig,
-								asrProvider: "dashscope",
-								minutesModel: "qwen3.6-flash",
-							},
-					options.mock,
-				),
+				Effect.gen(function* () {
+					const saved = live ? yield* live.initialConfig : undefined;
+					yield* MeetingService.configure(
+						options.mock
+							? defaultMeetingConfig
+							: (saved ?? {
+									...defaultMeetingConfig,
+									asrProvider: "dashscope",
+									minutesModel: "qwen3.6-flash",
+								}),
+						options.mock,
+					);
+				}),
 			);
 			const published = runtime.runFork(
 				MeetingService.subscribe().pipe(
@@ -367,6 +384,14 @@ export function prepareMeetings(
 						case "clear":
 							yield* MeetingService.clear();
 							break;
+						case "remoteFiles": {
+							const ids = yield* MeetingService.files(
+								command.id,
+								command.operation,
+								command.fileId,
+							);
+							return encode({ _tag: "remoteFiles", ids });
+						}
 						case "reveal":
 						case "export": {
 							const record = (yield* MeetingService.snapshot()).records.find(
@@ -429,6 +454,19 @@ export function prepareMeetings(
 						return failure(meetingError("Invalid"));
 					const decoded = decodeMeetingCommand(value);
 					if (Either.isLeft(decoded)) return failure(meetingError("Invalid"));
+					if (
+						decoded.right._tag === "remoteFiles" &&
+						!agentRequestAllowed(
+							{
+								senderId: event.sender.id,
+								frameURL: event.senderFrame?.url ?? "",
+								mainFrame: event.senderFrame === event.sender.mainFrame,
+							},
+							options.management?.()?.webContents.id,
+							renderer,
+						)
+					)
+						return failure(meetingError("Invalid"));
 					const initialized = await ready;
 					if (initialized._tag === "Failure") {
 						const error = Cause.failureOption(initialized.cause);

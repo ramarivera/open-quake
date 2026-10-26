@@ -386,3 +386,27 @@ for (const reason of ["QUAKE.APP.UPDATE_FAILED", ""]) {
 		expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1);
 	});
 }
+
+it("SETTINGS-005 marks both destructive reset actions with the shared danger treatment and preserves Cancel", async () => {
+	const c = controller(view());
+	const { host } = await render(c, "settings");
+	const reset = host.querySelector<HTMLButtonElement>(
+		".maintenance-danger button",
+	);
+	if (!reset) throw new Error("Reset entry missing");
+	expect(reset.dataset.variant).toBe("danger");
+	await click(reset);
+	const dialog = query(host, "dialog", HTMLDialogElement);
+	const destructive = dialog.querySelector<HTMLButtonElement>(
+		'[data-variant="danger"]',
+	);
+	if (!destructive) throw new Error("Destructive confirmation missing");
+	expect(destructive.textContent).toContain("Without Backup");
+	const cancel = [...dialog.querySelectorAll("button")].find((item) =>
+		item.textContent?.includes("Cancel"),
+	);
+	if (!cancel) throw new Error("Cancel missing");
+	await click(cancel);
+	expect(host.querySelector("dialog")).toBeNull();
+	expect(c.request).not.toHaveBeenCalled();
+});

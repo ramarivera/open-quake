@@ -6,11 +6,13 @@ import type { ProfileLocale } from "../../../../../packages/device/src/profiles/
 export const profileThumbnailKey = (
 	profile: Profile,
 	locale: ProfileLocale,
+	showEmptyGridDashedBorder = true,
 ): string =>
 	createHash("sha256")
 		.update(
 			JSON.stringify([
-				"emoji-assets-v2",
+				"strip-borders-v3",
+				showEmptyGridDashedBorder,
 				locale,
 				Schema.encodeSync(Profile)(profile),
 			]),

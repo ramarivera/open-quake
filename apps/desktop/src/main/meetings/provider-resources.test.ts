@@ -1,0 +1,71 @@
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Effect, Either, Stream } from "effect";
+import { expect, it, vi } from "vitest";
+
+const converter = vi.hoisted(() => ({ failure: "corrupt", attempts: 0 }));
+vi.mock("node:child_process", async () => {
+	const { EventEmitter } = await import("node:events");
+	return {
+		spawn: vi.fn((_executable: string, args: string[]) => {
+			const child = new EventEmitter();
+			converter.attempts++;
+			queueMicrotask(() => {
+				if (converter.failure === "corrupt") child.emit("close", 1);
+				else if (converter.attempts === 1 || converter.failure !== "EAGAIN")
+					child.emit(
+						"error",
+						Object.assign(new Error("fake spawn failure"), {
+							code: converter.failure,
+						}),
+					);
+				else {
+					const output = args.at(-1);
+					if (!output) throw new Error("Missing output");
+					void writeFile(output, new Uint8Array([1, 2])).then(
+						() => child.emit("close", 0),
+						(error) => child.emit("error", error),
+					);
+				}
+			});
+			return child;
+		}),
+	};
+});
+
+import { meetingDirectory } from "./private-files";
+import { meetingResources } from "./provider-resources";
+
+it.each(["corrupt", "ENOENT", "EACCES", "EAGAIN"])(
+	"retries only transient conversion failures: %s",
+	async (failure) => {
+		converter.failure = failure;
+		converter.attempts = 0;
+		const root = await mkdtemp(join(tmpdir(), "oq-conversion-retry-"));
+		const id = "00000000-0000-4000-8000-000000000111";
+		const directory = await meetingDirectory(root, id);
+		try {
+			await writeFile(join(directory, "final_recording.mp3"), "fake audio");
+			const result = await Effect.runPromise(
+				Effect.either(meetingResources(root, "fake-ffmpeg").pcm(id)),
+			);
+			if (failure === "EAGAIN") {
+				expect(converter.attempts).toBe(2);
+				if (Either.isLeft(result)) throw result.left;
+				expect(
+					Array.from(
+						await Effect.runPromise(Stream.runCollect(result.right.frames)),
+					),
+				).toEqual([new Uint8Array([1, 2])]);
+				await Effect.runPromise(result.right.release);
+			} else {
+				expect(converter.attempts).toBe(1);
+				expect(Either.isLeft(result)).toBe(true);
+			}
+			expect(await readdir(directory)).toEqual(["final_recording.mp3"]);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+);

@@ -20,6 +20,19 @@ export type Activation = {
 };
 export function managementActivation(input: string): Activation | null {
 	const value = input.toLowerCase();
+	if (
+		[
+			"clawdashboard",
+			"clawinstall",
+			"openclaw-dashboard",
+			"openclaw-install",
+		].includes(value)
+	)
+		return { page: "agents", agentTab: "sessions" };
+	if (["general", "settings-general", "1"].includes(value))
+		return { page: "settings" };
+	if (["device", "settings-device", "2"].includes(value))
+		return { page: "controls" };
 	if (value === "openclaw-ai") return { page: "agents", agentTab: "ai" };
 	if (["agents", "openclaw-agents"].includes(value))
 		return { page: "agents", agentTab: "agents" };

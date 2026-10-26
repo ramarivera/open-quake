@@ -19,6 +19,7 @@ import {
 	appendTranslation,
 	COOLDOWN_MS,
 	duration,
+	transcriptText,
 } from "./meeting-invariants.js";
 import {
 	MeetingCapture,
@@ -372,8 +373,14 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 										case "liveAudioTranslate":
 											if (state.translating) yield* stopTranslation();
 											else {
-												yield* provider.requireTranslation();
-												yield* capture.startTranslation(yield* Ref.get(config));
+												yield* provider.requireTranslation(
+													yield* Ref.get(config),
+												);
+												yield* capture
+													.startTranslation(yield* Ref.get(config))
+													.pipe(
+														Effect.onError(() => provider.stopTranslation()),
+													);
 												yield* Ref.update(
 													ephemeral,
 													(
@@ -416,12 +423,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				const record = yield* lock.withPermits(1)(
 					Effect.gen(function* () {
 						const current = yield* find(id);
-						if (
-							current.state === "cancelled" ||
-							current.state === "recording" ||
-							!current.transcript.length
-						)
+						if (current.state === "cancelled" || current.state === "recording")
 							return yield* meetingError("Invalid");
+						if (!current.transcript.length)
+							return yield* meetingError("TranscriptMissing");
 						yield* patchWork(id, (r) => ({
 							...r,
 							state: "processing",
@@ -513,16 +518,50 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			);
 			return {
 				snapshot,
+				files: Effect.fn("MeetingService.files")(function* (
+					id: MeetingId,
+					operation: "list" | "upload" | "delete",
+					fileId?: string,
+				) {
+					const record = yield* find(id);
+					if (record.state === "processing" || record.state === "recording")
+						return yield* meetingError("Invalid");
+					if (
+						operation === "upload" &&
+						!record.transcript.some((s) => s.text.trim())
+					)
+						return yield* meetingError("TranscriptMissing");
+					return yield* provider.files(
+						id,
+						operation,
+						operation === "upload"
+							? transcriptText(record.transcript)
+							: (fileId ?? ""),
+					);
+				}, lock.withPermits(1)),
 				subscribe: Effect.fn("MeetingService.subscribe")(() =>
 					Effect.succeed(Stream.fromPubSub(changes)),
 				),
 				action,
 				configure: Effect.fn("MeetingService.configure")(
 					(next: MeetingConfig, mock = false) =>
-						Ref.set(config, next).pipe(
-							Effect.zipRight(Ref.update(ephemeral, (s) => ({ ...s, mock }))),
-							Effect.zipRight(publish()),
-						),
+						Effect.gen(function* () {
+							const previous = yield* Ref.get(config);
+							if (
+								previous.profileId !== next.profileId ||
+								previous.targetLanguage !== next.targetLanguage ||
+								previous.translationModel !== next.translationModel
+							) {
+								yield* stopTranslation();
+								yield* Ref.update(ephemeral, (s) => ({
+									...s,
+									translations: [],
+								}));
+							}
+							yield* Ref.set(config, next);
+							yield* Ref.update(ephemeral, (s) => ({ ...s, mock }));
+							yield* publish();
+						}),
 				),
 				process: Effect.fn("MeetingService.process")(
 					(id: MeetingId): Effect.Effect<void, MeetingError> =>
@@ -667,10 +706,13 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					pcm: Uint8Array,
 				): Effect.fn.Return<void, MeetingError> {
 					if (!(yield* Ref.get(ephemeral)).translating) return;
-					const updates = yield* provider.translate(
-						yield* Ref.get(config),
-						pcm,
-					);
+					const selected = yield* Ref.get(config);
+					const updates = yield* provider.translate(selected, pcm);
+					if (
+						(yield* Ref.get(config)) !== selected ||
+						!(yield* Ref.get(ephemeral)).translating
+					)
+						return;
 					for (const update of updates)
 						yield* Ref.update(ephemeral, (s) => ({
 							...s,
@@ -739,6 +781,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						)
 					)
 						yield* stopTranslation();
+					for (const record of records) yield* provider.cleanup(record.id);
 					yield* repo.remove(records.map((r) => r.id));
 					yield* publish();
 				}, lock.withPermits(1)),

@@ -191,6 +191,7 @@ export function SettingsPage({
 						<button
 							type="button"
 							className="button"
+							data-variant="danger"
 							disabled={c.busy || running}
 							onClick={() => setReset(true)}
 						>
@@ -264,7 +265,8 @@ function ResetDialog({
 				</button>
 				<button
 					type="button"
-					className="button danger"
+					className="button"
+					data-variant="danger"
 					onClick={() => onReset(false)}
 				>
 					{strings.clearAllDataWithoutBackup}

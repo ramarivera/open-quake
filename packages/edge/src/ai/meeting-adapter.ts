@@ -21,6 +21,26 @@ export type MeetingAsrResult =
 	| { readonly status: "complete"; readonly segments: readonly Segment[] };
 /** Provider-owned port. Credentials, upload policy and native SDK types stay behind it. */
 export interface MeetingAdapter {
+	readonly prepare?: (
+		config: MeetingConfig,
+	) => Effect.Effect<void, MeetingError>;
+	readonly cleanup?: (ref: string) => Effect.Effect<void, MeetingError>;
+	readonly files?: {
+		readonly list: (
+			ref: string,
+		) => Effect.Effect<readonly Record<string, unknown>[], MeetingError>;
+		readonly upload: (
+			ref: string,
+			text: string,
+		) => Effect.Effect<string, MeetingError>;
+		readonly remove: (
+			ref: string,
+			id: string,
+		) => Effect.Effect<void, MeetingError>;
+	};
+	readonly prepareTranslation?: (
+		config: MeetingConfig,
+	) => Effect.Effect<void, MeetingError>;
 	readonly submit: (
 		request: MeetingAsrRequest,
 	) => Effect.Effect<string, MeetingError>;
@@ -61,7 +81,11 @@ export const transcribeMeeting = Effect.fn(
 						diarization: true,
 						expiresInMs: asrPlan.uploadExpiryMs,
 					})
-					.pipe(Effect.tap(() => progress(2, 2))),
+					.pipe(
+						Effect.interruptible,
+						Effect.onInterrupt(() => port.cancel(audioRef)),
+						Effect.tap(() => progress(2, 2)),
+					),
 				(task) =>
 					Effect.gen(function* () {
 						yield* progress(3, 1);
@@ -76,7 +100,7 @@ export const transcribeMeeting = Effect.fn(
 									),
 								);
 								if (!segments.some((s) => s.text.trim()))
-									return yield* meetingError("TranscriptionFailed");
+									return yield* meetingError("NoValidSpeech");
 								if (segments.some((s) => s.endMs < s.startMs))
 									return yield* meetingError("TranscriptionFailed");
 								yield* progress(3, 2);

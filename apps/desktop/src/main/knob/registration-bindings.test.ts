@@ -1,7 +1,13 @@
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Option, Schema } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import type { KnobModelContext } from "../../../../../packages/device/src/knob/model/contracts.js";
+import { selectorProfiles } from "../../../../../packages/device/src/knob/model/invariants.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
+import {
+	createEmptyProfileKey,
+	encodeProfileEnvelope,
+	ProfileEnvelope,
+} from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { desktopKnobAdapters } from "./desktop-adapters";
 import { makeKnobRuntime, registerKnobRuntime } from "./index";
 
 vi.mock("electron", () => ({
@@ -19,44 +25,150 @@ const create = () =>
 		warmThumbnails: (p) => Effect.succeed(p),
 	});
 describe("knob registration binding lifecycle", () => {
-	it("invalidates a ready catalog when the content/locale fingerprint changes, preserving identical commits", async () => {
-		const runtime = create();
-		const context = (await runtime.runPromise(KnobModel.snapshot())).context;
-		let version = "initial";
-		const registration = registerKnobRuntime(
-			runtime,
-			Effect.succeed(context),
-			() => undefined,
-			() => [],
-			undefined,
-			{ readVolume: Effect.never, contextVersion: () => version },
-		);
-		try {
-			await registration.refresh();
-			const ready: KnobModelContext = {
-				...context,
-				profiles: context.profiles.map((p) => ({
-					...p,
-					thumbnail: { _tag: "ready", dataUrl: "data:image/png;base64,YWJj" },
-				})),
-			};
-			await runtime.runPromise(KnobModel.configure(ready));
-			await registration.refresh();
-			expect(
-				(await runtime.runPromise(KnobModel.snapshot())).context.profiles[0]
-					?.thumbnail._tag,
-			).toBe("ready");
-			version = "inactive-profile-edited";
-			await registration.refresh();
-			expect(
-				(await runtime.runPromise(KnobModel.snapshot())).context.profiles.every(
-					(p) => p.thumbnail._tag === "missing",
-				),
-			).toBe(true);
-		} finally {
-			await registration.dispose();
-		}
-	});
+	for (const mutation of ["add", "rename", "reorder", "delete"] as const)
+		for (const mode of ["picker", "focus", "volume"] as const)
+			it(`${mutation} through production registration preserves ${mode} and unchanged thumbnails`, async () => {
+				const key = createEmptyProfileKey("1,1");
+				const base = Schema.decodeUnknownSync(ProfileEnvelope)({
+					schemaVersion: 1,
+					profiles: ["cold", "active", "inactive", "third"].map((id) => ({
+						id,
+						name: id,
+						revision: 0,
+						pages: [{ id: `${id}-page`, keys: [] }],
+					})),
+					activeByDevice: {
+						"desktop-preview": { profileId: "active", pageId: "active-page" },
+					},
+				});
+				const active = base.profiles[1];
+				if (!active) throw new Error("Missing active profile");
+				const control = {
+					...key,
+					childrenName: Option.some("control"),
+					config: {
+						...key.config,
+						type: mode === "volume" ? "playAudio" : "vol",
+						supportKnob: true,
+					},
+				};
+				let saved = Schema.validateSync(ProfileEnvelope)({
+					...base,
+					profiles: base.profiles.map((p) =>
+						p.id === active.id
+							? { ...active, pages: [{ ...active.pages[0], keys: [control] }] }
+							: p,
+					),
+				});
+				const write = vi.fn(async () => {});
+				const adapters = desktopKnobAdapters(
+					"/unused",
+					{
+						readVolume: Effect.succeed({ level: 50, muted: false }),
+						writeVolume: () => Effect.void,
+					},
+					{ read: async () => encodeProfileEnvelope(saved), write },
+				);
+				const runtime = makeKnobRuntime(adapters.ports);
+				const registration = registerKnobRuntime(
+					runtime,
+					adapters.load,
+					() => undefined,
+					() => [],
+					undefined,
+					{
+						readVolume: Effect.never,
+						contextVersion: adapters.contextVersion,
+					},
+				);
+				try {
+					await registration.refresh();
+					const context = (await runtime.runPromise(KnobModel.snapshot()))
+						.context;
+					await runtime.runPromise(
+						KnobModel.configure({
+							...context,
+							profiles: context.profiles.map((p) => ({
+								...p,
+								thumbnail:
+									p.id === "cold"
+										? { _tag: "missing" }
+										: {
+												_tag: "ready",
+												dataUrl: "data:image/png;base64,YWJj",
+											},
+							})),
+						}),
+					);
+					const send = (event: object) =>
+						runtime.runPromise(
+							KnobModel.dispatch({
+								sessionId: context.session.sessionId,
+								...event,
+							}),
+						);
+					if (mode === "picker")
+						await registration.onDevice({
+							source: "mock",
+							kind: "rotate",
+							direction: 1,
+						});
+					if (mode === "focus") await send({ _tag: "TapTile", keyCode: "1,1" });
+					if (mode === "volume") {
+						await send({ _tag: "ToggleVolume" });
+						await vi.waitFor(async () =>
+							expect(
+								(await runtime.runPromise(KnobModel.snapshot())).volume.phase,
+							).toBe("active"),
+						);
+					}
+					const before = await runtime.runPromise(KnobModel.snapshot());
+					const version = adapters.contextVersion();
+					const third = saved.profiles.find((p) => p.id === "third");
+					if (!third) throw new Error("Missing third profile");
+					const profiles =
+						mutation === "add"
+							? [...saved.profiles, { ...third, id: "added", name: "Added" }]
+							: mutation === "rename"
+								? saved.profiles.map((p) =>
+										p.id === "inactive" ? { ...p, name: "Renamed" } : p,
+									)
+								: mutation === "reorder"
+									? [...saved.profiles].reverse()
+									: saved.profiles.filter((p) => p.id !== "inactive");
+					saved = Schema.validateSync(ProfileEnvelope)({ ...saved, profiles });
+					await registration.refresh();
+					const after = await runtime.runPromise(KnobModel.snapshot());
+					expect(adapters.contextVersion()).not.toBe(version);
+					expect(after.context.profiles.map((p) => p.id)).toEqual(
+						profiles.map((p) => p.id),
+					);
+					expect(after.context.session.profileId).toBe("active");
+					expect(
+						after.context.profiles.find((p) => p.id === "active")?.thumbnail,
+					).toEqual(
+						before.context.profiles.find((p) => p.id === "active")?.thumbnail,
+					);
+					if (mode === "picker") {
+						expect(after.selector.mode).toBe("picker");
+						expect(selectorProfiles(after)[after.selector.index]?.id).toBe(
+							"active",
+						);
+					} else if (mode === "focus")
+						expect(after.focus).toEqual(before.focus);
+					else expect(after.volume.phase).toBe("active");
+					if (mutation === "rename")
+						expect(
+							after.context.profiles.find((p) => p.id === "inactive"),
+						).toMatchObject({
+							name: "Renamed",
+							thumbnail: { _tag: "missing" },
+						});
+					expect(write).not.toHaveBeenCalled();
+				} finally {
+					await registration.dispose();
+				}
+			});
 	it("interrupts an in-flight observation when its registration is disposed", async () => {
 		const runtime = create();
 		const initial = (await runtime.runPromise(KnobModel.snapshot())).context;

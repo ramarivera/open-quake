@@ -15,7 +15,11 @@ import {
 } from "../../../../packages/device/src/profiles/profile-contracts";
 import lifecycleStrings from "../shared/lifecycle-strings.json";
 import { APP_LANGUAGES, LOCALE_REQUEST } from "../shared/locale";
-import { MANAGEMENT_ACTIVATE } from "../shared/management";
+import {
+	MANAGEMENT_ACTIVATE,
+	MANAGEMENT_EXTERNAL,
+	MANAGEMENT_READY,
+} from "../shared/management";
 import { registerAgentHttp } from "./agent-http";
 import { makeDesktopRuntime } from "./diagnostics/runtime";
 import { registerIntegrations } from "./integrations";
@@ -53,8 +57,11 @@ const electron = vi.hoisted(() => {
 		contentListeners = new Map<string, () => void>();
 		webContents = {
 			id: 1,
-			mainFrame: { url: "http://localhost:5173?surface=management" },
-			getURL: () => "http://localhost:5173?surface=management",
+			mainFrame: { url: "http://localhost:5173/?surface=management" },
+			getURL: () => "http://localhost:5173/?surface=management",
+			isLoadingMainFrame: () => false,
+			once: vi.fn(),
+			setWindowOpenHandler: vi.fn(),
 			send: vi.fn(),
 			setAudioMuted: vi.fn(),
 			setZoomFactor: vi.fn(),
@@ -114,6 +121,9 @@ const electron = vi.hoisted(() => {
 			),
 		},
 		app: {
+			commandLine: { appendSwitch: vi.fn() },
+			setAppUserModelId: vi.fn(),
+			relaunch: vi.fn(),
 			isPackaged: false,
 			dock: { setMenu: vi.fn() },
 			requestSingleInstanceLock: vi.fn(() => true),
@@ -136,12 +146,21 @@ const electron = vi.hoisted(() => {
 			handle: vi.fn(),
 			removeHandler: vi.fn(),
 		},
+		nativeImage: {
+			createFromBitmap: vi.fn(() => ({ setTemplateImage: vi.fn() })),
+		},
+		Tray: class {
+			setToolTip = vi.fn();
+			setContextMenu = vi.fn();
+			on = vi.fn();
+			destroy = vi.fn();
+		},
 		nativeTheme: { themeSource: "system" },
 		safeStorage: { isEncryptionAvailable: () => false },
 		powerSaveBlocker: { start: vi.fn(() => 7), stop: vi.fn() },
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
-		shell: { openExternal: vi.fn() },
+		shell: { openExternal: vi.fn(async (_url: string) => {}) },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -259,6 +278,8 @@ vi.mock("./profiles", async () => {
 		registerProfiles: vi.fn((..._args: unknown[]) => ({
 			runtime: { runFork: vi.fn(), runPromise: vi.fn() },
 			select: vi.fn(),
+			currentThumbnailBorder: () => true,
+			onLocaleChanged: vi.fn((_listener: () => void) => vi.fn()),
 			connect: vi.fn(async () => {}),
 			disconnect: vi.fn(async () => {}),
 			resetKeys: vi.fn(async () => {}),
@@ -355,6 +376,7 @@ vi.mock("./profiles/profile-ipc", async () => {
 		"../../../../packages/device/src/profiles/profile-contracts.js"
 	);
 	return {
+		...actual,
 		desktopProfilesLive: vi.fn(() =>
 			actual.ProfilesLive({
 				read: async () => encodeProfileEnvelope(createInitialProfileEnvelope()),
@@ -556,6 +578,18 @@ describe("desktop window lifecycle", () => {
 		// Electron passes native arguments; this callback intentionally needs none.
 		if (!settings?.click) throw new Error("Missing native Settings action");
 		Reflect.apply(settings.click, undefined, []);
+		expect(management.webContents.send).not.toHaveBeenCalledWith(
+			MANAGEMENT_ACTIVATE,
+			"settings",
+		);
+		const ready = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === MANAGEMENT_READY,
+		)?.[1];
+		if (!ready) throw new Error("Missing management renderer-ready owner");
+		ready({
+			sender: management.webContents,
+			senderFrame: management.webContents.mainFrame,
+		});
 		await vi.waitFor(() =>
 			expect(management.webContents.send).toHaveBeenCalledWith(
 				MANAGEMENT_ACTIVATE,
@@ -563,6 +597,23 @@ describe("desktop window lifecycle", () => {
 			),
 		);
 		expect(management.focus).toHaveBeenCalled();
+	});
+
+	it("refreshes knob thumbnails on profile appearance changes and removes the listener on quit", async () => {
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		const knob = vi.mocked(registerKnob).mock.results[0]?.value;
+		if (!profiles || !knob)
+			throw new Error("Missing profile or knob registration");
+		const refresh = vi.spyOn(knob, "refresh");
+		const change = vi.mocked(profiles.onLocaleChanged).mock.calls[0]?.[0];
+		const remove = vi.mocked(profiles.onLocaleChanged).mock.results[0]?.value;
+		if (!change || !remove)
+			throw new Error("Missing thumbnail appearance listener");
+		const before = refresh.mock.calls.length;
+		change();
+		await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(before + 1));
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
 	});
 
 	it("starts both surfaces on the primary display without panel hardware", async () => {
@@ -1161,6 +1212,97 @@ describe("desktop window lifecycle", () => {
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
 	});
 
+	it.each([false, true])(
+		"MAIN-127 MGMT-019 drains writers before shell quit with restart=%s",
+		async (restart) => {
+			const { management } = windows();
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([name]) => name === "management:command",
+			)?.[1];
+			if (!handler) throw new Error("Shell handler missing");
+			const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;
+			if (!voice) throw new Error("Voice owner missing");
+			let release = () => {};
+			vi.mocked(voice.dispose).mockImplementationOnce(
+				() =>
+					new Promise<void>((resolve) => {
+						release = resolve;
+					}),
+			);
+			const call = Reflect.apply(handler, undefined, [
+				{
+					sender: management.webContents,
+					senderFrame: management.webContents.mainFrame,
+				},
+				{ action: restart ? "restart" : "quit" },
+			]);
+			expect(call).toBe(true);
+			expect(electron.app.quit).toHaveBeenCalledOnce();
+			electron.app.quit.mockClear();
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(voice.dispose).toHaveBeenCalledOnce());
+			try {
+				expect(electron.app.relaunch).not.toHaveBeenCalled();
+				expect(electron.app.quit).not.toHaveBeenCalled();
+			} finally {
+				release();
+			}
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+			expect(electron.app.relaunch).toHaveBeenCalledTimes(restart ? 1 : 0);
+			if (restart)
+				expect(electron.app.relaunch.mock.invocationCallOrder[0]).toBeLessThan(
+					electron.app.quit.mock.invocationCallOrder[0] ?? 0,
+				);
+		},
+	);
+
+	it("MGMT-006 blocks navigation and popups and retains the approved minimum and platform chrome", () => {
+		const { management } = windows();
+		expect(management.options).toMatchObject({
+			width: 1100,
+			height: 760,
+			minWidth: 640,
+			minHeight: 560,
+			webPreferences: { contextIsolation: true, nodeIntegration: false },
+		});
+		if (process.platform === "darwin")
+			expect(management.options.titleBarStyle).toBe("hiddenInset");
+		const navigate = management.contentListeners.get("will-navigate");
+		if (!navigate) throw new Error("Missing navigation guard");
+		const event = { preventDefault: vi.fn() };
+		for (const url of [
+			"https://docs.example.test",
+			"file:///private",
+			"javascript:alert(1)",
+		])
+			Reflect.apply(navigate, undefined, [event, url]);
+		expect(event.preventDefault).toHaveBeenCalledTimes(3);
+		expect(electron.shell.openExternal).not.toHaveBeenCalled();
+		const popup =
+			management.webContents.setWindowOpenHandler.mock.calls[0]?.[0];
+		if (!popup) throw new Error("Missing popup guard");
+		expect(
+			Reflect.apply(popup, undefined, [
+				{ url: "https://github.com/ramarivera/open-quake" },
+			]),
+		).toEqual({ action: "deny" });
+		expect(electron.shell.openExternal).not.toHaveBeenCalled();
+		const external = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === MANAGEMENT_EXTERNAL,
+		)?.[1];
+		if (!external) throw new Error("Missing authenticated external-link owner");
+		external(
+			{
+				sender: management.webContents,
+				senderFrame: management.webContents.mainFrame,
+			},
+			"https://github.com/ramarivera/open-quake",
+		);
+		expect(electron.shell.openExternal).toHaveBeenCalledExactlyOnceWith(
+			"https://github.com/ramarivera/open-quake",
+		);
+	});
+
 	it("unregisters display callbacks and stops the bus before quitting", async () => {
 		appEvent("before-quit");
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
@@ -1309,6 +1451,85 @@ describe("desktop main with the real device service and fake HID", () => {
 		if (!first || !second) throw new Error("Two panels required");
 		return { two, primary, a, b, first, second };
 	}
+
+	it("SETTINGS-018 pins explicit device selection despite input from another serial and rejects stale selections", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two } = await startTwoStrips();
+			const { management } = windows();
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([name]) => name === "management:devices",
+			)?.[1];
+			if (!handler) throw new Error("Device picker missing");
+			const event = {
+				sender: management.webContents,
+				senderFrame: management.webContents.mainFrame,
+			};
+			const read = await Reflect.apply(handler, undefined, [
+				event,
+				{ action: "read" },
+			]);
+			const { DeviceChoices } = await import("../shared/management");
+			const choices = Schema.decodeUnknownSync(DeviceChoices)(read);
+			expect(choices.devices.map((device) => device.serial)).toEqual([
+				"A",
+				"B",
+			]);
+			const device = choices.devices.find((device) => device.serial === "B");
+			if (!device) throw new Error("B missing");
+			expect(
+				await Reflect.apply(handler, undefined, [
+					event,
+					{ action: "select", device: { ...device, session: "old" } },
+				]),
+			).toBeNull();
+			await Reflect.apply(handler, undefined, [
+				event,
+				{ action: "select", device },
+			]);
+			await Effect.runPromise(two.first.emit(report(3, 1, [1])));
+			const hardware = electron.ipcMain.handle.mock.calls.find(
+				([name]) => name === "hardware:request",
+			)?.[1];
+			if (!hardware) throw new Error("Hardware owner missing");
+			const response = await Reflect.apply(hardware, undefined, [
+				{
+					...event,
+					sender: {
+						...management.webContents,
+						getURL: () => "http://localhost:5173/?surface=management",
+					},
+				},
+				{ _tag: "read" },
+			]);
+			expect(response).toEqual({
+				_tag: "failure",
+				code: "QUAKE.HARDWARE.REQUEST_DENIED",
+			});
+			const view = await Reflect.apply(handler, undefined, [
+				event,
+				{ action: "read" },
+			]);
+			expect(Schema.decodeUnknownSync(DeviceChoices)(view).selected).toBe("B");
+			Object.assign(management.webContents, {
+				getURL: () => "http://localhost:5173/?surface=management",
+			});
+			expect(
+				await Reflect.apply(hardware, undefined, [event, { _tag: "read" }]),
+			).toMatchObject({ _tag: "ready", snapshot: { serial: "B" } });
+			expect(
+				await Reflect.apply(handler, undefined, [
+					{ ...event, senderFrame: {} },
+					{ action: "read" },
+				]),
+			).toBeNull();
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
 	it("routes secondary touch and knob input to its own panel and input consumers", async () => {
 		vi.useFakeTimers();
 		try {
@@ -1852,6 +2073,28 @@ describe("desktop main with the real device service and fake HID", () => {
 });
 
 describe("single-instance startup and release policy", () => {
+	it("MAIN-119 prepares Chromium and privileged protocols before the lock, readiness and windows", async () => {
+		vi.resetModules();
+		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
+		electron.app.requestSingleInstanceLock.mockReturnValueOnce(false);
+		const switches = electron.app.commandLine.appendSwitch.mock.calls.length;
+		const locks = electron.app.requestSingleInstanceLock.mock.calls.length;
+		await import("./index");
+		const { registerClockScheme } = await import("./clock");
+		const flagOrder =
+			electron.app.commandLine.appendSwitch.mock.invocationCallOrder[switches];
+		const lockOrder =
+			electron.app.requestSingleInstanceLock.mock.invocationCallOrder[locks];
+		expect(electron.app.commandLine.appendSwitch.mock.calls[switches]).toEqual([
+			"disable-features",
+			"CalculateNativeWinOcclusion",
+		]);
+		expect(flagOrder).toBeLessThan(lockOrder ?? 0);
+		expect(
+			vi.mocked(registerClockScheme).mock.invocationCallOrder.at(-1),
+		).toBeLessThan(lockOrder ?? 0);
+	});
+
 	it("refuses startup before readiness, windows, discovery or HID open", async () => {
 		vi.resetModules();
 		const fake = await Effect.runPromise(makeFakeHidTransport());

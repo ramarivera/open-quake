@@ -33,9 +33,11 @@ export function createProfileThumbnailPruner(directory: string) {
 					? previous
 					: {
 							content,
-							names: ProfileLocale.literals.map(
-								(locale) =>
-									`${profileThumbnailKey(translateProfile(profile, locale), locale)}.png`,
+							names: ProfileLocale.literals.flatMap((locale) =>
+								[true, false].map(
+									(show) =>
+										`${profileThumbnailKey(translateProfile(profile, locale), locale, show)}.png`,
+								),
 							),
 						};
 			next.set(profile.id, entry);

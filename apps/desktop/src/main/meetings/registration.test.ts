@@ -586,3 +586,189 @@ it("AI-311 SETTINGS-106 reveals only an existing regular managed audio file thro
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it("AI-136 AI-327 binds saved profile credentials and live transport in production registration, including repeat/source-loss cleanup", async () => {
+	const { Queue, Redacted } = await import("effect");
+	const queue = await Effect.runPromise(Queue.unbounded<unknown>());
+	const sent: Record<string, unknown>[] = [];
+	let closed = 0;
+	const root = await mkdtemp(join(tmpdir(), "oq-production-meeting-"));
+	const meetings = registerMeetings({
+		userData: root,
+		mock: false,
+		hardware: () => undefined,
+		provider: {
+			models: () =>
+				Effect.succeed([
+					{
+						id: "saved-qwen",
+						role: "default",
+						provider: "qwen",
+						model: "qwen3.6-flash",
+						baseUrl: "http://127.0.0.1:1234/compatible-mode/v1",
+						maxTokens: 2048,
+						credentialRef: "00000000-0000-4000-8000-000000000002",
+					},
+				]),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake-vault")),
+				revoked: () => Effect.never,
+			},
+			socket: {
+				connect: (input) =>
+					Effect.gen(function* () {
+						expect(input.url).toContain(
+							"model=qwen3.5-livetranslate-flash-realtime",
+						);
+						expect(input.headers.Authorization).toBe("Bearer fake-vault");
+						return {
+							send: (data: string | Uint8Array) =>
+								Effect.gen(function* () {
+									const event: unknown = JSON.parse(String(data));
+									if (typeof event !== "object" || event === null)
+										throw new Error("Bad fixture event");
+									const obj = Object.fromEntries(Object.entries(event));
+									sent.push(obj);
+									if (obj.type === "session.update")
+										yield* Queue.offer(queue, { type: "session.updated" });
+								}),
+							receive: Queue.take(queue),
+							close: Effect.sync(() => {
+								closed++;
+							}),
+						};
+					}),
+			},
+		},
+	});
+	let clockOffset = 0;
+	const originalNow = Date.now;
+	const clock = vi
+		.spyOn(Date, "now")
+		.mockImplementation(() => originalNow() + clockOffset);
+	try {
+		const ready = await meetings.ready;
+		expect(ready._tag).toBe("Success");
+		const first = await meetings.runtime.runPromise(
+			MeetingService.action("liveAudioTranslate"),
+		);
+		expect(first.translating).toBe(true);
+		await meetings.runtime.runPromise(
+			MeetingService.action("liveAudioTranslate"),
+		);
+		expect(closed).toBe(0);
+		expect(sent.filter((e) => e.type === "session.update")).toHaveLength(1);
+		await meetings.runtime.runPromise(
+			Queue.offer(queue, {
+				type: "response.text.done",
+				response_id: "translation",
+				text: "fixture live translation",
+			}),
+		);
+		await ipc.handlers.get(CAPTURE_PCM)?.({}, new Uint8Array(14400));
+		const updated = await meetings.runtime.runPromise(
+			MeetingService.snapshot(),
+		);
+		expect(updated.translations).toMatchObject([
+			{ text: "fixture live translation", final: true },
+		]);
+		capture.lost("00000000-0000-4000-8000-000000000000");
+		await vi.waitFor(async () =>
+			expect(
+				(await meetings.runtime.runPromise(MeetingService.snapshot()))
+					.translating,
+			).toBe(false),
+		);
+		expect(closed).toBe(1);
+		clockOffset += 5000;
+		expect(
+			(
+				await meetings.runtime.runPromise(
+					MeetingService.action("liveAudioTranslate"),
+				)
+			).translating,
+		).toBe(true);
+		clockOffset += 5000;
+		expect(
+			(
+				await meetings.runtime.runPromise(
+					MeetingService.action("liveAudioTranslate"),
+				)
+			).translating,
+		).toBe(false);
+		expect(closed).toBe(2);
+		const current = await meetings.runtime.runPromise(
+			MeetingService.snapshot(),
+		);
+		await meetings.runtime.runPromise(
+			MeetingService.configure({ ...current.config, autoGenerate: false }),
+		);
+		clockOffset += 5000;
+		await meetings.runtime.runPromise(
+			MeetingService.action("liveAudioTranslate"),
+		);
+		await meetings.runtime.runPromise(MeetingService.action("meetingMinutes"));
+		clockOffset += 5000;
+		const ended = await meetings.runtime.runPromise(
+			MeetingService.action("meetingMinutes"),
+		);
+		expect(ended.translating).toBe(false);
+		expect(closed).toBe(3);
+		expect(
+			JSON.stringify(
+				Schema.encodeSync(MeetingReply)({ _tag: "ready", snapshot: updated }),
+			),
+		).not.toContain("fake-vault");
+	} finally {
+		clock.mockRestore();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("restricts remote file IPC to the management window's main frame", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meeting-file-owner-"));
+	const renderer = "file:///synthetic-meetings/index.html";
+	let files: ReturnType<typeof vi.spyOn> | undefined;
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+		management: () => ({ webContents: { id: 7 } }),
+	});
+	const frame = { url: renderer };
+	const event = (id: number, main = true) => ({
+		command: true,
+		senderFrame: main ? frame : {},
+		sender: { id, mainFrame: frame, getURL: () => renderer },
+	});
+	const request = {
+		_tag: "remoteFiles",
+		id: "00000000-0000-4000-8000-000000000111",
+		operation: "list",
+	};
+	try {
+		await meetings.ready;
+		const service = await meetings.runtime.runPromise(MeetingService);
+		files = vi.spyOn(service, "files").mockReturnValue(Effect.succeed([]));
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing production meeting IPC");
+		for (const source of [event(8), event(7, false)]) {
+			expect(await handler(source, request)).toMatchObject({
+				_tag: "failure",
+				code: "QUAKE.MEETING.INVALID",
+			});
+		}
+		expect(files).not.toHaveBeenCalled();
+		expect(await handler(event(7), request)).toEqual({
+			_tag: "remoteFiles",
+			ids: [],
+		});
+		expect(files).toHaveBeenCalledOnce();
+	} finally {
+		files?.mockRestore();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});

@@ -224,11 +224,17 @@ export function prepareProfiles(
 			const captureWindows = new Set<BrowserWindow>();
 			const thumbnails = createProfileThumbnailStore(root);
 			const thumbnailLock = Effect.unsafeMakeSemaphore(1);
-			const cachedThumbnail = thumbnails.read;
+			const cachedThumbnail = (
+				profile: Profile,
+				locale: ProfileLocale,
+				border = initialized?.currentThumbnailBorder() ?? true,
+			) => thumbnails.read(profile, locale, border);
 			const capture = async (
 				profile: Profile,
 				locale: ProfileLocale,
 				signal?: AbortSignal,
+				showEmptyGridDashedBorder = initialized?.currentThumbnailBorder() ??
+					true,
 			): Promise<string> => {
 				signal = signal
 					? AbortSignal.any([signal, AbortSignal.timeout(10000)])
@@ -258,6 +264,10 @@ export function prepareProfiles(
 					url.searchParams.set("surface", "profile-thumbnail");
 					url.searchParams.set("profile", profile.id);
 					url.searchParams.set("locale", locale);
+					url.searchParams.set(
+						"emptyBorders",
+						String(showEmptyGridDashedBorder),
+					);
 					await window.loadURL(url.href);
 					signal.throwIfAborted();
 					await window.webContents.executeJavaScript(
@@ -268,7 +278,12 @@ export function prepareProfiles(
 						throw ProfileThumbnailUnsupported.fromCause(undefined);
 					const png = image.toPNG();
 					signal?.throwIfAborted();
-					return await thumbnails.write(profile, locale, png);
+					return await thumbnails.write(
+						profile,
+						locale,
+						png,
+						showEmptyGridDashedBorder,
+					);
 				} finally {
 					signal?.removeEventListener("abort", abort);
 					captureProfiles.delete(window.webContents);
@@ -313,11 +328,11 @@ export function prepareProfiles(
 							? Option.some(await canonicalProfileAppPath(platform, path))
 							: Option.none();
 					},
-					capture: (profile, locale) =>
+					capture: (profile, locale, _refresh, border) =>
 						runtime.runPromise(
 							thumbnailLock.withPermits(1)(
 								Effect.tryPromise({
-									try: (signal) => capture(profile, locale, signal),
+									try: (signal) => capture(profile, locale, signal, border),
 									catch: (cause) => ProfileThumbnailFailed.fromCause(cause),
 								}),
 							),
@@ -328,7 +343,9 @@ export function prepareProfiles(
 				});
 			});
 			const initializationLock = runtime.runSync(Effect.makeSemaphore(1));
-			let initialized: Effect.Effect.Success<typeof initialize> | undefined;
+			let initialized:
+				| Effect.Effect.Success<ReturnType<typeof makeProfileController>>
+				| undefined;
 			const controller = Effect.gen(function* () {
 				if (initialized) return initialized;
 				const service = yield* initialize;
@@ -445,6 +462,8 @@ export function prepareProfiles(
 				/** The profile controller owns this locale, initially en until a non-preview read. */
 				currentLocale: (): ProfileLocale =>
 					initialized?.currentLocale() ?? "en",
+				currentThumbnailBorder: (): boolean =>
+					initialized?.currentThumbnailBorder() ?? true,
 				onLocaleChanged: (listener: () => void): (() => void) => {
 					localeListeners.add(listener);
 					return () => {
