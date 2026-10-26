@@ -367,3 +367,102 @@ it.effect("AI-037 repeated tool calls stop at the bounded step budget", () => {
 		expect(executions).toBe(4);
 	}).pipe(Effect.provide(workflowLayer(adapter)));
 });
+
+it.effect(
+	"AI-037 rejects a truncated tool step before a follow-up answer",
+	() => {
+		let calls = 0;
+		const adapter = makeVercelCompatibleAdapter(
+			async () => {
+				calls++;
+				return calls === 1
+					? sse(
+							{
+								...tool,
+								choices: tool.choices.map((choice) => ({
+									...choice,
+									finish_reason: "length",
+								})),
+							},
+							"[DONE]",
+						)
+					: sse(answer, stop, "[DONE]");
+			},
+			{ execute: () => Effect.succeed("local result") },
+		);
+		return Effect.gen(function* () {
+			yield* AiRepository.put({
+				...workflowProfile,
+				capabilities: { ...workflowProfile.capabilities, tools: "supported" },
+			});
+			const generation = yield* AiProviderService.generate({
+				...workflowRequest,
+				tools: [definition],
+			});
+			const result = yield* Effect.either(Stream.runCollect(generation.events));
+			expect(Either.isLeft(result) && result.left.code).toBe(
+				"AI.PROVIDER.PROTOCOL_INVALID",
+			);
+		}).pipe(Effect.provide(workflowLayer(adapter)));
+	},
+);
+
+it.effect(
+	"AI-037 accepts three tool steps and completes only after the fourth-step answer",
+	() => {
+		let calls = 0;
+		let executions = 0;
+		const adapter = makeVercelCompatibleAdapter(
+			async () => {
+				calls++;
+				return calls < 4
+					? sse(
+							{
+								...tool,
+								choices: tool.choices.map((choice) => ({
+									...choice,
+									delta: {
+										tool_calls: choice.delta.tool_calls.map((call) => ({
+											...call,
+											id: `call-${calls}`,
+										})),
+									},
+								})),
+							},
+							"[DONE]",
+						)
+					: sse(answer, stop, "[DONE]");
+			},
+			{
+				execute: () =>
+					Effect.sync(() => {
+						executions++;
+						return "local result";
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			yield* AiRepository.put({
+				...workflowProfile,
+				capabilities: { ...workflowProfile.capabilities, tools: "supported" },
+			});
+			const generation = yield* AiProviderService.generate({
+				...workflowRequest,
+				tools: [definition],
+			});
+			const events = Chunk.toReadonlyArray(
+				yield* Stream.runCollect(generation.events),
+			);
+			expect(calls).toBe(4);
+			expect(executions).toBe(3);
+			expect(events).toEqual([
+				{ _tag: "textDelta", textDelta: "answer", kind: "generation" },
+				{
+					_tag: "usage",
+					usage: { inputTokens: 4, outputTokens: 2, provenance: "reported" },
+				},
+				{ _tag: "completed" },
+			]);
+		}).pipe(Effect.provide(workflowLayer(adapter)));
+	},
+);
