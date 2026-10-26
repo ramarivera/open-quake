@@ -25,6 +25,7 @@ import {
 	profileStorageLayer,
 } from "../../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../../packages/device/src/profiles/profile-service";
+import type { QuakeEvent } from "../../../preload/quake";
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import type {
 	KeyPreview,
@@ -35,13 +36,14 @@ import type { MeetingsBridge } from "../../../shared/meeting-bridge";
 import { selectStripPage } from "../../../shared/strip-selection";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { button, click, input, mount, query, settle } from "../../test/dom";
-import { stripLayout, tileAt } from "../strip/geometry";
+import { stripLayout } from "../strip/geometry";
+import { mountStripTouch } from "../strip/mount-strip-touch";
 import {
 	previewVoiceContext,
 	type StripVoiceContext,
 } from "../strip/overlays/voice/voice-context";
 import { StripScreen } from "../strip/StripScreen";
-import { createStripTouchController } from "../strip/touch-controller";
+
 import { KeyEditor } from "./KeyEditor";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -519,46 +521,70 @@ for (const [profileId, type] of [
 		child.addEventListener("quake-sub-touch-end", () => {
 			received++;
 		});
-		const keys: unknown[] = [];
-		const controller = createStripTouchController({
-			view: () => ({ width: 1920, height: 480, rotation: 0 }),
-			layout: () => layout,
-			tileAt: (point) => {
-				const hit = tileAt(point, layout);
-				return hit
-					? {
-							...hit,
-							subTargets: [
-								{ id: "child", bounds: tile.slot, scrollable: false },
-							],
-						}
-					: undefined;
-			},
-			onKey: (value) => keys.push(value),
-			onSubTouch: (value) =>
-				child.dispatchEvent(
-					new CustomEvent(
-						value.phase === "end"
-							? "quake-sub-touch-end"
-							: "quake-sub-touch-start",
-						{ detail: value },
-					),
+		// happy-dom has no layout engine. Only DOM rectangles are supplied here;
+		// production mountStripTouch owns coordinate conversion, hit mapping and dispatch.
+		const rootRect = new DOMRect(80, 35, 960, 240);
+		vi.spyOn(m.host, "getBoundingClientRect").mockReturnValue(rootRect);
+		const children = Array.from(
+			host.querySelectorAll<HTMLElement>("[data-quake-sub-touch]"),
+		);
+		const sibling = children.find((element) => element !== child);
+		if (!sibling) throw new Error("Missing second nested touch consumer");
+		const y = tile.slot.y + tile.slot.height / 2;
+		const x = tile.slot.x + tile.slot.width / 4;
+		const siblingX = tile.slot.x + (tile.slot.width * 3) / 4;
+		for (const element of children) {
+			const centerX =
+				element === child ? x : element === sibling ? siblingX : -1000;
+			vi.spyOn(element, "getBoundingClientRect").mockReturnValue(
+				new DOMRect(
+					rootRect.x + (centerX - 24) / 2,
+					rootRect.y + (y - 24) / 2,
+					24,
+					24,
 				),
-			overlay: { active: () => false, point: () => {} },
-			now: () => 100,
-			schedule: (action) => {
-				action();
-				return () => {};
-			},
-		});
-		for (const action of [1, 0])
-			await act(async () =>
-				controller.event({
-					kind: "touch",
-					source: "mock",
-					points: [{ x: tile.slot.x + 30, y: 480 - tile.slot.y - 30, action }],
-				}),
 			);
+		}
+		let siblingReceived = 0;
+		sibling.addEventListener("quake-sub-touch-end", () => {
+			siblingReceived++;
+		});
+		const keys: unknown[] = [];
+		let publishTouch: ((event: QuakeEvent) => void) | undefined;
+		const unmountTouch = mountStripTouch(
+			m.host,
+			{
+				version: "test",
+				onQuakeEvent: (callback) => {
+					publishTouch = callback;
+					return () => {
+						publishTouch = undefined;
+					};
+				},
+			},
+			0,
+			() => layout,
+			(value) => keys.push(value),
+		);
+		cleanups.push(async () => unmountTouch());
+		const tap = async (logicalX: number, logicalY: number) => {
+			for (const action of [1, 0])
+				await act(async () =>
+					publishTouch?.({
+						kind: "touch",
+						source: "mock",
+						points: [{ x: logicalX, y: 480 - logicalY, action }],
+					}),
+				);
+		};
+		await tap(
+			tile.slot.x + tile.slot.width / 2,
+			tile.slot.y + tile.slot.height - 10,
+		);
+		expect(received).toBe(0);
+		expect(siblingReceived).toBe(0);
+		await tap(x, y);
+		expect(siblingReceived).toBe(0);
 		expect(keys).toEqual([]);
 		expect(received).toBe(1);
 		if (type === "aiChatView")
@@ -573,7 +599,10 @@ for (const [profileId, type] of [
 			});
 		if (type === "liveAudioTranslateDisplay")
 			expect(meeting).toHaveBeenCalledWith({ _tag: "tab", tab: "live" });
-		controller.dispose();
+		await tap(siblingX, y);
+		expect(received).toBe(1);
+		expect(siblingReceived).toBe(1);
+		expect(keys).toEqual([]);
 	});
 
 it("MGMT-097 updates built-in locale and external configuration without persisting injected labels", async () => {
