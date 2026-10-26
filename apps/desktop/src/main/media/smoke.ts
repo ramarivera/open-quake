@@ -42,6 +42,7 @@ import { registerMeetings } from "../meetings";
 import { startMockDeviceBus } from "../mockDeviceBus";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles/profile-ipc";
+import { registerAppLocale } from "../settings/registration";
 import { makeDisplay } from "../test/display";
 import {
 	clockProfile,
@@ -172,6 +173,12 @@ async function smoke(): Promise<void> {
 	const management = new BrowserWindow(options);
 	managementWindow = management;
 	const panel = new BrowserWindow(options);
+	const locale = registerAppLocale({
+		directory,
+		osLocale: "en-US",
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		windows: () => [management, panel],
+	});
 	management.webContents.setAudioMuted(true);
 	panel.webContents.setAudioMuted(true);
 	// This media-only fixture has no agent service; the management smoke owns it.
@@ -414,6 +421,14 @@ async function smoke(): Promise<void> {
 		width: "480",
 		height: "480",
 	});
+	const actionLabels: unknown = await management.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.button-row button')].map(button => button.textContent)`,
+	);
+	assert(
+		Array.isArray(actionLabels) &&
+			actionLabels.includes("Add Media…") &&
+			actionLabels.includes("Remove All"),
+	);
 	// Cluster 18: exercise the mounted playlist editor without foreground input.
 	selectedPath = pngPath;
 	await request(management, {
@@ -444,6 +459,17 @@ async function smoke(): Promise<void> {
 		(await request(management, { _tag: "read" })).saved.settings
 			.displayMediaList[0]?.name,
 		"second.jpg",
+	);
+	const beforeNoop = await request(management, { _tag: "read" });
+	await management.webContents.executeJavaScript(`(() => {
+ const row = document.querySelector('.wallpaper-playlist li'); const dataTransfer = new DataTransfer();
+ row.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+ row.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer })); return null;
+ })()`);
+	await settle(150);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.revision,
+		beforeNoop.saved.revision,
 	);
 	for (const enabled of [true, false]) {
 		await management.webContents.executeJavaScript(
@@ -476,6 +502,27 @@ async function smoke(): Promise<void> {
 			join(artifacts, "wallpaper-playlist.png"),
 			(await management.webContents.capturePage()).toPNG(),
 		);
+	await management.webContents.executeJavaScript(
+		"window.quakeLocale.set('de')",
+	);
+	await settle(150);
+	const germanLabels: unknown = await management.webContents.executeJavaScript(
+		`[...document.querySelectorAll('.button-row button')].map(button => button.textContent)`,
+	);
+	assert(
+		Array.isArray(germanLabels) &&
+			germanLabels.includes("Medien hinzufügen…") &&
+			germanLabels.includes("Alle entfernen"),
+	);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "wallpaper-playlist-de.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	await management.webContents.executeJavaScript(
+		"window.quakeLocale.set('en')",
+	);
+	await settle(150);
 	if (artifacts) {
 		management.setSize(390, 844);
 		await management.webContents.executeJavaScript(
@@ -960,6 +1007,7 @@ async function smoke(): Promise<void> {
 	removeLifecycle();
 	await lifecycleRuntime.dispose();
 	await profiles.dispose();
+	await locale.dispose();
 	await clock.dispose();
 	await meetings.dispose();
 	await voice.dispose();
