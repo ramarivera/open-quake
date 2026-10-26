@@ -108,6 +108,10 @@ export const ProfileAction = Schema.Struct({
 	value: ProfileJson,
 });
 const KeyConfigFields = Schema.Struct({
+	temperatureUnit: Schema.optionalWith(
+		Schema.Literal("celsius", "fahrenheit"),
+		{ exact: true },
+	),
 	aiConfigData: Schema.optional(ProfileJsonObject),
 	sessionState: Schema.optional(Schema.Literal("start", "end", "error")),
 	animationState: Schema.optional(

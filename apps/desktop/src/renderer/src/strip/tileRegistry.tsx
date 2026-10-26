@@ -36,6 +36,9 @@ import { GenericTile } from "./tiles/GenericTile";
 import { HomeAssistantTile } from "./tiles/home-assistant/HomeAssistantTile";
 import { MeetingDisplay } from "./tiles/meeting/MeetingDisplay";
 import { MeetingKey } from "./tiles/meeting/MeetingKey";
+import { monitorKeySettings } from "./tiles/monitor/key-settings";
+import { MetricTile } from "./tiles/monitor/MetricTile";
+import { useMonitorKeyMedia } from "./tiles/monitor/MonitorKeySettings";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
 import { useMonitor } from "./tiles/monitor/useMonitor";
 import {
@@ -215,6 +218,13 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 	const live =
 		new URLSearchParams(window.location.search).get("surface") === "panel";
 	const monitor = useMonitor(live);
+	const settings = monitorKeySettings(tile.key, monitor.settings);
+	const media = useMonitorKeyMedia(
+		settings.background === "custom"
+			? settings.media[settings.styleId]
+			: undefined,
+		tile.key.keyCode,
+	);
 	return (
 		<div
 			style={{
@@ -232,9 +242,9 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 				}}
 			>
 				<MonitorPanel
-					settings={monitor.settings}
+					settings={settings}
 					snapshot={live ? monitor.snapshot : previewSnapshot()}
-					media={monitor.view?.media[monitor.settings.styleId]}
+					media={media}
 					preview={!live}
 				/>
 			</div>
@@ -393,6 +403,16 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 		["aiChat", VoiceKeyTile],
 		["clawbot", VoiceKeyTile],
 		["systemMonitorPanel", MonitorSlot],
+		...[
+			"cpuInfo",
+			"gpuInfo",
+			"memInfo",
+			"diskInfo",
+			"processInfo",
+			"networkInfo",
+			"powerInfo",
+			"bluetoothInfo",
+		].map((id): [string, StripTileComponent] => [id, MetricTile]),
 		["emoji", EmojiTile],
 		["homeAssistant", HomeAssistantTile],
 	]);

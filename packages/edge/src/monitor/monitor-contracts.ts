@@ -23,6 +23,9 @@ export const Disk = Schema.Struct({
 export type Disk = typeof Disk.Type;
 /** Partial values are deliberate. Zero is a measurement, absence is unavailable. */
 export const MetricValues = Schema.Struct({
+	devices: optionalNumber,
+	adapters: optionalNumber,
+	connected: optionalNumber,
 	load: optionalNumber,
 	temperature: optionalNumber,
 	model: Schema.optionalWith(Schema.String, { exact: true }),
