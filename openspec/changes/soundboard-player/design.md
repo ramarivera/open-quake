@@ -94,3 +94,20 @@ Catalog errors stay in the shared `QUAKE.*` catalog, per the failure contract ab
 The first implemented step is a review-only version-1 preview, not a playback capability. It accepts the saved playAudio key actions, equivalent migration fields, or a previous preview. It preserves duplicate selections and ordering, represents each unavailable entry, rechecks saved availability, and requires explicit review before a future profile save. Numeric operation/fade decoding is exact. Unknown controls remain needsConfiguration. A preview cannot acquire AudioOutput or execute an action.
 
 Metadata inspection is injected through SoundboardFiles. The desktop adapter only stats/checks access on explicit local paths and never traverses directories or decodes media. Limit inputs to 1,024 entries, 32,768 characters per path and 1 MiB of path data, four concurrent probes and a two-second per-probe Effect deadline. Reject URLs, relative paths, network shares, device paths and control characters before IO. Configuration contains private paths; diagnostics contain only catalog identity, source errno and static span/log names. File IDs are deterministic and scoped to the ordered configuration. Playback stays unavailable until the remaining tasks are delivered and verified.
+
+## First-release tile decision, 2026-10-25
+
+Opus 5.5 reviewed the actual PlayerSlot source and chose a neutral unavailable
+state for local soundboard keys. Only exact empty sound plus audioAction 0 retains
+the existing native system-media player; malformed, missing, duplicate, legacy,
+nonempty and other operation values stay with the unavailable local owner.
+Volume/fade edits alone don't turn native media into local playback. No path
+parsing, IO or transport is part of this predicate.
+
+A full-width blocked tile uses the existing black device palette, muted playlist
+glyph and source row, a clear release-limit heading and retained-file explanation.
+It has no jade action, buttons, sub-touch targets or live announcements. Compact
+legacy keys retain their artwork with a neutral Unavailable chip. No file paths,
+names or counts appear. Native media transport/card and strip geometry stay with
+their owners. Source of the design decision is delegated task
+`oq-soundboard-boundary-design-20261025-r1`; artifacts stay outside git.

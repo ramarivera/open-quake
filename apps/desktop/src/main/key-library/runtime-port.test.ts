@@ -2,10 +2,12 @@ import { Deferred, Effect, Layer, Schema } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
 import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
+import { normalizeActionImport } from "../../../../../packages/device/src/actions/action-import.js";
 import {
 	KeyRuntime,
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createEmptyProfileKey,
 	ProfileKey,
@@ -15,15 +17,29 @@ import {
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service.js";
 import { systemMediaKeyActions } from "../weather-media/key-actions";
 import { desktopKeyRuntimePort } from "./runtime-port";
 
+const files = vi.hoisted(() => ({
+	stat: vi.fn(),
+	access: vi.fn(),
+	readFile: vi.fn(),
+	open: vi.fn(),
+	readdir: vi.fn(),
+	opendir: vi.fn(),
+}));
+vi.mock("node:fs/promises", async (importOriginal) => ({
+	...(await importOriginal<typeof import("node:fs/promises")>()),
+	...files,
+}));
 const os = vi.hoisted(() => ({
 	platform: vi.fn(() => "darwin"),
 	openPath: vi.fn(async (_path: string) => ""),
 	openExternal: vi.fn(async (_url: string) => {}),
 	exec: vi.fn<(file: string, args: readonly string[]) => void>(),
 	clipboard: vi.fn(),
+	worker: vi.fn(),
 }));
 vi.mock("node:os", () => ({ platform: os.platform }));
 vi.mock("node:child_process", () => ({
@@ -41,6 +57,7 @@ vi.mock("node:child_process", () => ({
 	},
 }));
 vi.mock("electron", () => ({
+	BrowserWindow: os.worker,
 	shell: { openPath: os.openPath, openExternal: os.openExternal },
 	clipboard: { availableFormats: os.clipboard },
 }));
@@ -58,6 +75,8 @@ function layer(
 	mock = false,
 	publish: KeyRuntimePort["Type"]["publish"] = () => Effect.void,
 	media?: MediaActionAdapter,
+	savedKey?: typeof ProfileKey.Encoded,
+	owned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
 ) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -76,7 +95,7 @@ function layer(
 										{
 											id: "one",
 											keys: [
-												{
+												savedKey ?? {
 													...empty,
 													childrenName: "multiActions",
 													config: {
@@ -108,7 +127,7 @@ function layer(
 		() => undefined,
 		(state) => Effect.runSync(publish(state)),
 		mock,
-		undefined,
+		owned,
 		media,
 	).pipe(Layer.provide(profiles));
 	return KeyRuntime.DefaultWithoutDependencies.pipe(Layer.provideMerge(port));
@@ -297,5 +316,87 @@ it.each([false, true])(
 		if (!mock)
 			expect(send).toHaveBeenCalledWith("audio_play", expect.any(AbortSignal));
 		expect(os.exec).not.toHaveBeenCalled();
+	},
+);
+
+it.each([true, false])(
+	"keeps imported local sound inert through production dispatch, quarantined=%s",
+	async (quarantined) => {
+		const builtin = builtinProfiles("darwin").find(
+			(profile) => profile.id === "1-6",
+		);
+		if (!builtin) throw new Error("Missing built-in sound fixture");
+		const first = builtin.pages[0].keys[0];
+		if (!first) throw new Error("Missing sound key");
+		const encoded = Schema.encodeSync(ProfileKey)(first);
+		const raw = {
+			...encoded,
+			config: {
+				...encoded.config,
+				actions: [
+					{ type: "sound", value: '["/private/local/track.mp3"]' },
+					{ type: "audioAction", value: 1 },
+					{ type: "audioFade", value: "3-500" },
+					{ type: "volume", value: 50 },
+				],
+			},
+		};
+		const imported = normalizeActionImport(raw);
+		expect(imported.diagnostics).toContain("unsupported-or-incomplete");
+		const key = Schema.encodeSync(ProfileKey)(
+			Schema.decodeUnknownSync(ProfileKey)({
+				...raw,
+				compatibility: {
+					...raw.compatibility,
+					unsupported: quarantined,
+					source: imported.original,
+				},
+			}),
+		);
+		const owned = vi.fn(async (_key: ProfileKey, _signal: AbortSignal) => true);
+		const media = {
+			supportedCommands: new Set(["audio_play"] as const),
+			sendMedia: vi.fn(() => Effect.void),
+		};
+		const publish = vi.fn(() => Effect.void);
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const output = yield* makeAudioOutput;
+					let speechStops = 0;
+					const speech = yield* output.acquire(
+						"speech",
+						Effect.sync(() => {
+							speechStops++;
+						}),
+					);
+					const runtime = yield* KeyRuntime;
+					const result = yield* runtime
+						.activate("device", "1,1", "press")
+						.pipe(Effect.either);
+					expect(result._tag).toBe(quarantined ? "Right" : "Left");
+					if (result._tag === "Left")
+						expect(result.left).toMatchObject({
+							_tag: "KeyFunctionUnavailable",
+							code: "QUAKE.ACTION.UNAVAILABLE",
+						});
+					expect(yield* speech.current).toBe(true);
+					expect(speechStops).toBe(0);
+					yield* runtime.activate("device", "1,1", "release");
+					expect(os.exec).not.toHaveBeenCalled();
+					expect(os.openPath).not.toHaveBeenCalled();
+					expect(os.openExternal).not.toHaveBeenCalled();
+					expect(os.clipboard).not.toHaveBeenCalled();
+					expect(media.sendMedia).not.toHaveBeenCalled();
+					expect(owned).not.toHaveBeenCalled();
+					expect(publish).not.toHaveBeenCalled();
+					expect(os.worker).not.toHaveBeenCalled();
+					for (const probe of Object.values(files))
+						expect(probe).not.toHaveBeenCalled();
+					yield* speech.release;
+					expect(speechStops).toBe(1);
+				}),
+			).pipe(Effect.provide(layer(false, publish, media, key, owned))),
+		);
 	},
 );
