@@ -5,11 +5,13 @@ import { Row } from "../ui/Form";
 
 /** Local workspace identities stay distinct from the selected external runtime identity. */
 export function AgentRouteFields({
+	idPrefix,
 	agent,
 	model,
 	onAgent,
 	onModel,
 }: {
+	readonly idPrefix: string;
 	readonly agent: string;
 	readonly model: string;
 	readonly onAgent: (id: string) => void;
@@ -25,9 +27,9 @@ export function AgentRouteFields({
 	);
 	return (
 		<>
-			<Row label={copy.agent} htmlFor="local-agent">
+			<Row label={copy.agent} htmlFor={`${idPrefix}-local-agent`}>
 				<select
-					id="local-agent"
+					id={`${idPrefix}-local-agent`}
 					value={agent || "main"}
 					onChange={(e) => onAgent(e.target.value)}
 				>
@@ -44,9 +46,9 @@ export function AgentRouteFields({
 						))}
 				</select>
 			</Row>
-			<Row label={copy.model} htmlFor="local-agent-model">
+			<Row label={copy.model} htmlFor={`${idPrefix}-local-agent-model`}>
 				<select
-					id="local-agent-model"
+					id={`${idPrefix}-local-agent-model`}
 					value={model}
 					disabled={!agent}
 					onChange={(e) => onModel(e.target.value)}

@@ -37,6 +37,7 @@ export function AgentKeyFields({
 	return (
 		<section aria-label={copy.title}>
 			<AgentRouteFields
+				idPrefix="key"
 				agent={String(action("agentId") || "main")}
 				model={String(action("model") || "")}
 				onAgent={(id) => patch("agentId", id)}

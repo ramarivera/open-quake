@@ -843,9 +843,9 @@ it("MGMT-280 count/add-step focus and Back preserve the real key draft", async (
 it("MGMT-302 mounted local agent/model/voice/task Save retains typed actions and reset uses the isolated context command", async () => {
 	const f = await fixture({ agentKey: true });
 	await f.select();
-	await input(query(f.host, "#local-agent", HTMLSelectElement), "writer");
+	await input(query(f.host, "#key-local-agent", HTMLSelectElement), "writer");
 	await input(
-		query(f.host, "#local-agent-model", HTMLSelectElement),
+		query(f.host, "#key-local-agent-model", HTMLSelectElement),
 		"fake-model",
 	);
 	await click(query(f.host, "#agent-key-voice", HTMLInputElement));
@@ -884,9 +884,9 @@ it("MGMT-306 saves/reopens DK Claw agent and model through the mounted knob cons
 	const f = await fixture({ knobKey: true });
 	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
 	await input(query(f.host, "#knob-route", HTMLSelectElement), "dkclaw");
-	await input(query(f.host, "#local-agent", HTMLSelectElement), "writer");
+	await input(query(f.host, "#knob-local-agent", HTMLSelectElement), "writer");
 	await input(
-		query(f.host, "#local-agent-model", HTMLSelectElement),
+		query(f.host, "#knob-local-agent-model", HTMLSelectElement),
 		"fake-model",
 	);
 	await click(button(f.host, "Save knob"));
@@ -908,9 +908,11 @@ it("MGMT-306 saves/reopens DK Claw agent and model through the mounted knob cons
 		]),
 	);
 	await click(button(f.host, "Cancel"));
-	expect(query(f.host, "#local-agent", HTMLSelectElement).value).toBe("writer");
-	await input(query(f.host, "#local-agent", HTMLSelectElement), "main");
-	await input(query(f.host, "#local-agent-model", HTMLSelectElement), "");
+	expect(query(f.host, "#knob-local-agent", HTMLSelectElement).value).toBe(
+		"writer",
+	);
+	await input(query(f.host, "#knob-local-agent", HTMLSelectElement), "main");
+	await input(query(f.host, "#knob-local-agent-model", HTMLSelectElement), "");
 	await click(button(f.host, "Save knob"));
 	const reset = await f.runtime.runPromise(ProfileService.getProfile("p"));
 	expect(
@@ -1695,4 +1697,29 @@ it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved
 	);
 	await click(button(f.host, "1,1"));
 	expect(f.host.querySelector("#key-title")).toBeNull();
+});
+
+it("MGMT-302/306 keeps knob and key agent route IDs and labels distinct", async () => {
+	const f = await fixture({ agentKey: true });
+	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
+	await input(query(f.host, "#knob-route", HTMLSelectElement), "dkclaw");
+	await f.select();
+	const routes = [
+		...f.host.querySelectorAll<HTMLSelectElement>('select[id*="local-agent"]'),
+	];
+	expect(routes).toHaveLength(4);
+	expect(new Set(routes.map((route) => route.id)).size).toBe(4);
+	for (const route of routes) {
+		const label = f.host.querySelector<HTMLLabelElement>(
+			`label[for="${route.id}"]`,
+		);
+		expect(label?.control).toBe(route);
+	}
+	const knob = query(f.host, "#knob-local-agent", HTMLSelectElement);
+	const key = query(f.host, "#key-local-agent", HTMLSelectElement);
+	await input(key, "writer");
+	expect(knob.value).toBe("main");
+	await input(knob, "writer");
+	await input(key, "main");
+	expect(knob.value).toBe("writer");
 });

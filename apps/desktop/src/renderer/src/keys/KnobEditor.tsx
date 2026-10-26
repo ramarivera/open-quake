@@ -243,6 +243,7 @@ export function KnobEditor({
 						</Row>
 						{route === "dkclaw" && (
 							<AgentRouteFields
+								idPrefix="knob"
 								agent={String(value("agentId") || "main")}
 								model={String(value("dkclawModel") || "")}
 								onAgent={(id) =>
