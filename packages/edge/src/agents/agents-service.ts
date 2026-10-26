@@ -94,7 +94,8 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 						models,
 						runtime: yield* runtime.read(),
 						progress,
-						draftingAvailable: Option.isSome(draft),
+						draftingAvailable:
+							Option.isSome(draft) && (draft.value.available?.() ?? true),
 					};
 				},
 			);
@@ -291,7 +292,8 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 						);
 						break;
 					case "draft-agent": {
-						if (Option.isNone(draft)) return yield* new AgentDraftUnavailable();
+						if (Option.isNone(draft) || draft.value.available?.() === false)
+							return yield* new AgentDraftUnavailable();
 						const state = yield* repository.read();
 						yield* check(state, command.revision);
 						yield* editable(state, command.id);
@@ -332,7 +334,8 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 						break;
 					}
 					case "draft-skill": {
-						if (Option.isNone(draft)) return yield* new AgentDraftUnavailable();
+						if (Option.isNone(draft) || draft.value.available?.() === false)
+							return yield* new AgentDraftUnavailable();
 						draftText = yield* draft.value
 							.skill({ name: command.name, prompt: command.prompt })
 							.pipe(

@@ -91,6 +91,8 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 	const { root, mock } = options;
 	const nativeExit = options.exit ?? ((code = 0) => app.exit(code));
 	let requestedExit: number | undefined;
+	let replacement: (() => Promise<void>) | undefined;
+	let exitStarted = false;
 	// Complete the effect and its diagnostic span before the forced native exit.
 	const exit = (code = 0): void => {
 		requestedExit = code;
@@ -316,17 +318,18 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 								catch: (cause) => new ResetFailed(cause),
 							}),
 						resetAndQuit: () =>
-							Effect.tryPromise({
-								try: () =>
+							Effect.sync(() => {
+								replacement = () =>
 									resetAndExit({
-										stop: options.stopWriters,
+										stop: async () => {
+											disposed = true;
+											await options.stopWriters();
+										},
 										clear: () => clearOwnedData(root),
 										report: (message) =>
 											dialog.showMessageBox({ message, buttons: ["Close"] }),
 										exit,
-									}),
-								catch: (cause) =>
-									cause instanceof ResetFailed ? cause : new ResetFailed(cause),
+									});
 							}),
 					}),
 				),
@@ -335,7 +338,8 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 		(runtime) => {
 			const ready = runtime.runPromise(
 				Effect.gen(function* () {
-					yield* FirmwareUpdates;
+					const firmware = yield* FirmwareUpdates;
+					yield* firmware.snapshot();
 					yield* AppUpdates;
 					yield* DataReset;
 				}),
@@ -356,7 +360,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 			const view = Effect.fn("DesktopMaintenance.view")(
 				function* (): Effect.fn.Return<
 					MaintenanceView,
-					never,
+					FirmwarePersistenceFailed,
 					FirmwareUpdates | AppUpdates
 				> {
 					const firmware = yield* FirmwareUpdates;
@@ -409,7 +413,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 				if (mutation) mutating = true;
 				pendingOperations++;
 				try {
-					return await runtime.runPromise(
+					let reply: MaintenanceReply = await runtime.runPromise(
 						Effect.gen(function* () {
 							const firmware = yield* FirmwareUpdates;
 							const update = yield* AppUpdates;
@@ -579,16 +583,18 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 										))
 									)
 										break;
-									yield* io(() =>
+									replacement = () =>
 										restoreAndExit({
 											validate: () => restored.validate(root),
-											stop: options.stopWriters,
+											stop: async () => {
+												disposed = true;
+												await options.stopWriters();
+											},
 											commit: () => restored.commit(root),
 											report: (message) =>
 												dialog.showMessageBox({ message, buttons: ["Close"] }),
 											exit,
-										}),
-									);
+										});
 									break;
 								}
 								case "reset": {
@@ -645,14 +651,50 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 							}),
 						),
 					);
+					// Main owns replacement after the request fiber and its diagnostic span
+					// have ended. Closing the shared graph here cannot await this fiber.
+					const replace = mutation ? replacement : undefined;
+					if (mutation) replacement = undefined;
+					if (mutation && replace) {
+						const action = Effect.tryPromise({
+							try: replace,
+							catch: (cause) =>
+								cause instanceof ResetFailed || cause instanceof RestoreFailed
+									? cause
+									: new RestoreFailed(cause),
+						});
+						// This IO-only effect has no application services. The diagnostic
+						// sink stays alive until native exit, including graph finalizers.
+						const work = options.diagnostics
+							? options.diagnostics
+									.instrument(action, "app.background")
+									.pipe(Effect.provide(options.diagnostics.layer))
+							: action;
+						reply = await Effect.runPromise(
+							work.pipe(
+								Effect.match({
+									onFailure: (error): MaintenanceReply => ({
+										ok: false,
+										code: error.code,
+									}),
+									onSuccess: () => reply,
+								}),
+							),
+						);
+					}
+					return reply;
 				} finally {
 					pendingOperations--;
-					if (mutation) mutating = false;
+					if (mutation) {
+						mutating = false;
+						replacement = undefined;
+					}
 					// Read-only requests may finish while a reset is unwinding. Only the
 					// exclusive mutation that requested exit can dispose its owning runtime.
 					if (mutation && requestedExit !== undefined) {
 						const code = requestedExit;
 						requestedExit = undefined;
+						exitStarted = true;
 						ipcMain.removeHandler(MAINTENANCE_CHANNEL);
 						try {
 							await runtime.dispose();
@@ -694,6 +736,16 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 						const failures: unknown[] = [];
 						try {
 							await ready;
+						} catch (cause) {
+							failures.push(cause);
+						}
+						try {
+							if (!exitStarted)
+								await runtime.runPromise(
+									Effect.flatMap(FirmwareUpdates, (service) =>
+										service.shutdown(),
+									),
+								);
 						} catch (cause) {
 							failures.push(cause);
 						}

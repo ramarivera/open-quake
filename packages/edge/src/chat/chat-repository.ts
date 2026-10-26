@@ -123,64 +123,76 @@ export class ChatRepository extends Effect.Service<ChatRepository>()(
 		effect: Effect.gen(function* () {
 			const storage = yield* ChatStorage;
 			const lock = yield* Effect.makeSemaphore(1);
-			const loaded = yield* storage.load;
-			const decoded = Schema.decodeUnknownEither(Document, {
-				onExcessProperty: "error",
-			})(Option.isSome(loaded) ? loaded.value : { version: 1, sessions: [] });
-			if (Either.isLeft(decoded))
-				return yield* new ChatStorageFailed(decoded.left);
-			let document: ChatDocument = immutable(decoded.right);
-			// A crash never resumes inference or admits a partial exchange to context.
-			const recovered: ChatDocument = {
-				version: 1,
-				sessions: document.sessions.map((session) => ({
-					...session,
-					turns: session.turns.map((turn) =>
-						turn.status !== "processing"
-							? turn
-							: {
-									...turn,
-									status: "interrupted" as const,
-									snapshot: {
-										...turn.snapshot,
-										terminal: Option.some({
-											outcome: "failed" as const,
-											errorCode: "CHAT.RESPONSE.INTERRUPTED",
-										}),
+			let document: ChatDocument | undefined;
+			const initialize = Effect.gen(function* () {
+				if (document) return document;
+				const loaded = yield* storage.load;
+				const decoded = Schema.decodeUnknownEither(Document, {
+					onExcessProperty: "error",
+				})(Option.isSome(loaded) ? loaded.value : { version: 1, sessions: [] });
+				if (Either.isLeft(decoded))
+					return yield* new ChatStorageFailed(decoded.left);
+				let current: ChatDocument = immutable(decoded.right);
+				// A crash never resumes inference or admits a partial exchange to context.
+				const recovered: ChatDocument = {
+					version: 1,
+					sessions: current.sessions.map((session) => ({
+						...session,
+						turns: session.turns.map((turn) =>
+							turn.status !== "processing"
+								? turn
+								: {
+										...turn,
+										status: "interrupted" as const,
+										snapshot: {
+											...turn.snapshot,
+											terminal: Option.some({
+												outcome: "failed" as const,
+												errorCode: "CHAT.RESPONSE.INTERRUPTED",
+											}),
+										},
 									},
-								},
-					),
-				})),
-			};
-			if (
-				document.sessions.some((session) =>
-					session.turns.some((turn) => turn.status === "processing"),
-				)
-			) {
-				yield* storage.save(recovered);
-				document = immutable(recovered);
-			}
+						),
+					})),
+				};
+				if (
+					current.sessions.some((session) =>
+						session.turns.some((turn) => turn.status === "processing"),
+					)
+				) {
+					yield* storage.save(recovered);
+					current = immutable(recovered);
+				}
+				document = current;
+				return current;
+			});
 			const get = Effect.fn("ChatRepository.get")(
 				(
 					owner: string,
 					id: SessionId,
-				): Effect.Effect<Option.Option<ChatHistory>> =>
+				): Effect.Effect<Option.Option<ChatHistory>, ChatStorageFailed> =>
 					lock.withPermits(1)(
-						Effect.sync(() =>
-							Option.fromNullable(
-								document.sessions.find(
-									(session) =>
-										session.owner === owner && session.sessionId === id,
+						initialize.pipe(
+							Effect.map((current) =>
+								Option.fromNullable(
+									current.sessions.find(
+										(session) =>
+											session.owner === owner && session.sessionId === id,
+									),
 								),
 							),
 						),
 					),
 			);
 			const list = Effect.fn("ChatRepository.list")(
-				(owner: string): Effect.Effect<readonly ChatHistory[]> =>
+				(
+					owner: string,
+				): Effect.Effect<readonly ChatHistory[], ChatStorageFailed> =>
 					lock.withPermits(1)(
-						Effect.sync(() =>
-							document.sessions.filter((session) => session.owner === owner),
+						initialize.pipe(
+							Effect.map((current) =>
+								current.sessions.filter((session) => session.owner === owner),
+							),
 						),
 					),
 			);
@@ -191,11 +203,12 @@ export class ChatRepository extends Effect.Service<ChatRepository>()(
 				): Effect.Effect<void, ChatError> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
+							const current = yield* initialize;
 							const ownedHistory = yield* Effect.try({
 								try: () => historyCopy(history),
 								catch: (cause) => new ChatStorageFailed(cause),
 							});
-							const previous = document.sessions.find(
+							const previous = current.sessions.find(
 								(session) =>
 									session.owner === history.owner &&
 									session.sessionId === history.sessionId,
@@ -205,9 +218,7 @@ export class ChatRepository extends Effect.Service<ChatRepository>()(
 							const next = {
 								version: 1 as const,
 								sessions: [
-									...document.sessions.filter(
-										(session) => session !== previous,
-									),
+									...current.sessions.filter((session) => session !== previous),
 									ownedHistory,
 								],
 							};
@@ -223,9 +234,10 @@ export class ChatRepository extends Effect.Service<ChatRepository>()(
 				): Effect.Effect<void, ChatStorageFailed> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
+							const current = yield* initialize;
 							const next = {
 								version: 1 as const,
-								sessions: document.sessions.filter(
+								sessions: current.sessions.filter(
 									(session) =>
 										session.owner !== owner || session.sessionId !== id,
 								),

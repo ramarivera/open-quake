@@ -14,6 +14,7 @@ import {
 } from "../../../../packages/device/src/profiles/profile-contracts";
 import { LOCALE_REQUEST } from "../shared/locale";
 import { registerAgentHttp } from "./agent-http";
+import { makeDesktopRuntime } from "./diagnostics/runtime";
 import { registerIntegrations } from "./integrations";
 import { registerKnob } from "./knob";
 import { registerMaintenance } from "./maintenance";
@@ -118,37 +119,125 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
-vi.mock("./agents", () => ({
-	registerAgents: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
-}));
-vi.mock("./integrations", () => ({
-	registerIntegrations: vi.fn(() => ({
-		dispose: vi.fn(async () => {}),
-		executeHaFromKey: vi.fn(async () => {}),
-	})),
-}));
-vi.mock("./emoji", () => ({
-	registerEmoji: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
-}));
-vi.mock("./maintenance", () => ({
-	registerMaintenance: vi.fn(() => ({
-		dispose: vi.fn(async () => {}),
-		ready: Promise.resolve(),
-	})),
-}));
-vi.mock("./monitor", () => ({
-	registerMonitor: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
-}));
-vi.mock("./profiles", () => ({
-	registerProfiles: vi.fn(() => ({
-		runtime: { runFork: vi.fn(), runPromise: vi.fn() },
-		select: vi.fn(),
-		connect: vi.fn(async () => {}),
-		disconnect: vi.fn(async () => {}),
-		resetKeys: vi.fn(async () => {}),
-		dispose: vi.fn(async () => {}),
-	})),
-}));
+vi.mock("./diagnostics/runtime", async (original) => {
+	const actual = await original<typeof import("./diagnostics/runtime")>();
+	return { ...actual, makeDesktopRuntime: vi.fn(actual.makeDesktopRuntime) };
+});
+vi.mock("./agents", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerAgents: vi.fn((..._args: unknown[]) => ({
+			dispose: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareAgents: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerAgents(...args),
+			);
+			return module;
+		},
+	};
+});
+vi.mock("./integrations", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerIntegrations: vi.fn((..._args: unknown[]) => ({
+			dispose: vi.fn(async () => {}),
+			executeHaFromKey: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareIntegrations: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerIntegrations(...args),
+			);
+			return module;
+		},
+	};
+});
+vi.mock("./emoji", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerEmoji: vi.fn((..._args: unknown[]) => ({
+			dispose: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareEmoji: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerEmoji(...args),
+			);
+			return module;
+		},
+	};
+});
+vi.mock("./maintenance", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerMaintenance: vi.fn((..._args: unknown[]) => ({
+			dispose: vi.fn(async () => {}),
+			ready: Promise.resolve(),
+		})),
+	};
+	return {
+		...registration,
+		prepareMaintenance: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerMaintenance(...args),
+			);
+			return module;
+		},
+	};
+});
+vi.mock("./monitor", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerMonitor: vi.fn((..._args: unknown[]) => ({
+			dispose: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareMonitor: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerMonitor(...args),
+			);
+			return module;
+		},
+	};
+});
+vi.mock("./profiles", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerProfiles: vi.fn((..._args: unknown[]) => ({
+			runtime: { runFork: vi.fn(), runPromise: vi.fn() },
+			select: vi.fn(),
+			connect: vi.fn(async () => {}),
+			disconnect: vi.fn(async () => {}),
+			resetKeys: vi.fn(async () => {}),
+			dispose: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareProfiles: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerProfiles(...args),
+			);
+			return module;
+		},
+	};
+});
 
 vi.mock("./lifecycle/native-display", async (original) => {
 	const actual = await original<typeof import("./lifecycle/native-display")>();
@@ -159,16 +248,44 @@ vi.mock("./lifecycle/native-display", async (original) => {
 		probeHiddenMirroring: vi.fn(() => Effect.succeed(false)),
 	};
 });
-vi.mock("./meetings", () => ({
-	registerMeetings: vi.fn(() => ({ dispose: vi.fn(async () => {}) })),
-}));
-vi.mock("./knob", () => ({
-	registerKnob: vi.fn(() => ({
-		onDevice: () => {},
-		refresh: () => Promise.resolve(),
-		dispose: vi.fn(async () => {}),
-	})),
-}));
+vi.mock("./meetings", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerMeetings: vi.fn((..._args: unknown[]) => ({
+			dispose: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareMeetings: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerMeetings(...args),
+			);
+			return module;
+		},
+	};
+});
+vi.mock("./knob", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerKnob: vi.fn((..._args: unknown[]) => ({
+			onDevice: () => {},
+			refresh: () => Promise.resolve(),
+			dispose: vi.fn(async () => {}),
+		})),
+	};
+	return {
+		...registration,
+		prepareKnob: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerKnob(...args),
+			);
+			return module;
+		},
+	};
+});
 vi.mock("./media", async () => {
 	const { Layer } = await import("effect");
 	return {
@@ -211,11 +328,14 @@ vi.mock("./profiles/profile-ipc", async () => {
 	};
 });
 vi.mock("./voice", async () => {
+	const { Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+
 	const { Effect } = await import("effect");
-	return {
+	const registration = {
 		createToneRecorder: vi.fn(() => ({ play: vi.fn(), played: () => [] })),
 		toneSinks: vi.fn(() => ({ play: vi.fn() })),
-		registerVoiceSurface: vi.fn(() => ({
+		registerVoiceSurface: vi.fn((..._args: unknown[]) => ({
 			ready: Promise.resolve(),
 			reset: vi.fn(async () => undefined),
 			onDevice: vi.fn(async () => undefined),
@@ -224,18 +344,45 @@ vi.mock("./voice", async () => {
 			dispose: vi.fn(async () => undefined),
 		})),
 	};
+	return {
+		...registration,
+		prepareVoiceSurface: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerVoiceSurface(...args),
+			);
+			return module;
+		},
+	};
 });
 
-vi.mock("./agent-http", () => ({
-	registerAgentHttp: vi.fn(async () => ({
-		backend: undefined,
-		configured: vi.fn(async () => false),
-		drafting: undefined,
-		createVoiceAdapter: vi.fn(),
-		decorateVoiceRuntime: vi.fn(),
-		dispose: vi.fn(async () => undefined),
-	})),
-}));
+vi.mock("./agent-http", async () => {
+	const { Effect, Layer } = await import("effect");
+	const { prepareDesktopModule } = await import("./diagnostics/module");
+	const registration = {
+		registerAgentHttp: vi.fn(async (..._args: unknown[]) => ({
+			backend: undefined,
+			configured: vi.fn(async () => false),
+			drafting: undefined,
+			createVoiceAdapter: vi.fn(),
+			decorateVoiceRuntime: vi.fn(),
+			dispose: vi.fn(async () => undefined),
+		})),
+	};
+	return {
+		...registration,
+		prepareAgentHttp: (...args: unknown[]) => {
+			const module = prepareDesktopModule(Layer.empty, () =>
+				registration.registerAgentHttp(...args),
+			);
+			return {
+				...module,
+				backend: undefined,
+				drafting: undefined,
+				createVoiceAdapter: () => Effect.void,
+			};
+		},
+	};
+});
 
 function displayEvent(name: string): void {
 	const listeners = electron.screen.on.mock.calls.filter(
@@ -332,6 +479,19 @@ describe("desktop window lifecycle", () => {
 
 	it("starts both surfaces on the primary display without panel hardware", async () => {
 		const { panel, management } = windows();
+		expect(makeDesktopRuntime).toHaveBeenCalledOnce();
+		for (const win of [panel, management]) {
+			const load = win.loadURL.mock.invocationCallOrder[0];
+			expect(load).toBeGreaterThan(
+				vi.mocked(registerMaintenance).mock.invocationCallOrder[0] ?? Infinity,
+			);
+			expect(load).toBeGreaterThan(
+				electron.ipcMain.handle.mock.invocationCallOrder.at(-1) ?? Infinity,
+			);
+		}
+		expect(
+			electron.app.on.mock.calls.filter(([name]) => name === "before-quit"),
+		).toHaveLength(1);
 		expect(electron.app.getLocale).toHaveBeenCalledOnce();
 		expect(electron.ipcMain.handle).toHaveBeenCalledWith(
 			LOCALE_REQUEST,
@@ -453,11 +613,7 @@ describe("desktop window lifecycle", () => {
 		);
 		electron.screen.getAllDisplays.mockReturnValue([primary]);
 		displayEvent("display-removed");
-		await vi.waitFor(() =>
-			expect(
-				electron.BrowserWindow.windows.at(-1)?.options.type,
-			).toBeUndefined(),
-		);
+		await vi.waitFor(() => expect(strip?.destroy).toHaveBeenCalledOnce());
 		const restored = electron.BrowserWindow.windows.at(-1);
 		expect(strip?.destroy).toHaveBeenCalledOnce();
 		expect(restored?.options.type).toBeUndefined();
@@ -769,6 +925,39 @@ describe("desktop window lifecycle", () => {
 		}
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
 		expect(profiles.dispose).toHaveBeenCalledOnce();
+	});
+
+	it("continues cleanup after a registration failure and awaits graph disposal", async () => {
+		const weather = vi.mocked(registerWeatherMedia).mock.results[0]?.value;
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		const application = vi.mocked(makeDesktopRuntime).mock.results[0]?.value;
+		if (!weather || !profiles || !application)
+			throw new Error("Missing application owner");
+		vi.mocked(weather.dispose).mockRejectedValueOnce(
+			new Error("synthetic cleanup failure"),
+		);
+		const dispose = application.dispose.bind(application);
+		let release = () => {};
+		const finalizer = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const ownerDisposal = vi
+			.spyOn(application, "dispose")
+			.mockImplementation(async () => {
+				await finalizer;
+				await dispose();
+			});
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(ownerDisposal).toHaveBeenCalledOnce());
+		try {
+			expect(profiles.dispose).toHaveBeenCalledOnce();
+			expect(electron.app.quit).not.toHaveBeenCalled();
+			appEvent("before-quit");
+			expect(ownerDisposal).toHaveBeenCalledOnce();
+		} finally {
+			release();
+		}
+		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {
@@ -1239,8 +1428,10 @@ describe("single-instance startup and release policy", () => {
 			expect(panel.destroyed).toBe(false);
 			await vi.waitFor(() => expect(reopened?.show).toHaveBeenCalledOnce());
 			expect(reopened?.focus).toHaveBeenCalledOnce();
-			if (state === "destroyed") expect(reopened).not.toBe(management);
-			else expect(reopened).toBe(management);
+			if (state === "destroyed") {
+				expect(reopened).not.toBe(management);
+				expect(reopened?.loadFile).toHaveBeenCalledOnce();
+			} else expect(reopened).toBe(management);
 			if (state === "minimized")
 				expect(management.restore).toHaveBeenCalledOnce();
 			appEvent("before-quit");
