@@ -11,7 +11,10 @@ import {
 	installProfileCatalog,
 	type ManagerRejection,
 } from "./profile-manager-invariants.js";
-import { ProfileRepository } from "./profile-repository.js";
+import {
+	type ProfileCommitGuard,
+	ProfileRepository,
+} from "./profile-repository.js";
 
 export type ManagerResult =
 	| { readonly _tag: "updated"; readonly envelope: ProfileEnvelope }
@@ -41,6 +44,7 @@ export class ProfileManager extends Effect.Service<ProfileManager>()(
 					prepare?: (
 						envelope: ProfileEnvelope,
 					) => Effect.Effect<ProfileEnvelope, E>,
+					guard?: ProfileCommitGuard,
 				): Effect.fn.Return<ManagerResult, ProfileRepositoryError | E> {
 					const command = yield* Schema.decodeUnknown(ManagerCommand)(input, {
 						onExcessProperty: "error",
@@ -59,7 +63,7 @@ export class ProfileManager extends Effect.Service<ProfileManager>()(
 						return prepare
 							? prepare(result.envelope)
 							: Effect.succeed(result.envelope);
-					});
+					}, guard);
 					return Option.match(rejection, {
 						onNone: (): ManagerResult => ({ _tag: "updated", envelope }),
 						onSome: (reason): ManagerResult => ({ _tag: "rejected", reason }),

@@ -11,6 +11,7 @@ import {
 	ProfileWriteFailed,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/index.js";
+import type { ProfileCommitGuard } from "../../../../../packages/device/src/profiles/profile-repository.js";
 
 /** Direct domain import until task 2.1 installs/composes the desktop package edge. */
 export interface ProfileFileSystem {
@@ -51,11 +52,13 @@ export function createDesktopProfileStorage(
 	const atomicWrite = async (
 		target: string,
 		contents: string,
+		guard?: ProfileCommitGuard,
 	): Promise<void> => {
 		await io.mkdir(dirname(target));
 		const temporary = `${target}.${randomUUID()}.tmp`;
 		try {
 			await io.writeFile(temporary, contents);
+			guard?.();
 			await io.rename(temporary, target);
 		} finally {
 			// A cleanup failure must not turn a completed rename into a reported failed save.
@@ -77,14 +80,17 @@ export function createDesktopProfileStorage(
 			return undefined;
 		}
 	};
-	const write = async (envelope: EncodedProfileEnvelope): Promise<void> => {
+	const write = async (
+		envelope: EncodedProfileEnvelope,
+		guard?: ProfileCommitGuard,
+	): Promise<void> => {
 		try {
 			if (!isEncodedProfileEnvelope(envelope))
 				throw new TypeError("Invalid local envelope");
 			const previous = await readOptional(path);
 			if (previous !== undefined && isEncodedProfileEnvelope(parse(previous)))
 				await atomicWrite(backupPath, previous);
-			await atomicWrite(path, JSON.stringify(envelope));
+			await atomicWrite(path, JSON.stringify(envelope), guard);
 		} catch (cause) {
 			throw ProfileWriteFailed.fromCause(cause);
 		}
