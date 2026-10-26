@@ -130,3 +130,31 @@ drain, and verifies worker cleanup. It has a 30-second deadline and must emit
 `SPEECH_AUDIO_SMOKE_OK`; process exit alone is insufficient. This establishes
 the native worker binding only. It doesn't establish physical audio routing,
 provider compatibility, microphone permission, or audibility.
+
+
+`createDesktopSpeech` now creates exactly one `AudioOutput` ownership service and
+returns it as `audioOutput` for app-root soundboard composition. Its lifetime is
+the same scoped voice runtime; shutdown closes the owner after the voice
+controller finalizes. `desktopSpeechPorts(audioOutput)` and
+`createDesktopAudioOutput(audioOutput, optionalWorkerFactory)` require that owner
+explicitly, so separate adapters don't silently create independent arbiters.
+Synthetic `options.ports` overrides remain responsible for their own output
+semantics.
+
+The production speech port supplies a scoped `capture` reservation. Recognition
+holds it from before provider/socket and microphone acquisition through every
+success, failure and interruption finalizer. Legacy injected ports without that
+optional reservation retain their existing `suspendForCapture` behavior. A new
+speech or capture reservation invalidates and awaits the previous output group's
+immediate cleanup. The cleanup has a two-second deadline; failure blocks later
+acquisition for that owner's lifetime instead of allowing overlapping output.
+Soundboard groups must register only immediate resource shutdown, without fades
+or recursive lease release. A group's later release only touches its own token.
+No playback starts automatically after capture completes.
+
+The native synthetic speech smoke now drives the production output adapter and
+shared owner, in addition to its fake microphone. It checks repeated readiness
+creates one worker, speech/capture preemption, busy rejection, stale soundboard
+stop isolation, muted natural drain, and full native worker cleanup. These are
+ownership and native worker proofs. The soundboard conductor, MP3 decoding,
+player UI and physical/hearing acceptance remain separate unfinished tasks.

@@ -6,6 +6,7 @@ import {
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import { wav } from "../../../../../packages/edge/src/ai/speech/speech-test-fixtures";
+import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import {
 	VoiceSurface,
 	VoiceSurfacePublisher,
@@ -63,7 +64,10 @@ describe("turnkey production factory with synthetic ports", () => {
 				closed++;
 			},
 		};
-		const output = createDesktopAudioOutput(async () => worker);
+		const output = createDesktopAudioOutput(
+			await Effect.runPromise(makeAudioOutput),
+			async () => worker,
+		);
 		const layer = Layer.mergeAll(
 			Layer.succeed(SpeechOutput, output),
 			Layer.succeed(SpeechWebSocket, {

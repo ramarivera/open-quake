@@ -32,6 +32,11 @@ export class SpeechOutput extends Context.Tag("@open-quake/edge/SpeechOutput")<
 	{
 		/** Stop/suspend all host audio before recognition. Never resume it automatically. */
 		readonly suspendForCapture: Effect.Effect<void, AiError>;
+		/** Production shared ownership, held until recognition finalizes on every exit. */
+		readonly capture?: Effect.Effect<
+			{ readonly stop: Effect.Effect<void> },
+			AiError
+		>;
 		readonly acquire: Effect.Effect<
 			{
 				readonly ready: Effect.Effect<void, AiError>;
