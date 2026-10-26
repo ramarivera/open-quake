@@ -25,6 +25,39 @@ Production desktop bindings and synthetic acceptance are implemented. Live provi
 - [ ] 3.3 Add optional Qwen realtime TTS, Azure, or XFY only after adapter-specific evidence; verify readiness, codec, usage, and playback-terminal conformance per route, and document unsupported capabilities.
 - [ ] 3.4 Add the shipped opt-in Meet AI live translation route (`AI-136/292/327`); verify explicit language pairs, original/translated provenance, target TTS, and GT locale independence through the voice UI and bounded display history (`AI-338`), and document the shipped-profile evidence despite commented library entries.
 
+## 4. Recorder lifetime hardening
+
+- [x] 4.1 Await acquired recorder-worker teardown on startup failure and interruption, close late acquisitions without recording, and share failed-Stop/session-close teardown. Tracked in `open-quake-c5w.6.1`; broader task 2.3 remains open.
+
+The actual driver passes five lifetime regressions. Four fail against the
+previous implementation, demonstrating two failure paths returning before
+cleanup, interruption dropping acquired ownership, and duplicate close calls.
+Permission-denied and recorder errors retain their original private cause.
+The desktop suite passes 1,616 tests with one existing native skip. Typecheck,
+scoped Biome, production build, both bundle smoke modes and strict validation
+pass. The hidden native smoke exercises the production capture driver with
+Chromium synthetic input, and failed startup with delayed real worker cleanup,
+then the existing muted output/ownership acceptance. It reports success with
+zero remaining workers or worker directories. This proves synthetic native
+resource ownership, not physical microphone, OS grants or audible playback.
+
+An initial native run blocked in an Electron uncaught-error dialog and its
+owned process was terminated. Its cause wasn't established. The test entry now
+exits unsuccessfully on uncaught errors instead of opening that dialog. The
+subsequent native run passed. Reviewed delivery remains tracked in Beads.
+
+PR69 review hardening adds two cleanup-rejection cases and strengthens late
+acquisition cancellation. All three fail on the previous revision. Cancellation
+now awaits both the pending factory and its worker teardown; a rejecting factory
+also settles before cancellation returns. Startup cleanup rejection emits a
+scrubbed catalog warning without masking the original typed recorder error.
+The eight lifetime cases and 80 focused speech/chat tests pass. The updated
+native smoke joins delayed acquisition and actual worker cleanup without invoking
+capture, and finishes with no workers or worker directories left. It continues
+to use synthetic input and muted output only. The combined desktop suite passes
+1,626 tests with one existing native skip; typecheck, production build, both
+bundle smoke modes, scoped Biome and strict validation pass.
+
 
 Cluster 14 implementation evidence for 2.6: packages/edge/src/ai/speech/
 speech-service.test.ts drives AiProviderService.createSpeech to fake HTTP and

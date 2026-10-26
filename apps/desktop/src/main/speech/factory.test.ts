@@ -160,12 +160,11 @@ describe("turnkey production factory with synthetic ports", () => {
 				Effect.gen(function* () {
 					const fiber = yield* driver.open("late").pipe(Effect.fork);
 					yield* Effect.yieldNow();
-					yield* Fiber.interrupt(fiber);
+					const stopping = yield* Fiber.interrupt(fiber).pipe(Effect.fork);
+					yield* Effect.yieldNow();
+					expect(Option.isNone(yield* Fiber.poll(stopping))).toBe(true);
 					grant?.({ invoke, close });
-					yield* Effect.promise(async () => {
-						await granted;
-						await Promise.resolve();
-					});
+					yield* Fiber.join(stopping);
 					expect(invoke).not.toHaveBeenCalled();
 					expect(close).toHaveBeenCalledOnce();
 				}),
