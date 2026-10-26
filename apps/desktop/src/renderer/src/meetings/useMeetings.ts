@@ -32,6 +32,7 @@ function accept(value: unknown): void {
 		? {
 				...view,
 				error: "Meeting response was invalid",
+				errorCode: undefined,
 				failureVersion: view.failureVersion + 1,
 			}
 		: decoded.right._tag === "failure"
@@ -42,7 +43,12 @@ function accept(value: unknown): void {
 					failureVersion: view.failureVersion + 1,
 				}
 			: decoded.right._tag === "ready"
-				? { ...view, snapshot: decoded.right.snapshot, error: "" }
+				? {
+						...view,
+						snapshot: decoded.right.snapshot,
+						error: "",
+						errorCode: undefined,
+					}
 				: view;
 	for (const listener of listeners) listener();
 }

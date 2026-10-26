@@ -123,3 +123,31 @@ it.each([
 		message,
 	);
 });
+
+it("clears stale coded failures before invalid responses and ready replies", async () => {
+	const { useMeetings } = await import("./useMeetings");
+	let current: ReturnType<typeof useMeetings> | undefined;
+	function Probe() {
+		current = useMeetings();
+		return createElement("p", {}, current.error);
+	}
+	dom = meetingDom();
+	await dom.render(createElement(Probe));
+	await dom.emit({
+		_tag: "failure",
+		code: "QUAKE.MEETING.AUDIO_MISSING",
+		message: "Missing audio",
+	});
+	expect(current?.errorCode).toBe("QUAKE.MEETING.AUDIO_MISSING");
+	await dom.emit({ invalid: true });
+	expect(dom.host.textContent).toBe("Meeting response was invalid");
+	expect(current?.errorCode).toBeUndefined();
+	await dom.emit({
+		_tag: "failure",
+		code: "QUAKE.MEETING.AUDIO_MISSING",
+		message: "Missing audio",
+	});
+	await dom.push({});
+	expect(current?.error).toBe("");
+	expect(current?.errorCode).toBeUndefined();
+});
