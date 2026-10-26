@@ -9,6 +9,7 @@ import {
 	MeetingId,
 	type MeetingRecord,
 	type MeetingSnapshot,
+	type MeetingStageState,
 	type TemplateId,
 	type Translation,
 } from "./meeting-contracts.js";
@@ -36,6 +37,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			const provider = yield* MeetingProvider;
 			const capture = yield* MeetingCapture;
 			const progress = yield* Effect.serviceOption(MeetingProgress);
+			const latestStages = new Map<MeetingId, MeetingStageState>();
 			const stages = new Map<
 				MeetingId,
 				{ stage: number; origin?: MeetingOrigin | undefined }
@@ -51,6 +53,11 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					const current = stages.get(meetingId);
 					if (!current) return;
 					current.stage = value;
+					latestStages.set(meetingId, { stage: value, status });
+					while (latestStages.size > 128) {
+						const first = latestStages.keys().next().value;
+						if (first !== undefined) latestStages.delete(first);
+					}
 					if (Option.isSome(progress))
 						yield* progress.value.publish({
 							meetingId,
@@ -85,9 +92,15 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			);
 			const snapshot = Effect.fn("MeetingService.snapshot")(
 				function* (): Effect.fn.Return<MeetingSnapshot, MeetingError> {
+					const records = yield* repo.list();
 					return {
 						...(yield* Ref.get(ephemeral)),
-						records: yield* repo.list(),
+						records,
+						progress: Object.fromEntries(
+							[...latestStages].filter(([id]) =>
+								records.some((r) => r.id === id),
+							),
+						),
 						mic: yield* capture.mic(),
 						config: yield* Ref.get(config),
 						revision: yield* Ref.updateAndGet(revision, (n) => n + 1),

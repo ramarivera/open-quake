@@ -31,7 +31,10 @@ export function MeetingDisplay({
 	const temp = snapshot?.records.find((r) => Option.isSome(r.parentId));
 	const record = tab === "main" ? main : temp;
 	const progress = record
-		? context.voice.view.meetingStages.get(record.id)
+		? (context.voice.view.meetingStages.get(record.id) ??
+			(context.voice.view.resetMeetings.has(record.id)
+				? undefined
+				: snapshot?.progress?.[record.id]))
 		: undefined;
 	const text =
 		tab === "live"
@@ -129,7 +132,7 @@ export function MeetingDisplay({
 			aria-label="Meet AI"
 			style={{ borderRadius: tile.tileRadius }}
 			data-translating={snapshot?.translating}
-			data-meeting-id={progress?.meetingId}
+			data-meeting-id={progress ? record?.id : undefined}
 			data-meeting-stage={progress?.stage}
 			data-meeting-status={progress?.status}
 		>

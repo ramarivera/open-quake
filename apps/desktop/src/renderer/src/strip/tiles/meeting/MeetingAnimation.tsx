@@ -1,7 +1,9 @@
 import { Option } from "effect";
 import { useEffect, useState } from "react";
-import type { MeetingRecord } from "../../../../../shared/meeting-bridge";
-import type { VoiceSurfaceEvent } from "../../../../../shared/voice-surface";
+import type {
+	MeetingRecord,
+	MeetingStageState,
+} from "../../../../../shared/meeting-bridge";
 import { MeetingGlyph } from "./MeetingGlyph";
 
 export function MeetingAnimation({
@@ -9,7 +11,7 @@ export function MeetingAnimation({
 	progress: latestProgress,
 }: {
 	record: MeetingRecord | undefined;
-	progress?: Extract<VoiceSurfaceEvent, { _tag: "MeetingStage" }> | undefined;
+	progress?: MeetingStageState | undefined;
 }): React.JSX.Element {
 	const progress =
 		record?.state === "recorded" &&
