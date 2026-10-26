@@ -640,3 +640,38 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"touching directional knob hotkeys never acquires or executes a chord",
+	() => {
+		let acquisitions = 0;
+		const f = fixture(
+			{
+				type: "hotkey",
+				supportKnob: true,
+				actions: [
+					{ type: "key", value: "a" },
+					{ type: "key", value: "b" },
+				],
+			},
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.sync(() => {
+						acquisitions++;
+						return Effect.void;
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			for (const finish of ["up", "cancel"] as const) {
+				yield* runtime.activate("device", "1,1", "down");
+				yield* runtime.activate("device", "1,1", finish);
+			}
+			expect(acquisitions).toBe(0);
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

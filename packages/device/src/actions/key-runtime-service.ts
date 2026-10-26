@@ -270,6 +270,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				);
 				if (!key || isUnsupportedProfileKey(key)) return;
 				if (kind === "down") {
+					if (key.config.type === "hotkey" && key.config.supportKnob) return;
 					const activation = {
 						deviceId,
 						profileId: profile.id,
