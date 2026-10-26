@@ -166,7 +166,7 @@ for (const stage of [
 				} else {
 					expect(reply.ok).toBe(true);
 					expect(release).not.toHaveBeenCalled();
-					if (shared && (stage === "dispose" || stage === "disposing-copy")) {
+					if (shared && stage === "dispose") {
 						await owner.dispose();
 						expect(release).not.toHaveBeenCalled();
 					}

@@ -85,14 +85,15 @@ describe("production locale IPC registration and durable storage", () => {
 		try {
 			expect(await bridge.set("de")).toEqual({ locale: "de", revision: 1 });
 			expect(await consumer.read()).toEqual({ locale: "de", revision: 1 });
-			await registration.dispose();
-			expect(await consumer.read()).toEqual({ locale: "de", revision: 1 });
 			expect(await locale.runtime.runPromise(SettingsService)).toBe(
 				await application.runPromise(SettingsService),
 			);
+			await registration.dispose();
+			expect(await consumer.read()).toEqual({ locale: "de", revision: 1 });
 		} finally {
 			await bridge.dispose();
 			await registration.dispose();
+			await observer.runtime.dispose();
 			await application.dispose();
 			await rm(directory, { recursive: true, force: true });
 		}
@@ -202,15 +203,37 @@ describe("production locale IPC registration and durable storage", () => {
 				.reverse()
 				.find(([name]) => name === LOCALE_REQUEST)?.[1];
 			if (!handler) throw new Error("Missing handler");
-			await expect(
-				handler(management.event(), {
-					_tag: "Request",
-					id: "1",
-					tag: "settings.locale",
-					payload: undefined,
-				}),
-			).rejects.toBeDefined();
+			const failed = await handler(management.event(), {
+				_tag: "Request",
+				id: "1",
+				tag: "settings.locale",
+				payload: undefined,
+			});
+			expect(failed).toMatchObject({
+				_tag: "Exit",
+				exit: {
+					_tag: "Failure",
+					cause: {
+						_tag: "Fail",
+						error: { code: "QUAKE.SETTINGS.READ_FAILED" },
+					},
+				},
+			});
 			expect(await readFile(path, "utf8")).toBe(original);
+			await writeFile(
+				path,
+				JSON.stringify({ version: 1, locale: "de", revision: 7 }),
+			);
+			const recovered = await handler(management.event(), {
+				_tag: "Request",
+				id: "2",
+				tag: "settings.locale",
+				payload: undefined,
+			});
+			expect(recovered).toMatchObject({
+				_tag: "Exit",
+				exit: { _tag: "Success", value: { locale: "de", revision: 7 } },
+			});
 		} finally {
 			await registration.dispose();
 			await rm(directory, { recursive: true, force: true });

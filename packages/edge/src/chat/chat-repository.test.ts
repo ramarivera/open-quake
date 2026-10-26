@@ -3,14 +3,14 @@ import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Either, Layer, Option, Schema } from "effect";
+import { Effect, Either, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { vi } from "vitest";
 import { workflowProfile } from "../ai/ai-test-fixtures.js";
 import { SessionId, TurnId } from "./chat-contracts.js";
 import { ChatStorageFailed } from "./chat-errors.js";
 import { emptyTurn } from "./chat-invariants.js";
 import {
-	type ChatHistory,
+	ChatHistory,
 	ChatRepository,
 	ChatStorage,
 	fileChatStorageLayer,
@@ -204,4 +204,59 @@ describe("private durable chat repository", () => {
 			);
 		},
 	);
+});
+
+it("acquires without loading history, retries a failed read and serializes crash recovery", async () => {
+	let broken = true;
+	let loads = 0;
+	const saved: unknown[] = [];
+	const error = new ChatStorageFailed(new Error("private history"));
+	const runtime = ManagedRuntime.make(
+		ChatRepository.Default.pipe(
+			Layer.provide(
+				Layer.succeed(ChatStorage, {
+					load: Effect.suspend(() => {
+						loads++;
+						return broken
+							? Effect.fail(error)
+							: Effect.succeed(
+									Option.some({
+										version: 1,
+										sessions: [Schema.encodeSync(ChatHistory)(history)],
+									}),
+								);
+					}),
+					save: (document) =>
+						Effect.sync(() => {
+							saved.push(document);
+						}),
+				}),
+			),
+		),
+	);
+	try {
+		await runtime.runtime();
+		expect(loads).toBe(0);
+		expect(
+			await runtime.runPromise(
+				Effect.either(ChatRepository.list(history.owner)),
+			),
+		).toMatchObject({ _tag: "Left", left: error });
+		expect(saved).toEqual([]);
+		broken = false;
+		const results = await Promise.all(
+			Array.from({ length: 8 }, () =>
+				runtime.runPromise(ChatRepository.list(history.owner)),
+			),
+		);
+		expect(
+			results.every(
+				(records) => records[0]?.turns[0]?.status === "interrupted",
+			),
+		).toBe(true);
+		expect(loads).toBe(2);
+		expect(saved).toHaveLength(1);
+	} finally {
+		await runtime.dispose();
+	}
 });

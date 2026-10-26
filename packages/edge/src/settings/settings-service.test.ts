@@ -145,3 +145,53 @@ describe("saved locale settings", () => {
 		}
 	});
 });
+
+it("acquires without reading settings and retries failures without overwriting saved data", async () => {
+	let broken = true;
+	let reads = 0;
+	let writes = 0;
+	const error = new SettingsReadFailed(new Error("private saved settings"));
+	const runtime = ManagedRuntime.make(
+		SettingsService.Default.pipe(
+			Layer.provide(
+				Layer.succeed(SettingsStorage, {
+					osLocale: "en",
+					read: Effect.suspend(() => {
+						reads++;
+						return broken
+							? Effect.fail(error)
+							: Effect.succeed(
+									Option.some({ version: 1, locale: "de", revision: 7 }),
+								);
+					}),
+					write: () =>
+						Effect.sync(() => {
+							writes++;
+						}),
+				}),
+			),
+		),
+	);
+	try {
+		await runtime.runtime();
+		expect(reads).toBe(0);
+		const failed = await runtime.runPromise(
+			SettingsService.use((s) => Effect.either(s.locale())),
+		);
+		expect(failed).toMatchObject({ _tag: "Left", left: error });
+		expect(writes).toBe(0);
+		broken = false;
+		const results = await Promise.all(
+			Array.from({ length: 8 }, () =>
+				runtime.runPromise(SettingsService.use((s) => s.locale())),
+			),
+		);
+		expect(results.every((r) => r.locale === "de" && r.revision === 7)).toBe(
+			true,
+		);
+		expect(reads).toBe(2);
+		expect(writes).toBe(0);
+	} finally {
+		await runtime.dispose();
+	}
+});

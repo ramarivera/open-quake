@@ -1,8 +1,15 @@
-import type { Effect, Layer, ManagedRuntime } from "effect";
+import {
+	Effect,
+	Exit,
+	Fiber,
+	type Layer,
+	type ManagedRuntime,
+	Scope,
+} from "effect";
 import type { DesktopDiagnostics, DiagnosticOperation } from "./index.js";
 import { makeDesktopRuntime } from "./runtime.js";
 
-/** An execution view has no Effect layer or independently owned service scope. */
+/** An execution view owns registration work, never the application service scope. */
 export type DesktopRuntime<R, E = never> = Pick<
 	ManagedRuntime.ManagedRuntime<R, E>,
 	| "runPromise"
@@ -27,6 +34,21 @@ export function prepareDesktopModule<R, E, A>(
 	let owner: DesktopRuntime<R, E> | undefined;
 	let owned = false;
 	let started = false;
+	let closed = false;
+	let disposal: Promise<void> | undefined;
+	const scope = Effect.runSync(Scope.make());
+	// Every execution belongs to this registration. Interrupting a caller also
+	// interrupts its child; closing this scope joins all outstanding operations.
+	const local = <V, F, Requirements>(
+		effect: Effect.Effect<V, F, Requirements>,
+	) =>
+		Effect.uninterruptibleMask((restore) =>
+			Effect.flatMap(Effect.forkIn(restore(effect), scope), (fiber) =>
+				restore(Fiber.join(fiber)).pipe(
+					Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+				),
+			),
+		);
 	const interpreter = (): DesktopRuntime<R, E> => {
 		if (!owner) throw new TypeError("Desktop module has no application owner");
 		return owner;
@@ -37,16 +59,25 @@ export function prepareDesktopModule<R, E, A>(
 		diagnostics && !owned ? diagnostics.instrument(effect, operation) : effect;
 	const runtime: DesktopRuntime<R, E> = {
 		runPromise: (effect, options) =>
-			interpreter().runPromise(observe(effect), options),
+			interpreter().runPromise(local(observe(effect)), options),
 		runPromiseExit: (effect, options) =>
-			interpreter().runPromiseExit(observe(effect), options),
+			interpreter().runPromiseExit(local(observe(effect)), options),
 		runFork: (effect, options) =>
-			interpreter().runFork(observe(effect), options),
-		runSync: (effect) => interpreter().runSync(observe(effect)),
-		runSyncExit: (effect) => interpreter().runSyncExit(observe(effect)),
+			interpreter().runFork(local(observe(effect)), options),
+		runSync: (effect) =>
+			interpreter().runSync(closed ? Effect.interrupt : observe(effect)),
+		runSyncExit: (effect) =>
+			interpreter().runSyncExit(closed ? Effect.interrupt : observe(effect)),
 		runCallback: (effect, options) =>
-			interpreter().runCallback(observe(effect), options),
-		dispose: () => (owned ? interpreter().dispose() : Promise.resolve()),
+			interpreter().runCallback(local(observe(effect)), options),
+		dispose: () => {
+			if (disposal) return disposal;
+			closed = true;
+			disposal = Effect.runPromise(Scope.close(scope, Exit.void)).finally(() =>
+				owned ? interpreter().dispose() : undefined,
+			);
+			return disposal;
+		},
 	};
 	const bind = (application: DesktopRuntime<R, E>): void => {
 		if (owner) throw new TypeError("Desktop module is already bound");

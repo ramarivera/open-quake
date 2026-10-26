@@ -52,7 +52,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				new Set(),
 			);
 			const snapshot = Effect.fn("MeetingService.snapshot")(
-				function* (): Effect.fn.Return<MeetingSnapshot> {
+				function* (): Effect.fn.Return<MeetingSnapshot, MeetingError> {
 					return {
 						...(yield* Ref.get(ephemeral)),
 						records: yield* repo.list(),
@@ -63,7 +63,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				},
 			);
 			const publish = Effect.fn("MeetingService.publish")(
-				function* (): Effect.fn.Return<void> {
+				function* (): Effect.fn.Return<void, MeetingError> {
 					yield* PubSub.publish(changes, yield* snapshot());
 				},
 			);
@@ -397,7 +397,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					summary: r.summary === "processing" ? "failed" : r.summary,
 				}));
 			const suspendCapture = Effect.fn("MeetingService.suspend")(
-				function* (): Effect.fn.Return<void> {
+				function* (): Effect.fn.Return<void, MeetingError> {
 					const now = yield* Clock.currentTimeMillis;
 					const active = (yield* repo.list()).filter(
 						(r) => r.state === "recording",

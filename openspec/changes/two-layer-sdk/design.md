@@ -10,10 +10,37 @@ the application runtime. Their explicit teardown still cancels and joins workers
 in dependency order. The root disposes the graph once after those writers stop,
 then flushes diagnostics. Standalone module tests may construct their own owner.
 This does not use a registry of runtimes or a shared memo map across owners.
+Each execution view owns a closeable scope for its registration's asynchronous
+operations. Closing that view interrupts and joins those operations, including
+pending finalizers, while keeping the shared services alive. Caller interruption
+also interrupts and joins the corresponding operation. Standalone views additionally
+dispose their own runtime. Service resources, including the emoji foreground
+probe and conversation shutdown, remain scoped to the graph.
+
+Settings, chat history, meeting history and firmware recovery load their local
+records on the first service operation rather than while acquiring the graph.
+Initialization is serialized, publishes state only after a successful read or
+recovery, and retries after failures. A corrupt feature store retains its catalog
+error and cannot block unrelated services from starting. No failed read silently
+replaces saved data. HTTP connection acquisition retains its existing unavailable
+response when its local repository cannot be constructed.
+
+The root acquires the graph before activating IPC consumers and loads renderers
+after registrations. Recreated panel and management windows still load their
+surfaces. Wallpaper delegates quit ownership to the root. Shutdown attempts every
+ordered registration cleanup even if an earlier one fails, awaits graph disposal,
+then flushes diagnostics. Maintenance reset and import finish their graph-bound
+request effect before main runs the confirmed replacement. Main stops all writers
+and awaits graph finalizers before clearing or replacing owned data, so a late
+persistence finalizer cannot recreate deleted records or overwrite imported data.
+The replacement uses an IO-only diagnostic effect outside the disposed graph;
+failures retain their catalog identity, and diagnostics flush before native exit. Firmware shutdown prevents new work and joins its worker before
+releasing security bookmarks.
 
 The runtime registry and conversation service participate in the same graph.
 Saved connection reads remain local, optional runtime setup failures retain their
-unavailable IPC response, and boot does not perform HTTP or acquire HID handles.
+unavailable IPC response. Graph acquisition performs no HTTP or HID I/O; the
+existing device bus starts after registration.
 
 ## Context
 
