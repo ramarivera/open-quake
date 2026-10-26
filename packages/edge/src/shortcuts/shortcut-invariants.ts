@@ -4,11 +4,16 @@ import {
 	HOTKEY_MODIFIERS,
 	isHotkeyChord,
 } from "../../../device/src/actions/action-contracts.js";
+import { findAction } from "../../../device/src/actions/action-registry.js";
+import {
+	ProfileAction,
+	ProfileJson,
+} from "../../../device/src/profiles/profile-contracts.js";
 import { InputRejected } from "../channels/integration-errors.js";
 import {
 	type DraftResult,
-	GeneratedAction,
 	GeneratedConfig,
+	ShortcutConfig,
 	type ShortcutRow,
 } from "./shortcut-contracts.js";
 
@@ -96,31 +101,55 @@ export function decodeDraft(
 		const rows: ShortcutRow[] = [];
 		let dropped = 0;
 		for (const [index, item] of decoded.ConfigData.entries()) {
-			if (
-				item.config.functionType !== "hotkey" ||
-				item.config.actions.length !== 1
-			) {
-				dropped++;
-				continue;
-			}
-			const action = Schema.decodeUnknownEither(GeneratedAction)(
-				item.config.actions[0],
-			);
-			if (action._tag === "Left") {
-				dropped++;
-				continue;
-			}
 			try {
-				const chord = normalizeChord(
-					"value" in action.right
-						? action.right.value
-						: action.right.operationValue,
-				);
+				let config = Schema.decodeUnknownSync(ShortcutConfig)({
+					type: item.config.functionType,
+					actions: item.config.actions.map((raw) => {
+						const action = Schema.decodeUnknownSync(
+							Schema.Union(
+								ProfileAction,
+								Schema.Struct({
+									operationName: Schema.String,
+									operationValue: ProfileJson,
+								}),
+							),
+						)(raw);
+						return "type" in action
+							? action
+							: { type: action.operationName, value: action.operationValue };
+					}),
+					...(item.config.subActions
+						? { subActions: item.config.subActions }
+						: {}),
+				});
+				if (config.type === "hotkey" || config.type === "hotkeySwitch") {
+					config = {
+						...config,
+						actions: config.actions.map((action) =>
+							action.type === "key" && typeof action.value === "string"
+								? {
+										...action,
+										value: executableChord(normalizeChord(action.value)),
+									}
+								: action,
+						),
+					};
+				}
+				validateShortcutConfig(config);
+				const first = config.actions.find((a) => a.type === "key");
+				const chord =
+					config.type === "hotkey" && typeof first?.value === "string"
+						? normalizeChord(first.value)
+						: "";
 				rows.push({
 					id: id(),
 					name: item.title.trim() || `Shortcut ${index + 1}`,
 					app,
 					chord,
+					...(config.type === "hotkey" ? {} : { config }),
+					...(item.icon && /^mdi-[a-z0-9-]{1,80}$/.test(item.icon)
+						? { icon: item.icon }
+						: {}),
 				});
 			} catch {
 				dropped++;
@@ -145,3 +174,32 @@ export const conflictIds = (
 };
 export const validLibraryName = (name: string) =>
 	!!name.trim() && /^[一-龥a-zA-Z0-9\s\-_]+$/.test(name) && name.length <= 100;
+
+export function validateShortcutConfig(
+	config: typeof ShortcutConfig.Type,
+): void {
+	const entry = findAction(config.type);
+	if (
+		![
+			"hotkey",
+			"hotkeySwitch",
+			"website",
+			"text",
+			"timer",
+			"panelBrightness",
+			"playPause",
+			"stopPlay",
+			"skipBackward",
+			"skipForward",
+			"fastBackward",
+			"fastForward",
+			"repeatPlay",
+			"randomPlay",
+		].includes(config.type) ||
+		!entry ||
+		entry.gate === "unresolved" ||
+		["emoji", "assistant", "multiActions"].includes(config.type) ||
+		entry.decode(config)._tag === "Left"
+	)
+		throw new InputRejected(undefined, "Unsupported generated action");
+}

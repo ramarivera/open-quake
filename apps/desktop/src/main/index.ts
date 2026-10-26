@@ -41,6 +41,7 @@ import { prepareDesktopModule } from "./diagnostics/module";
 import { makeDesktopRuntime } from "./diagnostics/runtime";
 import { findPanelDisplay, type PanelRotation, panelRotation } from "./display";
 import { prepareEmoji } from "./emoji";
+import { createEmojiGeneration } from "./emoji/generation";
 import { createEventForwarder } from "./eventForwarding";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
@@ -475,6 +476,15 @@ if (!app.requestSingleInstanceLock()) {
 							draftShortcuts: (...args) => directChat.draftShortcuts(...args),
 						});
 						const emojiModule = prepareEmoji({
+							generation: createEmojiGeneration({
+								models: () =>
+									agentsModule.runtime.runPromise(
+										AgentsService.resolve("default"),
+									),
+								credentials: modelCredentials.ai,
+								infer: (effect, signal) =>
+									directModule.runtime.runPromise(effect, { signal }),
+							}),
 							diagnostics,
 							selectionSerial: () => media.selectionSerial(),
 							management: () => managementWin,

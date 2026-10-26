@@ -1,10 +1,13 @@
 import { Effect, Layer, ManagedRuntime, Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
-import { managerState } from "../../../../../packages/device/src/profiles/profile-manager-invariants";
+import {
+	applyManagerCommand,
+	managerState,
+} from "../../../../../packages/device/src/profiles/profile-manager-invariants";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -14,6 +17,7 @@ import {
 	emptyEmojiStore,
 } from "../../../../../packages/edge/src/emoji/emoji-contracts";
 import { placeEmojiPackage } from "./profile-placement";
+import { renameLinkedEmojiProfile } from "./profile-rename";
 
 const hash = "a".repeat(64);
 const fixture: EmojiStore = {
@@ -61,6 +65,30 @@ function setup() {
 	};
 }
 describe("emoji profile placement", () => {
+	it.each([0, 1, 2] as const)(
+		"pins edited per-key mode %s during placement",
+		async (mode) => {
+			const f = setup();
+			try {
+				const place = placeEmojiPackage({
+					runtime: f.runtime,
+					select: async () => {},
+				});
+				const id = await place("daily", {
+					...fixture,
+					items: fixture.items.map((item) => ({ ...item, mode })),
+				});
+				const key = (await f.read()).envelope.profiles.find((p) => p.id === id)
+					?.pages[0].keys[0];
+				expect(
+					key?.config.actions.find((action) => action.type === "emojiAction")
+						?.value,
+				).toBe(mode);
+			} finally {
+				await f.runtime.dispose();
+			}
+		},
+	);
 	it("places in row order, pins hashes, and updates the same profile on repeat", async () => {
 		const f = setup();
 		let selected = "";
@@ -258,4 +286,97 @@ describe("emoji profile placement", () => {
 			await f.runtime.dispose();
 		}
 	});
+});
+
+it("MGMT-101 renames linked profiles, rejects existing names and rolls back library save failure", async () => {
+	const f = setup();
+	try {
+		const place = placeEmojiPackage({
+			runtime: f.runtime,
+			select: async () => {},
+		});
+		const id = await place("daily", fixture);
+		let published = 0;
+		const rename = renameLinkedEmojiProfile({
+			runtime: f.runtime,
+			refresh: async () => {
+				published++;
+			},
+		});
+		await rename(id, "Renamed", async () => {});
+		expect(
+			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
+		).toBe("Renamed");
+		expect(published).toBe(1);
+		await expect(
+			rename(id, "Failed", async () => {
+				throw Error("library unavailable");
+			}),
+		).rejects.toThrow("library unavailable");
+		expect(
+			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
+		).toBe("Renamed");
+		expect(published).toBe(1);
+		const existing = (await f.read()).envelope.profiles.find(
+			(p) => p.id !== id,
+		)?.name;
+		expect(existing).toBeTruthy();
+		await expect(
+			rename(id, existing ?? "", async () => {
+				throw Error("must not save");
+			}),
+		).rejects.toBeDefined();
+		expect(
+			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
+		).toBe("Renamed");
+	} finally {
+		await f.runtime.dispose();
+	}
+});
+
+it("allows package renames after its generated profile is deleted", async () => {
+	const f = setup();
+	try {
+		const id = await placeEmojiPackage({
+			runtime: f.runtime,
+			select: async () => {},
+		})("daily", fixture);
+		await f.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) =>
+				repo.transact((current) =>
+					Effect.try({
+						try: () => {
+							const result = applyManagerCommand(current, {
+								type: "delete",
+								id,
+								confirmed: true,
+							});
+							if (result._tag !== "updated")
+								throw Error("Expected profile deletion");
+							return result.envelope;
+						},
+						catch: (cause) => cause,
+					}),
+				),
+			),
+		);
+		const before = f.disk;
+		const save = vi.fn(async () => {});
+		const refresh = vi.fn(async () => {});
+		const rename = renameLinkedEmojiProfile({ runtime: f.runtime, refresh });
+		// The standalone package limit is 20, even though linked profiles allow 10.
+		await expect(rename(id, "Standalone Pack", save)).resolves.toBeUndefined();
+		expect(save).toHaveBeenCalledOnce();
+		expect(f.disk).toEqual(before);
+		expect(refresh).not.toHaveBeenCalled();
+		const failure = new Error("library write failed");
+		await expect(
+			rename(id, "Retry", async () => {
+				throw failure;
+			}),
+		).rejects.toBe(failure);
+		expect(f.disk).toEqual(before);
+	} finally {
+		await f.runtime.dispose();
+	}
 });
