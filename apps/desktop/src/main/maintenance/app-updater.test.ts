@@ -1,6 +1,15 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import * as files from "node:fs/promises";
-import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Option } from "effect";
@@ -287,4 +296,40 @@ it("streams reusable chunks to disk and hashes files with bounded allocations an
 	await Effect.runPromise(f.port.install(big));
 	expect(allocations).toHaveBeenCalled();
 	expect(concatenate).not.toHaveBeenCalled();
+});
+
+it("prunes superseded artifacts after successful download and installation, preserving unrelated files and failed-download recovery", async () => {
+	const f = await fixture();
+	const old = `app-update-${"a".repeat(64)}.artifact`;
+	const linked = `app-update-${"b".repeat(64)}.artifact`;
+	const directory = `app-update-${"c".repeat(64)}.artifact`;
+	await writeFile(join(f.root, old), "old synthetic installer");
+	await writeFile(join(f.root, "settings.json"), "keep");
+	await symlink(join(f.root, "settings.json"), join(f.root, linked));
+	await mkdir(join(f.root, directory));
+	await Effect.runPromise(f.port.check());
+	f.transport.mockResolvedValueOnce(new Response("corrupt"));
+	expect(
+		(
+			await Effect.runPromise(
+				f.port.download(release, () => {}).pipe(Effect.either),
+			)
+		)._tag,
+	).toBe("Left");
+	expect(await readdir(f.root)).toContain(old);
+	f.transport.mockResolvedValueOnce(new Response(bytes));
+	await Effect.runPromise(f.port.download(release, () => {}));
+	expect(await readdir(f.root)).not.toContain(old);
+	await writeFile(join(f.root, old), "superseded synthetic installer");
+	await Effect.runPromise(f.port.install(release));
+	expect(await readdir(f.root)).toEqual(
+		expect.arrayContaining([
+			linked,
+			directory,
+			"settings.json",
+			`app-update-${release.sha256}.artifact`,
+		]),
+	);
+	expect(await readdir(f.root)).not.toContain(old);
+	expect(await readFile(join(f.root, "settings.json"), "utf8")).toBe("keep");
 });

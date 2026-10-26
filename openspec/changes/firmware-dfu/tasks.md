@@ -33,6 +33,6 @@ Tracked by open-quake-18d.8. Each finding gets a regression, commit, push and re
 - [x] 5.3 Keep Settings available with unreadable optional firmware directories, review 4379259396.
 - [x] 5.4 Accept newer hardware version observations, review 4379259164.
 - [x] 5.5 Finish normally returning installs, review 4379259656.
-- [ ] 5.6 Prune superseded update artifacts, review 4379259888.
+- [x] 5.6 Prune superseded update artifacts, review 4379259888.
 - [ ] 5.7 Persist bounded intermediate copy progress, review 4379260103.
 - [ ] 5.8 Reconcile unanswered Codex/Copilot threads and run full gates plus synthetic native firmware smoke.

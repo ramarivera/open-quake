@@ -6,6 +6,7 @@ import {
 	mkdir,
 	mkdtemp,
 	open,
+	readdir,
 	rm,
 	unlink,
 } from "node:fs/promises";
@@ -129,6 +130,16 @@ export function ownedAppUpdater(options: {
 	let downloaded: string | undefined;
 	const pathFor = (release: AppRelease) =>
 		join(options.root, `app-update-${release.sha256}.artifact`);
+	const prune = async (current: AppRelease) => {
+		for (const entry of await readdir(options.root, { withFileTypes: true })) {
+			if (
+				entry.isFile() &&
+				/^app-update-[a-f0-9]{64}\.artifact$/.test(entry.name) &&
+				join(options.root, entry.name) !== pathFor(current)
+			)
+				await unlink(join(options.root, entry.name));
+		}
+	};
 	const boundary = <A>(run: (signal: AbortSignal) => Promise<A>) =>
 		Effect.tryPromise({
 			try: run,
@@ -258,6 +269,7 @@ export function ownedAppUpdater(options: {
 				}
 				downloaded = path;
 				await checked(release);
+				await prune(release);
 				progress(1);
 			}),
 		install: (release) =>
@@ -343,6 +355,7 @@ export function ownedAppUpdater(options: {
 				} finally {
 					await rm(directory, { recursive: true, force: true });
 				}
+				await prune(release);
 			}),
 	};
 }
