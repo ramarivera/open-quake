@@ -203,3 +203,45 @@ Generic hotkey titles polluted with a default from any recovered locale SHALL re
 #### Scenario: Eight-locale default recovery
 - **WHEN** a legacy generic hotkey or ClawBot title is localized without a user-origin marker
 - **THEN** the selected locale or configured agent supplies the title, while a title marked as user-modified survives unchanged
+
+### Requirement: Inline sequence entry and return
+The inline Multiple Operations editor SHALL show the contained operation count, focus a newly added step, and provide Back and Edit operations controls without discarding the draft (MGMT-280).
+
+#### Scenario: Add a step and return
+- **WHEN** a user adds an operation and selects Back
+- **THEN** the count increases and reopening Edit operations retains the added draft
+
+### Requirement: Library placement and grid selection
+The mounted Keys editor SHALL offer pointer drag and keyboard placement from the action library and coordinate-only grid moves. Starting a drag SHALL revert unsaved artwork/title previews and cancel obsolete picker callbacks. Drops SHALL require entry into a valid current grid, confirm every replaced occupied footprint including the target anchor, honor all edit locks and protect Back, emojiBack and colorfulScreen. Successful drops SHALL autosave one complete revision and retarget selection. Cancellation, invalid drops, failed writes and revision conflicts SHALL preserve the committed profile. Sources: MGMT-068, MGMT-069, MGMT-070, MGMT-071, MGMT-073, MGMT-074, MGMT-075, MGMT-076, MGMT-078, SCREEN-136, SCREEN-137.
+
+#### Scenario: Placement and replacement
+- **WHEN** an action is dropped on an occupied grid footprint
+- **THEN** the editor shows localized replacement names and explicit Confirm Replace/Cancel controls before any save
+- **AND** confirmation removes complete affected footprints, isolates catalog templates, retains default artwork metadata, forces playAudio to 1,1 at 8x2, creates folder and Back together, and opens multi-action editing
+
+#### Scenario: Move and keyboard equivalent
+- **WHEN** a tile is dragged or picked up with Space and placed with Enter on a coordinate button
+- **THEN** covered multi-cell targets resolve to their anchor, equal footprints can swap, and mismatched footprints, partial overlaps, locked or invalid targets show forbidden feedback without saving
+- **AND** moves preserve all configuration and Escape or leaving the grid cancels placement
+
+### Requirement: Selection and editor navigation
+Single clicks SHALL toggle selection, normalize covered coordinates to their visible anchor, exclude liveAudioTranslateDisplay, and revert unsaved previews on deselection, click-away and key/profile/page switches. Double clicks SHALL enter existing same-profile folder/emoji pages, return through Back/emojiBack, wrap next/previous pages, and open multi-action editing without executing host actions. Sources: MGMT-057, MGMT-064, MGMT-066, MGMT-077, SCREEN-138.
+
+#### Scenario: Selection and safe navigation
+- **WHEN** a selected covered coordinate is clicked again or a folder tile is double-clicked
+- **THEN** the first deselects and restores committed appearance and the second changes only the editor's selected page
+- **AND** obsolete picker results cannot change the newly selected key
+
+### Requirement: Responsive editor guidance
+The Keys editor SHALL retain the independent management layout, accessible controls and scrollable multi-action/knob forms at narrow and wide sizes. No-selection and built-in protection hints SHALL use recovered locale strings. Vivid profiles SHALL expose an accessible configuration action scoped to the selected serial/profile, without key execution. Free sizes SHALL label 1x1 Single, 2x1 Horizontal, 1x2 Vertical, 2x2 Four Cells and Custom width x height, preserving forced-size locks and inward spans. Sources: MGMT-045, MGMT-046, MGMT-061, MGMT-067, SCREEN-135, SCREEN-143.
+
+#### Scenario: Layout, size and vivid guidance
+- **WHEN** the window narrows, locale changes or a vivid/default profile is selected
+- **THEN** the editor remains usable without horizontal clipping, contextual hints update, fixed-size controls stay disabled and vivid activation opens its wallpaper configuration
+
+### Requirement: Editor update scheduling
+Grid state, overlap validation and size edits SHALL use synchronous canonical computations rather than vendor 100/50/200 ms watcher timers. Profile reads SHALL happen on readiness/selection rather than a vendor one-second delay. Library search SHALL debounce for 500 ms and cancel its timer on replacement or unmount. Draft requests SHALL carry target epochs so delayed replies cannot retarget an editor. Sources: MGMT-081.
+
+#### Scenario: Coalescing and cleanup
+- **WHEN** library search changes repeatedly then the editor closes, or a draft reply arrives after switching targets
+- **THEN** only the last live search may apply and no stale timer or reply changes the closed or newer editor

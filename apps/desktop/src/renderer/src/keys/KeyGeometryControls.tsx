@@ -91,7 +91,13 @@ export function KeyGeometryControls({
 						(_, index) => [(index % 8) + 1, Math.floor(index / 8) + 1] as const,
 					).map(([w, h]) => (
 						<option key={`${w},${h}`} value={`${w},${h}`}>
-							{w} × {h}
+							{keyText(`shortcutGrid.sizeLabel.${w}x${h}`, locale).startsWith(
+								"shortcutGrid.",
+							)
+								? keyText("shortcutGrid.sizeLabel.custom", locale)
+										.replace("{width}", String(w))
+										.replace("{height}", String(h))
+								: keyText(`shortcutGrid.sizeLabel.${w}x${h}`, locale)}
 						</option>
 					))}
 				</select>

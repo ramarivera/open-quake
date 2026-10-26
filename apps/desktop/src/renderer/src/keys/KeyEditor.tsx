@@ -7,7 +7,6 @@ import {
 import { isObsId } from "../../../../../../packages/device/src/actions/obs-contracts";
 import {
 	editKeyTitle,
-	type KeyTarget,
 	keyEditable,
 	keyText,
 	keyTitle,
@@ -25,12 +24,12 @@ import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
+import { occupiedCells } from "../../../../../../packages/device/src/profiles/profile-invariants.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { ClockSnapshot } from "../../../shared/clock-contracts";
 import { selectStripPage } from "../../../shared/strip-selection";
 import { ObsSettings } from "../obs/ObsSettings";
-import { stripLayout, tileAt } from "../strip/geometry";
-import { StripScreen, StripViewport } from "../strip/StripScreen";
+import { stripLayout } from "../strip/geometry";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 import {
@@ -40,7 +39,9 @@ import {
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
+import { AgentKeyFields } from "./AgentKeyFields";
 import { editableFocus } from "./editor-input";
+import { GridEditor, type Selection } from "./GridEditor";
 import { NativeIconPicker } from "./IconPicker";
 import { KeyGeometryControls } from "./KeyGeometryControls";
 import { KeyImport } from "./KeyImport";
@@ -53,16 +54,10 @@ import { SelectedKeyPreview } from "./SelectedKeyPreview";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
-type Selection = {
-	readonly target: KeyTarget;
-	readonly key: ProfileKey;
-	readonly geometry: KeyGeometry;
-	readonly savedKey: ProfileKey;
-};
 export function KeyEditor(): React.JSX.Element {
-	const { snapshot: wallpaper } = useWallpaper();
+	const wallpaperController = useWallpaper();
+	const { snapshot: wallpaper } = wallpaperController;
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
-	const [mirrorPressed, setMirrorPressed] = useState<string>();
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
 		[profileId, setProfileId] = useState(""),
 		[pageId, setPageId] = useState(""),
@@ -75,6 +70,7 @@ export function KeyEditor(): React.JSX.Element {
 		[overlaps, setOverlaps] = useState<readonly string[]>([]);
 	const savePending = useRef(false);
 	const epoch = useRef(0);
+	const gridReset = useRef<(() => void) | undefined>(undefined);
 	const current = useRef<Selection | undefined>(undefined),
 		host = useRef<HTMLElement>(null);
 	const accept = useCallback(
@@ -103,6 +99,7 @@ export function KeyEditor(): React.JSX.Element {
 		setIcons(false);
 		setAlternate(false);
 		setOverlaps([]);
+		gridReset.current?.();
 		if (old)
 			await window.quakeKeyLibrary.request({
 				type: "revert",
@@ -151,6 +148,10 @@ export function KeyEditor(): React.JSX.Element {
 			profileId: profile.id,
 			pageId: page.id,
 		};
+		if (previous) {
+			gridReset.current?.();
+			epoch.current++;
+		}
 		const draft = current.current;
 		if (
 			draft &&
@@ -322,11 +323,31 @@ export function KeyEditor(): React.JSX.Element {
 			setSaving(false);
 		}
 	};
-	const choose = async (keyCode: string): Promise<void> => {
+	const selectKey = async (
+		keyCode: string,
+		intent: "click" | "refresh",
+	): Promise<void> => {
 		if (savePending.current) return;
+		const anchor = page?.keys.find(
+			(key) =>
+				key.config.type &&
+				key.config.display &&
+				occupiedCells(key).includes(keyCode),
+		);
+		keyCode = anchor?.keyCode ?? keyCode;
+		const deselect =
+			intent === "click" && current.current?.target.keyCode === keyCode;
+		const pickerOpen = icons;
 		const ticket = epoch.current + 1;
 		await revert();
-		if (!profile || !page || epoch.current !== ticket) return;
+		if (
+			!profile ||
+			!page ||
+			epoch.current !== ticket ||
+			deselect ||
+			anchor?.config.type === "liveAudioTranslateDisplay"
+		)
+			return;
 		const selected = await window.quakeKeyLibrary.request({
 			type: "select",
 			deviceId: serial,
@@ -364,7 +385,10 @@ export function KeyEditor(): React.JSX.Element {
 		};
 		current.current = next;
 		setSelection(next);
+		if (pickerOpen && keyEditable(key, "icon")) setIcons(true);
 	};
+	const choose = (keyCode: string): Promise<void> =>
+		selectKey(keyCode, "click");
 	const save = async (): Promise<void> => {
 		const old = current.current;
 		if (!old || savePending.current) return;
@@ -565,7 +589,19 @@ export function KeyEditor(): React.JSX.Element {
 		setAlternate(false);
 	};
 	return (
-		<section className="key-editor" ref={host} aria-busy={saving}>
+		<section
+			className="key-editor"
+			aria-label="Key editor"
+			tabIndex={-1}
+			ref={host}
+			aria-busy={saving}
+			onKeyDown={(event) => {
+				if (event.key === "Escape") {
+					event.preventDefault();
+					void revert();
+				}
+			}}
+		>
 			<PageHeader title="Keys" />
 			<fieldset className="keys-save-boundary" disabled={saving}>
 				<Group title="Configuration">
@@ -632,85 +668,25 @@ export function KeyEditor(): React.JSX.Element {
 					accept={accept}
 					keyEditOpen={selection !== undefined || saving}
 				/>
-				<fieldset
-					className="keys-preview"
-					onPointerDownCapture={(event) => {
-						const rect = event.currentTarget.getBoundingClientRect();
-						const tile = tileAt(
-							{
-								x: ((event.clientX - rect.left) * 1920) / rect.width,
-								y: ((event.clientY - rect.top) * 480) / rect.height,
-							},
-							stripLayout(profile, page),
-						);
-						const key = page.keys.find((key) => key.keyCode === tile?.keyCode);
-						const locked =
-							key &&
-							Option.isSome(key.config.basicEditableItems) &&
-							!key.config.basicEditableItems.value.allowDrag;
-						setMirrorPressed(locked ? undefined : tile?.keyCode);
-					}}
-					onPointerUpCapture={() => setMirrorPressed(undefined)}
-					onPointerCancelCapture={() => setMirrorPressed(undefined)}
-					onPointerLeave={() => setMirrorPressed(undefined)}
-					onDragStartCapture={(event) => {
-						event.preventDefault();
-						setMirrorPressed(undefined);
-					}}
-					onKeyDown={(event) => {
-						if (event.key === "Escape") void revert();
-					}}
-					aria-label="Key grid preview"
-					onClickCapture={(event) => {
-						// Capture before nested controls, including programmatic clicks.
-						event.preventDefault();
-						event.stopPropagation();
-						const frame = event.currentTarget.getBoundingClientRect();
-						const point = {
-							x: ((event.clientX - frame.left) * 1920) / frame.width,
-							y: ((event.clientY - frame.top) * 480) / frame.height,
-						};
-						const layout = stripLayout(profile, page),
-							tile = tileAt(point, layout);
-						const cell =
-							tile?.keyCode ??
-							layout.cells.find(
-								(c) =>
-									point.x >= c.rect.x &&
-									point.x < c.rect.x + c.rect.width &&
-									point.y >= c.rect.y &&
-									point.y < c.rect.y + c.rect.height,
-							)?.keyCode;
-						if (cell) void choose(cell);
-					}}
-				>
-					<StripViewport>
-						<StripScreen
-							titles="provided"
-							pressedKeyCode={mirrorPressed}
-							interactive={false}
-							previewSerial="editor-preview"
-							wallpaper={wallpaper}
-							profiles={{ _tag: "ready", envelope: previewEnvelope }}
-							showEmptyGridDashedBorder
-						/>
-					</StripViewport>
-				</fieldset>
-				<fieldset className="keys-cells" aria-label="Select key">
-					{Array.from(
-						{ length: 16 },
-						(_, i) => `${Math.floor(i / 8) + 1},${(i % 8) + 1}`,
-					).map((code) => (
-						<button
-							type="button"
-							key={code}
-							aria-pressed={key?.keyCode === code}
-							onClick={() => void choose(code)}
-						>
-							{code}
-						</button>
-					))}
-				</fieldset>
+				<GridEditor
+					profile={profile}
+					page={page}
+					serial={serial}
+					locale={locale}
+					selection={selection}
+					previewEnvelope={previewEnvelope}
+					wallpaperController={wallpaperController}
+					current={current}
+					epoch={epoch}
+					savePending={savePending}
+					resetRef={gridReset}
+					revert={revert}
+					save={save}
+					choose={choose}
+					selectPage={selectPage}
+					setSelection={setSelection}
+					setStatus={setStatus}
+				/>
 				{key ? (
 					<Group
 						title={
@@ -736,7 +712,7 @@ export function KeyEditor(): React.JSX.Element {
 									await save();
 									return old !== current.current;
 								}}
-								onSaved={() => choose(key.keyCode)}
+								onSaved={() => selectKey(key.keyCode, "refresh")}
 								isCurrent={() =>
 									current.current?.target.token === selection.target.token
 								}
@@ -922,6 +898,12 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						{key.config.type === "clawbot" && (
+							<AgentKeyFields
+								value={key}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						<MediaKeySettings
 							keyValue={key}
 							locale={locale}
@@ -933,6 +915,7 @@ export function KeyEditor(): React.JSX.Element {
 									action.type !== "musicSource" &&
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
+									key.config.type !== "clawbot" &&
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)

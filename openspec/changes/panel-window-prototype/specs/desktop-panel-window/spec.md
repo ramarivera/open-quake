@@ -105,3 +105,41 @@ safe to call repeatedly.
 #### Scenario: Remove one subscription
 - **WHEN** one of two mock bus subscribers unsubscribes
 - **THEN** only the remaining subscriber receives subsequent events
+
+### Requirement: Serial-scoped ready transport
+Audit rows SCREEN-009, SCREEN-013, SCREEN-014 and SCREEN-015. Typed local IPC
+SHALL provide the recovered socket semantics without opening a network server.
+The strip SHALL subscribe before requesting readiness, receive its coherent
+identity, then report 2x8 configuration and active profile once per handshake.
+A1 messages, A2 resources and matrix presses SHALL reach only the owning serial.
+The semantic contract SHALL cover press actions 0/1/2/3, configuration/version,
+active profile, gaming mode, text chat send/stop, management and timer callbacks.
+These operations SHALL enter existing action owners with trusted panel identity.
+Failed sends/transport loss SHALL retry readiness up to ten times at 3000 ms
+multiplied by attempt, with one listener owner. Deliberate disposal SHALL cancel
+retries. Exhaustion SHALL wait for another explicit send or recovery request.
+
+#### Scenario: Renderer reload
+- **WHEN** a strip reconnects after transport loss
+- **THEN** one subscription remains and configuration precedes active-profile reporting
+
+### Requirement: Revision-aware strip profiles
+Audit rows SCREEN-018 and SCREEN-019. An absent active selection SHALL choose the
+first visible colorful profile. Committed profile snapshots SHALL reject stale
+envelope revisions, including a late initial read after a newer push. Active
+layout identity SHALL include profile id/revision and geometry. Inactive changes
+SHALL not replace the active layout. Transient emoji-back navigation SHALL never
+persist an active profile. A reconnect SHALL read the committed store fallback.
+
+#### Scenario: New push before initial read
+- **WHEN** revision 12 is pushed and an initial revision 11 read resolves later
+- **THEN** the strip retains revision 12 and its current active resource
+
+### Requirement: Supported matrix negotiation
+Audit row SCREEN-144. Strip configuration SHALL explicitly report two rows and
+eight columns. A reported device matrix MAY select one or two rows, always eight
+columns; unsupported values SHALL be rejected without truncating saved keys.
+
+#### Scenario: One row negotiation
+- **WHEN** a device reports one row and an arbitrary column count
+- **THEN** the negotiated view has one row and eight columns and the stored profile remains intact

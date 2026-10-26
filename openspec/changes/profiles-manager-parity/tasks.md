@@ -19,3 +19,7 @@
 - [ ] test-device-widgets remainder MGMT-384: migrate already-installed legacy SysView grids without altering custom profiles.
 
 - [x] Mounted profile/grid burn-down regressions for MGMT-313/315/317/319/337/370/371/381/382; track remaining MGMT-079/092/120/330/336/427 and AI-147 gaps without claiming them covered. Beads open-quake-lih.9.2 and open-quake-lih.9.3 remain open for lead integration.
+
+## Agents burn-down lane, 2026-10-26
+
+- [x] A.1 Verify the exact ClawBotView payload, geometry, title and lock round-trip and all four DK-Claw agent IDs/positions/voice/task fields through saved preset activation. Sources MGMT-348/349; bead `open-quake-lih.17.12`; production catalog/profile binding, `apps/desktop/src/main/agents/profile-binding.test.ts`. This verifies mock activation and persistence, not physical QUAKE output or a paid provider.

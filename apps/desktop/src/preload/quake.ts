@@ -20,6 +20,21 @@ export type DeviceStatusEvent = { source: "mock" | "hid"; kind: "status" } & (
 
 /** Shared IPC contract. Safe to import as a type from renderer code. */
 export type QuakeEvent =
+	| {
+			source: "mock" | "hid";
+			kind: "json";
+			value: Extract<DeviceEvent, { _tag: "Json" }>["value"];
+	  }
+	| {
+			source: "mock" | "hid";
+			kind: "resource";
+			envelope: Extract<DeviceEvent, { _tag: "Resource" }>["envelope"];
+	  }
+	| {
+			source: "mock" | "hid";
+			kind: "matrix";
+			matrix: Extract<DeviceEvent, { _tag: "Matrix" }>["matrix"];
+	  }
 	| DeviceStatusEvent
 	| { source: "mock" | "hid"; kind: "rotate"; direction: 1 | -1 }
 	| { source: "mock" | "hid"; kind: "press"; state?: number }

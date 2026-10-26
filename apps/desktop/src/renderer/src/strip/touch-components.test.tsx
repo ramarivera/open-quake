@@ -135,8 +135,33 @@ describe("touch production components", () => {
 			const { root } = host();
 			const other = serial === "A" ? "B" : "A";
 			window.history.replaceState({}, "", `?surface=panel&serial=${serial}`);
-			const a = { ...fixtureProfile(), id: "profile-A" };
-			const b = { ...fixtureProfile(), id: "profile-B" };
+			const profileWithEmoji = (id: string): Profile => {
+				const profile = fixtureProfile();
+				const page = profile.pages[0];
+				const key = page.keys[0];
+				if (!key) throw new Error("Missing key");
+				return {
+					...profile,
+					id,
+					pages: [
+						{
+							...page,
+							keys: [
+								...page.keys,
+								{
+									...key,
+									keyCode: "1,2",
+									config: { ...key.config, type: "emoji" },
+								},
+							],
+						},
+					],
+				};
+			};
+			const a = profileWithEmoji("profile-A");
+			const b = profileWithEmoji("profile-B");
+			const emojiPress = vi.fn(async () => ({ _tag: "success" as const }));
+			vi.stubGlobal("quakeEmoji", { press: emojiPress });
 			const envelope: ProfileEnvelope = {
 				...createInitialProfileEnvelope(),
 				profiles: [a, b],
@@ -155,6 +180,23 @@ describe("touch production components", () => {
 					};
 				},
 			};
+			vi.stubGlobal("quakeDeviceReady", {
+				read: async () => ({
+					_tag: "ready",
+					snapshot: {
+						serialNumber: serial,
+						connected: true,
+						deviceModel: "QUAKE_HID",
+						connectionType: "mock",
+						session: `session-${serial}`,
+						rotation: 0,
+						keyMatrix: { row: 2, col: 8 },
+					},
+				}),
+			});
+			vi.stubGlobal("quakeStripTransport", {
+				send: async () => ({ ok: true }),
+			});
 			window.quakeProfiles = {
 				read: async () => ({
 					_tag: "ready",
@@ -215,6 +257,91 @@ describe("touch production components", () => {
 						kind: "down",
 					}),
 				]);
+				await act(async () => {
+					for (const listener of listeners)
+						listener({
+							source: "mock",
+							kind: "resource",
+							envelope: {
+								opCode: 2,
+								metadata: [1, 1, 1, 0, 0],
+								sequence: 0,
+								payload: [
+									255, 216, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255,
+									218, 0, 8, 1, 1, 0, 0, 63, 0, 255, 217,
+								],
+							},
+						});
+				});
+				const image = document.querySelector(
+					'[data-key-code="1,1"] img[src^="data:image/jpeg;base64,"]',
+				);
+				expect(image).not.toBeNull();
+				// End the preceding touch contact before exercising legacy press-only matrix input.
+				await act(async () => {
+					for (const listener of listeners)
+						listener({
+							source: "mock",
+							kind: "touch",
+							points: [{ x: 100, y: 380, action: 0 }],
+						});
+				});
+				await flush();
+				request.mockClear();
+				const matrix = async (index: number) => {
+					await act(async () => {
+						for (const listener of listeners)
+							listener({
+								source: "mock",
+								kind: "matrix",
+								matrix: {
+									reserved: [0, 0, 0, 0],
+									states: Array.from({ length: 15 }, (_, i) =>
+										i === index ? 1 : 0,
+									),
+									tail: [],
+								},
+							});
+					});
+					await flush();
+				};
+				await matrix(0);
+				await matrix(0);
+				await matrix(-1);
+				expect(
+					request.mock.calls
+						.filter(([c]) => c.type === "activate")
+						.map(([c]) => c),
+				).toEqual([
+					expect.objectContaining({
+						deviceId: serial,
+						profileId: `profile-${serial}`,
+						keyCode: "1,1",
+						kind: "down",
+					}),
+				]);
+				await act(async () => {
+					for (const listener of listeners)
+						listener({
+							source: "mock",
+							kind: "status",
+							state: "disconnected",
+							reason: "requested",
+						});
+				});
+				await flush();
+				expect(request.mock.calls.at(-1)?.[0]).toMatchObject({
+					type: "activate",
+					kind: "cancel",
+				});
+				await matrix(1);
+				await matrix(1);
+				expect(emojiPress).toHaveBeenCalledExactlyOnceWith({
+					profileId: `profile-${serial}`,
+					pageId: "page",
+					keyCode: "1,2",
+					keyAction: 1,
+				});
 			} finally {
 				await act(async () => root.unmount());
 				window.history.replaceState({}, "", "/");

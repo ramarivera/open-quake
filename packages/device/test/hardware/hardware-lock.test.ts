@@ -69,7 +69,11 @@ describe("pre-lock knob lighting state", () => {
 							"QUAKE.HARDWARE.UNAVAILABLE",
 						);
 						yield* session.setLocked(false).pipe(Effect.either);
-						expect(commands(yield* fake.writes)).toEqual(
+						expect(
+							commands(
+								(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+							),
+						).toEqual(
 							phase === "query"
 								? [[2, 6]]
 								: [
@@ -87,7 +91,9 @@ describe("pre-lock knob lighting state", () => {
 			yield* session.send({ _tag: "KnobLed", on: false });
 			yield* session.setLocked(true);
 			yield* session.setLocked(false);
-			expect(commands(yield* fake.writes)).toEqual([
+			expect(
+				commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+			).toEqual([
 				[1, 6, 0],
 				[2, 6],
 			]);
@@ -105,7 +111,9 @@ describe("pre-lock knob lighting state", () => {
 					[session.setLocked(false), session.setLocked(false)],
 					{ concurrency: "unbounded" },
 				);
-				expect(commands(yield* fake.writes)).toEqual([
+				expect(
+					commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+				).toEqual([
 					[2, 6],
 					[1, 6, 0],
 					[1, 6, 1],
@@ -118,13 +126,17 @@ describe("pre-lock knob lighting state", () => {
 			Effect.gen(function* () {
 				const { fake, session } = yield* setup();
 				yield* session.setLocked(false);
-				expect(yield* fake.writes).toHaveLength(0);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(0);
 				yield* session.setLocked(true);
 				yield* session.setLocked(false);
 				yield* session.send({ _tag: "KnobLed", on: false });
 				yield* session.setLocked(true);
 				yield* session.setLocked(false);
-				expect(commands(yield* fake.writes)).toEqual([
+				expect(
+					commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+				).toEqual([
 					[2, 6],
 					[1, 6, 0],
 					[1, 6, 1],
@@ -143,7 +155,9 @@ describe("pre-lock knob lighting state", () => {
 				yield* session.setLocked(false);
 				yield* session.setLocked(true);
 				yield* session.setLocked(false);
-				expect(commands(yield* fake.writes)).toEqual([
+				expect(
+					commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+				).toEqual([
 					[2, 6],
 					[1, 6, 0],
 					[1, 6, 1],
@@ -161,7 +175,9 @@ describe("pre-lock knob lighting state", () => {
 			});
 			yield* session.setLocked(true);
 			yield* session.setLocked(false);
-			expect(yield* fake.writes).toHaveLength(0);
+			expect(
+				(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+			).toHaveLength(0);
 		}),
 	);
 	it.scoped("a failed state query cannot turn lighting on during unlock", () =>
@@ -176,7 +192,9 @@ describe("pre-lock knob lighting state", () => {
 				"QUAKE.HARDWARE.REPLY_TIMEOUT",
 			);
 			yield* session.setLocked(false).pipe(Effect.either);
-			expect(commands(yield* fake.writes)).toEqual([[2, 6]]);
+			expect(
+				commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+			).toEqual([[2, 6]]);
 		}),
 	);
 	it.scoped("a rejected disable does not schedule an enable", () =>
@@ -193,7 +211,9 @@ describe("pre-lock knob lighting state", () => {
 				"QUAKE.HARDWARE.COMMAND_REJECTED",
 			);
 			yield* session.setLocked(false);
-			expect(commands(yield* fake.writes)).toEqual([
+			expect(
+				commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+			).toEqual([
 				[2, 6],
 				[1, 6, 0],
 			]);
@@ -216,7 +236,9 @@ describe("pre-lock knob lighting state", () => {
 				yield* TestClock.adjust(0);
 				yield* fake.emit(fakeHardwareReply(0, [0x90]));
 				yield* Fiber.join(unlocking);
-				expect(commands(yield* fake.writes)).toEqual([
+				expect(
+					commands((yield* fake.writes).filter((bytes) => bytes[4] !== 0xef)),
+				).toEqual([
 					[2, 6],
 					[1, 6, 0],
 					[1, 6, 1],

@@ -1,6 +1,6 @@
 import { Effect, Array as EffectArray, Option, Ref, Schema } from "effect";
 import { validateAction } from "../actions/action-invariants.js";
-import { findAction } from "../actions/action-registry.js";
+import { createActionDraft, findAction } from "../actions/action-registry.js";
 import {
 	type KeyDraft,
 	type KeyTarget,
@@ -90,7 +90,7 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 					return yield* Effect.fail(
 						ProfileValidationFailed.fromCause(undefined),
 					);
-				if (original) {
+				if (original && !geometry.placement) {
 					if (
 						original.config.type !== key.config.type &&
 						!keyEditable(original, "allowDelete")
@@ -190,7 +190,17 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 								key.config.type,
 								Schema.encodeSync(ProfileKey)(key).config,
 							);
-							if (validated._tag === "Left")
+							const entry = findAction(key.config.type);
+							const defaults = entry ? createActionDraft(entry.id) : undefined;
+							const unconfiguredTemplate =
+								Option.isSome(key.config.compatibility) &&
+								key.config.compatibility.value.pendingConfiguration === true &&
+								defaults &&
+								JSON.stringify(key.config.actions) ===
+									JSON.stringify(defaults.actions) &&
+								JSON.stringify(Option.getOrUndefined(key.config.subActions)) ===
+									JSON.stringify(defaults.subActions);
+							if (validated._tag === "Left" && !unconfiguredTemplate)
 								return yield* Effect.fail(
 									ProfileValidationFailed.fromCause(validated.left),
 								);
@@ -208,10 +218,55 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 								: replaceProfileKey(profile, target.pageId, key)),
 							revision: profile.revision + 1,
 						};
+						// Folder placement and its return key are one persisted revision.
+						const folder =
+							key.config.type === "createFolder"
+								? key.config.actions.find((action) => action.type === "folder")
+										?.value
+								: undefined;
+						const back = createEmptyProfileKey("1,1");
+						const complete =
+							typeof folder === "string" &&
+							folder &&
+							!next.pages.some((page) => page.id === folder)
+								? {
+										...next,
+										pages: [
+											next.pages[0],
+											...next.pages.slice(1),
+											{
+												id: folder,
+												compatibility: Option.none(),
+												keys: [
+													{
+														...back,
+														childrenName: Option.some("back"),
+														config: {
+															...back.config,
+															type: "back",
+															icon: key.config.icon,
+															title: { ...back.config.title, text: "Back" },
+															actions: [
+																{ type: "parentFolder", value: target.pageId },
+															],
+															basicEditableItems: Option.some({
+																title: true,
+																grid: false,
+																icon: true,
+																allowDelete: false,
+																allowDrag: false,
+															}),
+														},
+													},
+												],
+											},
+										] as const,
+									}
+								: next;
 						return {
 							...envelope,
 							profiles: EffectArray.map(envelope.profiles, (p) =>
-								p.id === next.id ? next : p,
+								p.id === complete.id ? complete : p,
 							),
 						};
 					}),
