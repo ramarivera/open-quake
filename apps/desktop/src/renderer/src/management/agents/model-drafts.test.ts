@@ -78,7 +78,7 @@ it("distinguishes blank defaults from invalid numbers and accepts inclusive boun
 		{ temperature: 0, topP: 0 },
 		{ temperature: 2, topP: 1 },
 	])
-		expect(samplingValid(row)).toBe(true);
+		expect(samplingValid({ ...first, provider: "generic", ...row })).toBe(true);
 	for (const row of [
 		{ temperature: -0.1 },
 		{ temperature: 2.1 },
@@ -86,5 +86,26 @@ it("distinguishes blank defaults from invalid numbers and accepts inclusive boun
 		{ topP: 1.1 },
 		{ topP: Number.POSITIVE_INFINITY },
 	])
-		expect(samplingValid(row)).toBe(false);
+		expect(samplingValid({ ...first, provider: "generic", ...row })).toBe(
+			false,
+		);
+});
+
+it("blocks unsupported model sampling before every row save while allowing clearing", () => {
+	for (const model of ["gpt-5.1", "o3", "unknown"]) {
+		expect(samplingValid({ ...first, model })).toBe(true);
+		expect(samplingValid({ ...first, model, temperature: 0 })).toBe(false);
+		expect(samplingValid({ ...first, model, topP: 1 })).toBe(false);
+	}
+	expect(
+		samplingValid({ ...first, model: "gpt-4o", temperature: 0, topP: 1 }),
+	).toBe(true);
+	expect(
+		samplingValid({
+			...first,
+			provider: "kimi",
+			model: "kimi-k2.5",
+			temperature: 0,
+		}),
+	).toBe(false);
 });

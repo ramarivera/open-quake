@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { providerSamplingValid } from "../ai/ai-sampling.js";
 import { type Agent, AgentState, type ModelRow } from "./agents-contracts.js";
 export const sanitizeAgentId = (value: string): string =>
 	value
@@ -112,6 +113,7 @@ export const modelValid = (row: ModelRow): boolean => {
 		!configured(row) ||
 		!Number.isSafeInteger(row.maxTokens) ||
 		row.maxTokens < 1 ||
+		!providerSamplingValid(row) ||
 		(row.temperature !== undefined &&
 			(!Number.isFinite(row.temperature) ||
 				row.temperature < 0 ||

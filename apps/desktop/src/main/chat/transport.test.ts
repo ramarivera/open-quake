@@ -87,7 +87,11 @@ function fixtureServer() {
 	});
 	return { server, calls, closed, release: () => release?.() };
 }
-async function fixture(sampling: { temperature?: number; topP?: number } = {}) {
+async function fixture(
+	sampling: { temperature?: number; topP?: number } = {},
+	provider = "generic",
+	initialModel = "fixture-model",
+) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
 	const endpoint = fixtureServer();
 	await new Promise<void>((resolve) =>
@@ -116,7 +120,7 @@ async function fixture(sampling: { temperature?: number; topP?: number } = {}) {
 	const reference = await Effect.runPromise(
 		creds.management.store(Redacted.make("fixture-key")),
 	);
-	let model = "fixture-model";
+	let model = initialModel;
 	let maxTokens = 512;
 	const host = createDirectChat({
 		directory,
@@ -126,7 +130,7 @@ async function fixture(sampling: { temperature?: number; topP?: number } = {}) {
 				{
 					id: "configured",
 					role: "default",
-					provider: "generic",
+					provider,
 					model,
 					baseUrl: `http://127.0.0.1:${address.port}/v1`,
 					maxTokens,
@@ -228,6 +232,41 @@ function voiceFixture(
 }
 
 describe("desktop chat RPC through actual SDK and HTTP", () => {
+	it.each([
+		"gpt-4o",
+		"gpt-4o-mini",
+		"gpt-4o-2024-08-06",
+		"gpt-4.1",
+		"gpt-4.1-mini",
+		"gpt-4.1-nano-2025-04-14",
+	])(
+		"sends saved OpenAI sampling through actual RPC and SDK for %s",
+		async (model) => {
+			const f = await fixture({ temperature: 0, topP: 1 }, "openai", model);
+			try {
+				const session = sessionId();
+				await f.bridge.submit({
+					sessionId: session,
+					turnId: turnId(),
+					text: "sampling",
+				});
+				await vi.waitFor(async () =>
+					expect(
+						(await f.bridge.history(session)).turns[0]?.snapshot.terminal,
+					).toMatchObject({ _tag: "Some", value: { outcome: "completed" } }),
+				);
+				expect(f.endpoint.calls).toHaveLength(1);
+				expect(f.endpoint.calls[0]?.body).toMatchObject({
+					model,
+					temperature: 0,
+					top_p: 1,
+				});
+			} finally {
+				await f.close();
+			}
+		},
+	);
+
 	it.each([{}, { temperature: 0, topP: 1 }, { temperature: 2, topP: 0 }])(
 		"sends saved sampling through actual RPC and SDK, preserving omission %j",
 		async (sampling) => {

@@ -111,6 +111,42 @@ const model = (
 });
 describe("AgentsService real consumer", () => {
 	it.effect(
+		"rejects unsupported provider sampling without saving credentials or state",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				const before = f.state();
+				for (const row of [
+					{ ...model("bad"), model: "gpt-5.1", temperature: 0 },
+					{ ...model("bad"), model: "o3", topP: 1 },
+					{ ...model("bad"), model: "unqualified", temperature: 1 },
+					{
+						...model("bad"),
+						provider: "kimi",
+						model: "kimi-k2.5",
+						temperature: 1,
+					},
+				]) {
+					const result = yield* service
+						.request({
+							type: "save-model",
+							scope: "default",
+							row,
+							secret: "must-not-store",
+							revision: (yield* service.view()).revision,
+						})
+						.pipe(Effect.either);
+					expect(result._tag === "Left" && result.left._tag).toBe(
+						"AgentModelInvalid",
+					);
+					expect(f.state()).toBe(before);
+					expect(f.keys.size).toBe(0);
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
 		"persists optional sampling through model commands, public views and inference selection",
 		() => {
 			const f = fixture();

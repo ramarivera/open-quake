@@ -1,3 +1,4 @@
+import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
 import type { PublicModelRow } from "../../../../shared/agents";
 
 /** Apply committed field changes while preserving edits made against the previous snapshot. */
@@ -58,9 +59,10 @@ export function samplingInput(
 			: Number(value);
 }
 export function samplingValid(
-	row: Pick<PublicModelRow, "temperature" | "topP">,
+	row: Pick<PublicModelRow, "provider" | "model" | "temperature" | "topP">,
 ): boolean {
 	return (
+		providerSamplingValid(row) &&
 		(row.temperature === undefined ||
 			(Number.isFinite(row.temperature) &&
 				row.temperature >= 0 &&

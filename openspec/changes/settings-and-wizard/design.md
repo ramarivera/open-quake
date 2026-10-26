@@ -269,3 +269,10 @@ integration is recorded below; lighting remains open:
 ## Approved saved-model sampling integration, 2026-10-26
 
 Ramiro approved optional finite temperature 0..2 and topP 0..1 ModelRow fields and their derived RPC. Existing rows remain valid and omission keeps provider defaults. Implement the existing per-model Advanced disclosure decision, preserving existing table input/select/button order. Each field keeps its raw draft until Save, including invalid input; show a field error and block every save path for that row while invalid. Pending save acknowledgments must retain newer drafts, including clearing a value back to default. Use existing agent storage and the common profileFromModel inference projection for direct chat, voice and shortcut drafting. No new dependency or provider-specific claim is introduced.
+
+
+### Sampling review correction
+
+The editor, AgentsService validation and inference preparation share one pure provider-sampling policy. Documented GPT-4o and GPT-4.1 text models, including their mini/nano variants and dated snapshots, accept explicit bounded overrides. Other OpenAI models retain the existing default-only policy. Conflicting Kimi mandatory values are rejected by the same policy. Unsupported overrides keep the draft visible, explain the restriction in English/German and block save and role autosave; clearing both fields remains possible. Backend validation rejects them before credential writes or persistence.
+
+OpenAI primary references checked 2026-10-26: [Chat Completions sampling parameters](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create), [GPT-4o](https://developers.openai.com/api/docs/models/gpt-4o), [GPT-4.1](https://developers.openai.com/api/docs/models/gpt-4.1), and [reasoning-model parameter restrictions](https://developers.openai.com/api/docs/guides/latest-model). Model availability isn't inferred from parameter support. No live provider call is part of this correction.

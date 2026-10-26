@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
+import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
 import { useAgentsCopy } from "./copy";
@@ -249,6 +250,14 @@ function ModelTable({
 										<p id={`sampling-hint-${scope}-${row.id}`}>
 											{t.samplingDefault}
 										</p>
+										{!providerSamplingValid(row) ? (
+											<p
+												id={`sampling-policy-${scope}-${row.id}`}
+												className="aw-field-error"
+											>
+												{t.samplingUnsupported}
+											</p>
+										) : null}
 										{(["temperature", "topP"] as const).map((field) => {
 											const value = row[field];
 											const maximum = field === "temperature" ? 2 : 1;
@@ -269,8 +278,10 @@ function ModelTable({
 														step="any"
 														disabled={busy}
 														aria-label={`${t[field]} ${scope} ${index + 1}`}
-														aria-invalid={invalid}
-														aria-describedby={`sampling-hint-${scope}-${row.id}${invalid ? ` ${id}-error` : ""}`}
+														aria-invalid={
+															invalid || !providerSamplingValid(row)
+														}
+														aria-describedby={`sampling-hint-${scope}-${row.id}${invalid ? ` ${id}-error` : ""}${!providerSamplingValid(row) ? ` sampling-policy-${scope}-${row.id}` : ""}`}
 														value={
 															value === undefined || Number.isNaN(value)
 																? ""
