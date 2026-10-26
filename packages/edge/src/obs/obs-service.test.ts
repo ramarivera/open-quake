@@ -559,3 +559,36 @@ it.scoped("Auto-fetch authentication failure stays blocked and private", () =>
 		expect(f.server.connections()).toBe(1);
 	}),
 );
+
+it.scoped(
+	"catalog discovers audio capability independently of platform or plugin kind names",
+	() =>
+		Effect.gen(function* () {
+			const inputs = [
+				"ffmpeg_source",
+				"vlc_source",
+				"wasapi_input_capture",
+				"browser_source",
+				"third_party_capture",
+				"image_source",
+			].map((inputKind) => ({
+				inputUuid: inputKind,
+				inputName: inputKind,
+				inputKind,
+			}));
+			const f = yield* fixture({ inputs, silentInputs: ["image_source"] });
+			yield* f.service.connect();
+			const catalog = yield* f.service.catalog();
+			for (const input of catalog.inputs) {
+				expect(input).toHaveProperty(
+					"hasAudio",
+					input.inputUuid !== "image_source",
+				);
+			}
+			expect(
+				f.server.calls
+					.filter((call) => call.type === "GetInputVolume")
+					.map((call) => call.data.inputUuid),
+			).toEqual(inputs.map((input) => input.inputUuid));
+		}),
+);

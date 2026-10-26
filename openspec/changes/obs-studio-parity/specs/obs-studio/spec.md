@@ -8,6 +8,12 @@ The system SHALL register all 21 recovered ids and configuration parameters enum
 - **THEN** the owning OBS service sends its corresponding v5 requests with the saved target parameters exactly once
 - **AND** invalid or incomplete keys cannot perform OBS requests
 
+#### Scenario: Audio and media target choices
+- **WHEN** editing mute, volume or audio monitoring
+- **THEN** every input accepted by the OBS audio-volume request and every special audio input is selectable, including media and platform capture sources
+- **AND** media controls include FFmpeg and VLC inputs
+- **AND** a saved input outside the selectable list stays visible for repair
+
 #### Scenario: Display-only functions
 - **WHEN** a stats or screenshot key activates
 - **THEN** it performs no write action and its display retains the fixed footprint

@@ -195,6 +195,12 @@ export function ObsSettings({
 		"obsAudioMonitor",
 		"obsMedia",
 	].includes(type);
+	const inputChoices = catalog.inputs.filter((input) =>
+		type === "obsMedia"
+			? ["ffmpeg_source", "vlc_source"].includes(input.inputKind) ||
+				input.inputKind.toLowerCase().includes("media")
+			: input.special || input.hasAudio,
+	);
 	return (
 		<section className="obs-connection" aria-label={text("title")}>
 			<div className="obs-controls">
@@ -416,26 +422,18 @@ export function ObsSettings({
 					>
 						<option value="">{text("input")}</option>
 						{field("inputUuid") &&
-							!catalog.inputs.some(
+							!inputChoices.some(
 								(input) => input.inputUuid === field("inputUuid"),
 							) && (
 								<option value={field("inputUuid")}>
 									{field("inputName") || field("inputUuid")}
 								</option>
 							)}
-						{catalog.inputs
-							.filter((input) =>
-								type === "obsMedia"
-									? input.inputKind.toLowerCase().includes("media") ||
-										input.inputKind === "ffmpeg_source"
-									: input.special ||
-										input.inputKind.toLowerCase().includes("audio"),
-							)
-							.map((input) => (
-								<option key={input.inputUuid} value={input.inputUuid}>
-									{input.inputName}
-								</option>
-							))}
+						{inputChoices.map((input) => (
+							<option key={input.inputUuid} value={input.inputUuid}>
+								{input.inputName}
+							</option>
+						))}
 					</select>
 				</Row>
 			)}

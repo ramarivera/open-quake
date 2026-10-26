@@ -97,6 +97,7 @@ export const ObsCatalog = Schema.Struct({
 			inputName: Schema.String,
 			inputKind: Schema.String,
 			special: Schema.optional(Schema.Boolean),
+			hasAudio: Schema.optional(Schema.Boolean),
 		}),
 	),
 	transitions: Schema.Array(Schema.Struct({ transitionName: Schema.String })),

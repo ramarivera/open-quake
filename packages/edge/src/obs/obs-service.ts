@@ -310,13 +310,25 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 						(name): name is string =>
 							typeof name === "string" && name.length > 0,
 					);
+					const audioInputs = yield* Effect.forEach(decoded.inputs, (input) =>
+						request("GetInputVolume", { inputUuid: input.inputUuid }).pipe(
+							Effect.map(
+								(reply) =>
+									typeof reply.inputVolumeMul === "number" &&
+									Number.isFinite(reply.inputVolumeMul),
+							),
+							Effect.catchTag("ObsRequestFailed", () => Effect.succeed(false)),
+							Effect.map((hasAudio) => ({
+								...input,
+								hasAudio,
+								special: names.includes(input.inputName),
+							})),
+						),
+					);
 					return {
 						...decoded,
 						inputs: [
-							...decoded.inputs.map((input) => ({
-								...input,
-								special: names.includes(input.inputName),
-							})),
+							...audioInputs,
 							...names
 								.filter(
 									(name) =>
@@ -326,6 +338,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 									inputUuid: name,
 									inputName: name,
 									inputKind: "special_audio",
+									hasAudio: true,
 									special: true,
 								})),
 						],

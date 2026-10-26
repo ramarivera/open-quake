@@ -14,6 +14,12 @@ export async function fakeObsServer(
 		readonly password?: string;
 		readonly rpcVersion?: number;
 		readonly rejectAuth?: boolean;
+		readonly inputs?: readonly {
+			readonly inputUuid: string;
+			readonly inputName: string;
+			readonly inputKind: string;
+		}[];
+		readonly silentInputs?: readonly string[];
 	} = {},
 ) {
 	const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
@@ -150,7 +156,7 @@ export async function fakeObsServer(
 					break;
 				case "GetInputList":
 					response = {
-						inputs: [
+						inputs: options.inputs ?? [
 							{
 								inputUuid: "input-1",
 								inputName: "Mic",
@@ -176,7 +182,12 @@ export async function fakeObsServer(
 						requestType: type,
 						requestId: frame.d.requestId,
 						requestStatus: {
-							result: !failures.has(type),
+							result:
+								!failures.has(type) &&
+								!(
+									type === "GetInputVolume" &&
+									options.silentInputs?.includes(String(values.inputUuid))
+								),
 							code: failures.has(type) ? 600 : 100,
 							comment: "do-not-leak private remote comment",
 						},
