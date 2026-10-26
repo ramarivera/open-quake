@@ -63,6 +63,8 @@ export function registerMedia(
 				!Schema.is(WallpaperAudioCommand)(input)
 			)
 				return false;
+			if (input.active && (disposed || !panelWindow()?.isVisible()))
+				return false;
 			if (!input.active) {
 				if (audioRequest?.id === input.id) audioRequest = undefined;
 				await audio.stop(input.id);
@@ -78,6 +80,7 @@ export function registerMedia(
 				snapshot.saved.settings.displayMediaList[snapshot.activeIndex ?? 0];
 			if (
 				audioRequest !== request ||
+				!panelWindow()?.isVisible() ||
 				!snapshot.saved.settings.enableSound ||
 				snapshot.saved.serial !== input.serial ||
 				snapshot.saved.revision !== input.revision ||
@@ -103,7 +106,8 @@ export function registerMedia(
 					expectedEpoch === audioEpoch &&
 					!disposed &&
 					!event.sender.isDestroyed() &&
-					event.sender === panelWindow()?.webContents,
+					event.sender === panelWindow()?.webContents &&
+					panelWindow()?.isVisible() === true,
 			);
 		},
 	);
@@ -172,16 +176,30 @@ export function registerMedia(
 		)
 			clockFiber = runtime.runFork(service.ticks);
 	};
+	const removeVisibilityListeners = new Set<() => void>();
 	const trackWindow = (window: BrowserWindow): void => {
 		const contents = window.webContents;
-		window.once("closed", () => {
-			if (audioSender === contents) {
+		const deactivate = (): void => {
+			if (audioSender === contents || contents === panelWindow()?.webContents) {
 				audioEpoch++;
 				audioSender = undefined;
 				audioRequest = undefined;
+				if (!contents.isDestroyed()) contents.setAudioMuted(true);
 				void audio.stop();
 			}
-		});
+		};
+		const remove = (): void => {
+			window.removeListener("hide", deactivate);
+			window.removeListener("closed", onClosed);
+			removeVisibilityListeners.delete(remove);
+		};
+		const onClosed = (): void => {
+			deactivate();
+			remove();
+		};
+		window.on("hide", deactivate);
+		window.once("closed", onClosed);
+		removeVisibilityListeners.add(remove);
 		void startClock();
 		window.once("closed", () => {
 			if (!BrowserWindow.getAllWindows().length) void stopClock();
@@ -244,6 +262,7 @@ export function registerMedia(
 	const dispose = (): Promise<void> => {
 		if (shutdown) return shutdown;
 		disposed = true;
+		for (const remove of removeVisibilityListeners) remove();
 		ipcMain.removeHandler(WALLPAPER_REQUEST);
 		ipcMain.removeHandler(WALLPAPER_AUDIO);
 		app.removeListener("browser-window-created", onWindow);
