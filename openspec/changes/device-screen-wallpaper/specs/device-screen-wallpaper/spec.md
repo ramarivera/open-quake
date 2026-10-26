@@ -19,9 +19,10 @@ The system SHALL persist wallpaper settings per nonempty device serial, independ
 | gapInterval | Integer 3..86400 for unit 0 or 1..1440 for unit 1; default 5 |
 | gapIntervalUnit | 0 seconds or 1 minutes, default 0 |
 | playMode | sequential or random, default sequential |
-| displayMediaList | Ordered list of media records; first-release editor accepts at most one static image |
+| enableSound | Boolean, default false, only active panel video may sound (`WIDGETS-128/130`) |
+| displayMediaList | Ordered list of media records; ordered app-managed image/video playlist; duplicate assets are omitted (`WIDGETS-128`) |
 | media.name | Nonempty display filename |
-| media.type | image or video; video is later-phase |
+| media.type | image or decoded video |
 | media.filePath | Validated app-managed local asset reference; legacy file URLs require import normalization |
 | media.duration | Positive finite duration in milliseconds; image interval equals gapInterval multiplied by 1000 or 60000; later video duration comes from decoded metadata |
 | media.format | image/jpeg or image/png for new first-release images; a supported decoded video MIME type for later video; legacy image empty string normalizes using decoded content |
@@ -98,7 +99,7 @@ First-release resource-push acceptance SHALL require a real QUAKE test recording
 
 ### Requirement: Later playlist and mode behavior
 
-When enabled, wallpapers SHALL render only in color-screen mode with isTransparent false and at least one playable media item. Sequential playback SHALL preserve list order and wrap. Random playback SHALL avoid the current item when another playable item exists. A single image SHALL stay visible and a single video SHALL loop muted. Videos SHALL have decodable metadata and duration at least 2000 ms. Timers, decoders, and event listeners SHALL stop on replacement, mode/device switch, or destruction. Reduced-motion settings SHALL suppress decorative fades.
+When enabled, wallpapers SHALL render only in color-screen mode with isTransparent false and at least one playable media item. Sequential playback SHALL preserve list order and wrap. Random playback SHALL avoid the current item when another playable item exists. A single image SHALL stay visible and a single video SHALL loop. Wallpaper sound SHALL default off and only the active panel video may unmute when enabled; management previews SHALL remain muted (`WIDGETS-128/130`). Videos SHALL have decodable metadata and duration at least 2000 ms. Timers, decoders, and event listeners SHALL stop on replacement, mode/device switch, or destruction. Reduced-motion settings SHALL suppress decorative fades.
 
 #### Scenario: Transparent mode
 
@@ -108,7 +109,7 @@ When enabled, wallpapers SHALL render only in color-screen mode with isTranspare
 #### Scenario: Singleton video
 
 - **WHEN** a valid single video playlist is active
-- **THEN** the video loops muted without creating recurring playlist-switch timers
+- **THEN** the video loops without recurring playlist-switch timers, muted unless wallpaper sound is enabled
 
 ### Requirement: Later targeted display events
 
@@ -145,3 +146,36 @@ When multi-display binding is enabled, a confirmed association SHALL bind a devi
 
 - **WHEN** the confirmed target display disappears
 - **THEN** its device becomes unbound and the management window explains the missing display without moving content onto another monitor automatically
+
+### Requirement: Wallpaper playlist editing and sound
+
+The wallpaper editor SHALL persist enableSound per serial with default false for old records, and SHALL display the saved ordered media list. Dragging a media card or using its keyboard-accessible move controls SHALL save a permutation without adding, losing or duplicating assets. Removing one card SHALL retain the others. Adding the same managed asset twice SHALL preserve its original position. Stale revisions and invalid indices SHALL retain the previous revision. Sequential playback SHALL follow the saved order and wrap; singleton videos SHALL loop. Only the active panel video SHALL be eligible for sound, never a management preview or inactive video. This covers `WIDGETS-128/130`; proprietary factory media and crossfade visual parity remain outside cluster 18.
+
+#### Scenario: Reorder survives reload
+
+- **WHEN** a user moves the third playlist item before the first and reloads that serial
+- **THEN** both the editor and panel use the new order with each asset exactly once
+
+#### Scenario: Sound setting migration
+
+- **WHEN** an old serial record without enableSound loads
+- **THEN** sound is off, and an explicit sound change persists independently from other serials
+
+#### Scenario: Silent preview
+
+- **WHEN** wallpaper sound is enabled and a management preview shows the active video
+- **THEN** the preview stays muted and only the panel may produce sound
+
+### Requirement: Exact playlist transition deadlines
+
+The shared media controller SHALL advance videos at their metadata duration in milliseconds, independently of the one-second display clock. Each deadline SHALL build on the prior deadline so delayed work retains elapsed time and processes every overdue interval. Playlist replacement or selected-device changes SHALL reset the deadline; stopping the tick owner SHALL cancel transitions. Evidence: WIDGETS-128/130; recovered WallpaperView.vue metadata-driven video scheduling.
+
+#### Scenario: Fractional video durations
+
+- **WHEN** a two-item playlist contains two 2500 ms videos
+- **THEN** selection changes at 2500 ms and 5000 ms and continues every 2500 ms without rounding or drift
+
+#### Scenario: Late video mount
+
+- **WHEN** the panel enters vivid mode or a management preview mounts 50 seconds into a running 60-second video interval
+- **THEN** its video seeks to the controller's elapsed position after metadata loads and the existing playlist deadline stays unchanged

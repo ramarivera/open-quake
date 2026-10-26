@@ -1,3 +1,4 @@
+import { importSoundConfig } from "../../../../../../../../packages/edge/src/soundboard/soundboard-invariants";
 import type { ProfileKey } from "../../../../../shared/profiles";
 
 /** Only the empty system-media preset can offer OS transport controls. */
@@ -15,5 +16,16 @@ export function soundboardOwned(
 		sounds[0]?.value !== "" ||
 		operations.length !== 1 ||
 		operations[0]?.value !== 0
+	);
+}
+
+export function soundboardConfigured(
+	config: Pick<ProfileKey["config"], "type" | "actions">,
+): boolean {
+	const parsed = importSoundConfig(config);
+	return (
+		soundboardOwned(config) &&
+		parsed._tag === "Right" &&
+		parsed.right.issues.every((issue) => issue === "unverifiedFiles")
 	);
 }

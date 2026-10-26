@@ -3,7 +3,10 @@ import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters";
-import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import {
+	type KeyActivation,
+	KeyRuntime,
+} from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
@@ -19,6 +22,8 @@ import {
 import {
 	ProfileDeliveryFailed,
 	ProfileNotFound,
+	ProfileSelectionResetFailed,
+	ProfileSelectionResetTimedOut,
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
@@ -29,6 +34,7 @@ import type {
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
 	ProfileRepository,
+	ProfileSelectionCommit,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
@@ -76,9 +82,14 @@ export function prepareProfiles(
 	managementURL = renderer,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
-	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	executeOwned?: (
+		key: ProfileKey,
+		signal: AbortSignal,
+		activation: KeyActivation,
+	) => Promise<boolean>,
 	diagnostics?: DesktopDiagnostics,
 	mediaActions?: MediaActionAdapter,
+	resetOwned?: (deviceId?: string) => Promise<void>,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -116,6 +127,32 @@ export function prepareProfiles(
 			ProfileRepository.DefaultWithoutDependencies.pipe(
 				Layer.provide(profileStorageLayer(storage)),
 				Layer.provide(ManagementProfileContractsLive),
+				Layer.provide(
+					Layer.succeed(ProfileSelectionCommit, {
+						changed: (serial) =>
+							resetOwned
+								? Effect.tryPromise({
+										try: () => resetOwned(serial),
+										catch: ProfileSelectionResetFailed.fromCause,
+									}).pipe(
+										// Repository commits are uninterruptible. Only this
+										// post-publication promise wait must be interruptible.
+										Effect.interruptible,
+										Effect.timeoutFail({
+											duration: "5 seconds",
+											onTimeout: () =>
+												ProfileSelectionResetTimedOut.fromCause(undefined),
+										}),
+										Effect.catchAll((error) =>
+											Effect.logWarning("profiles.selection.reset.failed", {
+												code: error.code,
+												diagnosticCause: error.diagnosticCause,
+											}),
+										),
+									)
+								: Effect.void,
+					}),
+				),
 			),
 		),
 		Layer.provide(
@@ -160,6 +197,7 @@ export function prepareProfiles(
 						undefined,
 						executeOwned,
 						mediaActions,
+						resetOwned,
 					),
 				),
 			),

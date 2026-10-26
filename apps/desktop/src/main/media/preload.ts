@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
+	WALLPAPER_AUDIO,
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
 	WALLPAPER_SNAPSHOT,
@@ -18,6 +19,7 @@ const subscribe = (
 	};
 };
 const bridge: WallpaperBridge = {
+	audio: (command) => ipcRenderer.invoke(WALLPAPER_AUDIO, command),
 	request: (command) => ipcRenderer.invoke(WALLPAPER_REQUEST, command),
 	onSnapshot: (callback) => subscribe(WALLPAPER_SNAPSHOT, callback),
 	onClock: (callback) => subscribe(WALLPAPER_CLOCK, callback),

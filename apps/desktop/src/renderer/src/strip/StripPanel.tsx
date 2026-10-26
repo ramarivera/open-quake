@@ -278,6 +278,7 @@ export function StripPanel(): React.JSX.Element {
 					pressedKeyCode={pressedKeyCode}
 					profiles={profiles}
 					wallpaper={snapshot}
+					wallpaperSound
 					showEmptyGridDashedBorder={settings.showEmptyGridDashedBorder}
 					voice={{
 						...voice.context,
