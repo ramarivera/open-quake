@@ -323,6 +323,48 @@ it("pins a specific saved knob model before edits and dispatches through the act
 
 describe("desktop chat RPC through actual SDK and HTTP", () => {
 	it.each([
+		"moonshot-v1-8k",
+		"moonshot-v1-32k",
+		"moonshot-v1-128k",
+		"kimi-k2-turbo",
+		"kimi-k2-thinking",
+		"kimi-k2-thinking-turbo",
+	])(
+		"preserves legacy Moonshot requests for %s before and after canonicalization",
+		async (model) => {
+			for (const provider of ["moonshot", "kimi"]) {
+				const f = await fixture(
+					{ temperature: 0.4, topP: 0.8 },
+					provider,
+					model,
+				);
+				try {
+					const session = sessionId();
+					await f.bridge.submit({
+						sessionId: session,
+						turnId: turnId(),
+						text: "legacy",
+					});
+					await vi.waitFor(async () =>
+						expect(
+							(await f.bridge.history(session)).turns[0]?.snapshot.terminal,
+						).toMatchObject({ _tag: "Some", value: { outcome: "completed" } }),
+					);
+					expect(f.endpoint.calls).toHaveLength(1);
+					expect(f.endpoint.calls[0]?.body).toMatchObject({
+						model,
+						temperature: 0.4,
+						top_p: 0.8,
+					});
+					expect(f.endpoint.calls[0]?.body).not.toHaveProperty("thinking");
+				} finally {
+					await f.close();
+				}
+			}
+		},
+	);
+
+	it.each([
 		"gpt-4o",
 		"gpt-4o-mini",
 		"gpt-4o-2024-08-06",

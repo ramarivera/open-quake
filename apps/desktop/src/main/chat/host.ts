@@ -29,7 +29,7 @@ import { validateProfile } from "../../../../../packages/edge/src/ai/ai-invarian
 import { AiRepository } from "../../../../../packages/edge/src/ai/ai-repository";
 import { AiProviderService } from "../../../../../packages/edge/src/ai/ai-service";
 import {
-	canonicalProvider,
+	inferenceProvider,
 	localProviderListing,
 	modelOptions,
 	volcBaseUrl,
@@ -82,7 +82,7 @@ function profileMetadataFromModel(row: ModelRow): ProviderProfile {
 		.digest("hex");
 	const id =
 		`${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}` as ProfileId;
-	const selectedProvider = canonicalProvider(row.provider);
+	const selectedProvider = inferenceProvider(row.provider, row.model);
 	const baseUrl =
 		selectedProvider === "volc" && !row.baseUrl
 			? volcBaseUrl(row.settings?.entryMethod ?? "inference")

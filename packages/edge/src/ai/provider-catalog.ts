@@ -126,6 +126,23 @@ const aliases: Readonly<Record<string, string>> = {
 };
 export const canonicalProvider = (provider: string): string =>
 	aliases[provider] ?? provider;
+
+/** Retain the compatible protocol used by saved Moonshot models without
+ * applying the distinct K2.5/K2.6 sampling and thinking policy to them. */
+export function inferenceProvider(provider: string, model: string): string {
+	const canonical = canonicalProvider(provider);
+	return canonical === "kimi" &&
+		[
+			"moonshot-v1-8k",
+			"moonshot-v1-32k",
+			"moonshot-v1-128k",
+			"kimi-k2-turbo",
+			"kimi-k2-thinking",
+			"kimi-k2-thinking-turbo",
+		].includes(model)
+		? "generic"
+		: canonical;
+}
 export function defaultModel(provider: string): string {
 	switch (canonicalProvider(provider)) {
 		case "qwen":
