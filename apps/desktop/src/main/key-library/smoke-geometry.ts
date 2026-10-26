@@ -357,6 +357,156 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		true,
 	);
 	await snapshot(win, "editor-import-invalid-en");
+	// grid-editor: actual renderer/preload/main placement and responsive layout.
+	const dragProfile = Schema.decodeUnknownSync(Profile)({
+		id: "grid-editor-native",
+		name: "Grid placement",
+		revision: 0,
+		pages: [{ id: "one", keys: [] }],
+	});
+	await profiles.runtime.runPromise(
+		Effect.flatMap(ProfileRepository, (repo) =>
+			repo.transact((env) =>
+				Effect.succeed({ ...env, profiles: [...env.profiles, dragProfile] }),
+			),
+		),
+	);
+	await ready(
+		win,
+		`document.querySelector('#keys-profile option[value="grid-editor-native"]')`,
+	);
+	await select(win, "#keys-profile", dragProfile.id);
+	const keyButton = (code: string) => `.keys-cells [data-drop-code="${code}"]`;
+	const dragRevision = async () =>
+		(await saved()).profiles.find((p) => p.id === dragProfile.id)?.revision;
+	await click(win, '[data-library-type="timer"]');
+	await click(win, keyButton("2,8"));
+	await ready(
+		win,
+		`document.querySelector('.keys-cells [data-drop-code="2,8"]').getAttribute("aria-pressed") === "true"`,
+	);
+	assert.equal(await dragRevision(), 1);
+	await evalIn(
+		win,
+		`document.querySelector('.keys-cells [data-drop-code="2,8"]').dispatchEvent(new KeyboardEvent("keydown",{key:" ",bubbles:true}))`,
+	);
+	await evalIn(
+		win,
+		`document.querySelector('.keys-cells [data-drop-code="1,1"]').dispatchEvent(new KeyboardEvent("keydown",{key:"Enter",bubbles:true}))`,
+	);
+	await ready(
+		win,
+		`document.querySelector('.keys-cells [data-drop-code="1,1"]').getAttribute("aria-pressed") === "true"`,
+	);
+	assert.equal(await dragRevision(), 2);
+	await click(win, '[data-library-type="playAudio"]');
+	await click(win, keyButton("2,8"));
+	await ready(win, `document.querySelector('[role="alertdialog"]')`);
+	await evalIn(
+		win,
+		`document.querySelector('[role="alertdialog"]').scrollIntoView({block:"center"})`,
+	);
+	await snapshot(win, "grid-placement-replace-en");
+	await button(win, "Cancel");
+	assert.equal(await dragRevision(), 2);
+	await select(win, "#keys-language", "de");
+	await click(win, '[data-library-type="playAudio"]');
+	await click(win, keyButton("2,8"));
+	await ready(win, `document.querySelector('[role="alertdialog"]')`);
+	await evalIn(
+		win,
+		`document.querySelector('[role="alertdialog"]').scrollIntoView({block:"center"})`,
+	);
+	await snapshot(win, "grid-placement-replace-de");
+	await button(win, "Abbrechen");
+	await click(win, '[data-library-type="multiActions"]');
+	await click(win, keyButton("1,3"));
+	await ready(win, `document.querySelector(".key-sequence")`);
+	win.setContentSize(680, 1000);
+	await evalIn(
+		win,
+		`document.querySelector(".key-sequence").scrollIntoView({block:"center"})`,
+	);
+	await snapshot(win, "grid-placement-narrow-de");
+	assert.equal(
+		await evalIn(win, `document.documentElement.scrollWidth <= innerWidth`),
+		true,
+	);
+	await evalIn(
+		win,
+		`[...document.querySelectorAll('.knob-editor button')].find(button => button.textContent === 'Left').click()`,
+	);
+	await select(win, "#knob-function", "panelBrightness");
+	await input(win, "#knob-number", "15");
+	await evalIn(
+		win,
+		`document.querySelector(".knob-editor").scrollIntoView({block:"center"})`,
+	);
+	assert.equal(
+		await evalIn(
+			win,
+			`document.documentElement.scrollWidth <= innerWidth && document.querySelector('#knob-number').value === "15"`,
+		),
+		true,
+	);
+	await snapshot(win, "grid-placement-knob-narrow-de");
+
+	win.setContentSize(1400, 1150);
+	await select(win, "#keys-language", "en");
+	await click(win, '[data-library-type="createFolder"]');
+	await click(win, keyButton("2,4"));
+	await ready(win, `document.querySelector("#keys-page").options.length === 2`);
+	assert.equal(await dragRevision(), 4);
+	await evalIn(
+		win,
+		`document.querySelector('.keys-cells [data-drop-code="2,4"]').dispatchEvent(new MouseEvent("dblclick",{bubbles:true}))`,
+	);
+	await ready(win, `document.querySelector("#keys-page").value !== "one"`);
+	await evalIn(
+		win,
+		`document.querySelector(".keys-preview").scrollIntoView({block:"center"})`,
+	);
+	await snapshot(win, "grid-placement-folder-en");
+	const vividProfile = Schema.decodeUnknownSync(Profile)({
+		id: "grid-editor-vivid",
+		name: "Vivid configuration",
+		revision: 0,
+		pages: [{ id: "vivid", keys: [key("1,1", { type: "colorfulScreen" })] }],
+	});
+	await profiles.runtime.runPromise(
+		Effect.flatMap(ProfileRepository, (repo) =>
+			repo.transact((env) =>
+				Effect.succeed({ ...env, profiles: [...env.profiles, vividProfile] }),
+			),
+		),
+	);
+	await ready(
+		win,
+		`document.querySelector('#keys-profile option[value="grid-editor-vivid"]')`,
+	);
+	await select(win, "#keys-profile", vividProfile.id);
+	await ready(win, `document.querySelector('.keys-vivid-configure')`);
+	await evalIn(win, `document.querySelector('.keys-vivid-configure').focus()`);
+	win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Space" });
+	win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Space" });
+	await ready(
+		win,
+		`document.querySelector('[data-profile-id="grid-editor-vivid"]')`,
+	);
+	assert.equal(
+		(await saved()).profiles.find((p) => p.id === vividProfile.id)?.revision,
+		0,
+	);
+	await evalIn(
+		win,
+		`document.querySelector('.keys-vivid-configure').scrollIntoView({block:"center"})`,
+	);
+	await snapshot(win, "grid-placement-vivid-keyboard-en");
+
+	process.stdout.write(
+		"Grid placement PASS: autosave, keyboard move, bilingual replacement cancellation, narrow multi-action layout folder entry and native vivid keyboard activation.\n",
+	);
+
 	await writeFile(
 		join(h.scratch, "geometry-page-import.json"),
 		JSON.stringify(

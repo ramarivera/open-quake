@@ -1,8 +1,11 @@
 // Semantic fallbacks from the pinned Apache-2.0 MDI set, not DK resource packs.
+
 import alarm from "@mdi/svg/svg/alarm.svg?raw";
 import application from "@mdi/svg/svg/application.svg?raw";
 import left from "@mdi/svg/svg/arrow-left.svg?raw";
 import right from "@mdi/svg/svg/arrow-right.svg?raw";
+import brightness from "@mdi/svg/svg/brightness-7.svg?raw";
+import folder from "@mdi/svg/svg/folder.svg?raw";
 import list from "@mdi/svg/svg/format-list-numbered.svg?raw";
 import text from "@mdi/svg/svg/format-text.svg?raw";
 import unknown from "@mdi/svg/svg/help-circle-outline.svg?raw";
@@ -19,6 +22,10 @@ import web from "@mdi/svg/svg/web.svg?raw";
 import { isInlineIcon } from "../strip/tileMetrics";
 
 const defaults: Readonly<Record<string, string>> = {
+	brightness,
+	createFolder: folder,
+	back: left,
+	emojiBack: left,
 	website: web,
 	hotkey: keyboard,
 	hotkeySwitch: keyboard,
