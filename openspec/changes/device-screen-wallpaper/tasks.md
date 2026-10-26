@@ -66,3 +66,15 @@ Coverage is WIDGETS-128 sound/order/deduplication/removal and WIDGETS-130 active
 video sound eligibility/singleton looping. Other portions of those broad rows,
 including crossfade/preload geometry, remain outside this lane. Physical sound,
 QUAKE delivery, display binding and the full codec matrix remain unverified.
+
+## PR79 review fixes
+
+- [x] 5.3 Schedule playlist transitions at real deadlines independently of display-clock ticks, preserving elapsed time; prove two 2500 ms videos switch at 2.5 s and 5 s with TestClock. Evidence: WIDGETS-128/130; open-quake-lih.19.7.
+
+Review-fix verification: all six new cases fail against PR79 head `95a6844`
+and pass with these fixes. Full gates pass with 2,896 tests and four existing
+skips, six package typechecks, production build, both bundle modes, Biome
+1,158 files with zero errors and 14 existing warnings, and 46 strict OpenSpec
+items. External logs, including `regressions-final-before.log`, stay under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/wallpaper-soundboard/fix1/`.
+No renderer UI changes, real QUAKE access, DK-Suite execution or audible playback.

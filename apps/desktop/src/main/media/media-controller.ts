@@ -1,4 +1,4 @@
-import { Effect, Option, Ref, Schema, Stream } from "effect";
+import { Effect, Option, Queue, Ref, Schema, Stream } from "effect";
 import {
 	clockSnapshot,
 	defaultClockTile,
@@ -46,11 +46,28 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 			);
 			const semaphore = yield* Effect.makeSemaphore(1);
 			let activeIndex = 0;
-			let elapsed = 0;
-			let previousTick = yield* Effect.clockWith(
-				(source) => source.currentTimeMillis,
-			);
+			let deadline = 0;
+			const playlistChanged = yield* Queue.sliding<void>(1);
 			let playlistKey = "";
+			const synchronizePlaylist = Effect.fn(
+				"MediaController.synchronizePlaylist",
+			)(function* (serial: string, saved: WallpaperSnapshot["saved"]) {
+				const key = JSON.stringify([
+					serial,
+					saved.settings.displayMediaList.map((media) => [
+						media.filePath,
+						media.duration,
+					]),
+				]);
+				if (key !== playlistKey) {
+					playlistKey = key;
+					activeIndex = 0;
+					deadline =
+						(yield* Effect.clockWith((source) => source.currentTimeMillis)) +
+						(saved.settings.displayMediaList[0]?.duration ?? 5000);
+					yield* Queue.offer(playlistChanged, undefined);
+				}
+			});
 			const snapshot = Effect.fn("MediaController.snapshot")(
 				(
 					serial: string,
@@ -58,21 +75,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 				): Effect.Effect<WallpaperSnapshot, MediaRepositoryError> =>
 					Effect.gen(function* () {
 						const { saved, recovered } = yield* repository.load(serial);
-						const key = JSON.stringify([
-							serial,
-							saved.settings.displayMediaList.map((media) => [
-								media.filePath,
-								media.duration,
-							]),
-						]);
-						if (key !== playlistKey) {
-							playlistKey = key;
-							activeIndex = 0;
-							elapsed = 0;
-							previousTick = yield* Effect.clockWith(
-								(source) => source.currentTimeMillis,
-							);
-						}
+						yield* synchronizePlaylist(serial, saved);
 						const asset = yield* repository.resolve(saved, activeIndex).pipe(
 							Effect.map(
 								Option.match({
@@ -188,46 +191,68 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						}),
 					),
 			);
-			const ticks = displayClock.pipe(
-				Stream.runForEach((next) =>
-					semaphore
-						.withPermits(1)(
-							Effect.gen(function* () {
-								const now = yield* Effect.clockWith(
-									(source) => source.currentTimeMillis,
-								);
-								const delta = Math.max(0, now - previousTick);
-								previousTick = now;
-								yield* Ref.set(clock, next);
-								yield* edge.publishClock(next);
-								const serial = yield* Ref.get(activeSerial);
-								const { saved } = yield* repository.load(serial);
-								if (saved.settings.displayMediaList.length <= 1) return;
-								elapsed += delta;
-								if (
-									elapsed <
-									(saved.settings.displayMediaList[activeIndex]?.duration ??
-										5000)
-								)
-									return;
-								elapsed = 0;
-								activeIndex = nextWallpaperIndex(
-									activeIndex,
-									saved.settings.displayMediaList.length,
-									saved.settings.playMode,
-								);
-								yield* edge.publish(yield* snapshot(serial));
-							}),
-						)
-						.pipe(
-							Effect.catchTags({
-								InvalidWallpaper: () => Effect.void,
-								MediaUnreadable: () => Effect.void,
-								MediaPersistenceFailed: () => Effect.void,
-							}),
-						),
+			const advancePlaylist = semaphore
+				.withPermits(1)(
+					Effect.gen(function* () {
+						const serial = yield* Ref.get(activeSerial);
+						const { saved } = yield* repository.load(serial);
+						yield* synchronizePlaylist(serial, saved);
+						const list = saved.settings.displayMediaList;
+						if (list.length <= 1) return Option.none<number>();
+						const now = yield* Effect.clockWith(
+							(source) => source.currentTimeMillis,
+						);
+						// Retain the prior deadline even when IO or a suspended host wakes late.
+						while (now >= deadline) {
+							activeIndex = nextWallpaperIndex(
+								activeIndex,
+								list.length,
+								saved.settings.playMode,
+							);
+							deadline += list[activeIndex]?.duration ?? 5000;
+							yield* edge.publish(yield* snapshot(serial));
+						}
+						return Option.some(
+							Math.max(
+								0,
+								deadline -
+									(yield* Effect.clockWith(
+										(source) => source.currentTimeMillis,
+									)),
+							),
+						);
+					}),
+				)
+				.pipe(
+					Effect.catchTags({
+						InvalidWallpaper: () => Effect.succeed(Option.some(1000)),
+						MediaUnreadable: () => Effect.succeed(Option.some(1000)),
+						MediaPersistenceFailed: () => Effect.succeed(Option.some(1000)),
+					}),
+				);
+			const playlistTicks = Effect.forever(
+				advancePlaylist.pipe(
+					Effect.flatMap(
+						Option.match({
+							onNone: () => Queue.take(playlistChanged),
+							onSome: (wait) =>
+								Effect.raceFirst(
+									Effect.sleep(wait),
+									Queue.take(playlistChanged),
+								),
+						}),
+					),
 				),
 			);
+			const clockTicks = displayClock.pipe(
+				Stream.runForEach((next) =>
+					Ref.set(clock, next).pipe(Effect.zipRight(edge.publishClock(next))),
+				),
+			);
+			const ticks = Effect.all([clockTicks, playlistTicks], {
+				concurrency: "unbounded",
+				discard: true,
+			});
 			return { request, ticks, selectionSerial: Ref.get(activeSerial) };
 		}),
 );

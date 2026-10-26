@@ -160,3 +160,12 @@ The wallpaper editor SHALL persist enableSound per serial with default false for
 
 - **WHEN** wallpaper sound is enabled and a management preview shows the active video
 - **THEN** the preview stays muted and only the panel may produce sound
+
+### Requirement: Exact playlist transition deadlines
+
+The shared media controller SHALL advance videos at their metadata duration in milliseconds, independently of the one-second display clock. Each deadline SHALL build on the prior deadline so delayed work retains elapsed time and processes every overdue interval. Playlist replacement or selected-device changes SHALL reset the deadline; stopping the tick owner SHALL cancel transitions. Evidence: WIDGETS-128/130; recovered WallpaperView.vue metadata-driven video scheduling.
+
+#### Scenario: Fractional video durations
+
+- **WHEN** a two-item playlist contains two 2500 ms videos
+- **THEN** selection changes at 2500 ms and 5000 ms and continues every 2500 ms without rounding or drift
