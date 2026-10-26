@@ -125,3 +125,12 @@ the final unsupported-fade and queued ownership regressions. The full desktop
 suite passes 1,567 tests. Existing skips are three external edge cases and one
 native desktop case. Both typechecks, lint, production build, both bundle smoke
 modes and strict validation are required for delivery.
+
+PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
+allowlists retain both native-media and importer names; the final diff contains
+only the importer scope. All 53 importer tests, 16 filesystem/diagnostics tests,
+both typechecks, scoped Biome and strict OpenSpec pass. This disposable worktree
+initially lacked generated Husky shims; installing frozen dependencies restored
+them, and the first merge's commit-message/post-commit consumers were checked
+explicitly before the normal final merge and push gates. Reviewed delivery is
+still pending; no playback is enabled by this restack.

@@ -29,10 +29,15 @@ import {
 import { ProfileFunctionContracts } from "./profile-function-contracts.js";
 import { committedProfileSnapshot } from "./profile-snapshots.js";
 
-/** One desktop main-process owner per store. write must replace the whole envelope atomically. */
+/** Throws when the originating operation no longer owns its device session. */
+export type ProfileCommitGuard = () => void;
+/** One owner per store. write replaces atomically and checks the guard before publication. */
 export interface ProfileStoragePort {
 	readonly read: () => Promise<unknown>;
-	readonly write: (envelope: EncodedProfileEnvelope) => Promise<void>;
+	readonly write: (
+		envelope: EncodedProfileEnvelope,
+		guard?: ProfileCommitGuard,
+	) => Promise<void>;
 }
 export class ProfileStorage extends Context.Tag(
 	"@open-quake/device/ProfileStorage",
@@ -128,6 +133,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 			const write = Effect.fn("ProfileRepository.write")(
 				(
 					envelope: ProfileEnvelope,
+					guard?: ProfileCommitGuard,
 				): Effect.Effect<void, ProfileWriteFailed | ProfileValidationFailed> =>
 					Schema.encode(ProfileEnvelope)(envelope, {
 						onExcessProperty: "error",
@@ -137,7 +143,10 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 						),
 						Effect.flatMap((encoded) =>
 							Effect.tryPromise({
-								try: () => storage.write(encoded),
+								try: () => {
+									guard?.();
+									return storage.write(encoded, guard);
+								},
 								catch: (cause) =>
 									cause instanceof ProfileWriteFailed
 										? cause
@@ -222,6 +231,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 			const select = Effect.fn("ProfileRepository.select")(
 				(
 					request: unknown,
+					guard?: ProfileCommitGuard,
 				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
 					Effect.gen(function* () {
 						const input = yield* Schema.decodeUnknown(SelectProfileRequest)(
@@ -254,7 +264,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 								[input.deviceId]: { profileId: profile.id, pageId: page.id },
 							},
 						};
-						yield* write(candidate);
+						yield* write(candidate, guard);
 						yield* SubscriptionRef.set(committed, Option.some(candidate));
 						return candidate;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
@@ -264,6 +274,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 					change: (
 						envelope: ProfileEnvelope,
 					) => Effect.Effect<ProfileEnvelope, ProfileRepositoryError | E>,
+					guard?: ProfileCommitGuard,
 				): Effect.Effect<ProfileEnvelope, ProfileRepositoryError | E> =>
 					Effect.gen(function* () {
 						const { envelope } = yield* loadUnlocked();
@@ -274,7 +285,7 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 								Effect.fail(profileParseFailure(cause)),
 							),
 						);
-						yield* write(snapshot);
+						yield* write(snapshot, guard);
 						yield* SubscriptionRef.set(committed, Option.some(snapshot));
 						return snapshot;
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
