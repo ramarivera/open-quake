@@ -25,6 +25,9 @@ export function AdministrationPanel({
 	const [agent, setAgent] = useState(
 		view.agents.find((a) => a.id !== "main")?.id ?? "main",
 	);
+	const effectiveAgent = view.agents.some((a) => a.id === agent)
+		? agent
+		: (view.agents.find((a) => a.id !== "main")?.id ?? "main");
 	const [result, setResult] = useState("");
 	useEffect(() => {
 		let mounted = true;
@@ -195,7 +198,10 @@ export function AdministrationPanel({
 				<summary>{copy.portable}</summary>
 				<label className="mc-field">
 					{copy.agent}
-					<select value={agent} onChange={(e) => setAgent(e.target.value)}>
+					<select
+						value={effectiveAgent}
+						onChange={(e) => setAgent(e.target.value)}
+					>
 						{view.agents.map((a) => (
 							<option key={a.id} value={a.id}>
 								{a.name}
@@ -208,10 +214,12 @@ export function AdministrationPanel({
 					className="mc-button"
 					disabled={busy}
 					onClick={() =>
-						void request({ type: "export-pack", id: agent }).then((reply) => {
-							if (reply._tag === "success") setPack(reply.draft);
-							else setResult(reply.message);
-						})
+						void request({ type: "export-pack", id: effectiveAgent }).then(
+							(reply) => {
+								if (reply._tag === "success") setPack(reply.draft);
+								else setResult(reply.message);
+							},
+						)
 					}
 				>
 					{copy.export}

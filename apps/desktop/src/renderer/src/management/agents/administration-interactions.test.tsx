@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { Schema } from "effect";
-import { act } from "react";
+import { act, useState } from "react";
 import { expect, it, vi } from "vitest";
 import { initialAgentState } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import {
@@ -383,4 +383,41 @@ it("CENTER-052 keeps a roster target visible beside a mounted skill drag source"
 		target: "writer",
 		revision: view.revision,
 	});
+});
+
+it("CENTER-047 pack export follows the visible agent after roster replacement", async () => {
+	let publish: (next: AgentView) => void = () => {};
+	const request = vi.fn<AgentRequest>(async () => ({
+		_tag: "success",
+		view,
+		draft: "",
+	}));
+	function Panel() {
+		const [current, setCurrent] = useState(view);
+		publish = setCurrent;
+		return (
+			<AdministrationPanel view={current} request={request} busy={false} />
+		);
+	}
+	await mount(<Panel />);
+	const replacement = Schema.decodeUnknownSync(AgentId)("reviewer");
+	await act(async () =>
+		publish({
+			...view,
+			agents: [
+				view.agents[0],
+				{ ...view.agents[1], id: replacement, name: "Reviewer" },
+			],
+		}),
+	);
+	expect(element<HTMLSelectElement>("details select").value).toBe("reviewer");
+	await click(button("Export pack"));
+	expect(request).toHaveBeenLastCalledWith({
+		type: "export-pack",
+		id: "reviewer",
+	});
+	await act(async () => publish({ ...view, agents: [view.agents[0]] }));
+	expect(element<HTMLSelectElement>("details select").value).toBe("main");
+	await click(button("Export pack"));
+	expect(request).toHaveBeenLastCalledWith({ type: "export-pack", id: "main" });
 });
