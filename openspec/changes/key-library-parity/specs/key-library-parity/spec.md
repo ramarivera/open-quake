@@ -278,5 +278,9 @@ All library items SHALL use the merged GridEditor placement/replacement path wit
 The sequence library SHALL use the same translated search and groups and SHALL declare the 21 recovered active MULTIACTIONS_SIDEBAR entries: buzzer, mic, homeAssistant, website, hotkey, open, close, text, playAudioLegacy, stopAudio, delay, mute, playPause, stopPlay, skipBackward, skipForward, fastBackward, fastForward, repeatPlay, randomPlay and cmd. The commented-out playAudio entry SHALL be excluded. Plugin entries SHALL be included unless SupportedInMultiActions is false. Unavailable runtime actions SHALL remain visibly unavailable and SHALL not bypass executable schema validation. Sources: MGMT-127, KeyConfiguration.js:1805-2617 and MainScreen.vue:1179-1225.
 
 #### Scenario: Sequence filtering and runtime boundary
-- **WHEN** a sequence is selected and the user searches the library or installed plugin metadata changes
+- **WHEN** a sequence is selected and the user searches the library or stored/imported plugin metadata changes
 - **THEN** navigation, nested sequences and explicitly excluded plugin actions are absent; allowed entries remain searchable, and unavailable actions cannot be added as executable steps
+
+#### Scenario: Retained legacy plugin metadata
+- **WHEN** saved AI library JSON contains malformed placeholders beside a valid user group or a retained pluginAction manifest
+- **THEN** valid groups survive independently, explicit SupportedInMultiActions false excludes the plugin entry, and allowed unsupported plugin actions remain disabled

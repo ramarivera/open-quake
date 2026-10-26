@@ -110,7 +110,7 @@ export async function verifyAppLibrary(h: Harness): Promise<void> {
 		);
 		await evalIn(
 			win,
-			`const groups=document.querySelector('.function-library-groups');groups.scrollTop=document.querySelector('[data-library-group="apps:Discord"]').offsetTop-groups.offsetTop;true`,
+			`(()=>{const groups=document.querySelector('.function-library-groups');groups.scrollTop=document.querySelector('[data-library-group="apps:Discord"]').offsetTop-groups.offsetTop;return true;})()`,
 		);
 		await snapshot(win, `app-library-groups-${locale}`);
 		win.setContentSize(680, 1000);

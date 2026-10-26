@@ -30,7 +30,11 @@ const generated = {
 	createdAt: "2026-10-26",
 	rows: [{ id: "one", name: "Save file", app: "Editor", chord: "control+s" }],
 };
-async function fixture() {
+async function fixture(sequence = false) {
+	let libraries = [
+		generated,
+		{ ...generated, id: "plugin-1", name: "Placeholder" },
+	];
 	let changed = () => {};
 	let emoji: EmojiReply = {
 		_tag: "ready",
@@ -72,17 +76,14 @@ async function fixture() {
 	vi.stubGlobal("quakeIntegrations", {
 		request: async () => ({
 			type: "libraries",
-			libraries: [
-				generated,
-				{ ...generated, id: "plugin-1", name: "Placeholder" },
-			],
+			libraries,
 		}),
 	});
 	vi.stubGlobal("quakeEmoji", { request: async () => emoji });
 	const props = {
 		locale: "de" as const,
 		pageNumber: 1,
-		sequence: false,
+		sequence,
 		onPointerDown: vi.fn(),
 		onChoose: choose,
 		onActivate: activate,
@@ -96,6 +97,7 @@ async function fixture() {
 		activate,
 		refresh: async (next: EmojiReply) => {
 			emoji = next;
+			libraries = [];
 			await act(async () => changed());
 		},
 	};
@@ -161,6 +163,7 @@ it("MGMT-119/124 composes live generated and emoji data, excludes placeholders a
 		apps: [],
 	});
 	expect(f.host.textContent).not.toContain("Smile");
+	expect(f.host.textContent).not.toContain("Save file");
 });
 it("MGMT-127 searches the sequence allowlist and removes explicit plugin exclusions", () => {
 	const groups = functionGroups(true, "en");
@@ -252,7 +255,9 @@ it("MGMT-119 imports inert legacy AI groups and excludes placeholders and malfor
 	});
 	const groups = legacyAiGroups(
 		JSON.stringify([
-			source("plugin-1", "Default"),
+			{ id: "plugin-1", name: "Default" },
+			{ id: "broken", name: "No config" },
+			null,
 			source("2", "文本处理插件"),
 			source("real", "Mine"),
 		]),
@@ -262,4 +267,84 @@ it("MGMT-119 imports inert legacy AI groups and excludes placeholders and malfor
 		{ type: "key", value: "control+s" },
 	]);
 	expect(legacyAiGroups("alert(1)")).toEqual([]);
+});
+
+it("MGMT-127 filters retained imported plugin metadata without enabling unsupported execution", () => {
+	const plugin = (supported?: boolean) => ({
+		...functionLibraryKey("plugin.action"),
+		compatibility: Option.some({
+			source: {
+				isPlugin: true,
+				...(supported === undefined
+					? {}
+					: { SupportedInMultiActions: supported }),
+			},
+		}),
+	});
+	const app = appGroups(
+		[
+			{
+				subMenu: "Imported",
+				children: [plugin(false), plugin(true), plugin()],
+			},
+		],
+		[],
+		undefined,
+		true,
+	);
+	expect(app[0]?.entries.map((entry) => entry.id)).toEqual([
+		"apps:Imported:1",
+		"apps:Imported:2",
+	]);
+	expect(app[0]?.entries.every((entry) => entry.disabled)).toBe(true);
+});
+
+it("MGMT-127 reads the recovered pluginAction manifest through legacy import and library composition", () => {
+	const groups = legacyAiGroups(
+		JSON.stringify([
+			{
+				id: "installed-plugin-import",
+				name: "Plugin imports",
+				config: {
+					subMenu: "Plugin imports",
+					children: [false, true].map((supported) => ({
+						isPlugin: true,
+						childrenName: "Plugin command",
+						config: {
+							type: "plugin.action",
+							actions: [
+								{
+									type: "pluginAction",
+									value: JSON.stringify({ SupportedInMultiActions: supported }),
+								},
+							],
+						},
+					})),
+				},
+			},
+		]),
+	);
+	const library = appGroups(groups, [], undefined, true);
+	expect(library[0]?.entries.map((entry) => entry.id)).toEqual([
+		"apps:Plugin imports:1",
+	]);
+	expect(library[0]?.entries[0]?.disabled).toBe(true);
+});
+
+it("MGMT-107/127 mounts the translated sequence search and keeps unavailable operations disabled", async () => {
+	const f = await fixture(true);
+	vi.useFakeTimers();
+	expect(f.host.querySelector('[data-library-type="multiActions"]')).toBeNull();
+	expect(
+		query(f.host, '[data-library-type="cmd"]', HTMLButtonElement).disabled,
+	).toBe(true);
+	await input(
+		query(f.host, "#keys-library-search", HTMLInputElement),
+		"GERÄTEMIKROFON",
+	);
+	await act(async () => vi.advanceTimersByTimeAsync(500));
+	expect(f.host.querySelector('[data-library-type="website"]')).toBeNull();
+	expect(f.host.querySelector('[data-library-type="mic"]')).not.toBeNull();
+	await input(query(f.host, "#keys-library-search", HTMLInputElement), "");
+	expect(f.host.querySelector('[data-library-type="website"]')).not.toBeNull();
 });

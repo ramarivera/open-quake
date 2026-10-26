@@ -249,7 +249,7 @@ export function FunctionLibrary({
 										emoji?._tag === "ready"
 											? emoji.assets[entry.key.config.icon.slice(6)]
 											: keyArtwork(
-													entry.key.config.icon,
+													entry.key.config.icon || `library:${entry.id}`,
 													entry.key.config.type,
 												);
 									return (

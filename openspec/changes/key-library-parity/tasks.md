@@ -89,6 +89,8 @@ Lane evidence: 45 mounted editor regressions in `key-editor-interactions.test.ts
 
 ## 12. app-library burn-down
 
-- [ ] 12.1 Persist app preset groups, idempotent defaults, locks, default-only localization and app icon scoring. Rows MGMT-110, MGMT-122, MGMT-123, MGMT-386, MGMT-387, MGMT-388, MGMT-391. Bead open-quake-lih.10.16.
-- [ ] 12.2 Mount grouped translated search, app/generated/emoji composition, management activation and shared validated placement; verify English/German native mock screenshots and existing grid regressions. Rows MGMT-047, MGMT-107, MGMT-109, MGMT-115, MGMT-117, MGMT-119, MGMT-121, MGMT-124, MGMT-125. Bead open-quake-lih.10.17.
-- [ ] 12.3 Share recovered sequence allowlist and plugin SupportedInMultiActions filtering with the function library while retaining runtime validation. Row MGMT-127. Bead open-quake-lih.10.18.
+- [x] 12.1 Persist app preset groups, idempotent defaults, locks, default-only localization and app icon scoring. Rows MGMT-110, MGMT-122, MGMT-123, MGMT-386, MGMT-387, MGMT-388, MGMT-391. Bead open-quake-lih.10.16.
+- [x] 12.2 Mount grouped translated search, app/generated/emoji composition, management activation and shared validated placement; verify English/German native mock screenshots and existing grid regressions. Rows MGMT-047, MGMT-107, MGMT-109, MGMT-115, MGMT-117, MGMT-119, MGMT-121, MGMT-124, MGMT-125. Bead open-quake-lih.10.17.
+- [x] 12.3 Share recovered sequence allowlist and plugin SupportedInMultiActions filtering with the function library while retaining runtime validation. Row MGMT-127. Bead open-quake-lih.10.18.
+
+Lane verification: exact root turbo command passes 4131 tests with four existing skips, including 50 key-editor interactions with the 47 inherited regressions intact. Types pass all six tasks; Biome has zero errors and 16 existing warnings plus one info; build and both bundle smoke modes pass; strict OpenSpec validation passes all 47 items. Hidden native app-library acceptance passes saved preset placement and translated search with six EN/DE wide/narrow captures. Beads remain open for lead acceptance. Assigned software rows have spec/code/test coverage; Game Mode/plugin execution and hardware remain outside this lane.

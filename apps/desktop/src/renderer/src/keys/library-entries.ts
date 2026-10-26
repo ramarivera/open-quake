@@ -235,16 +235,43 @@ export function appGroups(
 			entries: group.entries
 				.filter((entry) => {
 					if (!sequence) return true;
-					const metadata = Option.getOrUndefined(
+					const metadata: typeof ProfileJsonObject.Type = Option.getOrElse(
 						entry.key.config.compatibility,
+						() => ({}),
 					);
-					const plugin =
-						metadata?.isPlugin === true
-							? {
-									SupportedInMultiActions:
-										metadata?.SupportedInMultiActions !== false,
-								}
-							: undefined;
+					const retained: typeof ProfileJsonObject.Type = Option.getOrElse(
+						entry.key.compatibility,
+						() => ({}),
+					);
+					const source = Schema.is(ProfileJsonObject)(retained.source)
+						? retained.source
+						: {};
+					const manifest = entry.key.config.actions.find(
+						(action) => action.type === "pluginAction",
+					)?.value;
+					let actionMetadata: unknown;
+					if (typeof manifest === "string") {
+						try {
+							actionMetadata = JSON.parse(manifest);
+						} catch {
+							// Legacy plugin manifests are inert data; malformed values cannot execute.
+						}
+					}
+					const records = [
+						metadata,
+						retained,
+						source,
+						...(Schema.is(ProfileJsonObject)(actionMetadata)
+							? [actionMetadata]
+							: []),
+					];
+					const plugin = records.some((record) => record.isPlugin === true)
+						? {
+								SupportedInMultiActions: !records.some(
+									(record) => record.SupportedInMultiActions === false,
+								),
+							}
+						: undefined;
 					return allowedInSequence(entry.key.config.type, plugin);
 				})
 				.map((entry) =>
@@ -298,9 +325,12 @@ export function legacyAiGroups(
 	} catch {
 		return [];
 	}
-	const decoded = Schema.decodeUnknownEither(Schema.Array(Plugin))(input);
-	if (decoded._tag === "Left") return [];
-	return decoded.right
+	if (!Array.isArray(input)) return [];
+	return input
+		.flatMap((value: unknown) => {
+			const decoded = Schema.decodeUnknownEither(Plugin)(value);
+			return decoded._tag === "Right" ? [decoded.right] : [];
+		})
 		.filter(
 			(plugin) =>
 				!placeholders.has(plugin.id) &&
@@ -322,6 +352,12 @@ export function legacyAiGroups(
 				const key = Schema.decodeUnknownEither(ProfileKey)({
 					...empty,
 					...raw,
+					compatibility: {
+						...(Schema.is(ProfileJsonObject)(raw.compatibility)
+							? raw.compatibility
+							: {}),
+						source: raw,
+					},
 					keyCode: typeof raw.keyCode === "string" ? raw.keyCode : "1,1",
 					childrenName:
 						typeof raw.childrenName === "string"
