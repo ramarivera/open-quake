@@ -128,3 +128,56 @@ carry instance and track generation; consumed and stale tokens do nothing. The
 ten-second readiness deadline includes native acquisition and readiness. These
 modules remain uncomposed behind the first-release boundary until their native
 adapter and consumer acceptance are delivered.
+
+
+## Playback controls, 2026-10-26
+
+The conductor delegates controls, explicit-list selection and track-scoped gain
+ramps to separate modules. Pause/resume retains the native player and position;
+previous/next wraps and performs at most one configured-list traversal. Rescan
+updates availability without reopening a decoded player. Navigation from a
+stopped key chooses its target before decoding rather than briefly starting the
+remembered file. Profile deactivation invalidates pending requests as well as
+active sessions.
+
+Ramps use the Effect clock, update element gain at most every 20 ms, retain the
+latest applied gain, and run outside the global command gate. Cancelling a ramp
+awaits its native write fiber before a successor starts. Every ramp is bound to
+the track's scope and generation. Stop/restart waits for applicable fade-out;
+capture and teardown bypass it. Stop intent survives natural completion during
+its fade, and an end observed while paused is retained until resume. Pending
+start requests are bounded at 128 and carry cancellation identity through metadata
+checks, fades and the serialized start. A newer command can supersede an older
+Stop All fade without its late completion stopping the replacement.
+
+Only service/native-adapter behavior is implemented here. The approved
+first-release key/renderer/IPC gate remains intact; task 3.1 owns production
+consumer composition and acceptance. No visual design decision changes.
+
+### PR59 follow-up concurrency fixes
+
+Natural completion now defers to a command-owned replacement through its outgoing
+fade. New controls clear that intent; interruption/failure releases resources
+still owned by the cancelled replacement. Play checks its request again after
+native readiness before beginning either incoming or fresh-play outgoing gain.
+Stop All and profile deactivation include matching already-stopping sessions in
+their snapshot, awaiting cached cleanup without selecting later replacements.
+
+Six deterministic real-service regressions failed before these fixes and pass
+afterward. A seventh covers interrupted replacement after natural end. All 126
+soundboard/audio tests, both package typechecks, scoped Biome and strict spec pass.
+The hidden muted Electron control harness passes actual MP3 decode, pause/resume,
+navigation, rescan, natural end, capture preemption, gain ramps and teardown with
+zero remaining windows/workers. Artifacts stay external in
+`open-quake-finish/soundboard-controls/review-r2/`. Production consumer composition
+and audible/physical acceptance remain open.
+
+The next PR59 review identified the separate stopped-key navigation readiness
+path and volume superseding a replacement after natural completion. Navigation
+now checks its request after readiness before ramping. A successful, still-owned
+volume command processes any deferred end after applying its gain. Four cases
+cover both navigation directions and volume superseding replacement/navigation;
+three fail before the fix. All 130 soundboard/audio tests, both package types,
+scoped Biome and strict spec pass. A fresh muted native control harness also
+passes with no remaining windows/workers. External outputs use the
+`review-r2/second-*` names. Production consumer and physical limits are unchanged.

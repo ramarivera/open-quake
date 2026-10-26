@@ -13,109 +13,135 @@ import { SoundboardFiles } from "../../../../../packages/edge/src/soundboard/sou
 import { SoundboardService } from "../../../../../packages/edge/src/soundboard/soundboard-service.js";
 import { createDesktopDiagnostics } from "../diagnostics/index.js";
 
-it("persists the real conductor/player failure in one scrubbed trace and exposes truthful failed state", async () => {
-	const directory = await mkdtemp(join(tmpdir(), "oq-playback-diagnostics-"));
-	const original = Object.assign(
-		new Error("/private/music/song.mp3 Bearer secret"),
-		{ code: "EACCES" },
-	);
-	const failure = new SoundboardDecodeFailed(original);
-	const diagnostics = createDesktopDiagnostics({ directory });
-	const runtime = ManagedRuntime.make(
-		SoundboardService.Default.pipe(
-			Layer.provide(
-				Layer.mergeAll(
-					AudioOutput.Default,
-					Layer.succeed(SoundboardFiles, {
-						inspect: () => Effect.succeed("available" as const),
-					}),
-					Layer.succeed(SoundboardPlayer, {
-						open: Effect.fn("SoundboardPlayer.open")(() =>
-							Effect.fail(failure),
-						),
-					}),
-				),
-			),
-			Layer.provideMerge(diagnostics.layer),
-		),
-	);
-	try {
-		const result = await runtime.runPromise(
-			diagnostics
-				.instrument(
-					SoundboardService.play(
-						{ profileId: "synthetic-profile", keyCode: "1" },
-						{
-							revision: 1,
-							entries: [
-								{
-									fileId: "a",
-									path: "/private/music/song.mp3",
-									status: "available",
-								},
-							],
-							volume: 50,
-							fade: { mode: "none", durationMs: 0 },
-						},
+it.each(["open", "pause"])(
+	"persists the real conductor/player %s failure in one scrubbed trace and exposes truthful failed state",
+	async (phase) => {
+		const directory = await mkdtemp(join(tmpdir(), "oq-playback-diagnostics-"));
+		const original = Object.assign(
+			new Error("/private/music/song.mp3 Bearer secret"),
+			{ code: "EACCES" },
+		);
+		const failure = new SoundboardDecodeFailed(original);
+		const diagnostics = createDesktopDiagnostics({ directory });
+		const runtime = ManagedRuntime.make(
+			SoundboardService.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						AudioOutput.Default,
+						Layer.succeed(SoundboardFiles, {
+							inspect: () => Effect.succeed("available" as const),
+						}),
+						Layer.succeed(SoundboardPlayer, {
+							open: Effect.fn("SoundboardPlayer.open")(() =>
+								phase === "open"
+									? Effect.fail(failure)
+									: Effect.succeed({
+											ready: Effect.void,
+											play: Effect.void,
+											pause: Effect.fail(failure),
+											position: Effect.succeed(0),
+											ended: Effect.never,
+											gain: () => Effect.void,
+										}),
+							),
+						}),
 					),
-					"app.background",
+				),
+				Layer.provideMerge(diagnostics.layer),
+			),
+		);
+		try {
+			const result = await runtime.runPromise(
+				diagnostics
+					.instrument(
+						SoundboardService.play(
+							{ profileId: "synthetic-profile", keyCode: "1" },
+							{
+								revision: 1,
+								entries: [
+									{
+										fileId: "a",
+										path: "/private/music/song.mp3",
+										status: "available",
+									},
+								],
+								volume: 50,
+								fade: { mode: "none", durationMs: 0 },
+							},
+						).pipe(
+							Effect.flatMap((session) =>
+								phase === "pause"
+									? SoundboardService.pause(session.playbackId)
+									: Effect.void,
+							),
+						),
+						"app.background",
+					)
+					.pipe(Effect.either),
+			);
+			expect(Either.isLeft(result)).toBe(true);
+			if (Either.isLeft(result))
+				expect(Cause.originalError(result.left)).toBe(failure);
+			expect(failure.originalCause).toBe(original);
+			expect(
+				await runtime.runPromise(SoundboardService.snapshot()),
+			).toMatchObject([{ state: "failed", errorCode: failure.code }]);
+			await runtime.dispose();
+			await diagnostics.close();
+			const raw = (
+				await Promise.all(
+					(
+						await readdir(directory)
+					)
+						.filter((file) => file.endsWith(".ndjson"))
+						.map((file) => readFile(join(directory, file), "utf8")),
 				)
-				.pipe(Effect.either),
-		);
-		expect(Either.isLeft(result)).toBe(true);
-		if (Either.isLeft(result))
-			expect(Cause.originalError(result.left)).toBe(failure);
-		expect(failure.originalCause).toBe(original);
-		expect(
-			await runtime.runPromise(SoundboardService.snapshot()),
-		).toMatchObject([{ state: "failed", errorCode: failure.code }]);
-		await runtime.dispose();
-		await diagnostics.close();
-		const raw = (
-			await Promise.all(
-				(
-					await readdir(directory)
-				)
-					.filter((file) => file.endsWith(".ndjson"))
-					.map((file) => readFile(join(directory, file), "utf8")),
-			)
-		).join("\n");
-		const records = raw
-			.trim()
-			.split("\n")
-			.filter(Boolean)
-			.map((line) => JSON.parse(line) as Record<string, unknown>);
-		const conductor = records.find(
-			(record) =>
-				record.span_name === "SoundboardService.play" &&
-				record.outcome === "failure",
-		);
-		const player = records.find(
-			(record) =>
-				record.span_name === "SoundboardPlayer.open" &&
-				record.outcome === "failure",
-		);
-		expect(conductor).toMatchObject({
-			cause: {
-				kind: "Fail",
-				error: {
-					_tag: "SoundboardDecodeFailed",
-					code: failure.code,
-					cause: { sourceCode: "EACCES" },
+			).join("\n");
+			const records = raw
+				.trim()
+				.split("\n")
+				.filter(Boolean)
+				.map((line) => JSON.parse(line) as Record<string, unknown>);
+			const conductor = records.find(
+				(record) =>
+					record.span_name ===
+						(phase === "pause"
+							? "SoundboardService.pause"
+							: "SoundboardService.play") && record.outcome === "failure",
+			);
+			const player = records.find(
+				(record) =>
+					record.span_name === "SoundboardPlayer.open" &&
+					record.outcome === "failure",
+			);
+			expect(conductor).toMatchObject({
+				cause: {
+					kind: "Fail",
+					error: {
+						_tag: "SoundboardDecodeFailed",
+						code: failure.code,
+						cause: { sourceCode: "EACCES" },
+					},
 				},
-			},
-		});
-		expect(player?.trace_id).toBe(conductor?.trace_id);
-		expect(player?.parent_span_id).toBe(conductor?.span_id);
-		expect(player?.request_id).toBe(conductor?.request_id);
-		expect(typeof conductor?.trace_id).toBe("string");
-		expect(raw).not.toMatch(/private|music|Bearer|secret|song/);
-	} finally {
-		await runtime.dispose();
-		await diagnostics.close();
-		await rm(directory, { recursive: true, force: true });
-	}
-});
+			});
+			if (phase === "open") {
+				const start = records.find(
+					(record) => record.span_name === "SoundboardService.start",
+				);
+				expect(player?.trace_id).toBe(conductor?.trace_id);
+				expect(player?.parent_span_id).toBe(start?.span_id);
+				expect(start?.parent_span_id).toBe(conductor?.span_id);
+				expect(player?.request_id).toBe(conductor?.request_id);
+			}
+			expect(typeof conductor?.trace_id).toBe("string");
+			expect(raw).not.toMatch(/private|music|Bearer|secret|song/);
+		} finally {
+			await runtime.dispose();
+			await diagnostics.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
 
 it.each([SoundboardDecodeFailed, SoundboardLoadTimeout])(
 	"round-trips playback catalog error %s without exposing its original cause",
