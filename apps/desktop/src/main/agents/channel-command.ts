@@ -51,9 +51,10 @@ export function channelCommandRunner(
 			};
 			const timer = setTimeout(abort, timeoutMs);
 			signal?.addEventListener("abort", abort, { once: true });
-			child.stdout.on("data", (chunk: Buffer) => {
-				output += chunk.toString("utf8");
-				pending += chunk.toString("utf8");
+			child.stdout.setEncoding("utf8");
+			child.stdout.on("data", (chunk: string) => {
+				output += chunk;
+				pending += chunk;
 				if (Buffer.byteLength(output) > 262144) {
 					abort();
 					return;

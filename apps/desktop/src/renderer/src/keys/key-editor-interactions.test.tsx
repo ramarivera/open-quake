@@ -988,6 +988,51 @@ it("MGMT-302 mounted local agent/model/voice/task Save retains typed actions and
 	).toBe(false);
 });
 
+it("MGMT-302 absent voiceInput stays typed-only through mounted editing and save", async () => {
+	const f = await fixture({
+		agentKey: true,
+		configure: (value) =>
+			Schema.encodeSync(ProfileEnvelope)(
+				Schema.decodeUnknownSync(ProfileEnvelope)({
+					...value,
+					profiles: value.profiles.map((profile) => ({
+						...profile,
+						pages: profile.pages.map((page) => ({
+							...page,
+							keys: page.keys.map((key) => ({
+								...key,
+								config: {
+									...key.config,
+									actions: (key.config.actions ?? []).filter(
+										(a) => a.type !== "voiceInput",
+									),
+								},
+							})),
+						})),
+					})),
+				}),
+			),
+	});
+	await f.select();
+	expect(query(f.host, "#agent-key-voice", HTMLInputElement).checked).toBe(
+		false,
+	);
+	await input(
+		query(f.host, "#agent-key-task", HTMLTextAreaElement),
+		"Typed task",
+	);
+	await click(button(f.host, "Save"));
+	const actions = f.stored().profiles[0].pages[0].keys[0]?.config.actions;
+	expect(actions).toContainEqual({ type: "taskPrompt", value: "Typed task" });
+	expect(actions?.some((a) => a.type === "voiceInput")).toBe(false);
+	await click(query(f.host, "#agent-key-voice", HTMLInputElement));
+	expect(f.host.querySelector("#agent-key-task")).toBeNull();
+	await click(button(f.host, "Save"));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.actions,
+	).toContainEqual({ type: "voiceInput", value: true });
+});
+
 it("MGMT-306 saves/reopens DK Claw agent and model through the mounted knob consumer and canonical profile storage", async () => {
 	const f = await fixture({ knobKey: true });
 	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");

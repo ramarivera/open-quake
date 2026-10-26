@@ -100,3 +100,7 @@ Account, cloud catalog, Agent Market, OpenClaw installer and editions remain OUT
 - [x] 9.10 Address new Codex finding 4378613145 by treating deleted linked profiles as independent packages. A real profile manager deletion/rename regression fails before and passes after without profile writes, recreation or refresh; library failures propagate. Bead `open-quake-lih.17.7`.
 - [x] 9.11 Reconcile the full management smoke with SCREEN-057/069 release-anywhere behavior after touch commit `f60a85ba`, merged by `ae869087` in PR88. Preserve no-copy cancellation assertions by resetting the mounted moved gesture before lift, and prove a normal moved release copies exactly once without navigating. Two consecutive full hidden mock runs pass with 82 screenshots each. Bead `open-quake-lih.17.18` stays open for lead merge; emoji rows CENTER-090 and MGMT-284.
 - [x] 9.12 Repair the required media smoke's EN/DE setup through the canonical `quakeLocale` bridge instead of the retired key-local storage preference. Preserve localized status assertions and all waits; the full hidden media smoke passes, including EN/DE player captures. Bead `open-quake-lih.17.23` stays open for lead merge, discovered during the 9.11 media gate.
+
+## PR108 post-round follow-ups
+
+- [x] F.1 Render pinned recorded WhatsApp terminal QR output through the session and setup drawer, preserving split UTF-8 glyphs. CENTER-078, PR108 finding 4380901925; bead `open-quake-lih.17.24`. Agent-runtime tasks F.1-F.3 track the owned process and imported voice-default fixes in the same effort.

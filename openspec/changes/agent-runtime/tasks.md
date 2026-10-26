@@ -50,3 +50,22 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 - [x] A.2 Add revision-checked rename/template reset, portable pack round-trip, bounded authored-workspace backup export, redacted diagnostics and managed log-level environment updates. Sources CENTER-050/104, MAIN-144. Same bead; service and real controller/storage tests in `administration.test.ts`, mounted settings/wizard tests in `administration-interactions.test.tsx`.
 - [x] A.3 Add local agent/model/voice/task editing and key-scoped HTTP context reset using existing credentials and conversation owners. Source MGMT-302. Bead `open-quake-lih.17.12`; mounted `key-editor-interactions.test.tsx` and `agent-http/voice-adapter.test.ts` verify persistence and cross-key isolation.
 - [ ] A.4 Lead acceptance: launch a selected installed OpenClaw executable and verify its supported plugin versions, readiness/restart, real messaging authentication and physical key behavior. No live external service was used. This lane does not complete the in-process tool-loop tasks above.
+
+## PR108 post-round follow-ups
+
+- [x] F.1 Stop Windows shim gateway trees with bounded injectable termination and fake Windows/POSIX regressions. CENTER-047, MAIN-144, finding 4380901915. Bead `open-quake-lih.17.24`.
+- [x] F.2 Decode pinned recorded WhatsApp terminal QR output into the existing PNG drawer path, with consumer regression coverage and UTF-8-safe stdout chunk framing. CENTER-078, finding 4380901925. Same bead; owning channel spec is management-center-parity/specs/integration-channels.
+- [x] F.3 Match runtime voiceInput defaults in mounted key editing and persistence. MGMT-302, finding 4380901936. Same bead.
+
+## PR122 review fix round
+- [x] R.1 Separate cleanup ownership from live readiness and retain early-exited Windows trees. CENTER-047, MAIN-144, 4381279137; bead `open-quake-lih.17.24.1`.
+- [x] R.2 Prove late processor exit cannot erase failed tree-cleanup ownership. CENTER-047, MAIN-144, 4381279385; same bead.
+- [x] R.3 Prove TestClock startup timeout plus failed tree cleanup retains an explicit Stop retry. CENTER-047, MAIN-144, 4381279552; same bead.
+- [x] R.4 Prove retained cleanup cannot report ready or admit a new process before successful cleanup. CENTER-047, MAIN-144, 4381290893; same bead.
+- [x] R.5 Verify pinned QR renderer and raw-payload availability; test all 40 versions with ANSI/plain, LF/CRLF and refresh framing. CENTER-078, 4381279720; same bead, owning integration-channels spec.
+- [x] R.6 Release cleanup on confirmed Windows creation failure with no PID, and prove recovery with fake spawning. CENTER-047, MAIN-144, mid-round finding 4381510116; same bead.
+- [x] R.7 Confirm an already-absent Windows tree without confusing absent shim with surviving descendants; keep failed probes retryable. CENTER-047, MAIN-144, mid-round finding 4381535855; same bead.
+- [x] R.8 Verify Windows creation identity before every tree kill, hold the verified native handle through termination, and reject reused/unknown/late identities without killing. CENTER-047, MAIN-144, safety finding 4381625938; same bead.
+
+- [x] R.9 Own the Windows tree with a kernel Job Object assigned before the suspended root can run; retain descendants and retryable cleanup after root exit without PID kills. CENTER-047, MAIN-144, finding 4381720098; same bead.
+- [x] R.10 Confirm absent-tree cleanup after initial identity sampling fails, while preserving the prohibition on unverified PID kills. CENTER-047, MAIN-144, finding 4381720113; same bead.
