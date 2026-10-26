@@ -34,7 +34,7 @@ import { GenericTile } from "./tiles/GenericTile";
 import { type StripProfiles, subscribeStripProfiles } from "./useStripProfiles";
 
 const decode = Schema.decodeUnknownSync(ProfileEnvelope);
-const ready = (active = quickProfile, serial?: string): StripProfiles => ({
+const ready = (active = quickProfile, serial = "smoke-A"): StripProfiles => ({
 	_tag: "ready",
 	envelope: decode(stripFixtureEnvelope(active, serial)),
 });
@@ -446,10 +446,11 @@ describe("tile registry", () => {
 });
 
 describe("strip selection and settings", () => {
-	it("follows the device selection and falls back to the first page", () => {
+	it("follows saved selection, uses colorful for new serials and preserves preview fallback", () => {
 		const envelope = decode(stripFixtureEnvelope(meetAiProfile, "SN-1"));
 		expect(selectStripPage(envelope, "SN-1").profile.name).toBe("MeetAI");
-		expect(selectStripPage(envelope, "other").profile.id).toBe(
+		expect(selectStripPage(envelope, "other").profile.id).toBe(vividProfile.id);
+		expect(selectStripPage(envelope, "desktop-preview").profile.id).toBe(
 			envelope.profiles[0].id,
 		);
 		expect(selectStripPage(envelope, "__proto__").page.id).toBe(

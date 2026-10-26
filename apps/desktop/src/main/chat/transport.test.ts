@@ -12,6 +12,7 @@ import {
 	Redacted,
 	Schema,
 	Scope,
+	Stream,
 } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -26,6 +27,7 @@ import {
 } from "../../../../../packages/edge/src/voice/surface";
 import { CHAT_DISCONNECT, CHAT_EVENT, CHAT_REQUEST } from "../../shared/chat";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
+import { createAgentHttpVoiceAdapter } from "../agent-http/voice-adapter";
 import { createModelCredentials } from "./credentials";
 import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
@@ -192,6 +194,7 @@ async function fixture(
 function voiceFixture(
 	host: ReturnType<typeof createDirectChat>,
 	publish: (event: VoiceSurfaceEvent) => Effect.Effect<void>,
+	decorate = false,
 ) {
 	let direct:
 		| Effect.Effect.Success<ReturnType<typeof createDirectChatVoice>>
@@ -209,7 +212,18 @@ function voiceFixture(
 			GridVoiceRuntime,
 			Effect.gen(function* () {
 				direct = yield* createDirectChatVoice(host, fallback);
-				return direct.runtime;
+				return decorate
+					? (yield* createAgentHttpVoiceAdapter(
+							{
+								selected: () => Effect.succeed(undefined),
+								stream: () => Stream.die("external stream must not run"),
+								clear: () => Effect.die("external clear must not run"),
+								cancel: () => Effect.die("external cancel must not run"),
+								generation: () => 0,
+							},
+							direct.runtime,
+						)).runtime
+					: direct.runtime;
 			}),
 		).pipe(
 			Layer.provideMerge(
@@ -954,6 +968,57 @@ it("AI-010: pins an in-flight model, refreshes the next submission and revokes a
 		);
 		expect(f.endpoint.calls).toHaveLength(2);
 	} finally {
+		await f.close();
+	}
+});
+
+it("MGMT-302 resets only the selected key through the production HTTP and direct-chat composition", async () => {
+	const f = await fixture();
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(
+		f.host,
+		(event) =>
+			Effect.sync(() => {
+				events.push(event);
+			}),
+		true,
+	);
+	try {
+		const runtime = await v.voice.runPromise(GridVoiceRuntime);
+		const request = {
+			serial: "mock-reset",
+			keyCode: "1,5",
+			agentId: "main",
+			message: "first",
+		};
+		const send = async (keyCode: string, count: number) => {
+			await v.voice.runPromise(runtime.sendText({ ...request, keyCode }));
+			await vi.waitFor(() =>
+				expect(
+					events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+				).toHaveLength(count),
+			);
+		};
+		await send("1,5", 1);
+		await send("1,6", 2);
+		await send("1,5", 3);
+		const sessions = () =>
+			events.filter((e) => e._tag === "TurnStarted").map((e) => e.sessionId);
+		expect(sessions()[2]).toBe(sessions()[0]);
+		if (!runtime.resetContext) throw new Error("missing resetContext");
+		await v.voice.runPromise(runtime.resetContext(request.serial, "1,5"));
+		await send("1,5", 4);
+		await send("1,6", 5);
+		expect(sessions()[3]).not.toBe(sessions()[0]);
+		expect(sessions()[4]).toBe(sessions()[1]);
+		expect(
+			f.endpoint.calls[3]?.body.messages.filter((m) => m.role === "user"),
+		).toHaveLength(1);
+		expect(
+			f.endpoint.calls[4]?.body.messages.filter((m) => m.role === "user"),
+		).toHaveLength(2);
+	} finally {
+		await v.voice.dispose();
 		await f.close();
 	}
 });

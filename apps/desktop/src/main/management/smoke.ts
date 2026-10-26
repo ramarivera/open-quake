@@ -1114,6 +1114,11 @@ async function smoke() {
 		await settle(30);
 		touch(1, 160);
 		await settle(30);
+		// SCREEN-057 retains a held tile across movement. Cancel explicitly through
+		// the mounted owner; movement alone is not cancellation after PR88.
+		await panel.webContents.executeJavaScript(
+			"document.getElementById('root').dispatchEvent(new Event('quake-strip-reset'));null;",
+		);
 		touch(0, 160);
 		await settle(100);
 		assert.equal(
@@ -1121,7 +1126,7 @@ async function smoke() {
 			beforeMovement,
 			"Gesture movement cancellation must discard held emoji",
 		);
-		cancelledTouchCases.push("movement");
+		cancelledTouchCases.push("movement-then-reset");
 		const copiedBeforeCancel = copiedFiles.length;
 		touch(1);
 		await settle(30);
@@ -1299,7 +1304,7 @@ async function smoke() {
 			command: { type: "settings", appMatch: false, apps: [], globalMode: 0 },
 		});
 		process.stdout.write(
-			"Emoji cancellation regressions PASS: overlay takeover, early close, movement; no copy.\n",
+			"Emoji cancellation regressions PASS: overlay takeover, early close, movement then reset; no copy.\n",
 		);
 		const beforeNormal = copiedFiles.length;
 		touch(1);
@@ -1311,6 +1316,32 @@ async function smoke() {
 			beforeNormal + 1,
 			"Subsequent ordinary touch must still copy",
 		);
+		const beforeMovedRelease = copiedFiles.length;
+		touch(1);
+		await settle(30);
+		touch(1, 160);
+		await settle(30);
+		assert.equal(
+			copiedFiles.length,
+			beforeMovedRelease,
+			"Movement alone must not copy before lift",
+		);
+		touch(0, 160);
+		await settle(250);
+		touch(0, 160);
+		await settle(100);
+		assert.equal(
+			copiedFiles.length,
+			beforeMovedRelease + 1,
+			"SCREEN-057 moved release must copy the original emoji exactly once",
+		);
+		assert.equal(
+			await panelJs(
+				"document.querySelector('[data-key-code=\"1,1\"] .strip-tile-title')?.textContent",
+			),
+			"Hello",
+			"SCREEN-069 movement must not navigate away from the original emoji page",
+		);
 		await writeFile(
 			join(artifacts, "touch-ownership-proof.json"),
 			JSON.stringify(
@@ -1320,6 +1351,7 @@ async function smoke() {
 					mountedPanelAndIpc: true,
 					cancelledCases,
 					subsequentTouchCopied: true,
+					movedReleaseCopiedOnce: true,
 					modeDuringCancellation: 2,
 					overlayAndMovementMode: 0,
 					realClipboardOrKeyboard: false,

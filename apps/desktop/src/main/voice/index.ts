@@ -257,6 +257,19 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 							),
 						);
 					}
+					case "ResetContext":
+						return runtime.runPromise(
+							Effect.flatMap(GridVoiceRuntime, (owner) =>
+								owner.resetContext
+									? owner.resetContext(serial, request.keyCode).pipe(
+											Effect.as(ok),
+											Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+												Effect.succeed(rejected(error.code)),
+											),
+										)
+									: Effect.succeed(rejected("VOICE.RUNTIME.UNAVAILABLE")),
+							),
+						);
 					case "Reset":
 						await run(GridVoice.reset(serial, request.reason));
 						return ok;

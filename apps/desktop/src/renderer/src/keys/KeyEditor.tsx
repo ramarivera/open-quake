@@ -40,6 +40,7 @@ import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { WallpaperSettings } from "../wallpaper/WallpaperViews";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
+import { AgentKeyFields } from "./AgentKeyFields";
 import { editableFocus } from "./editor-input";
 import { GridEditor, type Selection } from "./GridEditor";
 import { NativeIconPicker } from "./IconPicker";
@@ -901,6 +902,12 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						{key.config.type === "clawbot" && (
+							<AgentKeyFields
+								value={key}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						<MediaKeySettings
 							keyValue={key}
 							locale={locale}
@@ -912,6 +919,7 @@ export function KeyEditor(): React.JSX.Element {
 									action.type !== "musicSource" &&
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
+									key.config.type !== "clawbot" &&
 									!isObsId(key.config.type) &&
 									!isMonitorKey(key),
 							)
