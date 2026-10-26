@@ -7,6 +7,7 @@ import { meetingError } from "../../meetings/meeting-errors.js";
 import { AiProtocolInvalid } from "../ai-errors.js";
 import type { ResolveMeetingConnection } from "./meeting-resources.js";
 import type { SpeechSocket, SpeechWebSocket } from "./speech-ports.js";
+import { pcmResampler } from "./speech-resample.js";
 import { encodeAudio, receiveObject, sendEvent } from "./speech-session.js";
 
 /** One app-owned translation session. Host socket and PCM queues are bounded independently. */
@@ -178,8 +179,9 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 							event_id: crypto.randomUUID(),
 							session: {
 								modalities: ["text"],
-								input_audio_format: "pcm16",
-								sample_rate: 24000,
+								// LiveTranslate client events document pcm at 8/16 kHz.
+								input_audio_format: "pcm",
+								sample_rate: 16000,
 								input_audio_transcription: { language: "auto" },
 								translation: { language: config.targetLanguage },
 								output_audio: false,
@@ -222,9 +224,13 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 						yield* resolve(config, true);
 						if (epoch !== generation || !active)
 							return yield* meetingError("Unavailable");
+						// Capture owns 300 ms at 24 kHz. Each aligned block maps exactly
+						// to 4800 signed samples at the provider's documented 16 kHz.
+						const audio = pcmResampler(24000, 16000)(pcm);
+						if (audio.length !== 9600) return yield* meetingError("Invalid");
 						yield* sendEvent(active.socket, {
 							type: "input_audio_buffer.append",
-							audio: encodeAudio(pcm),
+							audio: encodeAudio(audio),
 						}).pipe(
 							Effect.mapError((cause) => meetingError("Unavailable", cause)),
 							Effect.timeoutFail({

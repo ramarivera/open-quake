@@ -535,3 +535,8 @@ Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, 
 
 - **WHEN** AI-288 system validation times out, conversion fails permanently, AI-278 ownership persistence fails after upload, or AI-292 translation reconnects
 - **THEN** validation decodes at most a one-second sample and a timeout fails finalization instead of dropping the system track, conversion retries only transient host errors, failed ownership persistence triggers remote deletion with interruption deferred during the handoff, and reconnect clears undelivered old-session text
+
+#### Scenario: LiveTranslate uses documented wire audio
+
+- **WHEN** AI-136, AI-137 and AI-292 send a 300 ms capture block to qwen3.5-livetranslate-flash-realtime
+- **THEN** the adapter SHALL resample the 7200 signed little-endian mono samples at 24 kHz into exactly 4800 samples at 16 kHz and declare input_audio_format pcm and sample_rate 16000 in session.update, as documented at https://www.alibabacloud.com/help/en/model-studio/live-translator-client-events

@@ -350,6 +350,66 @@ function fakeSocket(transcript = "file transcript") {
 }
 describe("file and live realtime ownership", () => {
 	it.scoped(
+		"uses documented LiveTranslate PCM settings and sends resampled 16 kHz signed audio",
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				const s = yield* fakeSocket();
+				const transport: typeof SpeechWebSocket.Service = {
+					connect: () =>
+						Effect.succeed({
+							...s.socket,
+							send: (raw) => {
+								const event = object(JSON.parse(String(raw)));
+								if (event.type === "session.update") {
+									expect(event.session).toMatchObject({
+										input_audio_format: "pcm",
+										sample_rate: 16000,
+									});
+								}
+								return s.socket.send(raw);
+							},
+						}),
+				};
+				const live = yield* makeMeetingTranslation(transport, f.resolve);
+				for (let block = 0; block < 2; block++) {
+					const backing = new Uint8Array(14404);
+					const pcm = backing.subarray(2, 14402);
+					const input = new DataView(
+						pcm.buffer,
+						pcm.byteOffset,
+						pcm.byteLength,
+					);
+					for (let i = 0; i < 7200; i++)
+						input.setInt16(i * 2, i * 4 - 20000 + block, true);
+					yield* live.translate(f.request.config, pcm);
+					const event = s.events.filter(
+						(e) => e.type === "input_audio_buffer.append",
+					)[block];
+					if (typeof event?.audio !== "string")
+						throw new Error("No wire audio");
+					const bytes = Buffer.from(event.audio, "base64");
+					expect(bytes.length).toBe(9600);
+					for (let i = 0; i < 4800; i++)
+						expect(bytes.readInt16LE(i * 2)).toBe(i * 6 - 20000 + block);
+				}
+				expect(
+					s.events.filter((e) => e.type === "session.update"),
+				).toHaveLength(1);
+				for (const length of [9600, 14398, 14402]) {
+					const result = yield* live
+						.translate(f.request.config, new Uint8Array(length))
+						.pipe(Effect.either);
+					expect(Either.isLeft(result) && result.left.code).toBe(
+						"QUAKE.MEETING.INVALID",
+					);
+				}
+				expect(
+					s.events.filter((e) => e.type === "input_audio_buffer.append"),
+				).toHaveLength(2);
+			}),
+	);
+	it.scoped(
 		"paces file PCM, waits for finality, persists it and releases each concurrent job",
 		() =>
 			Effect.gen(function* () {
@@ -410,7 +470,8 @@ describe("file and live realtime ownership", () => {
 				yield* live.prepareTranslation(f.request.config);
 				const session = object(s.events[0]?.session);
 				expect(session).toMatchObject({
-					input_audio_format: "pcm16",
+					input_audio_format: "pcm",
+					sample_rate: 16000,
 					translation: { language: "zh" },
 					input_audio_transcription: { language: "auto" },
 					modalities: ["text"],
