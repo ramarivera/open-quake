@@ -74,9 +74,13 @@ export async function linuxMetrics(
 		}
 	}
 	if (id === "power") {
+		const supplies = await optional(() =>
+			files.list("/sys/class/power_supply"),
+		);
+		if (supplies === undefined) return {};
 		let source: "ac" | "battery" | undefined;
 		const batteries: string[] = [];
-		for (const name of await files.list("/sys/class/power_supply")) {
+		for (const name of supplies) {
 			const base = `/sys/class/power_supply/${name}`,
 				type = (await read(`${base}/type`))?.trim();
 			if (type === "Battery") batteries.push(base);
@@ -114,7 +118,9 @@ export async function linuxMetrics(
 			...(batteryState ? { batteryState } : {}),
 		};
 	}
-	if (id === "bluetooth")
-		return { adapters: (await files.list("/sys/class/bluetooth")).length };
+	if (id === "bluetooth") {
+		const adapters = await optional(() => files.list("/sys/class/bluetooth"));
+		return adapters === undefined ? {} : { adapters: adapters.length };
+	}
 	return {};
 }

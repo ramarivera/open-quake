@@ -381,3 +381,66 @@ it("skips invalid GPU temperature sensors on the same card", async () => {
 		values: { temperature: 52 },
 	});
 });
+
+it.each(["ENOENT", "ENOTDIR"])(
+	"reports missing Linux sysfs classes as unsupported, without fake hardware values: %s",
+	async (code) => {
+		for (const id of ["bluetooth", "power"] as const) {
+			const c = nativeCollector(
+				"linux",
+				async () => "",
+				() => ({}),
+				{
+					read: async () => {
+						throw new Error("no device reads expected");
+					},
+					list: async () => {
+						throw Object.assign(new Error("missing class"), { code });
+					},
+				},
+			);
+			expect(await Effect.runPromise(c.collect(id))).toEqual({
+				state: "unsupported",
+				values: {},
+			});
+		}
+	},
+);
+it.each(["EACCES", "EPERM", "EIO"])(
+	"preserves real Linux class enumeration failures: %s",
+	async (code) => {
+		for (const id of ["bluetooth", "power"] as const) {
+			const c = nativeCollector(
+				"linux",
+				async () => "",
+				() => ({}),
+				{
+					read: async () => "",
+					list: async () => {
+						throw Object.assign(new Error("class read failed"), { code });
+					},
+				},
+			);
+			expect(await Effect.runPromise(c.collect(id))).toEqual({
+				state: code === "EIO" ? "error" : "permission-denied",
+				values: {},
+			});
+		}
+	},
+);
+it("distinguishes a confirmed empty inventory from absent Linux sysfs support", async () => {
+	const c = nativeCollector(
+		"linux",
+		async () => "",
+		() => ({}),
+		{ read: async () => "", list: async () => [] },
+	);
+	expect(await Effect.runPromise(c.collect("bluetooth"))).toEqual({
+		state: "available",
+		values: { adapters: 0 },
+	});
+	expect(await Effect.runPromise(c.collect("power"))).toEqual({
+		state: "available",
+		values: { hasBattery: false },
+	});
+});

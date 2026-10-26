@@ -52,3 +52,5 @@ fixture-tested only. All three burn-down beads stay open for lead merge.
 - [x] 8.2 Preserve upgraded global presentation with idempotent per-key migration and restart regressions. Bead open-quake-lih.8.5; review 4378997492.
 
 - [x] 8.3 Skip unusable Linux DRM cards and temperature sensors with failing-before native collector fixtures. Bead open-quake-lih.8.6; review 4378997712.
+
+- [x] 8.4 Distinguish absent Linux hardware classes from confirmed empty inventory and real enumeration failures. Bead open-quake-lih.8.6; review 4378997864.

@@ -154,6 +154,11 @@ Windows SHALL use local typed subprocess output through stdio, never an unauthen
 - **WHEN** a DRM card or temperature sensor is out of range and a later card or sensor supplies valid measurements
 - **THEN** collection skips the unusable readings and returns the valid GPU measurements without invoking the optional fallback
 
+#### Scenario: Missing Linux hardware classes
+
+- **WHEN** Bluetooth or power-supply sysfs enumeration reports ENOENT or ENOTDIR
+- **THEN** collection reports unsupported with absent values, without inventing zero adapters or battery state; a confirmed empty directory retains its empty inventory, while permission and I/O failures remain errors
+
 #### Scenario: Error budget and cancellation
 
 - **WHEN** sixty checks fail after a successful sample, or the rate changes or the last subscriber leaves
