@@ -107,11 +107,7 @@ export const createDirectChatVoice = (
 										),
 									catch: (cause) => new VoiceRuntimeUnavailable(cause),
 								});
-						if (
-							settings &&
-							((source === "voice" && !settings.enableVoiceInput) ||
-								(source === "typed" && settings.useAgent))
-						)
+						if (source === "voice" && settings && !settings.enableVoiceInput)
 							return yield* new VoiceRuntimeUnavailable();
 						const token = Symbol("assistant-session");
 						identities.set(request.serial, { keyCode: request.keyCode, token });

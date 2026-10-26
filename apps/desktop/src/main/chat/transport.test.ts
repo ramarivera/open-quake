@@ -1634,3 +1634,44 @@ it.each(["none", "default", "fallback"] as const)(
 		}
 	},
 );
+
+it("default assistant typed messages reach Auto routing", async () => {
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () => Effect.succeed(defaultAssistantSettings()),
+	});
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(f.host, (event) =>
+		Effect.sync(() => {
+			events.push(event);
+		}),
+	);
+	try {
+		const runtime = await v.voice.runPromise(GridVoiceRuntime);
+		await v.voice.runPromise(
+			runtime.sendText({
+				serial: "fixture",
+				keyCode: "1,1",
+				agentId: "main",
+				message: "typed hello",
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(
+				events.some((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toBe(true),
+		);
+		expect(f.endpoint.calls).toHaveLength(2);
+		expect(f.endpoint.calls[0]?.body.messages[0]?.content).toContain(
+			"userRequestAction",
+		);
+		expect(f.endpoint.calls[1]?.body.messages.at(-1)?.content).toBe(
+			"typed hello",
+		);
+		expect(events.find((e) => e._tag === "TurnStarted")).toMatchObject({
+			source: "typed",
+		});
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
