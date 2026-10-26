@@ -128,8 +128,8 @@ describe("platform collection boundaries", () => {
 			),
 		).toEqual({ up: 2048, down: 1024 });
 	});
-	it("keeps non-macOS native-only metrics unsupported", async () => {
-		const collector = nativeCollector("linux");
+	it("keeps unsupported platforms explicitly unsupported", async () => {
+		const collector = nativeCollector("freebsd");
 		for (const id of ["gpu", "disk", "process", "network", "power"] as const)
 			expect(await Effect.runPromise(collector.collect(id))).toEqual({
 				state: "unsupported",
@@ -152,5 +152,173 @@ describe("platform collection boundaries", () => {
 				"available",
 			);
 		}
+	});
+});
+
+describe("qualified platform fixtures", () => {
+	const iface: () => Record<string, NetworkInterfaceInfo[]> = () => ({
+		eth0: [
+			{
+				address: "10.0.0.2",
+				netmask: "255.255.255.0",
+				family: "IPv4",
+				mac: "00:11:22:33:44:55",
+				internal: false,
+				cidr: "10.0.0.2/24",
+			},
+		],
+	});
+	it("uses typed Windows stdio for CPU, GPU, disks, network, process, power and Bluetooth", async () => {
+		let time = 1000;
+		const run = vi.fn(async (_file: string, args: readonly string[]) => {
+			const script = args.at(-1) ?? "";
+			if (script.includes("Win32_Processor")) return '{"load":0}';
+			if (script.includes("Win32_VideoController"))
+				return '{"model":"Fixture GPU","temperature":55}';
+			if (script.includes("Win32_LogicalDisk"))
+				return '{"disks":[{"name":"C:","size":100000,"usedPercent":40}]}';
+			if (script.includes("Get-NetAdapter"))
+				return JSON.stringify({
+					iface: "Ethernet",
+					up: time * 10,
+					down: time * 20,
+				});
+			if (script.includes("Win32_Battery"))
+				return '{"hasBattery":false,"source":"ac"}';
+			if (script.includes("Get-PnpDevice")) return '{"devices":0}';
+			return '{"all":87}';
+		});
+		const collector = nativeCollector(
+			"win32",
+			run,
+			iface,
+			undefined,
+			() => time,
+		);
+		expect(await Effect.runPromise(collector.collect("cpu"))).toEqual({
+			state: "available",
+			values: { load: 0 },
+		});
+		expect((await Effect.runPromise(collector.collect("gpu"))).values).toEqual({
+			model: "Fixture GPU",
+			temperature: 55,
+		});
+		expect(
+			(await Effect.runPromise(collector.collect("disk"))).values.disks,
+		).toHaveLength(1);
+		expect(
+			(await Effect.runPromise(collector.collect("process"))).values.all,
+		).toBe(87);
+		expect(
+			(await Effect.runPromise(collector.collect("power"))).values,
+		).toEqual({ hasBattery: false, source: "ac" });
+		expect(
+			(await Effect.runPromise(collector.collect("bluetooth"))).values.devices,
+		).toBe(0);
+		expect(
+			(await Effect.runPromise(collector.collect("network"))).values.up,
+		).toBeUndefined();
+		time = 2000;
+		expect(
+			(await Effect.runPromise(collector.collect("network"))).values,
+		).toEqual({ iface: "Ethernet", up: 10000, down: 20000 });
+		expect(
+			run.mock.calls.every(
+				([file, args]) =>
+					file === "powershell.exe" && args.includes("-NonInteractive"),
+			),
+		).toBe(true);
+	});
+	it("isolates Windows denial, disconnection, malformed output and rejects fake fields", async () => {
+		for (const code of ["EACCES", "EPERM", "ECONNRESET", "ETIMEDOUT"]) {
+			const c = nativeCollector("win32", async () => {
+				throw Object.assign(new Error("private"), { code });
+			});
+			expect((await Effect.runPromise(c.collect("gpu"))).state).toBe(
+				code === "EACCES" || code === "EPERM" ? "permission-denied" : "error",
+			);
+			expect((await Effect.runPromise(c.collect("memory"))).state).toBe(
+				"available",
+			);
+		}
+		expect(
+			(
+				await Effect.runPromise(
+					nativeCollector("win32", async () => '{"load":"invalid"}').collect(
+						"cpu",
+					),
+				)
+			).state,
+		).toBe("error");
+		expect(
+			(
+				await Effect.runPromise(
+					nativeCollector("win32", async () => "{}").collect("power"),
+				)
+			).values,
+		).toEqual({});
+	});
+	it("reads Linux GPU/temperature/power/Bluetooth fixtures and caches slow inventory for sixty cycles", async () => {
+		const fixture: Record<string, string> = {
+			"/sys/class/drm/card0/device/gpu_busy_percent": "0",
+			"/sys/class/drm/card0/device/hwmon/hwmon0/temp1_input": "52000",
+			"/sys/class/power_supply/BAT0/type": "Battery",
+			"/sys/class/power_supply/BAT0/status": "Discharging",
+			"/sys/class/power_supply/BAT0/capacity": "67",
+		};
+		const files = {
+			read: async (path: string) => fixture[path] ?? "",
+			list: async (path: string) =>
+				path === "/sys/class/drm"
+					? ["card0"]
+					: path.endsWith("/hwmon")
+						? ["hwmon0"]
+						: path === "/sys/class/power_supply"
+							? ["BAT0"]
+							: path === "/sys/class/bluetooth"
+								? ["hci0"]
+								: [],
+		};
+		const run = vi.fn(
+			async () =>
+				"Filesystem Type 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 ext4 20000000 10000000 10000000 50% /\ntmpfs tmpfs 20000000 1 1 1% /run\n/dev/sdb1 ext4 100 1 99 1% /tiny",
+		);
+		const c = nativeCollector("linux", run, iface, files);
+		expect((await Effect.runPromise(c.collect("gpu"))).values).toEqual({
+			load: 0,
+			temperature: 52,
+		});
+		expect((await Effect.runPromise(c.collect("power"))).values).toEqual({
+			hasBattery: true,
+			source: "battery",
+			percent: 67,
+			batteryState: "discharging",
+		});
+		expect((await Effect.runPromise(c.collect("bluetooth"))).values).toEqual({
+			adapters: 1,
+		});
+		for (let i = 0; i < 60; i++)
+			expect(
+				(await Effect.runPromise(c.collect("disk"))).values.disks,
+			).toHaveLength(1);
+		expect(run).toHaveBeenCalledTimes(1);
+		await Effect.runPromise(c.collect("disk"));
+		expect(run).toHaveBeenCalledTimes(2);
+		if (c.reset) await Effect.runPromise(c.reset);
+		await Effect.runPromise(c.collect("disk"));
+		expect(run).toHaveBeenCalledTimes(3);
+	});
+	it("qualifies macOS optional GPU and Bluetooth without inventing temperature", async () => {
+		const c = nativeCollector("darwin", async (file) =>
+			file.endsWith("ioreg")
+				? '"Device Utilization %"=0'
+				: '{"SPBluetoothDataType":[{"devices_connected":[{}]}]}',
+		);
+		expect((await Effect.runPromise(c.collect("gpu"))).values).toEqual({
+			load: 0,
+		});
+		expect(
+			(await Effect.runPromise(c.collect("bluetooth"))).values.connected,
+		).toBe(1);
 	});
 });
