@@ -47,3 +47,15 @@
 - [x] 8.1 Implement scoped native strip windows, 3s/5s disposal and app suspension lease. Bead open-quake-lih.11.3. Rows MAIN-012,048,049,050,061; SCREEN-146; SETTINGS-079,084.
 - [x] 8.2 Implement serial-safe recovery, ambiguity, scaled layout, debounced orientation and wake generations. Bead open-quake-lih.11.4. Rows MAIN-046,047,053,054,060; SCREEN-147; SETTINGS-085.
 - [x] 8.3 Implement consented Windows probe/extend, arrangement persistence and wizard orientation ownership. Bead open-quake-lih.11.5. Rows MAIN-043,044,057,058,059; SETTINGS-058,087.
+
+## 9. PR #86 single bot-review fix round
+
+- [x] 9.1 Fix Linux panel type regression and assert each platform. Bead `open-quake-lih.11.6`. Hosted run 40332287050.
+- [ ] 9.2 Forward secondary strip input to its serial panel. Bead `open-quake-lih.11.7`. Devin 4377860557.
+- [ ] 9.3 Attach secondary hardware sessions and enroll serial profiles. Bead `open-quake-lih.11.8`. Devin 4377860703.
+- [ ] 9.4 Select a surviving strip when the selected panel closes. Bead `open-quake-lih.11.9`. Devin 4377860894.
+- [ ] 9.5 Reject recycled display identities on grace reconnect. Bead `open-quake-lih.11.10`. Devin 4377861513.
+- [ ] 9.6 Drain connections pending after the pairing loop. Bead `open-quake-lih.11.11`. Devin 4377861167.
+- [ ] 9.7 Allowlist new lifecycle diagnostics spans. Bead `open-quake-lih.11.12`. Copilot 4377915651/4377915718/4377915765/4377915820.
+- [ ] 9.8 Move orientation confirmation copy into settings translations. Bead `open-quake-lih.11.13`. Copilot 4377915877.
+- [ ] 9.9 Run full gates and reconcile all unanswered review threads. Bead `open-quake-lih.11.14`. Devin info 4377861742; final Codex scan; no resolving or merging.
