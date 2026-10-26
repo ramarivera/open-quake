@@ -245,3 +245,46 @@ it("hands off only a readable private copy, so replacing the cache during instal
 	});
 	await Effect.runPromise(f.port.install(release));
 });
+
+it("streams reusable chunks to disk and hashes files with bounded allocations and no full concatenation", async () => {
+	const chunk = Buffer.alloc(65536, 7);
+	const digest = createHash("sha256");
+	for (let n = 0; n < 16; n++) digest.update(chunk);
+	const big = {
+		...release,
+		bytes: chunk.length * 16,
+		sha256: digest.digest("hex"),
+	};
+	const f = await fixture(big);
+	await Effect.runPromise(f.port.check());
+	let remaining = 16;
+	f.transport.mockResolvedValueOnce(
+		new Response(
+			new ReadableStream<Uint8Array>(
+				{
+					pull(controller) {
+						if (!remaining--) return controller.close();
+						chunk.fill(7);
+						controller.enqueue(chunk);
+					},
+				},
+				{ highWaterMark: 0 },
+			),
+		),
+	);
+	const allocate = Buffer.alloc;
+	const allocations = vi.spyOn(Buffer, "alloc").mockImplementation((size) => {
+		expect(size).toBeLessThanOrEqual(65536);
+		return allocate(size);
+	});
+	const concatenate = vi.spyOn(Buffer, "concat");
+	await Effect.runPromise(f.port.download(big, () => chunk.fill(0)));
+	f.install.mockImplementationOnce(async (artifact) => {
+		const first = Buffer.alloc(1);
+		expect(await artifact.read(first, 0)).toBe(1);
+		expect(first[0]).toBe(7);
+	});
+	await Effect.runPromise(f.port.install(big));
+	expect(allocations).toHaveBeenCalled();
+	expect(concatenate).not.toHaveBeenCalled();
+});

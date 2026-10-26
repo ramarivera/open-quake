@@ -1,6 +1,14 @@
 import { createHash, verify } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, mkdtemp, open, rm, unlink } from "node:fs/promises";
+import {
+	type FileHandle,
+	lstat,
+	mkdir,
+	mkdtemp,
+	open,
+	rm,
+	unlink,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Option, Schema } from "effect";
 import { Version } from "../../../../../packages/edge/src/maintenance/contracts.js";
@@ -52,19 +60,13 @@ function trustedUrl(raw: string, origin?: string): URL {
 		throw new AppUpdateFailed();
 	return url;
 }
-const sha256 = (bytes: Uint8Array) =>
-	createHash("sha256").update(bytes).digest("hex");
-async function boundedResponse(
-	response: Response,
-	limit: number,
-	progress?: (n: number) => void,
-): Promise<Buffer> {
+const chunkSize = 65536;
+async function* responseChunks(response: Response, limit: number) {
 	if (!response.ok || !response.body) throw new AppUpdateFailed();
 	const announced = response.headers.get("content-length");
 	if (announced && (!/^\d+$/.test(announced) || Number(announced) > limit))
 		throw new AppUpdateFailed();
 	const reader = response.body.getReader();
-	const chunks: Uint8Array[] = [];
 	let bytes = 0;
 	try {
 		while (true) {
@@ -72,14 +74,46 @@ async function boundedResponse(
 			if (next.done) break;
 			bytes += next.value.length;
 			if (bytes > limit) throw new AppUpdateFailed();
-			chunks.push(next.value);
-			progress?.(bytes / limit);
+			yield next.value;
 		}
-		return Buffer.concat(chunks);
 	} finally {
 		await reader.cancel();
 		reader.releaseLock();
 	}
+}
+/** Only the tiny signed metadata envelope is collected in memory. */
+async function boundedResponse(
+	response: Response,
+	limit: number,
+): Promise<Buffer> {
+	const chunks: Uint8Array[] = [];
+	for await (const chunk of responseChunks(response, limit)) chunks.push(chunk);
+	return Buffer.concat(chunks);
+}
+async function verifyFile(file: FileHandle, release: AppRelease) {
+	const before = await file.stat();
+	if (!before.isFile() || before.size !== release.bytes)
+		throw new AppUpdateFailed();
+	const buffer = Buffer.alloc(chunkSize);
+	const hash = createHash("sha256");
+	let offset = 0;
+	while (true) {
+		const { bytesRead } = await file.read(buffer, 0, buffer.length, offset);
+		if (!bytesRead) break;
+		offset += bytesRead;
+		if (offset > release.bytes) throw new AppUpdateFailed();
+		hash.update(buffer.subarray(0, bytesRead));
+	}
+	const after = await file.stat();
+	if (
+		offset !== release.bytes ||
+		hash.digest("hex") !== release.sha256 ||
+		after.size !== before.size ||
+		after.mtimeMs !== before.mtimeMs ||
+		after.ctimeMs !== before.ctimeMs
+	)
+		throw new AppUpdateFailed();
+	return after;
 }
 /** No default endpoint or installer. An unconfigured build makes zero network requests. */
 export function ownedAppUpdater(options: {
@@ -113,35 +147,9 @@ export function ownedAppUpdater(options: {
 			constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
 		);
 		try {
-			const metadata = await file.stat();
-			if (!metadata.isFile() || metadata.size !== release.bytes)
-				throw new AppUpdateFailed();
-			const bytes = Buffer.alloc(release.bytes + 1);
-			let offset = 0;
-			while (offset < bytes.length) {
-				const next = await file.read(
-					bytes,
-					offset,
-					bytes.length - offset,
-					offset,
-				);
-				if (!next.bytesRead) break;
-				offset += next.bytesRead;
-			}
-			if (
-				offset !== release.bytes ||
-				sha256(bytes.subarray(0, offset)) !== release.sha256
-			)
-				throw new AppUpdateFailed();
-			const after = await file.stat();
+			const metadata = await verifyFile(file, release);
 			const named = await lstat(downloaded);
-			if (
-				after.size !== metadata.size ||
-				after.mtimeMs !== metadata.mtimeMs ||
-				after.ctimeMs !== metadata.ctimeMs ||
-				named.ino !== metadata.ino ||
-				named.dev !== metadata.dev
-			)
+			if (named.ino !== metadata.ino || named.dev !== metadata.dev)
 				throw new AppUpdateFailed();
 			return metadata;
 		} finally {
@@ -211,9 +219,6 @@ export function ownedAppUpdater(options: {
 				});
 				if (response.url && response.url !== url.href)
 					throw new AppUpdateFailed();
-				const bytes = await boundedResponse(response, release.bytes, progress);
-				if (bytes.length !== release.bytes || sha256(bytes) !== release.sha256)
-					throw new AppUpdateFailed();
 				await mkdir(options.root, { recursive: true });
 				const path = pathFor(release);
 				// Only this adapter owns this deterministic cache name. Never accept arbitrary renderer paths.
@@ -237,7 +242,16 @@ export function ownedAppUpdater(options: {
 					0o600,
 				);
 				try {
-					await file.writeFile(bytes);
+					const hash = createHash("sha256");
+					let bytes = 0;
+					for await (const chunk of responseChunks(response, release.bytes)) {
+						await file.writeFile(chunk);
+						hash.update(chunk);
+						bytes += chunk.length;
+						progress(bytes / release.bytes);
+					}
+					if (bytes !== release.bytes || hash.digest("hex") !== release.sha256)
+						throw new AppUpdateFailed();
 					await file.sync();
 				} finally {
 					await file.close();
@@ -278,7 +292,19 @@ export function ownedAppUpdater(options: {
 							0o600,
 						);
 						try {
-							await output.writeFile(await source.readFile());
+							const buffer = Buffer.alloc(chunkSize);
+							let offset = 0;
+							while (offset < release.bytes) {
+								const { bytesRead } = await source.read(
+									buffer,
+									0,
+									Math.min(buffer.length, release.bytes - offset),
+									offset,
+								);
+								if (!bytesRead) throw new AppUpdateFailed();
+								await output.writeFile(buffer.subarray(0, bytesRead));
+								offset += bytesRead;
+							}
 							await output.sync();
 							await output.chmod(0o400);
 						} finally {
@@ -294,15 +320,7 @@ export function ownedAppUpdater(options: {
 					try {
 						// Remove the copy's name before its final hash, retaining only a read descriptor.
 						await unlink(path);
-						const metadata = await input.stat();
-						const bytes = await input.readFile();
-						if (
-							!metadata.isFile() ||
-							metadata.size !== release.bytes ||
-							bytes.length !== release.bytes ||
-							sha256(bytes) !== release.sha256
-						)
-							throw new AppUpdateFailed();
+						await verifyFile(input, release);
 						const final = await checked(release);
 						if (
 							final.ino !== verified.ino ||
