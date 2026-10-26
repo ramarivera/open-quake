@@ -134,30 +134,23 @@ export function inspectProfileImport(
 				delete next[field];
 			}
 		}
+		let unsupported = record(source.compatibility)?.unsupported === true;
 		if (Array.isArray(config.actions))
-			next.actions = config.actions.filter((action, index) => {
+			next.actions = config.actions.flatMap((action, index) => {
 				const a = record(action);
 				if (
 					action === null ||
 					(a && (Object.keys(a).length === 0 || a.type === ""))
 				) {
 					report("legacy-sentinel", `${path}.config.actions.${index}`);
-					return false;
+					return [];
 				}
-				return true;
-			});
-		if (config.type === "" && source.childrenName === "")
-			report("legacy-sentinel", `${path}.childrenName`);
-		let unsupported = record(source.compatibility)?.unsupported === true;
-		if (Array.isArray(next.actions))
-			next.actions = next.actions.map((action, index) => {
-				const a = record(action);
 				if (
 					!a ||
 					typeof a.type !== "string" ||
 					!isPageReference(a.type, a.value)
 				)
-					return action;
+					return [action];
 				if (
 					typeof a.value === "string" &&
 					pageIds.has(a.value) &&
@@ -168,13 +161,15 @@ export function inspectProfileImport(
 						closesFolderCycle(pageId, a.value)
 					)
 				)
-					return action;
+					return [action];
 				report("invalid-action", `${path}.config.actions.${index}.value`);
 				unsupported = true;
 				// Keep the complete original in compatibility.source. Empty destinations
 				// cannot accidentally bind to a page allocated later during import.
-				return { ...a, value: "" };
+				return [{ ...a, value: "" }];
 			});
+		if (config.type === "" && source.childrenName === "")
+			report("legacy-sentinel", `${path}.childrenName`);
 		if (typeof config.type === "string" && config.type !== "") {
 			if (!contracts.has(config.type)) {
 				report("unknown-function", `${path}.config.type`);
