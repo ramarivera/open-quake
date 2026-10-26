@@ -363,3 +363,13 @@
 		gap: 12px;
 	}
 }
+
+.emoji-draft {
+	display: grid;
+	gap: 4px;
+	width: 112px;
+}
+.emoji-assets {
+	overflow-x: auto;
+	flex-wrap: nowrap;
+}

@@ -1,5 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
-import { link, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import {
+	link,
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { Schema } from "effect";
 import { EmojiStore } from "../../../../../packages/edge/src/emoji/emoji-contracts";
@@ -135,5 +143,44 @@ export function emojiFiles(root: string) {
 			await rm(temp, { force: true }).catch(() => undefined);
 		}
 	};
-	return { read, write, put, get, assetPath, clipboardPath };
+	const collect = async (profileHashes: readonly string[]): Promise<void> => {
+		const live = new Set(profileHashes);
+		const primary = await inspect(file);
+		if (primary.kind === "absent") return;
+		if (primary.kind !== "valid")
+			throw new RangeError("Collection needs a valid committed library.");
+		for (const asset of primary.value.staticAssets) live.add(asset.hash);
+		for (const item of primary.value.items) {
+			live.add(item.original);
+			live.add(item.rendered);
+		}
+		// Checkpoint the validated primary before removing assets from the previous backup.
+		const checkpoint = `${backupFile}.${randomUUID()}.part`;
+		try {
+			await writeFile(checkpoint, primary.contents, {
+				mode: 0o600,
+				flag: "wx",
+			});
+			await rename(checkpoint, backupFile);
+		} finally {
+			await rm(checkpoint, { force: true }).catch(() => {});
+		}
+
+		for (const directory of ["assets", "clipboard"]) {
+			const names = await readdir(join(root, directory)).catch(
+				(cause: unknown) => {
+					if (absent(cause)) return [];
+					throw cause;
+				},
+			);
+			for (const name of names) {
+				const hash = name.replace(/\.gif$/, "");
+				if (/^[a-f0-9]{64}$/.test(hash) && !live.has(hash)) {
+					await rm(join(root, directory, name));
+					verifiedGifs.delete(hash);
+				}
+			}
+		}
+	};
+	return { read, write, put, get, assetPath, clipboardPath, collect };
 }

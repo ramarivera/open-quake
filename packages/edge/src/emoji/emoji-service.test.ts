@@ -299,3 +299,25 @@ it("leaves a deleted grid slot vacant and fills it before appending", () => {
 		}).packages[0]?.emojiIds[5],
 	).toBe("wave");
 });
+
+for (const mode of [0, 1, 2] as const) {
+	it.effect(
+		`uses key mode ${mode} only on release when global mode is null`,
+		() => {
+			const f = setup({ ...initial, globalMode: null, appMatch: false });
+			return Effect.gen(function* () {
+				expect(yield* EmojiPress.press(ref, mode, 0)).toBe("ignored");
+				expect(yield* EmojiPress.press(ref, mode, 2)).toBe("ignored");
+				expect(f.calls).toEqual([]);
+				const release = yield* Effect.fork(EmojiPress.press(ref, mode, 1));
+				yield* TestClock.adjust("200 millis");
+				yield* Fiber.join(release);
+				expect(f.calls).toEqual([
+					`copy:${hash}`,
+					...(mode > 0 ? ["command+v"] : []),
+					...(mode === 2 ? ["enter"] : []),
+				]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}

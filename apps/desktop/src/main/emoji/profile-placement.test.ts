@@ -14,6 +14,7 @@ import {
 	emptyEmojiStore,
 } from "../../../../../packages/edge/src/emoji/emoji-contracts";
 import { placeEmojiPackage } from "./profile-placement";
+import { renameLinkedEmojiProfile } from "./profile-rename";
 
 const hash = "a".repeat(64);
 const fixture: EmojiStore = {
@@ -258,4 +259,50 @@ describe("emoji profile placement", () => {
 			await f.runtime.dispose();
 		}
 	});
+});
+
+it("MGMT-101 renames linked profiles, rejects existing names and rolls back library save failure", async () => {
+	const f = setup();
+	try {
+		const place = placeEmojiPackage({
+			runtime: f.runtime,
+			select: async () => {},
+		});
+		const id = await place("daily", fixture);
+		let published = 0;
+		const rename = renameLinkedEmojiProfile({
+			runtime: f.runtime,
+			refresh: async () => {
+				published++;
+			},
+		});
+		await rename(id, "Renamed", async () => {});
+		expect(
+			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
+		).toBe("Renamed");
+		expect(published).toBe(1);
+		await expect(
+			rename(id, "Failed", async () => {
+				throw Error("library unavailable");
+			}),
+		).rejects.toThrow("library unavailable");
+		expect(
+			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
+		).toBe("Renamed");
+		expect(published).toBe(1);
+		const existing = (await f.read()).envelope.profiles.find(
+			(p) => p.id !== id,
+		)?.name;
+		expect(existing).toBeTruthy();
+		await expect(
+			rename(id, existing ?? "", async () => {
+				throw Error("must not save");
+			}),
+		).rejects.toBeDefined();
+		expect(
+			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
+		).toBe("Renamed");
+	} finally {
+		await f.runtime.dispose();
+	}
 });
