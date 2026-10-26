@@ -498,6 +498,11 @@ Evidence: AI-266, AI-273, AI-276, AI-278, AI-279. Upload location, expiry, task 
 - **WHEN** the provider returns no speech or a remote deletion fails
 - **THEN** no transcript is fabricated, no-valid-speech is distinct from transport failure, failed remote cleanup remains durable, and another meeting's files cannot be deleted
 
+#### Scenario: Cancellation and file cleanup both fail
+
+- **WHEN** cancellation of a running provider task and deletion of its owned files both fail, then cleanup retries after the adapter restarts
+- **THEN** the private failed-cleanup record retains the task and file identities, retry cancels that task before deleting its files, and a task already cancelled successfully is not cancelled again
+
 ### Requirement: Continuous encoded capture and deterministic mixing
 
 Evidence: AI-285, AI-286, AI-288, AI-294. Main and side records SHALL isolate mic_N.webm and system_N.webm under their own UUID directories, use audio/webm;codecs=opus and ten-second slices, and rotate hourly by starting replacement recorders before stopping old ones. Finalization SHALL concatenate numeric segment order, mix usable mic/system tracks at 48 kHz with longest duration and mono MP3 output, and use mic-only output for empty or unusable optional system tracks. Upload SHALL submit the mono artifact, reject failed conversion and clean private temporary files.

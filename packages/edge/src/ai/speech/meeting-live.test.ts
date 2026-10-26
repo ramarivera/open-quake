@@ -1361,6 +1361,75 @@ it.scoped(
 		}),
 );
 
+for (const cancelFails of [true, false]) {
+	it.scoped(
+		`retries persisted task cancellation and file deletion after cleanup failure, cancel fails=${cancelFails}`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				f.states.set("meeting", {
+					version: 1,
+					config: f.request.config,
+					task: "running-task",
+					remoteFiles: ["owned-file"],
+					cleanupPending: true,
+				});
+				const operations: string[] = [];
+				let rejectCancellation = cancelFails;
+				const s = yield* fakeSocket();
+				const options = {
+					...f,
+					socket: s.transport,
+					http: {
+						fetch: async (url: string, init: RequestInit) => {
+							if (url.endsWith("/cancel")) {
+								operations.push("cancel:running-task");
+								return rejectCancellation
+									? Response.json(
+											{ code: "UnsupportedOperation" },
+											{ status: 400 },
+										)
+									: Response.json({});
+							}
+							if (init.method === "DELETE")
+								operations.push("delete:owned-file");
+							return f.http.fetch(url, init);
+						},
+					},
+				};
+				const adapter = yield* makeLiveMeetingAdapter(options);
+				if (!adapter.cleanup) throw new Error("Missing cleanup operation");
+				f.fail();
+				const failed = yield* adapter.cleanup("meeting").pipe(Effect.either);
+				expect(Either.isLeft(failed) && failed.left.code).toBe(
+					"QUAKE.MEETING.TRANSCRIPTION_FAILED",
+				);
+				expect(f.states.get("meeting")).toMatchObject({
+					task: cancelFails ? "running-task" : undefined,
+					remoteFiles: ["owned-file"],
+					cleanupPending: true,
+				});
+				f.fail(false);
+				rejectCancellation = false;
+				// Rebuild the consumer to prove retry uses durable resource state.
+				const retry = yield* makeLiveMeetingAdapter(options);
+				if (!retry.cleanup) throw new Error("Missing cleanup operation");
+				yield* retry.cleanup("meeting");
+				expect(operations).toEqual([
+					"cancel:running-task",
+					"delete:owned-file",
+					...(cancelFails ? ["cancel:running-task"] : []),
+					"delete:owned-file",
+				]);
+				expect(f.states.get("meeting")).toMatchObject({
+					task: undefined,
+					remoteFiles: [],
+					cleanupPending: false,
+				});
+			}),
+	);
+}
+
 it.scoped("omits output language from OpenAI source transcription hints", () =>
 	Effect.gen(function* () {
 		const f = fixture();

@@ -50,13 +50,22 @@ export const makeLiveMeetingAdapter = Effect.fn("AiMeetingAdapter.live")(
 								{},
 							)
 							.pipe(
-								Effect.catchAll((error) =>
-									Effect.logWarning("Meeting task cancellation skipped", error),
-								),
+								Effect.matchEffect({
+									onFailure: (error) =>
+										Effect.logWarning(
+											"Meeting task cancellation skipped",
+											error,
+										),
+									onSuccess: () =>
+										options.resources.save(ref, { ...state, task: undefined }),
+								}),
 							);
-						yield* options.resources.save(ref, { ...state, task: undefined });
 					}
 					yield* files.cleanup(ref);
+					// Full cleanup releases local ownership even for a non-cancellable task.
+					const cleaned = yield* options.resources.load(ref);
+					if (cleaned?.task)
+						yield* options.resources.save(ref, { ...cleaned, task: undefined });
 				}),
 			...translation,
 			submit: (request) =>
