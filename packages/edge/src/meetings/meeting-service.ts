@@ -620,6 +620,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 										patchWork(id, (r) => ({
 											...r,
 											state: "interrupted",
+											audio: r.audio === "processing" ? "interrupted" : r.audio,
 											transcription:
 												r.transcription === "processing"
 													? "interrupted"

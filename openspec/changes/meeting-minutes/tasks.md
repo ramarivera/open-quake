@@ -122,3 +122,5 @@ Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptanc
 - [ ] Handle valid incoming Codex/Copilot findings, run full gates and hidden mock native smoke, then list unanswered GraphQL threads without resolving them.
 
 - [x] Fix Codex 4378948017 by observing asynchronous failure events independently of saved processing state. Four mounted retry/regeneration cases fail before the fix and cover failure on both sides of acknowledgement and a repeated identical error.
+
+- [x] Fix Codex 4378948029 by marking processing audio interrupted on job interruption. Two fake-backed service regressions fail before the fix and cover failed/interrupted audio, persisted restart state and retry without repeating completed ASR/summary.

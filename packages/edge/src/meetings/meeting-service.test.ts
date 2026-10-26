@@ -1554,3 +1554,54 @@ for (const failRegeneration of [false, true]) {
 		},
 	);
 }
+
+for (const audio of ["failed", "interrupted"] as const) {
+	it.effect(
+		`interrupts ${audio} audio retry conversion and preserves retry after restart`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* MeetingService.process(id);
+				const original = (yield* MeetingService.snapshot()).records[0];
+				yield* MeetingRepository.update((records) =>
+					records.map((record) =>
+						record.id === id ? { ...record, state: audio, audio } : record,
+					),
+				);
+				const converting = yield* Deferred.make<void>();
+				f.pauseStop(
+					Deferred.succeed(converting, undefined).pipe(
+						Effect.zipRight(Effect.never),
+					),
+				);
+				const retry = yield* Effect.fork(MeetingService.process(id));
+				yield* Deferred.await(converting);
+				expect((yield* MeetingService.snapshot()).records[0]?.audio).toBe(
+					"processing",
+				);
+				yield* Fiber.interrupt(retry);
+				const interrupted = (yield* MeetingService.snapshot()).records[0];
+				expect(interrupted?.state).toBe("interrupted");
+				expect(interrupted?.audio).toBe("interrupted");
+				expect(interrupted?.transcription).toBe("complete");
+				expect(interrupted?.summary).toBe("complete");
+				expect(interrupted?.minutes).toBe(original?.minutes);
+				expect(f.saved().records[0]?.audio).toBe("interrupted");
+				const restarted = yield* MeetingRepository.list().pipe(
+					Effect.provide(MeetingRepository.Default(f.storage)),
+				);
+				expect(restarted[0]?.audio).toBe("interrupted");
+				f.pauseStop(Effect.void);
+				yield* MeetingService.process(id);
+				expect((yield* MeetingService.snapshot()).records[0]).toMatchObject({
+					state: "completed",
+					audio: "complete",
+					minutes: original?.minutes,
+				});
+				expect(f.requests).toHaveLength(1);
+				expect(f.prompts).toHaveLength(1);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
