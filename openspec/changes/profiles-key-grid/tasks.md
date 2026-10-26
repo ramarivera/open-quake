@@ -92,3 +92,7 @@ completing the import workflow in task 2.4 or hardware verification.
 - Gate logs are in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/key-grid-editor/`. Full tests use `TMPDIR` there with Turbo `--env-mode=loose` and `--maxWorkers=2`, preserving assertions and the default timeout. Default concurrency hit existing five-second timeouts; strict Turbo strips `TMPDIR`, which causes existing symlink-sensitive storage tests to reject macOS temporary paths.
 - Final repository gates: 2,899 tests passed, four existing skips; 31 editor scenario tests and 16 typed registration tests passed. Biome checked 1,156 files with 14 existing CSS warnings and no errors; all six typecheck tasks, build, both bundle modes and all 46 strict OpenSpec items passed. Native fixtures log missing unrelated settings/agent handlers, so this is feature-path evidence rather than a console-clean root acceptance claim.
 - Leave jy0.7/.8/.9 open for the lead to close after merge. Task 5.1 remains unchecked for device delivery, folders and broader integration; physical acceptance remains unverified. No real QUAKE or DK-Suite access.
+
+## Grid-editor burn-down lane
+
+- [x] Implement grid-editor import overflow recovery and canonical replacement/swap checks with tests. Beads open-quake-lih.10.7/.9.

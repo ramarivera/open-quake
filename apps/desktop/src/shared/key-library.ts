@@ -52,6 +52,7 @@ export const KeyRequest = Schema.Union(
 			Schema.Struct({
 				destination: Schema.optional(Schema.String),
 				replaceOverlaps: Schema.optional(Schema.Boolean),
+				placement: Schema.optional(Schema.Boolean),
 			}),
 		),
 	}),

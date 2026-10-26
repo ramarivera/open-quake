@@ -79,3 +79,7 @@
 - [x] test-device-widgets: MGMT-255/340 brightness/plugin/template reset precedence, real editor platform selection and blank Clock reset.
 
 - [x] Mounted editor and title-recovery burn-down regressions for MGMT-049/083/096/097/100/249. Beads open-quake-lih.9.2 and open-quake-lih.9.3 remain open for lead integration.
+
+## Grid-editor burn-down lane
+
+- [x] Implement grid-editor placement, movement, selection, navigation, sizing, hints and scheduling with mounted consumer tests. Beads open-quake-lih.10.7/.8/.9.

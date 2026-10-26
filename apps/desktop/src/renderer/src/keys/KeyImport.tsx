@@ -1,5 +1,9 @@
+import { Schema } from "effect";
 import { useEffect, useRef, useState } from "react";
+import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
+import { ProfileJson } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileImportReport } from "../../../../../../packages/device/src/profiles/profile-import.js";
+import { profileOverflow } from "../../../../../../packages/device/src/profiles/profile-invariants.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { KeyReply } from "../../../shared/key-library";
 import { Group, Row } from "../ui/Form";
@@ -37,6 +41,12 @@ export function KeyImport({
 	const [report, setReport] = useState<ProfileImportReport>();
 	const [busy, setBusy] = useState(false);
 	const [status, setStatus] = useState("");
+	const [overflowVisible, setOverflowVisible] = useState(false);
+	const decoded = Schema.decodeUnknownEither(Schema.parseJson(ProfileJson))(
+		source,
+	);
+	const overflow =
+		decoded._tag === "Right" ? profileOverflow(decoded.right) : [];
 	const ticket = useRef(0);
 	useEffect(
 		() => () => {
@@ -46,6 +56,10 @@ export function KeyImport({
 	);
 	const de = locale === "de";
 	const request = async (type: "inspect-import" | "import-profile") => {
+		if (overflow.length) {
+			setOverflowVisible(true);
+			return;
+		}
 		const epoch = ++ticket.current;
 		setBusy(true);
 		try {
@@ -149,6 +163,31 @@ export function KeyImport({
 								</li>
 							))}
 						</ul>
+					</div>
+				)}
+				{overflowVisible && overflow.length > 0 && (
+					<div
+						role="alertdialog"
+						aria-modal="true"
+						aria-label={keyText("shortcutGrid.overflowTitle", locale)}
+					>
+						<p>
+							{keyText("shortcutGrid.overflowMessage", locale).replace(
+								"{maxTiles}",
+								"16",
+							)}
+						</p>
+						<ul className="keys-overflow-list">
+							{overflow.map((item) => (
+								<li key={item.id}>
+									{item.page} · {item.keyCode} · {item.name} · {item.width}×
+									{item.height}
+								</li>
+							))}
+						</ul>
+						<button type="button" onClick={() => setOverflowVisible(false)}>
+							{keyText("cancel", locale)}
+						</button>
 					</div>
 				)}
 				{status && <p role="status">{status}</p>}
