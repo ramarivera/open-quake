@@ -10,7 +10,7 @@ DK-Suite exposes CPU, GPU, memory, disk, network, process, Bluetooth, and power 
 - Define a reversible monitoring override with bounded sampling (`MAIN-096` distinguishes device hotkey mode).
 - Expose stale, permission-denied, and unsupported states on management and panel views.
 
-The original change added planning artifacts only. The system-monitor-panel change now implements a seven-module collection and panel subset. The broader app/window monitoring, Bluetooth tiles and monitoring override implementation tasks remain open; see design.md for the boundary.
+The original change added planning artifacts only. The system-monitor-panel change supplied a seven-module panel. This implementation adds saved selections, the monitoring override, scoped foreground monitoring and management controls. Bluetooth stays explicitly unsupported, with no new strip tile. Target-platform and physical acceptance remain separate; see design.md and verification.md.
 
 ## Capabilities
 

@@ -1,6 +1,6 @@
 /** Native Electron proof. Hidden windows, mock touch, no HID imports or opens. */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -12,6 +12,7 @@ import {
 	MONITOR_METRICS,
 	type MonitorCommand,
 	MonitorReply,
+	MonitorSnapshot,
 	type SettingsView,
 	STYLES,
 } from "../../shared/monitor-contracts";
@@ -30,12 +31,10 @@ import { registerMonitor } from "./index";
 import { nativeCollector } from "./native-collector";
 
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1");
-const artifacts = process.argv[2] ?? "";
-assert(
-	artifacts?.startsWith(
-		"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/monitor-panel",
-	),
-);
+const artifactsArgument = process.argv[2] ?? "";
+assert(artifactsArgument.trim(), "pass a non-empty artifacts directory");
+const artifacts = resolve(artifactsArgument);
+mkdirSync(artifacts, { recursive: true });
 const base = mkdtempSync(join(artifacts, "native-"));
 app.setPath("userData", base);
 process.once("exit", () => rmSync(base, { recursive: true, force: true }));
@@ -230,6 +229,7 @@ async function smoke(): Promise<void> {
 			reason: "monitor-smoke-fixture",
 		}));
 		let samples = 0;
+		let failNetwork = true;
 		const fixture = previewSnapshot();
 		const monitor = registerMonitor(
 			base,
@@ -239,6 +239,8 @@ async function smoke(): Promise<void> {
 				collect: (id) =>
 					Effect.sync(() => {
 						samples++;
+						if (id === "network" && failNetwork)
+							return { state: "error" as const, values: {} };
 						return (
 							fixture.samples.find((sample) => sample.id === id) ?? {
 								state: "unsupported",
@@ -299,13 +301,17 @@ async function smoke(): Promise<void> {
 			management,
 			`document.querySelector('.monitor-settings [data-monitor-style="glass"]')?.disabled === false`,
 		);
-		assert.equal(samples, 0, "PC preview must not collect");
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-cpu"]')?.dataset.state === 'live'`,
+		);
+		assert(samples > 0, "trusted Live status must start collection");
 		await thumbnail.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "profile-thumbnail" },
 		});
 		await evaluate(
 			thumbnail,
-			`window.monitorLeaks = 0; window.quakeMonitor.onSettings(() => window.monitorLeaks++); window.quakeMonitor.onMetrics(() => window.monitorLeaks++); void 0;`,
+			`window.monitorLeaks = 0; window.quakeMonitor.onSettings(() => window.monitorLeaks++); window.quakeMonitor.onMetrics(() => window.monitorLeaks++); window.quakeMonitor.onState(() => window.monitorLeaks++); void 0;`,
 		);
 		for (const command of [
 			{ _tag: "read" },
@@ -321,17 +327,17 @@ async function smoke(): Promise<void> {
 		});
 		await evaluate(
 			thumbnail,
-			`window.monitorLeaks = 0; window.quakeMonitor.onSettings(() => window.monitorLeaks++); window.quakeMonitor.onMetrics(() => window.monitorLeaks++); void 0;`,
+			`window.monitorLeaks = 0; window.quakeMonitor.onSettings(() => window.monitorLeaks++); window.quakeMonitor.onMetrics(() => window.monitorLeaks++); window.quakeMonitor.onState(() => window.monitorLeaks++); void 0;`,
 		);
 		assert.equal(
 			(await request(thumbnail, { _tag: "watch", active: true }))._tag,
 			"failure",
 			"a spoofed panel URL must not grant subscription",
 		);
-		assert.equal(samples, 0, "unowned windows must not start collectors");
+
 		assert.equal(
 			(await request(management, { _tag: "watch", active: true }))._tag,
-			"failure",
+			"success",
 		);
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
@@ -341,6 +347,194 @@ async function smoke(): Promise<void> {
 			`document.querySelector('[data-testid="sys-monitor-value-cpu-load"]')?.textContent === '37%'`,
 		);
 		assert(samples > 0);
+		for (const win of [thumbnail, panel])
+			assert.equal(
+				await evaluate(
+					win,
+					`window.quakeMonitor.snapshot().then(() => false, () => true)`,
+				),
+				true,
+				"only management can read full foreground state",
+			);
+		await evaluate(
+			panel,
+			`window.fullStateLeaks = 0; window.monitorFrames = []; window.quakeMonitor.onState(() => window.fullStateLeaks++); window.quakeMonitor.onMetrics(v => {window.monitorFrames.push(v); window.monitorFrames = window.monitorFrames.slice(-8);}); void 0;`,
+		);
+		await evaluate(
+			management,
+			`window.monitorFrames = []; window.quakeMonitor.onState(v => {window.monitorFrames.push(v.metrics); window.monitorFrames = window.monitorFrames.slice(-8);}); void 0;`,
+		);
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-network"]')?.dataset.state === 'error'`,
+		);
+		await until(panel, `window.monitorFrames.length > 0`);
+		const panelFrames = Schema.decodeUnknownSync(Schema.Array(MonitorSnapshot))(
+			await evaluate(panel, `window.monitorFrames`),
+		);
+		const managementFrames = Schema.decodeUnknownSync(
+			Schema.Array(MonitorSnapshot),
+		)(await evaluate(management, `window.monitorFrames`));
+		const common = panelFrames.find((frame) =>
+			managementFrames.some((other) => other.sampledAt === frame.sampledAt),
+		);
+		assert(common, "actual management and panel must receive a shared sample");
+		assert.deepEqual(
+			common,
+			managementFrames.find((frame) => frame.sampledAt === common.sampledAt),
+		);
+		assert.equal(
+			common.samples.find((sample: { id: string }) => sample.id === "network")
+				?.state,
+			"error",
+		);
+		assert.equal(
+			common.samples.find((sample: { id: string }) => sample.id === "cpu")
+				?.state,
+			"available",
+		);
+		assert.equal(await evaluate(panel, `window.fullStateLeaks`), 0);
+		failNetwork = false;
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-network"]')?.dataset.state === 'live'`,
+		);
+
+		// Exercise the saved overlay through real controls, and compare both actual consumers.
+		const saveControls = async (): Promise<void> => {
+			const revision = (await read(management)).revision;
+			await until(
+				management,
+				`![...document.querySelectorAll('.monitor-save button')].find(b => b.textContent === 'Save').disabled`,
+			);
+			await evaluate(
+				management,
+				`[...document.querySelectorAll('.monitor-save button')].find(b => b.textContent === 'Save').click()`,
+			);
+			await until(
+				management,
+				`window.quakeMonitor.request({_tag:'read'}).then(r => r._tag === 'success' && r.view.revision > ${revision})`,
+			);
+			await until(
+				management,
+				`[...document.querySelectorAll('.monitor-save button')].find(b => b.textContent === 'Save').disabled`,
+			);
+		};
+		const toggleLabel = async (label: string): Promise<void> => {
+			await evaluate(
+				management,
+				`document.getElementById([...document.querySelectorAll('.monitor-settings label')].find(l => l.textContent === ${JSON.stringify(label)}).htmlFor).click()`,
+			);
+		};
+		const capture = async (name: string): Promise<void> => {
+			for (const width of [1180, 820, 390]) {
+				management.setContentSize(width, 625);
+				await wait(80);
+				assert.equal(management.getContentSize()[0], width);
+				for (const [section, title] of [
+					["preview", "System monitor panel"],
+					["live", "Live status"],
+					["controls", "App monitor"],
+				]) {
+					await evaluate(
+						management,
+						`[...document.querySelectorAll('.monitor-settings .group')].find(s => s.querySelector('h2')?.textContent === ${JSON.stringify(title)}).scrollIntoView({block:'start'})`,
+					);
+					await wait(50);
+					const overflow = await evaluate(
+						management,
+						`Array.from(document.querySelectorAll('*')).filter(e=>e.clientWidth>0 && e.scrollWidth>e.clientWidth+1 && ['auto','scroll'].includes(getComputedStyle(e).overflowX)).map(e=>({tag:e.tagName,cls:e.className,width:e.clientWidth,scroll:e.scrollWidth}))`,
+					);
+					await writeFile(
+						join(artifacts, `${name}-${section}-${width}-geometry.json`),
+						JSON.stringify(overflow),
+					);
+					await writeFile(
+						join(artifacts, `${name}-${section}-${width}.png`),
+						(await management.webContents.capturePage()).toPNG(),
+					);
+					assert.deepEqual(
+						overflow,
+						[],
+						`${name}/${section}/${width} overflows`,
+					);
+				}
+			}
+			management.setContentSize(1100, 625);
+		};
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-bluetooth"]')?.dataset.state === 'unsupported'`,
+		);
+		await capture("normal");
+		await toggleLabel("Use monitoring override");
+		await saveControls();
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-monitoring"]')?.textContent === 'Override · 1 Hz'`,
+		);
+		await until(
+			panel,
+			`[...document.querySelectorAll('.monitor-state')].filter(n => n.textContent === 'Off').length === 6`,
+		);
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-memory"]')?.dataset.state === 'off'`,
+		);
+		await capture("override");
+		// A normal-rate edit is durable but cannot change the active overlay.
+		management.webContents.debugger.attach("1.3");
+		await evaluate(
+			management,
+			`(() => {const i=document.querySelector('input[aria-label="Samples per second"]'); i.focus(); i.select();})()`,
+		);
+		await management.webContents.debugger.sendCommand("Input.insertText", {
+			text: "2",
+		});
+		management.webContents.debugger.detach();
+		await saveControls();
+		assert.equal((await read(management)).settings.hz, 2);
+		assert.equal(
+			await evaluate(
+				management,
+				`document.querySelector('[data-testid="monitor-live-monitoring"]').textContent`,
+			),
+			"Override · 1 Hz",
+		);
+		await toggleLabel("Use monitoring override");
+		await saveControls();
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-monitoring"]')?.textContent === 'Running · 2 Hz'`,
+		);
+		await until(
+			panel,
+			`document.querySelector('[data-testid="sys-monitor-value-mem-used-gb"]')?.textContent !== '--'`,
+		);
+		await toggleLabel("Track foreground app");
+		await saveControls();
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-foreground"]')?.dataset.state === 'waiting'`,
+		);
+		await capture("foreground-mock");
+		await toggleLabel("Enable monitoring");
+		await saveControls();
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-foreground"]')?.dataset.state === 'off'`,
+		);
+		const stoppedCount = samples;
+		await wait(600);
+		assert.equal(samples, stoppedCount, "master-off must stop all metric work");
+		await capture("disabled");
+		await toggleLabel("Enable monitoring");
+		await toggleLabel("Track foreground app");
+		await saveControls();
+		await until(
+			management,
+			`document.querySelector('[data-testid="monitor-live-cpu"]')?.dataset.state === 'live'`,
+		);
 		let previous = "glass";
 		for (const style of STYLES) {
 			await evaluate(
@@ -680,13 +874,14 @@ async function smoke(): Promise<void> {
 		await wait(200);
 		assert(samples > count, "enable must resume sampling");
 		panel.destroy();
+		await request(management, { _tag: "watch", active: false });
 		await wait(150);
 		const afterClose = samples;
 		await wait(350);
 		assert.equal(
 			samples,
 			afterClose,
-			"last live panel close must stop sampling",
+			"last live consumer detaching must stop sampling",
 		);
 		const native = nativeCollector();
 		for (const id of [
@@ -697,6 +892,7 @@ async function smoke(): Promise<void> {
 			"network",
 			"power",
 			"gpu",
+			"bluetooth",
 		] as const) {
 			const result = await Effect.runPromise(native.collect(id));
 			process.stdout.write(`Native ${id}: ${result.state}\n`);
@@ -711,6 +907,8 @@ async function smoke(): Promise<void> {
 	}
 }
 smoke().catch((cause) => {
-	process.stderr.write(`${String(cause)}\n`);
+	process.stderr.write(
+		`${cause instanceof Error ? cause.stack : String(cause)}\n`,
+	);
 	app.exit(1);
 });

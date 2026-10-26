@@ -5,12 +5,14 @@ import { BrowserWindow, dialog, ipcMain } from "electron";
 import {
 	type MetricCollector,
 	MonitorCollector,
-	MonitorService,
 } from "../../../../../packages/edge/src/monitor/monitor-service";
+import { MonitoringService } from "../../../../../packages/edge/src/monitor/monitoring-service";
 import {
 	MONITOR_METRICS,
 	MONITOR_REQUEST,
 	MONITOR_SETTINGS,
+	MONITOR_STATE,
+	MONITOR_STATE_REQUEST,
 	MonitorCommand,
 	type MonitorReply,
 	type SettingsView,
@@ -23,9 +25,11 @@ import {
 import { canRequestClock } from "../clock/clock-ipc";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { monitorForegroundLive } from "./foreground";
 import { MonitorStore, monitorStoreLive } from "./monitor-store";
 import { nativeCollector } from "./native-collector";
 import { selectMedia } from "./native-media";
+import { decodeMonitoringRequest, handleMonitoringRequest } from "./rpc";
 
 export function registerMonitor(
 	root: string,
@@ -39,8 +43,9 @@ export function registerMonitor(
 	const runtime = makeDesktopRuntime(
 		Layer.merge(
 			monitorStoreLive(root),
-			MonitorService.Default.pipe(
+			MonitoringService.Default.pipe(
 				Layer.provide(Layer.succeed(MonitorCollector, collector)),
+				Layer.provide(monitorForegroundLive()),
 			),
 		),
 		diagnostics,
@@ -51,49 +56,59 @@ export function registerMonitor(
 		(contents === management()?.webContents ||
 			contents === panel()?.webContents) &&
 		canRequestClock(contents.getURL(), renderer, { _tag: "read" }, false);
-	let running: Fiber.RuntimeFiber<void> | undefined;
-	let transition = Promise.resolve(),
-		generation = 0,
-		disposed = false;
-	const stop = async (): Promise<void> => {
-		const fiber = running;
-		running = undefined;
-		if (fiber) await runtime.runPromise(Fiber.interrupt(fiber));
-	};
+	let disposed = false;
+	let transition = Promise.resolve();
 	const broadcastSettings = (view: SettingsView): void => {
 		for (const win of new Set([management(), panel()]))
 			if (win && !win.isDestroyed() && trusted(win.webContents))
 				win.webContents.send(MONITOR_SETTINGS, view);
 	};
 	const restart = (): Promise<void> => {
-		const requested = ++generation;
-		transition = transition.then(async () => {
-			await stop();
-			if (disposed || requested !== generation) return;
+		const next = transition.then(async () => {
+			if (disposed) return;
 			const view = await runtime.runPromise(MonitorStore.configuration());
-			if (
-				disposed ||
-				requested !== generation ||
-				!view.settings.enabled ||
-				!watchers.size
-			)
-				return;
-			running = runtime.runFork(
-				MonitorService.watch(view.settings.hz).pipe(
-					Effect.flatMap((stream) =>
-						Stream.runForEach(stream, (snapshot) =>
-							Effect.sync(() => {
-								for (const contents of watchers.keys())
-									if (contents === panel()?.webContents && trusted(contents))
-										contents.send(MONITOR_METRICS, snapshot);
-							}),
-						),
-					),
-				),
+			await runtime.runPromise(
+				MonitoringService.configure(view.settings, watchers.size > 0),
 			);
 		});
-		return transition;
+		// A failed transition must not poison future saves or shutdown.
+		transition = next.catch(() => undefined);
+		return next;
 	};
+	const delivery = runtime.runFork(
+		MonitoringService.subscribe().pipe(
+			Effect.flatMap((stream) =>
+				Stream.runForEach(stream, (snapshot) =>
+					Effect.sync(() => {
+						if (disposed) return;
+						for (const win of new Set([management(), panel()])) {
+							if (win && !win.isDestroyed() && trusted(win.webContents)) {
+								// Only the live panel and management may see this shared state, never thumbnail windows.
+								if (win === management())
+									win.webContents.send(MONITOR_STATE, snapshot);
+								if (watchers.has(win.webContents))
+									win.webContents.send(MONITOR_METRICS, snapshot.metrics);
+							}
+						}
+					}),
+				),
+			),
+		),
+	);
+	void restart().catch(() => undefined);
+	ipcMain.handle(MONITOR_STATE_REQUEST, async (event, input: unknown) => {
+		const message = decodeMonitoringRequest(input);
+		if (
+			!message ||
+			disposed ||
+			!trusted(event.sender) ||
+			event.sender !== management()?.webContents ||
+			event.senderFrame !== event.sender.mainFrame ||
+			!BrowserWindow.fromWebContents(event.sender)
+		)
+			return undefined;
+		return runtime.runPromise(handleMonitoringRequest(message));
+	});
 	ipcMain.handle(
 		MONITOR_REQUEST,
 		async (event, input: unknown): Promise<MonitorReply> => {
@@ -128,13 +143,11 @@ export function registerMonitor(
 			)
 				return reject();
 			if (command._tag === "watch") {
-				// Main-owned window identity controls live collection. PC previews cannot subscribe.
-				if (event.sender !== panel()?.webContents || isManagement)
-					return reject();
+				// Only main-owned management and live panel identities can request collection.
 				if (command.active && !watchers.has(event.sender)) {
 					const remove = (): void => {
 						watchers.get(event.sender)?.();
-						if (!disposed) void restart();
+						if (!disposed) void restart().catch(() => undefined);
 					};
 					const detach = (): void => {
 						watchers.delete(event.sender);
@@ -245,12 +258,13 @@ export function registerMonitor(
 	return {
 		dispose: async (): Promise<void> => {
 			disposed = true;
-			generation++;
+
 			for (const detach of watchers.values()) detach();
 			watchers.clear();
 			ipcMain.removeHandler(MONITOR_REQUEST);
+			ipcMain.removeHandler(MONITOR_STATE_REQUEST);
 			await transition;
-			await stop();
+			await runtime.runPromise(Fiber.interrupt(delivery));
 			await runtime.dispose();
 		},
 	};

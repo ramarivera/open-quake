@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. Every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The original planning record is retained here, followed by the 2026-10-26 implementation decisions. Native and physical acceptance limits are recorded in verification.md.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -24,7 +24,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 
 Goals: give implementers one owned contract, observable failure states and a verification path for this capability.
 
-Non-goals: implementation in this lane, new dependencies, changes to other lanes' artifacts, guessed device opcodes, or claiming unresolved integrations work.
+Non-goals: new dependencies, guessed device opcodes, storing foreground history or claiming unresolved integrations work.
 
 ## Package ownership
 
@@ -74,7 +74,7 @@ Create versioned local settings/repository records behind a capability gate. Val
 
 Use a fake clock and controllable collectors to prove non-overlap, stale thresholds, disable-during-query and override restoration. Drive a settings save through the typed client to both actual tile consumers and assert obsolete collectors stop. Native collector availability and all device display behavior remain unverified until exercised on target hosts/hardware.
 
-Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+Implementation closure requires scenario evidence and synchronized Beads updates. See verification.md for software acceptance and remaining target-platform work. Do not launch DK-Suite; use independent fixtures and the open-quake application.
 
 ## Terminology correction
 
@@ -87,6 +87,58 @@ modules using this change's availability and 0.2–10 Hz rate contract. See
 `packages/edge/src/monitor` and `apps/desktop/src/main/monitor/README.md` for the
 platform matrix. Approved GAP-MAP decisions 4/5 retain unavailable values and
 1 Hz default. WIDGETS-075–077/080–083 provide updated 0.4.95 source evidence.
-Foreground-window monitoring, Bluetooth tiles and monitoring override remain
-unimplemented here; the broader tasks in this change remain open. The panel's
-native mock smoke cannot close those tasks or physical hardware acceptance.
+The 2026-10-26 extension below adds foreground monitoring and the override.
+Bluetooth remains unsupported, without changing the strip layout. The panel's
+native mock smoke cannot close physical hardware acceptance.
+
+## Implementation decisions, 2026-10-26
+
+The existing local `MonitorStore` remains the sole durable owner of monitoring
+settings and panel media. The edge module owns normalized contracts, effective
+configuration and a scoped `MonitoringService`; it doesn't introduce a second
+settings file. Existing `monitor-v1` records decode with all metrics selected,
+native collection, app monitoring off and an inactive CPU-only 1 Hz override.
+Normal settings are preserved independently from the override. The master switch
+gates both kinds of collection. An override never touches profiles or hotkeys.
+
+One metric worker group serves all current consumers. The main-owned management
+Live status and real panel can request collection; thumbnails and URL-spoofed
+windows can't. A changed effective selection or rate stops old workers before
+starting replacements. Editing normal settings under an unchanged override does
+not restart workers. State subscriptions don't themselves create collectors.
+Foreground monitoring is independently enabled, coalesces native reads through
+the existing 500 ms probe cache, polls at 3 s on macOS and 2 s elsewhere, and has a
+5 s query deadline. Disable and shutdown dispose its native helper, including
+aborting a pending command. No titles or app history are retained.
+
+The schema-first `monitoring.snapshot` RPC and validated push subscription carry
+foreground identity only to the main-owned management document. The panel gets
+metrics only. `packages/client/src/monitor.ts` validates subscription messages and
+drops delivery after unsubscribe. Existing panel settings/media IPC is retained.
+All errors use the canonical edge monitor catalog, re-exported by desktop.
+
+Opus 5.5 designed the new controls and all new copy. The page separates the
+labelled sample preview from Live status, then Readings, App monitor and Monitoring
+override. All edits follow the existing Save/Revert flow. The master switch
+disables dependent controls. Normal and override metrics wrap as labelled toggle
+buttons. Uncollected panel modules say Off; unsupported collectors remain visible.
+Live status isn't a live region because updates can reach 10 Hz. The foreground
+row derives only an app display name from the transient app identity; it never
+renders a full path or window id. The design artifact is local-only under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/monitoring-state/design/`.
+
+### Collector availability
+
+| Metric | macOS | Windows / Linux |
+| --- | --- | --- |
+| CPU utilization, memory | Node OS APIs | Node OS APIs |
+| Disk, process-state counts, network counters, power | bounded native commands | unsupported |
+| GPU load, CPU/GPU temperatures | unsupported | unsupported |
+| Bluetooth | unsupported | unsupported |
+| Foreground identity | bounded AppKit/CoreGraphics query | persistent user32 helper on Windows; xprop on X11 |
+
+Bluetooth has an explicit unsupported identity in normalized state and management.
+The existing panel keeps its seven-module layout. Missing metrics never become
+synthetic zeroes. Linux without a usable X11 collector reports a failed foreground
+query, rather than inventing an app. Windows session-0 absence is not proof of
+interactive desktop identity. Target-host and physical acceptance stay separate.

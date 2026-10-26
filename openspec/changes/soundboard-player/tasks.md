@@ -186,3 +186,12 @@ initially lacked generated Husky shims; installing frozen dependencies restored
 them, and the first merge's commit-message/post-commit consumers were checked
 explicitly before the normal final merge and push gates. Reviewed delivery is
 still pending; no playback is enabled by this restack.
+
+PR58 lifecycle review follow-up, 2026-10-26: three regressions first failed on
+the reviewed source. A native teardown defect during natural advancement now
+uses the existing slot cleanup, publishes AudioOutputFailed, retains unsafe
+teardown ownership and prevents capture from acquiring output. Releasing an
+empty idle group no longer invalidates another key already queued at the gate;
+both decode failure and the ten-second load timeout are covered. All 89 focused
+soundboard/shared-output tests, both typechecks, scoped Biome and strict
+soundboard validation pass. The release gate stays unchanged.

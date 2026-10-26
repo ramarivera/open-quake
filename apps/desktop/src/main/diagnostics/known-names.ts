@@ -89,6 +89,7 @@ MeetingService.regenerate MeetingService.rename MeetingService.shutdown MeetingS
 MeetingService.sourceLost MeetingService.start MeetingService.stop MeetingService.stopTranslation
 MeetingService.subscribe MeetingService.suspend MeetingService.tab MeetingService.template
 MeetingService.translate MeetingService.translationLost MockHardwareBus.start MonitorService.watch
+MonitoringService.snapshot MonitoringService.subscribe MonitoringService.configure MonitorForeground.query MonitorForeground.stop
 MonitorStore.configuration MonitorStore.read MonitorStore.save MonitorStore.stage NativeDisplay.call
 NativeDisplay.hiddenMirroring NodeHidTransport.close NodeHidTransport.discover NodeHidTransport.open
 NodeHidTransport.write OpenClawAdapter.authenticated OpenClawAdapter.capabilities

@@ -76,6 +76,7 @@ export function sampleOf(
 /** Exact WIDGETS-080 fixture. Only a labelled PC preview or mock smoke supplies it. */
 export function previewSnapshot(): MonitorSnapshot {
 	const values: Readonly<Record<MetricSample["id"], MetricValues>> = {
+		bluetooth: {},
 		cpu: { load: 37, temperature: 52 },
 		gpu: { load: 12, temperature: 44, model: "NVIDIA GeForce RTX 4070" },
 		memory: {
@@ -108,7 +109,7 @@ export function previewSnapshot(): MonitorSnapshot {
 		sampledAt: 1,
 		samples: emptySnapshot().samples.map((sample) => ({
 			...sample,
-			state: "available",
+			state: sample.id === "bluetooth" ? "unsupported" : "available",
 			collectedAt: 1,
 			values: values[sample.id],
 		})),

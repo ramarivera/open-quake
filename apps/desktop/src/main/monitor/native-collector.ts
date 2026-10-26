@@ -86,7 +86,7 @@ export function nativeCollector(
 						: {},
 			};
 		}
-		if (id === "gpu" || platform !== "darwin")
+		if (id === "gpu" || id === "bluetooth" || platform !== "darwin")
 			return { state: "unsupported", values: {} };
 		switch (id) {
 			case "disk":
