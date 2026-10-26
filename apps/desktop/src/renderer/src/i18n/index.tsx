@@ -94,14 +94,16 @@ export function useLocaleText(
 export function AppLocaleProvider({
 	children,
 	bridge = window.quakeLocale,
+	initialLocale = "en",
 	bundled = appDictionaries,
 }: {
 	readonly children: ReactNode;
 	readonly bridge?: AppLocaleBridge | null | undefined;
+	readonly initialLocale?: AppLocale;
 	readonly bundled?: AppDictionaries;
 }) {
 	const [snapshot, update] = useState<LocaleSnapshot>({
-		locale: "en",
+		locale: initialLocale,
 		revision: -1,
 	});
 	const [loading, setLoading] = useState(Boolean(bridge));

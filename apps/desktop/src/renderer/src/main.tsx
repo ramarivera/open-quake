@@ -1,4 +1,6 @@
+import { Schema } from "effect";
 import { createRoot } from "react-dom/client";
+import { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts";
 import { App } from "./App";
 import { AppLocaleProvider } from "./i18n";
 import "./panelRotation.css";
@@ -15,10 +17,17 @@ if (params.get("surface") === "panel") {
 const surface = params.get("surface");
 const auxiliary =
 	surface !== null && surface !== "panel" && surface !== "management";
+const initialLocale =
+	surface === "profile-thumbnail"
+		? Schema.decodeUnknownSync(ProfileLocale)(params.get("locale") ?? "en")
+		: "en";
 const root = document.getElementById("root");
 if (root) {
 	createRoot(root).render(
-		<AppLocaleProvider bridge={auxiliary ? null : window.quakeLocale}>
+		<AppLocaleProvider
+			bridge={auxiliary ? null : window.quakeLocale}
+			initialLocale={initialLocale}
+		>
 			<App />
 		</AppLocaleProvider>,
 	);
