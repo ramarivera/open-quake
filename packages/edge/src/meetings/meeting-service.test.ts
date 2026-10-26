@@ -87,6 +87,7 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 	let nextSubmit: Effect.Effect<void> = Effect.void;
 	let nextSummary: Effect.Effect<void> = Effect.void;
 	let translationStop: Effect.Effect<void> = Effect.void;
+	let nextTranslation: Effect.Effect<void> = Effect.void;
 	const storage: MeetingStorage = {
 		load: () => Effect.succeed(stored),
 		save: (next) =>
@@ -188,7 +189,7 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 			Effect.sync(() => {
 				translationRequests.push({ config, pcm });
 				return translationUpdates;
-			}),
+			}).pipe(Effect.zipLeft(Effect.suspend(() => nextTranslation))),
 		stopTranslation: () => Effect.suspend(() => translationStop),
 	};
 	const ai = AiProviderService.DefaultWithoutDependencies.pipe(
@@ -269,6 +270,9 @@ function setup(recoveredDuration = 2500, effectiveConfig?: MeetingConfig) {
 		},
 		pauseSummary: (wait: Effect.Effect<void>) => {
 			nextSummary = wait;
+		},
+		pauseTranslation: (wait: Effect.Effect<void>) => {
+			nextTranslation = wait;
 		},
 		pauseTranslationStop: (wait: Effect.Effect<void>) => {
 			translationStop = wait;
@@ -1605,3 +1609,72 @@ for (const audio of ["failed", "interrupted"] as const) {
 		},
 	);
 }
+
+it.effect(
+	"AI-279 regeneration with missing transcript reports its own actionable code without calling the text provider",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			yield* configure;
+			yield* MeetingService.configure({
+				...defaultMeetingConfig,
+				profileId: selected.id,
+				minutesModel: selected.modelId,
+				autoGenerate: false,
+			});
+			const state = yield* MeetingService.action("meetingMinutes");
+			const id = state.records[0]?.id;
+			if (!id) return yield* Effect.die("missing fixture record");
+			yield* TestClock.adjust(5000);
+			yield* MeetingService.action("meetingMinutes");
+			const result = yield* Effect.either(
+				MeetingService.regenerate(id, "standard"),
+			);
+			expect(Either.isLeft(result) && result.left.code).toBe(
+				"QUAKE.MEETING.TRANSCRIPT_MISSING",
+			);
+			expect(f.prompts).toHaveLength(0);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"SCREEN-110 profile/language reset clears both displays and ignores in-flight old translation",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			yield* configure;
+			yield* MeetingService.action("liveAudioTranslate");
+			const entered = yield* Deferred.make<void>();
+			const release = yield* Deferred.make<void>();
+			f.translations([
+				{
+					id: "old",
+					speaker: "1",
+					text: "old profile text",
+					final: true,
+					at: 0,
+				},
+			]);
+			f.pauseTranslation(
+				Deferred.succeed(entered, undefined).pipe(
+					Effect.zipRight(Deferred.await(release)),
+				),
+			);
+			const old = yield* MeetingService.translate(new Uint8Array(14400)).pipe(
+				Effect.fork,
+			);
+			yield* Deferred.await(entered);
+			yield* MeetingService.configure({
+				...defaultMeetingConfig,
+				targetLanguage: "de",
+			});
+			yield* Deferred.succeed(release, undefined);
+			yield* Fiber.join(old);
+			const current = yield* MeetingService.snapshot();
+			expect(current.translating).toBe(false);
+			expect(current.translations).toEqual([]);
+			expect(f.calls).toContain("stop-translation");
+		}).pipe(Effect.provide(f.layer));
+	},
+);

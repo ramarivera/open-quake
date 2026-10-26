@@ -22,6 +22,7 @@ import {
 } from "./contracts.js";
 import {
 	canFocus,
+	pickerProfiles,
 	readyProfiles,
 	selectorProfiles,
 	volumeStep,
@@ -74,6 +75,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 			const mutex = yield* Effect.makeSemaphore(1);
 			const updates = yield* SubscriptionRef.make(initial);
 			let state = initial;
+			let configured = false;
 			let generation = 0;
 			let hold = Option.none<number>();
 			let voiceOwned = Option.none<number>();
@@ -204,6 +206,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 			): Effect.Effect<void, KnobError> =>
 				Effect.gen(function* () {
 					contextGeneration++;
+					configured = true;
 					yield* stopBrightness;
 					yield* stopSelection;
 					yield* stopVolume;
@@ -232,6 +235,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 			): Effect.Effect<void, KnobError> =>
 				Effect.gen(function* () {
 					const ring = state.selector;
+					const switched = profileId !== state.context.session.profileId;
 					yield* stopSelection;
 					yield* emit({
 						selector: {
@@ -239,14 +243,14 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							...(keepRing ? { ...ring, mode: "ring" as const } : {}),
 						},
 					});
-					if (profileId !== state.context.session.profileId) {
-						yield* stopVolume;
-						// Publish only the committed context. Failure leaves the current profile intact.
-						yield* cancelVoice;
+					if (switched) {
+						// Persistence owns truth; failed writes must not reset the old voice/volume session.
 						const previousProfiles = state.context.profiles;
 						const context = yield* ports
 							.selectProfile(profileId)
 							.pipe(Effect.onError(() => emit({ selector: closed })));
+						yield* stopVolume;
+						yield* quiet(cancelVoice);
 						yield* emit({
 							context: {
 								...context,
@@ -272,7 +276,9 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 					if (keepRing)
 						yield* schedule(
 							"hide",
-							KNOB_TIMING.ringHide - KNOB_TIMING.ringCommit,
+							switched
+								? KNOB_TIMING.pickerRingHide
+								: KNOB_TIMING.ringHide - KNOB_TIMING.ringCommit,
 							emit({ selector: closed }),
 						);
 				});
@@ -419,7 +425,10 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						state.selector.mode === "picker" ||
 						readyProfiles(state.context.profiles).length > 0;
 					const entries = picker
-						? readyProfiles(state.context.profiles)
+						? pickerProfiles(
+								state.context.profiles,
+								state.context.session.profileId,
+							)
 						: state.context.profiles;
 					if (!entries.length) return;
 					const base =
@@ -523,7 +532,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							return;
 						case "Page": {
 							if (state.selector.mode !== "picker") return;
-							const count = readyProfiles(state.context.profiles).length;
+							const count = selectorProfiles(state).length;
 							const page = Math.max(
 								0,
 								Math.min(
@@ -546,9 +555,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						case "Select":
 							if (
 								state.selector.mode === "picker" &&
-								readyProfiles(state.context.profiles).some(
-									(p) => p.id === event.profileId,
-								)
+								selectorProfiles(state).some((p) => p.id === event.profileId)
 							)
 								yield* commit(event.profileId);
 							return;
@@ -671,9 +678,97 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 													}),
 												),
 											});
-										return identity(context) === identity(state.context)
-											? Effect.void
-											: replace(context, true);
+										if (identity(context) === identity(state.context))
+											return Effect.void;
+										return Effect.gen(function* () {
+											const previous = state;
+											const sameDevice =
+												configured &&
+												connected &&
+												context.session.deviceId ===
+													previous.context.session.deviceId;
+											const switched =
+												sameDevice &&
+												context.session.profileId !==
+													previous.context.session.profileId;
+											const sameContent =
+												sameDevice &&
+												!switched &&
+												context.session.revision ===
+													previous.context.session.revision &&
+												context.pageId === previous.context.pageId &&
+												context.player === previous.context.player &&
+												JSON.stringify(context.keys) ===
+													JSON.stringify(previous.context.keys);
+											const merged = {
+												...context,
+												profiles: context.profiles.map((profile) => {
+													const cached = previous.context.profiles.find(
+														(entry) => entry.id === profile.id,
+													);
+													return profile.thumbnail._tag === "missing" &&
+														profile.thumbnailKey !== undefined &&
+														profile.thumbnailKey === cached?.thumbnailKey
+														? { ...profile, thumbnail: cached.thumbnail }
+														: profile;
+												}),
+											};
+											if (sameContent) {
+												contextGeneration++;
+												yield* emit({ context: merged });
+											} else yield* replace(merged, true);
+											if (switched) {
+												const index = merged.profiles.findIndex(
+													(profile) => profile.id === merged.session.profileId,
+												);
+												yield* emit({
+													selector: {
+														...closed,
+														mode: "ring",
+														ringVisible: true,
+														index,
+														page: Math.floor(index / 15),
+													},
+												});
+												yield* schedule(
+													"hide",
+													KNOB_TIMING.pickerRingHide,
+													emit({ selector: closed }),
+												);
+											} else if (
+												sameDevice &&
+												previous.selector.mode !== "closed"
+											) {
+												// Source reinitializes the open selector to the active ID after menu edits.
+												const picker =
+													previous.selector.mode === "picker" &&
+													readyProfiles(merged.profiles).length > 0;
+												const entries = picker
+													? pickerProfiles(
+															merged.profiles,
+															merged.session.profileId,
+														)
+													: merged.profiles;
+												const index = Math.max(
+													0,
+													entries.findIndex(
+														(profile) =>
+															profile.id === merged.session.profileId,
+													),
+												);
+												yield* emit({
+													selector: {
+														...previous.selector,
+														mode: picker ? "picker" : "ring",
+														ringVisible: !picker,
+														index,
+														page: Math.floor(index / 15),
+														progress: 0,
+													},
+												});
+												yield* arm(picker);
+											}
+										});
 									}),
 								),
 							),

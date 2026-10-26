@@ -71,9 +71,12 @@ export function createMeetingCapture(
 			return recorder;
 		});
 	};
-	const endRecorders = async (session: Session): Promise<void> => {
+	const endRecorders = async (
+		session: Session,
+		recorders = session.recorders,
+	): Promise<void> => {
 		await Promise.all(
-			session.recorders.map(
+			recorders.map(
 				(recorder) =>
 					new Promise<void>((resolve, reject) => {
 						if (recorder.state === "inactive") {
@@ -127,10 +130,10 @@ export function createMeetingCapture(
 		}
 	};
 	const stopTranslation = async (): Promise<void> => {
-		translationGeneration++;
 		await translationContext?.close().catch(() => {});
 		translationContext = undefined;
 		await pcmQueue;
+		translationGeneration++;
 		if (translationOwnsStream && translationStream)
 			release([translationStream]);
 		translationStream = undefined;
@@ -192,9 +195,10 @@ export function createMeetingCapture(
 					timer: setInterval(() => {
 						session.rotation = session.rotation
 							.then(async () => {
-								await endRecorders(session);
+								const previous = session.recorders;
 								session.segment++;
 								beginRecorders(id, session);
+								await endRecorders(session, previous);
 							})
 							.catch(() => {
 								session.failed = true;
@@ -263,11 +267,21 @@ export function createMeetingCapture(
 			const node = new AudioWorkletNode(context, "meeting-pcm");
 			let pending = 0;
 			node.port.onmessage = (event: MessageEvent<unknown>) => {
-				if (!(event.data instanceof ArrayBuffer) || pending >= 8) return;
+				if (
+					!(event.data instanceof ArrayBuffer) ||
+					pending >= 8 ||
+					generation !== translationGeneration ||
+					translationContext !== context
+				)
+					return;
 				const bytes = new Uint8Array(event.data);
 				pending++;
 				pcmQueue = pcmQueue
-					.then(() => bridge.pcm(bytes))
+					.then(() =>
+						generation === translationGeneration
+							? bridge.pcm(bytes)
+							: undefined,
+					)
 					.catch(() => {
 						bridge.sourceLost("00000000-0000-4000-8000-000000000000");
 					})
