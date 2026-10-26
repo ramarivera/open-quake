@@ -22,8 +22,16 @@ export function createProfileThumbnailStore(root: string) {
 		);
 		return next;
 	};
-	const path = (profile: Profile, locale: ProfileLocale) =>
-		join(root, "thumbnails", `${profileThumbnailKey(profile, locale)}.png`);
+	const path = (
+		profile: Profile,
+		locale: ProfileLocale,
+		showEmptyGridDashedBorder: boolean,
+	) =>
+		join(
+			root,
+			"thumbnails",
+			`${profileThumbnailKey(profile, locale, showEmptyGridDashedBorder)}.png`,
+		);
 	const decode = (bytes: Buffer): Option.Option<string> => {
 		// Bound decompression before nativeImage allocates a bitmap from untrusted cache bytes.
 		if (
@@ -57,9 +65,13 @@ export function createProfileThumbnailStore(root: string) {
 		read: async (
 			profile: Profile,
 			locale: ProfileLocale,
+			showEmptyGridDashedBorder = true,
 		): Promise<Option.Option<string>> => {
 			try {
-				const file = await open(path(profile, locale), "r");
+				const file = await open(
+					path(profile, locale, showEmptyGridDashedBorder),
+					"r",
+				);
 				try {
 					if ((await file.stat()).size > maximumBytes) return Option.none();
 					const bytes = Buffer.alloc(maximumBytes + 1);
@@ -91,9 +103,10 @@ export function createProfileThumbnailStore(root: string) {
 			profile: Profile,
 			locale: ProfileLocale,
 			bytes: Buffer,
+			showEmptyGridDashedBorder = true,
 		): Promise<string> =>
 			serialize(async () => {
-				const temporary = `${path(profile, locale)}.${randomUUID()}.pending`;
+				const temporary = `${path(profile, locale, showEmptyGridDashedBorder)}.${randomUUID()}.pending`;
 				let failed = false;
 				try {
 					const decoded = decode(bytes);
@@ -102,7 +115,10 @@ export function createProfileThumbnailStore(root: string) {
 					const data = decoded.value;
 					await mkdir(join(root, "thumbnails"), { recursive: true });
 					await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
-					await rename(temporary, path(profile, locale));
+					await rename(
+						temporary,
+						path(profile, locale, showEmptyGridDashedBorder),
+					);
 					return data;
 				} catch (cause) {
 					failed = true;

@@ -52,6 +52,19 @@ function readStored(): StripSettings {
  */
 export function useStripSettings() {
 	const [settings, setSettings] = useState(readStored);
+	useEffect(() => {
+		if (
+			new URLSearchParams(location.search).get("surface") ===
+			"profile-thumbnail"
+		)
+			return;
+		void window.quakeProfileManager
+			?.request({
+				type: "thumbnail-style",
+				showEmptyGridDashedBorder: settings.showEmptyGridDashedBorder,
+			})
+			.catch(() => {});
+	}, [settings.showEmptyGridDashedBorder]);
 	const [notice, setNotice] = useState("");
 	const channel = useRef<BroadcastChannel | null>(null);
 	useEffect(() => {

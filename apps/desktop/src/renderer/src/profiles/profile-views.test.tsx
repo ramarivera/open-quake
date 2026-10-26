@@ -104,6 +104,9 @@ async function fixture(
 	let snapshot: ((v: ProfileView) => void) | undefined;
 	let chosen = Option.none<string>();
 	let captures = 0;
+	const capture = vi.fn(
+		async () => `data:image/png;base64,thumbnail${++captures}`,
+	);
 	const controller = await runtime.runPromise(
 		makeProfileController({
 			installedApps: async () => [
@@ -112,7 +115,7 @@ async function fixture(
 			confirm: async () => true,
 			execute: async () => {},
 			chooseApp: async () => chosen,
-			capture: async () => `data:image/png;base64,thumbnail${++captures}`,
+			capture,
 			cachedThumbnail: async () => Option.none(),
 			publish: (v) => snapshot?.(v),
 			progress: () => {},
@@ -243,6 +246,7 @@ async function fixture(
 		runtime,
 		controller,
 		request,
+		capture,
 		saved: () => saved,
 		choose: (path?: string) => {
 			chosen = Option.fromNullable(path);
@@ -409,6 +413,81 @@ it("MGMT-317 refreshes selected properties after an external profile rename publ
 		f.host.querySelector(".profile-settings legend")?.textContent,
 	).toContain("External");
 	expect(button(f.host, "Delete External")).toBeDefined();
+});
+
+it("keeps retained thumbnail pixels stale until a capture with the requested border style arrives", async () => {
+	const storageKey = "open-quake.strip.v1";
+	const savedSettings = localStorage.getItem(storageKey);
+	localStorage.setItem(
+		storageKey,
+		JSON.stringify({ version: 1, showEmptyGridDashedBorder: true }),
+	);
+	cleanup.push(async () => {
+		if (savedSettings === null) localStorage.removeItem(storageKey);
+		else localStorage.setItem(storageKey, savedSettings);
+	});
+	const f = await fixture();
+	const cell = () =>
+		query(f.host, '[data-profile-id="custom"]', HTMLDivElement);
+	await click(
+		button(
+			cell(),
+			`${profileText("functionWheelEditor.thumbnailUpdate")} Custom`,
+		),
+	);
+	const original = query(cell(), "img", HTMLImageElement).src;
+	expect(cell().getAttribute("data-state")).toBe("ready");
+	const dispatch = f.request.getMockImplementation();
+	if (!dispatch) throw new Error("Missing profile request fixture");
+	let releaseStyle: (() => void) | undefined;
+	const gate = new Promise<void>((resolve) => {
+		releaseStyle = resolve;
+	});
+	const pending: Promise<ProfileReply>[] = [];
+	f.request.mockImplementation((command) => {
+		if (command.type !== "thumbnail-style" || command.showEmptyGridDashedBorder)
+			return dispatch(command);
+		const reply = gate.then(() => dispatch(command));
+		pending.push(reply);
+		return reply;
+	});
+	f.capture.mockRejectedValue(new Error("Capture unavailable"));
+	cleanup.push(async () => {
+		await act(async () => {
+			releaseStyle?.();
+			await Promise.all(pending);
+		});
+	});
+	await act(async () => {
+		window.dispatchEvent(
+			new StorageEvent("storage", {
+				key: storageKey,
+				newValue: JSON.stringify({
+					version: 1,
+					showEmptyGridDashedBorder: false,
+				}),
+			}),
+		);
+	});
+	expect(pending.length).toBeGreaterThan(0);
+	expect(cell().getAttribute("data-state")).toBe("stale");
+	expect(query(cell(), "img", HTMLImageElement).src).toBe(original);
+	await act(async () => {
+		releaseStyle?.();
+		await Promise.all(pending);
+	});
+	expect(cell().getAttribute("data-state")).toBe("stale");
+	expect(query(cell(), "img", HTMLImageElement).src).toBe(original);
+	// Identical replacement bytes still have a newly confirmed capture identity.
+	f.capture.mockResolvedValue(original);
+	await act(async () => {
+		await f.request({
+			type: "thumbnail-style",
+			showEmptyGridDashedBorder: false,
+		});
+	});
+	expect(cell().getAttribute("data-state")).toBe("ready");
+	expect(query(cell(), "img", HTMLImageElement).src).toBe(original);
 });
 
 for (const platform of ["win32", "linux"] as const)
