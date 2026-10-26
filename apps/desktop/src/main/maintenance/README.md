@@ -129,6 +129,26 @@ wrong targets and changed cached bytes fail closed. Downloads run in the
 application scope; native confirmation gates installation. Fake-feed tests drive
 the actual maintenance request path and renderer Later/Now/progress/failure UI,
 while existing TestClock tests cover the 5s initial and 12h background cadence.
+Artifact downloads stream into an exclusive cache file with incremental SHA-256
+and a signed byte limit. Verification and staging read at most 64 KiB at once.
+Installation creates a private directory with mode 0700 and an exclusive copy,
+opens that copy read-only, removes its pathname and re-verifies its descriptor.
+Cache inode, size, timestamps and hash must still match before handoff. The
+installer receives only a `VerifiedUpdateArtifact.read` capability, valid until
+its callback returns. It must consume those bytes rather than reopen a cache path.
+A returning callback completes the handoff and restores idle controls; the app
+never claims its running version changed. Successful downloads and installs prune
+superseded hash-named regular artifacts while retaining the current one.
+
+Unreadable optional firmware directories produce scrubbed warnings and do not
+prevent Settings startup. Readback precedence belongs to one hardware session;
+newer observations and reconnected sessions can replace retained versions.
+During copying, the service saves changed byte counts at most once per 200 ms
+interval and joins that writer before terminal saves. Restart recovery uses the
+last completed checkpoint, so bytes copied after that checkpoint can be
+absent from recovery progress. Terminal expiry and close serialize their state
+saves with other firmware transitions.
+
 No real endpoint, key or installer policy is selected. These four rows remain
 blocked for production delivery pending that decision. SETTINGS-047 remains
 blocked for actual vendor-image testing under the synthetic-only lane rule;
