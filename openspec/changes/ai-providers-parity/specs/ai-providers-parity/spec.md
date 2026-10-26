@@ -246,6 +246,11 @@ Assistant settings SHALL link the existing Models and Speech settings consumers 
 - **THEN** the turn worker interrupts provider I/O and cannot execute Home Assistant actions later
 - **AND** equipment dispatch rechecks the owning session/profile identity after generation immediately before execution (AI-058)
 
+#### Scenario: Concurrent chat cannot replace accepted routing metadata
+- **WHEN** another session submits plain chat for the same model while an accepted Auto turn awaits classification
+- **THEN** classification and Home Assistant action generation retain that turn's pinned provider profile and routing model
+- **AND** mutable shared repository entries cannot change the accepted routing selection (AI-058)
+
 #### Scenario: Typed input with default router enabled
 - **WHEN** a default assistant key submits typed text with Use Dekie Agent enabled
 - **THEN** text reaches Auto classification and its supported chat/HA route; voice-input settings restrict microphone transcripts independently (AI-053, AI-060)

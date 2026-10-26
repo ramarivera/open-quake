@@ -1487,6 +1487,98 @@ it("rechecks session/profile identity after pending HA generation with TestClock
 	}
 });
 
+it("pins Auto routing metadata while another session submits plain chat", async () => {
+	let release = () => {};
+	let entered = () => {};
+	const paused = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const classifying = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const executed: string[] = [];
+	const f = await fixture(
+		{},
+		"generic",
+		"fixture-model",
+		{
+			snapshot: () =>
+				Effect.succeed({
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected",
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: [
+						{
+							entity_id: "light.allowed",
+							name: "Fake",
+							state: "off",
+							area: "",
+							attributes: {},
+						},
+					],
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist: ["light.allowed"],
+				}),
+			execute: (key) =>
+				Effect.sync(() => {
+					executed.push(key.entity_id);
+				}),
+		},
+		{
+			fetch: async (input, init) => {
+				if (String(init?.body).includes("userRequestAction")) {
+					entered();
+					await paused;
+				}
+				return globalThis.fetch(input, init);
+			},
+		},
+	);
+	try {
+		const settings = {
+			...defaultAssistantSettings(),
+			homeAssistantControl: true,
+			entityIds: ["light.allowed"],
+		};
+		const routed = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "operate HA" },
+				"main",
+				undefined,
+				settings,
+			),
+		);
+		await classifying;
+		const plain = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+				"main",
+				undefined,
+				{ ...settings, useAgent: false },
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(plain.events));
+		release();
+		const chunks = await f.host.runtime.runPromise(
+			Stream.runCollect(routed.events),
+		);
+		expect(Array.from(chunks).at(-1)).toMatchObject({
+			type: "end",
+			outcome: "completed",
+		});
+		expect(executed).toEqual(["light.allowed"]);
+		expect(f.endpoint.calls).toHaveLength(4);
+	} finally {
+		release();
+		await f.close();
+	}
+});
+
 it.each(["classification", "action"] as const)(
 	"disconnect/profile reset interrupts pending %s before equipment execution",
 	async (phase) => {

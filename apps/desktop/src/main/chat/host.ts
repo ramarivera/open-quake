@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIPv4 } from "node:net";
-import { Cause, Effect, Either, Exit, Layer, Schema } from "effect";
+import { Cause, Effect, Either, Exit, Layer, Option, Schema } from "effect";
 import { net } from "electron";
 import { AssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
@@ -202,24 +202,20 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			),
 		),
 	);
+	const providerDependencies = Layer.mergeAll(
+		Layer.succeed(
+			AiCompatibleAdapter,
+			makeProviderAdapter(options.fetch, options.sparkConnect ?? connectSpark),
+		),
+		Layer.succeed(AiCredentials, options.credentials),
+		Layer.succeed(AiFileAdapter, makeFileAdapter(options.fetch)),
+		Layer.succeed(AiConnectivity, {
+			online: () => Effect.sync(() => options.online?.() ?? net.isOnline()),
+		}),
+	);
 	const facade = AiProviderService.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(profiles),
-		Layer.provide(
-			Layer.mergeAll(
-				Layer.succeed(
-					AiCompatibleAdapter,
-					makeProviderAdapter(
-						options.fetch,
-						options.sparkConnect ?? connectSpark,
-					),
-				),
-				Layer.succeed(AiCredentials, options.credentials),
-				Layer.succeed(AiFileAdapter, makeFileAdapter(options.fetch)),
-				Layer.succeed(AiConnectivity, {
-					online: () => Effect.sync(() => options.online?.() ?? net.isOnline()),
-				}),
-			),
-		),
+		Layer.provide(providerDependencies),
 	);
 	const dependencies = Layer.mergeAll(
 		facade,
@@ -380,60 +376,75 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								...profile,
 								models: { ...profile.models, routing: profile.modelId },
 							};
-							yield* AiRepository.put(routedProfile);
-							const repository = yield* AiRepository;
-							const providers = yield* AiProviderService;
+							const repository = AiRepository.make({
+								get: (id) =>
+									Effect.succeed(
+										id === routedProfile.id
+											? Option.some(routedProfile)
+											: Option.none(),
+									),
+								put: () => Effect.fail(new AiConfigInvalid()),
+							});
+							const providerLayer =
+								AiProviderService.DefaultWithoutDependencies.pipe(
+									Layer.provide(
+										Layer.mergeAll(
+											Layer.succeed(AiRepository, repository),
+											providerDependencies,
+										),
+									),
+								);
 							return yield* submitChat(
-								AiVoiceService.submit({
-									requestId: input.turnId,
-									profileId: profile.id,
-									text: input.text,
-									mode: "auto",
-									homeAssistantEnabled:
-										settings.homeAssistantControl &&
-										Boolean(options.homeAssistant),
-								})
-									.pipe(
-										Effect.provide(
-											AiVoiceService.DefaultWithoutDependencies.pipe(
-												Layer.provide(
-													Layer.mergeAll(
-														Layer.succeed(
-															AiProviderService,
-															yield* AiProviderService,
+								Effect.gen(function* () {
+									const providers = yield* AiProviderService;
+									return yield* AiVoiceService.submit({
+										requestId: input.turnId,
+										profileId: profile.id,
+										text: input.text,
+										mode: "auto",
+										homeAssistantEnabled:
+											settings.homeAssistantControl &&
+											Boolean(options.homeAssistant),
+									})
+										.pipe(
+											Effect.provide(
+												AiVoiceService.DefaultWithoutDependencies.pipe(
+													Layer.provide(
+														Layer.mergeAll(
+															Layer.succeed(AiProviderService, providers),
+															Layer.succeed(AiRepository, repository),
 														),
-														Layer.succeed(AiRepository, repository),
+													),
+													Layer.provide(
+														Layer.succeed(AiVoiceTargets, {
+															dispatch: Effect.fn("DesktopAssistant.dispatch")(
+																function* (dispatch) {
+																	if (dispatch.route === "normal")
+																		return { operationId: input.turnId };
+																	if (dispatch.route !== "operateEquipment")
+																		return yield* new AiUnavailable();
+																	yield* executeAssistantHa(
+																		options.homeAssistant,
+																		settings,
+																		profile.id,
+																		input.text,
+																		assertCurrent,
+																	).pipe(
+																		Effect.provideService(
+																			AiProviderService,
+																			providers,
+																		),
+																	);
+																	return { operationId: input.turnId };
+																},
+															),
+														}),
 													),
 												),
-												Layer.provide(
-													Layer.succeed(AiVoiceTargets, {
-														dispatch: Effect.fn("DesktopAssistant.dispatch")(
-															function* (dispatch) {
-																if (dispatch.route === "normal")
-																	return { operationId: input.turnId };
-																if (dispatch.route !== "operateEquipment")
-																	return yield* new AiUnavailable();
-																yield* executeAssistantHa(
-																	options.homeAssistant,
-																	settings,
-																	profile.id,
-																	input.text,
-																	assertCurrent,
-																).pipe(
-																	Effect.provideService(
-																		AiProviderService,
-																		providers,
-																	),
-																);
-																return { operationId: input.turnId };
-															},
-														),
-													}),
-												),
 											),
-										),
-									)
-									.pipe(Effect.asVoid, Effect.zipLeft(assertCurrent)),
+										)
+										.pipe(Effect.asVoid, Effect.zipLeft(assertCurrent));
+								}).pipe(Effect.provide(providerLayer)),
 							);
 						}),
 					),
