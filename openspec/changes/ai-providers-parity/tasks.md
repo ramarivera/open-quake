@@ -42,4 +42,19 @@ qualification remains unverified; this lane made no paid calls or speech edits.
 
 ## 6. PR #93 review fixes
 
-- [ ] 6.1 Complete the single PR #93 review round. Bind files to window-owned pinned conversations, select media models, share readiness, retain keyless options, isolate Qwen endpoints, clear incompatible controls, preserve media deadlines and align UTF-8 file bounds. The tool-call report does not reproduce with pinned ai@7.0.153; preserve bounded terminal rejection and add multi-step/truncation fixtures. Also preserve legacy Moonshot models, normalize optional bot IDs, restrict OpenAI search, identify media capability errors and guard provider aliases. Lead superseded the initial two-finding deferral to open-quake-lih.15.6. Merge current main, regress valid findings before fixing, commit/push/reply separately, run full gates and reconcile unanswered threads. Bead: open-quake-lih.15.5.
+- [x] 6.1 Complete the single PR #93 review round. Bind files to window-owned pinned conversations, select media models, share readiness, retain keyless options, isolate Qwen endpoints, clear incompatible controls, preserve media deadlines and align UTF-8 file bounds. The tool-call report does not reproduce with pinned ai@7.0.153; preserve bounded terminal rejection and add multi-step/truncation fixtures. Also preserve legacy Moonshot models, normalize optional bot IDs, restrict OpenAI search, identify media capability errors and guard provider aliases. Lead superseded the initial two-finding deferral to open-quake-lih.15.6. Merge current main, regress valid findings before fixing, commit/push/reply separately, run full gates and reconcile unanswered threads. Bead: open-quake-lih.15.5.
+
+Review round completed on the current-main merge d38cf245 and functional head
+86bb5240. Thirteen bugs have failing-before regressions. The tool-call finding
+was disproven against the pinned SDK, with bounded multi-step/truncation coverage.
+All findings received attributed replies; the final GraphQL query had no unanswered
+threads. No threads were resolved and the PR was not merged by this lane.
+
+Final integrated gates: root Turbo tests passed with 3,439 tests and four skipped
+(desktop 2,056, device 509, edge 811, protocol 63 cached). Six typecheck tasks,
+the desktop build, both bundle modes, lint of 1,272 files with zero errors and
+14 existing warnings, and all 47 strict OpenSpec validations passed. Both hidden
+native media and production direct-chat smoke checks passed using mock hardware
+and fake providers. Earlier pre-integration runs had load-related timeouts; the
+final required two-worker command passed. Hosted checks remain owned by the lead.
+Live providers and hardware remain unverified; this round made no paid calls.
