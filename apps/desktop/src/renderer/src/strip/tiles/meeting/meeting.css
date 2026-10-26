@@ -400,7 +400,8 @@
 }
 
 :root[data-motion="reduce"] :is(.meeting-key, .meeting-display),
-:root[data-motion="reduce"] :is(.meeting-key, .meeting-display) * {
+:root[data-motion="reduce"] :is(.meeting-key, .meeting-display) *,
+:root[data-motion="reduce"] .meeting-animation[data-animation] * {
 	animation: none;
 	transition: none;
 }

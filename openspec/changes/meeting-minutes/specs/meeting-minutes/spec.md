@@ -269,7 +269,7 @@ panel-only bursts until 5000ms after accepted completion, never restart that win
 remount or failed regeneration, and allow a fresh successful completion. OS and app reduced
 motion SHALL disable recording/pulse/gears/fireworks/border animation and transitions while
 keeping status text visible. The viewer SHALL scale its 1196x456 base inside its actual
-span, keep Clear reachable, and clear only the selected pane without deleting saved
+box, retain the forced 5x2 span through the editing owner, keep Clear reachable, and clear only the selected pane without deleting saved
 minutes. Selected target language and bounded live translation updates SHALL reach the
 viewer. Evidence: AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152, MGMT-360.
 
@@ -277,7 +277,7 @@ viewer. Evidence: AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152, MGMT
 
 - **WHEN** capture readiness is delayed, a meeting crosses an hour, controls cool down and translated content arrives
 - **THEN** the timer, sweeps, active mark and selected translation pane follow authoritative snapshots without opening native capture
-- **AND** clearing Main, Temporary or Live affects only that pane, and shipped/alternate spans keep Clear within the visible frame
+- **AND** clearing Main, Temporary or Live affects only that pane, renderer boxes keep Clear within the visible frame, and the editing owner rejects alternate saved spans
 
 #### Scenario: Completion and reduced motion remain bounded
 

@@ -56,6 +56,23 @@ Task 5.2 proof: 1310 uncached tests, six forced/fresh gates with loose Turbo env
 Lane test-meeting-history, pinned origin/main 95f6a69 includes #79-#84. Task beads
 open-quake-lih.16.2, .3 and .4 remain open until lead merge.
 
-- [ ] 6.1 Pin exact MeetAI defaults, theme, protected edit ownership and saved Mark/Translate consumers. AI-265, AI-318, MGMT-360, MGMT-365.
-- [ ] 6.2 Exercise mounted history navigation, content, copy, request races, independent retry, responsive actions and durable templates/title. AI-275, AI-296, AI-299, AI-300, AI-303, AI-304, AI-305, AI-306, AI-307, AI-309, AI-316.
+- [x] 6.1 Pin exact MeetAI defaults, theme, protected edit ownership and saved Mark/Translate consumers. AI-265, AI-318, MGMT-360, MGMT-365.
+- [x] 6.2 Exercise mounted history navigation, content, copy, request races, independent retry, responsive actions and durable templates/title. AI-275, AI-296, AI-299, AI-300, AI-303, AI-304, AI-305, AI-306, AI-307, AI-309, AI-316.
 - [ ] 6.3 Exercise mounted strip timer/cooldown, main-tab animation, bounded celebration, reduced motion, scaled Clear and live translation. AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152.
+
+Section 6 evidence: 18 mounted renderer tests, 20 device catalog/editor tests and
+47 meeting-service tests pass. Repository verification totals 3153 passing tests
+and 4 skipped, using the authorized direct desktop fallback with external-SSD
+TMPDIR after root Turbo stripped it. Typecheck passes for all 6 packages, Biome
+checks 1229 files with 14 existing warnings, build and both bundle modes pass,
+and strict OpenSpec passes 47 items. Hidden native mock smoke checks both motion
+owners, real Clear touch routing and 1440/980/520px inspector/header reachability;
+EN/DE screenshots and logs are in the lane scratch directory.
+
+Task 6.3 remains partially blocked for AI-334's requested saved alternate span:
+`profile-footprint.ts` forces this viewer to 5x2 and `key-geometry.ts` rejects
+resizing it. Native regression pins that rejection and Clear at the supported
+size; mounted consumer tests also exercise alternate box dimensions. Changing the
+approved fixed-span contract needs a separate decision. All other task 6.3 rows
+are implemented and tested. Physical device, microphone/system audio and paid
+providers remain unverified. No hardware or real capture was opened.
