@@ -466,7 +466,16 @@ export function prepareMeetings(
 						await runtime.runPromise(Fiber.interrupt(fiber));
 					await runtime.runPromiseExit(MeetingService.suspend());
 					await runtime.runPromiseExit(Fiber.interrupt(published));
-					await runtime.dispose();
+					try {
+						await runtime.dispose();
+					} finally {
+						// Failed acquisition has no graph-owned capture finalizer.
+						if (!capture) {
+							removeCapture();
+							if (captureScope)
+								await Effect.runPromise(Scope.close(captureScope, Exit.void));
+						}
+					}
 					app.removeListener("before-quit", beforeQuit);
 				})();
 				return disposal;
