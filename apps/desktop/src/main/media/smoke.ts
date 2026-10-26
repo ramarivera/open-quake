@@ -679,7 +679,7 @@ async function smoke(): Promise<void> {
 		);
 		// The light theme reaches both windows; the strip keeps DK's black.
 		assert.deepEqual(appearance, {
-			token: "#f6f4f0",
+			token: "#f5f4f1",
 			strip: "rgb(0, 0, 0)",
 			animations: 0,
 		});

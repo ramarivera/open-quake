@@ -1,11 +1,15 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Layer } from "effect";
 import type { BrowserWindow, IpcMainInvokeEvent } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SettingsService } from "../../../../../packages/edge/src/settings/settings-service";
 import { LOCALE_CHANGED, LOCALE_REQUEST } from "../../shared/locale";
+import { prepareDesktopModule } from "../diagnostics/module";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { createAppLocaleBridge } from "./preload";
-import { registerAppLocale } from "./registration";
+import { prepareAppLocale, registerAppLocale } from "./registration";
 
 const ipc = vi.hoisted(() => ({
 	handle:
@@ -45,6 +49,54 @@ function windowFixture(id: number, surface: string) {
 	};
 }
 describe("production locale IPC registration and durable storage", () => {
+	it("drives production IPC and a second consumer through one shared owner", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "oq-locale-shared-"));
+		const management = windowFixture(1, "management");
+		const locale = prepareAppLocale({
+			directory,
+			osLocale: "en-US",
+			renderer,
+			windows: () => [management.window],
+		});
+		const observer = prepareDesktopModule(locale.layer, (runtime) => ({
+			read: () =>
+				runtime.runPromise(SettingsService.use((service) => service.locale())),
+		}));
+		expect(ipc.handle).not.toHaveBeenCalled();
+		const application = makeDesktopRuntime(
+			Layer.merge(locale.layer, observer.layer),
+		);
+		locale.bind(application);
+		observer.bind(application);
+		await application.runtime();
+		const registration = locale.start();
+		const consumer = observer.start();
+		const bridge = createAppLocaleBridge({
+			invoke: (_channel, input) => {
+				const handler = ipc.handle.mock.calls.find(
+					([name]) => name === LOCALE_REQUEST,
+				)?.[1];
+				if (!handler) throw new Error("Missing locale IPC");
+				return handler(management.event(), input);
+			},
+			on: () => {},
+			removeListener: () => {},
+		});
+		try {
+			expect(await bridge.set("de")).toEqual({ locale: "de", revision: 1 });
+			expect(await consumer.read()).toEqual({ locale: "de", revision: 1 });
+			await registration.dispose();
+			expect(await consumer.read()).toEqual({ locale: "de", revision: 1 });
+			expect(await locale.runtime.runPromise(SettingsService)).toBe(
+				await application.runPromise(SettingsService),
+			);
+		} finally {
+			await bridge.dispose();
+			await registration.dispose();
+			await application.dispose();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
 	it("authenticates frames, broadcasts only to trusted windows, and keeps language across restart with changed OS seed", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "oq-locale-"));
 		const management = windowFixture(1, "management"),

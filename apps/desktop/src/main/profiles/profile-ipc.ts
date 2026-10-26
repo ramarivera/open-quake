@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, type ManagedRuntime, Stream } from "effect";
+import { Effect, Fiber, Layer, Stream } from "effect";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
 	type ProfileEnvelope,
@@ -15,6 +15,7 @@ import {
 	PROFILES_SNAPSHOT,
 	type ProfileSnapshotReply,
 } from "../../shared/profile-snapshot-contracts";
+import type { DesktopRuntime } from "../diagnostics/module";
 import { createDesktopProfileStorage } from "./local-profile-storage";
 
 export const ProfilesLive = (
@@ -68,7 +69,7 @@ function broadcast(reply: ProfileSnapshotReply): void {
  * commands belong to profiles-key-grid task 2.1 and the profile manager.
  */
 export function registerProfiles<R>(
-	runtime: ManagedRuntime.ManagedRuntime<R | ProfileService, never>,
+	runtime: DesktopRuntime<R | ProfileService, never>,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	owned = true,

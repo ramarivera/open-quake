@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Layer, type ManagedRuntime, Schema } from "effect";
+import { Layer, Schema } from "effect";
 import { BrowserWindow, ipcMain, nativeImage } from "electron";
 import {
 	WEATHER_MEDIA_CHANGED,
@@ -9,6 +9,7 @@ import {
 	type WeatherMediaReply,
 } from "../../shared/weather-media-contracts";
 import { canRequestClock } from "../clock/clock-ipc";
+import type { DesktopRuntime } from "../diagnostics/module";
 import { WeatherMediaController } from "./controller";
 import { nativeSystemMedia } from "./native";
 import { boundedCoverBytes } from "./native/cover";
@@ -73,7 +74,7 @@ export const canRequestWeatherMedia = (
 };
 
 export function registerWeatherMedia(
-	runtime: ManagedRuntime.ManagedRuntime<WeatherMediaController, never>,
+	runtime: DesktopRuntime<WeatherMediaController, never>,
 	managementWindow: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,

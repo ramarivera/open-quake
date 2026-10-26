@@ -1,10 +1,11 @@
-import { Cause, Effect, type ManagedRuntime, Option, Runtime } from "effect";
+import { Cause, Effect, Option, Runtime } from "effect";
 import {
 	KnobDispatchFailed,
 	KnobSessionStale,
 } from "../../../../../packages/device/src/knob/knob-errors.js";
 import type { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import type { DesktopRuntime } from "../diagnostics/module";
 import type { ProfileSelectionScope } from "../profiles/profile-controller";
 import type { DesktopKnobBindings } from "./desktop-adapters";
 
@@ -21,7 +22,7 @@ export const knobBoundaryFailure = (cause: unknown): KnobDispatchFailed =>
 
 /** One profile repository owns writes and publication for knob, panel and preview. */
 export function knobProfileBinding(
-	runtime: ManagedRuntime.ManagedRuntime<ProfileService, never>,
+	runtime: DesktopRuntime<ProfileService, never>,
 	select = (
 		profileId: string,
 		scope?: ProfileSelectionScope,

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, type ManagedRuntime, Option } from "effect";
+import { Effect, Fiber, Layer, Option } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { MediaUnreadable } from "../../shared/display";
 import {
@@ -9,6 +9,7 @@ import {
 	WALLPAPER_SNAPSHOT,
 	type WallpaperReply,
 } from "../../shared/wallpaper-contracts";
+import type { DesktopRuntime } from "../diagnostics/module";
 import { makeMediaController } from "./media-controller";
 import { MediaRoot } from "./media-files";
 import { canRequestWallpaper } from "./media-permissions";
@@ -28,7 +29,7 @@ export const MediaLive = (root: string): Layer.Layer<MediaRepository> =>
 
 /** Main owns the runtime and identifies its management window independently of URLs. */
 export function registerMedia(
-	runtime: ManagedRuntime.ManagedRuntime<MediaRepository, never>,
+	runtime: DesktopRuntime<MediaRepository, never>,
 	managementWindow: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,

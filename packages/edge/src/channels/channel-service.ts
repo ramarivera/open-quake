@@ -263,6 +263,15 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 						return yield* list();
 					}).pipe(lock.withPermits(1)),
 			);
+			const dispose = Effect.fn("ChannelService.dispose")(
+				(): Effect.Effect<void> =>
+					Effect.sync(() => {
+						for (const session of sessions.values()) session.cancel();
+						sessions.clear();
+						secrets.clear();
+					}),
+			);
+			yield* Effect.addFinalizer(() => dispose());
 			return {
 				list,
 				save,
@@ -486,14 +495,7 @@ export class ChannelService extends Effect.Service<ChannelService>()(
 							);
 						}),
 				),
-				dispose: Effect.fn("ChannelService.dispose")(
-					(): Effect.Effect<void> =>
-						Effect.sync(() => {
-							for (const s of sessions.values()) s.cancel();
-							sessions.clear();
-							secrets.clear();
-						}),
-				),
+				dispose,
 			};
 		}),
 	},

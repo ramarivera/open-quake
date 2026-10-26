@@ -72,4 +72,4 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 ## 8. Production drafting
 
-- [ ] 8.1 Bind shortcut generation to the saved default model and native credential owner through the existing AI facade. Keep output inert, bounded and validated by ShortcutService; preserve explicit library save/profile sync. Verify the real IPC/root path, missing/failed credentials, malformed/oversized output, no chat history changes, concurrent generation, cancellation and shutdown. Deliver a reviewed merged PR. Bead `open-quake-lih.17.1.40`.
+- [x] 8.1 Bind shortcut generation to the saved default model and native credential owner through the existing AI facade. Keep output inert, bounded and validated by ShortcutService; preserve explicit library save/profile sync. Verify the real IPC/root path, missing/failed credentials, malformed/oversized output, no chat history changes, concurrent generation, cancellation and shutdown. Deliver a reviewed merged PR. Bead `open-quake-lih.17.1.40`. PR71 merged as `0c9cde3` after current-head review and the complete package/download matrix; evidence in `verification-shortcut-drafting.md`.
