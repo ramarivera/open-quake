@@ -1112,20 +1112,22 @@ it("renders mute alternate title and artwork from external host observations", a
 	const base = fixtureProfile();
 	const profile: Profile = {
 		...base,
-		pages: base.pages.map((page) => ({
-			...page,
-			keys: page.keys.map((key) => ({
-				...key,
-				config: {
-					...key.config,
-					type: "mute",
-					title: { ...key.config.title, text: "Sound on" },
-					icon: "mdi:volume-high",
-					alterTitle: Option.some({ ...key.config.title, text: "Sound off" }),
-					alterIcon: Option.some("mdi:volume-off"),
-				},
-			})),
-		})),
+		pages: [
+			{
+				...base.pages[0],
+				keys: base.pages[0].keys.map((key) => ({
+					...key,
+					config: {
+						...key.config,
+						type: "mute",
+						title: { ...key.config.title, text: "Sound on" },
+						icon: "mdi:volume-high",
+						alterTitle: Option.some({ ...key.config.title, text: "Sound off" }),
+						alterIcon: Option.some("mdi:volume-off"),
+					},
+				})),
+			},
+		],
 	};
 	let receive = (_state: KeyRuntimeState) => {};
 	const layout = vi.fn();
@@ -1149,6 +1151,7 @@ it("renders mute alternate title and artwork from external host observations", a
 				}}
 				voice={previewVoiceContext}
 				titles="provided"
+				showEmptyGridDashedBorder={false}
 				onLayout={layout}
 			/>,
 		),
