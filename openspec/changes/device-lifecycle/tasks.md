@@ -81,3 +81,13 @@ Bead `open-quake-lih.11.18` owns this final-round scope.
 - [x] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.
 
 Device lane validation: current main `4aa4a9f1` merged. Root test command with SSD TMPDIR passed 4,137 tests with four existing skips. Lint, six-package typecheck, build, bundle smoke, 47 strict OpenSpec items and hidden muted native media smoke passed. EN/DE screenshots and per-row evidence are in the lane scratch directory; hardware stays unverified. Beads remain open for the lead.
+
+## 11. PR #112 post-merge device follow-ups
+
+Bead `open-quake-lih.11.24` stays in progress until the lead accepts the PR.
+
+- [x] 11.1 Derive successful matrix release edges on empty frames and key changes, retain held contacts on repeated frames, and route emoji through the full handler. Prove ordinary execution, held hotkeys, A-to-B and emoji with mounted production components and KeyRuntime. Finding 4380831182; MAIN-008/028, SCREEN-144.
+- [x] 11.2 Migrate legacy colon-serial hardware preferences on normalized reads without replacing a canonical save or losing the legacy record. Prove fake-store migration, concurrent saves and failure retention. Finding 4380831192; MAIN-018, SETTINGS-075.
+- [ ] 11.3 Run typecheck, zero-error Biome, root two-worker tests, strict OpenSpec, build, both bundle modes, hidden mock and media smokes. Open a PR to main, record its link in the bead, remove generated build output and retain the worktree.
+
+Follow-up verification: 35 focused tests passed, including mounted matrix/runtime contacts, legacy preference migration, concurrent-save protection, corruption retention and write ordering. Typecheck 6/6, Biome 1419 files with zero errors, strict OpenSpec 47/47, build, both mocked bundle modes, hidden conversation smoke 126 scenarios and media smoke with 26 screenshots passed. Full root two-worker testing remains incomplete because unchanged main/profile tests hit hook/test deadlines under host load; isolated selection-lifecycle passes 7/7. The final exact root attempt passed 4,154 tests with three timeouts in the unchanged selection-lifecycle file and four existing skips. Exact attempts and PR handoff are recorded in bead open-quake-lih.11.24 and SSD scratch burndown/fix-device-followups. No hardware, microphone, paid provider or audible playback was used.

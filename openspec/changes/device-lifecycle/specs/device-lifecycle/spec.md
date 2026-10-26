@@ -255,3 +255,18 @@ with stale host values. The SDK handle SHALL connect immediately, with its first
 - **WHEN** successful readiness reads are followed by rejected or unsuccessful outbound handshake sends
 - **THEN** recovery waits 3, 6, through 30 seconds for at most ten retries and then stops
 - **AND** only a completed outbound handshake resets that retry budget, while explicit recovery starts a new cycle
+
+### Requirement: Colon-serial hardware preference migration
+On a normalized HID serial read, the hardware preference store SHALL first use an existing normalized record. When absent, it SHALL discover a validated colon-serial record with the same canonical identity, select the newest matching legacy record, and atomically publish its preferences under the normalized serial without replacing a concurrently created normalized record. The original legacy record SHALL remain recoverable. Failed migration SHALL preserve the legacy data and report the existing typed preference failure. Sources: MAIN-018, SETTINGS-075; PR #112 finding 4380831192.
+
+#### Scenario: Existing installation normalizes its serial
+- **WHEN** a fake store contains saved LED, buzzer and volume preferences under AB:CD and the consumer reads ABCD
+- **THEN** it receives those preferences, creates a complete validated ABCD record, and subsequent reads use that normalized record
+
+#### Scenario: A newer normalized save wins
+- **WHEN** a normalized save exists already or arrives while the legacy migration is staged
+- **THEN** the read returns that normalized save and migration never overwrites it or removes the legacy source
+
+#### Scenario: Migration cannot publish
+- **WHEN** publishing the normalized file fails
+- **THEN** the old record remains intact, no partial normalized record becomes visible, and retry can migrate it
