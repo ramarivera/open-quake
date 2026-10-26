@@ -1,7 +1,9 @@
 import { ChildProcess, type SpawnOptions } from "node:child_process";
 import { it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Layer, TestClock } from "effect";
 import { expect, vi } from "vitest";
+import { AgentRuntimePort } from "../../../../../packages/edge/src/agents/agents-ports";
+import { AgentsRuntime } from "../../../../../packages/edge/src/agents/agents-runtime";
 import type { LocalAgentState } from "./local-state";
 import {
 	createOwnedAgentRuntime,
@@ -101,5 +103,50 @@ it.effect(
 				"/T",
 				"/F",
 			]);
+		}),
+);
+
+it.effect(
+	"4381279552 timed out startup retains failed cleanup for an explicit Stop",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			let entered: () => void = () => {};
+			const checking = new Promise<void>((resolve) => {
+				entered = resolve;
+			});
+			f.health.mockImplementation(
+				(signal) =>
+					new Promise<boolean>((resolve) => {
+						entered();
+						signal.addEventListener("abort", () => resolve(false), {
+							once: true,
+						});
+					}),
+			);
+			f.runCommand
+				.mockRejectedValueOnce(new Error("fake failure"))
+				.mockRejectedValueOnce(new Error("fake failure"));
+			yield* Effect.gen(function* () {
+				const service = yield* AgentsRuntime;
+				const starting = yield* service
+					.control("start")
+					.pipe(Effect.either, Effect.fork);
+				yield* Effect.promise(() => checking);
+				yield* TestClock.adjust("10 seconds");
+				expect(yield* starting.await).toMatchObject({
+					_tag: "Success",
+					value: { _tag: "Left", left: { code: "AGENT.RUNTIME.TIMEOUT" } },
+				});
+				yield* f.backend.stop;
+				expect(f.runCommand).toHaveBeenCalledTimes(3);
+				expect((yield* service.read()).status).toBe("stopped");
+			}).pipe(
+				Effect.provide(
+					AgentsRuntime.Default.pipe(
+						Layer.provide(Layer.succeed(AgentRuntimePort, f.backend)),
+					),
+				),
+			);
 		}),
 );
