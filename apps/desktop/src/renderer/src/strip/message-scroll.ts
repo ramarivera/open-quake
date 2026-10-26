@@ -65,3 +65,118 @@ export function stepMessageFling(
 		done: Math.abs(speed) < CHAT_MIN_FLING * 0.5,
 	};
 }
+
+/** Mounted chat scroll lifetime, including completion invalidation for moved child targets. */
+export function mountMessageScroll(
+	element: HTMLElement,
+	reduced: () => boolean,
+): () => void {
+	let frame = 0,
+		origin = 0,
+		startedAt = 0,
+		lastAt = 0;
+	let active = false;
+	let samples: VelocitySample[] = [];
+	const max = () => Math.max(0, element.scrollHeight - element.clientHeight);
+	const refresh = () =>
+		element.dispatchEvent(
+			new CustomEvent("quake-touch-rescan", { bubbles: true }),
+		);
+	const stop = () => {
+		cancelAnimationFrame(frame);
+		frame = 0;
+	};
+	const start = (event: Event): void => {
+		if (!(event instanceof CustomEvent)) return;
+		const d: unknown = event.detail;
+		if (
+			typeof d !== "object" ||
+			d === null ||
+			!("y" in d) ||
+			!("startY" in d) ||
+			typeof d.y !== "number" ||
+			typeof d.startY !== "number"
+		)
+			return;
+		const now = performance.now();
+		if ("phase" in d && d.phase === "start") {
+			stop();
+			active = true;
+			origin = element.scrollTop;
+			startedAt = now;
+			lastAt = now;
+			samples = [{ offset: origin, time: now }];
+		} else if (active) {
+			element.scrollTop = messageDragOffset(
+				origin,
+				d.y - d.startY,
+				element.scrollTop,
+				max(),
+				now - lastAt,
+			);
+			lastAt = now;
+			samples = [...samples, { offset: element.scrollTop, time: now }].slice(
+				-12,
+			);
+		}
+	};
+	const end = (event: Event): void => {
+		if (!active || !(event instanceof CustomEvent)) return;
+		active = false;
+		const d: unknown = event.detail;
+		if (
+			typeof d !== "object" ||
+			d === null ||
+			("cancelled" in d && d.cancelled === true) ||
+			!("isEffective" in d) ||
+			d.isEffective !== true ||
+			reduced()
+		) {
+			stop();
+			refresh();
+			return;
+		}
+		const now = performance.now();
+		let velocity = messageReleaseVelocity(samples);
+		if (
+			!shouldFlingMessages(
+				velocity,
+				now - startedAt,
+				element.scrollTop - origin,
+			)
+		) {
+			refresh();
+			return;
+		}
+		let previous = now;
+		const tick = (time: number): void => {
+			if (reduced()) {
+				stop();
+				refresh();
+				return;
+			}
+			const step = stepMessageFling(
+				element.scrollTop,
+				velocity,
+				max(),
+				time - previous,
+			);
+			previous = time;
+			element.scrollTop = step.offset;
+			velocity = step.velocity;
+			if (step.done) {
+				frame = 0;
+				refresh();
+			} else frame = requestAnimationFrame(tick);
+		};
+		frame = requestAnimationFrame(tick);
+	};
+	element.addEventListener("quake-sub-touch-start", start);
+	element.addEventListener("quake-sub-touch-end", end);
+	return () => {
+		active = false;
+		stop();
+		element.removeEventListener("quake-sub-touch-start", start);
+		element.removeEventListener("quake-sub-touch-end", end);
+	};
+}

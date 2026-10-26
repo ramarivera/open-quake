@@ -165,7 +165,9 @@ export function registerKeyLibrary<R>(
 				"cancel-icons",
 			].includes(command.type);
 		return (
-			(command.type === "activate" || command.type === "navigate") &&
+			(command.type === "activate" ||
+				command.type === "navigate" ||
+				command.type === "player-control") &&
 			event.sender === panelWindow()?.webContents &&
 			new URL(event.sender.getURL()).searchParams.get("surface") === "panel"
 		);
@@ -425,6 +427,18 @@ export function registerKeyLibrary<R>(
 						case "delete":
 							yield* KeyEditing.remove(command.target);
 							break;
+						case "player-control": {
+							const completion = yield* KeyRuntime.preparePlayerControl(
+								command,
+								command.intent,
+							);
+							return {
+								completion: completion.pipe(
+									Effect.as<KeyReply>({ _tag: "success" }),
+								),
+							};
+						}
+
 						case "activate": {
 							const completion = yield* KeyRuntime.prepareActivation(
 								command.deviceId,

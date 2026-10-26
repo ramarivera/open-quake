@@ -153,3 +153,66 @@ it.scoped(
 			}).pipe(Effect.provide(layer));
 		}),
 );
+
+it.scoped(
+	"KNOB-089 committed local-player transport reuses soundboard playback and rejects stale targets",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* rig(),
+				keys = soundboardKeyActions(f.service);
+			const envelope = Schema.decodeUnknownSync(ProfileEnvelope)({
+				schemaVersion: 1,
+				profiles: [
+					{
+						id: "p",
+						name: "P",
+						revision: 1,
+						pages: [
+							{ id: "one", keys: [Schema.encodeSync(ProfileKey)(key(0))] },
+						],
+					},
+				],
+				activeByDevice: { device: { profileId: "p", pageId: "one" } },
+			});
+			const layer = KeyRuntime.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					Layer.succeed(KeyRuntimePort, {
+						read: Effect.succeed(envelope),
+						execute: () => Effect.die("OS transport must not run"),
+						executeOwned: (key, activation) =>
+							keys.execute(key, activation).pipe(Effect.orDie),
+						publish: () => Effect.void,
+						select: () => Effect.void,
+						alarm: () => Effect.die("must stay silent"),
+					}),
+				),
+			);
+			yield* Effect.gen(function* () {
+				const runtime = yield* KeyRuntime,
+					target = { ...activation, keyCode: "1,1" };
+				for (const intent of ["toggle", "next", "previous", "stop"] as const) {
+					const completion = yield* runtime.preparePlayerControl(
+						target,
+						intent,
+					);
+					yield* completion;
+				}
+				expect(f.tracks.map((track) => track.fileId)).toEqual([
+					"sound-0",
+					"sound-1",
+					"sound-0",
+				]);
+				expect(
+					(yield* f.service.snapshot()).every(
+						(session) => session.state === "stopped",
+					),
+				).toBe(true);
+				const work = yield* runtime.preparePlayerControl(
+					{ ...target, revision: 0 },
+					"toggle",
+				);
+				yield* work;
+				expect(f.tracks).toHaveLength(3);
+			}).pipe(Effect.provide(layer));
+		}),
+);

@@ -1,3 +1,5 @@
+import { HardwareControls, QuakeDevice } from "@open-quake/device";
+import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
 import { Deferred, Effect, Layer, Schema } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
@@ -7,6 +9,7 @@ import {
 	KeyRuntime,
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createEmptyProfileKey,
@@ -77,6 +80,7 @@ function layer(
 	media?: MediaActionAdapter,
 	savedKey?: typeof ProfileKey.Encoded,
 	owned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	hardware: () => HardwareSession | undefined = () => undefined,
 ) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -124,7 +128,7 @@ function layer(
 		),
 	);
 	const port = desktopKeyRuntimePort(
-		() => undefined,
+		hardware,
 		(state) => Effect.runSync(publish(state)),
 		mock,
 		owned,
@@ -393,6 +397,131 @@ it.each([true, false])(
 					expect(speechStops).toBe(1);
 				}),
 			).pipe(Effect.provide(layer(false, publish, media, key, owned))),
+		);
+	},
+);
+
+it.each([false, true])(
+	"MAIN-065 SCREEN-057 held HID edges release the original keyboard owner, lostAck=%s",
+	async (lostAck) => {
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const fake = yield* makeFakeHardwareTransport({
+						serial: "device",
+						...(lostAck ? { onCommand: () => [] } : {}),
+					});
+					const device = yield* QuakeDevice.pipe(
+						Effect.provide(
+							QuakeDevice.DefaultWithoutDependencies.pipe(
+								Layer.provide(fake.layer),
+							),
+						),
+					);
+					const controls = yield* HardwareControls.pipe(
+						Effect.provide(HardwareControls.Default),
+					);
+					const session = yield* controls.create(yield* device.connect(), {
+						serial: "device",
+						session: "touch-1",
+					});
+					let active: HardwareSession | undefined = session;
+					const empty = Schema.encodeSync(ProfileKey)(
+						createEmptyProfileKey("1,1"),
+					);
+					const key = {
+						...empty,
+						childrenName: "hotkey",
+						config: {
+							...empty.config,
+							type: "hotkey",
+							display: true,
+							actions: [{ type: "key", value: "control+a" }],
+						},
+					};
+					yield* Effect.gen(function* () {
+						const runtime = yield* KeyRuntime;
+						if (lostAck) {
+							const result = yield* Effect.either(
+								runtime.activate("device", "1,1", "down"),
+							);
+							expect(result._tag).toBe("Left");
+							if (result._tag === "Left")
+								expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+							expect(
+								(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+							).toEqual([
+								[1, 16, 1, 1, 4],
+								[1, 16, 0, 1, 4],
+							]);
+							expect((yield* session.snapshot()).available).toBe(false);
+							return;
+						}
+						yield* runtime.activate("device", "1,1", "down");
+						expect(
+							(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+						).toEqual([[1, 16, 1, 1, 4]]);
+						active = undefined;
+						yield* runtime.activate("device", "1,1", "cancel");
+						yield* runtime.activate("device", "1,1", "up");
+						expect(
+							(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+						).toEqual([
+							[1, 16, 1, 1, 4],
+							[1, 16, 0, 1, 4],
+						]);
+					}).pipe(
+						Effect.provide(
+							layer(false, undefined, undefined, key, undefined, () => active),
+						),
+					);
+				}),
+			),
+		);
+	},
+);
+
+it.each([false, true])(
+	"local player controls enforce committed quarantine=%s",
+	async (unsupported) => {
+		const base = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const key = {
+			...base,
+			childrenName: "playAudio",
+			compatibility: { unsupported },
+			config: {
+				...base.config,
+				type: "playAudio",
+				display: true,
+				actions: [
+					{ type: "sound", value: '["/fixture/a.mp3"]' },
+					{ type: "audioAction", value: 0 },
+					{ type: "audioFade", value: "0-0" },
+					{ type: "volume", value: 50 },
+				],
+			},
+		};
+		const owned = vi.fn(async () => true);
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const runtime = yield* KeyRuntime;
+					const result = yield* runtime
+						.preparePlayerControl(
+							{
+								deviceId: "device",
+								profileId: "p",
+								pageId: "one",
+								revision: 0,
+								keyCode: "1,1",
+							},
+							"toggle",
+						)
+						.pipe(Effect.flatten, Effect.either);
+					expect(result._tag).toBe(unsupported ? "Left" : "Right");
+					expect(owned).toHaveBeenCalledTimes(unsupported ? 0 : 1);
+				}).pipe(Effect.provide(layer(false, undefined, undefined, key, owned))),
+			),
 		);
 	},
 );

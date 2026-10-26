@@ -12,6 +12,7 @@ export interface SubTouchTarget {
 	readonly id: string;
 	readonly bounds: Rect;
 	readonly scrollable: boolean;
+	readonly scale?: number;
 }
 /** strip-grid owns geometry and may return extra fields structurally. */
 export interface TouchTile {
@@ -36,6 +37,7 @@ export interface SubTouchEvent extends Point {
 	readonly startY: number;
 	readonly isEffective: boolean;
 	readonly confirmedTap: boolean;
+	readonly cancelled?: boolean;
 }
 interface SubGesture {
 	readonly tile: TouchTile;
@@ -51,6 +53,7 @@ export function createStripTouchController<Layout>(options: {
 	readonly tileAt: TileAt<Layout>;
 	readonly onKey: (event: StripKeyEvent) => void;
 	readonly onSubTouch: (event: SubTouchEvent) => void;
+	readonly onTileTap?: (keyCode: string) => void;
 	readonly overlay: {
 		readonly active: () => boolean;
 		readonly point: (point: Point, action: 0 | 1) => void;
@@ -59,6 +62,8 @@ export function createStripTouchController<Layout>(options: {
 	readonly schedule: (action: () => void, delay: number) => () => void;
 }) {
 	let held: string | undefined, sub: SubGesture | undefined;
+	let contactActive = false;
+	let heldTap: ReturnType<typeof createTapRecognizer> | undefined;
 	let overlayOwns = false,
 		disposed = false;
 	const releases = new Map<string, () => void>();
@@ -68,6 +73,7 @@ export function createStripTouchController<Layout>(options: {
 		phase: SubTouchEvent["phase"],
 		effective = false,
 		tap = false,
+		cancelled = false,
 	): void =>
 		options.onSubTouch({
 			keyCode: gesture.tile.keyCode,
@@ -78,6 +84,7 @@ export function createStripTouchController<Layout>(options: {
 			startY: gesture.start.y,
 			isEffective: effective,
 			confirmedTap: tap,
+			...(cancelled ? { cancelled: true } : {}),
 		});
 	const release = (delay: number): void => {
 		if (!held) return;
@@ -102,7 +109,7 @@ export function createStripTouchController<Layout>(options: {
 		sub = undefined;
 	};
 	return {
-		event(event: QuakeEvent): void {
+		event(event: QuakeEvent, releaseDelay = 10): void {
 			if (disposed) return;
 			if (event.kind === "status" && event.state !== "connected") {
 				// Link loss cancels touch ownership. It is never a successful voice
@@ -115,10 +122,12 @@ export function createStripTouchController<Layout>(options: {
 				if (held) options.onKey({ keyCode: held, keyAction: 1 });
 				held = undefined;
 				if (sub) {
-					emitSub(sub, sub.last, "end");
+					emitSub(sub, sub.last, "end", false, false, true);
 					sub = undefined;
 				}
 				overlayOwns = false;
+				contactActive = false;
+				heldTap = undefined;
 				return;
 			}
 			if (event.kind !== "touch" || !event.points.length) return;
@@ -128,22 +137,37 @@ export function createStripTouchController<Layout>(options: {
 			const action = first.action === 0 ? 0 : 1;
 			if (overlayOwns || options.overlay.active()) {
 				if (!overlayOwns) {
-					release(0);
+					for (const [keyCode, cancel] of releases) {
+						cancel();
+						options.onKey({ keyCode, keyAction: 1 });
+					}
+					releases.clear();
+					if (held) options.onKey({ keyCode: held, keyAction: 1 });
+					held = undefined;
+					heldTap = undefined;
 					if (sub) {
-						emitSub(sub, sub.last, "end");
+						emitSub(sub, sub.last, "end", false, false, true);
 						sub = undefined;
 					}
 				}
 				overlayOwns = action === 1;
+				contactActive = action === 1;
 				options.overlay.point(point, action);
 				return;
 			}
 			if (action === 0) {
-				release(10);
+				contactActive = false;
+				if (held && heldTap?.end(point, options.now()))
+					options.onTileTap?.(held);
+				heldTap = undefined;
+				release(releaseDelay);
 				endSub(point);
 				return;
 			}
-			if (held) return;
+			if (held) {
+				heldTap?.move(point);
+				return;
+			}
 			if (sub) {
 				if (sub.cancelled) return;
 				if (sub.last.x === point.x && sub.last.y === point.y) return;
@@ -166,9 +190,11 @@ export function createStripTouchController<Layout>(options: {
 				sub.last = point;
 				return;
 			}
+			if (contactActive) return;
+			contactActive = true;
 			const tile = options.tileAt(point, options.layout());
 			if (!tile) return;
-			if (tile.supportTouchEffect) {
+			if (tile.supportTouchEffect || !tile.subTargets?.length) {
 				// Preserve up-before-down ordering when another tap arrives inside 10 ms.
 				for (const [keyCode, cancel] of releases) {
 					cancel();
@@ -176,6 +202,7 @@ export function createStripTouchController<Layout>(options: {
 				}
 				releases.clear();
 				held = tile.keyCode;
+				heldTap = createTapRecognizer(point, options.now());
 				options.onKey({ keyCode: held, keyAction: 0 });
 				return;
 			}
@@ -190,11 +217,12 @@ export function createStripTouchController<Layout>(options: {
 				start: point,
 				last: point,
 				cancelled: false,
-				tap: createTapRecognizer(point, options.now()),
+				tap: createTapRecognizer(point, options.now(), target.scale),
 			};
 			emitSub(sub, point, "start");
 		},
 		dispose(): void {
+			if (disposed) return;
 			disposed = true;
 			for (const [keyCode, cancel] of releases) {
 				cancel();
@@ -204,7 +232,7 @@ export function createStripTouchController<Layout>(options: {
 			if (held) options.onKey({ keyCode: held, keyAction: 1 });
 			held = undefined;
 			if (sub) {
-				emitSub(sub, sub.last, "end");
+				emitSub(sub, sub.last, "end", false, false, true);
 				sub = undefined;
 			}
 		},
