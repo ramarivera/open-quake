@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Deferred, Effect, Either, Layer, Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts";
 import { GridVoiceRuntime } from "../../../../../packages/edge/src/voice/surface";
 import type { CaptureRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import {
@@ -15,6 +16,7 @@ import {
 	createDesktopDiagnostics,
 	type DesktopDiagnostics,
 } from "../diagnostics";
+import { copilotProfile } from "../test/voice-fixtures";
 import { meetingAdmission } from "./admission";
 import { createToneRecorder, registerVoiceSurface } from "./index";
 
@@ -88,6 +90,114 @@ const sent = () =>
 
 afterEach(() => {
 	vi.clearAllMocks();
+});
+
+it("authorizes reader IPC from the committed active AudioBot key and settings, rejecting other keys and frames", async () => {
+	const committed = {
+		engine: "webSpeech",
+		voiceHint: "saved",
+		rate: 1,
+		pitch: 1,
+		volume: 0.5,
+	} as const;
+	let envelope = Schema.decodeUnknownSync(ProfileEnvelope)({
+		schemaVersion: 1,
+		profiles: [
+			{
+				...copilotProfile,
+				pages: copilotProfile.pages.map((page) => ({
+					...page,
+					keys: page.keys.map((key) =>
+						key.keyCode !== "2,8"
+							? key
+							: {
+									...key,
+									childrenName: "audioBot",
+									config: {
+										...key.config,
+										type: "audioBot",
+										actions: [
+											{ type: "agentId", value: "saved-agent" },
+											{ type: "modeltype", value: "saved-model" },
+											{ type: "ttsEngine", value: "webSpeech" },
+											{ type: "ttsVoice", value: "saved" },
+											{ type: "ttsVolume", value: 0.5 },
+										],
+									},
+								},
+					),
+				})),
+			},
+		],
+		activeByDevice: {
+			"QK-1": {
+				profileId: copilotProfile.id,
+				pageId: copilotProfile.pages[0].id,
+			},
+		},
+	});
+	const toggleReader = vi.fn(async () => undefined);
+	const profiles = vi.fn(async () => envelope);
+	const registration = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "QK-1",
+		panel: () => undefined,
+		management: () => undefined,
+		renderer: RENDERER,
+		profiles,
+		speech: {
+			toggleReader,
+			readAloud: async () => ({ _tag: "ok" }),
+			onEvent: () => {},
+		},
+	});
+	try {
+		const handler = electron.ipcMain.handle.mock.calls.at(-1)?.[1];
+		if (typeof handler !== "function") throw new Error("No handler");
+		const frame = {
+			sender: electron.webContents,
+			senderFrame: electron.webContents.mainFrame,
+		};
+		const raw = {
+			_tag: "ToggleReader",
+			keyCode: "2,8",
+			settings: { ...committed, voiceHint: "forged" },
+		};
+		for (const keyCode of ["1,6", "9,9"]) {
+			expect(await handler(frame, { ...raw, keyCode })).toEqual({
+				_tag: "rejected",
+				code: "VOICE.SURFACE.REQUEST_INVALID",
+			});
+		}
+		expect(await handler({ ...frame, senderFrame: {} }, raw)).toEqual({
+			_tag: "rejected",
+			code: "VOICE.SURFACE.REQUEST_INVALID",
+		});
+		expect(toggleReader).not.toHaveBeenCalled();
+		expect(await handler(frame, raw)).toEqual({ _tag: "ok" });
+		expect(toggleReader).toHaveBeenCalledExactlyOnceWith(
+			{ serial: "QK-1", keyCode: "2,8" },
+			committed,
+		);
+		envelope = {
+			...envelope,
+			activeByDevice: { "QK-1": { profileId: "missing", pageId: "missing" } },
+		};
+		expect(await handler(frame, raw)).toEqual({
+			_tag: "rejected",
+			code: "VOICE.SURFACE.REQUEST_INVALID",
+		});
+		expect(toggleReader).toHaveBeenCalledTimes(1);
+		profiles.mockRejectedValueOnce(new Error("Storage unavailable"));
+		expect(await handler(frame, raw)).toEqual({
+			_tag: "rejected",
+			code: "VOICE.SURFACE.REQUEST_INVALID",
+		});
+		expect(toggleReader).toHaveBeenCalledTimes(1);
+	} finally {
+		await registration.dispose();
+	}
 });
 
 describe("voice:request", () => {

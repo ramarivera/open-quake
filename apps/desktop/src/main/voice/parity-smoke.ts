@@ -110,7 +110,7 @@ async function smoke(): Promise<void> {
 		() => undefined,
 		renderer,
 	);
-	const profileRuntime = ManagedRuntime.make(
+	let profileRuntime = ManagedRuntime.make(
 		ProfilesLive({
 			read: async () => voiceFixtureEnvelope(dkClawProfile),
 			write: async () => undefined,
@@ -145,6 +145,10 @@ async function smoke(): Promise<void> {
 	const voice = (() => {
 		try {
 			return registerVoiceSurface({
+				profiles: () =>
+					profileRuntime
+						.runPromise(ProfileService.loadProfiles())
+						.then(({ envelope }) => envelope),
 				mock: true,
 				tones: createToneRecorder(),
 				serial: () => serial,
@@ -467,26 +471,28 @@ async function smoke(): Promise<void> {
 										...key.config,
 										type: "audioBot",
 										title: { ...key.config.title, text: "Voice Bot" },
-										actions: [{ type: "ttsEngine", value: "qwen" }],
+										actions: [
+											{ type: "ttsEngine", value: "qwen" },
+											{ type: "agentId", value: "fixture" },
+											{ type: "modeltype", value: "fixture" },
+										],
 									},
 								},
 					),
 				})),
 			}),
 		);
-		profiles = registerProfiles(
-			ManagedRuntime.make(
-				ProfilesLive({
-					read: async () => ({
-						schemaVersion: 1,
-						profiles: [readerProfile],
-						activeByDevice: {},
-					}),
-					write: async () => undefined,
+		profileRuntime = ManagedRuntime.make(
+			ProfilesLive({
+				read: async () => ({
+					schemaVersion: 1,
+					profiles: [readerProfile],
+					activeByDevice: {},
 				}),
-			),
-			renderer,
+				write: async () => undefined,
+			}),
 		);
+		profiles = registerProfiles(profileRuntime, renderer);
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		});

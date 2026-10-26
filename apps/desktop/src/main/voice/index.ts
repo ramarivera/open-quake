@@ -9,6 +9,7 @@ import {
 	ipcMain,
 	shell,
 } from "electron";
+import type { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts";
 import {
 	GridVoice,
 	GridVoiceRuntime,
@@ -36,6 +37,7 @@ import {
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { committedReader } from "./reader-authorization";
 
 /**
  * strip-voice-ui in main: the voice surface conductor, its Electron ports,
@@ -86,6 +88,7 @@ export const UnavailableRuntimeLive = Layer.succeed(GridVoiceRuntime, {
 });
 
 export interface VoiceSurfaceOptions {
+	readonly profiles?: () => Promise<ProfileEnvelope>;
 	readonly diagnostics?: DesktopDiagnostics;
 	readonly admission?: typeof VoiceAdmission.Service.check;
 	readonly knobRoute?: (
@@ -329,14 +332,19 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 						if (!panel.isDestroyed()) panel.focus();
 						return ok;
 					}
-					case "ToggleReader":
+					case "ToggleReader": {
+						const envelope = await options.profiles?.().catch(() => undefined);
+						const settings =
+							envelope && committedReader(envelope, serial, request.keyCode);
+						if (!settings) return rejected("VOICE.SURFACE.REQUEST_INVALID");
 						if (!options.speech?.toggleReader)
 							return rejected("VOICE.TTS.UNAVAILABLE");
 						await options.speech.toggleReader(
 							{ serial, keyCode: request.keyCode },
-							request.settings,
+							settings,
 						);
 						return ok;
+					}
 					case "ReadAloud": {
 						const owner = { serial, keyCode: request.keyCode };
 						if (await options.speech?.stopReadAloud?.(owner)) return ok;

@@ -260,6 +260,10 @@ AI-091, AI-155, KNOB-073, MGMT-149, MGMT-301 and WIDGETS-015 SHALL use an explic
 - **WHEN** a reader receives ordered reply chunks then a second effective release
 - **THEN** its unsaid text and playback stop, other device owners remain intact, and no microphone or alternate engine starts
 
+#### Scenario: Committed reader authorization
+- **WHEN** a renderer requests an AudioBot reader toggle for MGMT-149 and MGMT-301
+- **THEN** main verifies the sender frame and the visible AudioBot binding on the device's committed active profile page, uses its saved settings, and rejects unbound keys or unavailable profile storage before activating speech
+
 ### Requirement: Bounded segmentation and stalled output
 
 AI-092 explicitly retains the app's punctuation/200-character/two-second pending-text segmentation as a supported replacement for DK's first-20/later-50 segmentation. Tests SHALL pin punctuation boundaries, 200-character splitting, remainder, exact idle flush and the 4000-character queue bound. AI-156, KNOB-074 and WIDGETS-108 SHALL reuse the shared 12s no-audio watchdog and one suspended-context resume at 8s. Playback SHALL complete only on natural drain. A failed segment SHALL report its stable timeout, release output and allow later queued segments; stop SHALL invalidate timers. A stalled resume SHALL be bounded by declared duration plus 5s or 30s when unknown, with at least 8s observation after a resume attempt.

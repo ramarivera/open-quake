@@ -385,6 +385,10 @@ if (!app.requestSingleInstanceLock()) {
 							run: (effect) => background.runPromise(effect),
 						});
 						const voiceModule = prepareVoiceSurface({
+							profiles: () =>
+								profiles.runtime
+									.runPromise(ProfileService.loadProfiles())
+									.then(({ envelope }) => envelope),
 							admission: meetingAdmission(() =>
 								meetingsModule.runtime.runPromise(MeetingService.snapshot()),
 							),
