@@ -1,12 +1,15 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Duplex } from "node:stream";
 import { Effect, Either, Redacted } from "effect";
 import { expect, it, vi } from "vitest";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { MeetingProvider } from "../../../../../packages/edge/src/meetings/meeting-provider";
+import { connectSpeechSocket } from "../speech/websocket";
 import { meetingDirectory } from "./private-files";
 import { liveMeetingProviders } from "./provider";
 
@@ -62,7 +65,26 @@ it("composes saved model credentials through the production facade and submits r
 					},
 				}),
 			);
-		else if (path === "/transcript")
+		else if (path === "/compatible-mode/v1/chat/completions") {
+			res.setHeader("content-type", "text/event-stream");
+			for (const data of [
+				{
+					choices: [
+						{
+							index: 0,
+							delta: { content: "## Summary from saved profile" },
+							finish_reason: null,
+						},
+					],
+				},
+				{ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
+				"[DONE]",
+			])
+				res.write(
+					`data: ${typeof data === "string" ? data : JSON.stringify(data)}\n\n`,
+				);
+			res.end();
+		} else if (path === "/transcript")
 			res.end(
 				JSON.stringify({
 					transcripts: [
@@ -141,12 +163,24 @@ it("composes saved model credentials through the production facade and submits r
 			Effect.scoped(
 				Effect.gen(function* () {
 					const provider = yield* MeetingProvider;
-					expect(yield* provider.transcribe(config, id, 300)).toMatchObject([
+					const transcript = yield* provider.transcribe(config, id, 300);
+					expect(transcript).toMatchObject([
 						{ speaker: "1", text: "Grüße from the fake provider" },
 					]);
+					expect(
+						yield* provider.summarize(config, transcript, "interview"),
+					).toBe("## Summary from saved profile");
 				}).pipe(Effect.provide(production.layer)),
 			),
 		);
+		expect(
+			requests.find((r) => r.path.endsWith("/chat/completions"))?.auth,
+		).toBe("Bearer fixture-vault-key");
+		expect(
+			requests
+				.find((r) => r.path.endsWith("/chat/completions"))
+				?.body.toString(),
+		).toContain("Grüße from the fake provider");
 		expect(resolve).toHaveBeenCalled();
 		expect(uploads).toBe(1);
 		expect(requests.find((r) => r.path === "/oss")?.auth).toBeUndefined();
@@ -223,6 +257,11 @@ it("composes saved model credentials through the production facade and submits r
 				/^provider-.*\.(mp3|pcm)$/.test(name),
 			),
 		).toEqual([]);
+		const { meetingStorage } = await import("./storage");
+		await Effect.runPromise(
+			meetingStorage(root).remove({ version: 1, records: [] }, [id]),
+		);
+		expect(await readdir(root)).not.toContain(id);
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -276,6 +315,179 @@ it("AI-288 mixes unequal tracks, skips empty/corrupt optional system files and j
 		expect(elapsed).toBeGreaterThan(590);
 		expect(elapsed).toBeLessThan(800);
 	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("AI-269 AI-272 sends synthetic file PCM through production saved-profile composition and a real loopback WebSocket", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-openai-meeting-ws-"));
+	const id = "00000000-0000-4000-8000-000000000113";
+	const sockets = new Set<Duplex>();
+	const events: Record<string, unknown>[] = [];
+	let auth: string | undefined;
+	let model: string | null = null;
+	const server = createServer();
+	server.on("upgrade", (request, socket) => {
+		auth = request.headers.authorization;
+		model = new URL(request.url ?? "/", "http://127.0.0.1").searchParams.get(
+			"model",
+		);
+		sockets.add(socket);
+		socket.on("close", () => sockets.delete(socket));
+		const accept = createHash("sha1")
+			.update(
+				`${request.headers["sec-websocket-key"]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`,
+			)
+			.digest("base64");
+		socket.write(
+			`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+		);
+		const send = (event: object) => {
+			const bytes = Buffer.from(JSON.stringify(event));
+			const header = Buffer.alloc(bytes.length < 126 ? 2 : 4);
+			header[0] = 0x81;
+			header[1] = bytes.length < 126 ? bytes.length : 126;
+			if (bytes.length >= 126) header.writeUInt16BE(bytes.length, 2);
+			socket.write(Buffer.concat([header, bytes]));
+		};
+		let buffered: Buffer = Buffer.alloc(0);
+		socket.on("data", (data: Buffer) => {
+			buffered = Buffer.concat([buffered, data]);
+			while (buffered.length >= 2) {
+				let size = (buffered[1] ?? 0) & 127;
+				let header = 2;
+				if (size === 126) {
+					if (buffered.length < 4) return;
+					size = buffered.readUInt16BE(2);
+					header = 4;
+				}
+				if (size === 127) {
+					socket.destroy();
+					return;
+				}
+				if (buffered.length < header + 4 + size) return;
+				const mask = buffered.subarray(header, header + 4);
+				const payload = Buffer.from(
+					buffered.subarray(header + 4, header + 4 + size),
+				);
+				const opcode = (buffered[0] ?? 0) & 15;
+				buffered = buffered.subarray(header + 4 + size);
+				if (opcode !== 1) continue;
+				for (let i = 0; i < payload.length; i++)
+					payload[i] = (payload[i] ?? 0) ^ (mask[i % 4] ?? 0);
+				const raw: unknown = JSON.parse(payload.toString());
+				if (typeof raw !== "object" || raw === null) {
+					socket.destroy();
+					return;
+				}
+				const event = Object.fromEntries(Object.entries(raw));
+				events.push(event);
+				if (event.type === "session.update") send({ type: "session.updated" });
+				if (event.type === "input_audio_buffer.commit") {
+					send({
+						type: "input_audio_buffer.speech_started",
+						item_id: "utterance",
+						audio_start_ms: 0,
+					});
+					send({
+						type: "input_audio_buffer.speech_stopped",
+						item_id: "utterance",
+						audio_end_ms: 300,
+					});
+					send({ type: "input_audio_buffer.committed", item_id: "utterance" });
+					send({
+						type: "conversation.item.input_audio_transcription.completed",
+						item_id: "utterance",
+						transcript: "local websocket transcript",
+					});
+				}
+			}
+		});
+	});
+	try {
+		await new Promise<void>((resolve) =>
+			server.listen(0, "127.0.0.1", resolve),
+		);
+		const address = server.address();
+		if (!address || typeof address === "string")
+			throw new Error("No fixture port");
+		const directory = await meetingDirectory(root, id);
+		await new Promise<void>((resolve, reject) => {
+			const child = spawn(
+				"ffmpeg",
+				[
+					"-v",
+					"error",
+					"-f",
+					"lavfi",
+					"-i",
+					"sine=frequency=440:duration=0.3",
+					"-ac",
+					"2",
+					"-y",
+					join(directory, "final_recording.mp3"),
+				],
+				{ stdio: "ignore" },
+			);
+			child.once("error", reject);
+			child.once("close", (code) =>
+				code === 0
+					? resolve()
+					: reject(new Error("Synthetic audio encoding failed")),
+			);
+		});
+		const production = liveMeetingProviders(root, "ffmpeg", {
+			models: () =>
+				Effect.succeed([
+					{
+						id: "saved-openai",
+						role: "default",
+						provider: "openai",
+						model: "gpt-5.1",
+						baseUrl: `http://127.0.0.1:${address.port}/v1`,
+						maxTokens: 2048,
+						credentialRef: "00000000-0000-4000-8000-000000000002",
+					},
+				]),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake-openai-vault-key")),
+				revoked: () => Effect.never,
+			},
+			socket: { connect: (input) => connectSpeechSocket(input, true) },
+		});
+		const config = await Effect.runPromise(production.initialConfig);
+		if (!config) throw new Error("Missing saved OpenAI config");
+		const transcript = await Effect.runPromise(
+			Effect.scoped(
+				MeetingProvider.transcribe(config, id, 300).pipe(
+					Effect.provide(production.layer),
+				),
+			),
+		);
+		expect(transcript).toMatchObject([
+			{ startMs: 0, endMs: 300, text: "local websocket transcript" },
+		]);
+		expect(auth).toBe("Bearer fake-openai-vault-key");
+		expect(model).toBe("gpt-realtime-mini");
+		const audio = events.filter((e) => e.type === "input_audio_buffer.append");
+		expect(audio.length).toBeGreaterThan(0);
+		for (const event of audio) {
+			if (typeof event.audio !== "string")
+				throw new Error("Missing audio data");
+			expect(Buffer.from(event.audio, "base64").length).toBeLessThanOrEqual(
+				30720,
+			);
+		}
+		expect(
+			(await readdir(directory)).filter((name) => name.endsWith(".pcm")),
+		).toEqual([]);
+		expect(
+			await readFile(join(directory, "MM_Transcription.txt"), "utf8"),
+		).toContain("local websocket transcript");
+	} finally {
+		for (const socket of sockets) socket.destroy();
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
 		await rm(root, { recursive: true, force: true });
 	}
 });

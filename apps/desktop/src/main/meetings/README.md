@@ -104,7 +104,7 @@ Credentials, upload policy and SDK types belong behind that port.
 The facade supplies DashScope's `qwen-audio-3.0-asr-flash-filetrans`, channel `[0]`,
 diarization, ten-second polling, 48-hour upload expiry and timeout
 `max(180000, durationMs * 1.5 + 120000)`. OpenAI file realtime uses
-a transcription-only `gpt-4o-transcribe` session and timeout `clamp(180000, durationMs * 0.5 + 180000, 1800000)`.
+`gpt-realtime-mini` with `gpt-4o-transcribe` input transcription and timeout `clamp(180000, durationMs * 0.5 + 180000, 1800000)`.
 Summary generation uses the existing text facade and requires the explicitly
 selected AI profile's model to match the minutes model. Language selection is
 independent of UI locale. ASR/summary failures never log transcript or credentials.
