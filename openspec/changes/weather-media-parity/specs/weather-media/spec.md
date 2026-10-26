@@ -258,3 +258,12 @@ The strip SHALL apply a mute key's alternate icon and title when the shared host
 
 - **WHEN** external host mute observations change from unmuted to muted and back
 - **THEN** the mounted tile changes to alternate title and icon and restores the primary artwork
+
+### Requirement: Media hotkey activation owns dispatch
+
+A held hotkey containing a media command SHALL dispatch once on activation and SHALL return cleanup that only releases ownership. Up, cancellation and runtime reset SHALL NOT dispatch a new media command. Covers MGMT-226, MGMT-290, PR103 comment 4379737934 and bead open-quake-lih.7.5.
+
+#### Scenario: Media hotkey cleanup
+
+- **WHEN** a media hotkey is pressed and then released, canceled or reset
+- **THEN** the media adapter receives exactly one command on press and no command from cleanup
