@@ -129,3 +129,18 @@ and integration suites pass, 54 tests. The preparation edge suite passes,
 647 tests with three existing skips. The full preparation desktop suite passes,
 1650 tests with one existing skip, and both typechecks pass. These checks
 use synthetic ports and isolated stores; no microphone, HID or OS input runs.
+
+
+PR72 failed-capture and firmware-access corrections, 2026-10-26: a failed
+capture acquisition has no resource finalizer, so registration disposal now
+removes the audio IPC handlers and closes its unused capture scope explicitly.
+Successful acquisition retains the existing graph-owned lifetime. Firmware
+security-scoped access is now owned by the scoped FirmwarePort layer, which
+closes after its dependent firmware worker. Registration teardown can no longer
+release access during the settle delay or an in-flight uninterruptible copy.
+The existing bookmark suite now exercises both standalone and shared owners.
+Three assertions fail on 58764b3 and pass after the correction, including
+registration disposal before copy opens the destination and graph disposal
+waiting for an in-flight copy. All 153 desktop maintenance/meeting tests,
+desktop typecheck and scoped Biome pass. Ports are synthetic; no actual drive,
+firmware write, microphone or hardware acceptance is claimed.
