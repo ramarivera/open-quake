@@ -61,13 +61,43 @@ export function meetingFileHygiene(
 			const id = object(raw).id;
 			if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))
 				return yield* meetingError("TranscriptionFailed");
-			yield* resources.save(ref, {
-				...state,
-				remoteFiles: [...state.remoteFiles, id],
-				cleanupPending: true,
-			});
+			yield* resources
+				.save(ref, {
+					...state,
+					remoteFiles: [...state.remoteFiles, id],
+					cleanupPending: true,
+				})
+				.pipe(
+					Effect.onError(() =>
+						meetingRequest(
+							http,
+							providerUrl(`files/${encodeURIComponent(id)}`, c.files ?? c.api),
+							{
+								method: "DELETE",
+								headers: { Authorization: `Bearer ${c.key}` },
+							},
+						).pipe(
+							Effect.flatMap((response) =>
+								Effect.tryPromise({
+									try: async () => {
+										await response.body?.cancel();
+										if (!response.ok && response.status !== 404)
+											throw meetingError("TranscriptionFailed");
+									},
+									catch: (cause) => meetingError("TranscriptionFailed", cause),
+								}),
+							),
+							Effect.catchAll((error) =>
+								Effect.logWarning(
+									"Meeting transcript rollback needs cleanup",
+									error,
+								),
+							),
+						),
+					),
+				);
 			return id;
-		});
+		}).pipe(Effect.uninterruptible);
 	const remove = (ref: string, id: string) =>
 		Effect.gen(function* () {
 			const state = yield* resources.load(ref);

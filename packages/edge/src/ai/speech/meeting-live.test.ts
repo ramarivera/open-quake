@@ -1,6 +1,7 @@
 import { it } from "@effect/vitest";
 import {
 	Clock,
+	Deferred,
 	Effect,
 	Either,
 	Fiber,
@@ -1050,4 +1051,65 @@ it.scoped(
 			expect(projectedUploadMs + 30000).toBeLessThan(1800000);
 		}),
 	{ timeout: 30000 },
+);
+
+it.effect(
+	"deletes an accepted transcript when ownership persistence fails",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				remoteFiles: [],
+				cleanupPending: false,
+			});
+			const failure = meetingError("StorageFailed", new Error("disk full"));
+			const resources: MeetingResources = {
+				...f.resources,
+				save: () => Effect.fail(failure),
+			};
+			const files = meetingFileHygiene(f.http, resources, f.resolve);
+			const result = yield* Effect.either(
+				files.upload("meeting", "private transcript"),
+			);
+			expect(Either.isLeft(result) && result.left).toBe(failure);
+			expect(
+				f.requests.filter((r) => r.init.method === "DELETE").map((r) => r.url),
+			).toEqual(["http://127.0.0.1:1234/api/v1/files/owned-file"]);
+		}),
+);
+
+it.effect(
+	"finishes transcript ownership handoff before honoring interruption",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				remoteFiles: [],
+				cleanupPending: false,
+			});
+			const entered = yield* Deferred.make<void>();
+			const release = yield* Deferred.make<void>();
+			const resources: MeetingResources = {
+				...f.resources,
+				save: (ref, state) =>
+					Deferred.succeed(entered, undefined).pipe(
+						Effect.zipRight(Deferred.await(release)),
+						Effect.zipRight(f.resources.save(ref, state)),
+					),
+			};
+			const files = meetingFileHygiene(f.http, resources, f.resolve);
+			const job = yield* files
+				.upload("meeting", "private transcript")
+				.pipe(Effect.fork);
+			yield* Deferred.await(entered);
+			yield* Fiber.interruptFork(job);
+			yield* Effect.yieldNow();
+			yield* Deferred.succeed(release, undefined);
+			yield* Fiber.await(job);
+			expect(f.states.get("meeting")?.remoteFiles).toEqual(["owned-file"]);
+		}),
 );
