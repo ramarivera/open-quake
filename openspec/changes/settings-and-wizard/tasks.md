@@ -1,24 +1,24 @@
 # Tasks
 
-Execution is tracked by open-quake-def under open-quake-lih.14. Section 5 is the settings-firmware lane; earlier wizard/general tasks stay open. Source and automated evidence are in apps/desktop/src/main/maintenance/README.md and the lane report. Parent clusters remain open until merge and acceptance.
+Execution is tracked by open-quake-def under open-quake-lih.14. Section 5 is the settings-firmware lane. Settings contracts, general adapters and local setup are delivered; selected-device settings, provider sampling controls and broader acceptance remain open. Source and automated evidence are recorded below. Parent clusters retain their remaining acceptance requirements.
 
 ## 1. Scope and persistent contracts
 
-- [ ] 1.1 Record Ramiro's decision on question 8, the QUAKE calibration gate, wizard ordering, locale/provider seeding and question 11 deferral; verify design/spec/tasks remain coherent and section 10 has only the design note.
-- [ ] 1.2 Add versioned settings/wizard schemas, validation/migration invariants and repository documentation; verify atomic completion failure, unknown-field preservation and user choices surviving reseed.
+- [x] 1.1 Record Ramiro's decision on question 8, the QUAKE calibration gate, wizard ordering, locale/provider seeding and question 11 deferral; verify design/spec/tasks remain coherent and section 10 has only the design note.
+- [x] 1.2 Add versioned settings/wizard schemas, validation/migration invariants and repository documentation; verify atomic completion failure, unknown-field preservation and user choices surviving reseed.
 
-  Backend implementation is in `packages/edge/src/settings/`, reusing the canonical locale repository and `settings-v1.json`. General/wizard sections migrate additively, retain unknown fields and reject inconsistent completion markers. `onboarding.test.ts` covers shared commits, failed completion, restart/replay, preserved provider choices, owner failure and both cancellation boundaries. Root composition and actual wizard controls remain with the parent; keep this task open until that consumption is reconciled.
+  Backend implementation is in `packages/edge/src/settings/`, reusing the canonical locale repository and `settings-v1.json`. General/wizard sections migrate additively, retain unknown fields and reject inconsistent completion markers. `onboarding.test.ts` covers shared commits, failed completion, restart/replay, preserved provider choices, owner failure and both cancellation boundaries. Root composition and actual wizard controls were integrated in reviewed PR49/50; the delivery reconciliation below closes this task.
 
 ## 2. Settings owners and host adapters
 
-- [ ] 2.1 Implement general OS preference/window adapters and protected provider secret references with catalog errors; verify login/start-hidden separation, unreachable-window correction, denied OS writes and secret-free serialization.
+- [x] 2.1 Implement general OS preference/window adapters and protected provider secret references with catalog errors; verify login/start-hidden separation, unreachable-window correction, denied OS writes and secret-free serialization.
 
-  Backend implementation is in `general-service.ts` and `apps/desktop/src/main/settings/os-adapter.ts`. Fake native tests cover separate login/hidden intent, OS readback, denial, unsupported operations, abort and timeout; file tests cover corruption and restart. Model/speech credentials remain with their existing protected owners. No real login-item/window operation or renderer/native acceptance is claimed. The parent owns existing settings registration and IPC integration; this task remains open pending consumption.
+  Backend implementation is in `general-service.ts` and `apps/desktop/src/main/settings/os-adapter.ts`. Fake native tests cover separate login/hidden intent, OS readback, denial, unsupported operations, abort and timeout; file tests cover corruption and restart. Model/speech credentials remain with their existing protected owners. Reviewed PR49/50 completed root, IPC and renderer consumption. Live login-item writes and physical acceptance remain task 4.2, independently of this adapter implementation.
 - [ ] 2.2 Integrate selected-device brightness/lighting capabilities and owner-delegated wallpaper/monitor/artwork/firmware actions; verify invalid values do no IO and device-selection races cannot redirect a write.
 
 ## 3. Wizard and settings UI
 
-- [ ] 3.1 Wire resumable local wizard, explicit desktop preview, idempotent profile selection and optional runtime skip; verify close/relaunch/replay, failed completion writes and offline completion through actual controls.
+- [x] 3.1 Wire resumable local wizard, explicit desktop preview, idempotent profile selection and optional runtime skip; verify close/relaunch/replay, failed completion writes and offline completion through actual controls.
 - [ ] 3.2 Wire locale/general/AI/device settings and local QUAKE guide with support-state documentation; verify hot locale updates, numeric provider bounds, unavailable adapters and no ARIS-68 calibration call.
 
   Existing provider validation now rejects advertised temperature ranges outside 0..2 and topP ranges outside 0..1. Request validation also enforces those product bounds independently of a provider's advertised range, while preserving narrower limits. The regression failed before the fix; 120 focused AI/chat tests, edge typecheck, scoped Biome and strict change validation pass. A real AiRepository/AiProviderService regression proves the existing `AiConfigInvalid` identity is returned before credential resolution or adapter dispatch. No saved-model/RPC schema, credentials or UI changed. The corresponding model controls still need the proposed optional-field schema approval; lighting and aggregate acceptance remain incomplete. Tracked in `open-quake-def.6.1`.
@@ -105,3 +105,36 @@ No overflow, unnamed controls or console errors; OS login item unchanged. The
 external final evidence is settings-guide/final-run2/. The design note now
 describes the integrated callback. All52 settings tests, desktop typecheck, scoped
 Biome and strict validation pass. Task3.2 remains incomplete for its other gaps.
+
+
+## Reviewed delivery reconciliation, 2026-10-26
+
+Tasks 1.1, 1.2, 2.1 and 3.1 are complete. The approved decisions are already
+recorded in design.md, including QUAKE-only scope, no borrowed ARIS-68
+calibration command, local-first ordering, explicit locale/region seeding and
+the subsequent Meet AI resolution of question 11. Section 10 remains an
+exclusion note rather than a new capability.
+
+The settings backend was squash-merged in PR49 as `0d0bf6d`; setup and General
+controls were squash-merged in PR50 as `3c1ad0f`. The versioned shared repository,
+atomic completion and preserved unknown/provider fields are exercised through
+`packages/edge/src/settings/onboarding.test.ts` and desktop storage/RPC tests.
+The OS adapters distinguish saved login intent, confirmed OS readback and
+start-hidden, retain catalog failures and correct unreachable window geometry.
+The actual hidden-root control runs already recorded above prove incomplete
+resume, explicit replay, offline preview/simulated-QUAKE completion, profile
+eligibility and retry, failed-save behavior and locale preservation. The final
+UI run in `settings-ui/review-full/shots/report.json` has 54 captures and 57
+audits with no reported layout or console failures; the separate narrow-drawer
+regression proves Resume uses the shared navigation path. Both PRs received
+current-head clean reviews and passed the complete package/download matrix.
+
+This reconciliation changes recorded completion only. Tasks 2.2, 3.2, 4.1 and
+4.2 remain open for selected-device lighting, saved sampling controls, all
+remaining scenario coverage and native/physical acceptance. The guide is now
+also merged through PR62, but that alone does not complete task 3.2. Beads
+`open-quake-def.1`, `.2`, `.3` and `.5` correspond to the four checked tasks;
+`open-quake-def.22` owns this reconciliation delivery.
+
+Fresh verification on the merged source passes 36 settings-domain tests and
+79 desktop settings/RPC/renderer tests plus strict OpenSpec validation.

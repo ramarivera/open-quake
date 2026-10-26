@@ -10,7 +10,7 @@ The desktop needs a usable local first-run path and one validated settings model
 - Specify general, AI and capability-gated device settings with persistent validation.
 - Document QUAKE-only recommendation, calibration evidence limits and the section 10 exclusion in design only.
 
-Section 5 now implements backup/restore, reset, permissions and app-update scheduling. The broader wizard and general settings tasks remain open.
+Section 5 implements backup/restore, reset, permissions and app-update scheduling. Reviewed PR49/50 also delivered the local wizard and general settings. Provider sampling controls, selected-device lighting and broader native acceptance remain open.
 
 ## Capabilities
 
