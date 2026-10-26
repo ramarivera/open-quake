@@ -170,3 +170,30 @@ startup. Committed deletion garbage is collected independently of the history tr
 Private output files are created before ffmpeg opens them; exports use same-directory
 private staging and rename. Trusted capture URL/frame checks apply to permissions, replies,
 chunks and PCM; navigation/crash revokes authority and clears owned sources.
+
+## Meeting UI burn-down
+
+History sorts by capture timestamp and stable ID, retains selected identity across
+refreshes, and refreshes when the host activates or reselects Meetings. A failed
+read preserves the current document and unsaved title. Refresh feedback lasts at
+least one second. Deletion chooses the next surviving visible neighbour below,
+then above, excluding cascading side records.
+
+The renderer uses pinned react-markdown 10.1.0 and remark-gfm 4.0.1 because the
+platform has no Markdown renderer. Raw HTML stays text, links allow only HTTP(S),
+and images render their alt text without fetching. Copy/export keep saved source
+text. Timed words align into the original transcript text so punctuation, spacing
+and unlisted text survive. Unalignable tokens fall back to the saved paragraph.
+Marks remain main-only; legacy parent zero still identifies a side record.
+
+Template choice saves the record and default for future recordings atomically.
+Regeneration retains the previous summary/applied template until success. A
+persistent attempt counter lets the inspector recognize completion or failure
+even when processing starts and finishes between snapshots. Stage retries preserve
+already complete artifacts. Audio reveal checks the managed directories and file
+without following symlinks and reports the catalogued missing-audio error.
+
+Title edits use the shared 100-character weighted rule in UI and service, with
+ASCII weighing one and other Unicode code points two. Attendee counts use explicit
+metadata; diarized speaker counts don't establish meeting attendance. Native smoke
+uses fake capture/providers, hidden muted windows, and the actual renderer/preload.

@@ -205,6 +205,11 @@ it("CENTER-070 autofills catalog provider/model/token suggestions and preserves 
 		"deepseek",
 		"qwen",
 		"custom",
+		"groq",
+		"zhipu",
+		"xfy",
+		"volc",
+		"coze",
 	]);
 	await input(provider, "deepseek");
 	expect(url.value).toBe("https://api.deepseek.com");
@@ -213,8 +218,8 @@ it("CENTER-070 autofills catalog provider/model/token suggestions and preserves 
 			(option) => option.value,
 		),
 	).toEqual([
-		"deepseek-v4-pro",
 		"deepseek-v4-flash",
+		"deepseek-v4-pro",
 		"deepseek-chat",
 		"deepseek-reasoner",
 	]);

@@ -313,3 +313,229 @@ it.scoped(
 			}
 		}),
 );
+
+it.scoped(
+	"MAIN-044 Windows extend obeys accepted, declined, failed and mock consent",
+	() =>
+		Effect.gen(function* () {
+			const native = vi.fn<NonNullable<PromptEdges["windowsExtend"]>>(
+				() => Effect.void,
+			);
+			let response = 1;
+			const service = yield* makeDisplayPrompts(
+				edges({
+					platform: "win32",
+					windowsExtend: native,
+					prompt: () => Effect.succeed(response),
+				}),
+			);
+			expect(yield* service.prepareWindows()).toBe(false);
+			expect(native).not.toHaveBeenCalled();
+			response = 0;
+			expect(yield* service.prepareWindows()).toBe(true);
+			expect(native).toHaveBeenCalledOnce();
+			const error = new DisplayOperationFailed(new Error("token=private"));
+			native.mockImplementation(() => Effect.fail(error));
+			const failure = yield* Effect.flip(service.prepareWindows());
+			expect(failure.code).toBe(error.code);
+			expect(failure.originalCause).toBe(error.originalCause);
+			expect(JSON.stringify(failure)).not.toContain("private");
+			const mock = yield* makeDisplayPrompts(
+				edges({ platform: "win32", mock: true, windowsExtend: native }),
+			);
+			yield* mock.prepareWindows();
+			expect(native).toHaveBeenCalledTimes(2);
+		}),
+);
+it.scoped(
+	"MAIN-058 keeps Later connected and quits only for an explicit Disconnect choice",
+	() =>
+		Effect.gen(function* () {
+			const disconnect = vi.fn(() => Effect.void);
+			const native = vi.fn<PromptEdges["native"]>((action) =>
+				Effect.succeed(action === "probe" ? "mirrored" : "applied"),
+			);
+			let response = 1;
+			const prompt = vi.fn<PromptEdges["prompt"]>(() =>
+				Effect.succeed(response),
+			);
+			const service = yield* makeDisplayPrompts(
+				edges({ platform: "darwin", native, prompt, disconnect }),
+			);
+			yield* service.check(portrait, false);
+			expect(prompt.mock.calls[0]?.[0].buttons).toEqual([
+				strings.displayMode.switch,
+				strings.displayMode.orientationLater,
+				strings.displayMode.disconnect,
+			]);
+			expect(disconnect).not.toHaveBeenCalled();
+			yield* TestClock.adjust(600000);
+			response = 2;
+			yield* service.check(portrait, false);
+			expect(disconnect).toHaveBeenCalledOnce();
+			expect(native.mock.calls.map(([action]) => action)).toEqual([
+				"probe",
+				"probe",
+			]);
+		}),
+);
+it.scoped(
+	"SETTINGS-087 wizard suppresses portrait prompts until it closes",
+	() =>
+		Effect.gen(function* () {
+			const prompt = vi.fn(() => Effect.succeed(1));
+			const service = yield* makeDisplayPrompts(edges({ prompt }));
+			yield* service.check(portrait, false, true);
+			yield* TestClock.adjust(20000);
+			yield* service.check(portrait, false, true);
+			expect(prompt).not.toHaveBeenCalled();
+			yield* service.check(portrait, false, false);
+			yield* TestClock.adjust(2499);
+			yield* service.check(portrait, false, false);
+			expect(prompt).not.toHaveBeenCalled();
+			yield* TestClock.adjust(1);
+			yield* service.check(portrait, false, false);
+			expect(prompt).toHaveBeenCalledOnce();
+		}),
+);
+it.scoped(
+	"MAIN-057 persists first-run success only after consent and native success, and reads it on restart",
+	() =>
+		Effect.gen(function* () {
+			let saved = false;
+			let response = 1;
+			let broken = false;
+			const save = vi.fn(() =>
+				Effect.sync(() => {
+					saved = true;
+				}),
+			);
+			const read = vi.fn(() => Effect.sync(() => saved));
+			const native: PromptEdges["native"] = (action) =>
+				action === "probe"
+					? Effect.succeed("mirrored")
+					: broken
+						? Effect.fail(new DisplayOperationFailed(new Error("failure")))
+						: Effect.succeed("applied");
+			const config = edges({
+				platform: "darwin",
+				arrangement: { read, save },
+				prompt: () => Effect.succeed(response),
+				native,
+			});
+			const service = yield* makeDisplayPrompts(config);
+			yield* service.repair(portrait);
+			expect(save).not.toHaveBeenCalled();
+			response = 0;
+			broken = true;
+			yield* Effect.flip(service.repair(portrait));
+			expect(save).not.toHaveBeenCalled();
+			broken = false;
+			yield* service.repair(portrait);
+			expect(save).toHaveBeenCalledOnce();
+			const restarted = yield* makeDisplayPrompts(config);
+			yield* restarted.repair(portrait);
+			expect(read).toHaveBeenCalledTimes(2);
+			expect(save).toHaveBeenCalledOnce();
+		}),
+);
+it.scoped(
+	"MAIN-057 retains a failed native probe on decline and uses consented geometry fallback",
+	() =>
+		Effect.gen(function* () {
+			let accept = false;
+			const error = new DisplayOperationFailed(new Error("probe exit"));
+			const native = vi.fn<PromptEdges["native"]>((action) =>
+				action === "probe" ? Effect.fail(error) : Effect.succeed("applied"),
+			);
+			const service = yield* makeDisplayPrompts(
+				edges({
+					platform: "darwin",
+					native,
+					prompt: () => Effect.succeed(accept ? 0 : 1),
+				}),
+			);
+			const failed = yield* Effect.flip(service.check(portrait, false));
+			expect(failed.code).toBe(error.code);
+			expect(failed.originalCause).toBe(error.originalCause);
+			expect(native.mock.calls.map(([action]) => action)).toEqual(["probe"]);
+			accept = true;
+			yield* TestClock.adjust(600000);
+			expect(yield* service.check(portrait, false)).toBe(true);
+			expect(native.mock.calls.map(([action]) => action)).toEqual([
+				"probe",
+				"probe",
+				"fix",
+			]);
+		}),
+);
+
+it.scoped(
+	"SETTINGS-064: Windows consent uses the saved live locale on every action",
+	() =>
+		Effect.gen(function* () {
+			let locale = "en";
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(1));
+			const extend = vi.fn(() => Effect.void);
+			const service = yield* makeDisplayPrompts(
+				edges({
+					platform: "win32",
+					locale: () => locale,
+					prompt,
+					windowsExtend: extend,
+				}),
+			);
+			for (const next of [...Object.keys(strings.locales), "unsupported"]) {
+				locale = next;
+				expect(yield* service.prepareWindows()).toBe(false);
+				const text = strings.locales[resolveAppLocale(next)].displayMode;
+				expect(prompt).toHaveBeenLastCalledWith(
+					expect.objectContaining({
+						title: text.title,
+						message: text.message,
+						detail: text.windowsExtendDetail,
+						buttons: [text.switch, text.orientationLater],
+					}),
+				);
+			}
+			expect(extend).not.toHaveBeenCalled();
+		}),
+);
+
+it.scoped(
+	"SETTINGS-064: hidden mirror reminders retain localized Disconnect after a live switch",
+	() =>
+		Effect.gen(function* () {
+			let locale = "en";
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(2));
+			const disconnect = vi.fn(() => Effect.void);
+			const service = yield* makeDisplayPrompts(
+				edges({
+					platform: "darwin",
+					locale: () => locale,
+					prompt,
+					disconnect,
+					hiddenMirroring: () => Effect.succeed(true),
+				}),
+			);
+			for (const next of [...Object.keys(strings.locales), "unsupported"]) {
+				locale = next;
+				yield* service.check(undefined, false);
+				const text = strings.locales[resolveAppLocale(next)].displayMode;
+				expect(prompt).toHaveBeenLastCalledWith(
+					expect.objectContaining({
+						title: text.title,
+						message: text.message,
+						detail: `${text.message}. ${text.laterDetail}`,
+						buttons: [
+							text.openDisplaySettings,
+							text.orientationLater,
+							text.disconnect,
+						],
+					}),
+				);
+				yield* TestClock.adjust(600000);
+			}
+			expect(disconnect).toHaveBeenCalledTimes(9);
+		}),
+);

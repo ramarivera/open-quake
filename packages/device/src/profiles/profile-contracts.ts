@@ -108,6 +108,12 @@ export const ProfileAction = Schema.Struct({
 	value: ProfileJson,
 });
 const KeyConfigFields = Schema.Struct({
+	aiConfigData: Schema.optional(ProfileJsonObject),
+	sessionState: Schema.optional(Schema.Literal("start", "end", "error")),
+	animationState: Schema.optional(
+		Schema.Literal("recording", "processing", "idle"),
+	),
+	assistantType: Schema.optional(Schema.Literal("chat", "keyConfig")),
 	userModifiedTitle: Schema.optional(Schema.Boolean),
 	userModifiedAlterTitle: Schema.optional(Schema.Boolean),
 	type: Schema.String,

@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Option, Schema } from "effect";
 import { AiCompatibleAdapter } from "../ai/adapters/adapter.js";
+import { AiConnectivity } from "../ai/ai-connectivity.js";
 import type { InferenceRequest, ProviderProfile } from "../ai/ai-contracts.js";
 import { AiCredentials } from "../ai/ai-credentials.js";
 import { AiConfigInvalid, type AiError } from "../ai/ai-errors.js";
@@ -39,7 +40,10 @@ export const ChatInferenceLive = Layer.effect(
 	Effect.gen(function* () {
 		const adapter = yield* Effect.serviceOption(AiCompatibleAdapter);
 		const credentials = yield* Effect.serviceOption(AiCredentials);
+		const connectivity = yield* Effect.serviceOption(AiConnectivity);
 		let context = Context.empty();
+		if (Option.isSome(connectivity))
+			context = Context.add(context, AiConnectivity, connectivity.value);
 		if (Option.isSome(adapter))
 			context = Context.add(context, AiCompatibleAdapter, adapter.value);
 		if (Option.isSome(credentials))
@@ -73,3 +77,5 @@ export const ChatInferenceLive = Layer.effect(
 		};
 	}),
 );
+
+export { AiConnectivity } from "../ai/ai-connectivity.js";

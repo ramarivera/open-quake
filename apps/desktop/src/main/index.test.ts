@@ -23,10 +23,11 @@ import { registerKnob } from "./knob";
 import { registerMaintenance } from "./maintenance";
 import { registerMedia } from "./media";
 import { registerMeetings } from "./meetings";
+import { startMockDeviceBus } from "./mockDeviceBus";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
-import { report } from "./test/hid";
+import { makeTwoStrips, report } from "./test/hid";
 import { registerVoiceSurface } from "./voice";
 import { registerWeatherMedia } from "./weather-media";
 
@@ -49,18 +50,32 @@ const electron = vi.hoisted(() => {
 		}
 
 		destroyed = false;
+		contentListeners = new Map<string, () => void>();
 		webContents = {
 			id: 1,
 			mainFrame: { url: "http://localhost:5173?surface=management" },
 			getURL: () => "http://localhost:5173?surface=management",
 			send: vi.fn(),
 			setAudioMuted: vi.fn(),
+			setZoomFactor: vi.fn(),
+			removeListener: vi.fn(),
+			on: vi.fn((event: string, listener: () => void) =>
+				this.contentListeners.set(event, listener),
+			),
 			isDestroyed: () => this.destroyed,
 		};
-		loadURL = vi.fn();
-		loadFile = vi.fn();
+		loadURL = vi.fn((_url: string) => {
+			this.contentListeners.get("did-finish-load")?.();
+		});
+		loadFile = vi.fn(() => {
+			this.contentListeners.get("did-finish-load")?.();
+		});
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
 		hide = vi.fn();
+		setOpacity = vi.fn();
+		setIgnoreMouseEvents = vi.fn();
+		setVisibleOnAllWorkspaces = vi.fn();
+		moveTop = vi.fn();
 		showInactive = vi.fn();
 		show = vi.fn();
 		focus = vi.fn();
@@ -83,7 +98,8 @@ const electron = vi.hoisted(() => {
 			>();
 
 		constructor(readonly options: BrowserWindowConstructorOptions) {
-			Window.windows.push(this);
+			if (options.title !== "open-quake panel shield")
+				Window.windows.push(this);
 		}
 
 		isDestroyed() {
@@ -122,6 +138,7 @@ const electron = vi.hoisted(() => {
 		},
 		nativeTheme: { themeSource: "system" },
 		safeStorage: { isEncryptionAvailable: () => false },
+		powerSaveBlocker: { start: vi.fn(() => 7), stop: vi.fn() },
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
 		shell: { openExternal: vi.fn() },
@@ -135,6 +152,10 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./mockDeviceBus", async (original) => {
+	const actual = await original<typeof import("./mockDeviceBus")>();
+	return { ...actual, startMockDeviceBus: vi.fn(actual.startMockDeviceBus) };
+});
 vi.mock("./diagnostics/runtime", async (original) => {
 	const actual = await original<typeof import("./diagnostics/runtime")>();
 	return { ...actual, makeDesktopRuntime: vi.fn(actual.makeDesktopRuntime) };
@@ -287,7 +308,7 @@ vi.mock("./knob", async () => {
 	const { prepareDesktopModule } = await import("./diagnostics/module");
 	const registration = {
 		registerKnob: vi.fn((..._args: unknown[]) => ({
-			onDevice: () => {},
+			onDevice: vi.fn(async (_event: unknown) => {}),
 			refresh: () => Promise.resolve(),
 			dispose: vi.fn(async () => {}),
 		})),
@@ -464,6 +485,7 @@ describe("desktop window lifecycle", () => {
 			);
 		vi.useRealTimers();
 		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
 	});
 
 	it("wires saved HA activation to the direct integration consumer", async () => {
@@ -656,6 +678,27 @@ describe("desktop window lifecycle", () => {
 		expect(management.focus).toHaveBeenCalledOnce();
 	});
 
+	it("cancels pending knob input before draining the bus on quit", async () => {
+		const knob = vi.mocked(registerKnob).mock.results.at(-1)?.value;
+		const bus = vi.mocked(startMockDeviceBus).mock.results.at(-1)?.value;
+		if (!knob || !bus) throw new Error("Missing mock input owners");
+		let release = () => {};
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		vi.mocked(knob.onDevice).mockImplementationOnce(() => pending);
+		vi.mocked(knob.dispose).mockImplementationOnce(async () => release());
+		try {
+			bus.emitStatus({ source: "mock", kind: "status", state: "connected" });
+			await vi.waitFor(() => expect(knob.onDevice).toHaveReturnedWith(pending));
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			expect(knob.dispose).toHaveBeenCalledOnce();
+		} finally {
+			release();
+		}
+	});
+
 	it("replays connected mock status when either preload requests it", () => {
 		const handler = electron.ipcMain.on.mock.calls.find(
 			([channel]) => channel === "quake:status",
@@ -671,56 +714,65 @@ describe("desktop window lifecycle", () => {
 		}
 	});
 
-	it("swaps to a strip panel when DK-QUAKE is attached, then back to a normal fallback", async () => {
-		const { panel: fallback } = windows();
-		// A normal window on the current Space, never rotated.
-		expect(fallback.options.type).toBeUndefined();
-		expect(fallback.setAlwaysOnTop).toHaveBeenLastCalledWith(
-			false,
-			"screen-saver",
-		);
-		expect(fallback.loadURL).toHaveBeenLastCalledWith(
-			"http://localhost:5173?surface=panel&rotation=0",
-		);
-		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
-		displayEvent("display-added");
-		await vi.waitFor(() =>
-			expect(
-				electron.BrowserWindow.windows.at(-1)?.setBounds,
-			).toHaveBeenLastCalledWith(panelDisplay.bounds),
-		);
-		const strip = electron.BrowserWindow.windows.at(-1);
-		expect(strip).not.toBe(fallback);
-		expect(fallback.destroy).toHaveBeenCalledOnce();
-		expect(strip?.options.type).toBe(
-			process.platform === "darwin" ? "panel" : undefined,
-		);
-		// The whole display, menu-bar area included, with the canvas turned upright.
-		expect(strip?.setBounds).toHaveBeenLastCalledWith(panelDisplay.bounds);
-		expect(strip?.setAlwaysOnTop).toHaveBeenLastCalledWith(
-			true,
-			"screen-saver",
-		);
-		expect(strip?.loadURL).toHaveBeenLastCalledWith(
-			"http://localhost:5173?surface=panel&rotation=90",
-		);
-		electron.screen.getAllDisplays.mockReturnValue([primary]);
-		displayEvent("display-removed");
-		await vi.waitFor(() => expect(strip?.destroy).toHaveBeenCalledOnce());
-		const restored = electron.BrowserWindow.windows.at(-1);
-		expect(strip?.destroy).toHaveBeenCalledOnce();
-		expect(restored?.options.type).toBeUndefined();
-		expect(restored?.setBounds).toHaveBeenLastCalledWith({
-			x: 0,
-			y: 0,
-			width: 1920,
-			height: 480,
-		});
-		expect(restored?.loadURL).toHaveBeenLastCalledWith(
-			"http://localhost:5173?surface=panel&rotation=0",
-		);
-		expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
-	});
+	it.each(["darwin", "linux", "win32"])(
+		"swaps to a strip panel and back to a normal fallback on %s",
+		async (platform) => {
+			vi.stubGlobal("process", { ...process, platform });
+			const { panel: fallback } = windows();
+			// A normal window on the current Space, never rotated.
+			expect(fallback.options.type).toBeUndefined();
+			expect(fallback.setAlwaysOnTop).toHaveBeenLastCalledWith(
+				false,
+				"screen-saver",
+			);
+			expect(fallback.loadURL).toHaveBeenLastCalledWith(
+				"http://localhost:5173?surface=panel&rotation=0&serial=desktop-preview",
+			);
+			electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
+			displayEvent("display-added");
+			await vi.waitFor(() =>
+				expect(
+					electron.BrowserWindow.windows.at(-1)?.setBounds,
+				).toHaveBeenLastCalledWith(panelDisplay.bounds),
+			);
+			const strip = electron.BrowserWindow.windows.at(-1);
+			expect(strip).not.toBe(fallback);
+			expect(fallback.destroy).toHaveBeenCalledOnce();
+			expect(strip?.options.type).toBe(
+				platform === "darwin"
+					? "panel"
+					: platform === "linux"
+						? "dock"
+						: undefined,
+			);
+			// The whole display, menu-bar area included, with the canvas turned upright.
+			expect(strip?.setBounds).toHaveBeenLastCalledWith(panelDisplay.bounds);
+			expect(strip?.setAlwaysOnTop).toHaveBeenLastCalledWith(
+				true,
+				"screen-saver",
+				process.platform === "darwin" ? 1 : 0,
+			);
+			expect(strip?.loadURL).toHaveBeenLastCalledWith(
+				"http://localhost:5173?surface=panel&rotation=90&serial=desktop-preview",
+			);
+			electron.screen.getAllDisplays.mockReturnValue([primary]);
+			displayEvent("display-removed");
+			await vi.waitFor(() => expect(strip?.destroy).toHaveBeenCalledOnce());
+			const restored = electron.BrowserWindow.windows.at(-1);
+			expect(strip?.destroy).toHaveBeenCalledOnce();
+			expect(restored?.options.type).toBeUndefined();
+			expect(restored?.setBounds).toHaveBeenLastCalledWith({
+				x: 0,
+				y: 0,
+				width: 1920,
+				height: 480,
+			});
+			expect(restored?.loadURL).toHaveBeenLastCalledWith(
+				"http://localhost:5173?surface=panel&rotation=0&serial=desktop-preview",
+			);
+			expect(electron.BrowserWindow.getAllWindows()).toHaveLength(2);
+		},
+	);
 
 	it("recreates a destroyed panel on hot-plug and forwards to the replacement", async () => {
 		const { panel, management } = windows();
@@ -740,7 +792,7 @@ describe("desktop window lifecycle", () => {
 			title: "open-quake panel",
 		});
 		expect(replacement?.loadURL).toHaveBeenCalledWith(
-			"http://localhost:5173?surface=panel&rotation=90",
+			"http://localhost:5173?surface=panel&rotation=90&serial=desktop-preview",
 		);
 		vi.advanceTimersByTime(1500);
 		expect(panel.webContents.send).not.toHaveBeenCalled();
@@ -792,7 +844,7 @@ describe("desktop window lifecycle", () => {
 		);
 		expect(panel.setBounds).toHaveBeenLastCalledWith(rotated.bounds);
 		expect(panel.loadURL).toHaveBeenLastCalledWith(
-			"http://localhost:5173?surface=panel&rotation=0",
+			"http://localhost:5173?surface=panel&rotation=0&serial=desktop-preview",
 		);
 	});
 
@@ -806,6 +858,62 @@ describe("desktop window lifecycle", () => {
 		listener?.({ preventDefault });
 		expect(preventDefault).toHaveBeenCalledTimes(1);
 		expect(panel.options.title).toBe("open-quake panel");
+	});
+
+	it("MAIN-012 SETTINGS-079 owns final close, voice teardown and the first/last suspension blocker", async () => {
+		electron.screen.getAllDisplays.mockReturnValue([primary, panelDisplay]);
+		displayEvent("display-added");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows.at(-1)?.showInactive,
+			).toHaveBeenCalled(),
+		);
+		const panel = electron.BrowserWindow.windows.at(-1);
+		const bus = vi.mocked(startMockDeviceBus).mock.results.at(-1)?.value;
+		const voice = vi.mocked(registerVoiceSurface).mock.results.at(-1)?.value;
+		if (!panel || !bus || !voice)
+			throw new Error("Missing active strip owners");
+		expect(electron.powerSaveBlocker.start).toHaveBeenCalledExactlyOnceWith(
+			"prevent-app-suspension",
+		);
+		const lose = () =>
+			bus.emitStatus({
+				source: "mock",
+				kind: "status",
+				state: "disconnected",
+				reason: "error",
+			});
+		const reconnect = () =>
+			bus.emitStatus({ source: "mock", kind: "status", state: "connected" });
+		lose();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(panel.hide).toHaveBeenCalled();
+		expect(voice.onDevice).toHaveBeenCalledWith(
+			expect.objectContaining({ state: "disconnected" }),
+		);
+		await vi.advanceTimersByTimeAsync(2999);
+		expect(panel.destroy).not.toHaveBeenCalled();
+		expect(electron.powerSaveBlocker.stop).not.toHaveBeenCalled();
+		reconnect();
+		await vi.advanceTimersByTimeAsync(2001);
+		expect(panel.destroy).not.toHaveBeenCalled();
+		expect(electron.powerSaveBlocker.start).toHaveBeenCalledOnce();
+		lose();
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersByTimeAsync(2999);
+		expect(electron.powerSaveBlocker.stop).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(electron.powerSaveBlocker.stop).toHaveBeenCalledExactlyOnceWith(7);
+		await vi.advanceTimersByTimeAsync(1999);
+		expect(panel.destroy).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(panel.destroy).toHaveBeenCalledOnce();
+		reconnect();
+		await vi.advanceTimersByTimeAsync(0);
+		const replacement = electron.BrowserWindow.windows.at(-1);
+		expect(replacement).not.toBe(panel);
+		expect(replacement?.showInactive).toHaveBeenCalled();
+		expect(electron.powerSaveBlocker.start).toHaveBeenCalledTimes(2);
 	});
 
 	it("restores both windows on macOS activation and forwards to the new windows", () => {
@@ -1150,6 +1258,250 @@ describe("desktop main with the real device service and fake HID", () => {
 			appEvent("before-quit");
 			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
 			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	async function startTwoStrips() {
+		const two = await Effect.runPromise(makeTwoStrips);
+		native.layer = two.layer;
+		const primary = makeDisplay();
+		const a = makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1920, height: 480 },
+		});
+		const b = makeDisplay({
+			...a,
+			id: 3,
+			bounds: { x: 1920, y: 0, width: 1920, height: 480 },
+		});
+		electron.screen.getAllDisplays.mockReturnValue([primary, a]);
+		await import("./index");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows
+					.filter((w) => w.options.title === "open-quake panel")
+					.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(a.bounds),
+		);
+		await vi.waitFor(() =>
+			expect(windows().management.webContents.send).toHaveBeenCalledWith(
+				"quake:diagnostic",
+				expect.objectContaining({ hdmi: "pass", checking: false }),
+			),
+		);
+		const first = electron.BrowserWindow.windows
+			.filter((w) => w.options.title === "open-quake panel")
+			.at(-1);
+		two.devices.push(two.b);
+		electron.screen.getAllDisplays.mockReturnValue([primary, a, b]);
+		await vi.advanceTimersByTimeAsync(1000);
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows
+					.filter((w) => w.options.title === "open-quake panel")
+					.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(b.bounds),
+		);
+		const second = electron.BrowserWindow.windows
+			.filter((w) => w.options.title === "open-quake panel")
+			.at(-1);
+		if (!first || !second) throw new Error("Two panels required");
+		return { two, primary, a, b, first, second };
+	}
+	it("routes secondary touch and knob input to its own panel and input consumers", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two, first, second } = await startTwoStrips();
+			expect(second).not.toBe(first);
+			for (const [win, serial] of [
+				[first, "A"],
+				[second, "B"],
+			] as const) {
+				expect(
+					new URL(
+						win.loadURL.mock.calls.at(-1)?.[0] ?? "http://missing",
+					).searchParams.get("serial"),
+				).toBe(serial);
+			}
+			const knob = vi.mocked(registerKnob).mock.results.at(-1)?.value;
+			first?.webContents.send.mockClear();
+			second?.webContents.send.mockClear();
+			vi.mocked(knob?.onDevice ?? vi.fn()).mockClear();
+			await Effect.runPromise(two.second.emit(report(3, 1, [1])));
+			await Effect.runPromise(
+				two.second.emit(report(0xa3, 26, [1, 2, 0x34, 1, 0x78, 5])),
+			);
+			await vi.waitFor(() =>
+				expect(second?.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "touch",
+					points: [{ action: 2, x: 1400, y: 308 }],
+				}),
+			);
+			expect(second?.webContents.send).toHaveBeenCalledWith("quake:event", {
+				source: "hid",
+				kind: "rotate",
+				direction: 1,
+			});
+			expect(first?.webContents.send).not.toHaveBeenCalledWith(
+				"quake:event",
+				expect.objectContaining({ kind: "touch" }),
+			);
+			expect(first?.webContents.send).not.toHaveBeenCalledWith(
+				"quake:event",
+				expect.objectContaining({ kind: "rotate" }),
+			);
+			await vi.waitFor(() =>
+				expect(knob?.onDevice).toHaveBeenCalledWith({
+					source: "hid",
+					kind: "rotate",
+					direction: 1,
+				}),
+			);
+			expect(vi.mocked(registerKnob).mock.calls.at(-1)?.[0]()).toBe(second);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
+	it("enrolls each strip and uses the selected serial hardware with scoped cleanup", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two } = await startTwoStrips();
+			const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+			await vi.waitFor(() =>
+				expect(profiles?.connect).toHaveBeenCalledWith("B"),
+			);
+			expect(profiles?.connect).toHaveBeenCalledWith("A");
+			const bindings = vi.mocked(registerKnob).mock.calls.at(-1)?.[2];
+			await Effect.runPromise(two.second.emit(report(3, 1, [1])));
+			await vi.waitFor(() => expect(bindings?.deviceId?.()).toBe("B"));
+			const second = bindings?.hardware?.();
+			if (!second) throw new Error("Secondary hardware must be attached");
+			expect(await Effect.runPromise(second.snapshot())).toMatchObject({
+				serial: "B",
+			});
+			await Effect.runPromise(two.first.emit(report(3, 1, [1])));
+			await vi.waitFor(() => expect(bindings?.deviceId?.()).toBe("A"));
+			const first = bindings?.hardware?.();
+			if (!first) throw new Error("Primary hardware must remain attached");
+			expect(await Effect.runPromise(first.snapshot())).toMatchObject({
+				serial: "A",
+			});
+			const lockA = vi.spyOn(first, "setLocked");
+			const lockB = vi.spyOn(second, "setLocked");
+			for (const [event, listener] of electron.powerMonitor.on.mock.calls) {
+				if (event === "lock-screen") listener();
+			}
+			await vi.waitFor(() => {
+				expect(lockA).toHaveBeenCalledWith(true);
+				expect(lockB).toHaveBeenCalledWith(true);
+			});
+
+			two.devices.splice(1, 1);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.waitFor(() =>
+				expect(profiles?.disconnect).toHaveBeenCalledWith("B"),
+			);
+			expect(profiles?.disconnect).not.toHaveBeenCalledWith("A");
+			expect(await Effect.runPromise(two.second.closes)).toBe(1);
+			expect(bindings?.hardware?.()).toBe(first);
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			expect(profiles?.disconnect).toHaveBeenCalledWith("A");
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
+	it("reroutes shared panel consumers when the selected strip closes", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two, first, second } = await startTwoStrips();
+			const removed = second;
+			const remaining = first;
+			const lostBus = two.second;
+			const liveBus = two.first;
+			await Effect.runPromise(lostBus.emit(report(3, 1, [1])));
+			const panel = vi.mocked(registerMonitor).mock.calls.at(-1)?.[2];
+			await vi.waitFor(() => expect(panel?.()).toBe(removed));
+			two.devices.splice(1, 1);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.advanceTimersByTimeAsync(2500);
+			expect(removed.isDestroyed()).toBe(false);
+			await vi.advanceTimersByTimeAsync(2500);
+			await vi.waitFor(() => expect(removed.isDestroyed()).toBe(true));
+			expect(panel?.()).toBe(remaining);
+			expect(remaining.isDestroyed()).toBe(false);
+			expect(
+				vi.mocked(registerVoiceSurface).mock.calls.at(-1)?.[0].panel(),
+			).toBe(first);
+			expect(vi.mocked(registerKnob).mock.calls.at(-1)?.[2]?.deviceId?.()).toBe(
+				"A",
+			);
+			expect(
+				electron.BrowserWindow.getAllWindows().filter(
+					(w) => w.options.title === "open-quake panel",
+				),
+			).toEqual([remaining]);
+			remaining.webContents.send.mockClear();
+			await Effect.runPromise(liveBus.emit(report(3, 1, [0])));
+			await vi.waitFor(() =>
+				expect(remaining.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "rotate",
+					direction: -1,
+				}),
+			);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
+	it("disposes the visible preview before handing its ownership to real hardware", async () => {
+		vi.useFakeTimers();
+		try {
+			const two = await Effect.runPromise(makeTwoStrips);
+			two.devices.length = 0;
+			native.layer = two.layer;
+			await import("./index");
+			await vi.waitFor(() =>
+				expect(windows().panel.showInactive).toHaveBeenCalled(),
+			);
+			const preview = windows().panel;
+			two.devices.push(two.a);
+			const strip = makeDisplay({
+				id: 2,
+				label: "DK-QUAKE",
+				size: { width: 1920, height: 480 },
+			});
+			electron.screen.getAllDisplays.mockReturnValue([makeDisplay(), strip]);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.waitFor(() =>
+				expect(
+					vi.mocked(registerProfiles).mock.results.at(-1)?.value.connect,
+				).toHaveBeenCalledWith("A"),
+			);
+			await vi.waitFor(() => expect(preview.isDestroyed()).toBe(true));
+			const panels = electron.BrowserWindow.getAllWindows().filter(
+				(w) => w.options.title === "open-quake panel",
+			);
+			expect(panels).toHaveLength(1);
+			expect(panels[0]?.setBounds).toHaveBeenLastCalledWith(strip.bounds);
+			expect(vi.mocked(registerMonitor).mock.calls.at(-1)?.[2]()).toBe(
+				panels[0],
+			);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
 		}
 	});
 

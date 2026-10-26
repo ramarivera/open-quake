@@ -2,8 +2,10 @@ import { describe, expect, it } from "@effect/vitest";
 import { Option, Schema } from "effect";
 import fc from "fast-check";
 import {
+	MeetingCommand,
 	MeetingId,
 	type MeetingRecord,
+	Segment,
 	type Translation,
 } from "./meeting-contracts.js";
 import { defaultMeetingConfig } from "./meeting-defaults.js";
@@ -135,4 +137,44 @@ describe("meeting invariants", () => {
 		expect(wire).not.toMatch(/private|sk-secret|password|Bearer/);
 		expect(Object.keys(error)).not.toContain("originalCause");
 	});
+});
+
+it("AI-310 SETTINGS-108 validates timed words and weighted Unicode title commands", () => {
+	const segment = {
+		id: "timed",
+		speaker: "1",
+		startMs: 0,
+		endMs: 100,
+		text: "hello",
+		words: [{ text: "hello", startMs: 0, endMs: 100 }],
+	};
+	expect(Schema.decodeUnknownSync(Segment)(segment)).toEqual(segment);
+	expect(
+		Schema.is(Segment)({
+			...segment,
+			words: [{ text: "outside", startMs: 0, endMs: 101 }],
+		}),
+	).toBe(false);
+	expect(
+		Schema.is(Segment)({
+			...segment,
+			words: [{ text: "backwards", startMs: 90, endMs: 10 }],
+		}),
+	).toBe(false);
+	for (const title of ["a".repeat(100), "汉".repeat(50), "😀".repeat(50)]) {
+		expect(
+			Schema.is(MeetingCommand)({ _tag: "rename", id: record.id, title }),
+		).toBe(true);
+	}
+	for (const title of [
+		"",
+		" ",
+		"汉".repeat(51),
+		"😀".repeat(51),
+		"a".repeat(101),
+	]) {
+		expect(
+			Schema.is(MeetingCommand)({ _tag: "rename", id: record.id, title }),
+		).toBe(false);
+	}
 });

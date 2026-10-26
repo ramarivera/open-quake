@@ -166,18 +166,31 @@ bootstrap preserves explicit/unknown settings and removes only documented transi
 keys. Main lifecycle prompts and the macOS Dock background menu use saved locale.
 The supported Qwen ASR suggestion is 3.1 rather than the recovered retired 3.0 name.
 
-Verification: root Turbo tests pass 3,541 tests with four existing skips across
-protocol/device/edge/desktop, six package typechecks pass, Biome reports no errors
-and 14 existing warnings, production build and both bundle smoke cases pass, and
-strict OpenSpec validation passes all 47 items. The unmodified hidden native media
-smoke passes with mock devices and muted windows. Additional Settings captures
-show en/de at 1180px and 390px with all eight controls and no horizontal overflow;
-the German clock capture shows localized seconds, theme and enrichment copy.
-The extended capture script later hits the known OBS scene-selector timeout, so
-its extra screenshots are separate from the passing unmodified smoke gate.
+Final integration includes main `97ab6656`. Windows Extend consent, arrangement
+persistence and explicit Disconnect remain intact and read the saved locale at
+action time. Live macOS/Windows/hidden-mirror prompt and startup tests pass 61
+cases. Main's newly expanded provider catalog required the existing agent-picker
+test to expect its five added providers and Flash-before-Pro DeepSeek order;
+production provider behavior is unchanged. That isolated regression passes all
+three tests after reconciliation.
+
+Verification: the required root Turbo command with `--env-mode=loose` and SSD
+TMPDIR passes 3,853 tests with four existing skips: desktop 2,413, edge 865,
+device 512 and protocol 63. Six package typechecks pass. Biome checks 1,346 files
+with no errors and 14 existing warnings. Production build, both bundle smoke
+cases and all 47 strict OpenSpec items pass. The unmodified hidden native media
+smoke passes eight groups on the merged renderer with mock devices and muted
+windows. Its 22 screenshots include EN/DE wallpaper controls. Earlier additional
+Settings captures show en/de at 1180px and 390px with all eight controls and no
+horizontal overflow; the German clock capture shows localized seconds, theme
+and enrichment copy. The extended capture script later hit the known OBS
+scene-selector timeout, so its extra captures are separate from the passing
+unmodified smoke gate.
+
 Evidence stays under the SSD lane scratch directory
-`open-quake-parity/burndown/locale/`, including `root-tests-final.log`,
-`native-smoke-final.log` and `screenshots/`. Physical hardware, live microphone,
-paid-provider, OS-login and foreground native-menu acceptance remain unverified.
-Beads open-quake-def.23 and open-quake-def.24 remain open for lead merge; the parent
+`open-quake-parity/burndown/locale/`, including `merge-root-tests-verified.log`,
+`merge-native-smoke.log`, `screenshots-merged/` and `screenshots/`. Physical
+hardware, live microphone, paid-provider, OS-login and foreground native-menu
+acceptance remain unverified. PR #105 carries all fifteen row mappings. Beads
+open-quake-def.23 and open-quake-def.24 remain open for lead merge; the parent
 change's unrelated incomplete tasks are unchanged.

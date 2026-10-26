@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
+import {
+	ownModelRows,
+	sharesModelEndpoint,
+} from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
+import {
+	modelOptions,
+	supportsWebSearch,
+	volcBaseUrl,
+} from "../../../../../../../packages/edge/src/ai/provider-catalog";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
 import { useAgentsCopy } from "./copy";
@@ -11,6 +19,9 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectModelId,
+	selectModelProvider,
+	selectQwenGeneration,
 } from "./model-drafts";
 import type { AgentRequest } from "./useAgents";
 
@@ -43,7 +54,7 @@ function ModelTable({
 			current.map((r) =>
 				r.id === next.id
 					? next
-					: propagate && r.provider === next.provider
+					: propagate && sharesModelEndpoint(r, next)
 						? { ...r, baseUrl: next.baseUrl }
 						: r,
 			),
@@ -147,8 +158,7 @@ function ModelTable({
 										onChange={(event) => {
 											const provider = event.target.value;
 											update({
-												...row,
-												provider,
+												...selectModelProvider(row, provider),
 												baseUrl:
 													row.baseUrl ||
 													providerDefaults.find((p) => p.id === provider)
@@ -178,20 +188,20 @@ function ModelTable({
 												(m) => m.id === model,
 											);
 											update({
-												...row,
-												model,
-												provider: provider?.id ?? row.provider,
+												...selectModelId(
+													row,
+													model,
+													provider?.id ?? row.provider,
+												),
 												maxTokens: entry?.maxTokens ?? row.maxTokens,
 												baseUrl: row.baseUrl || provider?.baseUrl || "",
 											});
 										}}
 									/>
 									<datalist id={`agent-models-${scope}-${row.id}`}>
-										{providerDefaults
-											.find((p) => p.id === row.provider)
-											?.models.map((m) => (
-												<option key={m.id} value={m.id} />
-											))}
+										{modelOptions(row.provider, [row.model]).map((m) => (
+											<option key={m.id} value={m.id} />
+										))}
 									</datalist>
 								</td>
 								<td data-label={t.baseUrlCol}>
@@ -203,6 +213,117 @@ function ModelTable({
 											update({ ...row, baseUrl: event.target.value }, true)
 										}
 									/>
+									{row.provider === "qwen" && (
+										<label className="aw-provider-field">
+											{t.generationType}
+											<select
+												aria-label={`${t.generationType} ${scope} ${index + 1}`}
+												value={row.settings?.mediaKind ?? "chat"}
+												onChange={(event) => {
+													const kind = event.target.value;
+													update(
+														selectQwenGeneration(
+															row,
+															kind === "image" || kind === "video"
+																? kind
+																: "chat",
+														),
+													);
+												}}
+											>
+												<option value="chat">{t.chatGeneration}</option>
+												<option value="image">{t.imageGeneration}</option>
+												<option value="video">{t.videoGeneration}</option>
+											</select>
+										</label>
+									)}
+									{row.provider === "volc" && (
+										<label className="aw-provider-field">
+											{t.entryMethod}
+											<select
+												aria-label={`${t.entryMethod} ${scope} ${index + 1}`}
+												value={row.settings?.entryMethod ?? "inference"}
+												onChange={(event) => {
+													const entryMethod =
+														event.target.value === "agent"
+															? "agent"
+															: "inference";
+													update({
+														...row,
+														settings: { ...row.settings, entryMethod },
+														baseUrl: volcBaseUrl(entryMethod),
+													});
+												}}
+											>
+												<option value="inference">{t.inference}</option>
+												<option value="agent">{t.agentEntry}</option>
+											</select>
+										</label>
+									)}
+									{(row.provider === "coze" || row.provider === "volc") && (
+										<label className="aw-provider-field">
+											{row.provider === "coze" ? t.botId : t.endpointBotId}
+											<input
+												aria-label={`${t.botId} ${scope} ${index + 1}`}
+												value={row.settings?.botId ?? ""}
+												onChange={(event) => {
+													const { botId: _botId, ...settings } =
+														row.settings ?? {};
+													const botId = event.target.value.trim();
+													update({
+														...row,
+														settings: {
+															...settings,
+															...(botId ? { botId } : {}),
+														},
+													});
+												}}
+											/>
+										</label>
+									)}
+									{(row.provider === "openai" || row.provider === "qwen") && (
+										<label className="aw-provider-option">
+											<input
+												type="checkbox"
+												checked={row.settings?.filesEnabled ?? false}
+												onChange={(event) =>
+													update({
+														...row,
+														settings: {
+															...row.settings,
+															filesEnabled: event.target.checked,
+														},
+													})
+												}
+											/>
+											{t.providerFiles}
+										</label>
+									)}
+									{supportsWebSearch(row.provider, row.model) && (
+										<label className="aw-provider-option">
+											<input
+												type="checkbox"
+												checked={row.controls?.webSearch ?? false}
+												onChange={(event) =>
+													update({
+														...row,
+														controls: {
+															...row.controls,
+															webSearch: event.target.checked,
+															...(row.provider === "qwen"
+																? {
+																		searchOptions: event.target.checked
+																			? { enable_source: true }
+																			: undefined,
+																	}
+																: {}),
+														},
+													})
+												}
+											/>
+											{t.providerSearch}
+										</label>
+									)}
 								</td>
 								<td data-label={t.credentials}>
 									<span className="aw-credential">

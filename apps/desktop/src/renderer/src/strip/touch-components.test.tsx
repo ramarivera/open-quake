@@ -7,6 +7,7 @@ import { KnobModelPorts } from "../../../../../../packages/device/src/knob/model
 import { KnobModel } from "../../../../../../packages/device/src/knob/model/service";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import type { QuakeEvent } from "../../../preload/quake";
+import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import type { KeyRequest, KeyRuntimeState } from "../../../shared/key-library";
 import type {
 	KnobModelContext,
@@ -128,6 +129,99 @@ afterEach(async () => {
 });
 
 describe("touch production components", () => {
+	it.each(["A", "B"])(
+		"pins %s profile and activation to the renderer serial despite another wallpaper selection",
+		async (serial) => {
+			const { root } = host();
+			const other = serial === "A" ? "B" : "A";
+			window.history.replaceState({}, "", `?surface=panel&serial=${serial}`);
+			const a = { ...fixtureProfile(), id: "profile-A" };
+			const b = { ...fixtureProfile(), id: "profile-B" };
+			const envelope: ProfileEnvelope = {
+				...createInitialProfileEnvelope(),
+				profiles: [a, b],
+				activeByDevice: {
+					A: { profileId: a.id, pageId: "page" },
+					B: { profileId: b.id, pageId: "page" },
+				},
+			};
+			const listeners = new Set<(event: QuakeEvent) => void>();
+			window.openQuake = {
+				version: "test",
+				onQuakeEvent: (listener) => {
+					listeners.add(listener);
+					return () => {
+						listeners.delete(listener);
+					};
+				},
+			};
+			window.quakeProfiles = {
+				read: async () => ({
+					_tag: "ready",
+					envelope: encodeProfileEnvelope(envelope),
+				}),
+				onSnapshot: () => () => {},
+			};
+			const request = vi.fn(async (_command: KeyRequest) => ({
+				_tag: "success" as const,
+			}));
+			window.quakeKeyLibrary = {
+				request,
+				onPreview: () => () => {},
+				onRuntime: () => () => {},
+			};
+			window.quakeWallpaper = {
+				request: async () => ({
+					_tag: "success",
+					snapshot: {
+						saved: {
+							version: 1,
+							serial: other,
+							revision: 0,
+							settings: defaultWallpaper,
+							clock: defaultClockTile,
+						},
+						clock: { epochMillis: 0, hour: 0, minute: 0, second: 0 },
+						asset: { _tag: "empty" },
+						recovered: false,
+						normalizedFileUrl: false,
+						deviceDelivery: "unverified",
+					},
+				}),
+				onSnapshot: () => () => {},
+				onClock: () => () => {},
+				audio: async () => false,
+			};
+			try {
+				await act(async () => root.render(<StripPanel />));
+				await flush();
+				await act(async () => {
+					for (const listener of listeners)
+						listener({
+							source: "mock",
+							kind: "touch",
+							points: [{ x: 100, y: 380, action: 1 }],
+						});
+				});
+				await flush();
+				expect(
+					request.mock.calls
+						.filter(([command]) => command.type === "activate")
+						.map(([command]) => command),
+				).toEqual([
+					expect.objectContaining({
+						deviceId: serial,
+						profileId: `profile-${serial}`,
+						kind: "down",
+					}),
+				]);
+			} finally {
+				await act(async () => root.unmount());
+				window.history.replaceState({}, "", "/");
+				delete window.quakeWallpaper;
+			}
+		},
+	);
 	it("KNOB-014 KNOB-015 renders focus from native taps and restores only its captured generation", async () => {
 		const original = fixtureProfile();
 		const profile: Profile = {

@@ -5,6 +5,8 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectModelProvider,
+	selectQwenGeneration,
 } from "./model-drafts";
 
 const first: PublicModelRow = {
@@ -91,6 +93,27 @@ it("distinguishes blank defaults from invalid numbers and accepts inclusive boun
 		);
 });
 
+it("retains provider settings and search selection across refreshes and pending saves", () => {
+	const previous: PublicModelRow = {
+		...first,
+		settings: { filesEnabled: false },
+		controls: { webSearch: false },
+	};
+	const saved: PublicModelRow = {
+		...previous,
+		settings: { filesEnabled: true, botId: "selected" },
+		controls: { webSearch: true, searchOptions: { enable_source: true } },
+	};
+	expect(reconcileModelRow(previous, previous, saved)).toEqual(saved);
+	const newer: PublicModelRow = {
+		...previous,
+		settings: { filesEnabled: true, botId: "newer-edit" },
+		controls: undefined,
+	};
+	expect(reconcileModelRow(newer, previous, saved)).toEqual(newer);
+	expect(reconcileModelRow(saved, saved, { ...saved })).toEqual(saved);
+});
+
 it("blocks unsupported model sampling before every row save while allowing clearing", () => {
 	for (const model of ["gpt-5.1", "o3", "unknown"]) {
 		expect(samplingValid({ ...first, model })).toBe(true);
@@ -109,3 +132,55 @@ it("blocks unsupported model sampling before every row save while allowing clear
 		}),
 	).toBe(false);
 });
+
+it("selects a Qwen model for each new generation kind and preserves explicit same-kind custom models", () => {
+	const chat: PublicModelRow = {
+		...first,
+		provider: "qwen",
+		model: "qwen3.6-plus",
+	};
+	const image = selectQwenGeneration(chat, "image");
+	expect(image).toMatchObject({
+		model: "wanx2.1-t2i-turbo",
+		baseUrl: "https://dashscope.aliyuncs.com/api/v1",
+		settings: { mediaKind: "image" },
+	});
+	const video = selectQwenGeneration(image, "video");
+	expect(video).toMatchObject({
+		model: "wan2.2-t2v-plus",
+		settings: { mediaKind: "video" },
+	});
+	expect(selectQwenGeneration(video, "chat")).toMatchObject({
+		model: "qwen3.6-plus",
+		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+	});
+	const custom = {
+		...image,
+		model: "custom-image",
+		baseUrl: "https://custom.invalid/api/v1",
+	};
+	expect(selectQwenGeneration(custom, "image")).toEqual(custom);
+	expect(chat.model).toBe("qwen3.6-plus");
+});
+
+it.each(["openai", "deepseek"])(
+	"clears incompatible Qwen controls and settings when switching to %s",
+	(provider) => {
+		const row: PublicModelRow = {
+			...first,
+			provider: "qwen",
+			model: "qwen3.6-plus",
+			controls: {
+				webSearch: true,
+				searchOptions: { enable_source: true },
+				thinking: true,
+			},
+			settings: { mediaKind: "image" },
+		};
+		const switched = selectModelProvider(row, provider);
+		expect(switched.controls).toBeUndefined();
+		expect(switched.settings).toBeUndefined();
+		expect(selectModelProvider(row, "Qwen").controls).toEqual(row.controls);
+		expect(row.controls?.searchOptions).toEqual({ enable_source: true });
+	},
+);

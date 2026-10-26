@@ -153,7 +153,18 @@
 			"effective": "Direct chat and QUAKE use {model}.",
 			"effectiveNoKey": "Direct chat would use {model}, but its API key isn't saved.",
 			"effectiveNone": "No default model is set, so direct chat is unavailable.",
-			"mainOverride": "from the main agent's own models"
+			"mainOverride": "from the main agent's own models",
+			"entryMethod": "Entry Method",
+			"inference": "Inference",
+			"agentEntry": "Agent",
+			"providerSearch": "Web search with sources",
+			"providerFiles": "Enable provider file storage",
+			"generationType": "Generation",
+			"chatGeneration": "Chat",
+			"imageGeneration": "Image",
+			"videoGeneration": "Video",
+			"botId": "Bot ID",
+			"endpointBotId": "Endpoint/Bot ID"
 		},
 		"dkclaw": {
 			"cardBlurb": "Choose which agent each of the four DK-Claw keys opens on QUAKE, then sync to the device.",
@@ -332,7 +343,18 @@
 			"effective": "Direkter Chat und QUAKE verwenden {model}.",
 			"effectiveNoKey": "Direkter Chat würde {model} verwenden, aber der API-Schlüssel ist nicht gespeichert.",
 			"effectiveNone": "Kein Standardmodell festgelegt, daher ist direkter Chat nicht verfügbar.",
-			"mainOverride": "aus den eigenen Modellen des Hauptagenten"
+			"mainOverride": "aus den eigenen Modellen des Hauptagenten",
+			"entryMethod": "Zugriffsmethode",
+			"inference": "Inferenz",
+			"agentEntry": "Agent",
+			"providerSearch": "Websuche mit Quellen",
+			"providerFiles": "Dateispeicher beim Anbieter aktivieren",
+			"generationType": "Generierung",
+			"chatGeneration": "Chat",
+			"imageGeneration": "Bild",
+			"videoGeneration": "Video",
+			"botId": "Bot-ID",
+			"endpointBotId": "Endpunkt/Bot-ID"
 		},
 		"dkclaw": {
 			"cardBlurb": "Wähle, welchen Agenten jede der vier DK-Claw-Tasten auf QUAKE öffnet, und synchronisiere dann mit dem Gerät.",

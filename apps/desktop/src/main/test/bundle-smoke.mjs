@@ -44,6 +44,9 @@ class Window extends EventEmitter {
 	url = "";
 	webContents = {
 		setAudioMuted: () => {},
+		setZoomFactor: () => {},
+		on: () => {},
+		removeListener: () => {},
 		send: (channel, event) => events.push({ channel, event }),
 		isDestroyed: () => false,
 		getURL: () => this.url,
@@ -81,6 +84,10 @@ class Window extends EventEmitter {
 	}
 	setBounds() {}
 	setAlwaysOnTop() {}
+	setOpacity() {}
+	moveTop() {}
+	setIgnoreMouseEvents() {}
+	setVisibleOnAllWorkspaces() {}
 	destroy() {}
 }
 const screen = new EventEmitter();
@@ -90,10 +97,12 @@ const display = {
 	label: "Primary",
 	size: { width: 1920, height: 1080 },
 	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+	bounds: { x: 0, y: 0, width: 1920, height: 1080 },
 };
 screen.getAllDisplays = () => [display];
 screen.getPrimaryDisplay = () => display;
 const powerMonitor = new EventEmitter();
+const powerSaveBlocker = { start: () => 1, stop: () => {} };
 const ipcMain = new EventEmitter();
 const requests = new Map();
 ipcMain.handle = (channel, handler) => {
@@ -149,6 +158,7 @@ globalThis.openQuakeBundleSmoke = {
 	desktopCapturer,
 	systemPreferences,
 	powerMonitor,
+	powerSaveBlocker,
 	nativeTheme,
 	safeStorage,
 	shell,
@@ -177,7 +187,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, Menu, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, Menu, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

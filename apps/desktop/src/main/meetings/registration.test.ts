@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Layer, Option, Schema } from "effect";
@@ -22,6 +29,7 @@ const ipc = vi.hoisted(() => ({
 	removeHandler: vi.fn(),
 	on: vi.fn(),
 	removeListener: vi.fn(),
+	reveal: vi.fn(),
 	app: { on: vi.fn(), removeListener: vi.fn(), quit: vi.fn() },
 }));
 const capture = vi.hoisted(() => ({
@@ -60,7 +68,7 @@ vi.mock("electron", () => ({
 	ipcMain: ipc,
 	BrowserWindow: { getAllWindows: () => [], fromWebContents: () => ({}) },
 	dialog: {},
-	shell: {},
+	shell: { showItemInFolder: ipc.reveal },
 }));
 vi.mock("./capture-port", () => ({
 	createCapturePort: (options: { onLost: (id: string) => void }) => {
@@ -507,6 +515,74 @@ it("rejects requests safely when capture acquisition itself throws", async () =>
 			CAPTURE_LOST,
 			expect.any(Function),
 		);
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("AI-311 SETTINGS-106 reveals only an existing regular managed audio file through production IPC", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meeting-reveal-"));
+	const renderer = "file:///synthetic-meetings/index.html";
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		await meetings.ready;
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing production meeting IPC");
+		const state = await meetings.runtime.runPromise(
+			MeetingService.action("meetingMinutes"),
+		);
+		const record = state.records[0];
+		if (!record) throw new Error("Missing mock record");
+		ipc.reveal.mockClear();
+		const missing = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "reveal", id: record.id }),
+		);
+		expect(missing).toEqual({
+			_tag: "failure",
+			code: "QUAKE.MEETING.AUDIO_MISSING",
+			message: "Audio file not found",
+		});
+		expect(ipc.reveal).not.toHaveBeenCalled();
+		const directory = join(root, "meetings-v1", record.id);
+		const audio = join(directory, "final_recording.mp3");
+		await mkdir(directory);
+		await writeFile(audio, "fake audio", { mode: 0o600 });
+		expect(
+			Schema.decodeUnknownSync(MeetingReply)(
+				await handler(event, { _tag: "reveal", id: record.id }),
+			)._tag,
+		).toBe("ready");
+		expect(ipc.reveal).toHaveBeenCalledExactlyOnceWith(audio);
+		await rm(audio);
+		const outside = join(root, "outside.mp3");
+		await writeFile(outside, "outside audio");
+		await symlink(outside, audio);
+		expect(
+			Schema.decodeUnknownSync(MeetingReply)(
+				await handler(event, { _tag: "reveal", id: record.id }),
+			)._tag,
+		).toBe("failure");
+		expect(ipc.reveal).toHaveBeenCalledTimes(1);
+		await rm(directory, { recursive: true });
+		await symlink(root, directory);
+		expect(
+			Schema.decodeUnknownSync(MeetingReply)(
+				await handler(event, { _tag: "reveal", id: record.id }),
+			)._tag,
+		).toBe("failure");
+		expect(ipc.reveal).toHaveBeenCalledTimes(1);
+	} finally {
+		await meetings.dispose();
 		await rm(root, { recursive: true, force: true });
 	}
 });

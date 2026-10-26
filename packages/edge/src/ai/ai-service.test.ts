@@ -441,6 +441,7 @@ describe("mock-default provider facade", () => {
 					[Stream.succeed(invalid), false],
 					[
 						Stream.fromIterable<NormalizedEvent>([
+							{ _tag: "textDelta", textDelta: "visible", kind: "generation" },
 							{ _tag: "completed" },
 							{ _tag: "textDelta", textDelta: "late", kind: "generation" },
 						]),
@@ -448,6 +449,7 @@ describe("mock-default provider facade", () => {
 					],
 					[
 						Stream.fromIterable<NormalizedEvent>([
+							{ _tag: "textDelta", textDelta: "visible", kind: "generation" },
 							{ _tag: "completed" },
 							invalid,
 						]),
@@ -468,6 +470,7 @@ describe("mock-default provider facade", () => {
 							expect(result.left).toBeInstanceOf(AiProtocolInvalid);
 						else
 							expect(Chunk.toReadonlyArray(result.right)).toEqual([
+								{ _tag: "textDelta", textDelta: "visible", kind: "generation" },
 								{ _tag: "completed" },
 							]);
 					}).pipe(

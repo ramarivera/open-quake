@@ -11,6 +11,10 @@ const definition = <const C extends string, const M extends string>(
 	policy: { userFacing: true, userRecoverable: true, retry: "manual" as const },
 });
 export const MeetingErrors = {
+	AudioMissing: definition(
+		"QUAKE.MEETING.AUDIO_MISSING",
+		"Audio file not found",
+	),
 	ConverterUnavailable: definition(
 		"QUAKE.MEETING.CONVERTER_UNAVAILABLE",
 		"Recording requires FFmpeg with the libmp3lame encoder. Install it and restart open-quake, or set OPEN_QUAKE_FFMPEG to its executable path.",
@@ -222,6 +226,30 @@ export class MeetingStorageFailed extends Schema.TaggedError<MeetingStorageFaile
 	}
 }
 
+export class MeetingAudioMissing extends Schema.TaggedError<MeetingAudioMissing>()(
+	"MeetingAudioMissing",
+	{
+		code: Schema.Literal(MeetingErrors.AudioMissing.code),
+		message: Schema.Literal(MeetingErrors.AudioMissing.message),
+		category: Schema.Literal(MeetingErrors.AudioMissing.category),
+		diagnosticCause: DiagnosticCause,
+	},
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super({
+			code: MeetingErrors.AudioMissing.code,
+			message: MeetingErrors.AudioMissing.message,
+			category: MeetingErrors.AudioMissing.category,
+			diagnosticCause: toSafeDiagnosticCause(cause),
+		});
+		Object.defineProperty(this, "originalCause", {
+			value: cause,
+			enumerable: false,
+		});
+	}
+}
+
 export class MeetingExportFailed extends Schema.TaggedError<MeetingExportFailed>()(
 	"MeetingExportFailed",
 	{
@@ -326,6 +354,7 @@ export type MeetingError =
 	| MeetingTranscriptionFailed
 	| MeetingGenerationFailed
 	| MeetingStorageFailed
+	| MeetingAudioMissing
 	| MeetingExportFailed
 	| MeetingUnavailable
 	| MeetingInvalid
@@ -338,6 +367,7 @@ export const MeetingErrorSchema = Schema.Union(
 	MeetingTranscriptionFailed,
 	MeetingGenerationFailed,
 	MeetingStorageFailed,
+	MeetingAudioMissing,
 	MeetingExportFailed,
 	MeetingUnavailable,
 	MeetingInvalid,
@@ -349,6 +379,8 @@ export function meetingError(
 	cause: unknown = undefined,
 ): MeetingError {
 	switch (reason) {
+		case "AudioMissing":
+			return new MeetingAudioMissing(cause);
 		case "ConverterUnavailable":
 			return new MeetingConverterUnavailable(cause);
 		case "CaptureDenied":

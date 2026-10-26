@@ -79,7 +79,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "Later keeps the device connected and reminds you in 10 minutes.",
 				"farRight": "Move Quake to the far right",
-				"placementDetail": "open-quake will use Quake as a separate display and place it to the far right of your other screens. If Quake is your main display, another screen will become the main display. Your other screens will keep their positions relative to each other. You can change this arrangement later in System Settings > Displays."
+				"placementDetail": "open-quake will use Quake as a separate display and place it to the far right of your other screens. If Quake is your main display, another screen will become the main display. Your other screens will keep their positions relative to each other. You can change this arrangement later in System Settings > Displays.",
+				"windowsExtendDetail": "open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected."
 			},
 			"trayMenu": {
 				"resume": "Resume",
@@ -103,7 +104,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "Später lässt das Gerät verbunden und erinnert dich in 10 Minuten.",
 				"farRight": "Quake ganz nach rechts verschieben",
-				"placementDetail": "open-quake verwendet Quake als eigenen Bildschirm ganz rechts. Ist Quake der Hauptbildschirm, wird ein anderer Bildschirm zum Hauptbildschirm. Die übrigen Bildschirme behalten ihre Positionen zueinander. Du kannst die Anordnung später in Systemeinstellungen > Displays ändern."
+				"placementDetail": "open-quake verwendet Quake als eigenen Bildschirm ganz rechts. Ist Quake der Hauptbildschirm, wird ein anderer Bildschirm zum Hauptbildschirm. Die übrigen Bildschirme behalten ihre Positionen zueinander. Du kannst die Anordnung später in Systemeinstellungen > Displays ändern.",
+				"windowsExtendDetail": "open-quake schaltet Windows in den Modus Erweitern, damit Quake als eigener Bildschirm verwendet werden kann. Später lässt das Gerät verbunden."
 			},
 			"trayMenu": {
 				"resume": "Fortsetzen",
@@ -127,7 +129,8 @@
 				"orientationLater": "稍后",
 				"laterDetail": "稍后处理会保持设备连接，并在 10 分钟后再次提醒。",
 				"farRight": "将 Quake 移至最右侧",
-				"placementDetail": "open-quake 会将 Quake 用作独立显示器，并放在其他屏幕的最右侧。如果 Quake 是主显示器，其他屏幕将成为主显示器。其余屏幕的相对位置保持不变。你可以稍后在系统设置 > 显示器中更改排列。"
+				"placementDetail": "open-quake 会将 Quake 用作独立显示器，并放在其他屏幕的最右侧。如果 Quake 是主显示器，其他屏幕将成为主显示器。其余屏幕的相对位置保持不变。你可以稍后在系统设置 > 显示器中更改排列。",
+				"windowsExtendDetail": "open-quake 会将 Windows 切换为扩展模式，以便将 Quake 用作独立显示器。稍后处理会保持设备连接。"
 			},
 			"trayMenu": {
 				"resume": "恢复窗口",
@@ -151,7 +154,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "Más tarde mantiene el dispositivo conectado y te recuerda en 10 minutos.",
 				"farRight": "Mover Quake al extremo derecho",
-				"placementDetail": "open-quake usará Quake como pantalla independiente a la derecha de las demás. Si Quake es la principal, otra pantalla pasará a ser la principal. Las demás conservarán sus posiciones relativas. Puedes cambiarlo después en Ajustes del Sistema > Pantallas."
+				"placementDetail": "open-quake usará Quake como pantalla independiente a la derecha de las demás. Si Quake es la principal, otra pantalla pasará a ser la principal. Las demás conservarán sus posiciones relativas. Puedes cambiarlo después en Ajustes del Sistema > Pantallas.",
+				"windowsExtendDetail": "open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected."
 			},
 			"trayMenu": {
 				"resume": "Reanudar",
@@ -175,7 +179,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "Plus tard garde l’appareil connecté et vous rappelle dans 10 minutes.",
 				"farRight": "Déplacer Quake tout à droite",
-				"placementDetail": "open-quake utilisera Quake comme écran distinct tout à droite. Si Quake est l’écran principal, un autre le deviendra. Les autres écrans garderont leurs positions relatives. Vous pourrez changer cette disposition dans Réglages Système > Moniteurs."
+				"placementDetail": "open-quake utilisera Quake comme écran distinct tout à droite. Si Quake est l’écran principal, un autre le deviendra. Les autres écrans garderont leurs positions relatives. Vous pourrez changer cette disposition dans Réglages Système > Moniteurs.",
+				"windowsExtendDetail": "open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected."
 			},
 			"trayMenu": {
 				"resume": "Reprendre",
@@ -199,7 +204,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "나중에를 선택하면 연결을 유지하고 10분 후 다시 알립니다.",
 				"farRight": "Quake를 맨 오른쪽으로 이동",
-				"placementDetail": "open-quake가 Quake를 독립 화면으로 사용해 다른 화면의 맨 오른쪽에 놓습니다. Quake가 주 화면이면 다른 화면이 주 화면이 됩니다. 나머지 화면의 상대 위치는 유지됩니다. 나중에 시스템 설정 > 디스플레이에서 배치를 바꿀 수 있습니다."
+				"placementDetail": "open-quake가 Quake를 독립 화면으로 사용해 다른 화면의 맨 오른쪽에 놓습니다. Quake가 주 화면이면 다른 화면이 주 화면이 됩니다. 나머지 화면의 상대 위치는 유지됩니다. 나중에 시스템 설정 > 디스플레이에서 배치를 바꿀 수 있습니다.",
+				"windowsExtendDetail": "open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected."
 			},
 			"trayMenu": {
 				"resume": "재개",
@@ -223,7 +229,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "Più tardi mantiene il dispositivo connesso e ricorda tra 10 minuti.",
 				"farRight": "Sposta Quake a destra",
-				"placementDetail": "open-quake userà Quake come schermo separato a destra degli altri. Se Quake è lo schermo principale, un altro diventerà principale. Gli altri manterranno le posizioni relative. Puoi cambiare la disposizione in Impostazioni di Sistema > Schermi."
+				"placementDetail": "open-quake userà Quake come schermo separato a destra degli altri. Se Quake è lo schermo principale, un altro diventerà principale. Gli altri manterranno le posizioni relative. Puoi cambiare la disposizione in Impostazioni di Sistema > Schermi.",
+				"windowsExtendDetail": "open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected."
 			},
 			"trayMenu": {
 				"resume": "Riprendi",
@@ -247,7 +254,8 @@
 				"orientationLater": "Later",
 				"laterDetail": "後でを選ぶと接続を維持し、10分後に再通知します。",
 				"farRight": "Quakeを一番右に移動",
-				"placementDetail": "open-quakeはQuakeを独立ディスプレイとして他の画面の一番右に配置します。Quakeがメインの場合は別の画面がメインになります。他の画面の相対位置は維持されます。後でシステム設定 > ディスプレイで変更できます。"
+				"placementDetail": "open-quakeはQuakeを独立ディスプレイとして他の画面の一番右に配置します。Quakeがメインの場合は別の画面がメインになります。他の画面の相対位置は維持されます。後でシステム設定 > ディスプレイで変更できます。",
+				"windowsExtendDetail": "open-quake will switch Windows to Extend mode so Quake can be used as a separate display. Later keeps the device connected."
 			},
 			"trayMenu": {
 				"resume": "再開",

@@ -74,7 +74,8 @@
 			"CHAT.RESPONSE.TIMEOUT": "The response took too long.",
 			"CHAT.RESPONSE.INTERRUPTED": "The response was interrupted.",
 			"CHAT.TRANSPORT.UNAVAILABLE": "The desktop connection was interrupted.",
-			"CHAT.BRIDGE.UNAVAILABLE": "Chat isn't available in this window."
+			"CHAT.BRIDGE.UNAVAILABLE": "Chat isn't available in this window.",
+			"AI.PROVIDER.OFFLINE": "You're offline. Reconnect and try again."
 		},
 		"loadingConfiguration": "Loading model settings…",
 		"configurationFailed": "Model settings couldn't be read",
@@ -155,7 +156,8 @@
 			"CHAT.RESPONSE.TIMEOUT": "Die Antwort hat zu lange gedauert.",
 			"CHAT.RESPONSE.INTERRUPTED": "Die Antwort wurde unterbrochen.",
 			"CHAT.TRANSPORT.UNAVAILABLE": "Die Desktop-Verbindung wurde unterbrochen.",
-			"CHAT.BRIDGE.UNAVAILABLE": "Chat ist in diesem Fenster nicht verfügbar."
+			"CHAT.BRIDGE.UNAVAILABLE": "Chat ist in diesem Fenster nicht verfügbar.",
+			"AI.PROVIDER.OFFLINE": "Du bist offline. Stelle die Verbindung wieder her und versuche es erneut."
 		},
 		"loadingConfiguration": "Modelleinstellungen werden geladen…",
 		"configurationFailed": "Modelleinstellungen konnten nicht gelesen werden",

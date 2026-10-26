@@ -17,6 +17,7 @@ export const defaultCaption: EmojiCaption = {
 export const EmojiItem = Schema.Struct({
 	id: Schema.String,
 	name: Schema.String,
+	mode: Schema.optional(EmojiMode),
 	original: Schema.String.pipe(Schema.pattern(/^[a-f0-9]{64}$/)),
 	rendered: Schema.String.pipe(Schema.pattern(/^[a-f0-9]{64}$/)),
 	caption: EmojiCaption,
