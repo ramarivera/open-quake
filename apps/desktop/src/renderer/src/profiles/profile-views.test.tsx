@@ -284,7 +284,10 @@ it("MGMT-317 selects, duplicates, refreshes the thumbnail and deletes a custom p
 	await click(query(custom(), ".profile-select", HTMLButtonElement));
 	expect(custom().getAttribute("data-selected")).toBe("true");
 	await click(
-		button(custom(), profileText("functionWheelEditor.thumbnailUpdate")),
+		button(
+			custom(),
+			`${profileText("functionWheelEditor.thumbnailUpdate")} Custom`,
+		),
 	);
 	expect(query(custom(), "img", HTMLImageElement).src).toContain("thumbnail1");
 	await click(button(custom(), "Duplicate Custom"));
