@@ -18,4 +18,4 @@
 
 ## Conversation burn-down lane test-conversation
 
-- [x] AI-223 New Chat clears draft/session and locks switching while streaming; AI-227 follows the real AgentsPage settings callback into Models and back without losing conversation state. Evidence: hidden native `renderer/src/test/workspace-smoke.tsx`. New Chat needed the minimal draft-clear fix. Bead open-quake-cby.10 remains open for lead delivery.
+- [x] AI-223 New Chat clears draft/session and locks switching while streaming; AI-227 follows the real AgentsPage settings callback into Models and back without losing conversation state. Evidence: happy-dom `renderer/src/test/workspace-render.test.tsx`. New Chat needed the minimal draft-clear fix. Bead open-quake-cby.10 remains open for lead delivery.

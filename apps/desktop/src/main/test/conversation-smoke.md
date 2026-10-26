@@ -1,8 +1,8 @@
 # Conversation coverage
 
-Vitest uses the desktop's existing Node environment and server-rendered React tests. It needs no browser installation. The release workflow and browser dependencies are unchanged.
+Vitest reuses the desktop's existing Node/SSR environment and happy-dom renderer setup. Mounted interaction and exact timer assertions use the shared `renderer/test/dom.ts` helper and need no browser installation. The release workflow and browser dependencies are unchanged.
 
-Mounted interaction, layout, scrolling and computed-style assertions run separately in the hidden native smoke. Its prerequisite is the repository-pinned Electron binary installed by the normal `pnpm install`, with a host that can launch Electron. It never requires a separate Chromium or Playwright installation.
+Layout, scrolling, native touch routing and computed-style assertions also run separately in the hidden native smoke. Its prerequisite is the repository-pinned Electron binary installed by the normal `pnpm install`, with a host that can launch Electron. It never requires a separate Chromium or Playwright installation.
 
 From the repository root, use an absolute SSD scratch directory for `TMPDIR` and `OPEN_QUAKE_CONVERSATION_SCRATCH`. The latter receives English and German 1920 by 480 screenshots. In Nushell:
 

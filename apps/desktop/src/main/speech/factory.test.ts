@@ -1,5 +1,6 @@
 import { Effect, Fiber, Layer, Option } from "effect";
 import { describe, expect, it, vi } from "vitest";
+import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import {
 	SpeechHttp,
 	SpeechOutput,
@@ -178,6 +179,10 @@ it("AI-103 AI-010: ignores blank read-aloud and refreshes saved voice/key on the
 	let stored: unknown = emptySpeechSettings;
 	const requests: { authorization: string | null; body: unknown }[] = [];
 	let outputs = 0;
+	let playing: (() => void) | undefined;
+	const played = new Promise<void>((resolve) => {
+		playing = resolve;
+	});
 	const ports = Layer.mergeAll(
 		Layer.succeed(SpeechHttp, {
 			fetch: async (_url, init) => {
@@ -199,7 +204,11 @@ it("AI-103 AI-010: ignores blank read-aloud and refreshes saved voice/key on the
 				outputs++;
 				return {
 					ready: Effect.void,
-					play: () => Effect.void,
+					play: () =>
+						Effect.suspend(() => {
+							playing?.();
+							return outputs === 1 ? Effect.never : Effect.void;
+						}),
 					stop: Effect.void,
 				};
 			}),
@@ -234,6 +243,7 @@ it("AI-103 AI-010: ignores blank read-aloud and refreshes saved voice/key on the
 					sendText: () => Effect.void,
 					sendTranscript: () => Effect.die("no microphone"),
 				});
+				let active: Fiber.RuntimeFiber<SpeechOutcome> | undefined;
 				for (const [voice, key] of [
 					["marin", "old-synthetic-key"],
 					["cedar", "new-synthetic-key"],
@@ -247,15 +257,25 @@ it("AI-103 AI-010: ignores blank read-aloud and refreshes saved voice/key on the
 						},
 						ttsKey: key,
 					});
+					if (active)
+						expect(yield* Fiber.join(active)).toEqual({ _tag: "cancelled" });
 					for (const blank of ["", " ", "\n \t"]) {
 						expect(yield* controller.readAloud(blank)).toMatchObject({
 							_tag: "textOnly",
 						});
 					}
 					expect(requests).toHaveLength(outputs);
-					expect(yield* controller.readAloud("whole utterance")).toEqual({
-						_tag: "completed",
-					});
+					if (voice === "marin") {
+						active = yield* controller
+							.readAloud("whole utterance")
+							.pipe(Effect.fork);
+						yield* Effect.promise(() => played);
+						expect(Option.isNone(yield* Fiber.poll(active))).toBe(true);
+					} else {
+						expect(yield* controller.readAloud("whole utterance")).toEqual({
+							_tag: "completed",
+						});
+					}
 					expect(requests.at(-1)).toMatchObject({
 						authorization: `Bearer ${key}`,
 						body: { voice, input: "whole utterance", model: "gpt-4o-mini-tts" },

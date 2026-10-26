@@ -4,7 +4,6 @@ import { inputSmoke } from "./input-smoke";
 import { knobConversationSmoke } from "./knob-conversation-smoke";
 import { overlaySmoke } from "./overlay-smoke";
 import { toolTouchSmoke } from "./tool-touch-smoke";
-import { workspaceSmoke } from "./workspace-smoke";
 
 const nativeRequire: NodeJS.Require = globalThis.require;
 const { ipcRenderer }: typeof import("electron") = nativeRequire("electron");
@@ -16,7 +15,6 @@ async function run() {
 		inputSmoke,
 		copilotSmoke,
 		overlaySmoke,
-		workspaceSmoke,
 		toolTouchSmoke,
 		knobConversationSmoke,
 	])

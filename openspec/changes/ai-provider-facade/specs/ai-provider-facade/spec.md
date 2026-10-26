@@ -34,7 +34,7 @@ Remote credential-bearing requests SHALL require HTTPS and SHALL NOT forward cre
 
 - **WHEN** a saved chat model changes during an accepted stream or speech voice and credentials change between requests
 - **THEN** the accepted chat stream keeps its pinned model, the next chat submission reads the edited model and token limit, and the next speech request uses the saved voice and key
-- **AND** removing the old chat key terminates its active request and rejects another submission before transmission
+- **AND** saving changed speech settings cancels the previous playback before exposing the new voice, while removing the old chat key terminates its active request and rejects another submission before transmission
 
 #### Scenario: Endpoint redirect
 - **WHEN** a provider responds with a redirect to another origin

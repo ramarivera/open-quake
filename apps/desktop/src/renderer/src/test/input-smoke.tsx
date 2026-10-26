@@ -92,6 +92,18 @@ export async function inputSmoke() {
 			getComputedStyle(element("[role=alert]")).backdropFilter,
 			"none",
 		);
+		const warning = element("[role=alert]"),
+			warningBounds = warning.getBoundingClientRect(),
+			inputBounds = element(".clawbot-input").getBoundingClientRect();
+		assert(
+			warningBounds.width > 0 &&
+				warningBounds.left >= inputBounds.left &&
+				warningBounds.right <= inputBounds.right,
+		);
+		assert(
+			Math.abs(parseFloat(getComputedStyle(warning).fontSize) - 20 * s) < 0.1,
+		);
+		assert.equal(getComputedStyle(warning).backgroundColor, "rgb(30, 33, 36)");
 		await act(async () => {
 			await delay(1700);
 		});

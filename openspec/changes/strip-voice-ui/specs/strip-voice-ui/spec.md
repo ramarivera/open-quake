@@ -419,6 +419,7 @@ Voice partials SHALL merge into the box, a final transcript SHALL replace it, an
 - **WHEN** the input renders with or without a selected agent and receives a cancelled picker, multiple paths, repeated warnings and confirmed sub-touch gestures
 - **THEN** the scaled header and button targets fit, cancellation preserves the draft without submitting, paths append once per line, and warnings stay visible for 1800 milliseconds after the latest warning
 - **AND** each confirmed gesture invokes one action with a 150 millisecond pressed flash, cancelled or moved gestures invoke none, and preview controls remain disabled
+- **AND** touch registration preserves larger authored input button targets instead of reducing them to its minimum hit size
 
 
 ### Requirement: Localized strip copy

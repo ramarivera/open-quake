@@ -1,10 +1,11 @@
+// @vitest-environment happy-dom
+
+import assert from "node:assert/strict";
 import { Option, Schema } from "effect";
 import { act } from "react";
+import { afterEach, it, vi } from "vitest";
 
-const nativeRequire: NodeJS.Require = globalThis.require;
-const assert: typeof import("node:assert/strict") =
-	nativeRequire("node:assert/strict");
-const { mock }: typeof import("node:test") = nativeRequire("node:test");
+const mock = { fn: vi.fn };
 
 import { initialAgentState } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import type { TurnSnapshot } from "../../../../../../packages/edge/src/chat/chat-contracts";
@@ -16,6 +17,7 @@ import type {
 } from "../../../../../../packages/edge/src/chat/chat-rpc";
 import type { AgentsBridge, AgentView } from "../../../shared/agents";
 import type { DirectChatBridge } from "../../../shared/chat";
+import { click, mount, input as type } from "../../test/dom";
 import { AppLocaleProvider } from "../i18n";
 import { AgentsPage } from "../management/agents/AgentsPage";
 import {
@@ -23,7 +25,19 @@ import {
 	DirectChatPanel,
 } from "../management/chat/DirectChatPanel";
 import { directChatModel } from "../management/chat/model-scope";
-import { click, element, mount, type } from "../strip/render-test-fixtures";
+
+const element = <T extends Element = HTMLElement>(selector: string): T => {
+	const found = document.querySelector<T>(selector);
+	if (!found) throw new Error(`Missing ${selector}`);
+	return found;
+};
+let mounted: Awaited<ReturnType<typeof mount>> | undefined;
+afterEach(async () => {
+	await mounted?.close();
+	mounted = undefined;
+	Reflect.deleteProperty(window, "quakeChat");
+	vi.unstubAllGlobals();
+});
 
 function fixture() {
 	const state = initialAgentState();
@@ -124,9 +138,9 @@ const button = (text: string) => {
 	if (!found) throw new Error(`Missing button ${text}`);
 	return found;
 };
-export async function workspaceSmoke() {
-	let passed = 0;
-	for (const locale of ["en", "de"] as const) {
+it.each(["en", "de"] as const)(
+	"AI-223: %s New Chat clears draft/session and locks switching during streaming",
+	async (locale) => {
 		const f = fixture(),
 			t = chatStrings(locale);
 		const screen = await mount(
@@ -136,6 +150,7 @@ export async function workspaceSmoke() {
 				locale={locale}
 			/>,
 		);
+		mounted = screen;
 		try {
 			assert.deepEqual(
 				[...document.querySelectorAll(".cw-session-title")].map(
@@ -151,14 +166,14 @@ export async function workspaceSmoke() {
 				document.querySelector(".cw-session[aria-current=true]"),
 				null,
 			);
-			assert.equal(f.chat.submit.mock.callCount(), 0);
+			assert.equal(f.chat.submit.mock.calls.length, 0);
 			await type(box, "new question");
 			await act(async () => {
 				element("form").dispatchEvent(
 					new Event("submit", { bubbles: true, cancelable: true }),
 				);
 			});
-			assert.equal(f.chat.submit.mock.callCount(), 1);
+			assert.equal(f.chat.submit.mock.calls.length, 1);
 			assert.equal(f.input().text, "new question");
 			assert(!/00000000000[12]$/.test(f.input().sessionId));
 			assert(button(t.newChat).disabled);
@@ -182,12 +197,14 @@ export async function workspaceSmoke() {
 			});
 			await click(button(t.newChat));
 			assert(document.body.textContent?.includes("stream retained"));
-			assert.equal(f.chat.submit.mock.callCount(), 1);
-			passed++;
+			assert.equal(f.chat.submit.mock.calls.length, 1);
 		} finally {
-			await screen.unmount();
+			await screen.close();
+			mounted = undefined;
 		}
-	}
+	},
+);
+it("AI-227: the real AgentsPage settings callback opens Models and retains the conversation on return", async () => {
 	const f = fixture();
 	Object.defineProperty(window, "quakeChat", {
 		configurable: true,
@@ -198,6 +215,7 @@ export async function workspaceSmoke() {
 			<AgentsPage bridge={f.agents} />
 		</AppLocaleProvider>,
 	);
+	mounted = screen;
 	try {
 		const box = element<HTMLTextAreaElement>(".cw-composer textarea");
 		await type(box, "keep this draft");
@@ -218,11 +236,10 @@ export async function workspaceSmoke() {
 			element(".cw-session[aria-current=true]").textContent,
 			selected,
 		);
-		assert.equal(f.chat.list.mock.callCount(), 1);
-		passed++;
+		assert.equal(f.chat.list.mock.calls.length, 1);
 	} finally {
-		await screen.unmount();
+		await screen.close();
+		mounted = undefined;
 		Reflect.deleteProperty(window, "quakeChat");
 	}
-	return passed;
-}
+});

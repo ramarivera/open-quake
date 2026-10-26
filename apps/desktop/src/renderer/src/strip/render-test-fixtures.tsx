@@ -101,6 +101,11 @@ export function element<T extends Element = HTMLElement>(
 export async function tap(target: Element, confirmedTap = true) {
 	await act(async () => {
 		target.dispatchEvent(
+			new CustomEvent("quake-sub-touch-start", {
+				detail: { phase: "start", y: 0, startY: 0 },
+			}),
+		);
+		target.dispatchEvent(
 			new CustomEvent("quake-sub-touch-end", {
 				detail: { phase: "end", y: 0, startY: 0, confirmedTap },
 			}),

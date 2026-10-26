@@ -113,18 +113,26 @@ export function ClawBotInputTile({
 			})
 			.catch(() => undefined);
 	};
-	useSubTouchTap(send, () => {
-		if (interactive) {
-			flash("send");
-			onSend();
-		}
-	});
-	useSubTouchTap(attach, () => {
-		if (interactive) {
-			flash("attach");
-			onAttach();
-		}
-	});
+	useSubTouchTap(
+		send,
+		() => {
+			if (interactive) {
+				flash("send");
+				onSend();
+			}
+		},
+		s,
+	);
+	useSubTouchTap(
+		attach,
+		() => {
+			if (interactive) {
+				flash("attach");
+				onAttach();
+			}
+		},
+		s,
+	);
 	useSubTouchTap(box, onFocusRequest);
 	const agent = Option.getOrElse(state.agentName, () => "");
 	return (

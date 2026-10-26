@@ -134,6 +134,19 @@ export async function chatSmoke() {
 				delta("answer"),
 				Date.now(),
 			);
+			conversation = reduceConversation(
+				conversation,
+				{
+					_tag: "Tool",
+					serial: "QK",
+					keyCode: "1,5",
+					turnId,
+					toolCallId: "locale",
+					name: "exec",
+					phase: "result",
+				},
+				Date.now(),
+			);
 			conversation = appendHint(
 				conversation,
 				{
@@ -157,6 +170,7 @@ export async function chatSmoke() {
 			for (const expected of [
 				`${stripText(locale, "quakeBotIconView.userOutgoing")} · Weather`,
 				"Weather",
+				"🔧 exec",
 				stripText(locale, "quakeBotIconView.systemSender"),
 				`${stripText(locale, "quakeBotIconView.voiceInput")} · Weather`,
 			])
@@ -257,14 +271,21 @@ export async function chatSmoke() {
 		};
 		await show(conversation);
 		assert.equal(area.scrollTop, top);
+		conversation = reduceConversation(conversation, started(), Date.now());
+		conversation = reduceConversation(
+			conversation,
+			delta("away answer"),
+			Date.now(),
+		);
+		await show(conversation);
+		assert.equal(area.scrollTop, top);
 		await act(async () => {
 			area.scrollTop = area.scrollHeight - area.clientHeight - threshold + 2;
 			area.dispatchEvent(new Event("scroll"));
 		});
-		conversation = reduceConversation(conversation, started(), Date.now());
 		conversation = reduceConversation(
 			conversation,
-			delta("streamed\n".repeat(10)),
+			delta("streamed\n".repeat(10), 1),
 			Date.now(),
 		);
 		await show(conversation);
@@ -304,6 +325,8 @@ export async function chatSmoke() {
 		);
 		passed++;
 		for (const name of ["exec", "web_search", "generic"]) {
+			await screen.render(null);
+			document.documentElement.dataset.motion = "full";
 			conversation = reduceConversation(
 				initialConversation,
 				started(),
@@ -328,6 +351,11 @@ export async function chatSmoke() {
 			await show(conversation);
 			const button = element<HTMLButtonElement>(".clawbot-tool-row");
 			assert(button.textContent?.includes("Running"));
+			const dot = element(".clawbot-tool-dot");
+			assert.equal(getComputedStyle(dot).backgroundColor, "rgb(95, 202, 181)");
+			assert.equal(getComputedStyle(dot).animationDuration, "1.2s");
+			document.documentElement.dataset.motion = "reduce";
+			assert.equal(getComputedStyle(dot).animationName, "none");
 			assert.equal(button.disabled, name === "generic");
 			if (name !== "generic") {
 				const before = element(".clawbot-tool").getBoundingClientRect().height;
@@ -355,6 +383,7 @@ export async function chatSmoke() {
 			);
 			await show(conversation);
 			assert(button.textContent?.includes("Done"));
+			assert.equal(getComputedStyle(dot).backgroundColor, "rgb(98, 201, 138)");
 			conversation = reduceConversation(
 				conversation,
 				{ ...tool, phase: "error" },
