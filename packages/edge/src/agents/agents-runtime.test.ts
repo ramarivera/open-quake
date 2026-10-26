@@ -95,7 +95,9 @@ describe("AgentsRuntime real lifecycle consumer", () => {
 						Logger.replace(
 							Logger.defaultLogger,
 							Logger.make((event) => {
-								messages.push(...event.message);
+								if (Array.isArray(event.message))
+									messages.push(...event.message);
+								else messages.push(event.message);
 							}),
 						),
 					),
