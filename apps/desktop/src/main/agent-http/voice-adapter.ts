@@ -65,6 +65,11 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 
 	const send = (request: TextRequest, source: "typed" | "voice") =>
 		Effect.gen(function* () {
+			// A committed direct knob route never follows the mutable external selection.
+			if (request.knob)
+				return yield* fallbackTranscript
+					? fallbackTranscript(request)
+					: fallback.sendText(request);
 			const selected = yield* options
 				.selected()
 				.pipe(

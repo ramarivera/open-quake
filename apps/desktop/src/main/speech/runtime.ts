@@ -1,4 +1,4 @@
-import { Effect, Fiber, Option, Scope } from "effect";
+import { Effect, Exit, Fiber, Option, Scope } from "effect";
 import {
 	type AiError,
 	AiUnavailable,
@@ -16,8 +16,11 @@ import {
 	VoiceRuntimeUnavailable,
 	VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface";
+import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type {
 	CaptureRequest,
+	KnobCaptureSnapshot,
+	PinnedDirectModel,
 	TextRequest,
 } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { VoiceStage, VoiceSurfaceEvent } from "../../shared/voice-surface";
@@ -36,6 +39,9 @@ export interface SpeechProfiles {
 	readonly speakAnswers: boolean;
 }
 export interface ProductionVoiceOptions {
+	readonly pinDirectModel?: (
+		snapshot: KnobCaptureSnapshot,
+	) => Effect.Effect<PinnedDirectModel, VoiceKnobRejected>;
 	readonly speech: AiSpeechService;
 	readonly capture: CaptureDriver;
 	readonly profiles: () => Effect.Effect<SpeechProfiles, AiError>;
@@ -76,6 +82,10 @@ export const createProductionVoiceRuntime = Effect.fn(
 	};
 	let active: Active | undefined;
 	let closed = false;
+	let cleanup: Fiber.RuntimeFiber<void> | undefined;
+	let cleanupSerial = "";
+	let lastOwnerSerial: string | undefined;
+	const knobProfiles = new Map<string, CaptureRequest>();
 	let readAloud: Fiber.RuntimeFiber<SpeechOutcome> | undefined;
 	let cancelReadAloud: (() => Effect.Effect<void>) | undefined;
 	const turns = new Map<
@@ -101,13 +111,15 @@ export const createProductionVoiceRuntime = Effect.fn(
 			readAloud = undefined;
 		}
 	});
-	const stop = Effect.fn("DesktopSpeech.stopCapture")(function* () {
-		const owner = active;
+	const stopOwner = Effect.fn("DesktopSpeech.stopCapture")(function* (
+		owner: Active | undefined,
+	) {
 		if (!owner) return;
 		owner.released = true;
 		yield* Fiber.interrupt(owner.fiber);
 		if (active === owner) active = undefined;
 	});
+	const stop = () => stopOwner(active);
 	yield* Effect.addFinalizer(() =>
 		Effect.gen(function* () {
 			closed = true;
@@ -118,6 +130,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 	const runtime = GridVoiceRuntime.of({
 		select: (serial, keyCode) =>
 			Effect.gen(function* () {
+				if (active && active.request.serial !== serial) return;
 				if (
 					active &&
 					(active.request.serial !== serial ||
@@ -130,12 +143,82 @@ export const createProductionVoiceRuntime = Effect.fn(
 			lock.withPermits(1)(
 				Effect.gen(function* () {
 					if (closed) return yield* new VoiceRuntimeUnavailable();
-					yield* stop();
-					yield* cancelSpeech();
+					if (
+						cleanup &&
+						cleanupSerial !== request.serial &&
+						Option.isNone(yield* Fiber.poll(cleanup))
+					)
+						return yield* new VoiceKnobRejected("Busy");
+					if (active && active.request.serial !== request.serial)
+						return yield* new VoiceKnobRejected("Busy");
+					if (
+						lastOwnerSerial &&
+						lastOwnerSerial !== request.serial &&
+						(Option.isSome(yield* surface.activeFlow(lastOwnerSerial)) ||
+							turns.get(lastOwnerSerial)?.speech.isBusy())
+					)
+						return yield* new VoiceKnobRejected("Busy");
+					if (request.type === "knob" && !request.knob)
+						return yield* new VoiceKnobRejected("RouteIncomplete");
+					if (
+						active?.request.serial === request.serial &&
+						active.request.keyCode === request.keyCode &&
+						active.request.generation === request.generation
+					)
+						return;
+					const previous = active;
+					if (!cleanup) {
+						cleanupSerial = request.serial;
+						cleanup = yield* Effect.gen(function* () {
+							yield* stopOwner(previous);
+							yield* cancelSpeech();
+							yield* options.cancelText?.(request.serial, request.keyCode) ??
+								Effect.void;
+						}).pipe(Effect.forkIn(scope));
+					}
+					const cleaning = cleanup;
 					const start = yield* Effect.makeLatch();
 					let owner: Active;
+					if (request.knob) knobProfiles.set(request.serial, request);
 					const body = Effect.gen(function* () {
 						yield* stage(owner, { _tag: "recording", status: "preparing" });
+						const [directModel] = yield* Effect.all(
+							[
+								request.knob
+									? (
+											options.pinDirectModel?.(request.knob) ??
+											Effect.fail(new VoiceKnobRejected("RouteIncomplete"))
+										).pipe(
+											Effect.timeoutFail({
+												duration: "10 seconds",
+												onTimeout: () =>
+													new VoiceKnobRejected("RouteIncomplete"),
+											}),
+										)
+									: Effect.succeed(undefined),
+								Effect.gen(function* () {
+									const cleaned = yield* Fiber.await(cleaning).pipe(
+										Effect.timeoutOption("2 seconds"),
+									);
+									if (Option.isNone(cleaned))
+										return yield* new VoiceKnobRejected("Busy");
+									if (Exit.isFailure(cleaned.value))
+										return yield* new VoiceKnobRejected(
+											"Busy",
+											cleaned.value.cause,
+										);
+									if (cleanup === cleaning) cleanup = undefined;
+								}),
+							],
+							{ concurrency: "unbounded" },
+						);
+						if (owner.released || active !== owner) return;
+						if (request.knob) {
+							while (knobProfiles.size > 16) {
+								const first = knobProfiles.keys().next();
+								if (!first.done) knobProfiles.delete(first.value);
+							}
+						}
 						const profiles = yield* options.profiles().pipe(
 							Effect.timeoutFail({
 								duration: "10 seconds",
@@ -222,6 +305,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 							keyCode: request.keyCode,
 							agentId: Option.getOrElse(request.agentId, () => ""),
 							message: transcript.slice(0, 8000),
+							...(request.knob ? { knob: request.knob } : {}),
+							...(directModel ? { directModel } : {}),
 						});
 						owner.terminal = true;
 					});
@@ -263,6 +348,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 						listening: false,
 					};
 					active = owner;
+					lastOwnerSerial = request.serial;
 					yield* start.open;
 				}),
 			),
@@ -296,6 +382,12 @@ export const createProductionVoiceRuntime = Effect.fn(
 						active.request.generation === generation
 					)
 						yield* stop();
+					const pinned = knobProfiles.get(serial);
+					if (pinned?.keyCode === keyCode && pinned.generation === generation) {
+						knobProfiles.delete(serial);
+						yield* options.cancelText?.(serial, keyCode) ?? Effect.void;
+						yield* cancelSpeech();
+					}
 				}),
 			),
 		cancelFlow: (serial, keyCode) =>
@@ -315,6 +407,21 @@ export const createProductionVoiceRuntime = Effect.fn(
 	return {
 		runtime,
 		cancelSpeech,
+		reconcileProfiles: Effect.fn("DesktopSpeech.reconcileProfiles")(
+			(ids: readonly string[]) =>
+				lock.withPermits(1)(
+					Effect.gen(function* () {
+						for (const [serial, request] of knobProfiles) {
+							if (request.knob && ids.includes(request.knob.profileId))
+								continue;
+							knobProfiles.delete(serial);
+							if (active?.request.serial === serial) yield* stop();
+							yield* options.cancelText?.(serial, "0,1") ?? Effect.void;
+							yield* cancelSpeech();
+						}
+					}),
+				),
+		),
 		reset: Effect.fn("DesktopSpeech.reset")(function* () {
 			yield* lock.withPermits(1)(stop());
 			yield* cancelSpeech();

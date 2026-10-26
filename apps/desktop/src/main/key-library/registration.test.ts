@@ -21,6 +21,7 @@ import {
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { createPanelKeyDispatcher } from "../../renderer/src/keys/panel-key-dispatch";
 import { KEY_REQUEST, type KeyReply } from "../../shared/key-library";
+import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { iconZip } from "../test/icon-pack-fixtures";
 import { iconStore } from "./icon-store";
 import { registerKeyLibrary } from "./registration";
@@ -263,6 +264,51 @@ it("rejects a delayed import after the owning picker closes", async () => {
 		await f.runtime.dispose();
 	}
 });
+it("saves only profile knob data through management IPC and rejects panel, foreign frame and stale revision", async () => {
+	const f = fixture();
+	try {
+		const before = await f.runtime.runPromise(ProfileService.getProfile("p"));
+		const knob = {
+			keyCode: "0,1",
+			config: {
+				type: "knob",
+				title: {
+					text: "Knob",
+					pos: "bot",
+					size: 8,
+					color: "#FFFFFF",
+					display: true,
+					style: "",
+				},
+				icon: "",
+				size: [1, 1],
+				display: true,
+				subActions: Array.from({ length: 3 }, () => ({
+					childrenName: "",
+					config: { type: "", actions: [] },
+				})),
+			},
+		};
+		const command = { type: "save-knob", profileId: "p", revision: 0, knob };
+		for (const reply of [
+			await f.request(f.panel, command),
+			await f.request(f.impostor, command),
+			await f.request(f.manager, command, {}),
+		])
+			expect(reply._tag).toBe("rejected");
+		const saved = await f.request(f.manager, command);
+		expect(saved._tag).toBe("success");
+		const after = await f.runtime.runPromise(ProfileService.getProfile("p"));
+		expect(after.pages).toEqual(before.pages);
+		expect(after.name).toBe(before.name);
+		expect(after.revision).toBe(1);
+		expect((await f.request(f.manager, command))._tag).toBe("rejected");
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
 function fixture(
 	config: Readonly<Record<string, unknown>> = {},
 	execute: () => Effect.Effect<void> = () => Effect.void,
@@ -306,7 +352,8 @@ function fixture(
 	const published: { countdown?: number; profileId: string }[] = [];
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(
-			ProfileRepository.Default.pipe(
+			ProfileRepository.DefaultWithoutDependencies.pipe(
+				Layer.provide(ManagementProfileContractsLive),
 				Layer.provide(
 					profileStorageLayer({
 						read: async () => stored,

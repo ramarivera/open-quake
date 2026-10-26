@@ -1,10 +1,14 @@
 import { Context, type Effect, type Option } from "effect";
+import type { ProviderProfile } from "../../ai/ai-contracts.js";
 import type { HoldKeyType } from "./hold-to-talk.js";
 import type {
 	VoiceSurfaceEvent,
 	VoiceTone,
 } from "./voice-surface-contracts.js";
-import type { VoiceRuntimeUnavailable } from "./voice-surface-errors.js";
+import type {
+	VoiceKnobRejected,
+	VoiceRuntimeUnavailable,
+} from "./voice-surface-errors.js";
 
 /**
  * Infrastructure the voice surface is injected with. Desktop main binds them
@@ -26,7 +30,21 @@ export class VoiceTonePort extends Context.Tag("VoiceTonePort")<
 	{ readonly play: (serial: string, tone: VoiceTone) => Effect.Effect<void> }
 >() {}
 
+export interface PinnedDirectModel {
+	readonly profile: ProviderProfile;
+	readonly maxTokens: number;
+}
+export interface KnobCaptureSnapshot {
+	readonly profileId: string;
+	readonly revision: number;
+	readonly route: "direct";
+	readonly providerId: string;
+	readonly modelId: string;
+}
 export interface CaptureRequest {
+	/** Committed at the physical hold, never reconstructed from current UI selection. */
+	readonly knob?: KnobCaptureSnapshot;
+	readonly directModel?: PinnedDirectModel;
 	readonly serial: string;
 	readonly keyCode: string;
 	readonly captureId: string;
@@ -36,6 +54,8 @@ export interface CaptureRequest {
 	readonly agentId: Option.Option<string>;
 }
 export interface TextRequest {
+	readonly knob?: KnobCaptureSnapshot;
+	readonly directModel?: PinnedDirectModel;
 	readonly serial: string;
 	readonly keyCode: string;
 	readonly agentId: string;
@@ -58,7 +78,7 @@ export class GridVoiceRuntime extends Context.Tag("GridVoiceRuntime")<
 		) => Effect.Effect<void>;
 		readonly startCapture: (
 			request: CaptureRequest,
-		) => Effect.Effect<void, VoiceRuntimeUnavailable>;
+		) => Effect.Effect<void, VoiceRuntimeUnavailable | VoiceKnobRejected>;
 		readonly releaseCapture: (
 			serial: string,
 			keyCode: string,

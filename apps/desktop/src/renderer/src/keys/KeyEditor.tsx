@@ -32,6 +32,7 @@ import { useWallpaper } from "../wallpaper/useWallpaper";
 import { editableFocus } from "./editor-input";
 import { NativeIconPicker } from "./IconPicker";
 import { KeyTitleSettings } from "./KeyTitleSettings";
+import { KnobEditor } from "./KnobEditor";
 import { keyArtwork } from "./key-artwork";
 import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
@@ -431,6 +432,7 @@ export function KeyEditor(): React.JSX.Element {
 						</select>
 					</Row>
 				</Group>
+				<KnobEditor key={profile.id} profile={profile} accept={accept} />
 				<fieldset
 					className="keys-preview"
 					onKeyDown={(event) => {

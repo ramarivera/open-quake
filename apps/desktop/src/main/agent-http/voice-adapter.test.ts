@@ -165,7 +165,9 @@ async function setup(
 		waitSelection: (wait: Promise<void>) => {
 			selectionWait = wait;
 		},
-		sendTranscript: (input: typeof request) => {
+		sendTranscript: (
+			input: import("../../../../../packages/edge/src/voice/surface/voice-surface-ports").TextRequest,
+		) => {
 			if (!voice) throw new Error("Voice adapter not initialized");
 			return runtime.runPromise(voice.sendTranscript(input));
 		},
@@ -459,6 +461,27 @@ describe("HTTP conversations through the production GridVoice consumer", () => {
 		}
 	});
 
+	it("never lets mutable external HTTP selection hijack a pinned knob transcript", async () => {
+		const f = await setup();
+		try {
+			const knob = {
+				profileId: "committed",
+				revision: 4,
+				route: "direct" as const,
+				providerId: "saved",
+				modelId: "org/model",
+			};
+			await f.sendTranscript({ ...request, keyCode: "0,1", knob });
+			expect(f.stream).not.toHaveBeenCalled();
+			expect(f.fallback.sendText).toHaveBeenCalledWith({
+				...request,
+				keyCode: "0,1",
+				knob,
+			});
+		} finally {
+			await f.dispose();
+		}
+	});
 	it("preserves existing typed and capture behavior with no external selection", async () => {
 		const fixture = await setup();
 		try {

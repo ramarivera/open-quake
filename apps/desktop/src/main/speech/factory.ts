@@ -26,7 +26,12 @@ import { createSpeechSettings } from "./settings";
 export interface DesktopSpeechOptions
 	extends Pick<
 		ProductionVoiceOptions,
-		"sendTranscript" | "sendText" | "cancelText" | "diagnostics" | "speechError"
+		| "sendTranscript"
+		| "sendText"
+		| "cancelText"
+		| "diagnostics"
+		| "speechError"
+		| "pinDirectModel"
 	> {
 	readonly storage: JsonStore;
 	/** The existing app-owned safeStorage vault, e.g. systemCredentialVault(userData/credentials). */

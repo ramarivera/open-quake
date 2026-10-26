@@ -1,8 +1,10 @@
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Either, Schema } from "effect";
+import { Deferred, Effect, Either, Layer, Schema } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { GridVoiceRuntime } from "../../../../../packages/edge/src/voice/surface";
+import type { CaptureRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import {
 	VOICE_REQUEST_CHANNEL,
 	VOICE_SURFACE_CHANNEL,
@@ -275,6 +277,137 @@ describe("voice:request", () => {
 			await registration.dispose();
 		}
 	});
+});
+
+it.each(["release", "cancel", "disconnect"] as const)(
+	"latches %s while committed knob resolution is pending",
+	async (action) => {
+		const entered = await Effect.runPromise(Deferred.make<void>());
+		const release = await Effect.runPromise(Deferred.make<void>());
+		const lookupFinished = await Effect.runPromise(Deferred.make<void>());
+		const startCapture = vi.fn((_request: CaptureRequest) => Effect.void);
+		const registration = registerVoiceSurface({
+			mock: true,
+			tones: createToneRecorder(),
+			serial: () => "QK-1",
+			panel: () => undefined,
+			management: () => undefined,
+			renderer: RENDERER,
+			knobRoute: () =>
+				Deferred.succeed(entered, undefined).pipe(
+					Effect.zipRight(Deferred.await(release)),
+					Effect.ensuring(Deferred.succeed(lookupFinished, undefined)),
+					Effect.as({
+						profileId: "p",
+						revision: 1,
+						route: "direct" as const,
+						providerId: "saved",
+						modelId: "model",
+					}),
+				),
+			runtime: () =>
+				Layer.succeed(GridVoiceRuntime, {
+					select: () => Effect.void,
+					startCapture,
+					releaseCapture: () => Effect.void,
+					cancelCapture: () => Effect.void,
+					cancelFlow: () => Effect.void,
+					sendText: () => Effect.void,
+				}),
+		});
+		try {
+			const starting = Effect.runPromise(
+				registration.knobVoice({ action: "holdStart", generation: 1 }),
+			);
+			await Effect.runPromise(Deferred.await(entered));
+			if (action === "disconnect")
+				await registration.onDevice({
+					kind: "status",
+					state: "disconnected",
+					reason: "requested",
+					source: "mock",
+				});
+			else
+				await Effect.runPromise(
+					registration.knobVoice({ action, generation: 1 }),
+				);
+			await Effect.runPromise(Deferred.succeed(release, undefined));
+			await starting;
+			await Effect.runPromise(Deferred.await(lookupFinished));
+			await new Promise<void>((done) => setImmediate(done));
+			expect(startCapture).not.toHaveBeenCalled();
+		} finally {
+			await registration.dispose();
+		}
+	},
+);
+
+it("hands the committed profile and revision into capture and rejects a stale session", async () => {
+	const startCapture = vi.fn((_request: CaptureRequest) => Effect.void);
+	const snapshot = {
+		profileId: "p",
+		revision: 4,
+		route: "direct" as const,
+		providerId: "saved",
+		modelId: "org/model",
+	};
+	const registration = registerVoiceSurface({
+		mock: true,
+		tones: createToneRecorder(),
+		serial: () => "QK-1",
+		panel: () => undefined,
+		management: () => undefined,
+		renderer: RENDERER,
+		knobRoute: () => Effect.succeed(snapshot),
+		runtime: () =>
+			Layer.succeed(GridVoiceRuntime, {
+				select: () => Effect.void,
+				startCapture,
+				releaseCapture: () => Effect.void,
+				cancelCapture: () => Effect.void,
+				cancelFlow: () => Effect.void,
+				sendText: () => Effect.void,
+			}),
+	});
+	try {
+		await Effect.runPromise(
+			registration.knobVoice({
+				action: "holdStart",
+				generation: 1,
+				session: { deviceId: "QK-1", profileId: "p", revision: 4 },
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(startCapture).toHaveBeenCalledWith(
+				expect.objectContaining({
+					serial: "QK-1",
+					keyCode: "0,1",
+					knob: snapshot,
+				}),
+			),
+		);
+		await Effect.runPromise(
+			registration.knobVoice({
+				action: "holdStart",
+				generation: 2,
+				session: { deviceId: "QK-1", profileId: "p", revision: 3 },
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(
+				sent().some(
+					(e) =>
+						Either.isRight(e) &&
+						e.right._tag === "Stage" &&
+						e.right.stage._tag === "failed" &&
+						e.right.stage.errorCode === "VOICE.KNOB.ROUTE_INCOMPLETE",
+				),
+			).toBe(true),
+		);
+		expect(startCapture).toHaveBeenCalledTimes(1);
+	} finally {
+		await registration.dispose();
+	}
 });
 
 it("routes Read Aloud through the selected speech consumer using accumulated real answer chunks", async () => {

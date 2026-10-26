@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { KnobResource } from "../../../../packages/device/src/knob/knob-contracts.js";
 import {
 	ProfileEnvelope,
 	ProfileKey,
@@ -16,6 +17,12 @@ export const KeyTarget = Schema.Struct({
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 });
 export const KeyRequest = Schema.Union(
+	Schema.Struct({
+		type: Schema.Literal("save-knob"),
+		profileId: Schema.NonEmptyString,
+		revision: Schema.Int.pipe(Schema.nonNegative()),
+		knob: KnobResource,
+	}),
 	Schema.Struct({
 		type: Schema.Literal("select"),
 		deviceId: Schema.String,

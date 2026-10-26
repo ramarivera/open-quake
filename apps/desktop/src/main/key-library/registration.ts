@@ -5,6 +5,7 @@ import { Effect, Fiber, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import type { ActionError } from "../../../../../packages/device/src/actions/action-errors.js";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import { saveProfileKnob } from "../../../../../packages/device/src/knob/knob-profile.js";
 import { iconInUse } from "../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
@@ -321,6 +322,13 @@ export function registerKeyLibrary<R>(
 							break;
 						case "preview":
 							yield* KeyEditing.preview(command.target, command.key);
+							break;
+						case "save-knob":
+							yield* saveProfileKnob(
+								command.profileId,
+								command.revision,
+								command.knob,
+							);
 							break;
 						case "save":
 							yield* KeyEditing.save(command.token);

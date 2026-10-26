@@ -270,6 +270,50 @@ describe("knob model uses the real domain ports", () => {
 		},
 	);
 	it.effect(
+		"committed edits preserve the held generation, while selecting another profile cancels it",
+		() => {
+			const h = harness();
+			return Effect.gen(function* () {
+				const initial = modelContext();
+				yield* KnobModel.configure(initial);
+				yield* send({ _tag: "Key", code: 5 });
+				yield* KnobModel.configure(
+					{
+						...initial,
+						session: { ...initial.session, revision: 1, sessionId: "edited" },
+					},
+					true,
+				);
+				yield* KnobModel.dispatch({
+					_tag: "Key",
+					sessionId: "edited",
+					code: 255,
+				});
+				expect(h.voice.map((v) => [v.action, v.generation])).toEqual([
+					["holdStart", 1],
+					["release", 1],
+				]);
+				yield* KnobModel.dispatch({
+					_tag: "Key",
+					sessionId: "edited",
+					code: 5,
+				});
+				yield* KnobModel.synchronize({
+					...initial,
+					session: {
+						...initial.session,
+						profileId: "p1",
+						sessionId: "selected",
+					},
+				});
+				expect(h.voice.map((v) => [v.action, v.generation]).slice(-2)).toEqual([
+					["holdStart", 2],
+					["cancel", 2],
+				]);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	it.effect(
 		"focus toggles each supported tile and wins over armed player volume",
 		() => {
 			const h = harness();

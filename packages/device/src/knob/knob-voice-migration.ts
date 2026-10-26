@@ -10,6 +10,15 @@ export const KnobVoiceMigration = Schema.Struct({
 	format: Schema.Literal("open-quake.knob-voice.v1"),
 	actions: Schema.Union(KnobVoiceActions, Schema.Tuple()),
 	active: Schema.Boolean,
+	status: Schema.optionalWith(
+		Schema.Literal(
+			"ready",
+			"needsConfiguration",
+			"needsMigration",
+			"unsupported",
+		),
+		{ default: () => "needsConfiguration" },
+	),
 	original: KnobJson,
 	diagnostics: Schema.Array(
 		Schema.Literal(
@@ -20,6 +29,14 @@ export const KnobVoiceMigration = Schema.Struct({
 	),
 });
 export type KnobVoiceMigration = typeof KnobVoiceMigration.Type;
+export interface KnobVoiceCatalog {
+	readonly providers: ReadonlyArray<{
+		readonly id: string;
+		readonly provider: string;
+		readonly modelId: string;
+	}>;
+	readonly agentIds?: ReadonlyArray<string>;
+}
 const importedActions = Schema.Array(
 	Schema.Struct({ type: Schema.String, value: Schema.String }),
 );
@@ -45,6 +62,7 @@ export const legacyKnobRoute = (
 /** Import only: new assignments require an explicit route. No runtime is enabled here. */
 export function migrateKnobVoiceActions(
 	input: unknown,
+	catalog?: KnobVoiceCatalog,
 ): Either.Either<KnobVoiceMigration, InvalidKnobConfig> {
 	const existing = Schema.decodeUnknownEither(KnobVoiceMigration)(input);
 	if (Either.isRight(existing)) return Either.right(existing.right);
@@ -70,6 +88,7 @@ export function migrateKnobVoiceActions(
 		return Either.right({
 			format: "open-quake.knob-voice.v1",
 			active: false,
+			status: "unsupported",
 			actions: [],
 			original,
 			diagnostics: ["unsupported-actions"],
@@ -85,6 +104,7 @@ export function migrateKnobVoiceActions(
 		return Either.right({
 			format: "open-quake.knob-voice.v1",
 			active: false,
+			status: "unsupported",
 			actions: [],
 			original,
 			diagnostics: ["unknown-route"],
@@ -105,18 +125,60 @@ export function migrateKnobVoiceActions(
 			{ type: "directModel", value: field("directModel", model) },
 		);
 	if (route === "dkclaw") {
-		actions.push({ type: "agentId", value: field("agentId", "main") });
+		actions.push({
+			type: "agentId",
+			value: field(
+				"agentId",
+				catalog?.agentIds?.length === 1 ? (catalog.agentIds[0] ?? "") : "",
+			),
+		});
 		const ref = field("dkclawModel", legacy);
 		if (ref) actions.push({ type: "dkclawModel", value: ref });
 	}
 	if (route === "legacyAssistant")
 		actions.push({ type: "assistant", value: field("assistant", "") });
+	if (route === "direct" && catalog) {
+		const providerField = actions.find((a) => a.type === "directProvider");
+		const modelId = actions.find((a) => a.type === "directModel")?.value ?? "";
+		if (providerField) {
+			const exact = catalog.providers.filter(
+				(p) => p.id === providerField.value && p.modelId === modelId,
+			);
+			const matches = exact.length
+				? exact
+				: catalog.providers.filter(
+						(p) => p.provider === providerField.value && p.modelId === modelId,
+					);
+			if (matches.length === 1 && matches[0])
+				providerField.value = matches[0].id;
+		}
+	}
 	const canonical = Schema.decodeUnknownEither(KnobVoiceActions)(actions);
 	if (Either.isLeft(canonical))
 		return Either.left(InvalidKnobConfig.fromCause(canonical.left));
 	return Either.right({
 		format: "open-quake.knob-voice.v1",
 		active: true,
+		status:
+			route === "legacyAssistant"
+				? "needsMigration"
+				: route === "direct"
+					? actions.every((a) => a.value.length > 0) &&
+						(!catalog ||
+							catalog.providers.filter(
+								(p) =>
+									p.id === actions[1]?.value && p.modelId === actions[2]?.value,
+							).length === 1)
+						? "ready"
+						: "needsConfiguration"
+					: actions[1]?.value &&
+							actions.some(
+								(a) => a.type === "dkclawModel" && a.value.length > 0,
+							) &&
+							(!catalog?.agentIds ||
+								catalog.agentIds.includes(actions[1].value))
+						? "ready"
+						: "needsConfiguration",
 		actions: canonical.right,
 		original,
 		diagnostics:
