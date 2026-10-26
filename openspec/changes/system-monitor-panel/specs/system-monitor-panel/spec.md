@@ -9,14 +9,14 @@ The system SHALL render the first visible systemMonitorPanel anchor as a 1920×4
 - **WHEN** the active page contains a visible panel tile
 - **THEN** it occupies all 8×2 cells and exposes all seven modules without generic key art
 
-### Requirement: Five source-derived styles
+### Requirement: Five independently drawn styles
 
-The panel SHALL support glass, cyber, anime, tactical and wasteland in recovered order with glass as default and invalid-style fallback. Geometry and colours SHALL follow the five recovered Vue canvases and AUDIT_WIDGETS §3.2. Animations SHALL respect reduced motion; contrast/transparency preferences SHALL produce opaque readable surfaces. Evidence: WIDGETS-067, 069–074, 079.
+The panel SHALL support glass, cyber, anime, tactical and wasteland in recovered order with glass as default and invalid-style fallback. Layout grouping SHALL retain the five functional arrangements from AUDIT_WIDGETS §3.2. All five SHALL use the independent-device-design palette, opaque cards and system typography. The visual rule supersedes vendor glass, glow, gradients, scanlines, sparkle, bounce, wobble and lamp decoration in every style, including the retained compatibility names glass and cyber. Built-in backgrounds SHALL be hand-authored flat CSS compositions in monitor.css, without claiming absent vendor JPEGs or generated canvases. MonitorPanel.tsx and monitor.css SHALL be the reproducible app-owned design inputs, with provenance documented beside them. Evidence: WIDGETS-069, WIDGETS-070, WIDGETS-074, WIDGETS-079; independent-device-design Device palette and type.
 
 #### Scenario: Change styles
 
 - **WHEN** each of the five styles is selected
-- **THEN** its own complete layout renders at 1920×480 with the recovered labels and seven metric modules
+- **THEN** its own complete layout renders at 1920×480 with the recovered labels and seven metric modules, without prohibited decoration under normal or accessibility preferences
 
 ### Requirement: Backgrounds and draft settings
 
@@ -78,7 +78,7 @@ The system SHALL reuse system-monitor-tiles rate bounds 0.2–10 Hz with persist
 #### Scenario: Failed collection after success
 
 - **WHEN** a valid sample is followed by errors, permission failures or unavailable attempts
-- **THEN** the last successful values and timestamp remain, become stale after three intervals, and are replaced only on a successful recovery; a module that has never succeeded retains its explicit failure state
+- **THEN** the last successful values and timestamp remain, become stale after three intervals, and expire after sixty failed checks unless a successful recovery replaces them; a module that has never succeeded retains its explicit failure state
 
 #### Scenario: IPv6-only external interface
 
@@ -98,3 +98,55 @@ Each canvas SHALL register its disk list as smDiskList with move support through
 
 - **WHEN** touch moves vertically over an overflowing disk list and releases
 - **THEN** scrollTop changes, remains within bounds and no key action fires
+
+
+### Requirement: Profile-owned monitor presentation
+
+Visual settings SHALL belong to the selected profile key. systemMonitorPanel SHALL read monitorStyle and temperatureUnit from that key, backfilling glass, style background and Celsius. cpuInfo and gpuInfo SHALL backfill Celsius and offer Fahrenheit. Per-style managed image/video slots SHALL remain isolated by key. Global settings SHALL own collector enablement, metric selection and rate only. Management key edits SHALL preview a draft without collecting; existing profile Save and Revert SHALL commit or discard that draft. Live panels SHALL use committed profile settings. Evidence: MGMT-265, MGMT-283, SCREEN-121, WIDGETS-064, WIDGETS-081.
+
+#### Scenario: Two keys and restart
+
+- **WHEN** two profile keys save different style, unit and background settings and the app restarts
+- **THEN** each renders its own saved presentation; reverting a later draft changes neither committed key nor global sampling
+
+#### Scenario: Individual metric tiles
+
+- **WHEN** CPU, GPU or Bluetooth is placed individually
+- **THEN** it renders its own availability and measured fields, CPU/GPU use the key's unit, and Bluetooth remains separate from the seven-module panel
+
+#### Scenario: Media lifecycle
+
+- **WHEN** a custom video fails, does not start within five visible seconds, changes source or its document hides
+- **THEN** it falls back on failure, never reuses an older source, pauses while hidden and releases its media element on unmount
+
+### Requirement: Conservative installed SysView migration
+
+The installed untouched built-in SysView grid SHALL migrate once to the full-panel default, preserving profile identity, active selections and all unrelated profiles. A user-edited or already migrated profile SHALL remain unchanged. Migration SHALL persist atomically, verify storage readback and advance the profile revision, and SHALL retry safely after write or verification failure. Evidence: MGMT-344.
+
+#### Scenario: Migration and edited grid
+
+- **WHEN** an untouched installed built-in grid and a modified grid are loaded
+- **THEN** only the untouched grid becomes a full panel; readback and a second restart confirm idempotence
+
+### Requirement: Platform metrics and bounded partial samples
+
+Windows SHALL use local typed subprocess output through stdio, never an unauthenticated socket or vendor service. Linux SHALL read native proc/sysfs data and bounded execFile commands. macOS SHALL retain its native commands and qualify optional GPU and Bluetooth readouts. GPU, temperature, Bluetooth, disk, network and power fields SHALL stay absent when unsupported or denied, preserving measured zero. Commands SHALL have a two-second deadline and cancellation. Slow inventory SHALL cache at most sixty sampling cycles and stop with the last subscription. A failed value SHALL become stale after three intervals and expire after sixty failed checks, showing unavailable instead of retaining it forever. Evidence: MAIN-102, MGMT-409, WIDGETS-082. Decisions 4 and 5 retain truthful missing values and configurable 1-Hz default.
+
+#### Scenario: Platform fixtures and disconnect
+
+- **WHEN** independent Windows, Linux and macOS fixtures supply partial metrics, permission failures or disconnects
+- **THEN** supported values render and unsupported fields remain absent; no service or network listener starts
+
+#### Scenario: Error budget and cancellation
+
+- **WHEN** sixty checks fail after a successful sample, or the rate changes or the last subscriber leaves
+- **THEN** expired values become unavailable and old workers or delayed responses cannot continue publication
+
+### Requirement: Inert legacy game-mode configuration
+
+The gameModeMonitorConfig compatibility field SHALL round-trip in monitor storage without enabling an override, app tracking or device keyboard mode. It SHALL never participate in effective sampling configuration. Evidence: MAIN-086.
+
+#### Scenario: Legacy import and restart
+
+- **WHEN** an imported record contains an active gameModeMonitorConfig and is saved and restarted
+- **THEN** the legacy value survives as inert data while only the explicit current override controls monitoring

@@ -4,10 +4,11 @@ Implements `openspec/changes/system-monitor-panel` and the software portion of
 `system-monitor-tiles`, WIDGETS-064–083. The strip's
 `systemMonitorPanel` renderer uses the existing padded 8×2 slot. Its 1920×480
 design stage scales to that slot, matching the recovered Vue stageStyle.
-Management's Screen page has a labelled deterministic preview and draft/Save
-settings. Live status observes the saved configuration; draft edits affect only
-the labelled sample preview until Save. Settings belong to one local panel
-record, ready for the future profile editor to address by profile.
+Management's Keys page edits each panel's style, background, per-style managed
+media and temperature unit through profile draft, Save and Cancel. Individual CPU
+and GPU keys have the same unit control. Two profile keys retain independent
+presentation across restart. The Screen page owns global sampling controls and
+shows a labelled sample preview alongside saved live status.
 
 `packages/edge/src/monitor` owns metric schemas, module IDs and scoped workers.
 Each module has one sequential worker. Slow requests cannot overlap or block
@@ -23,7 +24,7 @@ override overlays the metric selection and rate; leaving it restores the latest
 saved normal values. Normal edits under an unchanged override don't restart
 workers. Legacy settings decode to all metrics, app monitoring off and an
 inactive CPU-only 1 Hz override. The strip retains its seven modules; Bluetooth
-appears as explicitly unsupported in management and normalized state.
+has a separate individual tile and management status, outside the full panel.
 
 App monitoring runs independently of visible metric consumers when saved as
 enabled. It reuses the coalesced 500 ms foreground probe, with 3 s macOS / 2 s
@@ -40,16 +41,20 @@ identity. `packages/client/src/monitor.ts` validates messages and drops late
 delivery after unsubscribe. `MonitorStore` remains the sole persistence owner;
 its accepted atomic write settles in memory and on disk even if a caller exits.
 
-The native adapter uses Node os for CPU load deltas and total/free memory. On
-macOS it runs `/bin/df -kP`, `/bin/ps -A -o state=`, `/usr/sbin/netstat -ibn` and
-`/usr/bin/pmset -g batt` via execFile, without a shell, with 2 s deadlines and
-1 MiB output limits. GPU load/model and CPU/GPU temperatures are unsupported.
-Non-macOS hosts expose CPU and memory; other modules remain unsupported.
-Memory is os total minus free, not a claim about macOS memory pressure. Process
-counts come from states, without process names or command lines. Network rates
-need two counter samples and reset on interface change or counter rollback.
-External IPv4 and IPv6 interfaces both qualify. Power source and battery state
-are independent, so charged or idle laptops on AC never claim to be discharging.
+The native adapter uses Node os for CPU deltas and memory. macOS uses df, ps,
+netstat and pmset, plus optional IOAccelerator GPU utilization and system_profiler
+Bluetooth inventory. Windows uses fixed local PowerShell CIM/Get-NetAdapter
+scripts over typed stdio, with optional nvidia-smi GPU load/temperature. Linux
+uses df, ps, proc network counters and sysfs GPU, CPU-temperature, power and
+Bluetooth data, with optional nvidia-smi. No vendor service or socket starts.
+Commands have two-second deadlines and one-MiB output limits. Disk and Bluetooth
+inventory cache for at most sixty checks. Detaching the last subscriber clears
+caches and counter baselines. Retained metrics become stale after three intervals
+and expire after sixty failed checks. CPU temperature on macOS and Windows, and
+GPU temperature on macOS, remain absent without a qualified provider. Memory is
+os total minus free. Network rates need two samples and reset on interface change,
+counter rollback or stream restart. Battery presence, source and charging state
+remain independent. Unsupported or denied fields stay absent.
 
 The local `monitor-v1/settings.json` stores revision and validated settings.
 Atomic rename and revision checks preserve the previous record on write failure
@@ -61,9 +66,12 @@ hidden sandboxed window, require ≥2 s duration, and time out after 6 s. Video
 inputs are limited to 32 MiB. The decoder window closes in every outcome. Selected
 bytes cross the bridge as data URLs for only the active custom style; other
 styles remain metadata until management explicitly previews them. Sampling
-restarts use metadata without loading media. No path is exposed. Media selection is
+restarts use metadata without loading media. No path is exposed. Profile keys store opaque managed IDs, and trusted panel and
+management windows resolve only the selected key's slot. Media selection is
 staged until Save. Unreferenced staged assets are retained locally for now.
-Built-in textures are original CSS artwork, not redistributed vendor images.
+All five compatibility styles use hand-authored flat CSS layouts under the
+independent-device-design palette. DESIGN.md records ownership and the explicit
+replacement of vendor blur, textures and decorative animation.
 
 Unavailable values stay `--` at startup and on unsupported hosts. A confirmed
 absent battery shows AC Power and no percentage or charging bolt. Per-field

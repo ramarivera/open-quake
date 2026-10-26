@@ -25,3 +25,22 @@ Cluster open-quake-lih.8 and delivery epic open-quake-lih.8.1 remain open until 
 ## 6. Physical acceptance
 
 - [ ] 6.1 Verify all five layouts, supported live readouts, display placement/readability and physical disk-list touch scrolling on the real QUAKE. Capture screenshots and obtain confirmation for hands-on gestures. Bead open-quake-lih.8.1.6; shared hardware checklist open-quake-lih.24. Mock screenshots do not close this task.
+
+## 7. monitor-panels burn-down
+
+- [x] 7.1 Per-key visual settings, metric unit controls and conservative SysView migration. Bead open-quake-lih.8.5.
+- [x] 7.2 Platform collectors, inert legacy data and bounded freshness. Bead open-quake-lih.8.6.
+- [x] 7.3 Independent layouts, provenance, media lifecycle and mounted accessibility coverage. Bead open-quake-lih.8.7.
+
+All burn-down beads remain open for lead merge.
+
+Burn-down implementation evidence: production profile/restart and platform fixtures,
+3,228 passing workspace tests with four skips, six typecheck tasks, 47 strict
+OpenSpec items, build and both bundle modes. Biome checked 1,253 files with zero
+errors and 14 existing warnings. Hidden monitor and media native smokes passed.
+Monitor smoke exercises Save/Cancel, per-key units, all eight individual tiles,
+all five flat styles and accessibility preferences, media timeout/error/hiding,
+and disk sub-touch. Screenshots and logs are external to git under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/monitor-panels/`.
+Physical acceptance remains task 6.1. Windows/Linux native commands remain
+fixture-tested only. All three burn-down beads stay open for lead merge.
