@@ -86,6 +86,57 @@ const input = (
 ): GridVoiceInput => ({ keyCode, kind, type: "aiChat" });
 const at = (ms: number) => TestClock.adjust(Duration.millis(ms));
 
+for (const replacement of [false, true])
+	it.scoped(
+		`knob interrupt cancels an early grid chat once and preserves successor=${replacement}`,
+		() => {
+			const rec = recorder();
+			const runtime = fakeRuntime(rec);
+			const cancelling = Layer.effect(
+				GridVoiceRuntime,
+				Effect.gen(function* () {
+					const original = yield* GridVoiceRuntime;
+					const surface = yield* VoiceSurface;
+					return {
+						...original,
+						cancelCapture: (
+							serial: string,
+							keyCode: string,
+							generation: number,
+						) =>
+							original
+								.cancelCapture(serial, keyCode, generation)
+								.pipe(
+									Effect.zipRight(
+										replacement
+											? surface.reserve(serial, keyCode, "turn/successor")
+											: Effect.void,
+									),
+								),
+					};
+				}),
+			).pipe(Layer.provide(runtime));
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1000);
+				yield* VoiceSurface.reserve("QK", "1,6", "turn/early-chat");
+				yield* GridVoice.knob("QK", "interrupt", 1);
+				if (!replacement) yield* GridVoice.knob("QK", "interrupt", 1);
+				yield* GridVoice.input("QK", input("1,6", "touchEnd"));
+				yield* at(1000);
+				expect(rec.calls).toEqual([
+					"select 1,6",
+					"start 1,6 #1",
+					"cancel 1,6 #1",
+					...(!replacement ? ["cancelFlow 1,6"] : []),
+				]);
+				expect(yield* VoiceSurface.activeFlow("QK")).toEqual(
+					replacement ? Option.some("1,6") : Option.none(),
+				);
+			}).pipe(Effect.provide(stack(rec, cancelling)));
+		},
+	);
+
 describe("GridVoice", () => {
 	for (const knobFirst of [true, false])
 		it.scoped(

@@ -386,6 +386,18 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 							if (Option.isSome(state.held)) {
 								yield* applyUnlocked(serial, (now) => ({ _tag: "reset", now }));
 								if (state.held.value.phase === "capturing") {
+									const current = yield* surface.flowOwner(serial);
+									if (
+										Option.isSome(owner) &&
+										owner.value.captureId.startsWith("turn/") &&
+										Option.exists(
+											current,
+											(value) =>
+												value.keyCode === owner.value.keyCode &&
+												value.captureId === owner.value.captureId,
+										)
+									)
+										yield* runtime.cancelFlow(serial, owner.value.keyCode);
 									yield* surface.clearFlow(
 										serial,
 										state.held.value.keyCode,
