@@ -88,7 +88,7 @@ describe("real encoded settings RPC and preload", () => {
 		};
 		expect(decodeLocaleRequest(base)).toMatchObject({ headers: [] });
 		expect(
-			decodeLocaleRequest({ ...base, payload: { locale: "fr" } }),
+			decodeLocaleRequest({ ...base, payload: { locale: "xx" } }),
 		).toBeUndefined();
 		expect(
 			decodeLocaleRequest({

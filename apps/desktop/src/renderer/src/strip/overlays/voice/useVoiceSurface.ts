@@ -14,6 +14,7 @@ import {
 	type VoiceSurfaceReply,
 	type VoiceSurfaceRequest,
 } from "../../../../../shared/voice-surface";
+import { useAppLocale } from "../../../i18n";
 import type { StripLayout, StripTile } from "../../geometry";
 import { stripLocale } from "./strings";
 import type { StripVoiceContext } from "./voice-context";
@@ -134,15 +135,16 @@ export function useVoiceSurface(layout: StripLayout | undefined): {
 			Effect.runPromise(requestVoiceSurface(window.quakeVoice, value)),
 		[],
 	);
+	const { locale } = useAppLocale();
 	const context = useMemo(
 		() => ({
 			view,
-			locale: stripLocale(navigator.language),
+			locale: stripLocale(locale),
 			request,
 			toast: (key: Parameters<StripVoiceContext["toast"]>[0]) =>
 				dispatch({ _tag: "toast", key }),
 		}),
-		[view, request, dispatch],
+		[view, request, dispatch, locale],
 	);
 	return { view, context, dispatch };
 }

@@ -1,4 +1,5 @@
 import { Context, Effect, Option, Schema } from "effect";
+import { bootstrapSettings } from "./bootstrap-invariants.js";
 import { GeneralPreferences } from "./general-contracts.js";
 import { type AppLocale, SettingsDocument } from "./settings-contracts.js";
 import {
@@ -50,10 +51,11 @@ export class SettingsRepository extends Effect.Service<SettingsRepository>()(
 				yield* Schema.decodeUnknown(BackendFields)(loaded).pipe(
 					Effect.mapError((cause) => new SettingsInvalid(cause)),
 				);
-				if (Option.isNone(raw))
-					yield* Effect.uninterruptible(storage.write(loaded));
-				state = loaded;
-				return loaded;
+				const migrated = bootstrapSettings(loaded);
+				if (Option.isNone(raw) || migrated !== loaded)
+					yield* Effect.uninterruptible(storage.write(migrated));
+				state = migrated;
+				return migrated;
 			});
 			return {
 				/** One lock and commit point shared by locale, general preferences and onboarding. */
