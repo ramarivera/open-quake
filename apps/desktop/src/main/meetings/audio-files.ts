@@ -25,10 +25,14 @@ const run = (executable: string, args: readonly string[], timeout?: number) =>
 					output = (output + chunk.toString("utf8")).slice(-16384);
 				});
 				process.once("error", reject);
-				process.once("exit", (code) =>
+				process.once("exit", (code, signal) =>
 					code === 0
 						? resolve(output)
-						: reject(new Error("Audio conversion failed")),
+						: reject(
+								Object.assign(new Error("Audio conversion failed"), {
+									code: signal ? "ETIMEDOUT" : "INVALID_MEDIA",
+								}),
+							),
 				);
 			}),
 		catch: (cause) => meetingError("CaptureFailed", cause),
@@ -124,12 +128,30 @@ export function audioFiles(root: string, ffmpeg: string) {
 						usable &&
 						(yield* run(
 							ffmpeg,
-							["-nostdin", "-v", "error", "-i", systemPath, "-f", "null", "-"],
+							[
+								"-nostdin",
+								"-v",
+								"error",
+								"-i",
+								systemPath,
+								"-t",
+								"1",
+								"-map",
+								"0:a:0",
+								"-f",
+								"null",
+								"-",
+							],
 							8000,
 						).pipe(
 							Effect.as(true),
-							Effect.catchTag("MeetingCaptureFailed", () =>
-								Effect.succeed(false),
+							Effect.catchTag("MeetingCaptureFailed", (error) =>
+								typeof error.originalCause === "object" &&
+								error.originalCause !== null &&
+								"code" in error.originalCause &&
+								error.originalCause.code === "INVALID_MEDIA"
+									? Effect.succeed(false)
+									: Effect.fail(error),
 							),
 						));
 					if (validSystem)
