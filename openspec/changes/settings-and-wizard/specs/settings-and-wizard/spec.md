@@ -324,6 +324,97 @@ Backup completion SHALL sync the staged file before rename and the parent direct
 - **THEN** it can run without author-specific directory names, while absent opt-in, escaping paths and real-userData overlap are rejected
 
 
+### Requirement: Owned desktop shell and background recovery
+
+Before creating windows, the host SHALL set its Windows identity to `net.roxasroot.open-quake`, apply a validated saved Chromium locale, disable native-window occlusion for background device rendering, register privileged media protocols, and acquire the single-instance lock. Management SHALL retain open-quake's 1100x760 initial size, 640x560 minimum, native macOS controls, Windows overlay and Linux frame. It SHALL block renderer navigation and popups; only trusted user clicks from the exact management main frame may open an exact allowlisted project URL externally. The allowlist SHALL contain only `https://github.com/ramarivera/open-quake` and `https://github.com/ramarivera/open-quake/issues`, the project destinations shipped in the built-in shortcut profiles. No mailto destination is defined. Native minimize/maximize SHALL remain usable. Closing management SHALL hide it while a tray or macOS Dock can restore it, preserving device owners. On platforms without a usable tray, management SHALL remain reachable and last-window close SHALL quit safely. Tray Resume, Settings, Management Center and Exit SHALL share the existing owner. Exit and Restart SHALL drain all writers, runtimes and diagnostics before quitting; only Restart SHALL relaunch. Geometry retains the safer existing 250ms debounce rather than DK-Suite's 500ms. Evidence: MAIN-119, MAIN-121, MAIN-122, MAIN-127, MGMT-006, MGMT-015, MGMT-018, MGMT-019, SETTINGS-112, SETTINGS-113.
+
+#### Scenario: Background close and recovery
+
+- **WHEN** management closes with an available tray, then Resume, double-click or macOS activation occurs
+- **THEN** the same management window is restored and device subscriptions remain running; a destroyed management window is recreated with persisted geometry
+
+#### Scenario: Settings after window recreation
+
+- **WHEN** the tray or Dock Settings action recreates a destroyed management window
+- **THEN** the host retains the requested Settings route until the exact replacement management main frame signals that its activation listener is installed
+- **AND** document load alone, an old window or a child frame cannot consume the pending route; later activations deliver immediately until the main frame reloads
+
+#### Scenario: Trusted application commands
+
+- **WHEN** management's exact top-level app document requests Quit or Restart
+- **THEN** shutdown runs once and completes before process exit or relaunch; a panel, subframe, foreign document, stale window, invalid command or request after disposal performs no action
+
+#### Scenario: Trusted external project links
+
+- **WHEN** a user clicks either exact project URL in the trusted management main frame
+- **THEN** the isolated preload requests the native opener and main validates frame identity and the destination
+- **AND** foreign hosts, extra paths, credentials, query/fragment data, javascript/file/mailto schemes, synthetic clicks, child frames, automatic navigation and popups never reach the system browser
+
+#### Scenario: Tray failure
+
+- **WHEN** Linux or Windows cannot create a tray
+- **THEN** hidden startup shows management and closing the last window uses the awaited shutdown path instead of stranding an unreachable background process
+
+### Requirement: Shell route and settings equivalence
+
+Management-hosted Settings SHALL replace the vendor's fixed 660x450 window with the existing resizable management window and independent design system. General is the default subsection; Device deep links SHALL open the canonical device controls. Settings tab navigation SHALL support arrow keys, Home and End with focus and horizontal scrolling. Settings, guide, setup, icons, panel and thumbnail routes SHALL select only their intended renderer. The management title strip SHALL remain visible across screen and diagnostic pages; panel and preview render without management chrome. Help and Exit SHALL be available from every management page. As approved by Ramiro on 2026-10-26, disabled vendor idle ads, the always-zero bell, unreachable game-mode/app-load settings handlers, and ARIS-only calibration/CommonDialog flows SHALL be excluded; no inert substitutes SHALL appear. Evidence: MAIN-124, MGMT-001, MGMT-007, MGMT-008, MGMT-014, MGMT-431, MGMT-432, MGMT-433, SETTINGS-001, SETTINGS-002, SETTINGS-003, SETTINGS-017.
+
+#### Scenario: Settings activation and local help
+
+- **WHEN** Settings or its General/Device deep link is activated, or Help is chosen
+- **THEN** the requested subsection or bundled QUAKE guide is shown without opening vendor pages or allocating duplicate services
+
+#### Scenario: Approved dormant features
+
+- **WHEN** the QUAKE shell, settings and device controls render
+- **THEN** they offer no idle-ad webview, notification placeholder, unreachable settings actions, ARIS calibration or ARIS confirmation dialog
+
+#### Scenario: macOS privacy handoff keeps settings visible
+
+- **WHEN** the authenticated management owner opens a privacy settings link
+- **THEN** the shell restores Settings and suppresses close and hide during the request and its 1600ms handoff, including overlapping requests
+- **AND** normal close-to-tray resumes afterward, explicit Quit remains available, and disposal cancels the handoff timer
+
+### Requirement: Bounded daily local diagnostics
+
+Privacy-scrubbed local diagnostics SHALL rotate on the first write after local midnight and before exceeding 10 MiB, retaining at most 30 files including the active file. The writer SHALL serialize rollover with queued writes, retain 0700 directories and 0600 files, reject symlinks, and flush on shutdown. Evidence: MAIN-126.
+
+#### Scenario: Midnight and size rollover
+
+- **WHEN** records cross local midnight or the 10 MiB boundary
+- **THEN** each record is retained once in order within the size and 30-file limits, and no secret-bearing raw application data enters diagnostics
+
+### Requirement: Explicit device selection
+
+Device settings SHALL list connected QUAKE serial numbers and let the user select a specific live serial/session. Controls SHALL retain that selection when input arrives from another device. Focus and connection polling SHALL refresh the list. Disconnect SHALL retain an offline selection instead of redirecting writes; reconnect and selection changes SHALL remount controls to invalidate queued mutations. Only the authenticated management top frame may read or change selection. Stale sessions, malformed requests and disposed owners SHALL reject requests without changing selection. Evidence: SETTINGS-018, MAIN-130, MGMT-005.
+
+#### Scenario: Select the second device and disconnect it
+
+- **GIVEN** devices A and B are connected and A is selected
+- **WHEN** the user selects B and B disconnects
+- **THEN** controls retain B as disconnected, never write to A, and refresh the available choices on focus
+- **AND** unmounting cancels polling and suppresses pending replies
+
+### Requirement: Icon loading stages
+
+The icon picker SHALL announce distinct library, local application and Material Design stages with progress tied to completed work. Search SHALL remain editable while loading. Completion or failure SHALL dismiss the loading overlay, and failure SHALL retain an actionable error. Evidence: MGMT-423.
+
+#### Scenario: Complete icon preparation
+
+- **WHEN** library and local application icon reads complete in order
+- **THEN** progress advances and the stage changes before Material icons load
+- **AND** the overlay disappears when preparation finishes
+
+
+### Requirement: General settings use the independent form system
+
+General settings SHALL use the management form measure, grouped sections, label-left rows with a 52px minimum height, wrapping controls at narrow widths, semantic theme colors and keyboard focus treatment. The vendor fixed card dimensions and colors SHALL yield to the approved independent management design. Clear all data and erase without backup SHALL use the shared danger variant. The confirmation SHALL keep Cancel and backup-first actions distinct, and Cancel SHALL perform no mutation. Evidence: SETTINGS-005.
+
+#### Scenario: Review destructive settings at narrow width
+
+- **WHEN** settings render in the minimum management width and the user opens Clear all data
+- **THEN** rows and controls remain inside the content area and destructive actions use the danger treatment
+- **AND** Cancel closes the confirmation without a reset request
 ### Requirement: Local advisory region defaults and legacy migration
 
 Region suggestions SHALL use only the explicitly selected ISO country, independently of UI locale, credentials and vendor catalogs. China SHALL suggest DeepSeek with deepseek-v4-flash and Qwen speech with qwen-audio-3.1-asr-flash-streaming, qwen-audio-3.1-tts-flash and qwen3.5-livetranslate-flash-realtime. Other valid countries SHALL suggest OpenAI with gpt-5.1, gpt-4o-transcribe and gpt-4o-mini-tts. Unknown region SHALL yield no suggestion. Suggestions SHALL remain visible advisory values, never create credentials, choose a configured model profile, enable speech or perform geographic lookup. A versioned local legacy-settings migration SHALL replace only a China QWen default explicitly marked seeded and not user-chosen with the DeepSeek suggestion. Explicit and unmarked existing choices SHALL survive migration, region changes and restart. Evidence: AI-015, SETTINGS-065, SETTINGS-098, SETTINGS-099.
@@ -364,3 +455,32 @@ The six AI role titles SHALL resolve explicit user edits first, then multilingua
 
 - **WHEN** the app language changes with the strip, voice, picker, profile manager and clock mounted
 - **THEN** their labels update for all eight locales, an unsupported value renders English, drafts and user-edited titles survive, and no translated title is written to a profile
+
+### Requirement: Retained migration and host capability ownership
+
+The shell SHALL keep retained capabilities behind decoded, authenticated feature contracts with context isolation enabled and Node integration disabled. Plugin configuration and per-user ChatHistory migration SHALL preserve local durable data through their canonical feature owners, omit credentials, and never import transient selected-device, port or upgrade state. Missing plugin, camera, gaming, assistant-window or report owners SHALL remain explicit incomplete parity, rather than unimplemented successful replies. Evidence: MAIN-124, MAIN-129, MAIN-130, MAIN-133, MAIN-134, SCREEN-012.
+
+The retained ownership map is:
+
+| Vendor capability group | Current canonical owner and typed equivalent | Outstanding work |
+| --- | --- | --- |
+| Quit, restart, minimize, maximize, background recovery | management desktop-shell and shared management command schema | None for these commands |
+| General preferences, locale, setup, geometry | settings backend RPC, locale RPC and window binding | None for the retained settings shell behavior |
+| Connected-device discovery and controls | management device choices, hardware request contracts | Full former device-control method inventory remains incomplete |
+| Profiles, key library, icon selection and thumbnails | profiles manager, key-library and isolated icon/thumbnail renderers | Plugin custom windows remain incomplete |
+| Wallpaper, clock and weather | media, clock and weather-media request/event contracts | Retained cross-owner outgoing-event reconciliation remains incomplete |
+| Knob, key dispatch, focus reset and management activation | knob service, panel key dispatcher, strip reset and management activation | Gaming request/status consumer is missing |
+| Direct chat, agent sessions, models, integrations and meetings | chat, agent-http, agents, integrations and meetings owners | Separate assistant/report roles and legacy history import remain incomplete |
+| Plugin protocol, settings and custom windows | stream-deck-compat OpenSpec owner | Production plugin owner and PluginConfigs migration are missing |
+| Camera/printer gateway and camera image pushes | camera-and-printer-views OpenSpec owner | Protocol prerequisite and production adapter are missing |
+
+#### Scenario: Retained operation is not implemented
+
+- **WHEN** a retained operation has no canonical production adapter
+- **THEN** the shell does not install an inert success handler or grant a preview renderer mutation privileges
+- **AND** the corresponding parity row stays incomplete until its actual consumer and regression test exist
+
+#### Scenario: Import legacy durable configuration
+
+- **WHEN** synthetic legacy account, plugin and history stores are imported
+- **THEN** canonical owners preserve supported durable data, remove credentials and transient launch values, and repeated imports do not overwrite explicit current choices

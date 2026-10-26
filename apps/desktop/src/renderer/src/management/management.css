@@ -1091,3 +1091,36 @@ fieldset.mc-tabs button {
 .management-window [hidden] {
 	display: none;
 }
+
+/* Settings and shell actions reuse the approved compact control vocabulary. */
+.shell-settings-tabs {
+	flex-wrap: nowrap;
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+	margin-bottom: var(--oq-space-4, 16px);
+}
+.shell-settings-tabs > button {
+	flex: 0 0 auto;
+	margin-bottom: 0;
+}
+.mc-sidebar-footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--oq-space-2);
+}
+.mc-sidebar-footer > .mc-ui-settings-host {
+	flex: 0 0 100%;
+}
+
+.shell-device-picker {
+	display: grid;
+	gap: 8px;
+	max-width: 420px;
+	margin: 0 0 24px;
+}
+.shell-device-picker select {
+	width: 100%;
+	min-width: 0;
+}

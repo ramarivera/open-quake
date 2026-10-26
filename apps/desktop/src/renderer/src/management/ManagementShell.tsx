@@ -5,6 +5,8 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { useAppLocale } from "../i18n";
+import { QuakeGuideEntry } from "../settings/QuakeGuide";
 import type { AppearanceController } from "../theme/useAppearance";
 import { PageSectionContext, StatusDot } from "../ui/Form";
 import {
@@ -30,6 +32,7 @@ import {
 	pageLayouts,
 	pageLocation,
 } from "./navigation";
+import { SettingsNavigation } from "./SettingsNavigation";
 import { UiSettings } from "./UiSettings";
 
 const icons: Readonly<Record<ManagementPage, () => React.JSX.Element>> = {
@@ -102,6 +105,7 @@ export function ManagementShell({
 	children?: ReactNode;
 }): React.JSX.Element {
 	const narrow = useNarrow();
+	const { locale } = useAppLocale();
 	const [drawerOpen, setDrawerOpen] = useState(false);
 	const menuButton = useRef<HTMLButtonElement>(null);
 	const sidebar = useRef<HTMLElement>(null);
@@ -255,6 +259,20 @@ export function ManagementShell({
 					{setupEntry?.(choose)}
 					<footer className="mc-sidebar-footer">
 						<UiSettings controller={appearance} />
+						<QuakeGuideEntry
+							label={locale === "de" ? "Hilfe" : "Help"}
+							onOpenPage={choose}
+						/>
+						<button
+							type="button"
+							className="mc-button mc-quiet"
+							disabled={!window.quakeManagement?.command}
+							onClick={() => {
+								void window.quakeManagement?.command?.({ action: "quit" });
+							}}
+						>
+							{locale === "de" ? "Beenden" : "Exit"}
+						</button>
 					</footer>
 				</aside>
 				<SidebarResizer appearance={appearance} />
@@ -269,7 +287,20 @@ export function ManagementShell({
 							data-page={page}
 							data-layout={page === "setup" ? "default" : pageLayouts[page]}
 						>
-							{children}
+							{page === "settings" || page === "controls" ? (
+								<SettingsNavigation page={page} onOpen={choose} />
+							) : null}
+							{page === "settings" || page === "controls" ? (
+								<div
+									id="shell-settings-panel"
+									role="tabpanel"
+									aria-labelledby={`shell-tab-${page}`}
+								>
+									{children}
+								</div>
+							) : (
+								children
+							)}
 						</div>
 					</PageSectionContext.Provider>
 				</main>

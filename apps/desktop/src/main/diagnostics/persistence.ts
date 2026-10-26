@@ -15,6 +15,7 @@ export interface DiagnosticStorageOptions {
 	readonly maxFileBytes?: number;
 	readonly maxFiles?: number;
 	readonly maxQueueBytes?: number;
+	readonly now?: () => Date;
 }
 export interface DiagnosticStatus {
 	readonly written: number;
@@ -44,11 +45,11 @@ const isMissing = (cause: unknown): boolean =>
 export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 	const maxFileBytes = bounded(
 		options.maxFileBytes,
-		2 * 1024 * 1024,
+		10 * 1024 * 1024,
 		1024,
 		16 * 1024 * 1024,
 	);
-	const maxFiles = bounded(options.maxFiles, 4, 1, 8);
+	const maxFiles = bounded(options.maxFiles, 30, 1, 30);
 	const maxQueueBytes = bounded(
 		options.maxQueueBytes,
 		512 * 1024,
@@ -59,7 +60,11 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 		join(options.directory, `diagnostics.${index}.ndjson`);
 	let handle: FileHandle | undefined;
 	let bytes = 0;
-	let queue: string[] = [];
+	const day = (date: Date) =>
+		`${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+	const now = options.now ?? (() => new Date());
+	let currentDay: string | undefined;
+	let queue: { line: string; day: string }[] = [];
 	let queuedBytes = 0;
 	let written = 0;
 	let dropped = 0;
@@ -107,7 +112,7 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 				if (!isMissing(cause)) throw cause;
 			}
 		}
-		for (let index = maxFiles; index < 8; index++) {
+		for (let index = maxFiles; index < 30; index++) {
 			try {
 				await unlink(path(index));
 			} catch (cause) {
@@ -115,7 +120,9 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 			}
 		}
 		handle = await open(path(0), "a", 0o600);
-		bytes = (await handle.stat()).size;
+		const active = await handle.stat();
+		bytes = active.size;
+		currentDay = day(bytes ? active.mtime : now());
 	};
 	const rotate = async () => {
 		await handle?.sync();
@@ -138,10 +145,16 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 		try {
 			while (queue.length > 0) {
 				await acquire();
-				const line = queue[0];
-				if (line === undefined) break;
+				const record = queue[0];
+				if (record === undefined) break;
+				const { line } = record;
 				const size = Buffer.byteLength(line);
-				if (bytes + size > maxFileBytes) await rotate();
+				if (
+					bytes + size > maxFileBytes ||
+					(bytes > 0 && currentDay !== record.day)
+				)
+					await rotate();
+				currentDay = record.day;
 				await handle?.writeFile(line, "utf8");
 				bytes += size;
 				queue.shift();
@@ -174,7 +187,7 @@ export function createDiagnosticStorage(options: DiagnosticStorageOptions) {
 				dropped++;
 				return;
 			}
-			queue.push(line);
+			queue.push({ line, day: day(now()) });
 			queuedBytes += size;
 			if (!pumping) pumping = pump();
 		} catch (cause) {

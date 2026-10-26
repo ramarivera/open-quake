@@ -124,6 +124,15 @@ Audit regression coverage: CENTER-070.
 - **WHEN** the user has replaced key `2,6` with a hotkey
 - **THEN** sync stops at preflight with the invalid-slot error and nothing is written
 
+### Requirement: Retired entry points reach local sessions
+
+Saved ClawDashboard and ClawInstall entry points SHALL open the current local Sessions tab in the management workbench. Removed vendor installer and dashboard components SHALL remain retired. Evidence: CENTER-105.
+
+#### Scenario: Open a retired saved entry point
+
+- **WHEN** a management activation or saved URL names ClawDashboard or ClawInstall
+- **THEN** the workbench selects Sessions and retains the management navigation and chrome
+
 ### Requirement: Runtime presentation and refresh
 The Agents heading SHALL contain the runtime indicator, with Start, Stop and Restart always visible. All controls SHALL be disabled for an unavailable backend or an active transition; Start SHALL additionally be disabled when ready, and Stop/Restart unless ready. Sessions SHALL expose a refresh action, current local agent count, runtime status and detecting/offline/starting/stopping/error presentation. Local chat SHALL remain usable independently of runtime availability. Newer status snapshots SHALL win over delayed reads, and disposed listeners and replies SHALL not update a replacement bridge. A deprecated local-model diagnostic card SHALL appear only in development with explicit `VITE_ENABLE_CLAW_LOCAL_MODEL_TEST=true`, without inference controls. Sources: CENTER-012, CENTER-020, CENTER-022, CENTER-024, CENTER-025, CENTER-026, CENTER-028, CENTER-042.
 
