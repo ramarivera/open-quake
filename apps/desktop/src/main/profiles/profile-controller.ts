@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
 import { Effect, Array as EffectArray, Option } from "effect";
 import { translateProfile } from "../../../../../packages/device/src/profiles/profile-catalog.js";
-import {
-	encodeProfileEnvelope,
-	type Profile,
-} from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import type { Profile } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	ProfileCommandFailed,
 	ProfileDeliveryFailed,
@@ -24,6 +21,7 @@ import type {
 	ProfileView,
 	ThumbnailProgress,
 } from "../../shared/profile-manager";
+import { encodeRendererProfiles } from "./clock-profile-projection";
 
 /** Main-process-only ownership. Never accepted from renderer IPC. */
 export interface ProfileSelectionScope {
@@ -114,7 +112,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 				),
 			);
 			return {
-				envelope: encodeProfileEnvelope({ ...envelope, profiles }),
+				envelope: encodeRendererProfiles({ ...envelope, profiles }),
 				serials: yield* switching.connectedSerials(),
 				apps: port.installedApps ? yield* native(port.installedApps) : [],
 				thumbnails: Object.fromEntries(loaded),

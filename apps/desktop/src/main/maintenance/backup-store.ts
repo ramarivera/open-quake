@@ -156,7 +156,19 @@ async function readManaged(
 			files.set(`open-quake/${relative}`, bytes);
 		}
 	}
-	for (const name of managedData) await collect(name);
+	for (const name of managedData) {
+		if (name === "clock-v1") {
+			const profiles = files.get("open-quake/profiles-v1.json");
+			if (
+				profiles &&
+				Schema.decodeUnknownSync(ProfileEnvelope)(
+					JSON.parse(Buffer.from(profiles).toString("utf8")),
+				).clockConfigVersion === 1
+			)
+				continue;
+		}
+		await collect(name);
+	}
 	return files;
 }
 export async function exportBackup(

@@ -432,7 +432,7 @@ if (!app.requestSingleInstanceLock()) {
 							diagnostics,
 						);
 						const clockModule = prepareDesktopModule(
-							ClockLive(app.getPath("userData")),
+							ClockLive(app.getPath("userData"), profilesModule.runtime),
 							(runtime) => registerClock(runtime, () => managementWin),
 							diagnostics,
 						);

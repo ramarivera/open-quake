@@ -1,4 +1,9 @@
 import { OBS_IDS } from "../../../../../../packages/device/src/actions/obs-contracts";
+import type { ClockTarget } from "../../../shared/clock-contracts";
+import {
+	activeThemeOf,
+	normalizeClockStyle,
+} from "../../../shared/clock-style";
 import type { HourFormat } from "../../../shared/display";
 import { EmojiTile } from "../management/emoji/EmojiTile";
 import { ObsTile } from "../obs/ObsTile";
@@ -35,13 +40,14 @@ import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
 /**
  * Everything a registered tile may read; tiles never fetch their own data.
- * The clock is the one exception until profile keys carry `clockStyle`.
+ * Clock configuration comes from the selected profile key; its media URLs come from main.
  */
 export interface StripTileContext {
 	/** Host clock from main's one-second snapshot; undefined until it arrives. */
 	readonly now: Date | undefined;
-	/** The wallpaper session's saved clock format. */
+	/** Legacy context retained for other tile consumers. Clocks read their key. */
 	readonly hourFormat: HourFormat;
+	readonly clockTarget?: ClockTarget | undefined;
 	/** Voice and chat state for the AI tiles (strip-voice-ui). */
 	readonly voice: StripVoiceContext;
 	/** Defaults to live for existing tile consumers outside selection previews. */
@@ -57,8 +63,8 @@ export type StripTileComponent = (
 
 /**
  * DK-Suite 0.4.95's desktop clock (openspec/changes/desktop-clock). Its theme,
- * custom media and seconds option come from the clock store
- * (`window.quakeClock`) until profile keys carry `clockStyle`; it ticks on
+ * custom media and seconds option belong to the selected profile key. Main
+ * projects opaque media URLs through `window.quakeClock`; the tile ticks on
  * wall-clock minute boundaries so the flip lands on the minute, starting from
  * the host clock.
  */
@@ -66,10 +72,20 @@ function ClockSlot({
 	tile,
 	context,
 }: StripTileProps): React.JSX.Element | null {
-	const clock = useClockSettings();
+	const clock = useClockSettings(undefined, context.clockTarget);
 	const enrichment = useWeatherMedia();
 	const snapshot = clock.snapshot;
-	const now = useClockNow(snapshot?.showSeconds ?? false, context.now);
+	const actions = tile.key.config.actions;
+	const showSeconds =
+		actions.find((a) => a.type === "showSeconds")?.value === true;
+	const hourFormat =
+		actions.find((a) => a.type === "hourFormat")?.value === "12h"
+			? "12h"
+			: "24h";
+	const style = normalizeClockStyle(
+		actions.find((a) => a.type === "clockStyle")?.value,
+	);
+	const now = useClockNow(snapshot?.showSeconds ?? showSeconds, context.now);
 	// Wait for the saved theme rather than flashing the default first.
 	if (!clock.ready) return null;
 	return (
@@ -77,9 +93,9 @@ function ClockSlot({
 			widthPx={tile.box.width}
 			heightPx={tile.box.height}
 			now={now}
-			theme={snapshot ? themeOf(snapshot) : "season"}
-			hourFormat={context.hourFormat}
-			showSeconds={snapshot?.showSeconds ?? false}
+			theme={snapshot ? themeOf(snapshot) : activeThemeOf(style)}
+			hourFormat={snapshot?.hourFormat ?? hourFormat}
+			showSeconds={snapshot?.showSeconds ?? showSeconds}
 			media={mediaOf(snapshot)}
 			onThemeSelect={
 				context.interactive === false ? undefined : clock.selectTheme

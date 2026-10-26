@@ -12,6 +12,11 @@ import {
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import { ClockRecord } from "../clock/clock-store";
+import {
+	legacyClockConfiguration,
+	migrateProfileClocks,
+} from "../profiles/clock-migration";
 import { decodeAccountConfig, encodeAccountConfig } from "./account-config";
 import {
 	type ArchiveFiles,
@@ -124,11 +129,43 @@ export function mergeBackup(
 	const native = files.get("open-quake/profiles-v1.json");
 	const portable = backupPaths(files, destination);
 	if (native) {
-		const imported = Schema.decodeUnknownSync(ProfileEnvelope)(
+		let imported = Schema.decodeUnknownSync(ProfileEnvelope)(
 			portable.rewrite(
 				withoutCredentials(Schema.decodeUnknownSync(ProfileJson)(json(native))),
 			),
 		);
+		if (imported.clockConfigVersion !== 1) {
+			const legacy = legacyClockConfiguration(
+				new Map(
+					[...files]
+						.filter(
+							([name]) =>
+								name === "open-quake/clock-v1/clock.json" ||
+								name.startsWith("open-quake/wallpaper-v1/settings/"),
+						)
+						.map(([name, bytes]) => [
+							name.slice("open-quake/".length),
+							Buffer.from(bytes).toString("utf8"),
+						]),
+				),
+			);
+			const clock = legacy.clock
+				? Schema.decodeUnknownSync(ClockRecord, {
+						onExcessProperty: "preserve",
+					})(
+						portable.rewrite(
+							Schema.decodeUnknownSync(ProfileJson)(legacy.clock),
+						),
+					)
+				: undefined;
+			imported = Schema.decodeUnknownSync(ProfileEnvelope)(
+				migrateProfileClocks(encodeProfileEnvelope(imported), {
+					...legacy,
+					clock,
+				}),
+			);
+		}
+
 		const profiles = [...envelope.profiles];
 		const profileIds = new Map<string, string>();
 		let skipped = 0;
