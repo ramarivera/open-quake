@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Either, type Layer, Schema } from "effect";
+import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts";
 import {
 	defaults,
 	type MediaSlot,
@@ -17,6 +18,7 @@ import {
 	MonitorMediaUnusable,
 	MonitorPersistenceFailed,
 } from "../../shared/monitor-errors";
+import { monitorPanelSlot } from "./panel-media";
 
 export interface SelectedMedia {
 	readonly kind: "image" | "video";
@@ -64,6 +66,7 @@ export class MonitorStore extends Effect.Service<MonitorStore>()(
 					);
 				const read = Effect.fn("MonitorStore.read")(function* (
 					styleId?: StyleId,
+					includeMedia = true,
 				): Effect.fn.Return<SettingsView> {
 					const current = record;
 					const media: Partial<Record<StyleId, MediaView>> = {};
@@ -73,11 +76,29 @@ export class MonitorStore extends Effect.Service<MonitorStore>()(
 							? current.settings.styleId
 							: undefined);
 					const slot = style && current.settings.media[style];
-					if (style && slot) media[style] = yield* mediaView(slot);
+					if (includeMedia && style && slot)
+						media[style] = yield* mediaView(slot);
 					return { ...current, media, recovered };
 				});
 				return {
 					read,
+					resolveMedia: (slot: MediaSlot) => mediaView(slot),
+					resolvePanelMedia: Effect.fn("MonitorStore.resolvePanelMedia")(
+						function* (
+							slot: MediaSlot,
+							key: ProfileKey | undefined,
+						): Effect.fn.Return<MediaView, MonitorConfigInvalid> {
+							const owned = monitorPanelSlot(key);
+							if (
+								!owned ||
+								owned.id !== slot.id ||
+								owned.kind !== slot.kind ||
+								owned.name !== slot.name
+							)
+								return yield* Effect.fail(new MonitorConfigInvalid());
+							return yield* mediaView(owned);
+						},
+					),
 					configuration: Effect.fn("MonitorStore.configuration")(
 						(): Effect.Effect<MonitorRecord> => Effect.sync(() => record),
 					),

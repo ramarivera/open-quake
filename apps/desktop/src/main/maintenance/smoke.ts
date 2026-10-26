@@ -38,6 +38,7 @@ import { registerLifecycle } from "../lifecycle/registration";
 import { MediaLive, registerMedia } from "../media";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
+import { registerAppLocale } from "../settings/registration";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { referenceArchive, referenceDecode } from "./archive-fixtures";
 import { prepareRestore } from "./backup-store";
@@ -91,6 +92,9 @@ async function smoke() {
 	);
 	const payload = syntheticUf2();
 	const image = join(directory, "synthetic.uf2");
+	const bundledDirectory = join(directory, "firmware-images");
+	await mkdir(bundledDirectory);
+	await writeFile(join(bundledDirectory, "QUAKE_01.00.21_NEW.uf2"), payload);
 	await writeFile(image, payload);
 	const backup = join(directory, "DK-Suite_default_smoke_export_resources.zip");
 	dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [image] });
@@ -264,6 +268,9 @@ async function smoke() {
 			throw new Error("Smoke must not clear real app data");
 		},
 		fixture: {
+			...(process.argv[3] === "firmware-only"
+				? { bundledDirectories: [bundledDirectory] }
+				: {}),
 			roots: [join(directory, "firmware-mock"), join(directory, "other-drive")],
 			descriptors: [
 				{
@@ -278,10 +285,157 @@ async function smoke() {
 	});
 	cleanup.push(() => maintenance.dispose());
 	await maintenance.ready;
+	const locale = registerAppLocale({
+		directory,
+		osLocale: "en",
+		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
+		windows: () => [main, panel],
+	});
+	cleanup.push(() => locale.dispose());
 	await main.loadFile(resolve("out/renderer/index.html"));
 	await panel.loadFile(resolve("out/renderer/index.html"), {
 		query: { surface: "management" },
 	});
+	if (process.argv[3] === "firmware-only") {
+		const read = async () => {
+			const reply = Schema.decodeUnknownSync(MaintenanceReply)(
+				await main.webContents.executeJavaScript(
+					'window.quakeMaintenance.request({action:"read"})',
+				),
+			);
+			assert(reply.ok);
+			return reply.view;
+		};
+		const waitFor = async (expression: string) => {
+			for (let i = 0; i < 60; i++) {
+				if (await main.webContents.executeJavaScript(expression)) return;
+				await settle(100);
+			}
+			throw new Error(`Firmware smoke timeout: ${expression}`);
+		};
+		const capture = async (name: string) =>
+			writeFile(
+				join(artifacts, `${name}.png`),
+				(await main.webContents.capturePage()).toPNG(),
+			);
+		await waitFor(
+			"!![...document.querySelectorAll('nav button')].find(b=>b.textContent==='Settings')",
+		);
+		await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Settings').click()",
+		);
+		await waitFor(
+			"!!document.querySelector('.maintenance-settings') && !![...document.querySelectorAll('button')].find(b=>b.textContent==='Upgrade')",
+		);
+		assert.equal((await read()).imageTrusted, true);
+		assert.equal((await read()).firmwareAvailability, "newer_bundled");
+		await capture("firmware-settings-en");
+		confirmation = 0;
+		await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('button')].find(b=>b.textContent==='Upgrade').click()",
+		);
+		await settle(200);
+		assert.equal((await read()).firmware.state, "idle");
+		await main.webContents.executeJavaScript(
+			"document.querySelector('[aria-label=\"Close firmware upgrade\"]').click()",
+		);
+		await waitFor(
+			"![...document.querySelectorAll('button')].find(b=>b.textContent==='Upgrade').disabled",
+		);
+		confirmation = 1;
+		const otherVolume = join(directory, "other-drive", "QUAKE DFU");
+		await mkdir(otherVolume, { recursive: true });
+		await writeFile(
+			join(otherVolume, "INFO_UF2.TXT"),
+			"UF2 Board-ID: QUAKE RP2040",
+		);
+		await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('button')].find(b=>b.textContent==='Upgrade').click()",
+		);
+		await waitFor(
+			"document.querySelectorAll('.firmware-volumes .button-primary').length === 2",
+		);
+		assert.equal((await read()).firmware.state, "ready_to_write");
+		for (const language of ["en", "de"] as const) {
+			await main.webContents.executeJavaScript(
+				`window.quakeLocale.set(${JSON.stringify(language)})`,
+			);
+			await waitFor(
+				`document.documentElement.lang===${JSON.stringify(language)}`,
+			);
+			await capture(`firmware-ready-${language}`);
+		}
+		await main.webContents.executeJavaScript('window.quakeLocale.set("en")');
+		main.webContents.debugger.attach("1.3");
+		try {
+			await main.webContents.debugger.sendCommand(
+				"Emulation.setEmulatedMedia",
+				{ features: [{ name: "prefers-reduced-motion", value: "reduce" }] },
+			);
+			assert.equal(
+				await main.webContents.executeJavaScript(
+					"getComputedStyle(document.querySelector('.firmware-indeterminate span')).animationName",
+				),
+				"none",
+			);
+			await capture("firmware-reduced-motion");
+		} finally {
+			main.webContents.debugger.detach();
+		}
+		await main.webContents.executeJavaScript(
+			"document.querySelector('[aria-label=\"Close firmware upgrade\"]').click()",
+		);
+		await settle(100);
+		assert.equal((await read()).firmware.state, "ready_to_write");
+		await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Screen').click()",
+		);
+		await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('nav button')].find(b=>b.textContent==='Settings').click()",
+		);
+		await waitFor(
+			"!![...document.querySelectorAll('button')].find(b=>b.textContent==='View upgrade')",
+		);
+		await main.webContents.executeJavaScript(
+			"[...document.querySelectorAll('button')].find(b=>b.textContent==='View upgrade').click()",
+		);
+		const intended = (await read()).firmware.volumes.find((volume) =>
+			volume.label.includes(join(directory, "firmware-mock")),
+		);
+		assert(intended);
+		await main.webContents.executeJavaScript(
+			`[...document.querySelectorAll('.firmware-volumes .button-primary')].find(b=>b.textContent.includes(${JSON.stringify(intended.label)})).click()`,
+		);
+		await waitFor(
+			"!!document.querySelector('progress[aria-label=\"Firmware write progress\"]')",
+		);
+		await capture("firmware-copying");
+		await main.webContents.executeJavaScript(
+			"document.querySelector('[aria-label=\"Close firmware upgrade\"]').click()",
+		);
+		await waitFor("!!document.querySelector('.maintenance-toast')");
+		assert.equal((await read()).firmware.state, "success");
+		assert.equal((await read()).currentVersion, "1.0.21");
+		assert.deepEqual(
+			await readFile(
+				join(directory, "firmware-mock", "QUAKE DFU", "open-quake-update.uf2"),
+			),
+			Buffer.from(payload),
+		);
+		await assert.rejects(readFile(join(otherVolume, "open-quake-update.uf2")));
+		await capture("firmware-background-success");
+		connected = false;
+		const offline = await read();
+		assert.equal(offline.currentVersion, "1.0.21");
+		assert.equal(offline.serial, "");
+		assert.equal(offline.firmwareAvailability, "no_device");
+		await settle(2100);
+		await capture("firmware-offline-retained");
+		process.stdout.write(
+			"Firmware native smoke PASS: bundled synthetic discovery, explicit cancel, ambiguous mounts, EN/DE, reduced motion, tab switch/reopen, main-owned single copy, hidden terminal toast, exact-version verification and offline retention. No real firmware or hardware.\n",
+		);
+		return;
+	}
 	const voiceReply: unknown = await main.webContents.executeJavaScript(
 		'window.quakeVoice.request({_tag:"Hello"})',
 	);

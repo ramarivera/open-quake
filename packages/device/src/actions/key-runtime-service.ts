@@ -36,6 +36,8 @@ export interface KeyFeedback {
 	readonly pageId: string;
 	readonly keyCode: string;
 	readonly alternate?: 0 | 1;
+	readonly volume?: number;
+	readonly muted?: boolean;
 	readonly countdown?: number;
 	readonly progress?: number;
 	readonly alert?: 0 | 1 | 2 | 3;
@@ -557,9 +559,18 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 								typeof action.value === "string" &&
 								action.value.length > 0,
 						) ||
-						!port.executeOwned
+						!port.executeOwned ||
+						key.config.actions.some(
+							(a) => a.type === "musicSource" && a.value === "system",
+						)
 					)
 						return yield* new KeyFunctionUnavailable("owning-runtime");
+					const control = JSON.stringify([
+						activation.deviceId,
+						activation.keyCode,
+					]);
+					if (ownedControls.has(control)) return Effect.void;
+					ownedControls.add(control);
 					const operation = { previous: 5, toggle: 0, next: 6, stop: 4 }[
 						intent
 					];
@@ -572,6 +583,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									(action) => action.type !== "audioAction",
 								),
 								{ type: "audioAction", value: operation },
+								{ type: "playerIntent", value: intent },
 							],
 						},
 					};
@@ -585,7 +597,12 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									? Effect.void
 									: Effect.fail(new KeyFunctionUnavailable("owning-runtime")),
 							),
-							Effect.ensuring(Effect.sync(() => owned.delete(fiber))),
+							Effect.ensuring(
+								Effect.sync(() => {
+									owned.delete(fiber);
+									ownedControls.delete(control);
+								}),
+							),
 						),
 						scope,
 					);

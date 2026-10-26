@@ -299,3 +299,48 @@ describe("monitor settings", () => {
 		),
 	);
 });
+
+it.effect(
+	"round-trips gameModeMonitorConfig without activating current monitoring override",
+	() =>
+		Effect.gen(function* () {
+			const legacy = {
+				active: true,
+				keyboardMode: true,
+				hz: 10,
+				metrics: ["gpu"],
+			};
+			let saved: MonitorRecord | undefined;
+			const run = Effect.gen(function* () {
+				const store = yield* MonitorStore;
+				const view = yield* store.read();
+				expect(view.settings.override.active).toBe(false);
+				expect(view.settings.appMonitor.enabled).toBe(false);
+				expect(view.settings.gameModeMonitorConfig).toEqual(legacy);
+				yield* store.save(view.revision, { ...view.settings, hz: 2 });
+			});
+			yield* run.pipe(
+				Effect.provide(
+					MonitorStore.Default(
+						storage({
+							load: async () => ({
+								revision: 0,
+								settings: { ...defaults(), gameModeMonitorConfig: legacy },
+							}),
+							save: async (value) => {
+								saved = value;
+							},
+						}),
+					),
+				),
+			);
+			const restarted = yield* MonitorStore.read().pipe(
+				Effect.provide(
+					MonitorStore.Default(storage({ load: async () => saved })),
+				),
+			);
+			expect(restarted.settings.gameModeMonitorConfig).toEqual(legacy);
+			expect(restarted.settings.override.active).toBe(false);
+			expect(restarted.settings.hz).toBe(2);
+		}),
+);

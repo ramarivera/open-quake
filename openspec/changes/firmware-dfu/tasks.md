@@ -17,3 +17,42 @@ Implementation is tracked by open-quake-18d under open-quake-lih.13. Checked tas
 
 - [x] 3.1 Wire real firmware inspect/DFU/update/recovery controls through the typed client with local recovery documentation; verify each state and every confirmation/cancel path.
 - [ ] 3.2 Run all firmware-dfu scenarios with synthetic images and fake hardware/filesystem layers, then supervised hardware DFU/flash/reconnect checks when available; record exact report bytes, target/version evidence and leave unrun hardware steps open.
+
+## 4. Firmware burn-down lane
+
+- [x] 4.1 Implement trusted bundled discovery and retained availability with synthetic fixtures, tracked by open-quake-lih.13.1.
+- [x] 4.2 Implement bounded progress, Windows lookup cadence, close reconciliation and renderer lifecycle/guidance tests, tracked by open-quake-lih.13.2.
+- [ ] 4.3 Validate the actual audited production image. Blocked by this lane's synthetic-only instruction; no real firmware binary may be opened or downloaded.
+
+## 5. PR 102 review fixes
+
+Tracked by open-quake-18d.8. Each finding gets a regression, commit, push and reply; threads remain unresolved.
+
+- [x] 5.1 Replace installer path handoff with a verified private descriptor-backed copy and refuse cache swaps, review 4379260349.
+- [x] 5.2 Stream bounded downloads and verification, review 4379258894.
+- [x] 5.3 Keep Settings available with unreadable optional firmware directories, review 4379259396.
+- [x] 5.4 Accept newer hardware version observations, review 4379259164.
+- [x] 5.5 Finish normally returning installs, review 4379259656.
+- [x] 5.6 Prune superseded update artifacts, review 4379259888.
+- [x] 5.7 Persist bounded intermediate copy progress, review 4379260103.
+- [x] 5.8 Reconcile unanswered Codex/Copilot threads and run full gates plus synthetic native firmware smoke.
+
+- [x] 5.9 Scope version readback precedence to hardware sessions, Codex 4379316091.
+- [x] 5.10 Serialize terminal expiry and close against other state transitions, Codex 4379316105.
+- [x] 5.11 Interpolate expected firmware versions in guidance and toasts, Copilot 4379353834.
+- [x] 5.12 Render one app-update failure alert, Copilot 4379353930.
+
+- [x] 5.13 Reconcile the Agents provider suggestion fixture with the five supported providers inherited from main; full-gate failure reproduced before the fixture correction.
+
+
+### PR 102 fix-round evidence
+
+All seven assigned Devin findings and four additional Codex/Copilot findings received individual regression fixes, normal commits, pushes and attributed replies. Each new regression failed before its behavior fix. The merge commit `6be4964b` preserves both `cb1aa2e3` and main `852ce305`. No threads were resolved and the PR was not merged.
+
+Final functional head `0c93e2a6` passed root `pnpm exec turbo run test --env-mode=loose -- --maxWorkers=2` with TMPDIR on the SSD: desktop 2299 passed plus 1 existing skip, edge 859 passed plus 3 existing skips, device 511 passed, protocol 63 passed. Total 3732 passed, 4 skipped, zero failures across 386 passing test files and 2 skipped files. The initial full run found one stale Agents catalog fixture inherited from the main merge; explicit provider suggestions and DeepSeek order now match the merged catalog. No assertions were weakened.
+
+Typecheck passed all 6 tasks, Biome checked 1313 files with zero errors and 14 existing warnings plus 1 informational message, build passed its 1 task, both desktop bundle modes passed, and strict OpenSpec validation passed all 47 items. Hidden native firmware smoke passed with 7 captures, including bundled synthetic discovery, cancelled confirmation, ambiguous scratch mounts, one copy, exact-version readback, offline retention, EN/DE and reduced motion. The broad native media smoke passed with 22 captures. Firmware success and German ready-state captures were inspected. Every owned Electron process exited.
+
+GraphQL review-thread reconciliation on `0c93e2a6` found 11 unresolved threads and zero unanswered threads. Reviews are this requested single round; hosted checks/current-head re-review are handed to the lead, with no child watch. Updater remains disabled by default with no real endpoint. No real firmware/update binary, real QUAKE/DFU drive or hardware was opened, and nothing was flashed.
+
+Logs and captures: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/firmware/fix1/`. Build outputs are removed after verification. Physical acceptance and production updater configuration remain outside this review-fix round.

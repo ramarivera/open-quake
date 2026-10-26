@@ -1,5 +1,9 @@
 import { Option, Schema } from "effect";
 import {
+	ACTION_REGISTRY,
+	createActionDraft,
+} from "../../../../../../packages/device/src/actions/action-registry";
+import {
 	ProfileJsonObject,
 	type ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
@@ -111,6 +115,16 @@ export function SequenceEditor({
 								value={config.type}
 								onChange={(e) => {
 									const type = e.target.value;
+									const entry = ACTION_REGISTRY.find(
+										(entry) => entry.id === type,
+									);
+									if (entry?.binding === "media") {
+										const draft = Schema.decodeUnknownSync(Step)({
+											config: createActionDraft(entry.id),
+										});
+										change(index, draft.config);
+										return;
+									}
 									change(index, {
 										type,
 										actions: [
@@ -131,7 +145,22 @@ export function SequenceEditor({
 									});
 								}}
 							>
-								{["hotkey", "website", "text", "open", "delay"].map((type) => (
+								{[
+									"hotkey",
+									"website",
+									"text",
+									"open",
+									"delay",
+									"mute",
+									"playPause",
+									"stopPlay",
+									"skipBackward",
+									"skipForward",
+									"fastBackward",
+									"fastForward",
+									"repeatPlay",
+									"randomPlay",
+								].map((type) => (
 									<option key={type}>{type}</option>
 								))}
 							</select>

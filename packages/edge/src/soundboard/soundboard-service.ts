@@ -31,7 +31,7 @@ import type {
 } from "./playback-state.js";
 import {
 	SoundboardConfigInvalid,
-	type SoundboardDecodeFailed,
+	SoundboardDecodeFailed,
 	SoundboardLoadTimeout,
 } from "./soundboard-errors.js";
 import { SoundboardFiles } from "./soundboard-ports.js";
@@ -195,6 +195,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 		slot: Slot,
 		index: number,
 		initialGain?: number,
+		initialPositionMs = 0,
 	): Effect.Effect<void, SoundPlaybackError> =>
 		Effect.gen(function* () {
 			// A native finalizer can defect before loading starts. Retain unsafe
@@ -238,6 +239,10 @@ export const makeSoundboardService = Effect.gen(function* () {
 						if (!current(slot)) return yield* new AudioOutputBusy();
 						yield* player.gain(slot.session.gain);
 						if (!current(slot)) return yield* new AudioOutputBusy();
+						if (initialPositionMs > 0) {
+							if (!player.seek) return yield* new SoundboardDecodeFailed();
+							yield* player.seek(initialPositionMs);
+						}
 						yield* player.play;
 					}),
 				),
@@ -273,7 +278,11 @@ export const makeSoundboardService = Effect.gen(function* () {
 						),
 				}),
 			);
-			slot.session = { ...slot.session, state: "playing" };
+			slot.session = {
+				...slot.session,
+				state: "playing",
+				positionMs: initialPositionMs,
+			};
 			yield* publish(slot);
 			const token: SoundEndToken = {
 				playbackId: slot.session.playbackId,
@@ -406,6 +415,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 						initialGain,
 						expectedEpoch,
 						initialIndex,
+						initialPositionMs = 0,
 						accept = () => true,
 					} = options;
 					if (
@@ -493,7 +503,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 					}
 					slots.set(session.playbackId, slot);
 					target.slots.add(slot);
-					yield* startTrack(slot, index, initialGain).pipe(
+					yield* startTrack(slot, index, initialGain, initialPositionMs).pipe(
 						Effect.tapError((error) => failed(slot, error)),
 						Effect.onInterrupt(() => releaseIdle(target)),
 					);
@@ -532,7 +542,31 @@ export const makeSoundboardService = Effect.gen(function* () {
 	);
 	yield* Effect.addFinalizer(close);
 	const snapshot = Effect.fn("SoundboardService.snapshot")(
-		(): Effect.Effect<readonly SoundSession[]> => repository.list(),
+		(): Effect.Effect<readonly SoundSession[]> =>
+			Effect.gen(function* () {
+				// Reading UI state must never wait behind a pending decode or block Stop.
+				for (const slot of slots.values())
+					if (
+						current(slot) &&
+						Option.isSome(slot.player) &&
+						slot.session.state === "playing"
+					) {
+						const generation = slot.session.generation;
+						const position = yield* slot.player.value.position.pipe(
+							Effect.option,
+						);
+						if (
+							Option.isSome(position) &&
+							current(slot) &&
+							slot.session.generation === generation &&
+							slot.session.state === "playing"
+						) {
+							slot.session = { ...slot.session, positionMs: position.value };
+							yield* publish(slot);
+						}
+					}
+				return yield* repository.list();
+			}),
 	);
 	const selection = makePlaybackSelection({
 		slots,
@@ -570,7 +604,24 @@ export const makeSoundboardService = Effect.gen(function* () {
 			stopSlot(slot).pipe(Effect.zipRight(releaseIdle(slot.group))),
 		validatePlay: selection.validate,
 	});
-	return { ...controls, naturalEnd, close, snapshot };
+	return {
+		...controls,
+		naturalEnd,
+		close,
+		snapshot,
+		restore: (
+			owner: SoundOwner,
+			playlist: SoundPlaylist,
+			index: number,
+			positionMs: number,
+		) =>
+			Number.isFinite(positionMs) && positionMs >= 0
+				? start(owner, playlist, {
+						initialIndex: index,
+						initialPositionMs: positionMs,
+					})
+				: Effect.fail(new SoundboardConfigInvalid()),
+	};
 });
 
 export class SoundboardService extends Effect.Service<SoundboardService>()(
