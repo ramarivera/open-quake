@@ -13,7 +13,7 @@ Production desktop bindings and synthetic acceptance are implemented. Live provi
 - [ ] 2.1 Implement DashScope STT behind the facade; verify one run-task, readiness gating, 24kHz PCM frames, provisional replacement/final deduplication, one finish-task, malformed/close/timeout branches, and cancelled stale task IDs through the real transcript consumer, and document wire fixtures.
 - [ ] 2.2 Implement HTTP/SSE TTS behind the facade using the descriptor proved in 1.2; verify split SSE/base64 records, truncated/error streams, format rejection, ordered audio, cancel, and 30s synthesis timeout through the player consumer, and document provider limitations.
 - [ ] 2.3 Implement desktop mic permission/resampling/metering and exclusive AudioOutput playback; verify real preload correlation, 48kHz resampling, release-before-ready cleanup, normalized levels, player timeout/drain, and resource release with injected adapters, and document platform permissions.
-- [ ] 2.4 Wire ordered answer-segment TTS to ChatService; verify punctuation/200-char/2s flushes, 4,000-character overflow preserving text, ignored followUp speech, cancellation, and text-only continuation through the actual chat consumer, and document synthesis controls.
+- [x] 2.4 Wire ordered answer-segment TTS to ChatService; verify punctuation/200-char/2s flushes, 4,000-character overflow preserving text, ignored followUp speech, cancellation, and text-only continuation through the actual chat consumer, and document synthesis controls.
 - [ ] 2.5 Exercise an authorized macOS mic-to-STT-to-chat-to-TTS loop when credentials/audio are available; retain timing/format evidence without raw content or secrets, and mark physical audio/device acceptance unverified until exercised.
 
 - [ ] 2.6 Add the independent OpenAI TTS adapter (`AI-105`) with explicit model/voice/instructions/WAV descriptor, cancellation and output ownership; verify it through the actual player consumer, including text-only failure and late cancelled audio. Document the 2027-01-06 Speech API model shutdown, gate unavailable profiles, and verify any replacement transport separately before enabling it. Bead: `open-quake-c5w.13`.
@@ -59,7 +59,10 @@ input and muted natural-drain output; it doesn't verify a live provider or
 physical microphone/speaker. The parent composition test drives one finalized
 transcript through the selected external ConversationService into ordered
 answer speech, including original-fallback exclusion and retained safe failures.
-Direct ChatService answer consumption in 2.4 remains open.
+Direct ChatService answer consumption in 2.4 is verified by the actual
+production binding in speech/direct-composition.test.ts and composition.test.ts,
+using synthetic capture, fake provider fetch and controlled output drain.
+Live provider and physical audio acceptance in 2.5 remain open.
 
 
 ## Linux native-worker evidence, 2026-10-26
@@ -79,3 +82,22 @@ remain unverified, as do live STT/TTS credentials and physical hearing. The
 source and result artifacts remain external under `open-quake-finish/linux-audio/`
 in project scratch. The existing macOS synthetic smoke was reused with actual
 production driver capture and a nonzero generated output tone.
+
+## Direct speech consumer acceptance, 2026-10-26
+
+Task 2.4 drives finalized capture through the real direct ChatService, installed
+Vercel compatible adapter, VoiceSurface events, AiSpeechService and output
+consumer. Tests cover punctuation and 200-character segmentation, timed pending
+text, sequential natural drain after inference completion, cancellation,
+4,000-character overflow with readable chat intact, and synthesis failure with
+private text and credentials absent from diagnostics. Existing ordered/runtime
+TestClock tests verify the exact two-second boundary and ignored followUp chunks.
+
+Closing the voice scope previously removed its consumer without cancelling the
+host turn. It now cancels upstream before clearing ownership. Separately,
+interrupted SDK iteration previously waited for async-generator return before
+aborting pending IO. The adapter now aborts before return. Both fetch and body
+interruption regressions fail on the previous adapter; voice-only shutdown
+failed before its ownership fix. Tests assert cancelled durable history and
+stopped output. No live provider, physical microphone, audible output or device
+acceptance is claimed.

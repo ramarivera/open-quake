@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { describe, expect, it } from "@effect/vitest";
 import {
+	Cause,
 	Chunk,
 	Deferred,
 	Effect,
@@ -295,6 +296,70 @@ describe("production Vercel compatible adapter through real AiProviderService", 
 });
 
 describe("SDK abort and untrusted response boundaries", () => {
+	for (const phase of ["fetch", "body"] as const) {
+		it.effect(
+			`interrupts the real SDK consumer while ${phase} is pending without requiring explicit generation cancel`,
+			() => {
+				const started = Effect.runSync(Deferred.make<void>());
+				let aborted = false;
+				let calls = 0;
+				const adapter = makeVercelCompatibleAdapter((_url, init) => {
+					calls++;
+					if (phase === "fetch")
+						return new Promise<Response>((_resolve, reject) => {
+							init?.signal?.addEventListener(
+								"abort",
+								() => {
+									aborted = true;
+									reject(new DOMException("Aborted", "AbortError"));
+								},
+								{ once: true },
+							);
+							Effect.runSync(Deferred.succeed(started, undefined));
+						});
+					return Promise.resolve(
+						new Response(
+							new ReadableStream<Uint8Array>({
+								start(controller) {
+									init?.signal?.addEventListener(
+										"abort",
+										() => {
+											aborted = true;
+											controller.error(
+												new DOMException("Aborted", "AbortError"),
+											);
+										},
+										{ once: true },
+									);
+								},
+								pull() {
+									Effect.runSync(Deferred.succeed(started, undefined));
+								},
+							}),
+							{ headers: { "content-type": "text/event-stream" } },
+						),
+					);
+				});
+				return Effect.gen(function* () {
+					yield* (yield* AiRepository).put(workflowProfile);
+					const generation = yield* (yield* AiProviderService).generate(
+						workflowRequest,
+					);
+					const consumer = yield* Stream.runDrain(generation.events).pipe(
+						Effect.fork,
+					);
+					yield* Deferred.await(started);
+					const exit = yield* Fiber.interrupt(consumer);
+					expect(
+						exit._tag === "Failure" && Cause.isInterruptedOnly(exit.cause),
+					).toBe(true);
+					expect(aborted).toBe(true);
+					expect(calls).toBe(1);
+				}).pipe(Effect.provide(workflowLayer(adapter)));
+			},
+		);
+	}
+
 	it.effect(
 		"physically aborts a pending production SDK fetch when the real facade is cancelled",
 		() => {
