@@ -164,6 +164,7 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 									yield* Deferred.fail(ready, error);
 									if (generation === epoch) {
 										active = undefined;
+										updates = [];
 										reconnectAt = (yield* Clock.currentTimeMillis) + 500;
 									}
 									controller.abort();

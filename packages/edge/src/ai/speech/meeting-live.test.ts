@@ -1113,3 +1113,36 @@ it.effect(
 			expect(f.states.get("meeting")?.remoteFiles).toEqual(["owned-file"]);
 		}),
 );
+
+it.scoped(
+	"discards undelivered translation text when its socket disconnects",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			const live = yield* makeMeetingTranslation(s.transport, f.resolve);
+			yield* live.prepareTranslation(f.request.config);
+			yield* Queue.offer(s.queue, {
+				type: "response.text.delta",
+				response_id: "old",
+				delta: "stale paragraph",
+			});
+			yield* Effect.yieldNow();
+			yield* Queue.offer(s.queue, "disconnect");
+			yield* Effect.yieldNow();
+			const reconnect = yield* live
+				.translate(f.request.config, new Uint8Array(14400))
+				.pipe(Effect.fork);
+			yield* TestClock.adjust(500);
+			expect(yield* Fiber.join(reconnect)).toEqual([]);
+			yield* Queue.offer(s.queue, {
+				type: "response.text.done",
+				response_id: "new",
+				text: "fresh paragraph",
+			});
+			yield* Effect.yieldNow();
+			expect(
+				yield* live.translate(f.request.config, new Uint8Array(14400)),
+			).toMatchObject([{ id: "1:new", text: "fresh paragraph" }]);
+		}),
+);
