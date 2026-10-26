@@ -223,7 +223,11 @@ describe("serial lifecycle consumer", () => {
 							yield* TestClock.adjust(1);
 							expect(h.service.status().orientations).toHaveLength(2);
 							yield* h.service.onStatus(
-								{ ...connected, state: "disconnected", reason: "transport-ended" },
+								{
+									...connected,
+									state: "disconnected",
+									reason: "transport-ended",
+								},
 								"a",
 							);
 							yield* TestClock.adjust(1000);
