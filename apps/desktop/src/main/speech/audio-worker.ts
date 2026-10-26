@@ -72,7 +72,8 @@ export function installAudioWorker(
 					: [];
 			const selected = microphone
 				? recover(
-						microphone,
+						// groupId belongs to the settings document, not this worker.
+						{ ...microphone, groupId: "" },
 						devices.filter((d) => d.kind === "audioinput"),
 					)
 				: undefined;

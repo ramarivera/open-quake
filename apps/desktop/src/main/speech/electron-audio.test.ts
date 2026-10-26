@@ -17,6 +17,8 @@ const native = vi.hoisted(() => ({
 	failWindow: false,
 	failWrite: false,
 	captureError: "",
+	microphones: [] as { deviceId: string; label: string; groupId: string }[],
+	constraints: [] as MediaStreamConstraints[],
 	windows: [] as { url: string; destroyed: boolean }[],
 	contents: [] as unknown[],
 	sessions: [] as {
@@ -56,7 +58,10 @@ vi.mock("electron", () => ({
 			DOMException,
 			navigator: {
 				mediaDevices: {
-					getUserMedia: async () => {
+					enumerateDevices: async () =>
+						native.microphones.map((d) => ({ ...d, kind: "audioinput" })),
+					getUserMedia: async (constraints: MediaStreamConstraints) => {
+						native.constraints.push(constraints);
 						throw new DOMException(
 							"private input details",
 							native.captureError,
@@ -139,6 +144,8 @@ beforeEach(async () => {
 	native.failWrite = false;
 	native.failWindow = false;
 	native.captureError = "";
+	native.microphones = [];
+	native.constraints = [];
 	native.windows.length = 0;
 	native.sessions.length = 0;
 	native.contents.length = 0;
@@ -147,6 +154,64 @@ afterEach(async () => {
 	await rm(native.root, { recursive: true });
 });
 describe("owned Electron audio worker", () => {
+	it("resolves renderer identities in the capture worker session through the production bridge", async () => {
+		const saved = {
+			deviceId: "settings-salt-id",
+			label: "Desk mic",
+			groupId: "settings-document-group",
+		};
+		native.microphones = [
+			{
+				deviceId: "worker-salt-id",
+				label: "Desk mic",
+				groupId: "worker-document-group",
+			},
+			{ deviceId: "other-input", label: "Webcam", groupId: "other-group" },
+		];
+		// Deliberately reject after selection so this fixture never opens audio.
+		native.captureError = "NotReadableError";
+		const driver = createElectronCaptureDriver(undefined, () =>
+			Effect.succeed(saved),
+		);
+		await Effect.runPromise(driver.open("selected").pipe(Effect.either));
+		expect(native.constraints).toHaveLength(1);
+		expect(native.constraints[0]?.audio).toMatchObject({
+			deviceId: { exact: "worker-salt-id" },
+		});
+		expect(native.windows.every((window) => window.destroyed)).toBe(true);
+		expect(await readdir(native.root)).toEqual([]);
+	});
+	it.each(["missing", "ambiguous"])(
+		"doesn't substitute a %s cross-session microphone",
+		async (mode) => {
+			const saved = {
+				deviceId: "settings-salt-id",
+				label: "Desk mic",
+				groupId: "settings-group",
+			};
+			native.microphones =
+				mode === "missing"
+					? []
+					: [
+							{ deviceId: "worker-one", label: "Desk mic", groupId: "one" },
+							{ deviceId: "worker-two", label: "Desk mic", groupId: "two" },
+						];
+			native.captureError = "OverconstrainedError";
+			const result = await Effect.runPromise(
+				createElectronCaptureDriver(undefined, () => Effect.succeed(saved))
+					.open("selected")
+					.pipe(Effect.either),
+			);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: { code: "VOICE.CAPTURE.NO_DEVICE" },
+			});
+			expect(native.constraints).toHaveLength(1);
+			expect(native.constraints[0]?.audio).toMatchObject({
+				deviceId: { exact: saved.deviceId },
+			});
+		},
+	);
 	it.each([
 		["NotAllowedError", "VOICE.CAPTURE.PERMISSION_DENIED"],
 		["NotFoundError", "VOICE.CAPTURE.NO_DEVICE"],

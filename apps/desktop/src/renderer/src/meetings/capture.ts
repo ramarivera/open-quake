@@ -155,7 +155,8 @@ export function createMeetingCapture(
 						: undefined;
 					const selected = request.microphone
 						? recoverMicrophone(
-								request.microphone,
+								// The settings picker and capture host are separate documents.
+								{ ...request.microphone, groupId: "" },
 								devices?.filter((d) => d.kind === "audioinput") ?? [],
 							)
 						: undefined;

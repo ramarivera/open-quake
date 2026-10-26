@@ -130,11 +130,15 @@ The [official OpenAI TTS guide](https://developers.openai.com/api/docs/guides/te
 
 ### Requirement: Shared persistent microphone identity
 
-Evidence: AI-247, AI-281, KNOB-049, SETTINGS-019. Assistant and meeting capture SHALL use one saved microphone identity containing deviceId, label and groupId. Legacy strings and objects SHALL normalize to that identity; empty values mean system default. The picker SHALL enumerate audio inputs without opening a microphone, refresh on opening/device changes, and discard stale results. Recovery SHALL prefer exact ID, unique group, unique group plus label, then unique label only when no group is saved. Ambiguous or disconnected saved identities SHALL display an empty selection, preserve the saved value and fail exact acquisition without fallback. No saved choice SHALL prefer default then first input.
+Evidence: AI-247, AI-281, KNOB-049, SETTINGS-019. Assistant and meeting capture SHALL use one saved microphone identity containing deviceId, label and groupId. Legacy strings and objects SHALL normalize to that identity; empty values mean system default. The picker SHALL enumerate audio inputs without opening a microphone, refresh on opening/device changes, and discard stale results. Recovery SHALL prefer exact ID, unique group, unique group plus label, then unique label only when no group is saved. Ambiguous or disconnected saved identities SHALL display an empty selection, preserve the saved value and fail exact acquisition without fallback. No saved choice SHALL prefer default then first input. At an isolated capture document boundary, the saved groupId SHALL be excluded because it is document-specific. The capture document SHALL enumerate its own inputs and translate a foreign saved device ID only through a unique nonempty label; missing or ambiguous matches SHALL fail exact acquisition without fallback.
 
 #### Scenario: Identity changes and duplicates
 - **WHEN** an input ID changes but its saved group uniquely matches, or group plus label uniquely matches
 - **THEN** both capture consumers acquire that recovered exact ID, and ambiguous recovery never chooses an arbitrary input
+
+#### Scenario: Capture worker has a different media-device salt
+- **WHEN** settings saves a physical input with document-specific device and group IDs and an isolated capture worker enumerates the same uniquely labeled input
+- **THEN** capture uses the worker-local exact device ID, while missing or duplicate labels never select another input
 
 #### Scenario: Stale enumeration and unplugged microphone
 - **WHEN** an older enumeration resolves after a newer result or a saved input disappears

@@ -118,3 +118,7 @@ acceptance is claimed.
 
 - [x] Implement the shared identity, recorder format/control, runtime timing/error and knob duration requirements above with production consumer fixtures. Evidence: shared microphone/settings/worker tests, supported PCM input-rate and stereo fixtures, recorder lifetime/native rejection boundary tests, runtime TestClock level/deadline/terminal metrics fixtures, and mounted EN/DE picker checks. Beads open-quake-c5w.14 and open-quake-c5w.15 stay open for lead merge.
 - [ ] Complete physical microphone, OS permission/unplug/reconnect, provider and device acceptance under the lead's authorization. No physical recording or playback was performed by the speech-capture lane.
+
+## PR85 review corrections
+
+- [x] Resolve saved microphones against capture-local identities, excluding foreign document group IDs and retaining exact or unambiguous label selection. Regression drives the production Electron worker bridge with distinct settings/worker salts. Tracked in open-quake-c5w.17; physical acceptance remains on the checklist above.
