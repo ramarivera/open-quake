@@ -86,6 +86,56 @@ const input = (
 ): GridVoiceInput => ({ keyCode, kind, type: "aiChat" });
 const at = (ms: number) => TestClock.adjust(Duration.millis(ms));
 
+for (const blocker of ["meeting", "translation", "foreign"] as const)
+	it.scoped(
+		`same-key chat cancellation bypasses ${blocker} admission while new captures remain blocked`,
+		() => {
+			const rec = recorder();
+			let busy = false;
+			return Effect.gen(function* () {
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				yield* at(1000);
+				yield* GridVoice.input("QK", input("1,6", "touchEnd"));
+				yield* at(350);
+				yield* VoiceSurface.reserve("QK", "1,6", "turn/pre-meeting");
+				busy = true;
+				if (blocker === "foreign")
+					yield* VoiceSurface.reserve("OTHER", "1,7", "turn/foreign");
+				yield* GridVoice.input("QK", input("1,6", "down"));
+				expect(
+					rec.calls.filter((call) => call.startsWith("cancelFlow")),
+				).toEqual(["cancelFlow 1,6"]);
+				expect(rec.tones).toEqual([]);
+				yield* GridVoice.input("QK", input("1,7", "down"));
+				yield* at(1500);
+				expect(rec.calls).not.toContain("select 1,7");
+				expect(rec.calls.filter((call) => call.startsWith("start"))).toEqual([
+					"start 1,6 #1",
+				]);
+				expect(rec.tones).toEqual(["busy"]);
+			}).pipe(
+				Effect.provide(
+					stack(rec, fakeRuntime(rec)).pipe(
+						Layer.provide(
+							Layer.succeed(VoiceAdmission, {
+								check: () =>
+									Effect.sync(() =>
+										busy && blocker !== "foreign"
+											? Option.some(
+													blocker === "meeting"
+														? ("meetingAssistantPrompt.meetingActive" as const)
+														: ("meetingAssistantPrompt.liveTranslateActive" as const),
+												)
+											: Option.none(),
+									),
+							}),
+						),
+					),
+				),
+			);
+		},
+	);
+
 for (const replacement of [false, true])
 	it.scoped(
 		`knob interrupt cancels an early grid chat once and preserves successor=${replacement}`,

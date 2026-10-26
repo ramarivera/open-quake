@@ -207,54 +207,72 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 			serial: string,
 			event: GridVoiceInput,
 		): Effect.fn.Return<void> {
-			yield* Effect.annotateCurrentSpan({
-				keyCode: event.keyCode,
-				kind: event.kind,
-			});
-			if (
-				event.kind === "down" &&
-				!(yield* admitted(serial, event.keyCode, event.type))
-			)
-				return;
-			if (event.type === "clawbot" && event.voiceInput === false) {
-				if (event.kind === "down")
-					yield* runtime.select(
-						serial,
-						event.keyCode,
-						event.type,
-						Option.fromNullable(event.agentId),
-					);
-				return yield* surface.publish({
-					_tag: "KeyPress",
-					serial,
-					keyCode: event.keyCode,
-					action: event.kind === "down" ? "down" : "up",
-				});
-			}
-			yield* apply(serial, (now, activeFlow): HoldInput => {
-				switch (event.kind) {
-					case "down":
-						return {
-							_tag: "down",
+			yield* lock.withPermits(1)(
+				Effect.gen(function* () {
+					yield* Effect.annotateCurrentSpan({
+						keyCode: event.keyCode,
+						kind: event.kind,
+					});
+					const state =
+						(yield* Ref.get(states)).get(serial) ?? initialHoldState;
+					const cancelling =
+						event.kind === "down" &&
+						Option.isNone(state.held) &&
+						Option.exists(
+							yield* surface.activeFlow(serial),
+							(keyCode) => keyCode === event.keyCode,
+						);
+					if (
+						event.kind === "down" &&
+						!cancelling &&
+						!(yield* admitted(serial, event.keyCode, event.type))
+					)
+						return;
+					if (
+						!cancelling &&
+						event.type === "clawbot" &&
+						event.voiceInput === false
+					) {
+						if (event.kind === "down")
+							yield* runtime.select(
+								serial,
+								event.keyCode,
+								event.type,
+								Option.fromNullable(event.agentId),
+							);
+						return yield* surface.publish({
+							_tag: "KeyPress",
+							serial,
 							keyCode: event.keyCode,
-							type: event.type,
-							agentId: Option.fromNullable(event.agentId),
-							now,
-							activeFlow,
-						};
-					case "touchEnd":
-						return { _tag: "touchEnd", keyCode: event.keyCode, now };
-					case "touchCancel":
-						return { _tag: "touchCancel", keyCode: event.keyCode, now };
-					case "up":
-						return {
-							_tag: "up",
-							keyCode: event.keyCode,
-							now,
-							voiceTouchEnd: event.voiceTouchEnd === true,
-						};
-				}
-			});
+							action: event.kind === "down" ? "down" : "up",
+						});
+					}
+					yield* applyUnlocked(serial, (now, activeFlow): HoldInput => {
+						switch (event.kind) {
+							case "down":
+								return {
+									_tag: "down",
+									keyCode: event.keyCode,
+									type: event.type,
+									agentId: Option.fromNullable(event.agentId),
+									now,
+									activeFlow,
+								};
+							case "touchEnd":
+								return { _tag: "touchEnd", keyCode: event.keyCode, now };
+							case "touchCancel":
+								return { _tag: "touchCancel", keyCode: event.keyCode, now };
+							case "up":
+								return {
+									_tag: "up",
+									keyCode: event.keyCode,
+									now,
+									voiceTouchEnd: event.voiceTouchEnd === true,
+								};
+						}
+					});
+				}),
+			);
 		});
 
 		/** Profile change or disconnect: disarm and cancel a running capture. */

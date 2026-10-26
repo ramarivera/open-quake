@@ -524,6 +524,10 @@ For KNOB-007, KNOB-008, KNOB-064 and SCREEN-050, grid and knob voice SHALL check
 - **WHEN** grid recognition starts a chat while its key is still held and the knob interrupts
 - **THEN** the held capture resets and its active chat is cancelled once, while a successor with a different flow identity remains untouched
 
+#### Scenario: Meeting starts during a grid chat
+- **WHEN** a meeting, translation or foreign-device owner becomes busy after a grid chat starts and its key is pressed again
+- **THEN** the same-key cancellation reaches the hold reducer, while new selections and capture acquisition remain blocked
+
 ### Requirement: Explicit independent voice presentation
 
 SCREEN-112, SCREEN-113, SCREEN-118 and SCREEN-119 SHALL follow independent-device-design. The full-strip sheet SHALL use the device palette, a 96px state glyph and 48px/64px single-line transcript, with 72px bottom meter clearance. Grid capture SHALL show its transcript above the meter without covering the whole grid. Portrait rendering SHALL preserve the strip's logical coordinates. The meter SHALL clamp RMS to 0–1, smooth full-motion updates and show a static level under reduced motion. The Copilot presence ring SHALL expose status and microphone energy without decorative simulated audio. Full-motion activity SHALL stop on idle/unmount; reduced motion SHALL retain state without animation. Volume SHALL keep the existing 380×88 device capsule and inactive/activating/active/unavailable states, a bounded percentage, disabled unavailable/read-only controls and the shared 600ms gesture duplicate guard. These are accepted replacements for recovered cyan/magenta artwork, gradients and orb clouds, not exclusions of state, level or interaction behavior.
