@@ -1,5 +1,44 @@
 import type { QuakeEvent } from "../../../preload/quake";
 
+// Inspect JPEG frame dimensions before allowing the browser to allocate decoded pixels.
+// DNL/zero-height and multiple-frame streams are rejected rather than guessed.
+function boundedJpeg(bytes: readonly number[]): boolean {
+	let offset = 2;
+	let framed = false;
+	while (offset + 3 < bytes.length) {
+		if (bytes[offset++] !== 0xff) return false;
+		while (bytes[offset] === 0xff) offset++;
+		const marker = bytes[offset++];
+		const length = (bytes[offset] ?? 0) * 256 + (bytes[offset + 1] ?? 0);
+		if (length < 2 || offset + length > bytes.length - 2) return false;
+		if (marker === 0xda) return framed;
+		if (
+			marker !== undefined &&
+			marker >= 0xc0 &&
+			marker <= 0xcf &&
+			![0xc4, 0xc8, 0xcc].includes(marker)
+		) {
+			const height = (bytes[offset + 3] ?? 0) * 256 + (bytes[offset + 4] ?? 0);
+			const width = (bytes[offset + 5] ?? 0) * 256 + (bytes[offset + 6] ?? 0);
+			const components = bytes[offset + 7] ?? 0;
+			if (
+				framed ||
+				bytes[offset + 2] !== 8 ||
+				!width ||
+				!height ||
+				width * height > 64_000_000 ||
+				components < 1 ||
+				components > 4 ||
+				length !== 8 + 3 * components
+			)
+				return false;
+			framed = true;
+		}
+		offset += length;
+	}
+	return false;
+}
+
 /** Bounded per-cell resource assembly. Sequence zero completes a JPEG. */
 export function createStripResourceReceiver(
 	publish: (keyCode: string, dataUrl: string) => void,
@@ -44,7 +83,8 @@ export function createStripResourceReceiver(
 				bytes[0] !== 0xff ||
 				bytes[1] !== 0xd8 ||
 				bytes.at(-2) !== 0xff ||
-				bytes.at(-1) !== 0xd9
+				bytes.at(-1) !== 0xd9 ||
+				!boundedJpeg(bytes)
 			)
 				return;
 			let text = "";

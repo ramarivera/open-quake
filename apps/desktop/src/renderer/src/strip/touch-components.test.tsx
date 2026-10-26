@@ -266,12 +266,15 @@ describe("touch production components", () => {
 								opCode: 2,
 								metadata: [1, 1, 1, 0, 0],
 								sequence: 0,
-								payload: [255, 216, 255, 217],
+								payload: [
+									255, 216, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255,
+									218, 0, 8, 1, 1, 0, 0, 63, 0, 255, 217,
+								],
 							},
 						});
 				});
 				const image = document.querySelector(
-					'[data-key-code="1,1"] img[src="data:image/jpeg;base64,/9j/2Q=="]',
+					'[data-key-code="1,1"] img[src^="data:image/jpeg;base64,"]',
 				);
 				expect(image).not.toBeNull();
 				// End the preceding touch contact before exercising legacy press-only matrix input.

@@ -318,3 +318,16 @@ limits SHALL not be weakened through environment overrides.
 #### Scenario: Packaged custom fixtures
 - **WHEN** a packaged application starts with custom fake-device JSON
 - **THEN** startup fails before importing the production composition root
+
+### Requirement: Incoming device images have bounded decoded dimensions
+Audit rows MAIN-008 and SCREEN-144. Before publishing an A2 JPEG to a renderer
+image element, the resource receiver SHALL enforce both 8 MiB compressed bytes
+and 64 million decoded pixels, matching the desktop image budget. It SHALL read
+JPEG SOF dimensions before rendering and reject missing, zero, truncated,
+conflicting or excessive dimensions, including progressive JPEG frames.
+
+#### Scenario: Small compressed image expands beyond the pixel budget
+- **WHEN** an otherwise valid bounded A2 image declares a 65535 by 65535 JPEG frame
+- **THEN** no data URL is published or rendered
+- **WHEN** a complete JPEG frame is within the decoded-pixel budget
+- **THEN** ordinary sequenced resource assembly still publishes it to its target cell

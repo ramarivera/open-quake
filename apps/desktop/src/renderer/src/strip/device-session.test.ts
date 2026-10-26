@@ -87,12 +87,16 @@ it("assembles resource sequences at the correct cell, drops gaps and clears part
 			kind: "resource",
 			envelope: { opCode: 2, metadata: [1, 2, 8, 0, 0], sequence, payload },
 		});
-	frame(1, [255, 216]);
-	frame(2, [1, 2]);
-	frame(0, [255, 217]);
+	const image = [
+		255, 216, 255, 192, 0, 11, 8, 0, 1, 0, 1, 1, 1, 17, 0, 255, 218, 0, 8, 1, 1,
+		0, 0, 63, 0, 255, 217,
+	];
+	frame(1, image.slice(0, 8));
+	frame(2, image.slice(8, -2));
+	frame(0, image.slice(-2));
 	expect(publish).toHaveBeenCalledWith(
 		"2,8",
-		"data:image/jpeg;base64,/9gBAv/Z",
+		`data:image/jpeg;base64,${btoa(String.fromCharCode(...image))}`,
 	);
 	publish.mockClear();
 	frame(1, [255, 216]);
@@ -114,3 +118,62 @@ it("accepts only supported row counts and forces eight columns", () => {
 	expect(negotiateDeviceMatrix(2, 10)).toEqual({ row: 2, col: 8 });
 	expect(negotiateDeviceMatrix(3, 8)).toBeUndefined();
 });
+
+it.each([0xc0, 0xc2])(
+	"rejects compressed JPEGs with excessive decoded dimensions before publication, SOF %s",
+	(sof) => {
+		const publish = vi.fn();
+		const receiver = createStripResourceReceiver(publish);
+		const jpeg = (width: number, height: number) => [
+			255,
+			216,
+			255,
+			sof,
+			0,
+			11,
+			8,
+			height >> 8,
+			height & 255,
+			width >> 8,
+			width & 255,
+			1,
+			1,
+			17,
+			0,
+			255,
+			218,
+			0,
+			8,
+			1,
+			1,
+			0,
+			0,
+			63,
+			0,
+			255,
+			217,
+		];
+		const frame = (payload: readonly number[]) =>
+			receiver.accept({
+				source: "hid",
+				kind: "resource",
+				envelope: {
+					opCode: 2,
+					metadata: [1, 1, 1, 0, 0],
+					sequence: 0,
+					payload,
+				},
+			});
+		frame(jpeg(65535, 65535));
+		expect(publish).not.toHaveBeenCalled();
+		frame(jpeg(0, 480));
+		frame([255, 216, 255, sof, 255, 255, 8, 255, 217]);
+		frame([255, 216, 255, 217]);
+		expect(publish).not.toHaveBeenCalled();
+		frame(jpeg(8000, 8000));
+		expect(publish).toHaveBeenCalledOnce();
+		publish.mockClear();
+		frame(jpeg(8001, 8000));
+		expect(publish).not.toHaveBeenCalled();
+	},
+);
