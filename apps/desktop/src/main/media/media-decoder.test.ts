@@ -106,3 +106,32 @@ it("destroys a pending metadata worker on interruption", async () => {
 	await Effect.runPromise(Fiber.interrupt(fiber));
 	expect(native.destroy).toHaveBeenCalledOnce();
 });
+
+it("serves cached metadata while an unrelated video probe is pending", async () => {
+	let entered: () => void = () => {};
+	const ready = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	let resume: (value: unknown) => void = () => {};
+	await Effect.runPromise(
+		Effect.gen(function* () {
+			const decoder = yield* MediaDecoder;
+			yield* decoder.decode(headers[0].bytes);
+			native.metadata.mockImplementationOnce(() => {
+				entered();
+				return new Promise((resolve) => {
+					resume = resolve;
+				});
+			});
+			const pending = yield* Effect.fork(decoder.decode(headers[2].bytes));
+			yield* Effect.promise(() => ready);
+			const cached = yield* decoder
+				.decode(headers[0].bytes)
+				.pipe(Effect.timeoutOption(100));
+			resume({ width: 320, height: 80, durationMs: 3000 });
+			yield* Fiber.join(pending);
+			expect(cached._tag).toBe("Some");
+			expect(native.metadata).toHaveBeenCalledTimes(2);
+		}).pipe(Effect.provide(MediaDecoder.Default)),
+	);
+});

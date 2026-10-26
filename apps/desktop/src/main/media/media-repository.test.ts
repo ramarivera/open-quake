@@ -12,8 +12,20 @@ import { makeMediaController } from "./media-controller";
 import { MediaFiles, MediaRoot } from "./media-files";
 import { MediaRepository } from "./media-repository";
 
-const native = vi.hoisted(() => ({ decode: vi.fn() }));
+const native = vi.hoisted(() => ({
+	decode: vi.fn(),
+	metadata: vi.fn<() => Promise<unknown>>(),
+}));
 vi.mock("electron", () => ({
+	BrowserWindow: class {
+		webContents = {
+			setAudioMuted: () => {},
+			executeJavaScript: native.metadata,
+		};
+		loadURL = async () => {};
+		isDestroyed = () => false;
+		destroy = () => {};
+	},
 	nativeImage: { createFromBuffer: native.decode },
 }));
 vi.mock("node:fs/promises", async (load) => {
@@ -46,6 +58,12 @@ describe("desktop media repository and actual disk adapter", () => {
 			`${createHash("sha256").update(serial).digest("hex")}.json`,
 		);
 	beforeEach(async () => {
+		native.metadata.mockReset();
+		native.metadata.mockResolvedValue({
+			width: 320,
+			height: 80,
+			durationMs: 3000,
+		});
 		directory = await fs.mkdtemp(join(tmpdir(), "open-quake-media-"));
 		root = join(directory, "managed");
 		imagePath = join(directory, "corners.png");
@@ -60,6 +78,154 @@ describe("desktop media repository and actual disk adapter", () => {
 	});
 	afterEach(async () => {
 		await fs.rm(directory, { recursive: true, force: true });
+	});
+
+	it("probes video once across import, duplicate import, save and snapshots while verifying managed bytes", async () => {
+		const videoPath = join(directory, "silent.webm");
+		await fs.writeFile(videoPath, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				const imported = yield* repo.importLocal("A", 0, videoPath, true);
+				yield* repo.importLocal("A", 1, videoPath, true);
+				yield* repo.save(
+					"A",
+					1,
+					{ ...imported.saved.settings, enableSound: true },
+					imported.saved.clock,
+				);
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publish: () => Effect.void,
+					publishClock: () => Effect.void,
+				});
+				yield* controller.request({ _tag: "select", serial: "A" });
+				for (let i = 0; i < 4; i++)
+					expect((yield* controller.request({ _tag: "read" })).asset._tag).toBe(
+						"ready",
+					);
+				expect(native.metadata).toHaveBeenCalledTimes(1);
+				const media = imported.saved.settings.displayMediaList[0];
+				if (!media) throw new Error("Missing video");
+				expect(
+					(yield* repo
+						.resolve({
+							...imported.saved,
+							settings: {
+								...imported.saved.settings,
+								displayMediaList: [
+									{ ...media, type: "video", format: "video/mp4" },
+								],
+							},
+						})
+						.pipe(Effect.either))._tag,
+				).toBe("Left");
+				yield* Effect.promise(() =>
+					fs.writeFile(
+						join(assetsDirectory("A"), media.filePath.slice(6)),
+						"tampered",
+					),
+				);
+				expect((yield* controller.request({ _tag: "read" })).asset._tag).toBe(
+					"unreadable",
+				);
+				expect(native.metadata).toHaveBeenCalledTimes(1);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+
+	it("keeps controller reads and selection responsive during a video import probe", async () => {
+		const videoPath = join(directory, "slow.webm");
+		await fs.writeFile(videoPath, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+		let entered: () => void = () => {};
+		const ready = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		let resume: (value: unknown) => void = () => {};
+		native.metadata.mockImplementationOnce(() => {
+			entered();
+			return new Promise((resolve) => {
+				resume = resolve;
+			});
+		});
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.some(videoPath)),
+					publish: () => Effect.void,
+					publishClock: () => Effect.void,
+				});
+				const pending = yield* Effect.fork(
+					controller.request({
+						_tag: "import",
+						serial: "desktop-preview",
+						revision: 0,
+						append: true,
+					}),
+				);
+				yield* Effect.promise(() => ready);
+				const read = yield* controller
+					.request({ _tag: "read" })
+					.pipe(Effect.timeoutOption(100));
+				const selection = yield* controller
+					.request({ _tag: "select", serial: "B" })
+					.pipe(Effect.timeoutOption(100));
+				resume({ width: 320, height: 80, durationMs: 3000 });
+				yield* Fiber.join(pending);
+				expect(Option.isSome(read)).toBe(true);
+				expect(Option.isSome(selection)).toBe(true);
+				expect((yield* controller.request({ _tag: "read" })).saved.serial).toBe(
+					"B",
+				);
+				expect(native.metadata).toHaveBeenCalledTimes(1);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+
+	it("discards a cold video snapshot after selection changes without blocking the new selection", async () => {
+		const videoPath = join(directory, "cold.webm");
+		await fs.writeFile(videoPath, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+		await Effect.runPromise(
+			MediaRepository.importLocal("A", 0, videoPath).pipe(
+				Effect.provide(layer),
+			),
+		);
+		let entered: () => void = () => {};
+		const ready = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		let resume: (value: unknown) => void = () => {};
+		native.metadata.mockImplementationOnce(() => {
+			entered();
+			return new Promise((resolve) => {
+				resume = resolve;
+			});
+		});
+		const shown: string[] = [];
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publish: (snapshot) =>
+						Effect.sync(() => {
+							shown.push(snapshot.saved.serial);
+						}),
+					publishClock: () => Effect.void,
+				});
+				const pending = yield* Effect.fork(
+					controller.request({ _tag: "select", serial: "A" }),
+				);
+				yield* Effect.promise(() => ready);
+				const selection = yield* controller
+					.request({ _tag: "select", serial: "B" })
+					.pipe(Effect.timeoutOption(100));
+				resume({ width: 320, height: 80, durationMs: 3000 });
+				const result = yield* Fiber.join(pending);
+				expect(Option.isSome(selection)).toBe(true);
+				expect(result.saved.serial).toBe("B");
+				expect(shown).toEqual(["B", "B"]);
+			}).pipe(Effect.provide(layer)),
+		);
 	});
 
 	it("accepts decoded PNG/JPEG and normalizes selected legacy file URLs", async () => {

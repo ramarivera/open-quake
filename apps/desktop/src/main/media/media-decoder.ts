@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Effect, Schema } from "effect";
 import { BrowserWindow } from "electron";
 import { DESKTOP_RESOURCE_LIMIT, MediaUnreadable } from "../../shared/display";
@@ -17,20 +18,59 @@ export class MediaDecoder extends Effect.Service<MediaDecoder>()(
 		dependencies: [ImageDecoder.Default],
 		effect: Effect.gen(function* () {
 			const images = yield* ImageDecoder;
+			// Retain metadata only, never the up-to-11 MiB data URL. Serialize misses
+			// so concurrent reads/imports of identical content share one native probe.
+			const metadata = new Map<string, Omit<DecodedVideo, "dataUrl">>();
+			const probeLock = yield* Effect.makeSemaphore(1);
+			const video = Effect.fn("MediaDecoder.video")(function* (
+				bytes: Buffer,
+				format: DecodedVideo["format"],
+			) {
+				if (!bytes.length || bytes.length > DESKTOP_RESOURCE_LIMIT)
+					return yield* new MediaUnreadable(undefined);
+				const hash = createHash("sha256").update(bytes).digest("hex");
+				const ready = metadata.get(hash);
+				if (ready) {
+					metadata.delete(hash);
+					metadata.set(hash, ready);
+					return {
+						...ready,
+						dataUrl: `data:${ready.format};base64,${bytes.toString("base64")}`,
+					};
+				}
+				return yield* probeLock.withPermits(1)(
+					Effect.gen(function* () {
+						let cached = metadata.get(hash);
+						if (!cached) {
+							const decoded = yield* Effect.tryPromise({
+								try: (signal) => probeVideo(bytes, format, signal),
+								catch: (cause) => new MediaUnreadable(cause),
+							});
+							cached = {
+								format: decoded.format,
+								width: decoded.width,
+								height: decoded.height,
+								durationMs: decoded.durationMs,
+							};
+						}
+						metadata.delete(hash);
+						metadata.set(hash, cached);
+						if (metadata.size > 256) {
+							const oldest = metadata.keys().next().value;
+							if (oldest !== undefined) metadata.delete(oldest);
+						}
+						return {
+							...cached,
+							dataUrl: `data:${cached.format};base64,${bytes.toString("base64")}`,
+						};
+					}),
+				);
+			});
 			return {
 				decode: Effect.fn("MediaDecoder.decode")(
 					(bytes: Buffer): Effect.Effect<DecodedMedia, MediaUnreadable> => {
 						const format = videoFormat(bytes);
-						return format
-							? Effect.tryPromise({
-									try: (signal) => {
-										if (!bytes.length || bytes.length > DESKTOP_RESOURCE_LIMIT)
-											throw new MediaUnreadable(undefined);
-										return probeVideo(bytes, format, signal);
-									},
-									catch: (cause) => new MediaUnreadable(cause),
-								})
-							: images.decode(bytes);
+						return format ? video(bytes, format) : images.decode(bytes);
 					},
 				),
 			};
