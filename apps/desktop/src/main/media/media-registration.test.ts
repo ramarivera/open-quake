@@ -30,7 +30,10 @@ vi.mock("electron", async () => {
 });
 
 class TestWindow extends EventEmitter {
+	readonly mediaEvents = new EventEmitter();
 	readonly webContents = {
+		on: this.mediaEvents.on.bind(this.mediaEvents),
+		removeListener: this.mediaEvents.removeListener.bind(this.mediaEvents),
 		mainFrame: {},
 		getURL: () => "file:///app/index.html?surface=management",
 		isDestroyed: () => false,
@@ -105,6 +108,20 @@ describe("explicit media registration", () => {
 					_tag: "success",
 					snapshot: { saved: { serial } },
 				});
+			const sent = () =>
+				a.webContents.send.mock.calls.filter(
+					([channel]) => channel === WALLPAPER_SNAPSHOT,
+				);
+			const countBytes = () =>
+				(JSON.stringify(sent()).match(/dataUrl/g) ?? []).length;
+			expect(countBytes()).toBe(1);
+			await invoke(a, { _tag: "read" });
+			expect(countBytes()).toBe(1);
+			expect(JSON.stringify(sent().at(-1))).toContain('"cached"');
+			a.mediaEvents.emit("did-start-loading");
+			await invoke(a, { _tag: "read" });
+			expect(countBytes()).toBe(2);
+
 			await invoke(management, { _tag: "select", serial: "A" });
 			expect(await invoke(b, { _tag: "read" })).toMatchObject({
 				snapshot: { saved: { serial: "B" } },

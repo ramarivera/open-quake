@@ -257,3 +257,8 @@ For SCREEN-123, the desktop-clock contract SHALL retain five independent app-own
 
 - **WHEN** MAIN-149 reports a multi-screen alert on the connection page
 - **THEN** a visible Bind Quake screens action submits bind-all to the existing lifecycle queue, without opening another HID owner
+
+#### Scenario: Preload promotion avoids repeated media bytes
+
+- **WHEN** SCREEN-105 and WIDGETS-130 preload the next item and then promote it to active in an already subscribed window
+- **THEN** each asset transfers as full bytes once and later snapshots use content references; a new or reloaded window receives complete media, with only the current and next asset retained per window

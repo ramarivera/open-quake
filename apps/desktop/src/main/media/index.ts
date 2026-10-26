@@ -13,6 +13,7 @@ import {
 	type WallpaperReply,
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
+import { WallpaperSender } from "../../shared/wallpaper-transfer";
 import type { DesktopRuntime } from "../diagnostics/module";
 import { type MediaController, makeMediaController } from "./media-controller";
 import { MediaRoot } from "./media-files";
@@ -56,6 +57,7 @@ export function registerMedia(
 	applyBackground: (snapshot: WallpaperSnapshot) => void = () => {},
 ): { dispose: () => Promise<void>; selectionSerial: () => Promise<string> } {
 	const audio = wallpaperAudioSession(acquireSound);
+	const transfers = new WeakMap<Electron.WebContents, WallpaperSender>();
 	let audioEpoch = 0;
 	let audioKey = "";
 	let audioSender: Electron.WebContents | undefined;
@@ -180,11 +182,25 @@ export function registerMedia(
 							audioEpoch++;
 							yield* Effect.promise(() => audio.stop());
 						}
-						yield* broadcast(
-							WALLPAPER_SNAPSHOT,
-							snapshot,
-							(window) => panelSerial(window.webContents) === serial,
-						);
+						yield* Effect.sync(() => {
+							for (const window of BrowserWindow.getAllWindows()) {
+								if (
+									window.isDestroyed() ||
+									window.webContents.isDestroyed() ||
+									panelSerial(window.webContents) !== serial
+								)
+									continue;
+								let sender = transfers.get(window.webContents);
+								if (!sender) {
+									sender = new WallpaperSender();
+									transfers.set(window.webContents, sender);
+								}
+								window.webContents.send(
+									WALLPAPER_SNAPSHOT,
+									sender.encode(snapshot),
+								);
+							}
+						});
 					}),
 				publishClock: (clock) =>
 					broadcast(
@@ -255,6 +271,8 @@ export function registerMedia(
 	const removeVisibilityListeners = new Set<() => void>();
 	const trackWindow = (window: BrowserWindow): void => {
 		const contents = window.webContents;
+		const resetTransfers = () => transfers.delete(contents);
+		contents.on("did-start-loading", resetTransfers);
 		const deactivate = (): void => {
 			if (audioSender === contents || window === panelWindow()) {
 				audioEpoch++;
@@ -265,6 +283,8 @@ export function registerMedia(
 			}
 		};
 		const remove = (): void => {
+			contents.removeListener("did-start-loading", resetTransfers);
+			transfers.delete(contents);
 			window.removeListener("hide", deactivate);
 			window.removeListener("closed", onClosed);
 			removeVisibilityListeners.delete(remove);

@@ -289,3 +289,42 @@ it.scoped(
 			yield* Fiber.interrupt(fiber);
 		}),
 );
+
+it.scoped(
+	"SCREEN-105 sends each preload asset only once across transition and hydrates late subscribers",
+	() =>
+		Effect.gen(function* () {
+			const f = playlistFixture();
+			const controller = yield* f.make;
+			const first = yield* controller.request({ _tag: "select", serial: "A" });
+			const frames: unknown[] = [];
+			// Exercise the production wire owner with controller snapshots, including preload promotion.
+			const { WallpaperSender, WallpaperReceiver } = yield* Effect.promise(
+				() => import("../../shared/wallpaper-transfer"),
+			);
+			const sender = new WallpaperSender();
+			const receiver = new WallpaperReceiver();
+			frames.push(sender.encode(first));
+			expect(receiver.decode(frames[0])).toEqual(first);
+			const ticks = yield* Effect.forkScoped(controller.ticks);
+			yield* TestClock.adjust(4000);
+			const preload = yield* controller.request({ _tag: "read" });
+			frames.push(sender.encode(preload));
+			expect(receiver.decode(frames[1])).toEqual(preload);
+			yield* TestClock.adjust(200);
+			const active = yield* controller.request({ _tag: "read" });
+			frames.push(sender.encode(active));
+			expect(receiver.decode(frames[2])).toEqual(active);
+			expect(JSON.stringify(frames).match(/dataUrl/g)).toHaveLength(2);
+			const late = new WallpaperSender();
+			expect(new WallpaperReceiver().decode(late.encode(active))).toEqual(
+				active,
+			);
+			// Navigation clears sender state, so the reloaded renderer gets full bytes again.
+			sender.clear();
+			expect(new WallpaperReceiver().decode(sender.encode(active))).toEqual(
+				active,
+			);
+			yield* Fiber.interrupt(ticks);
+		}),
+);
