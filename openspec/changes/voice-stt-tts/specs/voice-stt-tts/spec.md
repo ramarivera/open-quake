@@ -199,11 +199,15 @@ Evidence: AI-045, AI-046, AI-099, AI-106, AI-245. Azure SHALL use a main-owned s
 
 ### Requirement: XFY signed speech protocols
 
-Evidence: AI-047, AI-100, AI-107. XFY SHALL resolve APPID, API key and secret only inside the main-owned adapter from one encrypted write-only bundle. HMAC-SHA256 signing SHALL use the exact host, RFC1123 date and request line. IAT SHALL convert 24kHz PCM to 16kHz with streaming phase preserved, send status 0 then 1 then one status 2 only after nonempty audio, use explicit en_us or zh_cn language and wpgs revisions, replacing the entire inclusive revision range. TTS SHALL send UTF8 base64 text, selected aisxping voice, raw 16kHz output, and convert it to the shared 24kHz descriptor. Both SHALL reject provider errors, malformed or oversized audio, enforce final deadlines and close on cancellation.
+Evidence: AI-047, AI-100, AI-107. XFY SHALL resolve APPID, API key and secret only inside the main-owned adapter from one encrypted write-only bundle. HMAC-SHA256 signing SHALL use the exact host, RFC1123 date and request line. IAT SHALL convert 24kHz PCM to 16kHz with streaming phase preserved, send status 0 then 1 then one status 2 only after nonempty audio, use explicit en_us or zh_cn language and wpgs revisions, replacing the entire inclusive revision range. A provider status-2 result before release SHALL end capture and return its final transcript without another finish frame. TTS SHALL send UTF8 base64 text, selected aisxping voice, raw 16kHz output, and convert it to the shared 24kHz descriptor. Both SHALL reject provider errors, malformed or oversized audio, enforce final deadlines and close on cancellation.
 
 #### Scenario: Inclusive correction
 - **WHEN** an IAT revision replaces segments one through three
 - **THEN** all three old segments disappear, the revision appears once, and only status 2 yields final text
+
+#### Scenario: Server ends recognition
+- **WHEN** the IAT server returns status 2 while the capture stream remains open
+- **THEN** recognition returns its final transcript, interrupts capture and closes its scoped socket without sending an additional finish frame
 
 ### Requirement: Explicit gated Qwen realtime synthesis
 

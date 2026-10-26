@@ -420,6 +420,187 @@ describe("independent speech provider conformance", () => {
 				expect(f.state().closed).toBe(1);
 			}),
 	);
+	it.effect(
+		"XFY server final stops a still-open capture without a duplicate finish",
+		() =>
+			Effect.gen(function* () {
+				const f = yield* fixture(
+					() => [
+						{
+							code: 0,
+							data: {
+								status: 2,
+								result: { sn: 0, ws: [{ cw: [{ w: "final" }] }] },
+							},
+						},
+					],
+					JSON.stringify({ appId: "app", apiKey: "key", apiSecret: "secret" }),
+				);
+				const updates: boolean[] = [];
+				expect(
+					yield* AiSpeechService.recognize(
+						xfy,
+						Stream.concat(Stream.make(frame()), Stream.never),
+						(t) =>
+							Effect.sync(() => {
+								updates.push(t.final);
+							}),
+					).pipe(Effect.provide(f.layer)),
+				).toBe("final");
+				expect(updates).toEqual([true]);
+				expect(f.sent.map((e) => object(e.data).status)).toEqual([0]);
+				expect(f.state()).toEqual({ closed: 1, aborted: true });
+			}),
+	);
+	for (const provider of [
+		"xfy-stt",
+		"xfy-tts",
+		"qwen-config",
+		"qwen-final",
+	] as const) {
+		for (const ending of ["timeout", "cancel", "error"] as const)
+			it.effect(
+				`${provider} ${ending} closes its scoped socket without audio`,
+				() =>
+					Effect.gen(function* () {
+						const f = yield* fixture(
+							(e) =>
+								provider === "qwen-final" && e.type === "session.update"
+									? [{ type: "session.updated" }]
+									: [],
+							JSON.stringify({
+								appId: "app",
+								apiKey: "key",
+								apiSecret: "secret",
+							}),
+						);
+						const task =
+							provider === "xfy-stt"
+								? AiSpeechService.recognize(xfy, Stream.make(frame())).pipe(
+										Effect.asVoid,
+									)
+								: AiSpeechService.synthesize(
+										provider === "xfy-tts" ? xfyTts : qwen,
+										"hello",
+									).pipe(Effect.asVoid);
+						const fiber = yield* task.pipe(
+							Effect.provide(f.layer),
+							Effect.either,
+							Effect.fork,
+						);
+						// WebCrypto is real CPU-only work. Await the first outbound provider frame.
+						yield* Deferred.await(f.opened);
+						if (ending === "cancel") yield* Fiber.interrupt(fiber);
+						else {
+							if (ending === "error")
+								yield* Queue.offer(
+									f.messages,
+									provider.startsWith("xfy")
+										? { code: 100, message: "private-key private transcript" }
+										: {
+												type: "error",
+												error: { message: "private-key private transcript" },
+											},
+								);
+							else
+								yield* TestClock.adjust(
+									provider === "xfy-stt"
+										? "15 seconds"
+										: provider === "qwen-config"
+											? "10 seconds"
+											: "30 seconds",
+								);
+							const result = yield* Fiber.join(fiber);
+							expect(result._tag).toBe("Left");
+							expect(JSON.stringify(result)).not.toContain("private-key");
+						}
+						expect(f.state()).toEqual({ closed: 1, aborted: true });
+					}),
+			);
+	}
+	it.effect("XFY empty stream sends no status or final frames", () =>
+		Effect.gen(function* () {
+			const f = yield* fixture(
+				() => [],
+				JSON.stringify({ appId: "app", apiKey: "key", apiSecret: "secret" }),
+			);
+			expect(
+				yield* AiSpeechService.recognize(xfy, Stream.empty).pipe(
+					Effect.provide(f.layer),
+				),
+			).toBe("");
+			expect(f.sent).toHaveLength(0);
+			expect(f.state().closed).toBe(1);
+		}),
+	);
+	it.effect(
+		"Qwen rejects another response's audio and still clears its owned buffer",
+		() =>
+			Effect.gen(function* () {
+				const f = yield* fixture((e) =>
+					e.type === "session.update"
+						? [{ type: "session.updated" }]
+						: e.type === "input_text_buffer.commit"
+							? [
+									{ type: "response.created", response: { id: "own" } },
+									{
+										type: "response.audio.delta",
+										response_id: "stale",
+										delta: "AAABAA==",
+									},
+								]
+							: [],
+				);
+				const result = yield* AiSpeechService.synthesize(qwen, "hello").pipe(
+					Effect.provide(f.layer),
+					Effect.either,
+				);
+				expect(result).toMatchObject({
+					_tag: "Left",
+					left: { _tag: "AiProtocolInvalid" },
+				});
+				expect(f.sent.map((e) => e.type)).toContain("input_text_buffer.clear");
+				expect(f.sent.every((e) => typeof e.event_id === "string")).toBe(true);
+			}),
+	);
+	it.effect(
+		"invalid provider profiles fail before credential or network access",
+		() =>
+			Effect.gen(function* () {
+				let reads = 0,
+					connects = 0;
+				const layer = AiSpeechService.Default.pipe(
+					Layer.provide(
+						Layer.mergeAll(
+							Layer.succeed(AiCredentials, {
+								resolve: () =>
+									Effect.sync(() => {
+										reads++;
+										return Redacted.make("private-key");
+									}),
+								revoked: () => Effect.never,
+							}),
+							Layer.succeed(SpeechWebSocket, {
+								connect: () => {
+									connects++;
+									return Effect.die("unexpected network");
+								},
+							}),
+						),
+					),
+				);
+				const result = yield* AiSpeechService.recognize(
+					{ ...openai, baseUrl: "wss://evil.example" },
+					Stream.empty,
+				).pipe(Effect.provide(layer), Effect.either);
+				expect(result).toMatchObject({
+					_tag: "Left",
+					left: { _tag: "AiConfigInvalid" },
+				});
+				expect([reads, connects]).toEqual([0, 0]);
+			}),
+	);
+
 	it("resampling retains phase across unequal frame boundaries", () => {
 		const input = new Uint8Array(1800);
 		const view = new DataView(input.buffer);

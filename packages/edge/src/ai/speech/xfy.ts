@@ -79,7 +79,6 @@ export function recognizeXfy(
 			Effect.gen(function* () {
 				const result = yield* Deferred.make<string, AiError>();
 				const segments = new Map<number, string>();
-				let finishing = false;
 				const reader = Effect.gen(function* () {
 					while (true) {
 						const event = yield* receiveObject(socket);
@@ -129,7 +128,6 @@ export function recognizeXfy(
 						if (text.length > 64000) return yield* new AiProtocolInvalid();
 						yield* onTranscript({ text, final: data.status === 2 });
 						if (data.status === 2) {
-							if (!finishing) return yield* new AiProtocolInvalid();
 							yield* Deferred.succeed(result, text);
 							return;
 						}
@@ -170,7 +168,6 @@ export function recognizeXfy(
 						return converted.length ? send(converted) : Effect.void;
 					});
 					if (!count) return "";
-					finishing = true;
 					return yield* phase(
 						Effect.gen(function* () {
 							const tail = convert(new Uint8Array(), true);
@@ -188,10 +185,8 @@ export function recognizeXfy(
 						"final",
 					);
 				});
-				const text = yield* Effect.raceFirst(
-					sender,
-					Deferred.await(result).pipe(Effect.zipRight(Effect.never)),
-				);
+				// IAT may finish on its own silence/utterance boundary before Stop.
+				const text = yield* Effect.raceFirst(sender, Deferred.await(result));
 				yield* Fiber.interrupt(fiber);
 				return text;
 			}),

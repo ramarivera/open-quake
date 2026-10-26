@@ -25,21 +25,21 @@ export function synthesizeQwenRealtime(
 		{ Authorization: `Bearer ${key}` },
 		(socket) =>
 			Effect.gen(function* () {
+				const emit = (event: object) =>
+					sendEvent(socket, { ...event, event_id: crypto.randomUUID() });
 				let completed = false;
 				yield* Effect.addFinalizer(() =>
 					Effect.gen(function* () {
 						if (!completed)
-							yield* sendEvent(socket, {
+							yield* emit({
 								type: "input_text_buffer.clear",
 							}).pipe(Effect.ignore);
-						yield* sendEvent(socket, { type: "session.finish" }).pipe(
-							Effect.ignore,
-						);
+						yield* emit({ type: "session.finish" }).pipe(Effect.ignore);
 					}).pipe(Effect.timeoutOption("1 second"), Effect.asVoid),
 				);
 				yield* phase(
 					Effect.gen(function* () {
-						yield* sendEvent(socket, {
+						yield* emit({
 							type: "session.update",
 							session: {
 								mode: "commit",
@@ -57,8 +57,8 @@ export function synthesizeQwenRealtime(
 					}),
 					"configure",
 				);
-				yield* sendEvent(socket, { type: "input_text_buffer.append", text });
-				yield* sendEvent(socket, { type: "input_text_buffer.commit" });
+				yield* emit({ type: "input_text_buffer.append", text });
+				yield* emit({ type: "input_text_buffer.commit" });
 				const chunks: Uint8Array[] = [];
 				let length = 0;
 				let responseId: string | undefined;
