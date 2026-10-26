@@ -195,3 +195,11 @@ empty idle group no longer invalidates another key already queued at the gate;
 both decode failure and the ten-second load timeout are covered. All 89 focused
 soundboard/shared-output tests, both typechecks, scoped Biome and strict
 soundboard validation pass. The release gate stays unchanged.
+
+PR58 interrupted teardown review: Stop and capture during natural advancement
+reproduced a mutual wait before the fix. Cleanup now waits for shared native
+teardown before interrupting its watcher, and the watcher does not re-enter
+cleanup after its slot has been removed. Both operations finish successfully
+once native teardown settles, without falsely poisoning the output owner. All
+91 focused soundboard/audio tests pass, including the original native-defect
+and bounded-stalled-teardown cases. Release playback remains disabled.
