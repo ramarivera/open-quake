@@ -362,20 +362,18 @@ for (const provisionalId of ["vad-provisional", "one"]) {
 							Effect.succeed({
 								...s.socket,
 								send: (raw) =>
-									s.socket
-										.send(raw)
-										.pipe(
-											Effect.zipRight(
-												object(JSON.parse(String(raw))).type ===
-													"input_audio_buffer.append"
-													? Queue.offer(s.queue, {
-															type: "input_audio_buffer.speech_started",
-															item_id: provisionalId,
-															audio_start_ms: 30,
-														}).pipe(Effect.asVoid)
-													: Effect.void,
-											),
+									s.socket.send(raw).pipe(
+										Effect.zipRight(
+											object(JSON.parse(String(raw))).type ===
+												"input_audio_buffer.append"
+												? Queue.offer(s.queue, {
+														type: "input_audio_buffer.speech_started",
+														item_id: provisionalId,
+														audio_start_ms: 30,
+													}).pipe(Effect.asVoid)
+												: Effect.void,
 										),
+									),
 							}),
 					},
 				});
