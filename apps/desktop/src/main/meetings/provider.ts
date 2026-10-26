@@ -110,9 +110,12 @@ export function liveMeetingProviders(
 					if (
 						!local &&
 						qwen &&
-						!/^dashscope\.(?:aliyuncs\.com|(?:cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com)$/.test(
-							base.hostname,
-						)
+						// Filetrans documents Beijing/Singapore workspace domains and
+						// both legacy hosts. The workspace is exactly one DNS label.
+						(base.port ||
+							!/^(?:dashscope(?:-intl)?\.aliyuncs\.com|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com)$/.test(
+								base.hostname,
+							))
 					)
 						return yield* meetingError("Unavailable");
 					const api = qwen ? new URL("/api/v1/", base) : new URL("/v1/", base);

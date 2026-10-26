@@ -540,3 +540,8 @@ Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, 
 
 - **WHEN** AI-136, AI-137 and AI-292 send a 300 ms capture block to qwen3.5-livetranslate-flash-realtime
 - **THEN** the adapter SHALL resample the 7200 signed little-endian mono samples at 24 kHz into exactly 4800 samples at 16 kHz and declare input_audio_format pcm and sample_rate 16000 in session.update, as documented at https://www.alibabacloud.com/help/en/model-studio/live-translator-client-events
+
+#### Scenario: Saved Qwen profiles use documented regional endpoints
+
+- **WHEN** AI-269, AI-270 or AI-137 selects a saved Qwen endpoint
+- **THEN** the adapter SHALL accept HTTPS dashscope.aliyuncs.com, dashscope-intl.aliyuncs.com and one valid workspace DNS label under cn-beijing.maas.aliyuncs.com or ap-southeast-1.maas.aliyuncs.com, reject other remote hosts and nondefault ports before transport, and retain explicitly configured loopback providers for offline use

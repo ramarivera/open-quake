@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
-import { Effect, Either, Redacted } from "effect";
+import { Effect, Either, Queue, Redacted } from "effect";
 import { expect, it, vi } from "vitest";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { MeetingProvider } from "../../../../../packages/edge/src/meetings/meeting-provider";
@@ -14,6 +14,98 @@ import { meetingDirectory } from "./private-files";
 import { liveMeetingProviders } from "./provider";
 
 vi.mock("electron", () => ({ net: { isOnline: () => true } }));
+
+const documentedQwenHosts = [
+	"dashscope.aliyuncs.com",
+	"dashscope-intl.aliyuncs.com",
+	"dashscope.cn-beijing.maas.aliyuncs.com",
+	"dashscope.ap-southeast-1.maas.aliyuncs.com",
+	"workspace-123.cn-beijing.maas.aliyuncs.com",
+	"123456.ap-southeast-1.maas.aliyuncs.com",
+];
+const rejectedQwenHosts = [
+	"10.1.2.3",
+	"172.16.0.1",
+	"192.168.1.1",
+	"169.254.169.254",
+	"metadata.google.internal",
+	"attacker.example",
+	"dashscope.aliyuncs.com.attacker.example",
+	"workspace.cn-beijing.maas.aliyuncs.com.attacker.example",
+	"workspace.eu-central-1.maas.aliyuncs.com",
+	"dashscope-us.aliyuncs.com",
+	"a.b.cn-beijing.maas.aliyuncs.com",
+	"-workspace.cn-beijing.maas.aliyuncs.com",
+	"workspace-.cn-beijing.maas.aliyuncs.com",
+	"work_space.cn-beijing.maas.aliyuncs.com",
+	`${"a".repeat(64)}.cn-beijing.maas.aliyuncs.com`,
+	"dashscope.aliyuncs.com:444",
+];
+for (const host of [...documentedQwenHosts, ...rejectedQwenHosts]) {
+	it(`saved Qwen endpoint policy ${host}`, async () => {
+		const root = await mkdtemp(join(tmpdir(), "oq-provider-host-"));
+		const connections: string[] = [];
+		const http = vi.fn<typeof fetch>();
+		try {
+			const events = await Effect.runPromise(Queue.unbounded<unknown>());
+			const production = liveMeetingProviders(root, "ffmpeg", {
+				models: () =>
+					Effect.succeed([
+						{
+							id: "saved-qwen",
+							role: "default",
+							provider: "qwen",
+							model: "qwen3.6-flash",
+							baseUrl: `https://${host}/compatible-mode/v1`,
+							maxTokens: 2048,
+							credentialRef: "00000000-0000-4000-8000-000000000002",
+						},
+					]),
+				credentials: {
+					resolve: () => Effect.succeed(Redacted.make("fake-key")),
+					revoked: () => Effect.never,
+				},
+				fetch: http,
+				socket: {
+					connect: (input) =>
+						Effect.sync(() => {
+							connections.push(input.url);
+							return {
+								send: () =>
+									Queue.offer(events, { type: "session.updated" }).pipe(
+										Effect.asVoid,
+									),
+								receive: Queue.take(events),
+								close: Effect.void,
+							};
+						}),
+				},
+			});
+			const config = await Effect.runPromise(production.initialConfig);
+			if (!config) throw new Error("Missing saved Qwen profile");
+			const result = await Effect.runPromise(
+				Effect.scoped(
+					MeetingProvider.requireTranslation(config).pipe(
+						Effect.either,
+						Effect.provide(production.layer),
+					),
+				),
+			);
+			if (documentedQwenHosts.includes(host)) {
+				expect(Either.isRight(result)).toBe(true);
+				expect(connections).toEqual([
+					`wss://${host}/api-ws/v1/realtime?model=qwen3.5-livetranslate-flash-realtime`,
+				]);
+			} else {
+				expect(Either.isLeft(result)).toBe(true);
+				expect(connections).toEqual([]);
+			}
+			expect(http).not.toHaveBeenCalled();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+}
 
 it("composes saved model credentials through the production facade and submits real mono bytes to a local fake provider", async () => {
 	const root = await mkdtemp(join(tmpdir(), "oq-provider-"));
