@@ -12,8 +12,10 @@ import {
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
 	createEmptyProfileKey,
+	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { ProfileFunctionContracts } from "../../../../../packages/device/src/profiles/profile-function-contracts.js";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -21,6 +23,7 @@ import {
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { createPanelKeyDispatcher } from "../../renderer/src/keys/panel-key-dispatch";
 import { KEY_REQUEST, type KeyReply } from "../../shared/key-library";
+import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { iconZip } from "../test/icon-pack-fixtures";
 import { iconStore } from "./icon-store";
 import { registerKeyLibrary } from "./registration";
@@ -256,6 +259,172 @@ it("returns import diagnostics without writing, then imports quarantined JSON wi
 		await f.runtime.dispose();
 	}
 });
+
+const integrationImports = [
+	{
+		type: "homeAssistant",
+		childrenName: "homeAssistant",
+		actions: [
+			{
+				type: "configData",
+				value: JSON.stringify({
+					entity_id: "light.test",
+					service: "light.toggle",
+					service_data: {},
+					custom_display_type: "default",
+					custom_display_settings: { fontSize: 20 },
+					custom_display_detail: [],
+				}),
+			},
+		],
+	},
+	{
+		type: "clawbot",
+		childrenName: "clawbot",
+		actions: [{ type: "agentId", value: "test-agent" }],
+	},
+	{
+		type: "quakeBot",
+		childrenName: "ClawBotView",
+		actions: [{ type: "agentId", value: "test-agent" }],
+	},
+	{ type: "quakeBotInput", childrenName: "ClawBotInput", actions: [] },
+	{ type: "futureIntegration", childrenName: "futureIntegration", actions: [] },
+];
+it.each(integrationImports)(
+	"imports $type through IPC and retains only supported keys in dispatch",
+	async (entry) => {
+		const dispatched: string[] = [];
+		const f = fixture(
+			{},
+			() => Effect.void,
+			(key) =>
+				Effect.sync(() => {
+					dispatched.push(key.config.type);
+					return true;
+				}),
+		);
+		const unknown = entry.type === "futureIntegration";
+		try {
+			const source = JSON.stringify([
+				{
+					...f.key,
+					childrenName: entry.childrenName,
+					config: { ...f.key.config, type: entry.type, actions: entry.actions },
+				},
+			]);
+			const inspected = await f.request(f.manager, {
+				type: "inspect-import",
+				source,
+			});
+			expect(inspected._tag).toBe("success");
+			if (inspected._tag !== "success") throw new Error("Inspection rejected");
+			expect(
+				inspected.importReport?.profile?.pages[0].keys[0]?.compatibility
+					?.unsupported,
+			).toBe(unknown);
+			expect(
+				inspected.importReport?.diagnostics.some(
+					(d) => d.code === "unknown-function",
+				),
+			).toBe(unknown);
+			const imported = await f.request(f.manager, {
+				type: "import-profile",
+				source,
+			});
+			if (
+				imported._tag !== "success" ||
+				!imported.envelope ||
+				!imported.importedProfileId
+			)
+				throw new Error("Import rejected");
+			const profile = imported.envelope.profiles.find(
+				(p) => p.id === imported.importedProfileId,
+			);
+			expect(profile?.pages[0].keys[0]?.compatibility?.unsupported).toBe(
+				unknown,
+			);
+			const envelope = Schema.decodeUnknownSync(ProfileEnvelope)(
+				imported.envelope,
+			);
+			const projected = await Effect.runPromise(
+				ProfileFunctionContracts.dispatchSnapshot(envelope).pipe(
+					Effect.provide(ManagementProfileContractsLive),
+				),
+			);
+			expect(
+				projected.profiles
+					.find((p) => p.id === imported.importedProfileId)
+					?.pages[0].keys.map((k) => k.config.type),
+			).toEqual(unknown ? [] : [entry.type]);
+			// Home Assistant uses KeyRuntime; agent keys consume the dispatch snapshot in their own runtime.
+			if (entry.type === "homeAssistant" || unknown) {
+				await f.request(f.manager, {
+					type: "select",
+					deviceId: "device",
+					profileId: imported.importedProfileId,
+					pageId: profile?.pages[0].id,
+				});
+				await f.request(f.panel, {
+					...f.activation,
+					profileId: imported.importedProfileId,
+					pageId: profile?.pages[0].id,
+				});
+				await f.runtime.runPromise(KeyRuntime.reset("device"));
+				expect(dispatched).toEqual(unknown ? [] : [entry.type]);
+			}
+			if (!unknown) {
+				const invalid = await f.request(f.manager, {
+					type: "inspect-import",
+					source: JSON.stringify([
+						{ ...JSON.parse(source)[0], childrenName: "wrong-renderer" },
+					]),
+				});
+				expect(
+					invalid._tag === "success" &&
+						invalid.importReport?.profile?.pages[0].keys[0]?.compatibility
+							?.unsupported,
+				).toBe(true);
+				expect(
+					invalid._tag === "success" &&
+						invalid.importReport?.diagnostics.some(
+							(d) => d.code === "invalid-action",
+						),
+				).toBe(true);
+				const invalidConfig = await f.request(f.manager, {
+					type: "inspect-import",
+					source: JSON.stringify([
+						{
+							...JSON.parse(source)[0],
+							config: {
+								...f.key.config,
+								type: entry.type,
+								actions:
+									entry.type === "quakeBotInput"
+										? [{ type: "unexpected", value: "x" }]
+										: [],
+							},
+						},
+					]),
+				});
+				expect(
+					invalidConfig._tag === "success" &&
+						invalidConfig.importReport?.profile?.pages[0].keys[0]?.compatibility
+							?.unsupported,
+				).toBe(true);
+				expect(
+					invalidConfig._tag === "success" &&
+						invalidConfig.importReport?.diagnostics.some(
+							(d) => d.code === "invalid-action",
+						),
+				).toBe(true);
+			}
+		} finally {
+			await f.registration.dispose();
+			await f.runtime.dispose();
+		}
+	},
+);
 
 it("restricts the owned picker to icon operations and returns pixels without editing the draft", async () => {
 	const f = fixture();

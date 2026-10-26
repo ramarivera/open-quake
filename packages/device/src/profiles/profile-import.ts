@@ -8,7 +8,10 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "./profile-contracts.js";
-import { profileKeyFunctionIssues } from "./profile-function-contracts.js";
+import {
+	type ProfileFunctionContract,
+	profileKeyFunctionIssues,
+} from "./profile-function-contracts.js";
 
 export const ImportDiagnostic = Schema.Struct({
 	code: Schema.Literal(
@@ -32,7 +35,13 @@ const record = (input: unknown) => {
 };
 
 /** No evaluation, host IO or action execution. Original JSON stays inert. */
-export function inspectProfileImport(input: unknown): ProfileImportReport {
+export function inspectProfileImport(
+	input: unknown,
+	contracts: ReadonlyMap<
+		string,
+		ProfileFunctionContract
+	> = actionProfileFunctionContracts,
+): ProfileImportReport {
 	const diagnostics: (typeof ImportDiagnostic.Type)[] = [];
 	const report = (
 		code: typeof ImportDiagnostic.Type.code,
@@ -79,10 +88,13 @@ export function inspectProfileImport(input: unknown): ProfileImportReport {
 			report("legacy-sentinel", `${path}.childrenName`);
 		let unsupported = record(source.compatibility)?.unsupported === true;
 		if (typeof config.type === "string" && config.type !== "") {
-			if (!findAction(config.type)) {
+			if (!contracts.has(config.type)) {
 				report("unknown-function", `${path}.config.type`);
 				unsupported = true;
-			} else if (validateAction(config.type, next)._tag === "Left") {
+			} else if (
+				findAction(config.type) &&
+				validateAction(config.type, next)._tag === "Left"
+			) {
 				report("invalid-action", `${path}.config.actions`);
 				unsupported = true;
 			}
@@ -108,10 +120,7 @@ export function inspectProfileImport(input: unknown): ProfileImportReport {
 				);
 			return candidate;
 		}
-		const issues = profileKeyFunctionIssues(
-			decoded.right,
-			actionProfileFunctionContracts,
-		);
+		const issues = profileKeyFunctionIssues(decoded.right, contracts);
 		for (const issue of issues)
 			report("invalid-action", `${path}.${issue.map(String).join(".")}`);
 		const encoded = Schema.encodeSync(ProfileKey)(decoded.right);
@@ -173,11 +182,17 @@ export function inspectProfileImport(input: unknown): ProfileImportReport {
 		: { diagnostics, profile: Schema.encodeSync(Profile)(decoded.right) };
 }
 
-export function inspectProfileText(text: string): ProfileImportReport {
+export function inspectProfileText(
+	text: string,
+	contracts: ReadonlyMap<
+		string,
+		ProfileFunctionContract
+	> = actionProfileFunctionContracts,
+): ProfileImportReport {
 	const decoded = Schema.decodeUnknownEither(Schema.parseJson(ProfileJson))(
 		text,
 	);
 	return Either.isRight(decoded)
-		? inspectProfileImport(decoded.right)
+		? inspectProfileImport(decoded.right, contracts)
 		: { diagnostics: [{ code: "invalid-field", path: "$", blocking: true }] };
 }

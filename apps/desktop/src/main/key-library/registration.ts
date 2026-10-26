@@ -21,6 +21,7 @@ import {
 	KeyRequest,
 } from "../../shared/key-library";
 import type { DesktopRuntime } from "../diagnostics/module";
+import { managementProfileContracts } from "../management/profile-contracts";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { applicationIconLibrary } from "./application-icons";
 import { renderFontIcons } from "./font-renderer";
@@ -345,13 +346,17 @@ export function registerKeyLibrary<R>(
 						case "inspect-import":
 							return {
 								_tag: "success",
-								importReport: inspectProfileText(command.source),
+								importReport: inspectProfileText(
+									command.source,
+									managementProfileContracts,
+								),
 							};
 						case "import-profile": {
 							const id = randomUUID();
 							const envelope = yield* ProfileService.importProfile(
 								command.source,
 								id,
+								managementProfileContracts,
 							);
 							return {
 								_tag: "success",

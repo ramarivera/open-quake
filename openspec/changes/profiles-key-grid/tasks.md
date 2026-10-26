@@ -44,6 +44,11 @@ PR81 fix-round evidence lives in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-qu
 
 Delivery gates passed: 2,905 tests with four existing skips, six typecheck tasks, build, both bundle smoke modes, 46 strict OpenSpec items, and Biome across 1,158 files with 14 existing CSS warnings and no errors. Tests ran with scratch `TMPDIR`, Turbo `--env-mode=loose --concurrency=1` and Vitest `--maxWorkers=2`, retaining the default timeout after a concurrent profile-manager timeout. Hidden mock geometry and media fixtures passed, including synthetic touch and five built-in-like profiles. An exploratory full Keys smoke stopped in its unrelated icon-reset fixture before the targeted geometry probe; this round claims the targeted Keys and required media fixtures, not full icon acceptance. All launch artifacts and failure logs remain outside git. No real QUAKE or DK-Suite access.
 
+- [x] 6.2 Inspect and import with the desktop composed function contracts. Verify homeAssistant, clawbot, quakeBot and quakeBotInput survive import and dispatch, invalid integration configurations are quarantined, and unknown functions remain inert. Bead `open-quake-jy0.19`; review 4376109485, MGMT-073/074.
+PR81 round 2 import evidence: `registration.test.ts` has five IPC/import/dispatch scenarios. All four supported integrations failed before the fix; unknown functions stayed quarantined. Inspection and persistence now share the composed management contracts, including renderer identity and config validation. Home Assistant also reaches the mocked KeyRuntime owner. Focused 21 registration tests, 473 device tests, both package typechecks and scoped Biome pass. Full package and repository results are recorded with task 6.3. External logs: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/key-grid-editor/r2/`.
+
+- [ ] 6.3 Compare the full native Keys smoke against main with the navigation selector corrected. Record the verdict under external scratch, fix the product or stale expectations without weakening assertions, and pass the full mock smoke and repository gates. Bead `open-quake-jy0.20`.
+
 ## Lane W2 verification evidence
 
 Tasks 1.1–1.5 are implemented in `packages/device/src/profiles/` and

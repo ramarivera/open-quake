@@ -1,10 +1,12 @@
 import { Effect, Option, Schema, type Stream } from "effect";
+import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
 import { Profile, type ProfileEnvelope } from "./profile-contracts.js";
 import {
 	ProfileNotFound,
 	type ProfileRepositoryError,
 	ProfileValidationFailed,
 } from "./profile-errors.js";
+import type { ProfileFunctionContract } from "./profile-function-contracts.js";
 import { inspectProfileText } from "./profile-import.js";
 import { editProfilePages, type PageEdit } from "./profile-pages.js";
 import {
@@ -38,10 +40,14 @@ export class ProfileService extends Effect.Service<ProfileService>()(
 					(
 						text: string,
 						id: string,
+						contracts: ReadonlyMap<
+							string,
+							ProfileFunctionContract
+						> = actionProfileFunctionContracts,
 					): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
 						repository.transact((envelope) =>
 							Effect.gen(function* () {
-								const report = inspectProfileText(text);
+								const report = inspectProfileText(text, contracts);
 								if (
 									!report.profile ||
 									envelope.profiles.some((p) => p.id === id) ||
