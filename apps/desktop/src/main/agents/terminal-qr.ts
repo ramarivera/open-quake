@@ -35,7 +35,11 @@ function png(rows: readonly string[], size: number): string {
 	]).toString("base64")}`;
 }
 
-/** OpenClaw 3cd1240 src/media/qr-terminal.ts compact black-on-white output. */
+/** OpenClaw 3cd1240 src/media/qr-terminal.ts, small:true. Its own renderer
+ * uses qrcode@1.5.4 modules, not qrcode-terminal or platform-dependent glyphs.
+ * Versions 1..40 have size 21..177, one-module margins and a white final row.
+ * The command runner decodes piped UTF-8 and removes CRLF before this parser.
+ */
 export function terminalQrDecoder(): (line: string) => string | undefined {
 	let rows: string[] = [];
 	const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[mJH]`, "g");
