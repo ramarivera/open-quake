@@ -10,7 +10,9 @@ import {
 	displayChord,
 	normalizeChord,
 } from "../../../../../../../packages/edge/src/shortcuts/shortcut-invariants";
+import type { LibraryPack } from "../../../../shared/key-library";
 import { PageHeader } from "../../ui/Form";
+import { utf8Length } from "../emoji/composer";
 import { shortcutStrings as s, shortcutMessages } from "./strings";
 import { useIntegrations } from "./useIntegrations";
 
@@ -45,12 +47,48 @@ const apps = [
 ];
 export function ShortcutsPage() {
 	const { request, error, busy, setError } = useIntegrations();
+	const [applicationIcons, setApplicationIcons] = useState<
+		readonly LibraryPack[]
+	>([]);
+	const [legacy, setLegacy] = useState(false);
+	const [legacyPrompt, setLegacyPrompt] = useState("");
+	const legacyDialog = useRef<HTMLDialogElement>(null);
+	const chordCancelled = useRef(false);
+	useEffect(() => {
+		if (legacy) legacyDialog.current?.showModal();
+	}, [legacy]);
+	useEffect(() => {
+		let active = true;
+		void window.quakeKeyLibrary
+			?.request({ type: "application-icons" })
+			.then((reply) => {
+				if (active && reply._tag === "success")
+					setApplicationIcons(reply.packs ?? []);
+			})
+			.catch(() => {});
+		return () => {
+			active = false;
+		};
+	}, []);
+	const appIcon = (app: string) => {
+		const icon = applicationIcons
+			.flatMap((pack) => pack.icons)
+			.find((icon) => icon.name.toLowerCase() === app.toLowerCase());
+		return icon && /^data:image\/(png|jpeg|webp);base64,/.test(icon.data) ? (
+			<img src={icon.data} alt="" width={24} height={24} />
+		) : (
+			<span role="img" aria-label="Application icon unavailable">
+				▦
+			</span>
+		);
+	};
 	const [app, setApp] = useState("Adobe Photoshop");
 	const [custom, setCustom] = useState("");
 	const [prompt, setPrompt] = useState("");
 	const [aiAvailable, setAiAvailable] = useState(false);
 	const [libraries, setLibraries] = useState<readonly ShortcutLibrary[]>([]);
 	const [active, setActive] = useState("");
+	const [editRevision, setEditRevision] = useState(0);
 	const [rows, setRows] = useState<readonly ShortcutRow[]>([]);
 	const [original, setOriginal] = useState<readonly ShortcutRow[]>([]);
 	const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -96,16 +134,21 @@ export function ShortcutsPage() {
 	const persist = async (next: readonly ShortcutRow[]) => {
 		const previous = rows;
 		setRows(next);
-		if (!activeLibrary) return;
+		if (!activeLibrary) return true;
 		const reply = await request({
 			type: "shortcuts.save",
 			library: { ...activeLibrary, rows: next },
 		});
-		if (reply?.type === "libraries") updateLibraries(reply.libraries);
-		else setRows(previous);
+		if (reply?.type === "libraries") {
+			updateLibraries(reply.libraries);
+			return true;
+		}
+		setRows(previous);
+		setEditRevision((revision) => revision + 1);
+		return false;
 	};
-	const generate = async () => {
-		if (!prompt.trim()) {
+	const generate = async (inputPrompt = prompt) => {
+		if (!inputPrompt.trim()) {
 			setError(s.needPrompt);
 			promptInput.current?.focus();
 			return;
@@ -113,9 +156,9 @@ export function ShortcutsPage() {
 		const reply = await request({
 			type: "shortcuts.generate",
 			app: application,
-			prompt,
+			prompt: inputPrompt,
 		});
-		if (reply?.type !== "draft") return;
+		if (reply?.type !== "draft") return false;
 		setActive("");
 		setTitle(reply.title);
 		setRows(reply.rows);
@@ -124,6 +167,7 @@ export function ShortcutsPage() {
 		setNotice(
 			`${shortcutMessages.generated} ${reply.dropped} unsupported entries dropped`,
 		);
+		return true;
 	};
 	const addManual = () => {
 		const row = {
@@ -139,6 +183,10 @@ export function ShortcutsPage() {
 		setSelected(new Set([...selected, row.id]));
 	};
 	const finishChord = (row: ShortcutRow) => {
+		if (chordCancelled.current) {
+			chordCancelled.current = false;
+			return;
+		}
 		try {
 			const normalized = normalizeChord(chord);
 			setEditing("");
@@ -158,12 +206,62 @@ export function ShortcutsPage() {
 				<button
 					className="mc-button"
 					type="button"
+					disabled={busy}
+					onClick={() => setLegacy(true)}
+				>
+					Generate app shortcuts
+				</button>
+				<button
+					className="mc-button"
+					type="button"
 					onClick={addManual}
 					disabled={busy}
 				>
 					Add shortcut
 				</button>
 			</PageHeader>
+			{legacy ? (
+				<dialog
+					ref={legacyDialog}
+					className="mc-dialog"
+					aria-label="Generate app shortcuts"
+					onCancel={() => setLegacy(false)}
+				>
+					<h2>Generate app shortcuts</h2>
+					<label className="mc-field">
+						App workflow
+						<input
+							value={legacyPrompt}
+							onChange={(e) => setLegacyPrompt(e.target.value)}
+						/>
+					</label>
+					<p>{utf8Length(legacyPrompt)}/100 bytes</p>
+					<button
+						className="mc-button"
+						type="button"
+						disabled={
+							busy ||
+							!aiAvailable ||
+							!legacyPrompt.trim() ||
+							utf8Length(legacyPrompt) > 100
+						}
+						onClick={() => {
+							void generate(legacyPrompt).then((ok) => {
+								if (ok) setLegacy(false);
+							});
+						}}
+					>
+						Generate
+					</button>
+					<button
+						className="mc-button"
+						type="button"
+						onClick={() => setLegacy(false)}
+					>
+						Cancel
+					</button>
+				</dialog>
+			) : null}
 			{error && <p role="alert">{error}</p>}
 			{notice && <p role="status">{notice}</p>}
 			<div className="mc-split">
@@ -338,30 +436,37 @@ export function ShortcutsPage() {
 														/>
 													</td>
 													<td>
-														<input
-															aria-label={`Name for ${row.name}`}
-															defaultValue={row.name}
-															key={`${row.id}-${row.name}`}
-															disabled={busy}
-															maxLength={100}
-															onBlur={(event) => {
-																if (event.target.value !== row.name)
-																	void persist(
-																		rows.map((r) =>
-																			r.id === row.id
-																				? {
-																						...r,
-																						name:
-																							event.target.value.trim() ||
-																							`Shortcut ${rows.indexOf(row) + 1}`,
-																					}
-																				: r,
-																		),
-																	);
-															}}
-														/>
+														<div
+															className="mc-field"
+															style={{ marginBottom: 0 }}
+														>
+															<input
+																aria-label={`Name for ${row.name}`}
+																defaultValue={row.name}
+																key={`${row.id}-${row.name}-${editRevision}`}
+																disabled={busy}
+																maxLength={100}
+																onBlur={(event) => {
+																	if (event.target.value !== row.name)
+																		void persist(
+																			rows.map((r) =>
+																				r.id === row.id
+																					? {
+																							...r,
+																							name:
+																								event.target.value.trim() ||
+																								`Shortcut ${rows.indexOf(row) + 1}`,
+																						}
+																					: r,
+																			),
+																		);
+																}}
+															/>
+														</div>
 													</td>
-													<td>{row.app}</td>
+													<td>
+														{appIcon(row.app)} {row.app}
+													</td>
 													<td>
 														{editing === row.id ? (
 															<input
@@ -382,19 +487,23 @@ export function ShortcutsPage() {
 																		event.preventDefault();
 																		event.currentTarget.blur();
 																	}
-																	if (event.key === "Escape") setEditing("");
+																	if (event.key === "Escape") {
+																		chordCancelled.current = true;
+																		setEditing("");
+																	}
 																}}
 															/>
 														) : (
 															<button
 																className="mc-button"
 																type="button"
-																disabled={busy}
+																disabled={busy || !!row.config}
 																aria-label={s.editRowAria.replace(
 																	"{name}",
 																	row.name,
 																)}
 																onClick={() => {
+																	chordCancelled.current = false;
 																	setEditing(row.id);
 																	setChord(displayChord(row.chord).join(" + "));
 																}}
@@ -411,7 +520,7 @@ export function ShortcutsPage() {
 																				</span>
 																			),
 																		)
-																	: s.unset}
+																	: (row.config?.type ?? s.unset)}
 															</button>
 														)}
 													</td>
@@ -473,8 +582,11 @@ export function ShortcutsPage() {
 											),
 										)
 									) {
-										void persist(rows.filter((r) => !selected.has(r.id)));
-										setSelected(new Set());
+										void persist(rows.filter((r) => !selected.has(r.id))).then(
+											(ok) => {
+												if (ok) setSelected(new Set());
+											},
+										);
 									}
 								}}
 							>
@@ -549,7 +661,17 @@ export function ShortcutsPage() {
 						</div>
 					)}
 					{libraries.map((library) => (
-						<article className="mc-card" key={library.id}>
+						<article
+							className="mc-card"
+							key={library.id}
+							onDoubleClick={() =>
+								setRename({ id: library.id, value: library.name })
+							}
+							onContextMenu={(event) => {
+								event.preventDefault();
+								setRename({ id: library.id, value: library.name });
+							}}
+						>
 							<button
 								className="mc-button"
 								type="button"
@@ -557,14 +679,7 @@ export function ShortcutsPage() {
 								disabled={busy}
 								onClick={() => load(library)}
 							>
-								<span aria-hidden="true">
-									{library.app.toLowerCase().includes("premiere")
-										? "🎬"
-										: library.app.toLowerCase().includes("office")
-											? "▦"
-											: "⌘"}
-								</span>{" "}
-								{library.name}
+								{appIcon(library.app)} {library.name}
 							</button>
 							<p>{library.app}</p>
 							<p>
@@ -582,7 +697,11 @@ export function ShortcutsPage() {
 										});
 										if (reply?.type === "libraries") {
 											updateLibraries(reply.libraries);
-											if (active === library.id) setTitle(rename.value);
+											if (active === library.id)
+												setTitle(
+													reply.libraries.find((l) => l.id === library.id)
+														?.name ?? library.name,
+												);
 											setRename(null);
 										}
 									}}
@@ -664,7 +783,7 @@ export function ShortcutsPage() {
 						type="button"
 						disabled={!activeLibrary || busy}
 						onClick={async () => {
-							if (!activeLibrary) return;
+							if (!activeLibrary) return true;
 							const reply = await request({
 								type: "shortcuts.sync",
 								id: activeLibrary.id,

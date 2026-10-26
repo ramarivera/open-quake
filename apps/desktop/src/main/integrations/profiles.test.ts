@@ -292,3 +292,35 @@ describe("integration placement through the shared ProfileService repository", (
 		}
 	});
 });
+
+// AI-121 retained action data must survive the production profile adapter.
+it("syncs validated generated configuration rows without converting them to hotkeys", async () => {
+	const f = setup();
+	try {
+		const id = await f.adapter.sync({
+			...library(0),
+			rows: [
+				{
+					id: "url",
+					name: "Docs",
+					app: "Office",
+					chord: "",
+					icon: "mdi-web",
+					config: {
+						type: "website",
+						actions: [{ type: "url", value: "https://example.org" }],
+					},
+				},
+			],
+		});
+		const profile = await f.runtime.runPromise(ProfileService.getProfile(id));
+		expect(profile.pages[0].keys[0]?.config).toMatchObject({
+			type: "website",
+			icon: "mdi-web",
+			actions: [{ type: "url", value: "https://example.org" }],
+			title: { text: "Docs" },
+		});
+	} finally {
+		await f.runtime.dispose();
+	}
+});
