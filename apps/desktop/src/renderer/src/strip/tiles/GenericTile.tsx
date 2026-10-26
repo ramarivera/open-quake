@@ -56,6 +56,7 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 		>
 			<div
 				ref={artwork.ref}
+				data-tile-artwork-state={artwork.state}
 				className="strip-tile-icon"
 				style={{
 					width: iconWidth,

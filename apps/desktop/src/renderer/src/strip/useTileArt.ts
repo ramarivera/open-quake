@@ -135,6 +135,7 @@ export function useTileArtwork(source: string, type: string) {
 	const [loaded, setLoaded] = useState(() => ({
 		source,
 		type,
+		settled: source.startsWith("data:") || /^[\d-]*$/.test(source),
 		data: source.startsWith("data:")
 			? validatedArtwork(source)
 			: /^[\d-]+$/.test(source)
@@ -143,19 +144,30 @@ export function useTileArtwork(source: string, type: string) {
 	}));
 	useEffect(() => {
 		let live = true;
-		setLoaded({ source, type, data: "" });
+		setLoaded({ source, type, data: "", settled: false });
 		if (visible)
 			void resolveTileArtwork(source, type)
 				.then((data) => {
-					if (live) setLoaded({ source, type, data });
+					if (live) setLoaded({ source, type, data, settled: true });
 				})
-				.catch(() => {});
+				.catch(() => {
+					if (live) setLoaded({ source, type, data: "", settled: true });
+				});
 		return () => {
 			live = false;
 		};
 	}, [source, type, visible]);
 	return {
 		ref,
+		state:
+			!visible ||
+			loaded.source !== source ||
+			loaded.type !== type ||
+			!loaded.settled
+				? "pending"
+				: loaded.data
+					? "ready"
+					: "empty",
 		src:
 			visible && loaded.source === source && loaded.type === type
 				? loaded.data
