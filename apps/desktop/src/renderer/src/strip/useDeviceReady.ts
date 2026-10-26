@@ -116,19 +116,25 @@ export function useDeviceReady(
 				}))
 			)
 				return;
+			if (report.current !== identity) return;
 			if (
-				report.current !== identity ||
 				isTransientStripPage(
 					profile,
 					profiles.envelope.activeByDevice[snapshot.serialNumber]?.pageId,
 				)
-			)
+			) {
+				recovery.current?.handshakeSucceeded();
 				return;
-			await send({
-				type: "reportActiveProfile",
-				resourceId: profile.id,
-				version: profile.revision,
-			});
+			}
+			if (
+				(await send({
+					type: "reportActiveProfile",
+					resourceId: profile.id,
+					version: profile.revision,
+				})) &&
+				report.current === identity
+			)
+				recovery.current?.handshakeSucceeded();
 		})();
 	}, [snapshot, profiles, send, serial]);
 	return {

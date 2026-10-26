@@ -32,7 +32,6 @@ export function createStripDeviceSession(options: {
 				(!options.serial ||
 					decoded.right.snapshot.serialNumber === options.serial)
 			) {
-				attempt = 0;
 				options.ready(decoded.right.snapshot);
 			} else retry();
 		} catch {
@@ -65,6 +64,9 @@ export function createStripDeviceSession(options: {
 			pending = undefined;
 			attempt = 0;
 			void read();
+		},
+		handshakeSucceeded: () => {
+			if (live) attempt = 0;
 		},
 		close: () => {
 			live = false;

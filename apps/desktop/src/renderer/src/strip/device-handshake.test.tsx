@@ -327,3 +327,34 @@ it("SCREEN-018 first-run panel and outbound handshake select the same colorful p
 		version: vividProfile.revision,
 	});
 });
+
+it.each(["rejected", "not-ok"])(
+	"mounted handshake exhausts its budget after persistent %s sends despite successful reads",
+	async (failure) => {
+		vi.useFakeTimers();
+		vi.stubGlobal("openQuake", events());
+		const read = vi.fn(async () => ({ _tag: "ready", snapshot: snapshot() }));
+		vi.stubGlobal("quakeDeviceReady", { read });
+		const send = vi.fn(async () => {
+			if (failure === "rejected") throw new Error("outbound unavailable");
+			return { ok: false };
+		});
+		vi.stubGlobal("quakeStripTransport", { send });
+		const value = decode(envelope(1));
+		function Panel() {
+			useDeviceReady("A", { _tag: "ready", envelope: value });
+			return null;
+		}
+		const { root } = host();
+		await act(async () => root.render(<Panel />));
+		for (let attempt = 1; attempt <= 10; attempt++) {
+			await act(async () => vi.advanceTimersByTimeAsync(3000 * attempt - 1));
+			expect(read).toHaveBeenCalledTimes(attempt);
+			await act(async () => vi.advanceTimersByTimeAsync(1));
+			expect(read).toHaveBeenCalledTimes(attempt + 1);
+		}
+		await act(async () => vi.advanceTimersByTimeAsync(300000));
+		expect(read).toHaveBeenCalledTimes(11);
+		expect(send).toHaveBeenCalledTimes(11);
+	},
+);

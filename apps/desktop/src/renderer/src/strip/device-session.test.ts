@@ -1,3 +1,5 @@
+import { it as effectIt } from "@effect/vitest";
+import { Effect, Fiber, Runtime, TestClock } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import { negotiateDeviceMatrix } from "../../../shared/hardware-contracts";
 import { createStripResourceReceiver } from "./device-resources";
@@ -176,4 +178,56 @@ it.each([0xc0, 0xc2])(
 		frame(jpeg(8001, 8000));
 		expect(publish).not.toHaveBeenCalled();
 	},
+);
+
+effectIt.scoped(
+	"keeps ten incremental retries when readiness succeeds but every outbound handshake fails",
+	() =>
+		Effect.gen(function* () {
+			const runtime = yield* Effect.runtime<never>();
+			let reads = 0;
+			let failSend = true;
+			const session = createStripDeviceSession({
+				bridge: {
+					read: async () => {
+						reads++;
+						return ready;
+					},
+				},
+				serial: "A",
+				ready: () => {
+					if (failSend) session.lost();
+				},
+				schedule: (work, delay) => {
+					const timer = Runtime.runFork(runtime)(
+						Effect.sleep(delay).pipe(Effect.andThen(Effect.sync(work))),
+					);
+					return () => {
+						Runtime.runFork(runtime)(Fiber.interrupt(timer));
+					};
+				},
+			});
+			yield* Effect.addFinalizer(() => Effect.sync(session.close));
+			session.start();
+			yield* TestClock.adjust(0);
+			expect(reads).toBe(1);
+			for (let attempt = 1; attempt <= 10; attempt++) {
+				yield* TestClock.adjust(3000 * attempt - 1);
+				expect(reads).toBe(attempt);
+				yield* TestClock.adjust(1);
+				expect(reads).toBe(attempt + 1);
+			}
+			yield* TestClock.adjust(300000);
+			expect(reads).toBe(11);
+			failSend = false;
+			session.recover();
+			yield* TestClock.adjust(0);
+			expect(reads).toBe(12);
+			session.handshakeSucceeded();
+			session.lost();
+			yield* TestClock.adjust(2999);
+			expect(reads).toBe(12);
+			yield* TestClock.adjust(1);
+			expect(reads).toBe(13);
+		}),
 );

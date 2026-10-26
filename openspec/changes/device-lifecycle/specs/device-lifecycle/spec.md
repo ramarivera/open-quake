@@ -250,3 +250,8 @@ with stale host values. The SDK handle SHALL connect immediately, with its first
 - **WHEN** an old readiness refresh fails or defects after its bus or hardware session is replaced
 - **THEN** the reader checks current bus, hardware identity and connection status first and returns offline
 - **AND** it never reports the obsolete session's failure to the replacement
+
+#### Scenario: Readiness succeeds but the outbound handshake keeps failing
+- **WHEN** successful readiness reads are followed by rejected or unsuccessful outbound handshake sends
+- **THEN** recovery waits 3, 6, through 30 seconds for at most ten retries and then stops
+- **AND** only a completed outbound handshake resets that retry budget, while explicit recovery starts a new cycle
