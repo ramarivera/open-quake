@@ -83,16 +83,25 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 			let state = idleFirmware;
 			let worker = Option.none<Fiber.RuntimeFiber<void, never>>();
 			let selectedImage: FirmwareImage | undefined;
-			const loaded = yield* port.load();
-			if (Schema.is(FirmwareSnapshot)(loaded))
-				state = runningFirmware(loaded)
-					? {
-							...loaded,
-							state: "needs_recovery",
-							reason: "interrupted",
-							endedAt: yield* Clock.currentTimeMillis,
-						}
-					: loaded;
+			const initializationLock = yield* Effect.makeSemaphore(1);
+			let initialized = false;
+			let stopped = false;
+			const initialize = initializationLock.withPermits(1)(
+				Effect.gen(function* () {
+					if (initialized) return;
+					const loaded = yield* port.load();
+					if (Schema.is(FirmwareSnapshot)(loaded))
+						state = runningFirmware(loaded)
+							? {
+									...loaded,
+									state: "needs_recovery",
+									reason: "interrupted",
+									endedAt: yield* Clock.currentTimeMillis,
+								}
+							: loaded;
+					initialized = true;
+				}),
+			);
 			const set = (
 				next: Partial<FirmwareSnapshot>,
 			): Effect.Effect<void, FirmwarePersistenceFailed> =>
@@ -146,8 +155,10 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				readonly serial: string;
 				readonly session: string;
 			}): Effect.fn.Return<void, MaintenanceError> {
+				yield* initialize;
 				yield* lock.withPermits(1)(
 					Effect.gen(function* () {
+						if (stopped) return yield* new FirmwareUnavailable();
 						if (runningFirmware(state)) return yield* new FirmwareBusy();
 						const image = yield* port.image();
 						const device = yield* port.current();
@@ -186,8 +197,10 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 			const write = Effect.fn("FirmwareUpdates.write")(function* (
 				id: string,
 			): Effect.fn.Return<void, MaintenanceError> {
+				yield* initialize;
 				yield* lock.withPermits(1)(
 					Effect.gen(function* () {
+						if (stopped) return yield* new FirmwareUnavailable();
 						if (state.state !== "ready_to_write" || !selectedImage)
 							return yield* new FirmwareBusy();
 						const volume = state.volumes.find((v) => v.id === id);
@@ -241,12 +254,22 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				);
 			});
 			return {
+				shutdown: Effect.fn("FirmwareUpdates.shutdown")(() =>
+					lock.withPermits(1)(
+						Effect.gen(function* () {
+							stopped = true;
+							if (Option.isSome(worker)) yield* Fiber.interrupt(worker.value);
+						}),
+					),
+				),
 				start,
 				recover: Effect.fn("FirmwareUpdates.recover")(function* (
 					serial: string,
 				): Effect.fn.Return<void, MaintenanceError> {
+					yield* initialize;
 					yield* lock.withPermits(1)(
 						Effect.gen(function* () {
+							if (stopped) return yield* new FirmwareUnavailable();
 							if (runningFirmware(state)) return yield* new FirmwareBusy();
 							if (!Schema.is(RecoverySerial)(serial))
 								return yield* new FirmwareUnavailable();
@@ -272,7 +295,11 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				}),
 				write,
 				snapshot: Effect.fn("FirmwareUpdates.snapshot")(
-					function* (): Effect.fn.Return<FirmwareSnapshot> {
+					function* (): Effect.fn.Return<
+						FirmwareSnapshot,
+						FirmwarePersistenceFailed
+					> {
+						yield* initialize;
 						if (
 							state.endedAt &&
 							(yield* Clock.currentTimeMillis) - state.endedAt >=
@@ -284,6 +311,7 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				),
 				cancel: Effect.fn("FirmwareUpdates.cancel")(
 					function* (): Effect.fn.Return<void, MaintenanceError> {
+						yield* initialize;
 						yield* lock.withPermits(1)(
 							Effect.gen(function* () {
 								if (state.state !== "ready_to_write")
@@ -300,6 +328,7 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 				),
 				close: Effect.fn("FirmwareUpdates.close")(
 					function* (): Effect.fn.Return<void, FirmwarePersistenceFailed> {
+						yield* initialize;
 						if (!runningFirmware(state)) yield* set({ ...idleFirmware });
 					},
 				),

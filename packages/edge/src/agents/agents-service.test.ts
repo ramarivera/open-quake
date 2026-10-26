@@ -876,3 +876,43 @@ describe("round two model commands through the conductor", () => {
 		},
 	);
 });
+
+it.effect(
+	"rechecks late draft capability and never invokes unavailable adapters",
+	() => {
+		let available = false;
+		let calls = 0;
+		const f = fixture({
+			available: () => available,
+			agent: () => Effect.succeed({}),
+			skill: () =>
+				Effect.sync(() => {
+					calls++;
+					return skill;
+				}),
+		});
+		return Effect.gen(function* () {
+			const service = yield* AgentsService;
+			expect((yield* service.view()).draftingAvailable).toBe(false);
+			expect(
+				yield* service
+					.request({ type: "draft-skill", name: "test", prompt: "draft" })
+					.pipe(Effect.either),
+			).toMatchObject({
+				_tag: "Left",
+				left: { code: "AGENT.DRAFT.UNAVAILABLE" },
+			});
+			expect(calls).toBe(0);
+			available = true;
+			expect((yield* service.view()).draftingAvailable).toBe(true);
+			expect(
+				(yield* service.request({
+					type: "draft-skill",
+					name: "test",
+					prompt: "draft",
+				})).draft,
+			).toBe(skill);
+			expect(calls).toBe(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

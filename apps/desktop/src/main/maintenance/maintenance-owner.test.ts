@@ -9,15 +9,21 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { Effect, ManagedRuntime } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDesktopDiagnostics } from "../diagnostics";
-import { clearOwnedData } from "./backup-store";
-import { registerMaintenance } from "./index";
+import { clearOwnedData, prepareRestore } from "./backup-store";
+import { prepareMaintenance, registerMaintenance } from "./index";
 
 const native = vi.hoisted(() => ({
 	app: { getVersion: () => "0.0.0", exit: vi.fn() },
-	dialog: { showMessageBox: vi.fn(async () => ({ response: 1 })) },
+	dialog: {
+		showMessageBox: vi.fn(async () => ({ response: 1 })),
+		showOpenDialog: vi.fn(async () => ({
+			canceled: false,
+			filePaths: [] as string[],
+		})),
+	},
 	ipcMain: { handle: vi.fn(), removeHandler: vi.fn() },
 	shell: {},
 }));
@@ -334,3 +340,95 @@ it("finishes reset spans and runtime finalizers before closing diagnostics and f
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it.each(["reset", "import"] as const)(
+	"unwinds %s before stopping the shared graph and replacing data",
+	async (mode) => {
+		const root = await mkdtemp(join(tmpdir(), "maintenance-graph-reset-"));
+		const events: string[] = [];
+		const diagnostics = createDesktopDiagnostics({
+			directory: join(root, "diagnostics"),
+		});
+
+		const module = prepareMaintenance({
+			root,
+			mock: true,
+			renderer: "https://app.invalid",
+			hardware: () => undefined,
+			management: () => undefined,
+			diagnostics,
+			stopWriters: async () => {
+				events.push("stop");
+				await application.dispose();
+				events.push("stopped");
+			},
+			exit: async () => {
+				events.push("exit");
+			},
+		});
+		const resource = Layer.scopedDiscard(
+			Effect.addFinalizer(() =>
+				Effect.sync(() => {
+					events.push("graph-finalizer");
+				}),
+			),
+		);
+		const application = ManagedRuntime.make(
+			module.layer.pipe(Layer.provideMerge(resource)),
+		);
+		module.bind(application);
+		const run = module.runtime.runPromise;
+		vi.spyOn(module.runtime, "runPromise").mockImplementation(
+			(effect, options) =>
+				run(
+					effect.pipe(
+						Effect.onExit(() =>
+							Effect.sync(() => {
+								events.push("effect-finished");
+							}),
+						),
+					),
+					options,
+				),
+		);
+		const owner = module.start();
+		vi.mocked(clearOwnedData).mockImplementationOnce(async () => {
+			events.push("clear");
+		});
+		try {
+			await owner.ready;
+			if (mode === "import") {
+				const archive = join(root, "synthetic-backup.zip");
+				await writeFile(archive, "synthetic");
+				native.dialog.showOpenDialog.mockResolvedValueOnce({
+					canceled: false,
+					filePaths: [archive],
+				});
+				vi.mocked(prepareRestore).mockResolvedValueOnce({
+					validate: async () => {},
+					commit: async () => {
+						events.push("clear");
+						return { skipped: 0, imported: 0 };
+					},
+				});
+			}
+			const reply = await owner.request(
+				mode === "reset" ? { action: mode, backup: false } : { action: mode },
+			);
+			expect(reply.ok).toBe(true);
+			expect(events.lastIndexOf("effect-finished")).toBeLessThan(
+				events.indexOf("stop"),
+			);
+			expect(events.indexOf("graph-finalizer")).toBeLessThan(
+				events.indexOf("clear"),
+			);
+			expect(events).toContain("exit");
+		} finally {
+			await owner.dispose().catch(() => undefined);
+			await application.dispose();
+			await diagnostics.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+	1500,
+);

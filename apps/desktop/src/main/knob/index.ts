@@ -16,6 +16,10 @@ import {
 	KnobRequest,
 } from "../../shared/knob-contracts";
 import type { DesktopDiagnostics } from "../diagnostics";
+import {
+	type DesktopRuntime,
+	prepareDesktopModule,
+} from "../diagnostics/module";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
 import {
 	type DesktopKnobBindings,
@@ -35,7 +39,7 @@ export function makeKnobRuntime(
 		diagnostics,
 	);
 }
-export type KnobRuntime = ReturnType<typeof makeKnobRuntime>;
+export type KnobRuntime = DesktopRuntime<KnobModel>;
 export function registerKnobRuntime(
 	runtime: KnobRuntime,
 	load: Effect.Effect<
@@ -221,22 +225,26 @@ export function registerKnobRuntime(
 	};
 }
 
-export function registerKnob(
+export function prepareKnob(
 	panel: () => BrowserWindow | undefined,
 	windows: () => readonly BrowserWindow[],
 	bindings: DesktopKnobBindings = {},
 	diagnostics?: DesktopDiagnostics,
 ) {
 	const adapters = desktopKnobAdapters(app.getPath("userData"), bindings);
-	return registerKnobRuntime(
-		makeKnobRuntime(adapters.ports, diagnostics),
-		adapters.load,
-		panel,
-		windows,
-		undefined,
-		{
-			readVolume: adapters.ports.readVolume,
-			contextVersion: adapters.contextVersion,
-		},
+	return prepareDesktopModule(
+		KnobModel.DefaultWithoutDependencies.pipe(
+			Layer.provide(Layer.succeed(KnobModelPorts, adapters.ports)),
+		),
+		(runtime) =>
+			registerKnobRuntime(runtime, adapters.load, panel, windows, undefined, {
+				readVolume: adapters.ports.readVolume,
+				contextVersion: adapters.contextVersion,
+			}),
+		diagnostics,
 	);
+}
+
+export function registerKnob(...args: Parameters<typeof prepareKnob>) {
+	return prepareKnob(...args).standalone();
 }

@@ -873,7 +873,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 					): Effect.Effect<ChatHistory, ChatError> => read(owner, sessionId),
 				),
 				list: Effect.fn("ChatService.list")(
-					(owner: string): Effect.Effect<readonly ChatHistory[]> =>
+					(owner: string): Effect.Effect<readonly ChatHistory[], ChatError> =>
 						repository
 							.list(owner)
 							.pipe(Effect.map((histories) => histories.map(present))),
