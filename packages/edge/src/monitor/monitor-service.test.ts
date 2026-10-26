@@ -121,6 +121,7 @@ describe("monitor sampling", () => {
 			Effect.gen(function* () {
 				const cpuCalls = yield* Ref.make(0),
 					cpuReleased = yield* Ref.make(0);
+				let resets = 0;
 				const started = yield* Deferred.make<void>();
 				const latest = yield* Ref.make<MonitorSnapshot>({
 					sampledAt: 0,
@@ -129,6 +130,9 @@ describe("monitor sampling", () => {
 				const layer = MonitorService.Default.pipe(
 					Layer.provide(
 						Layer.succeed(MonitorCollector, {
+							reset: Effect.sync(() => {
+								resets++;
+							}),
 							collect: (id) =>
 								id === "cpu"
 									? Effect.gen(function* () {
@@ -178,8 +182,52 @@ describe("monitor sampling", () => {
 				expect(yield* Ref.get(cpuCalls)).toBe(2);
 				yield* Fiber.interrupt(fiber);
 				expect(yield* Ref.get(cpuReleased)).toBe(1);
+				expect(resets).toBe(2);
 				yield* TestClock.adjust(10000);
 				expect(yield* Ref.get(cpuCalls)).toBe(2);
 			}),
 	);
 });
+
+it.scoped(
+	"expires retained values after sixty failed checks and cancels the old sampling stream",
+	() =>
+		Effect.gen(function* () {
+			const latest = yield* Ref.make<MonitorSnapshot>({
+				sampledAt: 0,
+				samples: [],
+			});
+			let calls = 0;
+			const layer = MonitorService.Default.pipe(
+				Layer.provide(
+					Layer.succeed(MonitorCollector, {
+						collect: () =>
+							Effect.sync(() => ({
+								state:
+									++calls === 1 ? ("available" as const) : ("error" as const),
+								values: calls === 1 ? { load: 42 } : {},
+							})),
+					}),
+				),
+			);
+			const f = yield* MonitorService.watch(1, ["cpu"]).pipe(
+				Effect.flatMap((s) => Stream.runForEach(s, (v) => Ref.set(latest, v))),
+				Effect.provide(layer),
+				Effect.forkScoped,
+			);
+			yield* TestClock.adjust(59000);
+			expect(
+				(yield* Ref.get(latest)).samples.find((s) => s.id === "cpu"),
+			).toMatchObject({ state: "stale", values: { load: 42 } });
+			yield* TestClock.adjust(2000);
+			expect(calls).toBeGreaterThanOrEqual(61);
+			yield* TestClock.adjust(1000);
+			expect(
+				(yield* Ref.get(latest)).samples.find((s) => s.id === "cpu"),
+			).toMatchObject({ state: "unavailable", values: {} });
+			yield* Fiber.interrupt(f);
+			const stopped = calls;
+			yield* TestClock.adjust(5000);
+			expect(calls).toBe(stopped);
+		}),
+);

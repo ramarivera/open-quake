@@ -297,11 +297,12 @@ it("MGMT-384: mounted disk sub-touch scrolls within bounds and cancellation/unmo
 	expect(list.scrollTop).toBe(700);
 });
 
-it("monitor motion preferences disable the retained style loops and gauge transitions", () => {
+it("monitor motion preferences disable gauge transitions and no decorative loops remain", () => {
 	const reduced = css.slice(
 		css.indexOf("@media (prefers-reduced-motion: reduce)"),
 	);
 	expect(reduced).toContain("animation: none");
 	expect(reduced).toContain("transition: none");
-	expect(css).toContain("animation: monitor-twinkle 2.5s");
+	// independent-device-design supersedes vendor scanline/twinkle/wobble loops.
+	expect(css).not.toMatch(/@keyframes\s+monitor-(twinkle|scanline)/);
 });

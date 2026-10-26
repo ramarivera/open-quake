@@ -4,10 +4,25 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime, Schema } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
+import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service";
+import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog";
+import {
+	Profile,
+	ProfileDraft,
+	ProfileEnvelope,
+	ProfileKey,
+} from "../../../../../packages/device/src/profiles/profile-contracts";
+import {
+	ProfileRepository,
+	profileStorageLayer,
+} from "../../../../../packages/device/src/profiles/profile-repository";
+import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { SYNTHETIC_TOUCH_EMPTY } from "../../../../../packages/device/src/touch/touch-fixtures";
+import { withMonitorKeySettings } from "../../renderer/src/strip/tiles/monitor/key-settings";
 import { previewSnapshot } from "../../renderer/src/strip/tiles/monitor/view-model";
+import { KEY_PREVIEW, KEY_REQUEST, KeyRequest } from "../../shared/key-library";
 import {
 	MONITOR_METRICS,
 	type MonitorCommand,
@@ -22,13 +37,15 @@ import { registerKnob } from "../knob";
 import { DeviceLifecycle } from "../lifecycle/lifecycle-service";
 import { registerLifecycle } from "../lifecycle/registration";
 import { registerManagementAppearance } from "../management/appearance";
+import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { MediaLive, registerMedia } from "../media";
 import { startMockDeviceBus } from "../mockDeviceBus";
-import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
-import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
+import { registerProfiles } from "../profiles/profile-ipc";
+import { stripFixtureEnvelope } from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { registerMonitor } from "./index";
 import { nativeCollector } from "./native-collector";
+import { activeMonitorKey } from "./panel-media";
 
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1");
 const artifactsArgument = process.argv[2] ?? "";
@@ -42,7 +59,9 @@ registerClockScheme();
 const wait = (ms: number): Promise<void> =>
 	new Promise((resolve) => setTimeout(resolve, ms));
 const evaluate = (win: BrowserWindow, code: string): Promise<unknown> =>
-	win.webContents.executeJavaScript(code);
+	win.webContents.executeJavaScript(code).catch((cause: unknown) => {
+		throw new Error(`Renderer script failed: ${code.slice(0, 500)}`, { cause });
+	});
 async function until(win: BrowserWindow, code: string): Promise<void> {
 	for (let i = 0; i < 150; i++) {
 		if ((await evaluate(win, code)) === true) return;
@@ -195,34 +214,89 @@ async function smoke(): Promise<void> {
 			() => management,
 			renderer,
 		);
+		const builtin = builtinProfiles("darwin").find((p) => p.id === "1-3");
+		assert(builtin);
 		const profile = {
-			...clockProfile,
+			...Schema.encodeSync(Profile)(builtin),
 			id: "monitor",
 			name: "SysView",
-			pages: [
-				{
-					...clockProfile.pages[0],
-					keys: clockProfile.pages[0].keys.map((key) => ({
-						...key,
-						childrenName: "systemMonitorPanel",
-						config: {
-							...key.config,
-							type: "systemMonitorPanel",
-							supportTouchEffect: false,
-						},
-					})),
-				},
-			] as const,
 		};
-		const profiles = registerProfiles(
-			ManagedRuntime.make(
-				ProfilesLive({
-					read: async () => stripFixtureEnvelope(profile),
-					write: async () => undefined,
+		const initialProfiles = stripFixtureEnvelope(profile);
+		let storedProfiles: typeof ProfileEnvelope.Encoded = {
+			...initialProfiles,
+			profiles: [
+				initialProfiles.profiles[0],
+				{
+					...initialProfiles.profiles[0],
+					id: "monitor-second",
+					name: "Second monitor",
+				},
+			],
+		};
+		const repository = ProfileRepository.DefaultWithoutDependencies.pipe(
+			Layer.provide(ManagementProfileContractsLive),
+			Layer.provide(
+				profileStorageLayer({
+					read: async () => storedProfiles,
+					write: async (value) => {
+						storedProfiles = value;
+					},
 				}),
 			),
-			renderer,
 		);
+		const profileRuntime = ManagedRuntime.make(
+			KeyEditing.DefaultWithoutDependencies.pipe(
+				Layer.provideMerge(
+					ProfileService.DefaultWithoutDependencies.pipe(
+						Layer.provideMerge(repository),
+					),
+				),
+			),
+		);
+
+		const profiles = registerProfiles(profileRuntime, renderer);
+		const commitPresentation = async (settings: SettingsView["settings"]) => {
+			const loaded = await profileRuntime.runPromise(
+				ProfileService.getProfile("monitor"),
+			);
+			const first = loaded.pages[0].keys[0];
+			assert(first);
+			const edited = withMonitorKeySettings(first, settings);
+			const raw = Schema.encodeSync(ProfileDraft)(loaded);
+			await profileRuntime.runPromise(
+				ProfileService.saveProfile({
+					expectedRevision: loaded.revision,
+					profile: {
+						...raw,
+						pages: raw.pages.map((pg, i) =>
+							i ? pg : { ...pg, keys: [Schema.encodeSync(ProfileKey)(edited)] },
+						),
+					},
+				}),
+			);
+		};
+		ipcMain.handle(KEY_REQUEST, async (_event, input: unknown) => {
+			const c = Schema.decodeUnknownSync(KeyRequest)(input);
+			const result = await profileRuntime.runPromise(
+				Effect.gen(function* () {
+					if (c.type === "preview")
+						yield* KeyEditing.preview(c.target, c.key, c.geometry);
+					else if (c.type === "save") yield* KeyEditing.save(c.token);
+					else if (c.type === "revert") yield* KeyEditing.revert(c.token);
+					else if (c.type === "select")
+						yield* ProfileService.selectProfile({
+							deviceId: c.deviceId,
+							profileId: c.profileId,
+							pageId: c.pageId,
+						});
+					const envelope = yield* KeyEditing.read();
+					return Schema.encodeSync(ProfileEnvelope)(envelope);
+				}),
+			);
+			if (c.type === "preview" || c.type === "revert")
+				management.webContents.send(KEY_PREVIEW, { envelope: result });
+			return { _tag: "success", envelope: result };
+		});
 		// Only the legacy profile fixture is served here; thumbnail-manager data is unavailable.
 		ipcMain.handle(PROFILE_REQUEST, () => ({
 			_tag: "rejected",
@@ -230,7 +304,7 @@ async function smoke(): Promise<void> {
 		}));
 		let samples = 0;
 		let failNetwork = true;
-		const fixture = previewSnapshot();
+		let fixture = previewSnapshot();
 		const monitor = registerMonitor(
 			base,
 			() => management,
@@ -250,6 +324,13 @@ async function smoke(): Promise<void> {
 					}),
 			},
 			renderer,
+			undefined,
+			async (keyCode) => {
+				const { envelope } = await profileRuntime.runPromise(
+					ProfileRepository.load(),
+				);
+				return activeMonitorKey(envelope, "desktop-preview", keyCode);
+			},
 		);
 		const knob = registerKnob(
 			() => panel,
@@ -274,7 +355,9 @@ async function smoke(): Promise<void> {
 			for (const window of [management, panel, thumbnail])
 				if (!window.isDestroyed()) window.destroy();
 			await knob.dispose();
+			ipcMain.removeHandler(KEY_REQUEST);
 			await profiles.dispose();
+			await profileRuntime.dispose();
 			ipcMain.removeHandler(PROFILE_REQUEST);
 			await clock.dispose();
 			await media.dispose();
@@ -299,7 +382,7 @@ async function smoke(): Promise<void> {
 		);
 		await until(
 			management,
-			`document.querySelector('.monitor-settings [data-monitor-style="glass"]')?.disabled === false`,
+			`document.querySelector('.monitor-hz')?.disabled === false`,
 		);
 		await until(
 			management,
@@ -535,65 +618,193 @@ async function smoke(): Promise<void> {
 			management,
 			`document.querySelector('[data-testid="monitor-live-cpu"]')?.dataset.state === 'live'`,
 		);
-		let previous = "glass";
-		for (const style of STYLES) {
+		// Mounted key editor uses the production draft and repository validation path.
+		await evaluate(
+			management,
+			`document.querySelector('.nav-item[title="Keys"]').click()`,
+		);
+		await until(management, `!!document.querySelector('#keys-profile')`);
+		const selectValue = async (selector: string, value: string) => {
 			await evaluate(
 				management,
-				`document.querySelector('[data-monitor-style="${style}"]').click()`,
+				`(() => {const e=document.querySelector(${JSON.stringify(selector)}); e.value=${JSON.stringify(value)}; e.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+			);
+		};
+		const chooseKey = async () => {
+			await evaluate(
+				management,
+				`[...document.querySelectorAll('.keys-cells button')].find(b=>b.textContent==='1,1').click()`,
 			);
 			await until(
 				management,
-				`document.querySelector('.monitor-settings .oq-monitor')?.dataset.style === '${style}'`,
+				`!!document.querySelector('select[aria-label="Panel style"]')`,
 			);
-			assert.equal(
-				await evaluate(
-					panel,
-					`document.querySelector('.oq-monitor').dataset.style`,
-				),
-				previous,
-				"draft leaked before Save",
+		};
+		await chooseKey();
+		await selectValue('select[aria-label="Panel style"]', "cyber");
+		await selectValue('select[aria-label="Temperature Unit"]', "fahrenheit");
+		await until(
+			management,
+			`document.querySelector('fieldset[aria-label="Monitor settings"] .oq-monitor')?.dataset.style==='cyber'`,
+		);
+		assert.equal(
+			(await profileRuntime.runPromise(ProfileService.getProfile("monitor")))
+				.revision,
+			0,
+			"draft cannot write storage",
+		);
+		await evaluate(
+			management,
+			`[...document.querySelectorAll('.key-editor button')].filter(b=>b.textContent==='Cancel').at(-1).click()`,
+		);
+		await until(
+			management,
+			`!document.querySelector('select[aria-label="Panel style"]')`,
+		);
+		await chooseKey();
+		assert.equal(
+			await evaluate(
+				management,
+				`document.querySelector('select[aria-label="Panel style"]').value`,
+			),
+			"glass",
+		);
+		await selectValue('select[aria-label="Panel style"]', "cyber");
+		await selectValue('select[aria-label="Temperature Unit"]', "fahrenheit");
+		await evaluate(
+			management,
+			`[...document.querySelectorAll('.key-editor button')].filter(b=>b.textContent==='Save').at(-1).click()`,
+		);
+		await until(
+			management,
+			`document.body.innerText.includes('Saved successfully')`,
+		);
+		await until(
+			panel,
+			`document.querySelector('.oq-monitor')?.dataset.style==='cyber'`,
+		);
+		assert.equal(
+			(
+				await profileRuntime.runPromise(
+					ProfileService.getProfile("monitor-second"),
+				)
+			).revision,
+			0,
+			"saving one profile leaves the other unchanged",
+		);
+		for (const locale of ["en", "de"]) {
+			await selectValue("#keys-language", locale);
+			await until(
+				management,
+				`!!document.querySelector('fieldset[aria-label="${locale === "de" ? "Monitor-Einstellungen" : "Monitor settings"}"]')`,
 			);
 			await evaluate(
 				management,
-				`[...document.querySelectorAll('.monitor-save button')].find(b => b.textContent === 'Save').click()`,
+				`document.querySelector('fieldset[aria-label="${locale === "de" ? "Monitor-Einstellungen" : "Monitor settings"}"] select').scrollIntoView({block:'center'})`,
 			);
+			await writeFile(
+				join(artifacts, `key-settings-${locale}.png`),
+				(await management.webContents.capturePage()).toPNG(),
+			);
+		}
+		await selectValue("#keys-language", "en");
+		await evaluate(
+			management,
+			`document.querySelector('.nav-item[title="Screen"]').click()`,
+		);
+		await until(management, `!!document.querySelector('.monitor-hz')`);
+		fixture = {
+			...fixture,
+			samples: fixture.samples.map((s) =>
+				s.id === "gpu"
+					? {
+							...s,
+							values: {
+								...s.values,
+								model:
+									"Long graphics device model with an external adapter and an extended manufacturer identifier",
+							},
+						}
+					: s,
+			),
+		};
+		await until(
+			panel,
+			`document.querySelector('[data-testid="sys-monitor-value-gpu-model"]')?.textContent.includes('Long graphics device')`,
+		);
+		for (const style of STYLES) {
+			await commitPresentation({
+				...(await read(management)).settings,
+				styleId: style,
+			});
 			await until(
 				panel,
 				`document.querySelector('.oq-monitor')?.dataset.style === '${style}'`,
 			);
-			await wait(200);
-			const dimensions = await evaluate(
+			await wait(100);
+			const geometry = await evaluate(
 				panel,
-				`(() => {const b=document.querySelector('.oq-monitor').getBoundingClientRect(); return [b.width,b.height,document.querySelectorAll('[data-testid^="sys-monitor-module-"]').length]})()`,
+				`(() => {const p=document.querySelector('.oq-monitor'); const r=p.getBoundingClientRect(); return [...p.querySelectorAll('[data-testid^="sys-monitor-module-"]')].map(e=>{const b=e.getBoundingClientRect(); return {id:e.dataset.testid,bounds:[b.left,b.top,b.right,b.bottom],panel:[r.left,r.top,r.right,r.bottom],visible:b.width>0&&b.height>0,inside:b.left>=r.left-1&&b.right<=r.right+1&&b.top>=r.top-1&&b.bottom<=r.bottom+1};});})()`,
 			);
-			assert.deepEqual(dimensions, [1908, 462, 7]);
+			assert(Array.isArray(geometry));
+			assert.equal(geometry.length, 7);
+			assert(
+				geometry.every((g) => g.visible && g.inside),
+				`${style} module bounds: ${JSON.stringify(geometry)}`,
+			);
+			const readoutBounds = await evaluate(
+				panel,
+				`(() => {const p=document.querySelector('.oq-monitor'); return [...p.querySelectorAll('.monitor-value')].filter(e=>e.getBoundingClientRect().width).map(e=>{const b=e.getBoundingClientRect(),c=e.closest('.monitor-card')?.getBoundingClientRect();return {value:e.textContent,inside:!c||(b.left>=c.left-1&&b.right<=c.right+1&&b.top>=c.top-1&&b.bottom<=c.bottom+1)};});})()`,
+			);
+			assert(
+				Array.isArray(readoutBounds) && readoutBounds.every((v) => v.inside),
+				`${style} values clipped: ${JSON.stringify(readoutBounds)}`,
+			);
 			panel.webContents.debugger.attach("1.3");
-			await panel.webContents.debugger.sendCommand(
-				"Emulation.setEmulatedMedia",
-				{
-					features: [{ name: "prefers-contrast", value: "more" }],
-				},
-			);
-			assert.equal(
-				await evaluate(
+			for (const feature of [
+				[],
+				[{ name: "prefers-reduced-motion", value: "reduce" }],
+				[{ name: "prefers-reduced-transparency", value: "reduce" }],
+				[{ name: "prefers-contrast", value: "more" }],
+			]) {
+				await panel.webContents.debugger.sendCommand(
+					"Emulation.setEmulatedMedia",
+					{ features: feature },
+				);
+				const result = await evaluate(
 					panel,
-					`getComputedStyle(document.querySelector('.monitor-card')).backdropFilter`,
-				),
-				"none",
-				"contrast must remove transparent blur in every style",
-			);
+					`(() => { const p=document.querySelector('.oq-monitor'); const r=p.getBoundingClientRect(); return { width:r.width,height:r.height,modules:p.querySelectorAll('[data-testid^="sys-monitor-module-"]').length,invalid:[...p.querySelectorAll('*')].filter(e=>{const s=getComputedStyle(e);return s.backdropFilter!=='none'||s.animationName!=='none'||s.backgroundImage.includes('gradient')}).length,surface:getComputedStyle(p.querySelector('.monitor-card')).backgroundColor,ticker:p.querySelector('.monitor-ticker')?.offsetHeight }; })()`,
+				);
+				assert(result && typeof result === "object" && "invalid" in result);
+				assert.equal(
+					result.invalid,
+					0,
+					"all styles obey flat design and a11y policies",
+				);
+				assert("modules" in result);
+				assert.equal(result.modules, 7);
+				assert("surface" in result);
+				assert.equal(result.surface, "rgb(21, 23, 26)");
+				if (style === "cyber") {
+					assert("ticker" in result);
+					assert.equal(result.ticker, 40);
+				}
+			}
 			await panel.webContents.debugger.sendCommand(
 				"Emulation.setEmulatedMedia",
 				{ features: [] },
 			);
 			panel.webContents.debugger.detach();
-			const image = await panel.webContents.capturePage();
 			await writeFile(
 				join(artifacts, `panel-${style}-1920x480.png`),
-				image.resize({ width: 1920, height: 480 }).toPNG(),
+				(await panel.webContents.capturePage())
+					.resize({ width: 1920, height: 480 })
+					.toPNG(),
 			);
-			previous = style;
 		}
+
+		fixture = previewSnapshot();
+
 		assert.equal(
 			await evaluate(thumbnail, "window.monitorLeaks"),
 			0,
@@ -627,6 +838,10 @@ async function smoke(): Promise<void> {
 			)._tag,
 			"success",
 		);
+		await commitPresentation({
+			...(await read(management)).settings,
+			styleId: "glass",
+		});
 		await until(
 			panel,
 			`document.querySelector('.oq-monitor')?.dataset.style === 'glass'`,
@@ -722,6 +937,10 @@ async function smoke(): Promise<void> {
 			)._tag,
 			"success",
 		);
+		await commitPresentation({
+			...(await read(management)).settings,
+			styleId: "glass",
+		});
 		await until(
 			panel,
 			`document.querySelector('.monitor-background')?.complete === true`,
@@ -739,6 +958,7 @@ async function smoke(): Promise<void> {
 			)._tag,
 			"success",
 		);
+		await panel.reload();
 		await until(panel, `!!document.querySelector('.monitor-background-error')`);
 		const windowsBeforeProbe = BrowserWindow.getAllWindows().length;
 		const video = join(base, "loop.webm");
@@ -760,10 +980,55 @@ async function smoke(): Promise<void> {
 			revision: beforeVideo.revision,
 			settings: { ...beforeVideo.settings, media: { glass: stagedVideo.slot } },
 		});
+		await commitPresentation((await read(management)).settings);
 		await until(
 			panel,
 			`(() => {const v=document.querySelector('video.monitor-background'); return !!v && v.readyState >= 2 && !v.paused && v.muted && v.loop;})()`,
 		);
+		// Hiding releases the element and source; showing resumes with a fresh element.
+		await evaluate(
+			panel,
+			`window.oldMonitorVideo=document.querySelector('video.monitor-background'); Object.defineProperty(document,'hidden',{configurable:true,value:true}); document.dispatchEvent(new Event('visibilitychange'))`,
+		);
+		await until(panel, `!document.querySelector('video.monitor-background')`);
+		assert.equal(
+			await evaluate(
+				panel,
+				`window.oldMonitorVideo.paused && !window.oldMonitorVideo.hasAttribute('src')`,
+			),
+			true,
+		);
+		await evaluate(
+			panel,
+			`Object.defineProperty(document,'hidden',{configurable:true,value:false}); document.dispatchEvent(new Event('visibilitychange'))`,
+		);
+		await until(
+			panel,
+			`!!document.querySelector('video.monitor-background') && document.querySelector('video.monitor-background')!==window.oldMonitorVideo`,
+		);
+		await evaluate(
+			panel,
+			`document.querySelector('video.monitor-background').dispatchEvent(new Event('error'))`,
+		);
+		await until(
+			panel,
+			`!!document.querySelector('.monitor-background-error') && !document.querySelector('video.monitor-background')`,
+		);
+		// Accelerate only the declared startup deadline, before playback can start.
+		await evaluate(
+			panel,
+			`window.realMonitorTimeout=window.setTimeout; window.monitorTimeouts=[]; window.setTimeout=(fn,ms,...args)=>{if(ms===5000){window.monitorTimeouts.push(ms);return window.realMonitorTimeout(fn,0,...args)}return window.realMonitorTimeout(fn,ms,...args)};void 0`,
+		);
+		await commitPresentation({
+			...(await read(management)).settings,
+			styleId: "anime",
+			media: { anime: stagedVideo.slot },
+		});
+		await until(
+			panel,
+			`!!document.querySelector('.monitor-background-error') && window.monitorTimeouts.includes(5000)`,
+		);
+		await evaluate(panel, `window.setTimeout=window.realMonitorTimeout;void 0`);
 		// Persist all five slots, then preview a different saved style without Save.
 		const oneStyle = await read(management);
 		const savedStyles = { ...oneStyle.settings.media };
@@ -782,29 +1047,12 @@ async function smoke(): Promise<void> {
 		assert(otherStyle._tag === "success");
 		assert.deepEqual(Object.keys(otherStyle.view.media), ["cyber"]);
 		assert.equal(otherStyle.view.settings.styleId, "glass");
-		await evaluate(
-			management,
-			`document.querySelector('[data-monitor-style="cyber"]').click()`,
-		);
+		await commitPresentation({ ...multiStyle.view.settings, styleId: "cyber" });
 		await until(
-			management,
-			`(() => {const p=document.querySelector('.monitor-settings .oq-monitor[data-style="cyber"]'); const v=p?.querySelector('video.monitor-background'); return !!v && v.readyState >= 2;})()`,
+			panel,
+			`document.querySelector('.oq-monitor')?.dataset.style === 'cyber'`,
 		);
-		assert.equal(
-			await evaluate(
-				panel,
-				`document.querySelector('.oq-monitor').dataset.style`,
-			),
-			"glass",
-		);
-		await evaluate(
-			management,
-			`[...document.querySelectorAll('.monitor-save button')].find(b => b.textContent === 'Revert').click()`,
-		);
-		await until(
-			management,
-			`document.querySelector('.monitor-settings .oq-monitor')?.dataset.style === 'glass'`,
-		);
+
 		const short = join(base, "short.webm");
 		await writeFile(short, await recordVideo(management, 500));
 		dialog.showOpenDialog = async () => ({
@@ -850,6 +1098,11 @@ async function smoke(): Promise<void> {
 				enabled: false,
 			},
 		});
+		await commitPresentation({
+			...(await read(management)).settings,
+			background: "none",
+			styleId: "cyber",
+		});
 		await until(
 			panel,
 			`document.querySelector('.oq-monitor')?.dataset.background === 'none'`,
@@ -873,6 +1126,76 @@ async function smoke(): Promise<void> {
 		});
 		await wait(200);
 		assert(samples > count, "enable must resume sampling");
+		const metricProfile = await profileRuntime.runPromise(
+			ProfileService.getProfile("monitor-second"),
+		);
+		const draft = Schema.encodeSync(ProfileDraft)(metricProfile);
+		const baseKey = draft.pages[0].keys[0];
+		assert(baseKey);
+		const types = [
+			"cpuInfo",
+			"gpuInfo",
+			"memInfo",
+			"diskInfo",
+			"processInfo",
+			"networkInfo",
+			"powerInfo",
+			"bluetoothInfo",
+		];
+		await profileRuntime.runPromise(
+			ProfileService.saveProfile({
+				expectedRevision: metricProfile.revision,
+				profile: {
+					...draft,
+					pages: [
+						{
+							...draft.pages[0],
+							keys: types.map((type, i) => ({
+								...baseKey,
+								keyCode: `1,${i + 1}`,
+								childrenName: type,
+								config: {
+									...baseKey.config,
+									type,
+									size: [1, 1],
+									temperatureUnit: "fahrenheit",
+									actions: [],
+								},
+							})),
+						},
+					],
+				},
+			}),
+		);
+		await profileRuntime.runPromise(
+			ProfileService.selectProfile({
+				deviceId: "desktop-preview",
+				profileId: "monitor-second",
+				pageId: metricProfile.pages[0].id,
+			}),
+		);
+		await until(
+			panel,
+			`document.querySelectorAll('.monitor-metric-tile').length===8 && document.querySelector('[data-metric="cpu"] strong')?.textContent==='37%'`,
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				`document.querySelector('[data-metric="gpu"]').textContent.includes('111 °F')`,
+			),
+			true,
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				`document.querySelector('[data-metric="bluetooth"] strong').textContent`,
+			),
+			"--",
+		);
+		await writeFile(
+			join(artifacts, "individual-metrics-1920x480.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
 		panel.destroy();
 		await request(management, { _tag: "watch", active: false });
 		await wait(150);
