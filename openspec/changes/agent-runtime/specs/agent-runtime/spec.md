@@ -150,7 +150,7 @@ The owned runtime SHALL allow a port, log level, opt-in autostart and a private 
 - **AND** command expansion, embedded quotes and line breaks are rejected before spawning, while native executables keep direct argument dispatch
 
 ### Requirement: Owned Windows runtime tree termination
-The owned runtime SHALL stop the entire Windows process tree, including the gateway launched by an npm command shim. It SHALL await a bounded tree-termination command and process exit, retry forced termination once on failure, and report failure if cleanup cannot be confirmed. POSIX SHALL retain SIGTERM followed by bounded SIGKILL escalation. Sources: CENTER-047, MAIN-144; open-quake-lih.17.24, PR108 finding 4380901915.
+The owned runtime SHALL stop the entire Windows process tree, including the gateway launched by an npm command shim. Production Windows launch SHALL assign the suspended root to an owned kernel Job Object before resuming it. Cleanup SHALL terminate the job by handle, await bounded confirmation that no job processes remain, and retain handles for retry on failure. The injectable PID termination adapter SHALL verify process identity before termination and retry forced termination once on failure. POSIX SHALL retain SIGTERM followed by bounded SIGKILL escalation. Sources: CENTER-047, MAIN-144; open-quake-lih.17.24, PR108 finding 4380901915.
 
 #### Scenario: Command processor exits before its gateway
 - **WHEN** a Windows shim gateway is stopped and cmd.exe closes before tree termination completes
@@ -159,7 +159,7 @@ The owned runtime SHALL stop the entire Windows process tree, including the gate
 
 #### Scenario: Retain cleanup after the Windows shim exits before Stop
 - **WHEN** the owned Windows command processor exits before its gateway and the user selects Stop
-- **THEN** the adapter retains the cleanup target independently of readiness and invokes bounded tree termination against its retained PID
+- **THEN** the adapter retains the cleanup target independently of readiness and invokes bounded tree termination against its retained ownership target
 - **AND** only successful cleanup releases ownership; repeated Stop does not kill the same target again
 - **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381279137, bead open-quake-lih.17.24.1
 
@@ -201,6 +201,14 @@ The owned runtime SHALL stop the entire Windows process tree, including the gate
 - **AND** matching identity permits tree termination only while the native Windows termination helper holds and rechecks that process object
 - **AND** identity results arriving after the bounded stop attempt cannot dispatch a late termination
 - **AND** this covers CENTER-047, MAIN-144, PR122 safety finding 4381625938, bead open-quake-lih.17.24.1
+
+#### Scenario: Verified Windows root exits while gateway descendants survive
+- **WHEN** the root exits and its creation identity is no longer queryable while owned gateway descendants remain
+- **THEN** the native job handle still owns those descendants and Stop terminates that job without querying or killing a PID
+- **AND** creation is suspended until assignment succeeds so descendants cannot escape the owned job
+- **AND** failed termination retains job and process handles for an explicit retry, including assignment or resume failure during startup
+- **AND** failed creation releases the empty job and closed handles are never queried on a later cleanup retry
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381720098, bead open-quake-lih.17.24.1
 
 ### Requirement: Imported agent key voice default
 The clawbot key editor SHALL derive Voice Input and Task Prompt visibility from the runtime hold-to-talk predicate. An absent voiceInput action SHALL display voice disabled and Task Prompt editable. Sources: MGMT-302; open-quake-lih.17.24, PR108 finding 4380901936; DK-Suite v0.4.95 recovered_sources/src/plugins/KeyConfiguration.js:239-240 defaults voiceInput to false, and src/views/Components/QuakeShortCutView.vue:1758-1767 requires a truthy voiceInput action.

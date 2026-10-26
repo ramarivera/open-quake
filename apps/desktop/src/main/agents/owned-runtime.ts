@@ -16,6 +16,7 @@ import type { ServiceSettings } from "../../../../../packages/edge/src/agents/se
 import { channelCommandRunner } from "./channel-command";
 import { agentCommandInvocation } from "./command-invocation";
 import { createLocalAgentState, type LocalAgentState } from "./local-state";
+import { startWindowsJob, type WindowsJobApi } from "./windows-job";
 import {
 	terminateWindowsTree,
 	windowsProcessIdentity,
@@ -59,6 +60,7 @@ export function ownedRuntimeProcessDriver(
 	storage: LocalAgentState,
 	options: {
 		readonly platform?: NodeJS.Platform;
+		readonly windowsJobApi?: WindowsJobApi;
 		readonly spawn?: (
 			command: string,
 			args: readonly string[],
@@ -100,7 +102,7 @@ export function ownedRuntimeProcessDriver(
 				],
 				platform,
 			);
-			const child = spawnProcess(executable, args, {
+			const processOptions: SpawnOptions = {
 				...spawnOptions,
 				stdio: "ignore",
 				env: {
@@ -109,7 +111,15 @@ export function ownedRuntimeProcessDriver(
 					OPENCLAW_CONFIG_PATH: `${root}/openclaw.json`,
 					OPENCLAW_LOG_LEVEL: settings.logLevel,
 				},
-			});
+			};
+			if (platform === "win32" && (!options.spawn || options.windowsJobApi))
+				return startWindowsJob(
+					executable,
+					args,
+					processOptions,
+					options.windowsJobApi,
+				);
+			const child = spawnProcess(executable, args, processOptions);
 			const cleanup = { pid: child.pid, treeStopped: false };
 			let spawnFailed = false;
 			let processorExited = false;
