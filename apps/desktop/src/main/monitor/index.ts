@@ -29,6 +29,7 @@ import { applicationIconLibrary } from "../key-library/application-icons";
 import { monitorForegroundLive } from "./foreground";
 import {
 	foregroundArtwork,
+	foregroundKey,
 	publishMonitoringState,
 } from "./foreground-artwork";
 import { MonitorStore, monitorStoreLive } from "./monitor-store";
@@ -55,6 +56,7 @@ export function prepareMonitor(
 		),
 		(runtime) => {
 			const artwork = foregroundArtwork(applicationIconLibrary());
+			let artworkKey: string | undefined;
 			const watchers = new Map<Electron.WebContents, () => void>();
 			const trusted = (contents: Electron.WebContents): boolean =>
 				!contents.isDestroyed() &&
@@ -102,10 +104,15 @@ export function prepareMonitor(
 									send(management()),
 									send(panel()),
 								);
-								void artwork(snapshot).then((value) => {
-									for (const win of new Set([management(), panel()]))
-										send(win)(MONITOR_ARTWORK, value);
-								});
+								const key = foregroundKey(snapshot);
+								if (key !== artworkKey) {
+									artworkKey = key;
+									void artwork(snapshot).then((value) => {
+										if (key !== artworkKey) return;
+										for (const win of new Set([management(), panel()]))
+											send(win)(MONITOR_ARTWORK, value);
+									});
+								}
 								for (const contents of watchers.keys())
 									if (trusted(contents))
 										contents.send(MONITOR_METRICS, snapshot.metrics);
