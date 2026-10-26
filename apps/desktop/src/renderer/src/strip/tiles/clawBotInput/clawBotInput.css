@@ -76,7 +76,8 @@
 	font-weight: 550;
 	cursor: pointer;
 }
-.clawbot-input-button:active:not(:disabled) {
+.clawbot-input-button:active:not(:disabled),
+.clawbot-input-button[data-pressed="true"]:not(:disabled) {
 	box-shadow: inset 0 0 0 2px var(--strip-accent);
 	transform: scale(0.97);
 }

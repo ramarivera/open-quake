@@ -199,3 +199,12 @@ before inspecting cached answer text. The production binding and hidden smoke
 use the serialized runtime stop operation. Playing and pending-synthesis tests
 also prove foreign/stale owner stops do nothing. All 36 focused IPC, read-aloud
 and composition tests plus desktop typecheck pass. Logs: `strip-voice-2/fix1d/6267-*`.
+
+## Conversation burn-down lane test-conversation
+
+- [x] AI-151, AI-152, AI-153, AI-158, AI-159, AI-160, AI-161, AI-162, AI-167 and AI-173 cover mounted conversation styles, connection pulse, grouping, scrolling, error mappings and inert rich text. Evidence: `clawbot.test.ts` and native `test/chat-smoke.tsx`.
+- [x] AI-178, AI-179 and SCREEN-129 cover tool phases, accepted later answer text, click/touch expansion, capped previews and moved DOM touch targets. Evidence: `clawbot.test.ts`, native `test/chat-smoke.tsx` and `test/tool-touch-smoke.tsx`.
+- [x] AI-181, AI-185, AI-188 and AI-189 cover selected input headers, cancelled/multiple file selection, repeat-warning expiry and confirmed-touch feedback. Evidence: `main/voice/voice-ipc.test.ts` and native `test/input-smoke.tsx`.
+- [x] AI-191, AI-194, AI-195, AI-196, AI-197, AI-198, AI-199, AI-201, AI-204, AI-207, AI-208 and SCREEN-115 cover Copilot copy/status/scroll/hint/cancel, localized overlays and busy expiry in both motion modes, knob stream isolation, and real knob model-to-wheel routing. Evidence: native `test/copilot-smoke.tsx`, `test/overlay-smoke.tsx` and `test/knob-conversation-smoke.tsx`, plus offline renderer SSR coverage.
+
+All native tests use a hidden, muted Electron window and synthetic bridges. Vitest keeps its existing Node/SSR environment. No Playwright, browser dependency or CI/workflow change. Bead open-quake-cby.10 remains open for lead delivery; physical device, microphone and paid-provider acceptance remains unverified.

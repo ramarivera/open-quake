@@ -15,3 +15,7 @@
 
 - [x] 3.1 open-quake-nyd.3.4: Capture before and after hidden mock Electron screenshots at 1180 and 390 in Graphite, Midnight and Paper, and inspect them. Exercise interactions and layout/a11y checks, renderer tests, and the parent direct-chat smoke.
 - [x] 3.2 open-quake-nyd.3.5: Below 720px, keep the runtime name and health on one row and fold the address, Test connection, model route and header actions behind one Details disclosure. Keep the failed or pending runtime selection's source list unfolded so the direct model stays reachable. Leave the 1180 layout unchanged.
+
+## Conversation burn-down lane test-conversation
+
+- [x] AI-223 New Chat clears draft/session and locks switching while streaming; AI-227 follows the real AgentsPage settings callback into Models and back without losing conversation state. Evidence: hidden native `renderer/src/test/workspace-smoke.tsx`. New Chat needed the minimal draft-clear fix. Bead open-quake-cby.10 remains open for lead delivery.

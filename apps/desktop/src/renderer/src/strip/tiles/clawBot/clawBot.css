@@ -335,8 +335,13 @@
 
 /* Entry motion only; reduced motion drops it. */
 @media (prefers-reduced-motion: no-preference) {
+	:root[data-motion="full"] .clawbot-badge-dot[data-state="checking"],
+	:root[data-motion="full"] .clawbot-badge-dot[data-state="connecting"],
+	:root[data-motion="full"] .clawbot-badge-dot[data-state="connected"] {
+		animation: clawbot-pulse 2s ease-in-out infinite;
+	}
 	:root[data-motion="full"] .clawbot-group {
-		animation: clawbot-enter 0.16s ease-out both;
+		animation: clawbot-enter 0.3s ease-out both;
 	}
 }
 
