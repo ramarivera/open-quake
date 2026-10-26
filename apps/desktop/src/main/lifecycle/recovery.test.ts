@@ -205,6 +205,56 @@ describe("serial lifecycle consumer", () => {
 				},
 			),
 	);
+	for (const swapped of [
+		{ ...a, label: "Another strip" },
+		{ ...a, bounds: { ...a.bounds, x: a.bounds.x + 100 } },
+	])
+		it.scoped(
+			`parks a grace reconnect when display ${swapped.label !== a.label ? "identity" : "bounds"} changed under the same ID`,
+			() =>
+				withHarness(
+					(h) =>
+						Effect.gen(function* () {
+							yield* h.change([desktop, a]);
+							yield* h.service.onStatus(connected, "a");
+							yield* TestClock.adjust(1);
+							yield* h.change([desktop, a, b]);
+							yield* h.service.onStatus(connected, "b");
+							yield* TestClock.adjust(1);
+							expect(h.service.status().orientations).toHaveLength(2);
+							yield* h.service.onStatus(
+								{ ...connected, state: "disconnected", reason: "read-ended" },
+								"a",
+							);
+							yield* TestClock.adjust(1000);
+							yield* h.change([desktop, swapped, b]);
+							const before = h.panels.length;
+							yield* h.service.onStatus(connected, "a");
+							yield* TestClock.adjust(1);
+							expect(
+								h.panels
+									.slice(before)
+									.filter((p) => p.serial === "a")
+									.every((p) => !p.visible),
+							).toBe(true);
+							expect(h.service.status()).toMatchObject({
+								hdmi: "fail",
+								checking: true,
+							});
+							expect(
+								h.service.status().orientations?.map((o) => o.serialNumber),
+							).toEqual(["b"]);
+						}),
+					{
+						busFor: () => ({
+							on: () => () => {},
+							currentStatus: () => undefined,
+							setScreenPower: () => Effect.succeed(true),
+						}),
+					},
+				),
+		);
+
 	it.scoped(
 		"MAIN-053 SCREEN-147 debounces bursts at 1500ms, ignores workArea, and isolates rotated serials",
 		() =>

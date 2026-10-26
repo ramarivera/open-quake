@@ -4,6 +4,7 @@ import type { DeviceBus } from "../deviceBus";
 import { isPanelCandidate, physicalSize } from "../display";
 
 export interface DiscoveryEdges {
+	readonly requireBlanking?: () => boolean;
 	readonly displays: () => readonly Display[];
 	readonly watch: (changed: () => void) => () => void;
 	readonly bus: () => DeviceBus | undefined;
@@ -40,6 +41,7 @@ export const makeDiscovery = Effect.fn("StripDiscovery.make")(function* (
 			const identified = before.length === 1 ? before[0] : undefined;
 			const size = identified ? physicalSize(identified) : undefined;
 			if (
+				!edges.requireBlanking?.() &&
 				identified &&
 				identified.label.trim().toUpperCase() === "DK-QUAKE" &&
 				size &&

@@ -36,7 +36,22 @@ export interface LifecycleEdges extends DiscoveryEdges {
 		alert: NonNullable<ConnectionDiagnostic["alert"]>,
 	) => void;
 }
+/** A grace lease belongs to this serial's observed display, not a recycled OS ID. */
+const sameGraceDisplay = (saved: Display, live: Display): boolean =>
+	saved.id === live.id &&
+	saved.label.trim().toUpperCase() === live.label.trim().toUpperCase() &&
+	saved.internal === live.internal &&
+	saved.scaleFactor === live.scaleFactor &&
+	saved.rotation === live.rotation &&
+	saved.bounds.x === live.bounds.x &&
+	saved.bounds.y === live.bounds.y &&
+	saved.bounds.width === live.bounds.width &&
+	saved.bounds.height === live.bounds.height &&
+	saved.size.width === live.size.width &&
+	saved.size.height === live.size.height;
+
 interface Session {
+	requireBlanking: boolean;
 	connected: boolean;
 	grace: boolean;
 	closing: boolean;
@@ -73,6 +88,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					let state = sessions.get(serial);
 					if (!state) {
 						state = {
+							requireBlanking: false,
 							connected: false,
 							grace: false,
 							closing: false,
@@ -99,6 +115,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						: undefined;
 				};
 				const discovery = yield* makeDiscovery({
+					requireBlanking: () => session(discovering).requireBlanking,
 					...edges,
 					bus: () => edges.busFor?.(discovering) ?? edges.bus(),
 					displays: () =>
@@ -247,7 +264,10 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						// Initial real pairing still requires label+size or blanking proof.
 						if (!state.stable) continue;
 						state.bound = plan.assigned.get(serial);
-						if (state.bound) state.stable = state.bound;
+						if (state.bound) {
+							state.stable = state.bound;
+							state.requireBlanking = false;
+						}
 					}
 				};
 				const redetect = Effect.fn("DeviceLifecycle.redetect")(function* (
@@ -311,7 +331,10 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 									)
 										break;
 									state.bound = Option.getOrUndefined(result.display);
-									if (state.bound) state.stable = state.bound;
+									if (state.bound) {
+										state.stable = state.bound;
+										state.requireBlanking = false;
+									}
 									if (state.issue !== "native-failed")
 										state.issue = result.issue;
 									if (
@@ -350,6 +373,21 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					const wasConnected = state.connected;
 					state.connected = event.state === "connected";
 					if (state.connected) {
+						if (!wasConnected && state.bound) {
+							const saved = state.bound;
+							const live = edges
+								.displays()
+								.find((d) => sameGraceDisplay(saved, d) && isPanelCandidate(d));
+							const claimed = [...sessions.entries()].some(
+								([other, s]) =>
+									other !== serial && s.connected && s.bound?.id === saved.id,
+							);
+							if (!live || claimed) {
+								state.requireBlanking = true;
+								state.bound = undefined;
+								state.stable = undefined;
+							}
+						}
 						if (state.loss) yield* Fiber.interrupt(state.loss);
 						state.grace = false;
 						state.closing = false;
