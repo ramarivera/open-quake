@@ -31,6 +31,9 @@
 	opacity: 0.45;
 	cursor: default;
 }
+.icon-picker-surface button[aria-pressed="true"]:disabled {
+	opacity: 1;
+}
 .icon-library-toolbar {
 	display: flex;
 	align-items: center;
@@ -88,8 +91,7 @@
 .icon-picker-surface .icon-library-body aside small {
 	color: #a1a1aa;
 }
-.icon-picker-surface button[aria-pressed="true"],
-.icon-picker-surface .icon-library-cell > button[aria-pressed="true"] {
+.icon-picker-surface button[aria-pressed="true"] {
 	background: rgb(95 202 181 / 0.14);
 	color: #5fcab5;
 	border-color: rgb(95 202 181 / 0.45);
@@ -114,6 +116,10 @@
 	background: #18181b;
 	border-radius: 10px;
 	padding: 0;
+}
+.icon-picker-surface .icon-library-cell > button[aria-pressed="true"] {
+	background: rgb(95 202 181 / 0.14);
+	border-color: rgb(95 202 181 / 0.45);
 }
 .icon-picker-surface .icon-library-cell img {
 	object-fit: contain;

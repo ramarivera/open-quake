@@ -203,17 +203,18 @@ export function prepareProfiles(
 			),
 		).pipe(Layer.provideMerge(profileLive)),
 		(runtime) => {
+			const captureProfiles = new Map<Electron.WebContents, Profile>();
 			const keyLibrary = registerKeyLibrary(
 				runtime,
 				management,
 				renderer,
 				managementURL,
 				panel,
+				(sender) => captureProfiles.has(sender),
 			);
 			const snapshots = registerProfileSnapshots(runtime, renderer, false);
 			const localeListeners = new Set<() => void>();
 			const captureWindows = new Set<BrowserWindow>();
-			const captureProfiles = new Map<Electron.WebContents, Profile>();
 			const thumbnails = createProfileThumbnailStore(root);
 			const thumbnailLock = Effect.unsafeMakeSemaphore(1);
 			const cachedThumbnail = thumbnails.read;

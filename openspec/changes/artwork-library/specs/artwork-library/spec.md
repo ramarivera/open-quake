@@ -90,6 +90,20 @@ The library SHALL distinguish a saved local artwork assignment from device-deliv
 - **WHEN** an artwork assignment saves but device transfer fails
 - **THEN** the assignment remains saved and the transfer error is shown separately
 
+### Requirement: Native picker readiness and target ownership
+
+For MGMT-414 the picker SHALL bind its target token and locale in the owned window URL before renderer loading, replacing the vendor's ready-before-target message buffer. The window SHALL start hidden at 600 by 550 px with the same minimum size and remain resizable. Reopening SHALL cancel the previous operation and create a fresh owned window. Closing the owner entrance, saving its key or cancelling before readiness SHALL dispose the picker, suppress late readiness and prevent stale assignment.
+
+#### Scenario: Target exists before readiness
+
+- **WHEN** an icon picker starts before its renderer is ready
+- **THEN** its URL already contains the target token and locale, and cancelling before readiness prevents the late event from showing it
+
+#### Scenario: Reopen or leave the editor
+
+- **WHEN** the user reopens the picker, saves its key or leaves the Keys entrance
+- **THEN** the old child closes, any late result is ignored, and a reopened child has a fresh target token
+
 ### Requirement: Picker search and progressive groups
 
 For MGMT-415 and MGMT-416 the mounted picker SHALL debounce search by 500 ms across name, tags and extraData, hide groups without matches, and fall back to the first matching group. Local/app groups SHALL appear only when nonempty. MDI SHALL show a pending count until its lazy catalog arrives. No proprietary DK icon pack SHALL ship.

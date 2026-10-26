@@ -1508,6 +1508,7 @@ it("binds target and locale before readiness, ignores late readiness and starts 
 		const url = new URL(child.webContents.getURL());
 		expect(url.searchParams.get("token")).toBe("before-ready");
 		expect(url.searchParams.get("locale")).toBe("de");
+		if (!("options" in child)) throw new Error("Missing synthetic options");
 		expect(child.options).toMatchObject({
 			width: 600,
 			height: 550,

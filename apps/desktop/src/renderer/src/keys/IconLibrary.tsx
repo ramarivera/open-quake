@@ -266,7 +266,11 @@ export function IconLibrary({
 			if (reply._tag === "success") {
 				setPacks(reply.packs ?? []);
 				setProgress(100);
-				setNotice(reply.notice ?? "");
+				setNotice(
+					reply.notice === "duplicate-icon"
+						? t("iconLib.duplicateIconDetected")
+						: "",
+				);
 			} else setStatus(reply.reason);
 		} catch {
 			if (mounted.current) setStatus(t("iconLib.addIconFailed"));
@@ -410,7 +414,7 @@ export function IconLibrary({
 						)}
 					</ul>
 				</div>
-				{loading && (
+				{loading && !choosing.current && (
 					<div className="icon-library-loading" role="status">
 						<span>{t("iconLib.loadingIcons")}</span>
 						<progress
@@ -423,6 +427,9 @@ export function IconLibrary({
 				)}
 			</div>
 			<footer className="icon-library-footer">
+				{loading && choosing.current && (
+					<span role="status">{t("iconLib.loadingIcons")}</span>
+				)}
 				<button
 					type="button"
 					disabled={loading}

@@ -139,7 +139,7 @@ export const KeyReply = Schema.Union(
 		states: Schema.optional(Schema.Array(KeyRuntimeState)),
 		icon: Schema.optional(Schema.String),
 		iconSource: Schema.optional(Schema.String),
-		notice: Schema.optional(Schema.String),
+		notice: Schema.optional(Schema.Literal("duplicate-icon")),
 	}),
 	Schema.Struct({
 		_tag: Schema.Literal("rejected"),

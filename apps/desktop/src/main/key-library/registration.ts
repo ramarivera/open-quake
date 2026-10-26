@@ -69,6 +69,7 @@ export function registerKeyLibrary<R>(
 	renderer: string,
 	managementURL = renderer,
 	panelWindow: () => BrowserWindow | undefined = () => undefined,
+	captureOwner: (sender: Electron.WebContents) => boolean = () => false,
 ) {
 	const store = iconStore(join(app.getPath("userData"), "key-library-v1.json"));
 	const picker = createIconPicker(management, renderer);
@@ -145,10 +146,11 @@ export function registerKeyLibrary<R>(
 			event.sender.getURL() === new URL(managementURL).href
 		)
 			return true;
-		if (command.type === "read" || command.type === "icons") return true;
+		if (command.type === "read") return true;
 		if (
-			command.type === "application-icons" &&
-			event.sender === panelWindow()?.webContents
+			(command.type === "icons" || command.type === "application-icons") &&
+			(event.sender === panelWindow()?.webContents ||
+				captureOwner(event.sender))
 		)
 			return true;
 		if (picker.owns(event))
@@ -443,9 +445,7 @@ export function registerKeyLibrary<R>(
 							return {
 								_tag: "success",
 								packs: yield* store.read(),
-								...(duplicate
-									? { notice: "Duplicate icon detected, using existing icon." }
-									: {}),
+								...(duplicate ? { notice: "duplicate-icon" as const } : {}),
 							};
 						}
 						case "remove-icon":
