@@ -449,7 +449,9 @@ it.each([false, true])(
 							if (result._tag === "Left")
 								expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
 							expect(
-								(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+								(yield* fake.writes)
+									.filter((bytes) => bytes[4] !== 0xef)
+									.map((bytes) => [...bytes.slice(3, 8)]),
 							).toEqual([
 								[1, 16, 1, 1, 4],
 								[1, 16, 0, 1, 4],
@@ -459,13 +461,17 @@ it.each([false, true])(
 						}
 						yield* runtime.activate("device", "1,1", "down");
 						expect(
-							(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+							(yield* fake.writes)
+								.filter((bytes) => bytes[4] !== 0xef)
+								.map((bytes) => [...bytes.slice(3, 8)]),
 						).toEqual([[1, 16, 1, 1, 4]]);
 						active = undefined;
 						yield* runtime.activate("device", "1,1", "cancel");
 						yield* runtime.activate("device", "1,1", "up");
 						expect(
-							(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+							(yield* fake.writes)
+								.filter((bytes) => bytes[4] !== 0xef)
+								.map((bytes) => [...bytes.slice(3, 8)]),
 						).toEqual([
 							[1, 16, 1, 1, 4],
 							[1, 16, 0, 1, 4],

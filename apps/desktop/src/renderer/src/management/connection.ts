@@ -142,6 +142,10 @@ export function describeConnection(
 /** Human text for the activity list. Heartbeats are summarized elsewhere. */
 export function describeEvent(event: QuakeEvent): string | null {
 	switch (event.kind) {
+		case "json":
+		case "resource":
+		case "matrix":
+			return "Device data";
 		case "rotate":
 			return event.direction === 1
 				? "Knob turned clockwise"

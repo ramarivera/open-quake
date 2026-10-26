@@ -113,3 +113,10 @@ The Keys editor SHALL expose independent center, left and right slots for the se
 #### Scenario: Direct capture readiness
 - **WHEN** the saved direct route lacks a model, references a missing provider profile or contains fields belonging to another route
 - **THEN** capture is unavailable before microphone access and the editor shows the incomplete selection without adding credentials to actions
+
+### Requirement: Persisted DK Claw selectors
+The knob editor SHALL expose Agent and Model for a DK Claw route, including Default Agent resolving to main and Default (Agent) removing the model override (MGMT-306). Saving SHALL retain agentId and dkclawModel through the canonical knob command without claiming physical route acceptance.
+
+#### Scenario: Save a DK Claw agent and model
+- **WHEN** a user selects a DK Claw agent and model and saves the knob
+- **THEN** the profile retains both fields and reopening selects them

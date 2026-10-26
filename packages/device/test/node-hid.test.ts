@@ -1,11 +1,11 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, describe, expect, it } from "@effect/vitest";
-import { Effect, Either, Fiber, Stream } from "effect";
+import { Effect, Either, Fiber, Stream, TestClock } from "effect";
 import { vi } from "vitest";
 import { QuakeDevice } from "../src/device-service.js";
 import { FAKE_QUAKE_DEVICE } from "../src/hid-fake.js";
 import { HidTransport } from "../src/hid-transport.js";
-import { NodeHidLive } from "../src/node-hid.js";
+import { makeNodeHidLayer, NodeHidLive } from "../src/node-hid.js";
 import { createQuakeDevice } from "../src/plain.js";
 import { report } from "./reports.js";
 
@@ -48,7 +48,10 @@ describe("node-hid boundary, native API mocked", () => {
 		Effect.gen(function* () {
 			const connection = yield* (yield* QuakeDevice).connect();
 			expect(mocks.discover).toHaveBeenCalledTimes(1);
-			expect(mocks.open).toHaveBeenCalledWith("fake:quake");
+			expect(mocks.open).toHaveBeenCalledWith(
+				"fake:quake",
+				...(process.platform === "darwin" ? [{ nonExclusive: true }] : []),
+			);
 			yield* connection.disconnect();
 			expect(handle.close).toHaveBeenCalledTimes(1);
 		}).pipe(Effect.provide(QuakeDevice.Default)),
@@ -67,7 +70,10 @@ describe("node-hid boundary, native API mocked", () => {
 		try {
 			await client.connect();
 			expect(handle.listenerCount("data")).toBe(1);
-			expect(mocks.open).toHaveBeenCalledWith("fake:quake");
+			expect(mocks.open).toHaveBeenCalledWith(
+				"fake:quake",
+				...(process.platform === "darwin" ? [{ nonExclusive: true }] : []),
+			);
 			handle.emit("data", report(3, 2, [0]));
 			await next;
 			expect(seen).toEqual(["KnobPress"]);
@@ -161,7 +167,7 @@ describe("node-hid boundary, native API mocked", () => {
 						original,
 					);
 					yield* connection.close();
-				}).pipe(Effect.provide(NodeHidLive));
+				}).pipe(Effect.provide(makeNodeHidLayer({ platform: "linux" })));
 			}),
 	);
 	it.scoped(
@@ -213,3 +219,74 @@ it.scoped(
 			expect(handle.close).toHaveBeenCalledTimes(1);
 		}).pipe(Effect.provide(NodeHidLive)),
 );
+
+describe("explicit platform and framing contracts", () => {
+	it.effect(
+		"prefers Win32 native enumeration and permanently falls back once",
+		() =>
+			Effect.gen(function* () {
+				const native = vi
+					.fn()
+					.mockResolvedValueOnce([FAKE_QUAKE_DEVICE])
+					.mockRejectedValue(new Error("native enumeration"));
+				const fallback = vi.fn();
+				yield* Effect.gen(function* () {
+					const transport = yield* HidTransport;
+					expect(yield* transport.discover()).toEqual([FAKE_QUAKE_DEVICE]);
+					expect(mocks.discover).not.toHaveBeenCalled();
+					yield* transport.discover();
+					yield* transport.discover();
+					expect(native).toHaveBeenCalledTimes(2);
+					expect(fallback).toHaveBeenCalledTimes(1);
+					expect(mocks.discover).toHaveBeenCalledTimes(2);
+				}).pipe(
+					Effect.provide(
+						makeNodeHidLayer({
+							platform: "win32",
+							enumerateWin32: native,
+							onFallback: fallback,
+						}),
+					),
+				);
+			}),
+	);
+	it.scoped(
+		"uses compact framing only by contract and retries only rejected macOS writes",
+		() =>
+			Effect.gen(function* () {
+				yield* Effect.gen(function* () {
+					const transport = yield* HidTransport;
+					const connection = yield* transport.open(FAKE_QUAKE_DEVICE);
+					expect(mocks.open).toHaveBeenCalledWith("fake:quake", {
+						nonExclusive: true,
+					});
+					handle.write
+						.mockRejectedValueOnce(new Error("EIO"))
+						.mockRejectedValueOnce(new Error("EIO"));
+					const bytes = new Uint8Array(33);
+					bytes.set([0, 0xa3, 2, 2, 0xef, 0xf1]);
+					const write = yield* connection.write(bytes).pipe(Effect.forkScoped);
+					yield* TestClock.adjust(9);
+					expect(handle.write).toHaveBeenCalledTimes(1);
+					yield* TestClock.adjust(1);
+					expect(handle.write).toHaveBeenCalledTimes(2);
+					yield* TestClock.adjust(10);
+					yield* Fiber.join(write);
+					expect(handle.write.mock.calls.map(([data]) => data)).toEqual(
+						Array(3).fill([0, 0xa3, 2, 2, 0xef, 0xf1]),
+					);
+					const json = new Uint8Array(33);
+					json.set([0, 0xa1, 0, 2, 123, 125, 248]);
+					yield* connection.write(json);
+					expect(handle.write).toHaveBeenLastCalledWith([
+						0xa1, 0, 2, 123, 125, 248,
+					]);
+					yield* connection.close();
+				}).pipe(
+					Effect.provide(
+						makeNodeHidLayer({ platform: "darwin", framing: "dk-suite" }),
+					),
+				);
+			}),
+	);
+});

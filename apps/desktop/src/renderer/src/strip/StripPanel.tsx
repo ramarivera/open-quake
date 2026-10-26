@@ -11,6 +11,7 @@ import { PanelFeedbackLayer } from "../panel/PanelFeedbackLayer";
 import { usePanelFeedback } from "../panel/usePanelFeedback";
 import { useQuakeEvents } from "../useQuakeEvents";
 import { useWallpaper } from "../wallpaper/useWallpaper";
+import { createStripResourceReceiver } from "./device-resources";
 import type { StripLayout } from "./geometry";
 import { mountStripTouch } from "./mount-strip-touch";
 import { KnobPanelLayer } from "./overlays/knob/KnobPanelLayer";
@@ -27,6 +28,7 @@ import { StripScreen, StripViewport, useStripLayout } from "./StripScreen";
 import { selectStripPage } from "./selection";
 import { useStripSettings } from "./stripSettings";
 import type { StripKeyEvent } from "./touch-controller";
+import { useDeviceReady } from "./useDeviceReady";
 import { type StripProfiles, useStripProfiles } from "./useStripProfiles";
 
 type HoldKind = GridVoiceInput["kind"];
@@ -75,6 +77,7 @@ function ActiveStripPanel(): React.JSX.Element {
 		| {
 				profileId: string;
 				pageId: string;
+				revision: number;
 				emojiKeys: readonly string[];
 				generation: symbol;
 		  }
@@ -86,19 +89,21 @@ function ActiveStripPanel(): React.JSX.Element {
 	const { snapshot } = useWallpaper();
 	const serial =
 		new URLSearchParams(window.location.search).get("serial") ??
-		snapshot?.saved.serial ??
-		"desktop-preview";
+		snapshot?.saved.serial;
+	const profileSerial = serial ?? "desktop-preview";
 	const feedback = usePanelFeedback(useQuakeEvents());
 	const observeSelection = (next: StripProfiles): void => {
 		if (next._tag === "ready") {
-			const current = selectStripPage(next.envelope, serial);
+			const current = selectStripPage(next.envelope, profileSerial);
 			const previous = emojiSelection.current;
 			emojiSelection.current = {
 				profileId: current.profile.id,
 				pageId: current.page.id,
+				revision: current.profile.revision,
 				generation:
 					previous?.profileId === current.profile.id &&
-					previous.pageId === current.page.id
+					previous.pageId === current.page.id &&
+					previous.revision === current.profile.revision
 						? previous.generation
 						: Symbol(),
 				emojiKeys: current.page.keys
@@ -107,20 +112,57 @@ function ActiveStripPanel(): React.JSX.Element {
 			};
 		} else emojiSelection.current = undefined;
 	};
-	const profiles = useStripProfiles(observeSelection);
+	const profiles = useStripProfiles(observeSelection, serial);
+	const deviceReady = useDeviceReady(serial, profiles);
+	const layoutIdentity =
+		profiles._tag === "ready"
+			? (() => {
+					const { profile, page } = selectStripPage(
+						profiles.envelope,
+						profileSerial,
+					);
+					return JSON.stringify([
+						serial,
+						profile.id,
+						page.id,
+						profile.revision,
+						deviceReady.snapshot?.keyMatrix.row,
+					]);
+				})()
+			: undefined;
+	const [rawImages, setRawImages] = useState<Readonly<Record<string, string>>>(
+		{},
+	);
+	useEffect(() => {
+		setRawImages({});
+		if (!serial || !deviceReady.snapshot?.session || !layoutIdentity) return;
+		const receiver = createStripResourceReceiver((key, dataUrl) =>
+			setRawImages((old) => ({ ...old, [key]: dataUrl })),
+		);
+		const off = window.openQuake?.onQuakeEvent(receiver.accept);
+		return () => {
+			off?.();
+			receiver.reset();
+		};
+	}, [serial, deviceReady.snapshot?.session, layoutIdentity]);
 	observeSelection(profiles);
 	const { settings } = useStripSettings();
 	const knob = useKnob().snapshot;
-	const frame = useProfileFrame(profiles, knob, serial);
-	const stripLayout = useStripLayout(profiles, serial);
+	const frame = useProfileFrame(profiles, knob, profileSerial);
+	const stripLayout = useStripLayout(
+		profiles,
+		profileSerial,
+		deviceReady.snapshot?.keyMatrix.row,
+	);
 	const onLayout = useCallback(
 		(current: StripLayout | undefined) => {
 			if (current) {
 				// StripScreen clears its layout before replacement and also repaints
 				// runtime state. Compare committed keys, retaining identity across cleanup.
-				const identity = JSON.stringify(
+				const identity = JSON.stringify([
+					layoutIdentity,
 					stripLayout?.tiles.map((tile) => tile.key),
-				);
+				]);
 				if (
 					committedLayoutIdentity.current !== undefined &&
 					committedLayoutIdentity.current !== identity
@@ -132,7 +174,7 @@ function ActiveStripPanel(): React.JSX.Element {
 			}
 			layout.current = frame.pending ? undefined : current;
 		},
-		[stripLayout, frame.pending],
+		[stripLayout, layoutIdentity, frame.pending],
 	);
 	const voice = useVoiceSurface(stripLayout);
 	const motion = useStripMotion();
@@ -152,6 +194,7 @@ function ActiveStripPanel(): React.JSX.Element {
 			() => target.current,
 			(request) => window.quakeKeyLibrary.request(request),
 		);
+
 		const timers = new Set<ReturnType<typeof setTimeout>>();
 		const heldEmoji = new Map<
 			string,
@@ -173,63 +216,96 @@ function ActiveStripPanel(): React.JSX.Element {
 			}, 160);
 			timers.add(timer);
 		};
+		let matrixKey: string | undefined;
+		const handleKey = (event: StripKeyEvent, matrix = false): void => {
+			if (event.keyAction === 1 && matrixKey === event.keyCode)
+				matrixKey = undefined;
+			setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
+			dispatch.key(event);
+			holdKey.current(event);
+			const activation: StripKeyEvent = matrix
+				? { ...event, keyAction: 1 as const, voiceTouchEnd: true }
+				: event;
+			const action = meetingTouchAction(activation, layout.current);
+			if (action) void meetingRequest({ _tag: "action", action });
+			const current = emojiSelection.current;
+			if (event.keyAction === 0 && !matrix) {
+				if (current?.emojiKeys.includes(event.keyCode))
+					heldEmoji.set(event.keyCode, current);
+				else heldEmoji.delete(event.keyCode);
+				return;
+			}
+			const owner =
+				matrix && current?.emojiKeys.includes(event.keyCode)
+					? current
+					: heldEmoji.get(event.keyCode);
+			heldEmoji.delete(event.keyCode);
+			if (
+				!activation.voiceTouchEnd ||
+				!owner ||
+				owner.generation !== current?.generation
+			)
+				return;
+			void window.quakeEmoji
+				?.press({
+					profileId: owner.profileId,
+					pageId: owner.pageId,
+					keyCode: event.keyCode,
+					keyAction: activation.keyAction,
+				})
+				.then((reply) => {
+					if (reply._tag === "invalid") invalid(event.keyCode);
+				})
+				.catch(() => invalid(event.keyCode));
+		};
+		const cancel = (): void => {
+			if (matrixKey) holdKey.current({ keyCode: matrixKey, keyAction: 1 });
+			matrixKey = undefined;
+			dispatch.cancel();
+			heldEmoji.clear();
+			setPressedKeyCode(undefined);
+		};
+		const offMatrix = window.openQuake?.onQuakeEvent((event) => {
+			if (event.kind !== "matrix") return;
+			const index = event.matrix.states.indexOf(1);
+			if (index < 0) return;
+			const keyCode = `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
+			if (
+				matrixKey === keyCode ||
+				!layout.current?.tiles.some((tile) => tile.keyCode === keyCode)
+			)
+				return;
+			// DK-Suite checkDataValid case 1 emits only down. Empty matrices aren't releases.
+			cancel();
+			matrixKey = keyCode;
+			handleKey({ keyAction: 0, keyCode }, true);
+		});
 		if (root && window.openQuake) {
 			const off = mountStripTouch(
 				root,
 				window.openQuake,
 				Number(new URLSearchParams(location.search).get("rotation") ?? 0),
 				() => layout.current,
-				(event) => {
-					setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
-					dispatch.key(event);
-					holdKey.current(event);
-					const action = meetingTouchAction(event, layout.current);
-					if (action) void meetingRequest({ _tag: "action", action });
-					const current = emojiSelection.current;
-					if (event.keyAction === 0) {
-						if (current?.emojiKeys.includes(event.keyCode))
-							heldEmoji.set(event.keyCode, current);
-						else heldEmoji.delete(event.keyCode);
-						return;
-					}
-					const owner = heldEmoji.get(event.keyCode);
-					heldEmoji.delete(event.keyCode);
-					if (
-						!event.voiceTouchEnd ||
-						!owner ||
-						owner.generation !== current?.generation
-					)
-						return;
-					void window.quakeEmoji
-						?.press({
-							profileId: owner.profileId,
-							pageId: owner.pageId,
-							keyCode: event.keyCode,
-							keyAction: event.keyAction,
-						})
-						.then((reply) => {
-							if (reply._tag === "invalid") invalid(event.keyCode);
-						})
-						.catch(() => invalid(event.keyCode));
-				},
+				handleKey,
 				undefined,
-				() => {
-					dispatch.cancel();
-					heldEmoji.clear();
-					setPressedKeyCode(undefined);
-				},
+				cancel,
 			);
 			return () => {
 				disposed = true;
+				offMatrix?.();
 				off();
 				for (const timer of timers) clearTimeout(timer);
 			};
 		}
+		return () => {
+			offMatrix?.();
+			cancel();
+		};
 	}, []);
 	if (profiles._tag === "ready" && !frame.pending) {
-		const { profile, page } = selectStripPage(profiles.envelope, serial);
+		const { profile, page } = selectStripPage(profiles.envelope, profileSerial);
 		target.current = {
-			deviceId: serial,
+			deviceId: serial ?? "desktop-preview",
 			profileId: profile.id,
 			pageId: page.id,
 			revision: profile.revision,
@@ -239,8 +315,11 @@ function ActiveStripPanel(): React.JSX.Element {
 	const selection =
 		profiles._tag === "ready"
 			? (() => {
-					const { profile, page } = selectStripPage(profiles.envelope, serial);
-					return knob && knob.context.session.deviceId === serial
+					const { profile, page } = selectStripPage(
+						profiles.envelope,
+						profileSerial,
+					);
+					return knob && knob.context.session.deviceId === profileSerial
 						? `${knob.context.session.profileId}/${knob.context.pageId ?? profiles.envelope.profiles.find((entry) => entry.id === knob.context.session.profileId)?.pages[0].id ?? page.id}`
 						: `${profile.id}/${page.id}`;
 				})()
@@ -262,8 +341,9 @@ function ActiveStripPanel(): React.JSX.Element {
 		<main ref={main} className="strip-panel" aria-label="Quake device panel">
 			<StripViewport>
 				<StripScreen
+					previewSerial={profileSerial}
+					rows={deviceReady.snapshot?.keyMatrix.row ?? 2}
 					onLayout={onLayout}
-					previewSerial={serial}
 					pressedKeyCode={pressedKeyCode}
 					pendingProfile={frame.pending}
 					profiles={frame.profiles}
@@ -283,7 +363,26 @@ function ActiveStripPanel(): React.JSX.Element {
 					}}
 					tileOverlay={(tile) => {
 						const alert = view.alerts.get(tile.keyCode);
-						return alert ? <KeyAlert alert={alert.alert} /> : null;
+						return (
+							<>
+								{rawImages[tile.keyCode] ? (
+									<img
+										src={rawImages[tile.keyCode]}
+										alt=""
+										draggable={false}
+										style={{
+											position: "absolute",
+											inset: 0,
+											width: "100%",
+											height: "100%",
+											objectFit: "cover",
+											pointerEvents: "none",
+										}}
+									/>
+								) : null}
+								{alert ? <KeyAlert alert={alert.alert} /> : null}
+							</>
+						);
 					}}
 					htmlOverlay={
 						<>

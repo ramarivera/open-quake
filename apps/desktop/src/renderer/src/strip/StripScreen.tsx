@@ -180,12 +180,13 @@ function StripGrid({
 export function useStripLayout(
 	profiles: StripProfiles,
 	serial: string | undefined,
+	rows: 1 | 2 = 2,
 ): StripLayout | undefined {
 	return useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);
-		return stripLayout(profile, page);
-	}, [profiles, serial]);
+		return stripLayout(profile, page, rows);
+	}, [profiles, serial, rows]);
 }
 
 /**
@@ -210,10 +211,12 @@ export function StripScreen({
 	interactive = true,
 	wallpaperSound = false,
 	pendingProfile = false,
+	rows = 2,
 }: {
 	profiles: StripProfiles;
 	/** Committed profile is waiting for its matching grid snapshot. */
 	pendingProfile?: boolean;
+	rows?: 1 | 2;
 	/** Profile Manager and the editor already resolve their own title locale. */
 	titles?: "key-locale" | "provided";
 	/** Selection previews paint live state but cannot operate nested controls. */
@@ -292,38 +295,42 @@ export function StripScreen({
 	const layout = useMemo(() => {
 		if (profiles._tag !== "ready") return undefined;
 		const { profile, page } = selectStripPage(profiles.envelope, serial);
-		return stripLayout(profile, {
-			...page,
-			keys: page.keys.map((key) => {
-				const state = runtimeStates.get(
-					JSON.stringify([
-						serial ?? "desktop-preview",
-						profile.id,
-						page.id,
-						key.keyCode,
-					]),
-				);
-				const translated =
-					titles === "provided" ? key : localizedKey(key, locale);
-				return key.config.type === "hotkeySwitch" && state?.alternate === 1
-					? {
-							...translated,
-							config: {
-								...translated.config,
-								icon: Option.getOrElse(
-									translated.config.alterIcon,
-									() => translated.config.icon,
-								),
-								title: Option.getOrElse(
-									translated.config.alterTitle,
-									() => translated.config.title,
-								),
-							},
-						}
-					: translated;
-			}),
-		});
-	}, [profiles, serial, locale, runtimeStates, titles]);
+		return stripLayout(
+			profile,
+			{
+				...page,
+				keys: page.keys.map((key) => {
+					const state = runtimeStates.get(
+						JSON.stringify([
+							serial ?? "desktop-preview",
+							profile.id,
+							page.id,
+							key.keyCode,
+						]),
+					);
+					const translated =
+						titles === "provided" ? key : localizedKey(key, locale);
+					return key.config.type === "hotkeySwitch" && state?.alternate === 1
+						? {
+								...translated,
+								config: {
+									...translated.config,
+									icon: Option.getOrElse(
+										translated.config.alterIcon,
+										() => translated.config.icon,
+									),
+									title: Option.getOrElse(
+										translated.config.alterTitle,
+										() => translated.config.title,
+									),
+								},
+							}
+						: translated;
+				}),
+			},
+			rows,
+		);
+	}, [profiles, serial, locale, runtimeStates, titles, rows]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
 	useLayoutEffect(() => {
 		onLayout?.(vivid || pendingProfile ? undefined : layout);

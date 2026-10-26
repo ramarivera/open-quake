@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
-	type ProfileEnvelope,
+	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileDeliveryFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { installProfileCatalog } from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
@@ -457,6 +457,53 @@ it("rechecks selection when a device leaves DK-Claw after preparation", async ()
 		await Effect.runPromise(transaction.rollback);
 		expect(f.deliveries()).toBe(count);
 		expect((await f.read()).activeByDevice).toEqual(before.activeByDevice);
+	} finally {
+		await f.dispose();
+	}
+});
+
+it("MGMT-348/349 round trips the exact protected DK Claw preset and preserves all four agent ID bindings", async () => {
+	const f = fixture("1-8");
+	try {
+		const profile = claw(await f.read());
+		if (!profile) throw new Error("missing preset");
+		const conversation = profile.pages[0].keys.find((k) => k.keyCode === "1,1");
+		expect(conversation?.config).toMatchObject({
+			type: "quakeBot",
+			size: [4, 2],
+			title: { text: "ClawBotView", pos: "top", size: 6 },
+			actions: [
+				{ type: "agentId", value: "default" },
+				{ type: "ttsEngine", value: "qwen" },
+				{ type: "modeltype", value: "qwen-audio-3.1-tts-flash" },
+			],
+		});
+		const saved = encodeProfileEnvelope(await f.read());
+		expect(
+			Schema.encodeSync(ProfileEnvelope)(
+				Schema.decodeUnknownSync(ProfileEnvelope)(saved),
+			),
+		).toEqual(saved);
+		await f.connect();
+		for (const [code, id] of [
+			["1,5", "materialfinder"],
+			["1,6", "stockmaster"],
+			["2,5", "dataorganizer"],
+			["2,6", "techex"],
+		]) {
+			const key = profile.pages[0].keys.find((k) => k.keyCode === code);
+			expect(key?.config).toMatchObject({
+				type: "clawbot",
+				size: [1, 1],
+				actions: [
+					{ type: "voiceInput", value: true },
+					{ type: "taskPrompt", value: "" },
+					{ type: "agentId", value: id },
+				],
+			});
+		}
+		expect(claw(await f.read())?.pages).toEqual(profile.pages);
+		expect(claw(await f.read())?.compatibility).toEqual(profile.compatibility);
 	} finally {
 		await f.dispose();
 	}
