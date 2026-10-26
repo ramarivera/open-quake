@@ -34,7 +34,7 @@ import {
 	parseIconPack,
 	svgData,
 } from "./icon-packs";
-import { createIconPicker } from "./icon-picker";
+import { createIconPicker, decodeIconPicture } from "./icon-picker";
 import { iconStore } from "./icon-store";
 
 type PreparedImport =
@@ -69,6 +69,7 @@ export function registerKeyLibrary<R>(
 	renderer: string,
 	managementURL = renderer,
 	panelWindow: () => BrowserWindow | undefined = () => undefined,
+	captureOwner: (sender: Electron.WebContents) => boolean = () => false,
 ) {
 	const store = iconStore(join(app.getPath("userData"), "key-library-v1.json"));
 	const picker = createIconPicker(management, renderer);
@@ -146,6 +147,12 @@ export function registerKeyLibrary<R>(
 		)
 			return true;
 		if (command.type === "read") return true;
+		if (
+			(command.type === "icons" || command.type === "application-icons") &&
+			(event.sender === panelWindow()?.webContents ||
+				captureOwner(event.sender))
+		)
+			return true;
 		if (picker.owns(event))
 			return [
 				"icons",
@@ -216,7 +223,19 @@ export function registerKeyLibrary<R>(
 					applicationIcons().then(
 						(pack): KeyReply =>
 							authorized(event, command)
-								? { _tag: "success", packs: [pack] }
+								? {
+										_tag: "success",
+										packs: [
+											privileged || picker.owns(event)
+												? pack
+												: {
+														...pack,
+														icons: pack.icons.map(
+															({ extraData: _privatePaths, ...icon }) => icon,
+														),
+													},
+										],
+									}
 								: { _tag: "rejected", reason: "unauthorized" },
 						(cause: unknown): KeyReply => ({
 							_tag: "rejected",
@@ -258,7 +277,11 @@ export function registerKeyLibrary<R>(
 				const bytes = yield* Effect.tryPromise({
 					try: async () => {
 						const info = await stat(path);
-						if (!info.isFile() || info.size > 32 * 1024 * 1024)
+						if (
+							!info.isFile() ||
+							info.size >
+								(command.type === "import-icon" ? 5 : 32) * 1024 * 1024
+						)
 							throw new IconImportFailed(undefined);
 						return readFile(path);
 					},
@@ -266,7 +289,10 @@ export function registerKeyLibrary<R>(
 				});
 				yield* Effect.try({
 					try: () => {
-						if (bytes.length > 32 * 1024 * 1024)
+						if (
+							bytes.length >
+							(command.type === "import-icon" ? 5 : 32) * 1024 * 1024
+						)
 							throw new Error("Invalid icon pack");
 					},
 					catch: (c) => new IconImportFailed(c),
@@ -278,13 +304,13 @@ export function registerKeyLibrary<R>(
 					});
 					return { pack };
 				} else {
-					const data = yield* Effect.try({
-						try: () =>
+					const data = yield* Effect.tryPromise({
+						try: async () =>
 							/\.svg$/i.test(path)
 								? svgData(
 										bytes.toString("utf8").replace(/^\s*<\?xml[^>]*>\s*/, ""),
 									)
-								: imageData(bytes),
+								: decodeIconPicture(bytes, imageData),
 						catch: (c) => new IconImportFailed(c),
 					});
 					return {
@@ -423,11 +449,16 @@ export function registerKeyLibrary<R>(
 							return { _tag: "success", packs: yield* store.read() };
 						case "import-icon":
 						case "import-pack": {
+							let duplicate = false;
 							if (prepared) {
 								if ("pack" in prepared) yield* store.add(prepared.pack);
-								else yield* store.addLocal(prepared.icon);
+								else duplicate = yield* store.addLocal(prepared.icon);
 							}
-							return { _tag: "success", packs: yield* store.read() };
+							return {
+								_tag: "success",
+								packs: yield* store.read(),
+								...(duplicate ? { notice: "duplicate-icon" as const } : {}),
+							};
 						}
 						case "remove-icon":
 						case "remove-pack": {
@@ -443,7 +474,14 @@ export function registerKeyLibrary<R>(
 									_tag: "rejected",
 									reason: "Only local icons can be deleted individually.",
 								};
-							const refs = new Set(selected?.map((i) => i.data) ?? []);
+							const refs = new Set(
+								selected?.flatMap((i) => [
+									i.data,
+									i.id,
+									`resource:${i.id}`,
+									`application:${i.id}`,
+								]) ?? [],
+							);
 							const pending = yield* KeyEditing.pending;
 							const saved = yield* ProfileService.loadProfiles();
 							if (

@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
+	MONITOR_ARTWORK,
 	MONITOR_METRICS,
 	MONITOR_REQUEST,
 	MONITOR_SETTINGS,
@@ -32,6 +33,7 @@ const bridge: MonitorBridge = {
 	onSettings: (callback) => subscribe(MONITOR_SETTINGS, callback),
 	snapshot: () => state.snapshot(),
 	onState: (callback) => state.subscribe(callback),
+	onArtwork: (callback) => subscribe(MONITOR_ARTWORK, callback),
 	onMetrics: (callback) => subscribe(MONITOR_METRICS, callback),
 };
 contextBridge.exposeInMainWorld("quakeMonitor", bridge);

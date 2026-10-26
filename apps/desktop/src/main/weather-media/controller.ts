@@ -2,11 +2,9 @@ import { Effect } from "effect";
 import { matchingLocation } from "../../shared/weather-invariants";
 import {
 	DEFAULT_WEATHER_SETTINGS,
-	type WeatherLocale,
 	type WeatherMediaCommand,
 	type WeatherMediaReply,
 	type WeatherMediaSnapshot,
-	type WeatherResult,
 	type WeatherSettings,
 } from "../../shared/weather-media-contracts";
 import { WeatherSettingsRepository } from "./settings-repository";
@@ -31,10 +29,16 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 					),
 				);
 			let revision = 0;
+			let refreshRevision = 0;
 			const read: () => Effect.Effect<WeatherMediaSnapshot> = Effect.fn(
 				"WeatherMediaController.read",
 			)(function* () {
-				return { revision, settings, media: yield* media.read() };
+				return {
+					revision,
+					refreshRevision,
+					settings,
+					media: yield* media.read(),
+				};
 			});
 			const configure = Effect.fn("WeatherMediaController.configure")(
 				(next: WeatherSettings): Effect.Effect<WeatherMediaReply> =>
@@ -49,6 +53,7 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 								Effect.flatMap(() => {
 									settings = valid;
 									revision++;
+									refreshRevision++;
 									return read().pipe(
 										Effect.map(
 											(snapshot): WeatherMediaReply => ({
@@ -69,10 +74,6 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 						}),
 					),
 			);
-			const fetchWeather = Effect.fn("WeatherMediaController.weather")(
-				(locale: WeatherLocale): Effect.Effect<WeatherResult> =>
-					weather.fetchWeather(settings, locale),
-			);
 			const request = Effect.fn("WeatherMediaController.request")(
 				(command: WeatherMediaCommand): Effect.Effect<WeatherMediaReply> => {
 					switch (command._tag) {
@@ -87,8 +88,33 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 								.verifyCity(command.query, command.locale)
 								.pipe(Effect.map((result) => ({ _tag: "city", result })));
 						case "weather":
-							return fetchWeather(command.locale).pipe(
-								Effect.map((result) => ({ _tag: "weather", result })),
+							return weather
+								.fetchWeather(
+									command.settings ?? settings,
+									command.locale,
+									command.instanceId,
+									command.side,
+								)
+								.pipe(Effect.map((result) => ({ _tag: "weather", result })));
+						case "getCache":
+							return weather
+								.getCache(
+									command.settings ?? settings,
+									command.locale,
+									command.instanceId,
+									command.side,
+								)
+								.pipe(Effect.map((result) => ({ _tag: "cache", result })));
+						case "clearCache":
+							return weather
+								.clearCache(command.instanceId, command.side)
+								.pipe(Effect.as({ _tag: "cleared" } as const));
+						case "configChanged":
+							return Effect.sync(() => {
+								refreshRevision++;
+							}).pipe(
+								Effect.flatMap(read),
+								Effect.map((snapshot) => ({ _tag: "snapshot", snapshot })),
 							);
 						case "media":
 							return media

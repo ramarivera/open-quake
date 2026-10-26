@@ -5,6 +5,7 @@ import {
 	app,
 	BrowserWindow,
 	desktopCapturer,
+	dialog,
 	ipcMain,
 	systemPreferences,
 } from "electron";
@@ -22,7 +23,10 @@ import {
 	CaptureReply,
 	type CaptureRequest,
 } from "../../shared/meeting-bridge";
+import type { MicrophoneIdentity } from "../../shared/speech";
 import { audioFiles } from "./audio-files";
+
+class SystemAudioUnavailable extends Error {}
 
 export function createCapturePort(options: {
 	root: string;
@@ -30,6 +34,9 @@ export function createCapturePort(options: {
 	ffmpeg: string;
 	hardware: () => HardwareSession | undefined;
 	mock: boolean;
+	microphone?:
+		| (() => Effect.Effect<MicrophoneIdentity | undefined>)
+		| undefined;
 	onLost: (id: string) => void;
 	onNoWindows: () => void;
 }) {
@@ -82,7 +89,12 @@ export function createCapturePort(options: {
 		if (Either.isLeft(decoded)) return;
 		const task = pending.get(decoded.right.requestId);
 		if (decoded.right.success) task?.resolve();
-		else task?.reject(meetingError("CaptureFailed"));
+		else
+			task?.reject(
+				decoded.right.reason === "systemUnavailable"
+					? meetingError("CaptureFailed", new SystemAudioUnavailable())
+					: meetingError("CaptureFailed"),
+			);
 	};
 	ipcMain.on(CAPTURE_REPLY, listener);
 	const ensureWindow = async (): Promise<BrowserWindow> => {
@@ -129,9 +141,8 @@ export function createCapturePort(options: {
 			if (
 				!trusted(host) ||
 				!allowSystem ||
-				request.frame !== host.webContents.mainFrame ||
-				(process.platform === "darwin" &&
-					systemPreferences.getMediaAccessStatus("screen") !== "granted")
+				process.platform !== "win32" ||
+				request.frame !== host.webContents.mainFrame
 			) {
 				callback({});
 				return;
@@ -199,55 +210,82 @@ export function createCapturePort(options: {
 		config: MeetingConfig,
 		parentId?: string,
 	) =>
-		Effect.tryPromise({
-			try: async (signal) => {
-				if (options.mock) return;
-				const host = await ensureWindow();
-				const requestId = randomUUID();
-				allowSystem = config.systemAudio || operation === "translate";
-				await new Promise<void>((resolve, reject) => {
-					const cleanup = () => {
-						pending.delete(requestId);
-						clearTimeout(timer);
-						signal.removeEventListener("abort", abort);
-					};
-					const finish = () => {
-						cleanup();
-						resolve();
-					};
-					const fail = (cause: unknown) => {
-						allowSystem = false;
-						if (
-							(operation === "start" || operation === "translate") &&
-							!host.isDestroyed()
-						)
-							host.webContents.send(CAPTURE_REQUEST, {
-								requestId: randomUUID(),
-								operation: operation === "start" ? "cancel" : "stopTranslation",
-								id,
-								microphoneId: config.microphoneId,
-								systemAudio: false,
-							} satisfies CaptureRequest);
-						cleanup();
-						reject(cause);
-					};
-					const abort = () => fail(meetingError("CaptureFailed"));
-					const timer = setTimeout(() => fail(meetingError("Timeout")), 30000);
-					pending.set(requestId, { resolve: finish, reject: fail });
-					signal.addEventListener("abort", abort, { once: true });
-					host.webContents.send(CAPTURE_REQUEST, {
-						requestId,
-						operation,
-						id,
-						...(parentId ? { parentId } : {}),
-						microphoneId: config.microphoneId,
-						systemAudio: config.systemAudio,
-					} satisfies CaptureRequest);
-				});
-				allowSystem = false;
-			},
-			catch: (cause) =>
-				isMeetingError(cause) ? cause : meetingError("CaptureFailed", cause),
+		Effect.gen(function* () {
+			const microphone = options.microphone
+				? ((yield* options.microphone()) ?? {
+						deviceId: "default",
+						label: "",
+						groupId: "",
+					})
+				: undefined;
+			return yield* Effect.tryPromise({
+				try: async (signal) => {
+					if (options.mock) return;
+					const host = await ensureWindow();
+					const requestId = randomUUID();
+					allowSystem = config.systemAudio || operation === "translate";
+					await new Promise<void>((resolve, reject) => {
+						const cleanup = () => {
+							pending.delete(requestId);
+							clearTimeout(timer);
+							signal.removeEventListener("abort", abort);
+						};
+						const finish = () => {
+							cleanup();
+							resolve();
+						};
+						const fail = (cause: unknown) => {
+							allowSystem = false;
+							if (
+								(operation === "start" || operation === "translate") &&
+								!host.isDestroyed()
+							)
+								host.webContents.send(CAPTURE_REQUEST, {
+									requestId: randomUUID(),
+									operation:
+										operation === "start" ? "cancel" : "stopTranslation",
+									id,
+									microphoneId: microphone?.deviceId ?? config.microphoneId,
+									...(microphone ? { microphone } : {}),
+									platform:
+										process.platform === "win32"
+											? "win32"
+											: process.platform === "darwin"
+												? "darwin"
+												: "linux",
+									systemAudio: false,
+								} satisfies CaptureRequest);
+							cleanup();
+							reject(cause);
+						};
+						const abort = () => fail(meetingError("CaptureFailed"));
+						const timer = setTimeout(
+							() => fail(meetingError("Timeout")),
+							30000,
+						);
+						pending.set(requestId, { resolve: finish, reject: fail });
+						signal.addEventListener("abort", abort, { once: true });
+						host.webContents.send(CAPTURE_REQUEST, {
+							requestId,
+							operation,
+							id,
+							...(parentId ? { parentId } : {}),
+							microphoneId: microphone?.deviceId ?? config.microphoneId,
+							...(microphone ? { microphone } : {}),
+							platform:
+								process.platform === "win32"
+									? "win32"
+									: process.platform === "darwin"
+										? "darwin"
+										: "linux",
+							systemAudio: config.systemAudio,
+						} satisfies CaptureRequest);
+					});
+					allowSystem = false;
+				},
+				catch: (cause) =>
+					isMeetingError(cause) ? cause : meetingError("CaptureFailed", cause),
+			});
 		});
 	let lastConfig: MeetingConfig;
 	const port: CapturePort = {
@@ -267,16 +305,41 @@ export function createCapturePort(options: {
 						try: () => systemPreferences.askForMediaAccess("microphone"),
 						catch: (cause) => meetingError("CaptureDenied", cause),
 					});
-					if (
-						!granted ||
-						(config.systemAudio &&
-							systemPreferences.getMediaAccessStatus("screen") !== "granted")
-					)
-						return yield* meetingError("CaptureDenied");
+					if (!granted) return yield* meetingError("CaptureDenied");
 				}
 				lastConfig = config;
 				active.add(id);
 				yield* send("start", id, config, parent).pipe(
+					Effect.catchIf(
+						(cause) => cause.originalCause instanceof SystemAudioUnavailable,
+						() =>
+							Effect.gen(function* () {
+								const choice = yield* Effect.tryPromise({
+									try: (signal) =>
+										dialog.showMessageBox({
+											signal,
+											type: "question",
+											message: "System audio is unavailable",
+											detail:
+												"Record with the selected microphone only, or cancel and check System audio setup in meeting settings.",
+											buttons: ["Microphone only", "Cancel"],
+											defaultId: 1,
+											cancelId: 1,
+										}),
+									catch: (cause) => meetingError("CaptureFailed", cause),
+								});
+								if (choice.response !== 0)
+									return yield* meetingError("CaptureFailed");
+								lastConfig = { ...config, systemAudio: false };
+								yield* send("start", id, lastConfig, parent).pipe(
+									Effect.mapError((cause) =>
+										isMeetingError(cause)
+											? cause
+											: meetingError("CaptureFailed", cause),
+									),
+								);
+							}),
+					),
 					Effect.onError(() =>
 						Effect.sync(() => {
 							active.delete(id);
@@ -284,6 +347,7 @@ export function createCapturePort(options: {
 						}),
 					),
 				);
+				return lastConfig;
 			}),
 		drain: (id) =>
 			Effect.gen(function* () {
@@ -312,12 +376,6 @@ export function createCapturePort(options: {
 			}),
 		startTranslation: (config) =>
 			Effect.gen(function* () {
-				if (
-					!options.mock &&
-					process.platform === "darwin" &&
-					systemPreferences.getMediaAccessStatus("screen") !== "granted"
-				)
-					return yield* meetingError("CaptureDenied");
 				lastConfig = config;
 				yield* send("translate", translationId, config);
 				translating = true;

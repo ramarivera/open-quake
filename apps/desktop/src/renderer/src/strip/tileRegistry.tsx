@@ -2,6 +2,7 @@ import { OBS_IDS } from "../../../../../../packages/device/src/actions/obs-contr
 import type { ClockTarget } from "../../../shared/clock-contracts";
 import {
 	activeThemeOf,
+	clockWeatherSettings,
 	normalizeClockStyle,
 } from "../../../shared/clock-style";
 import type { HourFormat } from "../../../shared/display";
@@ -52,6 +53,7 @@ export interface StripTileContext {
 	readonly voice: StripVoiceContext;
 	/** Defaults to live for existing tile consumers outside selection previews. */
 	readonly interactive?: boolean;
+	readonly clockMode?: "passive" | "edit" | "panel";
 }
 export interface StripTileProps {
 	readonly tile: StripTile;
@@ -68,15 +70,69 @@ export type StripTileComponent = (
  * wall-clock minute boundaries so the flip lands on the minute, starting from
  * the host clock.
  */
-function ClockSlot({
+function ClockSlot(props: StripTileProps): React.JSX.Element | null {
+	const mode =
+		props.context.clockMode ??
+		(props.context.interactive === false ? "passive" : "panel");
+	return mode === "passive" ? (
+		<PassiveClockSlot {...props} />
+	) : (
+		<LiveClockSlot {...props} />
+	);
+}
+
+function PassiveClockSlot({
+	tile,
+	context,
+}: StripTileProps): React.JSX.Element {
+	const actions = tile.key.config.actions;
+	const style = normalizeClockStyle(
+		actions.find((a) => a.type === "clockStyle")?.value,
+	);
+	const settings = clockWeatherSettings(actions);
+	const now = useClockNow(false, context.now, false);
+	return (
+		<ClockTile
+			widthPx={tile.box.width}
+			heightPx={tile.box.height}
+			now={now}
+			theme={activeThemeOf(style)}
+			hourFormat="24h"
+			showSeconds={
+				actions.find((a) => a.type === "showSeconds")?.value === true
+			}
+			weather={
+				settings.enabled ? (
+					<ClockWeatherCard
+						city={settings.city}
+						unit={settings.unit}
+						state={{ kind: "loading" }}
+						loading={false}
+					/>
+				) : undefined
+			}
+			nowPlaying={
+				settings.musicEnabled ? (
+					<ClockMusicCard
+						snapshot={{ revision: 0, session: null, error: "SESSION_LOST" }}
+						control={async () => false}
+					/>
+				) : undefined
+			}
+		/>
+	);
+}
+
+function LiveClockSlot({
 	tile,
 	context,
 }: StripTileProps): React.JSX.Element | null {
 	const clock = useClockSettings(undefined, context.clockTarget);
-	const enrichment = useWeatherMedia();
 	const snapshot = clock.snapshot;
 	const actions = tile.key.config.actions;
+	const settings = snapshot?.weather ?? clockWeatherSettings(actions);
 	const showSeconds =
+		snapshot?.showSeconds ??
 		actions.find((a) => a.type === "showSeconds")?.value === true;
 	const hourFormat =
 		actions.find((a) => a.type === "hourFormat")?.value === "12h"
@@ -85,8 +141,7 @@ function ClockSlot({
 	const style = normalizeClockStyle(
 		actions.find((a) => a.type === "clockStyle")?.value,
 	);
-	const now = useClockNow(snapshot?.showSeconds ?? showSeconds, context.now);
-	// Wait for the saved theme rather than flashing the default first.
+	const now = useClockNow(showSeconds, context.now);
 	if (!clock.ready) return null;
 	return (
 		<ClockTile
@@ -94,36 +149,21 @@ function ClockSlot({
 			heightPx={tile.box.height}
 			now={now}
 			theme={snapshot ? themeOf(snapshot) : activeThemeOf(style)}
-			hourFormat={snapshot?.hourFormat ?? hourFormat}
-			showSeconds={snapshot?.showSeconds ?? showSeconds}
+			hourFormat={hourFormat}
+			showSeconds={showSeconds}
 			media={mediaOf(snapshot)}
-			onThemeSelect={
-				context.interactive === false ? undefined : clock.selectTheme
-			}
+			onThemeSelect={clock.selectTheme}
 			weather={
-				enrichment.snapshot?.settings.enabled ? (
-					context.interactive === false ? (
-						<ClockWeatherCard
-							city={enrichment.snapshot.settings.city}
-							unit={enrichment.snapshot.settings.unit}
-							state={{ kind: "loading" }}
-							loading={false}
-						/>
-					) : (
-						<ClockWeatherSlot />
-					)
+				settings.enabled ? (
+					<ClockWeatherSlot
+						settings={settings}
+						instanceId={JSON.stringify(context.clockTarget)}
+					/>
 				) : undefined
 			}
 			nowPlaying={
-				enrichment.snapshot?.settings.musicEnabled ? (
-					context.interactive === false ? (
-						<ClockMusicCard
-							snapshot={enrichment.snapshot.media}
-							control={async () => false}
-						/>
-					) : (
-						<ClockMusicSlot />
-					)
+				(snapshot?.musicEnabled ?? settings.musicEnabled) ? (
+					<ClockMusicSlot enabled />
 				) : undefined
 			}
 		/>

@@ -15,7 +15,12 @@ describe("safe icon packs", () => {
 			{
 				name: "pack/icons.json",
 				data: JSON.stringify([
-					{ path: "square.svg", name: "Square", tags: ["shape"] },
+					{
+						path: "square.svg",
+						name: "Square",
+						tags: ["shape"],
+						extraData: ["geometry"],
+					},
 				]),
 			},
 			{ name: "pack/icons/square.svg", data: svg },
@@ -24,7 +29,11 @@ describe("safe icon packs", () => {
 			throw new Error("Unexpected raster");
 		});
 		expect(pack.name).toBe("Test icons");
-		expect(pack.icons[0]).toMatchObject({ name: "Square", tags: ["shape"] });
+		expect(pack.icons[0]).toMatchObject({
+			name: "Square",
+			tags: ["shape"],
+			extraData: ["geometry"],
+		});
 		expect(pack.icons[0]?.data).toMatch(/^data:image\/svg\+xml;base64,/);
 		expect((await parseIconPack(bytes, () => "")).id).toBe(pack.id);
 	});

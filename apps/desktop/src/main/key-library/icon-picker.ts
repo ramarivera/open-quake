@@ -3,6 +3,59 @@ import { BrowserWindow, type IpcMainInvokeEvent, nativeImage } from "electron";
 import type { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { KeyReply } from "../../shared/key-library";
 
+/** Chromium decodes GIF/WebP that nativeImage cannot decode on every platform. */
+export async function decodeIconPicture(
+	bytes: Buffer,
+	raster: (bytes: Buffer) => string,
+): Promise<string> {
+	if (bytes.length > 5 * 1024 * 1024) throw new Error("Image too large");
+	const gif = /^GIF8[79]a$/.test(bytes.toString("ascii", 0, 6));
+	const webp =
+		bytes.toString("ascii", 0, 4) === "RIFF" &&
+		bytes.toString("ascii", 8, 12) === "WEBP";
+	if (!gif && !webp) return raster(bytes);
+	const window = new BrowserWindow({
+		show: false,
+		webPreferences: {
+			sandbox: true,
+			contextIsolation: true,
+			nodeIntegration: false,
+			webSecurity: true,
+		},
+	});
+	window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+	window.webContents.on("will-navigate", (event) => event.preventDefault());
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			(async () => {
+				await window.loadURL(
+					`data:text/html,${encodeURIComponent('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data:">')}`,
+				);
+				const data: unknown = await window.webContents.executeJavaScript(
+					`(async()=>{const image=new Image();image.src=${JSON.stringify(`data:image/${gif ? "gif" : "webp"};base64,${bytes.toString("base64")}`)};await image.decode();if(!image.naturalWidth||!image.naturalHeight||image.naturalWidth*image.naturalHeight>16000000)throw new Error('Invalid image');const canvas=document.createElement('canvas');const scale=Math.min(1024/image.naturalWidth,1024/image.naturalHeight,1);canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);return canvas.toDataURL('image/png')})()`,
+				);
+				if (
+					typeof data !== "string" ||
+					data.length > 8 * 1024 * 1024 ||
+					!data.startsWith("data:image/png;base64,")
+				)
+					throw new Error("Invalid image");
+				return data;
+			})(),
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(
+					() => reject(new Error("Image decode timed out")),
+					6000,
+				);
+			}),
+		]);
+	} finally {
+		clearTimeout(timer);
+		if (!window.isDestroyed()) window.destroy();
+	}
+}
+
 type Picker = {
 	readonly token: string;
 	readonly url: string;

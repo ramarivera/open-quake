@@ -126,9 +126,21 @@ export type MediaIntent = typeof MediaIntent.Type;
 export const WeatherMediaSnapshot = Schema.Struct({
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 	settings: WeatherSettings,
+	refreshRevision: Schema.optionalWith(Schema.Int.pipe(Schema.nonNegative()), {
+		exact: true,
+	}),
 	media: MediaSnapshot,
 });
 export type WeatherMediaSnapshot = typeof WeatherMediaSnapshot.Type;
+const weatherScope = {
+	instanceId: Schema.optionalWith(Schema.String.pipe(Schema.maxLength(300)), {
+		exact: true,
+	}),
+	side: Schema.optionalWith(Schema.Literal("panel", "edit", "left", "right"), {
+		exact: true,
+	}),
+	settings: Schema.optionalWith(WeatherSettings, { exact: true }),
+};
 export const WeatherMediaCommand = Schema.Union(
 	Schema.TaggedStruct("read", {}),
 	Schema.TaggedStruct("configure", { settings: WeatherSettings }),
@@ -136,13 +148,18 @@ export const WeatherMediaCommand = Schema.Union(
 		query: Schema.String.pipe(Schema.maxLength(200)),
 		locale: WeatherLocale,
 	}),
-	Schema.TaggedStruct("weather", { locale: WeatherLocale }),
+	Schema.TaggedStruct("weather", { locale: WeatherLocale, ...weatherScope }),
+	Schema.TaggedStruct("getCache", { locale: WeatherLocale, ...weatherScope }),
+	Schema.TaggedStruct("clearCache", { ...weatherScope }),
+	Schema.TaggedStruct("configChanged", {}),
 	Schema.TaggedStruct("media", { intent: MediaIntent }),
 );
 export type WeatherMediaCommand = typeof WeatherMediaCommand.Type;
 export const WeatherMediaReply = Schema.Union(
 	Schema.TaggedStruct("snapshot", { snapshot: WeatherMediaSnapshot }),
 	Schema.TaggedStruct("city", { result: CityResult }),
+	Schema.TaggedStruct("cache", { result: WeatherResult }),
+	Schema.TaggedStruct("cleared", {}),
 	Schema.TaggedStruct("weather", { result: WeatherResult }),
 	Schema.TaggedStruct("control", {
 		accepted: Schema.Boolean,

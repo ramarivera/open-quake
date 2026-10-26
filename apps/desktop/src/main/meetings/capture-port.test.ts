@@ -23,6 +23,7 @@ const native = vi.hoisted(() => {
 			for (const fn of this.listeners.get(name) ?? []) fn(...args);
 		}
 	}
+	const reply = { failSystem: false, choice: 1 };
 	const ipc = new Events();
 	const app = new Events();
 	class Window extends Events {
@@ -40,16 +41,27 @@ const native = vi.hoisted(() => {
 				setPermissionRequestHandler: vi.fn(),
 				setDisplayMediaRequestHandler: vi.fn(),
 			},
-			send: vi.fn((channel: string, value: { requestId: string }) => {
-				if (channel === "meetings:capture")
-					queueMicrotask(() =>
-						ipc.emit(
-							"meetings:capture-reply",
-							{ sender: this.webContents, senderFrame: this.frame },
-							{ requestId: value.requestId, success: true },
-						),
-					);
-			}),
+			send: vi.fn(
+				(
+					channel: string,
+					value: { requestId: string; systemAudio?: boolean },
+				) => {
+					if (channel === "meetings:capture")
+						queueMicrotask(() =>
+							ipc.emit(
+								"meetings:capture-reply",
+								{ sender: this.webContents, senderFrame: this.frame },
+								{
+									requestId: value.requestId,
+									success: !(reply.failSystem && value.systemAudio),
+									...(reply.failSystem && value.systemAudio
+										? { reason: "systemUnavailable" }
+										: {}),
+								},
+							),
+						);
+				},
+			),
 		});
 		constructor() {
 			super();
@@ -70,10 +82,21 @@ const native = vi.hoisted(() => {
 			});
 		});
 	}
-	return { app, ipc, Window, converterReady: vi.fn() };
+	return {
+		app,
+		ipc,
+		Window,
+		reply,
+		prompt: vi.fn(async () => ({
+			response: reply.choice,
+			checkboxChecked: false,
+		})),
+		converterReady: vi.fn(),
+	};
 });
 vi.mock("electron", () => ({
 	app: native.app,
+	dialog: { showMessageBox: native.prompt },
 	ipcMain: native.ipc,
 	BrowserWindow: native.Window,
 	systemPreferences: {
@@ -219,3 +242,40 @@ describe("capture host ownership and authority", () => {
 		expect(onNoWindows).toHaveBeenCalledOnce();
 	});
 });
+
+for (const choice of [0, 1]) {
+	it(`offers explicit mic-only or cancel after system failure, choice ${choice}`, async () => {
+		native.reply.failSystem = true;
+		native.reply.choice = choice;
+		try {
+			const { capture } = setup();
+			const id = MeetingId.make(crypto.randomUUID());
+			const result = await Effect.runPromise(
+				capture.port
+					.start(id, { ...defaultMeetingConfig, systemAudio: true }, undefined)
+					.pipe(Effect.either),
+			);
+			expect(native.prompt).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					buttons: ["Microphone only", "Cancel"],
+					defaultId: 1,
+					cancelId: 1,
+				}),
+			);
+			expect(result._tag).toBe(choice === 0 ? "Right" : "Left");
+			if (choice === 0) {
+				expect(result).toMatchObject({
+					_tag: "Right",
+					right: { ...defaultMeetingConfig, systemAudio: false },
+				});
+				const messages = native.Window.windows
+					.at(-1)
+					?.webContents.send.mock.calls.map((call) => call[1]);
+				expect(messages?.at(-1)?.systemAudio).toBe(false);
+				await Effect.runPromise(capture.port.cancel(id));
+			}
+		} finally {
+			native.reply.failSystem = false;
+		}
+	});
+}
