@@ -117,6 +117,17 @@ describe("clock store (WIDGETS-020/021/038)", () => {
 		const m = memory();
 		const snapshot = await m.run(ClockStore.read());
 		expect(snapshot).toEqual({
+			actions: defaultClockRecord.keys[0]?.config.actions,
+			musicEnabled: true,
+			weather: {
+				enabled: true,
+				city: "",
+				location: null,
+				unit: "celsius",
+				ipLookup: false,
+				forecastUrl: "",
+				musicEnabled: true,
+			},
 			hourFormat: "24h",
 			revision: 0,
 			keyCode: "1,1",

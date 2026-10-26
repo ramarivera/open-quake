@@ -69,7 +69,11 @@ export const canRequestWeatherMedia = (
 	)
 		return false;
 	return (
-		management || (input._tag !== "configure" && input._tag !== "verifyCity")
+		management ||
+		(input._tag !== "configure" &&
+			input._tag !== "verifyCity" &&
+			input._tag !== "clearCache" &&
+			input._tag !== "configChanged")
 	);
 };
 
@@ -123,7 +127,11 @@ export function registerWeatherMedia(
 					const reply = await runtime.runPromise(
 						WeatherMediaController.request(input),
 					);
-					if (input._tag === "configure" || input._tag === "media")
+					if (
+						input._tag === "configure" ||
+						input._tag === "media" ||
+						input._tag === "configChanged"
+					)
 						await broadcast();
 					return reply;
 				})(),

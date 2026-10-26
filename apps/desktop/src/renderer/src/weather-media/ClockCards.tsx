@@ -5,6 +5,7 @@ import type {
 	MediaIntent,
 	MediaSnapshot,
 	WeatherLocale,
+	WeatherSettings,
 } from "../../../shared/weather-media-contracts";
 import { WEATHER_MEDIA_STRINGS } from "../../../shared/weather-media-strings";
 import type { ClockWeatherCardProps } from "../strip/tiles/clock/clockCards";
@@ -201,12 +202,25 @@ export function ClockMusicCard({
 	);
 }
 
-export function ClockWeatherSlot(): React.JSX.Element | null {
+export function ClockWeatherSlot({
+	settings: ownSettings,
+	instanceId,
+	side,
+}: {
+	settings?: WeatherSettings;
+	instanceId?: string | undefined;
+	side?: "panel" | "edit" | undefined;
+} = {}): React.JSX.Element | null {
 	const { snapshot } = useWeatherMedia();
-	const enabled = snapshot?.settings.enabled ?? false;
-	const { result, loading } = useWeather(enabled);
-	if (!enabled || !snapshot) return null;
-	const settings = snapshot.settings;
+	const settings = ownSettings ?? snapshot?.settings;
+	const enabled = settings?.enabled ?? false;
+	const { result, loading } = useWeather(
+		enabled,
+		ownSettings,
+		instanceId,
+		side,
+	);
+	if (!enabled || !settings) return null;
 	const state: ClockWeatherCardProps["state"] =
 		result._tag === "ready"
 			? { kind: "ready", ...result.data }
@@ -223,9 +237,13 @@ export function ClockWeatherSlot(): React.JSX.Element | null {
 		/>
 	);
 }
-export function ClockMusicSlot(): React.JSX.Element | null {
+export function ClockMusicSlot({
+	enabled,
+}: {
+	enabled?: boolean;
+} = {}): React.JSX.Element | null {
 	const { snapshot, client } = useWeatherMedia();
-	return snapshot?.settings.musicEnabled ? (
+	return snapshot && (enabled ?? snapshot.settings.musicEnabled) ? (
 		<ClockMusicCard
 			snapshot={snapshot.media}
 			control={client.control}
