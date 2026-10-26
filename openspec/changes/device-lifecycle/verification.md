@@ -542,3 +542,66 @@ Every Electron run used `OPEN_QUAKE_MOCK_DEVICE=1` and
 `env -u ELECTRON_RUN_AS_NODE`; no real QUAKE or DK-Suite access occurred.
 Generated build output is removed after the gate run, and no started Electron
 process remains.
+
+
+## PR #86 final implementation round
+
+Bead `open-quake-lih.11.18` tracks this round. Final functional head
+`0a03ad6e7e00f11d8d3afd824d64fb14fbac1e9a` is pushed to `parity/lifecycle`.
+Merge commit `abedad57` incorporates main `ae869087`, including #88 touch,
+#91 meetings, #87 icons and #89 clock. The sole conflict was diagnostics tests;
+both lifecycle span coverage and touch hold-chord coverage remain.
+
+| Finding | Commit | Change and regression |
+| --- | --- | --- |
+| Hosted bundle shutdown, run 40340791664 | `94cd3986` | Cancel knob registration work before draining the bus input queue. Main-entrypoint regression holds pending input until disposal; it failed before, then all 41 main tests passed. |
+| Codex 4378546825 | `21943636` | Bootstrap each panel with its serial; route wallpaper state and clocks per owner; use that serial for profile rendering and key activation; authorize IPC through registered sender ownership. Two-panel media regression failed before. Mounted A/B renderer, IPC cross-serial rejection and bootstrap tests pass; 55 focused media/key/renderer tests passed. |
+| Codex 4378546838 | `53f87b4f` | Return the matching live Display while retaining the saved binding for recovery. TestClock moves and rotates A during B pairing and verifies final bounds/orientation without another event. It failed before; 28 lifecycle/recovery tests passed. Live reads are immediate while reassignment retains its 1500 ms debounce. |
+| Codex 4378546848 | `0a03ad6e` | Select secondary children by serial and resolve the current discovered HID path at each connection. Two-strip regression failed against prior source; repeated B re-enumeration, explicit recovery and resumed B input pass while A stays open once. All 14 HID bus tests passed. |
+
+The hosted bundle timeout occurred at the awaited-quit check, after startup.
+The original failure did not reproduce locally, including a Linux-platform
+branch simulation. The ordering regression proves a shutdown deadlock with
+pending knob work, but its connection to the exact hosted Linux trigger remains
+unconfirmed. Linux uses a dock panel, the transient shield is macOS-only, and
+the bundle harness supplies a synchronous powerSaveBlocker. No smoke timeout or
+assertion changed. Both original local modes and final fixed modes passed.
+
+All final gates passed on the functional head:
+
+- Exact root command with SSD TMPDIR,
+  `pnpm exec turbo run test --env-mode=loose -- --maxWorkers=2`: four successful
+  test tasks; 3,354 passed and four existing skips. Desktop ran 2,060 tests
+  successfully, with one skip; device 496, edge 735 with three skips, protocol
+  63 were valid cache hits. There were 353 passing test files and two skipped.
+- The first root attempt had two five-second profile-initialization timeouts
+  with host load above 130. Both passed in isolation; the complete unchanged
+  rerun passed in 104 seconds. No timeout or assertion was weakened.
+- `pnpm biome check packages apps`: 1,257 files, zero errors, 14 existing CSS
+  warnings. `pnpm typecheck`: six successful tasks, five cached.
+- `pnpm build`: production main/preload/renderer passed.
+- `pnpm --filter @open-quake/desktop test:bundle`: default HID absence and
+  explicit mock modes passed, including awaited quit and owner cleanup.
+- `openspec validate --all --strict`: 47 passed, zero failures.
+- Documented native media smoke: built, all eight PASS groups completed and
+  Electron exited zero. Includes OBS scene/reconnect, synthetic strip input,
+  production preload/IPC, isolated wallpaper serials and runtime disposal
+  before will-quit. The process took additional time to exit after assertions;
+  it exited normally without termination or a source change. Native renderer
+  screenshots total 22; `screenshots-media/panel-quick.png` was inspected.
+- `git diff --check` passed; normal commit and push hooks remained enabled.
+
+Evidence is under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/lifecycle/final/`.
+`full-tests-retry.log` records the successful root run; `native-media.log`
+records native assertions. Before/after regression logs are retained there.
+Each fix was separately committed, pushed and replied before the next fix.
+Replies are discussion comments 4378775059, 4378786872 and 4378795117; the
+bundle explanation is issue comment 6419017693.
+
+No threads were resolved and PR #86 remains open and linked. This child does
+not watch or wait for another review round. Fresh hosted checks and substantive
+current-head review remain for the lead to reconcile. Generated desktop output
+is removed after gates; no owned Electron or test process remains. All native
+runs used mock mode with ELECTRON_RUN_AS_NODE unset. No real QUAKE, touch
+controller or DK-Suite was used. Physical hardware behavior remains unverified.
