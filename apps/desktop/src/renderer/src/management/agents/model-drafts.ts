@@ -6,7 +6,14 @@ export function reconcileModelRow(
 	previous: PublicModelRow,
 	next: PublicModelRow,
 ): PublicModelRow {
+	const temperature =
+		draft.temperature === previous.temperature
+			? next.temperature
+			: draft.temperature;
+	const topP = draft.topP === previous.topP ? next.topP : draft.topP;
 	return {
+		...(temperature === undefined ? {} : { temperature }),
+		...(topP === undefined ? {} : { topP }),
 		id: draft.id,
 		role: draft.role === previous.role ? next.role : draft.role,
 		provider:
@@ -37,4 +44,28 @@ export function reconcileModelDrafts(
 		...merged,
 		...next.filter((saved) => !drafts.some((draft) => draft.id === saved.id)),
 	];
+}
+
+/** Empty numeric fields omit overrides. Invalid browser number input must not become a default. */
+export function samplingInput(
+	value: string,
+	badInput = false,
+): number | undefined {
+	return badInput
+		? Number.NaN
+		: value.trim() === ""
+			? undefined
+			: Number(value);
+}
+export function samplingValid(
+	row: Pick<PublicModelRow, "temperature" | "topP">,
+): boolean {
+	return (
+		(row.temperature === undefined ||
+			(Number.isFinite(row.temperature) &&
+				row.temperature >= 0 &&
+				row.temperature <= 2)) &&
+		(row.topP === undefined ||
+			(Number.isFinite(row.topP) && row.topP >= 0 && row.topP <= 1))
+	);
 }

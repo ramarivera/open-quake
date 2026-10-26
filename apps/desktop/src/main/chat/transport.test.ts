@@ -39,7 +39,12 @@ function fixtureServer() {
 	const calls: {
 		path: string;
 		auth: string | undefined;
-		body: { model: string; messages: { role: string; content: string }[] };
+		body: {
+			temperature?: number;
+			top_p?: number;
+			model: string;
+			messages: { role: string; content: string }[];
+		};
 	}[] = [];
 	let release: (() => void) | undefined;
 	let disconnected: (() => void) | undefined;
@@ -82,7 +87,7 @@ function fixtureServer() {
 	});
 	return { server, calls, closed, release: () => release?.() };
 }
-async function fixture() {
+async function fixture(sampling: { temperature?: number; topP?: number } = {}) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
 	const endpoint = fixtureServer();
 	await new Promise<void>((resolve) =>
@@ -126,6 +131,7 @@ async function fixture() {
 					baseUrl: `http://127.0.0.1:${address.port}/v1`,
 					maxTokens,
 					credentialRef: reference,
+					...sampling,
 				},
 			]),
 	});
@@ -222,6 +228,35 @@ function voiceFixture(
 }
 
 describe("desktop chat RPC through actual SDK and HTTP", () => {
+	it.each([{}, { temperature: 0, topP: 1 }, { temperature: 2, topP: 0 }])(
+		"sends saved sampling through actual RPC and SDK, preserving omission %j",
+		async (sampling) => {
+			const f = await fixture(sampling);
+			try {
+				const session = sessionId();
+				await f.bridge.submit({
+					sessionId: session,
+					turnId: turnId(),
+					text: "sampling",
+				});
+				await vi.waitFor(async () =>
+					expect(
+						(await f.bridge.history(session)).turns[0]?.snapshot.terminal,
+					).toMatchObject({ _tag: "Some", value: { outcome: "completed" } }),
+				);
+				const body = f.endpoint.calls[0]?.body;
+				if (sampling.temperature === undefined)
+					expect(body).not.toHaveProperty("temperature");
+				else expect(body?.temperature).toBe(sampling.temperature);
+				if (sampling.topP === undefined)
+					expect(body).not.toHaveProperty("top_p");
+				else expect(body?.top_p).toBe(sampling.topP);
+			} finally {
+				await f.close();
+			}
+		},
+	);
+
 	it("keeps an SDK reply without provider usage completed beyond the byte estimate reserve", async () => {
 		const f = await fixture();
 		try {

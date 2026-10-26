@@ -86,8 +86,18 @@ export function profileFromModel(row: ModelRow): ProviderProfile {
 			stt: "unsupported",
 			tts: "unsupported",
 		},
-		sampling: { maxOutputTokens: Math.min(row.maxTokens, 65536) },
-		samplingLimits: { maxOutputTokens: Math.min(row.maxTokens, 65536) },
+		sampling: {
+			maxOutputTokens: Math.min(row.maxTokens, 65536),
+			...(row.temperature === undefined
+				? {}
+				: { temperature: row.temperature }),
+			...(row.topP === undefined ? {} : { topP: row.topP }),
+		},
+		samplingLimits: {
+			maxOutputTokens: Math.min(row.maxTokens, 65536),
+			temperature: { min: 0, max: 2 },
+			topP: { min: 0, max: 1 },
+		},
 	};
 }
 export interface DirectChatOptions {

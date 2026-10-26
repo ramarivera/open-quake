@@ -111,7 +111,13 @@ export const modelValid = (row: ModelRow): boolean => {
 		/[{}]|%7[bd]/i.test(row.baseUrl) ||
 		!configured(row) ||
 		!Number.isSafeInteger(row.maxTokens) ||
-		row.maxTokens < 1
+		row.maxTokens < 1 ||
+		(row.temperature !== undefined &&
+			(!Number.isFinite(row.temperature) ||
+				row.temperature < 0 ||
+				row.temperature > 2)) ||
+		(row.topP !== undefined &&
+			(!Number.isFinite(row.topP) || row.topP < 0 || row.topP > 1))
 	)
 		return false;
 	try {

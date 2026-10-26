@@ -239,8 +239,8 @@ Opus 5.5 owns these renderer decisions.
   that closes the guide and calls the root. Without it, places are text only.
   The root passes its page navigation callback. After the destination commits, it focuses the stable destination page container, including when opening Settings again. Dismissal still restores focus to Open guide.
 
-Task 3.2 audit against source. These items are reported for the parent and
-are not implemented here:
+Task 3.2 guide-lane audit against its source baseline. The later sampling
+integration is recorded below; lighting remains open:
 
 - Provider sampling is a genuine gap. No UI exposes temperature or topP.
   `main/chat/host.ts` projects only `maxOutputTokens`, and `ai-invariants`
@@ -265,3 +265,7 @@ are not implemented here:
   explanation. ARIS-68 is filtered out at HID discovery by the QUAKE vendor
   and usage page. That means it is invisible rather than shown as
   unsupported, which is a spec mismatch for the parent to decide.
+
+## Approved saved-model sampling integration, 2026-10-26
+
+Ramiro approved optional finite temperature 0..2 and topP 0..1 ModelRow fields and their derived RPC. Existing rows remain valid and omission keeps provider defaults. Implement the existing per-model Advanced disclosure decision, preserving existing table input/select/button order. Each field keeps its raw draft until Save, including invalid input; show a field error and block every save path for that row while invalid. Pending save acknowledgments must retain newer drafts, including clearing a value back to default. Use existing agent storage and the common profileFromModel inference projection for direct chat, voice and shortcut drafting. No new dependency or provider-specific claim is introduced.

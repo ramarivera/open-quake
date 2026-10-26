@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 import type { PublicModelRow } from "../../../../shared/agents";
-import { reconcileModelDrafts, reconcileModelRow } from "./model-drafts";
+import {
+	reconcileModelDrafts,
+	reconcileModelRow,
+	samplingInput,
+	samplingValid,
+} from "./model-drafts";
 
 const first: PublicModelRow = {
 	id: "saved",
@@ -50,4 +55,36 @@ it("applies the save acknowledgement without overwriting edits made while it was
 			credentialAvailable: true,
 		}),
 	).toEqual({ ...first, model: "newer-edit", credentialAvailable: true });
+});
+
+it("keeps newer sampling edits and clearing across an older save acknowledgement", () => {
+	const previous = { ...first, temperature: 0.4, topP: 0.8 };
+	const saved = { ...previous, temperature: 0.6, topP: 0.9 };
+	expect(
+		reconcileModelRow(
+			{ ...previous, temperature: 1.2, topP: undefined },
+			previous,
+			saved,
+		),
+	).toEqual({ ...first, temperature: 1.2 });
+	expect(reconcileModelRow(previous, previous, saved)).toEqual(saved);
+});
+it("distinguishes blank defaults from invalid numbers and accepts inclusive bounds", () => {
+	expect(samplingInput("")).toBeUndefined();
+	expect(samplingInput("0")).toBe(0);
+	expect(samplingInput("", true)).toBeNaN();
+	for (const row of [
+		{},
+		{ temperature: 0, topP: 0 },
+		{ temperature: 2, topP: 1 },
+	])
+		expect(samplingValid(row)).toBe(true);
+	for (const row of [
+		{ temperature: -0.1 },
+		{ temperature: 2.1 },
+		{ temperature: Number.NaN },
+		{ topP: 1.1 },
+		{ topP: Number.POSITIVE_INFINITY },
+	])
+		expect(samplingValid(row)).toBe(false);
 });
