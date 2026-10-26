@@ -286,3 +286,70 @@ it.scoped(
 			).toBe(false);
 		}),
 );
+
+for (const terminal of ["stop", "preempt", "reset"] as const) {
+	it.scoped(
+		`retains sampled resume across ${terminal}, repeated polls and restart`,
+		() =>
+			Effect.gen(function* () {
+				let stored: unknown = {};
+				const store = {
+					read: async () => stored,
+					write: async (value: unknown) => {
+						stored = value;
+					},
+				};
+				const original = key(0);
+				const intent = (value: string) => ({
+					...original,
+					config: {
+						...original.config,
+						actions: [
+							...original.config.actions.map((a) =>
+								a.type === "audioAction" && value === "next"
+									? { ...a, value: 6 }
+									: a,
+							),
+							{ type: "musicSource", value: "local" },
+							{ type: "playerIntent", value },
+						],
+					},
+				});
+				const f = yield* rig();
+				const keys = soundboardKeyActions(f.service, store);
+				yield* keys.execute(intent("toggle"), activation);
+				yield* keys.execute(intent("next"), activation);
+				const track = f.tracks.at(-1);
+				if (!track) throw new Error("missing fake track");
+				track.positionMs = 4321;
+				expect(yield* keys.read(original, activation)).toMatchObject({
+					trackIndex: 1,
+					positionMs: 4321,
+				});
+				if (terminal === "stop")
+					yield* keys.execute(intent("stop"), activation);
+				else if (terminal === "preempt")
+					yield* f.output.acquire("speech", Effect.void);
+				else yield* keys.reset();
+				for (let i = 0; i < 2; i++)
+					expect(yield* keys.read(original, activation)).toMatchObject({
+						state: "stopped",
+						trackIndex: 1,
+						positionMs: 4321,
+					});
+				const second = yield* rig();
+				const restarted = soundboardKeyActions(second.service, store);
+				expect(yield* restarted.read(original, activation)).toMatchObject({
+					trackIndex: 1,
+					positionMs: 4321,
+				});
+				expect(second.tracks).toHaveLength(0);
+				yield* restarted.execute(intent("toggle"), activation);
+				expect(second.tracks[0]).toMatchObject({
+					fileId: "sound-1",
+					positionMs: 4321,
+					plays: 1,
+				});
+			}),
+	);
+}

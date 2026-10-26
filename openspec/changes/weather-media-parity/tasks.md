@@ -81,3 +81,5 @@ PR #103 integration normally merges main `88eaf029`. Both additive spec/task con
 ## Device widget coverage lane
 
 - [ ] test-device-widgets remainder MGMT-270: owner reconciliation of Local/System settings and persisted mode. media-native now supplies per-key controls through `MediaKeySettings` and the committed profile; MGMT-270 is outside its 24-row assignment and remains open for the owning lane's acceptance.
+
+- [x] 10.4 Preserve sampled local resume positions across terminal session polls, explicit stop, preemption and reset. PR103 review 4379605831, bead open-quake-lih.7.4.1. Fake canonical-player regressions fail before and pass after, including repeated polls, restart without autoplay and explicit resume of the saved track/position.

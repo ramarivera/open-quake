@@ -131,7 +131,7 @@ export function soundboardKeyActions(
 					s.owner.keyCode === owner.keyCode,
 			)
 			.at(-1);
-		if (latest)
+		if (latest && (latest.state === "playing" || latest.state === "paused"))
 			yield* resume.save(identity, {
 				fingerprint,
 				index: latest.trackIndex,
@@ -192,12 +192,16 @@ export function soundboardKeyActions(
 			playlist.fade,
 		]);
 		const identity = JSON.stringify({ profileId, keyCode });
-		if (active)
+		const resumable =
+			active?.state === "playing" || active?.state === "paused"
+				? active
+				: undefined;
+		if (resumable)
 			yield* resume
 				.save(identity, {
 					fingerprint,
-					index: active.trackIndex,
-					positionMs: active.positionMs,
+					index: resumable.trackIndex,
+					positionMs: resumable.positionMs,
 				})
 				.pipe(
 					Effect.catchTag("SoundboardConfigInvalid", (error) =>
@@ -212,7 +216,7 @@ export function soundboardKeyActions(
 				),
 			);
 		const index =
-			active?.trackIndex ??
+			resumable?.trackIndex ??
 			(saved?.fingerprint === fingerprint ? saved.index : 0);
 		const entry = playlist.entries[index];
 		return {
@@ -222,7 +226,7 @@ export function soundboardKeyActions(
 			trackIndex: index,
 			total: playlist.entries.length,
 			positionMs:
-				active?.positionMs ??
+				resumable?.positionMs ??
 				(saved?.fingerprint === fingerprint ? saved.positionMs : 0),
 			errorCode: active?.errorCode ?? null,
 		};
