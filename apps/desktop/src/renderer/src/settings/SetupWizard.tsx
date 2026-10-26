@@ -46,6 +46,9 @@ import type {
 	DisplayOrientation,
 	LifecycleBridge,
 } from "../../../shared/lifecycle-contracts";
+import { InstallationGuide } from "./InstallationGuide";
+import { PermissionGuidance } from "./PermissionGuidance";
+import { ProjectNotice } from "./ProjectNotice";
 import { RegionSuggestions } from "./RegionSuggestions";
 
 type T = ReturnType<typeof useAppTranslations>;
@@ -100,7 +103,9 @@ export function SetupWizard({
 	store,
 	runtime,
 	onLeave,
+	onOpenPermissions,
 }: {
+	onOpenPermissions?: (() => void) | undefined;
 	store: SetupStore;
 	runtime: RuntimeChoice;
 	/** Leaves setup without completing it; progress stays saved. */
@@ -159,13 +164,16 @@ export function SetupWizard({
 			</div>
 		);
 	return (
-		<SetupFlow
-			store={store}
-			state={state}
-			snapshot={state.snapshot}
-			runtime={runtime}
-			onLeave={onLeave}
-		/>
+		<>
+			<PermissionGuidance ready onOpen={onOpenPermissions} />
+			<SetupFlow
+				store={store}
+				state={state}
+				snapshot={state.snapshot}
+				runtime={runtime}
+				onLeave={onLeave}
+			/>
+		</>
 	);
 }
 
@@ -187,6 +195,7 @@ function SetupFlow({
 	const [chosen, setStep] = useState<SetupStep | null>(null);
 	const step =
 		chosen && steps.includes(chosen) ? chosen : resumeStep(snapshot, steps);
+	const [regionConfirm, setRegionConfirm] = useState(false);
 	const [choices, setChoices] = useState<SetupChoices>(() =>
 		initialChoices(
 			snapshot,
@@ -236,7 +245,12 @@ function SetupFlow({
 	const completed = snapshot.completed;
 	const index = steps.indexOf(step);
 	const go = (next: SetupStep): void => setStep(next);
-	const advance = async (): Promise<void> => {
+	const advance = async (confirmed = false): Promise<void> => {
+		if (step === "locale-region" && !confirmed) {
+			setRegionConfirm(true);
+			return;
+		}
+		setRegionConfirm(false);
 		if (step === "review") {
 			await store.complete();
 			return;
@@ -325,7 +339,11 @@ function SetupFlow({
 				</button>
 			</PageHeader>
 			<div className="setup-layout">
-				<ol className="setup-steps" aria-label={t("setup.stepsLabel")}>
+				<ol
+					className="setup-steps"
+					hidden={step === "welcome"}
+					aria-label={t("setup.stepsLabel")}
+				>
 					{steps.map((id, position) => {
 						const status =
 							position < index
@@ -353,7 +371,7 @@ function SetupFlow({
 					})}
 				</ol>
 				<section className="setup-panel" aria-labelledby={headingId}>
-					<p className="setup-progress">
+					<p className="setup-progress" hidden={step === "welcome"}>
 						{t("setup.stepOf", { current: index + 1, total: steps.length })}
 						<span className="setup-progress-name">
 							{" · "}
@@ -362,6 +380,7 @@ function SetupFlow({
 					</p>
 					<progress
 						className="setup-meter"
+						hidden={step === "welcome"}
 						aria-hidden="true"
 						max={steps.length}
 						value={index + 1}
@@ -397,6 +416,13 @@ function SetupFlow({
 							{step === "review" ? ` ${t("setup.failure.notComplete")}` : ""}
 						</p>
 					) : null}
+					{regionConfirm ? (
+						<RegionConfirmation
+							region={current.region}
+							onCancel={() => setRegionConfirm(false)}
+							onConfirm={() => void advance(true)}
+						/>
+					) : null}
 					<div className="setup-actions">
 						{index > 0 ? (
 							<button
@@ -422,7 +448,9 @@ function SetupFlow({
 									: t("setup.review.finish")
 								: state.pending === "save"
 									? t("setup.saving")
-									: t("setup.continue")}
+									: step === "welcome"
+										? t("setup.getStarted")
+										: t("setup.continue")}
 						</button>
 					</div>
 				</section>
@@ -477,6 +505,7 @@ function StepBody({
 						) : null}
 					</ul>
 					<p className="setup-meta">{t("setup.welcome.note")}</p>
+					<ProjectNotice />
 				</>
 			);
 		case "locale-region":
@@ -523,6 +552,37 @@ function StepBody({
 							</span>
 						</div>
 					</div>
+					<fieldset className="setup-service-region">
+						<legend>{t("setup.serviceRegion")}</legend>
+						<button
+							type="button"
+							className="mc-button"
+							disabled={busy}
+							aria-pressed={choices.region === "CN"}
+							onClick={() =>
+								setChoices((current) => ({ ...current, region: "CN" }))
+							}
+						>
+							{t("setup.china")}
+						</button>
+						<button
+							type="button"
+							className="mc-button"
+							disabled={busy}
+							aria-pressed={choices.region !== "CN"}
+							onClick={() =>
+								setChoices((current) => ({
+									...current,
+									region:
+										current.region && current.region !== "CN"
+											? current.region
+											: "US",
+								}))
+							}
+						>
+							{t("setup.international")}
+						</button>
+					</fieldset>
 					<RegionSuggestions region={choices.region} />
 				</>
 			);
@@ -698,6 +758,7 @@ export function DisplayStep({
 	return (
 		<>
 			<p className="setup-lead">{t("setup.display.body")}</p>
+			<InstallationGuide />
 			<div
 				className="setup-choices"
 				role="radiogroup"
@@ -1257,5 +1318,50 @@ export function OrientationConfirmation({
 				</button>
 			) : null}
 		</section>
+	);
+}
+
+function RegionConfirmation({
+	region,
+	onCancel,
+	onConfirm,
+}: {
+	region: string;
+	onCancel: () => void;
+	onConfirm: () => void;
+}): React.JSX.Element {
+	const t = useAppTranslations("settings");
+	const dialog = useRef<HTMLDialogElement>(null);
+	const id = useId();
+	useEffect(() => {
+		const node = dialog.current;
+		if (node && !node.open) node.showModal();
+		return () => node?.close();
+	}, []);
+	return (
+		<dialog
+			ref={dialog}
+			className="guide-dialog setup-notice"
+			aria-labelledby={id}
+			onCancel={(event) => {
+				event.preventDefault();
+				onCancel();
+			}}
+		>
+			<h2 id={id}>{t("setup.regionConfirmTitle")}</h2>
+			<p>
+				{t("setup.regionConfirmBody", {
+					region: region === "CN" ? t("setup.china") : t("setup.international"),
+				})}
+			</p>
+			<div className="button-row">
+				<button type="button" className="mc-button" onClick={onCancel}>
+					{t("setup.cancel")}
+				</button>
+				<button type="button" className="mc-button" onClick={onConfirm}>
+					{t("setup.confirm")}
+				</button>
+			</div>
+		</dialog>
 	);
 }

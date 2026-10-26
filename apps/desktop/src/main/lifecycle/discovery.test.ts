@@ -146,7 +146,10 @@ describe("screen-off pairing", () => {
 			Effect.gen(function* () {
 				const h = yield* harness(mode);
 				const fiber = yield* h.discovery.run().pipe(Effect.fork);
-				yield* TestClock.adjust(30_000);
+				yield* TestClock.adjust(29_999);
+				expect(Option.isNone(yield* Fiber.poll(fiber))).toBe(true);
+				expect(h.power).toEqual([false]);
+				yield* TestClock.adjust(1);
 				const result = yield* Fiber.join(fiber);
 				expect(result.issue).toBe("timeout");
 				expect(Option.isNone(result.display)).toBe(true);

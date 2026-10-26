@@ -456,6 +456,175 @@ The six AI role titles SHALL resolve explicit user edits first, then multilingua
 - **WHEN** the app language changes with the strip, voice, picker, profile manager and clock mounted
 - **THEN** their labels update for all eight locales, an unsupported value renders English, drafts and user-edited titles survive, and no translated title is written to a profile
 
+### Requirement: Setup diagnostic and installation recovery
+
+The app SHALL provide the setup lane recovery paths for MGMT-029, MGMT-030,
+MGMT-037, MGMT-038, MGMT-039, SETTINGS-068, SETTINGS-069 and SETTINGS-070.
+Connection detection SHALL use the lifecycle owner's bounded discovery and
+single-flight redetect instead of adding renderer delays. The existing independent
+pairing policy uses a 30,000 ms deadline for observing display disappearance and
+return, restores screen power on timeout and releases its watcher. This replaces
+the vendor's renderer-side delay/poll loop. During a request,
+Re-detect SHALL be disabled and both channels SHALL announce Checking.
+User-triggered notices SHALL last 2600 ms; persistent channel results SHALL
+remain after the notice expires. Mounting and background snapshots SHALL be
+silent. A failed request SHALL leave the last results readable and retryable.
+
+#### Scenario: Retry and recover without hardware
+- **WHEN** a user clicks Re-detect and IPC succeeds, fails or rejects
+- **THEN** only one request runs, Checking appears until settlement, and the
+  outcome notice expires after 2600 ms without deleting the diagnostic result
+
+#### Scenario: Display pairing deadline
+- **WHEN** display pairing cannot observe one unambiguous target
+- **THEN** it stays pending through 29,999 ms, times out at 30,000 ms, restores
+  screen power and releases observation without publishing a guessed display
+
+#### Scenario: Installation help from entrance, setup and connection
+- **WHEN** the user opens Installation Guide from setup, the entrance or Connection
+- **THEN** a bundled modal works even if settings services are unavailable,
+  with three illustrated steps, independent English/Chinese selection, left/right
+  keyboard navigation and reset to English/step one after close
+- **AND** it describes left USB-C and Mini HDMI ports, latch engagement and box
+  contents, desktop USB-A plus HDMI, and a laptop hub on a DP-capable USB-C port
+- **AND** a DisplayPort source requires a DP-source-to-HDMI-display adapter,
+  correcting the recovered guide's reversed HDMI-to-DP advice
+
+#### Scenario: Project support
+- **WHEN** the user follows Contact Support
+- **THEN** the app opens only the fixed project GitHub issues URL through the
+  management-only isolated preload after a trusted top-frame click, never a vendor account or arbitrary URL. The link SHALL be available only when that preload advertises external-link handling
+
+### Requirement: Setup first-run ownership and welcome
+
+MAIN-055, MAIN-056, MAIN-125, SETTINGS-011, SETTINGS-051, SETTINGS-053,
+SETTINGS-054 and SETTINGS-055 SHALL retain resumable offline setup and the
+approved desktop-preview path. Explicit navigation SHALL win over a late
+startup read. Automatic setup SHALL open at most once per renderer run;
+completion SHALL persist through the existing wizard owner, while leaving
+setup SHALL not complete it. Development controls SHALL expose a debug override
+and explicit reset of first-run state, hidden in packaged production builds.
+All eight supported language choices SHALL apply immediately, persist and
+refresh localized profile titles. The welcome step SHALL hide progress and
+use Get Started. Welcome SHALL include project-owned privacy and
+software-notice reading, never imply agreement to vendor terms. For SETTINGS-054,
+Ramiro approved the MIT project license with the owner's copyright and local
+privacy/software notices on 2026-10-26. Welcome SHALL bundle those documents and
+state that selecting Get Started agrees to MIT and acknowledges the notices.
+Only that explicit action SHALL advance saved progress. It SHALL not request
+permissions or accept vendor terms. Reduced motion
+SHALL suppress welcome motion. Lifecycle orientation snapshots SHALL be consumed
+for the selected serial, and setup ownership SHALL suppress automatic display
+prompts until it closes, reloads or its owner is destroyed.
+
+#### Scenario: First run and explicit navigation
+- **WHEN** the startup wizard read returns unfinished state with no hardware
+- **THEN** setup opens once unless the user already explicitly chose a page
+- **AND** completed state stays closed, leaving preserves progress and replay
+  returns to welcome without changing existing device or profile preferences
+
+#### Scenario: Welcome and local project information
+- **WHEN** Welcome renders
+- **THEN** Get Started and the complete MIT license plus local privacy/software reading
+  are available offline, progress is hidden and leaving does not complete setup
+- **AND** reading or closing a notice doesn't save progress; selecting Get Started
+  acknowledges the displayed documents and persists the next step
+
+#### Scenario: Language and display ownership
+- **WHEN** a language changes or lifecycle reports a selected serial's orientation
+- **THEN** the mounted wizard refreshes labels/profile names and the matching
+  display readiness, ignores stale reads, and releases display-prompt ownership
+  on unmount/reload/destruction
+
+### Requirement: Explicit local service region confirmation
+
+SETTINGS-056 SHALL project country CN as China and other country choices as
+International, offer explicit China/International choices, and confirm the
+region before advancing. Cancelling SHALL retain the draft on the locale step.
+Confirming SHALL persist through the existing country-based wizard owner.
+No IP lookup or vendor host, OTA, legal or credential routing SHALL run.
+
+#### Scenario: Confirm or cancel region
+- **WHEN** Continue is selected on Locale and region
+- **THEN** a confirmation names China or International, Cancel stays on the step
+  without saving region, and Confirm persists CN or the selected international
+  country and advances only after successful save
+
+### Requirement: Permission guidance without automatic requests
+
+MAIN-128 and SETTINGS-015 SHALL show once-only first-run permission guidance
+1500 ms after initial setup is ready on macOS. Guidance and reads SHALL never
+request global input, microphone or screen access. Permission actions SHALL
+require a user gesture, pin the management window through the existing shell
+permission-flow owner, refresh on focus and every 2000 ms, and keep denied,
+unknown and unsupported states truthful. Accessibility recovery SHALL offer
+Restart Now and Later through the shell's existing restart action. All automated
+verification SHALL inject permission probes, never change host permissions.
+
+#### Scenario: Guidance is read-only and refreshable
+- **WHEN** macOS setup opens for the first time
+- **THEN** guidance appears after 1500 ms at most once, no permission mutation
+  occurs, and a user can inspect denied and subsequently granted states
+
+#### Scenario: Explicit permission flow
+- **WHEN** a user selects a permission action
+- **THEN** its bounded request runs only from that gesture, status comes from a
+  fresh probe, and closing or hiding cannot discard the active flow
+- **AND** denied, failed or unavailable request APIs still open the selected permission's fixed System Settings pane; unexpected failures retain their typed diagnostic after that handoff
+
+### Requirement: QUAKE help and calibration boundaries
+
+SETTINGS-071 is explicitly excluded from QUAKE parity by Ramiro on 2026-10-26.
+It is an ARIS-only hover popover with placeholder text and no recovered QUAKE
+behavior. SETTINGS-072 SHALL keep QUAKE calibration unavailable and reject
+unrecognized generic/ARIS calibration requests before device writes.
+
+#### Scenario: ARIS placeholder is excluded
+- **WHEN** QUAKE settings render
+- **THEN** they do not expose the ARIS HelpTips placeholder
+
+#### Scenario: Unsupported calibration
+- **WHEN** a caller attempts generic or ARIS calibration for selected QUAKE
+- **THEN** schema/authorization rejects it and no hardware write occurs
+
+### Requirement: Management-owned setup window equivalent
+
+For SETTINGS-052, Ramiro approved on 2026-10-26 the existing setup page inside
+Management Center as the equivalent to the recovered fixed 920×680 native child.
+The management window SHALL own the page and its loading/error/retry state.
+Finish later SHALL return to Overview without completing setup. Reload SHALL
+read persisted progress and release stale lifecycle suppression. Explicit
+navigation SHALL remain available while a failed or pending setup read recovers.
+There is no second native window, so no empty child-window URL to recreate.
+
+#### Scenario: Leave and recover setup in its parent
+- **WHEN** the user selects Finish later and reloads the management renderer
+- **THEN** Overview is reachable, saved progress is unchanged, and a fresh startup
+  read can resume unfinished setup without a stale native child or prompt owner
+
+### Requirement: Selected-device setup handoff
+
+MGMT-042 and MGMT-044 SHALL use the canonical profile and selected-hardware
+owners. Connecting a serial SHALL resolve an existing visible profile using the
+owner's startup/reported/saved/fallback policy, deliver it before publishing its
+selection and return the same serial selection to the editor. Missing or invalid
+active references SHALL not publish a nonexistent profile. Switching settings
+devices SHALL use the shell's serial/session picker and remount device drafts;
+in-flight edits SHALL retain their original session and never write to the newly
+selected device. A user SHALL be able to return to the entrance while a save is
+pending. The selected-device settings picker is the existing independent design,
+not a second picker inside the strip/key editor.
+
+#### Scenario: Missing active selection at connection
+- **WHEN** a serial connects with a missing or invalid saved profile reference
+- **THEN** a valid visible fallback is delivered, its serial selection is
+  published and the profile editor reads the same active profile
+
+#### Scenario: Switch with an old device draft pending
+- **WHEN** a user leaves device settings and chooses a different serial/session
+- **THEN** the new device's saved state replaces the old draft, and settling the
+  old device request cannot mutate or overwrite the new device
+- **AND** the actual serial/session picker delegates selection to the canonical owner and remounts controls with the new session
 ### Requirement: Retained migration and host capability ownership
 
 The shell SHALL keep retained capabilities behind decoded, authenticated feature contracts with context isolation enabled and Node integration disabled. Plugin configuration and per-user ChatHistory migration SHALL preserve local durable data through their canonical feature owners, omit credentials, and never import transient selected-device, port or upgrade state. Missing plugin, camera, gaming, assistant-window or report owners SHALL remain explicit incomplete parity, rather than unimplemented successful replies. Evidence: MAIN-124, MAIN-129, MAIN-130, MAIN-133, MAIN-134, SCREEN-012.

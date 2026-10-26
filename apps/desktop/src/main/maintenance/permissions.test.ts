@@ -44,3 +44,121 @@ describe("live permissions", () => {
 		expect(permissionRows(checks)[0]?.status).toBe("granted");
 	});
 });
+
+it("SETTINGS-015 requests only a denied user-selected permission, refreshes status and skips a newly granted microphone deep link", async () => {
+	const { Effect } = await import("effect");
+	const { permissionAction } = await import("./permissions");
+	let microphone = false;
+	const checks = {
+		accessibility: () => true,
+		inputMonitoring: () => false,
+		microphone: () => microphone,
+		screenRecording: () => "unsupported",
+		systemAudio: () => undefined,
+	};
+	const request = vi.fn(async () => {
+		microphone = true;
+	});
+	const open = vi.fn(async () => {});
+	expect(
+		permissionRows(checks).find((row) => row.key === "screenRecording")?.status,
+	).toBe("unsupported");
+	expect(request).not.toHaveBeenCalled();
+	await Effect.runPromise(
+		permissionAction("microphone", { checks, request, open }),
+	);
+	expect(request).toHaveBeenCalledExactlyOnceWith("microphone");
+	expect(open).not.toHaveBeenCalled();
+	await Effect.runPromise(
+		permissionAction("accessibility", { checks, request, open }),
+	);
+	expect(request).toHaveBeenCalledOnce();
+	expect(open).toHaveBeenCalledExactlyOnceWith("accessibility");
+	await Effect.runPromise(
+		permissionAction("microphone", { checks, request, open }),
+	);
+	expect(request).toHaveBeenCalledOnce();
+	expect(open).toHaveBeenLastCalledWith("microphone");
+});
+it("SETTINGS-015 retains denied/unknown probes and typed scrubbed errors after a rejected request", async () => {
+	const { Effect } = await import("effect");
+	const { permissionAction } = await import("./permissions");
+	const checks = {
+		accessibility: () => false,
+		inputMonitoring: () => false,
+		microphone: () => false,
+		screenRecording: () => undefined,
+		systemAudio: () => undefined,
+	};
+	const original = new Error("private request cause");
+	const open = vi.fn(async () => {});
+	const result = await Effect.runPromise(
+		Effect.either(
+			permissionAction("inputMonitoring", {
+				checks,
+				request: async () => {
+					throw original;
+				},
+				open,
+			}),
+		),
+	);
+	expect(result._tag).toBe("Left");
+	if (result._tag === "Left") {
+		expect(result.left.code).toBe("QUAKE.SETTINGS.PERMISSION_PROBE_FAILED");
+		expect(result.left.originalCause).toBe(original);
+		expect(JSON.stringify(result.left)).not.toContain("private request cause");
+	}
+	expect(open).toHaveBeenCalledExactlyOnceWith("inputMonitoring");
+	expect(permissionRows(checks)[1]?.status).toBe("denied");
+});
+
+it.each(["microphone", "systemAudio"] as const)(
+	"SETTINGS-015 denied %s still opens its Settings pane",
+	async (key) => {
+		const { Effect } = await import("effect");
+		const { permissionAction } = await import("./permissions");
+		const checks = {
+			accessibility: () => false,
+			inputMonitoring: () => false,
+			microphone: () => false,
+			screenRecording: () => false,
+			systemAudio: () => false,
+		};
+		const request = vi.fn(async () => {});
+		const open = vi.fn(async () => {});
+		await Effect.runPromise(permissionAction(key, { checks, request, open }));
+		expect(request).toHaveBeenCalledExactlyOnceWith(key);
+		expect(open).toHaveBeenCalledExactlyOnceWith(key);
+		expect(permissionRows(checks).find((row) => row.key === key)?.status).toBe(
+			"denied",
+		);
+	},
+);
+it("SETTINGS-015 a rejected System Audio request opens Settings and retains the typed failure", async () => {
+	const { Effect } = await import("effect");
+	const { permissionAction } = await import("./permissions");
+	const checks = {
+		accessibility: () => false,
+		inputMonitoring: () => false,
+		microphone: () => false,
+		screenRecording: () => false,
+		systemAudio: () => undefined,
+	};
+	const cause = new Error("synthetic denied capture");
+	const open = vi.fn(async () => {});
+	const result = await Effect.runPromise(
+		Effect.either(
+			permissionAction("systemAudio", {
+				checks,
+				request: async () => {
+					throw cause;
+				},
+				open,
+			}),
+		),
+	);
+	expect(open).toHaveBeenCalledExactlyOnceWith("systemAudio");
+	expect(result._tag).toBe("Left");
+	if (result._tag === "Left") expect(result.left.originalCause).toBe(cause);
+});

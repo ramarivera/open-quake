@@ -539,3 +539,24 @@ it.scoped(
 			expect(disconnect).toHaveBeenCalledTimes(9);
 		}),
 );
+
+it.scoped(
+	"MAIN-056 wizard suppresses repeated orientation warnings and preserves Later after closing",
+	() =>
+		Effect.gen(function* () {
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(1));
+			const service = yield* makeDisplayPrompts(edges({ prompt }));
+			yield* service.check(portrait, false, true);
+			yield* TestClock.adjust(3000);
+			yield* service.check(portrait, false, true);
+			expect(prompt).not.toHaveBeenCalled();
+			yield* service.check(portrait, false, false);
+			yield* TestClock.adjust(2500);
+			yield* service.check(portrait, false, false);
+			expect(prompt).toHaveBeenCalledOnce();
+			yield* service.check(portrait, false, true);
+			yield* TestClock.adjust(1000);
+			yield* service.check(portrait, false, false);
+			expect(prompt).toHaveBeenCalledOnce();
+		}),
+);

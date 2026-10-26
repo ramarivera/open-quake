@@ -137,7 +137,15 @@
 				"darwin": "Quake display is in standard orientation. In macOS Displays settings, set Quake screen Rotation to 270°.",
 				"win32": "Quake display is in portrait orientation. In Windows Display settings, set Quake screen Orientation to Landscape.",
 				"other": "Portrait orientation detected. Please set the Quake display to landscape in your PC display settings."
-			}
+			},
+			"getStarted": "Get Started",
+			"serviceRegion": "Service region",
+			"china": "China",
+			"international": "International",
+			"regionConfirmTitle": "Confirm region selection",
+			"regionConfirmBody": "Please confirm your service region: {region}. Continue?",
+			"cancel": "Cancel",
+			"confirm": "Confirm"
 		},
 		"general": {
 			"heading": "General",
@@ -440,7 +448,15 @@
 				"darwin": "Das Quake-Display ist in Standardausrichtung. Stellen Sie in den macOS-Monitor-Einstellungen die Drehung des Quake-Bildschirms auf 270° ein.",
 				"win32": "Das Quake-Display ist im Hochformat. Stellen Sie in den Windows-Anzeigeeinstellungen die Ausrichtung des Quake-Bildschirms auf Querformat ein.",
 				"other": "Hochformat erkannt. Bitte stellen Sie das Quake-Display in den PC-Anzeigeeinstellungen auf Querformat."
-			}
+			},
+			"getStarted": "Los geht's",
+			"serviceRegion": "Dienstregion",
+			"china": "China",
+			"international": "International",
+			"regionConfirmTitle": "Region bestätigen",
+			"regionConfirmBody": "Bitte bestätige deine Dienstregion: {region}. Fortfahren?",
+			"cancel": "Abbrechen",
+			"confirm": "Bestätigen"
 		},
 		"general": {
 			"heading": "Allgemein",

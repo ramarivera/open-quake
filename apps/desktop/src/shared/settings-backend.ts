@@ -9,6 +9,8 @@ import type {
 
 export const SETTINGS_BACKEND_REQUEST = "settings:backend:rpc";
 export interface SettingsBackendBridge {
+	readonly development?: boolean;
+	readonly wizardDebug?: boolean;
 	readonly general: () => Promise<GeneralSnapshot>;
 	readonly saveGeneral: (preferences: GeneralPatch) => Promise<GeneralSnapshot>;
 	readonly loginStatus: () => Promise<boolean>;

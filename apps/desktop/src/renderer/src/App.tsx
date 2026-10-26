@@ -44,7 +44,9 @@ import { useAppTranslations } from "./i18n";
 import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
 import { settingsBridge } from "./settings/bridge";
 import { GeneralSettings } from "./settings/GeneralSettings";
+import { InstallationGuide } from "./settings/InstallationGuide";
 import { SetupResumeEntry, SetupWizard } from "./settings/SetupWizard";
+import { createSetupLaunch } from "./settings/setup-launch";
 import { useRuntimeChoice } from "./settings/setup-owners";
 import { createSetupStore } from "./settings/stores";
 
@@ -93,6 +95,14 @@ function ManagementSurface({
 	const settingsT = useAppTranslations("settings");
 	const [setup] = useState(() => createSetupStore(settingsBridge()));
 	const runtimeOption = useRuntimeChoice();
+	const [setupLaunch] = useState(() =>
+		createSetupLaunch(
+			localStorage,
+			window.quakeSettings?.development === true,
+			window.quakeSettings?.wizardDebug === true,
+		),
+	);
+	const [setupLaunchError, setSetupLaunchError] = useState("");
 	// Any explicit activation or navigation wins over first-run setup.
 	const navigated = useRef(
 		((query) => query.has("activeTab") || query.has("page"))(
@@ -158,12 +168,24 @@ function ManagementSurface({
 	const bridge = window.openQuake;
 	const connection = describeConnection(quake.connection, bridge !== undefined);
 	useEffect(() => {
-		// One read. An unfinished record opens setup unless the user already chose a page.
-		void setup.load().then((ok) => {
-			if (ok && !setup.getState().snapshot?.completed && !navigated.current)
-				setPage("setup");
+		let live = true;
+		void setup.load().then(async (ok) => {
+			const snapshot = setup.getState().snapshot;
+			if (!live || !ok || !snapshot || navigated.current) return;
+			try {
+				if (!setupLaunch.admit(snapshot, navigated.current)) return;
+				if (snapshot.completed && !(await setup.replay())) return;
+				if (live && !navigated.current) setPage("setup");
+			} catch {
+				setSetupLaunchError(
+					"First-run state could not be saved. Open setup from Settings to continue.",
+				);
+			}
 		});
-	}, [setup]);
+		return () => {
+			live = false;
+		};
+	}, [setup, setupLaunch]);
 	const open = (next: Page): void => {
 		navigated.current = true;
 		setPage(next);
@@ -202,18 +224,24 @@ function ManagementSurface({
 					/>
 				)}
 			>
+				{setupLaunchError ? <p role="alert">{setupLaunchError}</p> : null}
 				{/* Keep the diagnostic subscription alive while navigating pages. */}
 				<div hidden={page !== "connection"}>
 					<ConnectionCheck onReady={onReady} />
 				</div>
 				{page === "overview" ? (
-					<OverviewPage
-						quake={quake}
-						connection={connection}
-						snapshot={wallpaper.snapshot}
-						onOpenScreen={() => open("screen")}
-						onOpenConnection={() => open("connection")}
-					/>
+					<>
+						<OverviewPage
+							quake={quake}
+							connection={connection}
+							snapshot={wallpaper.snapshot}
+							onOpenScreen={() => open("screen")}
+							onOpenConnection={() => open("connection")}
+						/>
+						<div className="button-row setup-entrance-guide">
+							<InstallationGuide />
+						</div>
+					</>
 				) : page === "keys" ? (
 					<KeyEditor onOpenLibrary={setPage} />
 				) : page === "profiles" ? (
@@ -258,6 +286,7 @@ function ManagementSurface({
 					<SetupWizard
 						store={setup}
 						runtime={runtimeOption}
+						onOpenPermissions={() => open("settings")}
 						onLeave={() => open("overview")}
 					/>
 				) : page === "appearance" ? (
