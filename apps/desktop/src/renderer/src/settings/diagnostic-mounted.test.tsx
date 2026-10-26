@@ -124,6 +124,8 @@ it("MGMT-037 successful redetect notice expires at 2600ms while passing rows rem
 				status: command.action === "read" ? status : ready,
 			}),
 			onStatus: () => () => {},
+			displaySettingsAvailable: false,
+			layoutRepairAvailable: false,
 		} satisfies LifecycleBridge,
 	});
 	await mount(createElement(ConnectionCheck));
