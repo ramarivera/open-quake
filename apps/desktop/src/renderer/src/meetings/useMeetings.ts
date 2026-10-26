@@ -10,7 +10,7 @@ import { useAppLocale } from "../i18n";
 import { meetingFailure } from "./meeting-failure";
 
 interface MeetingView {
-	readonly errorCode?: string;
+	readonly errorCode?: string | undefined;
 	readonly snapshot: MeetingSnapshot | undefined;
 	readonly error: string;
 	readonly failureVersion: number;
@@ -32,6 +32,7 @@ function accept(value: unknown): void {
 		? {
 				...view,
 				error: "Meeting response was invalid",
+				errorCode: undefined,
 				failureVersion: view.failureVersion + 1,
 			}
 		: decoded.right._tag === "failure"
@@ -42,7 +43,12 @@ function accept(value: unknown): void {
 					failureVersion: view.failureVersion + 1,
 				}
 			: decoded.right._tag === "ready"
-				? { ...view, snapshot: decoded.right.snapshot, error: "" }
+				? {
+						...view,
+						snapshot: decoded.right.snapshot,
+						error: "",
+						errorCode: undefined,
+					}
 				: view;
 	for (const listener of listeners) listener();
 }

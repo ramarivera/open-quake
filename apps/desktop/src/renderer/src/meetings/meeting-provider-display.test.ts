@@ -106,3 +106,48 @@ it.each([
 		meetingFailure(code, "fallback", "en"),
 	);
 });
+
+it.each([
+	["AUDIO_MISSING", "Audio recording file is missing. Please record again."],
+	["AUDIO_EXPIRED", "Audio file expired and was deleted. Please record again."],
+	[
+		"TRANSCRIPT_MISSING",
+		"Transcription file is missing. Please retry transcription before regenerating.",
+	],
+	[
+		"NO_VALID_SPEECH",
+		"No valid speech detected. Please check the audio source and record again.",
+	],
+])("gives an actionable English recovery for %s", (suffix, message) => {
+	expect(meetingFailure(`QUAKE.MEETING.${suffix}`, "fallback", "en")).toBe(
+		message,
+	);
+});
+
+it("clears stale coded failures before invalid responses and ready replies", async () => {
+	const { useMeetings } = await import("./useMeetings");
+	let current: ReturnType<typeof useMeetings> | undefined;
+	function Probe() {
+		current = useMeetings();
+		return createElement("p", {}, current.error);
+	}
+	dom = meetingDom();
+	await dom.render(createElement(Probe));
+	await dom.emit({
+		_tag: "failure",
+		code: "QUAKE.MEETING.AUDIO_MISSING",
+		message: "Missing audio",
+	});
+	expect(current?.errorCode).toBe("QUAKE.MEETING.AUDIO_MISSING");
+	await dom.emit({ invalid: true });
+	expect(dom.host.textContent).toBe("Meeting response was invalid");
+	expect(current?.errorCode).toBeUndefined();
+	await dom.emit({
+		_tag: "failure",
+		code: "QUAKE.MEETING.AUDIO_MISSING",
+		message: "Missing audio",
+	});
+	await dom.push({});
+	expect(current?.error).toBe("");
+	expect(current?.errorCode).toBeUndefined();
+});

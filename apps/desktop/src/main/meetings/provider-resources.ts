@@ -9,6 +9,7 @@ import {
 } from "../../../../../packages/edge/src/ai/speech/meeting-resources";
 import {
 	isMeetingError,
+	type MeetingError,
 	meetingError,
 } from "../../../../../packages/edge/src/meetings/meeting-errors";
 import {
@@ -53,36 +54,62 @@ export function meetingResources(
 					Effect.logWarning("Meeting temporary audio cleanup failed", error),
 				),
 			);
-			yield* io(async (signal) => {
-				await privateOutput(path);
-				await new Promise<void>((resolve, reject) => {
-					const child = spawn(
-						ffmpeg,
-						[
-							"-nostdin",
-							"-v",
-							"error",
-							"-y",
-							"-i",
-							input,
-							"-ac",
-							"1",
-							"-ar",
-							format === "pcm" ? "24000" : "48000",
-							...(format === "pcm"
-								? ["-f", "s16le", "-acodec", "pcm_s16le"]
-								: ["-codec:a", "libmp3lame"]),
-							path,
-						],
-						{ signal, stdio: "ignore", timeout: 120000 },
-					);
-					child.once("error", reject);
-					child.once("close", (code) =>
-						code === 0 ? resolve() : reject(meetingError("CaptureFailed")),
-					);
+			yield* Effect.async<void, MeetingError>((resume) => {
+				const controller = new AbortController();
+				let closed: Promise<void> | undefined;
+				const work = (async () => {
+					const signal = controller.signal;
+					if (signal.aborted) return;
+					await privateOutput(path);
+					if (signal.aborted) return;
+					await new Promise<void>((resolve, reject) => {
+						const child = spawn(
+							ffmpeg,
+							[
+								"-nostdin",
+								"-v",
+								"error",
+								"-y",
+								"-i",
+								input,
+								"-ac",
+								"1",
+								"-ar",
+								format === "pcm" ? "24000" : "48000",
+								...(format === "pcm"
+									? ["-f", "s16le", "-acodec", "pcm_s16le"]
+									: ["-codec:a", "libmp3lame"]),
+								path,
+							],
+							{ signal, stdio: "ignore" },
+						);
+						closed = new Promise<void>((resolve) =>
+							child.once("close", () => resolve()),
+						);
+						child.once("error", reject);
+						child.once("close", (code) =>
+							code === 0 ? resolve() : reject(meetingError("CaptureFailed")),
+						);
+					});
+					const stat = await lstat(path);
+					if (!stat.isFile() || !stat.size) throw meetingError("CaptureFailed");
+				})();
+				work.then(
+					() => resume(Effect.void),
+					(cause) =>
+						resume(
+							Effect.fail(
+								isMeetingError(cause)
+									? cause
+									: meetingError("StorageFailed", cause),
+							),
+						),
+				);
+				return Effect.promise(async () => {
+					controller.abort();
+					await closed;
+					await work.catch(() => undefined);
 				});
-				const stat = await lstat(path);
-				if (!stat.isFile() || !stat.size) throw meetingError("CaptureFailed");
 			}).pipe(
 				Effect.onError(() => release),
 				Effect.retry({

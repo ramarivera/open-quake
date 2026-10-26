@@ -87,7 +87,7 @@ export function dashscopeFiletrans(options: {
 			if (!key || key.includes("..") || key.length > 2048)
 				return yield* meetingError("TranscriptionFailed");
 			yield* Effect.acquireUseRelease(
-				resources.audio(ref),
+				resources.audio(ref).pipe(Effect.interruptible),
 				({ blob }) =>
 					Effect.gen(function* () {
 						const form = new FormData();
@@ -102,10 +102,17 @@ export function dashscopeFiletrans(options: {
 						}))
 							form.append(name, value);
 						form.append("file", blob, "meeting.mp3");
-						const response = yield* meetingRequest(http, uploadUrl, {
-							method: "POST",
-							body: form,
-						});
+						// Budget uploads at 64 kB/s plus setup; the outer ASR deadline
+						// still bounds conversion, transfer, task submission and polling together.
+						const response = yield* meetingRequest(
+							http,
+							uploadUrl,
+							{
+								method: "POST",
+								body: form,
+							},
+							Math.min(1800000, 30000 + Math.ceil(blob.size / 64000) * 1000),
+						);
 						if (!response.ok) return yield* meetingError("TranscriptionFailed");
 						yield* Effect.promise(
 							() => response.body?.cancel() ?? Promise.resolve(),
@@ -192,6 +199,7 @@ export function dashscopeFiletrans(options: {
 			yield* resources.save(request.audioRef, state);
 		}
 		if (state.task) return request.audioRef;
+		state = { ...state, internalRetries: 0 };
 		if (
 			!state.upload ||
 			state.upload.expiresAt <= (yield* Clock.currentTimeMillis)
