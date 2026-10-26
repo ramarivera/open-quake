@@ -29,9 +29,12 @@ The root acquires the graph before activating IPC consumers and loads renderers
 after registrations. Recreated panel and management windows still load their
 surfaces. Wallpaper delegates quit ownership to the root. Shutdown attempts every
 ordered registration cleanup even if an earlier one fails, awaits graph disposal,
-then flushes diagnostics. Maintenance reset and import stop writers before changing
-owned data, settle their request before closing its execution view, dispose the
-graph and exit. Firmware shutdown prevents new work and joins its worker before
+then flushes diagnostics. Maintenance reset and import finish their graph-bound
+request effect before main runs the confirmed replacement. Main stops all writers
+and awaits graph finalizers before clearing or replacing owned data, so a late
+persistence finalizer cannot recreate deleted records or overwrite imported data.
+The replacement uses an IO-only diagnostic effect outside the disposed graph;
+failures retain their catalog identity, and diagnostics flush before native exit. Firmware shutdown prevents new work and joins its worker before
 releasing security bookmarks.
 
 The runtime registry and conversation service participate in the same graph.

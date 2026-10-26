@@ -529,7 +529,24 @@ if (!app.requestSingleInstanceLock()) {
 							renderer: rendererURL,
 							hardware: () => bus?.hardware?.(),
 							management: () => managementWin,
-							stopWriters: () => stopWriters(true),
+							stopWriters: async () => {
+								const failures: unknown[] = [];
+								for (const stop of [
+									() => stopWriters(true),
+									() => background.dispose(),
+									() => application.dispose(),
+								]) {
+									try {
+										await stop();
+									} catch (cause) {
+										failures.push(cause);
+									}
+								}
+								if (failures.length)
+									throw new MaintenanceShutdownFailed(
+										new AggregateError(failures),
+									);
+							},
 							exit: async (code) => {
 								try {
 									await background.dispose();
