@@ -24,7 +24,7 @@ import { startMockDeviceBus } from "./mockDeviceBus";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
 import { makeDisplay } from "./test/display";
-import { report } from "./test/hid";
+import { makeTwoStrips, report } from "./test/hid";
 import { registerVoiceSurface } from "./voice";
 import { registerWeatherMedia } from "./weather-media";
 
@@ -296,7 +296,7 @@ vi.mock("./knob", async () => {
 	const { prepareDesktopModule } = await import("./diagnostics/module");
 	const registration = {
 		registerKnob: vi.fn((..._args: unknown[]) => ({
-			onDevice: () => {},
+			onDevice: vi.fn(async (_event: unknown) => {}),
 			refresh: () => Promise.resolve(),
 			dispose: vi.fn(async () => {}),
 		})),
@@ -1155,6 +1155,97 @@ describe("desktop main with the real device service and fake HID", () => {
 			appEvent("before-quit");
 			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
 			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("routes secondary touch and knob input to its own panel and input consumers", async () => {
+		vi.useFakeTimers();
+		try {
+			const two = await Effect.runPromise(makeTwoStrips);
+			native.layer = two.layer;
+			const primary = makeDisplay();
+			const a = makeDisplay({
+				id: 2,
+				label: "DK-QUAKE",
+				size: { width: 1920, height: 480 },
+			});
+			const b = makeDisplay({
+				...a,
+				id: 3,
+				bounds: { x: 1920, y: 0, width: 1920, height: 480 },
+			});
+			electron.screen.getAllDisplays.mockReturnValue([primary, a]);
+			await import("./index");
+			await vi.waitFor(() =>
+				expect(
+					electron.BrowserWindow.windows
+						.filter((w) => w.options.title === "open-quake panel")
+						.at(-1)?.setBounds,
+				).toHaveBeenLastCalledWith(a.bounds),
+			);
+			await vi.waitFor(() =>
+				expect(windows().management.webContents.send).toHaveBeenCalledWith(
+					"quake:diagnostic",
+					expect.objectContaining({ hdmi: "pass", checking: false }),
+				),
+			);
+			const first = electron.BrowserWindow.windows
+				.filter((w) => w.options.title === "open-quake panel")
+				.at(-1);
+			two.devices.push(two.b);
+			electron.screen.getAllDisplays.mockReturnValue([primary, a, b]);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.waitFor(() =>
+				expect(
+					electron.BrowserWindow.windows
+						.filter((w) => w.options.title === "open-quake panel")
+						.at(-1)?.setBounds,
+				).toHaveBeenLastCalledWith(b.bounds),
+			);
+			const second = electron.BrowserWindow.windows
+				.filter((w) => w.options.title === "open-quake panel")
+				.at(-1);
+			expect(second).not.toBe(first);
+			const knob = vi.mocked(registerKnob).mock.results.at(-1)?.value;
+			first?.webContents.send.mockClear();
+			second?.webContents.send.mockClear();
+			vi.mocked(knob?.onDevice ?? vi.fn()).mockClear();
+			await Effect.runPromise(two.second.emit(report(3, 1, [1])));
+			await Effect.runPromise(
+				two.second.emit(report(0xa3, 26, [1, 2, 0x34, 1, 0x78, 5])),
+			);
+			await vi.waitFor(() =>
+				expect(second?.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "touch",
+					points: [{ action: 2, x: 1400, y: 308 }],
+				}),
+			);
+			expect(second?.webContents.send).toHaveBeenCalledWith("quake:event", {
+				source: "hid",
+				kind: "rotate",
+				direction: 1,
+			});
+			expect(first?.webContents.send).not.toHaveBeenCalledWith(
+				"quake:event",
+				expect.objectContaining({ kind: "touch" }),
+			);
+			expect(first?.webContents.send).not.toHaveBeenCalledWith(
+				"quake:event",
+				expect.objectContaining({ kind: "rotate" }),
+			);
+			await vi.waitFor(() =>
+				expect(knob?.onDevice).toHaveBeenCalledWith({
+					source: "hid",
+					kind: "rotate",
+					direction: 1,
+				}),
+			);
+			expect(vi.mocked(registerKnob).mock.calls.at(-1)?.[0]()).toBe(second);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
 		}
 	});
 

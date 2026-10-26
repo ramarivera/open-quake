@@ -934,38 +934,77 @@ if (!app.requestSingleInstanceLock()) {
 												});
 												yield* Effect.addFinalizer(() => Effect.sync(off));
 											}
-											const forward = createEventForwarder(
-												() => [panelWin, managementWin],
-												() => [panelWin],
-											);
-											bus.on((event) => {
-												// Gate new holds synchronously and cancel in main before
-												// renderer touch teardown can synthesize a normal release.
-												void voice.onDevice(event);
-												forward(event);
-												if (event.kind === "status") {
-													const serial = bus?.serial?.() ?? activeDeviceId();
-													if (!bus?.onLifecycleStatus)
-														void lifecycle.then((service) =>
-															lifecycleRuntime.runPromise(
-																service.onStatus(event, serial),
-															),
-														);
-													if (!mock)
-														void resetKeysOnLinkLoss(
-															event,
-															profiles.resetKeys,
-														).catch(() => {});
-													if (mock) {
-														const operation =
-															event.state === "connected"
-																? profiles.connect("desktop-preview")
-																: profiles.disconnect("desktop-preview");
-														void operation.catch(() => {});
+											const owner = bus;
+											let input = Promise.resolve();
+											bus.on(
+												(
+													event,
+													serial = owner.serial?.() ?? activeDeviceId(),
+												) => {
+													// Gate new holds synchronously and cancel in main before
+													// renderer touch teardown can synthesize a normal release.
+													if (event.kind === "status")
+														void voice.onDevice(event);
+													const target =
+														stripWindows.get(serial)?.win ??
+														(serial === (owner.serial?.() ?? activeDeviceId())
+															? panelWin
+															: undefined);
+													createEventForwarder(
+														() =>
+															target
+																? [target, managementWin]
+																: [managementWin],
+														() => (target ? [target] : []),
+													)(event);
+													if (event.kind !== "keepalive") {
+														input = input
+															.then(async () => {
+																if (bus !== owner) return;
+																const changed = activeDeviceId() !== serial;
+																if (
+																	event.kind !== "status" ||
+																	event.state === "connected"
+																) {
+																	activeSerial = serial;
+																	const owned = stripWindows.get(serial);
+																	if (owned) {
+																		panelWin = owned.win;
+																		panelTarget = owned.target;
+																	}
+																	if (changed) await knob.refresh();
+																}
+																if (event.kind !== "status")
+																	await voice.onDevice(event);
+																await knob.onDevice(event);
+															})
+															.catch(() => {});
 													}
-												}
-											});
-											bus.on(knob.onDevice);
+													if (event.kind === "status") {
+														if (!bus?.onLifecycleStatus)
+															void lifecycle.then((service) =>
+																lifecycleRuntime.runPromise(
+																	service.onStatus(event, serial),
+																),
+															);
+														if (!mock)
+															void resetKeysOnLinkLoss(
+																event,
+																profiles.resetKeys,
+															).catch(() => {});
+														if (mock) {
+															const operation =
+																event.state === "connected"
+																	? profiles.connect("desktop-preview")
+																	: profiles.disconnect("desktop-preview");
+															void operation.catch(() => {});
+														}
+													}
+												},
+											);
+											yield* Effect.addFinalizer(() =>
+												Effect.promise(() => input),
+											);
 											yield* Effect.never;
 										}),
 									),

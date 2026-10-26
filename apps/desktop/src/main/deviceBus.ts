@@ -18,7 +18,7 @@ import type {
 export type { QuakeEvent } from "../preload/quake";
 
 export type DeviceBus = {
-	on(listener: (event: QuakeEvent) => void): () => void;
+	on(listener: (event: QuakeEvent, serial?: string) => void): () => void;
 	currentStatus(): DeviceStatusEvent | undefined;
 	serial?(): string | undefined;
 	onLifecycleStatus?: (
@@ -55,7 +55,9 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		if (serial)
 			for (const listener of lifecycleListeners) listener(event, serial);
 	};
-	const emitter = new EventEmitter<{ event: [event: QuakeEvent] }>();
+	const emitter = new EventEmitter<{
+		event: [event: QuakeEvent, serial?: string];
+	}>();
 	let status: DeviceStatusEvent | undefined;
 	let lastSerial: string | undefined;
 	let sequence = 0;
@@ -84,7 +86,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 				status = event;
 				publishLifecycle(event, lastSerial ?? "desktop-preview");
 			}
-			emitter.emit("event", event);
+			emitter.emit("event", event, lastSerial);
 		});
 	const reportError = (error: DeviceStatusError): Effect.Effect<void> =>
 		publish({
@@ -296,6 +298,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 							secondary.set(serial, { bus: child, scope: childScope });
 							child.on((event) => {
 								if (event.kind === "status") publishLifecycle(event, serial);
+								emitter.emit("event", event, serial);
 							});
 						}
 					}),
@@ -314,7 +317,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	const primary: DeviceBus = {
 		on(listener) {
 			emitter.on("event", listener);
-			if (status) listener(status);
+			if (status) listener(status, lastSerial);
 			return () => emitter.off("event", listener);
 		},
 		currentStatus: () => status,

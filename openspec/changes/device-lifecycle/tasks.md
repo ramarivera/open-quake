@@ -51,7 +51,7 @@
 ## 9. PR #86 single bot-review fix round
 
 - [x] 9.1 Fix Linux panel type regression and assert each platform. Bead `open-quake-lih.11.6`. Hosted run 40332287050.
-- [ ] 9.2 Forward secondary strip input to its serial panel. Bead `open-quake-lih.11.7`. Devin 4377860557.
+- [x] 9.2 Forward secondary strip input to its serial panel. Bead `open-quake-lih.11.7`. Devin 4377860557.
 - [ ] 9.3 Attach secondary hardware sessions and enroll serial profiles. Bead `open-quake-lih.11.8`. Devin 4377860703.
 - [ ] 9.4 Select a surviving strip when the selected panel closes. Bead `open-quake-lih.11.9`. Devin 4377860894.
 - [ ] 9.5 Reject recycled display identities on grace reconnect. Bead `open-quake-lih.11.10`. Devin 4377861513.
