@@ -9,9 +9,10 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { Context, Effect, Either, Layer, Option, Schema } from "effect";
-import type {
-	ClockMediaView,
-	ClockSnapshot,
+import {
+	type ClockMediaView,
+	type ClockSnapshot,
+	ClockTarget,
 } from "../../shared/clock-contracts";
 import {
 	ClockConfigInvalid,
@@ -36,10 +37,12 @@ import {
 	type ThemePatchReason,
 } from "../../shared/clock-style";
 
+import { ClockProfiles } from "./clock-profiles";
+
 /**
- * `<userData>/clock-v1/clock.json`: DK-Suite's cell shape for the clock
- * profile, so profile wiring can later move these actions into the profile
- * key verbatim. Only main reads custom media paths.
+ * DK-Suite's cell shape projected from a canonical profile key. Standalone
+ * compatibility consumers use `<userData>/clock-v1/clock.json`.
+ * Only main reads custom media paths.
  */
 const ClockActionSchema = Schema.Struct({
 	type: Schema.String,
@@ -54,6 +57,7 @@ const ClockKeySchema = Schema.Struct({
 	}),
 });
 export const ClockRecord = Schema.Struct({
+	target: Schema.optionalWith(ClockTarget, { exact: true }),
 	version: Schema.Literal(1),
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 	keys: Schema.Array(ClockKeySchema),
@@ -174,9 +178,7 @@ function updateAction(
 	type: string,
 	update: (value: unknown) => unknown,
 ): readonly ClockKey[] {
-	const index = keys.findIndex(
-		(key) => key.keyCode === CLOCK_KEY_CODE && isClockKey(key),
-	);
+	const index = keys.findIndex((key) => isClockKey(key));
 	const fallback = defaultClockRecord.keys[0];
 	const target = keys[index] ?? fallback;
 	if (!target) return keys;
@@ -249,13 +251,20 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 	accessors: true,
 	effect: Effect.gen(function* () {
 		const root = yield* ClockRoot;
+		const profiles = yield* Effect.serviceOption(ClockProfiles);
 		const files = yield* ClockFiles;
 		const videoProbe = yield* ClockVideoProbe;
 		const file = join(root, "clock-v1", "clock.json");
 		const lock = yield* Effect.makeSemaphore(1);
 		const candidates = new Map<
 			string,
-			{ themeId: ThemeId; path: string; kind: MediaKind; probing: boolean }
+			{
+				themeId: ThemeId;
+				path: string;
+				kind: MediaKind;
+				probing: boolean;
+				target?: ClockTarget;
+			}
 		>();
 
 		// Highest revision this process has seen. A recovered or deleted file falls
@@ -267,7 +276,9 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 			return { ...loaded, record: { ...loaded.record, revision: highWater } };
 		};
 
-		const load = Effect.fn("ClockStore.load")(function* () {
+		const load = Effect.fn("ClockStore.load")(function* (target?: ClockTarget) {
+			if (Option.isSome(profiles))
+				return { record: yield* profiles.value.read(target), recovered: false };
 			return monotonic(yield* loadFile());
 		});
 
@@ -301,9 +312,7 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 			recovered: boolean,
 		) {
 			const key =
-				record.keys.find(
-					(k) => k.keyCode === CLOCK_KEY_CODE && isClockKey(k),
-				) ?? defaultClockRecord.keys[0];
+				record.keys.find((k) => isClockKey(k)) ?? defaultClockRecord.keys[0];
 			const actions = key?.config.actions ?? [];
 			const style = normalizeClockStyle(
 				actions.find((a) => a.type === "clockStyle")?.value,
@@ -315,11 +324,16 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 				media[id] = {
 					kind: slot.kind,
 					name: basename(slot.path),
-					url: `oq-clock-media://theme/${id}?r=${record.revision}`,
+					url: `oq-clock-media://theme/${id}?r=${record.revision}${record.target ? `&t=${encodeURIComponent(JSON.stringify(record.target))}` : ""}`,
 					available: yield* files.exists(slot.path),
 				};
 			}
 			const snapshot: ClockSnapshot = {
+				...(record.target ? { target: record.target } : {}),
+				hourFormat:
+					actions.find((a) => a.type === "hourFormat")?.value === "12h"
+						? "12h"
+						: "24h",
 				revision: record.revision,
 				keyCode: key?.keyCode ?? CLOCK_KEY_CODE,
 				mode: style.background.mode,
@@ -335,27 +349,33 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 		const save = (record: ClockRecord, keys: readonly ClockKey[]) => {
 			const next: ClockRecord = {
 				...record,
-				revision: Math.max(record.revision, highWater) + 1,
+				revision:
+					(Option.isSome(profiles)
+						? record.revision
+						: Math.max(record.revision, highWater)) + 1,
 				keys,
 			};
-			return files
-				.writeAtomic(file, `${JSON.stringify(next, null, "\t")}\n`)
-				.pipe(
-					Effect.tap(() =>
-						Effect.sync(() => {
-							highWater = Math.max(highWater, next.revision);
-						}),
-					),
-					Effect.as(next),
-				);
+			return (
+				Option.isSome(profiles)
+					? profiles.value.write(next)
+					: files.writeAtomic(file, `${JSON.stringify(next, null, "\t")}\n`)
+			).pipe(
+				Effect.tap(() =>
+					Effect.sync(() => {
+						highWater = Math.max(highWater, next.revision);
+					}),
+				),
+				Effect.as(next),
+			);
 		};
 
 		const mutate = (
 			update: (keys: readonly ClockKey[]) => readonly ClockKey[],
+			target?: ClockTarget,
 		): Effect.Effect<ClockSnapshot, ClockPersistenceFailed> =>
 			lock.withPermits(1)(
 				Effect.gen(function* () {
-					const { record } = yield* load();
+					const { record } = yield* load(target);
 					const keys = update(record.keys);
 					if (JSON.stringify(keys) === JSON.stringify(record.keys))
 						return yield* project(record, false);
@@ -363,8 +383,8 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 				}),
 			);
 
-		const read = Effect.fn("ClockStore.read")(function* () {
-			const { record, recovered } = yield* load();
+		const read = Effect.fn("ClockStore.read")(function* (target?: ClockTarget) {
+			const { record, recovered } = yield* load(target);
 			return yield* project(record, recovered);
 		});
 
@@ -373,10 +393,11 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 			(
 				keyCode: string,
 				themeId: string,
+				target?: ClockTarget,
 			): Effect.Effect<SetThemeOutcome, ClockPersistenceFailed> =>
 				lock.withPermits(1)(
 					Effect.gen(function* () {
-						const { record } = yield* load();
+						const { record } = yield* load(target);
 						const patch = buildClockThemePatch(record.keys, keyCode, themeId);
 						if (!patch.ok) return setThemeFailed(patch.reason);
 						if (!patch.changed)
@@ -388,22 +409,45 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 				),
 		);
 
-		const setMode = Effect.fn("ClockStore.setMode")((mode: "none" | "theme") =>
-			mutate((keys) =>
-				updateBackground(keys, (background) => ({ ...v04(background), mode })),
-			),
+		const setMode = Effect.fn("ClockStore.setMode")(
+			(mode: "none" | "theme", target?: ClockTarget) =>
+				mutate(
+					(keys) =>
+						updateBackground(keys, (background) => ({
+							...v04(background),
+							mode,
+						})),
+					target,
+				),
 		);
 
 		const setSeconds = Effect.fn("ClockStore.setSeconds")(
-			(showSeconds: boolean) =>
-				mutate((keys) => updateAction(keys, "showSeconds", () => showSeconds)),
+			(showSeconds: boolean, target?: ClockTarget) =>
+				mutate(
+					(keys) => updateAction(keys, "showSeconds", () => showSeconds),
+					target,
+				),
 		);
 
-		const commitSlot = (themeId: ThemeId, slot: ClockMediaSlot | null) =>
-			mutate((keys) =>
-				updateBackground(keys, (background) =>
-					withSlot(background, themeId, slot),
+		const setHourFormat = Effect.fn("ClockStore.setHourFormat")(
+			(hourFormat: "12h" | "24h", target?: ClockTarget) =>
+				mutate(
+					(keys) => updateAction(keys, "hourFormat", () => hourFormat),
+					target,
 				),
+		);
+
+		const commitSlot = (
+			themeId: ThemeId,
+			slot: ClockMediaSlot | null,
+			target?: ClockTarget,
+		) =>
+			mutate(
+				(keys) =>
+					updateBackground(keys, (background) =>
+						withSlot(background, themeId, slot),
+					),
+				target,
 			);
 
 		/**
@@ -413,17 +457,27 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 		const stageMedia = Effect.fn("ClockStore.stageMedia")(function* (
 			themeId: ThemeId,
 			path: string,
+			target?: ClockTarget,
 		) {
 			const kind = mediaKindOfPath(path);
 			if (!kind || !(yield* files.exists(path)))
 				return yield* ClockMediaUnusable.fromCause(undefined);
 			if (kind === "image") {
-				const snapshot = yield* commitSlot(themeId, { kind, path });
+				const snapshot = yield* commitSlot(themeId, { kind, path }, target);
 				return { _tag: "saved", snapshot } as const;
 			}
 			const token = randomBytes(16).toString("hex");
 			candidates.clear();
-			candidates.set(token, { themeId, path, kind, probing: false });
+			const pinned = Option.isSome(profiles)
+				? (yield* load(target)).record.target
+				: target;
+			candidates.set(token, {
+				themeId,
+				path,
+				kind,
+				probing: false,
+				...(pinned ? { target: pinned } : {}),
+			});
 			const candidate: MediaCandidate = {
 				token,
 				themeId,
@@ -447,26 +501,31 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 				return yield* ClockMediaUnusable.fromCause(undefined);
 			if (!(durationMs >= MIN_VIDEO_MS))
 				return yield* ClockMediaTooShort.fromCause(undefined);
-			return yield* commitSlot(candidate.themeId, {
-				kind: candidate.kind,
-				path: candidate.path,
-			});
+			return yield* commitSlot(
+				candidate.themeId,
+				{
+					kind: candidate.kind,
+					path: candidate.path,
+				},
+				candidate.target,
+			);
 		});
 
 		const restoreMedia = Effect.fn("ClockStore.restoreMedia")(
-			(themeId: ThemeId) => commitSlot(themeId, null),
+			(themeId: ThemeId, target?: ClockTarget) =>
+				commitSlot(themeId, null, target),
 		);
 
 		/** For the media protocol: a theme's saved file or a staged candidate. */
 		const mediaPath = Effect.fn("ClockStore.mediaPath")(function* (
-			target: { readonly theme: string } | { readonly candidate: string },
+			target:
+				| { readonly theme: string; readonly target?: ClockTarget }
+				| { readonly candidate: string },
 		) {
 			if ("candidate" in target)
 				return Option.fromNullable(candidates.get(target.candidate)?.path);
-			const { record } = yield* load();
-			const key = record.keys.find(
-				(k) => k.keyCode === CLOCK_KEY_CODE && isClockKey(k),
-			);
+			const { record } = yield* load(target.target);
+			const key = record.keys.find((k) => isClockKey(k));
 			const style = normalizeClockStyle(
 				key?.config.actions.find((a) => a.type === "clockStyle")?.value,
 			);
@@ -478,6 +537,7 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 
 		return {
 			read,
+			setHourFormat,
 			setTheme,
 			setMode,
 			setSeconds,

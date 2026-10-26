@@ -33,10 +33,6 @@ const borderOptions: ReadonlyArray<SegmentOption<"on" | "off">> = [
 	{ value: "on", label: "On" },
 	{ value: "off", label: "Off" },
 ];
-const hourOptions: ReadonlyArray<SegmentOption<HourFormat>> = [
-	{ value: "24h", label: "24-hour" },
-	{ value: "12h", label: "12-hour" },
-];
 
 /** Management view. The controller is shared with the overview preview. */
 export function WallpaperSettings({
@@ -184,19 +180,6 @@ export function WallpaperSettings({
 						options={fillOptions}
 						disabled={disabled}
 						onChange={(fill) => configure(fill, hourFormat)}
-					/>
-				</Row>
-			</Group>
-
-			<Group title="Clock">
-				<Row label="Time format" labelId={`${ids}-clock`}>
-					<Segmented
-						name={`${ids}-clock`}
-						labelledBy={`${ids}-clock`}
-						value={hourFormat}
-						options={hourOptions}
-						disabled={disabled}
-						onChange={(hours) => configure(fillMode, hours)}
 					/>
 				</Row>
 			</Group>

@@ -1,9 +1,9 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, Stream } from "effect";
+import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { app, BrowserWindow, ipcMain } from "electron";
 import {
-	type ProfileEnvelope,
+	ProfileEnvelope,
 	type ProfileRepositoryError,
 	ProfileService,
 	type ProfileStoragePort,
@@ -16,6 +16,7 @@ import {
 	type ProfileSnapshotReply,
 } from "../../shared/profile-snapshot-contracts";
 import type { DesktopRuntime } from "../diagnostics/module";
+import { encodeRendererProfiles } from "./clock-profile-projection";
 import { createDesktopProfileStorage } from "./local-profile-storage";
 
 export const ProfilesLive = (
@@ -37,7 +38,9 @@ export const profileFailure = (
 });
 const ready = (envelope: ProfileEnvelope): ProfileSnapshotReply => ({
 	_tag: "ready",
-	envelope,
+	envelope: Schema.decodeUnknownSync(ProfileEnvelope)(
+		encodeRendererProfiles(envelope),
+	),
 });
 
 /** Same origin and path as the app's renderer, top-level frame only. */

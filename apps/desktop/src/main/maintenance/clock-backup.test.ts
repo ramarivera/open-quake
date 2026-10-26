@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
 	chmod,
 	mkdir,
@@ -10,19 +11,183 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, ManagedRuntime, Option } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { expect, it } from "vitest";
+import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	Profile,
+	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import {
+	ProfileRepository,
+	profileStorageLayer,
+} from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { BackupFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
-import { ClockLive, ClockStore } from "../clock/clock-store";
+import { defaultClockTile, defaultWallpaper } from "../../shared/display";
+import {
+	ClockLive,
+	ClockStore,
+	defaultClockRecord,
+} from "../clock/clock-store";
+import { clockProfileLayer } from "../profiles/clock-profile-binding";
+import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
 import { readBackup } from "./backup-archive";
 import { exportBackup, prepareRestore } from "./backup-store";
 
 const profiles = () =>
 	JSON.stringify(encodeProfileEnvelope(createInitialProfileEnvelope()));
+
+it.each(["deleted-media", "invalid-record", "unused-asset"])(
+	"ignores abandoned legacy %s after migration and restores every canonical profile clock",
+	async (abandoned) => {
+		const scratch = await mkdtemp(join(tmpdir(), "profile-clock-backup-"));
+		const source = join(scratch, "source");
+		const destination = join(scratch, "destination");
+		await Promise.all([source, destination].map((path) => mkdir(path)));
+		const image = join(scratch, "profile-image.png");
+		await mkdir(join(source, "clock-v1"));
+		await writeFile(
+			join(source, "clock-v1/clock.json"),
+			JSON.stringify({
+				...defaultClockRecord,
+				keys: defaultClockRecord.keys.map((k) => ({
+					...k,
+					config: {
+						...k.config,
+						actions: [
+							{
+								type: "clockStyle",
+								value: {
+									background: {
+										mode: "theme",
+										themeId: "season",
+										themes: {
+											season: {
+												kind: "image",
+												path: join(scratch, "deleted-legacy.png"),
+											},
+										},
+									},
+								},
+							},
+						],
+					},
+				})),
+			}),
+		);
+		await writeFile(image, "profile-clock-image");
+		const preset = builtinProfiles("darwin").find((p) =>
+			p.pages.some((page) =>
+				page.keys.some((k) => k.config.type === "dkDesktopClock"),
+			),
+		);
+		if (!preset) throw new Error("Clock fixture missing");
+		const first = Schema.encodeSync(Profile)(preset);
+		const second = { ...first, id: "second-clock" };
+		const envelope = {
+			schemaVersion: 1,
+			clockConfigVersion: 1,
+			profiles: [first, second],
+			activeByDevice: {},
+		};
+		const owner = (root: string) =>
+			ManagedRuntime.make(
+				ProfileRepository.Default.pipe(
+					Layer.provide(
+						profileStorageLayer(
+							createDesktopProfileStorage(join(root, "profiles-v1.json")),
+						),
+					),
+				),
+			);
+		await writeFile(join(source, "profiles-v1.json"), JSON.stringify(envelope));
+		await writeFile(join(destination, "profiles-v1.json"), profiles());
+		const repository = owner(source);
+		const clocks = ManagedRuntime.make(
+			ClockLive(source, { duration: () => Effect.succeed(3000) }).pipe(
+				Layer.provide(clockProfileLayer(repository)),
+			),
+		);
+		try {
+			for (const profile of [first, second]) {
+				const target = {
+					profileId: profile.id,
+					pageId: profile.pages[0].id,
+					keyCode: "1,1",
+				};
+				await clocks.runPromise(ClockStore.stageMedia("season", image, target));
+				if (profile.id === first.id)
+					await clocks.runPromise(ClockStore.setHourFormat("12h", target));
+			}
+			if (abandoned === "invalid-record")
+				await writeFile(join(source, "clock-v1/clock.json"), "corrupt");
+			if (abandoned === "unused-asset") {
+				await mkdir(join(source, "clock-v1/assets"));
+				await writeFile(join(source, "clock-v1/assets/unused.png"), "unused");
+			}
+			const archive = await exportBackup(source);
+			const entries = await readBackup(archive, "canonical.zip");
+			expect(entries.has("open-quake/clock-v1/clock.json")).toBe(false);
+			expect(entries.has("open-quake/clock-v1/assets/unused.png")).toBe(false);
+			await clocks.dispose();
+			await repository.dispose();
+			await rm(image);
+			await rm(source, { recursive: true });
+			const restore = await prepareRestore(archive, "profile-clocks.zip");
+			await restore.validate(destination);
+			await restore.commit(destination);
+			const restoredEnvelope = Schema.decodeUnknownSync(ProfileEnvelope)(
+				JSON.parse(
+					await readFile(join(destination, "profiles-v1.json"), "utf8"),
+				),
+			);
+			const restoredOwner = owner(destination);
+			const restored = ManagedRuntime.make(
+				ClockLive(destination, { duration: () => Effect.succeed(3000) }).pipe(
+					Layer.provide(clockProfileLayer(restoredOwner)),
+				),
+			);
+			try {
+				const formats: string[] = [];
+				for (const profile of restoredEnvelope.profiles) {
+					const page = profile.pages.find((p) =>
+						p.keys.some((k) => k.config.type === "dkDesktopClock"),
+					);
+					if (!page) continue;
+					const target = {
+						profileId: profile.id,
+						pageId: page.id,
+						keyCode: "1,1",
+					};
+					const snapshot = await restored.runPromise(ClockStore.read(target));
+					formats.push(snapshot.hourFormat ?? "missing");
+					expect(snapshot.media.season?.available).toBe(true);
+					const selected = await restored.runPromise(
+						ClockStore.mediaPath({ theme: "season", target }),
+					);
+					if (Option.isNone(selected))
+						throw new Error("Restored media missing");
+					expect(
+						selected.value.startsWith(`${destination}/clock-v1/assets/`),
+					).toBe(true);
+					expect(await readFile(selected.value, "utf8")).toBe(
+						"profile-clock-image",
+					);
+				}
+				expect(formats.sort()).toEqual(["12h", "24h"]);
+			} finally {
+				await restored.dispose();
+				await restoredOwner.dispose();
+			}
+		} finally {
+			await clocks.dispose();
+			await repository.dispose();
+			await rm(scratch, { recursive: true, force: true });
+		}
+	},
+);
 
 it("restores selected external image and video through ClockStore after the originals are removed", async () => {
 	const scratch = await mkdtemp(join(tmpdir(), "clock-backup-"));
@@ -194,3 +359,105 @@ for (const failure of [
 		}
 	});
 }
+
+it("migrates a pre-migration archive into a marked destination once without changing existing clocks", async () => {
+	const scratch = await mkdtemp(join(tmpdir(), "legacy-profile-clock-backup-"));
+	const source = join(scratch, "source"),
+		destination = join(scratch, "destination");
+	await Promise.all([source, destination].map((path) => mkdir(path)));
+	const preset = builtinProfiles("darwin").find((p) =>
+		p.pages.some((page) =>
+			page.keys.some((k) => k.config.type === "dkDesktopClock"),
+		),
+	);
+	if (!preset) throw new Error("Clock fixture missing");
+	const profile = Schema.encodeSync(Profile)(preset);
+	const existing = { ...profile, id: "existing", revision: 9 };
+	const current = {
+		schemaVersion: 1,
+		clockConfigVersion: 1,
+		profiles: [existing],
+		activeByDevice: {},
+	};
+	try {
+		await writeFile(
+			join(source, "profiles-v1.json"),
+			JSON.stringify({
+				schemaVersion: 1,
+				profiles: [profile],
+				activeByDevice: {},
+			}),
+		);
+		await writeFile(
+			join(destination, "profiles-v1.json"),
+			JSON.stringify(current),
+		);
+		await mkdir(join(source, "clock-v1"));
+		await writeFile(
+			join(source, "clock-v1/clock.json"),
+			JSON.stringify({
+				...defaultClockRecord,
+				keys: defaultClockRecord.keys.map((k) => ({
+					...k,
+					config: {
+						...k.config,
+						actions: [
+							{
+								type: "clockStyle",
+								value: {
+									background: { mode: "theme", themeId: "cyber", themes: {} },
+								},
+							},
+							{ type: "showSeconds", value: true },
+						],
+					},
+				})),
+			}),
+		);
+		await mkdir(join(source, "wallpaper-v1/settings"), { recursive: true });
+		await writeFile(
+			join(
+				source,
+				"wallpaper-v1/settings",
+				`${createHash("sha256").update("desktop-preview").digest("hex")}.json`,
+			),
+			JSON.stringify({
+				version: 1,
+				serial: "desktop-preview",
+				revision: 0,
+				settings: defaultWallpaper,
+				clock: {
+					...defaultClockTile,
+					actions: [{ type: "hourFormat", value: "12h" }],
+				},
+			}),
+		);
+		const archive = await exportBackup(source);
+		const restore = await prepareRestore(archive, "legacy-clock.zip");
+		await restore.validate(destination);
+		await restore.commit(destination);
+		const first = JSON.parse(
+			await readFile(join(destination, "profiles-v1.json"), "utf8"),
+		);
+		expect(
+			first.profiles.find((p: typeof existing) => p.id === existing.id),
+		).toEqual(existing);
+		expect(first.profiles).toHaveLength(2);
+		const imported = Schema.decodeUnknownSync(ProfileEnvelope)(
+			first,
+		).profiles.find((p) => p.id !== existing.id);
+		const actions = imported?.pages[0].keys[0]?.config.actions;
+		expect(actions?.find((a) => a.type === "hourFormat")?.value).toBe("12h");
+		expect(actions?.find((a) => a.type === "clockStyle")?.value).toMatchObject({
+			background: { themeId: "cyber" },
+		});
+		expect(actions?.find((a) => a.type === "showSeconds")?.value).toBe(true);
+		await restore.validate(destination);
+		await restore.commit(destination);
+		expect(
+			JSON.parse(await readFile(join(destination, "profiles-v1.json"), "utf8")),
+		).toEqual(first);
+	} finally {
+		await rm(scratch, { recursive: true, force: true });
+	}
+});
