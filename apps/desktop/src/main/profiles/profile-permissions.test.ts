@@ -18,6 +18,7 @@ describe("profile IPC authority", () => {
 			"run-command",
 			"choose-app",
 			"thumbnail",
+			"thumbnail-style",
 			"thumbnails",
 			"cancel-thumbnails",
 		]) {

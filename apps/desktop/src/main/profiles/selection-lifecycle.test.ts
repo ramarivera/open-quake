@@ -1,12 +1,4 @@
-import {
-	Effect,
-	Fiber,
-	Logger,
-	Option,
-	Schema,
-	TestClock,
-	TestContext,
-} from "effect";
+import { Effect, Fiber, Logger, Option, Schema, TestClock } from "effect";
 import { BrowserWindow } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service";
@@ -19,7 +11,7 @@ import {
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { KEY_REQUEST } from "../../shared/key-library";
-import { registerProfiles } from "./index";
+import { registerTestProfiles } from "../test/profile-registration";
 
 const storage = vi.hoisted(() => ({
 	read: vi.fn<() => Promise<unknown>>(),
@@ -33,6 +25,22 @@ vi.mock("./profile-ipc", async (load) => ({
 	...(await load<typeof import("./profile-ipc")>()),
 	registerProfiles: () => ({ dispose: async () => {} }),
 }));
+vi.mock("../monitor/monitor-store", () => ({
+	monitorStorage: () => ({ load: async () => undefined }),
+}));
+vi.mock("./profile-thumbnails", async () => {
+	const { Option } = await import("effect");
+	return {
+		createProfileThumbnailStore: () => ({
+			read: async () => Option.none(),
+			prune: async () => {},
+			write: async () => {
+				throw new Error("Unexpected thumbnail capture");
+			},
+		}),
+	};
+});
+
 const electron = vi.hoisted(() => {
 	const frame = { url: "file:///application/index.html" };
 	const sender = {
@@ -86,6 +94,15 @@ async function fixture() {
 			})),
 		})),
 		activeByDevice: {},
+		// Selection/reset tests use existing profiles, not a fresh catalog install.
+		manager: {
+			revision: 1,
+			installed: true,
+			hidden: [],
+			links: [],
+			approvedCommands: [],
+			userHasSetDefault: false,
+		},
 	});
 	let saved = encodeProfileEnvelope(envelope);
 	storage.read.mockImplementation(async () => saved);
@@ -97,7 +114,7 @@ async function fixture() {
 	const reset = vi.fn(async (_serial?: string) => {});
 	const deliver = vi.fn(async (_serial: string) => {});
 	const management = new BrowserWindow();
-	const profiles = registerProfiles(
+	const profiles = registerTestProfiles(
 		() => management,
 		electron.sender.getURL(),
 		deliver,
@@ -322,7 +339,6 @@ it("releases the commit mutex after a five-second reset timeout", async () => {
 					expect(f.reset.mock.calls).toEqual([["A"], ["B"]]);
 				}).pipe(Effect.ensuring(Effect.sync(() => release()))),
 			).pipe(
-				Effect.provide(TestContext.TestContext),
 				Effect.provide(
 					Logger.replace(
 						Logger.defaultLogger,

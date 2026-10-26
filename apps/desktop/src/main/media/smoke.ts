@@ -1292,6 +1292,33 @@ async function smoke(): Promise<void> {
 			vivid: theme === undefined ? "true" : "false",
 			clock: name === "clock",
 		});
+		if (theme !== undefined) {
+			const stripStyles: unknown = await panel.webContents.executeJavaScript(
+				`(() => {
+					const screen = document.querySelector('.strip-screen');
+					const grid = screen.querySelector('.strip-grid');
+					const empty = grid.querySelector('[data-state="empty"]');
+					return {
+						isolation: getComputedStyle(screen).isolation,
+						gridLayer: getComputedStyle(grid).zIndex,
+						logicalSize: [screen.style.width, screen.style.height],
+						emptyBorder: empty ? getComputedStyle(empty).borderTopWidth : null,
+						bodyCount: grid.querySelectorAll('[data-state="tile"]').length,
+						flat: [...grid.querySelectorAll('[data-state="tile"]')].every(slot => getComputedStyle(slot).backgroundColor === 'rgb(21, 23, 26)')
+					};
+				})()`,
+			);
+			assert.deepEqual(stripStyles, {
+				isolation: "isolate",
+				gridLayer: "10",
+				logicalSize: ["1920px", "480px"],
+				emptyBorder: name === "quick" || name === "spans" ? "2px" : null,
+				bodyCount: profile.pages[0].keys.filter(
+					(key) => key.config.display && key.config.type !== "",
+				).length,
+				flat: true,
+			});
+		}
 		if (name === "vivid" && process.env.OPEN_QUAKE_SMOKE_VIDEO) {
 			selectedPath = process.env.OPEN_QUAKE_SMOKE_VIDEO;
 			const imported = await request(management, {
@@ -1389,7 +1416,7 @@ async function smoke(): Promise<void> {
 		await panel.loadFile(resolve("out/renderer/index.html"), {
 			query: { surface: "panel" },
 		});
-		await panel.webContents.executeJavaScript(
+		await management.webContents.executeJavaScript(
 			`window.quakeLocale.set('${language}')`,
 		);
 		await panel.reload();
@@ -1432,7 +1459,7 @@ async function smoke(): Promise<void> {
 		),
 	);
 	for (const language of ["en", "de"]) {
-		await panel.webContents.executeJavaScript(
+		await management.webContents.executeJavaScript(
 			`window.quakeLocale.set('${language}')`,
 		);
 		await panel.reload();
@@ -1453,6 +1480,9 @@ async function smoke(): Promise<void> {
 
 	process.stdout.write(
 		"media-native smoke PASS: production IPC/rendering, retained source label, EN/DE screenshots; no real media session or audio.\n",
+	);
+	await management.webContents.executeJavaScript(
+		"window.quakeLocale.set('en')",
 	);
 	await profiles.dispose();
 	profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));

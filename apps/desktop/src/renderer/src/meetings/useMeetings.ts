@@ -6,7 +6,11 @@ import {
 	type MeetingSnapshot,
 } from "../../../shared/meeting-bridge";
 
+import { useAppLocale } from "../i18n";
+import { meetingFailure } from "./meeting-failure";
+
 interface MeetingView {
+	readonly errorCode?: string;
 	readonly snapshot: MeetingSnapshot | undefined;
 	readonly error: string;
 	readonly failureVersion: number;
@@ -16,6 +20,7 @@ const listeners = new Set<() => void>();
 let stop: (() => void) | undefined;
 function accept(value: unknown): void {
 	const decoded = decodeMeetingReply(value);
+	if (Either.isRight(decoded) && decoded.right._tag === "remoteFiles") return;
 	if (
 		Either.isRight(decoded) &&
 		decoded.right._tag === "ready" &&
@@ -33,9 +38,12 @@ function accept(value: unknown): void {
 			? {
 					...view,
 					error: decoded.right.message,
+					errorCode: decoded.right.code,
 					failureVersion: view.failureVersion + 1,
 				}
-			: { ...view, snapshot: decoded.right.snapshot, error: "" };
+			: decoded.right._tag === "ready"
+				? { ...view, snapshot: decoded.right.snapshot, error: "" }
+				: view;
 	for (const listener of listeners) listener();
 }
 export async function meetingRequest(
@@ -79,12 +87,21 @@ function subscribe(listener: () => void): () => void {
 		}
 	};
 }
-export const useMeetings = (): MeetingView =>
-	useSyncExternalStore(
+export const useMeetings = (): MeetingView => {
+	const { locale } = useAppLocale();
+	const current = useSyncExternalStore(
 		subscribe,
 		() => view,
 		() => view,
 	);
+	return {
+		...current,
+		error: current.error
+			? meetingFailure(current.errorCode ?? "", current.error, locale)
+			: "",
+	};
+};
+
 export function useMeetingNow(): number {
 	const [now, setNow] = useState(Date.now);
 	useEffect(() => {

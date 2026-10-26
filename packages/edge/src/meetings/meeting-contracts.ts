@@ -179,11 +179,17 @@ export const MeetingCommand = Schema.Union(
 		artifact: Schema.Literal("summary", "transcript"),
 	}),
 	Schema.TaggedStruct("reveal", { id: MeetingId }),
+	Schema.TaggedStruct("remoteFiles", {
+		id: MeetingId,
+		operation: Schema.Literal("list", "upload", "delete"),
+		fileId: Schema.optional(Schema.NonEmptyString.pipe(Schema.maxLength(200))),
+	}),
 	Schema.TaggedStruct("tab", { tab: MeetingSnapshot.fields.tab }),
 	Schema.TaggedStruct("clear", {}),
 );
 export type MeetingCommand = typeof MeetingCommand.Type;
 export const MeetingReply = Schema.Union(
+	Schema.TaggedStruct("remoteFiles", { ids: Schema.Array(Schema.String) }),
 	Schema.TaggedStruct("ready", { snapshot: MeetingSnapshot }),
 	Schema.TaggedStruct("failure", {
 		code: Schema.String,

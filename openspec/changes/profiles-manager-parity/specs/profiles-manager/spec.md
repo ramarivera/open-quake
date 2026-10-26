@@ -86,8 +86,12 @@ Management SHALL expose Knob Profile, Default Profile, Custom Profile, Add Item,
 - **THEN** the new document cannot mutate profiles or execute commands
 
 #### Scenario: Recoverable initialization failure
-- **WHEN** initial profile storage fails and later recovers
-- **THEN** IPC returns a typed failure reason and a subsequent request retries initialization successfully
+- **GIVEN** profile initialization cannot read or persist its catalog
+- **WHEN** a manager request arrives before storage recovers
+- **THEN** IPC returns the matching typed read or write failure without private cause details
+- **AND** background initialization retries after two seconds and succeeds when storage recovers
+- **AND** a subsequent authorized request uses the recovered controller and committed selection
+- **AND** recovery tests control the clock and storage recovery explicitly, independently of filesystem latency and host load. Regression bead `open-quake-lih.9.10`.
 
 
 ### Requirement: Platform defaults and SysView preset

@@ -24,7 +24,9 @@ type CloseReason = "dismiss" | "navigate";
  */
 export function QuakeGuideEntry({
 	onOpenPage,
+	label,
 }: {
+	label?: string;
 	/** Optional root navigation; without it, places are listed as text only. */
 	onOpenPage?: OpenPage | undefined;
 }): React.JSX.Element {
@@ -41,7 +43,7 @@ export function QuakeGuideEntry({
 				aria-haspopup="dialog"
 				onClick={() => setOpen(true)}
 			>
-				{t("guide.open")}
+				{label ?? t("guide.open")}
 			</button>
 			{open ? (
 				<QuakeGuideDialog

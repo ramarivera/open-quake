@@ -12,6 +12,7 @@ import { AgentsPage } from "./management/agents";
 import { runtimeStatusLabel } from "./management/agents/RuntimeIndicator";
 import { useAgents } from "./management/agents/useAgents";
 import { describeConnection } from "./management/connection";
+import { DevicePicker } from "./management/DevicePicker";
 import { EmojiPage } from "./management/emoji/EmojiPage";
 import { ChannelsPage } from "./management/integrations/ChannelsPage";
 import { HomeAssistantPage } from "./management/integrations/HomeAssistantPage";
@@ -226,7 +227,9 @@ function ManagementSurface({
 				) : page === "meetings" ? (
 					<MeetingHistory activation={meetingActivation} />
 				) : page === "controls" ? (
-					<HardwareSettings />
+					<DevicePicker>
+						<HardwareSettings />
+					</DevicePicker>
 				) : page === "agents" ? (
 					<AgentsPage
 						initialTab={agentActivation.tab}

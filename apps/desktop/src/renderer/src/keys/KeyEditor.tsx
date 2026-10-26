@@ -676,6 +676,7 @@ export function KeyEditor({
 					onActivate={onOpenLibrary}
 					profile={profile}
 					page={page}
+					saving={saving}
 					serial={serial}
 					locale={locale}
 					selection={selection}

@@ -11,6 +11,19 @@ const definition = <const C extends string, const M extends string>(
 	policy: { userFacing: true, userRecoverable: true, retry: "manual" as const },
 });
 export const MeetingErrors = {
+	AudioExpired: definition(
+		"QUAKE.MEETING.AUDIO_EXPIRED",
+		"Audio file expired and deleted.",
+	),
+	TranscriptMissing: definition(
+		"QUAKE.MEETING.TRANSCRIPT_MISSING",
+		"Transcription file missing, cannot regenerate",
+	),
+	NoValidSpeech: definition(
+		"QUAKE.MEETING.NO_VALID_SPEECH",
+		"No valid speech detected in the recording.",
+	),
+
 	AudioMissing: definition(
 		"QUAKE.MEETING.AUDIO_MISSING",
 		"Audio file not found",
@@ -346,7 +359,74 @@ export class MeetingTimeout extends Schema.TaggedError<MeetingTimeout>()(
 	}
 }
 
+export class MeetingAudioExpired extends Schema.TaggedError<MeetingAudioExpired>()(
+	"MeetingAudioExpired",
+	{
+		code: Schema.Literal(MeetingErrors.AudioExpired.code),
+		message: Schema.Literal(MeetingErrors.AudioExpired.message),
+		category: Schema.Literal(MeetingErrors.AudioExpired.category),
+		diagnosticCause: DiagnosticCause,
+	},
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super({
+			...MeetingErrors.AudioExpired,
+			diagnosticCause: toSafeDiagnosticCause(cause),
+		});
+		Object.defineProperty(this, "originalCause", {
+			value: cause,
+			enumerable: false,
+		});
+	}
+}
+export class MeetingTranscriptMissing extends Schema.TaggedError<MeetingTranscriptMissing>()(
+	"MeetingTranscriptMissing",
+	{
+		code: Schema.Literal(MeetingErrors.TranscriptMissing.code),
+		message: Schema.Literal(MeetingErrors.TranscriptMissing.message),
+		category: Schema.Literal(MeetingErrors.TranscriptMissing.category),
+		diagnosticCause: DiagnosticCause,
+	},
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super({
+			...MeetingErrors.TranscriptMissing,
+			diagnosticCause: toSafeDiagnosticCause(cause),
+		});
+		Object.defineProperty(this, "originalCause", {
+			value: cause,
+			enumerable: false,
+		});
+	}
+}
+export class MeetingNoValidSpeech extends Schema.TaggedError<MeetingNoValidSpeech>()(
+	"MeetingNoValidSpeech",
+	{
+		code: Schema.Literal(MeetingErrors.NoValidSpeech.code),
+		message: Schema.Literal(MeetingErrors.NoValidSpeech.message),
+		category: Schema.Literal(MeetingErrors.NoValidSpeech.category),
+		diagnosticCause: DiagnosticCause,
+	},
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super({
+			...MeetingErrors.NoValidSpeech,
+			diagnosticCause: toSafeDiagnosticCause(cause),
+		});
+		Object.defineProperty(this, "originalCause", {
+			value: cause,
+			enumerable: false,
+		});
+	}
+}
+
 export type MeetingError =
+	| MeetingAudioExpired
+	| MeetingTranscriptMissing
+	| MeetingNoValidSpeech
 	| MeetingConverterUnavailable
 	| MeetingCaptureDenied
 	| MeetingSourceLost
@@ -360,6 +440,10 @@ export type MeetingError =
 	| MeetingInvalid
 	| MeetingTimeout;
 export const MeetingErrorSchema = Schema.Union(
+	MeetingAudioExpired,
+	MeetingTranscriptMissing,
+	MeetingNoValidSpeech,
+
 	MeetingConverterUnavailable,
 	MeetingCaptureDenied,
 	MeetingSourceLost,
@@ -379,6 +463,13 @@ export function meetingError(
 	cause: unknown = undefined,
 ): MeetingError {
 	switch (reason) {
+		case "AudioExpired":
+			return new MeetingAudioExpired(cause);
+		case "TranscriptMissing":
+			return new MeetingTranscriptMissing(cause);
+		case "NoValidSpeech":
+			return new MeetingNoValidSpeech(cause);
+
 		case "AudioMissing":
 			return new MeetingAudioMissing(cause);
 		case "ConverterUnavailable":
