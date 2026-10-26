@@ -125,6 +125,15 @@ export const MaintenanceView = Schema.Struct({
 	serial: Schema.String,
 	imageVersion: Schema.String,
 	imageTrusted: Schema.Boolean,
+	firmwareAvailability: Schema.optional(
+		Schema.Literal(
+			"no_device",
+			"no_bundled_firmware",
+			"device_version_unknown",
+			"newer_bundled",
+			"up_to_date",
+		),
+	),
 	permissions: Schema.Array(PermissionRow),
 	macOS: Schema.Boolean,
 	appVersion: Schema.String,

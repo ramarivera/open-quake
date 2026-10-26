@@ -89,6 +89,7 @@ for (const stage of [
 
 			vi.spyOn(files, "firmwareFiles").mockReturnValueOnce({
 				inspect: () => Effect.succeed(image),
+				bundled: () => Effect.succeed(image),
 				selected: () => Effect.succeed(image),
 				discover: () =>
 					Effect.succeed([{ id: "synthetic-volume", label: "QUAKE DFU" }]),

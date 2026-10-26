@@ -1,14 +1,13 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { HardwareSession } from "@open-quake/device";
-import { Effect, Exit, Layer, Option, Schema } from "effect";
+import { Effect, Exit, Layer, Schema } from "effect";
 import { app, type BrowserWindow, dialog, ipcMain, shell } from "electron";
 import {
 	FirmwarePort,
 	FirmwareUpdates,
 } from "../../../../../packages/edge/src/maintenance/firmware-service.js";
 import {
-	AppUpdateFailed,
 	BackupFailed,
 	FirmwarePersistenceFailed,
 	FirmwareTargetMismatch,
@@ -27,6 +26,7 @@ import {
 } from "../../../../../packages/edge/src/maintenance/update-service.js";
 import { APPEARANCE_STORAGE_KEY } from "../../renderer/src/theme/appearance";
 import {
+	FIRMWARE_PROGRESS_CHANNEL,
 	MAINTENANCE_CHANNEL,
 	MaintenanceCommand,
 	type MaintenanceReply,
@@ -36,6 +36,7 @@ import {
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { canRequestWallpaper } from "../media/media-permissions";
+import { type OwnedUpdateConfiguration, ownedAppUpdater } from "./app-updater";
 import {
 	acknowledgeAppearance,
 	appearanceRecord,
@@ -49,6 +50,7 @@ import {
 	type TrustedFirmware,
 } from "./firmware-files";
 import { firmwareSessionStore } from "./firmware-session";
+import { firmwareVersions } from "./firmware-versions";
 import {
 	nativePermissionChecks,
 	openPermission,
@@ -74,6 +76,7 @@ export function maintenanceRequestAllowed(
 	);
 }
 interface MaintenanceOptions {
+	readonly updater?: OwnedUpdateConfiguration;
 	readonly diagnostics?: DesktopDiagnostics;
 	readonly root: string;
 	readonly mock: boolean;
@@ -83,6 +86,7 @@ interface MaintenanceOptions {
 	readonly stopWriters: () => Promise<void>;
 	readonly exit?: (code?: number) => void | Promise<void>;
 	readonly fixture?: {
+		readonly bundledDirectories?: readonly string[];
 		readonly roots: readonly string[];
 		readonly descriptors: readonly TrustedFirmware[];
 	};
@@ -121,6 +125,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 	let pendingOperations = 0;
 	let disposed = false;
 	let mockVersion = "1.0.19";
+	const versions = firmwareVersions();
 	const sessions = firmwareSessionStore(
 		join(root, "firmware-session-v1.json"),
 		options.diagnostics,
@@ -143,10 +148,13 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 			const snapshot = yield* current.snapshot();
 			if (snapshot.serial !== serial || !snapshot.available)
 				return yield* new FirmwareUnavailable();
-			if (mock) return mockVersion;
-			return yield* current
-				.readVersion()
-				.pipe(Effect.mapError((cause) => new FirmwareUnavailable(cause)));
+			const reported = mock
+				? mockVersion
+				: yield* current
+						.readVersion()
+						.pipe(Effect.mapError((cause) => new FirmwareUnavailable(cause)));
+			versions.readback(serial, reported, snapshot.session);
+			return reported;
 		});
 	const confirm = async (message: string, detail = ""): Promise<boolean> => {
 		const parent = options.management();
@@ -219,6 +227,23 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 						FirmwarePort,
 						Effect.acquireRelease(
 							Effect.succeed({
+								publish: (snapshot) => {
+									const window = options.management();
+									if (
+										window &&
+										!window.isDestroyed() &&
+										canRequestWallpaper(
+											window.webContents.getURL(),
+											options.renderer,
+											{ _tag: "read" },
+											true,
+										)
+									)
+										window.webContents.send(
+											FIRMWARE_PROGRESS_CHANNEL,
+											snapshot,
+										);
+								},
 								current: () =>
 									Effect.gen(function* () {
 										const current = options.hardware();
@@ -296,15 +321,16 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 			),
 			AppUpdates.Default.pipe(
 				Layer.provide(
-					Layer.succeed(AppUpdatePort, {
-						enabled: false,
-						currentVersion: app.getVersion(),
-						platform: process.platform,
-						arch: process.arch,
-						check: () => Effect.succeed(Option.none()),
-						download: () => Effect.fail(new AppUpdateFailed()),
-						install: () => Effect.fail(new AppUpdateFailed()),
-					}),
+					Layer.succeed(
+						AppUpdatePort,
+						ownedAppUpdater({
+							root: join(root, "app-updates"),
+							currentVersion: app.getVersion(),
+							platform: process.platform,
+							arch: process.arch,
+							...(options.updater ? { configuration: options.updater } : {}),
+						}),
+					),
 				),
 			),
 			DataReset.Default.pipe(
@@ -340,6 +366,20 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 				Effect.gen(function* () {
 					const firmware = yield* FirmwareUpdates;
 					yield* firmware.snapshot();
+					if (!mock || options.fixture?.bundledDirectories)
+						yield* files.bundled(
+							options.fixture?.bundledDirectories ??
+								(options.fixture
+									? []
+									: [
+											join(process.resourcesPath, "firmware"),
+											join(process.resourcesPath, "app", "firmware"),
+											join(app.getAppPath(), "firmware"),
+											...(!app.isPackaged
+												? [join(app.getAppPath(), "public", "firmware")]
+												: []),
+										]),
+						);
 					yield* AppUpdates;
 					yield* DataReset;
 				}),
@@ -374,16 +414,22 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 								Effect.succeed(undefined),
 							),
 						);
+					const serial = snapshot?.available ? snapshot.serial : "";
+					const reported = !serial
+						? ""
+						: mock
+							? mockVersion
+							: snapshot?.firmware
+								? `${snapshot.firmware.major}.${snapshot.firmware.minor}.${snapshot.firmware.patch}`
+								: "";
 					return {
 						firmware: yield* firmware.snapshot(),
-						currentVersion: !snapshot?.available
-							? ""
-							: mock
-								? mockVersion
-								: snapshot.firmware
-									? `${snapshot.firmware.major}.${snapshot.firmware.minor}.${snapshot.firmware.patch}`
-									: "",
-						serial: snapshot?.available ? snapshot.serial : "",
+						...versions.observe(
+							serial,
+							reported,
+							image,
+							snapshot?.session ?? "",
+						),
 						imageVersion: image?.version ?? "",
 						imageTrusted: image?.trusted ?? false,
 						permissions: checks ? permissionRows(checks) : [],
@@ -622,7 +668,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									yield* update.check();
 									break;
 								case "download-update":
-									yield* update.download();
+									yield* update.startDownload();
 									break;
 								case "install-update":
 									if (yield* io(() => confirm("Install update now?")))
