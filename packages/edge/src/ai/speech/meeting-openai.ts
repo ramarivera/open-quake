@@ -230,7 +230,7 @@ export const openaiMeeting = (
 										),
 									);
 								}),
-							);
+							).pipe(Effect.raceFirst(Fiber.join(reader)));
 							if (!sentMs) return yield* meetingError("NoValidSpeech");
 							// Drain automatic VAD commits before requesting the final manual flush.
 							// session.updated is ordered after prior audio and its VAD events.

@@ -1666,3 +1666,73 @@ it.effect(
 			expect(f.states.get("meeting")?.task).toBe(task);
 		}),
 );
+
+it.scoped("stops paced PCM immediately when the OpenAI reader fails", () =>
+	Effect.gen(function* () {
+		const f = fixture();
+		const s = yield* fakeSocket();
+		let appended = 0;
+		const transport: typeof SpeechWebSocket.Service = {
+			connect: () =>
+				Effect.succeed({
+					...s.socket,
+					send: (raw) =>
+						Effect.gen(function* () {
+							const event = object(JSON.parse(String(raw)));
+							yield* s.socket.send(raw);
+							if (
+								event.type === "input_audio_buffer.append" &&
+								++appended === 1
+							)
+								yield* Queue.offer(s.queue, {
+									type: "error",
+									error: { code: "invalid_request_error" },
+								});
+						}),
+				}),
+		};
+		const adapter = yield* makeLiveMeetingAdapter({
+			...f,
+			socket: transport,
+			resources: {
+				...f.resources,
+				pcm: () =>
+					Effect.succeed({
+						frames: Stream.fromIterable(
+							Array.from({ length: 100 }, () => new Uint8Array(4800)),
+						),
+						release: Effect.void,
+					}),
+			},
+		});
+		let failure: unknown;
+		const job = yield* adapter
+			.submit({
+				...f.request,
+				config: {
+					...f.request.config,
+					asrProvider: "openai",
+					asrModel: "gpt-realtime-mini",
+				},
+			})
+			.pipe(
+				Effect.tapError((error) =>
+					Effect.sync(() => {
+						failure = error;
+					}),
+				),
+				Effect.either,
+				Effect.fork,
+			);
+		yield* TestClock.adjust(1000);
+		const finished = yield* Fiber.poll(job);
+		yield* Fiber.interrupt(job);
+		expect(appended).toBe(1);
+		expect(Option.isSome(finished)).toBe(true);
+		expect(failure).toMatchObject({
+			_tag: "MeetingTranscriptionFailed",
+			originalCause: expect.any(AiProtocolInvalid),
+		});
+		expect(s.closed()).toBe(1);
+	}),
+);
