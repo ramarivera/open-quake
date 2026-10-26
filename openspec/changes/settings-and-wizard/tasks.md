@@ -156,9 +156,10 @@ Verification after correction: 46 focused edge tests and 32 focused desktop test
 Beads open-quake-lih.17.14, open-quake-lih.17.15, open-quake-lih.17.16 and open-quake-lih.17.17 remain open for lead merge.
 
 - [x] 8.1 Implement owned startup, tray recovery, authenticated shell commands, close-to-hide and drained restart/quit with production-root tests.
-- [x] 8.2 Implement settings deep links, keyboard tab focus, global Help/Exit, serial selection, danger variants, icon stages, route/chrome and timer-lifetime tests using the existing visual system. SETTINGS-002 privacy pinning remains incomplete under 8.5.
+- [x] 8.2 Implement settings deep links, keyboard tab focus, global Help/Exit, serial selection, danger variants, icon stages, route/chrome and timer-lifetime tests using the existing visual system, including SETTINGS-002 macOS privacy-flow close/hide pinning.
 - [x] 8.3 Implement daily bounded diagnostics and document retained capability ownership. Broad catalog rows remain incomplete under 8.5.
 - [ ] 8.4 Merge latest main, run repository gates and native mock EN/DE captures, publish row-by-row PR evidence and exclusions.
+- [ ] 8.5 Finish retained assistant/report/plugin window behavior, PluginConfigs and ChatHistory migration, the complete device/IPC/outgoing event inventories and gaming hooks. Rows MAIN-124/129/130/133/134 and SCREEN-012 remain partial. Canonical plugin protocol/schema work is open-quake-a5u.2; camera/printer protocol prerequisite is open-quake-rtk.1; game-mode provider is open-quake-lih.10.15. No exclusions were inferred for these rows.
 ## 6. Locale burn-down lane
 
 - [x] 6.1 Bundle eight recovered locales, normalization/endonyms, mounted window/strip/profile/picker/voice/native propagation and all-six-role precedence tests. Rows AI-149, CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064. Bead open-quake-def.23.
@@ -210,6 +211,5 @@ PR #105 review fix 4379719107 keeps the mounted city verifier across locale chan
 PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated profile capture locale before mounting App. The real renderer-entry regression fails with English MON on the preceding implementation and passes with German MO, OKT 26 and localized theme navigation, including every observed ready preview. Fourteen focused profile/live-locale cases and desktop typecheck pass. Capture windows still use no management/panel locale bridge.
 
 
-- [ ] 8.5 Finish retained assistant/report/plugin window behavior, PluginConfigs and ChatHistory migration, the complete device/IPC/outgoing event inventories, gaming hooks and macOS privacy-flow visibility pinning. Rows MAIN-124/129/130/133/134, SCREEN-012 and SETTINGS-002 remain partial. Canonical plugin protocol/schema work is open-quake-a5u.2; camera/printer protocol prerequisite is open-quake-rtk.1; game-mode provider is open-quake-lih.10.15. No exclusions were inferred for these rows.
 
 Shell scope decision, 2026-10-26: Ramiro explicitly excluded dormant vendor features and ARIS-only flows. MGMT-008, MGMT-014, MGMT-432, MGMT-433 and SETTINGS-017 are approved exclusions, not implemented parity. The corresponding decision remains open in open-quake-lih.17.17 for lead reconciliation.

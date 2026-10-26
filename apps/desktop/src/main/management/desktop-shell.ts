@@ -41,6 +41,7 @@ export function createDesktopShell(options: {
 	readonly focus: () => void;
 	readonly quit: (restart: boolean) => void;
 	readonly quitting: () => boolean;
+	readonly keepVisible?: () => boolean;
 	readonly platform?: string;
 	readonly locale?: () => string;
 }) {
@@ -109,6 +110,11 @@ export function createDesktopShell(options: {
 	const attach = (win: ShellWindow) => {
 		if (disposed || attached.has(win)) return;
 		const close = (event: { preventDefault(): void }) => {
+			if (!disposed && !options.quitting() && options.keepVisible?.()) {
+				event.preventDefault();
+				options.focus();
+				return;
+			}
 			if (!disposed && !options.quitting() && recoverable()) {
 				event.preventDefault();
 				win.hide();
@@ -153,7 +159,8 @@ export function createDesktopShell(options: {
 				else win.maximize();
 				break;
 			case "hide":
-				if (recoverable()) win.hide();
+				if (options.keepVisible?.()) options.focus();
+				else if (recoverable()) win.hide();
 				else win.close();
 				break;
 		}

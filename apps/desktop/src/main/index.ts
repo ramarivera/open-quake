@@ -82,6 +82,7 @@ import {
 } from "./management/appearance";
 import { createDesktopShell } from "./management/desktop-shell";
 import { registerDevicePicker } from "./management/device-picker";
+import { createPrivacyVisibility } from "./management/privacy-visibility";
 import { prepareDesktopStartup } from "./management/startup";
 import { MediaLive, registerMedia } from "./media";
 import { prepareMeetings } from "./meetings";
@@ -774,7 +775,16 @@ if (!app.requestSingleInstanceLock()) {
 							(runtime) => runtime,
 							diagnostics,
 						);
+						const privacyVisibility = createPrivacyVisibility({
+							show: () => {
+								if (quitting || managementWin.isDestroyed()) return;
+								if (managementWin.isMinimized()) managementWin.restore();
+								managementWin.show();
+								managementWin.focus();
+							},
+						});
 						const maintenanceModule = prepareMaintenance({
+							permissionFlow: privacyVisibility.begin,
 							diagnostics,
 							root: app.getPath("userData"),
 							mock,
@@ -976,6 +986,7 @@ if (!app.requestSingleInstanceLock()) {
 						app.on("second-instance", focusManagement);
 						let restartRequested = false;
 						const desktopShell = createDesktopShell({
+							keepVisible: privacyVisibility.active,
 							locale: () => knobLocale,
 							management: () => managementWin,
 							renderer: rendererURL,
@@ -1397,6 +1408,7 @@ if (!app.requestSingleInstanceLock()) {
 							removeLifecycle();
 							removeManagementAppearance();
 							desktopShell.dispose();
+							privacyVisibility.dispose();
 							removeDevicePicker();
 							removeKnobLocale();
 							disposeHardware();

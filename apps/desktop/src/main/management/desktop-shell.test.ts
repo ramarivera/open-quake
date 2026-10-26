@@ -47,7 +47,11 @@ vi.mock("electron", () => ({
 		}
 	},
 }));
-function fixture(platform = "linux", locale = () => "en") {
+function fixture(
+	platform = "linux",
+	locale = () => "en",
+	keepVisible = () => false,
+) {
 	const win = Object.assign(new EventEmitter(), {
 		webContents: Object.assign(new EventEmitter(), {
 			mainFrame: { url: "https://app.test/index.html?surface=management" },
@@ -74,6 +78,7 @@ function fixture(platform = "linux", locale = () => "en") {
 		quitting: () => false,
 		platform,
 		locale,
+		keepVisible,
 	});
 	const event = {
 		sender: win.webContents,
@@ -181,4 +186,28 @@ it("SETTINGS-112 refreshes native tray labels from the current app locale", () =
 		"Beenden",
 	]);
 	f.shell.dispose();
+});
+
+it("SETTINGS-002 rejects close/hide during privacy handoff but permits explicit quit", () => {
+	let pinned = true;
+	const f = fixture(
+		"darwin",
+		() => "en",
+		() => pinned,
+	);
+	try {
+		const event = { preventDefault: vi.fn() };
+		f.win.emit("close", event);
+		expect(event.preventDefault).toHaveBeenCalledOnce();
+		expect(f.command({ action: "hide" })).toBe(true);
+		expect(f.focus).toHaveBeenCalledTimes(2);
+		expect(f.win.hide).not.toHaveBeenCalled();
+		expect(f.command({ action: "quit" })).toBe(true);
+		expect(f.quit).toHaveBeenCalledWith(false);
+		pinned = false;
+		f.win.emit("close", event);
+		expect(f.win.hide).toHaveBeenCalledOnce();
+	} finally {
+		f.shell.dispose();
+	}
 });

@@ -357,6 +357,12 @@ Management-hosted Settings SHALL replace the vendor's fixed 660x450 window with 
 - **WHEN** the QUAKE shell, settings and device controls render
 - **THEN** they offer no idle-ad webview, notification placeholder, unreachable settings actions, ARIS calibration or ARIS confirmation dialog
 
+#### Scenario: macOS privacy handoff keeps settings visible
+
+- **WHEN** the authenticated management owner opens a privacy settings link
+- **THEN** the shell restores Settings and suppresses close and hide during the request and its 1600ms handoff, including overlapping requests
+- **AND** normal close-to-tray resumes afterward, explicit Quit remains available, and disposal cancels the handoff timer
+
 ### Requirement: Bounded daily local diagnostics
 
 Privacy-scrubbed local diagnostics SHALL rotate on the first write after local midnight and before exceeding 10 MiB, retaining at most 30 files including the active file. The writer SHALL serialize rollover with queued writes, retain 0700 directories and 0600 files, reject symlinks, and flush on shutdown. Evidence: MAIN-126.
@@ -447,7 +453,7 @@ The retained ownership map is:
 | Vendor capability group | Current canonical owner and typed equivalent | Outstanding work |
 | --- | --- | --- |
 | Quit, restart, minimize, maximize, background recovery | management desktop-shell and shared management command schema | None for these commands |
-| General preferences, locale, setup, geometry | settings backend RPC, locale RPC and window binding | macOS privacy-flow visibility pinning |
+| General preferences, locale, setup, geometry | settings backend RPC, locale RPC and window binding | None for the retained settings shell behavior |
 | Connected-device discovery and controls | management device choices, hardware request contracts | Full former device-control method inventory remains incomplete |
 | Profiles, key library, icon selection and thumbnails | profiles manager, key-library and isolated icon/thumbnail renderers | Plugin custom windows remain incomplete |
 | Wallpaper, clock and weather | media, clock and weather-media request/event contracts | Retained cross-owner outgoing-event reconciliation remains incomplete |
