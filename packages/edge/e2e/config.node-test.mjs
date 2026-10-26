@@ -2,7 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
-import { settings, validateSnapshot } from "./config.mjs";
+import { containerIdentity, settings, validateSnapshot } from "./config.mjs";
+
+test("container identity preserves the private snapshot owner on Unix hosts", () => {
+	assert.deepEqual(containerIdentity({ getuid: () => 501, getgid: () => 20 }), {
+		uid: "501",
+		gid: "20",
+	});
+	assert.deepEqual(
+		containerIdentity({ getuid: () => 1000, getgid: () => 1001 }),
+		{ uid: "1000", gid: "1001" },
+	);
+	assert.deepEqual(containerIdentity({}), { uid: "1000", gid: "1000" });
+});
 
 const input = {
 	OPEN_QUAKE_E2E_SCRATCH: "/external/scratch",

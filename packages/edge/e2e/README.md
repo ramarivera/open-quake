@@ -42,8 +42,8 @@ browsers and messaging integrations are disabled.
 
 The native reader runs without windows, HID or inference, with its own temporary
 session data. It writes one selected provider snapshot into a private 0700
-scratch directory. The file starts at 0600, then becomes 0444 inside that private
-directory so the container user can read its Compose secret mount. Both
+scratch directory. The file stays at 0600. Both runtimes use the host user's
+numeric UID and GID so they can read that owner-only Compose secret mount. Both
 containers mount only that file and their fixed bootstrap script, read-only.
 They never mount the source app data, native credential vault, home directory,
 repository or Docker socket. Runtime state and any runtime-local credentials

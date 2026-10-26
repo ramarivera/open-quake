@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import {
-	chmod,
 	mkdir,
 	mkdtemp,
 	readFile,
@@ -11,13 +10,19 @@ import {
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { HERMES_COMMIT, settings, validateSnapshot } from "./config.mjs";
+import {
+	containerIdentity,
+	HERMES_COMMIT,
+	settings,
+	validateSnapshot,
+} from "./config.mjs";
 import { cleanupProject, failureDiagnostic } from "./lifecycle.mjs";
 
 const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, "../../..");
 const config = settings(process.env, process.argv.slice(2));
+const identity = containerIdentity();
 await mkdir(config.scratch, { recursive: true });
 const scratch = await realpath(config.scratch);
 const inside = relative(repository, scratch);
@@ -43,6 +48,8 @@ const env = {
 	OPEN_QUAKE_E2E_HERMES_SOURCE: join(state, "hermes"),
 	OPEN_QUAKE_E2E_HERMES_DOCKERFILE: join(here, "hermes.Dockerfile"),
 	OPEN_QUAKE_E2E_RUN: "1",
+	OPEN_QUAKE_E2E_UID: identity.uid,
+	OPEN_QUAKE_E2E_GID: identity.gid,
 };
 // T3 may itself run inside Electron with this flag. Child acceptance must
 // launch the real Electron application rather than Electron's Node mode.
@@ -174,9 +181,8 @@ try {
 		JSON.parse(await readFile(env.OPEN_QUAKE_E2E_PROFILE_FILE, "utf8")),
 		config.authorizedModel,
 	);
-	// Parent directory stays 0700. File-backed Compose secrets preserve host
-	// modes, so container uid 1000 needs read permission on this single file.
-	await chmod(env.OPEN_QUAKE_E2E_PROFILE_FILE, 0o444);
+	// Keep the native reader's 0600 mode. Both containers run as this file's
+	// owner, because file-backed Compose secrets preserve host permissions.
 	if (interrupted) abort();
 	console.log("Preparing pinned Hermes source and disposable Compose project");
 	await command(

@@ -2,6 +2,7 @@ services:
   openclaw:
     image: ghcr.io/openclaw/openclaw:2026.10.7@sha256:fb26f0841659dc757f23feec9adeab51f11d76779a409db5d22e191b43841afa
     init: true
+    user: "${OPEN_QUAKE_E2E_UID:?runner-owned uid}:${OPEN_QUAKE_E2E_GID:?runner-owned gid}"
     entrypoint: ["node", "/fixture/openclaw.mjs"]
     environment:
       HOME: /state
@@ -11,7 +12,7 @@ services:
     secrets: [production_provider]
     ports: ["127.0.0.1::18789"]
     volumes: ["./openclaw.mjs:/fixture/openclaw.mjs:ro"]
-    tmpfs: ["/state:uid=1000,gid=1000,mode=0700", "/tmp:uid=1000,gid=1000"]
+    tmpfs: ["/state:uid=${OPEN_QUAKE_E2E_UID},gid=${OPEN_QUAKE_E2E_GID},mode=0700", "/tmp:uid=${OPEN_QUAKE_E2E_UID},gid=${OPEN_QUAKE_E2E_GID}"]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -24,7 +25,7 @@ services:
       context: ${OPEN_QUAKE_E2E_HERMES_SOURCE:?runner-owned pinned source checkout}
       dockerfile: ${OPEN_QUAKE_E2E_HERMES_DOCKERFILE:?runner-owned absolute Dockerfile}
     init: true
-    user: "1000:1000"
+    user: "${OPEN_QUAKE_E2E_UID:?runner-owned uid}:${OPEN_QUAKE_E2E_GID:?runner-owned gid}"
     entrypoint: ["/app/.venv/bin/python", "/fixture/hermes.py"]
     environment:
       HOME: /state
@@ -39,7 +40,7 @@ services:
     secrets: [production_provider]
     ports: ["127.0.0.1::8642"]
     volumes: ["./hermes.py:/fixture/hermes.py:ro"]
-    tmpfs: ["/state:uid=1000,gid=1000,mode=0700", "/tmp:uid=1000,gid=1000"]
+    tmpfs: ["/state:uid=${OPEN_QUAKE_E2E_UID},gid=${OPEN_QUAKE_E2E_GID},mode=0700", "/tmp:uid=${OPEN_QUAKE_E2E_UID},gid=${OPEN_QUAKE_E2E_GID}"]
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

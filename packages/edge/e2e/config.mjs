@@ -3,6 +3,14 @@ import { isAbsolute } from "node:path";
 import { parseArgs } from "node:util";
 
 export const HERMES_COMMIT = "e10934b03e115b036b3c38b9c6e6817039a5962d";
+// Docker Desktop on Windows has no POSIX host IDs. Its Linux bind mounts use
+// the runtime's conventional user; Unix hosts preserve the snapshot owner.
+export function containerIdentity(host = process) {
+	return {
+		uid: String(host.getuid?.() ?? 1000),
+		gid: String(host.getgid?.() ?? 1000),
+	};
+}
 export function settings(env, args = []) {
 	if (
 		[
