@@ -462,7 +462,7 @@ it("rechecks selection when a device leaves DK-Claw after preparation", async ()
 	}
 });
 
-it("MGMT-348/349 round trips the exact protected DK Claw preset and activates all four agent tiles", async () => {
+it("MGMT-348/349 round trips the exact protected DK Claw preset and preserves all four agent ID bindings", async () => {
 	const f = fixture("1-8");
 	try {
 		const profile = claw(await f.read());
