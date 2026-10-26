@@ -271,12 +271,6 @@ export function prepareIntegrations<R>(options: {
 							Fiber.interrupt(profileMonitor),
 						);
 						await Promise.allSettled([...pending]);
-						await runtime.runPromise(
-							Effect.all([
-								ChannelService.dispose(),
-								HomeAssistantService.dispose(),
-							]),
-						);
 						await runtime.dispose();
 					})();
 					return disposal;

@@ -102,3 +102,27 @@ foreground error after application disposal. The probe test injects a synthetic
 native reader and performs no foreground inspection or OS input. Both focused
 suites passed, 18 tests; the two new regressions fail against the previous
 commit in a scratch checkout. Desktop typecheck passed.
+
+
+PR72 retained-capture and integration corrections, 2026-10-26: meeting audio
+chunk, PCM and source-loss IPC now shares the graph-owned capture lifetime.
+A retained Effect execution context dispatches capture work through a private
+scope after registration disposal and while the graph finalizer drains capture.
+The finalizer suspends capture, waits for its final write, then removes audio
+handlers, joins capture work and releases the port. Only standalone meeting
+registration installs a quit veto; prepared registration leaves quit to root.
+Home Assistant and channel QR session cleanup now belongs to their scoped
+service finalizers. Registration disposal retains its own timers, draft
+cancellation, publisher and pending-operation cleanup without disconnecting a
+second consumer's services.
+
+The meeting regression starts translation and recording after registration
+teardown, then blocks the final chunk write during graph disposal. Handlers
+and the port remain alive until that write completes. The integration regression
+keeps a Home Assistant connection and pending QR session usable after
+registration teardown, then checks each is released exactly once by the graph.
+Both regressions fail against 2d114ae in a scratch archive. The focused meeting
+and integration suites pass, 54 tests. The preparation edge suite passes,
+647 tests with three existing skips. The full preparation desktop suite passes,
+1650 tests with one existing skip, and both typechecks pass. These checks
+use synthetic ports and isolated stores; no microphone, HID or OS input runs.

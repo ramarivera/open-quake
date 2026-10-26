@@ -4,10 +4,13 @@ import {
 	Cause,
 	Effect,
 	Either,
+	Exit,
 	Fiber,
 	Layer,
 	Option,
+	Runtime,
 	Schema,
+	Scope,
 	Stream,
 } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
@@ -86,15 +89,18 @@ export const mockMeetingAdapter: MeetingAdapter = {
 		]),
 	stopTranslation: () => Effect.void,
 };
-export function prepareMeetings(options: {
-	diagnostics?: DesktopDiagnostics;
-	userData: string;
-	hardware: () => HardwareSession | undefined;
-	mock: boolean;
-	renderer?: string;
-	ffmpeg?: string;
-	adapter?: MeetingAdapter;
-}) {
+export function prepareMeetings(
+	options: {
+		diagnostics?: DesktopDiagnostics;
+		userData: string;
+		hardware: () => HardwareSession | undefined;
+		mock: boolean;
+		renderer?: string;
+		ffmpeg?: string;
+		adapter?: MeetingAdapter;
+	},
+	quitOwner = false,
+) {
 	const root = join(options.userData, "meetings-v1");
 	const renderer =
 		options.renderer ??
@@ -112,10 +118,30 @@ export function prepareMeetings(options: {
 				win.webContents.send(MEETING_SNAPSHOT, failure(error));
 	};
 	let capture: ReturnType<typeof createCapturePort> | undefined;
+	let captureExecution: Runtime.Runtime<MeetingService> | undefined;
+	let captureScope: Scope.CloseableScope | undefined;
+	let removeCapture = () => {};
+	const captureEffect = <A, E>(
+		effect: Effect.Effect<A, E, MeetingService>,
+	): Effect.Effect<A, E | MeetingError, MeetingService> =>
+		captureScope
+			? Effect.flatMap(Effect.forkIn(effect, captureScope), Fiber.join)
+			: Effect.fail(meetingError("Unavailable"));
+	const runCapture = <A, E>(effect: Effect.Effect<A, E, MeetingService>) => {
+		if (!captureExecution) return Promise.reject(meetingError("Unavailable"));
+		return Runtime.runPromise(captureExecution)(captureEffect(effect));
+	};
+	const forkCapture = (
+		effect: Effect.Effect<unknown, MeetingError, MeetingService>,
+	): void => {
+		if (captureExecution)
+			Runtime.runFork(captureExecution)(captureEffect(effect));
+	};
 	const captureLayer = Layer.scoped(
 		MeetingCapture,
 		Effect.acquireRelease(
-			Effect.sync(() => {
+			Effect.gen(function* () {
+				captureScope = yield* Scope.make();
 				const acquired = createCapturePort({
 					root,
 					renderer,
@@ -123,15 +149,15 @@ export function prepareMeetings(options: {
 					mock: options.mock,
 					ffmpeg: options.ffmpeg ?? process.env.OPEN_QUAKE_FFMPEG ?? "ffmpeg",
 					onNoWindows: () => {
-						prepared.runtime.runFork(MeetingService.suspend());
+						forkCapture(MeetingService.suspend());
 					},
 					onLost: (id) => {
 						if (id === "00000000-0000-4000-8000-000000000000") {
-							prepared.runtime.runFork(MeetingService.translationLost());
+							forkCapture(MeetingService.translationLost());
 							return;
 						}
 						if (Schema.is(MeetingId)(id))
-							prepared.runtime.runFork(
+							forkCapture(
 								MeetingService.sourceLost(id).pipe(
 									Effect.tapError((error) =>
 										Effect.sync(() => publishFailure(error)),
@@ -151,7 +177,24 @@ export function prepareMeetings(options: {
 				};
 				return capture;
 			}),
-			(acquired) => Effect.sync(acquired.dispose),
+			(acquired) =>
+				Effect.gen(function* () {
+					if (captureExecution)
+						yield* captureEffect(MeetingService.suspend()).pipe(
+							Effect.provide(captureExecution),
+							Effect.catchAllCause((cause) =>
+								Effect.logWarning(
+									"Meeting capture cleanup failed",
+									meetingError("CaptureFailed", cause),
+								),
+							),
+						);
+					removeCapture();
+					if (captureScope) yield* Scope.close(captureScope, Exit.void);
+					captureScope = undefined;
+					captureExecution = undefined;
+					acquired.dispose();
+				}),
 		).pipe(Effect.map((acquired) => acquired.port)),
 	);
 	const supplied =
@@ -169,6 +212,16 @@ export function prepareMeetings(options: {
 					MeetingRepository.Default(meetingStorage(root)),
 					providers,
 					captureLayer,
+				),
+			),
+			Layer.tap((context) =>
+				Effect.runtime<MeetingService>().pipe(
+					Effect.provide(context),
+					Effect.tap((execution) =>
+						Effect.sync(() => {
+							captureExecution = execution;
+						}),
+					),
 				),
 			),
 		),
@@ -363,7 +416,7 @@ export function prepareMeetings(options: {
 					!capture.active(chunk.right.id)
 				)
 					throw new Error("Meeting audio chunk rejected");
-				await runtime.runPromise(capture.files.write(chunk.right));
+				await runCapture(capture.files.write(chunk.right));
 			});
 			ipcMain.handle(CAPTURE_PCM, async (event, value: unknown) => {
 				await ready;
@@ -373,11 +426,11 @@ export function prepareMeetings(options: {
 					value.length > 14400
 				)
 					throw new Error("Meeting PCM rejected");
-				await runtime.runPromise(
+				await runCapture(
 					MeetingService.translate(value).pipe(
 						Effect.tapError(() =>
 							Effect.sync(() => {
-								runtime.runFork(MeetingService.translationLost());
+								forkCapture(MeetingService.translationLost());
 							}),
 						),
 					),
@@ -385,7 +438,7 @@ export function prepareMeetings(options: {
 			});
 			const lost = (event: Electron.IpcMainEvent, value: unknown): void => {
 				if (!capture?.accepts(event) || !Schema.is(MeetingId)(value)) return;
-				runtime.runFork(
+				forkCapture(
 					(value === "00000000-0000-4000-8000-000000000000"
 						? MeetingService.translationLost()
 						: MeetingService.sourceLost(value)
@@ -397,6 +450,11 @@ export function prepareMeetings(options: {
 				);
 			};
 			ipcMain.on(CAPTURE_LOST, lost);
+			removeCapture = () => {
+				ipcMain.removeHandler(CAPTURE_CHUNK);
+				ipcMain.removeHandler(CAPTURE_PCM);
+				ipcMain.removeListener(CAPTURE_LOST, lost);
+			};
 			let disposed = false;
 			let disposal: Promise<void> | undefined;
 			const dispose = (): Promise<void> => {
@@ -407,9 +465,6 @@ export function prepareMeetings(options: {
 					for (const fiber of jobs.values())
 						await runtime.runPromise(Fiber.interrupt(fiber));
 					await runtime.runPromiseExit(MeetingService.suspend());
-					ipcMain.removeHandler(CAPTURE_CHUNK);
-					ipcMain.removeHandler(CAPTURE_PCM);
-					ipcMain.removeListener(CAPTURE_LOST, lost);
 					await runtime.runPromiseExit(Fiber.interrupt(published));
 					await runtime.dispose();
 					app.removeListener("before-quit", beforeQuit);
@@ -424,7 +479,7 @@ export function prepareMeetings(options: {
 					void dispose().then(() => app.quit());
 				}
 			};
-			app.on("before-quit", beforeQuit);
+			if (quitOwner) app.on("before-quit", beforeQuit);
 			return { runtime, dispose, ready };
 		},
 		options.diagnostics,
@@ -434,5 +489,5 @@ export function prepareMeetings(options: {
 }
 
 export function registerMeetings(...args: Parameters<typeof prepareMeetings>) {
-	return prepareMeetings(...args).standalone();
+	return prepareMeetings(args[0], true).standalone();
 }

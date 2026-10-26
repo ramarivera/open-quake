@@ -58,7 +58,7 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 	"integrations/HomeAssistantService",
 	{
 		accessors: true,
-		effect: Effect.gen(function* () {
+		scoped: Effect.gen(function* () {
 			const ports = yield* HaPorts;
 			const lock = yield* Effect.makeSemaphore(1);
 			let connection: HaConnection | undefined;
@@ -199,6 +199,7 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 						return yield* snapshot();
 					}).pipe(Effect.tapError(recordFailure), lock.withPermits(1)),
 			);
+			yield* Effect.addFinalizer(() => Effect.sync(disconnect));
 			return {
 				snapshot,
 				connect,
