@@ -3,6 +3,12 @@
 ### Requirement: Shipped profile catalog
 The app SHALL install Discord, MeetAI, Vivid, Quick, SysView, AI Chat, Music, Clock and DK Claw using recovered resource IDs, menu order, key layouts, titles and actions, and SHALL resolve built-in titles through the eight recovered locales. Quick SHALL use the host platform variant. Custom names SHALL remain literal. macOS SHALL omit Discord from its visible menu while retaining its resource. Existing profiles SHALL survive installation. Source: MGMT-315, 338–340, 343, 346–384. Decisions 12/13/15 govern exclusions, first-run shell approval and weather privacy; MGMT-341 vendor links become project links.
 
+#### Scenario: DKClaw input stream stays with the selected assistant
+- **GIVEN** the shipped DKClaw profile has the `quakeBotInput` tile at `1,7` with its `2x2` footprint and original default payload
+- **WHEN** the panel selects another assistant and receives voice text, then changes profile
+- **THEN** the mounted input follows the selected assistant, rejects text for the previous assistant, and clears its buffer and selection on the profile reset
+- **AND** it cannot display late text from the previous profile until a new assistant is selected. This covers MGMT-350.
+
 #### Scenario: Platform and locale selection
 - **WHEN** a fresh macOS installation selects German
 - **THEN** eight built-ins appear, the stored catalog contains nine resources, Quick uses Mac actions, and available title keys resolve to recovered German strings

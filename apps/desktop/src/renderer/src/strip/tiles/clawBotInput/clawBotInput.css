@@ -45,6 +45,8 @@
 	box-sizing: border-box;
 	width: 100%;
 	resize: none;
+	/* Override the panel and tile selection suppression for the editor. */
+	user-select: text;
 	border: 1px solid var(--strip-line);
 	outline: none;
 	background: var(--strip-canvas);
