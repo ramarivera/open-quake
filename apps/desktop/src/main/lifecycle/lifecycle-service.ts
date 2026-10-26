@@ -283,21 +283,21 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						if (refresh) {
 							yield* edges.bus()?.recover?.() ?? Effect.void;
 							if (!edges.mock && edges.prompts.platform === "win32") {
-								yield* prompts
-									.prepareWindows()
-									.pipe(
-										Effect.catchTag(
-											"DisplayOperationFailed",
-											() => repairFailed,
-										),
-									);
+								let preparationFailed = false;
+								yield* prompts.prepareWindows().pipe(
+									Effect.catchTag("DisplayOperationFailed", () =>
+										Effect.sync(() => {
+											preparationFailed = true;
+										}).pipe(Effect.zipRight(repairFailed), Effect.as(false)),
+									),
+								);
 								for (
 									let elapsed = 0;
 									elapsed < 5000 && !edges.displays().some(isPanelCandidate);
 									elapsed += 500
 								)
 									yield* Effect.sleep(500);
-								if (edges.prompts.windowsProbe)
+								if (edges.prompts.windowsProbe) {
 									native = yield* edges.prompts.windowsProbe().pipe(
 										Effect.catchTag("DisplayOperationFailed", () =>
 											Effect.sync(() => {
@@ -312,6 +312,9 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 											}),
 										),
 									);
+									if (!preparationFailed && !native.failed)
+										yield* repaired(true);
+								}
 							}
 						}
 						if (!edges.mock) {

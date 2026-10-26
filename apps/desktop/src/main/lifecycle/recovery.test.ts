@@ -449,6 +449,68 @@ describe("connections at pairing completion", () => {
 });
 
 describe("Windows redetect deadlines", () => {
+	for (const extendFails of [false, true])
+		it.scoped(
+			`clears a transient Windows probe failure only when retry has no native errors: extendFails=${extendFails}`,
+			() => {
+				let failed = true;
+				const probe = () =>
+					failed
+						? Effect.fail(
+								new DisplayOperationFailed(new Error("fake probe failed")),
+							)
+						: Effect.succeed({
+								source: "wmi-name" as const,
+								present: true,
+								width: 1920,
+								height: 480,
+								failed: false,
+							});
+				return withHarness(
+					(h) =>
+						Effect.gen(function* () {
+							yield* h.change([desktop, a]);
+							yield* h.service.onStatus(connected, "a");
+							yield* TestClock.adjust(1);
+							const initial = yield* h.service
+								.redetect()
+								.pipe(Effect.forkScoped);
+							yield* TestClock.adjust(1500);
+							expect((yield* Fiber.join(initial)).issue).toBe("native-failed");
+							failed = false;
+							const retry = yield* h.service.redetect().pipe(Effect.forkScoped);
+							yield* TestClock.adjust(1500);
+							expect(yield* Fiber.join(retry)).toMatchObject({
+								issue: extendFails ? "native-failed" : "none",
+								usb: "pass",
+								hdmi: "pass",
+								native: { failed: false, present: true },
+							});
+						}),
+					{
+						prompts: {
+							platform: "win32",
+							mock: false,
+							windowsExtend: () =>
+								extendFails && !failed
+									? Effect.fail(
+											new DisplayOperationFailed(
+												new Error("fake extend failure"),
+											),
+										)
+									: Effect.void,
+							windowsProbe: probe,
+							displays: () => [],
+							primaryId: () => desktop.id,
+							prompt: () => Effect.succeed(0),
+							native: () => Effect.succeed("extended"),
+							openSettings: () => Effect.void,
+						},
+					},
+				);
+			},
+		);
+
 	for (const fails of [false, true])
 		it.scoped(
 			`MAIN-043 MAIN-059 keeps native ${fails ? "failure" : "WMI evidence"} and finishes at 6500ms`,

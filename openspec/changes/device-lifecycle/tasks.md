@@ -62,4 +62,4 @@
 
 - [x] 9.10 Preserve another serial discovery when one device disconnects. Bead `open-quake-lih.11.15`. Codex4378016504.
 - [x] 9.11 Dispose preview ownership when real hardware connects. Bead `open-quake-lih.11.16`. Codex4378016521.
-- [ ] 9.12 Clear recovered Windows probe failures on redetect. Bead `open-quake-lih.11.17`. Codex4378016538.
+- [x] 9.12 Clear recovered Windows probe failures on redetect. Bead `open-quake-lih.11.17`. Codex4378016538.
