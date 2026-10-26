@@ -41,6 +41,7 @@ import { KeyTitleSettings } from "./KeyTitleSettings";
 import { KnobEditor } from "./KnobEditor";
 import { keyArtwork } from "./key-artwork";
 import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
+import { SelectedKeyPreview } from "./SelectedKeyPreview";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
@@ -410,6 +411,10 @@ export function KeyEditor(): React.JSX.Element {
 		},
 	};
 	const key = selection?.key;
+	const selectedTile = stripLayout(
+		previewProfile,
+		previewProfile.pages.find((p) => p.id === page.id) ?? page,
+	).tiles.find((tile) => tile.keyCode === key?.keyCode);
 	const changeActions = (index: number, value: string): void => {
 		if (!key) return;
 		void update({
@@ -583,6 +588,31 @@ export function KeyEditor(): React.JSX.Element {
 							keyTitle(key, locale) || key.config.type || "Select Function"
 						}
 					>
+						{selectedTile && selection && (
+							<SelectedKeyPreview
+								tile={selectedTile}
+								target={{
+									profileId: profile.id,
+									pageId: page.id,
+									keyCode: key.keyCode,
+								}}
+								beforeWrite={async () => {
+									const old = current.current;
+									if (!old || savePending.current) return false;
+									if (
+										JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
+										JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
+									)
+										return true;
+									await save();
+									return old !== current.current;
+								}}
+								onSaved={() => choose(key.keyCode)}
+								isCurrent={() =>
+									current.current?.target.token === selection.target.token
+								}
+							/>
+						)}
 						{Option.isSome(key.compatibility) &&
 							key.compatibility.value.unsupported === true && (
 								<p role="status" className="key-unsupported">

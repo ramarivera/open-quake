@@ -23,7 +23,11 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { createPanelKeyDispatcher } from "../../renderer/src/keys/panel-key-dispatch";
-import { KEY_REQUEST, type KeyReply } from "../../shared/key-library";
+import {
+	KEY_REQUEST,
+	type KeyReply,
+	type LibraryPack,
+} from "../../shared/key-library";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { iconZip } from "../test/icon-pack-fixtures";
 import { iconStore } from "./icon-store";
@@ -104,7 +108,7 @@ vi.mock("electron", () => ({
 	},
 }));
 const appIcons = vi.hoisted(() => ({
-	load: vi.fn<() => Promise<{ id: string; name: string; icons: [] }>>(),
+	load: vi.fn<() => Promise<LibraryPack>>(),
 }));
 vi.mock("./application-icons", () => ({
 	applicationIconLibrary: () => appIcons.load,
@@ -1494,3 +1498,145 @@ it("redacts clock media paths from imported profile replies", async () => {
 		await f.runtime.dispose();
 	}
 });
+
+it("binds target and locale before readiness, ignores late readiness and starts fresh on reopen", async () => {
+	const f = fixture();
+	try {
+		const first = f.request(f.manager, {
+			type: "open-icons",
+			token: "before-ready",
+			locale: "de",
+		});
+		const child = BrowserWindow.getAllWindows().at(-1);
+		if (!child) throw new Error("Missing picker");
+		const url = new URL(child.webContents.getURL());
+		expect(url.searchParams.get("token")).toBe("before-ready");
+		expect(url.searchParams.get("locale")).toBe("de");
+		if (!("options" in child)) throw new Error("Missing synthetic options");
+		expect(child.options).toMatchObject({
+			width: 600,
+			height: 550,
+			minWidth: 600,
+			minHeight: 550,
+			resizable: true,
+			show: false,
+		});
+		await f.request(f.manager, { type: "cancel-icons", token: "before-ready" });
+		child.emit("ready-to-show");
+		expect(child.show).not.toHaveBeenCalled();
+		expect(child.showInactive).not.toHaveBeenCalled();
+		expect(await first).toEqual({ _tag: "success" });
+		const second = f.request(f.manager, {
+			type: "open-icons",
+			token: "reopen",
+			locale: "en",
+		});
+		const reopened = BrowserWindow.getAllWindows().at(-1);
+		expect(reopened).not.toBe(child);
+		expect(
+			new URL(reopened?.webContents.getURL() ?? "about:blank").searchParams.get(
+				"token",
+			),
+		).toBe("reopen");
+		await f.registration.dispose();
+		expect(await second).toEqual({ _tag: "success" });
+	} finally {
+		await f.runtime.dispose();
+	}
+});
+
+it("never sends installed application paths to the panel catalog consumer", async () => {
+	const f = fixture();
+	appIcons.load.mockResolvedValue({
+		id: "applications",
+		name: "Apps",
+		icons: [
+			{
+				id: "a".repeat(64),
+				name: "Private",
+				tags: [],
+				extraData: ["/Users/private/Secret.app"],
+				data: "data:image/png;base64,AAAA",
+			},
+		],
+	});
+	try {
+		const reply = await f.request(f.panel, { type: "application-icons" });
+		expect(reply._tag).toBe("success");
+		expect(JSON.stringify(reply)).not.toContain("/Users/private");
+		expect(reply).toMatchObject({
+			packs: [
+				{ icons: [{ id: "a".repeat(64), data: "data:image/png;base64,AAAA" }] },
+			],
+		});
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it.each([
+	{ pack: false, saved: false },
+	{ pack: false, saved: true },
+	{ pack: true, saved: false },
+	{ pack: true, saved: true },
+])(
+	"protects application-prefixed artwork from deletion: %j",
+	async ({ pack, saved }) => {
+		const files = await importFixture(),
+			f = fixture();
+		try {
+			electron.dialog.showOpenDialog.mockResolvedValue({
+				canceled: false,
+				filePaths: [pack ? files.packPath : files.localPath],
+			});
+			const imported = await f.request(f.openPicker(), {
+				type: pack ? "import-pack" : "import-icon",
+			});
+			if (imported._tag !== "success") throw new Error("Import failed");
+			const library = imported.packs?.find((p) =>
+					pack ? p.id !== "local" : p.id === "local",
+				),
+				icon = library?.icons[0];
+			if (!library || !icon) throw new Error("Missing artwork");
+			const target = {
+				token: "application-reference",
+				profileId: "p",
+				pageId: "one",
+				keyCode: "1,1",
+				revision: 0,
+			};
+			const key = {
+				...f.key,
+				config: { ...f.key.config, icon: `application:${icon.id}` },
+			};
+			expect(
+				await f.request(f.manager, { type: "preview", target, key }),
+			).toMatchObject({ _tag: "success" });
+			if (saved)
+				expect(
+					await f.request(f.manager, { type: "save", token: target.token }),
+				).toMatchObject({ _tag: "success" });
+			expect(
+				await f.request(f.openPicker(), {
+					type: pack ? "remove-pack" : "remove-icon",
+					id: pack ? library.id : icon.id,
+				}),
+			).toMatchObject({
+				_tag: "rejected",
+				reason: "This icon is currently in use and cannot be deleted.",
+			});
+			expect(await f.request(f.manager, { type: "icons" })).toMatchObject({
+				packs: [
+					expect.objectContaining({
+						id: library.id,
+						icons: expect.arrayContaining([icon]),
+					}),
+				],
+			});
+		} finally {
+			await f.registration.dispose();
+			await f.runtime.dispose();
+		}
+	},
+);
