@@ -117,6 +117,6 @@ review is handed to the parent; no thread was resolved and no merge was attempte
 Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptance.
 
 - [x] Fix Devin 4378930331 by invalidating minutes atomically with replacement transcription and regenerating from the new text. Regression tests in `meeting-service.test.ts` fail before the fix for both successful and failed regeneration, including summary-only recovery.
-- [ ] Fix Devin 4378930536 missing mark placement over omitted transcript words.
+- [x] Fix Devin 4378930536 with segment-level highlighting and selectable bookmarks when aligned tokens omit words. Three mounted regressions for leading/middle/trailing omissions fail before the fix; punctuation and exact saved text remain intact.
 - [ ] Reply to Devin 4378930892 with unit/consumer provider-settings coverage and the separate live hardware/provider checklist.
 - [ ] Handle valid incoming Codex/Copilot findings, run full gates and hidden mock native smoke, then list unanswered GraphQL threads without resolving them.

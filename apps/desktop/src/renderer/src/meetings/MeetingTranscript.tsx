@@ -23,10 +23,15 @@ function transcriptUnits(segment: Segment) {
 		// Provider tokens aren't guaranteed to reproduce the saved paragraph.
 		// Keep all punctuation and gaps, or fall back to the original paragraph.
 		if (start < 0) return fallback();
-		words.push({ ...word, text, before: segment.text.slice(offset, start) });
+		const before = segment.text.slice(offset, start);
+		// Untimed words need paragraph placement; punctuation/spacing can stay gaps.
+		if (/[^\p{P}\s]/u.test(before)) return fallback();
+		words.push({ ...word, text, before });
 		offset = start + text.length;
 	}
-	return { words, tail: segment.text.slice(offset), timed: true };
+	const tail = segment.text.slice(offset);
+	if (/[^\p{P}\s]/u.test(tail)) return fallback();
+	return { words, tail, timed: true };
 }
 export function tooltipBounds(
 	rect: Pick<DOMRect, "left" | "top" | "bottom">,

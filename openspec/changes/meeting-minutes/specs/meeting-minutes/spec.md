@@ -405,7 +405,7 @@ Evidence: AI-310, AI-317. Main and side tags SHALL remain explicit. A present le
 
 #### Scenario: Word timing preserves saved transcript text
 - **WHEN** AI-310 provider tokens omit punctuation, whitespace or part of the saved paragraph
-- **THEN** the renderer preserves the complete saved text around aligned tokens and falls back to paragraph highlighting if tokens cannot align
+- **THEN** the renderer preserves the complete saved text around aligned tokens and falls back to paragraph highlighting and numbered bookmarks if tokens cannot align or omit saved words
 
 #### Scenario: Word boundary and open mark
 

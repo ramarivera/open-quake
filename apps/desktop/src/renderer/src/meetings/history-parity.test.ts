@@ -484,7 +484,7 @@ it("AI-314 AI-317 skips deleted children when selecting the next surviving neigh
 });
 
 it("AI-310 preserves exact paragraph text around timed tokens and falls back for unaligned tokens", async () => {
-	const text = "  Hello,  世界!\nAn omitted tail.  ";
+	const text = "  Hello,  世界!\n  ";
 	const segment = {
 		id: "punctuation",
 		speaker: "1",
@@ -523,3 +523,66 @@ it("AI-310 preserves exact paragraph text around timed tokens and falls back for
 	expect(displayed()).toBe(text);
 	expect(dom.host.querySelectorAll(".meeting-transcript-word")).toHaveLength(1);
 });
+
+for (const [omission, words, startMs, endMs] of [
+	[
+		"leading",
+		[
+			{ text: "second", startMs: 100, endMs: 200 },
+			{ text: "third", startMs: 200, endMs: 300 },
+		],
+		0,
+		100,
+	],
+	[
+		"middle",
+		[
+			{ text: "First", startMs: 0, endMs: 100 },
+			{ text: "third", startMs: 200, endMs: 300 },
+		],
+		100,
+		200,
+	],
+	["trailing", [{ text: "First", startMs: 0, endMs: 100 }], 200, 300],
+] as const) {
+	it(`AI-310 places selectable segment bookmarks for marks over ${omission} untimed text`, async () => {
+		const text = "First second third";
+		await mount([
+			meetingRecord(1, {
+				minutes: "",
+				endedAt: Option.some(epoch + 300),
+				marks: [{ startMs, endMs: Option.some(endMs) }],
+				transcript: [
+					{
+						id: "incomplete",
+						speaker: "1",
+						startMs: 0,
+						endMs: 300,
+						text,
+						words,
+					},
+				],
+			}),
+		]);
+		expect(dom.host.querySelectorAll(".meeting-bookmark")).toHaveLength(2);
+		expect(
+			element(".meeting-transcript-segment").getAttribute("data-marked"),
+		).toBe("true");
+		expect(
+			[
+				...dom.host.querySelectorAll(
+					".meeting-transcript-gap, .meeting-transcript-word",
+				),
+			]
+				.map((node) => node.textContent)
+				.join(""),
+		).toBe(text);
+		await click('[aria-label="Mark 1 begin"]');
+		expect(
+			element('[aria-label="Mark 1 end"]').getAttribute("aria-pressed"),
+		).toBe("true");
+		expect(
+			element('.meeting-transcript-word[data-selected="true"]').textContent,
+		).toBe(text);
+	});
+}
