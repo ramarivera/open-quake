@@ -11,6 +11,8 @@ import {
 	Segmented,
 	type SegmentOption,
 } from "../../../ui/Form";
+import { selectStripPage } from "../../selection";
+import { useStripProfiles } from "../../useStripProfiles";
 import { themeArtUrl } from "./art";
 import { ClockTile } from "./ClockTile";
 import { useClockNow } from "./clockHooks";
@@ -44,6 +46,23 @@ const secondsOptions: ReadonlyArray<SegmentOption<"off" | "on">> = [
 	{ value: "off", label: "Off" },
 	{ value: "on", label: "On" },
 ];
+
+/** Use the same serial-scoped page as StripScreen; never edit a different profile. */
+export function ScreenClockSettings({
+	serial,
+}: {
+	serial: string | undefined;
+}): React.JSX.Element | null {
+	const profiles = useStripProfiles();
+	if (profiles._tag !== "ready") return null;
+	const { profile, page } = selectStripPage(profiles.envelope, serial);
+	const key = page.keys.find((key) => key.config.type === "dkDesktopClock");
+	return key ? (
+		<ClockSettings
+			target={{ profileId: profile.id, pageId: page.id, keyCode: key.keyCode }}
+		/>
+	) : null;
+}
 
 /**
  * Management "Desktop clock" settings on the Screen page: live preview,

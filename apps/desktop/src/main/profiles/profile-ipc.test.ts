@@ -123,6 +123,58 @@ describe("read-only profile snapshots", () => {
 		expect(electron.ipcMain.removeHandler).toHaveBeenCalledWith(PROFILES_READ);
 	});
 
+	it("redacts clock media paths from reads and committed broadcasts while retaining main data", async () => {
+		const original = stripFixtureEnvelope();
+		const path = "/Users/private/selected-clock.png";
+		const envelope = {
+			...original,
+			profiles: original.profiles.map((p) => ({
+				...p,
+				pages: p.pages.map((page) => ({
+					...page,
+					keys: page.keys.map((key) =>
+						key.config.type !== "dkDesktopClock"
+							? key
+							: {
+									...key,
+									config: {
+										...key.config,
+										actions: [
+											{
+												type: "clockStyle",
+												value: {
+													background: {
+														mode: "theme",
+														themeId: "season",
+														themes: { season: { kind: "image", path } },
+													},
+												},
+											},
+										],
+									},
+								},
+					),
+				})),
+			})),
+		};
+		const { runtime, registration, request } = setup(async () => envelope);
+		try {
+			const reply = await request();
+			expect(JSON.stringify(reply)).not.toContain(path);
+			await vi.waitFor(() => expect(pushed()).toHaveLength(1));
+			expect(
+				JSON.stringify(electron.webContents.send.mock.calls),
+			).not.toContain(path);
+			expect(
+				JSON.stringify(
+					(await runtime.runPromise(ProfileService.loadProfiles())).envelope,
+				),
+			).toContain(path);
+		} finally {
+			await registration.dispose();
+		}
+	});
+
 	it("delivers the fixture profiles intact", async () => {
 		const { registration, request } = setup(async () => stripFixtureEnvelope());
 		const reply = decode(await request());

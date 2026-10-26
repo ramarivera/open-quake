@@ -11,28 +11,30 @@ Production clock settings live in `<userData>/profiles-v1.json`. Each
 The profile owner commits updates to the explicitly named profile, page and key,
 increments that profile's revision, and preserves unrelated fields. Both the key
 editor and strip read this configuration. Two profiles can keep different formats,
-seconds options, themes and custom media after restart. Screen settings follow the
-selected preview profile's clock, falling back to the first clock when necessary.
-The editor saves its pending key draft before changing clock configuration, then
-refreshes its editing revision. Wallpaper settings no longer own clock rendering.
+seconds options, themes and custom media after restart. Screen settings use the same serial-scoped profile and page as the strip preview.
+They remain absent when that page has no clock. The editor saves a dirty key draft
+before changing clock configuration, skips that write for an unchanged draft, and
+refreshes its editing revision after a clock save. Wallpaper settings no longer own clock rendering.
 
 Before the first profile snapshot, the owner migrates the legacy
 `clock-v1/clock.json` and `wallpaper-v1/settings/<sha256(serial)>.json` stores.
 Existing non-default profile actions win. Missing actions and actions equal to the
 built-in defaults inherit legacy settings, then defaults. Styles match by key code.
 For hour format, serials selecting the profile win in lexical order, followed by
-`desktop-preview`, then all remaining saved serials in lexical order. Valid backup
-wallpaper files supply missing primaries. A fresh installation persists built-in
+`desktop-preview`, then all remaining saved serials in lexical order. Validated wallpaper backups supply missing or invalid primaries. A fresh installation persists built-in
 profiles before migration, so an interrupted migration can't leave an empty seed.
 
 The profile file's atomic rename commits both migrated values and
 `clockConfigVersion: 1`. Failure keeps migration retryable. A completed migration
 doesn't read or overwrite legacy data again. Both legacy stores remain untouched,
-including on failure. Invalid legacy data stops migration without committing the
-marker. The standalone `ClockLive` without a profile port retains the legacy file
+including on failure. Unusable legacy data supplies defaults and a scrubbed `QUAKE.CLOCK.CONFIG_INVALID`
+diagnostic on stderr, so it cannot block profile publication. The standalone `ClockLive` without a profile port retains the legacy file
 adapter for isolated compatibility tests; the application always supplies its
-profile owner. Backups collect custom media from every canonical clock key and
-restore paths through the existing portable archive owner.
+profile owner. After migration, backups collect custom media only from canonical clock keys,
+skipping the abandoned legacy clock record and unreferenced legacy clock assets.
+Legacy archive imports migrate only imported profiles before deduplication, so
+repeat imports are idempotent and destination clocks remain unchanged. Paths
+restore through the existing portable archive owner.
 
 A theme switch applies `buildClockThemePatch` to that clock key. Only `themeId`
 changes and `mode` becomes `theme`. Failures retain DK-Suite's reasons and the
@@ -49,11 +51,14 @@ and device-screen-wallpaper specs now agree on this behavior, resolving b1b.
 app's renderer document may call it. The strip may `read` and `setTheme`;
 `setMode`, `setHourFormat`, `setSeconds`, `chooseMedia`, `commitMedia` and `restoreMedia`
 need the management window. Every successful change is broadcast to all
-windows.
+windows. Listeners accept only their explicit or initially resolved target.
 
 ## Custom media
 
 Slots store `{ kind, path }` like DK-Suite, but only main reads `path`.
+Renderer profile responses and broadcasts replace clock media paths with opaque
+`clock-media:` references, including compatibility copies. Main restores references
+only against the original saved key when the editor previews or saves a draft.
 Renderers get `{ kind, name, url, available }` with
 `url = oq-clock-media://theme/<id>?r=<revision>&t=<encoded profile/page/key>`. The privileged scheme is
 registered before `app.whenReady()`, resolves the theme's saved slot, answers

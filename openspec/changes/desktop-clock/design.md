@@ -101,3 +101,11 @@ Settings decode with excess-property preservation at every level before a narrow
 The clock protocol uses Electron webRequest's browser-owned requesting frame identity to authorize subresources from the exact app document. Top-level protocol navigation and media from unrelated documents are denied. Video commits ignore management's duration hint and use an isolated hidden main-owned decoder window without a preload or app bridge, with a six-second timeout. The shared video probe handles WebM without a finite metadata duration by seeking to the end. Native checks cover valid media access followed by denial after navigation and rejection of a forged duration for a real short WebM.
 
 Theme cycling from None intentionally matches `recovered_sources/src/views/Components/dkDesktopClock.vue:329-333`: season is the base, so next chooses cyber and previous chooses aurora. The review suggestion to select season on next was declined against that source.
+
+## PR #82 review fixes
+
+Migration and legacy archive import share primary/backup validation. Invalid wallpaper primaries recover from valid backups; unusable legacy files retain their original bytes and record a scrubbed catalog diagnostic while profiles migrate with defaults. Only a failed profile write leaves migration incomplete. Archive import migrates the imported envelope before deduplication and leaves existing destination clocks alone. Once profiles own clock settings, backup collection skips the abandoned clock directory and archives only the slots referenced by canonical keys.
+
+Screen controls resolve the same serial-scoped page as StripScreen and omit the clock editor if that page has no clock. Broadcast listeners compare explicit or initially resolved targets, including targetless compatibility messages. The key editor tracks its last saved key and avoids saving an unchanged draft before a clock update.
+
+Every renderer profile delivery projects clock media paths to opaque references. Main restores those references from the corresponding saved key before previewing an editor draft, preserving media on save. The clock service retains its basename and opaque media URL projection.

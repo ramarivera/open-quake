@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Schema } from "effect";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	encodeProfileEnvelope,
@@ -107,6 +107,43 @@ describe("profile clock migration", () => {
 		const value = await loadProfileClockMigration(seed(), path, async () => {});
 		expect(action(value, "hourFormat")).toBe("12h");
 	});
+	it.each(["desktop-preview", "unselected-physical-serial"])(
+		"recovers corrupt wallpaper primary from its valid backup for %s",
+		async (serial) => {
+			const path = await root();
+			const file = await saveLegacy(path, serial);
+			await writeFile(
+				file.replace(".json", ".backup.json"),
+				await readFile(file),
+			);
+			await writeFile(file, "corrupt");
+			const value = await loadProfileClockMigration(
+				seed(),
+				path,
+				async () => {},
+			);
+			expect(action(value, "hourFormat")).toBe("12h");
+			expect(value.clockConfigVersion).toBe(1);
+		},
+	);
+	it("publishes migrated profile defaults when both wallpaper copies are unusable", async () => {
+		const path = await root();
+		const file = await saveLegacy(path);
+		await writeFile(file, "corrupt");
+		await writeFile(file.replace(".json", ".backup.json"), "{}");
+		const storage = createDesktopProfileStorage(
+			join(path, "profiles-v1.json"),
+			undefined,
+			seed,
+		);
+		const value = Schema.encodeSync(ProfileEnvelope)(
+			Schema.decodeUnknownSync(ProfileEnvelope)(await storage.read()),
+		);
+		expect(value.clockConfigVersion).toBe(1);
+		expect(action(value, "hourFormat")).toBe("24h");
+		expect(await readFile(file, "utf8")).toBe("corrupt");
+	});
+
 	it("retains the real built-in seed when the first migration commit is interrupted", async () => {
 		const path = await root();
 		await saveLegacy(path);
@@ -283,17 +320,32 @@ describe("profile clock migration", () => {
 			migrateProfileClocks(first, { clock: undefined, formats: new Map() }),
 		).toBe(first);
 	});
-	it("invalid legacy is retained and cannot commit a completion marker", async () => {
+	it("invalid legacy clock is retained while defaults commit with a scrubbed diagnostic", async () => {
 		const path = await root();
 		await mkdir(join(path, "clock-v1"));
 		await writeFile(join(path, "clock-v1/clock.json"), "invalid");
 		let writes = 0;
-		await expect(
-			loadProfileClockMigration(seed(), path, async () => {
+		const diagnostic = vi.fn();
+		const value = await loadProfileClockMigration(
+			seed(),
+			path,
+			async () => {
 				writes++;
-			}),
-		).rejects.toThrow();
-		expect(writes).toBe(0);
+			},
+			diagnostic,
+		);
+		expect(writes).toBe(1);
+		expect(value.clockConfigVersion).toBe(1);
+		expect(action(value, "hourFormat")).toBe("24h");
+		expect(diagnostic).toHaveBeenCalledOnce();
+		const error = diagnostic.mock.calls[0]?.[0];
+		expect(error).toMatchObject({
+			_tag: "ClockConfigInvalid",
+			code: "QUAKE.CLOCK.CONFIG_INVALID",
+		});
+		expect(error.originalCause).toBeInstanceOf(SyntaxError);
+		expect(JSON.stringify(error)).not.toContain(path);
+		expect(JSON.stringify(error)).not.toContain("originalCause");
 		expect(await readFile(join(path, "clock-v1/clock.json"), "utf8")).toBe(
 			"invalid",
 		);

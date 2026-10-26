@@ -128,9 +128,8 @@ export function useClockSettings(
 		const off = bridge.onSnapshot((value) => {
 			if (
 				Schema.is(ClockSnapshot)(value) &&
-				(!value.target ||
-					JSON.stringify(value.target) ===
-						(targetId ?? JSON.stringify(resolvedTarget.current)))
+				JSON.stringify(value.target) ===
+					(targetId ?? JSON.stringify(resolvedTarget.current))
 			)
 				setSnapshot((current) => newest(current, value));
 		});

@@ -45,3 +45,20 @@ Review round 1 evidence: fixes `9ea0bf3`, current-main integration `e3ab3f4` thr
 Profile smoke screenshots and logs live under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/clock-profile/`. The two formats are `screenshots/profile-a-12h-seconds.png` and `screenshots/profile-b-24h-minutes.png`; `screenshots/profile-a-after-restart.png` proves the first profile remains configured after owner restart. No hardware or DK-Suite process was opened.
 
 Final gate logs: `biome-final.log`, `typecheck-final.log`, `test-serial.log`, `build-final.log`, `bundle-final.log`, `spec-final.log`, `native-profile.log` and `native-media.log` in the lane scratch directory above. The full suite command was `TMPDIR=<lane scratch> OPEN_QUAKE_TEST_SCRATCH=<lane scratch> pnpm test --env-mode=loose --force --concurrency=1 -- --maxWorkers=2`; loose environment propagation keeps tests on the required scratch volume. All hidden Electron processes started by these smokes exited.
+
+## 8. PR #82 review fixes
+
+- [x] 8.1 Recover invalid wallpaper primary from a validated backup in both migration passes. Invalid legacy data falls back to defaults with scrubbed diagnostics and never blocks profile reads. Devin 4375879053, bead `open-quake-t10.7`. Covers WIDGETS-021/022/062.
+- [x] 8.2 Archive only profile-owned clock slots after the completion marker. Abandoned legacy media must not block backup. Devin 4375879270, bead `open-quake-t10.8`. Covers WIDGETS-038/062.
+- [x] 8.3 Migrate legacy archive clocks into imported profiles before deduplication, leaving destination clocks unchanged and repeat imports idempotent. Devin 4375879434, bead `open-quake-t10.9`. Covers WIDGETS-021/022/062.
+- [x] 8.4 Bind Screen controls to the serial-scoped clock shown by its preview. Devin 4375879554, bead `open-quake-t10.10`. Covers WIDGETS-020/022/056.
+- [x] 8.5 Filter broadcasts against explicit or resolved clock targets, including rejecting targetless compatibility snapshots for profile clocks. Devin 4375879660, bead `open-quake-t10.11`. Covers WIDGETS-038/056.
+- [x] 8.6 Save an editor clock change in one profile write when its key draft is unchanged. Preserve dirty draft saves. Devin 4375879792, bead `open-quake-t10.12`. Covers WIDGETS-038/056.
+
+- [x] 8.7 Project clock media paths to opaque references in renderer profile responses and broadcasts, restoring references only for the matching key draft in main. Codex 4375943157, bead `open-quake-t10.13`. Covers WIDGETS-034/038/056.
+
+Fix round evidence: migration/backup regressions reproduced six failures on the original implementation. Hidden native UI regressions reproduced five failures before renderer fixes. Additional privacy and obsolete-record/asset tests reproduced four failures before their fixes. The final suite passes 2,889 tests with four existing skips across four packages, including 1,719 desktop tests. Biome checks 1,156 files with 14 existing warnings; all six typecheck tasks, build, both bundle modes and strict OpenSpec 46/46 pass. Hidden mock profile smoke passes 16 assertions and three captures; wallpaper/media smoke passes and saves 16 captures. No hardware or DK-Suite process was opened.
+
+Evidence directory: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/clock-profile/fix1/`. Logs: `regression-main-before.log`, `native-before3.log`, `privacy-before.log`, `test-final2.log`, `biome-final.log`, `typecheck-final2.log`, `build-final2.log`, `bundle-final2.log`, `spec-final.log`, `native-profile-final.log`, `native-media-final.log`. Native checks used the existing Electron 43.4.1 distribution through `ELECTRON_OVERRIDE_DIST_PATH` after the local download failed, with `OPEN_QUAKE_MOCK_DEVICE=1` and `ELECTRON_RUN_AS_NODE` unset.
+
+Codex 4375943149 duplicates 8.2, and 4375943171 duplicates 8.3. All six Devin findings and all three Codex findings are addressed. CodeRabbit is rate-limited and has no findings. Review replies reference the pushed fix commit; threads remain unresolved for the lead. Physical acceptance stays open under task 4.2 and `open-quake-t10.6`.

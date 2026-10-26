@@ -984,3 +984,57 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 		await f.runtime.dispose();
 	}
 });
+
+it("redacts clock media in editor replies and previews without losing it on save", async () => {
+	const path = "/Users/private/clock-media.png";
+	const f = fixture({
+		type: "dkDesktopClock",
+		actions: [
+			{
+				type: "clockStyle",
+				value: {
+					background: {
+						mode: "theme",
+						themeId: "season",
+						themes: { season: { kind: "image", path } },
+					},
+				},
+			},
+		],
+	});
+	try {
+		const read = await f.request(f.manager, { type: "read", locale: "en" });
+		if (read._tag !== "success" || !read.envelope)
+			throw new Error("Read fixture failed");
+		expect(JSON.stringify(read)).not.toContain(path);
+		const key = read.envelope.profiles[0].pages[0].keys[0];
+		const target = {
+			token: "clock-media-roundtrip",
+			profileId: "p",
+			pageId: "one",
+			keyCode: "1,1",
+			revision: 0,
+		};
+		const preview = await f.request(f.manager, {
+			type: "preview",
+			target,
+			key,
+		});
+		expect(preview._tag).toBe("success");
+		expect(JSON.stringify(preview)).not.toContain(path);
+		expect(
+			JSON.stringify(vi.mocked(f.manager.webContents.send).mock.calls),
+		).not.toContain(path);
+		const saved = await f.request(f.manager, {
+			type: "save",
+			token: target.token,
+		});
+		expect(saved._tag).toBe("success");
+		expect(JSON.stringify(saved)).not.toContain(path);
+		const main = await f.runtime.runPromise(ProfileService.loadProfiles());
+		expect(JSON.stringify(main.envelope)).toContain(path);
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});

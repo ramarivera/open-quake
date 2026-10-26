@@ -37,7 +37,11 @@ import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
-type Selection = { readonly target: KeyTarget; readonly key: ProfileKey };
+type Selection = {
+	readonly target: KeyTarget;
+	readonly key: ProfileKey;
+	readonly savedKey: ProfileKey;
+};
 export function KeyEditor(): React.JSX.Element {
 	const { snapshot: wallpaper } = useWallpaper();
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
@@ -179,6 +183,7 @@ export function KeyEditor(): React.JSX.Element {
 		);
 		const next = {
 			key,
+			savedKey: key,
 			target: {
 				token: crypto.randomUUID(),
 				profileId: p.id,
@@ -234,6 +239,7 @@ export function KeyEditor(): React.JSX.Element {
 				);
 				const next = {
 					...old,
+					savedKey: old.key,
 					target: {
 						...old.target,
 						revision: p?.revision ?? old.target.revision,
@@ -704,6 +710,12 @@ export function KeyEditor(): React.JSX.Element {
 					<ClockSettings
 						beforeWrite={async () => {
 							const old = current.current;
+							if (!old || savePending.current) return false;
+							if (
+								JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
+								JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
+							)
+								return true;
 							await save();
 							return old !== current.current;
 						}}

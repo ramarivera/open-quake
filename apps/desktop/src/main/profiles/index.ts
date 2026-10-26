@@ -50,6 +50,7 @@ import { prepareDesktopModule } from "../diagnostics/module";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
+import { encodeRendererProfile } from "./clock-profile-projection";
 import { makeScopedForegroundProbe } from "./foreground-app";
 import {
 	canonicalProfileAppPath,
@@ -136,7 +137,7 @@ export function prepareProfiles(
 									guard?.();
 									broadcast(PROFILE_SELECTION, {
 										serial,
-										profile: Schema.encodeSync(Profile)(profile),
+										profile: encodeRendererProfile(profile),
 										hardware: "unverified",
 									});
 								},

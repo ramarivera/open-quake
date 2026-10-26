@@ -7,8 +7,10 @@ import { app, BrowserWindow } from "electron";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository.js";
+import { CLOCK_SNAPSHOT } from "../../shared/clock-contracts";
 import { MediaLive, registerMedia } from "../media";
 import { registerProfiles } from "../profiles";
+import { ClockStore } from "./clock-store";
 import { ClockLive, registerClock, registerClockScheme } from "./index";
 
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode is required");
@@ -17,6 +19,12 @@ registerClockScheme();
 app.on("window-all-closed", () => {});
 async function smoke(): Promise<void> {
 	let assertions = 0;
+	const regressions: string[] = [];
+	const regression = (value: unknown, name: string): void => {
+		assertions++;
+		if (!value) regressions.push(name);
+		process.stdout.write(`Regression ${value ? "PASS" : "FAIL"}: ${name}\n`);
+	};
 	const check = (value: unknown, message: string): void => {
 		assert(value, message);
 		assertions++;
@@ -80,6 +88,11 @@ async function smoke(): Promise<void> {
 			`new Promise((resolve,reject)=>{const end=Date.now()+10000;const check=()=>{if(${expression})return resolve(true);if(Date.now()>end)return reject(new Error('Clock profile smoke timeout: '+${JSON.stringify(expression)}));setTimeout(check,25)};check()})`,
 		);
 	let profiles: ReturnType<typeof registerProfiles> | undefined;
+	const makeClockRuntime = () => {
+		assert(profiles);
+		return ManagedRuntime.make(ClockLive(root, profiles.runtime));
+	};
+	let clockRuntime: ReturnType<typeof makeClockRuntime> | undefined;
 	let clock: ReturnType<typeof registerClock> | undefined;
 	let media: ReturnType<typeof registerMedia> | undefined;
 	async function start() {
@@ -87,10 +100,8 @@ async function smoke(): Promise<void> {
 		const management = new BrowserWindow(options);
 		const panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
 		profiles = registerProfiles(() => management);
-		clock = registerClock(
-			ManagedRuntime.make(ClockLive(root, profiles.runtime)),
-			() => management,
-		);
+		clockRuntime = makeClockRuntime();
+		clock = registerClock(clockRuntime, () => management);
 		media = registerMedia(
 			ManagedRuntime.make(MediaLive(join(root, "wallpaper-v1"))),
 			() => management,
@@ -170,6 +181,12 @@ async function smoke(): Promise<void> {
 				JSON.stringify(after.envelope.profiles.find((p) => p.id === second.id)),
 			"profile B remains byte-identical",
 		);
+		regression(
+			after.envelope.profiles[0].revision ===
+				before.envelope.profiles[0].revision + 2,
+			"editor clock changes write exactly one revision each",
+		);
+
 		const originalKey = before.envelope.profiles[0].pages[0].keys[0];
 		const editedKey = after.envelope.profiles[0].pages[0].keys[0];
 		check(
@@ -201,6 +218,100 @@ async function smoke(): Promise<void> {
 			),
 			"profile B renders 24h without seconds",
 		);
+		// The physical serial selects B while desktop-preview selects A.
+		await evaluate(
+			management,
+			`(async()=>{
+			await window.quakeKeyLibrary.request({type:'select', deviceId:'desktop-preview', profileId:'clock-a', pageId:${JSON.stringify(first.pages[0].id)}});
+			await window.quakeKeyLibrary.request({type:'select', deviceId:'QUAKE-MOCK', profileId:'clock-b', pageId:${JSON.stringify(first.pages[0].id)}});
+			await window.quakeWallpaper.request({_tag:'select',serial:'QUAKE-MOCK'});
+			document.querySelector('[data-nav-page=screen]').click();
+		})()`,
+		);
+		await wait(
+			management,
+			"!!document.querySelector('.clock-settings input[type=radio]') && !document.querySelector('.clock-settings input[type=radio]').disabled",
+		);
+		const selectedFormat =
+			"[...document.querySelectorAll('.clock-settings label')].find(b=>b.textContent==='24-Hour').querySelector('input').checked";
+		regression(
+			await evaluate(management, selectedFormat),
+			"Screen controls use the displayed serial profile",
+		);
+		const snapshotB = await clockRuntime?.runPromise(
+			ClockStore.read({
+				profileId: second.id,
+				pageId: first.pages[0].id,
+				keyCode: "1,1",
+			}),
+		);
+		assert(snapshotB);
+		management.webContents.send(CLOCK_SNAPSHOT, {
+			...snapshotB,
+			revision: snapshotB.revision + 100,
+		});
+		await evaluate(management, "new Promise(resolve=>setTimeout(resolve,100))");
+		// A targeted snapshot cannot redirect a consumer resolved to another profile.
+		const snapshotA = await clockRuntime?.runPromise(
+			ClockStore.read({
+				profileId: first.id,
+				pageId: first.pages[0].id,
+				keyCode: "1,1",
+			}),
+		);
+		assert(snapshotA);
+		management.webContents.send(CLOCK_SNAPSHOT, {
+			...snapshotA,
+			revision: snapshotA.revision + 100,
+		});
+		await evaluate(management, "new Promise(resolve=>setTimeout(resolve,100))");
+		regression(
+			await evaluate(management, selectedFormat),
+			"Screen ignores another profile's clock broadcast",
+		);
+		const { target: _target, ...targetless } = snapshotA;
+		management.webContents.send(CLOCK_SNAPSHOT, {
+			...targetless,
+			revision: 1000,
+		});
+		await evaluate(management, "new Promise(resolve=>setTimeout(resolve,100))");
+		regression(
+			await evaluate(management, selectedFormat),
+			"profile clock ignores targetless compatibility broadcasts",
+		);
+		await evaluate(
+			management,
+			"[...document.querySelectorAll('.clock-settings label')].find(b=>b.textContent==='12-Hour (AM/PM)').click()",
+		);
+		await wait(
+			management,
+			"!document.querySelector('.clock-settings input[type=radio]').disabled",
+		);
+		const editedB = await clockRuntime?.runPromise(
+			ClockStore.read({
+				profileId: second.id,
+				pageId: first.pages[0].id,
+				keyCode: "1,1",
+			}),
+		);
+		regression(
+			editedB?.hourFormat === "12h",
+			"Screen hour-format writes reach the displayed profile",
+		);
+		// Restore B for the existing restart checks.
+		await clockRuntime?.runPromise(
+			ClockStore.setHourFormat("24h", {
+				profileId: second.id,
+				pageId: first.pages[0].id,
+				keyCode: "1,1",
+			}),
+		);
+		await evaluate(
+			management,
+			"window.quakeWallpaper.request({_tag:'select',serial:'desktop-preview'})",
+		);
+		await profiles?.select(second.id);
+
 		await stop();
 		const restarted = await start();
 		await wait(
@@ -239,6 +350,7 @@ async function smoke(): Promise<void> {
 			BrowserWindow.getAllWindows().length === 0,
 			"all hidden windows are closed",
 		);
+		assert.deepEqual(regressions, [], "clock review regressions");
 		await writeFile(
 			join(artifacts, "profile-smoke-result.json"),
 			JSON.stringify(

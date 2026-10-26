@@ -67,9 +67,22 @@ export async function archiveClockMedia(
 			}
 			return result;
 		};
+		const profileName = "open-quake/profiles-v1.json";
+		const profileBytes = files.get(profileName);
+		const envelope = profileBytes
+			? encodeProfileEnvelope(
+					Schema.decodeUnknownSync(ProfileEnvelope)(
+						JSON.parse(Buffer.from(profileBytes).toString("utf8")),
+					),
+				)
+			: undefined;
+
 		const legacyName = "open-quake/clock-v1/clock.json";
 		const legacyBytes = files.get(legacyName);
-		if (legacyBytes) {
+		if (envelope?.clockConfigVersion === 1) {
+			// Legacy slots are abandoned after migration and may point at deleted files.
+			files.delete(legacyName);
+		} else if (legacyBytes) {
 			const record = Schema.decodeUnknownSync(ClockRecord, {
 				onExcessProperty: "preserve",
 			})(JSON.parse(Buffer.from(legacyBytes).toString("utf8")));
@@ -88,14 +101,7 @@ export async function archiveClockMedia(
 				);
 			files.set(legacyName, Buffer.from(JSON.stringify({ ...record, keys })));
 		}
-		const profileName = "open-quake/profiles-v1.json";
-		const profileBytes = files.get(profileName);
-		if (profileBytes) {
-			const envelope = encodeProfileEnvelope(
-				Schema.decodeUnknownSync(ProfileEnvelope)(
-					JSON.parse(Buffer.from(profileBytes).toString("utf8")),
-				),
-			);
+		if (envelope) {
 			const profiles = [];
 			for (const profile of envelope.profiles) {
 				const pages = [];
