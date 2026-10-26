@@ -29,6 +29,7 @@ export const appUpdateTiming = { first: 5000, interval: 43200000 } as const;
 export class AppUpdates extends Effect.Service<AppUpdates>()("AppUpdates", {
 	scoped: Effect.gen(function* () {
 		const port = yield* AppUpdatePort;
+		const scope = yield* Effect.scope;
 		let state: AppUpdateSnapshot = {
 			state: port.enabled ? "idle" : "disabled",
 			version: "",
@@ -57,7 +58,7 @@ export class AppUpdates extends Effect.Service<AppUpdates>()("AppUpdates", {
 						...state,
 						state: "downloading",
 						progress: 0,
-						prompt: false,
+						reason: "",
 					};
 					yield* port.download(selected, (progress) => {
 						state = { ...state, progress: Math.max(0, Math.min(1, progress)) };
@@ -138,6 +139,13 @@ export class AppUpdates extends Effect.Service<AppUpdates>()("AppUpdates", {
 		return {
 			check,
 			download,
+			startDownload: Effect.fn("AppUpdates.startDownload")(function* () {
+				yield* download().pipe(
+					Effect.catchTag("AppUpdateFailed", () => Effect.void),
+					Effect.forkIn(scope),
+				);
+				yield* Effect.yieldNow();
+			}),
 			snapshot: Effect.fn("AppUpdates.snapshot")(
 				(): Effect.Effect<AppUpdateSnapshot> =>
 					Effect.sync(() => ({ ...state })),
@@ -164,6 +172,16 @@ export class AppUpdates extends Effect.Service<AppUpdates>()("AppUpdates", {
 					),
 					Effect.tapError(fail),
 				);
+				// A returning installer completed its handoff. The running app's version
+				// does not change until restart, so permit a fresh check without claiming it did.
+				release = Option.none();
+				state = {
+					state: "idle",
+					version: "",
+					progress: 0,
+					reason: "",
+					prompt: false,
+				};
 			}),
 		};
 	}),

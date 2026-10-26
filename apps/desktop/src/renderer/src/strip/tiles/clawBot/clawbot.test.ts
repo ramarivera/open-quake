@@ -9,6 +9,7 @@ import {
 } from "../../../../../main/test/voice-fixtures";
 import { ProfileEnvelope } from "../../../../../shared/profiles";
 import { stripLayout } from "../../geometry";
+import { type StripLocale, stripText } from "../../overlays/voice/strings";
 import { previewVoiceContext } from "../../overlays/voice/voice-context";
 import { initialVoiceView } from "../../overlays/voice/voice-state";
 import { selectStripPage } from "../../selection";
@@ -266,6 +267,70 @@ describe("conversation", () => {
 		expect(isHintCopy(errorCopy("1003"))).toBe(false);
 	});
 
+	it("AI-178: only accepted later answer text finishes running tools", () => {
+		let state = answer(
+			answer(turn(initialConversation, "typed"), 0, "first"),
+			1,
+			"",
+		);
+		state = reduceConversation(
+			state,
+			{
+				_tag: "Tool",
+				serial: "QK",
+				keyCode: "1,5",
+				turnId,
+				toolCallId: "t1",
+				name: "exec",
+				args: '{"command":"pwd"}',
+				phase: "start",
+			},
+			201,
+		);
+		const render = (conversation: ConversationState) =>
+			renderToStaticMarkup(
+				createElement(ClawBotTile, {
+					tile: tile("quakeBot"),
+					context: {
+						now: undefined,
+						hourFormat: "24h",
+						voice: {
+							...previewVoiceContext,
+							surface: "panel",
+							view: { ...initialVoiceView, conversation },
+						},
+					},
+				}),
+			);
+		const running = (conversation: ConversationState) =>
+			expect(render(conversation)).toContain('data-phase="start"');
+		running(answer(state, 0, "stale"));
+		running(answer(state, 1, "duplicate"));
+		running(answer(state, 2, ""));
+		running(answer(state, 4, "sequence gap"));
+		const ended = reduceConversation(
+			state,
+			{
+				_tag: "Chunk",
+				serial: "QK",
+				keyCode: "1,5",
+				chunk: {
+					version: 1,
+					sessionId,
+					turnId,
+					seq: 2,
+					type: "end",
+					outcome: "completed",
+				},
+			},
+			202,
+		);
+		running(answer(ended, 3, "late"));
+		const next = answer(state, 2, " next");
+		expect(render(next)).toContain('data-phase="result"');
+		expect(render(next)).toContain("first next");
+	});
+
 	it("upserts tool cards by call id", () => {
 		let state = turn(initialConversation, "voice");
 		const tool = (phase: "start" | "result") =>
@@ -498,4 +563,124 @@ describe("ClawBotInput", () => {
 		expect(markup).toContain("File Attach");
 		expect(markup).not.toContain("WebChat");
 	});
+});
+
+describe("AI-167 retained error copy through the conversation renderer", () => {
+	const cases = [
+		["1401", "sttErrorUnauthorized", false],
+		["2003", "sttErrorGeneric", false],
+		["1003", "sttErrorNoAudioCapture", false],
+		["1002", "sttErrorInvalidUserInput", false],
+		["3005", "voiceStartFailed", false],
+		["2009", "communicationCancelled", true],
+		["2010", "openClawNotConnected", true],
+		["2011", "sendChatFailed", true],
+		["2012", "chatFailed", true],
+		["2013", "chatResponseError", true],
+		["4001", "chatFailed", true],
+		["4003", "chatFailed", true],
+		["2014", "chatFailed", true],
+		["VOICE.GRID.RUNTIME_UNAVAILABLE", "voiceStartFailed", false],
+		["VOICE.KNOB.ROUTE_UNAVAILABLE", "voiceStartFailed", false],
+		["VOICE.CAPTURE.NO_DEVICE", "sttErrorNoAudioCapture", false],
+		["VOICE.CAPTURE.PERMISSION_DENIED", "sttErrorNoAudioCapture", false],
+		["VOICE.CAPTURE.RECORDER_UNAVAILABLE", "sttErrorNoAudioCapture", false],
+		["VOICE.CAPTURE.PHASE_TIMEOUT", "sttErrorNoAudioCapture", false],
+		["CHAT.RESPONSE.TIMEOUT", "chatResponseError", true],
+		["CHAT.SESSION.BUSY", "chatFailed", true],
+		["CHAT.TURN.CANCELLED", "communicationCancelled", true],
+		["AI.PROVIDER.UNAVAILABLE", "chatFailed", true],
+		["AI.PROVIDER.RATE_LIMITED", "chatFailed", true],
+		["AI.PROVIDER.AUTH_REQUIRED", "sttErrorUnauthorized", false],
+		["AI.PROVIDER.AUTH_REVOKED", "sttErrorUnauthorized", false],
+		["AI.PROVIDER.PROTOCOL_INVALID", "chatResponseError", true],
+	] as const;
+	const render = (state: ConversationState, locale: StripLocale = "en") =>
+		renderToStaticMarkup(
+			createElement(ClawBotTile, {
+				tile: tile("quakeBot"),
+				context: {
+					now: undefined,
+					hourFormat: "24h",
+					voice: {
+						...previewVoiceContext,
+						surface: "panel",
+						locale,
+						view: { ...initialVoiceView, conversation: state },
+					},
+				},
+			}),
+		);
+	const failed = (code?: string, message?: string) =>
+		reduceConversation(
+			initialConversation,
+			{
+				_tag: "Stage",
+				serial: "QK",
+				keyCode: "1,5",
+				captureId: "fixture",
+				stage: {
+					_tag: "failed",
+					reason: "generic",
+					...(code === undefined ? {} : { errorCode: code }),
+					...(message === undefined ? {} : { message }),
+				},
+			},
+			0,
+		);
+	it.each(cases)("renders %s as %s, hint=%s", (code, key, hint) => {
+		const html = render(failed(code));
+		expect(html).toContain(stripText("en", `quakeBotIconView.${key}`));
+		expect(html.includes('data-variant="hint"')).toBe(hint);
+		expect(html).toContain(
+			hint ? stripText("en", "quakeBotIconView.systemSender") : "default",
+		);
+	});
+	it("prefers a supplied message, otherwise localizes unknown code or generic fallback", () => {
+		expect(render(failed("unknown", "  supplied <img>  "))).toContain(
+			"supplied &lt;img&gt;",
+		);
+		expect(render(failed("2012", "supplied"))).toContain("supplied");
+		expect(render(failed("unknown", " "))).toContain(
+			stripText("en", "aiIconViewTxt.errorCodeLine", { code: "unknown" }),
+		);
+		expect(render(failed())).toContain(stripText("en", "aiAudio.error"));
+	});
+	it.each(["en", "zh", "de", "es", "fr", "it", "ja", "ko"] as const)(
+		"AI-208: %s stage/error/input copy is bundled offline",
+		(locale) => {
+			const input = renderToStaticMarkup(
+				createElement(ClawBotInputTile, {
+					tile: tile("quakeBotInput"),
+					context: {
+						now: undefined,
+						hourFormat: "24h",
+						voice: { ...previewVoiceContext, locale, surface: "panel" },
+					},
+				}),
+			);
+			for (const key of [
+				"quakeBotInputIconView.title",
+				"quakeBotInputIconView.placeholder",
+				"quakeBotInputIconView.quickActions.send.label",
+				"quakeBotInputIconView.quickActions.fileAttach.label",
+			] as const) {
+				const text = stripText(locale, key);
+				expect(text).not.toBe(key);
+				expect(input).toContain(
+					text
+						.replaceAll("&", "&amp;")
+						.replaceAll('"', "&quot;")
+						.replaceAll("'", "&#x27;"),
+				);
+			}
+			for (const [code, key] of cases)
+				expect(render(failed(code), locale)).toContain(
+					stripText(locale, `quakeBotIconView.${key}`).replaceAll(
+						"'",
+						"&#x27;",
+					),
+				);
+		},
+	);
 });

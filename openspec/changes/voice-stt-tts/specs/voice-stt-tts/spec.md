@@ -172,6 +172,15 @@ Evidence: AI-254, AI-255, KNOB-053, KNOB-055. Missing input SHALL report VOICE.C
 - **WHEN** a knob recorder reaches 57999ms then 58000ms after readiness
 - **THEN** it remains open before the boundary and stops once at 58000ms, finalizes nonempty audio once and closes all capture resources
 
+#### Scenario: Empty synthesis AI-103
+
+- **WHEN** synthesis receives empty or whitespace-only text
+- **THEN** it returns text-only without HTTP, credentials or audio output
+
+#### Scenario: Provider switch and reload AI-108
+
+- **WHEN** saved TTS selection switches between OpenAI and DashScope and settings reload
+- **THEN** the derived model is respectively gpt-4o-mini-tts or qwen-audio-3.1-tts-flash, without retaining the previous provider model
 
 ### Requirement: Independent retained speech engines
 

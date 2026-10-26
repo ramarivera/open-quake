@@ -58,3 +58,17 @@ The agents area SHALL use the shared management tokens and controls, with one bo
 #### Scenario: Paper theme
 - **WHEN** the user selects the Paper theme
 - **THEN** the workspace text, borders and focus indicators use the theme tokens with readable contrast
+
+### Requirement: Fresh direct conversations and settings navigation
+
+Direct chat SHALL clear its draft and current session on New Chat, create one session only on send, and prevent conversation switching during a stream. Model settings navigation SHALL target the model configuration tab without losing the current conversation. Covers AI-223, AI-227.
+
+#### Scenario: New Chat while streaming AI-223
+
+- **WHEN** a user starts a new conversation and sends once
+- **THEN** the previous draft and session clear, one session is created, and New Chat and history switching stay disabled until the turn ends
+
+#### Scenario: Configuration round trip AI-227
+
+- **WHEN** Model settings is activated from the conversation workspace
+- **THEN** the Models tab opens and returning preserves the current conversation

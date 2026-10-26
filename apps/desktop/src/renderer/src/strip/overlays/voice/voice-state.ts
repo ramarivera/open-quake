@@ -390,6 +390,6 @@ export function nextExpiry(view: VoiceView): Option.Option<number> {
 
 /** The key showing the AI cancel indicator: the active key while processing. */
 export const cancelIndicatorKey = (view: VoiceView): Option.Option<string> =>
-	Option.contains(view.copilot.status, 1)
+	Option.contains(view.copilot.status, 1) && view.copilot.text.trim() === ""
 		? view.copilot.activeKey
 		: Option.none();
