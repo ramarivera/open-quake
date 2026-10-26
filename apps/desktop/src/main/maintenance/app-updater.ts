@@ -1,6 +1,6 @@
 import { createHash, verify } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, unlink } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, rm, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { Effect, Option, Schema } from "effect";
 import { Version } from "../../../../../packages/edge/src/maintenance/contracts.js";
@@ -23,13 +23,21 @@ const Envelope = Schema.Struct({
 	payload: Schema.String.pipe(Schema.maxLength(32768)),
 	signature: Schema.String.pipe(Schema.pattern(/^[A-Za-z0-9+/]{86}==$/)),
 });
+/** The installer consumes verified bytes from a pinned descriptor, never a replaceable path.
+ * It must finish consuming the artifact before its promise resolves. */
+export interface VerifiedUpdateArtifact {
+	readonly read: (buffer: Uint8Array, position: number) => Promise<number>;
+}
 export interface OwnedUpdateConfiguration {
 	readonly feed: string;
 	readonly artifactOrigin: string;
 	/** PEM Ed25519 key pinned by the distributor, never supplied by release metadata. */
 	readonly publicKey: string;
 	/** The distributor must choose an installer policy before enabling this adapter. */
-	readonly install: (path: string, release: AppRelease) => Promise<void>;
+	readonly install: (
+		artifact: VerifiedUpdateArtifact,
+		release: AppRelease,
+	) => Promise<void>;
 	readonly fetch?: typeof fetch;
 }
 function trustedUrl(raw: string, origin?: string): URL {
@@ -93,7 +101,7 @@ export function ownedAppUpdater(options: {
 			catch: (cause) =>
 				cause instanceof AppUpdateFailed ? cause : new AppUpdateFailed(cause),
 		});
-	const checked = async (release: AppRelease): Promise<string> => {
+	const checked = async (release: AppRelease) => {
 		if (
 			!selected ||
 			JSON.stringify(release) !== JSON.stringify(selected) ||
@@ -125,7 +133,17 @@ export function ownedAppUpdater(options: {
 				sha256(bytes.subarray(0, offset)) !== release.sha256
 			)
 				throw new AppUpdateFailed();
-			return downloaded;
+			const after = await file.stat();
+			const named = await lstat(downloaded);
+			if (
+				after.size !== metadata.size ||
+				after.mtimeMs !== metadata.mtimeMs ||
+				after.ctimeMs !== metadata.ctimeMs ||
+				named.ino !== metadata.ino ||
+				named.dev !== metadata.dev
+			)
+				throw new AppUpdateFailed();
+			return metadata;
 		} finally {
 			await file.close();
 		}
@@ -231,7 +249,82 @@ export function ownedAppUpdater(options: {
 		install: (release) =>
 			boundary(async () => {
 				if (!config) throw new AppUpdateFailed();
-				await config.install(await checked(release), release);
+				const verified = await checked(release);
+				const directory = await mkdtemp(
+					join(options.root, ".app-update-install-"),
+				);
+				try {
+					const source = await open(
+						pathFor(release),
+						constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+					);
+					const path = join(directory, "artifact");
+					try {
+						const current = await source.stat();
+						if (
+							current.ino !== verified.ino ||
+							current.dev !== verified.dev ||
+							current.size !== verified.size ||
+							current.mtimeMs !== verified.mtimeMs ||
+							current.ctimeMs !== verified.ctimeMs
+						)
+							throw new AppUpdateFailed();
+						const output = await open(
+							path,
+							constants.O_WRONLY |
+								constants.O_CREAT |
+								constants.O_EXCL |
+								constants.O_NOFOLLOW,
+							0o600,
+						);
+						try {
+							await output.writeFile(await source.readFile());
+							await output.sync();
+							await output.chmod(0o400);
+						} finally {
+							await output.close();
+						}
+					} finally {
+						await source.close();
+					}
+					const input = await open(
+						path,
+						constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+					);
+					try {
+						// Remove the copy's name before its final hash, retaining only a read descriptor.
+						await unlink(path);
+						const metadata = await input.stat();
+						const bytes = await input.readFile();
+						if (
+							!metadata.isFile() ||
+							metadata.size !== release.bytes ||
+							bytes.length !== release.bytes ||
+							sha256(bytes) !== release.sha256
+						)
+							throw new AppUpdateFailed();
+						const final = await checked(release);
+						if (
+							final.ino !== verified.ino ||
+							final.dev !== verified.dev ||
+							final.mtimeMs !== verified.mtimeMs ||
+							final.ctimeMs !== verified.ctimeMs
+						)
+							throw new AppUpdateFailed();
+						await config.install(
+							{
+								read: async (buffer, position) =>
+									(await input.read(buffer, 0, buffer.length, position))
+										.bytesRead,
+							},
+							release,
+						);
+					} finally {
+						await input.close();
+					}
+				} finally {
+					await rm(directory, { recursive: true, force: true });
+				}
 			}),
 	};
 }

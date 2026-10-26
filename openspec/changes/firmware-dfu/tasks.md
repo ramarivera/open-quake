@@ -23,3 +23,16 @@ Implementation is tracked by open-quake-18d under open-quake-lih.13. Checked tas
 - [x] 4.1 Implement trusted bundled discovery and retained availability with synthetic fixtures, tracked by open-quake-lih.13.1.
 - [x] 4.2 Implement bounded progress, Windows lookup cadence, close reconciliation and renderer lifecycle/guidance tests, tracked by open-quake-lih.13.2.
 - [ ] 4.3 Validate the actual audited production image. Blocked by this lane's synthetic-only instruction; no real firmware binary may be opened or downloaded.
+
+## 5. PR 102 review fixes
+
+Tracked by open-quake-18d.8. Each finding gets a regression, commit, push and reply; threads remain unresolved.
+
+- [x] 5.1 Replace installer path handoff with a verified private descriptor-backed copy and refuse cache swaps, review 4379260349.
+- [ ] 5.2 Stream bounded downloads and verification, review 4379258894.
+- [ ] 5.3 Keep Settings available with unreadable optional firmware directories, review 4379259396.
+- [ ] 5.4 Accept newer hardware version observations, review 4379259164.
+- [ ] 5.5 Finish normally returning installs, review 4379259656.
+- [ ] 5.6 Prune superseded update artifacts, review 4379259888.
+- [ ] 5.7 Persist bounded intermediate copy progress, review 4379260103.
+- [ ] 5.8 Reconcile unanswered Codex/Copilot threads and run full gates plus synthetic native firmware smoke.

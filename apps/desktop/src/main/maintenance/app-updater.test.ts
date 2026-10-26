@@ -1,13 +1,18 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import * as files from "node:fs/promises";
+import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Effect, Option } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
 import { AppUpdateFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import type { AppRelease } from "../../../../../packages/edge/src/maintenance/update-service.js";
-import { ownedAppUpdater } from "./app-updater";
+import { ownedAppUpdater, type VerifiedUpdateArtifact } from "./app-updater";
 
+vi.mock("node:fs/promises", async (original) => {
+	const actual = await original<typeof import("node:fs/promises")>();
+	return { ...actual, mkdtemp: vi.fn(actual.mkdtemp) };
+});
 const key = generateKeyPairSync("ed25519");
 const bytes = Buffer.from("synthetic installer fixture, never executable");
 const release: AppRelease = {
@@ -41,7 +46,14 @@ async function fixture(
 		).toString("base64"),
 	});
 	const transport = vi.fn<typeof fetch>(async () => new Response(envelope));
-	const install = vi.fn(async (_path: string, _release: AppRelease) => {});
+	const installed: Buffer[] = [];
+	const install = vi.fn(
+		async (artifact: VerifiedUpdateArtifact, _release: AppRelease) => {
+			const buffer = Buffer.alloc(bytes.length);
+			expect(await artifact.read(buffer, 0)).toBe(bytes.length);
+			installed.push(buffer);
+		},
+	);
 	const port = ownedAppUpdater({
 		root,
 		currentVersion: "1.0.0",
@@ -57,7 +69,7 @@ async function fixture(
 			install,
 		},
 	});
-	return { root, port, transport, install };
+	return { root, port, transport, install, installed };
 }
 it("uses no network or installer with the default disabled owned policy", async () => {
 	const transport = vi.spyOn(globalThis, "fetch");
@@ -91,10 +103,10 @@ it("verifies signed owned release, reports progress and rechecks private cached 
 	expect(f.install).not.toHaveBeenCalled();
 	await Effect.runPromise(f.port.install(release));
 	expect(f.install).toHaveBeenCalledWith(
-		join(f.root, `app-update-${release.sha256}.artifact`),
+		{ read: expect.any(Function) },
 		release,
 	);
-	expect(await readFile(f.install.mock.calls[0]?.[0] ?? "")).toEqual(bytes);
+	expect(f.installed).toEqual([bytes]);
 	expect(f.transport).toHaveBeenLastCalledWith(
 		release.artifact,
 		expect.objectContaining({
@@ -192,4 +204,44 @@ it("preserves original dependency error privately and scrubs response/installer 
 		expect(result.left.originalCause).toBe(cause);
 		expect(JSON.stringify(result.left)).not.toMatch(/secret|private/);
 	}
+});
+
+for (const replacement of [bytes, Buffer.alloc(bytes.length)]) {
+	it(`refuses a cache inode swap between verification and installer handoff even with matching bytes ${replacement[0]}`, async () => {
+		const f = await fixture();
+		await Effect.runPromise(f.port.check());
+		f.transport.mockResolvedValueOnce(new Response(bytes));
+		await Effect.runPromise(f.port.download(release, () => {}));
+		const make = files.mkdtemp;
+		vi.spyOn(files, "mkdtemp").mockImplementationOnce(
+			async (prefix, options) => {
+				const path = join(f.root, `app-update-${release.sha256}.artifact`);
+				await rename(path, `${path}.old`);
+				await writeFile(path, replacement);
+				return make(prefix, options);
+			},
+		);
+		expect(
+			(await Effect.runPromise(f.port.install(release).pipe(Effect.either)))
+				._tag,
+		).toBe("Left");
+		expect(f.install).not.toHaveBeenCalled();
+	});
+}
+it("hands off only a readable private copy, so replacing the cache during install cannot change its bytes", async () => {
+	const f = await fixture();
+	await Effect.runPromise(f.port.check());
+	f.transport.mockResolvedValueOnce(new Response(bytes));
+	await Effect.runPromise(f.port.download(release, () => {}));
+	f.install.mockImplementationOnce(async (artifact) => {
+		await writeFile(
+			join(f.root, `app-update-${release.sha256}.artifact`),
+			Buffer.alloc(bytes.length),
+		);
+		const buffer = Buffer.alloc(bytes.length);
+		expect(await artifact.read(buffer, 0)).toBe(bytes.length);
+		expect(buffer).toEqual(bytes);
+		expect(Object.keys(artifact)).toEqual(["read"]);
+	});
+	await Effect.runPromise(f.port.install(release));
 });
