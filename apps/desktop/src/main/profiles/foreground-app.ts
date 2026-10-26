@@ -11,10 +11,13 @@ import { makeWindowsForeground } from "./windows-foreground";
 const run = promisify(execFile);
 export const nativeForegroundApp = async (
 	platform: ProfilePlatform,
+	signal?: AbortSignal,
 ): Promise<Option.Option<ForegroundApp>> => {
 	const options = {
 		timeout: 5000,
-		signal: AbortSignal.timeout(5000),
+		signal: signal
+			? AbortSignal.any([signal, AbortSignal.timeout(5000)])
+			: AbortSignal.timeout(5000),
 		maxBuffer: 64 * 1024,
 		windowsHide: true,
 	};
@@ -74,6 +77,7 @@ export const makeForegroundProbe = (
 	let cached: Option.Option<ForegroundApp> = Option.none();
 	let at = Number.NEGATIVE_INFINITY;
 	let pending: Promise<Option.Option<ForegroundApp>> | undefined;
+	const abort = new AbortController();
 	const probe = Effect.fn("ForegroundApp.probe")(function* (): Effect.fn.Return<
 		Option.Option<ForegroundApp>,
 		ProfileForegroundFailed
@@ -89,13 +93,17 @@ export const makeForegroundProbe = (
 		const result = yield* Effect.tryPromise({
 			try: () => {
 				if (!pending)
-					pending = read(platform).finally(() => {
+					pending = read(platform, abort.signal).finally(() => {
 						pending = undefined;
 					});
 				return pending;
 			},
 			catch: ProfileForegroundFailed.fromCause,
 		});
+		if (disposed)
+			return yield* ProfileForegroundFailed.fromCause(
+				new Error("Foreground probe disposed"),
+			);
 		cached = result;
 		at = yield* Clock.currentTimeMillis;
 		return result;
@@ -104,10 +112,16 @@ export const makeForegroundProbe = (
 		dispose: (): Promise<void> => {
 			if (disposal) return disposal;
 			disposed = true;
+			abort.abort();
 			cached = Option.none();
-			disposal = (helper?.dispose() ?? Promise.resolve()).catch((cause) => {
-				throw ProfileForegroundFailed.fromCause(cause);
-			});
+			disposal = Promise.all([
+				helper?.dispose(),
+				pending?.catch(() => undefined),
+			])
+				.then(() => undefined)
+				.catch((cause) => {
+					throw ProfileForegroundFailed.fromCause(cause);
+				});
 			return disposal;
 		},
 	});

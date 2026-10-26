@@ -1,4 +1,10 @@
 import { Schema } from "effect";
+import {
+	AppMonitoring,
+	MetricSelection,
+	MonitoringOverride,
+	monitoringDefaults,
+} from "../../../../packages/edge/src/monitor/monitor-config";
 import { SampleRate } from "../../../../packages/edge/src/monitor/monitor-contracts";
 
 export {
@@ -35,9 +41,22 @@ export const MonitorSettings = Schema.Struct({
 	temperatureUnit: Schema.Literal("celsius", "fahrenheit"),
 	enabled: Schema.Boolean,
 	hz: SampleRate,
+	metrics: Schema.optionalWith(MetricSelection, {
+		default: () => monitoringDefaults().metrics,
+	}),
+	method: Schema.optionalWith(Schema.Literal("native"), {
+		default: () => "native" as const,
+	}),
+	appMonitor: Schema.optionalWith(AppMonitoring, {
+		default: () => monitoringDefaults().appMonitor,
+	}),
+	override: Schema.optionalWith(MonitoringOverride, {
+		default: () => monitoringDefaults().override,
+	}),
 });
 export type MonitorSettings = typeof MonitorSettings.Type;
 export const defaults = (): MonitorSettings => ({
+	...monitoringDefaults(),
 	styleId: "glass",
 	background: "style",
 	media: {},
@@ -86,10 +105,15 @@ export const MonitorReply = Schema.Union(
 export type MonitorReply = typeof MonitorReply.Type;
 export const MONITOR_REQUEST = "monitor:request";
 export const MONITOR_SETTINGS = "monitor:settings";
+export const MONITOR_STATE_REQUEST = "monitor:state:request";
+export const MONITOR_STATE = "monitor:state";
+export { MonitoringSnapshot } from "../../../../packages/edge/src/monitor/monitor-config";
 export const MONITOR_METRICS = "monitor:metrics";
 export interface MonitorBridge {
 	request(command: MonitorCommand): Promise<unknown>;
+	snapshot(): Promise<unknown>;
 	onSettings(callback: (view: unknown) => void): () => void;
+	onState(callback: (snapshot: unknown) => void): () => void;
 	onMetrics(callback: (snapshot: unknown) => void): () => void;
 }
 declare global {
