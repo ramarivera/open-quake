@@ -26,6 +26,8 @@ import {
 	formatClock,
 	hasVerifiedResourceTarget,
 	intervalMillis,
+	nextWallpaperIndex,
+	reorderWallpaper,
 } from "./display-invariants.js";
 
 const image = {
@@ -263,4 +265,22 @@ describe("host clock", () => {
 				expect(yield* Ref.get(frames)).toHaveLength(3);
 			}),
 	);
+});
+
+it("migrates sound off and preserves a playlist permutation", () => {
+	const old = { ...defaultWallpaper };
+	const { enableSound: _sound, ...withoutSound } = old;
+	expect(
+		Schema.decodeUnknownSync(WallpaperSettings)(withoutSound).enableSound,
+	).toBe(false);
+	const items = ["first", "second", "third"];
+	expect(reorderWallpaper(items, 2, 0)).toEqual(["third", "first", "second"]);
+	expect(items).toEqual(["first", "second", "third"]);
+	for (const index of [-1, 3, NaN, 0.5])
+		expect(reorderWallpaper(items, index, 0)).toBe(items);
+	for (let i = 0; i < 10; i++)
+		expect(nextWallpaperIndex(i % 3, 3, "sequential")).toBe((i + 1) % 3);
+	for (const random of [0, 0.2, 0.5, 0.99, 1])
+		expect(nextWallpaperIndex(1, 3, "random", random)).not.toBe(1);
+	expect(nextWallpaperIndex(0, 1, "random")).toBe(0);
 });

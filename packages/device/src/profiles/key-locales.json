@@ -1,5 +1,7 @@
 {
 	"en": {
+		"editor.titleStyle": "Title style",
+		"editor.destination": "Row {row} · Column {column}",
 		"aiCopilotChat": "AI Chat",
 		"cancel": "Cancel",
 		"confirm": "Confirm",
@@ -155,6 +157,8 @@
 		"obsScreenshot": "Screenshot"
 	},
 	"zh": {
+		"editor.titleStyle": "标题样式",
+		"editor.destination": "第 {row} 行 · 第 {column} 列",
 		"aiCopilotChat": "AI助手",
 		"cancel": "取 消",
 		"confirm": "确 定",
@@ -310,6 +314,8 @@
 		"obsScreenshot": "源缩略图"
 	},
 	"de": {
+		"editor.titleStyle": "Titelstil",
+		"editor.destination": "Zeile {row} · Spalte {column}",
 		"aiCopilotChat": "KI-Chat",
 		"cancel": "Abbrechen",
 		"confirm": "Bestätigen",
@@ -465,6 +471,8 @@
 		"obsScreenshot": "Screenshot"
 	},
 	"es": {
+		"editor.titleStyle": "Estilo del título",
+		"editor.destination": "Fila {row} · Columna {column}",
 		"aiCopilotChat": "Chat de IA",
 		"cancel": "Cancelar",
 		"confirm": "Confirmar",
@@ -620,6 +628,8 @@
 		"obsScreenshot": "Captura"
 	},
 	"fr": {
+		"editor.titleStyle": "Style du titre",
+		"editor.destination": "Ligne {row} · Colonne {column}",
 		"aiCopilotChat": "Chat IA",
 		"cancel": "Annuler",
 		"confirm": "Confirmer",
@@ -775,6 +785,8 @@
 		"obsScreenshot": "Capture d'écran"
 	},
 	"it": {
+		"editor.titleStyle": "Stile del titolo",
+		"editor.destination": "Riga {row} · Colonna {column}",
 		"aiCopilotChat": "Chat IA",
 		"cancel": "Annulla",
 		"confirm": "Conferma",
@@ -930,6 +942,8 @@
 		"obsScreenshot": "Screenshot"
 	},
 	"ja": {
+		"editor.titleStyle": "タイトルのスタイル",
+		"editor.destination": "{row} 行 · {column} 列",
 		"aiCopilotChat": "AIチャット",
 		"cancel": "キャンセル",
 		"confirm": "確認",
@@ -1085,6 +1099,8 @@
 		"obsScreenshot": "スクリーンショット"
 	},
 	"ko": {
+		"editor.titleStyle": "제목 스타일",
+		"editor.destination": "{row}행 · {column}열",
 		"aiCopilotChat": "AI 채팅",
 		"cancel": "취소",
 		"confirm": "확인",

@@ -144,6 +144,7 @@ function createPanelWindow(target: PanelTarget): BrowserWindow {
 			nodeIntegration: false,
 		},
 	});
+	win.webContents.setAudioMuted(true);
 	// OmniWM matches this title even while HTML/navigation titles change.
 	win.on("page-title-updated", (event) => event.preventDefault());
 	placePanel(win, target);
@@ -353,15 +354,17 @@ if (!app.requestSingleInstanceLock()) {
 							managementURL.href,
 							() => bus?.hardware?.(),
 							() => panelWin,
-							async (key, signal) =>
+							async (key, signal, activation) =>
 								(await obsKeyAction((command, signal) =>
 									obs.execute(command, signal),
 								)(key, signal)) ||
+								(await speech.executeSoundKey(key, signal, activation)) ||
 								integrationKeyAction((key, signal) =>
 									integrations.executeHaFromKey(key, signal),
 								)(key, signal),
 							diagnostics,
 							mediaActions,
+							speech.resetSoundKeys,
 						);
 						const agentsModule = prepareAgents({
 							diagnostics,
@@ -428,7 +431,14 @@ if (!app.requestSingleInstanceLock()) {
 						const mediaModule = prepareDesktopModule(
 							MediaLive(join(app.getPath("userData"), "wallpaper-v1")),
 							(runtime) =>
-								registerMedia(runtime, () => managementWin, rendererURL, false),
+								registerMedia(
+									runtime,
+									() => managementWin,
+									rendererURL,
+									false,
+									() => panelWin,
+									speech.acquireWallpaperSound,
+								),
 							diagnostics,
 						);
 						const clockModule = prepareDesktopModule(

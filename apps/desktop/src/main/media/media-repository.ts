@@ -12,7 +12,8 @@ import {
 	SavedWallpaper,
 	type WallpaperSettings,
 } from "../../shared/display";
-import { ImageDecoder, normalizeLocalSelection } from "./image-decoder";
+import { normalizeLocalSelection } from "./image-decoder";
+import { type DecodedMedia, MediaDecoder } from "./media-decoder";
 import { MediaFiles } from "./media-files";
 
 export type MediaRepositoryError =
@@ -23,10 +24,10 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 	"MediaRepository",
 	{
 		accessors: true,
-		dependencies: [MediaFiles.Default, ImageDecoder.Default],
+		dependencies: [MediaFiles.Default, MediaDecoder.Default],
 		effect: Effect.gen(function* () {
 			const files = yield* MediaFiles;
-			const decoder = yield* ImageDecoder;
+			const decoder = yield* MediaDecoder;
 			const lock = yield* Effect.makeSemaphore(1);
 			const validate = Effect.fn("MediaRepository.validate")(
 				(input: unknown): Effect.Effect<SavedWallpaper, InvalidWallpaper> =>
@@ -70,12 +71,10 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 			const resolve = Effect.fn("MediaRepository.resolve")(
 				(
 					saved: SavedWallpaper,
-				): Effect.Effect<
-					Option.Option<import("./image-decoder").DecodedImage>,
-					MediaUnreadable
-				> =>
+					index = 0,
+				): Effect.Effect<Option.Option<DecodedMedia>, MediaUnreadable> =>
 					Effect.gen(function* () {
-						const media = saved.settings.displayMediaList[0];
+						const media = saved.settings.displayMediaList[index];
 						if (!media) return Option.none();
 						const bytes = yield* files.readAsset(saved.serial, media.filePath);
 						const decoded = yield* decoder.decode(bytes);
@@ -101,12 +100,17 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 							clock,
 							revision: revision + 1,
 						});
-						// No unreadable new selection may replace the last readable revision.
-						if (
-							next.settings.displayMediaList[0]?.filePath !==
-							previous.settings.displayMediaList[0]?.filePath
-						)
-							yield* resolve(next);
+						// Decode newly introduced assets before committing. Reordering never probes removed files.
+						for (const [
+							index,
+							media,
+						] of next.settings.displayMediaList.entries())
+							if (
+								!previous.settings.displayMediaList.some(
+									(item) => item.filePath === media.filePath,
+								)
+							)
+								yield* resolve(next, index);
 						yield* files.writeSettings(previous, next);
 						// Cleanup cannot turn an already committed save into a failed request.
 						yield* files.collectAssets(serial).pipe(
@@ -138,6 +142,7 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 					serial: string,
 					revision: number,
 					selection: string,
+					append = false,
 				): Effect.Effect<
 					{ saved: SavedWallpaper; normalizedFileUrl: boolean },
 					MediaRepositoryError
@@ -152,21 +157,40 @@ export class MediaRepository extends Effect.Service<MediaRepository>()(
 							const bytes = yield* files.readLocal(path);
 							const decoded = yield* decoder.decode(bytes);
 							const reference = yield* files.storeAsset(serial, bytes);
-							const settings = {
+							const media = {
+								name: basename(path),
+								filePath: reference,
+								...(decoded.format === "image/png" ||
+								decoded.format === "image/jpeg"
+									? {
+											type: "image" as const,
+											format: decoded.format,
+											duration: intervalMillis(
+												previous.settings.gapInterval,
+												previous.settings.gapIntervalUnit,
+											),
+										}
+									: {
+											type: "video" as const,
+											format: decoded.format,
+											duration:
+												"durationMs" in decoded ? decoded.durationMs : 2000,
+										}),
+							};
+							const settings: WallpaperSettings = {
 								...previous.settings,
 								displayMediaList: [
-									{
-										name: basename(path),
-										type: "image" as const,
-										filePath: reference,
-										format: decoded.format,
-										duration: intervalMillis(
-											previous.settings.gapInterval,
-											previous.settings.gapIntervalUnit,
-										),
-									},
+									...(append ? previous.settings.displayMediaList : []),
+									media,
 								],
 							};
+							if (
+								append &&
+								previous.settings.displayMediaList.some(
+									(media) => media.filePath === reference,
+								)
+							)
+								return { saved: previous, normalizedFileUrl };
 							const saved = yield* saveUnlocked(
 								serial,
 								revision,

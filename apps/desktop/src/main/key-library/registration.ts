@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Effect, Fiber, Schema, Stream } from "effect";
@@ -9,6 +9,7 @@ import { iconInUse } from "../../../../../packages/device/src/profiles/key-editi
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileRepositoryError } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { inspectProfileText } from "../../../../../packages/device/src/profiles/profile-import.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
 	KEY_PREVIEW,
@@ -17,6 +18,7 @@ import {
 	KeyRequest,
 } from "../../shared/key-library";
 import type { DesktopRuntime } from "../diagnostics/module";
+import { managementProfileContracts } from "../management/profile-contracts";
 import {
 	encodeRendererProfiles,
 	restoreClockMediaReferences,
@@ -327,11 +329,47 @@ export function registerKeyLibrary<R>(
 							const original = profile.pages
 								.find((page) => page.id === command.target.pageId)
 								?.keys.find((key) => key.keyCode === command.target.keyCode);
-							yield* KeyEditing.preview(
+							const result = yield* KeyEditing.preview(
 								command.target,
 								restoreClockMediaReferences(command.key, original),
+								command.geometry,
 							);
+							if (result._tag !== "ready") yield* publish;
+							if (result._tag === "confirmation")
+								return {
+									_tag: "rejected",
+									reason: "overlap-confirmation",
+									keyCodes: result.keyCodes,
+								};
+							if (result._tag === "rejected")
+								return { _tag: "rejected", reason: "layout-locked-or-invalid" };
 							break;
+						}
+						case "add-page":
+						case "delete-page":
+							yield* ProfileService.editPages(command);
+							yield* KeyEditing.discard();
+							break;
+						case "inspect-import":
+							return {
+								_tag: "success",
+								importReport: inspectProfileText(
+									command.source,
+									managementProfileContracts,
+								),
+							};
+						case "import-profile": {
+							const id = randomUUID();
+							const envelope = yield* ProfileService.importProfile(
+								command.source,
+								id,
+								managementProfileContracts,
+							);
+							return {
+								_tag: "success",
+								envelope: encodeRendererProfiles(envelope),
+								importedProfileId: id,
+							};
 						}
 						case "save":
 							yield* KeyEditing.save(command.token);

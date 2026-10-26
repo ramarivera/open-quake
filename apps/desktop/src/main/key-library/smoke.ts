@@ -33,6 +33,7 @@ import {
 	verifyEditorTransactions,
 } from "./smoke-editor";
 import { verifyFinalReview } from "./smoke-final-review";
+import { verifyGeometryPagesImport } from "./smoke-geometry";
 import { verifyIconReview } from "./smoke-icon-review";
 import { verifyReviewEditor } from "./smoke-review";
 
@@ -83,6 +84,16 @@ const click = async (win: BrowserWindow, selector: string): Promise<void> => {
 	await sleep();
 };
 const button = async (win: BrowserWindow, text: string): Promise<void> => {
+	const page =
+		text === "Keys" ? "keys" : text === "Appearance" ? "appearance" : undefined;
+	if (page) {
+		await click(win, `[data-nav-page="${page}"]`);
+		await ready(
+			win,
+			`document.querySelector('[data-nav-page="${page}"]')?.getAttribute('aria-current') === 'page'`,
+		);
+		return;
+	}
 	await ready(
 		win,
 		`Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()===${JSON.stringify(text)})`,
@@ -112,10 +123,25 @@ const select = async (
 	selector: string,
 	value: string,
 ): Promise<void> => {
+	process.stdout.write(`keys smoke: select ${selector} ${value}\n`);
+	await ready(
+		win,
+		`Array.from(document.querySelector(${JSON.stringify(selector)})?.options ?? []).some(option => option.value === ${JSON.stringify(value)})`,
+	);
+	await ready(win, `document.querySelector(${JSON.stringify(selector)})`);
 	await evalIn(
 		win,
 		`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`,
 	);
+	await ready(
+		win,
+		`document.querySelector(${JSON.stringify(selector)})?.value === ${JSON.stringify(value)}`,
+	);
+	if (selector === "#keys-profile" || selector === "#keys-page")
+		await ready(
+			win,
+			"!document.querySelector('#key-title') && document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false'",
+		);
 	await sleep();
 };
 const snapshot = async (win: BrowserWindow, name: string): Promise<void> => {
@@ -384,6 +410,10 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "geometry-pages-import") {
+			await verifyGeometryPagesImport(harness);
+			return;
+		}
 		await verifyIconReview(
 			harness,
 			directory,
@@ -920,6 +950,10 @@ async function smoke(): Promise<void> {
 		);
 	} catch (cause) {
 		failed = true;
+		await writeFile(
+			join(scratch, "keys-requests-failure.json"),
+			JSON.stringify(delays?.requests, null, 2),
+		);
 		process.stderr.write(
 			`${cause instanceof Error ? cause.stack : String(cause)}\n`,
 		);

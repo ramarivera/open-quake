@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { FillMode, HourFormat } from "../../../shared/display";
+import { useAppTranslations } from "../i18n";
 import { useStripSettings } from "../strip/stripSettings";
 import { DeviceScreen } from "../ui/DeviceScreen";
 import {
@@ -11,6 +12,7 @@ import {
 	type SegmentOption,
 } from "../ui/Form";
 import type { useWallpaper } from "./useWallpaper";
+import { WallpaperPlaylist } from "./WallpaperPlaylist";
 
 export type WallpaperController = ReturnType<typeof useWallpaper>;
 
@@ -41,6 +43,7 @@ export function WallpaperSettings({
 	wallpaper: WallpaperController;
 }): React.JSX.Element {
 	const { snapshot, notice, busy, request } = wallpaper;
+	const t = useAppTranslations("wallpaper");
 	const [serial, setSerial] = useState("");
 	const [preview, setPreview] = useState<PreviewView>("active");
 	const strip = useStripSettings();
@@ -52,7 +55,8 @@ export function WallpaperSettings({
 	const disabled = busy || !selection;
 	const fillMode = saved?.settings.bgFillMode ?? "cover";
 	const hourFormat = saved?.clock.actions[0].value ?? "24h";
-	const image = saved?.settings.displayMediaList[0];
+	const activeMedia =
+		saved?.settings.displayMediaList[snapshot?.activeIndex ?? 0];
 	const previewSession = saved?.serial === "desktop-preview";
 	const configure = (fill: FillMode, hours: HourFormat): void => {
 		if (selection)
@@ -108,13 +112,11 @@ export function WallpaperSettings({
 
 			<Group
 				title="Wallpaper"
-				description="One local JPEG or PNG for the vivid screen, saved for each device."
+				description="Local images and videos for the vivid screen, saved in playlist order for each device."
 				footer={
 					<div role="status" aria-live="polite" className="status-notes">
 						{snapshot?.asset._tag === "unreadable" ? (
-							<Callout tone="warning">
-								The saved image can't be read. Choose it again or remove it.
-							</Callout>
+							<Callout tone="warning">{t("savedUnreadable")}</Callout>
 						) : null}
 						{snapshot?.recovered ? (
 							<Callout tone="warning">
@@ -123,9 +125,7 @@ export function WallpaperSettings({
 							</Callout>
 						) : null}
 						{snapshot?.normalizedFileUrl ? (
-							<Callout>
-								Imported the file URL as an app-managed image reference.
-							</Callout>
+							<Callout>{t("importedUrl")}</Callout>
 						) : null}
 						{notice ? <Callout tone="warning">{notice}</Callout> : null}
 						<p>
@@ -136,16 +136,16 @@ export function WallpaperSettings({
 				}
 			>
 				<Row
-					label="Image"
+					label={t("media")}
 					hint={
 						<span aria-live="polite">
 							{!snapshot
-								? "Loading saved wallpaper…"
+								? t("loading")
 								: snapshot.asset._tag === "ready"
-									? (image?.name ?? "Custom image")
+									? (activeMedia?.name ?? t("customMedia"))
 									: snapshot.asset._tag === "unreadable"
-										? "Unreadable image"
-										: "None · neutral background"}
+										? t("unreadableMedia")
+										: t("noMedia")}
 						</span>
 					}
 				>
@@ -155,23 +155,58 @@ export function WallpaperSettings({
 							className="button"
 							disabled={disabled}
 							onClick={() => {
-								if (selection) void request({ _tag: "import", ...selection });
+								if (selection)
+									void request({ _tag: "import", ...selection, append: true });
 							}}
 						>
-							Choose Image…
+							{t("addMedia")}
 						</button>
 						<button
 							type="button"
 							className="button"
-							disabled={disabled || !image}
+							disabled={disabled || !saved?.settings.displayMediaList.length}
 							onClick={() => {
 								if (selection) void request({ _tag: "clear", ...selection });
 							}}
 						>
-							Remove
+							{t("removeAll")}
 						</button>
 					</div>
 				</Row>
+				<WallpaperPlaylist
+					items={saved?.settings.displayMediaList ?? []}
+					disabled={disabled}
+					move={(from, to) => {
+						if (selection && from !== to)
+							void request({ _tag: "reorder", ...selection, from, to });
+					}}
+					remove={(index) => {
+						if (selection)
+							void request({ _tag: "remove", ...selection, index });
+					}}
+				/>
+				<Row
+					label="Video Sound"
+					labelId={`${ids}-sound`}
+					hint="Sound plays only on the panel. Previews stay muted."
+				>
+					<Segmented
+						name={`${ids}-sound`}
+						labelledBy={`${ids}-sound`}
+						value={saved?.settings.enableSound ? "on" : "off"}
+						options={borderOptions}
+						disabled={disabled}
+						onChange={(value) => {
+							if (selection)
+								void request({
+									_tag: "sound",
+									...selection,
+									enableSound: value === "on",
+								});
+						}}
+					/>
+				</Row>
+
 				<Row label="Fit" labelId={`${ids}-fit`} hint={fillHints[fillMode]}>
 					<Segmented
 						name={`${ids}-fit`}

@@ -202,7 +202,7 @@ export const resetKeyIcons = (
 };
 export const keyEditable = (
 	key: ProfileKey,
-	field: "title" | "icon" | "allowDelete",
+	field: "title" | "icon" | "allowDelete" | "grid" | "allowDrag",
 ): boolean =>
 	Option.match(key.config.basicEditableItems, {
 		onNone: () => true,
@@ -223,6 +223,7 @@ export interface KeyTarget {
 export interface KeyDraft {
 	readonly target: KeyTarget;
 	readonly key: ProfileKey;
+	readonly pageKeys?: readonly ProfileKey[];
 }
 export const replaceProfileKey = (
 	profile: Profile,
@@ -245,11 +246,20 @@ export const previewEnvelope = (
 ): ProfileEnvelope =>
 	Option.match(draft, {
 		onNone: () => envelope,
-		onSome: ({ target, key }) => ({
+		onSome: ({ target, key, pageKeys }) => ({
 			...envelope,
 			profiles: EffectArray.map(envelope.profiles, (p) =>
 				p.id === target.profileId && p.revision === target.revision
-					? replaceProfileKey(p, target.pageId, key)
+					? pageKeys
+						? {
+								...p,
+								pages: EffectArray.map(p.pages, (page) =>
+									page.id === target.pageId
+										? { ...page, keys: pageKeys }
+										: page,
+								),
+							}
+						: replaceProfileKey(p, target.pageId, key)
 					: p,
 			),
 		}),

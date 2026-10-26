@@ -5,7 +5,11 @@ import {
 	AudioOutputFailed,
 } from "./output-errors.js";
 
-export type AudioOutputOwner = "soundboard" | "speech" | "capture";
+export type AudioOutputOwner =
+	| "wallpaper"
+	| "soundboard"
+	| "speech"
+	| "capture";
 export interface AudioOutputLease {
 	/** Check before and after asynchronous native acquisition. Preemption invalidates immediately. */
 	readonly current: Effect.Effect<boolean>;
@@ -63,7 +67,9 @@ export const makeAudioOutput = Effect.gen(function* () {
 						const previous = active;
 						if (
 							previous &&
-							(owner === "soundboard" || previous.owner === "capture")
+							(owner === "wallpaper" ||
+								(owner === "soundboard" && previous.owner !== "wallpaper") ||
+								previous.owner === "capture")
 						)
 							return yield* new AudioOutputBusy();
 						const cleanup = yield* Effect.cached(

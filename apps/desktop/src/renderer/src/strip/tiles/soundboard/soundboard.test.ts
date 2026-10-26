@@ -62,7 +62,7 @@ function render(actions: Actions, type = "playAudio") {
 	);
 }
 
-describe("first-release soundboard ownership", () => {
+describe("local soundboard ownership", () => {
 	it("keeps the real built-in preset on native media even with volume/fade edits", () => {
 		expect(soundboardOwned(soundKey.config)).toBe(false);
 		expect(
@@ -116,15 +116,15 @@ describe("registered soundboard rendering", () => {
 			);
 			expect(html).toContain('data-testid="soundboard-unavailable"');
 			expect(html).toContain(
-				'aria-label="Local playlist, not available in this release"',
+				'aria-label="Local playlist, configuration required"',
 			);
 			expect(html).toMatch(/aria-describedby="[^"]+"/);
 			expect(html).not.toMatch(
 				/class="oq-player"|<button|data-quake-sub-touch|tabindex|aria-live|role="status"|private|secret\.mp3/,
 			);
 			if (type === "playAudio") {
-				expect(html).toContain("Not available in this release");
-				expect(html).toContain("Imported files are kept.");
+				expect(html).toContain("Audio player is not configured properly");
+				expect(html).toContain("Select local MP3 files");
 			} else {
 				expect(html).toContain('data-kind="unavailable">Unavailable');
 				expect(html).toContain('class="strip-tile"');
@@ -150,4 +150,19 @@ describe("registered soundboard rendering", () => {
 		expect(html).toContain("data-quake-sub-touch");
 		expect(html).not.toContain("soundboard-unavailable");
 	});
+});
+
+it("renders configured recovered local keys without native OS controls", () => {
+	for (const value of [0, 1, 2, 3, 4, 5, 6]) {
+		const html = render([
+			{ type: "sound", value: "/private/secret.mp3" },
+			{ type: "audioAction", value },
+			{ type: "audioFade", value: "3-1000" },
+			{ type: "volume", value: 50 },
+		]);
+		expect(html).toContain('data-testid="soundboard-local"');
+		expect(html).not.toMatch(
+			/secret|private|data-quake-sub-touch|data-testid="soundboard-unavailable"/,
+		);
+	}
 });

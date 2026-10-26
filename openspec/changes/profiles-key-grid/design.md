@@ -75,3 +75,11 @@ otherwise `config.size`, with the start clamped to `min(column, 9 − width)` an
 `min(row, 3 − height)`. DK-Suite imports with edge spans therefore load instead
 of failing. The strip, the preview and hit-testing use the same function. See
 `openspec/changes/strip-key-grid/design.md`.
+
+## Amendment: editor completion, 2026-10-26
+
+The approved `key-library-parity` navigation contract supersedes this document's earlier clamped previous/next and strict go-to wording. Previous/next wrap; goToPage clamps, per MAIN-077/078. Editor page creation selects the new page for its device. Deletion repairs every affected selection to the former index or final remaining page and preserves the profile knob.
+
+MGMT-061/062/063/070/073/074/076 govern the remaining geometry editor paths. Moves/swaps commit coordinates atomically without changing configuration. Span previews require explicit replacement approval for overlaps and honor all five edit locks. Forced spans remain owned by `profile-footprint.ts`.
+
+Import accepts one canonical profile object or one legacy flat key array, including reserved knob `0,1`. It creates a new local profile with fresh identity, retains the complete original JSON in compatibility metadata, reports normalization paths, quarantines unknown functions, and rejects malformed required fields. Inspection and import do not execute actions. Renderer diagnostics cross the typed Keys preload boundary.
