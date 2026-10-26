@@ -109,6 +109,56 @@ it("SETTINGS-015 retains denied/unknown probes and typed scrubbed errors after a
 		expect(result.left.originalCause).toBe(original);
 		expect(JSON.stringify(result.left)).not.toContain("private request cause");
 	}
-	expect(open).not.toHaveBeenCalled();
+	expect(open).toHaveBeenCalledExactlyOnceWith("inputMonitoring");
 	expect(permissionRows(checks)[1]?.status).toBe("denied");
+});
+
+it.each(["microphone", "systemAudio"] as const)(
+	"SETTINGS-015 denied %s still opens its Settings pane",
+	async (key) => {
+		const { Effect } = await import("effect");
+		const { permissionAction } = await import("./permissions");
+		const checks = {
+			accessibility: () => false,
+			inputMonitoring: () => false,
+			microphone: () => false,
+			screenRecording: () => false,
+			systemAudio: () => false,
+		};
+		const request = vi.fn(async () => {});
+		const open = vi.fn(async () => {});
+		await Effect.runPromise(permissionAction(key, { checks, request, open }));
+		expect(request).toHaveBeenCalledExactlyOnceWith(key);
+		expect(open).toHaveBeenCalledExactlyOnceWith(key);
+		expect(permissionRows(checks).find((row) => row.key === key)?.status).toBe(
+			"denied",
+		);
+	},
+);
+it("SETTINGS-015 a rejected System Audio request opens Settings and retains the typed failure", async () => {
+	const { Effect } = await import("effect");
+	const { permissionAction } = await import("./permissions");
+	const checks = {
+		accessibility: () => false,
+		inputMonitoring: () => false,
+		microphone: () => false,
+		screenRecording: () => false,
+		systemAudio: () => undefined,
+	};
+	const cause = new Error("synthetic denied capture");
+	const open = vi.fn(async () => {});
+	const result = await Effect.runPromise(
+		Effect.either(
+			permissionAction("systemAudio", {
+				checks,
+				request: async () => {
+					throw cause;
+				},
+				open,
+			}),
+		),
+	);
+	expect(open).toHaveBeenCalledExactlyOnceWith("systemAudio");
+	expect(result._tag).toBe("Left");
+	if (result._tag === "Left") expect(result.left.originalCause).toBe(cause);
 });

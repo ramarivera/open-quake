@@ -122,13 +122,29 @@ export const permissionAction = (
 			const before = permissionRows(edges.checks).find(
 				(row) => row.key === key,
 			)?.status;
-			if (before !== "granted") await edges.request(key);
+			let requestFailed = false;
+			let requestCause: unknown;
+			if (before !== "granted") {
+				try {
+					await edges.request(key);
+				} catch (cause) {
+					requestFailed = true;
+					requestCause = cause;
+				}
+			}
 			const after = permissionRows(edges.checks).find(
 				(row) => row.key === key,
 			)?.status;
 			// A fresh microphone grant needs no second System Settings handoff.
-			if (key !== "microphone" || before === "granted" || after !== "granted")
+			if (
+				requestFailed ||
+				key !== "microphone" ||
+				before === "granted" ||
+				after !== "granted"
+			)
 				await edges.open(key);
+			// Preserve the unexpected request failure after delivering the recovery path.
+			if (requestFailed) throw requestCause;
 		},
 		catch: (cause) => new PermissionProbeFailed(cause),
 	});

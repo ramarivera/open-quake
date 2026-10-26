@@ -24,6 +24,7 @@ const native = vi.hoisted(() => {
 		},
 		desktopCapturer: { getSources: vi.fn(async () => []) },
 		coreRequest: vi.fn(() => true),
+		coreSymbol: vi.fn(),
 	};
 });
 vi.mock("electron", () => ({
@@ -37,10 +38,18 @@ vi.mock("electron", () => ({
 	shell: {},
 }));
 
-vi.mock("koffi", () => ({ load: () => ({ func: () => native.coreRequest }) }));
+vi.mock("koffi", () => ({
+	load: () => ({
+		func: () => {
+			native.coreSymbol();
+			return native.coreRequest;
+		},
+	}),
+}));
 
 import {
 	nativePermissionRequest,
+	permissionAction,
 	permissionRows,
 } from "../maintenance/permissions";
 
@@ -122,3 +131,39 @@ it("SETTINGS-015 destroys a stalled permission worker at its ten-second deadline
 		vi.useRealTimers();
 	}
 });
+
+it.each(["inputMonitoring", "screenRecording"] as const)(
+	"SETTINGS-015 unavailable %s request API still hands off to Settings",
+	async (key) => {
+		if (process.platform !== "darwin") return;
+		const { Effect } = await import("effect");
+		const cause = new Error("synthetic missing native symbol");
+		native.coreSymbol.mockImplementationOnce(() => {
+			throw cause;
+		});
+		const open = vi.fn(async () => {});
+		const checks = {
+			accessibility: () => false,
+			inputMonitoring: () => undefined,
+			microphone: () => false,
+			screenRecording: () => undefined,
+			systemAudio: () => undefined,
+		};
+		const result = await Effect.runPromise(
+			Effect.either(
+				permissionAction(key, {
+					checks,
+					request: nativePermissionRequest,
+					open,
+				}),
+			),
+		);
+		expect(open).toHaveBeenCalledExactlyOnceWith(key);
+		expect(native.coreRequest).not.toHaveBeenCalled();
+		expect(result._tag).toBe("Left");
+		if (result._tag === "Left") {
+			expect(result.left.originalCause).toBe(cause);
+			expect(result.left.code).toBe("QUAKE.SETTINGS.PERMISSION_PROBE_FAILED");
+		}
+	},
+);

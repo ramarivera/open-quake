@@ -570,6 +570,7 @@ verification SHALL inject permission probes, never change host permissions.
 - **WHEN** a user selects a permission action
 - **THEN** its bounded request runs only from that gesture, status comes from a
   fresh probe, and closing or hiding cannot discard the active flow
+- **AND** denied, failed or unavailable request APIs still open the selected permission's fixed System Settings pane; unexpected failures retain their typed diagnostic after that handoff
 
 ### Requirement: QUAKE help and calibration boundaries
 
