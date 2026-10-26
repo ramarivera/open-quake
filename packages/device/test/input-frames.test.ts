@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Chunk, Effect, Fiber, Layer, Stream, TestClock } from "effect";
+import { Chunk, Effect, Either, Fiber, Layer, Stream, TestClock } from "effect";
 import {
 	canonicalHidSerial,
 	hidSerialFromAlias,
@@ -37,6 +37,74 @@ const a2 = [
 const matrix = physical([1, 0, 0, 0, 0, 1]);
 
 describe("live independent input frames", () => {
+	it.scoped(
+		"MAIN-008 rejects corrupt A1 and truncated A2 on the live stream",
+		() =>
+			Effect.gen(function* () {
+				for (const mode of ["checksum", "truncated"] as const) {
+					const fake = yield* makeFakeHidTransport();
+					yield* Effect.scoped(
+						Effect.gen(function* () {
+							const connection = yield* (yield* QuakeDevice).connect();
+							const stream = yield* connection.subscribe();
+							const reading = yield* Stream.runCollect(stream).pipe(
+								Effect.either,
+								Effect.forkScoped,
+							);
+							if (mode === "checksum") {
+								const corrupt = a1.slice();
+								corrupt[10] = 0;
+								yield* fake.emit(corrupt);
+							} else {
+								yield* fake.emit(physical(a2.slice(0, 32)));
+								yield* fake.end();
+							}
+							const result = yield* Fiber.join(reading);
+							expect(Either.isLeft(result)).toBe(true);
+							expect(yield* fake.closes).toBe(1);
+						}),
+					).pipe(
+						Effect.provide(
+							QuakeDevice.DefaultWithoutDependencies.pipe(
+								Layer.provide(fake.layer),
+							),
+						),
+					);
+				}
+			}),
+	);
+	it.scoped(
+		"MAIN-008 discards partial assembly when the serial reconnects",
+		() =>
+			Effect.gen(function* () {
+				const fake = yield* makeFakeHidTransport([
+					{ ...FAKE_QUAKE_DEVICE, serialNumber: "A" },
+				]);
+				yield* Effect.gen(function* () {
+					const device = yield* QuakeDevice;
+					const first = yield* device.connect();
+					yield* fake.emit(physical(a2.slice(0, 32)));
+					yield* TestClock.adjust(0);
+					yield* first.disconnect();
+					const next = yield* device.connect();
+					const stream = yield* next.subscribe();
+					const reading = yield* Stream.runCollect(
+						stream.pipe(Stream.take(1)),
+					).pipe(Effect.forkScoped);
+					yield* fake.emit(a1);
+					expect(Chunk.toReadonlyArray(yield* Fiber.join(reading))).toEqual([
+						{ _tag: "Json", value: { x: 1 } },
+					]);
+				}).pipe(
+					Effect.provide(
+						QuakeDevice.DefaultWithoutDependencies.pipe(
+							Layer.provide(fake.layer),
+						),
+					),
+				);
+			}),
+	);
+
 	it.scoped(
 		"dispatches A1, assembled A2 and matrix in order through the read consumer",
 		() =>

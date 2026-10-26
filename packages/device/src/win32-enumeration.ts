@@ -1,5 +1,6 @@
 import type { HidDeviceInfo } from "./device-contracts.js";
 import { QUAKE_IDENTITY } from "./device-contracts.js";
+import { TOUCH_IDENTITY } from "./touch/touch-contracts.js";
 
 /** Read-only Windows control-interface discovery. Loads no DLL on other hosts. */
 export async function enumerateWin32(): Promise<readonly HidDeviceInfo[]> {
@@ -45,12 +46,18 @@ export async function enumerateWin32(): Promise<readonly HidDeviceInfo[]> {
 		const vendorId = Number.parseInt(match[1] ?? "", 16);
 		const productId = Number.parseInt(match[2] ?? "", 16);
 		if (
-			vendorId !== QUAKE_IDENTITY.vendorId ||
-			productId !== QUAKE_IDENTITY.productId
+			!(
+				vendorId === QUAKE_IDENTITY.vendorId &&
+				productId === QUAKE_IDENTITY.productId
+			) &&
+			!(
+				vendorId === TOUCH_IDENTITY.vendorId &&
+				productId === TOUCH_IDENTITY.productId
+			)
 		)
 			continue;
 		const handle: unknown = open(path, 0, 3, null, 3, 0, null);
-		if (handle === null || handle === -1n)
+		if (handle === null || ffi.address(handle) === 0xffffffffffffffffn)
 			throw new Error("Win32 HID metadata open failed");
 		try {
 			const data: unknown[] = [null];

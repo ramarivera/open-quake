@@ -52,6 +52,57 @@ const settle = TestClock.adjust(0);
 
 describe("hardware controls over actual device connection with fake transport", () => {
 	it.scoped(
+		"MAIN-018 retries version at 300ms and accepts a delayed correlated reply",
+		() =>
+			Effect.gen(function* () {
+				let attempts = 0;
+				const { session } = yield* setup({
+					onCommand: (c) => {
+						if (c.cmdId !== 46) return [];
+						attempts++;
+						return attempts === 4 ? [fakeHardwareReply(46, [1, 2, 3, 4])] : [];
+					},
+				});
+				const reading = yield* session.readVersion().pipe(Effect.fork);
+				yield* TestClock.adjust(299);
+				expect(attempts).toBe(1);
+				yield* TestClock.adjust(1);
+				expect(attempts).toBe(2);
+				yield* TestClock.adjust(600);
+				expect(yield* Fiber.join(reading)).toBe("2.3.4");
+				yield* TestClock.adjust(3000);
+				expect(attempts).toBe(4);
+			}),
+	);
+	it.scoped("MAIN-018 exhausts exactly ten version attempts at 3000ms", () =>
+		Effect.gen(function* () {
+			let attempts = 0;
+			const { session } = yield* setup({
+				onCommand: (c) => {
+					if (c.cmdId === 46) attempts++;
+					return [];
+				},
+			});
+			const reading = yield* session
+				.readVersion()
+				.pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(2699);
+			expect(attempts).toBe(9);
+			yield* TestClock.adjust(1);
+			expect(attempts).toBe(10);
+			yield* TestClock.adjust(299);
+			expect(Option.isNone(yield* Fiber.poll(reading))).toBe(true);
+			yield* TestClock.adjust(1);
+			const result = yield* Fiber.join(reading);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"QUAKE.HARDWARE.REPLY_TIMEOUT",
+			);
+			yield* TestClock.adjust(3000);
+			expect(attempts).toBe(10);
+		}),
+	);
+
+	it.scoped(
 		"generic DFU is rejected without a write or poisoning, while enterDfu still owns the transition",
 		() =>
 			Effect.gen(function* () {
