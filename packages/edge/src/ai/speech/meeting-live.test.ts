@@ -182,6 +182,68 @@ function fixture() {
 	};
 }
 describe("direct meeting provider resources", () => {
+	for (const missingAudio of [false, true]) {
+		it.effect(
+			`failed FILE_DOWNLOAD_FAILED subtask invalidates durable upload before retry, missing audio=${missingAudio}`,
+			() =>
+				Effect.gen(function* () {
+					const f = fixture();
+					const options = {
+						...f,
+						http: {
+							fetch: async (url: string, init: RequestInit) =>
+								url.includes("/tasks/")
+									? Response.json({
+											output: {
+												task_id: f.states.get("meeting")?.task,
+												task_status: "SUCCEEDED",
+												results: [
+													{
+														subtask_status: "FAILED",
+														code: "FILE_DOWNLOAD_FAILED",
+														message: "FILE_DOWNLOAD_FAILED",
+													},
+												],
+											},
+										})
+									: f.http.fetch(url, init),
+						},
+					};
+					const adapter = dashscopeFiletrans(options);
+					yield* adapter.submit(f.request);
+					const previousUpload = f.states.get("meeting")?.upload?.url;
+					const result = yield* adapter.poll("meeting").pipe(Effect.either);
+					expect(Either.isLeft(result) && result.left.code).toBe(
+						"QUAKE.MEETING.TRANSCRIPTION_FAILED",
+					);
+					expect(f.states.get("meeting")?.task).toBeUndefined();
+					expect(f.states.get("meeting")?.upload?.expiresAt).toBe(0);
+					if (missingAudio) f.missing();
+					const retry = yield* dashscopeFiletrans(options)
+						.submit(f.request)
+						.pipe(Effect.either);
+					if (missingAudio) {
+						expect(Either.isLeft(retry) && retry.left.code).toBe(
+							"QUAKE.MEETING.AUDIO_EXPIRED",
+						);
+						expect(
+							f.requests.filter((r) => r.url.endsWith("/transcription")),
+						).toHaveLength(1);
+					} else {
+						expect(Either.isRight(retry)).toBe(true);
+						expect(
+							f.requests.filter((r) => r.url.endsWith("/oss")),
+						).toHaveLength(2);
+						expect(f.states.get("meeting")?.upload?.url).not.toBe(
+							previousUpload,
+						);
+						expect(
+							f.requests.filter((r) => r.url.endsWith("/transcription")),
+						).toHaveLength(2);
+					}
+				}),
+		);
+	}
 	it.effect(
 		"uploads private OSS, matches model and mono plan, persists ordered artifacts and resumes after restart",
 		() =>

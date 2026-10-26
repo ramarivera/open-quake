@@ -186,5 +186,5 @@ Execution: open-quake-lih.16.13, left open for lead merge.
 - [x] 12.2 Fix 4380327514 with the documented Beijing/Singapore workspace and legacy hosts, preserving URL rejection cases.
 - [x] 12.3 Fix 4380327483 by waiting only for committed OpenAI items, preserving VAD timing.
 - [x] 12.4 Fix 4380327495 by cancelling active OpenAI transcription when its saved credential is revoked.
-- [ ] 12.5 Fix 4380327502 by invalidating rejected uploads on failed DashScope subtasks.
+- [x] 12.5 Fix 4380327502 by invalidating rejected uploads on failed DashScope subtasks.
 - [ ] 12.6 Run full gates and hidden meetings mock smoke, list unanswered GraphQL threads and track further valid findings without another review round.

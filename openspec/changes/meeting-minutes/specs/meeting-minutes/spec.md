@@ -555,3 +555,8 @@ Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, 
 
 - **WHEN** AI-272 is sending file audio or waiting in a blocked socket send and the saved credential is removed
 - **THEN** the operation SHALL observe revocation of that credential generation, stop sending further audio, abort and close its owned socket, release private PCM and save no partial transcript
+
+#### Scenario: Failed subtask invalidates rejected upload
+
+- **WHEN** AI-269 or AI-270 reports FILE_DOWNLOAD_FAILED inside output.results even when the overall task is SUCCEEDED
+- **THEN** the adapter SHALL clear the terminal task and durably expire the upload before returning failure, so a restarted retry reuploads managed audio with a new URL or reports expired audio when the local recording is missing

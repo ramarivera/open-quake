@@ -200,6 +200,19 @@ export function dashscopeFiletrans(options: {
 		yield* submitTask(request.audioRef, state);
 		return request.audioRef;
 	});
+	const rejectTask = (ref: string, state: MeetingResource, code: unknown) =>
+		Effect.gen(function* () {
+			// Terminal task and subtask failures share durable upload invalidation.
+			yield* resources.save(ref, {
+				...state,
+				task: undefined,
+				upload:
+					code === "FILE_DOWNLOAD_FAILED" && state.upload
+						? { ...state.upload, expiresAt: 0 }
+						: state.upload,
+			});
+			return yield* meetingError("TranscriptionFailed");
+		});
 	const poll = Effect.fn("DashscopeMeeting.poll")(function* (
 		ref: string,
 	): Effect.fn.Return<
@@ -232,24 +245,15 @@ export function dashscopeFiletrans(options: {
 				yield* submitTask(ref, next);
 				return { status: "pending" };
 			}
-			if (task.output.code === "FILE_DOWNLOAD_FAILED") {
-				// Leave retry explicit and durable. A rejected upload is never reused.
-				yield* resources.save(ref, {
-					...state,
-					task: undefined,
-					upload: state.upload ? { ...state.upload, expiresAt: 0 } : undefined,
-				});
-			} else yield* resources.save(ref, { ...state, task: undefined });
-			return yield* meetingError("TranscriptionFailed");
+			return yield* rejectTask(ref, state, task.output.code);
 		}
 		const bodies: unknown[] = [];
 		const segments: (typeof Segment.Type)[] = [];
 		for (const item of task.output.results ?? []) {
 			const entry = object(item);
-			if (
-				entry.subtask_status !== "SUCCEEDED" ||
-				typeof entry.transcription_url !== "string"
-			)
+			if (entry.subtask_status !== "SUCCEEDED")
+				return yield* rejectTask(ref, state, entry.code);
+			if (typeof entry.transcription_url !== "string")
 				return yield* meetingError("TranscriptionFailed");
 			const body = yield* meetingRequest(
 				http,
