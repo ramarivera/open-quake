@@ -900,3 +900,60 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 		}
 	}, 10000);
 });
+
+it("AI-010: pins an in-flight model, refreshes the next submission and revokes a removed key", async () => {
+	const f = await fixture();
+	try {
+		const firstSession = sessionId(),
+			firstTurn = turnId();
+		await f.bridge.submit({
+			sessionId: firstSession,
+			turnId: firstTurn,
+			text: "block",
+		});
+		await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+		f.changeModel("edited-model");
+		f.setMaxTokens(1024);
+		expect(f.endpoint.calls[0]?.body.model).toBe("fixture-model");
+		await f.bridge.submit({
+			sessionId: sessionId(),
+			turnId: turnId(),
+			text: "next request",
+		});
+		await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(2));
+		expect(f.endpoint.calls[1]).toMatchObject({
+			auth: "Bearer fixture-key",
+			body: { model: "edited-model", max_tokens: 1024 },
+		});
+		expect(
+			(await f.bridge.snapshot(firstSession, firstTurn)).terminal._tag,
+		).toBe("None");
+		await Effect.runPromise(f.creds.management.remove(f.reference));
+		await vi.waitFor(async () =>
+			expect(
+				(await f.bridge.snapshot(firstSession, firstTurn)).terminal,
+			).toMatchObject({
+				_tag: "Some",
+				value: { outcome: "failed", errorCode: "AI.PROVIDER.AUTH_REVOKED" },
+			}),
+		);
+		const removedSession = sessionId(),
+			removedTurn = turnId();
+		await f.bridge.submit({
+			sessionId: removedSession,
+			turnId: removedTurn,
+			text: "removed key",
+		});
+		await vi.waitFor(async () =>
+			expect(
+				(await f.bridge.snapshot(removedSession, removedTurn)).terminal,
+			).toMatchObject({
+				_tag: "Some",
+				value: { outcome: "failed", errorCode: "AI.PROVIDER.AUTH_REVOKED" },
+			}),
+		);
+		expect(f.endpoint.calls).toHaveLength(2);
+	} finally {
+		await f.close();
+	}
+});

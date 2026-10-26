@@ -72,6 +72,13 @@ The overlay SHALL sit above the grid and tile overlays and take no pointer event
 - **WHEN** the subtitle text is wider than the band
 - **THEN** it scrolls from 100 % to −100 % over 10 s; under reduced motion it is truncated with an ellipsis instead
 
+#### Scenario: Knob stage and answer isolation AI-201, AI-204, SCREEN-115
+
+- **WHEN** knob key 0,1 emits stage, TurnStarted, answer deltas and terminal events, including late deltas after cancellation
+- **THEN** the logical 1920 by 480 backdrop contains only stage or transcript copy, answer text assembles once in the conversation, and answers never reopen the backdrop
+- **AND** long subtitles stay inside the sheet with reduced motion truncation and no overflow
+
+
 ### Requirement: Voice stage texts and countdown
 
 The overlay text SHALL follow the stage:
@@ -210,6 +217,12 @@ Toast events and local busy interceptions SHALL show a warning toast with 24 px 
 - **WHEN** a toast with key `aiIconViewTxt.busyToast` arrives in English
 - **THEN** "System busy, please try later" shows for 3000 ms
 
+#### Scenario: Mounted busy notice AI-199
+
+- **WHEN** a busy notice is replaced or repeated in full or reduced motion
+- **THEN** exactly one localized opaque glyph-and-text toast renders at the independent design type scale and expires after 3000 milliseconds
+
+
 ### Requirement: AI Copilot view
 
 The `aiChatView` tile SHALL lay out with toolbar 20 % of the height, content split 1:4, gap clamp(0.015·min(w,h), 4, 20), textFs clamp(0.05·min, 10, 20) and smallFs clamp(0.035·min, 8, 16). The toolbar SHALL show "AI Copilot Chat", the status text and, on the strip with text present, the 40×40 copy icon. The status machine SHALL follow ACV:
@@ -250,6 +263,14 @@ The left panel SHALL hold the energy orb in a 1:2 box with speed null 1, 0 → 3
 
 - **WHEN** an answer delta contains `<img src=x onerror=alert(1)>`
 - **THEN** it renders as literal text and no element is created
+
+#### Scenario: Mounted Copilot lifecycle AI-191, AI-194, AI-195, AI-196, AI-197, AI-198
+
+- **WHEN** the shipped tile renders every status and receives streamed whitespace, user scrolling, drag gestures, locale changes and clipboard replies
+- **THEN** status text and the flat presence glyph remain legible, copy appears only on the panel with nonempty trimmed text, and one confirmed touch copies the displayed text through main's trimming boundary with a localized success or failure toast
+- **AND** scrolling preserves a reader's position away from the bottom, transcript dragging uses delta without fling, the idle hint advances every 100 milliseconds and resets on locale change, and reduced motion stops highlighting
+- **AND** processing without text shows the active key title or localized fallback; only that key shows a 120 by 120 cancel target, removed after text, cancellation, completion or profile change
+
 
 ### Requirement: Energy orb
 
@@ -301,6 +322,14 @@ Messages SHALL group per turn with avatars, sender and HH:mm time, and normal, s
 - **WHEN** the tile renders in the management preview
 - **THEN** the header renders and the message list does not
 
+#### Scenario: Mounted conversation coverage AI-151, AI-152, AI-153, AI-158, AI-159, AI-160, AI-161, AI-162, AI-167, AI-207, AI-208
+
+- **WHEN** the shipped conversation renders in each bundled locale with connection changes, normal, system, voice and agent messages, and a FunctionWheel snapshot
+- **THEN** the flat opaque palette, scaled header and avatar bounds, sender labels, HH:mm times, bubble wrapping and final corners are preserved without blur or clipping
+- **AND** connection dots pulse only for checking, connecting and connected in full motion, group entry lasts 0.3 seconds with index times 0.05 seconds delay, and reduced motion removes both animations
+- **AND** streamed answers and live transcripts follow only within clamp(8s, 5, 15) pixels of the bottom; all retained errors use their mapped copy, unknown errors prefer a supplied message, and hint codes render as system hints
+
+
 ### Requirement: Safe rich text and link chips
 
 Chat text SHALL render a markdown subset when DK's detection rule matches: headings, paragraphs, bullet and numbered lists, blockquotes, fenced code, bold and inline code. Everything SHALL render as React elements with no HTML injection. HTTP(S) URLs SHALL render as link chips with the AI-176 visuals. Activating a chip SHALL ask main to open the URL, and main SHALL open only `http:` or `https:` URLs with a host and no credentials. File paths SHALL stay text. Covers AI-172–AI-177.
@@ -330,6 +359,12 @@ Chat text SHALL render a markdown subset when DK's detection rule matches: headi
 - **WHEN** a chip activation asks to open `javascript:alert(1)` or `https://user:pw@host/`
 - **THEN** main opens nothing
 
+#### Scenario: Mounted block matrix AI-173
+
+- **WHEN** a conversation contains all six heading levels, ordered and unordered lists, a quote, fenced code, raw HTML, tables and images
+- **THEN** supported blocks retain their styles and unsupported markup stays inert without creating remote images or executable HTML
+
+
 ### Requirement: Tool cards
 
 Tool events SHALL upsert cards by toolCallId with the running (`#4a9fff`, pulsing 1.2 s), done (`#30d158`) or error (`#ff375f`) dot, "Command", the monospace name and the phase. Exec-kind and web_search-kind tools SHALL expand on tap into a preview capped at 160s height, showing the command or query argument, the JSON arguments or the raw string. Covers AI-178, AI-179.
@@ -338,6 +373,13 @@ Tool events SHALL upsert cards by toolCallId with the running (`#4a9fff`, pulsin
 
 - **WHEN** a tool event with phase start and then one with phase result arrive for one toolCallId
 - **THEN** one card shows, first "Running" and then "Done"
+
+#### Scenario: Mounted tool lifecycle AI-178, AI-179, SCREEN-129
+
+- **WHEN** exec, search and generic tools receive start, result or error updates for the same call ID and later answer text
+- **THEN** one card per call shows the matching word and state dot, later answer text completes running tools, exec/search preview toggles by click or confirmed sub-touch within 160s height, and generic cards remain nonexpandable
+- **AND** expansion changes the measured sub-touch bounds without executing the preview
+
 
 ### Requirement: ClawBotInput
 
@@ -371,6 +413,14 @@ Voice partials SHALL merge into the box, a final transcript SHALL replace it, an
 
 - **WHEN** a profile or page switch reuses the input tile coordinate
 - **THEN** the mounted input clears its typed draft, voice buffer and selected assistant
+
+#### Scenario: Mounted input interactions AI-181, AI-185, AI-188, AI-189
+
+- **WHEN** the input renders with or without a selected agent and receives a cancelled picker, multiple paths, repeated warnings and confirmed sub-touch gestures
+- **THEN** the scaled header and button targets fit, cancellation preserves the draft without submitting, paths append once per line, and warnings stay visible for 1800 milliseconds after the latest warning
+- **AND** each confirmed gesture invokes one action with a 150 millisecond pressed flash, cancelled or moved gestures invoke none, and preview controls remain disabled
+- **AND** touch registration preserves larger authored input button targets instead of reducing them to its minimum hit size
+
 
 ### Requirement: Localized strip copy
 
