@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import "../../css-properties";
 import { type StripStringKey, stripText } from "../../overlays/voice/strings";
 import { useSubTouchTap } from "../../overlays/voice/sub-touch";
@@ -25,6 +25,32 @@ export function ClawBotInputTile({
 	const [text, setText] = useState("");
 	const [warning, setWarning] = useState<StripStringKey | undefined>();
 	const box = useRef<HTMLTextAreaElement>(null);
+	const recovery = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const focusOwner = useRef<object | undefined>(undefined);
+	const ownsFocus =
+		interactive && !voice.wheelOpen && !voice.view.overlay.visible;
+	useLayoutEffect(() => {
+		const owner = ownsFocus
+			? {
+					keyCode: state.keyCode,
+					agentId: state.agentId,
+					epoch: voice.view.focusEpoch,
+				}
+			: undefined;
+		focusOwner.current = owner;
+		return () => {
+			focusOwner.current = undefined;
+			clearTimeout(recovery.current);
+		};
+	}, [ownsFocus, state.keyCode, state.agentId, voice.view.focusEpoch]);
+	const recoverFocus = (): void => {
+		clearTimeout(recovery.current);
+		const owner = focusOwner.current;
+		if (!owner) return;
+		recovery.current = setTimeout(() => {
+			if (focusOwner.current === owner) box.current?.focus();
+		}, 100);
+	};
 	const send = useRef<HTMLButtonElement>(null);
 	const attach = useRef<HTMLButtonElement>(null);
 	// Voice partials and finals overwrite the box (QBI:371-462).
@@ -64,7 +90,14 @@ export function ClawBotInputTile({
 	};
 	// A tap on the strip focuses the strip window first (QBI:598-653).
 	const onFocusRequest = (): void => {
-		void voice.request({ _tag: "FocusPanel" }).then(() => box.current?.focus());
+		const owner = focusOwner.current;
+		if (!owner) return;
+		void voice
+			.request({ _tag: "FocusPanel" })
+			.then(() => {
+				if (focusOwner.current === owner) box.current?.focus();
+			})
+			.catch(() => undefined);
 	};
 	useSubTouchTap(send, onSend);
 	useSubTouchTap(attach, onAttach);
@@ -115,6 +148,8 @@ export function ClawBotInputTile({
 							: undefined
 					}
 					data-quake-sub-touch="quakeBotInputTextarea"
+					onBlur={recoverFocus}
+					onFocus={() => clearTimeout(recovery.current)}
 					onChange={(event) => setText(event.target.value)}
 					style={{
 						minHeight: 120 * s,

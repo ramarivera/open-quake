@@ -24,15 +24,68 @@ const Frame = Schema.Struct({
 });
 const parseFrame = Schema.decodeUnknownSync(Schema.parseJson(Frame));
 
+/** Track data chunks across network boundaries without treating RIFF metadata
+ * or chunk padding as PCM. Final format validation still owns acceptance. */
+function wavProgress(onAudio: () => void): (chunk: Uint8Array) => void {
+	const header = new Uint8Array(12);
+	let headerSize = 12,
+		filled = 0,
+		skip = 0,
+		remaining = 0,
+		samples = 0;
+	let received = false;
+	return (chunk) => {
+		if (received) return;
+		let offset = 0;
+		while (offset < chunk.length) {
+			if (skip) {
+				const size = Math.min(skip, chunk.length - offset);
+				skip -= size;
+				offset += size;
+			} else if (remaining) {
+				const size = Math.min(remaining, chunk.length - offset);
+				remaining -= size;
+				offset += size;
+				samples += size;
+				if (samples >= 2) {
+					received = true;
+					onAudio();
+					return;
+				}
+			} else {
+				const size = Math.min(headerSize - filled, chunk.length - offset);
+				header.set(chunk.subarray(offset, offset + size), filled);
+				filled += size;
+				offset += size;
+				if (filled !== headerSize) continue;
+				filled = 0;
+				const four = (at: number) =>
+					String.fromCharCode(...header.subarray(at, at + 4));
+				if (headerSize === 12) {
+					if (four(0) !== "RIFF" || four(8) !== "WAVE")
+						throw new SpeechFormatUnsupported();
+					headerSize = 8;
+				} else {
+					const length = new DataView(header.buffer).getUint32(4, true);
+					if (four(0) === "data") remaining = length;
+					else skip = length + (length % 2);
+				}
+			}
+		}
+	};
+}
+
 async function readAudio(
 	response: Response,
 	format: "wav" | "pcm",
 	signal: AbortSignal,
+	onAudio: () => void,
 ): Promise<Uint8Array> {
 	if (!response.body) throw new AiProtocolInvalid();
 	const reader = response.body.getReader();
 	const decoder = new TextDecoder("utf-8", { fatal: true });
 	const chunks: Uint8Array[] = [];
+	const receiveWav = wavProgress(onAudio);
 	let bytes = 0;
 	let line = "";
 	let data: string[] = [];
@@ -58,6 +111,7 @@ async function readAudio(
 			bytes += decoded.length;
 			if (bytes > MAX_AUDIO_BYTES) throw new SpeechFormatUnsupported();
 			chunks.push(decoded);
+			if (decoded.length) onAudio();
 		}
 		const reason = frame.output.finish_reason;
 		if (reason !== undefined && reason !== null && reason !== "null") {
@@ -89,6 +143,7 @@ async function readAudio(
 				bytes += chunk.value.length;
 				if (bytes > MAX_AUDIO_BYTES) throw new SpeechFormatUnsupported();
 				chunks.push(chunk.value);
+				receiveWav(chunk.value);
 			} else consume(decoder.decode(chunk.value, { stream: true }));
 		}
 		if (format === "pcm") {
@@ -115,6 +170,7 @@ export function synthesizeHttp(
 	profile: TtsProfile,
 	text: string,
 	key: Redacted.Redacted<string>,
+	onAudio: () => void = () => {},
 ): Effect.Effect<GeneratedAudio, SynthesisError> {
 	return Effect.tryPromise({
 		try: async (signal) => {
@@ -165,7 +221,7 @@ export function synthesizeHttp(
 				await response.body?.cancel();
 				throw new SpeechFormatUnsupported();
 			}
-			const bytes = await readAudio(response, profile.format, signal);
+			const bytes = await readAudio(response, profile.format, signal, onAudio);
 			const audio = verifiedAudio(bytes, profile.format);
 			if (Either.isLeft(audio)) throw audio.left;
 			return audio.right;

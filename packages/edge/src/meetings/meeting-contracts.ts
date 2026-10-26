@@ -94,11 +94,19 @@ export const Translation = Schema.Struct({
 	at: Count,
 });
 export type Translation = typeof Translation.Type;
+export const MeetingStageState = Schema.Struct({
+	stage: Count.pipe(Schema.lessThanOrEqualTo(5)),
+	status: Count.pipe(Schema.lessThanOrEqualTo(2)),
+});
+export type MeetingStageState = typeof MeetingStageState.Type;
 export const MeetingSnapshot = Schema.Struct({
 	revision: Count,
 	mic: Schema.OptionFromNullOr(Schema.Boolean),
 	config: MeetingConfig,
 	records: Schema.Array(MeetingRecord),
+	progress: Schema.optional(
+		Schema.Record({ key: Schema.String, value: MeetingStageState }),
+	),
 	cooldowns: Schema.Record({ key: Schema.String, value: Schema.Number }),
 	translations: Schema.Array(Translation),
 	translating: Schema.Boolean,
@@ -118,7 +126,12 @@ export type MeetingAction = typeof MeetingAction.Type;
 export const MeetingCommand = Schema.Union(
 	Schema.TaggedStruct("read", {}),
 	Schema.TaggedStruct("configure", { config: MeetingConfig }),
-	Schema.TaggedStruct("action", { action: MeetingAction }),
+	Schema.TaggedStruct("action", {
+		action: MeetingAction,
+		keyCode: Schema.optional(
+			Schema.String.pipe(Schema.pattern(/^\d{1,2},\d{1,2}$/)),
+		),
+	}),
 	Schema.TaggedStruct("cancel", { id: MeetingId }),
 	Schema.TaggedStruct("retry", { id: MeetingId }),
 	Schema.TaggedStruct("regenerate", { id: MeetingId, template: TemplateId }),

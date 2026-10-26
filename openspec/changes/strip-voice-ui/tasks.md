@@ -68,8 +68,7 @@ main at `cef6ee0` (touch #20, hardware #22, knob #24, clock #25, lifecycle #21):
   the mock runtime, no HID): PASS. Captures in
   `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice/smoke/`.
 
-Not verified: real buzzer output, real microphone levels (no capture adapter
-calls the meter yet), knob holds and touch on the device, and rendering on the
+Not verified: real buzzer output, real microphone levels at the time of that original smoke, knob holds and touch on the device, and rendering on the
 physical strip.
 
 PR #28 review round 1 completed in `2d8867e`: seven confirmed threads
@@ -92,3 +91,111 @@ attributed fix-commit replies and resolutions; the final fetch confirms all
 16 PR threads resolved. See [review-round-2.md](review-round-2.md) for source,
 regressions, the lock-only race counterfactual, artifacts and the inconclusive
 docstring advisory. Physical task 6.3 and the epic remain open.
+
+
+## 7. Capture and consumer parity, 2026-10-26
+
+- [x] 7.1 Wire capture RMS and peak through the normalized meter, 50/180 ms throttling and 15-buffer VAD, resetting per capture; TestClock consumer regressions. (`open-quake-lih.5.2`, KNOB-050, KNOB-054)
+- [x] 7.2 Adopt the 100 ms blur refocus only while the strip chat input owns its active surface; cancel on close, ownership change and unmount; mounted focus regression. (`open-quake-lih.5.3`, AI-183)
+- [x] 7.3 Toggle read-aloud per serial/key, publish thinking/speaking/idle to the pill, render dots/wave FX and apply 8 s resume, duration + 5 s and 12 s no-audio watchdogs; consumer regressions. (`open-quake-lih.5.4`, AI-155, AI-156)
+- [x] 7.4 Publish correlated meeting stages 0–5/status 0–2 from capture, merge, upload, ASR, transcript and summary; consume in the mounted strip display with stale-id, cancellation and reset regressions. (`open-quake-lih.5.5`, AI-267)
+
+These four beads stay open for lead integration. Physical acceptance 6.3,
+live provider qualification and the Auto router are outside this lane.
+
+
+Evidence for tasks 7.1–7.4 on `feat/strip-voice-parity`:
+
+- 7.1: `apps/desktop/src/main/speech/runtime-levels.test.ts` drives the real
+  capture, STT socket, VoiceSurface and renderer reducer. TestClock checks
+  49/50 ms, 179/180 ms, peak-only activity, quiet buffers 14/15, continued
+  capture and immediate first emission after a capture reset. The serialized
+  audio-worker regression also verifies RMS and peak from synthetic samples.
+- 7.2: `apps/desktop/src/main/voice/parity-smoke.ts` mounts the real input and
+  uses deterministic renderer timers to check 99/100 ms, reset without an
+  assistant, assistant ownership changes, FunctionWheel, full voice overlay,
+  chat-surface unmount and a delayed FocusPanel reply. Native window focus is
+  intercepted; no foreground app is activated.
+- 7.3: `main/speech/read-aloud.test.ts` has eight consumer tests for second
+  taps during readiness, playback and synthesis, different-key replacement,
+  reset, stale sessions, the 8 s resume and restarted duration + 5 s deadline,
+  and 12 s without audio. Receiving partial audio before 12 s allows the
+  synthesis stream to continue. Edge `speech-watchdog.test.ts` adds three
+  exact-clock cases for unknown 30 s, minimum 8 s and a hung context probe.
+  The native smoke verifies the pill's 3/3/7 dots/bars and second-tap stop
+  through the production renderer, preload, IPC and speech controller.
+- 7.4: `packages/edge/src/meetings/meeting-service.test.ts` passes 41 tests,
+  including all twelve stage/status pairs, origin preservation on retry,
+  cancellation of a delayed provider, failure and shutdown. The native smoke
+  checks each real pipeline transition through the mounted strip and covers
+  stale UUIDs, failure, cancellation, reset, and revealing the final minutes.
+
+Gates pass: Biome checks 1,154 files with zero errors and 14 existing warnings;
+all six package typechecks; 2,882 tests pass with four existing skips across
+307 passing files and two skipped files; production build; both bundle-smoke
+modes; strict OpenSpec validation, 46 items. The full test command uses
+`TURBO_ENV_MODE=loose pnpm test -- --maxWorkers=2` with lane `TMPDIR`.
+Unrestricted workers initially hit unrelated wall-clock timeouts; Turbo's
+strict environment initially removed `TMPDIR`, causing macOS `/tmp` symlink
+rejections in backup tests. Preserving `TMPDIR` and limiting workers passes
+without source changes or relaxed assertions in those tests.
+
+Both hidden native smokes pass: the media README gate and the parity gate
+in `apps/desktop/src/main/voice/README.md`. They emit expected missing-handler
+messages for optional modules outside those fixtures. Screenshots and logs:
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice-2/`.
+Representative files are `parity-meter-speaking.png`, `parity-pill-idle.png`,
+`parity-pill-thinking.png`, `parity-pill-speaking.png`,
+`parity-meeting-{0-1,1-1,2-1,3-1,4-1,5-1,5-2,failed,cancelled,reset}.png`,
+`parity-meeting-minutes.png` and `parity-evidence.json`; the media set is in
+`media/`. No real microphone, audible playback, HID, QUAKE or DK-Suite was used.
+Live provider qualification, physical acceptance 6.3 / `open-quake-lih.5.1.14`
+and the Auto router `open-quake-lih.15` remain unverified and out of scope.
+
+## 8. PR #83 fix round
+
+- [x] 8.1 Allow only the additional `state` and `resume` worker methods and prove suspended playback recovery through the production bridge. Reviews 4375970560 and 4376016278, AI-156, bead `open-quake-lih.5.1.18`.
+- [x] 8.2 Render stopped manual recordings as recorded/idle after stage 1 completes. Review 4375970758, AI-267, bead `open-quake-lih.5.1.19`.
+- [x] 8.3 Count WAV sample payload rather than metadata for the 12 s no-audio deadline. Review 4375970956, AI-156, bead `open-quake-lih.5.1.20`.
+- [x] 8.4 Include current meeting stage/status in snapshots for late strip mounts. Review 4375971137, AI-267, bead `open-quake-lih.5.1.21`.
+- [x] 8.5 Stop active read-aloud before validating a newer streaming answer. Review 4376016267, AI-155, bead `open-quake-lih.5.1.22`.
+
+Each fix requires a regression observed failing before implementation, its own
+normal commit/push and an attributed thread reply. Leave threads unresolved
+and the PR unmerged. Run all six lane gates and hidden mock native smokes.
+Evidence is stored under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice-2/fix1c/`.
+
+8.1 regression `resumes suspended playback at 8 s through the production worker bridge`
+failed before the fix with context state `suspended` instead of `running`. It uses
+production `openAudioWorker`, desktop output, serialized worker and watchdog,
+with a synthetic WebAudio implementation. No physical audio device is opened.
+
+8.2 regression `shows recorded idle after a manual recording finishes merging`
+failed before the fix because the mounted display markup showed processing and
+uploading after stage 1/status 2. The recording now renders idle while retaining
+its recorded state. The regression and desktop typecheck pass. Current fix-round
+logs use `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice-2/fix1d/`.
+
+8.3 regression `WAV header without PCM times out at 12 seconds and clears the
+read-aloud pill` failed before the fix, still pending at 12 seconds. Incremental
+RIFF chunk parsing now waits for a full PCM sample, skipping metadata and padding.
+Eleven read-aloud consumer tests cover ordinary/extended headers fragmented into
+single bytes and samples arriving later. The speech protocol/service tests and
+all six package typechecks also pass. Logs: `strip-voice-2/fix1d/0956-*`.
+
+8.4 regressions `meeting snapshots retain current and terminal stages for late
+strip mounts` and `late-mounted display renders the current stage from its
+meeting snapshot` both failed before implementation. Snapshots now include
+bounded latest progress for extant records, including completed/cancelled stages.
+A new strip uses the decoded snapshot until a live event arrives and respects
+reset exclusions. Meeting service 42 tests, desktop meeting display/registration
+11 tests and all six package typechecks pass. Logs: `strip-voice-2/fix1d/1137-*`.
+
+8.5 regressions `stop tap precedes overflow answer validation for active
+read-aloud` and `stop tap precedes empty answer validation for active read-aloud`
+failed before implementation. The IPC edge now attempts an owner-checked stop
+before inspecting cached answer text. The production binding and hidden smoke
+use the serialized runtime stop operation. Playing and pending-synthesis tests
+also prove foreign/stale owner stops do nothing. All 36 focused IPC, read-aloud
+and composition tests plus desktop typecheck pass. Logs: `strip-voice-2/fix1d/6267-*`.

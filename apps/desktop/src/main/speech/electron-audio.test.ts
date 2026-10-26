@@ -1,10 +1,19 @@
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runInNewContext } from "node:vm";
+import { it as effectIt } from "@effect/vitest";
+import { Effect, Fiber, TestClock } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PCM_24K } from "../../../../../packages/edge/src/ai/speech/speech-contracts";
+import { playbackWatchdog } from "../../../../../packages/edge/src/ai/speech/speech-watchdog";
+import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 
 const native = vi.hoisted(() => ({
 	root: "",
+	contextState: "suspended",
+	resumes: 0,
+	end: () => {},
 	failWindow: false,
 	failWrite: false,
 	windows: [] as { url: string; destroyed: boolean }[],
@@ -42,6 +51,36 @@ vi.mock("electron", () => ({
 		},
 	},
 	BrowserWindow: class {
+		context = {
+			AudioBufferSourceNode: class {},
+			AudioContext: class {
+				get state() {
+					return native.contextState;
+				}
+				destination = {};
+				async resume() {
+					if (++native.resumes > 1) native.contextState = "running";
+				}
+				async close() {
+					native.contextState = "closed";
+				}
+				createBuffer(_channels: number, count: number) {
+					return { getChannelData: () => new Float32Array(count) };
+				}
+				createBufferSource() {
+					const source = {
+						buffer: undefined,
+						onended: () => {},
+						connect() {},
+						start() {},
+						stop() {},
+						disconnect() {},
+					};
+					native.end = () => source.onended();
+					return source;
+				}
+			},
+		};
 		state = { url: "", destroyed: false };
 		constructor() {
 			if (native.failWindow) throw new Error("synthetic window failure");
@@ -52,7 +91,8 @@ vi.mock("electron", () => ({
 			setWindowOpenHandler: () => {},
 			on: () => {},
 			getURL: () => this.state.url,
-			executeJavaScript: async () => {},
+			executeJavaScript: async (code: string) =>
+				runInNewContext(code, this.context),
 		};
 		isDestroyed() {
 			return this.state.destroyed;
@@ -66,10 +106,13 @@ vi.mock("electron", () => ({
 	},
 }));
 
-import { openAudioWorker } from "./electron-audio";
+import { createDesktopAudioOutput, openAudioWorker } from "./electron-audio";
 
 beforeEach(async () => {
 	native.root = await mkdtemp(join(tmpdir(), "oq-audio-test-"));
+	native.contextState = "suspended";
+	native.resumes = 0;
+	native.end = () => {};
 	native.failWrite = false;
 	native.failWindow = false;
 	native.windows.length = 0;
@@ -152,3 +195,43 @@ describe("owned Electron audio worker", () => {
 		expect(await readdir(native.root)).toEqual([]);
 	});
 });
+
+effectIt.scoped(
+	"resumes suspended playback at 8 s through the production worker bridge",
+	() =>
+		Effect.gen(function* () {
+			const ownership = yield* makeAudioOutput;
+			const lease = yield* createDesktopAudioOutput(ownership).acquire;
+			yield* Effect.addFinalizer(() => lease.stop);
+			yield* lease.ready;
+			const contextState = lease.contextState;
+			const resume = lease.resume;
+			if (!contextState || !resume) throw new Error("missing watchdog methods");
+			const playback = yield* lease
+				.play({
+					bytes: new Uint8Array(480000),
+					format: "pcm",
+					descriptor: PCM_24K,
+					durationMs: 10000,
+					provenance: "generation",
+				})
+				.pipe(
+					Effect.raceFirst(
+						playbackWatchdog(
+							10000,
+							() => contextState.pipe(Effect.orElseSucceed(() => "closed")),
+							() => resume.pipe(Effect.orElseSucceed(() => undefined)),
+						),
+					),
+					Effect.forkScoped,
+				);
+			yield* TestClock.adjust(7999);
+			expect(native.resumes).toBe(1);
+			yield* TestClock.adjust(1);
+			yield* Effect.yieldNow().pipe(Effect.repeatN(10));
+			expect(native.contextState).toBe("running");
+			expect(native.resumes).toBe(2);
+			native.end();
+			yield* Fiber.join(playback);
+		}),
+);

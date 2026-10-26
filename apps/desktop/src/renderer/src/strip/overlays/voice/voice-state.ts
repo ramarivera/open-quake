@@ -58,6 +58,7 @@ export interface StripToast {
 }
 export interface VoiceView {
 	readonly overlay: OverlayState;
+	readonly focusEpoch: number;
 	readonly bar: BarState;
 	readonly copilot: CopilotState;
 	readonly conversation: ConversationState;
@@ -70,9 +71,19 @@ export interface VoiceView {
 	/** The last selected clawbot key: its green dot (SCREEN-040). */
 	readonly activeClawbot: Option.Option<string>;
 	readonly nextToast: number;
+	readonly meetingStages: ReadonlyMap<
+		string,
+		Extract<VoiceSurfaceEvent, { _tag: "MeetingStage" }>
+	>;
+	readonly resetMeetings: ReadonlySet<string>;
+	readonly readAloud: ReadonlyMap<
+		string,
+		Extract<VoiceSurfaceEvent, { _tag: "ReadAloudState" }>
+	>;
 }
 export const initialVoiceView: VoiceView = {
 	overlay: initialOverlay,
+	focusEpoch: 0,
 	bar: initialBar,
 	copilot: initialCopilot,
 	conversation: initialConversation,
@@ -81,6 +92,9 @@ export const initialVoiceView: VoiceView = {
 	toasts: [],
 	activeClawbot: Option.none(),
 	nextToast: 1,
+	readAloud: new Map(),
+	meetingStages: new Map(),
+	resetMeetings: new Set(),
 };
 
 export type VoiceAction =
@@ -267,8 +281,34 @@ function routeEvent(
 					},
 				].slice(-3),
 			};
-		case "MeetingStage":
-			return view;
+		case "ReadAloudState": {
+			const current = view.readAloud.get(event.keyCode);
+			if (event.phase !== "thinking" && current?.sessionId !== event.sessionId)
+				return view;
+			const readAloud = new Map(view.readAloud);
+			readAloud.set(event.keyCode, event);
+			return { ...view, readAloud };
+		}
+		case "MeetingStage": {
+			const id = String(event.meetingId);
+			if (
+				view.resetMeetings.has(id) &&
+				!(event.stage === 0 && event.status === 1)
+			)
+				return view;
+			const previous = view.meetingStages.get(id);
+			if (!previous && event.status !== 1) return view;
+			if (previous?.status === 0 && event.status !== 1) return view;
+			const meetingStages = new Map(view.meetingStages);
+			meetingStages.set(id, event);
+			while (meetingStages.size > 128) {
+				const first = meetingStages.keys().next().value;
+				if (first !== undefined) meetingStages.delete(first);
+			}
+			const resetMeetings = new Set(view.resetMeetings);
+			resetMeetings.delete(id);
+			return { ...view, meetingStages, resetMeetings };
+		}
 	}
 }
 
@@ -296,6 +336,7 @@ export function reduceVoice(
 			// aiChatView:profileChanged (AI-170): the active key, live row and cancel indicator go.
 			return {
 				...view,
+				focusEpoch: view.focusEpoch + 1,
 				copilot: { ...initialCopilot, text: view.copilot.text },
 				conversation: reduceConversation(
 					view.conversation,
@@ -304,6 +345,11 @@ export function reduceVoice(
 				),
 				input: { ...initialInput, revision: view.input.revision + 1 },
 				activeClawbot: Option.none(),
+				readAloud: new Map(),
+				meetingStages: new Map(),
+				resetMeetings: new Set(
+					[...view.resetMeetings, ...view.meetingStages.keys()].slice(-128),
+				),
 				bar: initialBar,
 			};
 		case "expire": {

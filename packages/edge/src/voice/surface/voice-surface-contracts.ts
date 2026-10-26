@@ -155,11 +155,18 @@ export const VoiceSurfaceEvent = Schema.Union(
 		name: Schema.optional(Schema.String.pipe(Schema.maxLength(128))),
 	}),
 	Schema.TaggedStruct("AgentStatus", { state: AgentConnection }),
+	/** AI-155: playback is independent from capture and chat generation. */
+	Schema.TaggedStruct("ReadAloudState", {
+		serial: Serial,
+		keyCode: VoiceKeyCode,
+		sessionId: CaptureId,
+		phase: Schema.Literal("idle", "thinking", "speaking"),
+	}),
 	/** DK mmStageChange (AI-267). Meeting tiles (cluster 15) consume it. */
 	Schema.TaggedStruct("MeetingStage", {
 		serial: Serial,
 		keyCode: VoiceKeyCode,
-		meetingId: Schema.Int.pipe(Schema.nonNegative()),
+		meetingId: Schema.Union(Schema.Int.pipe(Schema.nonNegative()), Schema.UUID),
 		stage: Schema.Int.pipe(Schema.between(0, 5)),
 		status: Schema.Int.pipe(Schema.between(0, 2)),
 	}),

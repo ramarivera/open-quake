@@ -115,6 +115,7 @@ describe("production voice consumer", () => {
 															seq: 0,
 															bytes: new Uint8Array(960),
 															rms: 0.5,
+															peak: 0.5,
 														},
 													],
 													done: false,
@@ -446,7 +447,7 @@ describe("production voice consumer", () => {
 });
 
 it.effect(
-	"serializes overlapping Read Aloud replacement before acquiring a second playback",
+	"cancels pending profile lookup before replacing Read Aloud and never acquires the canceled player",
 	() =>
 		Effect.scoped(
 			Effect.gen(function* () {
@@ -501,15 +502,14 @@ it.effect(
 					const first = yield* controller.readAloud("one").pipe(Effect.fork);
 					yield* Queue.take(profilesEntered);
 					const second = yield* controller.readAloud("two").pipe(Effect.fork);
-					yield* tick;
-					yield* Queue.offer(profilesReleased, undefined);
-					yield* Queue.take(acquisitions);
 					yield* Queue.take(profilesEntered);
+					expect(yield* Fiber.join(first)).toEqual({ _tag: "cancelled" });
 					yield* Queue.offer(profilesReleased, undefined);
 					yield* Queue.take(acquisitions);
 					expect(peak).toBe(1);
-					expect(cancelled).toBe(1);
+					expect(cancelled).toBe(0);
 					yield* controller.cancelSpeech();
+					expect(cancelled).toBe(1);
 					expect(yield* Fiber.join(first)).toEqual({ _tag: "cancelled" });
 					expect(yield* Fiber.join(second)).toEqual({ _tag: "cancelled" });
 				}).pipe(

@@ -206,6 +206,7 @@ async function fixture(
 											seq: 0,
 											bytes: new Uint8Array(960),
 											rms: 0.1,
+											peak: 0.1,
 										},
 									],
 									done: false,

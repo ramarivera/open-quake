@@ -30,6 +30,7 @@ import { SpeechPhaseTimeout } from "./speech-errors.js";
 import { type SynthesisError, synthesizeHttp } from "./speech-http.js";
 import { SpeechHttp, SpeechOutput, SpeechWebSocket } from "./speech-ports.js";
 import { recognizeSocket, type Transcript } from "./speech-stt.js";
+import { playbackWatchdog } from "./speech-watchdog.js";
 
 export type SpeechFailure = SynthesisError | SpeechPhaseTimeout;
 export type SpeechOutcome =
@@ -85,6 +86,7 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 			const synthesize = Effect.fn("AiSpeechService.synthesize")(function* (
 				input: unknown,
 				text: string,
+				onAudio: () => void = () => {},
 			): Effect.fn.Return<GeneratedAudio, SpeechFailure> {
 				const profile = yield* validate(input);
 				if (!text.trim() || text.length > 4000)
@@ -98,7 +100,13 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 							profile.credentialRef,
 							profile.authGeneration,
 						);
-						return yield* synthesizeHttp(http.value, profile, text, key);
+						return yield* synthesizeHttp(
+							http.value,
+							profile,
+							text,
+							key,
+							onAudio,
+						);
 					}),
 					store.revoked(profile.credentialRef, profile.authGeneration),
 				).pipe(
@@ -176,6 +184,9 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 				createSpeech: Effect.fn("AiSpeechService.createSpeech")(function* (
 					input: unknown,
 					text: string,
+					onPhase: (
+						phase: "thinking" | "speaking",
+					) => Effect.Effect<void> = () => Effect.void,
 				): Effect.fn.Return<SpeechTurn> {
 					const cancelled = yield* Deferred.make<void>();
 					const consumed = yield* Ref.make(false);
@@ -192,28 +203,59 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 						if (Option.isNone(output)) return yield* new AiUnavailable();
 						const play = Effect.scoped(
 							Effect.gen(function* () {
-								const audio = yield* synthesize(profile, text);
-								const player = yield* Effect.acquireRelease(
-									output.value.acquire.pipe(
-										Effect.interruptible,
+								yield* onPhase("thinking");
+								let hasAudio = false;
+								const audio = yield* Effect.raceFirst(
+									synthesize(profile, text, () => {
+										hasAudio = true;
+									}),
+									Effect.sleep(12000).pipe(
+										Effect.zipRight(
+											Effect.suspend(() =>
+												hasAudio
+													? Effect.never
+													: Effect.fail(new SpeechPhaseTimeout("synthesis")),
+											),
+										),
+									),
+								);
+								let current:
+									| Effect.Effect.Success<typeof output.value.acquire>
+									| undefined;
+								let playbackStarted = false;
+								const playback = Effect.gen(function* () {
+									const player = yield* Effect.acquireRelease(
+										output.value.acquire.pipe(
+											Effect.interruptible,
+											Effect.timeoutFail({
+												duration: "10 seconds",
+												onTimeout: () => new SpeechPhaseTimeout("playerReady"),
+											}),
+										),
+										(value) => value.stop,
+									);
+									current = player;
+									yield* player.ready.pipe(
 										Effect.timeoutFail({
 											duration: "10 seconds",
 											onTimeout: () => new SpeechPhaseTimeout("playerReady"),
 										}),
+									);
+									playbackStarted = true;
+									yield* onPhase("speaking");
+									yield* player.play(audio);
+								});
+								yield* Effect.raceFirst(
+									playback,
+									playbackWatchdog(
+										audio.durationMs,
+										() =>
+											current?.contextState?.pipe(
+												Effect.orElseSucceed(() => "closed"),
+											) ?? Effect.succeed("running"),
+										() => current?.resume?.pipe(Effect.ignore) ?? Effect.void,
+										() => (playbackStarted ? "playback" : "playerReady"),
 									),
-									(value) => value.stop,
-								);
-								yield* player.ready.pipe(
-									Effect.timeoutFail({
-										duration: "10 seconds",
-										onTimeout: () => new SpeechPhaseTimeout("playerReady"),
-									}),
-								);
-								yield* player.play(audio).pipe(
-									Effect.timeoutFail({
-										duration: Math.min(120000, audio.durationMs + 10000),
-										onTimeout: () => new SpeechPhaseTimeout("playback"),
-									}),
 								);
 								return { _tag: "completed" } satisfies SpeechOutcome;
 							}),

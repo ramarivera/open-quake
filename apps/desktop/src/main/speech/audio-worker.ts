@@ -88,6 +88,12 @@ export function installAudioWorker(Framer: typeof PcmFramer) {
 			context = new AudioContext({ sampleRate: 24000 });
 			await context.resume();
 		},
+		state() {
+			return context?.state ?? "closed";
+		},
+		async resume() {
+			await context?.resume();
+		},
 		async play(bytes: number[]) {
 			if (!context || stopped) throw new Error("Player closed");
 			const buffer = context.createBuffer(1, bytes.length / 2, 24000);

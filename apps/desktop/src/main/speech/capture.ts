@@ -54,6 +54,10 @@ export function captureFrames(
 							frame.bytes.length > 960 ||
 							frame.bytes.length === 0 ||
 							frame.bytes.length % 2 ||
+							!Number.isFinite(frame.rms) ||
+							!Number.isFinite(frame.peak) ||
+							frame.peak < 0 ||
+							frame.peak > 1 ||
 							frame.rms < 0 ||
 							frame.rms > 1
 						)

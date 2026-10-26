@@ -44,40 +44,51 @@ export const transcribeMeeting = Effect.fn(
 	config: MeetingConfig,
 	audioRef: string,
 	durationMs: number,
+	progress: (stage: 2 | 3, status: 1 | 2) => Effect.Effect<void> = () =>
+		Effect.void,
 ): Effect.fn.Return<readonly Segment[], MeetingError> {
 	if (Option.isNone(adapter)) return yield* meetingError("Unavailable");
 	const port = adapter.value;
-	const work = Effect.acquireUseRelease(
-		port.submit({
-			config,
-			audioRef,
-			durationMs,
-			channelIds: asrPlan.channelIds,
-			diarization: true,
-			expiresInMs: asrPlan.uploadExpiryMs,
-		}),
-		(task) =>
-			Effect.gen(function* () {
-				while (true) {
-					const result = yield* port.poll(task);
-					if (result.status === "complete") {
-						const segments = yield* Schema.decodeUnknown(
-							Schema.Array(SegmentSchema),
-						)(result.segments).pipe(
-							Effect.mapError((cause) =>
-								meetingError("TranscriptionFailed", cause),
-							),
-						);
-						if (!segments.some((s) => s.text.trim()))
-							return yield* meetingError("TranscriptionFailed");
-						if (segments.some((s) => s.endMs < s.startMs))
-							return yield* meetingError("TranscriptionFailed");
-						return [...segments].sort((a, b) => a.startMs - b.startMs);
-					}
-					yield* Effect.sleep(asrPlan.pollMs);
-				}
-			}),
-		(task, exit) => (exit._tag === "Failure" ? port.cancel(task) : Effect.void),
+	const work = progress(2, 1).pipe(
+		Effect.zipRight(
+			Effect.acquireUseRelease(
+				port
+					.submit({
+						config,
+						audioRef,
+						durationMs,
+						channelIds: asrPlan.channelIds,
+						diarization: true,
+						expiresInMs: asrPlan.uploadExpiryMs,
+					})
+					.pipe(Effect.tap(() => progress(2, 2))),
+				(task) =>
+					Effect.gen(function* () {
+						yield* progress(3, 1);
+						while (true) {
+							const result = yield* port.poll(task);
+							if (result.status === "complete") {
+								const segments = yield* Schema.decodeUnknown(
+									Schema.Array(SegmentSchema),
+								)(result.segments).pipe(
+									Effect.mapError((cause) =>
+										meetingError("TranscriptionFailed", cause),
+									),
+								);
+								if (!segments.some((s) => s.text.trim()))
+									return yield* meetingError("TranscriptionFailed");
+								if (segments.some((s) => s.endMs < s.startMs))
+									return yield* meetingError("TranscriptionFailed");
+								yield* progress(3, 2);
+								return [...segments].sort((a, b) => a.startMs - b.startMs);
+							}
+							yield* Effect.sleep(asrPlan.pollMs);
+						}
+					}),
+				(task, exit) =>
+					exit._tag === "Failure" ? port.cancel(task) : Effect.void,
+			),
+		),
 	);
 	return yield* work.pipe(
 		Effect.timeoutFail({
