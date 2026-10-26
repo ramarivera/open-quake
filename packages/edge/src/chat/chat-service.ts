@@ -23,7 +23,7 @@ import {
 	AiErrors,
 	AiProtocolInvalid,
 } from "../ai/ai-errors.js";
-import { validateRequest } from "../ai/ai-invariants.js";
+import { generationDeadlineMs, validateRequest } from "../ai/ai-invariants.js";
 import { prepareWorkflow } from "../ai/ai-provider-quirks.js";
 import { AiRepository } from "../ai/ai-repository.js";
 import type { Generation } from "../ai/ai-service.js";
@@ -375,9 +375,10 @@ export class ChatService extends Effect.Service<ChatService>()(
 			): Effect.Effect<void> =>
 				Effect.uninterruptibleMask((restore) =>
 					Effect.gen(function* () {
+						const deadlineMs = generationDeadlineMs(profile);
 						const remainingMs = Math.max(
 							0,
-							60000 -
+							deadlineMs -
 								Number((yield* Clock.currentTimeNanos) - turn.acceptedAt) / 1e6,
 						);
 						if (remainingMs <= 0) {
@@ -461,7 +462,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 						const cancelled = yield* Deferred.poll(turn.stop);
 						const result = Option.isSome(cancelled)
 							? yield* cancelled.value
-							: terminal.outcome !== "cancelled" && elapsedMs >= 60000
+							: terminal.outcome !== "cancelled" && elapsedMs >= deadlineMs
 								? {
 										outcome: "timedOut" as const,
 										errorCode: "CHAT.RESPONSE.TIMEOUT",

@@ -60,6 +60,10 @@ export function profileSummary(profile: ProviderProfile): ProfileSummary {
 	};
 }
 
+/** Absolute budget shared by the facade and its enclosing chat turn. */
+export const generationDeadlineMs = (profile: ProviderProfile): number =>
+	profile.adapter === "dashscope-media" ? 300000 : 60000;
+
 export function validateProfile(
 	input: unknown,
 ): Either.Either<ProviderProfile, ValidationIssue> {

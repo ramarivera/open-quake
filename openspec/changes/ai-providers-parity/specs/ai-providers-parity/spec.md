@@ -171,6 +171,16 @@ Imports SHALL map assistant session start/end/error, animation ongoing/processin
 - **WHEN** each recovered session, animation or type enum is decoded
 - **THEN** its local state is returned, including keyConfig, and unknown values fail closed
 
+### Requirement: Media turn deadlines
+
+The desktop chat turn and AI facade SHALL share the selected transport's absolute deadline including acceptance and setup (AI-007, AI-079). Explicit DashScope media profiles SHALL have 300 seconds; text SHALL retain 60 seconds. Deltas SHALL NOT extend either deadline.
+
+#### Scenario: Media generation outlasts a normal text turn
+- **WHEN** a selected media profile completes after 90 seconds
+- **THEN** the owning chat turn completes successfully instead of timing out at 60 seconds
+- **WHEN** media work is still pending at 300 seconds
+- **THEN** upstream aborts and exactly one timedOut terminal is emitted
+
 ### Requirement: Window-owned provider files
 
 Opt-in file operations SHALL use only the profile pinned by the requesting window's owned conversation (AI-038, AI-244). Renderer-supplied row or session IDs SHALL NOT grant credential access.

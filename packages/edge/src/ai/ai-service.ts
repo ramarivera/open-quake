@@ -21,7 +21,7 @@ import {
 	AiUnavailable,
 } from "./ai-errors.js";
 import { FileRequest, type FileResult } from "./ai-file-contracts.js";
-import { validateRequest } from "./ai-invariants.js";
+import { generationDeadlineMs, validateRequest } from "./ai-invariants.js";
 import { prepareWorkflow } from "./ai-provider-quirks.js";
 import { AiRepository } from "./ai-repository.js";
 import { selectRole } from "./ai-role-presets.js";
@@ -344,11 +344,9 @@ export class AiProviderService extends Effect.Service<AiProviderService>()(
 						),
 						Stream.interruptWhen(Deferred.await(cancelled)),
 						Stream.interruptWhen(
-							Effect.sleep(
-								profile.adapter === "dashscope-media"
-									? "300 seconds"
-									: "60 seconds",
-							).pipe(Effect.zipRight(Effect.fail(new AiUnavailable()))),
+							Effect.sleep(generationDeadlineMs(profile)).pipe(
+								Effect.zipRight(Effect.fail(new AiUnavailable())),
+							),
 						),
 						Stream.withSpan("AiProviderService.stream"),
 					);
