@@ -8,10 +8,10 @@ import {
 } from "../../../../../packages/edge/src/monitor/monitor-service";
 import { MonitoringService } from "../../../../../packages/edge/src/monitor/monitoring-service";
 import {
+	MONITOR_ARTWORK,
 	MONITOR_METRICS,
 	MONITOR_REQUEST,
 	MONITOR_SETTINGS,
-	MONITOR_STATE,
 	MONITOR_STATE_REQUEST,
 	MonitorCommand,
 	type MonitorReply,
@@ -25,7 +25,12 @@ import {
 import { canRequestClock } from "../clock/clock-ipc";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
+import { applicationIconLibrary } from "../key-library/application-icons";
 import { monitorForegroundLive } from "./foreground";
+import {
+	foregroundArtwork,
+	publishMonitoringState,
+} from "./foreground-artwork";
 import { MonitorStore, monitorStoreLive } from "./monitor-store";
 import { nativeCollector } from "./native-collector";
 import { selectMedia } from "./native-media";
@@ -49,6 +54,7 @@ export function prepareMonitor(
 			),
 		),
 		(runtime) => {
+			const artwork = foregroundArtwork(applicationIconLibrary());
 			const watchers = new Map<Electron.WebContents, () => void>();
 			const trusted = (contents: Electron.WebContents): boolean =>
 				!contents.isDestroyed() &&
@@ -80,14 +86,29 @@ export function prepareMonitor(
 						Stream.runForEach(stream, (snapshot) =>
 							Effect.sync(() => {
 								if (disposed) return;
-								for (const win of new Set([management(), panel()])) {
-									if (win && !win.isDestroyed() && trusted(win.webContents)) {
-										// Only the live panel and management may see this shared state, never thumbnail windows.
-										win.webContents.send(MONITOR_STATE, snapshot);
-										if (watchers.has(win.webContents))
-											win.webContents.send(MONITOR_METRICS, snapshot.metrics);
-									}
-								}
+								const send =
+									(win: BrowserWindow | undefined) =>
+									(channel: string, value: unknown): void => {
+										if (
+											!disposed &&
+											win &&
+											!win.isDestroyed() &&
+											trusted(win.webContents)
+										)
+											win.webContents.send(channel, value);
+									};
+								publishMonitoringState(
+									snapshot,
+									send(management()),
+									send(panel()),
+								);
+								void artwork(snapshot).then((value) => {
+									for (const win of new Set([management(), panel()]))
+										send(win)(MONITOR_ARTWORK, value);
+								});
+								for (const contents of watchers.keys())
+									if (trusted(contents))
+										contents.send(MONITOR_METRICS, snapshot.metrics);
 							}),
 						),
 					),
@@ -135,6 +156,7 @@ export function prepareMonitor(
 					if (
 						command._tag !== "read" &&
 						command._tag !== "watch" &&
+						command._tag !== "artwork" &&
 						!isManagement
 					)
 						return reject();
@@ -144,6 +166,12 @@ export function prepareMonitor(
 						!isManagement
 					)
 						return reject();
+					if (command._tag === "artwork") {
+						const snapshot = await runtime.runPromise(
+							MonitoringService.snapshot(),
+						);
+						return { _tag: "foregroundArtwork", ...(await artwork(snapshot)) };
+					}
 					if (command._tag === "watch") {
 						// Only main-owned management and live panel identities can request collection.
 						if (command.active && !watchers.has(event.sender)) {

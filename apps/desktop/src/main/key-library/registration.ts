@@ -223,7 +223,19 @@ export function registerKeyLibrary<R>(
 					applicationIcons().then(
 						(pack): KeyReply =>
 							authorized(event, command)
-								? { _tag: "success", packs: [pack] }
+								? {
+										_tag: "success",
+										packs: [
+											privileged || picker.owns(event)
+												? pack
+												: {
+														...pack,
+														icons: pack.icons.map(
+															({ extraData: _privatePaths, ...icon }) => icon,
+														),
+													},
+										],
+									}
 								: { _tag: "rejected", reason: "unauthorized" },
 						(cause: unknown): KeyReply => ({
 							_tag: "rejected",

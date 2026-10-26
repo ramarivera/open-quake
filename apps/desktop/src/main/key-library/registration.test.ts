@@ -23,7 +23,11 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import { createPanelKeyDispatcher } from "../../renderer/src/keys/panel-key-dispatch";
-import { KEY_REQUEST, type KeyReply } from "../../shared/key-library";
+import {
+	KEY_REQUEST,
+	type KeyReply,
+	type LibraryPack,
+} from "../../shared/key-library";
 import { ManagementProfileContractsLive } from "../management/profile-contracts";
 import { iconZip } from "../test/icon-pack-fixtures";
 import { iconStore } from "./icon-store";
@@ -104,7 +108,7 @@ vi.mock("electron", () => ({
 	},
 }));
 const appIcons = vi.hoisted(() => ({
-	load: vi.fn<() => Promise<{ id: string; name: string; icons: [] }>>(),
+	load: vi.fn<() => Promise<LibraryPack>>(),
 }));
 vi.mock("./application-icons", () => ({
 	applicationIconLibrary: () => appIcons.load,
@@ -1537,6 +1541,36 @@ it("binds target and locale before readiness, ignores late readiness and starts 
 		await f.registration.dispose();
 		expect(await second).toEqual({ _tag: "success" });
 	} finally {
+		await f.runtime.dispose();
+	}
+});
+
+it("never sends installed application paths to the panel catalog consumer", async () => {
+	const f = fixture();
+	appIcons.load.mockResolvedValue({
+		id: "applications",
+		name: "Apps",
+		icons: [
+			{
+				id: "a".repeat(64),
+				name: "Private",
+				tags: [],
+				extraData: ["/Users/private/Secret.app"],
+				data: "data:image/png;base64,AAAA",
+			},
+		],
+	});
+	try {
+		const reply = await f.request(f.panel, { type: "application-icons" });
+		expect(reply._tag).toBe("success");
+		expect(JSON.stringify(reply)).not.toContain("/Users/private");
+		expect(reply).toMatchObject({
+			packs: [
+				{ icons: [{ id: "a".repeat(64), data: "data:image/png;base64,AAAA" }] },
+			],
+		});
+	} finally {
+		await f.registration.dispose();
 		await f.runtime.dispose();
 	}
 });

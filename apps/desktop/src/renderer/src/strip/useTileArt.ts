@@ -1,11 +1,11 @@
+import { Schema } from "effect";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { monitoringClient } from "../../../../../../packages/client/src/monitor";
 import { safeIconSvg } from "../../../main/key-library/icon-svg";
-import type { MonitoringSnapshot } from "../../../shared/monitor-contracts";
+import { ForegroundArtwork } from "../../../shared/monitor-contracts";
 import { keyArtwork } from "../keys/key-artwork";
 import { truncateTitle } from "./tileMetrics";
 
-/** Foreground paths only select artwork already extracted by the installed-app owner. */
+/** Main resolves foreground artwork without exposing native paths to this renderer. */
 export function useForegroundArtwork(enabled: boolean): string {
 	const [artwork, setArtwork] = useState("");
 	useEffect(() => {
@@ -13,46 +13,25 @@ export function useForegroundArtwork(enabled: boolean): string {
 			typeof window === "undefined" ? undefined : window.quakeMonitor;
 		if (!enabled || !bridge) return;
 		let active = true,
-			sequence = 0,
 			received = false;
-		const appPath = (path: string): string => {
-			const bundle = /^(.*?\.app)(?:\/|$)/i.exec(path)?.[1] ?? path;
-			return bundle.replaceAll("\\", "/").toLowerCase();
+		const update = (value: unknown): void => {
+			const decoded = Schema.decodeUnknownOption(ForegroundArtwork)(value);
+			if (active && decoded._tag === "Some")
+				setArtwork(validatedArtwork(decoded.value.artwork));
 		};
-		const update = (snapshot: MonitoringSnapshot): void => {
-			const ticket = ++sequence;
-			setArtwork("");
-			const foreground = snapshot.foreground;
-			if (foreground.state !== "available" || !foreground.window) return;
-			const path = appPath(foreground.window.path);
-			void window.quakeKeyLibrary
-				?.request({ type: "application-icons" })
-				.then((reply) => {
-					if (!active || ticket !== sequence || reply._tag !== "success")
-						return;
-					const match = reply.packs
-						?.flatMap((pack) => pack.icons)
-						.find((icon) =>
-							icon.extraData?.some((entry) => appPath(entry) === path),
-						);
-					setArtwork(validatedArtwork(match?.data ?? ""));
-				})
-				.catch(() => {});
-		};
-		const client = monitoringClient(bridge);
-		const off = client.subscribe((snapshot) => {
+		const off = bridge.onArtwork?.((value) => {
 			received = true;
-			update(snapshot);
+			update(value);
 		});
-		void client
-			.snapshot()
-			.then((snapshot) => {
-				if (active && !received) update(snapshot);
+		void bridge
+			.request({ _tag: "artwork" })
+			.then((value) => {
+				if (!received) update(value);
 			})
 			.catch(() => {});
 		return () => {
 			active = false;
-			off();
+			off?.();
 		};
 	}, [enabled]);
 	return enabled ? artwork : "";

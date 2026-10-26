@@ -218,3 +218,23 @@ MGMT-413 SHALL remain an open obligation until merge/deletion, image downloads, 
 
 - **WHEN** a recovered helper belongs to another subsystem and lacks a defined artwork use
 - **THEN** its obligation stays open with that missing owner or decision recorded
+
+#### Scenario: Foreground artwork privacy and sample stability
+
+- **WHEN** monitoring publishes foreground app state or metric-only samples
+- **THEN** the panel receives resolved artwork without executable paths, and unchanged normalized foreground identity reuses artwork without requesting a catalog
+
+#### Scenario: Inert selected preview and stale clock completion
+
+- **WHEN** keyboard navigation reaches a selected preview or a clock write completes after another selection
+- **THEN** the preview cannot receive focus or activate a key, and stale completion cannot reopen the old selection
+
+#### Scenario: Thumbnail waits for owned artwork
+
+- **WHEN** a thumbnail includes an asynchronously resolved application icon
+- **THEN** capture waits for resolution and successful image decoding before caching the PNG
+
+#### Scenario: Application-prefixed deletion reference
+
+- **WHEN** saved or draft keys reference application:<hash>
+- **THEN** removing the referenced local icon or pack is rejected
