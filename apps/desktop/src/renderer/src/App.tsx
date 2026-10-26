@@ -215,7 +215,7 @@ function ManagementSurface({
 						onOpenConnection={() => open("connection")}
 					/>
 				) : page === "keys" ? (
-					<KeyEditor />
+					<KeyEditor onOpenLibrary={setPage} />
 				) : page === "profiles" ? (
 					<ProfilesManager />
 				) : page === "screen" ? (

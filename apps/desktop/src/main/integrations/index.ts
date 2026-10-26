@@ -36,6 +36,7 @@ import {
 	type IntegrationReply,
 	IntegrationRequest,
 } from "../../shared/integrations";
+import { KEY_LIBRARY_CHANGED } from "../../shared/key-library";
 import type { DesktopDiagnostics } from "../diagnostics";
 import type { DesktopRuntime } from "../diagnostics/module";
 import { prepareDesktopModule } from "../diagnostics/module";
@@ -234,7 +235,15 @@ export function prepareIntegrations<R>(options: {
 					});
 					pending.add(operation);
 					try {
-						return await operation;
+						const reply = await operation;
+						if (
+							reply.type === "libraries" &&
+							["shortcuts.save", "shortcuts.remove"].includes(
+								request.right.type,
+							)
+						)
+							options.management()?.webContents.send(KEY_LIBRARY_CHANGED);
+						return reply;
 					} finally {
 						pending.delete(operation);
 					}

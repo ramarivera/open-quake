@@ -16,6 +16,10 @@ import {
 } from "../../../../../../packages/device/src/actions/key-runtime-service";
 import { actionProfileFunctionContracts } from "../../../../../../packages/device/src/actions/profile-function-contracts";
 import { saveProfileKnob } from "../../../../../../packages/device/src/knob/knob-profile";
+import {
+	AppLibrarySnapshot,
+	defaultAppLibrary,
+} from "../../../../../../packages/device/src/profiles/app-library";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -60,7 +64,6 @@ import {
 } from "../strip/overlays/voice/voice-context";
 import { StripScreen } from "../strip/StripScreen";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
-
 import { KeyEditor } from "./KeyEditor";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -74,7 +77,9 @@ async function fixture({
 	agentKey = false,
 	knobKey = false,
 	configure,
+	appGroups = defaultAppLibrary(),
 }: {
+	appGroups?: AppLibrarySnapshot["groups"];
 	locked?: boolean;
 	agentKey?: boolean;
 	knobKey?: boolean;
@@ -228,6 +233,15 @@ async function fixture({
 		const operation = Effect.gen(function* () {
 			const editing = yield* KeyEditing;
 			switch (command.type) {
+				case "app-library.read":
+					return {
+						_tag: "success",
+						appLibrary: Schema.encodeSync(AppLibrarySnapshot)({
+							version: 1,
+							revision: 1,
+							groups: appGroups,
+						}),
+					} as const;
 				case "inspect-import":
 					return {
 						_tag: "success",
@@ -2070,6 +2084,220 @@ it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved
 	expect(f.host.querySelector("#key-title")).toBeNull();
 });
 
+it("MGMT-386/387/388 places reusable presets through validated profile publication without consuming the library", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "apps:Discord:2", "1,2");
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,2")
+				?.config.actions,
+		).toEqual([{ type: "key", value: "control+alt+leftbracket" }]),
+	);
+	await click(
+		query(
+			f.host,
+			".keys-cells button[data-drop-code='1,2']",
+			HTMLButtonElement,
+		),
+	);
+	// Clicking the selected key clears selection, restoring the ordinary library.
+	await libraryPlace(f.host, "apps:Premiere Pro:4", "2,5");
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "2,5")
+				?.config.actions,
+		).toEqual([
+			{ type: "key", value: "alt+left" },
+			{ type: "key", value: "alt+right" },
+		]),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "2,5")
+			?.config.supportKnob,
+	).toBe(true);
+	expect(
+		f.host.querySelector('[data-library-type="apps:Premiere Pro:3"]'),
+	).not.toBeNull();
+	expect(defaultAppLibrary()[1]?.children[4]?.keyCode).toBe("1,4");
+});
+it("MGMT-109/124 generated placement confirms replacements and refuses locked return cells", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: [{ id: "r", name: "Save", app: "Editor", chord: "control+s" }],
+				},
+			],
+		}),
+	});
+	const f = await gridFixture([
+		gridKey("1,1"),
+		gridKey("1,2", "back"),
+		gridKey("1,3", "hotkey", { basicEditableItems: { allowDrag: false } }),
+	]);
+	await pointerMove(
+		f.host,
+		query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+		"1,1",
+	);
+	await settle(() =>
+		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
+	);
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.actions).toEqual([
+		{ type: "key", value: "a" },
+	]);
+	await click(button(f.host, "Cancel"));
+	expect(f.stored().profiles[0].revision).toBe(0);
+	for (const code of ["1,2", "1,3"]) {
+		await pointerMove(
+			f.host,
+			query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+			code,
+		);
+		expect(f.stored().profiles[0].revision).toBe(0);
+	}
+	await pointerMove(
+		f.host,
+		query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+		"1,1",
+	);
+	await settle(() =>
+		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
+	);
+	await click(button(f.host, "Confirm Replace"));
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,1")
+				?.config.actions,
+		).toEqual([{ type: "key", value: "control+s" }]),
+	);
+});
+it("MGMT-124 bounds generated placement titles while retaining searchable full library names", async () => {
+	const names = [
+		"Toggle Full Screen Mode",
+		"一二三四五六七八九十十一",
+		"123456789012345678😀tail",
+	];
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: names.map((name, i) => ({
+						id: String(i),
+						name,
+						app: "Editor",
+						chord: "control+s",
+					})),
+				},
+			],
+		}),
+	});
+	const f = await gridFixture([]);
+	const expected = [
+		"Toggle Full Screen M",
+		"一二三四五六七八九十",
+		"123456789012345678😀",
+	];
+	for (const [i, name] of names.entries()) {
+		const selector = `[data-library-type="generated:g:${i}"]`;
+		expect(query(f.host, selector, HTMLButtonElement).textContent).toContain(
+			name,
+		);
+		await pointerMove(
+			f.host,
+			query(f.host, selector, HTMLButtonElement),
+			`1,${i + 1}`,
+		);
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(i + 1));
+		expect(
+			f
+				.stored()
+				.profiles[0].pages[0].keys.find((key) => key.keyCode === `1,${i + 1}`)
+				?.config.title.text,
+		).toBe(expected[i]);
+	}
+	await input(query(f.host, "#keys-library-search", HTMLInputElement), "Mode");
+	await settle(() => {
+		expect(
+			f.host.querySelector('[data-library-type="generated:g:1"]'),
+		).toBeNull();
+		expect(
+			f.host.querySelector('[data-library-type="generated:g:0"]')?.textContent,
+		).toContain(names[0]);
+	});
+});
+it("MGMT-124 converts stored Windows modifiers for generated grid placement and sequence availability", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: ["meta+s", "right_meta+s"].map((chord, i) => ({
+						id: String(i),
+						name: `Save ${i}`,
+						app: "Editor",
+						chord,
+					})),
+				},
+			],
+		}),
+	});
+	const f = await fixture();
+	for (const [i, value] of ["super+s", "right_super+s"].entries()) {
+		await pointerMove(
+			f.host,
+			query(
+				f.host,
+				`[data-library-type="generated:g:${i}"]`,
+				HTMLButtonElement,
+			),
+			`1,${i + 2}`,
+		);
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(i + 1));
+		expect(
+			f
+				.stored()
+				.profiles[0].pages[0].keys.find((key) => key.keyCode === `1,${i + 2}`)
+				?.config.actions,
+		).toEqual([{ type: "key", value }]);
+	}
+	await click(button(f.host, "1,1"));
+	for (const i of [0, 1]) {
+		const entry = query(
+			f.host,
+			`[data-library-type="generated:g:${i}"]`,
+			HTMLButtonElement,
+		);
+		expect(entry.disabled).toBe(false);
+	}
+	expect(f.stored().profiles[0].revision).toBe(2);
+});
+it("MGMT-109 registry placement retains OBS default locks rather than empty-cell defaults", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "obsStats", "1,1");
+	await settle(() =>
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.size).toEqual([
+			2, 1,
+		]),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.basicEditableItems,
+	).toMatchObject({ title: false, grid: false, icon: false });
+});
 it("MGMT-302/306 keeps knob and key agent route IDs and labels distinct", async () => {
 	const f = await fixture({ agentKey: true });
 	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
@@ -2093,4 +2321,80 @@ it("MGMT-302/306 keeps knob and key agent route IDs and labels distinct", async 
 	await input(knob, "writer");
 	await input(key, "main");
 	expect(knob.value).toBe("writer");
+});
+
+it("MGMT-127 blocks the 101st library operation with feedback and preserves a saveable sequence", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "multiActions", {
+			subActions: Array.from({ length: 99 }, (_, i) => ({
+				config: { type: "delay", actions: [{ type: "time", value: i }] },
+			})),
+		}),
+	]);
+	await f.select();
+	const delay = () =>
+		query(f.host, '[data-library-type="delay"]', HTMLButtonElement);
+	await click(delay());
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(100);
+	await click(delay());
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(100);
+	expect(f.host.textContent).toContain(
+		"Max configurations reached, please delete first.",
+	);
+	expect(f.stored().profiles[0].revision).toBe(0);
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.subActions,
+	).toHaveLength(100);
+	expect(f.writes()).toBe(1);
+});
+
+it("MGMT-121 keeps an unmarked renamed preset on the saved grid and localized editor after placement", async () => {
+	const groups = defaultAppLibrary();
+	const renamed = groups.map((group, i) =>
+		i
+			? group
+			: {
+					...group,
+					children: group.children.map((key, j) =>
+						j
+							? key
+							: {
+									...key,
+									config: {
+										...key.config,
+										title: { ...key.config.title, text: "My mute" },
+									},
+								},
+					),
+				},
+	);
+	const f = await fixture({
+		appGroups: renamed,
+		configure: (value) => ({
+			...value,
+			profiles: [
+				{ ...value.profiles[0], pages: [{ id: "one", keys: [] }] },
+				...value.profiles.slice(1),
+			],
+		}),
+	});
+	await libraryPlace(f.host, "apps:Discord:0", "1,2");
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	const key = f
+		.stored()
+		.profiles[0].pages[0].keys.find((key) => key.keyCode === "1,2");
+	expect(key?.config.title.text).toBe("My mute");
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe("My mute");
+	expect(
+		f.host.querySelector('[data-key-code="1,2"] .strip-tile-title')
+			?.textContent,
+	).toBe("My mute");
+	await input(query(f.host, "#keys-language", HTMLSelectElement), "de");
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe("My mute");
+	expect(
+		f.host.querySelector('[data-key-code="1,2"] .strip-tile-title')
+			?.textContent,
+	).toBe("My mute");
 });
