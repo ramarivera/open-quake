@@ -3,6 +3,7 @@ import { ipcMain, Menu, nativeImage, Tray } from "electron";
 import {
 	MANAGEMENT_ACTIVATE,
 	MANAGEMENT_COMMAND,
+	MANAGEMENT_READY,
 	ShellCommand,
 } from "../../shared/management";
 import { isAppRenderer } from "../profiles/profile-ipc";
@@ -13,8 +14,20 @@ export interface ShellWindow {
 	readonly webContents: {
 		readonly mainFrame: { readonly url: string };
 		readonly send: (channel: string, value: string) => void;
-		readonly isLoadingMainFrame: () => boolean;
-		readonly once: (event: "did-finish-load", callback: () => void) => unknown;
+		on(
+			event: "did-start-navigation",
+			callback: (details: {
+				readonly isMainFrame: boolean;
+				readonly isSameDocument?: boolean;
+			}) => void,
+		): unknown;
+		removeListener(
+			event: "did-start-navigation",
+			callback: (details: {
+				readonly isMainFrame: boolean;
+				readonly isSameDocument?: boolean;
+			}) => void,
+		): unknown;
 	};
 	readonly hide: () => void;
 	readonly close: () => void;
@@ -49,19 +62,29 @@ export function createDesktopShell(options: {
 	let disposed = false;
 	let tray: Tray | undefined;
 	const attached = new Map<ShellWindow, () => void>();
+	const ready = new Set<ShellWindow>();
+	const pending = new Map<ShellWindow, string>();
+	const flush = (win: ShellWindow) => {
+		const page = pending.get(win);
+		if (
+			!page ||
+			!ready.has(win) ||
+			disposed ||
+			options.quitting() ||
+			win.isDestroyed()
+		)
+			return;
+		pending.delete(win);
+		win.webContents.send(MANAGEMENT_ACTIVATE, page);
+	};
 	const recoverable = () => !!tray || platform === "darwin";
 	const open = (page?: string) => {
 		if (disposed || options.quitting()) return;
 		options.focus();
 		const win = options.management();
 		if (!page || win.isDestroyed()) return;
-		const send = () => {
-			if (!disposed && !win.isDestroyed() && win === options.management())
-				win.webContents.send(MANAGEMENT_ACTIVATE, page);
-		};
-		if (win.webContents.isLoadingMainFrame())
-			win.webContents.once("did-finish-load", send);
-		else send();
+		pending.set(win, page);
+		flush(win);
 	};
 	const refresh = () => {
 		if (!tray || disposed) return;
@@ -120,15 +143,43 @@ export function createDesktopShell(options: {
 				win.hide();
 			}
 		};
+		const navigating = (details: {
+			readonly isMainFrame: boolean;
+			readonly isSameDocument?: boolean;
+		}) => {
+			if (details.isMainFrame && !details.isSameDocument) ready.delete(win);
+		};
 		const detach = () => {
+			ready.delete(win);
+			pending.delete(win);
+			win.webContents.removeListener("did-start-navigation", navigating);
 			win.removeListener("close", close);
 			win.removeListener("closed", detach);
 			attached.delete(win);
 		};
+		win.webContents.on("did-start-navigation", navigating);
 		win.on("close", close);
 		win.on("closed", detach);
 		attached.set(win, detach);
 	};
+	const rendererReady = (event: Electron.IpcMainEvent) => {
+		const win = options.management();
+		if (
+			disposed ||
+			options.quitting() ||
+			win.isDestroyed() ||
+			event.sender !== win.webContents ||
+			event.senderFrame !== win.webContents.mainFrame ||
+			!isAppRenderer(event.senderFrame?.url ?? "", options.renderer) ||
+			new URL(event.senderFrame?.url ?? options.renderer).searchParams.get(
+				"surface",
+			) !== "management"
+		)
+			return;
+		ready.add(win);
+		flush(win);
+	};
+	ipcMain.on(MANAGEMENT_READY, rendererReady);
 	ipcMain.handle(MANAGEMENT_COMMAND, (event, input: unknown) => {
 		const win = options.management();
 		if (
@@ -169,12 +220,14 @@ export function createDesktopShell(options: {
 	attach(options.management());
 	return {
 		attach,
+		open,
 		refresh,
 		recoverable,
 		dispose: () => {
 			if (disposed) return;
 			disposed = true;
 			ipcMain.removeHandler(MANAGEMENT_COMMAND);
+			ipcMain.removeListener(MANAGEMENT_READY, rendererReady);
 			for (const detach of attached.values()) detach();
 			tray?.destroy();
 			tray = undefined;

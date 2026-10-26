@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import {
 	MANAGEMENT_COMMAND,
 	MANAGEMENT_EXTERNAL,
+	MANAGEMENT_READY,
 } from "../../shared/management";
 import { managementExternalLinks } from "../../shared/management-external";
 import { createDesktopShell } from "./desktop-shell";
@@ -63,26 +64,29 @@ function fixture(
 	locale = () => "en",
 	keepVisible = () => false,
 ) {
-	const win = Object.assign(new EventEmitter(), {
-		webContents: Object.assign(new EventEmitter(), {
-			mainFrame: { url: "https://app.test/index.html?surface=management" },
-			send: vi.fn(),
-			isLoadingMainFrame: () => false,
-			setWindowOpenHandler:
-				vi.fn<
-					(handler: (details: { url: string }) => { action: "deny" }) => void
-				>(),
-		}),
-		isDestroyed: () => false,
-		hide: vi.fn(),
-		close: vi.fn(),
-		minimize: vi.fn(),
-		maximize: vi.fn(),
-		unmaximize: vi.fn(),
-		isMaximized: vi.fn(() => false),
-	});
+	const makeWindow = () =>
+		Object.assign(new EventEmitter(), {
+			webContents: Object.assign(new EventEmitter(), {
+				mainFrame: { url: "https://app.test/index.html?surface=management" },
+				send: vi.fn(),
+				isLoadingMainFrame: () => false,
+				setWindowOpenHandler:
+					vi.fn<
+						(handler: (details: { url: string }) => { action: "deny" }) => void
+					>(),
+			}),
+			isDestroyed: () => false,
+			hide: vi.fn(),
+			close: vi.fn(),
+			minimize: vi.fn(),
+			maximize: vi.fn(),
+			unmaximize: vi.fn(),
+			isMaximized: vi.fn(() => false),
+		});
+	const win = makeWindow();
 	// The fixture structurally implements only the BrowserWindow methods used by this owner.
-	const management = () => win;
+	let current = win;
+	const management = () => current;
 	const quit = vi.fn(),
 		focus = vi.fn();
 	const shell = createDesktopShell({
@@ -101,7 +105,21 @@ function fixture(
 	};
 	const command = (input: unknown, from: Sender = event) =>
 		native.handlers.get(MANAGEMENT_COMMAND)?.(from, input);
-	return { win, shell, quit, focus, event, command };
+	native.listeners.get(MANAGEMENT_READY)?.(event, undefined);
+	return {
+		win,
+		shell,
+		quit,
+		focus,
+		event,
+		command,
+		replace: () => {
+			const replacement = makeWindow();
+			current = replacement;
+			shell.attach(replacement);
+			return replacement;
+		},
+	};
 }
 beforeEach(() => {
 	native.handlers.clear();
@@ -297,4 +315,58 @@ it("automatic navigation and child-frame popups cannot open the system browser",
 	expect(native.openExternal).not.toHaveBeenCalled();
 	f.win.webContents.emit("destroyed");
 	f.shell.dispose();
+});
+
+it("Settings survives window recreation until the replacement renderer subscribes", () => {
+	const f = fixture();
+	const replacement = f.replace();
+	const settings = native.template[1];
+	if (settings && typeof settings.click === "function")
+		Reflect.apply(settings.click, undefined, []);
+	replacement.webContents.emit("did-finish-load");
+	expect(replacement.webContents.send).not.toHaveBeenCalled();
+	native.listeners.get(MANAGEMENT_READY)?.(
+		{
+			...f.event,
+			sender: replacement.webContents,
+			senderFrame: { ...replacement.webContents.mainFrame },
+		},
+		undefined,
+	);
+	native.listeners.get(MANAGEMENT_READY)?.(f.event, undefined);
+	expect(replacement.webContents.send).not.toHaveBeenCalled();
+	native.listeners.get(MANAGEMENT_READY)?.(
+		{
+			sender: replacement.webContents,
+			senderFrame: replacement.webContents.mainFrame,
+		},
+		undefined,
+	);
+	expect(replacement.webContents.send).toHaveBeenCalledExactlyOnceWith(
+		"management:activate",
+		"settings",
+	);
+	// Subsequent activations deliver immediately; reload must wait for a new subscription.
+	if (settings && typeof settings.click === "function")
+		Reflect.apply(settings.click, undefined, []);
+	expect(replacement.webContents.send).toHaveBeenCalledTimes(2);
+	replacement.webContents.emit("did-start-navigation", { isMainFrame: false });
+	replacement.webContents.emit("did-start-navigation", {
+		isMainFrame: true,
+		isSameDocument: true,
+	});
+	replacement.webContents.emit("did-start-navigation", { isMainFrame: true });
+	if (settings && typeof settings.click === "function")
+		Reflect.apply(settings.click, undefined, []);
+	expect(replacement.webContents.send).toHaveBeenCalledTimes(2);
+	native.listeners.get(MANAGEMENT_READY)?.(
+		{
+			sender: replacement.webContents,
+			senderFrame: replacement.webContents.mainFrame,
+		},
+		undefined,
+	);
+	expect(replacement.webContents.send).toHaveBeenCalledTimes(3);
+	f.shell.dispose();
+	expect(native.listeners.has(MANAGEMENT_READY)).toBe(false);
 });

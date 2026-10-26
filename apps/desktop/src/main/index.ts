@@ -27,7 +27,6 @@ import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/sett
 import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
-import { MANAGEMENT_ACTIVATE } from "../shared/management";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
 import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
@@ -956,21 +955,7 @@ if (!app.requestSingleInstanceLock()) {
 									Menu.buildFromTemplate(
 										nativeLocaleMenu(knobLocale, {
 											resume: focusManagement,
-											settings: () => {
-												focusManagement();
-												const target = managementWin;
-												void managementReady.then(() => {
-													if (
-														!quitting &&
-														!target.isDestroyed() &&
-														target === managementWin
-													)
-														target.webContents.send(
-															MANAGEMENT_ACTIVATE,
-															"settings",
-														);
-												});
-											},
+											settings: () => desktopShell.open("settings"),
 											exit: () => app.quit(),
 										}),
 									),

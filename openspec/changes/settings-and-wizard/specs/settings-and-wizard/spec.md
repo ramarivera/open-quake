@@ -333,6 +333,12 @@ Before creating windows, the host SHALL set its Windows identity to `net.roxasro
 - **WHEN** management closes with an available tray, then Resume, double-click or macOS activation occurs
 - **THEN** the same management window is restored and device subscriptions remain running; a destroyed management window is recreated with persisted geometry
 
+#### Scenario: Settings after window recreation
+
+- **WHEN** the tray or Dock Settings action recreates a destroyed management window
+- **THEN** the host retains the requested Settings route until the exact replacement management main frame signals that its activation listener is installed
+- **AND** document load alone, an old window or a child frame cannot consume the pending route; later activations deliver immediately until the main frame reloads
+
 #### Scenario: Trusted application commands
 
 - **WHEN** management's exact top-level app document requests Quit or Restart

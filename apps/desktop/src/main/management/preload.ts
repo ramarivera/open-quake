@@ -4,6 +4,7 @@ import {
 	MANAGEMENT_COMMAND,
 	MANAGEMENT_DEVICES,
 	MANAGEMENT_EXTERNAL,
+	MANAGEMENT_READY,
 	MANAGEMENT_THEME,
 	type ManagementBridge,
 } from "../../shared/management";
@@ -24,6 +25,7 @@ const bridge: ManagementBridge = {
 			if (typeof value === "string") receive(value);
 		};
 		ipcRenderer.on(MANAGEMENT_ACTIVATE, listener);
+		ipcRenderer.send(MANAGEMENT_READY);
 		return () => ipcRenderer.off(MANAGEMENT_ACTIVATE, listener);
 	},
 };

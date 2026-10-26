@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
 export const MANAGEMENT_THEME = "management:theme";
+export const MANAGEMENT_READY = "management:ready";
 export const MANAGEMENT_ACTIVATE = "management:activate";
 export const MANAGEMENT_EXTERNAL = "management:external";
 export const MANAGEMENT_COMMAND = "management:command";
