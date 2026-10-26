@@ -1,21 +1,36 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	realpath,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { HERMES_COMMIT, settings } from "./config.mjs";
+import {
+	containerIdentity,
+	HERMES_COMMIT,
+	settings,
+	validateSnapshot,
+} from "./config.mjs";
 import { cleanupProject, failureDiagnostic } from "./lifecycle.mjs";
 
 const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(here, "../../..");
-const config = settings(process.env);
+const config = settings(process.env, process.argv.slice(2));
+const identity = containerIdentity();
 await mkdir(config.scratch, { recursive: true });
 const scratch = await realpath(config.scratch);
 const inside = relative(repository, scratch);
 if (!inside.startsWith("..") && !inside.startsWith("/"))
 	throw new Error("E2E scratch must be outside the repository");
 const state = await mkdtemp(join(scratch, "runtime-e2e-"));
+const profileDirectory = join(state, "private-profile");
+await mkdir(profileDirectory, { mode: 0o700 });
 console.log(`Disposable Compose project: ${config.project}`);
 await writeFile(
 	join(state, "cleanup.compose.json"),
@@ -27,13 +42,14 @@ await writeFile(
 );
 const env = {
 	...process.env,
-	OPEN_QUAKE_E2E_BASE_URL: config.baseURL,
-	OPEN_QUAKE_E2E_MODEL: config.model,
-	OPEN_QUAKE_E2E_API_KEY: config.apiKey,
+	OPEN_QUAKE_E2E_PROFILE_FILE: join(profileDirectory, "provider.json"),
 	OPEN_QUAKE_E2E_RUNTIME_TOKEN: config.token,
 	OPEN_QUAKE_E2E_REPORT_PREFIX: join(scratch, config.project),
 	OPEN_QUAKE_E2E_HERMES_SOURCE: join(state, "hermes"),
 	OPEN_QUAKE_E2E_HERMES_DOCKERFILE: join(here, "hermes.Dockerfile"),
+	OPEN_QUAKE_E2E_RUN: "1",
+	OPEN_QUAKE_E2E_UID: identity.uid,
+	OPEN_QUAKE_E2E_GID: identity.gid,
 };
 // T3 may itself run inside Electron with this flag. Child acceptance must
 // launch the real Electron application rather than Electron's Node mode.
@@ -120,7 +136,54 @@ process.on("SIGINT", onSignal);
 process.on("SIGTERM", onSignal);
 let passed = false;
 let failure;
+let composeStarted = false;
 try {
+	console.log(
+		"Reading the explicitly selected saved model through production native credentials",
+	);
+	await command(
+		"pnpm",
+		[
+			"--filter",
+			"@open-quake/desktop",
+			"exec",
+			"electron-vite",
+			"build",
+			"--config",
+			"src/main/test/runtime-profile-export.config.ts",
+		],
+		180000,
+	);
+	const profileRead = await command(
+		"pnpm",
+		[
+			"--filter",
+			"@open-quake/desktop",
+			"exec",
+			"electron",
+			"out/runtime-profile/runtime-profile-export.js",
+			"--user-data",
+			config.userData,
+			"--model-row",
+			config.rowId,
+			"--scope",
+			config.scope,
+			"--authorize-model",
+			config.authorizedModel,
+			"--output",
+			profileDirectory,
+		],
+		30000,
+	);
+	if (!profileRead.stdout.includes("PRODUCTION_PROFILE_READ_OK"))
+		throw new Error("Production profile reader did not complete");
+	validateSnapshot(
+		JSON.parse(await readFile(env.OPEN_QUAKE_E2E_PROFILE_FILE, "utf8")),
+		config.authorizedModel,
+	);
+	// Keep the native reader's 0600 mode. Both containers run as this file's
+	// owner, because file-backed Compose secrets preserve host permissions.
+	if (interrupted) abort();
 	console.log("Preparing pinned Hermes source and disposable Compose project");
 	await command(
 		"git",
@@ -145,6 +208,7 @@ try {
 	if (interrupted) abort();
 	await compose(["build", "hermes"], 900000);
 	if (interrupted) abort();
+	composeStarted = true;
 	await compose(["up", "--detach", "--no-build"], 180000);
 	const openclaw = await endpoint("openclaw", 18789);
 	const hermes = await endpoint("hermes", 8642);
@@ -222,12 +286,16 @@ try {
 } finally {
 	cleaningUp = true;
 	try {
-		await cleanupProject({
-			project: config.project,
-			compose,
-			command,
-			removeState: () => rm(state, { recursive: true, force: true }),
-		});
+		if (composeStarted)
+			await cleanupProject({
+				project: config.project,
+				compose,
+				command,
+				removeState: () => rm(state, { recursive: true, force: true }),
+				removeSecrets: () =>
+					rm(profileDirectory, { recursive: true, force: true }),
+			});
+		else await rm(state, { recursive: true, force: true });
 		console.log(
 			`Compose cleanup verified; inference tests ${passed ? "passed" : "did not pass"}`,
 		);
@@ -238,6 +306,9 @@ try {
 			"E2E cleanup failed",
 		);
 	} finally {
+		// Recovery state must never retain plaintext provider credentials,
+		// including when Compose down or inventory verification fails.
+		await rm(profileDirectory, { recursive: true, force: true });
 		process.off("SIGINT", onSignal);
 		process.off("SIGTERM", onSignal);
 	}

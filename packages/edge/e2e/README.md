@@ -1,81 +1,90 @@
 # Disposable agent runtime E2E
 
-These opt-in tests start real pinned Hermes and OpenClaw containers and call the
+These opt-in tests start pinned real Hermes and OpenClaw containers and call the
 production adapters and HTTP transport. They check authenticated discovery,
-streamed model replies and two-turn session continuity. OpenClaw's Responses and
-chat-completions protocols run separately. Ordinary `pnpm test` skips live calls.
+streamed replies and two-turn session continuity. OpenClaw Responses and chat
+completions run separately. Ordinary tests don't make live calls.
 
-You'll need Docker Compose, Git, the workspace dependencies, and an external
-scratch directory with space for the Hermes source and Docker build. Image builds
-can take several minutes. The provider must accept OpenAI-compatible chat
-completions. Each successful run makes six model requests, without tools. Provider
-charges depend on your endpoint. The runner doesn't retry conversation requests.
+You'll need Docker Compose, Git, the workspace dependencies, Electron's native
+credential store, and an external scratch directory with room for the Hermes
+source and build. The provider must support chat completions and be reachable
+from inside the containers. Host loopback addresses are refused.
 
-Set these environment variables before running:
+## Select a saved production model
 
-| Variable | Purpose |
-| --- | --- |
-| `OPEN_QUAKE_E2E_BASE_URL` | OpenAI-compatible provider base URL, including its API prefix |
-| `OPEN_QUAKE_E2E_API_KEY` | Optional provider API key, passed through to both runtime configurations |
-| `OPEN_QUAKE_E2E_MODEL` | Explicit provider model ID. There's no model default or fallback |
-| `OPEN_QUAKE_E2E_SCRATCH` | Absolute scratch directory outside the checkout |
-| `OPEN_QUAKE_E2E_DESKTOP` | Set to `1` to also run production Electron connection/chat UI acceptance |
+Configure the model in Agents > AI configuration first. The runner requires the
+app data directory, saved model row id, exact scope and explicitly authorized
+model. It reads that row through production agent storage and resolves its
+existing credential using the production native vault. It never edits the source
+app settings or reads a different row as fallback. An absent or mismatched model,
+missing credential or unavailable native store fails before container startup.
 
-Use your shell or secret manager to supply the key. Don't put it in command
-arguments, checked-in files or a PR comment. Endpoints without authentication use
-the runtimes' `no-key-required` placeholder when the key variable is absent.
+The old `OPEN_QUAKE_E2E_BASE_URL`, `OPEN_QUAKE_E2E_API_KEY` and
+`OPEN_QUAKE_E2E_MODEL` inputs are rejected, including when present but empty.
+Provider URLs and keys aren't command arguments. There are no endpoint or model
+defaults. For this project's authorized acceptance, select `gpt-6.1-sol`.
 
-The provider address must be reachable from inside both containers. Host loopback
-addresses such as `localhost` and `127.0.0.1` are rejected because they refer to
-each container itself. For a provider on the Docker host, use a reachable host
-address or `host.docker.internal` if your Docker installation supports it. The
-provider must listen on that interface; the runner doesn't rebind your service.
-
-From Nushell, after setting the variables:
+From Nushell, substitute the source app's absolute data path and saved row id:
 
 ```nu
+$env.OPEN_QUAKE_E2E_SCRATCH = "/absolute/external/scratch"
+$env.OPEN_QUAKE_E2E_DESKTOP = "1"
 pnpm --filter @open-quake/edge test:e2e:config
-pnpm --filter @open-quake/edge test:e2e
+node packages/edge/e2e/run.mjs --user-data "/absolute/app-data" --scope default --model-row "saved-row-id" --authorize-model "gpt-6.1-sol"
 ```
 
-The runner creates a unique Compose project and random bearer token. API ports
-publish only on loopback. Runtime state lives in container tmpfs. Neither runtime
-mounts your home directory, credentials, repository or Docker socket. The only
-runtime mounts are these read-only bootstrap scripts. Credentials are supplied
-through the environment and temporary container config; don't inspect or publish
-container environment dumps while a test is running.
+The model selection is a deliberate inference opt-in. Adapter acceptance makes
+six model requests, and desktop acceptance adds four. Provider charges depend
+on the saved profile. Conversation requests aren't retried. Tools, plugins,
+browsers and messaging integrations are disabled.
 
-Hermes uses source commit `e10934b03e115b036b3c38b9c6e6817039a5962d`, a frozen
-dependency lock and a pinned Python/uv image. OpenClaw uses version 2026.10.7 with
-an immutable image digest. All toolsets/plugins and messaging integrations are
-disabled. No agent lifecycle action touches an existing installation.
+## Isolation and credentials
 
-The runner tears down its project on success or failure and verifies no labeled
-containers, networks or volumes remain. Its source checkout is deleted only after
-successful cleanup. Docker's image and build caches remain reusable.
-`OPEN_QUAKE_E2E_FORCE_FAILURE=1` forces a failure
-after readiness without running inference, to exercise teardown. Failures write
-exit-status diagnostics under your scratch directory. Arbitrary process output
-and runtime logs aren't saved or printed because provider errors may contain
-encoded credentials. SIGKILL or a host crash can't run cleanup. On cleanup
-failure, the runner preserves and reports its scratch state directory, including
-a credential-free recovery Compose file. Remove only that project with
-`docker compose --file <state>/cleanup.compose.json down --volumes --remove-orphans`.
-This recovery file needs no provider settings or original bearer token. Recheck
-project-labeled resources before deleting the retained state directory.
+The native reader runs without windows, HID or inference, with its own temporary
+session data. It writes one selected provider snapshot into a private 0700
+scratch directory. The file stays at 0600. Both runtimes use the host user's
+numeric UID and GID so they can read that owner-only Compose secret mount. Both
+containers mount only that file and their fixed bootstrap script, read-only.
+They never mount the source app data, native credential vault, home directory,
+repository or Docker socket. Runtime state and any runtime-local credentials
+stay in tmpfs. The provider key isn't passed in Compose environment variables.
+Hermes copies it to a process-local key variable because its custom-provider
+adapter requires `key_env`. Don't publish container dumps or process environments.
 
-The default run proves runtime HTTP behavior. To also exercise the actual desktop,
-set `$env.OPEN_QUAKE_E2E_DESKTOP = "1"` in Nushell before running. This builds the
-production app, starts its real composition root and preload with isolated scratch
-user data and mandatory mock hardware, then drives the management connection and
-chat controls against both runtimes. It adds four model requests, verifies the two
-rendered replies per runtime and remote session continuity, and saves synthetic
-conversation screenshots beneath `desktop-e2e-*` in the scratch directory. It
-uses the normal production quit sequence and a bounded process deadline. On macOS
-it runs without activation. Other platforms may show its isolated windows.
+The runner creates a random project name and runtime bearer. Runtime API ports
+publish only on loopback. Hermes is pinned to source commit
+`e10934b03e115b036b3c38b9c6e6817039a5962d`, with a frozen dependency lock and
+pinned Python/uv image. OpenClaw 2026.10.7 uses an immutable image digest. No
+lifecycle action touches an existing runtime installation.
 
-Neither mode establishes microphone input, STT, TTS, physical QUAKE input or
-audible output. The desktop mode uses the real OS credential vault, so a locked
-or unavailable vault fails rather than storing its ephemeral bearer in plaintext.
+## Cleanup and failures
 
-The runner writes one private `*-acceptance.json` checkpoint per adapter. It intentionally replaces that checkpoint before each stage and marks `passed` only after the full conversation assertions finish. On failure it identifies the last attempted stage; it isn't a per-stage success ledger.
+Success, failure and handled interruption tear down the owned Compose project,
+then verify no labeled containers, networks or volumes remain. The source
+checkout is deleted only after successful cleanup. Docker build caches remain.
+The private provider snapshot is deleted even if Docker cleanup fails. Failed
+cleanup preserves a credential-free `cleanup.compose.json` recovery file under
+the reported state directory. Use only that project's recovery file to remove
+remaining resources, then verify their absence before deleting recovery state.
+SIGKILL or a host crash can't run finalizers and can leave the private snapshot;
+remove only that owned state after checking the project resources.
+
+`OPEN_QUAKE_E2E_FORCE_FAILURE=1` stops after authenticated readiness, before
+inference, to verify cleanup. Exit diagnostics omit arbitrary subprocess output,
+provider messages, URLs and credentials. Adapter checkpoints record only stage
+and synthetic acceptance metadata. No provider response bodies or runtime logs
+are retained by the runner.
+
+## Production desktop acceptance
+
+With `OPEN_QUAKE_E2E_DESKTOP=1`, the runner builds the actual app root and preload,
+starts them with isolated user data and mandatory mock hardware, then drives the
+real connection and conversation controls. All windows stay invisible,
+nonfocusable and click-through. It checks selected runtime identity, two replies,
+remote continuity, local history and normal production shutdown. At real content
+sizes of 1180 and 390 wide, it checks composer visibility and horizontal overflow,
+and captures synthetic conversations beneath `desktop-e2e-*` in scratch.
+
+The desktop uses the native vault for its disposable runtime bearer and fails
+if it can't encrypt it. Neither mode proves microphone input, speech-provider
+compatibility, physical QUAKE input or audible playback.

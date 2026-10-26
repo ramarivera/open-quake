@@ -51,3 +51,55 @@ The review also correctly notes that live adapter tests don't establish the desk
 PR41 was squash-merged as 78007a7040994a4eb625a364631b0a937b94e76d after run 40200809998 passed validation, all five native packaging/install jobs and the complete download matrix. Codex completed review of the final functional head 7d8d7e9bb6306eb71005c56243eb80f15ea56a74 with no findings. All six review threads have attributed replies and are resolved, including the separate live desktop coverage task. No disposable E2E containers, networks or volumes remain. The source checkout was removed after verified teardown; Docker image/build caches intentionally remain.
 
 The original PR38/39/40 stack and the container extension are now merged. No release tag was pushed. Runtime HTTP inference and continuity are verified; desktop live routing and physical speech remain outside that evidence. Existing speech tasks and open-quake-hwn.12 remain open. This final documentation update synchronizes task 5.4 with the completed delivery and doesn't change functional code.
+
+## Saved production profile acceptance, 2026-10-26
+
+This section supersedes the historical generic provider environment configuration
+and desktop coverage gaps above. The runner now requires an explicit saved model
+row, scope, source app data directory and authorized model. A windowless native
+Electron reader uses the production agent storage, model conversion, credentials
+service and encrypted vault. Both containers receive only one temporary,
+read-only provider snapshot. They never mount the source settings or vault.
+Legacy provider URL/key/model environment inputs fail before native startup.
+
+The normal application had no saved model, so acceptance used an isolated profile
+saved through the actual AgentsService and native vault, with the explicitly
+authorized gpt-6.1-sol route. No normal user settings were changed. One successful
+run passed all three adapter cases against pinned Hermes and OpenClaw, then the
+actual production root, preload, connection controls and conversation renderer
+completed two turns per runtime. This establishes streamed completion, selected
+connection/model identity, remote session continuity, local history and awaited
+production shutdown. Tools remained disabled. Ten successful inference requests
+used gpt-6.1-sol; no Claude requests were made.
+
+All four native captures were inspected at actual content sizes 1180x625 and
+390x625. Both narrow captures show the latest answer and reachable composer.
+Assertions require no horizontal overflow, a composer within the viewport and a
+capture matching the native content dimensions. Every test window stays hidden,
+nonfocusable and click-through. No physical device, microphone or audible output
+was used.
+
+Success removed the Compose project and private snapshot. A deliberate failure
+after authenticated readiness, SIGTERM after snapshot creation and SIGTERM after
+both containers started also removed
+the snapshot and all owned containers, networks and volumes. Fingerprints of the
+source model state and encrypted credential files, including modes and mtimes,
+were unchanged across these probes. Cleanup unit tests also require snapshot
+removal when Docker teardown, inventory or residual-resource checks fail.
+
+Eight profile selection tests and eleven runner configuration/lifecycle tests
+pass. The desktop suite passes 1626 tests with one existing native skip; the edge
+runtime suite passes 179 tests with three opt-in live cases skipped in the offline
+run. Both typechecks, production build, both bundle startup modes, scoped Biome
+and strict OpenSpec validation pass. The first current live attempt stopped
+before inference because an obsolete test still required the removed model
+environment variable. Removing that obsolete read allowed the successful run;
+its failed project and snapshot were also cleaned up.
+
+External evidence is under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/runtime-profile/`:
+`live-run-2.log`, the three `oq-e2e-efe617461278e785-*-acceptance.json`
+checkpoints, `desktop-e2e-GwsCbT/`, `cleanup-probes.json` and
+`interruption-ready.json`.
+Review, hosted release checks and merge remain pending under task 6.2 and
+`open-quake-hwn.12`. Physical speech acceptance remains separately open.

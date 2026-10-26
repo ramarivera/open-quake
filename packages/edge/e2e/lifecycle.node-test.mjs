@@ -9,9 +9,11 @@ function fixture({
 } = {}) {
 	const calls = [];
 	let removed = false;
+	let secretsRemoved = false;
 	return {
 		calls,
 		removed: () => removed,
+		secretsRemoved: () => secretsRemoved,
 		options: {
 			project: "oq-e2e-test",
 			compose: async (args) => {
@@ -27,6 +29,9 @@ function fixture({
 			removeState: async () => {
 				removed = true;
 			},
+			removeSecrets: async () => {
+				secretsRemoved = true;
+			},
 		},
 	};
 }
@@ -35,6 +40,7 @@ test("failed teardown preserves recovery state", async () => {
 	const f = fixture({ downFails: true });
 	await assert.rejects(cleanupProject(f.options), /Docker unavailable/);
 	assert.equal(f.removed(), false);
+	assert.equal(f.secretsRemoved(), true);
 	assert.equal(f.calls.length, 1);
 });
 
@@ -43,6 +49,7 @@ test("residual containers, networks or volumes preserve state and fail cleanup",
 		const f = fixture({ residual });
 		await assert.rejects(cleanupProject(f.options), /resources survived/);
 		assert.equal(f.removed(), false);
+		assert.equal(f.secretsRemoved(), true);
 	}
 });
 
@@ -50,12 +57,14 @@ test("inventory failure preserves recovery state", async () => {
 	const f = fixture({ inventoryFails: true });
 	await assert.rejects(cleanupProject(f.options), /Cannot enumerate/);
 	assert.equal(f.removed(), false);
+	assert.equal(f.secretsRemoved(), true);
 });
 
 test("removes state only after successful down and three empty inventories", async () => {
 	const f = fixture();
 	await cleanupProject(f.options);
 	assert.equal(f.removed(), true);
+	assert.equal(f.secretsRemoved(), true);
 	assert.deepEqual(f.calls, [
 		["down", "--volumes", "--remove-orphans"],
 		[

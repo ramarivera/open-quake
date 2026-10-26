@@ -58,7 +58,11 @@ Setup documentation SHALL distinguish Hermes agent HTTP API from its dashboard/c
 
 #### Scenario: Reusable container acceptance
 - **WHEN** an operator explicitly runs the disposable Compose E2E runner
-- **THEN** provider base URL, optional API key and model come from environment variables without a personal endpoint default, actual adapters verify streaming/session behavior, and success or failure removes the owned containers, network and runtime state
+- **THEN** an explicitly selected saved production model supplies the provider through its existing storage and native credential owner, the model must match the operator's explicit authorization before inference, generic provider URL/key/model environment overrides are rejected, actual adapters verify streaming/session behavior, and success or failure removes the owned containers, network and runtime state
+
+#### Scenario: Private provider snapshot cleanup
+- **WHEN** disposable acceptance succeeds, fails or receives a handled interruption
+- **THEN** its temporary provider snapshot is removed even if container cleanup fails, source application configuration and credentials remain unchanged, and any retained recovery configuration excludes provider credentials
 
 #### Scenario: Dashboard is not chat API
 - **WHEN** a configured Hermes address serves only its dashboard

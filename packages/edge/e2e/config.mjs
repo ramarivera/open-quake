@@ -1,14 +1,75 @@
 import { randomBytes } from "node:crypto";
+import { isAbsolute } from "node:path";
+import { parseArgs } from "node:util";
 
 export const HERMES_COMMIT = "e10934b03e115b036b3c38b9c6e6817039a5962d";
-export function settings(env) {
-	const baseURL = env.OPEN_QUAKE_E2E_BASE_URL;
-	const model = env.OPEN_QUAKE_E2E_MODEL;
-	if (!baseURL || !model)
+// Docker Desktop on Windows has no POSIX host IDs. Its Linux bind mounts use
+// the runtime's conventional user; Unix hosts preserve the snapshot owner.
+export function containerIdentity(host = process) {
+	return {
+		uid: String(host.getuid?.() ?? 1000),
+		gid: String(host.getgid?.() ?? 1000),
+	};
+}
+export function settings(env, args = []) {
+	if (
+		[
+			"OPEN_QUAKE_E2E_BASE_URL",
+			"OPEN_QUAKE_E2E_API_KEY",
+			"OPEN_QUAKE_E2E_MODEL",
+		].some((key) => Object.hasOwn(env, key))
+	)
 		throw new Error(
-			"Set OPEN_QUAKE_E2E_BASE_URL and OPEN_QUAKE_E2E_MODEL explicitly",
+			"Generic provider environment configuration is unsupported; select a saved production model",
 		);
-	const url = new URL(baseURL);
+	const { values } = parseArgs({
+		args,
+		options: {
+			"user-data": { type: "string" },
+			"model-row": { type: "string" },
+			scope: { type: "string" },
+			"authorize-model": { type: "string" },
+		},
+	});
+	if (
+		!values["user-data"] ||
+		!isAbsolute(values["user-data"]) ||
+		!values["model-row"]?.trim() ||
+		!values.scope?.trim() ||
+		!values["authorize-model"]?.trim() ||
+		values["authorize-model"].length > 256
+	)
+		throw new Error(
+			"Specify absolute --user-data, --model-row, --scope and --authorize-model for the saved production model",
+		);
+	if (!env.OPEN_QUAKE_E2E_SCRATCH || !isAbsolute(env.OPEN_QUAKE_E2E_SCRATCH))
+		throw new Error(
+			"Set OPEN_QUAKE_E2E_SCRATCH to an absolute directory outside the repository",
+		);
+	return {
+		userData: values["user-data"],
+		rowId: values["model-row"],
+		scope: values.scope,
+		authorizedModel: values["authorize-model"],
+		project: `oq-e2e-${randomBytes(8).toString("hex")}`,
+		token: randomBytes(32).toString("hex"),
+		scratch: env.OPEN_QUAKE_E2E_SCRATCH,
+	};
+}
+
+/** Validate the native reader's snapshot without accepting caller provider overrides. */
+export function validateSnapshot(snapshot, authorizedModel) {
+	if (
+		!snapshot ||
+		snapshot.model !== authorizedModel ||
+		typeof snapshot.apiKey !== "string" ||
+		!snapshot.apiKey.trim() ||
+		typeof snapshot.baseURL !== "string"
+	)
+		throw new Error("Saved production profile or credential is unavailable");
+	if (!URL.canParse(snapshot.baseURL))
+		throw new Error("Saved provider URL is invalid");
+	const url = new URL(snapshot.baseURL);
 	if (
 		!["http:", "https:"].includes(url.protocol) ||
 		url.username ||
@@ -17,7 +78,7 @@ export function settings(env) {
 		url.hash
 	)
 		throw new Error(
-			"Use an HTTP(S) provider base URL without credentials, query or fragment",
+			"Saved provider URL must use HTTP(S) without inline credentials, query or fragment",
 		);
 	if (
 		url.hostname === "localhost" ||
@@ -26,17 +87,6 @@ export function settings(env) {
 		["[::1]", "[::]", "0.0.0.0"].includes(url.hostname)
 	)
 		throw new Error(
-			"Provider URL must be reachable from containers; use a network address or host.docker.internal where supported, not host loopback",
+			"Saved provider must be reachable from containers, not host loopback",
 		);
-	if (!model.trim() || model.length > 256) throw new Error("Invalid E2E model");
-	if (!env.OPEN_QUAKE_E2E_SCRATCH)
-		throw new Error("Set OPEN_QUAKE_E2E_SCRATCH outside the repository");
-	return {
-		baseURL: url.href,
-		model,
-		apiKey: env.OPEN_QUAKE_E2E_API_KEY ?? "",
-		project: `oq-e2e-${randomBytes(8).toString("hex")}`,
-		token: randomBytes(32).toString("hex"),
-		scratch: env.OPEN_QUAKE_E2E_SCRATCH,
-	};
 }

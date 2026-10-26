@@ -40,7 +40,6 @@ describe.skipIf(process.env.OPEN_QUAKE_E2E_RUN !== "1")(
 					hermes ? "OPEN_QUAKE_E2E_HERMES_URL" : "OPEN_QUAKE_E2E_OPENCLAW_URL",
 				);
 				const token = required("OPEN_QUAKE_E2E_RUNTIME_TOKEN");
-				required("OPEN_QUAKE_E2E_MODEL");
 				const path = hermes ? "/v1/capabilities" : "/v1/models";
 				const unauthenticated = await fetch(`${baseURL}${path}`, {
 					redirect: "error",
