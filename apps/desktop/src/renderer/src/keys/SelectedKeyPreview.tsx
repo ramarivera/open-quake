@@ -50,6 +50,7 @@ export function SelectedKeyPreview({
 		>
 			<div ref={frame} className="key-selected-preview-frame">
 				<div
+					inert
 					style={{
 						width,
 						height: side,
