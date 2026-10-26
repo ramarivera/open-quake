@@ -78,3 +78,13 @@ The tile focus SHALL be a 2 px accent ring around the focused tile with a compac
 - **WHEN** knob focus renders at 220 by 220, 460 by 220 or 1920 by 480 with zero, positive or negative detent angles
 - **THEN** a two-pixel accent outline fits inside the focused tile, one compact gauge rotates its pointer around the tile centre, and no disc artwork, tick crown, filter or decorative label appears
 - **AND** these rendered properties establish the independent replacement for KNOB-016
+
+### Requirement: Burn-down strip visual reconciliation
+
+For SCREEN-023, SCREEN-029, SCREEN-030, SCREEN-033, SCREEN-034, SCREEN-126, SCREEN-134, MGMT-055, MGMT-058, MGMT-059 and SETTINGS-013, the flat palette and code-native plate SHALL replace recovered alpha slots, extracted-icon accent fallback, glow SVG variants, scanlines, sparkles and lamp loops. Theme geometry remains common 220/20/10, meeting 236/4/2, system 221/20/10 and monitor 220/20/10. Visible radii SHALL be rounded recovered radius times 7/12, so common/system 28, meeting 14 and panel 0. Default generic metrics SHALL use 9 percent inner padding, icon min(42 percent of short edge,168), font clamp(22,11 percent of short edge,34), weight 550 and bottom label. Explicit user title style SHALL override defaults. Enlarged slots SHALL retain local layer 10 and opaque surface under knob focus. Empty borders SHALL be two logical pixels at full opacity with no hover animation. Press transitions SHALL be 120 ms, panel scale 0.96 and management scale 0.98, with no scale/transition in either reduced-motion mode. Clock hover SHALL remain inert and geometrically stable.
+
+#### Scenario: Accepted flat result across hosts
+
+- **WHEN** the retained themes and spans render in panel and management preview with long, alternate or delayed artwork and user-styled titles
+- **THEN** the recovered grid geometry stays intact while the flat plate, title/icon metrics, square panel corners and bounded feedback follow this requirement
+- **AND** no superseded decorative artwork or animation is restored

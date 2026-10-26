@@ -564,6 +564,7 @@ if (!app.requestSingleInstanceLock()) {
 									(...args) => profiles.select(...args),
 								),
 								thumbnail: (...args) => profiles.thumbnail(...args),
+								thumbnailBorder: () => profiles.currentThumbnailBorder(),
 								obs: (key, delta, signal, beforeWrite) =>
 									obs.turn(key, delta, signal, beforeWrite),
 								hardware: currentHardware,
@@ -950,6 +951,9 @@ if (!app.requestSingleInstanceLock()) {
 									// The instrumented knob runtime retains the failed exit.
 								});
 						};
+						const removeKnobThumbnailStyle = profiles.onLocaleChanged(() => {
+							void knob.refresh().catch(() => {});
+						});
 						const removeKnobLocale = localeRegistration.onLocaleChanged(
 							synchronizeKnobLocale,
 						);
@@ -1509,6 +1513,7 @@ if (!app.requestSingleInstanceLock()) {
 							privacyVisibility.dispose();
 							removeDevicePicker();
 							removeKnobLocale();
+							removeKnobThumbnailStyle();
 							disposeHardware();
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 							removeDeviceReady();

@@ -53,3 +53,42 @@ Not verified: rendering on the real QUAKE strip, its colours, and frame timing.
 - [x] test-device-widgets: mounted panel/device/manager/editor host resize, artwork and frame coverage for MGMT-051/056/060, WIDGETS-011; real timer/rendered runtime feedback for WIDGETS-107.
 
 - [x] Retained catalog geometry/action and nested-touch burn-down regressions for AI-145/146 and MGMT-351/353/357. Bead open-quake-lih.9.3 remains open for lead integration.
+
+## Strip burn-down 2026-10-26
+
+- [x] Shared logical viewport, runtime placeholders, accepted theme/span rendering, overlay ordering and complete repaint. Bead open-quake-lih.10.10.
+- [x] Live empty borders and bounded management feedback, exclusions and clock hover. Bead open-quake-lih.10.11.
+- [ ] Complete WIDGETS-001 specialized dispatch and provider coverage. Bead open-quake-lih.10.12.
+
+### Strip burn-down evidence
+
+Verified on 2026-10-26 after merging main 31c400cc, including monitor panels #100
+and locale #105. Root test command used `--env-mode=loose -- --maxWorkers=2`:
+protocol 63, device 515, edge 877 and desktop 2627 passed, with four existing
+skips. Biome checked 1401 files with zero errors, 14 warnings and one info.
+Typecheck passed all six tasks; build, bundle smoke and strict OpenSpec
+validation passed, with 47 spec items. The production hidden Electron smoke
+passed using mock devices, muted windows and the canonical locale bridge.
+The focused native render exercised 346 assertions and 96 theme/span/host
+renders, real picker/wheel/voice composition, portrait fitting and reduced motion.
+Evidence and English/German captures live under the strip lane scratch root,
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/strip/`.
+
+WIDGETS-001 remains partial. Main's individual monitor renderers are retained and
+covered by mounted decoded-bridge tests. Camera/printer sessions, AudioBot and
+reversible game mode still need their software providers and decoded bridges;
+local audio remains truthfully unavailable. This is not a hardware-only gap.
+No real QUAKE, camera, microphone or audio playback was used. Physical display
+colour, USB delivery, touch and frame timing remain unverified. All three lane
+beads remain open for lead integration.
+
+## PR #110 review round one
+
+- [x] Merge main grid-editor while preserving both branches' interactions and all tests. Bead open-quake-lih.10.11.1.
+- [x] Include saved empty borders in manager and knob thumbnail identity, pin captures to that preference, and regenerate existing manager thumbnails. Failing-first controller/storage regressions, knob handoff and mounted capture tests cover Devin 4380317254.
+
+- [x] Remove unused config/eventInfo from runtime placeholders. SCREEN-022 now specifies the renderer's coordinate-only record. Existing hidden-slot, profile replacement and independent editor-default coverage remains; the added no-unused-payload regression fails before the fix. Devin 4380317447.
+
+- [x] Isolate style-regeneration capture failures and retain same-value retries for failed profiles. Failing-first two-profile regression covers Codex 4380623860.
+
+- [x] Preserve retained thumbnail capture style through pending and failed regeneration. Main snapshots carry the captured border preference; a failing-first mounted controller regression also accepts identical replacement pixels. Codex 4380698050.

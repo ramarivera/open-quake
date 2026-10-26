@@ -278,6 +278,8 @@ vi.mock("./profiles", async () => {
 		registerProfiles: vi.fn((..._args: unknown[]) => ({
 			runtime: { runFork: vi.fn(), runPromise: vi.fn() },
 			select: vi.fn(),
+			currentThumbnailBorder: () => true,
+			onLocaleChanged: vi.fn((_listener: () => void) => vi.fn()),
 			connect: vi.fn(async () => {}),
 			disconnect: vi.fn(async () => {}),
 			resetKeys: vi.fn(async () => {}),
@@ -595,6 +597,23 @@ describe("desktop window lifecycle", () => {
 			),
 		);
 		expect(management.focus).toHaveBeenCalled();
+	});
+
+	it("refreshes knob thumbnails on profile appearance changes and removes the listener on quit", async () => {
+		const profiles = vi.mocked(registerProfiles).mock.results[0]?.value;
+		const knob = vi.mocked(registerKnob).mock.results[0]?.value;
+		if (!profiles || !knob)
+			throw new Error("Missing profile or knob registration");
+		const refresh = vi.spyOn(knob, "refresh");
+		const change = vi.mocked(profiles.onLocaleChanged).mock.calls[0]?.[0];
+		const remove = vi.mocked(profiles.onLocaleChanged).mock.results[0]?.value;
+		if (!change || !remove)
+			throw new Error("Missing thumbnail appearance listener");
+		const before = refresh.mock.calls.length;
+		change();
+		await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(before + 1));
+		appEvent("before-quit");
+		await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
 	});
 
 	it("starts both surfaces on the primary display without panel hardware", async () => {
