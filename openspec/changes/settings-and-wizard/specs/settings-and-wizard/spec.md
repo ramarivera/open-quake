@@ -437,3 +437,32 @@ The six AI role titles SHALL resolve explicit user edits first, then multilingua
 
 - **WHEN** the app language changes with the strip, voice, picker, profile manager and clock mounted
 - **THEN** their labels update for all eight locales, an unsupported value renders English, drafts and user-edited titles survive, and no translated title is written to a profile
+
+### Requirement: Retained migration and host capability ownership
+
+The shell SHALL keep retained capabilities behind decoded, authenticated feature contracts with context isolation enabled and Node integration disabled. Plugin configuration and per-user ChatHistory migration SHALL preserve local durable data through their canonical feature owners, omit credentials, and never import transient selected-device, port or upgrade state. Missing plugin, camera, gaming, assistant-window or report owners SHALL remain explicit incomplete parity, rather than unimplemented successful replies. Evidence: MAIN-124, MAIN-129, MAIN-130, MAIN-133, MAIN-134, SCREEN-012.
+
+The retained ownership map is:
+
+| Vendor capability group | Current canonical owner and typed equivalent | Outstanding work |
+| --- | --- | --- |
+| Quit, restart, minimize, maximize, background recovery | management desktop-shell and shared management command schema | None for these commands |
+| General preferences, locale, setup, geometry | settings backend RPC, locale RPC and window binding | macOS privacy-flow visibility pinning |
+| Connected-device discovery and controls | management device choices, hardware request contracts | Full former device-control method inventory remains incomplete |
+| Profiles, key library, icon selection and thumbnails | profiles manager, key-library and isolated icon/thumbnail renderers | Plugin custom windows remain incomplete |
+| Wallpaper, clock and weather | media, clock and weather-media request/event contracts | Retained cross-owner outgoing-event reconciliation remains incomplete |
+| Knob, key dispatch, focus reset and management activation | knob service, panel key dispatcher, strip reset and management activation | Gaming request/status consumer is missing |
+| Direct chat, agent sessions, models, integrations and meetings | chat, agent-http, agents, integrations and meetings owners | Separate assistant/report roles and legacy history import remain incomplete |
+| Plugin protocol, settings and custom windows | stream-deck-compat OpenSpec owner | Production plugin owner and PluginConfigs migration are missing |
+| Camera/printer gateway and camera image pushes | camera-and-printer-views OpenSpec owner | Protocol prerequisite and production adapter are missing |
+
+#### Scenario: Retained operation is not implemented
+
+- **WHEN** a retained operation has no canonical production adapter
+- **THEN** the shell does not install an inert success handler or grant a preview renderer mutation privileges
+- **AND** the corresponding parity row stays incomplete until its actual consumer and regression test exist
+
+#### Scenario: Import legacy durable configuration
+
+- **WHEN** synthetic legacy account, plugin and history stores are imported
+- **THEN** canonical owners preserve supported durable data, remove credentials and transient launch values, and repeated imports do not overwrite explicit current choices

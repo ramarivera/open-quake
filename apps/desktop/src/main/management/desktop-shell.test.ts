@@ -47,7 +47,7 @@ vi.mock("electron", () => ({
 		}
 	},
 }));
-function fixture(platform = "linux") {
+function fixture(platform = "linux", locale = () => "en") {
 	const win = Object.assign(new EventEmitter(), {
 		webContents: Object.assign(new EventEmitter(), {
 			mainFrame: { url: "https://app.test/index.html?surface=management" },
@@ -73,6 +73,7 @@ function fixture(platform = "linux") {
 		quit,
 		quitting: () => false,
 		platform,
+		locale,
 	});
 	const event = {
 		sender: win.webContents,
@@ -166,3 +167,18 @@ it.each(["linux", "win32", "darwin"])(
 		}
 	},
 );
+
+it("SETTINGS-112 refreshes native tray labels from the current app locale", () => {
+	let locale = "en";
+	const f = fixture("linux", () => locale);
+	locale = "de";
+	f.shell.refresh();
+	expect(native.template.map((item) => item.label)).toEqual([
+		"Fortsetzen",
+		"Einstellungen",
+		"Verwaltungszentrum",
+		undefined,
+		"Beenden",
+	]);
+	f.shell.dispose();
+});

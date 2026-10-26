@@ -15,6 +15,9 @@ const directory = realpathSync(
 const mockMode = process.argv.includes("--mock");
 const app = new EventEmitter();
 app.isPackaged = true;
+app.commandLine = { appendSwitch() {} };
+app.setAppUserModelId = () => {};
+app.relaunch = () => {};
 app.requestSingleInstanceLock = () => true;
 app.whenReady = () => Promise.resolve();
 app.getPath = () => directory;
@@ -43,6 +46,7 @@ class Window extends EventEmitter {
 	}
 	url = "";
 	webContents = {
+		setWindowOpenHandler: () => {},
 		setAudioMuted: () => {},
 		setZoomFactor: () => {},
 		on: () => {},
@@ -90,6 +94,13 @@ class Window extends EventEmitter {
 	setVisibleOnAllWorkspaces() {}
 	destroy() {}
 }
+class Tray extends EventEmitter {
+	setToolTip() {}
+	setContextMenu() {}
+	destroy() {
+		this.removeAllListeners();
+	}
+}
 const screen = new EventEmitter();
 const display = {
 	id: 1,
@@ -115,6 +126,7 @@ const dialog = {
 	showOpenDialog: () => Promise.resolve({ canceled: true, filePaths: [] }),
 };
 const nativeImage = {
+	createFromBitmap: () => ({ setTemplateImage() {} }),
 	createFromBuffer: () => {
 		throw new Error("Bundle smoke must not decode images");
 	},
@@ -168,6 +180,7 @@ globalThis.openQuakeBundleSmoke = {
 	ipcMain,
 	dialog,
 	nativeImage,
+	Tray,
 	protocol,
 	net,
 	session,
@@ -187,7 +200,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, Menu, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, Menu, Tray, screen, ipcMain, dialog, nativeImage, powerMonitor, powerSaveBlocker, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

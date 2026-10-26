@@ -6,6 +6,7 @@ import {
 	ShellCommand,
 } from "../../shared/management";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { nativeLocaleMenu } from "../settings/native-locale";
 
 export interface ShellWindow {
 	readonly isDestroyed: () => boolean;
@@ -41,6 +42,7 @@ export function createDesktopShell(options: {
 	readonly quit: (restart: boolean) => void;
 	readonly quitting: () => boolean;
 	readonly platform?: string;
+	readonly locale?: () => string;
 }) {
 	const platform = options.platform ?? process.platform;
 	let disposed = false;
@@ -60,6 +62,22 @@ export function createDesktopShell(options: {
 			win.webContents.once("did-finish-load", send);
 		else send();
 	};
+	const refresh = () => {
+		if (!tray || disposed) return;
+		tray.setContextMenu(
+			Menu.buildFromTemplate(
+				nativeLocaleMenu(options.locale?.() ?? "en", {
+					resume: () => open(),
+					settings: () => open("settings"),
+					management: () => open("overview"),
+					exit: () => {
+						if (!disposed) options.quit(false);
+					},
+				}),
+			),
+		);
+	};
+
 	try {
 		// An app-owned monochrome knob icon, generated at native bitmap size.
 		const size = platform === "darwin" ? 18 : 22;
@@ -82,20 +100,7 @@ export function createDesktopShell(options: {
 		if (platform === "darwin") icon.setTemplateImage(true);
 		tray = new Tray(icon);
 		tray.setToolTip("open-quake");
-		tray.setContextMenu(
-			Menu.buildFromTemplate([
-				{ label: "Resume", click: () => open() },
-				{ label: "Settings", click: () => open("settings") },
-				{ label: "Management Center", click: () => open("overview") },
-				{ type: "separator" },
-				{
-					label: "Exit",
-					click: () => {
-						if (!disposed) options.quit(false);
-					},
-				},
-			]),
-		);
+		refresh();
 		tray.on("double-click", () => open());
 	} catch {
 		tray?.destroy();
@@ -157,6 +162,7 @@ export function createDesktopShell(options: {
 	attach(options.management());
 	return {
 		attach,
+		refresh,
 		recoverable,
 		dispose: () => {
 			if (disposed) return;

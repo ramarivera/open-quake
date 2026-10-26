@@ -290,6 +290,7 @@ if (!app.requestSingleInstanceLock()) {
 									: [];
 						let knobLocale: LocaleSnapshot["locale"] = "en";
 						let refreshNativeMenu = () => {};
+						let refreshTray = () => {};
 						let resetVoice = (): Promise<void> => Promise.resolve();
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 							Promise.resolve();
@@ -945,6 +946,7 @@ if (!app.requestSingleInstanceLock()) {
 							});
 						};
 						refreshNativeMenu = () => {
+							refreshTray();
 							if (app.dock?.setMenu)
 								app.dock.setMenu(
 									Menu.buildFromTemplate(
@@ -974,6 +976,7 @@ if (!app.requestSingleInstanceLock()) {
 						app.on("second-instance", focusManagement);
 						let restartRequested = false;
 						const desktopShell = createDesktopShell({
+							locale: () => knobLocale,
 							management: () => managementWin,
 							renderer: rendererURL,
 							focus: focusManagement,
@@ -983,6 +986,7 @@ if (!app.requestSingleInstanceLock()) {
 								app.quit();
 							},
 						});
+						refreshTray = desktopShell.refresh;
 						managementReachable = desktopShell.recoverable;
 						const removeDevicePicker = registerDevicePicker({
 							management: () => managementWin,

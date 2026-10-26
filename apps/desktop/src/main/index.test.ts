@@ -145,7 +145,6 @@ const electron = vi.hoisted(() => {
 		nativeImage: {
 			createFromBitmap: vi.fn(() => ({ setTemplateImage: vi.fn() })),
 		},
-		Menu: { buildFromTemplate: vi.fn((items: readonly unknown[]) => items) },
 		Tray: class {
 			setToolTip = vi.fn();
 			setContextMenu = vi.fn();

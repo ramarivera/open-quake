@@ -1097,16 +1097,21 @@ fieldset.mc-tabs button {
 	flex-wrap: nowrap;
 	max-width: 100%;
 	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
 	margin-bottom: var(--oq-space-4, 16px);
 }
 .shell-settings-tabs > button {
 	flex: 0 0 auto;
+	margin-bottom: 0;
 }
 .mc-sidebar-footer {
+	display: flex;
 	flex-wrap: wrap;
+	gap: var(--oq-space-2);
 }
-.mc-sidebar-footer > .guide-entry {
-	min-width: 0;
+.mc-sidebar-footer > .mc-ui-settings-host {
+	flex: 0 0 100%;
 }
 
 .shell-device-picker {
