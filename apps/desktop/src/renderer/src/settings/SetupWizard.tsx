@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import {
 	type ReactNode,
 	useCallback,
@@ -8,6 +9,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import type { WizardDisplay } from "../../../../../../packages/edge/src/settings/wizard-contracts";
+import { DeviceReadyReply } from "../../../shared/hardware-contracts";
 import type { AppLocale } from "../../../shared/locale";
 import { WIZARD_LANGUAGES } from "../../../shared/locale";
 import { useAppLocale, useAppTranslations } from "../i18n";
@@ -1160,7 +1162,7 @@ export function observeOrientation(
 		off();
 	};
 }
-function useOrientation(
+export function useOrientation(
 	serial: string | undefined,
 	disconnected?: () => void,
 ): DisplayOrientation | undefined {
@@ -1171,9 +1173,51 @@ function useOrientation(
 		setValue(undefined);
 		const bridge = window.quakeLifecycle;
 		if (!serial || !bridge) return;
-		return observeOrientation(bridge, serial, setValue, () =>
-			onDisconnect.current?.(),
+		let live = true;
+		let revision = 0;
+		const off = observeOrientation(
+			bridge,
+			serial,
+			(next) => {
+				revision++;
+				setValue(next);
+			},
+			() => {
+				revision++;
+				onDisconnect.current?.();
+			},
 		);
+		const requestedRevision = revision;
+		void window.quakeDeviceReady?.read(serial).then(
+			(reply) => {
+				const decoded = Schema.decodeUnknownOption(DeviceReadyReply)(reply);
+				if (
+					!live ||
+					revision !== requestedRevision ||
+					decoded._tag !== "Some" ||
+					decoded.value._tag !== "ready" ||
+					decoded.value.snapshot.serialNumber !== serial
+				)
+					return;
+				const snapshot = decoded.value.snapshot;
+				if (snapshot.rotation === undefined) return;
+				setValue({
+					serialNumber: serial,
+					rotation: snapshot.rotation,
+					connected: snapshot.connected,
+					isVertical: snapshot.rotation === 90 || snapshot.rotation === 270,
+					orientation:
+						snapshot.rotation === 90 || snapshot.rotation === 270
+							? "vertical"
+							: "horizontal",
+				});
+			},
+			() => {},
+		);
+		return () => {
+			live = false;
+			off();
+		};
 	}, [serial]);
 	return value?.serialNumber === serial ? value : undefined;
 }

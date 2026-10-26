@@ -2,11 +2,14 @@
 import {
 	decodeHardwareReply,
 	decodeHidReport,
+	decodeKeyMatrix,
 	encodeHardwareCommand,
 	encodeHidReport,
 	FRAME_HEADER,
 	FrameSizeInvalid,
 	type ProtocolError,
+	unwrapJsonFrame,
+	unwrapResourceFrame,
 	unwrapShortCommand,
 	wrapShortCommand,
 } from "@open-quake/protocol";
@@ -28,6 +31,22 @@ export function decodeReport(
 ): Either.Either<Option.Option<DeviceEvent>, ProtocolError> {
 	const physical = decodeHidReport(input);
 	if (Either.isLeft(physical)) return Either.left(physical.left);
+	if (physical.right[0] === 0xa1)
+		return unwrapJsonFrame(physical.right).pipe(
+			Either.map((value) => Option.some<DeviceEvent>({ _tag: "Json", value })),
+		);
+	if (physical.right[0] === 0xa2)
+		return unwrapResourceFrame(physical.right).pipe(
+			Either.map((envelope) =>
+				Option.some<DeviceEvent>({ _tag: "Resource", envelope }),
+			),
+		);
+	if (physical.right[0] === 1)
+		return decodeKeyMatrix(physical.right).pipe(
+			Either.map((matrix) =>
+				Option.some<DeviceEvent>({ _tag: "Matrix", matrix }),
+			),
+		);
 	if (physical.right[0] !== FRAME_HEADER) return Either.right(Option.none());
 	const decoded = unwrapShortCommand(physical.right);
 	if (Either.isLeft(decoded)) return Either.left(decoded.left);
@@ -70,4 +89,52 @@ export function decodeReport(
 		return Either.right(Option.some({ _tag: "Touch", points }));
 	}
 	return Either.right(Option.none());
+}
+
+/** Wide envelopes can span several fixed HID reads. State belongs to one session. */
+export function makeReportDecoder() {
+	let pending = new Uint8Array(0);
+	return {
+		push(
+			input: Uint8Array,
+		): Either.Either<Option.Option<DeviceEvent>, ProtocolError> {
+			const body = decodeHidReport(input);
+			if (Either.isLeft(body)) return Either.left(body.left);
+			const first = pending.length ? pending[0] : body.right[0];
+			if (first !== 0xa1 && first !== 0xa2) return decodeReport(input);
+			const combined = new Uint8Array(pending.length + body.right.length);
+			combined.set(pending);
+			combined.set(body.right, pending.length);
+			const size = (combined[1] ?? 0) * 256 + (combined[2] ?? 0) + 4;
+			if (combined.length < size) {
+				pending = combined;
+				return Either.right(Option.none());
+			}
+			pending = new Uint8Array(0);
+			if (combined.slice(size).some((byte) => byte !== 0))
+				return Either.left(new FrameSizeInvalid(combined.length, size));
+			const frame = combined.slice(0, size);
+			return first === 0xa1
+				? unwrapJsonFrame(frame).pipe(
+						Either.map((value) =>
+							Option.some<DeviceEvent>({ _tag: "Json", value }),
+						),
+					)
+				: unwrapResourceFrame(frame).pipe(
+						Either.map((envelope) =>
+							Option.some<DeviceEvent>({ _tag: "Resource", envelope }),
+						),
+					);
+		},
+		finish(): Either.Either<void, ProtocolError> {
+			return pending.length
+				? Either.left(
+						new FrameSizeInvalid(
+							pending.length,
+							(pending[1] ?? 0) * 256 + (pending[2] ?? 0) + 4,
+						),
+					)
+				: Either.right(undefined);
+		},
+	};
 }

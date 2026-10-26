@@ -250,7 +250,7 @@ describe("QuakeDevice conductor", () => {
 					const connection = yield* (yield* QuakeDevice).connect({
 						keepAliveIntervalMs: 100,
 					});
-					const advance = yield* TestClock.adjust(100).pipe(Effect.forkScoped);
+					const advance = yield* TestClock.adjust(1000).pipe(Effect.forkScoped);
 					yield* Deferred.await(writing);
 					const disconnecting = yield* connection
 						.disconnect()
@@ -411,7 +411,7 @@ describe("QuakeDevice conductor", () => {
 					if (kind === "read") yield* fake.failRead(original);
 					else if (kind === "write") {
 						yield* fake.failWrite(original);
-						yield* TestClock.adjust(100);
+						yield* TestClock.adjust(2500);
 					} else yield* fake.end();
 					const result = yield* Fiber.join(consumer);
 					expect(yield* received).toEqual([
