@@ -90,3 +90,5 @@ beads remain open for lead integration.
 - [x] Remove unused config/eventInfo from runtime placeholders. SCREEN-022 now specifies the renderer's coordinate-only record. Existing hidden-slot, profile replacement and independent editor-default coverage remains; the added no-unused-payload regression fails before the fix. Devin 4380317447.
 
 - [x] Isolate style-regeneration capture failures and retain same-value retries for failed profiles. Failing-first two-profile regression covers Codex 4380623860.
+
+- [x] Preserve retained thumbnail capture style through pending and failed regeneration. Main snapshots carry the captured border preference; a failing-first mounted controller regression also accepts identical replacement pixels. Codex 4380698050.

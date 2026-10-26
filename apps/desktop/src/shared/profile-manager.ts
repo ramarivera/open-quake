@@ -58,6 +58,8 @@ export interface ProfileView {
 		readonly identifier: string;
 	}[];
 	readonly thumbnails: Readonly<Record<string, string>>;
+	/** Border style of the returned captures; absent in older snapshots. */
+	readonly thumbnailShowEmptyGridDashedBorder?: boolean;
 	readonly progress: ThumbnailProgress;
 }
 export type ProfileReply =
@@ -95,6 +97,7 @@ export const ProfileReplySchema = Schema.Union(
 				}),
 			),
 			thumbnails: Schema.Record({ key: Schema.String, value: Schema.String }),
+			thumbnailShowEmptyGridDashedBorder: Schema.optional(Schema.Boolean),
 			progress: Schema.Struct({
 				running: Schema.Boolean,
 				done: Schema.Number,

@@ -123,6 +123,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 				serials: yield* switching.connectedSerials(),
 				apps: port.installedApps ? yield* native(port.installedApps) : [],
 				thumbnails: Object.fromEntries(loaded),
+				thumbnailShowEmptyGridDashedBorder: border,
 				progress,
 			};
 		});

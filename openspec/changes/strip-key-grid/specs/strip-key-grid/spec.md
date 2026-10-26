@@ -352,6 +352,13 @@ The registry SHALL dispatch recovered monitor types to metric renderers consumin
 - **THEN** manager and knob cache identities include the new preference, existing manager captures are regenerated, and each hidden capture pins the preference used for its cache key even if it changes while rendering
 - **AND** old captures from before border-aware cache identity are never reused
 
+#### Scenario: Retained thumbnail pixels keep their capture style
+
+- **GIVEN** the manager displays a cached thumbnail and the saved border preference changes
+- **WHEN** regeneration is pending or fails and the manager retains the previous pixels
+- **THEN** those pixels keep the border preference associated with their capture and remain stale
+- **AND** a matching replacement becomes ready even when its image bytes equal the previous capture
+
 #### Scenario: A failed style capture doesn't block other profiles
 
 - **GIVEN** multiple profiles have cached thumbnails and one capture fails after the border preference changes
