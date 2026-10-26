@@ -73,8 +73,12 @@ The current Shortcuts page SHALL retain double-click and context-menu rename and
 - **THEN** the first three rows start selected, partial selection is indeterminate, reset restores originals and only accepted deletion changes rows; a failed saved-library edit rolls back
 
 ### Requirement: Retained ConfigDetail generation
-The retained ConfigDetail types SHALL be validated against the canonical action registry, retain labels and icons, and remain inert through generation and persistence. Explicit profile sync SHALL preserve their action types. Model-generated application paths, shell commands, nested multi-actions and unavailable owning-domain actions SHALL be counted as unsupported instead of being executed. Source: AI-121.
+The retained ConfigDetail types SHALL be validated against the canonical action registry, retain labels and icons, and remain inert through generation and persistence. Explicit profile sync SHALL preserve their action types. Generated `mdi-` icon names SHALL resolve only against the bundled MDI catalog through the strip artwork owner, retaining the selected symbol on synced keys. Unknown or malformed names SHALL remain inert and unavailable. Model-generated application paths, shell commands, nested multi-actions and unavailable owning-domain actions SHALL be counted as unsupported instead of being executed. Source: AI-121.
 
 #### Scenario: Mixed configuration draft
 - **WHEN** output contains a hotkey, website, text, timer, switch, media key and shell command
 - **THEN** supported entries retain their action types and labels through save and sync, the shell command is counted as dropped, and inference aborts at the 300-second deadline without changing libraries
+
+#### Scenario: Generated MDI icon survives profile sync
+- **WHEN** a generated website row uses `mdi-star` and the user saves and syncs it
+- **THEN** the saved profile key renders the bundled star artwork rather than the default website symbol, and unknown names load no external resource

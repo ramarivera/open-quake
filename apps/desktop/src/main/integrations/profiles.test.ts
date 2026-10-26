@@ -1,3 +1,5 @@
+import mdiCatalog from "virtual:mdi-icons";
+import star from "@mdi/svg/svg/star.svg?raw";
 import {
 	Cause,
 	Effect,
@@ -27,6 +29,7 @@ import {
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service";
 import { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
 import type { ShortcutLibrary } from "../../../../../packages/edge/src/shortcuts/shortcut-contracts";
+import { resolveTileArtwork } from "../../renderer/src/strip/useTileArt";
 import {
 	ManagementProfileContractsLive,
 	managementProfileContracts,
@@ -305,7 +308,7 @@ it("syncs validated generated configuration rows without converting them to hotk
 					name: "Docs",
 					app: "Office",
 					chord: "",
-					icon: "mdi-web",
+					icon: "mdi-star",
 					config: {
 						type: "website",
 						actions: [{ type: "url", value: "https://example.org" }],
@@ -316,10 +319,23 @@ it("syncs validated generated configuration rows without converting them to hotk
 		const profile = await f.runtime.runPromise(ProfileService.getProfile(id));
 		expect(profile.pages[0].keys[0]?.config).toMatchObject({
 			type: "website",
-			icon: "mdi-web",
+			icon: "mdi-star",
 			actions: [{ type: "url", value: "https://example.org" }],
 			title: { text: "Docs" },
 		});
+		const key = profile.pages[0].keys[0];
+		const art = await resolveTileArtwork(
+			key?.config.icon ?? "",
+			key?.config.type ?? "",
+		);
+		const svg = decodeURIComponent(art.slice(art.indexOf(",") + 1));
+		expect(mdiCatalog.find((icon) => icon.name === "star")?.path).toBe(
+			/\bd="([^"]+)"/.exec(star)?.[1],
+		);
+		expect(svg).toContain(/\bd="([^"]+)"/.exec(star)?.[1]);
+		expect(svg).toContain('fill="white"');
+		expect(await resolveTileArtwork("mdi-does-not-exist", "website")).toBe("");
+		expect(await resolveTileArtwork("mdi-<script>", "website")).toBe("");
 	} finally {
 		await f.runtime.dispose();
 	}

@@ -85,3 +85,4 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 - [x] 9.6 Address PR94 security finding 4378586920 with documented media origins, connection-time public DNS validation, no redirects and bounded media downloads. Fake-provider regressions fail before and pass after. Bead `open-quake-lih.17.7`.
 - [x] 9.7 Address PR94 finding 4378586138 by deferring clipboard publication collection independently of source reclamation. Actual controller/file-store regression fails before and passes after across a store reopen. Bead `open-quake-lih.17.7`.
+- [x] 9.8 Address PR94 finding 4378586520 by resolving generated mdi names through the canonical bundled artwork pipeline. Synced-profile-to-artwork regression fails before and passes after; unknown/malformed names stay inert. Bead `open-quake-lih.17.7`.
