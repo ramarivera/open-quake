@@ -425,7 +425,7 @@ it("starts replacement mic/system recorders before stopping old ones and isolate
 			recorder.stop = vi.fn(() => {
 				expect(
 					Recorder.all.filter((r) => r.state === "recording").length,
-				).toBeGreaterThanOrEqual(3);
+				).toBeGreaterThanOrEqual(5);
 				original();
 			});
 		}
