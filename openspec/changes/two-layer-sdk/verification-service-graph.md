@@ -20,8 +20,9 @@ objects. Registrations retain their worker interruption, pending-operation joins
 and IPC checks. The HTTP registry, knob and root composition remain to integrate.
 
 Meeting capture listener acquisition now belongs to its scoped service layer.
-Registration teardown and graph finalization share an idempotent release, so
-neither preparing a module nor a second cleanup installs or removes listeners.
+Only graph finalization releases the capture port and audio IPC. Registration
+teardown suspends capture without releasing those resources. Preparation installs
+no listeners, and repeated cleanup is idempotent.
 This does not open a capture window, microphone or provider.
 
 ## Verification, 2026-10-26
@@ -81,7 +82,9 @@ runtimes are separate process or fixture owners. Hardware, microphone and live
 provider behavior are not established by this change.
 
 
-PR72 review corrections, 2026-10-26: registration teardown suspends capture and
+## PR72 review corrections
+
+Registration teardown suspends capture and
 interrupts its publisher without releasing the graph-owned capture port or
 shutting down the shared service PubSub. Only graph disposal releases the port.
 The shared-owner regression calls the service successfully after registration
