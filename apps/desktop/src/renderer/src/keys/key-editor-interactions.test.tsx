@@ -10,6 +10,10 @@ import {
 import { GTProvider } from "gt-react";
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import {
+	KeyRuntime,
+	KeyRuntimePort,
+} from "../../../../../../packages/device/src/actions/key-runtime-service";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -1381,4 +1385,52 @@ it("SCREEN-135 exposes vivid configuration for the selected serial/profile witho
 		).not.toBeNull(),
 	);
 	expect(f.calls.filter((c) => c.type === "activate")).toHaveLength(0);
+});
+
+it("MGMT-068 placed hotkeys retain held input through KeyRuntime activation", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "hotkey", "1,1");
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	await input(query(f.host, "#key-action-0", HTMLInputElement), "control+a");
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(2));
+	const edges: string[] = [];
+	const runtime = ManagedRuntime.make(
+		KeyRuntime.DefaultWithoutDependencies.pipe(
+			Layer.provide(
+				Layer.succeed(KeyRuntimePort, {
+					read: Effect.sync(() =>
+						Schema.decodeUnknownSync(ProfileEnvelope)(f.stored()),
+					),
+					execute: () =>
+						Effect.sync(() => {
+							edges.push("execute");
+						}),
+					holdHotkey: () =>
+						Effect.sync(() => {
+							edges.push("down");
+							return Effect.sync(() => {
+								edges.push("up");
+							});
+						}),
+					publish: () => Effect.void,
+					select: () => Effect.void,
+					alarm: () => Effect.void,
+				}),
+			),
+		),
+	);
+	cleanups.push(() => runtime.dispose());
+	await runtime.runPromise(
+		KeyRuntime.activate("desktop-preview", "1,1", "down"),
+	);
+	await runtime.runPromise(
+		KeyRuntime.activate("desktop-preview", "1,1", "down"),
+	);
+	expect(edges).toEqual(["down"]);
+	await runtime.runPromise(KeyRuntime.activate("desktop-preview", "1,1", "up"));
+	expect(edges).toEqual(["down", "up"]);
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.supportKnob).toBe(
+		false,
+	);
 });

@@ -87,7 +87,6 @@ function libraryKey(
 			icon,
 			...(type === "hotkeySwitch" ? { alterIcon: icon } : {}),
 			size: effectiveSpan(type, [1, 1]),
-			supportKnob: registered?.supportKnob ?? false,
 			supportTouchEffect: registered?.supportTouchEffect ?? false,
 			compatibility: {
 				defaultIcon: icon,
