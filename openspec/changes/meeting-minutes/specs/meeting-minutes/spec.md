@@ -276,7 +276,7 @@ Evidence: AI-111, AI-282, KNOB-056. Windows system capture SHALL use the trusted
 
 #### Scenario: Optional source unavailable
 - **WHEN** Windows loopback has no audio or macOS/Linux has no named source or permission
-- **THEN** all acquired tracks close, no recorder starts, and the user can deliberately retry microphone-only or cancel
+- **THEN** all acquired tracks close, no recorder starts, and the user can deliberately retry microphone-only or cancel; an accepted retry persists systemAudio=false on the recording while retaining the configured preference for future meetings
 
 ### Requirement: User-directed macOS capture setup
 

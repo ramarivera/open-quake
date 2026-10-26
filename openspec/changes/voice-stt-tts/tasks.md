@@ -124,3 +124,5 @@ acceptance is claimed.
 - [x] Resolve saved microphones against capture-local identities, excluding foreign document group IDs and retaining exact or unambiguous label selection. Regression drives the production Electron worker bridge with distinct settings/worker salts. Tracked in open-quake-c5w.17; physical acceptance remains on the checklist above.
 
 - [x] Stop recording duration at capture-stream release, including automatic 60-second capture, delayed final results and provider timeout. Two TestClock regressions drive the production STT consumer; startup timing still includes final processing. Tracked in open-quake-c5w.17.
+
+- [x] Propagate the effective microphone-only retry configuration into meeting history without changing the configured system-audio preference. Port and MeetingService persistence regressions fail before the fix. Tracked in open-quake-c5w.17; meeting-minutes owns the source-fallback scenario.

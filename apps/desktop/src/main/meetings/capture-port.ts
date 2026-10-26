@@ -347,6 +347,7 @@ export function createCapturePort(options: {
 						}),
 					),
 				);
+				return lastConfig;
 			}),
 		drain: (id) =>
 			Effect.gen(function* () {

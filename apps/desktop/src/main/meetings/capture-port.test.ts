@@ -264,6 +264,10 @@ for (const choice of [0, 1]) {
 			);
 			expect(result._tag).toBe(choice === 0 ? "Right" : "Left");
 			if (choice === 0) {
+				expect(result).toMatchObject({
+					_tag: "Right",
+					right: { ...defaultMeetingConfig, systemAudio: false },
+				});
 				const messages = native.Window.windows
 					.at(-1)
 					?.webContents.send.mock.calls.map((call) => call[1]);
