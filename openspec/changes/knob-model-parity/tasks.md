@@ -90,5 +90,5 @@ The first probe attempted Rotate IPC, correctly denied by the existing renderer 
 ## 9. PR #106 single review fix round
 
 - [x] 9.1 Keep the committed active profile in picker entries with a missing-thumbnail placeholder; prove catalog edits never persist a different profile. Finding 4379652095, bead open-quake-lih.4.3.1. Two domain regressions fail before the fix.
-- [ ] 9.2 Route production registration catalog refreshes through reconciliation and verify add/edit/reorder/delete with the real registration. Finding 4379654632, same bead.
+- [x] 9.2 Route production registration catalog refreshes through reconciliation and verify add/edit/reorder/delete with the real registration. Finding 4379654632, same bead. Twelve failing-before registration cases cover the four catalog mutations while picker, focus or volume is active, preserving unchanged thumbnails and invalidating renamed content.
 - [ ] 9.3 Run full lane gates and hidden mock smoke, reconcile unanswered review threads once, push and reply to each finding without resolving threads. No hardware acceptance.

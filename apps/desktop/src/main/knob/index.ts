@@ -60,7 +60,6 @@ export function registerKnobRuntime(
 	let disposed = false;
 	let connected = true;
 	let observer: Fiber.RuntimeFiber<never> | undefined;
-	let version = "";
 	let pending = Promise.resolve();
 	const lifetime = new AbortController();
 	const run = <A, E>(effect: Effect.Effect<A, E, KnobModel>): Promise<A> =>
@@ -69,7 +68,6 @@ export function registerKnobRuntime(
 		initialized ??= run(load.pipe(Effect.flatMap(KnobModel.configure)))
 			.then(() => {
 				if (!disposed) {
-					version = observation?.contextVersion?.() ?? "";
 					if (observation)
 						observer = runtime.runFork(
 							observeVolume(
@@ -194,24 +192,8 @@ export function registerKnobRuntime(
 			if (disposed) return;
 			await initialize();
 			if (disposed) return;
-			await run(
-				load.pipe(
-					Effect.flatMap((context) => {
-						const nextVersion = observation?.contextVersion?.() ?? "";
-						return (
-							nextVersion !== version
-								? KnobModel.configure(context, true)
-								: KnobModel.synchronize(context)
-						).pipe(
-							Effect.tap(() =>
-								Effect.sync(() => {
-									version = nextVersion;
-								}),
-							),
-						);
-					}),
-				),
-			);
+			// Reconciliation owns catalog invalidation and active-content replacement.
+			await run(load.pipe(Effect.flatMap(KnobModel.synchronize)));
 		},
 		async dispose(): Promise<void> {
 			disposed = true;
