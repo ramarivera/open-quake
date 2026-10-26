@@ -1158,53 +1158,58 @@ describe("desktop main with the real device service and fake HID", () => {
 		}
 	});
 
+	async function startTwoStrips() {
+		const two = await Effect.runPromise(makeTwoStrips);
+		native.layer = two.layer;
+		const primary = makeDisplay();
+		const a = makeDisplay({
+			id: 2,
+			label: "DK-QUAKE",
+			size: { width: 1920, height: 480 },
+		});
+		const b = makeDisplay({
+			...a,
+			id: 3,
+			bounds: { x: 1920, y: 0, width: 1920, height: 480 },
+		});
+		electron.screen.getAllDisplays.mockReturnValue([primary, a]);
+		await import("./index");
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows
+					.filter((w) => w.options.title === "open-quake panel")
+					.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(a.bounds),
+		);
+		await vi.waitFor(() =>
+			expect(windows().management.webContents.send).toHaveBeenCalledWith(
+				"quake:diagnostic",
+				expect.objectContaining({ hdmi: "pass", checking: false }),
+			),
+		);
+		const first = electron.BrowserWindow.windows
+			.filter((w) => w.options.title === "open-quake panel")
+			.at(-1);
+		two.devices.push(two.b);
+		electron.screen.getAllDisplays.mockReturnValue([primary, a, b]);
+		await vi.advanceTimersByTimeAsync(1000);
+		await vi.waitFor(() =>
+			expect(
+				electron.BrowserWindow.windows
+					.filter((w) => w.options.title === "open-quake panel")
+					.at(-1)?.setBounds,
+			).toHaveBeenLastCalledWith(b.bounds),
+		);
+		const second = electron.BrowserWindow.windows
+			.filter((w) => w.options.title === "open-quake panel")
+			.at(-1);
+		if (!first || !second) throw new Error("Two panels required");
+		return { two, primary, a, b, first, second };
+	}
 	it("routes secondary touch and knob input to its own panel and input consumers", async () => {
 		vi.useFakeTimers();
 		try {
-			const two = await Effect.runPromise(makeTwoStrips);
-			native.layer = two.layer;
-			const primary = makeDisplay();
-			const a = makeDisplay({
-				id: 2,
-				label: "DK-QUAKE",
-				size: { width: 1920, height: 480 },
-			});
-			const b = makeDisplay({
-				...a,
-				id: 3,
-				bounds: { x: 1920, y: 0, width: 1920, height: 480 },
-			});
-			electron.screen.getAllDisplays.mockReturnValue([primary, a]);
-			await import("./index");
-			await vi.waitFor(() =>
-				expect(
-					electron.BrowserWindow.windows
-						.filter((w) => w.options.title === "open-quake panel")
-						.at(-1)?.setBounds,
-				).toHaveBeenLastCalledWith(a.bounds),
-			);
-			await vi.waitFor(() =>
-				expect(windows().management.webContents.send).toHaveBeenCalledWith(
-					"quake:diagnostic",
-					expect.objectContaining({ hdmi: "pass", checking: false }),
-				),
-			);
-			const first = electron.BrowserWindow.windows
-				.filter((w) => w.options.title === "open-quake panel")
-				.at(-1);
-			two.devices.push(two.b);
-			electron.screen.getAllDisplays.mockReturnValue([primary, a, b]);
-			await vi.advanceTimersByTimeAsync(1000);
-			await vi.waitFor(() =>
-				expect(
-					electron.BrowserWindow.windows
-						.filter((w) => w.options.title === "open-quake panel")
-						.at(-1)?.setBounds,
-				).toHaveBeenLastCalledWith(b.bounds),
-			);
-			const second = electron.BrowserWindow.windows
-				.filter((w) => w.options.title === "open-quake panel")
-				.at(-1);
+			const { two, first, second } = await startTwoStrips();
 			expect(second).not.toBe(first);
 			const knob = vi.mocked(registerKnob).mock.results.at(-1)?.value;
 			first?.webContents.send.mockClear();
@@ -1242,6 +1247,58 @@ describe("desktop main with the real device service and fake HID", () => {
 				}),
 			);
 			expect(vi.mocked(registerKnob).mock.calls.at(-1)?.[0]()).toBe(second);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
+	it("enrolls each strip and uses the selected serial hardware with scoped cleanup", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two } = await startTwoStrips();
+			const profiles = vi.mocked(registerProfiles).mock.results.at(-1)?.value;
+			await vi.waitFor(() =>
+				expect(profiles?.connect).toHaveBeenCalledWith("B"),
+			);
+			expect(profiles?.connect).toHaveBeenCalledWith("A");
+			const bindings = vi.mocked(registerKnob).mock.calls.at(-1)?.[2];
+			await Effect.runPromise(two.second.emit(report(3, 1, [1])));
+			await vi.waitFor(() => expect(bindings?.deviceId?.()).toBe("B"));
+			const second = bindings?.hardware?.();
+			if (!second) throw new Error("Secondary hardware must be attached");
+			expect(await Effect.runPromise(second.snapshot())).toMatchObject({
+				serial: "B",
+			});
+			await Effect.runPromise(two.first.emit(report(3, 1, [1])));
+			await vi.waitFor(() => expect(bindings?.deviceId?.()).toBe("A"));
+			const first = bindings?.hardware?.();
+			if (!first) throw new Error("Primary hardware must remain attached");
+			expect(await Effect.runPromise(first.snapshot())).toMatchObject({
+				serial: "A",
+			});
+			const lockA = vi.spyOn(first, "setLocked");
+			const lockB = vi.spyOn(second, "setLocked");
+			for (const [event, listener] of electron.powerMonitor.on.mock.calls) {
+				if (event === "lock-screen") listener();
+			}
+			await vi.waitFor(() => {
+				expect(lockA).toHaveBeenCalledWith(true);
+				expect(lockB).toHaveBeenCalledWith(true);
+			});
+
+			two.devices.splice(1, 1);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.waitFor(() =>
+				expect(profiles?.disconnect).toHaveBeenCalledWith("B"),
+			);
+			expect(profiles?.disconnect).not.toHaveBeenCalledWith("A");
+			expect(await Effect.runPromise(two.second.closes)).toBe(1);
+			expect(bindings?.hardware?.()).toBe(first);
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			expect(profiles?.disconnect).toHaveBeenCalledWith("A");
 		} finally {
 			appEvent("before-quit");
 			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());

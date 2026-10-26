@@ -292,7 +292,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 								continue;
 							const childScope = yield* Scope.make();
 							const child = yield* Scope.extend(
-								startDeviceBus(undefined, { path: info.path }),
+								startDeviceBus(attachHardware, { path: info.path }),
 								childScope,
 							);
 							secondary.set(serial, { bus: child, scope: childScope });

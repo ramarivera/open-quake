@@ -202,7 +202,21 @@ if (!app.requestSingleInstanceLock()) {
 						);
 						let bus: DeviceBus | undefined;
 						let activeSerial: string | undefined;
+						const connectedSerials = new Set<string>();
 						const activeDeviceId = () => activeSerial ?? "desktop-preview";
+						const currentHardware = () =>
+							bus?.device
+								? bus.device(activeDeviceId())?.hardware?.()
+								: bus?.hardware?.();
+						const hardwareSessions = () =>
+							bus?.device
+								? [...connectedSerials].flatMap((serial) => {
+										const session = bus?.device?.(serial)?.hardware?.();
+										return session ? [session] : [];
+									})
+								: currentHardware()
+									? [currentHardware()].filter((s) => s !== undefined)
+									: [];
 						let knobLocale: LocaleSnapshot["locale"] = "en";
 						let resetVoice = (): Promise<void> => Promise.resolve();
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
@@ -259,7 +273,7 @@ if (!app.requestSingleInstanceLock()) {
 								}),
 								owners: createWizardOwners({
 									deviceId: async () => {
-										const hardware = bus?.hardware?.();
+										const hardware = currentHardware();
 										return hardware
 											? background.runPromise(
 													hardware
@@ -325,8 +339,10 @@ if (!app.requestSingleInstanceLock()) {
 							speech,
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 							tones: toneSinks(createToneRecorder(), {
-								play: (_serial, tone) => {
-									const hardware = bus?.hardware?.();
+								play: (serial, tone) => {
+									const hardware = bus?.device
+										? bus.device(serial)?.hardware?.()
+										: currentHardware();
 									if (hardware)
 										runtime.runFork(
 											hardware.playTone(tone).pipe(
@@ -350,7 +366,7 @@ if (!app.requestSingleInstanceLock()) {
 							rendererURL,
 							undefined,
 							managementURL.href,
-							() => bus?.hardware?.(),
+							currentHardware,
 							() => panelWin,
 							async (key, signal, activation) =>
 								(await obsKeyAction((command, signal) =>
@@ -421,7 +437,7 @@ if (!app.requestSingleInstanceLock()) {
 								thumbnail: (...args) => profiles.thumbnail(...args),
 								obs: (key, delta, signal, beforeWrite) =>
 									obs.turn(key, delta, signal, beforeWrite),
-								hardware: () => bus?.hardware?.(),
+								hardware: currentHardware,
 								voice: (...args) => voice.knobVoice(...args),
 							},
 							diagnostics,
@@ -473,7 +489,7 @@ if (!app.requestSingleInstanceLock()) {
 						const meetingsModule = prepareMeetings({
 							diagnostics,
 							userData: app.getPath("userData"),
-							hardware: () => bus?.hardware?.(),
+							hardware: currentHardware,
 							mock,
 							serial: activeDeviceId,
 							publishVoice: (event) => publishVoice(event),
@@ -617,7 +633,7 @@ if (!app.requestSingleInstanceLock()) {
 							root: app.getPath("userData"),
 							mock,
 							renderer: rendererURL,
-							hardware: () => bus?.hardware?.(),
+							hardware: currentHardware,
 							management: () => managementWin,
 							stopWriters: async () => {
 								const failures: unknown[] = [];
@@ -817,7 +833,8 @@ if (!app.requestSingleInstanceLock()) {
 											if (serial)
 												yield* Effect.acquireRelease(
 													Effect.sync(() => {
-														activeSerial = serial;
+														connectedSerials.add(serial);
+														activeSerial ??= serial;
 													}),
 													() =>
 														Effect.promise(() =>
@@ -830,6 +847,7 @@ if (!app.requestSingleInstanceLock()) {
 														).pipe(
 															Effect.ensuring(
 																Effect.sync(() => {
+																	connectedSerials.delete(serial);
 																	if (activeSerial === serial)
 																		activeSerial = undefined;
 																}),
@@ -864,11 +882,12 @@ if (!app.requestSingleInstanceLock()) {
 									);
 								});
 						const disposeHardware = registerHardware(
-							() => bus?.hardware?.(),
+							currentHardware,
 							() => managementWin,
 							mock,
 							rendererURL,
 							diagnostics,
+							hardwareSessions,
 						);
 						let running:
 							| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
@@ -902,8 +921,8 @@ if (!app.requestSingleInstanceLock()) {
 						powerMonitor.on("lock-screen", onLock);
 						powerMonitor.on("unlock-screen", onWake);
 						const onResume = (): void => {
-							const session = bus?.hardware?.();
-							if (session && !screenLocked)
+							const sessions = screenLocked ? [] : hardwareSessions();
+							for (const session of sessions)
 								void runtime.runPromise(
 									session
 										.setLocked(false)
