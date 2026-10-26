@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
+import { App } from "../App";
 import { button, click, element, mount } from "../management/dom-test";
 import { InstallationGuide } from "./InstallationGuide";
 
@@ -44,4 +45,24 @@ it("SETTINGS-068/069 opens offline illustrated steps, changes only guide languag
 	await click(button("Installation Guide"));
 	expect(document.body.textContent).toContain("1 / 3");
 	expect(document.body.textContent).toContain("left USB-C input port");
+});
+
+it("SETTINGS-070 opens and reopens installation help from the device entrance without settings services", async () => {
+	window.history.replaceState(null, "", "/?page=overview");
+	await mount(createElement(App));
+	for (let attempt = 0; attempt < 2; attempt++) {
+		await click(button("Installation Guide", element(".setup-entrance-guide")));
+		expect(element("dialog[open]").textContent).toContain(
+			"Connect Quake's Included Cables",
+		);
+		await act(async () =>
+			element("dialog").dispatchEvent(
+				new Event("cancel", { cancelable: true }),
+			),
+		);
+		expect(document.querySelector("dialog")).toBeNull();
+		expect(element(".content-inner").getAttribute("data-page")).toBe(
+			"overview",
+		);
+	}
 });

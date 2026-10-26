@@ -74,6 +74,11 @@ it("SETTINGS-015 requests only a denied user-selected permission, refreshes stat
 	);
 	expect(request).toHaveBeenCalledOnce();
 	expect(open).toHaveBeenCalledExactlyOnceWith("accessibility");
+	await Effect.runPromise(
+		permissionAction("microphone", { checks, request, open }),
+	);
+	expect(request).toHaveBeenCalledOnce();
+	expect(open).toHaveBeenLastCalledWith("microphone");
 });
 it("SETTINGS-015 retains denied/unknown probes and typed scrubbed errors after a rejected request", async () => {
 	const { Effect } = await import("effect");

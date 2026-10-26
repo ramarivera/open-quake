@@ -127,7 +127,8 @@ export const permissionAction = (
 				(row) => row.key === key,
 			)?.status;
 			// A fresh microphone grant needs no second System Settings handoff.
-			if (key !== "microphone" || after !== "granted") await edges.open(key);
+			if (key !== "microphone" || before === "granted" || after !== "granted")
+				await edges.open(key);
 		},
 		catch: (cause) => new PermissionProbeFailed(cause),
 	});

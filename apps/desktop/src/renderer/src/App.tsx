@@ -43,6 +43,7 @@ import { useAppTranslations } from "./i18n";
 import { ProfilesManager, ProfileThumbnail } from "./profiles/ProfileViews";
 import { settingsBridge } from "./settings/bridge";
 import { GeneralSettings } from "./settings/GeneralSettings";
+import { InstallationGuide } from "./settings/InstallationGuide";
 import { SetupResumeEntry, SetupWizard } from "./settings/SetupWizard";
 import { createSetupLaunch } from "./settings/setup-launch";
 import { useRuntimeChoice } from "./settings/setup-owners";
@@ -228,13 +229,18 @@ function ManagementSurface({
 					<ConnectionCheck onReady={onReady} />
 				</div>
 				{page === "overview" ? (
-					<OverviewPage
-						quake={quake}
-						connection={connection}
-						snapshot={wallpaper.snapshot}
-						onOpenScreen={() => open("screen")}
-						onOpenConnection={() => open("connection")}
-					/>
+					<>
+						<OverviewPage
+							quake={quake}
+							connection={connection}
+							snapshot={wallpaper.snapshot}
+							onOpenScreen={() => open("screen")}
+							onOpenConnection={() => open("connection")}
+						/>
+						<div className="button-row setup-entrance-guide">
+							<InstallationGuide />
+						</div>
+					</>
 				) : page === "keys" ? (
 					<KeyEditor />
 				) : page === "profiles" ? (

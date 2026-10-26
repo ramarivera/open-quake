@@ -57,6 +57,10 @@ export function DiagnosticView({
 	const checking = !status || status.checking;
 	const ready =
 		status?.usb === "pass" && status.hdmi === "pass" && status.issue === "none";
+	const supportAvailable =
+		typeof window !== "undefined" &&
+		!!window.quakeManagement &&
+		"command" in window.quakeManagement;
 	return (
 		<section className="connection-check" aria-labelledby="connection-title">
 			<header>
@@ -164,16 +168,10 @@ export function DiagnosticView({
 					href="https://github.com/ramarivera/open-quake/issues"
 					target="_blank"
 					rel="noreferrer"
-					aria-disabled={
-						!window.quakeManagement || !("command" in window.quakeManagement)
-					}
+					aria-disabled={!supportAvailable}
 					onClick={(event) => {
 						// The shell lane owns gesture-authenticated external navigation.
-						if (
-							!window.quakeManagement ||
-							!("command" in window.quakeManagement)
-						)
-							event.preventDefault();
+						if (!supportAvailable) event.preventDefault();
 					}}
 				>
 					Contact Support
