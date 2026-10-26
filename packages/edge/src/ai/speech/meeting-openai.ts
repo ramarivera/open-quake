@@ -1,6 +1,7 @@
 import { Deferred, Effect, Fiber, Schema, Stream } from "effect";
 import { Segment } from "../../meetings/meeting-contracts.js";
 import { isMeetingError, meetingError } from "../../meetings/meeting-errors.js";
+import { asrTimeout } from "../../meetings/meeting-invariants.js";
 import { AiProtocolInvalid } from "../ai-errors.js";
 import type { MeetingAsrRequest } from "../meeting-adapter.js";
 import type {
@@ -213,7 +214,19 @@ export const openaiMeeting = (
 										),
 									);
 									sentMs += bytes.length / 48;
-									yield* Effect.sleep(100);
+									// Keep at least 20% of the overall deadline for server processing,
+									// plus setup/final flush. Short files retain the normal 100ms pacing.
+									yield* Effect.sleep(
+										Math.min(
+											100,
+											(bytes.length / 48 / request.durationMs) *
+												Math.max(
+													0,
+													asrTimeout("openai", request.durationMs) - 30000,
+												) *
+												0.8,
+										),
+									);
 								}),
 							);
 							if (!sentMs) return yield* meetingError("NoValidSpeech");

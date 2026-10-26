@@ -974,3 +974,80 @@ it.scoped(
 			expect(f.released()).toBe(2);
 		}),
 );
+
+it.scoped(
+	"budgets four-hour file pacing within the production transcription deadline",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const queue = yield* Queue.unbounded<unknown>();
+			let frames = 0;
+			const durationMs = 4 * 3600000;
+			const frameCount = 24;
+			let firstAppend = 0;
+			let eofAt = 0;
+			const socket: typeof SpeechWebSocket.Service = {
+				connect: () =>
+					Effect.succeed({
+						send: (raw) =>
+							Effect.gen(function* () {
+								const event = object(JSON.parse(String(raw)));
+								if (event.type === "input_audio_buffer.append") {
+									if (!frames) firstAppend = yield* Clock.currentTimeMillis;
+									frames++;
+								}
+								if (event.type === "session.update")
+									yield* Queue.offer(queue, { type: "session.updated" });
+								if (event.type === "input_audio_buffer.commit") {
+									eofAt = yield* Clock.currentTimeMillis;
+								}
+								if (event.type === "input_audio_buffer.commit")
+									yield* Queue.offerAll(queue, [
+										{ type: "input_audio_buffer.committed", item_id: "file" },
+										{
+											type: "conversation.item.input_audio_transcription.completed",
+											item_id: "file",
+											transcript: "complete four hour file",
+										},
+									]);
+							}),
+						receive: Queue.take(queue),
+						close: Effect.void,
+					}),
+			};
+			const frame = new Uint8Array(30720);
+			const resources: MeetingResources = {
+				...f.resources,
+				pcm: () =>
+					Effect.succeed({
+						frames: Stream.range(1, frameCount).pipe(Stream.map(() => frame)),
+						release: Effect.void,
+					}),
+			};
+			const adapter = yield* makeLiveMeetingAdapter({
+				...f,
+				resources,
+				socket,
+			});
+			const config = {
+				...f.request.config,
+				asrProvider: "openai" as const,
+				asrModel: "gpt-realtime-mini",
+			};
+			const job = yield* transcribeMeeting(
+				Option.some(adapter),
+				config,
+				"meeting",
+				durationMs,
+			).pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(4000);
+			const result = yield* Fiber.join(job);
+			expect(Either.isRight(result)).toBe(true);
+			expect(frames).toBe(frameCount);
+			const projectedUploadMs =
+				((eofAt - firstAppend) / frames) * (durationMs / 640);
+			expect(projectedUploadMs).toBeGreaterThan(0);
+			expect(projectedUploadMs + 30000).toBeLessThan(1800000);
+		}),
+	{ timeout: 30000 },
+);
