@@ -14,45 +14,67 @@ const missing = (cause: unknown): boolean =>
 	cause instanceof Error && "code" in cause && cause.code === "ENOENT";
 
 /** Caller serializes this sweep with publication. Never follow links or remove unknown entries. */
-export async function pruneProfileThumbnails(
-	directory: string,
-	profiles: readonly Profile[],
-): Promise<void> {
-	try {
-		const directoryInfo = await lstat(directory);
-		if (directoryInfo.isSymbolicLink()) return;
-		const entries = await opendir(directory);
-		let keep: Set<string> | undefined;
-		// Iterate instead of loading an arbitrarily large orphan directory into memory.
-		for await (const entry of entries) {
-			if (!entry.isFile()) continue;
-			const pending = pendingName.test(entry.name);
-			if (!pending) {
-				if (!pngName.test(entry.name)) continue;
-				keep ??= new Set(
-					profiles.flatMap((profile) =>
-						ProfileLocale.literals.map(
-							(locale) =>
-								`${profileThumbnailKey(translateProfile(profile, locale), locale)}.png`,
-						),
-					),
-				);
-				if (keep.has(entry.name)) continue;
-			}
-			const path = join(directory, entry.name);
-			try {
-				const info = await lstat(path);
-				if (
-					!info.isFile() ||
-					(pending && Date.now() - info.mtimeMs < pendingGraceMs)
-				)
-					continue;
-				await unlink(path);
-			} catch (cause) {
-				if (!missing(cause)) throw cause;
-			}
+export function createProfileThumbnailPruner(directory: string) {
+	let cache = new Map<
+		string,
+		{ readonly content: string; readonly names: readonly string[] }
+	>();
+	const keepNames = (profiles: readonly Profile[]): Set<string> => {
+		const next = new Map<
+			string,
+			{ readonly content: string; readonly names: readonly string[] }
+		>();
+		const keep = new Set<string>();
+		for (const profile of profiles) {
+			const content = JSON.stringify(profile);
+			const previous = cache.get(profile.id);
+			const entry =
+				previous?.content === content
+					? previous
+					: {
+							content,
+							names: ProfileLocale.literals.map(
+								(locale) =>
+									`${profileThumbnailKey(translateProfile(profile, locale), locale)}.png`,
+							),
+						};
+			next.set(profile.id, entry);
+			for (const name of entry.names) keep.add(name);
 		}
-	} catch (cause) {
-		if (!missing(cause)) throw ProfileThumbnailFailed.fromCause(cause);
-	}
+		// Retain only the current catalog, not every revision seen during this session.
+		cache = next;
+		return keep;
+	};
+	return async (profiles: readonly Profile[]): Promise<void> => {
+		try {
+			const directoryInfo = await lstat(directory);
+			if (directoryInfo.isSymbolicLink()) return;
+			const entries = await opendir(directory);
+			let keep: Set<string> | undefined;
+			// Iterate instead of loading an arbitrarily large orphan directory into memory.
+			for await (const entry of entries) {
+				if (!entry.isFile()) continue;
+				const pending = pendingName.test(entry.name);
+				if (!pending) {
+					if (!pngName.test(entry.name)) continue;
+					keep ??= keepNames(profiles);
+					if (keep.has(entry.name)) continue;
+				}
+				const path = join(directory, entry.name);
+				try {
+					const info = await lstat(path);
+					if (
+						!info.isFile() ||
+						(pending && Date.now() - info.mtimeMs < pendingGraceMs)
+					)
+						continue;
+					await unlink(path);
+				} catch (cause) {
+					if (!missing(cause)) throw cause;
+				}
+			}
+		} catch (cause) {
+			if (!missing(cause)) throw ProfileThumbnailFailed.fromCause(cause);
+		}
+	};
 }

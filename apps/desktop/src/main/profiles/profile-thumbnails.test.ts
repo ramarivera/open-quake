@@ -18,7 +18,10 @@ import {
 	builtinProfiles,
 	translateProfile,
 } from "../../../../../packages/device/src/profiles/profile-catalog.js";
-import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import {
+	Profile,
+	ProfileEnvelope,
+} from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { profileThumbnailKey } from "./profile-thumbnail-key";
@@ -209,6 +212,37 @@ describe("canonical profile thumbnail storage", () => {
 		await writeFile(join(cache, "notes.txt"), "keep");
 		await store.prune(profiles);
 		expect(profileThumbnailKey).not.toHaveBeenCalled();
+	});
+
+	it("reuses unchanged locale keys across snapshots without trusting revision or object identity", async () => {
+		const root = await directory();
+		const store = createProfileThumbnailStore(root);
+		const current = builtinProfiles("darwin")[0];
+		if (!current) throw new Error("Missing built-in fixture");
+		const retained = translateProfile(current, "de");
+		await store.write(retained, "de", png);
+		await store.prune([current]);
+		vi.mocked(profileThumbnailKey).mockClear();
+		const orphan = `${"d".repeat(64)}.png`;
+		await writeFile(join(root, "thumbnails", orphan), png);
+		// Repository snapshots detach trees even when only selection changed.
+		await store.prune([
+			Schema.decodeUnknownSync(Schema.typeSchema(Profile))(current),
+		]);
+		expect(profileThumbnailKey).not.toHaveBeenCalled();
+		expect(await readdir(join(root, "thumbnails"))).not.toContain(orphan);
+		expect(Option.isSome(await store.read(retained, "de"))).toBe(true);
+		// A content edit with the same id/revision must invalidate cached names.
+		await store.prune([
+			{
+				...current,
+				compatibility: Option.some({
+					...Option.getOrElse(current.compatibility, () => ({})),
+					cacheTest: "changed",
+				}),
+			},
+		]);
+		expect(Option.isNone(await store.read(retained, "de"))).toBe(true);
 	});
 
 	it("prunes obsolete owned files while preserving every live locale and unrelated entries", async () => {
