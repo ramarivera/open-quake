@@ -604,3 +604,39 @@ it.effect("scope disposal retries a failed held-key release", () =>
 		expect(releases).toBe(2);
 	}),
 );
+
+it.effect(
+	"a failed synchronous contact press does not consume the next tap",
+	() => {
+		let attempts = 0;
+		const failure = new HostActionFailed("transient-open-failure");
+		const f = fixture(
+			{
+				type: "website",
+				actions: [{ type: "url", value: "https://example.com" }],
+			},
+			false,
+			0,
+			{
+				execute: () =>
+					Effect.suspend(() =>
+						++attempts === 1 ? Effect.fail(failure) : Effect.void,
+					),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			const first = yield* Effect.either(
+				runtime.activate("device", "1,1", "up"),
+			);
+			expect(first._tag).toBe("Left");
+			if (first._tag === "Left")
+				expect(first.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+			expect(attempts).toBe(1);
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(attempts).toBe(2);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

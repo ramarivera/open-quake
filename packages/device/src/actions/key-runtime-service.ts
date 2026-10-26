@@ -237,11 +237,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						)
 					)
 						return;
-					const work = yield* activate(
-						deviceId,
-						keyCode,
-						"press",
-						contact.activation,
+					const pressed = yield* Effect.either(
+						activate(deviceId, keyCode, "press", contact.activation),
 					);
 					const releaseWork = yield* activate(
 						deviceId,
@@ -249,7 +246,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 						"release",
 						contact.activation,
 					);
-					return releaseWork ?? work;
+					if (Either.isLeft(pressed)) return yield* Effect.fail(pressed.left);
+					return releaseWork ?? pressed.right;
 				}
 				if (kind === "down" && contacts.has(control)) return;
 				if (kind === "release") {
