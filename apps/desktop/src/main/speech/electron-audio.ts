@@ -101,7 +101,7 @@ export async function openAudioWorker(
 				if (
 					closed ||
 					!window ||
-					!/^(capture|pull|ready|play|stop)$/.test(method)
+					!/^(capture|pull|ready|play|stop|state|resume)$/.test(method)
 				)
 					return Promise.reject(new AiUnavailable());
 				return window.webContents.executeJavaScript(

@@ -151,3 +151,22 @@ Representative files are `parity-meter-speaking.png`, `parity-pill-idle.png`,
 `media/`. No real microphone, audible playback, HID, QUAKE or DK-Suite was used.
 Live provider qualification, physical acceptance 6.3 / `open-quake-lih.5.1.14`
 and the Auto router `open-quake-lih.15` remain unverified and out of scope.
+
+## 8. PR #83 fix round
+
+- [x] 8.1 Allow only the additional `state` and `resume` worker methods and prove suspended playback recovery through the production bridge. Reviews 4375970560 and 4376016278, AI-156, bead `open-quake-lih.5.1.18`.
+- [ ] 8.2 Render stopped manual recordings as recorded/idle after stage 1 completes. Review 4375970758, AI-267, bead `open-quake-lih.5.1.19`.
+- [ ] 8.3 Count WAV sample payload rather than metadata for the 12 s no-audio deadline. Review 4375970956, AI-156, bead `open-quake-lih.5.1.20`.
+- [ ] 8.4 Include current meeting stage/status in snapshots for late strip mounts. Review 4375971137, AI-267, bead `open-quake-lih.5.1.21`.
+- [ ] 8.5 Stop active read-aloud before validating a newer streaming answer. Review 4376016267, AI-155, bead `open-quake-lih.5.1.22`.
+
+Each fix requires a regression observed failing before implementation, its own
+normal commit/push and an attributed thread reply. Leave threads unresolved
+and the PR unmerged. Run all six lane gates and hidden mock native smokes.
+Evidence is stored under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice-2/fix1c/`.
+
+8.1 regression `resumes suspended playback at 8 s through the production worker bridge`
+failed before the fix with context state `suspended` instead of `running`. It uses
+production `openAudioWorker`, desktop output, serialized worker and watchdog,
+with a synthetic WebAudio implementation. No physical audio device is opened.
