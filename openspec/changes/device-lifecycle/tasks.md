@@ -56,6 +56,6 @@
 - [x] 9.4 Select a surviving strip when the selected panel closes. Bead `open-quake-lih.11.9`. Devin 4377860894.
 - [x] 9.5 Reject recycled display identities on grace reconnect. Bead `open-quake-lih.11.10`. Devin 4377861513.
 - [x] 9.6 Drain connections pending after the pairing loop. Bead `open-quake-lih.11.11`. Devin 4377861167.
-- [ ] 9.7 Allowlist new lifecycle diagnostics spans. Bead `open-quake-lih.11.12`. Copilot 4377915651/4377915718/4377915765/4377915820.
+- [x] 9.7 Allowlist new lifecycle diagnostics spans. Bead `open-quake-lih.11.12`. Copilot 4377915651/4377915718/4377915765/4377915820.
 - [ ] 9.8 Move orientation confirmation copy into settings translations. Bead `open-quake-lih.11.13`. Copilot 4377915877.
 - [ ] 9.9 Run full gates and reconcile all unanswered review threads. Bead `open-quake-lih.11.14`. Devin info 4377861742; final Codex scan; no resolving or merging.

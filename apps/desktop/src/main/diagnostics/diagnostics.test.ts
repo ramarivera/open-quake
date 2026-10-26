@@ -685,8 +685,15 @@ describe("process-owned runtime diagnostics", () => {
 	});
 });
 
-it("retains the firmware shutdown diagnostic span", () => {
-	expect(safeSpanName("FirmwareUpdates.shutdown")).toBe(
-		"FirmwareUpdates.shutdown",
-	);
+it.each([
+	"FirmwareUpdates.shutdown",
+	"ArrangementState.read",
+	"ArrangementState.save",
+	"NativeDisplay.runTool",
+	"NativeDisplay.windowsProbe",
+	"NativeDisplay.windowsExtend",
+	"PanelPower.setCount",
+	"DisplayPrompts.prepareWindows",
+])("retains the allowlisted diagnostic span %s", (name) => {
+	expect(safeSpanName(name)).toBe(name);
 });
