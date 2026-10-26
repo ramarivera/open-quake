@@ -56,5 +56,9 @@ The final native run is `shortcut-draft-MbdoLi`, with `result.json` and captures
   source and are not presented as regression proof.
 
 No live provider inference, hardware, microphone, audible output or focus-taking
-interaction was used for this change. Hosted package/download checks and
-current-head bot review are required before merge.
+interaction was used for this change. PR71 merged as
+`0c9cde385b164e26805f5b0bd815b43d1cae6eac` after Codex and Devin completed
+reviews of head `60b9a85` with no findings, no unresolved review threads
+remained, and validation, all five platform packages and the complete download
+matrix passed. Task 8.1 and `open-quake-lih.17.1.40` are complete; broader
+management parity remains incomplete.

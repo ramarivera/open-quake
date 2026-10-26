@@ -124,6 +124,7 @@ describe("prepared desktop service ownership", () => {
 			await owned.runPromise(Effect.void);
 			expect(() => standalone.start()).toThrow(TypeError);
 			expect(() => standalone.bind(owned)).toThrow(TypeError);
+			expect(() => standalone.standalone()).toThrow(TypeError);
 			await owned.dispose();
 			await owned.dispose();
 			expect(released).toHaveBeenCalledOnce();

@@ -27,10 +27,11 @@ This does not open a capture window, microphone or provider.
 ## Verification, 2026-10-26
 
 - The affected domain and root tests passed, 550 tests across 86 files.
-- Desktop full suite passed before the final two focused additions, 1630 tests
-  and one existing skip. External TMPDIR avoids the host's backup symlink issue.
-- The final focused ownership, diagnostics, settings IPC and meeting shutdown
-  tests passed, 24 tests. Desktop typecheck passed.
+- After merging the saved-model shortcut drafting change, the full desktop
+  suite passed, 1643 tests and one existing skip. External TMPDIR avoids the
+  host's backup symlink issue.
+- The final focused ownership, diagnostics, settings IPC, meeting shutdown and
+  shortcut deadline tests passed, 34 tests. Desktop typecheck passed.
 - Production build and bundle smoke passed. The bundle exercised default HID
   absence, development mock selection and awaited quit without hardware I/O.
 - The unmodified direct-chat native smoke passed against the actual root,
@@ -39,6 +40,18 @@ This does not open a capture window, microphone or provider.
   showed the newest reply, completion metadata and composer in view.
 - Native smoke windows were opacity zero, non-focusable and click-through;
   show and focus methods were disabled before the root created consumers.
+- The actual-root shortcut smoke passed after the drafting merge. It checked
+  saved-model drafting, cancellation of an active stream during quit and
+  byte-identical saved profiles. It logged one transient missing
+  `maintenance:request` handler at startup. Root registration currently follows
+  renderer creation; task 2.9 retains fixing and verifying activation ordering.
+- The native media smoke passed image decoding, panel mutation permissions,
+  preload/IPC, image fill modes, clock synchronization, reduced motion, touch,
+  profile grids and awaited runtime disposal. Its exact Paper background
+  expectation changed from the old `#f6f4f0` to the merged canonical `#f5f4f1`
+  token. No renderer styles changed. This media-only fixture does not register
+  settings or agent handlers and logs their absence; it is not console-clean.
+- Scoped Biome, strict OpenSpec validation and diff whitespace checks passed.
 
 The new tests drive both prepared consumers through the same acquired service,
 check incrementing shared state, stop one without disposing the owner, hold a
@@ -53,12 +66,16 @@ claimed as before/after regression proof against an existing prepared interface.
 
 Scratch evidence is under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/service-graph/`.
-The native run is `direct-smoke/direct-chat-O805XE`.
+The native runs are `direct-smoke/direct-chat-O805XE`,
+`shortcut-smoke/shortcut-draft-pEc9F2` and `media-shots`. The merged suite,
+final focused tests and media results are in `desktop-merged.log`,
+`merge-focused-final.log` and `media-native-3.log` respectively.
 
 ## Remaining acceptance
 
 Merge all root layers, supply prepared execution views, include the HTTP registry
-and knob, remove the other production main-process runtimes, and run actual-root
-active-work shutdown plus media/bundle acceptance. Preload and isolated test
+and knob, remove the other production main-process runtimes, and repeat
+actual-root active-work shutdown plus media/bundle acceptance on that graph.
+Preload and isolated test
 runtimes are separate process or fixture owners. Hardware, microphone and live
 provider behavior are not established by this change.

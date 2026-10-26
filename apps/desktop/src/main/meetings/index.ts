@@ -149,10 +149,10 @@ export function prepareMeetings(options: {
 						acquired.dispose();
 					},
 				};
-				return capture.port;
+				return capture;
 			}),
-			() => Effect.sync(() => capture.dispose()),
-		),
+			(acquired) => Effect.sync(acquired.dispose),
+		).pipe(Effect.map((acquired) => acquired.port)),
 	);
 	const supplied =
 		options.adapter ?? (options.mock ? mockMeetingAdapter : undefined);
