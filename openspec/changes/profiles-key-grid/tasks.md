@@ -34,6 +34,16 @@ Completed checkboxes record implemented and verified work. The parent maintains 
 
 - [ ] 5.1 Run the profile/key/knob/display integration scenarios and repository gates; verify source plus test/evidence paths are attached to each completed issue, openspec validate --all passes, and pending hardware or product decisions remain open.
 
+## 6. PR81 review fixes
+
+- [x] 6.1 Reuse dispatch function validation during import inspection to diagnose and quarantine identifier/visual mismatches; regress the exact hotkey childrenName mismatch. Correct the localized title-style disclosure, selected Function label and readable move/swap destinations. Verify EN/DE rendered labels, six repository gates and hidden mock Keys/media smokes. Bead `open-quake-jy0.17`; MGMT-061/070/073/074/258/261.
+
+PR81 fix-round evidence lives in `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/key-grid-editor/fix1/`. `profile-editor-scenarios.test.ts` adds four import/dispatch regressions, including valid hotkeys with `childrenName: timer` and `childrenName: text`, alternate visuals, and actual dispatch projection. `editor-labels.test.ts` adds two EN/DE rendering regressions. Three import checks and both label tests failed before the fix. `smoke-geometry.ts` verifies all three labels in each locale and diagnosed mismatch quarantine through the mounted editor, retaining its 16 geometry/page/import scenarios. Screenshots are `editor-geometry-en.png` and `editor-geometry-de.png` and were visually inspected.
+
+`git show origin/main:<file>` at `a529b80` confirmed that the malformed title-style disclosure and raw selected Function ID pre-existed on main. Raw move/swap coordinates came from PR81. Function labels reuse the bundled DK-Suite 0.4.95 `hotkey` translations, `Hotkey` and `Tastenkürzel`. Dedicated title-style and destination strings use the same eight-language dictionary.
+
+Delivery gates passed: 2,905 tests with four existing skips, six typecheck tasks, build, both bundle smoke modes, 46 strict OpenSpec items, and Biome across 1,158 files with 14 existing CSS warnings and no errors. Tests ran with scratch `TMPDIR`, Turbo `--env-mode=loose --concurrency=1` and Vitest `--maxWorkers=2`, retaining the default timeout after a concurrent profile-manager timeout. Hidden mock geometry and media fixtures passed, including synthetic touch and five built-in-like profiles. An exploratory full Keys smoke stopped in its unrelated icon-reset fixture before the targeted geometry probe; this round claims the targeted Keys and required media fixtures, not full icon acceptance. All launch artifacts and failure logs remain outside git. No real QUAKE or DK-Suite access.
+
 ## Lane W2 verification evidence
 
 Tasks 1.1–1.5 are implemented in `packages/device/src/profiles/` and

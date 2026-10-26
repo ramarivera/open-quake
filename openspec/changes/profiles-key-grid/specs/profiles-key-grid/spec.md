@@ -196,6 +196,16 @@ The Keys editor SHALL inspect a user-selected JSON profile or legacy flat key ar
 - **THEN** the editor shows each normalization and unsupported status before import
 - **AND** explicit import preserves the raw source and knob record while dispatch excludes the camera key
 
+#### Scenario: Diagnose a registered function rejected by dispatch
+- **WHEN** an imported hotkey has valid actions but a different `childrenName`, or another field rejected by its dispatch function contract
+- **THEN** inspection uses that same contract to report the rejected field and quarantine the key before confirmation
+- **AND** the original JSON remains available for editing while the dispatch projection excludes the key
+
+#### Scenario: Readable localized editor labels
+- **WHEN** the Keys editor shows a hotkey in English or German
+- **THEN** the Function selection uses the DK-Suite locale label, the title-style disclosure has a complete localized label, and move/swap destinations name their row and column
+- **AND** option values retain the original function identifiers and logical coordinates
+
 #### Scenario: Confirm span replacement
 - **WHEN** a span edit covers another visible key
 - **THEN** preview and Save require explicit replacement confirmation and honor the covered key's deletion and drag locks

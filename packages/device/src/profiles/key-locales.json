@@ -1,5 +1,7 @@
 {
 	"en": {
+		"editor.titleStyle": "Title style",
+		"editor.destination": "Row {row} · Column {column}",
 		"aiCopilotChat": "AI Chat",
 		"cancel": "Cancel",
 		"confirm": "Confirm",
@@ -133,6 +135,8 @@
 		"fontSize": "Font Size"
 	},
 	"zh": {
+		"editor.titleStyle": "标题样式",
+		"editor.destination": "第 {row} 行 · 第 {column} 列",
 		"aiCopilotChat": "AI助手",
 		"cancel": "取 消",
 		"confirm": "确 定",
@@ -266,6 +270,8 @@
 		"fontSize": "字号"
 	},
 	"de": {
+		"editor.titleStyle": "Titelstil",
+		"editor.destination": "Zeile {row} · Spalte {column}",
 		"aiCopilotChat": "KI-Chat",
 		"cancel": "Abbrechen",
 		"confirm": "Bestätigen",
@@ -399,6 +405,8 @@
 		"fontSize": "Schriftgröße"
 	},
 	"es": {
+		"editor.titleStyle": "Estilo del título",
+		"editor.destination": "Fila {row} · Columna {column}",
 		"aiCopilotChat": "Chat de IA",
 		"cancel": "Cancelar",
 		"confirm": "Confirmar",
@@ -532,6 +540,8 @@
 		"fontSize": "Tamaño de fuente"
 	},
 	"fr": {
+		"editor.titleStyle": "Style du titre",
+		"editor.destination": "Ligne {row} · Colonne {column}",
 		"aiCopilotChat": "Chat IA",
 		"cancel": "Annuler",
 		"confirm": "Confirmer",
@@ -665,6 +675,8 @@
 		"fontSize": "Taille de police"
 	},
 	"it": {
+		"editor.titleStyle": "Stile del titolo",
+		"editor.destination": "Riga {row} · Colonna {column}",
 		"aiCopilotChat": "Chat IA",
 		"cancel": "Annulla",
 		"confirm": "Conferma",
@@ -798,6 +810,8 @@
 		"fontSize": "Dimensione carattere"
 	},
 	"ja": {
+		"editor.titleStyle": "タイトルのスタイル",
+		"editor.destination": "{row} 行 · {column} 列",
 		"aiCopilotChat": "AIチャット",
 		"cancel": "キャンセル",
 		"confirm": "確認",
@@ -931,6 +945,8 @@
 		"fontSize": "フォントサイズ"
 	},
 	"ko": {
+		"editor.titleStyle": "제목 스타일",
+		"editor.destination": "{row}행 · {column}열",
 		"aiCopilotChat": "AI 채팅",
 		"cancel": "취소",
 		"confirm": "확인",

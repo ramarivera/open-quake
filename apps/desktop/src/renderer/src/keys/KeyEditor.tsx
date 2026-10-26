@@ -619,7 +619,9 @@ export function KeyEditor(): React.JSX.Element {
 								}}
 							>
 								<option value={key.config.type}>
-									{key.config.type || "Select Function"}
+									{key.config.type
+										? keyText(key.config.type, locale)
+										: "Select Function"}
 								</option>
 								{ACTION_REGISTRY.filter((a) => a.id !== key.config.type).map(
 									(a) => (

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Schema, Stream } from "effect";
+import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
 import { editKeyTitle } from "./key-editing-invariants.js";
 import { KeyEditing } from "./key-editing-service.js";
 import {
@@ -9,6 +10,10 @@ import {
 	ProfileKey,
 } from "./profile-contracts.js";
 import { FORCED_TILE_SPANS } from "./profile-footprint.js";
+import {
+	ProfileFunctionContracts,
+	profileFunctionContractsLayer,
+} from "./profile-function-contracts.js";
 import { inspectProfileImport, inspectProfileText } from "./profile-import.js";
 import { occupiedCells } from "./profile-invariants.js";
 import {
@@ -261,6 +266,71 @@ describe("editor geometry scenarios", () => {
 });
 
 describe("page and diagnosed import scenarios", () => {
+	it.effect(
+		"dispatch retains a valid imported hotkey while excluding the diagnosed mismatch",
+		() =>
+			Effect.gen(function* () {
+				const input = [
+					{ ...encodedKey("1,1"), childrenName: "text" },
+					encodedKey("1,2"),
+				];
+				const report = inspectProfileImport(input);
+				expect(report.profile).toBeDefined();
+				expect(
+					report.diagnostics.filter((d) => d.code === "invalid-action"),
+				).toEqual([
+					{
+						code: "invalid-action",
+						path: "pages.0.keys.0.childrenName",
+						blocking: false,
+					},
+				]);
+				const envelope = Schema.decodeUnknownSync(ProfileEnvelope)({
+					schemaVersion: 1,
+					profiles: [report.profile],
+					activeByDevice: {},
+				});
+				const contracts = yield* ProfileFunctionContracts;
+				yield* contracts.validateProfile(envelope.profiles[0]);
+				const dispatch = yield* contracts.dispatchSnapshot(envelope);
+				expect(
+					dispatch.profiles[0].pages[0].keys.map((k) => k.keyCode),
+				).toEqual(["1,2"]);
+				expect(envelope.profiles[0].pages[0].keys).toHaveLength(2);
+			}).pipe(
+				Effect.provide(
+					profileFunctionContractsLayer(actionProfileFunctionContracts),
+				),
+			),
+	);
+	for (const childrenName of ["timer", "text"])
+		it(`quarantines a valid hotkey with mismatched childrenName ${childrenName}`, () => {
+			const source = { ...encodedKey("1,1"), childrenName };
+			const report = inspectProfileImport([source]);
+			expect(report.profile).toBeDefined();
+			expect(report.diagnostics).toContainEqual({
+				code: "invalid-action",
+				path: "pages.0.keys.0.childrenName",
+				blocking: false,
+			});
+			expect(report.profile?.pages[0].keys[0]?.compatibility).toMatchObject({
+				unsupported: true,
+				source,
+			});
+		});
+	it("quarantines unsupported alternate visuals using the dispatch contract", () => {
+		const key = encodedKey("1,1");
+		const source = encodedKey("1,1", { alterTitle: key.config.title });
+		const report = inspectProfileImport([source]);
+		expect(report.diagnostics).toContainEqual({
+			code: "invalid-action",
+			path: "pages.0.keys.0.config.alterTitle",
+			blocking: false,
+		});
+		expect(report.profile?.pages[0].keys[0]?.compatibility?.unsupported).toBe(
+			true,
+		);
+	});
 	it.effect(
 		"creates/selects/deletes pages, repairs every selected device and retains knob data",
 		() => {

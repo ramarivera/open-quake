@@ -1,6 +1,5 @@
 import { Schema } from "effect";
-import { validateAction } from "../../../../../packages/device/src/actions/action-invariants";
-import { ACTION_REGISTRY } from "../../../../../packages/device/src/actions/action-registry";
+import { actionProfileFunctionContracts } from "../../../../../packages/device/src/actions/profile-function-contracts";
 import {
 	type ProfileFunctionContract,
 	profileFunctionContractsLayer,
@@ -12,20 +11,7 @@ export const managementProfileContracts = new Map<
 	string,
 	ProfileFunctionContract
 >([
-	...ACTION_REGISTRY.filter((entry) => entry.binding !== "unresolved").map(
-		(entry): [string, ProfileFunctionContract] => [
-			entry.id,
-			{
-				childrenName: entry.id,
-				supportsKnob: entry.supportKnob,
-				supportsAlternateVisuals: entry.alternateState,
-				validateConfig: (config) =>
-					validateAction(entry.id, config)._tag === "Right"
-						? []
-						: [["actions"]],
-			},
-		],
-	),
+	...actionProfileFunctionContracts,
 	...agentProfileFunctionContracts,
 	[
 		"homeAssistant",

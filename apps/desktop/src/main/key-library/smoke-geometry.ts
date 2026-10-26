@@ -23,6 +23,32 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		evalIn,
 		snapshot,
 	} = h;
+	const verifyLabels = async (locale: "en" | "de") => {
+		assert.equal(
+			await evalIn(
+				win,
+				"document.querySelector('.key-title-settings summary').textContent",
+			),
+			locale === "de" ? "Titelstil" : "Title style",
+		);
+		assert.equal(
+			await evalIn(
+				win,
+				"document.querySelector('#key-function').selectedOptions[0].textContent.trim()",
+			),
+			locale === "de" ? "Tastenkürzel" : "Hotkey",
+		);
+		assert.deepEqual(
+			await evalIn(
+				win,
+				"Array.from(document.querySelector('#key-destination').options).filter(o => o.value === '1,1' || o.value === '2,8').map(o => [o.value, o.textContent.trim()])",
+			),
+			[
+				["1,1", locale === "de" ? "Zeile 1 · Spalte 1" : "Row 1 · Column 1"],
+				["2,8", locale === "de" ? "Zeile 2 · Spalte 8" : "Row 2 · Column 8"],
+			],
+		);
+	};
 	const key = (code: string, extra: Record<string, unknown> = {}) => {
 		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code));
 		return {
@@ -204,6 +230,7 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		win,
 		"document.querySelector('#key-destination').scrollIntoView({block:'center'})",
 	);
+	await verifyLabels("en");
 	await snapshot(win, "editor-geometry-en");
 	process.stdout.write("geometry smoke: page lifecycle\n");
 	const knob = (await profile()).knob;
@@ -257,6 +284,7 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		win,
 		"document.querySelector('#key-destination').scrollIntoView({block:'center'})",
 	);
+	await verifyLabels("de");
 	await snapshot(win, "editor-geometry-de");
 	await button(win, "Abbrechen");
 	await click(win, ".keys-import > summary");
@@ -268,13 +296,14 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 			actions: [null, {}, { type: "", value: "" }],
 			alterIcon: null,
 		}),
+		{ ...key("1,8"), childrenName: "text" },
 		{ keyCode: "0,1", config: { nested: "kept" } },
 	];
 	await input(win, "#keys-import-json", JSON.stringify(raw));
 	await click(win, "#keys-inspect-import");
 	await ready(
 		win,
-		"document.querySelector('[data-code=unknown-function]') && document.querySelector('[data-code=legacy-sentinel]') && document.querySelector('[data-code=missing-optional]')",
+		"document.querySelector('[data-code=unknown-function]') && document.querySelector('[data-code=legacy-sentinel]') && document.querySelector('[data-code=missing-optional]') && document.querySelector('[data-code=invalid-action]')?.textContent.includes('pages.0.keys.1.childrenName')",
 	);
 	await evalIn(
 		win,
@@ -303,6 +332,11 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		raw,
 	);
 	assert.equal(Option.getOrThrow(imported.knob).config.nested, "kept");
+	assert.equal(
+		Option.getOrThrow(imported.pages[0].keys[1]?.compatibility ?? Option.none())
+			.unsupported,
+		true,
+	);
 	await ready(
 		win,
 		`document.querySelector('#keys-profile').value === ${JSON.stringify(imported.id)}`,

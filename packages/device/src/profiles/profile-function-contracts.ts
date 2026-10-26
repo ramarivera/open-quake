@@ -22,6 +22,34 @@ export const isUnsupportedProfileKey = (key: ProfileKey): boolean =>
 	Option.isSome(key.compatibility) &&
 	key.compatibility.value.unsupported === true;
 
+/** Field paths relative to one key; shared by inspection and dispatch. */
+export function profileKeyFunctionIssues(
+	key: ProfileKey,
+	contracts: ReadonlyMap<string, ProfileFunctionContract>,
+): readonly (readonly (string | number)[])[] {
+	if (key.config.type === "" || isUnsupportedProfileKey(key)) return [];
+	const contract = contracts.get(key.config.type);
+	if (!contract) return [["config", "type"]];
+	const paths: (readonly (string | number)[])[] = [];
+	if (
+		Option.isNone(key.childrenName) ||
+		key.childrenName.value !== contract.childrenName
+	)
+		paths.push(["childrenName"]);
+	if (key.config.supportKnob && !contract.supportsKnob)
+		paths.push(["config", "supportKnob"]);
+	if (
+		!contract.supportsAlternateVisuals &&
+		(Option.isSome(key.config.alterTitle) ||
+			Option.isSome(key.config.alterIcon))
+	)
+		paths.push(["config", "alterTitle"]);
+	paths.push(
+		...contract.validateConfig(key.config).map((p) => ["config", ...p]),
+	);
+	return paths;
+}
+
 const makeValidation = (
 	contracts: ReadonlyMap<string, ProfileFunctionContract>,
 ) => {
@@ -32,31 +60,14 @@ const makeValidation = (
 					const paths: (readonly (string | number)[])[] = [];
 					profile.pages.forEach((page, pageIndex) => {
 						page.keys.forEach((key, keyIndex) => {
-							if (key.config.type === "" || isUnsupportedProfileKey(key))
-								return;
-							const path = ["pages", pageIndex, "keys", keyIndex];
-							const contract = contracts.get(key.config.type);
-							if (!contract) {
-								paths.push([...path, "config", "type"]);
-								return;
-							}
-							if (
-								Option.isNone(key.childrenName) ||
-								key.childrenName.value !== contract.childrenName
-							)
-								paths.push([...path, "childrenName"]);
-							if (key.config.supportKnob && !contract.supportsKnob)
-								paths.push([...path, "config", "supportKnob"]);
-							if (
-								!contract.supportsAlternateVisuals &&
-								(Option.isSome(key.config.alterTitle) ||
-									Option.isSome(key.config.alterIcon))
-							)
-								paths.push([...path, "config", "alterTitle"]);
 							paths.push(
-								...contract
-									.validateConfig(key.config)
-									.map((field) => [...path, "config", ...field]),
+								...profileKeyFunctionIssues(key, contracts).map((field) => [
+									"pages",
+									pageIndex,
+									"keys",
+									keyIndex,
+									...field,
+								]),
 							);
 						});
 					});

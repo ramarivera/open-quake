@@ -1,12 +1,14 @@
 import { Either, ParseResult, Schema } from "effect";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
+import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
 import {
 	Profile,
 	ProfileJson,
 	ProfileJsonObject,
 	ProfileKey,
 } from "./profile-contracts.js";
+import { profileKeyFunctionIssues } from "./profile-function-contracts.js";
 
 export const ImportDiagnostic = Schema.Struct({
 	code: Schema.Literal(
@@ -106,7 +108,19 @@ export function inspectProfileImport(input: unknown): ProfileImportReport {
 				);
 			return candidate;
 		}
-		return Schema.encodeSync(ProfileKey)(decoded.right);
+		const issues = profileKeyFunctionIssues(
+			decoded.right,
+			actionProfileFunctionContracts,
+		);
+		for (const issue of issues)
+			report("invalid-action", `${path}.${issue.map(String).join(".")}`);
+		const encoded = Schema.encodeSync(ProfileKey)(decoded.right);
+		return issues.length > 0
+			? {
+					...encoded,
+					compatibility: { ...encoded.compatibility, unsupported: true },
+				}
+			: encoded;
 	};
 	const source = record(input);
 	const legacy = Array.isArray(input);

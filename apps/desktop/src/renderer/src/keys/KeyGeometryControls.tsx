@@ -45,7 +45,11 @@ export function KeyGeometryControls({
 						{ length: 16 },
 						(_, index) => `${Math.floor(index / 8) + 1},${(index % 8) + 1}`,
 					).map((code) => (
-						<option key={code}>{code}</option>
+						<option key={code} value={code}>
+							{keyText("editor.destination", locale)
+								.replace("{row}", code.split(",")[0] ?? "")
+								.replace("{column}", code.split(",")[1] ?? "")}
+						</option>
 					))}
 				</select>
 				<small>
