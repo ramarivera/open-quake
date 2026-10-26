@@ -725,3 +725,50 @@ it("AI-136 AI-327 binds saved profile credentials and live transport in producti
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it("restricts remote file IPC to the management window's main frame", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meeting-file-owner-"));
+	const renderer = "file:///synthetic-meetings/index.html";
+	let files: ReturnType<typeof vi.spyOn> | undefined;
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+		management: () => ({ webContents: { id: 7 } }),
+	});
+	const frame = { url: renderer };
+	const event = (id: number, main = true) => ({
+		command: true,
+		senderFrame: main ? frame : {},
+		sender: { id, mainFrame: frame, getURL: () => renderer },
+	});
+	const request = {
+		_tag: "remoteFiles",
+		id: "00000000-0000-4000-8000-000000000111",
+		operation: "list",
+	};
+	try {
+		await meetings.ready;
+		const service = await meetings.runtime.runPromise(MeetingService);
+		files = vi.spyOn(service, "files").mockReturnValue(Effect.succeed([]));
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing production meeting IPC");
+		for (const source of [event(8), event(7, false)]) {
+			expect(await handler(source, request)).toMatchObject({
+				_tag: "failure",
+				code: "QUAKE.MEETING.INVALID",
+			});
+		}
+		expect(files).not.toHaveBeenCalled();
+		expect(await handler(event(7), request)).toEqual({
+			_tag: "remoteFiles",
+			ids: [],
+		});
+		expect(files).toHaveBeenCalledOnce();
+	} finally {
+		files?.mockRestore();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});

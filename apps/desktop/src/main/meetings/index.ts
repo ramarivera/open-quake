@@ -51,6 +51,7 @@ import {
 	MEETING_SNAPSHOT,
 } from "../../shared/meeting-bridge";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
+import { agentRequestAllowed } from "../agents/controller";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
@@ -105,6 +106,9 @@ export function prepareMeetings(
 		hardware: () => HardwareSession | undefined;
 		mock: boolean;
 		renderer?: string;
+		management?: () =>
+			| { readonly webContents: { readonly id: number } }
+			| undefined;
 		ffmpeg?: string;
 		adapter?: MeetingAdapter;
 		provider?: MeetingProviderOptions;
@@ -450,6 +454,19 @@ export function prepareMeetings(
 						return failure(meetingError("Invalid"));
 					const decoded = decodeMeetingCommand(value);
 					if (Either.isLeft(decoded)) return failure(meetingError("Invalid"));
+					if (
+						decoded.right._tag === "remoteFiles" &&
+						!agentRequestAllowed(
+							{
+								senderId: event.sender.id,
+								frameURL: event.senderFrame?.url ?? "",
+								mainFrame: event.senderFrame === event.sender.mainFrame,
+							},
+							options.management?.()?.webContents.id,
+							renderer,
+						)
+					)
+						return failure(meetingError("Invalid"));
 					const initialized = await ready;
 					if (initialized._tag === "Failure") {
 						const error = Cause.failureOption(initialized.cause);
