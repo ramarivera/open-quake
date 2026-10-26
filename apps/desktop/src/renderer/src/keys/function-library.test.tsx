@@ -348,3 +348,34 @@ it("MGMT-107/127 mounts the translated sequence search and keeps unavailable ope
 	await input(query(f.host, "#keys-library-search", HTMLInputElement), "");
 	expect(f.host.querySelector('[data-library-type="website"]')).not.toBeNull();
 });
+
+it("MGMT-127 disables directional app hotkeys while retaining ordinary executable sequence presets", async () => {
+	const f = await fixture(true);
+	const sequence = appGroups(defaultAppLibrary(), [], undefined, true);
+	const ordinary = appGroups(defaultAppLibrary(), [], undefined, false);
+	let directional = 0;
+	for (const group of sequence) {
+		for (const entry of group.entries) {
+			if (entry.key.config.type !== "hotkey") continue;
+			const row = query(
+				f.host,
+				`[data-library-type="${entry.id}"]`,
+				HTMLButtonElement,
+			);
+			if (entry.key.config.supportKnob) {
+				directional++;
+				expect(row.disabled).toBe(true);
+				expect(row.title).toContain("In Sequenzen noch nicht verfügbar");
+				await click(row);
+				expect(f.choose).not.toHaveBeenCalled();
+				expect(
+					ordinary.flatMap((g) => g.entries).find((e) => e.id === entry.id)
+						?.disabled,
+				).not.toBe(true);
+			} else {
+				expect(row.disabled).toBe(false);
+			}
+		}
+	}
+	expect(directional).toBeGreaterThan(0);
+});

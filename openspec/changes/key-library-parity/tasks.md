@@ -106,3 +106,4 @@ Lane verification: exact root turbo command passes 4131 tests with four existing
 - [x] 13.3 Recover unmarked renamed preset titles against localized defaults and preserve them through placement. Comment 4380869996. Bead open-quake-lih.10.19.
 - [x] 13.4 Bound generated shortcut placement titles while retaining full searchable library labels. Comment 4381332353. Bead open-quake-lih.10.19.
 - [x] 13.5 Convert normalized Windows modifier chords for generated grid and sequence placement. Comment 4381332361. Bead open-quake-lih.10.19.
+- [x] 13.6 Disable directional hotkey presets in sequences while preserving ordinary grid placement. Comment 4381332371. Bead open-quake-lih.10.19.

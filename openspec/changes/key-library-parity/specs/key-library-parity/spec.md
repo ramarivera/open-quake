@@ -303,6 +303,11 @@ The sequence library SHALL use the same translated search and groups and SHALL d
 - **WHEN** a sequence is selected and the user searches the library or stored/imported plugin metadata changes
 - **THEN** navigation, nested sequences and explicitly excluded plugin actions are absent; allowed entries remain searchable, and unavailable actions cannot be added as executable steps
 
+#### Scenario: Directional hotkeys need knob routing
+- **WHEN** a directional two-chord app hotkey appears in the sequence library
+- **THEN** it SHALL remain visibly disabled because host leaf execution cannot route knob directions, while ordinary hotkeys remain available
+- **AND** ordinary grid placement SHALL retain both directional chords and knob support. Sources: MGMT-127, MGMT-388 and PR117 comment 4381332371.
+
 #### Scenario: Retained legacy plugin metadata
 - **WHEN** saved AI library JSON contains malformed placeholders beside a valid user group or a retained pluginAction manifest
 - **THEN** valid groups survive independently, explicit SupportedInMultiActions false excludes the plugin entry, and allowed unsupported plugin actions remain disabled

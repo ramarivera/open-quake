@@ -287,9 +287,12 @@ export function appGroups(
 					sequence
 						? {
 								...entry,
-								disabled: !Schema.is(Schema.encodedSchema(SequenceLeaf))(
-									Schema.encodeSync(ProfileKey)(entry.key).config,
-								),
+								disabled:
+									(entry.key.config.type === "hotkey" &&
+										entry.key.config.supportKnob === true) ||
+									!Schema.is(Schema.encodedSchema(SequenceLeaf))(
+										Schema.encodeSync(ProfileKey)(entry.key).config,
+									),
 							}
 						: entry,
 				),
