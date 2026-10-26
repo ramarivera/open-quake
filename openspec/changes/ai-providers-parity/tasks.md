@@ -84,4 +84,5 @@ route. The three task beads stay open for lead review and merge.
 
 - [x] 8.1 Propagate production HA runtime cancellation and recheck turn identity after the HA semaphore/allowlist wait. Reproduce cancelled and superseded turns against fake equipment before fixing. Bead: open-quake-lih.15.11.
 - [x] 8.2 Reconcile followed General Settings provider controls in execution and the assistant editor, with failing-before fake-provider and mounted UI regressions. Bead: open-quake-lih.15.11.
-- [ ] 8.3 Reproduce and fix the hosted assistant-wake lifecycle test against the renderer-ready activation queue; complete the requested gates and final unanswered-thread follow-up handoff. Bead: open-quake-lih.15.11.
+- [x] 8.3 Reproduce and fix the hosted assistant-wake lifecycle test against the renderer-ready activation queue; complete the requested gates and final unanswered-thread follow-up handoff. Bead: open-quake-lih.15.11.
+- [ ] 8.4 Follow up on current-default knob capture pinning, configured-row provider selection, and preserving HA dispatch outcomes in assistant responses. The final review round tracks these separately in bead open-quake-lih.15.12.
