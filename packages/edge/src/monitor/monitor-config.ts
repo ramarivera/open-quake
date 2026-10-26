@@ -7,6 +7,7 @@ import {
 } from "./monitor-contracts.js";
 
 export const MetricSelection = Schema.Array(ModuleId).pipe(
+	Schema.minItems(1),
 	Schema.maxItems(MODULES.length),
 	Schema.filter((ids) => new Set(ids).size === ids.length),
 );

@@ -60,6 +60,25 @@ Local-only artifacts, never committed:
 The final smoke output is under `final-smoke/`; tests/build logs are under
 `tests/`; Opus decisions and patches are under `design/`.
 
+## PR60 review corrections
+
+All three functional review findings reproduced in focused regressions before
+implementation. Normal and override metric lists now require at least one entry;
+rejected saves don't write or increment the revision. MonitorPanel clears values
+for uncollected modules at the shared rendering boundary, including sample-backed
+strip/profile previews and all five styles. Foreground names select the nearest
+case-insensitive macOS app bundle, while Windows executable names remain intact.
+
+The smoke now accepts an explicit artifact directory and creates it, matching the
+weather/media harness. It no longer requires a machine-specific volume path.
+The first attempted rerun used a missing output directory and stopped before
+testing; its owned Electron process was terminated. The corrected harness then
+passed from a newly created directory, including all 36 responsive captures and
+horizontal-overflow checks. Focused checks pass: 34 desktop tests, 9 edge tests,
+both package typechecks, production build, scoped Biome and strict OpenSpec.
+Artifacts are under `review/after-created/` in the external monitoring scratch.
+These checks use hidden mock windows and don't establish physical acceptance.
+
 ## Remaining acceptance
 
 - Physical QUAKE display placement, orientation, touch direction and readability.

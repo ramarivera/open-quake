@@ -19,6 +19,38 @@ const storage = (overrides: Partial<MonitorStorage> = {}): MonitorStorage => ({
 });
 describe("monitor settings", () => {
 	it.effect(
+		"rejects empty normal and override selections without writing a revision",
+		() =>
+			Effect.gen(function* () {
+				let writes = 0;
+				yield* Effect.gen(function* () {
+					const store = yield* MonitorStore;
+					for (const settings of [
+						{ ...defaults(), metrics: [] },
+						{ ...defaults(), override: { active: true, hz: 1, metrics: [] } },
+					]) {
+						const result = yield* Effect.either(store.save(0, settings));
+						expect(result).toMatchObject({
+							_tag: "Left",
+							left: { code: "QUAKE.MONITOR.CONFIG_INVALID" },
+						});
+						expect((yield* store.configuration()).revision).toBe(0);
+					}
+				}).pipe(
+					Effect.provide(
+						MonitorStore.Default(
+							storage({
+								save: async () => {
+									writes++;
+								},
+							}),
+						),
+					),
+				);
+				expect(writes).toBe(0);
+			}),
+	);
+	it.effect(
 		"migrates existing saved records without losing panel preferences or enabling app tracking",
 		() =>
 			Effect.gen(function* () {

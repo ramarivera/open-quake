@@ -9,7 +9,6 @@ import {
 	type MetricSample,
 	MODULES,
 	type ModuleId,
-	type MonitorSnapshot,
 } from "../../../../../../../../packages/edge/src/monitor/monitor-contracts";
 import {
 	defaults,
@@ -37,15 +36,6 @@ const toggle = (list: readonly ModuleId[], id: ModuleId): ModuleId[] =>
 	list.includes(id)
 		? list.filter((m) => m !== id)
 		: MODULES.filter((m) => m === id || list.includes(m));
-/** Sample data stays sample data; unselected metrics read as not collected. */
-const previewFor = (metrics: readonly ModuleId[]): MonitorSnapshot => ({
-	...preview,
-	samples: preview.samples.map((sample) =>
-		metrics.includes(sample.id)
-			? sample
-			: { ...sample, state: "unavailable" as const, values: {} },
-	),
-});
 
 function MetricPicker({
 	labelledBy,
@@ -99,9 +89,10 @@ const liveTone: Record<LiveState, string> = {
 };
 
 /** App display name from the executable path; the path itself is never shown. */
-const appName = (path: string): string => {
+export const appName = (path: string): string => {
 	const parts = path.split(/[\\/]/).filter(Boolean);
-	const name = parts.find((part) => part.endsWith(".app")) ?? parts.at(-1);
+	const name =
+		parts.filter((part) => /\.app$/i.test(part)).at(-1) ?? parts.at(-1);
 	return name?.replace(/\.(app|exe)$/i, "") ?? "";
 };
 function useMonitoringState(): MonitoringSnapshot | undefined {
@@ -372,7 +363,7 @@ export function MonitorSettings(): React.JSX.Element {
 						<div>
 							<MonitorPanel
 								settings={draft}
-								snapshot={previewFor(effectiveMonitoring(draft).metrics)}
+								snapshot={preview}
 								media={media[draft.styleId]}
 								preview
 							/>

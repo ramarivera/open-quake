@@ -649,6 +649,15 @@ function PanelWithMedia({
 }): React.JSX.Element {
 	const [failed, setFailed] = useState(false);
 	const [playing, setPlaying] = useState(false);
+	const collected = effectiveMonitoring(settings).metrics;
+	const visibleSnapshot: MonitorSnapshot = {
+		...snapshot,
+		samples: snapshot.samples.map((sample) =>
+			collected.includes(sample.id)
+				? sample
+				: { ...sample, state: "unavailable", values: {} },
+		),
+	};
 	const custom =
 		settings.background === "custom" && media?.available && !failed;
 	const invalid =
@@ -693,8 +702,8 @@ function PanelWithMedia({
 			) : null}
 			<div className="monitor-scrim" />
 			<PanelStyle.Provider value={settings.styleId}>
-				<PanelMetrics.Provider value={effectiveMonitoring(settings).metrics}>
-					<Canvas settings={settings} snapshot={snapshot} />
+				<PanelMetrics.Provider value={collected}>
+					<Canvas settings={settings} snapshot={visibleSnapshot} />
 				</PanelMetrics.Provider>
 			</PanelStyle.Provider>
 			{invalid ? (

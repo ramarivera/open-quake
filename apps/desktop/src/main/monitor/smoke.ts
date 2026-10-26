@@ -1,6 +1,6 @@
 /** Native Electron proof. Hidden windows, mock touch, no HID imports or opens. */
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -31,13 +31,10 @@ import { registerMonitor } from "./index";
 import { nativeCollector } from "./native-collector";
 
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1");
-const artifacts = process.argv[2] ?? "";
-assert(
-	[
-		"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/monitor-panel",
-		"/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/monitoring-state",
-	].some((root) => artifacts === root || artifacts.startsWith(`${root}/`)),
-);
+const artifactsArgument = process.argv[2] ?? "";
+assert(artifactsArgument.trim(), "pass a non-empty artifacts directory");
+const artifacts = resolve(artifactsArgument);
+mkdirSync(artifacts, { recursive: true });
 const base = mkdtempSync(join(artifacts, "native-"));
 app.setPath("userData", base);
 process.once("exit", () => rmSync(base, { recursive: true, force: true }));

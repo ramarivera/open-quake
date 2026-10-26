@@ -78,10 +78,11 @@ Run the native monitor smoke after building the app:
 pnpm build
 pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/monitor/smoke.config.ts
 env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 \
-  TMPDIR=/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/monitoring-state \
   pnpm --filter @open-quake/desktop exec electron out/monitor-smoke/smoke.js \
-  /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/monitoring-state
+  /path/to/monitor-smoke-artifacts
 ```
+
+Pass an explicit scratch directory for artifacts. The smoke creates it if needed.
 
 It drives real preload IPC, draft/Save controls, all five layouts, contrast,
 missing images, video duration/playback, lazy saved-style previews, picker

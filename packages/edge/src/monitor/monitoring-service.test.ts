@@ -78,6 +78,8 @@ describe("shared monitoring lifecycle", () => {
 			{ hz: 0 },
 			{ hz: 11 },
 			{ metrics: ["cpu", "cpu"] },
+			{ metrics: [] },
+			{ override: { active: true, hz: 1, metrics: [] } },
 			{ method: "shell" },
 			{ override: { active: true, hz: Infinity, metrics: [] } },
 		])
