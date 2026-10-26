@@ -210,31 +210,25 @@ function ActiveStripPanel(): React.JSX.Element {
 			timers.add(timer);
 		};
 		let matrixKey: string | undefined;
-		const handleKey = (event: StripKeyEvent, matrix = false): void => {
+		const handleKey = (event: StripKeyEvent): void => {
 			if (event.keyAction === 1 && matrixKey === event.keyCode)
 				matrixKey = undefined;
 			setPressedKeyCode(event.keyAction === 0 ? event.keyCode : undefined);
 			dispatch.key(event);
 			holdKey.current(event);
-			const activation: StripKeyEvent = matrix
-				? { ...event, keyAction: 1 as const, voiceTouchEnd: true }
-				: event;
-			const action = meetingTouchAction(activation, layout.current);
+			const action = meetingTouchAction(event, layout.current);
 			if (action) void meetingRequest({ _tag: "action", action });
 			const current = emojiSelection.current;
-			if (event.keyAction === 0 && !matrix) {
+			if (event.keyAction === 0) {
 				if (current?.emojiKeys.includes(event.keyCode))
 					heldEmoji.set(event.keyCode, current);
 				else heldEmoji.delete(event.keyCode);
 				return;
 			}
-			const owner =
-				matrix && current?.emojiKeys.includes(event.keyCode)
-					? current
-					: heldEmoji.get(event.keyCode);
+			const owner = heldEmoji.get(event.keyCode);
 			heldEmoji.delete(event.keyCode);
 			if (
-				!activation.voiceTouchEnd ||
+				!event.voiceTouchEnd ||
 				!owner ||
 				owner.generation !== current?.generation
 			)
@@ -244,7 +238,7 @@ function ActiveStripPanel(): React.JSX.Element {
 					profileId: owner.profileId,
 					pageId: owner.pageId,
 					keyCode: event.keyCode,
-					keyAction: activation.keyAction,
+					keyAction: event.keyAction,
 				})
 				.then((reply) => {
 					if (reply._tag === "invalid") invalid(event.keyCode);
@@ -261,17 +255,21 @@ function ActiveStripPanel(): React.JSX.Element {
 		const offMatrix = window.openQuake?.onQuakeEvent((event) => {
 			if (event.kind !== "matrix") return;
 			const index = event.matrix.states.indexOf(1);
-			if (index < 0) return;
-			const keyCode = `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
+			const keyCode =
+				index < 0
+					? undefined
+					: `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
+			if (matrixKey === keyCode) return;
+			// Legacy frames contain state, not edges. Preserve holds until that state changes.
+			if (matrixKey)
+				handleKey({ keyAction: 1, keyCode: matrixKey, voiceTouchEnd: true });
 			if (
-				matrixKey === keyCode ||
+				!keyCode ||
 				!layout.current?.tiles.some((tile) => tile.keyCode === keyCode)
 			)
 				return;
-			// DK-Suite checkDataValid case 1 emits only down. Empty matrices aren't releases.
-			cancel();
 			matrixKey = keyCode;
-			handleKey({ keyAction: 0, keyCode }, true);
+			handleKey({ keyAction: 0, keyCode });
 		});
 		if (root && window.openQuake) {
 			const off = mountStripTouch(

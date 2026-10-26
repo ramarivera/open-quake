@@ -129,21 +129,37 @@ row `floor(index/5)+1`, column `(index%5)+1`, keyCode `row,column`, and keyActio
 zero. It SHALL expose the states and preserve remaining report bytes.
 It SHALL NOT invent a release event or a physical layout from an empty matrix.
 
-The panel SHALL route legacy matrix presses through its complete strip key handler.
-The recovered DK-Suite v0.4.95 `app-resources/background.js`, character offset
-642254, `checkDataValid` case 1, emits only keyAction 0 for the first pressed
-state and an empty result for an empty matrix. Audit rows MAIN-008/028 and
-SCREEN-144 do not establish a release edge. Repeated downs SHALL be suppressed;
-held actions SHALL remain held until a confirmed release or lifecycle cancel.
-Momentary delegated emoji and meeting actions SHALL activate once on a matrix
-press without fabricating a release for held actions. Loss, selection reset,
-unmount or a different matrix key SHALL cancel the prior held action.
+The panel SHALL derive successful up edges when the first pressed cell changes or
+becomes empty, suppress repeated downs while a cell stays pressed, and retain
+held hotkeys until release. All edges SHALL pass through the complete strip key
+handler, including ordinary KeyRuntime activation, voice, meeting and emoji.
+A-to-B transitions SHALL release A before pressing B. Disconnect, selection reset
+and unmount SHALL cancel outstanding contacts. The pure kernel SHALL continue
+exposing raw state without inventing protocol release events.
 
-#### Scenario: Legacy matrix hold and emoji
-- **WHEN** repeated matrix reports select a held key, followed by an empty report
-- **THEN** the key receives one down and no up, and link loss cancels it
-- **WHEN** a matrix press selects an emoji tile
-- **THEN** the owning emoji handler executes once despite repeated reports
+Sources: MAIN-008/028, SCREEN-144, PR #112 finding 4380831182. Recovered DK-Suite
+0.4.95 `src/main/DeviceControl/Connections/ProtocolUtil.js:59-75` and
+`app-resources/background.js`, character offset 642333, emit the first pressed
+cell with keyAction 0 and discard empty matrices. The decoder supplies no release
+or A-to-B cancellation. `src/views/DKQuake/QuakeScreenView.vue:2895-2984` routes down
+and successful up through the full key handler;
+`src/views/DKQuake/RemoteSocketClient.vue:162-168` forwards both actions. Deriving
+contact transitions in the panel corrects the recovered decoder's incomplete
+handling, without changing the wire protocol.
+
+#### Scenario: Ordinary matrix contact
+- **WHEN** a mounted panel receives the same pressed cell repeatedly and then two empty matrices
+- **THEN** KeyRuntime executes its ordinary action exactly once on the first empty matrix
+- **AND** another full contact executes the action once again
+
+#### Scenario: Legacy matrix hold and replacement
+- **WHEN** repeated reports select a hotkey cell, followed by a different cell and an empty report
+- **THEN** one down holds the hotkey until the change, up releases it, and the next cell gets down and successful up
+- **AND** disconnect cancels any remaining contact
+
+#### Scenario: Legacy matrix emoji
+- **WHEN** repeated matrix reports select an emoji tile, followed by an empty matrix
+- **THEN** its owning emoji handler receives exactly one successful release for the captured profile and page
 
 #### Scenario: Last matrix cell pressed
 - **WHEN** only state index 14 is one

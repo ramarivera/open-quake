@@ -277,7 +277,7 @@ describe("touch production components", () => {
 					'[data-key-code="1,1"] img[src^="data:image/jpeg;base64,"]',
 				);
 				expect(image).not.toBeNull();
-				// End the preceding touch contact before exercising legacy press-only matrix input.
+				// End the preceding touch contact before exercising legacy matrix state input.
 				await act(async () => {
 					for (const listener of listeners)
 						listener({
@@ -319,7 +319,14 @@ describe("touch production components", () => {
 						keyCode: "1,1",
 						kind: "down",
 					}),
+					expect.objectContaining({
+						deviceId: serial,
+						profileId: `profile-${serial}`,
+						keyCode: "1,1",
+						kind: "up",
+					}),
 				]);
+				await matrix(0);
 				await act(async () => {
 					for (const listener of listeners)
 						listener({
@@ -336,6 +343,8 @@ describe("touch production components", () => {
 				});
 				await matrix(1);
 				await matrix(1);
+				expect(emojiPress).not.toHaveBeenCalled();
+				await matrix(-1);
 				expect(emojiPress).toHaveBeenCalledExactlyOnceWith({
 					profileId: `profile-${serial}`,
 					pageId: "page",
