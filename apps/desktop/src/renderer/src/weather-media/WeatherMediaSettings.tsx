@@ -8,6 +8,7 @@ import { WEATHER_MEDIA_STRINGS } from "../../../shared/weather-media-strings";
 import { Callout, Group, Row } from "../ui/Form";
 import { type CityStatus, CityVerifier } from "./city-verifier";
 import { rendererWeatherLocale, useWeatherMedia } from "./hooks";
+import { mediaErrorText } from "./PlayerCard";
 import "./weather-media.css";
 
 function SettingsFields({
@@ -200,8 +201,7 @@ function SettingsFields({
 				</Row>
 				{snapshot?.media.error ? (
 					<p className="weather-consent">
-						System media control is unavailable on this platform. The card shows
-						this status until a system media adapter is available.
+						{mediaErrorText(snapshot.media, locale)}
 					</p>
 				) : null}
 			</Group>

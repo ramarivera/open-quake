@@ -1,5 +1,6 @@
 import { Deferred, Effect, Layer, Schema } from "effect";
 import { afterEach, expect, it, vi } from "vitest";
+import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
 import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
 import {
 	KeyRuntime,
@@ -14,6 +15,7 @@ import {
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
+import { systemMediaKeyActions } from "../weather-media/key-actions";
 import { desktopKeyRuntimePort } from "./runtime-port";
 
 const os = vi.hoisted(() => ({
@@ -55,6 +57,7 @@ const open = (value: string) => ({
 function layer(
 	mock = false,
 	publish: KeyRuntimePort["Type"]["publish"] = () => Effect.void,
+	media?: MediaActionAdapter,
 ) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
@@ -105,6 +108,8 @@ function layer(
 		() => undefined,
 		(state) => Effect.runSync(publish(state)),
 		mock,
+		undefined,
+		media,
 	).pipe(Layer.provide(profiles));
 	return KeyRuntime.DefaultWithoutDependencies.pipe(Layer.provideMerge(port));
 }
@@ -266,3 +271,31 @@ it("stops the real sequence at the failed bundle launch and publishes failure", 
 	expect(os.exec).toHaveBeenCalledOnce();
 	expect(os.openPath).not.toHaveBeenCalled();
 });
+
+it.each([false, true])(
+	"ordinary media-key consumer uses the shared binding only in production, mock=%s",
+	async (mock) => {
+		const send = vi.fn(async () => ({ accepted: true }));
+		const result = await Effect.runPromise(
+			Effect.gen(function* () {
+				const port = yield* KeyRuntimePort;
+				return yield* Effect.either(
+					port.execute({
+						type: "playPause",
+						actions: [{ type: "key", value: "audio_play" }],
+					}),
+				);
+			}).pipe(
+				Effect.provide(
+					layer(mock, () => Effect.void, systemMediaKeyActions(send)),
+				),
+				Effect.scoped,
+			),
+		);
+		expect(result._tag).toBe(mock ? "Left" : "Right");
+		expect(send).toHaveBeenCalledTimes(mock ? 0 : 1);
+		if (!mock)
+			expect(send).toHaveBeenCalledWith("audio_play", expect.any(AbortSignal));
+		expect(os.exec).not.toHaveBeenCalled();
+	},
+);

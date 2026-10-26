@@ -78,6 +78,8 @@ import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { createToneRecorder, registerVoiceSurface, toneSinks } from "./voice";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
+import { systemMediaKeyActions } from "./weather-media/key-actions";
+import { SystemMediaService } from "./weather-media/system-media";
 
 const isDev = !app.isPackaged && !!process.env.ELECTRON_RENDERER_URL;
 const rendererURL =
@@ -208,11 +210,17 @@ if (!app.requestSingleInstanceLock()) {
 						app.getPath("userData"),
 						rendererURL,
 					);
+					const weatherMediaRuntime = makeDesktopRuntime(
+						weatherMediaLive(app.getPath("userData"), process.platform),
+						diagnostics,
+					);
+					const mediaActions = systemMediaKeyActions((command, signal) =>
+						weatherMediaRuntime.runPromise(SystemMediaService.send(command), {
+							signal,
+						}),
+					);
 					const weatherMedia = registerWeatherMedia(
-						makeDesktopRuntime(
-							weatherMediaLive(app.getPath("userData"), process.platform),
-							diagnostics,
-						),
+						weatherMediaRuntime,
 						() => managementWin,
 					);
 					let bus: DeviceBus | undefined;
@@ -389,6 +397,7 @@ if (!app.requestSingleInstanceLock()) {
 							integrations.executeHaFromKey(key, signal),
 						),
 						diagnostics,
+						mediaActions,
 					);
 					agents = registerAgents({
 						diagnostics,

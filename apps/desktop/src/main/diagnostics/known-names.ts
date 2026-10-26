@@ -1,7 +1,8 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
+	`SystemMedia.nativeProcess SystemMedia.macRead SystemMedia.macControl SystemMedia.windowsRead SystemMedia.windowsControl SystemMedia.nativeRead SystemMedia.nativeControl SystemMedia.keyAction SystemMediaService.send
+GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
 WizardService.snapshot WizardService.save WizardService.seedRegion WizardService.replay WizardService.complete SettingsRepository.transact
 DesktopSettings.login DesktopSettings.setLogin DesktopSettings.workAreas DesktopSettings.managementReachable DesktopWizard.displayAvailable DesktopWizard.usableProfiles
 SettingsService.locale SettingsService.setLocale SettingsRepository.read SettingsRepository.setLocale
@@ -177,10 +178,13 @@ test-fixtures.ts touch-contracts.ts touch-fixtures.ts touch-invariants.ts touch-
 touch-source.ts transport-decode.ts transport-fixtures.ts transport-limits.ts transport-sse.ts
 transport.ts update-service.ts voice-adapter.ts voice-fixtures.ts voice-surface-contracts.ts
 voice-surface-errors.ts voice-surface-invariants.ts voice-surface-ports.ts voice-surface-service.ts
-volume-discovery.ts weather-network.ts weather-service.ts zip.ts`.split(/\s+/),
+process.ts metadata.ts macos.ts windows.ts errors.ts key-actions.ts volume-discovery.ts weather-network.ts weather-service.ts zip.ts`.split(
+		/\s+/,
+	),
 );
 
 export const knownLogEvents = new Set([
+	"Native media request failed",
 	"Agent credential cleanup failed; retry pending",
 	"Application shutdown failed",
 	"Firmware session requires recovery",
@@ -200,7 +204,7 @@ export const knownLogEvents = new Set([
 ]);
 
 export const knownErrorTags = new Set(
-	`SettingsOsApplyFailed WizardIncomplete SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
+	`MediaHelperUnavailable MediaProcessFailed MediaResponseInvalid SettingsOsApplyFailed WizardIncomplete SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
 ActionApplicationMissing ActionPermissionDenied ActionSnapshotFailed AgentCredentialUnavailable
 AgentDraftFailed AgentDraftUnavailable AgentDuplicate AgentInvalid AgentMissing AgentModelInvalid
 AgentModelLastRow AgentPanelFailed AgentProfileMissing AgentProtected AgentRevisionConflict
