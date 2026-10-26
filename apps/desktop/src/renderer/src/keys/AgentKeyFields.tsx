@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { isHoldToTalkKey } from "../../../../../../packages/edge/src/voice/surface/voice-surface-invariants";
 import { ConnectionForm } from "../management/agent-http/ConnectionForm";
 import { useConnections } from "../management/agent-http/useConnections";
 import { useAgentsCopy } from "../management/agents/copy";
@@ -14,6 +15,7 @@ export function AgentKeyFields({
 	readonly onChange: (key: ProfileKey) => void;
 }) {
 	const copy = useAgentsCopy().keyFields;
+	const voiceInput = isHoldToTalkKey(value.config);
 	const [gateway, setGateway] = useState(false);
 	const [notice, setNotice] = useState("");
 	const [resetting, setResetting] = useState(false);
@@ -47,11 +49,11 @@ export function AgentKeyFields({
 				<input
 					id="agent-key-voice"
 					type="checkbox"
-					checked={action("voiceInput") !== false}
+					checked={voiceInput}
 					onChange={(e) => patch("voiceInput", e.target.checked)}
 				/>
 			</Row>
-			{action("voiceInput") === false && (
+			{!voiceInput && (
 				<Row label={copy.task} htmlFor="agent-key-task">
 					<textarea
 						id="agent-key-task"

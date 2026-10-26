@@ -226,3 +226,67 @@ describe("profile IPC initialization recovery and document authority", () => {
 		}
 	});
 });
+
+it.each(["missing", "invalid"] as const)(
+	"MGMT-042 connects a serial with %s active reference, publishes its initial profile and hands it to the editor",
+	async (kind) => {
+		vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
+		electron.ipcMain.handle.mockClear();
+		electron.frame.url = "file:///application/index.html";
+		const initial = createInitialProfileEnvelope();
+		storage.read.mockResolvedValue(
+			encodeProfileEnvelope({
+				...initial,
+				activeByDevice:
+					kind === "invalid"
+						? { QUAKE: { profileId: "does-not-exist", pageId: "gone" } }
+						: {},
+			}),
+		);
+		storage.write.mockResolvedValue();
+		const management = new BrowserWindow();
+		const windows = vi
+			.spyOn(BrowserWindow, "getAllWindows")
+			.mockReturnValue([management]);
+		const deliver = vi.fn(async (_serial: string, _profile: unknown) => {});
+		const profiles = registerTestProfiles(
+			() => management,
+			electron.frame.url,
+			deliver,
+		);
+		try {
+			await profiles.connect("QUAKE");
+			expect(deliver).toHaveBeenCalledOnce();
+			expect(deliver.mock.calls[0]?.[0]).toBe("QUAKE");
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([channel]) => channel === PROFILE_REQUEST,
+			)?.[1];
+			if (!handler) throw new Error("Missing profile IPC");
+			const result = await handler(
+				{
+					sender: management.webContents,
+					senderFrame: management.webContents.mainFrame,
+				},
+				{ type: "read", locale: "en" },
+			);
+			expect(result._tag).toBe("success");
+			if (result._tag === "success") {
+				const selection = result.view.envelope.activeByDevice.QUAKE;
+				expect(selection).toBeDefined();
+				expect(
+					result.view.envelope.profiles.some(
+						(profile) => profile.id === selection?.profileId,
+					),
+				).toBe(true);
+				expect(result.view.serials).toContain("QUAKE");
+			}
+			expect(management.webContents.send).toHaveBeenCalledWith(
+				"profiles:selection",
+				expect.objectContaining({ serial: "QUAKE", hardware: "unverified" }),
+			);
+		} finally {
+			await profiles.dispose();
+			windows.mockRestore();
+		}
+	},
+);

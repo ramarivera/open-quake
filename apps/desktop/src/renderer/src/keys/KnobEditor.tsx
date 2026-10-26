@@ -13,7 +13,7 @@ import { resolveModelRows } from "../../../../../../packages/edge/src/agents/age
 import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
 import { Group, Row } from "../ui/Form";
-import { AgentRouteFields } from "./AgentRouteFields";
+import { KnobAssistantSettings } from "./KnobAssistantSettings";
 import {
 	editKnobSlot,
 	knobAssignment,
@@ -122,6 +122,18 @@ export function KnobEditor({
 		replace({
 			childrenName: "assistant",
 			config: {
+				...slot.config,
+				...("assistantSettings" in slot.config && slot.config.assistantSettings
+					? {
+							assistantSettings: {
+								...slot.config.assistantSettings,
+								modelRowId: providerId,
+								modelId,
+								thinking: false,
+								webSearch: false,
+							},
+						}
+					: {}),
 				type: "assistant",
 				actions: [
 					{ type: "voiceRoute", value: "direct" },
@@ -214,68 +226,45 @@ export function KnobEditor({
 								id="knob-route"
 								value={String(route ?? "")}
 								onChange={(e) => {
-									if (e.target.value === "dkclaw")
+									const nextRoute = e.target.value;
+									if (nextRoute === "direct") changeDirect("", "");
+									else
 										replace({
 											childrenName: "assistant",
 											config: {
+												...slot.config,
 												type: "assistant",
-												actions: [
-													{ type: "voiceRoute", value: "dkclaw" },
-													{ type: "agentId", value: "main" },
-												],
+												actions:
+													nextRoute === "dkclaw"
+														? [
+																{ type: "voiceRoute", value: "dkclaw" },
+																{ type: "agentId", value: "main" },
+																{ type: "dkclawModel", value: "" },
+															]
+														: [
+																{
+																	type: "voiceRoute",
+																	value: "legacyAssistant",
+																},
+																{ type: "assistant", value: "" },
+															],
 											},
 										});
-									else changeDirect("", "");
 									setReviewed(true);
 								}}
 							>
-								{route !== "direct" && route !== "dkclaw" && (
-									<option value={String(route ?? "")} disabled>
-										{route === "dkclaw"
-											? "DK Claw (OpenClaw)"
-											: "Legacy assistant"}{" "}
-										· unavailable
-									</option>
-								)}
+								<option value="legacyAssistant">Legacy assistant</option>
+								<option value="dkclaw">DK Claw (OpenClaw)</option>
 								<option value="direct">Direct chat</option>
 								<option value="dkclaw">DK Claw (OpenClaw)</option>
 							</select>
 						</Row>
-						{route === "dkclaw" && (
-							<AgentRouteFields
-								idPrefix="knob"
-								agent={String(value("agentId") || "main")}
-								model={String(value("dkclawModel") || "")}
-								onAgent={(id) =>
-									replace({
-										...slot,
-										config: {
-											...slot.config,
-											actions: [
-												...slot.config.actions.filter(
-													(a) => a.type !== "agentId",
-												),
-												{ type: "agentId", value: id || "main" },
-											],
-										},
-									})
-								}
-								onModel={(id) =>
-									replace({
-										...slot,
-										config: {
-											...slot.config,
-											actions: [
-												...slot.config.actions.filter(
-													(a) => a.type !== "dkclawModel",
-												),
-												...(id ? [{ type: "dkclawModel", value: id }] : []),
-											],
-										},
-									})
-								}
-							/>
-						)}
+						<KnobAssistantSettings
+							key={String(route)}
+							slot={slot}
+							original={sourceActions}
+							onChange={replace}
+						/>
 						{route === "direct" && (
 							<>
 								<Row label="Chat provider:" htmlFor="knob-provider">

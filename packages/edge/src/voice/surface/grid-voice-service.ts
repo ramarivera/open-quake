@@ -228,11 +228,7 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 						!(yield* admitted(serial, event.keyCode, event.type))
 					)
 						return;
-					if (
-						!cancelling &&
-						event.type === "clawbot" &&
-						event.voiceInput === false
-					) {
+					if (!cancelling && event.voiceInput === false) {
 						if (event.kind === "down")
 							yield* runtime.select(
 								serial,

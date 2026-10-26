@@ -31,7 +31,10 @@ import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
-import { profileFunctionContractsLayer } from "../../../../../../packages/device/src/profiles/profile-function-contracts";
+import {
+	profileFunctionContractsLayer,
+	profileKeyFunctionIssues,
+} from "../../../../../../packages/device/src/profiles/profile-function-contracts";
 import { inspectProfileText } from "../../../../../../packages/device/src/profiles/profile-import";
 import {
 	ProfileRepository,
@@ -39,6 +42,7 @@ import {
 } from "../../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../../packages/device/src/profiles/profile-service";
 import { initialAgentState } from "../../../../../../packages/edge/src/agents/agents-invariants";
+import { managementProfileContracts } from "../../../main/management/profile-contracts";
 import type { QuakeEvent } from "../../../preload/quake";
 import type {
 	ClockCommand,
@@ -852,6 +856,71 @@ it("MGMT-096 repeated publications preserve an unchanged draft and a pending Sav
 	expect(f.calls.filter((c) => c.type === "save")).toHaveLength(1);
 });
 
+it("AI-041/054/060/062 MGMT-285 saves and reopens assistant controls through KeyEditor and KeyEditing", async () => {
+	const f = await fixture({
+		configure: (envelope) =>
+			Schema.encodeSync(ProfileEnvelope)(
+				Schema.decodeUnknownSync(ProfileEnvelope)({
+					...envelope,
+					profiles: envelope.profiles.map((p) =>
+						p.id === "p"
+							? {
+									...p,
+									pages: p.pages.map((page) => ({
+										...page,
+										keys: page.keys.map((key) => ({
+											...key,
+											childrenName: "aiChat",
+											config: { ...key.config, type: "aiChat", actions: [] },
+										})),
+									})),
+								}
+							: p,
+					),
+				}),
+			),
+	});
+	await f.select();
+	await click(button(f.host, "Configure assistant"));
+	const labelField = (label: string) => {
+		const id = Array.from(f.host.querySelectorAll("label")).find(
+			(l) => l.textContent === label,
+		)?.htmlFor;
+		return query(f.host, `[id="${id}"]`, HTMLInputElement);
+	};
+	await click(labelField("Custom Role"));
+	await input(
+		query(f.host, "textarea", HTMLTextAreaElement),
+		"Retained system prompt",
+	);
+	await input(labelField("Chat Timeout(s)"), "20");
+	await click(labelField("Use Dekie Agent"));
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.host.textContent).toContain("Saved successfully"),
+	);
+	const saved = f.stored().profiles[0].pages[0].keys[0];
+	expect(saved?.config.assistantSettings).toMatchObject({
+		roleId: -1,
+		customPrompt: "Retained system prompt",
+		contextTimeoutSeconds: 20,
+		useAgent: false,
+	});
+	if (!saved) throw new Error("saved assistant missing");
+	expect(
+		profileKeyFunctionIssues(
+			Schema.decodeUnknownSync(ProfileKey)(saved),
+			managementProfileContracts,
+		),
+	).toEqual([]);
+	await click(button(f.host, "1,1"));
+	await f.select();
+	expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe(
+		"Retained system prompt",
+	);
+	expect(labelField("Chat Timeout(s)").value).toBe("20");
+});
+
 it("MGMT-055 SETTINGS-013 shares the saved border preference with the actual key editor", async () => {
 	const storageKey = "open-quake.strip.v1";
 	localStorage.setItem(
@@ -986,6 +1055,51 @@ it("MGMT-302 mounted local agent/model/voice/task Save retains typed actions and
 				/token|credential/i.test(a.type),
 			),
 	).toBe(false);
+});
+
+it("MGMT-302 absent voiceInput stays typed-only through mounted editing and save", async () => {
+	const f = await fixture({
+		agentKey: true,
+		configure: (value) =>
+			Schema.encodeSync(ProfileEnvelope)(
+				Schema.decodeUnknownSync(ProfileEnvelope)({
+					...value,
+					profiles: value.profiles.map((profile) => ({
+						...profile,
+						pages: profile.pages.map((page) => ({
+							...page,
+							keys: page.keys.map((key) => ({
+								...key,
+								config: {
+									...key.config,
+									actions: (key.config.actions ?? []).filter(
+										(a) => a.type !== "voiceInput",
+									),
+								},
+							})),
+						})),
+					})),
+				}),
+			),
+	});
+	await f.select();
+	expect(query(f.host, "#agent-key-voice", HTMLInputElement).checked).toBe(
+		false,
+	);
+	await input(
+		query(f.host, "#agent-key-task", HTMLTextAreaElement),
+		"Typed task",
+	);
+	await click(button(f.host, "Save"));
+	const actions = f.stored().profiles[0].pages[0].keys[0]?.config.actions;
+	expect(actions).toContainEqual({ type: "taskPrompt", value: "Typed task" });
+	expect(actions?.some((a) => a.type === "voiceInput")).toBe(false);
+	await click(query(f.host, "#agent-key-voice", HTMLInputElement));
+	expect(f.host.querySelector("#agent-key-task")).toBeNull();
+	await click(button(f.host, "Save"));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.actions,
+	).toContainEqual({ type: "voiceInput", value: true });
 });
 
 it("MGMT-306 saves/reopens DK Claw agent and model through the mounted knob consumer and canonical profile storage", async () => {

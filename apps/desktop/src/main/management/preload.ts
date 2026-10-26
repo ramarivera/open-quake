@@ -17,6 +17,7 @@ installManagementExternalLinks(document, process.isMainFrame, (url) => {
 
 const bridge: ManagementBridge = {
 	platform: process.platform,
+	externalLinks: process.isMainFrame,
 	devices: (request) => ipcRenderer.invoke(MANAGEMENT_DEVICES, request),
 	command: (command) => ipcRenderer.invoke(MANAGEMENT_COMMAND, command),
 	setTheme: (theme) => ipcRenderer.invoke(MANAGEMENT_THEME, theme),

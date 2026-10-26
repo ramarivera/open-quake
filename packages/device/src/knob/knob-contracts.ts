@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { AssistantSettings } from "../profiles/assistant-contracts.js";
 
 /** JSON is confined to imported payloads and registry-validated action values. */
 export type KnobJson =
@@ -94,6 +95,11 @@ export const KnobFunction = Schema.Struct({
 	childrenName: nonblank,
 	config: Schema.Struct({
 		type: nonblank,
+		assistantSettings: Schema.optionalWith(AssistantSettings, { exact: true }),
+		animations: Schema.optionalWith(
+			Schema.Array(Schema.String).pipe(Schema.maxItems(4)),
+			{ exact: true },
+		),
 		actions: Schema.Array(KnobAction),
 		title: Schema.optionalWith(KnobTitle, { exact: true }),
 		icon: Schema.optionalWith(Schema.String, { exact: true }),

@@ -621,3 +621,36 @@ describe("Windows redetect deadlines", () => {
 			},
 		);
 });
+
+it.scoped(
+	"MAIN-055 broadcasts typed serial orientation on binding and metrics updates",
+	() =>
+		withHarness((h) =>
+			Effect.gen(function* () {
+				yield* h.service.onStatus(connected, "a");
+				yield* TestClock.adjust(1);
+				expect(h.notices.at(-1)?.orientations).toContainEqual({
+					serialNumber: "a",
+					rotation: 0,
+					isVertical: false,
+					orientation: "horizontal",
+					connected: true,
+				});
+				const portrait = makeDisplay({
+					...a,
+					size: { width: 480, height: 1920 },
+					bounds: { x: 2560, y: 0, width: 480, height: 1920 },
+					rotation: 90,
+				});
+				yield* h.change([desktop, portrait, b], ["rotation"]);
+				yield* TestClock.adjust(1500);
+				expect(h.notices.at(-1)?.orientations).toContainEqual({
+					serialNumber: "a",
+					rotation: 90,
+					isVertical: true,
+					orientation: "vertical",
+					connected: true,
+				});
+			}),
+		),
+);

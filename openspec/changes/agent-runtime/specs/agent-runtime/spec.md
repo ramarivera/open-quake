@@ -148,3 +148,80 @@ The owned runtime SHALL allow a port, log level, opt-in autostart and a private 
 - **WHEN** the explicitly selected executable is a Windows `.cmd` or `.bat` shim
 - **THEN** gateway and channel invocations use the same quoted `cmd.exe /d /s /v:off /c` adapter with verbatim arguments
 - **AND** command expansion, embedded quotes and line breaks are rejected before spawning, while native executables keep direct argument dispatch
+
+### Requirement: Owned Windows runtime tree termination
+The owned runtime SHALL stop the entire Windows process tree, including the gateway launched by an npm command shim. Production Windows launch SHALL assign the suspended root to an owned kernel Job Object before resuming it. Cleanup SHALL terminate the job by handle, await bounded confirmation that no job processes remain, and retain handles for retry on failure. The injectable PID termination adapter SHALL verify process identity before termination and retry forced termination once on failure. POSIX SHALL retain SIGTERM followed by bounded SIGKILL escalation. Sources: CENTER-047, MAIN-144; open-quake-lih.17.24, PR108 finding 4380901915.
+
+#### Scenario: Command processor exits before its gateway
+- **WHEN** a Windows shim gateway is stopped and cmd.exe closes before tree termination completes
+- **THEN** Stop waits for the tree command to finish and never kills only cmd.exe
+- **AND** failed termination remains an error, with an owned handle available for retry
+
+#### Scenario: Retain cleanup after the Windows shim exits before Stop
+- **WHEN** the owned Windows command processor exits before its gateway and the user selects Stop
+- **THEN** the adapter retains the cleanup target independently of readiness and invokes bounded tree termination against its retained ownership target
+- **AND** only successful cleanup releases ownership; repeated Stop does not kill the same target again
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381279137, bead open-quake-lih.17.24.1
+
+#### Scenario: Stop retries after tree-command failure followed by shim exit
+- **WHEN** both bounded taskkill attempts fail and the command processor exits afterward
+- **THEN** the cleanup target remains owned and a later Stop retries taskkill against the same PID
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381279385, bead open-quake-lih.17.24.1
+
+#### Scenario: Retry cleanup after startup timeout
+- **WHEN** startup times out and both bounded tree-termination attempts fail
+- **THEN** the adapter retains the target for an explicit Stop or dispose retry
+- **AND** failure to start never discards ownership of the possibly live gateway
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381279552, bead open-quake-lih.17.24.1
+
+#### Scenario: Start cannot mistake retained cleanup for readiness
+- **WHEN** a Stop fails after the command processor has already exited and the user selects Start
+- **THEN** Start retries retained cleanup before spawning a new owned process and checking its health
+- **AND** if cleanup still fails Start reports failure without spawning or publishing ready
+- **AND** clear and unconsented settings changes remain unavailable while cleanup is owed
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381290893, bead open-quake-lih.17.24.1
+
+#### Scenario: Failed process creation has no tree to retain
+- **WHEN** the Windows spawner reports an error without ever assigning a PID
+- **THEN** startup reports failure but cleanup succeeds without taskkill, and Stop, Clear and a repaired Start can recover
+- **AND** the adapter retains cleanup normally for a process that was created
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381510116, bead open-quake-lih.17.24.1
+
+#### Scenario: Tree termination reports that an exited PID is absent
+- **WHEN** the processor has closed and taskkill fails for the retained PID
+- **THEN** a bounded Windows process-tree probe checks the root and all descendants, including descendants of an absent root
+- **AND** only a successful confirmation that the entire tree is absent releases cleanup ownership
+- **AND** surviving descendants, failed probes and unexpected probe output keep cleanup retryable
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381535855, bead open-quake-lih.17.24.1
+
+#### Scenario: A retained Windows PID is reused
+- **WHEN** the owned command processor exits and another process reuses its PID before cleanup
+- **THEN** the driver compares the current creation identity with the identity sampled while the spawned process handle was alive
+- **AND** a mismatch, unavailable identity or failed identity query returns the typed scrubbed runtime failure without dispatching termination
+- **AND** matching identity permits tree termination only while the native Windows termination helper holds and rechecks that process object
+- **AND** identity results arriving after the bounded stop attempt cannot dispatch a late termination
+- **AND** this covers CENTER-047, MAIN-144, PR122 safety finding 4381625938, bead open-quake-lih.17.24.1
+
+#### Scenario: Verified Windows root exits while gateway descendants survive
+- **WHEN** the root exits and its creation identity is no longer queryable while owned gateway descendants remain
+- **THEN** the native job handle still owns those descendants and Stop terminates that job without querying or killing a PID
+- **AND** creation is suspended until assignment succeeds so descendants cannot escape the owned job
+- **AND** failed termination retains job and process handles for an explicit retry, including assignment or resume failure during startup
+- **AND** failed creation releases the empty job and closed handles are never queried on a later cleanup retry
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381720098, bead open-quake-lih.17.24.1
+
+#### Scenario: Initial Windows identity sampling fails and the tree later disappears
+- **WHEN** the initial process identity query fails and the processor subsequently closes
+- **THEN** confirmed absence of both root and descendants releases cleanup ownership without a kill, even without a captured identity
+- **AND** Start can recover and spawn a new owned runtime after cleanup succeeds
+- **AND** an unknown or mismatched identity still cannot authorize any PID termination
+- **AND** production job ownership does not depend on identity sampling
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381720113, bead open-quake-lih.17.24.1
+
+### Requirement: Imported agent key voice default
+The clawbot key editor SHALL derive Voice Input and Task Prompt visibility from the runtime hold-to-talk predicate. An absent voiceInput action SHALL display voice disabled and Task Prompt editable. Sources: MGMT-302; open-quake-lih.17.24, PR108 finding 4380901936; DK-Suite v0.4.95 recovered_sources/src/plugins/KeyConfiguration.js:239-240 defaults voiceInput to false, and src/views/Components/QuakeShortCutView.vue:1758-1767 requires a truthy voiceInput action.
+
+#### Scenario: Imported key omits voiceInput
+- **WHEN** a clawbot key without voiceInput opens in the mounted editor and its task is saved
+- **THEN** Voice Input is unchecked, Task Prompt is visible, and saving preserves typed-only behavior without adding voiceInput
+- **AND** explicitly enabling Voice Input hides Task Prompt and saves true

@@ -384,7 +384,7 @@ async function run() {
 		await delay(50);
 		await evaluate(
 			win,
-			"(()=>{const row=Array.from(document.querySelectorAll('.aw-table tbody tr')).find(row=>Array.from(row.querySelectorAll('input')).some(input=>input.value==='synthetic-model'));row.querySelector('.aw-table-actions button').click();})()",
+			"(()=>{const row=Array.from(document.querySelectorAll('.aw-table tbody tr')).find(row=>Array.from(row.querySelectorAll('input')).some(input=>input.value==='synthetic-model'));Array.from(row.querySelectorAll('.aw-table-actions button')).find(button=>button.textContent.trim()==='Save').click();})()",
 		);
 		await wait(
 			win,

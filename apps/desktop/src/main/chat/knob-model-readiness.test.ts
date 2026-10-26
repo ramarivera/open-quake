@@ -141,3 +141,53 @@ it.each(["", "not-a-credential-uuid", "00000000-0000-4000-8000-000000000001"])(
 		}
 	},
 );
+
+it.each(["private-model", "gpt-4o", " ", "x".repeat(201)])(
+	"knob custom readiness and runtime agree without assistant settings: %s",
+	async (modelId) => {
+		const directory = await mkdtemp(join(tmpdir(), "knob-custom-"));
+		const row: ModelRow = {
+			id: "saved",
+			role: "default",
+			provider: "openai",
+			model: "gpt-4o",
+			baseUrl: "https://fake.invalid/v1",
+			maxTokens: 1024,
+			credentialRef: "00000000-0000-4000-8000-000000000001",
+		};
+		const host = createDirectChat({
+			directory,
+			models: () => Effect.succeed([row]),
+			credentials: {
+				resolve: () => Effect.succeed(Redacted.make("fake")),
+				revoked: () => Effect.never,
+			},
+		});
+		try {
+			const knob = editKnobSlot(emptyKnobResource(), "center", {
+				childrenName: "assistant",
+				config: {
+					type: "assistant",
+					actions: [
+						{ type: "voiceRoute", value: "direct" },
+						{ type: "directProvider", value: "saved" },
+						{ type: "directModel", value: modelId },
+					],
+				},
+			});
+			const ready = knobVoiceReady(knob, [
+				{ ...row, credentialAvailable: true },
+			]);
+			const pinned = await host.runtime.runPromise(
+				host.pinKnobModel("saved", modelId).pipe(Effect.either),
+			);
+			expect(ready).toBe(modelId.trim().length > 0 && modelId.length <= 200);
+			expect(Either.isRight(pinned)).toBe(ready);
+			if (Either.isRight(pinned))
+				expect(pinned.right.profile.modelId).toBe(modelId);
+		} finally {
+			await host.dispose();
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);

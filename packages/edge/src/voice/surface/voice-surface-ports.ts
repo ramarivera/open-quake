@@ -1,4 +1,5 @@
 import { Context, type Effect, type Option } from "effect";
+import type { AssistantSettings } from "../../../../device/src/profiles/assistant-contracts.js";
 import type { ProviderProfile } from "../../ai/ai-contracts.js";
 import type { HoldKeyType } from "./hold-to-talk.js";
 import type {
@@ -36,6 +37,7 @@ export interface PinnedDirectModel {
 	readonly maxTokens: number;
 }
 export interface KnobCaptureSnapshot {
+	readonly assistantSettings?: AssistantSettings;
 	readonly profileId: string;
 	readonly revision: number;
 	readonly route: "direct";

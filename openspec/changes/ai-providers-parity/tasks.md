@@ -58,3 +58,31 @@ native media and production direct-chat smoke checks passed using mock hardware
 and fake providers. Earlier pre-integration runs had load-related timeouts; the
 final required two-worker command passed. Hosted checks remain owned by the lead.
 Live providers and hardware remain unverified; this round made no paid calls.
+
+## 7. Assistant-config burn-down lane
+
+- [x] 7.1 Implement typed key controls and fake consumer execution for AI-003/009/041/042/053/054/055/056/057/058/059/060 and MGMT-285. Bead: open-quake-lih.15.7.
+- [x] 7.2 Implement named model controls, General provider choice and subsequent-turn synchronization for AI-019/043/062 and SETTINGS-008/102. Bead: open-quake-lih.15.8.
+- [x] 7.3 Implement explicit knob migration, assignment/preview and agent/model retention for AI-065, KNOB-034 and MGMT-212/308. Owning knob-configuration spec updated. Bead: open-quake-lih.15.9.
+
+
+The assistant-config lane implements the 22 assigned software handoffs with
+portable key controls, a named Models editor, General provider selection and an
+explicit reviewed knob replacement. Mounted Save/reopen tests and fake-provider
+consumer tests cover persistence, sampling, search/thinking, context expiration,
+history and the assistant/global HA allowlist intersection. Imported role/control
+actions remain readable until the first typed save. Models and Speech links use
+in-document navigation so management write authorization remains valid.
+
+Software coverage does not qualify physical device display/animation, microphone,
+live provider credentials, speech playback or real HA. Auto device targets other
+than allowed HA remain unavailable in the desktop binding; the editor says so.
+DK Claw knob assignments persist but capture remains unavailable in its owning
+route. The three task beads stay open for lead review and merge.
+
+## 8. Final PR #114 review round
+
+- [x] 8.1 Propagate production HA runtime cancellation and recheck turn identity after the HA semaphore/allowlist wait. Reproduce cancelled and superseded turns against fake equipment before fixing. Bead: open-quake-lih.15.11.
+- [x] 8.2 Reconcile followed General Settings provider controls in execution and the assistant editor, with failing-before fake-provider and mounted UI regressions. Bead: open-quake-lih.15.11.
+- [x] 8.3 Reproduce and fix the hosted assistant-wake lifecycle test against the renderer-ready activation queue; complete the requested gates and final unanswered-thread follow-up handoff. Bead: open-quake-lih.15.11.
+- [ ] 8.4 Follow up on current-default knob capture pinning, configured-row provider selection, and preserving HA dispatch outcomes in assistant responses. The final review round tracks these separately in bead open-quake-lih.15.12.

@@ -29,6 +29,7 @@ export const NativeThemeRequest = Schema.Struct({
 });
 export interface ManagementBridge {
 	readonly platform: string;
+	readonly externalLinks?: boolean;
 	readonly devices?: (
 		request: typeof DeviceChoiceRequest.Type,
 	) => Promise<unknown>;

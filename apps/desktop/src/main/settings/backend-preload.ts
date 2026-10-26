@@ -76,6 +76,10 @@ export function createSettingsBackendBridge(
 						),
 			);
 	return {
+		development: process.env.NODE_ENV === "development",
+		wizardDebug:
+			process.env.NODE_ENV === "development" &&
+			process.env.OPEN_QUAKE_WIZARD_DEBUG === "1",
 		general: () => run((client) => client.settings.general(undefined)),
 		saveGeneral: (preferences) =>
 			run((client) => client.settings.saveGeneral({ preferences })),
