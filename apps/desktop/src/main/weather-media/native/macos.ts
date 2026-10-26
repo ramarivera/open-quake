@@ -69,7 +69,18 @@ export const makeMacMedia = (
 						sessions,
 					};
 				const selected = yield* macSessions(run, target);
-				return { ...selected, sessions };
+				return {
+					...selected,
+					session: selected.session && {
+						...selected.session,
+						coverUrl:
+							selected.session.coverUrl ??
+							(selected.session.id === reading?.session.id
+								? reading.session.coverUrl
+								: null),
+					},
+					sessions,
+				};
 			}
 			if (!reading)
 				return {
