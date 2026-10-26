@@ -66,7 +66,7 @@ export const visibleHaEntities = (
 const baseConfig = (
 	text: string,
 	type: string,
-	actions: readonly { readonly type: string; readonly value: string }[],
+	actions: ProfileKey["config"]["actions"],
 ) => ({
 	type,
 	title: {
@@ -141,10 +141,17 @@ export function integrationProfiles<R>(
 										.slice(page * 16, page * 16 + 16)
 										.map((row, index) => ({
 											keyCode: `${Math.floor(index / 8) + 1},${(index % 8) + 1}`,
-											childrenName: "hotkey",
-											config: baseConfig(row.name, "hotkey", [
-												{ type: "key", value: executableChord(row.chord) },
-											]),
+											childrenName: row.config?.type ?? "hotkey",
+											config: {
+												...baseConfig(
+													row.name,
+													row.config?.type ?? "hotkey",
+													row.config?.actions ?? [
+														{ type: "key", value: executableChord(row.chord) },
+													],
+												),
+												...(row.icon ? { icon: row.icon } : {}),
+											},
 										})),
 								}),
 							);

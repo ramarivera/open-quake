@@ -77,7 +77,7 @@ export const placeEmojiPackage =
 											style: "bold",
 										},
 										actions: [
-											{ type: "emojiAction", value: 1 },
+											{ type: "emojiAction", value: item.mode ?? 1 },
 											{
 												type: "emojiConfig",
 												value: {
