@@ -4,10 +4,9 @@ import type {
 	KnobRequest,
 	MenuProfile,
 } from "../../../../../shared/knob-contracts";
-import { KEY_LOCALE_STORAGE, storedKeyLocale } from "../../../keys/key-locale";
+import { useLocaleText } from "../../../i18n";
 import { cardRect, pageArrowRect, pickerLayout } from "./geometry";
 import { mountPickerTouch } from "./picker-touch";
-import strings from "./strings.json";
 
 export function ProfilePicker({
 	snapshot,
@@ -16,24 +15,11 @@ export function ProfilePicker({
 	locale: providedLocale,
 }: {
 	snapshot: KnobModelSnapshot;
-	locale?: keyof typeof strings;
+	locale?: string;
 	entries: readonly MenuProfile[];
 	request: (command: KnobRequest) => Promise<void>;
 }): React.JSX.Element {
-	const [storedLocale, setStoredLocale] = useState(storedKeyLocale);
-	useEffect(() => {
-		const update = () => setStoredLocale(storedKeyLocale());
-		const storage = (event: StorageEvent) => {
-			if (event.key === KEY_LOCALE_STORAGE || event.key === null) update();
-		};
-		window.addEventListener("storage", storage);
-		window.addEventListener("key-locale", update);
-		return () => {
-			window.removeEventListener("storage", storage);
-			window.removeEventListener("key-locale", update);
-		};
-	}, []);
-	const copy = strings[providedLocale ?? storedLocale] ?? strings.en;
+	const t = useLocaleText("picker", providedLocale);
 	const { context, selector } = snapshot;
 	const sessionId = context.session.sessionId;
 	const layout = pickerLayout(entries.length);
@@ -71,7 +57,7 @@ export function ProfilePicker({
 			className="knob-picker"
 			role="dialog"
 			aria-modal="true"
-			aria-label={copy.title}
+			aria-label={t("title")}
 			data-testid="profile-picker"
 			onKeyDown={(event) => {
 				if (event.key === "Escape")
@@ -79,11 +65,11 @@ export function ProfilePicker({
 			}}
 		>
 			<header>
-				<span className="knob-picker-title">{copy.title}</span>
+				<span className="knob-picker-title">{t("title")}</span>
 				<span className="knob-current-label">
-					{copy.currentPrefix} · <em>{current?.name}</em>
+					{t("currentPrefix")} · <em>{current?.name}</em>
 				</span>
-				<span className="knob-picker-hint">{copy.knobHint}</span>
+				<span className="knob-picker-hint">{t("knobHint")}</span>
 			</header>
 			{entries
 				.slice(selector.page * 15, (selector.page + 1) * 15)
@@ -123,7 +109,7 @@ export function ProfilePicker({
 							<span className="knob-card-scrim" />
 							<span className="knob-card-name">{entry.name}</span>
 							{entry.id === context.session.profileId && !layout.paged ? (
-								<span className="knob-current-badge">{copy.currentBadge}</span>
+								<span className="knob-current-badge">{t("currentBadge")}</span>
 							) : null}
 						</button>
 					);
@@ -149,7 +135,7 @@ export function ProfilePicker({
 								key={delta}
 								type="button"
 								className={`knob-page-arrow knob-page-${delta < 0 ? "previous" : "next"}`}
-								aria-label={delta < 0 ? copy.previousPage : copy.nextPage}
+								aria-label={delta < 0 ? t("previousPage") : t("nextPage")}
 								aria-hidden={hidden}
 								disabled={hidden}
 								style={{
@@ -172,7 +158,7 @@ export function ProfilePicker({
 						<span>
 							{selector.page + 1} / {Math.ceil(entries.length / 15)}
 						</span>
-						<span>{copy.pageHint}</span>
+						<span>{t("pageHint")}</span>
 					</footer>
 				</>
 			) : null}

@@ -11,6 +11,7 @@ import {
 	type HardwareBridge,
 	HardwareResponse,
 } from "../../../shared/hardware-contracts";
+import type { AppLocale } from "../../../shared/locale";
 import type { ProfileBridge } from "../../../shared/profile-manager";
 
 /**
@@ -79,7 +80,7 @@ export type ProfileChoices =
 
 export async function readProfiles(
 	bridge: ProfileBridge | undefined,
-	locale: "en" | "de",
+	locale: AppLocale,
 ): Promise<ProfileChoices> {
 	if (!bridge) return { state: "unavailable" };
 	try {

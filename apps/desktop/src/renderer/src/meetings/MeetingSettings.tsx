@@ -1,9 +1,10 @@
 import { Either, Schema } from "effect";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
 	defaultMeetingConfig,
 	MeetingConfig,
 } from "../../../shared/meeting-bridge";
+import { TranslationLanguageSelect } from "../settings/TranslationLanguageSelect";
 import { SharedMicrophonePicker } from "../speech/SpeechSettings";
 import { meetingRequest } from "./useMeetings";
 
@@ -14,6 +15,7 @@ export function MeetingSettings({
 	mock: boolean;
 	initial?: MeetingConfig | undefined;
 }): React.JSX.Element {
+	const translationId = useId();
 	const [profileId, setProfileId] = useState<string>(initial.profileId);
 
 	const [config, setConfig] = useState(initial),
@@ -131,12 +133,13 @@ export function MeetingSettings({
 						}
 					/>
 				</label>
-				<label>
+				<label htmlFor={translationId}>
 					Translation language
-					<input
+					<TranslationLanguageSelect
+						id={translationId}
 						value={config.targetLanguage}
-						onChange={(event) =>
-							setConfig({ ...config, targetLanguage: event.target.value })
+						onChange={(targetLanguage) =>
+							setConfig({ ...config, targetLanguage })
 						}
 					/>
 				</label>

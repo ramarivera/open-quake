@@ -14,6 +14,7 @@ import {
 	type Profile,
 	type ProfileEnvelope,
 } from "../../../../../shared/profiles";
+import recovered from "../../../i18n/recovered.json";
 import { stripLayout } from "../../geometry";
 import { StripPanel } from "../../StripPanel";
 import { StripScreen } from "../../StripScreen";
@@ -25,7 +26,6 @@ import { previewVoiceContext } from "../voice/voice-context";
 import { FunctionWheel } from "./FunctionWheel";
 import { cardRect, pageArrowRect } from "./geometry";
 import { ProfilePicker } from "./ProfilePicker";
-import strings from "./strings.json";
 import { useKnob } from "./useKnob";
 import { useProfileFrame } from "./useProfileFrame";
 
@@ -76,7 +76,11 @@ const render = async (element: React.ReactNode) => {
 const advance = async (ms: number) => {
 	await act(async () => vi.advanceTimersByTime(ms));
 };
-function picker(count: number, index = 0, locale: keyof typeof strings = "en") {
+function picker(
+	count: number,
+	index = 0,
+	locale: keyof typeof recovered = "en",
+) {
 	const state = snapshot(count, index);
 	return (
 		<div className="knob-overlay-root">
@@ -140,14 +144,14 @@ describe("SCREEN-087/088/089/094 rendered picker", () => {
 			});
 		}
 	});
-	for (const locale of Object.keys(strings).filter(
-		(key): key is keyof typeof strings => key in strings,
+	for (const locale of Object.keys(recovered).filter(
+		(key): key is keyof typeof recovered => key in recovered,
 	)) {
 		it.each([1, 16])(
 			`uses ${locale} source labels for %i profiles and renders the canonical settle progress`,
 			async (count) => {
 				await render(picker(count, 0, locale));
-				const copy = strings[locale];
+				const copy = recovered[locale].picker;
 				expect(host.querySelector("header")?.textContent).toContain(copy.title);
 				expect(host.querySelector(".knob-current-label")?.textContent).toBe(
 					`${copy.currentPrefix} · ${entries(count)[0]?.name}`,
