@@ -29,3 +29,13 @@ mock verification do not close production/live acceptance task 3.2.
 - [x] 4.1 Address the five new PR #27 threads on ec013348: preserve GPT-5.1 default and disabled reasoning, assert router error identities, reject preset custom prompts, accept streaming WAV size placeholders and DashScope in-progress finish reasons. Add regressions, integrate main once if advanced, run all six gates, and publish attributed thread dispositions and evidence. Bead: open-quake-lih.15.1.16. Production/live acceptance task 3.2 remains open.
 
 Review-round-2 evidence: [review-round-2.md](review-round-2.md).
+
+## 5. Providers burn-down lane
+
+- [x] 5.1 Complete retained catalog, migration and provider settings. Bead: open-quake-lih.15.2.
+- [x] 5.2 Complete dedicated and compatible wire protocols, tools and explicit search. Bead: open-quake-lih.15.3.
+- [x] 5.3 Complete offline preflight, terminal defense, diagnostic mapping and opt-in files. Bead: open-quake-lih.15.4.
+
+Implementation and synthetic verification cover the providers lane's 25 rows.
+The three beads stay open for lead review and merge. Live provider and hardware
+qualification remains unverified; this lane made no paid calls or speech edits.

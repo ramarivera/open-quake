@@ -91,6 +91,27 @@ it("distinguishes blank defaults from invalid numbers and accepts inclusive boun
 		);
 });
 
+it("retains provider settings and search selection across refreshes and pending saves", () => {
+	const previous: PublicModelRow = {
+		...first,
+		settings: { filesEnabled: false },
+		controls: { webSearch: false },
+	};
+	const saved: PublicModelRow = {
+		...previous,
+		settings: { filesEnabled: true, botId: "selected" },
+		controls: { webSearch: true, searchOptions: { enable_source: true } },
+	};
+	expect(reconcileModelRow(previous, previous, saved)).toEqual(saved);
+	const newer: PublicModelRow = {
+		...previous,
+		settings: { filesEnabled: true, botId: "newer-edit" },
+		controls: undefined,
+	};
+	expect(reconcileModelRow(newer, previous, saved)).toEqual(newer);
+	expect(reconcileModelRow(saved, saved, { ...saved })).toEqual(saved);
+});
+
 it("blocks unsupported model sampling before every row save while allowing clearing", () => {
 	for (const model of ["gpt-5.1", "o3", "unknown"]) {
 		expect(samplingValid({ ...first, model })).toBe(true);

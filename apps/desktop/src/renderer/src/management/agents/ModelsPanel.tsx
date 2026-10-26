@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
+import {
+	migrateLegacySelection,
+	modelOptions,
+	volcBaseUrl,
+} from "../../../../../../../packages/edge/src/ai/provider-catalog";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
 import { useAgentsCopy } from "./copy";
@@ -149,6 +154,10 @@ function ModelTable({
 											update({
 												...row,
 												provider,
+												model: migrateLegacySelection({
+													provider,
+													modelId: row.model,
+												}).modelId,
 												baseUrl:
 													row.baseUrl ||
 													providerDefaults.find((p) => p.id === provider)
@@ -187,11 +196,9 @@ function ModelTable({
 										}}
 									/>
 									<datalist id={`agent-models-${scope}-${row.id}`}>
-										{providerDefaults
-											.find((p) => p.id === row.provider)
-											?.models.map((m) => (
-												<option key={m.id} value={m.id} />
-											))}
+										{modelOptions(row.provider, [row.model]).map((m) => (
+											<option key={m.id} value={m.id} />
+										))}
 									</datalist>
 								</td>
 								<td data-label={t.baseUrlCol}>
@@ -203,6 +210,120 @@ function ModelTable({
 											update({ ...row, baseUrl: event.target.value }, true)
 										}
 									/>
+									{row.provider === "qwen" && (
+										<label className="aw-provider-field">
+											{t.generationType}
+											<select
+												aria-label={`${t.generationType} ${scope} ${index + 1}`}
+												value={row.settings?.mediaKind ?? "chat"}
+												onChange={(event) => {
+													const kind = event.target.value;
+													update({
+														...row,
+														settings: {
+															...row.settings,
+															mediaKind:
+																kind === "image" || kind === "video"
+																	? kind
+																	: undefined,
+														},
+														baseUrl:
+															kind === "chat"
+																? "https://dashscope.aliyuncs.com/compatible-mode/v1"
+																: "https://dashscope.aliyuncs.com/api/v1",
+													});
+												}}
+											>
+												<option value="chat">{t.chatGeneration}</option>
+												<option value="image">{t.imageGeneration}</option>
+												<option value="video">{t.videoGeneration}</option>
+											</select>
+										</label>
+									)}
+									{row.provider === "volc" && (
+										<label className="aw-provider-field">
+											{t.entryMethod}
+											<select
+												aria-label={`${t.entryMethod} ${scope} ${index + 1}`}
+												value={row.settings?.entryMethod ?? "inference"}
+												onChange={(event) => {
+													const entryMethod =
+														event.target.value === "agent"
+															? "agent"
+															: "inference";
+													update({
+														...row,
+														settings: { ...row.settings, entryMethod },
+														baseUrl: volcBaseUrl(entryMethod),
+													});
+												}}
+											>
+												<option value="inference">{t.inference}</option>
+												<option value="agent">{t.agentEntry}</option>
+											</select>
+										</label>
+									)}
+									{(row.provider === "coze" || row.provider === "volc") && (
+										<label className="aw-provider-field">
+											{row.provider === "coze" ? t.botId : t.endpointBotId}
+											<input
+												aria-label={`${t.botId} ${scope} ${index + 1}`}
+												value={row.settings?.botId ?? ""}
+												onChange={(event) =>
+													update({
+														...row,
+														settings: {
+															...row.settings,
+															botId: event.target.value,
+														},
+													})
+												}
+											/>
+										</label>
+									)}
+									{(row.provider === "openai" || row.provider === "qwen") && (
+										<label className="aw-provider-option">
+											<input
+												type="checkbox"
+												checked={row.settings?.filesEnabled ?? false}
+												onChange={(event) =>
+													update({
+														...row,
+														settings: {
+															...row.settings,
+															filesEnabled: event.target.checked,
+														},
+													})
+												}
+											/>
+											{t.providerFiles}
+										</label>
+									)}
+									{["qwen", "openai", "zhipu"].includes(row.provider) && (
+										<label className="aw-provider-option">
+											<input
+												type="checkbox"
+												checked={row.controls?.webSearch ?? false}
+												onChange={(event) =>
+													update({
+														...row,
+														controls: {
+															...row.controls,
+															webSearch: event.target.checked,
+															...(row.provider === "qwen"
+																? {
+																		searchOptions: event.target.checked
+																			? { enable_source: true }
+																			: undefined,
+																	}
+																: {}),
+														},
+													})
+												}
+											/>
+											{t.providerSearch}
+										</label>
+									)}
 								</td>
 								<td data-label={t.credentials}>
 									<span className="aw-credential">

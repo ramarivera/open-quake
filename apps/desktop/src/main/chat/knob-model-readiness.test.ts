@@ -63,3 +63,34 @@ it.each<ModelRow["role"]>(["none", "default", "fallback"])(
 		}
 	},
 );
+
+it("AI-005/048 direct knob selects a catalog model and pins it independently of the assistant default", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "knob-catalog-"));
+	const row: ModelRow = {
+		id: "saved",
+		role: "default",
+		provider: "deepseek",
+		model: "deepseek-v4-flash",
+		baseUrl: "https://selected.invalid/v1",
+		maxTokens: 1024,
+		credentialRef: "00000000-0000-4000-8000-000000000001",
+	};
+	const host = createDirectChat({
+		directory,
+		models: () => Effect.succeed([row]),
+		credentials: {
+			resolve: () => Effect.succeed(Redacted.make("fixture")),
+			revoked: () => Effect.never,
+		},
+	});
+	try {
+		const pinned = await host.runtime.runPromise(
+			host.pinKnobModel("saved", "deepseek-v4-pro"),
+		);
+		expect(pinned.profile.modelId).toBe("deepseek-v4-pro");
+		expect(row.model).toBe("deepseek-v4-flash");
+	} finally {
+		await host.dispose();
+		await rm(directory, { recursive: true, force: true });
+	}
+});

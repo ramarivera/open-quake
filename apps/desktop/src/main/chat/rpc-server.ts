@@ -62,6 +62,9 @@ export const makeDesktopChatConnection = (
 	Effect.gen(function* () {
 		const owned = new Map<SessionId, TurnId>();
 		const handlers = ChatRpcs.toLayer({
+			"provider.files": (input) =>
+				host.file(input).pipe(Effect.mapError(rpcFailure)),
+			"provider.list": () => host.providers().pipe(Effect.mapError(rpcFailure)),
 			"chat.submit": (input) =>
 				host.submit(input).pipe(
 					Effect.tap(() =>

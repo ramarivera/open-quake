@@ -12,9 +12,19 @@ export function reconcileModelRow(
 			? next.temperature
 			: draft.temperature;
 	const topP = draft.topP === previous.topP ? next.topP : draft.topP;
+	const settings =
+		JSON.stringify(draft.settings) === JSON.stringify(previous.settings)
+			? next.settings
+			: draft.settings;
+	const controls =
+		JSON.stringify(draft.controls) === JSON.stringify(previous.controls)
+			? next.controls
+			: draft.controls;
 	return {
 		...(temperature === undefined ? {} : { temperature }),
 		...(topP === undefined ? {} : { topP }),
+		...(settings === undefined ? {} : { settings }),
+		...(controls === undefined ? {} : { controls }),
 		id: draft.id,
 		role: draft.role === previous.role ? next.role : draft.role,
 		provider:
