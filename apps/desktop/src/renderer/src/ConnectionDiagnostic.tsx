@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import type {
 	ConnectionDiagnostic,
 	LifecycleBridge,
@@ -6,6 +6,7 @@ import type {
 } from "../../shared/lifecycle-contracts";
 import strings from "../../shared/lifecycle-strings.json";
 import "./connectionDiagnostic.css";
+import { InstallationGuide } from "./settings/InstallationGuide";
 import { PageSectionContext } from "./ui/Form";
 
 declare global {
@@ -137,6 +138,14 @@ export function DiagnosticView({
 				})}
 			</div>
 			<div className="connection-actions">
+				<InstallationGuide />
+				<a
+					href="https://github.com/ramarivera/open-quake/issues"
+					target="_blank"
+					rel="noreferrer"
+				>
+					Contact Support
+				</a>
 				<button
 					type="button"
 					disabled={checking}
@@ -178,14 +187,26 @@ export function ConnectionCheck({
 } = {}): React.JSX.Element {
 	const [status, setStatus] = useState<ConnectionDiagnostic>();
 	const [notice, setNotice] = useState("");
+	const pending = useRef(false);
+	const mounted = useRef(true);
+	const generation = useRef(0);
+	useEffect(() => {
+		if (!notice) return;
+		const timer = setTimeout(() => setNotice(""), 2600);
+		return () => clearTimeout(timer);
+	}, [notice]);
 	const run = useCallback(
 		async (
 			action: Exclude<LifecycleCommand["action"], "wizard">,
 		): Promise<void> => {
+			if (action === "redetect" && pending.current) return;
+			if (action === "redetect") pending.current = true;
+			const token = ++generation.current;
 			const bridge = window.quakeLifecycle;
 			if (!bridge) {
 				setStatus(unavailable);
 				setNotice(text.toast.checkError);
+				pending.current = false;
 				return;
 			}
 			if (action === "redetect") {
@@ -194,6 +215,7 @@ export function ConnectionCheck({
 			}
 			try {
 				const reply = await bridge.request({ action });
+				if (!mounted.current || token !== generation.current) return;
 				if (reply.ok) {
 					setStatus(reply.status);
 					if (action === "redetect")
@@ -215,31 +237,26 @@ export function ConnectionCheck({
 					setNotice(text.toast.checkError);
 				}
 			} catch {
+				if (!mounted.current || token !== generation.current) return;
 				setStatus((old) => ({ ...(old ?? unavailable), checking: false }));
 				setNotice(text.toast.checkError);
+			} finally {
+				if (action === "redetect") pending.current = false;
 			}
 		},
 		[],
 	);
 	useEffect(() => {
+		mounted.current = true;
 		const off = window.quakeLifecycle?.onStatus((next) => {
-			setStatus(next);
-			if (!next.checking)
-				setNotice(
-					next.issue !== "none"
-						? text.toast.checkError
-						: next.usb === "pass" && next.hdmi === "pass"
-							? text.toast.allPass
-							: text.toast.recheckDone.replace(
-									"{completed}",
-									String(
-										Number(next.usb === "pass") + Number(next.hdmi === "pass"),
-									),
-								),
-				);
+			if (mounted.current) setStatus(next);
 		});
 		void run("read");
-		return off;
+		return () => {
+			mounted.current = false;
+			generation.current++;
+			off?.();
+		};
 	}, [run]);
 	useEffect(() => {
 		onReady?.(

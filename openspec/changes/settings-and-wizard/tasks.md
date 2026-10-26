@@ -200,3 +200,13 @@ change's unrelated incomplete tasks are unchanged.
 PR #105 review fix 4379719107 keeps the mounted city verifier across locale changes and reads the current language when a lookup starts. Two mounted offline regressions fail on the previous implementation, covering a debounce that would be cancelled and an in-flight result that would be discarded. All 28 focused city/weather/live-locale cases pass.
 
 PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated profile capture locale before mounting App. The real renderer-entry regression fails with English MON on the preceding implementation and passes with German MO, OKT 26 and localized theme navigation, including every observed ready preview. Fourteen focused profile/live-locale cases and desktop typecheck pass. Capture windows still use no management/panel locale bridge.
+
+## 8. Setup burn-down lane
+
+- [ ] 8.1 First-run startup, welcome/legal reading, locale/region confirmation and lifecycle ownership. MAIN-055/056/125, SETTINGS-011/051/053/054/055/056. Bead open-quake-lih.14.1.
+- [ ] 8.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
+- [ ] 8.3 User-triggered permission recovery and once-only startup guidance with mock probes. MAIN-128, SETTINGS-015. Bead open-quake-lih.14.3.
+- [ ] 8.4 Verify selected-device handoff and pending-edit switching after shell dependency merges. MGMT-042/044. Bead open-quake-lih.14.2.
+- [ ] 8.5 Deliver fixed native modal wizard shell or obtain explicit equivalent-window approval. SETTINGS-052. Bead open-quake-lih.14.1.
+- [ ] 8.6 Prove QUAKE calibration rejection before writes. SETTINGS-072. Bead open-quake-lih.14.2.
+- [x] 8.7 Record Ramiro's explicit SETTINGS-071 exclusion, 2026-10-26. Bead open-quake-lih.14.2; memory oq-scope-exclusions-setup.
