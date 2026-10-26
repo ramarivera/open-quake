@@ -123,7 +123,7 @@ Final playback verification: controller timestamp and both late-mount regression
 - [x] 6.2 Add A/B preload/crossfade, readiness/errors and hidden/teardown coverage (SCREEN-105, WIDGETS-130; open-quake-lih.9.7).
 - [x] 6.3 Delegate selected-serial vivid editor with explicit Save/reset and prove clock theme migration (MGMT-098/250/286, SCREEN-123; open-quake-lih.9.8).
 - [x] 6.4 Add explicit focus and scoped queued rebind commands using existing owners (MAIN-148/149; open-quake-lih.9.9).
-- [ ] 6.5 Merge latest main and run all suites, bundle and silent mock native EN/DE smoke; open PR and leave beads open for lead.
+- [x] 6.5 Merge latest main and run all suites, bundle and silent mock native EN/DE smoke; open PR and leave beads open for lead.
 
 Wallpaper burn-down implementation evidence: the root command with
 `--env-mode=loose -- --maxWorkers=2` and SSD TMPDIR passed 4,126 tests with
@@ -131,3 +131,14 @@ four existing skips. The hidden mock native smoke exercised explicit draft Save,
 transparent/opaque panel and preview transitions, preserved native bounds and
 real playback of the five original silent factory videos. Current-main gates
 and final PR evidence follow task 6.5. No real hardware or audible output ran.
+
+PR #116, https://github.com/ramarivera/open-quake/pull/116, delivers all 15
+wallpaper burn-down rows. Latest-main base is 4aa4a9f1. The final root suite
+passes 4,126 tests with four existing skips across 422 passing files and two
+skipped files. Six typecheck targets, production build, both bundle scenarios,
+1,411-file Biome check with zero errors and existing diagnostics, and 47 strict
+OpenSpec items pass. The full hidden mock native smoke passes and exits after
+runtime disposal. Twenty-seven screenshots, including EN, DE, narrow and the
+factory panel, remain in external SSD burndown/wallpaper/screenshots alongside
+logs and ROWS.md. Four lane beads remain open for lead review and merge.
+Hardware, actual display binding and audible output remain unverified.
