@@ -17,6 +17,7 @@ export function useMaintenance() {
 	const [dialog, setDialog] = useState(false);
 	const [toast, setToast] = useState("");
 	const mounted = useRef(true);
+	const requestRevision = useRef(0);
 	const pending = useRef(false);
 	const last = useRef("");
 	const visible = useRef(false);
@@ -77,10 +78,11 @@ export function useMaintenance() {
 				setError("");
 				setMessage("");
 			}
+			const requestId = ++requestRevision.current;
 			try {
 				const revision = progressRevision.current;
 				const raw: unknown = await window.quakeMaintenance.request(command);
-				if (!mounted.current) return;
+				if (!mounted.current || requestId !== requestRevision.current) return;
 				if (!Schema.is(MaintenanceReply)(raw)) {
 					setError("Settings response could not be read.");
 					return;

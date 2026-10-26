@@ -53,8 +53,10 @@ import { firmwareSessionStore } from "./firmware-session";
 import { firmwareVersions } from "./firmware-versions";
 import {
 	nativePermissionChecks,
+	nativePermissionRequest,
 	openPermission,
 	type PermissionChecks,
+	permissionAction,
 	permissionRows,
 } from "./permissions";
 import { resetAndExit } from "./reset-exit";
@@ -662,7 +664,12 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									break;
 								}
 								case "permission":
-									if (!mock) yield* openPermission(input.key);
+									if (!mock && checks)
+										yield* permissionAction(input.key, {
+											checks,
+											request: nativePermissionRequest,
+											open: (key) => Effect.runPromise(openPermission(key)),
+										});
 									break;
 								case "check-update":
 									yield* update.check();

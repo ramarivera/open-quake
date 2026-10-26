@@ -80,7 +80,32 @@ it("MGMT-038/039 SETTINGS-070 exposes offline guide and fixed project support fr
 	await mount(createElement(ConnectionCheck));
 	await click(button("Installation Guide"));
 	expect(document.querySelector("dialog[open]")).not.toBeNull();
-	expect(element<HTMLAnchorElement>("a").href).toBe(
-		"https://github.com/ramarivera/open-quake/issues",
-	);
+	const link = element<HTMLAnchorElement>("a");
+	const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+	link.dispatchEvent(event);
+	expect(event.defaultPrevented).toBe(true);
+	expect(link.href).toBe("https://github.com/ramarivera/open-quake/issues");
+});
+
+it("MGMT-037 a fresh passing topology replaces an older retry-error notice", async () => {
+	let receive: (next: ConnectionDiagnostic) => void = () => {};
+	Object.defineProperty(window, "quakeLifecycle", {
+		configurable: true,
+		value: {
+			request: async (command: Parameters<LifecycleBridge["request"]>[0]) =>
+				command.action === "read"
+					? { ok: true, status }
+					: { ok: false, code: "DESKTOP.DISPLAY.OPERATION_FAILED" },
+			onStatus: (listener: typeof receive) => {
+				receive = listener;
+				return () => {};
+			},
+		},
+	});
+	await mount(createElement(ConnectionCheck));
+	await click(button("Re-detect"));
+	expect(document.body.textContent).toContain("Detection error");
+	await act(async () => receive({ ...status, usb: "pass", hdmi: "pass" }));
+	expect(document.body.textContent).toContain("both connections are normal");
+	expect(document.body.textContent).not.toContain("Detection error");
 });

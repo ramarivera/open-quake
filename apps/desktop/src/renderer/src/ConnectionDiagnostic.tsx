@@ -138,14 +138,6 @@ export function DiagnosticView({
 				})}
 			</div>
 			<div className="connection-actions">
-				<InstallationGuide />
-				<a
-					href="https://github.com/ramarivera/open-quake/issues"
-					target="_blank"
-					rel="noreferrer"
-				>
-					Contact Support
-				</a>
 				<button
 					type="button"
 					disabled={checking}
@@ -167,9 +159,28 @@ export function DiagnosticView({
 						Arrange Quake display…
 					</button>
 				)}
+				<InstallationGuide />
+				<a
+					href="https://github.com/ramarivera/open-quake/issues"
+					target="_blank"
+					rel="noreferrer"
+					aria-disabled={
+						!window.quakeManagement || !("command" in window.quakeManagement)
+					}
+					onClick={(event) => {
+						// The shell lane owns gesture-authenticated external navigation.
+						if (
+							!window.quakeManagement ||
+							!("command" in window.quakeManagement)
+						)
+							event.preventDefault();
+					}}
+				>
+					Contact Support
+				</a>
 			</div>
 			<p role="status" aria-live="polite">
-				{notice || (ready ? text.toast.allPass : "")}
+				{ready ? text.toast.allPass : notice}
 			</p>
 			{!ready && (
 				<p className="muted">
@@ -215,7 +226,11 @@ export function ConnectionCheck({
 			}
 			try {
 				const reply = await bridge.request({ action });
-				if (!mounted.current || token !== generation.current) return;
+				if (
+					!mounted.current ||
+					(action === "read" && token !== generation.current)
+				)
+					return;
 				if (reply.ok) {
 					setStatus(reply.status);
 					if (action === "redetect")
@@ -237,7 +252,11 @@ export function ConnectionCheck({
 					setNotice(text.toast.checkError);
 				}
 			} catch {
-				if (!mounted.current || token !== generation.current) return;
+				if (
+					!mounted.current ||
+					(action === "read" && token !== generation.current)
+				)
+					return;
 				setStatus((old) => ({ ...(old ?? unavailable), checking: false }));
 				setNotice(text.toast.checkError);
 			} finally {
@@ -249,6 +268,7 @@ export function ConnectionCheck({
 	useEffect(() => {
 		mounted.current = true;
 		const off = window.quakeLifecycle?.onStatus((next) => {
+			generation.current++;
 			if (mounted.current) setStatus(next);
 		});
 		void run("read");

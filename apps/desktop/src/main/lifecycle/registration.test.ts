@@ -121,3 +121,70 @@ it("SETTINGS-087 clears wizard suppression on reload/destroy and transfers liste
 		await runtime.dispose();
 	}
 });
+
+it("MGMT-029 shares one in-flight redetect through authorized IPC and returns its settled status to both callers", async () => {
+	vi.mocked(electron.ipcMain.handle).mockClear();
+	const management = new BrowserWindow();
+	const runtime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: false,
+			displays: () => [],
+			watch: () => () => {},
+			bus: () => undefined,
+			panel: () => {},
+			notify: () => {},
+			prompts: {
+				platform: "linux",
+				mock: true,
+				displays: () => [],
+				primaryId: () => 1,
+				prompt: () => Effect.die("unexpected prompt"),
+				native: () => Effect.die("unexpected native"),
+				openSettings: () => Effect.void,
+			},
+		}),
+	);
+	const service = await runtime.runPromise(DeviceLifecycle);
+	let release = () => {};
+	const waiting = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const redetect = vi
+		.spyOn(service, "redetect")
+		.mockImplementation(() =>
+			Effect.promise(() => waiting).pipe(Effect.as(service.status())),
+		);
+	const remove = registerLifecycle(
+		runtime,
+		() => management,
+		"file:///app/index.html",
+	);
+	try {
+		const handler = vi.mocked(electron.ipcMain.handle).mock.calls[0]?.[1];
+		if (!handler) throw new Error("No lifecycle handler");
+		const sender = { getURL: () => "file:///app/index.html", mainFrame: {} };
+		Object.assign(management.webContents, sender);
+		const event = {
+			sender: management.webContents,
+			senderFrame: management.webContents.mainFrame,
+		};
+		const first = Reflect.apply(handler, undefined, [
+			event,
+			{ action: "redetect" },
+		]);
+		const second = Reflect.apply(handler, undefined, [
+			event,
+			{ action: "redetect" },
+		]);
+		await vi.waitFor(() => expect(redetect).toHaveBeenCalledOnce());
+		release();
+		expect(await first).toEqual(await second);
+		await Reflect.apply(handler, undefined, [event, { action: "redetect" }]);
+		expect(redetect).toHaveBeenCalledTimes(2);
+	} finally {
+		release();
+		remove();
+		await runtime.dispose();
+	}
+});
