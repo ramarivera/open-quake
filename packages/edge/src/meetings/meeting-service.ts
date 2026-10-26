@@ -741,8 +741,11 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					if (!(yield* Ref.get(ephemeral)).translating) return;
 					const selected = yield* Ref.get(config);
 					const updates = yield* provider.translate(selected, pcm);
+					const current = yield* Ref.get(config);
 					if (
-						(yield* Ref.get(config)) !== selected ||
+						current.profileId !== selected.profileId ||
+						current.targetLanguage !== selected.targetLanguage ||
+						current.translationModel !== selected.translationModel ||
 						!(yield* Ref.get(ephemeral)).translating
 					)
 						return;

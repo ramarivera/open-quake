@@ -1750,3 +1750,50 @@ for (const operation of ["cleanup", "list", "upload", "delete"] as const) {
 			}),
 	);
 }
+
+for (const change of [
+	{ autoGenerate: false },
+	{ minutesModel: "another-summary-model" },
+	{ microphoneId: "another-input" },
+])
+	it.effect(
+		`retains in-flight translation through unrelated ${Object.keys(change)[0]} configuration`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				yield* configure;
+				yield* MeetingService.action("liveAudioTranslate");
+				const entered = yield* Deferred.make<void>();
+				const release = yield* Deferred.make<void>();
+				f.translations([
+					{
+						id: "delivered",
+						speaker: "1",
+						text: "translated text",
+						final: true,
+						at: 0,
+					},
+				]);
+				f.pauseTranslation(
+					Deferred.succeed(entered, undefined).pipe(
+						Effect.zipRight(Deferred.await(release)),
+					),
+				);
+				const job = yield* MeetingService.translate(new Uint8Array(14400)).pipe(
+					Effect.fork,
+				);
+				yield* Deferred.await(entered);
+				yield* MeetingService.configure({
+					...(yield* MeetingService.snapshot()).config,
+					...change,
+				});
+				yield* Deferred.succeed(release, undefined);
+				yield* Fiber.join(job);
+				const state = yield* MeetingService.snapshot();
+				expect(state.translating).toBe(true);
+				expect(state.translations).toMatchObject([
+					{ id: "delivered", text: "translated text" },
+				]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
