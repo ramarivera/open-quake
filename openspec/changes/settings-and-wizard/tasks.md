@@ -21,6 +21,8 @@ Execution is tracked by open-quake-def under open-quake-lih.14. Section 5 is the
 - [ ] 3.1 Wire resumable local wizard, explicit desktop preview, idempotent profile selection and optional runtime skip; verify close/relaunch/replay, failed completion writes and offline completion through actual controls.
 - [ ] 3.2 Wire locale/general/AI/device settings and local QUAKE guide with support-state documentation; verify hot locale updates, numeric provider bounds, unavailable adapters and no ARIS-68 calibration call.
 
+  Existing provider validation now rejects advertised temperature ranges outside 0..2 and topP ranges outside 0..1. Request validation also enforces those product bounds independently of a provider's advertised range, while preserving narrower limits. The regression failed before the fix; 120 focused AI/chat tests, edge typecheck, scoped Biome and strict change validation pass. A real AiRepository/AiProviderService regression proves the existing `AiConfigInvalid` identity is returned before credential resolution or adapter dispatch. No saved-model/RPC schema, credentials or UI changed. The corresponding model controls still need the proposed optional-field schema approval; lighting and aggregate acceptance remain incomplete. Tracked in `open-quake-def.6.1`.
+
 ## 4. Acceptance and handoff
 
 - [ ] 4.1 Run all settings-and-wizard scenarios through real consumers with fake OS/device/repository layers; verify pending/unverified device state is not shown as confirmed.

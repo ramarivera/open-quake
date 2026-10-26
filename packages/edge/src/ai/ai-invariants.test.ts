@@ -215,6 +215,53 @@ describe("AI contracts and invariants", () => {
 				),
 			).toBe(false);
 	});
+	it("rejects advertised temperature ranges outside product bounds", () => {
+		for (const temperature of [
+			{ min: -1, max: 2 },
+			{ min: 0, max: 3 },
+		]) {
+			expect(
+				validateProfile({ ...MOCK_PROFILE, samplingLimits: { temperature } }),
+			).toEqual(Either.left({ reason: "config" }));
+		}
+		for (const value of [-0.1, 2.1]) {
+			expect(
+				validateRequest(
+					{
+						...MOCK_PROFILE,
+						samplingLimits: { temperature: { min: -1, max: 3 } },
+					},
+					{ ...request, sampling: { temperature: value } },
+				),
+			).toEqual(Either.left({ reason: "config" }));
+		}
+	});
+	it("retains provider-specific sampling limits within the product bounds", () => {
+		const profile: ProviderProfile = {
+			...MOCK_PROFILE,
+			samplingLimits: {
+				temperature: { min: 0.5, max: 1.5 },
+				topP: { min: 0.2, max: 0.8 },
+			},
+		};
+		expect(Either.isRight(validateProfile(profile))).toBe(true);
+		for (const sampling of [
+			{ temperature: 0.5, topP: 0.2 },
+			{ temperature: 1.5, topP: 0.8 },
+		])
+			expect(
+				Either.isRight(validateRequest(profile, { ...request, sampling })),
+			).toBe(true);
+		for (const sampling of [
+			{ temperature: 0.4 },
+			{ temperature: 1.6 },
+			{ topP: 0.1 },
+			{ topP: 0.9 },
+		])
+			expect(validateRequest(profile, { ...request, sampling })).toEqual(
+				Either.left({ reason: "config" }),
+			);
+	});
 	it("rejects malformed, unsupported and out-of-range sampling without altering inputs", () => {
 		const profile: ProviderProfile = {
 			...MOCK_PROFILE,
