@@ -10,7 +10,7 @@ Implementation tasks. Configuration import and the first-release boundary have v
 ## 2. Playback lifecycle (macOS first)
 
 - [x] 2.1 Implement soundboard repository/conductor and audio adapter with per-key generation IDs and catalog errors; verify explicit-play replacement, PLAY_ADD independent instances, stale and duplicate natural-end rejection, independent keys, stop-all and the 10 s readiness timeout.
-- [ ] 2.2 Implement pause/resume/navigation, linear gain ramps, rescan and teardown; verify position continuity, first/last wrap, indefinitely looping playlists, bounded missing-file skip and all-unavailable stop (`KNOB-086`), interrupted ramps, zero gain, rescan without restart and no host-volume mutation with a fake player and TestClock.
+- [x] 2.2 Implement pause/resume/navigation, linear gain ramps, rescan and teardown; verify position continuity, first/last wrap, indefinitely looping playlists, bounded missing-file skip and all-unavailable stop (`KNOB-086`), interrupted ramps, zero gain, rescan without restart and no host-volume mutation with a fake player and TestClock.
 - [ ] 2.3 Integrate the shared AudioOutput lease; verify voice preemption of all sessions without fade, no auto-resume, busy while speech owns output, and a delayed soundboard stop leaving TTS intact against the real output service.
 
 ## 3. Player acceptance
@@ -125,6 +125,58 @@ the final unsupported-fade and queued ownership regressions. The full desktop
 suite passes 1,567 tests. Existing skips are three external edge cases and one
 native desktop case. Both typechecks, lint, production build, both bundle smoke
 modes and strict validation are required for delivery.
+
+
+## Playback controls source verification, 2026-10-26
+
+Task 2.2 source now supplies pause/resume, explicit wrapped navigation, rescan,
+linear element-gain ramps, all seven imported operations and profile teardown.
+The source tests exercise the real conductor and AudioOutput owner with Deferred
+and TestClock, including Stop All during metadata, replacement during fade-out,
+concurrent ramp cancellation awaiting native finalization, interrupted callers,
+natural end during Stop/paused states, invalid updates and missing-file traversal.
+A property test covers arbitrary volume/navigation sequences. Original lifecycle
+scenarios remain covered; task 2.1's interim rejection test now rejects invalid
+fade bounds because valid fades are implemented.
+
+A hidden muted Electron run verifies the actual decoder through service
+pause/resume with increasing position, unchanged generation during rescan,
+previous/next wrapping, zero-gain playback, outgoing fade timing, natural end,
+two-key capture preemption, stale Stop isolation, decode failure and cleanup.
+The final run measured a 150 ms fade at 158 ms and found zero player windows or
+worker directories. Diagnostics persist real open and pause failures with catalog
+identity, original EACCES cause and no private paths. Current tests and source
+notes live in the change; generated run evidence stays outside git under
+`open-quake-finish/soundboard-controls/` and `soundboard-playback/native/`.
+
+Reviewed delivery remains open under uv9.4. Task 2.3 and task 3.1 remain open for
+production composition/consumers, despite direct shared-output and native source
+proof. The first-release unavailable key/renderer/IPC boundary is unchanged.
+Audible output, physical triggers and Linux audio acceptance remain unverified.
+
+## PR59 concurrency review, 2026-10-26
+
+Six deterministic regressions reproduced the reported failures before the fix:
+profile deactivation during output delivery and replacement cleanup, Stop All
+during replacement cleanup, natural completion during next/previous fades, and
+a stalled rescan blocking another key's pause. Starts now recheck request and
+epoch validity after each asynchronous ownership boundary and release an idle
+reservation when rejected. Explicit navigation defers automatic advancement until
+its selection settles. Interrupted navigation stops its player. Metadata rescan
+runs outside the shared command gate and publishes only for the current slot,
+track generation and latest scan. Two additional regressions cover interrupted
+navigation cleanup and a stale overlapping scan. The production release gate
+remains unchanged; this is service source proof, not user-facing playback.
+
+
+PR59 follow-up review reproduced three additional failures before correction.
+A precomposed profile-stop effect now snapshots sessions only when it executes.
+Navigation rechecks command ownership after the final unavailable-file probe,
+so a newer pause or volume command survives instead of losing its player. All
+133 soundboard/audio tests, both typechecks, scoped Biome and strict validation
+pass. The fresh hidden muted native MP3 smoke passes playback controls, natural
+end, two-key preemption, stale-stop isolation and cleanup with zero windows or
+workers. This remains source acceptance with the release boundary unchanged.
 
 PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
 allowlists retain both native-media and importer names; the final diff contains

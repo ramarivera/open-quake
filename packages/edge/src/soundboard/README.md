@@ -41,8 +41,9 @@ second output owner for soundboard. Keep the service's Layer alive until its
 consumer finishes; acquiring a scoped service and returning it from a locally
 provided Layer closes it before the caller can use it.
 
-The current methods are `play`, `stop`, `stopAll`, `naturalEnd`, `snapshot` and
-idempotent awaited `close`. Explicit play replaces that key's instances;
+The current methods are `play`, `pause`, `resume`, `stop`, `stopAll`, `previous`,
+`next`, `rescan`, `setVolume`, `execute`, `stopProfile`, `naturalEnd`, `snapshot`
+and idempotent awaited `close`. Explicit play replaces that key's instances;
 `additional: true` creates an independent instance. Track generations reject
 stale or duplicate completion, playlists wrap, and `loopTrack` repeats the
 current track. Navigation probes at most one traversal and stops if every
@@ -64,7 +65,46 @@ Its scope closes the window/private directory, including interrupted and late
 acquisition. Native decode failures retain their original cause privately.
 
 These modules aren't composed into the production root or exposed through key,
-IPC or UI controls. Imported soundboard keys remain unavailable. Non-`none`
-fades are rejected until task 2.2 implements ramps. Service pause/resume,
-explicit previous/next, rescan, profile deactivation, managed-file import/copy,
-UI/key integration, audible output and physical-trigger acceptance remain open.
+IPC or UI controls. Imported soundboard keys remain unavailable. Managed-file
+import/copy, UI/key integration, audible output and physical-trigger acceptance
+remain open.
+
+Pause/resume keeps the same native player and position. Explicit previous/next
+wraps in source order, probes at most one traversal and stops if none is available.
+Navigation on a stopped key selects its destination before decoding anything.
+Rescan probes only configured entries with four concurrent checks, retains every
+availability result and never restarts the decoded track, even if its source file
+has disappeared. Deactivating a profile stops its current and pending instances;
+it doesn't affect another profile's sessions.
+
+`setVolume(id, volume, durationMs = 0)` validates 0..100 and 0..10,000 ms before
+changing playback. Ramps run at up to 50 element-gain updates per second, start
+from the latest applied gain and never hold the conductor command lock while
+waiting. New controls cancel the old ramp; zero gain leaves playback running.
+All gain changes are local to the media element. No host-volume port is supplied.
+
+`play` honors none/in/out/toggle fades. Toggle fades out an existing instance or
+fades in a fresh one. A replacement waits for its applicable outgoing fade before
+replacing that key, after validating the explicit target file. `stop(id, fade?)`
+and `stopAll(fade?)` default to each instance's saved fade. Stop/restart waits for
+the applicable fade-out; capture, profile deactivation and shutdown bypass fades.
+An end arriving during Stop's fade releases the track instead of advancing it.
+An end arriving while paused is retained and advances once on resume. New play
+and other controls supersede older pending replacements, so late metadata or
+fade completion cannot recreate stopped playback. At most 128 start requests
+may be pending.
+
+`execute(owner, playlist, operation)` uses the seven imported named operations.
+PLAY_STOP/PLAY_LOOP toggle all instances owned by that key; PLAY_ADD retains
+independent instances; PLAY_RESTART replaces them at the remembered track;
+PLAY_PREV/PLAY_NEXT navigate the latest instance or the remembered selection;
+STOP_ALL applies to soundboard only. `stopAll()` allows a newer command to cancel
+its outgoing fade and never stops that command's replacement afterward.
+
+Natural completion during an explicit replacement defers to that replacement,
+including its outgoing fade. A control accepted during native readiness prevents
+the superseded play or stopped-key navigation from starting a later gain ramp.
+If volume supersedes a replacement after natural completion, the deferred end
+advances once at the new target gain rather than leaving an ended player active. Stop All and profile
+deactivation await applicable sessions already tearing down as well as active
+sessions, without selecting newer replacements for cleanup.
