@@ -276,3 +276,59 @@ Clock saves SHALL preserve unknown metadata and legacy media, report committed s
 - **THEN** it exposes one formatted accessible time and hides decorative digit copies
 - **WHEN** local time repeats during DST fall-back
 - **THEN** every next boundary delay is positive and the clock avoids a tight timer loop
+
+### Requirement: Canonical profile clock configuration
+
+The profile owner SHALL persist each clock key's `hourFormat`, `clockStyle` and `showSeconds` actions in `profiles-v1.json`. Changes SHALL target a profile, page and key, preserve unrelated actions and metadata, and increment only that profile's revision. The strip and editor SHALL read that key's configuration. Covers WIDGETS-020/021/022/038/056/062 and beads open-quake-t10.2 and open-quake-t10.4.
+
+#### Scenario: Independent profiles after restart
+
+- **WHEN** profile A saves 12h and seconds and profile B saves 24h without seconds
+- **THEN** both retain their own format and style after restart and editing A leaves B and wallpaper unchanged
+
+### Requirement: One-time legacy clock migration
+
+Before publishing the first profile snapshot, the profile owner SHALL atomically migrate `clock-v1/clock.json` and serial-scoped `wallpaper-v1/settings` into clock keys and persist `clockConfigVersion: 1` in the same envelope. Existing non-default profile actions SHALL win. Missing actions and actions equal to the built-in preset SHALL inherit matching legacy actions, then defaults. Legacy style keys SHALL match by key code. For hour format, serials selecting that profile SHALL be tried in lexical order, followed by desktop-preview and all remaining saved serials in lexical order; the first existing saved serial supplies the format. A profile without such a selection SHALL use desktop-preview, then the lexically first available serial. All original legacy files SHALL remain untouched. Failure SHALL publish no migrated snapshot and SHALL permit retry. A completed migration SHALL never import legacy stores again. Covers WIDGETS-021/022/038/056/062.
+
+#### Scenario: Fresh and legacy-only stores
+
+- **WHEN** the profile owner starts without legacy files or with legacy files and no profile file
+- **THEN** it persists defaults or migrated built-in clock values respectively and marks the atomic envelope complete
+
+#### Scenario: Partial migration and retry
+
+- **WHEN** a key already has custom profile settings, other actions are absent, and the first migration write fails
+- **THEN** custom settings and unrelated fields survive, originals remain intact, retry fills only missing or built-in-default actions, and a completed repeat writes nothing
+
+### Requirement: Recover and target canonical clock configuration
+
+Profile clock migration SHALL recover a valid wallpaper backup when its primary is missing or invalid. If legacy clock or wallpaper data is unusable, migration SHALL retain the originals, record a scrubbed diagnostic and commit defaults without blocking profile publication. Migrated backups SHALL archive only profile-owned clock media. Legacy archive imports SHALL migrate only imported profiles before deduplication and SHALL be idempotent. Screen controls SHALL target the same serial-scoped profile/page/key as the displayed strip. Profile-targeted clock consumers SHALL ignore other targets and targetless compatibility broadcasts. An unchanged editor draft SHALL not add a write before a clock auto-save. Covers WIDGETS-020/021/022/038/056/062.
+
+#### Scenario: Corrupt legacy files
+
+- **WHEN** legacy primary data is corrupt
+- **THEN** a valid backup supplies the hour format, or defaults and a scrubbed diagnostic permit profiles to load if neither copy is usable
+
+#### Scenario: Legacy media after migration
+
+- **WHEN** abandoned legacy clock media is deleted after migration
+- **THEN** the backup succeeds with only the profile-owned clock media
+
+#### Scenario: Legacy import into a migrated destination
+
+- **WHEN** a pre-migration archive is imported twice into a migrated installation
+- **THEN** imported clocks inherit the archive configuration, existing clocks stay unchanged and the second import adds no profiles
+
+#### Scenario: Clock control ownership
+
+- **WHEN** a physical serial and desktop-preview select different clocks
+- **THEN** Screen controls edit the physical serial's displayed clock, unrelated and targetless broadcasts cannot replace it, and one editor clock change with an unchanged draft creates one revision
+
+### Requirement: Keep clock media paths in main
+
+Renderer-facing profile responses and broadcasts SHALL project absolute clock media paths to opaque references. A key editor round trip SHALL restore only references belonging to its original saved key without dropping selected media. Covers WIDGETS-034/038/056.
+
+#### Scenario: Profile with custom media
+
+- **WHEN** a renderer reads or receives a profile with selected clock media and saves that key again
+- **THEN** no absolute clock media path crosses IPC, and the persisted slot retains its original path

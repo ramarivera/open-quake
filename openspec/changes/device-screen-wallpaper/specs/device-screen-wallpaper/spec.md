@@ -52,12 +52,17 @@ The system SHALL decode user-selected local JPEG/PNG content before accepting it
 
 ### Requirement: First-release clock
 
-The system SHALL provide a clock tile with exactly one hourFormat action of value 24h or 12h, default 24h. It SHALL use the host's current local time and update displayed seconds at least once per second while active. 12h SHALL display midnight/noon as 12 with AM/PM; 24h SHALL display midnight as 00. Preview and panel SHALL use the same time snapshot and saved format. The clock SHALL NOT require an account or an invented firmware clock event.
+Clock rendering and configuration SHALL follow `desktop-clock`, owned by each profile clock key. Default display SHALL show hours and minutes only, matching DK-Suite 0.4.95, `AUDIT_WIDGETS.md` WIDGETS-030, recovered `dkDesktopClock.vue:140-153`. The approved open-quake seconds extension SHALL be optional and off by default; when enabled it SHALL update at host second boundaries. Wallpaper SHALL neither draw a second clock nor own the active clock format. The clock SHALL use host-local time without an account or firmware clock event. Covers WIDGETS-021/022/029/030 and resolves open-quake-b1b.
+
+#### Scenario: Default clock and optional seconds
+
+- **WHEN** a default clock profile is selected, then seconds are enabled on that key
+- **THEN** the default shows only hours and minutes, and the enabled key updates seconds without changing another profile or wallpaper
 
 #### Scenario: Midnight and noon
 
-- **WHEN** the injected host clock reaches midnight and then noon in 12h format
-- **THEN** both renderers show 12 AM and 12 PM respectively
+- **WHEN** the host clock reaches midnight and then noon in a profile with 12h format
+- **THEN** preview and panel show 12 AM and 12 PM respectively using that profile's saved format
 
 ### Requirement: Resource requests use verified targets
 

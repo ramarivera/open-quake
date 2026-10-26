@@ -45,14 +45,10 @@ type Selection = {
 	readonly target: KeyTarget;
 	readonly key: ProfileKey;
 	readonly geometry: KeyGeometry;
+	readonly savedKey: ProfileKey;
 };
 export function KeyEditor(): React.JSX.Element {
-	const {
-		snapshot: wallpaper,
-		request: configureWallpaper,
-		busy: clockBusy,
-		notice: clockNotice,
-	} = useWallpaper();
+	const { snapshot: wallpaper } = useWallpaper();
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
 		[profileId, setProfileId] = useState(""),
@@ -252,6 +248,7 @@ export function KeyEditor(): React.JSX.Element {
 		const next = {
 			key,
 			geometry: {},
+			savedKey: key,
 			target: {
 				token: crypto.randomUUID(),
 				profileId: p.id,
@@ -308,10 +305,12 @@ export function KeyEditor(): React.JSX.Element {
 					(p) => p.id === old.target.profileId,
 				);
 				const destination = old.geometry.destination ?? old.target.keyCode;
+				const savedKey = { ...old.key, keyCode: destination };
 				const next = {
 					...old,
-					key: { ...old.key, keyCode: destination },
+					key: savedKey,
 					geometry: {},
+					savedKey,
 					target: {
 						...old.target,
 						keyCode: destination,
@@ -736,37 +735,6 @@ export function KeyEditor(): React.JSX.Element {
 								Reset to default
 							</button>
 						</Row>
-						{key.config.type === "dkDesktopClock" && (
-							<Row
-								label={keyText("settings.clockHourFormat", locale)}
-								htmlFor="key-clock-format"
-							>
-								<select
-									id="key-clock-format"
-									disabled={!wallpaper || clockBusy}
-									value={wallpaper?.saved.clock.actions[0].value ?? "24h"}
-									onChange={(event) => {
-										if (wallpaper)
-											void configureWallpaper({
-												_tag: "configure",
-												serial: wallpaper.saved.serial,
-												revision: wallpaper.saved.revision,
-												fillMode: wallpaper.saved.settings.bgFillMode,
-												hourFormat:
-													event.target.value === "12h" ? "12h" : "24h",
-											});
-									}}
-								>
-									<option value="24h">
-										{keyText("settings.clockHourFormat24h", locale)}
-									</option>
-									<option value="12h">
-										{keyText("settings.clockHourFormat12h", locale)}
-									</option>
-								</select>
-								{clockNotice && <span role="status">{clockNotice}</span>}
-							</Row>
-						)}
 
 						{key.config.actions
 							.filter(() => key.config.type !== "dkDesktopClock")
@@ -887,7 +855,29 @@ export function KeyEditor(): React.JSX.Element {
 				)}
 				{key?.config.type === "dkDesktopClock" && (
 					<ClockSettings
-						hourFormat={wallpaper?.saved.clock.actions[0].value ?? "24h"}
+						beforeWrite={async () => {
+							const old = current.current;
+							if (!old || savePending.current) return false;
+							if (
+								JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
+								JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
+							)
+								return true;
+							await save();
+							return old !== current.current;
+						}}
+						onSaved={() => {
+							if (selection) void choose(selection.key.keyCode);
+						}}
+						target={
+							selection
+								? {
+										profileId: selection.target.profileId,
+										pageId: selection.target.pageId,
+										keyCode: selection.key.keyCode,
+									}
+								: undefined
+						}
 					/>
 				)}
 			</fieldset>

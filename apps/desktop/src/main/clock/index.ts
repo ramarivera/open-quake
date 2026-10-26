@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import {
 	BrowserWindow,
 	dialog,
@@ -9,6 +9,7 @@ import {
 	protocol,
 	session,
 } from "electron";
+import type { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import {
 	CLOCK_MEDIA_SCHEME,
 	CLOCK_REQUEST,
@@ -17,6 +18,7 @@ import {
 } from "../../shared/clock-contracts";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "../../shared/clock-style";
 import type { DesktopRuntime } from "../diagnostics/module";
+import { clockProfileLayer } from "../profiles/clock-profile-binding";
 import {
 	canRequestClock,
 	canRequestClockMedia,
@@ -26,8 +28,15 @@ import {
 import { ClockStore, ClockLive as clockLayer } from "./clock-store";
 import { isClockVideoProbe, probeClockVideo } from "./native-video-probe";
 
-export const ClockLive = (root: string) =>
-	clockLayer(root, { duration: probeClockVideo });
+export const ClockLive = (
+	root: string,
+	profiles?: DesktopRuntime<ProfileRepository>,
+) =>
+	profiles
+		? clockLayer(root, { duration: probeClockVideo }).pipe(
+				Layer.provide(clockProfileLayer(profiles)),
+			)
+		: clockLayer(root, { duration: probeClockVideo });
 
 /**
  * Must run before `app.whenReady()`: media elements need a standard, secure,

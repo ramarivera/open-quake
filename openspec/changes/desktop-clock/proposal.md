@@ -8,7 +8,7 @@ The panel clock open-quake ships today is a large SVG text clock with seconds. R
 
 - Replace the planning-only `desktop-clock` change with a contract taken from the recovered 0.4.95 sources (`dkDesktopClock.vue`, `DkFlipClock.vue`, `DkClockBackground.vue`, `shared/clockContract.js`, `shared/clockThemePatch.js`). It uses their geometry, timings, tokens and strings verbatim, and every requirement cites its audit rows.
 - Add a standalone `ClockTile` renderer component at `apps/desktop/src/renderer/src/strip/tiles/clock/`. Its props are `{ widthPx, heightPx, now, theme }` plus optional extensions. It replaces the `ClockPlaceholder` that strip-grid (`open-quake-lih.2`, `strip-key-grid`) left in its tile registry for this lane.
-- Persist the clock style (theme, background mode, per-theme custom media, seconds option) in a main-process store. That store accepts DK-Suite's `clockStyle` action shape and applies DK's narrow theme patch, so profile wiring can later move it into the profile key unchanged.
+- Persist the clock style (theme, background mode, per-theme custom media, seconds option) in a main-process store. That store accepts DK-Suite's `clockStyle` action shape and applies DK's narrow theme patch, through the profile owner in each clock key, with an atomic one-time migration from legacy global stores.
 - Serve custom media through an opaque per-theme protocol URL. The renderer never sees file paths. DK-Suite instead put the encoded absolute path in the URL and kept an allow-list.
 - Add a "Desktop clock" settings section to management (theme cards, Theme/None, seconds, change/restore background) and a live preview that ticks. DK-Suite freezes its PC preview at mount (WIDGETS-029).
 - The strip draws a `dkDesktopClock` key (the DK-Desktop-Clock profile) as this clock, full-strip, through the strip tile registry.
@@ -23,7 +23,7 @@ The panel clock open-quake ships today is a large SVG text clock with seconds. R
 
 ### Modified Capabilities
 
-None. `device-screen-wallpaper` "First-release clock" still says seconds update every second. With this change the DK clock replaces that clock on the panel, and the conflict (WIDGETS-030) is handed to the spec-corrections bead `open-quake-lih.20` rather than edited here.
+`device-screen-wallpaper`: defer clock rendering and format ownership to desktop-clock; minutes by default with optional seconds, matching WIDGETS-030 and approved decision 6. Resolves open-quake-b1b.
 
 ## Impact
 

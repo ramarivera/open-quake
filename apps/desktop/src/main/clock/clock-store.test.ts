@@ -117,6 +117,7 @@ describe("clock store (WIDGETS-020/021/038)", () => {
 		const m = memory();
 		const snapshot = await m.run(ClockStore.read());
 		expect(snapshot).toEqual({
+			hourFormat: "24h",
 			revision: 0,
 			keyCode: "1,1",
 			mode: "theme",

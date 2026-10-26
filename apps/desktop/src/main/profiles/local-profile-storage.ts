@@ -13,6 +13,8 @@ import {
 } from "../../../../../packages/device/src/profiles/index.js";
 import type { ProfileCommitGuard } from "../../../../../packages/device/src/profiles/profile-repository.js";
 
+import { loadProfileClockMigration } from "./clock-migration";
+
 /** Direct domain import until task 2.1 installs/composes the desktop package edge. */
 export interface ProfileFileSystem {
 	readonly readFile: (path: string) => Promise<string>;
@@ -46,6 +48,7 @@ export interface ProfileRecovery {
 export function createDesktopProfileStorage(
 	path: string,
 	io: ProfileFileSystem = profileFileSystem,
+	seedEnvelope?: () => EncodedProfileEnvelope,
 ): ProfileStoragePort & { readonly recoveries: readonly ProfileRecovery[] } {
 	const backupPath = `${path}.bak`;
 	const recoveries: ProfileRecovery[] = [];
@@ -115,7 +118,9 @@ export function createDesktopProfileStorage(
 				}
 				recoveries.push({ reason: "invalid-backup" });
 			}
-			const seed = encodeProfileEnvelope(createInitialProfileEnvelope());
+			const seed = seedEnvelope
+				? seedEnvelope()
+				: encodeProfileEnvelope(createInitialProfileEnvelope());
 			await atomicWrite(path, JSON.stringify(seed));
 			recoveries.push({ reason: "seeded" });
 			return seed;
@@ -123,7 +128,14 @@ export function createDesktopProfileStorage(
 			throw ProfileReadFailed.fromCause(cause);
 		}
 	};
-	return { read, write, recoveries };
+	return {
+		read: seedEnvelope
+			? async () =>
+					loadProfileClockMigration(await read(), dirname(path), write)
+			: read,
+		write,
+		recoveries,
+	};
 }
 
 export const desktopProfileStorageLayer = (path: string) =>
