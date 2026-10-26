@@ -237,6 +237,8 @@ export function mountStripTouch(
 	let nativeUntil = 0;
 	let clickUntil = 0;
 	let domActive = false;
+	let pointerId: number | undefined;
+	let touchIdentifier: number | undefined;
 	let ignoreContact = false;
 	let nativeActive = false;
 	let nativeDuplicatesDom = false;
@@ -249,6 +251,8 @@ export function mountStripTouch(
 		});
 		onCancel?.();
 		domActive = false;
+		pointerId = undefined;
+		touchIdentifier = undefined;
 		ignoreContact = nativeActive;
 	};
 	const off = bridge.onQuakeEvent((event) => {
@@ -307,7 +311,8 @@ export function mountStripTouch(
 			);
 			if (!target) return;
 			domActive = true;
-		} else if (!domActive) return;
+			pointerId = event.pointerId;
+		} else if (!domActive || event.pointerId !== pointerId) return;
 		event.preventDefault();
 		event.stopPropagation();
 		clickUntil = performance.now() + 600;
@@ -318,8 +323,10 @@ export function mountStripTouch(
 				event.clientY,
 				event.type === "pointerup" ? 0 : 1,
 			);
-		if (event.type === "pointerup" || event.type === "pointercancel")
+		if (event.type === "pointerup" || event.type === "pointercancel") {
 			domActive = false;
+			pointerId = undefined;
+		}
 	};
 	let lastPointer = Number.NEGATIVE_INFINITY;
 	const pointerEvent = (event: PointerEvent): void => {
@@ -332,7 +339,12 @@ export function mountStripTouch(
 			performance.now() < nativeUntil
 		)
 			return;
-		const point = event.changedTouches[0];
+		const point =
+			event.type === "touchstart"
+				? event.changedTouches[0]
+				: Array.from(event.changedTouches).find(
+						(point) => point.identifier === touchIdentifier,
+					);
 		if (!point) return;
 		if (event.type === "touchstart") {
 			if (
@@ -345,6 +357,7 @@ export function mountStripTouch(
 			)
 				return;
 			domActive = true;
+			touchIdentifier = point.identifier;
 		} else if (!domActive) return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -352,8 +365,10 @@ export function mountStripTouch(
 		if (event.type === "touchcancel") reset();
 		else
 			domPoint(point.clientX, point.clientY, event.type === "touchend" ? 0 : 1);
-		if (event.type === "touchend" || event.type === "touchcancel")
+		if (event.type === "touchend" || event.type === "touchcancel") {
 			domActive = false;
+			touchIdentifier = undefined;
+		}
 	};
 	const click = (event: MouseEvent): void => {
 		if (event.type === "dblclick" || performance.now() < clickUntil) {

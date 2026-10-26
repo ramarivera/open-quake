@@ -48,3 +48,7 @@ Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the le
 - [x] 6.11 Keep the hardware fail-safe keyboard release after a lost acknowledgement. Codex 4378002655.
 
 Review verification: protocol 63, edge 729 with 3 existing skips, device 491, desktop 1889 with 1 existing skip. Unbounded concurrent runs hit wall-clock timeouts; the complete desktop rerun with two workers passed. The subsequent diagnostics allowlist regression and all 16 diagnostics tests pass. All 6 package typechecks, Biome 1227 files with 14 existing warnings, build, bundle smoke in default-HID and explicit-mock modes, and 47 strict OpenSpec items pass. Native hidden mock media smoke reaches the known OBS screenshot selector timeout owned by PR #90; do not treat that smoke as passed. Current main was already an ancestor, the player body finding was disproven by mounted tests, and SCREEN-060 remains blocked. All 10 review threads have replies and remain unresolved. No real QUAKE or DK-Suite was opened. Logs and screenshots: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/touch/fix1/.
+
+- [x] 6.12 Retain the DOM pointer owner until its own release/cancel. Codex 4378206064.
+- [ ] 6.13 Preserve native caret and selection defaults for editable pointer targets. Codex 4378206071.
+- [ ] 6.14 Keep directional knob hotkeys out of normal held touch activation. Codex 4378206080.

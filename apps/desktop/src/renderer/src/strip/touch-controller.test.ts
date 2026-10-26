@@ -645,6 +645,55 @@ describe("mounted production touch lane", () => {
 		expect(calls).toEqual(["down", "up"]);
 		f.dispose();
 	});
+	it.each(["pointer", "touch"])(
+		"DOM %s events retain the initiating contact across another finger's move, cancel and lift",
+		(kind) => {
+			const f = mounted();
+			const send = (phase: string, id: number, x = 100) => {
+				if (kind === "pointer")
+					f.tile.dispatchEvent(
+						new PointerEvent(`pointer${phase}`, {
+							pointerId: id,
+							button: 0,
+							clientX: x,
+							clientY: 100,
+							bubbles: true,
+							cancelable: true,
+						}),
+					);
+				else {
+					const point = new Touch({
+						identifier: id,
+						target: f.tile,
+						clientX: x,
+						clientY: 100,
+					});
+					f.tile.dispatchEvent(
+						new TouchEvent(
+							`touch${phase === "down" ? "start" : phase === "up" ? "end" : phase}`,
+							{ changedTouches: [point], bubbles: true, cancelable: true },
+						),
+					);
+				}
+			};
+			send("down", 1);
+			expect(f.keys).toEqual([{ keyCode: "1,1", keyAction: 0 }]);
+			send("down", 2);
+			send("move", 2, 220);
+			send("cancel", 2);
+			send("up", 2);
+			vi.advanceTimersByTime(100);
+			expect(f.keys).toEqual([{ keyCode: "1,1", keyAction: 0 }]);
+			send("up", 1);
+			vi.advanceTimersByTime(100);
+			expect(f.keys).toEqual([
+				{ keyCode: "1,1", keyAction: 0 },
+				{ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true },
+			]);
+			f.dispose();
+		},
+	);
+
 	it.each(["hotkey", "aiChatView", "cameraView"])(
 		"SCREEN-060 shared pointer fallback for %s uses 100ms and suppresses physical duplicates",
 		async (type) => {
