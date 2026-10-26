@@ -115,6 +115,31 @@ afterEach(async () => {
 });
 
 describe("SCREEN-087/088/089/094 rendered picker", () => {
+	it("uses German page-arrow names on both pages and preserves navigation", async () => {
+		for (const [index, direction, label] of [
+			[0, "next", "Nächste Seite"],
+			[15, "previous", "Vorherige Seite"],
+		] as const) {
+			await render(picker(16, index, "de"));
+			expect(
+				host.querySelector(".knob-page-previous")?.getAttribute("aria-label"),
+			).toBe("Vorherige Seite");
+			expect(
+				host.querySelector(".knob-page-next")?.getAttribute("aria-label"),
+			).toBe("Nächste Seite");
+			const arrow = host.querySelector<HTMLButtonElement>(
+				`.knob-page-${direction}`,
+			);
+			expect(arrow?.getAttribute("aria-label")).toBe(label);
+			request.mockClear();
+			await act(async () => arrow?.click());
+			expect(request).toHaveBeenCalledExactlyOnceWith({
+				_tag: "Page",
+				sessionId: "s1",
+				delta: index === 0 ? 1 : -1,
+			});
+		}
+	});
 	for (const locale of Object.keys(strings).filter(
 		(key): key is keyof typeof strings => key in strings,
 	)) {
@@ -134,6 +159,14 @@ describe("SCREEN-087/088/089/094 rendered picker", () => {
 					host.querySelector<HTMLElement>(".knob-settle div")?.style.width,
 				).toBe("50%");
 				if (count > 15) {
+					expect(
+						host
+							.querySelector(".knob-page-previous")
+							?.getAttribute("aria-label"),
+					).toBe(copy.previousPage);
+					expect(
+						host.querySelector(".knob-page-next")?.getAttribute("aria-label"),
+					).toBe(copy.nextPage);
 					expect(host.querySelector("footer")?.textContent).toContain(
 						copy.pageHint,
 					);

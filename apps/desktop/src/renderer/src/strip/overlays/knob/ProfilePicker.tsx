@@ -149,7 +149,7 @@ export function ProfilePicker({
 								key={delta}
 								type="button"
 								className={`knob-page-arrow knob-page-${delta < 0 ? "previous" : "next"}`}
-								aria-label={delta < 0 ? "Previous page" : "Next page"}
+								aria-label={delta < 0 ? copy.previousPage : copy.nextPage}
 								aria-hidden={hidden}
 								disabled={hidden}
 								style={{
