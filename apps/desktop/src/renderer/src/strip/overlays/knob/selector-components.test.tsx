@@ -234,6 +234,26 @@ describe("SCREEN-087/088/089/094 rendered picker", () => {
 });
 
 describe("SCREEN-075/076/077/080/084 wheel", () => {
+	it("announces selection changes in a polite status outside the wheel image", async () => {
+		for (const index of [0, 1]) {
+			await render(
+				<FunctionWheel
+					entries={entries(2)}
+					index={index}
+					direction={1}
+					motion="reduce"
+				/>,
+			);
+			const status = host.querySelector('[role="status"]');
+			expect(status).not.toBeNull();
+			expect(status?.getAttribute("aria-live")).toBe("polite");
+			expect(status?.textContent).toBe(entries(2)[index]?.name);
+			expect(status?.closest('[role="img"]')).toBeNull();
+			expect(
+				host.querySelector('[role="img"]')?.getAttribute("aria-label"),
+			).toBe("Profile wheel");
+		}
+	});
 	it.each([1, 2, 8])(
 		"renders five clipped wrapped names for %i menu entries without management actions",
 		async (count) => {

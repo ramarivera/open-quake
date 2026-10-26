@@ -70,6 +70,9 @@ export function FunctionWheel({
 	}, [entryId, direction, motion]);
 	return (
 		<>
+			<span role="status" aria-live="polite" className="visually-hidden">
+				{entries[index]?.name}
+			</span>
 			<div className="knob-wheel-backdrop" style={{ width }} />
 			<div
 				className="knob-wheel"
