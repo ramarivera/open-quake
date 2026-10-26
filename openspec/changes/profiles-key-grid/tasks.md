@@ -2,7 +2,7 @@
 
 ## PR107 import-link follow-up
 
-- [ ] Remap imported folder, emoji-folder, Back and string page links after allocating all page IDs; diagnose and preserve unresolved links as inactive compatibility data. Verify colliding IDs through ProfileService and the mounted key-editor-interactions fixture, then run typecheck, Biome, root tests, strict OpenSpec, build, bundle and hidden geometry smoke. Bead `open-quake-lih.10.14`, MGMT-077/090, review 4380208827.
+- [x] Remap imported folder, emoji-folder, Back and string page links after allocating all page IDs; diagnose and preserve unresolved links as inactive compatibility data. Verify colliding IDs through ProfileService and the mounted key-editor-interactions fixture, then run typecheck, Biome, root tests, strict OpenSpec, build, bundle and hidden geometry smoke. Bead `open-quake-lih.10.14`, MGMT-077/090, review 4380208827.
 
 Completed checkboxes record implemented and verified work. The parent maintains one epic for this change and one issue per checkbox, using the task text and verification as its description and linking this OpenSpec path. Do not close implementation issues from spec validation alone.
 
