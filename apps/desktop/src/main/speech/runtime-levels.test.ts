@@ -180,6 +180,9 @@ it.effect(
 					expect(levels.map((e) => e.at)).toEqual([0, 50, 230]);
 					expect(view.bar.rms).toBeCloseTo(0.01225);
 					expect(view.bar.speaking).toBe(false);
+					yield* TestClock.adjust(50);
+					yield* frame(1, 1);
+					expect(view.bar.rms).toBe(1);
 					yield* controller.runtime.cancelCapture("fake", "0,1", 1);
 					expect(closes).toBe(1);
 					yield* controller.runtime.startCapture({
@@ -189,7 +192,7 @@ it.effect(
 					});
 					yield* frame(0.01, 0.02);
 					expect(levels.at(-1)).toMatchObject({
-						at: 230,
+						at: 280,
 						captureId: "two",
 						speaking: false,
 					});

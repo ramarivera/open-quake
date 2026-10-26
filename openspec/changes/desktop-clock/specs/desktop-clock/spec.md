@@ -332,3 +332,63 @@ Renderer-facing profile responses and broadcasts SHALL project absolute clock me
 
 - **WHEN** a renderer reads or receives a profile with selected clock media and saves that key again
 - **THEN** no absolute clock media path crosses IPC, and the persisted slot retains its original path
+
+
+### Requirement: Per-key clock editor and targeted publication
+
+Each clock key SHALL independently own hourFormat, clockStyle, weather, and showSeconds in the canonical profile repository. Theme updates SHALL carry profile/page/key and revision and main SHALL stamp source pc-grid or device-screen from authenticated window identity. Omitted device targets SHALL resolve only from the sender's active device selection. Unknown targets, mismatched owners, stale revisions and failed writes SHALL leave committed data unchanged. A targeted broadcast SHALL patch only the changed clock actions and the matching editor revision, preserving selection and unrelated unsaved edits without reloading the editor or another clock. Covers MAIN-141, SCREEN-142, WIDGETS-038, WIDGETS-056.
+
+#### Scenario: Theme changes while a draft is open
+
+- **WHEN** a device saves a theme for clock A while its editor has unsaved format changes and clock B has different settings
+- **THEN** A's theme and revision update without losing its draft or selection, B stays unchanged, and a failed or stale write publishes nothing
+
+### Requirement: Clock defaults and format draft
+
+The built-in clock SHALL retain all title/icon/grid/delete/drag locks and no knob/touch-effect support. First-install clock actions SHALL enable weather and music with empty city, Celsius, season theme, and 24h format. IP lookup SHALL remain off until explicit consent. Missing weather fields SHALL backfill without replacing valid saved fields. Each key SHALL render its persisted actions independently of wallpaper format. A key editor's hour-format change SHALL preview immediately, revert on Cancel/navigation, and persist only on Save. Covers MGMT-346, WIDGETS-020, WIDGETS-021, WIDGETS-022, WIDGETS-057.
+
+#### Scenario: Two independent clocks and cancellation
+
+- **WHEN** clock A uses 12h and clock B uses 24h, and A's format draft is cancelled
+- **THEN** their saved formats survive restart, wallpaper stays unchanged, and the panel returns to A's original format
+
+#### Scenario: First-install cards without consent
+
+- **WHEN** the built-in clock first renders with an empty city
+- **THEN** both cards show empty placeholders and no IP or forecast request starts
+
+### Requirement: Passive clock hosts
+
+Clock hosts SHALL distinguish passive, edit, and panel modes. Passive mode SHALL freeze the mount instant, force 24h and render weather/music switches as static placeholders without clock, weather or media bridge subscriptions or requests. Edit and panel modes SHALL tick at second/minute boundaries, resynchronize on visibility resume, and release timers/listeners on unmount. Covers WIDGETS-029, WIDGETS-060.
+
+#### Scenario: Passive preview beside a live clock
+
+- **WHEN** time crosses midnight and visibility resumes
+- **THEN** the passive host stays frozen with no IPC while edit/panel clocks show the current local time and dispose their timers on unmount
+
+### Requirement: Bounded theme thumbnails
+
+Custom video theme cards SHALL capture a decoded first frame at min(0.1 seconds, duration/2) into a 960 by 240 JPEG at quality 0.72. Capture SHALL complete or fail within 4 seconds and release media/listeners/timers on failure or unmount. Failure SHALL show a filename placeholder and video tag. Theme radios SHALL support Enter/Space, selection/custom/missing badges, change/restore actions, and disabled controls while saving/probing. Covers WIDGETS-058.
+
+#### Scenario: Video has metadata but no decoded frame
+
+- **WHEN** metadata loads but a frame never decodes within 4 seconds
+- **THEN** the card shows its filename placeholder, saves no empty thumbnail, and releases the decoder
+
+### Requirement: Window-owned clock media references
+
+Main SHALL issue opaque, unguessable custom-media references only after an authenticated clock request resolves a committed target. References SHALL belong to that window and target, expire on target change or navigation, and require the panel's current committed selection on every read. Raw profile selectors SHALL never authorize renderer media reads. Responses SHALL never grant wildcard CORS. Covers WIDGETS-034/038 and review 4377943205.
+
+#### Scenario: Media from another profile or window
+
+- **WHEN** a panel requests a management window's reference, guesses a profile selector, or reuses its reference after switching profiles
+- **THEN** main refuses the request, while the issuing window can load its current target's media and capture its decoded thumbnail
+
+### Requirement: Selected-key Screen enrichment controls
+
+Screen SHALL expose one weather/music control set backed by the selected clock key and SHALL leave legacy global weather settings unchanged. Covers WIDGETS-056 and review 4377943008.
+
+#### Scenario: One Screen weather and music editor
+
+- **WHEN** Screen displays clock B while clock A and the legacy global weather settings differ
+- **THEN** it shows exactly one weather/music control set, saves city and music to B, and leaves A and global settings unchanged

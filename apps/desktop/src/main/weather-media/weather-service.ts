@@ -113,7 +113,53 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 		effect: Effect.gen(function* () {
 			const network = yield* WeatherNetwork;
 			const lock = yield* Effect.makeSemaphore(1);
-			let cached: { key: string; at: number; data: WeatherData } | undefined;
+			const caches = new Map<
+				string,
+				{ key: string; at: number; data: WeatherData }
+			>();
+			const cacheKey = (settings: WeatherSettings, locale: WeatherLocale) =>
+				JSON.stringify([
+					settings.city.trim(),
+					settings.ipLookup,
+					settings.location,
+					settings.forecastUrl,
+					locale,
+				]);
+			const scopeOf = (instanceId = "global", side = "panel") =>
+				JSON.stringify([instanceId, side]);
+			const getCache = Effect.fn("WeatherService.getCache")(function* (
+				settings: WeatherSettings,
+				locale: WeatherLocale,
+				instanceId?: string,
+				side?: string,
+			) {
+				const cached = caches.get(scopeOf(instanceId, side));
+				if (
+					!settings.enabled ||
+					(!settings.city.trim() && !settings.ipLookup) ||
+					!cached ||
+					cached.key !== cacheKey(settings, locale)
+				)
+					return { _tag: "empty" } satisfies WeatherResult;
+				const age = (yield* Clock.currentTimeMillis) - cached.at;
+				return {
+					_tag: "ready",
+					data: weatherIn(
+						{ ...cached.data, stale: age >= WEATHER_REFRESH_MS },
+						settings.unit,
+					),
+					refreshAfterMs: Math.max(0, WEATHER_REFRESH_MS - age),
+				} satisfies WeatherResult;
+			});
+			const clearCache = Effect.fn("WeatherService.clearCache")(
+				(instanceId?: string, side?: string) =>
+					lock.withPermits(1)(
+						Effect.sync(() => {
+							caches.delete(scopeOf(instanceId, side));
+						}),
+					),
+			);
+
 			const search: (
 				query: string,
 				locale: WeatherLocale,
@@ -298,28 +344,26 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 				(
 					settings: WeatherSettings,
 					locale: WeatherLocale,
+					instanceId?: string,
+					side?: string,
 				): Effect.Effect<WeatherResult> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
+							const scope = scopeOf(instanceId, side);
+							const cached = caches.get(scope);
 							if (
 								!settings.enabled ||
 								(!settings.city.trim() && !settings.ipLookup)
 							)
 								return { _tag: "empty" } satisfies WeatherResult;
 							if (settings.city.trim() && !validCityQuery(settings.city)) {
-								cached = undefined;
+								caches.delete(scope);
 								return {
 									_tag: "error",
 									reason: "city-not-found",
 								} satisfies WeatherResult;
 							}
-							const key = JSON.stringify([
-								settings.city.trim(),
-								settings.ipLookup,
-								settings.location,
-								settings.forecastUrl,
-								locale,
-							]);
+							const key = cacheKey(settings, locale);
 							const now = yield* Clock.currentTimeMillis;
 							if (cached?.key === key && now - cached.at < WEATHER_REFRESH_MS)
 								return {
@@ -335,7 +379,7 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 											? { _tag: "matched", location: settings.location }
 											: yield* search(settings.city.trim(), locale);
 									if (result._tag !== "matched") {
-										cached = undefined;
+										caches.delete(scope);
 										return {
 											_tag: "error",
 											reason: "city-not-found",
@@ -346,7 +390,16 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 										result.location,
 										locale,
 									);
-									cached = { key, at: yield* Clock.currentTimeMillis, data };
+									// Bound instance churn without evicting another clock on every request.
+									if (caches.size >= 128 && !caches.has(scope)) {
+										const oldest = caches.keys().next().value;
+										if (oldest !== undefined) caches.delete(oldest);
+									}
+									caches.set(scope, {
+										key,
+										at: yield* Clock.currentTimeMillis,
+										data,
+									});
 									return {
 										_tag: "ready",
 										data: weatherIn(data, settings.unit),
@@ -374,7 +427,7 @@ export class WeatherService extends Effect.Service<WeatherService>()(
 						}),
 					),
 			);
-			return { verifyCity, fetchWeather };
+			return { verifyCity, fetchWeather, getCache, clearCache };
 		}),
 	},
 ) {}

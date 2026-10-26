@@ -1,7 +1,9 @@
 import { Effect, type Layer } from "effect";
 import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
+import type { CaptureMetrics } from "./capture-metrics";
 /** Structural Pick<DesktopDiagnostics, 'layer' | 'instrument'>, independent of the optional diagnostics lane. */
 export interface SpeechDiagnostics {
+	readonly recordCapture?: (metrics: CaptureMetrics) => Effect.Effect<void>;
 	readonly layer: Layer.Layer<never>;
 	readonly instrument: <A, E, R>(
 		effect: Effect.Effect<A, E, R>,

@@ -227,3 +227,23 @@
 	width: min(100%, 680px);
 	flex: 1;
 }
+
+.key-selected-preview {
+	width: min(100%, 320px);
+	padding: 12px;
+	border-radius: 10px;
+	background: linear-gradient(#404040f5, #303030f0);
+}
+.key-selected-preview-frame {
+	display: grid;
+	place-items: center;
+	height: 190px;
+	min-width: 0;
+	overflow: hidden;
+}
+.key-selected-preview-controls {
+	display: flex;
+	justify-content: center;
+	gap: 12px;
+	margin-top: 8px;
+}

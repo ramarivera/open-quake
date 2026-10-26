@@ -1,5 +1,5 @@
 import { Option, Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	BUILTIN_PROFILES,
 	isBuiltinProfile,
@@ -39,6 +39,7 @@ export function ProfilePreview({
 		>
 			<StripViewport>
 				<StripScreen
+					interactive={false}
 					titles="provided"
 					profiles={{
 						_tag: "ready",
@@ -109,7 +110,17 @@ export function ProfilesManager(): React.JSX.Element {
 	const [locale, setLocale] = useState<ProfileLocale>("en");
 	const text = (key: string): string => profileText(key, locale);
 	const [status, setStatus] = useState("");
+	const [refreshing, setRefreshing] = useState<readonly string[]>([]);
+	const [failedThumbnails, setFailedThumbnails] = useState<readonly string[]>(
+		[],
+	);
+	const retained = useRef(
+		new Map<string, { source: string; signature: string }>(),
+	);
 	const [deviceChoice, setDeviceChoice] = useState({ id: "", serial: "" });
+	useEffect(() => {
+		if (view?.progress.running) setFailedThumbnails([]);
+	}, [view?.progress.running]);
 	useEffect(() => {
 		if (!window.quakeProfileManager) return;
 		return subscribeManagerView(
@@ -160,19 +171,37 @@ export function ProfilesManager(): React.JSX.Element {
 		envelope.profiles.filter((p) => p.id === b.id),
 	).filter((p) => !(navigator.platform.includes("Mac") && p.id === "1-0"));
 	const customs = envelope.profiles.filter((p) => !isBuiltinProfile(p.id));
+	const refresh = async (id: string): Promise<void> => {
+		if (view.progress.running || refreshing.includes(id)) return;
+		setRefreshing((ids) => [...ids, id]);
+		setFailedThumbnails((ids) => ids.filter((value) => value !== id));
+		try {
+			const ok = await request({ type: "thumbnail", id, locale });
+			if (ok) retained.current.delete(id);
+			if (!ok) setFailedThumbnails((ids) => [...ids, id]);
+		} catch {
+			setFailedThumbnails((ids) => [...ids, id]);
+		} finally {
+			setRefreshing((ids) => ids.filter((value) => value !== id));
+		}
+	};
 	const row = (p: Profile): React.JSX.Element => (
 		<li
 			key={`${p.id}:${p.name}`}
 			className="profile-row"
 			data-selected={selected?.id === p.id}
 		>
-			{view.thumbnails[p.id] ? (
-				<img src={view.thumbnails[p.id]} alt={p.name} />
-			) : (
-				<span className="profile-no-preview">
-					{text("functionWheelEditor.thumbnailNoImage")}
-				</span>
-			)}
+			<ProfileThumbnailCell
+				profile={p}
+				locale={locale}
+				source={view.thumbnails[p.id] ?? ""}
+				retained={retained.current}
+				updating={refreshing.includes(p.id) || view.progress.running}
+				failed={failedThumbnails.includes(p.id)}
+				disabled={view.progress.running || refreshing.includes(p.id)}
+				text={text}
+				refresh={() => void refresh(p.id)}
+			/>
 			<button
 				type="button"
 				className="profile-select"
@@ -248,12 +277,6 @@ export function ProfilesManager(): React.JSX.Element {
 				}
 			>
 				{text("functionWheelEditor.copy")}
-			</button>
-			<button
-				type="button"
-				onClick={() => void request({ type: "thumbnail", id: p.id, locale })}
-			>
-				{text("functionWheelEditor.thumbnailUpdate")}
 			</button>
 		</li>
 	);
@@ -479,5 +502,100 @@ export function ProfilesManager(): React.JSX.Element {
 			)}
 			{status && <p role="status">{status}</p>}
 		</section>
+	);
+}
+
+function ProfileThumbnailCell({
+	profile,
+	locale,
+	source,
+	retained,
+	updating,
+	failed,
+	disabled,
+	text,
+	refresh,
+}: {
+	profile: Profile;
+	locale: ProfileLocale;
+	source: string;
+	retained: Map<string, { source: string; signature: string }>;
+	updating: boolean;
+	failed: boolean;
+	disabled: boolean;
+	text: (key: string) => string;
+	refresh: () => void;
+}): React.JSX.Element {
+	const signature = JSON.stringify([locale, profile.pages, profile.knob]);
+	const [failedImage, setFailedImage] = useState("");
+	useEffect(() => {
+		if (updating) setFailedImage("");
+	}, [updating]);
+	if (source) retained.set(profile.id, { source, signature });
+	const previous = retained.get(profile.id);
+	const pixels = source || previous?.source || "";
+	const state =
+		failed || (pixels && failedImage === pixels)
+			? "failed"
+			: updating
+				? pixels
+					? "updating"
+					: "generating"
+				: !pixels
+					? "empty"
+					: previous?.signature !== signature
+						? "stale"
+						: "ready";
+	return (
+		<div
+			className="profile-thumbnail-cell"
+			data-profile-id={profile.id}
+			data-state={state}
+		>
+			{pixels && failedImage !== pixels ? (
+				<img
+					src={pixels}
+					alt={profile.name}
+					onError={() => setFailedImage(pixels)}
+				/>
+			) : (
+				<span
+					role="img"
+					className="profile-thumbnail-placeholder"
+					aria-label={text("functionWheelEditor.thumbnailNoImage")}
+				/>
+			)}
+			{state === "failed" ? (
+				<span
+					className="profile-thumbnail-flag"
+					role="status"
+					title={text("functionWheelEditor.thumbnailUpdateFailed")}
+				>
+					⚠
+					<span className="visually-hidden">
+						{text("functionWheelEditor.thumbnailUpdateFailed")}
+					</span>
+				</span>
+			) : state === "stale" ? (
+				<span className="profile-thumbnail-flag">
+					{text("functionWheelEditor.thumbnailStale")}
+				</span>
+			) : updating ? (
+				<span
+					className="profile-thumbnail-spinner"
+					role="status"
+					aria-label={state}
+				/>
+			) : null}
+			<button
+				type="button"
+				disabled={disabled}
+				onClick={refresh}
+				title={text("functionWheelEditor.thumbnailUpdate")}
+				aria-label={`${text("functionWheelEditor.thumbnailUpdate")} ${profile.name}`}
+			>
+				↻
+			</button>
+		</div>
 	);
 }

@@ -41,6 +41,10 @@ export function createSpeechVoiceBinding(options: {
 	let speech: Speech | undefined;
 	const unavailable = () => new AiConfigInvalid();
 	const settings: SpeechSettingsController = {
+		microphone: () =>
+			Effect.suspend(() =>
+				speech ? speech.settings.microphone() : Effect.succeed(undefined),
+			),
 		profiles: () =>
 			Effect.suspend(() =>
 				speech

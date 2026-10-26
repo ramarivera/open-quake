@@ -3,6 +3,7 @@ import {
 	MeetingCommand,
 	MeetingReply,
 } from "../../../../packages/edge/src/meetings/meeting-contracts";
+import { MicrophoneIdentity } from "./speech";
 
 export * from "../../../../packages/edge/src/meetings/meeting-contracts";
 export const MEETING_REQUEST = "meetings:request";
@@ -25,12 +26,15 @@ export const CaptureRequest = Schema.Struct({
 	id: Schema.UUID,
 	parentId: Schema.optional(Schema.UUID),
 	microphoneId: Schema.String,
+	microphone: Schema.optional(MicrophoneIdentity),
+	platform: Schema.optional(Schema.Literal("win32", "darwin", "linux")),
 	systemAudio: Schema.Boolean,
 });
 export type CaptureRequest = typeof CaptureRequest.Type;
 export const CaptureReply = Schema.Struct({
 	requestId: Schema.UUID,
 	success: Schema.Boolean,
+	reason: Schema.optional(Schema.Literal("systemUnavailable")),
 });
 export const CaptureChunk = Schema.Struct({
 	id: Schema.UUID,

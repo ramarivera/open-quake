@@ -2,6 +2,9 @@ import type {
 	CaptureRequest,
 	MeetingsBridge,
 } from "../../../shared/meeting-bridge";
+import { recoverMicrophone } from "../../../shared/speech";
+
+class SystemAudioUnavailable extends Error {}
 
 interface Session {
 	readonly streams: readonly MediaStream[];
@@ -17,10 +20,8 @@ interface Session {
 /** Separate recorders share main streams. Only their owner can release the tracks. */
 export function createMeetingCapture(
 	bridge: MeetingsBridge,
-	media: Pick<
-		MediaDevices,
-		"getUserMedia" | "getDisplayMedia"
-	> = navigator.mediaDevices,
+	media: Pick<MediaDevices, "getUserMedia" | "getDisplayMedia"> &
+		Partial<Pick<MediaDevices, "enumerateDevices">> = navigator.mediaDevices,
 ) {
 	const sessions = new Map<string, Session>();
 	const cancelled = new Set<string>();
@@ -93,13 +94,37 @@ export function createMeetingCapture(
 		);
 		await session.pending;
 	};
-	const displayStream = async (): Promise<MediaStream> => {
-		const stream = await media.getDisplayMedia({ audio: true, video: true });
-		if (!stream.getAudioTracks().length) {
-			release([stream]);
-			throw new Error("System audio unavailable");
+	const systemStream = async (
+		platform: CaptureRequest["platform"],
+	): Promise<MediaStream> => {
+		let stream: MediaStream | undefined;
+		try {
+			if (platform === "darwin" || platform === "linux") {
+				const devices = await media.enumerateDevices?.();
+				const input = devices?.find(
+					(d) => d.kind === "audioinput" && /BlackHole|Monitor/i.test(d.label),
+				);
+				if (!input) throw new SystemAudioUnavailable();
+				stream = await media.getUserMedia({
+					audio: {
+						deviceId: { exact: input.deviceId },
+						echoCancellation: false,
+						noiseSuppression: false,
+						autoGainControl: false,
+					},
+					video: false,
+				});
+			} else stream = await media.getDisplayMedia({ audio: true, video: true });
+			if (!stream.getAudioTracks().length) throw new SystemAudioUnavailable();
+			for (const track of stream.getVideoTracks()) {
+				track.stop();
+				stream.removeTrack(track);
+			}
+			return stream;
+		} catch {
+			if (stream) release([stream]);
+			throw new SystemAudioUnavailable();
 		}
-		return stream;
 	};
 	const stopTranslation = async (): Promise<void> => {
 		translationGeneration++;
@@ -125,16 +150,30 @@ export function createMeetingCapture(
 				if (request.parentId && !parent) throw new Error("No main capture");
 				if (parent) streams = parent.streams;
 				else {
+					const devices = request.microphone
+						? await media.enumerateDevices?.()
+						: undefined;
+					const selected = request.microphone
+						? recoverMicrophone(
+								// The settings picker and capture host are separate documents.
+								{ ...request.microphone, groupId: "" },
+								devices?.filter((d) => d.kind === "audioinput") ?? [],
+							)
+						: undefined;
+					const microphoneId =
+						selected?.deviceId ??
+						request.microphone?.deviceId ??
+						request.microphoneId;
 					const mic = await media.getUserMedia({
 						audio:
-							request.microphoneId === "default"
+							microphoneId === "default"
 								? true
-								: { deviceId: { exact: request.microphoneId } },
+								: { deviceId: { exact: microphoneId } },
 						video: false,
 					});
 					streams = [mic];
 					if (request.systemAudio) {
-						system = await displayStream();
+						system = await systemStream(request.platform);
 						streams = [mic, system];
 					}
 				}
@@ -178,6 +217,7 @@ export function createMeetingCapture(
 					sessions.delete(id);
 				}
 				if (!parent) release(streams);
+				if (!parent) system = undefined;
 				throw cause;
 			}
 		} else if (operation === "stop" || operation === "cancel") {
@@ -201,7 +241,7 @@ export function createMeetingCapture(
 		} else if (operation === "translate") {
 			if (translationContext) return;
 			const generation = ++translationGeneration;
-			const stream = system ?? (await displayStream());
+			const stream = system ?? (await systemStream(request.platform));
 			const ownsStream = stream !== system;
 			if (disposed || generation !== translationGeneration) {
 				if (ownsStream) release([stream]);
@@ -245,9 +285,15 @@ export function createMeetingCapture(
 			try {
 				await perform(request);
 				bridge.captureReply({ requestId: request.requestId, success: true });
-			} catch {
+			} catch (cause) {
 				if (request.operation === "translate") await stopTranslation();
-				bridge.captureReply({ requestId: request.requestId, success: false });
+				bridge.captureReply({
+					requestId: request.requestId,
+					success: false,
+					...(cause instanceof SystemAudioUnavailable
+						? { reason: "systemUnavailable" as const }
+						: {}),
+				});
 			}
 		},
 		dispose: (): void => {

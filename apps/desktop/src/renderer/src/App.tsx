@@ -36,7 +36,6 @@ import {
 import { useQuakeEvents } from "./useQuakeEvents";
 import { useWallpaper } from "./wallpaper/useWallpaper";
 import { WallpaperSettings } from "./wallpaper/WallpaperViews";
-import { WeatherMediaSettings } from "./weather-media/WeatherMediaSettings";
 import "./styles.css";
 import { IconPickerSurface } from "./keys/IconPicker";
 import "./management/management.css";
@@ -218,7 +217,6 @@ function ManagementSurface({
 					<>
 						<WallpaperSettings wallpaper={wallpaper} />
 						<ScreenClockSettings serial={wallpaper.snapshot?.saved.serial} />
-						<WeatherMediaSettings />
 						<MonitorSettings />
 					</>
 				) : page === "meetings" ? (

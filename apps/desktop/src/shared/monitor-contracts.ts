@@ -82,6 +82,7 @@ export const SettingsView = Schema.Struct({
 });
 export type SettingsView = typeof SettingsView.Type;
 export const MonitorCommand = Schema.Union(
+	Schema.TaggedStruct("artwork", {}),
 	Schema.TaggedStruct("read", {
 		styleId: Schema.optionalWith(StyleId, { exact: true }),
 	}),
@@ -93,7 +94,11 @@ export const MonitorCommand = Schema.Union(
 	Schema.TaggedStruct("watch", { active: Schema.Boolean }),
 );
 export type MonitorCommand = typeof MonitorCommand.Type;
+export const ForegroundArtwork = Schema.Struct({ artwork: Schema.String });
+export type ForegroundArtwork = typeof ForegroundArtwork.Type;
+export const MONITOR_ARTWORK = "monitor:artwork";
 export const MonitorReply = Schema.Union(
+	Schema.TaggedStruct("foregroundArtwork", ForegroundArtwork.fields),
 	Schema.TaggedStruct("success", { view: SettingsView }),
 	Schema.TaggedStruct("media", { slot: MediaSlot, view: MediaView }),
 	Schema.TaggedStruct("cancelled", {}),
@@ -113,6 +118,7 @@ export interface MonitorBridge {
 	request(command: MonitorCommand): Promise<unknown>;
 	snapshot(): Promise<unknown>;
 	onSettings(callback: (view: unknown) => void): () => void;
+	onArtwork?(callback: (artwork: unknown) => void): () => void;
 	onState(callback: (snapshot: unknown) => void): () => void;
 	onMetrics(callback: (snapshot: unknown) => void): () => void;
 }

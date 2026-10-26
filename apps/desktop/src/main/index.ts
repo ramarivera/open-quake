@@ -16,6 +16,7 @@ import {
 } from "electron";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { ProfileManager } from "../../../../packages/device/src/profiles/profile-manager-service.js";
+import { ProfileRepository } from "../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
@@ -76,6 +77,7 @@ import { prepareObs } from "./obs";
 import { obsKeyAction } from "./obs/key-action";
 import { visibleObsKeys } from "./obs/visibility";
 import { prepareProfiles } from "./profiles";
+import { activeClockTarget } from "./profiles/clock-profile-binding";
 import { createSettingsOsAdapter } from "./settings/os-adapter";
 import { prepareAppLocale } from "./settings/registration";
 import { bindSettingsWindow } from "./settings/window-binding";
@@ -482,7 +484,21 @@ if (!app.requestSingleInstanceLock()) {
 						);
 						const clockModule = prepareDesktopModule(
 							ClockLive(app.getPath("userData"), profilesModule.runtime),
-							(runtime) => registerClock(runtime, () => managementWin),
+							(runtime) =>
+								registerClock(runtime, () => managementWin, undefined, {
+									panel: () => panelWin,
+									target: async (keyCode) => {
+										const { envelope } =
+											await profilesModule.runtime.runPromise(
+												ProfileRepository.load(),
+											);
+										return activeClockTarget(
+											envelope,
+											activeDeviceId(),
+											keyCode,
+										);
+									},
+								}),
 							diagnostics,
 						);
 						const monitorModule = prepareMonitor(
@@ -512,6 +528,7 @@ if (!app.requestSingleInstanceLock()) {
 						const runtime = hardwareModule.runtime;
 						const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 						const meetingsModule = prepareMeetings({
+							microphone: speech.settings.microphone,
 							diagnostics,
 							userData: app.getPath("userData"),
 							hardware: () => bus?.hardware?.(),

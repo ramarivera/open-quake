@@ -25,7 +25,8 @@
 				{
 					"type": "weather",
 					"value": {
-						"enabled": false,
+						"enabled": true,
+						"ipLookup": false,
 						"city": "",
 						"unit": "celsius",
 						"location": null

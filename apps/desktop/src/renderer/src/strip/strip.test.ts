@@ -375,7 +375,7 @@ describe("generic tile", () => {
 			expect(profile.name).toBe("Quick");
 			if (!icon) expect(markup).not.toContain("<img");
 			else if (icon.startsWith("resource:"))
-				expect(markup).toContain('<img src="data:image/svg+xml,');
+				expect(markup).not.toContain("<img");
 			else expect(markup).toContain('src="data:image/png;base64,AA=="');
 		},
 	);

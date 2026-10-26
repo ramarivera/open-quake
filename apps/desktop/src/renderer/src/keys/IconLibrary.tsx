@@ -2,22 +2,20 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { LibraryPack } from "../../../shared/key-library";
+import { useArtworkVisibility, validatedArtwork } from "../strip/useTileArt";
 
 type MdiIcon = {
 	readonly name: string;
 	readonly tags: readonly string[];
 	readonly path: string;
+	readonly extraData?: readonly string[];
 };
 const mdiData = (path: string): string =>
 	`data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="white" d="${path}"/></svg>`)}`;
 
 /** Decode an inert URL into portable pixels; imported markup is never inserted in DOM. */
 export async function rasterizeIcon(data: string): Promise<string> {
-	if (
-		!/^data:image\/(?:png|jpeg|gif|webp|svg\+xml)[;,]/.test(data) ||
-		data.length > 8 * 1024 * 1024
-	)
-		throw new Error("Invalid icon image.");
+	if (!validatedArtwork(data)) throw new Error("Invalid icon image.");
 	const image = new Image();
 	image.src = data;
 	await image.decode();
@@ -43,6 +41,24 @@ export async function rasterizeIcon(data: string): Promise<string> {
 	return canvas.toDataURL("image/png");
 }
 
+function IconImage({
+	data,
+	size,
+}: {
+	data: () => string;
+	size: number;
+}): React.JSX.Element {
+	const { ref, visible } = useArtworkVisibility<HTMLImageElement>();
+	return (
+		<img
+			ref={ref}
+			src={visible ? validatedArtwork(data()) || undefined : undefined}
+			alt=""
+			style={{ width: size, height: size }}
+		/>
+	);
+}
+
 export function IconLibrary({
 	onSelect,
 	onClose,
@@ -64,6 +80,8 @@ export function IconLibrary({
 		[loading, setLoading] = useState(true),
 		[progress, setProgress] = useState(8),
 		[status, setStatus] = useState(""),
+		[notice, setNotice] = useState(""),
+		[selectedIcon, setSelectedIcon] = useState(""),
 		[retry, setRetry] = useState(0);
 	const grid = useRef<HTMLUListElement>(null);
 	const mounted = useRef(true);
@@ -89,6 +107,7 @@ export function IconLibrary({
 		setLoading(true);
 		setProgress(8);
 		setStatus("");
+		setNotice("");
 		void (async () => {
 			try {
 				const library = await window.quakeKeyLibrary.request({ type: "icons" });
@@ -143,6 +162,7 @@ export function IconLibrary({
 						id: icon.name,
 						name: icon.name,
 						tags: icon.tags,
+						extraData: icon.extraData,
 						data: () => mdiData(icon.path),
 					})),
 				},
@@ -158,12 +178,17 @@ export function IconLibrary({
 				.map((pack) => ({
 					...pack,
 					icons: pack.icons.filter((icon) =>
-						`${icon.name} ${icon.tags.join(" ")}`
+						`${icon.name} ${icon.tags.join(" ")} ${icon.extraData?.join(" ") ?? ""}`
 							.toLowerCase()
 							.includes(search),
 					),
 				}))
-				.filter((pack) => pack.icons.length || !search),
+				.filter(
+					(pack) =>
+						((pack.id !== "local" && pack.id !== "applications") ||
+							pack.icons.length > 0) &&
+						(pack.icons.length || !search),
+				),
 		[mdi, packs, applications, search, locale],
 	);
 	const selected = groups.find((pack) => pack.id === group) ?? groups[0];
@@ -181,52 +206,96 @@ export function IconLibrary({
 		return () => observer.disconnect();
 	});
 	const remove = async (id: string, icon = false): Promise<void> => {
+		if (loading) return;
+		const name = icon
+			? (packs
+					.find((pack) => pack.id === "local")
+					?.icons.find((item) => item.id === id)?.name ?? id)
+			: (packs.find((pack) => pack.id === id)?.name ?? id);
 		if (
 			!confirm(
 				icon
-					? t("iconLib.deleteCustomIconConfirm").replace("{{iconName}}", id)
+					? t("iconLib.deleteCustomIconConfirm").replace("{{iconName}}", name)
 					: t("iconLib.deleteIconPackConfirm").replace(
 							"{{iconPackName}}",
-							packs.find((pack) => pack.id === id)?.name ?? id,
+							name,
 						),
 			)
 		)
 			return;
-		const reply = await window.quakeKeyLibrary.request({
-			type: icon ? "remove-icon" : "remove-pack",
-			id,
-		});
-		if (!mounted.current) return;
-		if (reply._tag === "success") setPacks(reply.packs ?? []);
-		else setStatus(reply.reason);
+		setLoading(true);
+		setStatus("");
+		setNotice("");
+		try {
+			const reply = await window.quakeKeyLibrary.request({
+				type: icon ? "remove-icon" : "remove-pack",
+				id,
+			});
+			if (!mounted.current) return;
+			if (reply._tag === "success") {
+				setPacks(reply.packs ?? []);
+				setNotice(
+					t(
+						icon
+							? "iconLib.deleteCustomIconSuccess"
+							: "iconLib.deleteIconPackSuccess",
+					).replace(icon ? "{{iconName}}" : "{{iconPackName}}", name),
+				);
+			} else setStatus(reply.reason);
+		} catch {
+			if (mounted.current)
+				setStatus(
+					t(
+						icon
+							? "iconLib.deleteCustomIconFailed"
+							: "iconLib.deleteIconPackFailed",
+					).replace(icon ? "{{iconName}}" : "{{iconPackName}}", name),
+				);
+		} finally {
+			if (mounted.current) setLoading(false);
+		}
 	};
 	const upload = async (type: "import-pack" | "import-icon"): Promise<void> => {
 		setLoading(true);
 		setProgress(8);
 		setStatus("");
+		setNotice("");
 		try {
 			const reply = await window.quakeKeyLibrary.request({ type });
 			if (!mounted.current) return;
 			if (reply._tag === "success") {
 				setPacks(reply.packs ?? []);
 				setProgress(100);
+				setNotice(
+					reply.notice === "duplicate-icon"
+						? t("iconLib.duplicateIconDetected")
+						: "",
+				);
 			} else setStatus(reply.reason);
+		} catch {
+			if (mounted.current) setStatus(t("iconLib.addIconFailed"));
 		} finally {
 			if (mounted.current) setLoading(false);
 		}
 	};
-	const choose = async (data: string): Promise<void> => {
+	const choosing = useRef(false);
+	const choose = async (id: string, data: string): Promise<void> => {
+		if (loading || choosing.current) return;
+		choosing.current = true;
+		setSelectedIcon(id);
 		setLoading(true);
 		setProgress(88);
 		setStatus("");
 		try {
-			await onSelect(await rasterizeIcon(data), data);
+			const pixels = await rasterizeIcon(data);
+			if (mounted.current) await onSelect(pixels, data);
 		} catch (cause) {
 			if (mounted.current)
 				setStatus(
 					cause instanceof Error ? cause.message : "Could not prepare icon.",
 				);
 		} finally {
+			choosing.current = false;
 			if (mounted.current) {
 				setProgress(100);
 				setLoading(false);
@@ -277,6 +346,7 @@ export function IconLibrary({
 									<button
 										type="button"
 										aria-label={`Uninstall ${pack.name}`}
+										disabled={loading}
 										onClick={() => void remove(pack.id)}
 									>
 										×
@@ -308,19 +378,19 @@ export function IconLibrary({
 										title={icon.name}
 										aria-label={`Select ${icon.name}`}
 										style={{ height: zoom }}
-										onClick={() => void choose(icon.data())}
+										aria-pressed={selectedIcon === `${selected.id}:${icon.id}`}
+										disabled={loading}
+										onClick={() =>
+											void choose(`${selected.id}:${icon.id}`, icon.data())
+										}
 									>
-										<img
-											loading="lazy"
-											src={icon.data()}
-											alt=""
-											style={{ width: zoom * 0.6, height: zoom * 0.6 }}
-										/>
+										<IconImage data={icon.data} size={zoom * 0.6} />
 									</button>
 									{selected.id === "local" && (
 										<button
 											type="button"
 											aria-label={`Delete ${icon.name}`}
+											disabled={loading}
 											onClick={() => void remove(icon.id, true)}
 										>
 											×
@@ -330,12 +400,21 @@ export function IconLibrary({
 							))
 						) : (
 							<li className="icon-library-empty">
-								{loading ? t("iconLib.loadingIcons") : "No matching icons."}
+								{loading
+									? t("iconLib.loadingIcons")
+									: search
+										? "No matching icons."
+										: "No icons in this group. Select Picture to add artwork."}
+								{!loading && search && (
+									<button type="button" onClick={() => setQuery("")}>
+										Clear search
+									</button>
+								)}
 							</li>
 						)}
 					</ul>
 				</div>
-				{loading && (
+				{loading && !choosing.current && (
 					<div className="icon-library-loading" role="status">
 						<span>{t("iconLib.loadingIcons")}</span>
 						<progress
@@ -348,6 +427,9 @@ export function IconLibrary({
 				)}
 			</div>
 			<footer className="icon-library-footer">
+				{loading && choosing.current && (
+					<span role="status">{t("iconLib.loadingIcons")}</span>
+				)}
 				<button
 					type="button"
 					disabled={loading}
@@ -404,6 +486,11 @@ export function IconLibrary({
 						Retry
 					</button>
 				</div>
+			)}
+			{notice && (
+				<p className="icon-library-notice" role="status">
+					{notice}
+				</p>
 			)}
 		</section>
 	);

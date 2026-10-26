@@ -89,3 +89,27 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+.clock-theme-radio {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	opacity: 0;
+	cursor: pointer;
+}
+.clock-theme-thumb:focus-within {
+	outline: 2px solid var(--oq-accent, var(--quake-accent));
+	outline-offset: 3px;
+}
+.clock-theme-thumb[data-disabled="true"] {
+	opacity: 0.55;
+	cursor: default;
+}
+.clock-theme-video-placeholder {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	min-height: 64px;
+	overflow: hidden;
+}

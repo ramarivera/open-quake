@@ -1,9 +1,12 @@
-import { keyArtwork } from "../../keys/key-artwork";
 import "../css-properties";
 import { STRIP_PALETTE } from "../palette";
-import { genericTileMetrics, isInlineIcon } from "../tileMetrics";
+import { genericTileMetrics } from "../tileMetrics";
 import type { StripTileProps } from "../tileRegistry";
-import { useTruncatedTitle } from "../useTileArt";
+import {
+	useForegroundArtwork,
+	useTileArtwork,
+	useTruncatedTitle,
+} from "../useTileArt";
 
 /**
  * The flat icon-and-label key tile: the key's own artwork centred above a
@@ -12,7 +15,8 @@ import { useTruncatedTitle } from "../useTileArt";
  */
 export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 	const { config } = tile.key;
-	const icon = keyArtwork(config.icon, config.type);
+	const foreground = useForegroundArtwork(config.type === "gameMode");
+	const artwork = useTileArtwork(foreground || config.icon, config.type);
 	const explicit = config.title.userModifiedStyle === true;
 	const metrics = genericTileMetrics(tile.box, {
 		pos: config.title.pos,
@@ -35,6 +39,15 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 			: metrics.titleAnchor === "mid"
 				? { top: "50%", transform: "translate(-50%, -50%)" }
 				: { bottom: metrics.padding };
+	const fullArtwork = config.type === "emoji" || config.type === "gameMode";
+	const iconSize =
+		config.type === "emoji"
+			? Math.floor(Math.min(tile.box.width, tile.box.height) * 0.77)
+			: metrics.iconSize;
+	const iconWidth =
+		config.type === "gameMode" ? Math.floor(tile.box.width * 0.95) : iconSize;
+	const iconHeight =
+		config.type === "gameMode" ? Math.floor(tile.box.height * 0.95) : iconSize;
 	return (
 		<div
 			className="strip-tile"
@@ -42,15 +55,17 @@ export function GenericTile({ tile }: StripTileProps): React.JSX.Element {
 			style={{ borderRadius: tile.tileRadius }}
 		>
 			<div
+				ref={artwork.ref}
+				data-tile-artwork-state={artwork.state}
 				className="strip-tile-icon"
 				style={{
-					width: metrics.iconSize,
-					height: metrics.iconSize,
-					top: `calc(${metrics.iconCenter * 100}% - ${metrics.iconSize / 2}px)`,
+					width: iconWidth,
+					height: iconHeight,
+					top: `calc(${fullArtwork ? 50 : metrics.iconCenter * 100}% - ${iconHeight / 2}px)`,
 				}}
 			>
-				{isInlineIcon(icon) ? (
-					<img src={icon} alt="" draggable={false} />
+				{artwork.src ? (
+					<img src={artwork.src} alt="" draggable={false} />
 				) : null}
 			</div>
 			{config.title.display ? (

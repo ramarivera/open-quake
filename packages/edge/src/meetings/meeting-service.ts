@@ -162,7 +162,11 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			): Effect.fn.Return<void, MeetingError> {
 				const currentConfig = parent?.config ?? (yield* Ref.get(config));
 				const id = MeetingId.make(crypto.randomUUID());
-				yield* capture.start(id, currentConfig, parent?.id);
+				const effectiveConfig = yield* capture.start(
+					id,
+					currentConfig,
+					parent?.id,
+				);
 				const now = yield* Clock.currentTimeMillis;
 				const record: MeetingRecord = {
 					id,
@@ -181,7 +185,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					appliedTemplate: Option.none(),
 					provenance: Option.none(),
 					errorCode: Option.none(),
-					config: currentConfig,
+					config: effectiveConfig,
 				};
 				yield* repo
 					.update((records) => [record, ...records])

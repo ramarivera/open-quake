@@ -220,3 +220,62 @@ describe("weather/media registration ownership", () => {
 		},
 	);
 });
+
+it("configuration refresh broadcasts to every window without replacing per-key settings", async () => {
+	const first = new TestWindow();
+	const second = new TestWindow();
+	vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+		first as unknown as BrowserWindow,
+		second as unknown as BrowserWindow,
+	]);
+	vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(
+		first as unknown as BrowserWindow,
+	);
+	const runtime = ManagedRuntime.make(
+		WeatherMediaController.Default.pipe(
+			Layer.provide(
+				Layer.mergeAll(
+					Layer.succeed(WeatherSettingsRepository, {
+						load: () => Effect.succeed(DEFAULT_WEATHER_SETTINGS),
+						save: () => Effect.die("no global write"),
+					}),
+					Layer.succeed(WeatherNetwork, {
+						json: () => Effect.die("no weather IO"),
+					}),
+					Layer.succeed(SystemMediaAdapter, {
+						read: () => Effect.succeed({ session: null, error: null }),
+						control: () => Effect.succeed(false),
+					}),
+				),
+			),
+		),
+	);
+	const registration = registerWeatherMedia(
+		runtime,
+		() => first as unknown as BrowserWindow,
+		"file:///app/index.html",
+	);
+	try {
+		const handler = vi
+			.mocked(ipcMain.handle)
+			.mock.calls.slice()
+			.reverse()
+			.find((call) => call[0] === WEATHER_MEDIA_REQUEST)?.[1];
+		if (!handler) throw new Error("handler missing");
+		const event = {
+			sender: first.webContents,
+			senderFrame: first.webContents.mainFrame,
+		} as unknown as Electron.IpcMainInvokeEvent;
+		expect(await handler(event, { _tag: "configChanged" })).toMatchObject({
+			_tag: "snapshot",
+			snapshot: { refreshRevision: 1, settings: DEFAULT_WEATHER_SETTINGS },
+		});
+		expect(first.webContents.send).toHaveBeenCalledOnce();
+		expect(second.webContents.send).toHaveBeenCalledOnce();
+		expect(second.webContents.send.mock.calls[0]?.[1]).toMatchObject({
+			refreshRevision: 1,
+		});
+	} finally {
+		await registration.dispose();
+	}
+});

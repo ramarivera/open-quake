@@ -1,4 +1,5 @@
 import { Schema } from "effect";
+import { ProfileAction } from "../profiles/profile-contracts.js";
 
 export const HOTKEY_MODIFIERS = [
 	"shift",
@@ -215,10 +216,14 @@ export const DirectVoiceConfig = Schema.Struct({
 });
 export const DesktopClockConfig = Schema.Struct({
 	type: Schema.Literal("dkDesktopClock"),
-	actions: Schema.Tuple(
-		Schema.Struct({
-			type: Schema.Literal("hourFormat"),
-			value: Schema.Literal("12h", "24h"),
+	actions: Schema.Array(ProfileAction).pipe(
+		Schema.filter((actions) => {
+			const formats = actions.filter((action) => action.type === "hourFormat");
+			return (
+				formats.length === 1 &&
+				(formats[0]?.value === "12h" || formats[0]?.value === "24h") &&
+				new Set(actions.map((action) => action.type)).size === actions.length
+			);
 		}),
 	),
 });

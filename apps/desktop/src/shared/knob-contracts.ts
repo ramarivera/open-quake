@@ -17,6 +17,11 @@ export const KnobRequest = Schema.Union(
 		keyCode: Schema.NonEmptyTrimmedString,
 	}),
 	Schema.TaggedStruct("ToggleVolume", session),
+	Schema.TaggedStruct("RestoreFocus", {
+		...session,
+		keyCode: Schema.NonEmptyTrimmedString,
+		generation: Schema.Int.pipe(Schema.nonNegative()),
+	}),
 	Schema.TaggedStruct("Page", { ...session, delta: Schema.Literal(-1, 1) }),
 	Schema.TaggedStruct("Select", {
 		...session,

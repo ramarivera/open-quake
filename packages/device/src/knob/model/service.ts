@@ -375,7 +375,12 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						if (key) {
 							yield* ports.focusedTurn(key, delta, state.context);
 							yield* emit({
-								focus: { _tag: "tile", keyCode, angle: angle + delta * 12 },
+								focus: {
+									...state.focus,
+									_tag: "tile",
+									keyCode,
+									angle: angle + delta * 12,
+								},
 							});
 							return;
 						}
@@ -434,6 +439,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 					yield* arm(picker);
 					if (!picker) yield* warm;
 				});
+			let focusGeneration = 0;
 			const handle = (event: KnobModelInput): Effect.Effect<void, KnobError> =>
 				Effect.gen(function* () {
 					if (event.sessionId !== state.context.session.sessionId || !connected)
@@ -442,6 +448,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						case "Rotate":
 							return yield* rotate(event.delta);
 						case "TapTile": {
+							focusGeneration++;
 							const key = state.context.keys.find(
 								(k) => k.keyCode === event.keyCode,
 							);
@@ -453,10 +460,23 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 								selector: closed,
 								focus:
 									key && canFocus(key) && !toggleOff
-										? { _tag: "tile", keyCode: key.keyCode, angle: 0 }
+										? {
+												_tag: "tile",
+												keyCode: key.keyCode,
+												angle: 0,
+												generation: focusGeneration,
+											}
 										: { _tag: "none" },
 							});
 						}
+						case "RestoreFocus":
+							if (
+								state.focus._tag === "tile" &&
+								state.focus.keyCode === event.keyCode &&
+								state.focus.generation === event.generation
+							)
+								yield* emit({ focus: { _tag: "none" } });
+							return;
 						case "ToggleVolume": {
 							if (!state.context.player) return;
 							if (state.volume.phase === "active")

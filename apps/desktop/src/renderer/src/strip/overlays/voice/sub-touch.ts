@@ -1,11 +1,6 @@
 import { type RefObject, useEffect, useRef } from "react";
-import {
-	messageDragOffset,
-	messageReleaseVelocity,
-	shouldFlingMessages,
-	stepMessageFling,
-} from "../../message-scroll";
-import type { VelocitySample } from "../../scroll-physics";
+import { mountMessageScroll } from "../../message-scroll";
+import { mountTouchTarget } from "../../touch-gestures";
 
 /**
  * Consumers of strip-touch-input's sub-element events (PR #20): elements
@@ -55,18 +50,45 @@ export function useSubTouchDrag(ref: RefObject<HTMLElement | null>): void {
 export function useSubTouchTap(
 	ref: RefObject<HTMLElement | null>,
 	onTap: () => void,
+	scale = 1,
 ): void {
 	const latest = useRef(onTap);
 	latest.current = onTap;
+	const binding = useRef<
+		| {
+				element: HTMLElement;
+				scale: number;
+				dispose: () => void;
+		  }
+		| undefined
+	>(undefined);
 	useEffect(() => {
 		const element = ref.current;
-		if (!element) return;
-		const onEnd = (event: Event): void => {
-			if (detailOf(event)?.confirmedTap) latest.current();
-		};
-		element.addEventListener("quake-sub-touch-end", onEnd);
-		return () => element.removeEventListener("quake-sub-touch-end", onEnd);
+		if (
+			binding.current?.element === element &&
+			binding.current?.scale === scale
+		)
+			return;
+		binding.current?.dispose();
+		binding.current = element
+			? {
+					element,
+					scale,
+					dispose: mountTouchTarget(element, {
+						scale,
+						tap: () => latest.current(),
+						disabled: () => element.matches(":disabled"),
+					}),
+				}
+			: undefined;
 	});
+	useEffect(
+		() => () => {
+			binding.current?.dispose();
+			binding.current = undefined;
+		},
+		[],
+	);
 }
 
 /**
@@ -81,70 +103,6 @@ export function useSubTouchMessages(
 	useEffect(() => {
 		const element = ref.current;
 		if (!element) return;
-		let origin = 0;
-		let startedAt = 0;
-		let lastAt = 0;
-		let samples: VelocitySample[] = [];
-		let frame = 0;
-		const max = (): number =>
-			Math.max(0, element.scrollHeight - element.clientHeight);
-		const onStart = (event: Event): void => {
-			const detail = detailOf(event);
-			if (!detail) return;
-			const now = performance.now();
-			if (detail.phase === "start") {
-				cancelAnimationFrame(frame);
-				origin = element.scrollTop;
-				startedAt = now;
-				lastAt = now;
-				samples = [{ offset: origin, time: now }];
-				return;
-			}
-			element.scrollTop = messageDragOffset(
-				origin,
-				detail.y - detail.startY,
-				element.scrollTop,
-				max(),
-				now - lastAt,
-			);
-			lastAt = now;
-			samples = [...samples, { offset: element.scrollTop, time: now }].slice(
-				-12,
-			);
-		};
-		const onEnd = (event: Event): void => {
-			if (!detailOf(event) || motion === "reduce") return;
-			const now = performance.now();
-			let velocity = messageReleaseVelocity(samples);
-			if (
-				!shouldFlingMessages(
-					velocity,
-					now - startedAt,
-					element.scrollTop - origin,
-				)
-			)
-				return;
-			let previous = now;
-			const tick = (time: number): void => {
-				const step = stepMessageFling(
-					element.scrollTop,
-					velocity,
-					max(),
-					time - previous,
-				);
-				previous = time;
-				element.scrollTop = step.offset;
-				velocity = step.velocity;
-				if (!step.done) frame = requestAnimationFrame(tick);
-			};
-			frame = requestAnimationFrame(tick);
-		};
-		element.addEventListener("quake-sub-touch-start", onStart);
-		element.addEventListener("quake-sub-touch-end", onEnd);
-		return () => {
-			cancelAnimationFrame(frame);
-			element.removeEventListener("quake-sub-touch-start", onStart);
-			element.removeEventListener("quake-sub-touch-end", onEnd);
-		};
+		return mountMessageScroll(element, () => motion === "reduce");
 	}, [ref, motion]);
 }

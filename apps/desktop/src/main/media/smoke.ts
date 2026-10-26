@@ -952,19 +952,28 @@ async function smoke(): Promise<void> {
 		select.value = 'scene-1'; select.dispatchEvent(new Event('change', {bubbles:true}));
 	})()`);
 	await settle(100);
+	// The knob editor has its own primary Save button before the selected key.
 	await management.webContents.executeJavaScript(
-		`document.querySelector('.key-editor .button-primary').click(); null;`,
+		`(() => {
+		const button = document.querySelector('#key-function')?.closest('.group')?.querySelector('.button-primary');
+		if (!(button instanceof HTMLButtonElement) || button.matches(':disabled')) throw new Error('Selected key Save is unavailable');
+		button.click();
+	})()`,
 	);
-	await settle(100);
-	assert.equal(
-		await management.webContents.executeJavaScript(`(async () => {
-		const reply = await window.quakeKeyLibrary.request({type:'read',locale:'en'});
-		const key = reply.envelope?.profiles[0]?.pages[0]?.keys.find(key => key.keyCode === '1,4');
-		const settings = JSON.parse(key?.config.actions[0]?.value || '{}');
-		return settings.sceneUuid === 'scene-1' && settings.sourceName === 'Main' && !('sceneName' in settings);
-	})()`),
-		true,
-		"Screenshot editor must save the selected scene through production IPC",
+	await waitForVoice(
+		management,
+		`document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && [...document.querySelectorAll('.key-editor > [role="status"]')].some(node => node.textContent === 'Saved successfully')`,
+	);
+	// KeyEditing.read includes drafts. Check the committed repository instead.
+	const savedScreenshot = (
+		await profiles.read()
+	).profiles[0]?.pages[0]?.keys.find((key) => key.keyCode === "1,4");
+	assert.deepEqual(
+		Schema.decodeUnknownSync(Schema.parseJson(Schema.Unknown))(
+			savedScreenshot?.config.actions[0]?.value,
+		),
+		{ sourceName: "Main", sceneUuid: "scene-1" },
+		"Screenshot editor must commit the selected scene through production IPC",
 	);
 	if (artifacts)
 		await writeFile(
@@ -995,7 +1004,10 @@ async function smoke(): Promise<void> {
 			const select = document.querySelector('#key-function'); select.value = ${JSON.stringify(type)};
 			select.dispatchEvent(new Event('change', {bubbles:true}));
 		})()`);
-		await settle(100);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-input option[value="${type === "obsMedia" ? "media-1" : "Desktop Audio"}"]') !== null`,
+		);
 		const values = await management.webContents.executeJavaScript(
 			`Array.from(document.querySelector('#obs-input').options, option => option.value)`,
 		);
@@ -1015,24 +1027,37 @@ async function smoke(): Promise<void> {
 		const select = document.querySelector('#key-function'); select.value = 'obsVolume';
 		select.dispatchEvent(new Event('change', {bubbles:true}));
 	})()`);
-	await settle(100);
+	await waitForVoice(
+		management,
+		`document.querySelector('#obs-input option[value="Desktop Audio"]') !== null`,
+	);
 	await management.webContents.executeJavaScript(`(() => {
 		const select = document.querySelector('#obs-input'); select.value = 'Desktop Audio';
 		select.dispatchEvent(new Event('change', {bubbles:true}));
 	})()`);
 	await settle(100);
 	await management.webContents.executeJavaScript(
-		`document.querySelector('.key-editor .button-primary').click(); null;`,
+		`(() => {
+		const button = document.querySelector('#key-function')?.closest('.group')?.querySelector('.button-primary');
+		if (!(button instanceof HTMLButtonElement) || button.matches(':disabled')) throw new Error('Selected key Save is unavailable');
+		button.click();
+	})()`,
 	);
-	await settle(100);
+	await waitForVoice(
+		management,
+		`document.querySelector('.key-editor')?.getAttribute('aria-busy') === 'false' && [...document.querySelectorAll('.key-editor > [role="status"]')].some(node => node.textContent === 'Saved successfully')`,
+	);
+	const savedVolume = (await profiles.read()).profiles[0]?.pages[0]?.keys.find(
+		(key) => key.keyCode === "1,6",
+	);
+	assert.equal(savedVolume?.config.type, "obsVolume");
+	assert.equal(savedVolume?.config.supportKnob, true);
 	assert.equal(
-		await management.webContents.executeJavaScript(`(async () => {
-		const reply = await window.quakeKeyLibrary.request({type:'read',locale:'en'});
-		const key = reply.envelope?.profiles[0]?.pages[0]?.keys.find(key => key.keyCode === '1,6');
-		return key?.config.type === 'obsVolume' && key.config.supportKnob === true && JSON.parse(key.config.actions[0].value).inputUuid === 'Desktop Audio';
-	})()`),
-		true,
-		"Volume editor must save a knob-enabled special audio input",
+		Schema.decodeUnknownSync(
+			Schema.parseJson(Schema.Struct({ inputUuid: Schema.String })),
+		)(savedVolume?.config.actions[0]?.value).inputUuid,
+		"Desktop Audio",
+		"Volume editor must commit a knob-enabled special audio input",
 	);
 	await waitForVoice(
 		panel,

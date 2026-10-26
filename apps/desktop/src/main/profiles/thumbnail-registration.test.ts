@@ -45,6 +45,7 @@ const fixture = vi.hoisted(() => ({
 	root: "",
 	windows: [] as Array<{ destroyed: boolean; options: unknown }>,
 	capture: vi.fn(),
+	ready: vi.fn<(source: string) => Promise<unknown>>(),
 	published: vi.fn(),
 	load: vi.fn<(url: string) => Promise<void>>(),
 	saved: undefined as unknown,
@@ -71,7 +72,7 @@ vi.mock("electron", () => {
 			fixture.windows.push(this);
 		}
 		webContents = {
-			executeJavaScript: async () => {},
+			executeJavaScript: (source: string) => fixture.ready(source),
 			capturePage: () => fixture.capture(),
 			isDestroyed: () => this.destroyed,
 			send: vi.fn(),
@@ -121,6 +122,7 @@ async function setup(
 	fixture.saved = encodeProfileEnvelope(createInitialProfileEnvelope());
 	fixture.windows.length = 0;
 	fixture.load.mockResolvedValue(undefined);
+	fixture.ready.mockResolvedValue(undefined);
 	fixture.capture.mockResolvedValue({ isEmpty: () => false, toPNG: () => png });
 	await prepare?.(fixture.root);
 	vi.stubEnv("OPEN_QUAKE_MOCK_DEVICE", "1");
@@ -484,4 +486,52 @@ describe("production manager thumbnail producer", () => {
 		finish();
 		expect(fixture.windows).toHaveLength(1);
 	});
+});
+
+it("waits for asynchronous owned tile artwork and decoded images before capturing", async () => {
+	const profiles = await setup();
+	const checks: Array<() => void> = [];
+	const image = { complete: false, naturalWidth: 0 };
+	const tile = {
+		dataset: { tileArtworkState: "pending" },
+		querySelectorAll: () => [image],
+	};
+	const preview = {
+		clientWidth: 960,
+		clientHeight: 240,
+		querySelector: (selector: string) =>
+			selector === ".strip-viewport-stage"
+				? { getBoundingClientRect: () => ({ width: 960 }) }
+				: {},
+		querySelectorAll: (selector: string) =>
+			selector === "[data-tile-artwork-state]" ? [tile] : [],
+	};
+	fixture.ready.mockImplementationOnce((source) =>
+		new Function(
+			"document",
+			"requestAnimationFrame",
+			"setTimeout",
+			`return ${source}`,
+		)(
+			{ querySelector: () => preview, fonts: { ready: Promise.resolve() } },
+			(callback: () => void) => callback(),
+			(callback: () => void, delay: number) => {
+				if (delay === 20) checks.push(callback);
+			},
+		),
+	);
+	fixture.capture.mockClear();
+	const pending = profiles.thumbnail("1-2", "en", new AbortController().signal);
+	await vi.waitFor(() => expect(fixture.ready).toHaveBeenCalled());
+	expect(fixture.capture).not.toHaveBeenCalled();
+	expect(checks.length).toBe(1);
+	tile.dataset.tileArtworkState = "ready";
+	checks.shift()?.();
+	await Promise.resolve();
+	expect(fixture.capture).not.toHaveBeenCalled();
+	image.complete = true;
+	image.naturalWidth = 170;
+	checks.shift()?.();
+	await pending;
+	expect(fixture.capture).toHaveBeenCalledOnce();
 });

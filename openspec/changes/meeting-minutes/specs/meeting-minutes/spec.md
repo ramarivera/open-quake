@@ -197,6 +197,95 @@ All animations SHALL respect reduced motion. Evidence: AI-329-341, WIDGETS-099-1
   timeline holds eight slots at least 3000ms apart after two estimated lines (50 characters/line), and update speed shows idle after 5000ms
 
 
+### Requirement: Meeting history consumer regressions
+
+The history workspace SHALL preserve selection through newer and out-of-order snapshots,
+show request failures without replacing committed records, and clear a failed rename's
+pending edit after a successful save. Records SHALL be the default navigation mode;
+In progress SHALL include recording and processing only. Empty lists, unmatched searches
+and absent selection SHALL use the recovered English messages. The document SHALL expose
+its title, local start time, HH:MM:SS duration, attendee placeholder and edit/delete/export
+controls. Cancelling an edit SHALL not save. Evidence: AI-296, AI-299, AI-300, AI-303,
+AI-304, AI-316.
+
+#### Scenario: Mounted history updates and responsive actions
+
+- **WHEN** a selected record receives a newer snapshot, an older response and a failed rename
+- **THEN** the selected document keeps the newest committed data, displays the error, permits another save and cancels without writing
+- **AND** desktop renders three columns and 980px/520px layouts keep the inspector and header controls visible, focusable and reachable by pointer
+
+### Requirement: History content and independent retry regressions
+
+Summary SHALL default when minutes exist, otherwise Transcript; empty Transcript SHALL be
+disabled. Copy SHALL write exact raw minutes or timestamp/speaker/plain transcript text,
+report no content without writing and report denied clipboard access. Transcript labels,
+plain text and markup-like speaker/content strings SHALL render escaped. Processing,
+failed and empty bodies SHALL retain completed transcript content and expose independent
+retry. Invalid non-string speaker data SHALL be rejected at the snapshot boundary.
+Evidence: AI-305, AI-306, AI-307, AI-309.
+
+#### Scenario: Failed summary keeps usable transcript
+
+- **WHEN** summary fails after completed transcription and Retry is clicked in history
+- **THEN** the transcript remains readable and copyable, only the summary provider runs, and capture and ASR do not restart
+- **AND** switching tabs shows their own content, empty copy writes nothing and clipboard rejection shows the recovered failure message
+
+### Requirement: Durable template and title request regressions
+
+All four templates SHALL send their recovered sections and English labels through the
+real provider consumer. New meetings SHALL select project-weekly. A selected template
+SHALL persist independently of the applied template until successful regeneration.
+Renamed titles and selected/applied templates SHALL survive service restart.
+Evidence: AI-275, AI-296.
+
+#### Scenario: Each template reaches the provider and survives restart
+
+- **WHEN** project-weekly, standard, executive or interview is selected and regenerated
+- **THEN** the provider receives its fixed sections, persisted history records the applied template, and restart retains the saved title and template without recapturing audio
+
+### Requirement: Shipped MeetAI control regression contract
+
+The shipped MeetAI profile SHALL keep resource 1-1, meetingAssistantTheme with cell 236,
+gap 4, edge 2, radius 24 and unitInnerGap 0.04. Its 1,1 viewer SHALL be 5x2, icon 0-80,
+subtouch enabled, unlocked and targetLanguage zh. Start at 1,6 SHALL span 1x2 with icon
+0-61 and generateReport true; Record 1,7 icon 0-99 and Mark 2,8 icon 0-99 SHALL have
+empty actions; Mic 1,8 SHALL retain icons 0-59/0-100 and toggle 0/1; Translate 2,7 SHALL
+retain icon 0-98 and targetLanguage zh. Every action key SHALL lock title/grid/icon/delete/
+drag through the real editing owner. Evidence: AI-265, AI-318, MGMT-360, MGMT-365.
+
+#### Scenario: Saved controls retain defaults and enforce locks
+
+- **WHEN** the shipped profile is decoded, edited, moved or deleted
+- **THEN** all six positions, spans, titles, icons and actions match these defaults, action-key protected edits fail, and the unlocked viewer remains editable
+- **AND** pressing saved Mark opens/closes a bounded mark range, updates its counter and respects its independent five-second cooldown
+
+### Requirement: Strip timing, translation and animation regressions
+
+The mounted timer SHALL use capture-ready startedAt, tick every 100ms, cross the hour,
+reset after stop and resume correctly after remount. Accepted Start/Record/Mark/Translate
+SHALL draw clockwise black cooldown sweeps at 0/180/360 degrees over 0/2500/5000ms.
+The main recording animation SHALL appear only in Main minutes. Success SHALL use 35
+panel-only bursts until 5000ms after accepted completion, never restart that window on
+remount or failed regeneration, and allow a fresh successful completion. OS and app reduced
+motion SHALL disable recording/pulse/gears/fireworks/border animation and transitions while
+keeping status text visible. The viewer SHALL scale its 1196x456 base inside its actual
+box, retain the forced 5x2 span through the editing owner, keep Clear reachable, and clear only the selected pane without deleting saved
+minutes. Selected target language and bounded live translation updates SHALL reach the
+viewer. Evidence: AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152, MGMT-360.
+
+#### Scenario: Mounted strip clocks and pane interactions
+
+- **WHEN** capture readiness is delayed, a meeting crosses an hour, controls cool down and translated content arrives
+- **THEN** the timer, sweeps, active mark and selected translation pane follow authoritative snapshots without opening native capture
+- **AND** clearing Main, Temporary or Live affects only that pane, renderer boxes keep Clear within the visible frame, and the editing owner rejects alternate saved spans
+
+#### Scenario: Completion and reduced motion remain bounded
+
+- **WHEN** success, remount, failed regeneration and a new accepted completion occur on panel and management views
+- **THEN** only a fresh panel completion celebrates for its remaining five-second window
+- **AND** OS/app reduced motion removes computed animations and transitions without hiding the current status
+
+
 ### Requirement: Recoverable recorder teardown and private files
 
 Stop SHALL drain every affected main/side recorder before audio conversion, attempt all
@@ -268,3 +357,20 @@ Evidence: AI-263-264, AI-280-294, AI-299-317, AI-338. These strengthen local pri
 
 - **WHEN** link loss or layout teardown cancels a held MeetAI key
 - **THEN** the synthetic release clears visual state without dispatching a meeting action
+
+
+### Requirement: Qualified system audio and deliberate fallback
+
+Evidence: AI-111, AI-282, KNOB-056. Windows system capture SHALL use the trusted main-process desktop loopback grant and discard video tracks. macOS and Linux SHALL select an exact enumerated BlackHole or Monitor audio input with echo cancellation, noise suppression and automatic gain disabled. Missing input, denied access, empty audio streams and cancelled acquisition SHALL release partial resources and never capture default audio silently. The desktop SHALL offer explicit microphone-only retry or cancellation before recording. Meeting microphone choice SHALL share the speech identity and recovery contract in AI-247, AI-281, KNOB-049 and SETTINGS-019.
+
+#### Scenario: Optional source unavailable
+- **WHEN** Windows loopback has no audio or macOS/Linux has no named source or permission
+- **THEN** all acquired tracks close, no recorder starts, and the user can deliberately retry microphone-only or cancel; an accepted retry persists systemAudio=false on the recording while retaining the configured preference for future meetings
+
+### Requirement: User-directed macOS capture setup
+
+Evidence: AI-283. The settings SHALL offer an explicit setup/help view, enumerate installed BlackHole/Monitor inputs without opening them, explain multi-output routing and permission prerequisites, and allow refresh or cancel after setup fails. No installer, driver, aggregate device or host routing change SHALL run automatically. Actual driver installation and multi-output configuration require separate host approval and remain unverified.
+
+#### Scenario: Missing or installed virtual input
+- **WHEN** the user opens setup help with no BlackHole input, then refreshes after manually installing one or cancels
+- **THEN** help reports missing or available from fresh enumeration, a failed refresh reports unavailable, and cancel changes no capture or host setting

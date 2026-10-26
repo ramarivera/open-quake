@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for the capability boundary. This is a spec-only proposal; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
+See proposal.md for the capability boundary. This change began as a spec-only proposal and now includes the icons burn-down implementation; every product choice below marked "Approved (Ramiro, 2026-10-23)" was accepted by Ramiro on that date. The delta spec records the recommended acceptance contract, not existing implementation or verified hardware parity.
 
 Inventory: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9, Later phases and the cited open questions.
 
@@ -25,7 +25,7 @@ Path roots are local-only, read-only research inputs. S means recovered source f
 
 Goals: give implementers one owned contract, observable failure states and a verification path for this capability.
 
-Non-goals: implementation in this lane, new dependencies, changes to other lanes' artifacts, guessed device opcodes, or claiming unresolved integrations work.
+Non-goals for the icons lane: template import changes, proprietary artwork packs, new dependencies, guessed device opcodes or physical display claims.
 
 ## Package ownership
 
@@ -76,3 +76,16 @@ Create versioned local settings/repository records behind a capability gate. Val
 Drive actual picker/template consumers through imports, unsafe SVG, limit cases, duplicate names, partial batch failure and stale target selection. Assert managed copies survive moving originals and referenced deletion fails. Physical 0xA2 delivery and emoji packaging, question 13, remain unverified and belong to display/emoji owners.
 
 Implementation closure requires scenario evidence and parent-managed Beads updates. The tasks in tasks.md remain unchecked in this design lane. Do not launch DK-Suite; use independent fixtures and the open-quake application for future verification.
+
+
+## Icons burn-down implementation
+
+The desktop already owns the key-icon repository and IPC. This lane extends that owner instead of introducing a second catalog service. Metadata `extraData` remains optional for backward-compatible stored packs. Duplicate feedback uses a stable reply discriminator and the existing locale catalog. GIF/WebP decode occurs in a hidden sandboxed Chromium window with only data-image CSP access and a bounded lifetime. Selection produces a static 170px PNG.
+
+The safe SVG parser is a browser-compatible allowlist shared by main import and renderer image loading. Images remain inert img sources, never markup injection. The scoped loader resolves only owned hashes, bundled MDI/app aliases and validated inline data. Catalog reads are permitted to the exact owned panel or registered thumbnail capture windows, alongside management and the owned picker. This needs minimal changes in the shared profile composition root to provide capture ownership.
+
+For WIDGETS-008, GenericTile selects foreground pixels through the existing validated monitoring client and the installed-application icon owner. The monitor broadcaster now delivers its already authorized snapshot to the owned panel as well as management. Installed application metadata includes its existing app path for exact matching, with macOS executable paths normalized to their enclosing bundle. Arbitrary foreground paths never become file reads. Denied or missing apps fall back to configured artwork. Monitor settings and collection ownership are unchanged. Real OS foreground events and physical display correspondence remain unverified.
+
+Selected previews use the existing tile registry at the recovered card size, with serialized clock arrows and a noninteractive tile image. Profile thumbnail rows retain old pixels when the current cache is absent, show stale/updating/failure states and disable refresh during batch work. These rows require minimal edits to KeyEditor, ProfileViews and their existing styles beyond the lane's original path list.
+
+MGMT-413 remains blocked. GAP-MAP does not approve excluding these internal helpers. Its merge/deletion, generic image download, port-probe and timestamp obligations span other consumers and have no defined artwork action to implement or test. Lead/user ownership or an explicit exclusion decision is required; unused helper copies would not satisfy the real-consumer definition of done.

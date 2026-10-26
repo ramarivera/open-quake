@@ -13,6 +13,10 @@ import {
 	Tracer,
 } from "effect";
 import {
+	type CaptureMetrics,
+	safeCaptureMetrics,
+} from "../speech/capture-metrics";
+import {
 	createDiagnosticStorage,
 	type DiagnosticStatus,
 	type DiagnosticStorageOptions,
@@ -23,6 +27,7 @@ import {
 	safeError,
 	safeLogEvent,
 	safeSpanName,
+	safeTouchLog,
 } from "./privacy.js";
 
 export type {
@@ -33,6 +38,7 @@ export type { DiagnosticOperation } from "./privacy.js";
 
 export interface DesktopDiagnostics {
 	readonly layer: Layer.Layer<never>;
+	readonly recordCapture?: (metrics: CaptureMetrics) => Effect.Effect<void>;
 	/** Main-owned request scope. Wrap BEFORE catch/match so failed exits remain observable. */
 	readonly instrument: <A, E, R>(
 		effect: Effect.Effect<A, E, R>,
@@ -120,6 +126,7 @@ export function createDesktopDiagnostics(
 					type: "log",
 					level: logLevel.label,
 					event: safeLogEvent(messages),
+					...safeTouchLog(messages),
 					...correlation(span, FiberRefs.getOrDefault(context, requestId)),
 					...(errors.length ? { errors } : {}),
 					...(!Cause.isEmpty(cause) ? { cause: safeCause(cause) } : {}),
@@ -240,6 +247,10 @@ export function createDesktopDiagnostics(
 		return closing;
 	};
 	return {
+		recordCapture: (metrics) =>
+			Effect.sync(() =>
+				emit({ type: "capture", ...safeCaptureMetrics(metrics) }),
+			),
 		layer,
 		bind,
 		instrument,
