@@ -192,8 +192,7 @@ it("MGMT-121 preserves unmarked renamed preset titles through profile serializat
 it("MGMT-121 recognizes localized defaults without classifying them as renamed user titles", () => {
 	const group = defaultAppLibrary()[0],
 		mute = group?.children[0];
-	if (!group || !mute?.config.title.i18nKey)
-		throw new Error("Missing preset");
+	if (!group || !mute?.config.title.i18nKey) throw new Error("Missing preset");
 	for (const language of ProfileLocale.literals) {
 		const source = {
 			...mute,
