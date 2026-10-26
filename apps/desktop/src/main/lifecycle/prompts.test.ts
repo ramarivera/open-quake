@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, TestClock } from "effect";
 import { vi } from "vitest";
+import { resolveAppLocale } from "../../../../../packages/edge/src/settings/settings-invariants";
 import strings from "../../shared/lifecycle-strings.json";
 import { makeDisplay } from "../test/display";
 import {
@@ -277,3 +278,38 @@ describe("display prompts", () => {
 		expect(JSON.stringify(error)).not.toContain("/private");
 	});
 });
+
+it.scoped(
+	"SETTINGS-064: a saved live locale change localizes the next native prompt without rebuilding the service",
+	() =>
+		Effect.gen(function* () {
+			let locale = "en";
+			const prompt = vi.fn<PromptEdges["prompt"]>(() => Effect.succeed(1));
+			const service = yield* makeDisplayPrompts(
+				edges({ platform: "darwin", locale: () => locale, prompt }),
+			);
+			for (const next of [
+				"zh",
+				"en",
+				"es",
+				"fr",
+				"ko",
+				"de",
+				"it",
+				"ja",
+				"unsupported",
+			]) {
+				locale = next;
+				yield* service.repair(portrait);
+				const expected = strings.locales[resolveAppLocale(next)].displayMode;
+				expect(prompt).toHaveBeenLastCalledWith(
+					expect.objectContaining({
+						title: expected.title,
+						message: expected.farRight,
+						detail: `\n\n${expected.placementDetail}`,
+						buttons: [expected.switch, expected.orientationLater],
+					}),
+				);
+			}
+		}),
+);

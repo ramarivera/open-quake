@@ -177,7 +177,7 @@ const hooks = registerHooks({
 	resolve(specifier, context, next) {
 		if (specifier === "electron")
 			return virtualModule(
-				"export const { app, BrowserWindow, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
+				"export const { app, BrowserWindow, Menu, screen, ipcMain, dialog, nativeImage, powerMonitor, shell, protocol, net, session, nativeTheme, safeStorage, clipboard, desktopCapturer, systemPreferences } = globalThis.openQuakeBundleSmoke;",
 			);
 		if (specifier === "node-hid") {
 			// Resolve the actual installed dependency before substituting hermetic I/O.

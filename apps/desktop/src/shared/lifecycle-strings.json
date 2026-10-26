@@ -8,8 +8,8 @@
 		"orientationTitle": "Adjust Quake orientation",
 		"orientationMessage": "Please set Quake to landscape",
 		"orientationDetail": "Open display settings and set Quake to landscape.",
-		"orientationDetailDarwin": "Open System Settings \u2192 Displays and set Quake Rotation to 270\u00b0.",
-		"orientationDetailWin32": "Open Settings \u2192 System \u2192 Display and set Quake Orientation to Landscape.",
+		"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+		"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
 		"openDisplaySettings": "Open Display Settings",
 		"orientationLater": "Later"
 	},
@@ -19,7 +19,7 @@
 		"subtitle": "Both USB and HDMI must be connected properly before entering device settings",
 		"troubleshootingTitle": "Troubleshoot in order",
 		"check": {
-			"checking": "Checking\u2026",
+			"checking": "Checking…",
 			"passDetails": "Connection is stable, no action needed",
 			"usb": {
 				"label": "USB Control Connection",
@@ -50,16 +50,210 @@
 		},
 		"action": {
 			"recheck": "Re-detect",
-			"checking": "Checking\u2026",
+			"checking": "Checking…",
 			"support": "Contact Support"
 		},
 		"fullGuide": "Need full installation guide?",
 		"toast": {
-			"recheckStart": "Re-detecting USB and HDMI\u2026",
+			"recheckStart": "Re-detecting USB and HDMI…",
 			"recheckDone": "Detection complete, {completed}/2 checks passed",
 			"allPass": "Detection complete, both connections are normal",
 			"checkError": "Detection error, please try again later"
 		},
 		"supportNotReady": "Support link coming soon, please try again later"
+	},
+	"locales": {
+		"en": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "Later keeps the device connected and reminds you in 10 minutes.",
+				"farRight": "Move Quake to the far right",
+				"placementDetail": "open-quake will use Quake as a separate display and place it to the far right of your other screens. If Quake is your main display, another screen will become the main display. Your other screens will keep their positions relative to each other. You can change this arrangement later in System Settings > Displays."
+			},
+			"trayMenu": {
+				"resume": "Resume",
+				"setting": "Settings",
+				"exit": "Exit"
+			}
+		},
+		"de": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "Später lässt das Gerät verbunden und erinnert dich in 10 Minuten.",
+				"farRight": "Quake ganz nach rechts verschieben",
+				"placementDetail": "open-quake verwendet Quake als eigenen Bildschirm ganz rechts. Ist Quake der Hauptbildschirm, wird ein anderer Bildschirm zum Hauptbildschirm. Die übrigen Bildschirme behalten ihre Positionen zueinander. Du kannst die Anordnung später in Systemeinstellungen > Displays ändern."
+			},
+			"trayMenu": {
+				"resume": "Fortsetzen",
+				"setting": "Einstellungen",
+				"exit": "Beenden"
+			}
+		},
+		"zh": {
+			"displayMode": {
+				"title": "显示模式",
+				"message": "请切换为扩展显示",
+				"detail": "Quake 当前为镜像模式，需改为扩展显示才能正常使用。拒绝将断开设备连接。",
+				"switch": "去切换",
+				"disconnect": "断开",
+				"orientationTitle": "请调整 Quake 屏幕方向",
+				"orientationMessage": "请将 Quake 设为横屏",
+				"orientationDetail": "打开系统显示设置，将 Quake 调整为横屏后返回。",
+				"orientationDetailDarwin": "打开「系统设置 → 显示器」，将 Quake 的旋转设为 270°。",
+				"orientationDetailWin32": "打开「设置 → 系统 → 显示」，将 Quake 的显示方向设为「横向」。",
+				"openDisplaySettings": "打开显示设置",
+				"orientationLater": "稍后",
+				"laterDetail": "稍后处理会保持设备连接，并在 10 分钟后再次提醒。",
+				"farRight": "将 Quake 移至最右侧",
+				"placementDetail": "open-quake 会将 Quake 用作独立显示器，并放在其他屏幕的最右侧。如果 Quake 是主显示器，其他屏幕将成为主显示器。其余屏幕的相对位置保持不变。你可以稍后在系统设置 > 显示器中更改排列。"
+			},
+			"trayMenu": {
+				"resume": "恢复窗口",
+				"setting": "设置",
+				"exit": "退出"
+			}
+		},
+		"es": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "Más tarde mantiene el dispositivo conectado y te recuerda en 10 minutos.",
+				"farRight": "Mover Quake al extremo derecho",
+				"placementDetail": "open-quake usará Quake como pantalla independiente a la derecha de las demás. Si Quake es la principal, otra pantalla pasará a ser la principal. Las demás conservarán sus posiciones relativas. Puedes cambiarlo después en Ajustes del Sistema > Pantallas."
+			},
+			"trayMenu": {
+				"resume": "Reanudar",
+				"setting": "Configuración",
+				"exit": "Salir"
+			}
+		},
+		"fr": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "Plus tard garde l’appareil connecté et vous rappelle dans 10 minutes.",
+				"farRight": "Déplacer Quake tout à droite",
+				"placementDetail": "open-quake utilisera Quake comme écran distinct tout à droite. Si Quake est l’écran principal, un autre le deviendra. Les autres écrans garderont leurs positions relatives. Vous pourrez changer cette disposition dans Réglages Système > Moniteurs."
+			},
+			"trayMenu": {
+				"resume": "Reprendre",
+				"setting": "Paramètres",
+				"exit": "Quitter"
+			}
+		},
+		"ko": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "나중에를 선택하면 연결을 유지하고 10분 후 다시 알립니다.",
+				"farRight": "Quake를 맨 오른쪽으로 이동",
+				"placementDetail": "open-quake가 Quake를 독립 화면으로 사용해 다른 화면의 맨 오른쪽에 놓습니다. Quake가 주 화면이면 다른 화면이 주 화면이 됩니다. 나머지 화면의 상대 위치는 유지됩니다. 나중에 시스템 설정 > 디스플레이에서 배치를 바꿀 수 있습니다."
+			},
+			"trayMenu": {
+				"resume": "재개",
+				"setting": "설정",
+				"exit": "종료"
+			}
+		},
+		"it": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "Più tardi mantiene il dispositivo connesso e ricorda tra 10 minuti.",
+				"farRight": "Sposta Quake a destra",
+				"placementDetail": "open-quake userà Quake come schermo separato a destra degli altri. Se Quake è lo schermo principale, un altro diventerà principale. Gli altri manterranno le posizioni relative. Puoi cambiare la disposizione in Impostazioni di Sistema > Schermi."
+			},
+			"trayMenu": {
+				"resume": "Riprendi",
+				"setting": "Impostazioni",
+				"exit": "Esci"
+			}
+		},
+		"ja": {
+			"displayMode": {
+				"title": "Display mode",
+				"message": "Switch to Extended Display",
+				"detail": "Quake is mirrored. Switch to Extended Display to continue. Declining will disconnect the device.",
+				"switch": "Switch",
+				"disconnect": "Disconnect",
+				"orientationTitle": "Adjust Quake orientation",
+				"orientationMessage": "Please set Quake to landscape",
+				"orientationDetail": "Open display settings and set Quake to landscape.",
+				"orientationDetailDarwin": "Open System Settings → Displays and set Quake Rotation to 270°.",
+				"orientationDetailWin32": "Open Settings → System → Display and set Quake Orientation to Landscape.",
+				"openDisplaySettings": "Open Display Settings",
+				"orientationLater": "Later",
+				"laterDetail": "後でを選ぶと接続を維持し、10分後に再通知します。",
+				"farRight": "Quakeを一番右に移動",
+				"placementDetail": "open-quakeはQuakeを独立ディスプレイとして他の画面の一番右に配置します。Quakeがメインの場合は別の画面がメインになります。他の画面の相対位置は維持されます。後でシステム設定 > ディスプレイで変更できます。"
+			},
+			"trayMenu": {
+				"resume": "再開",
+				"setting": "設定",
+				"exit": "終了"
+			}
+		}
 	}
 }

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type {
 	BrowserWindowConstructorOptions,
 	Display,
+	MenuItemConstructorOptions,
 	Rectangle,
 } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,7 +13,9 @@ import {
 	createEmptyProfileKey,
 	ProfileKey,
 } from "../../../../packages/device/src/profiles/profile-contracts";
-import { LOCALE_REQUEST } from "../shared/locale";
+import lifecycleStrings from "../shared/lifecycle-strings.json";
+import { APP_LANGUAGES, LOCALE_REQUEST } from "../shared/locale";
+import { MANAGEMENT_ACTIVATE } from "../shared/management";
 import { registerAgentHttp } from "./agent-http";
 import { makeDesktopRuntime } from "./diagnostics/runtime";
 import { registerIntegrations } from "./integrations";
@@ -47,6 +50,9 @@ const electron = vi.hoisted(() => {
 
 		destroyed = false;
 		webContents = {
+			id: 1,
+			mainFrame: { url: "http://localhost:5173?surface=management" },
+			getURL: () => "http://localhost:5173?surface=management",
 			send: vi.fn(),
 			setAudioMuted: vi.fn(),
 			isDestroyed: () => this.destroyed,
@@ -86,8 +92,14 @@ const electron = vi.hoisted(() => {
 	}
 	return {
 		BrowserWindow: Window,
+		Menu: {
+			buildFromTemplate: vi.fn(
+				(template: MenuItemConstructorOptions[]) => template,
+			),
+		},
 		app: {
 			isPackaged: false,
+			dock: { setMenu: vi.fn() },
 			requestSingleInstanceLock: vi.fn(() => true),
 			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
@@ -486,6 +498,49 @@ describe("desktop window lifecycle", () => {
 			}),
 		).toBe(true);
 		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config, signal);
+	});
+
+	it("SETTINGS-064: saved locale refreshes the native Dock menu and Settings activates the existing management route", async () => {
+		const { management } = windows();
+		const handler = electron.ipcMain.handle.mock.calls.find(
+			([channel]) => channel === LOCALE_REQUEST,
+		)?.[1];
+		if (!handler) throw new Error("Missing locale registration");
+		for (const [index, { value }] of APP_LANGUAGES.entries()) {
+			await handler(
+				{
+					sender: management.webContents,
+					senderFrame: management.webContents.mainFrame,
+				},
+				{
+					_tag: "Request",
+					id: String(index + 1),
+					tag: "settings.setLocale",
+					payload: { locale: value },
+				},
+			);
+			expect(
+				electron.Menu.buildFromTemplate.mock.calls
+					.at(-1)?.[0]
+					.map((item) => item.label),
+			).toEqual([
+				lifecycleStrings.locales[value].trayMenu.resume,
+				lifecycleStrings.locales[value].trayMenu.setting,
+				undefined,
+				lifecycleStrings.locales[value].trayMenu.exit,
+			]);
+		}
+		const settings = electron.Menu.buildFromTemplate.mock.calls.at(-1)?.[0][1];
+		// Electron passes native arguments; this callback intentionally needs none.
+		if (!settings?.click) throw new Error("Missing native Settings action");
+		Reflect.apply(settings.click, undefined, []);
+		await vi.waitFor(() =>
+			expect(management.webContents.send).toHaveBeenCalledWith(
+				MANAGEMENT_ACTIVATE,
+				"settings",
+			),
+		);
+		expect(management.focus).toHaveBeenCalled();
 	});
 
 	it("starts both surfaces on the primary display without panel hardware", async () => {
