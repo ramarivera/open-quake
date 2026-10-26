@@ -143,6 +143,15 @@ export function inferenceProvider(provider: string, model: string): string {
 		? "generic"
 		: canonical;
 }
+
+export function supportsWebSearch(provider: string, model: string): boolean {
+	const canonical = canonicalProvider(provider);
+	return (
+		canonical === "qwen" ||
+		canonical === "zhipu" ||
+		(canonical === "openai" && model === "gpt-5.1")
+	);
+}
 export function defaultModel(provider: string): string {
 	switch (canonicalProvider(provider)) {
 		case "qwen":

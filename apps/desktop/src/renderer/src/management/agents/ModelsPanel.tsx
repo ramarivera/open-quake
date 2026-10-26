@@ -7,6 +7,7 @@ import { providerDefaults } from "../../../../../../../packages/edge/src/agents/
 import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
 import {
 	modelOptions,
+	supportsWebSearch,
 	volcBaseUrl,
 } from "../../../../../../../packages/edge/src/ai/provider-catalog";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
@@ -18,6 +19,7 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectModelId,
 	selectModelProvider,
 	selectQwenGeneration,
 } from "./model-drafts";
@@ -186,11 +188,11 @@ function ModelTable({
 												(m) => m.id === model,
 											);
 											update({
-												...selectModelProvider(
+												...selectModelId(
 													row,
+													model,
 													provider?.id ?? row.provider,
 												),
-												model,
 												maxTokens: entry?.maxTokens ?? row.maxTokens,
 												baseUrl: row.baseUrl || provider?.baseUrl || "",
 											});
@@ -297,7 +299,7 @@ function ModelTable({
 											{t.providerFiles}
 										</label>
 									)}
-									{["qwen", "openai", "zhipu"].includes(row.provider) && (
+									{supportsWebSearch(row.provider, row.model) && (
 										<label className="aw-provider-option">
 											<input
 												type="checkbox"

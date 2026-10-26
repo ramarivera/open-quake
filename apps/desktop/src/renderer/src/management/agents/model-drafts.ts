@@ -2,6 +2,7 @@ import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai
 import {
 	canonicalProvider,
 	migrateLegacySelection,
+	supportsWebSearch,
 } from "../../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../../shared/agents";
 
@@ -124,4 +125,21 @@ export function selectModelProvider(
 		provider,
 		model: migrateLegacySelection({ provider, modelId: row.model }).modelId,
 	};
+}
+
+/** A model edit cannot retain a search control that its request policy rejects. */
+export function selectModelId(
+	row: PublicModelRow,
+	model: string,
+	provider = row.provider,
+): PublicModelRow {
+	const selected = { ...selectModelProvider(row, provider), model };
+	if (supportsWebSearch(provider, model) || !selected.controls) return selected;
+	const {
+		webSearch: _search,
+		searchOptions: _options,
+		searchQuery: _query,
+		...controls
+	} = selected.controls;
+	return { ...selected, controls };
 }

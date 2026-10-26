@@ -7,6 +7,7 @@ import {
 } from "./ai-errors.js";
 import { providerSamplingValid } from "./ai-sampling.js";
 import type { ProviderOptions } from "./ai-workflow-contracts.js";
+import { supportsWebSearch } from "./provider-catalog.js";
 
 /** AI-008 source catalog, never used as a fallback or evidence of live availability.
  * Image/video entries in Kimi/DeepSeek tables used a different provider in DK-Suite;
@@ -103,7 +104,8 @@ export function prepareWorkflow(
 				(controls.reasoningEffort && controls.reasoningEffort !== "low"))
 		)
 			return invalid();
-		if (controls.webSearch && modelId !== "gpt-5.1") return invalid();
+		if (controls.webSearch && !supportsWebSearch(provider, modelId))
+			return invalid();
 		if (
 			controls.thinking === false &&
 			controls.reasoningEffort &&
