@@ -48,7 +48,11 @@ export const sameStage = (a: VoiceStage, b: VoiceStage): boolean => {
 		case "busy":
 			return b._tag === "busy" && a.message === b.message;
 		case "idle":
-			return b._tag === "idle" && a.outcome === b.outcome;
+			return (
+				b._tag === "idle" &&
+				a.outcome === b.outcome &&
+				a.emptyReason === b.emptyReason
+			);
 	}
 };
 

@@ -113,3 +113,7 @@ interruption regressions fail on the previous adapter; voice-only shutdown
 failed before its ownership fix. Tests assert cancelled durable history and
 stopped output. No live provider, physical microphone, audible output or device
 acceptance is claimed.
+
+## speech-capture burn-down lane
+
+- [ ] Implement the shared identity, recorder format/control, runtime timing/error and knob duration requirements above with production consumer fixtures. Beads open-quake-c5w.14 and open-quake-c5w.15; physical audio and driver installation remain unverified.

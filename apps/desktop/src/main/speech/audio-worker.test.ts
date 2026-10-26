@@ -1,9 +1,14 @@
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
+import type { MicrophoneIdentity } from "../../shared/speech";
 import { audioWorkerSource } from "./audio-worker";
 
 interface WorkerApi {
-	capture(id: string): Promise<void>;
+	capture(
+		id: string,
+		microphone?: MicrophoneIdentity,
+		exportRecording?: boolean,
+	): Promise<void>;
 	pull(): {
 		frames: {
 			captureId: string;
@@ -16,10 +21,20 @@ interface WorkerApi {
 		failed: false | "overflow" | "recorder";
 	};
 	stop(): Promise<void>;
+	pause(): void;
+	resumeCapture(): void;
+	close(): Promise<void>;
+	level(): { rms: number; peak: number };
+	export(format: "pcm" | "wav"): number[];
+	export(format: "blob"): Blob;
 	ready(): Promise<void>;
 	play(bytes: number[]): Promise<void>;
 }
-function worker(grant?: Promise<unknown>) {
+function worker(
+	grant?: Promise<unknown>,
+	options: { devices?: readonly MicrophoneIdentity[]; error?: string } = {},
+) {
+	const constraints: MediaStreamConstraints[] = [];
 	let stopped = 0,
 		closed = 0;
 	const track = {
@@ -76,7 +91,12 @@ function worker(grant?: Promise<unknown>) {
 	const context = {
 		navigator: {
 			mediaDevices: {
-				getUserMedia: async () => {
+				enumerateDevices: async () =>
+					(options.devices ?? []).map((d) => ({ ...d, kind: "audioinput" })),
+				getUserMedia: async (input: MediaStreamConstraints) => {
+					constraints.push(input);
+					if (options.error)
+						throw Object.assign(new Error("private"), { name: options.error });
 					await grant;
 					return stream;
 				},
@@ -93,12 +113,14 @@ function worker(grant?: Promise<unknown>) {
 		Array,
 		Promise,
 		Object,
+		Blob,
 	};
 	runInNewContext(audioWorkerSource(), context);
 	const api = (context as typeof context & { __quakeSpeech: WorkerApi })
 		.__quakeSpeech;
 	return {
 		api,
+		constraints,
 		counts: () => ({ stopped, closed }),
 		feed: (samples: Float32Array) =>
 			process?.({ inputBuffer: { getChannelData: () => samples } }),
@@ -172,4 +194,73 @@ describe("actual serialized WebAudio worker with synthetic devices", () => {
 		await Promise.resolve();
 		expect(cancelledCompleted).toBe(false);
 	});
+});
+
+it("uses recovered exact identity and never retries missing or denied microphones with another input", async () => {
+	const saved = { deviceId: "old", label: "Desk", groupId: "group" };
+	const f = worker(undefined, { devices: [{ ...saved, deviceId: "new" }] });
+	await f.api.capture("selected", saved);
+	expect(f.constraints).toEqual([
+		{
+			audio: {
+				deviceId: { exact: "new" },
+				channelCount: 1,
+				echoCancellation: true,
+				noiseSuppression: true,
+				autoGainControl: false,
+			},
+			video: false,
+		},
+	]);
+	await f.api.stop();
+	for (const error of [
+		"NotFoundError",
+		"NotAllowedError",
+		"NotReadableError",
+	]) {
+		const failed = worker(undefined, { error });
+		await expect(failed.api.capture("failed", saved)).rejects.toHaveProperty(
+			"name",
+			error,
+		);
+		expect(failed.constraints).toHaveLength(1);
+		expect(failed.constraints[0]?.audio).toMatchObject({
+			deviceId: { exact: "old" },
+		});
+	}
+	const defaultMic = worker();
+	await defaultMic.api.capture("default");
+	expect(defaultMic.constraints[0]?.audio).not.toHaveProperty("deviceId");
+	await defaultMic.api.stop();
+});
+it("pauses without ending, exports opt-in PCM/WAV/Blob after stop and forgets it on close", async () => {
+	const f = worker();
+	await f.api.capture("export", undefined, true);
+	f.feed(new Float32Array(960).fill(0.25));
+	expect(f.api.level().rms).toBe(0.25);
+	f.api.pause();
+	f.feed(new Float32Array(960).fill(1));
+	expect(f.api.level()).toEqual({ rms: 0, peak: 0 });
+	expect(f.counts()).toEqual({ stopped: 0, closed: 0 });
+	f.api.resumeCapture();
+	f.feed(new Float32Array(960).fill(-0.5));
+	await f.api.stop();
+	expect(f.api.level()).toEqual({ rms: 0, peak: 0 });
+	expect(f.api.export("pcm")).toHaveLength(1920);
+	const wav = Uint8Array.from(f.api.export("wav"));
+	const header = new DataView(wav.buffer);
+	expect(new TextDecoder().decode(wav.slice(0, 4))).toBe("RIFF");
+	expect(header.getUint32(24, true)).toBe(24000);
+	expect(header.getUint16(22, true)).toBe(1);
+	expect(header.getUint16(34, true)).toBe(16);
+	expect(header.getUint32(40, true)).toBe(1920);
+	expect(new Uint8Array(await f.api.export("blob").arrayBuffer())).toEqual(wav);
+	expect(f.api.pull().frames[0]?.seq).toBe(0);
+	expect(f.api.pull().frames[0]?.seq).toBe(1);
+	await f.api.close();
+	expect(() => f.api.export("pcm")).toThrow();
+	const regular = worker();
+	await regular.api.capture("normal");
+	await regular.api.stop();
+	expect(() => regular.api.export("pcm")).toThrow();
 });

@@ -1,10 +1,16 @@
-import { Chunk, Effect, Option, Stream } from "effect";
+import { Chunk, Effect, Option, type Scope, Stream } from "effect";
 import type { AiError } from "../../../../../packages/edge/src/ai/ai-errors";
 import { AiUnavailable } from "../../../../../packages/edge/src/ai/ai-errors";
 import { DesktopSpeechError } from "./errors";
 import type { PcmFrame } from "./pcm";
 
 export interface CaptureSession {
+	/** Explicit recorder clients may pause/export. STT never requests an archive. */
+	readonly pause?: Effect.Effect<void, AiError>;
+	readonly resume?: Effect.Effect<void, AiError>;
+	readonly export?: (
+		format: "pcm" | "wav",
+	) => Effect.Effect<Uint8Array, AiError>;
 	readonly pull: Effect.Effect<
 		{ readonly frames: readonly PcmFrame[]; readonly done: boolean },
 		AiError | DesktopSpeechError
@@ -23,7 +29,7 @@ export interface CaptureDriver {
 export function captureFrames(
 	driver: CaptureDriver,
 	captureId: string,
-	ready: (session: CaptureSession) => Effect.Effect<void>,
+	ready: (session: CaptureSession) => Effect.Effect<void, never, Scope.Scope>,
 	meter: (frame: PcmFrame) => Effect.Effect<void>,
 ): Stream.Stream<Uint8Array, AiError> {
 	return Stream.unwrapScoped(

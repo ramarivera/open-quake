@@ -1,9 +1,10 @@
 import { Either, Schema } from "effect";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	defaultMeetingConfig,
 	MeetingConfig,
 } from "../../../shared/meeting-bridge";
+import { SharedMicrophonePicker } from "../speech/SpeechSettings";
 import { meetingRequest } from "./useMeetings";
 
 export function MeetingSettings({
@@ -14,7 +15,7 @@ export function MeetingSettings({
 	initial?: MeetingConfig | undefined;
 }): React.JSX.Element {
 	const [profileId, setProfileId] = useState<string>(initial.profileId);
-	const [devices, setDevices] = useState<readonly MediaDeviceInfo[]>([]);
+
 	const [config, setConfig] = useState(initial),
 		[message, setMessage] = useState("");
 	return (
@@ -48,32 +49,8 @@ export function MeetingSettings({
 					);
 				}}
 			>
-				<label>
-					Microphone
-					<select
-						value={config.microphoneId}
-						onFocus={() => {
-							void navigator.mediaDevices
-								?.enumerateDevices()
-								.then((devices) =>
-									setDevices(devices.filter((d) => d.kind === "audioinput")),
-								)
-								.catch(() => setMessage("Microphone list is unavailable"));
-						}}
-						onChange={(event) =>
-							setConfig({ ...config, microphoneId: event.target.value })
-						}
-					>
-						<option value="default">Default microphone</option>
-						{devices
-							.filter((d) => d.deviceId !== "default")
-							.map((device, i) => (
-								<option key={device.deviceId} value={device.deviceId}>
-									{device.label || `Microphone ${i + 1}`}
-								</option>
-							))}
-					</select>
-				</label>
+				<SharedMicrophonePicker />
+				<SystemAudioSetup />
 				<label className="meeting-checkbox">
 					<input
 						type="checkbox"
@@ -179,5 +156,73 @@ export function MeetingSettings({
 				<span role="status">{message}</span>
 			</form>
 		</details>
+	);
+}
+
+function SystemAudioSetup(): React.JSX.Element {
+	const [status, setStatus] = useState("");
+	const [open, setOpen] = useState(false);
+	const version = useRef(0);
+	const refresh = async () => {
+		const request = ++version.current;
+		try {
+			const devices = await navigator.mediaDevices.enumerateDevices();
+			if (request === version.current)
+				setStatus(
+					devices.some(
+						(d) =>
+							d.kind === "audioinput" && /BlackHole|Monitor/i.test(d.label),
+					)
+						? "System audio input available"
+						: "No BlackHole or Monitor input found",
+				);
+		} catch {
+			if (request === version.current)
+				setStatus(
+					"System audio inputs couldn't be checked. Refresh to try again.",
+				);
+		}
+	};
+	return (
+		<div>
+			<button
+				type="button"
+				onClick={() => {
+					setOpen(true);
+					void refresh();
+				}}
+			>
+				System audio setup
+			</button>
+			{open ? (
+				<section aria-label="System audio setup">
+					<p>
+						Windows uses desktop loopback. macOS and Linux require an installed
+						BlackHole or Monitor input. On macOS, create a Multi-Output Device
+						in Audio MIDI Setup, select your output and BlackHole, and route
+						system sound to it. Grant microphone access. No driver or audio
+						routing is changed here.
+					</p>
+					<p role="status">{status}</p>
+					<button
+						type="button"
+						onClick={() => {
+							void refresh();
+						}}
+					>
+						Refresh inputs
+					</button>
+					<button
+						type="button"
+						onClick={() => {
+							version.current++;
+							setOpen(false);
+						}}
+					>
+						Cancel
+					</button>
+				</section>
+			) : null}
+		</div>
 	);
 }

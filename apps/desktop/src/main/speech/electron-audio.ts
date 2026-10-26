@@ -13,6 +13,7 @@ import {
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import type { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
+import type { MicrophoneIdentity } from "../../shared/speech";
 import { audioWorkerSource } from "./audio-worker";
 import type { CaptureDriver } from "./capture";
 import { DesktopSpeechError } from "./errors";
@@ -101,7 +102,9 @@ export async function openAudioWorker(
 				if (
 					closed ||
 					!window ||
-					!/^(capture|pull|ready|play|stop|state|resume)$/.test(method)
+					!/^(capture|pull|ready|play|stop|state|resume|pause|resumeCapture|export|level|close)$/.test(
+						method,
+					)
 				)
 					return Promise.reject(new AiUnavailable());
 				return window.webContents.executeJavaScript(
@@ -139,6 +142,9 @@ const boundary = <A>(run: () => Promise<A>) =>
 	Effect.tryPromise({ try: run, catch: (cause) => new AiUnavailable(cause) });
 export function createElectronCaptureDriver(
 	open = openAudioWorker,
+	microphone: () => Effect.Effect<MicrophoneIdentity | undefined> = () =>
+		Effect.succeed(undefined),
+	exportRecording = false,
 ): CaptureDriver {
 	return {
 		permission: boundary(
@@ -149,6 +155,7 @@ export function createElectronCaptureDriver(
 		),
 		open: (id) =>
 			Effect.gen(function* () {
+				const selected = yield* microphone();
 				const controller = new AbortController();
 				let acquired: AudioWorker | undefined;
 				let opening: Promise<AudioWorker> | undefined;
@@ -176,17 +183,21 @@ export function createElectronCaptureDriver(
 						if (controller.signal.aborted) {
 							throw new AiUnavailable();
 						}
-						await value.invoke("capture", [id]);
+						await value.invoke("capture", [id, selected, exportRecording]);
 						return value;
 					},
 					catch: (cause) =>
 						cause instanceof Error && cause.name === "NotAllowedError"
 							? new DesktopSpeechError("PermissionDenied", "permission", cause)
-							: new DesktopSpeechError(
-									"RecorderUnavailable",
-									"recorder",
-									cause,
-								),
+							: cause instanceof Error &&
+									(cause.name === "NotFoundError" ||
+										cause.name === "OverconstrainedError")
+								? new DesktopSpeechError("NoDevice", "recorder", cause)
+								: new DesktopSpeechError(
+										"RecorderUnavailable",
+										"recorder",
+										cause,
+									),
 				}).pipe(
 					// Startup hasn't returned a CaptureSession yet, so captureFrames'
 					// acquisition finalizer can't close it. Own failed acquisition here.
@@ -209,6 +220,22 @@ export function createElectronCaptureDriver(
 					),
 				);
 				return {
+					pause: boundary(() => worker.invoke("pause")).pipe(Effect.asVoid),
+					resume: boundary(() => worker.invoke("resumeCapture")).pipe(
+						Effect.asVoid,
+					),
+					export: (format) =>
+						boundary(() => worker.invoke<unknown>("export", [format])).pipe(
+							Effect.flatMap(
+								Schema.decodeUnknown(
+									Schema.Array(Schema.Int.pipe(Schema.between(0, 255))).pipe(
+										Schema.maxItems(24000 * 2 * 60 + 44),
+									),
+								),
+							),
+							Effect.map((bytes) => Uint8Array.from(bytes)),
+							Effect.mapError((cause) => new AiUnavailable(cause)),
+						),
 					pull: boundary(() => worker.invoke<unknown>("pull")).pipe(
 						Effect.flatMap(Schema.decodeUnknown(Batch)),
 						Effect.mapError((cause) => new AiUnavailable(cause)),

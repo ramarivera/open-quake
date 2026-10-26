@@ -14,6 +14,7 @@ import {
 } from "../../../../../packages/edge/src/ai/speech/speech-contracts";
 import type { JsonStore } from "../../../../../packages/edge/src/channels/channel-contracts";
 import {
+	normalizeMicrophone,
 	SpeechSettings,
 	SpeechSettingsRequest,
 	type SpeechSettingsView,
@@ -96,6 +97,8 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 			},
 		);
 		return {
+			microphone: () =>
+				Effect.sync(() => normalizeMicrophone(state.settings.defaultMic)),
 			profiles: Effect.fn("DesktopSpeech.profiles")(
 				(): Effect.Effect<SpeechProfiles> =>
 					Effect.sync(() => ({
@@ -108,17 +111,40 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 				(input: unknown): Effect.Effect<SpeechSettingsView, AiError> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
-							const request = yield* Schema.decodeUnknown(
+							const decoded = yield* Schema.decodeUnknown(
 								SpeechSettingsRequest,
 								{ onExcessProperty: "error" },
 							)(input).pipe(
 								Effect.mapError((cause) => new AiConfigInvalid(cause)),
 							);
-							if (request._tag === "Get") {
+							if (decoded._tag === "Get") {
 								if (loadError) return yield* loadError;
 								yield* cleanup();
 								return yield* view();
 							}
+							if (loadError && decoded._tag === "SelectMicrophone")
+								return yield* loadError;
+							const request =
+								decoded._tag === "SelectMicrophone"
+									? {
+											_tag: "Save" as const,
+											sttKey: undefined,
+											ttsKey: undefined,
+											settings: {
+												...state.settings,
+												defaultMic: normalizeMicrophone(decoded.microphone),
+											},
+										}
+									: {
+											...decoded,
+											settings: {
+												...decoded.settings,
+												defaultMic: normalizeMicrophone(
+													decoded.settings.defaultMic ??
+														state.settings.defaultMic,
+												),
+											},
+										};
 							const previous = state;
 							const created: Array<SttProfile | TtsProfile> = [];
 							const build = Effect.gen(function* () {

@@ -148,6 +148,19 @@ export function reduceOverlay(
 				),
 			};
 		case "idle":
+			if (stage.outcome === "empty" && stage.emptyReason) {
+				const base = message(
+					stage.emptyReason === "noAudio"
+						? "quakeBotIconView.sttErrorNoAudioCapture"
+						: "quakeBotIconView.sttErrorInvalidUserInput",
+				);
+				return {
+					...next,
+					visible: true,
+					text: Option.some(base),
+					countdown: Option.some({ base, remaining: ERROR_COUNTDOWN_SECONDS }),
+				};
+			}
 			return { ...initialOverlay, captureId: Option.some(event.captureId) };
 	}
 }

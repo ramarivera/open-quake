@@ -18,8 +18,15 @@ import {
 	VoiceSurfacePublisher,
 	VoiceTonePort,
 } from "../../../../../packages/edge/src/voice/surface";
+import { voiceTextString } from "../../renderer/src/strip/overlays/voice/voice-context";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import type { CaptureDriver } from "./capture";
+import {
+	type CaptureMetrics,
+	createCaptureMetrics,
+	safeCaptureMetrics,
+} from "./capture-metrics";
+import { DesktopSpeechError } from "./errors";
 import { createProductionVoiceRuntime } from "./runtime";
 
 const captureRequest = {
@@ -294,7 +301,11 @@ describe("production capture deadlines and terminals", () => {
 							terminal._tag !== "Stage" ||
 							terminal.stage._tag !== "idle"
 						);
-						expect(terminal.stage).toEqual({ _tag: "idle", outcome: "empty" });
+						expect(terminal.stage).toEqual({
+							_tag: "idle",
+							outcome: "empty",
+							emptyReason: "noAudio",
+						});
 						expect(f.actions).toEqual(["run-task"]);
 						expect(f.counts()).toEqual({
 							opened: 1,
@@ -362,7 +373,11 @@ describe("production capture deadlines and terminals", () => {
 							terminal._tag !== "Stage" ||
 							terminal.stage._tag !== "idle"
 						);
-						expect(terminal.stage).toEqual({ _tag: "idle", outcome: "empty" });
+						expect(terminal.stage).toEqual({
+							_tag: "idle",
+							outcome: "empty",
+							emptyReason: "unclear",
+						});
 						expect(f.counts()).toEqual({
 							opened: 1,
 							closed: 1,
@@ -374,3 +389,193 @@ describe("production capture deadlines and terminals", () => {
 			),
 	);
 });
+
+it.effect(
+	"knob stops once at 58 seconds after ready, finalizes, and emits bounded phase metrics",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const f = yield* fixture("auto");
+				const metrics = yield* Queue.unbounded<CaptureMetrics>();
+				const recorded: CaptureMetrics[] = [];
+				yield* Effect.gen(function* () {
+					const controller = yield* createProductionVoiceRuntime({
+						speech: yield* AiSpeechService,
+						capture: f.driver,
+						profiles: f.profiles,
+						sendText: () => Effect.void,
+						sendTranscript: () => Effect.die("empty"),
+						diagnostics: {
+							layer: Layer.empty,
+							instrument: (effect) => effect,
+							recordCapture: (value) =>
+								Queue.offer(metrics, value).pipe(
+									Effect.tap(() => Effect.sync(() => recorded.push(value))),
+									Effect.asVoid,
+								),
+						},
+					});
+					yield* controller.runtime.startCapture({
+						...captureRequest,
+						keyCode: "0,1",
+					});
+					yield* Deferred.await(f.listening);
+					yield* TestClock.adjust(57999);
+					expect(f.counts()).toEqual({ opened: 1, closed: 0, socketClosed: 0 });
+					expect(f.actions.filter((a) => a === "finish-task")).toHaveLength(0);
+					yield* TestClock.adjust(1);
+					const result = yield* Queue.take(metrics);
+					expect(result).toEqual({
+						terminal: "empty",
+						startupMs: 58000,
+						readyLatencyMs: 0,
+						firstFrameLatencyMs: 0,
+						captureDurationMs: 58000,
+						hasAudioFrame: true,
+						stopBeforeReady: false,
+					});
+					expect(f.counts()).toEqual({ opened: 1, closed: 1, socketClosed: 1 });
+					expect(f.actions).toEqual(["run-task", "pcm", "finish-task"]);
+					yield* controller.runtime.releaseCapture("fixture", "0,1", 1);
+					yield* TestClock.adjust(2000);
+					expect(recorded).toHaveLength(1);
+				}).pipe(Effect.provide(f.layer));
+			}),
+		),
+);
+it.effect(
+	"release before readiness emits one empty early-stop metric without device or content",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const f = yield* fixture("recorder");
+				const records: CaptureMetrics[] = [];
+				yield* Effect.gen(function* () {
+					const controller = yield* createProductionVoiceRuntime({
+						speech: yield* AiSpeechService,
+						capture: f.driver,
+						profiles: f.profiles,
+						sendText: () => Effect.void,
+						sendTranscript: () => Effect.die("empty"),
+						diagnostics: {
+							layer: Layer.empty,
+							instrument: (effect) => effect,
+							recordCapture: (value) =>
+								Effect.sync(() => {
+									records.push(value);
+								}),
+						},
+					});
+					yield* controller.runtime.startCapture(captureRequest);
+					yield* Deferred.await(f.entered);
+					yield* TestClock.adjust(25);
+					yield* controller.runtime.releaseCapture("fixture", "1,5", 1);
+					expect(records).toEqual([
+						{
+							terminal: "cancelled",
+							startupMs: 25,
+							readyLatencyMs: null,
+							firstFrameLatencyMs: null,
+							captureDurationMs: 0,
+							hasAudioFrame: false,
+							stopBeforeReady: true,
+						},
+					]);
+					expect(JSON.stringify(records)).not.toMatch(
+						/fixture|captureId|deviceId|transcript|bytes|credential/,
+					);
+				}).pipe(Effect.provide(f.layer));
+			}),
+		),
+);
+for (const reason of [
+	"NoDevice",
+	"PermissionDenied",
+	"RecorderUnavailable",
+] as const) {
+	it.effect(
+		`retains ${reason} through the production runtime and localized retry consumer`,
+		() =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const f = yield* fixture("auto");
+					const records = yield* Queue.unbounded<CaptureMetrics>();
+					const error = new DesktopSpeechError(
+						reason,
+						"recorder",
+						new Error("private-device-path"),
+					);
+					yield* Effect.gen(function* () {
+						const controller = yield* createProductionVoiceRuntime({
+							speech: yield* AiSpeechService,
+							profiles: f.profiles,
+							capture: { ...f.driver, open: () => Effect.fail(error) },
+							sendText: () => Effect.void,
+							sendTranscript: () => Effect.die("none"),
+							diagnostics: {
+								layer: Layer.empty,
+								instrument: (effect) => effect,
+								recordCapture: (value) =>
+									Queue.offer(records, value).pipe(Effect.asVoid),
+							},
+						});
+						yield* controller.runtime.startCapture(captureRequest);
+						const event = yield* failed(f.published);
+						expect(event.stage).toMatchObject({
+							_tag: "failed",
+							reason: "noMic",
+							errorCode: error.code,
+						});
+						expect(
+							voiceTextString("en", { _tag: "errorCode", code: error.code }),
+						).toBe(
+							"The microphone was not ready or no audio was captured. Hold to talk a little longer and try again.",
+						);
+						expect(
+							voiceTextString("de", { _tag: "errorCode", code: error.code }),
+						).not.toContain(error.code);
+						expect(yield* Queue.take(records)).toMatchObject({
+							terminal: "failed",
+							hasAudioFrame: false,
+							stopBeforeReady: false,
+						});
+						expect(f.counts().socketClosed).toBe(1);
+					}).pipe(Effect.provide(f.layer));
+				}),
+			),
+	);
+}
+it.effect(
+	"bounds monotonic capture timings and emits only the closed projection",
+	() =>
+		Effect.gen(function* () {
+			const metrics = yield* createCaptureMetrics();
+			yield* TestClock.adjust(17);
+			yield* metrics.ready;
+			yield* TestClock.adjust(9);
+			yield* metrics.frame;
+			yield* TestClock.adjust(100);
+			yield* metrics.stop;
+			expect(yield* metrics.finish("completed")).toEqual({
+				terminal: "completed",
+				startupMs: 126,
+				readyLatencyMs: 17,
+				firstFrameLatencyMs: 26,
+				captureDurationMs: 109,
+				hasAudioFrame: true,
+				stopBeforeReady: false,
+			});
+			expect(
+				safeCaptureMetrics({
+					...(yield* metrics.finish("completed")),
+					startupMs: Infinity,
+					captureDurationMs: 999999,
+					readyLatencyMs: -5,
+				}),
+			).toMatchObject({
+				startupMs: 0,
+				captureDurationMs: 120000,
+				readyLatencyMs: 0,
+			});
+		}),
+);

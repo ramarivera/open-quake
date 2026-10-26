@@ -19,6 +19,7 @@ import {
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import {
 	initialVoiceActivity,
+	isKnobVoiceKey,
 	meterLevel,
 	shouldEmitLevel,
 	stepVoiceActivity,
@@ -35,6 +36,7 @@ import {
 	type CaptureSession,
 	captureFrames,
 } from "./capture";
+import { type CaptureMetrics, createCaptureMetrics } from "./capture-metrics";
 import { instrumentSpeechOutcome, type SpeechDiagnostics } from "./diagnostics";
 import { DesktopSpeechError } from "./errors";
 import { createOrderedSpeech, type OrderedSpeech } from "./ordered";
@@ -81,10 +83,14 @@ export const createProductionVoiceRuntime = Effect.fn(
 	type Active = {
 		readonly request: CaptureRequest;
 		readonly fiber: Fiber.RuntimeFiber<void>;
+		readonly metrics: Effect.Effect.Success<
+			ReturnType<typeof createCaptureMetrics>
+		>;
 		session?: CaptureSession;
 		released: boolean;
 		terminal: boolean;
 		listening: boolean;
+		hasAudioFrame: boolean;
 		transcript?: string;
 	};
 	let active: Active | undefined;
@@ -131,6 +137,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 	) {
 		if (!owner) return;
 		owner.released = true;
+		yield* owner.metrics.stop;
 		yield* Fiber.interrupt(owner.fiber);
 		if (active === owner) active = undefined;
 	});
@@ -194,6 +201,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 					const cleaning = cleanup;
 					const start = yield* Effect.makeLatch();
 					let owner: Active;
+					const metrics = yield* createCaptureMetrics();
+					let terminal: CaptureMetrics["terminal"] = "failed";
 					if (request.knob) knobProfiles.set(request.serial, request);
 					else knobProfiles.delete(request.serial);
 					const body = Effect.gen(function* () {
@@ -269,6 +278,20 @@ export const createProductionVoiceRuntime = Effect.fn(
 										return;
 									}
 									owner.listening = true;
+									yield* metrics.ready;
+									if (isKnobVoiceKey(request.keyCode))
+										yield* Effect.sleep("58 seconds").pipe(
+											Effect.zipRight(
+												Effect.gen(function* () {
+													if (active !== owner || owner.released) return;
+													owner.released = true;
+													yield* metrics.stop;
+													yield* session.stop;
+													yield* stage(owner, { _tag: "processing" });
+												}),
+											),
+											Effect.forkScoped,
+										);
 									yield* stage(owner, {
 										_tag: "recording",
 										status: "listening",
@@ -277,6 +300,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 							(frame) =>
 								Effect.gen(function* () {
 									if (active !== owner || owner.released) return;
+									owner.hasAudioFrame = true;
+									yield* metrics.frame;
 									const next = stepVoiceActivity(activity, frame.peak);
 									if (next.detected !== activity.detected) {
 										yield* stage(owner, {
@@ -326,8 +351,14 @@ export const createProductionVoiceRuntime = Effect.fn(
 							"speech.recognize",
 						);
 						if (active !== owner) return;
+						yield* metrics.stop;
 						if (!transcript.trim()) {
-							yield* stage(owner, { _tag: "idle", outcome: "empty" });
+							terminal = "empty";
+							yield* stage(owner, {
+								_tag: "idle",
+								outcome: "empty",
+								emptyReason: owner.hasAudioFrame ? "unclear" : "noAudio",
+							});
 							owner.terminal = true;
 							return;
 						}
@@ -335,6 +366,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 							_tag: "processing",
 							transcript: transcript.slice(0, 8000),
 						});
+						terminal = "completed";
 						// Capture is finalized and mic/socket are physically released before chat.
 						yield* stage(owner, { _tag: "idle", outcome: "completed" });
 						yield* options.sendTranscript({
@@ -359,7 +391,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 								_tag: "failed",
 								reason:
 									failure instanceof DesktopSpeechError &&
-									(failure.code === "VOICE.CAPTURE.PERMISSION_DENIED" ||
+									(failure.code === "VOICE.CAPTURE.NO_DEVICE" ||
+										failure.code === "VOICE.CAPTURE.PERMISSION_DENIED" ||
 										failure.code === "VOICE.CAPTURE.RECORDER_UNAVAILABLE")
 										? "noMic"
 										: "server",
@@ -367,7 +400,21 @@ export const createProductionVoiceRuntime = Effect.fn(
 							});
 						}),
 						Effect.onInterrupt(() =>
-							stage(owner, { _tag: "idle", outcome: "cancelled" }),
+							Effect.sync(() => {
+								terminal = "cancelled";
+							}).pipe(
+								Effect.zipRight(
+									stage(owner, { _tag: "idle", outcome: "cancelled" }),
+								),
+							),
+						),
+						Effect.ensuring(
+							Effect.suspend(() => metrics.finish(terminal)).pipe(
+								Effect.flatMap(
+									(value) =>
+										options.diagnostics?.recordCapture?.(value) ?? Effect.void,
+								),
+							),
 						),
 						Effect.ensuring(
 							Effect.sync(() => {
@@ -380,9 +427,11 @@ export const createProductionVoiceRuntime = Effect.fn(
 					owner = {
 						request,
 						fiber,
+						metrics,
 						released: false,
 						terminal: false,
 						listening: false,
+						hasAudioFrame: false,
 					};
 					active = owner;
 					lastOwnerSerial = request.serial;
@@ -402,6 +451,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 					)
 						return;
 					owner.released = true;
+					yield* owner.metrics.stop;
 					if (!owner.listening || !owner.session) {
 						yield* stop();
 						return;

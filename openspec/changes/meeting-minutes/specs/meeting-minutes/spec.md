@@ -268,3 +268,20 @@ Evidence: AI-263-264, AI-280-294, AI-299-317, AI-338. These strengthen local pri
 
 - **WHEN** link loss or layout teardown cancels a held MeetAI key
 - **THEN** the synthetic release clears visual state without dispatching a meeting action
+
+
+### Requirement: Qualified system audio and deliberate fallback
+
+Evidence: AI-111, AI-282, KNOB-056. Windows system capture SHALL use the trusted main-process desktop loopback grant and discard video tracks. macOS and Linux SHALL select an exact enumerated BlackHole or Monitor audio input with echo cancellation, noise suppression and automatic gain disabled. Missing input, denied access, empty audio streams and cancelled acquisition SHALL release partial resources and never capture default audio silently. The desktop SHALL offer explicit microphone-only retry or cancellation before recording. Meeting microphone choice SHALL share the speech identity and recovery contract in AI-247, AI-281, KNOB-049 and SETTINGS-019.
+
+#### Scenario: Optional source unavailable
+- **WHEN** Windows loopback has no audio or macOS/Linux has no named source or permission
+- **THEN** all acquired tracks close, no recorder starts, and the user can deliberately retry microphone-only or cancel
+
+### Requirement: User-directed macOS capture setup
+
+Evidence: AI-283. The settings SHALL offer an explicit setup/help view, enumerate installed BlackHole/Monitor inputs without opening them, explain multi-output routing and permission prerequisites, and allow refresh or cancel after setup fails. No installer, driver, aggregate device or host routing change SHALL run automatically. Actual driver installation and multi-output configuration require separate host approval and remain unverified.
+
+#### Scenario: Missing or installed virtual input
+- **WHEN** the user opens setup help with no BlackHole input, then refreshes after manually installing one or cancels
+- **THEN** help reports missing or available from fresh enumeration, a failed refresh reports unavailable, and cancel changes no capture or host setting
