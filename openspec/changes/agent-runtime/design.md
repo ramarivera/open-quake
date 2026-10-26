@@ -82,3 +82,9 @@ Keep agent enablement off until the runtime decision and action policies are app
 - In-process tools share host privileges. Use narrow registered adapters and explicit allowlists; a generic shell runner is not the default agent capability.
 - Cancellation cannot undo a non-cancellable mutation. Persist dispatch identity and display eventual or unknown completion rather than replaying it.
 - OpenClaw protocol recovery may remain incomplete. Treat compatibility as optional and do not make first-release chat or local agents depend on it.
+
+### Existing lifecycle recovery, 2026-10-26
+
+The existing lifecycle conductor must return its ready snapshot for repeated Start and its stopped snapshot for repeated Stop without dispatching again. An active control still rejects conflicting controls as busy. Acquisition and release of control ownership are interruption-safe. On caller interruption or an adapter defect, an unconfirmed starting/stopping state becomes the existing `AGENT.RUNTIME.FAILED` state; a terminal state confirmed by adapter cleanup is retained. This does not assert that interruption reversed a host operation. An explicit control may reconcile an error state, with no automatic retries. The 10s start/restart and 5s stop deadlines and original typed adapter errors remain unchanged. Production HTTP adapters keep local process controls unavailable.
+
+This hardens the existing control consumer under task 4.1. The in-process tool loop, health adapter, confirmations, tool cards, and remaining task 2.5 acceptance remain unfinished.
