@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keyText } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import { ProfileJson } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileImportReport } from "../../../../../../packages/device/src/profiles/profile-import.js";
@@ -42,11 +42,12 @@ export function KeyImport({
 	const [busy, setBusy] = useState(false);
 	const [status, setStatus] = useState("");
 	const [overflowVisible, setOverflowVisible] = useState(false);
-	const decoded = Schema.decodeUnknownEither(Schema.parseJson(ProfileJson))(
-		source,
-	);
-	const overflow =
-		decoded._tag === "Right" ? profileOverflow(decoded.right) : [];
+	const overflow = useMemo(() => {
+		const decoded = Schema.decodeUnknownEither(Schema.parseJson(ProfileJson))(
+			source,
+		);
+		return decoded._tag === "Right" ? profileOverflow(decoded.right) : [];
+	}, [source]);
 	const ticket = useRef(0);
 	useEffect(
 		() => () => {
