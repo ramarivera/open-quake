@@ -419,6 +419,28 @@
 .agent-workbench .aw-table input[type="number"] {
 	min-width: 84px;
 }
+.aw-provider-field {
+	display: grid;
+	gap: 4px;
+	margin-top: 8px;
+}
+.aw-provider-option {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	margin-top: 8px;
+	white-space: normal;
+}
+.agent-workbench .aw-table .aw-provider-option input[type="checkbox"] {
+	flex: 0 0 auto;
+	width: 16px;
+	min-width: 16px;
+	min-height: 16px;
+	height: 16px;
+	margin: 1px 0 0;
+	padding: 0;
+	accent-color: var(--cw-accent);
+}
 .agent-workbench .aw-table input:focus-visible,
 .agent-workbench .aw-table select:focus-visible {
 	outline: 2px solid var(--cw-accent);

@@ -23,6 +23,11 @@
 - [x] 4.4 Preserve the original velocity sample timestamp and regress a 30 px move over 100 ms released at 100/101 ms. Source: SCREEN-066.
 - [x] 4.5 Run all six gates and native mock smoke, record evidence, close the review beads, commit/push and reply to/resolve the three fixed threads. No hardware or merge.
 
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: DOM observation, child discovery, non-bubbling detail and disposal for SCREEN-061.
+
 ## 5. Touch burn-down lane, 2026-10-26
 
 - [x] 5.1 Deliver held input edges and scoped scrubbed diagnostics. MAIN-036, MAIN-065, SCREEN-057. Bead open-quake-lih.28.

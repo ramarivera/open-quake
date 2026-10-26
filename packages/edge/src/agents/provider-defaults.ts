@@ -1,5 +1,6 @@
+import { mergeProviderCatalog } from "../ai/provider-catalog.js";
 // CENTER-070: recovered provider defaults and common model suggestions. No cloud catalog.
-export const providerDefaults = [
+export const providerDefaults = mergeProviderCatalog([
 	{
 		id: "openai",
 		baseUrl: "https://api.openai.com/v1",
@@ -259,4 +260,4 @@ export const providerDefaults = [
 		baseUrl: "",
 		models: [],
 	},
-];
+]);

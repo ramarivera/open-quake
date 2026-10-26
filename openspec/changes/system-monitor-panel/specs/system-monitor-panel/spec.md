@@ -98,3 +98,19 @@ Each canvas SHALL register its disk list as smDiskList with move support through
 
 - **WHEN** touch moves vertically over an overflowing disk list and releases
 - **THEN** scrollTop changes, remains within bounds and no key action fires
+
+
+### Requirement: Retained monitor layout behavior
+
+Anime SHALL retain CPU/GPU/model grouping, a memory/process/disk group, and power/network group, with explicit unknown temperatures and reduced-motion-safe sparkles. Tactical SHALL retain CPU/GPU/memory grouping, ACTIVE_TASK_SCHEDULER, DRIVE_MANIFEST and WLAN_PRIMARY labels, with power/network grouping and no decorative animation. Wasteland SHALL map measured CPU/GPU/memory percentages 0/50/100 to -135/0/135 degree needles and omit unknown needles, retaining disk/network and process/power groups. Readouts SHALL update from real snapshots and identify unavailable and stale values. Evidence: WIDGETS-071, WIDGETS-072, WIDGETS-073. The device palette/readability reconciliation, anime value motion and wasteland warning-lamp/wobble behavior remain implementation obligations, not covered by grouping tests.
+
+#### Scenario: Snapshot changes in each retained skin
+
+- **WHEN** each skin receives unavailable, available then stale samples
+- **THEN** all seven modules reconcile their text without fabricated values, long model names stay in the model group, and measured needle values use the specified mapping
+
+#### Scenario: Disk drag cancelled or disposed
+
+- **WHEN** a native disk drag reaches its scroll bounds then cancels or the panel unmounts
+- **THEN** scrolling remains bounded and no later inertia or touch changes its position
+- **AND** this verifies the disk sub-touch portion of MGMT-384 without claiming legacy-grid migration

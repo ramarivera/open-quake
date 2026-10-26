@@ -115,6 +115,8 @@ export function createDirectChatBridge(
 			});
 	let disposed = false;
 	return {
+		files: (input) => run((client) => client.provider.files(input)),
+		providers: () => run((client) => client.provider.list(undefined)),
 		submit: (input) => run((client) => client.chat.submit(input)),
 		snapshot: (sessionId, turnId) =>
 			run((client) => client.chat.snapshot({ sessionId, turnId })),

@@ -67,6 +67,7 @@ async function fixture(
 	let aborted = false;
 	const host = createDirectChat({
 		directory,
+		online: () => true,
 		models: (scope) => {
 			expect(scope).toBe("default");
 			return Effect.succeed(rows);

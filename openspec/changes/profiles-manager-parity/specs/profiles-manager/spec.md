@@ -3,6 +3,12 @@
 ### Requirement: Shipped profile catalog
 The app SHALL install Discord, MeetAI, Vivid, Quick, SysView, AI Chat, Music, Clock and DK Claw using recovered resource IDs, menu order, key layouts, titles and actions, and SHALL resolve built-in titles through the eight recovered locales. Quick SHALL use the host platform variant. Custom names SHALL remain literal. macOS SHALL omit Discord from its visible menu while retaining its resource. Existing profiles SHALL survive installation. Source: MGMT-315, 338–340, 343, 346–384. Decisions 12/13/15 govern exclusions, first-run shell approval and weather privacy; MGMT-341 vendor links become project links.
 
+#### Scenario: DKClaw input stream stays with the selected assistant
+- **GIVEN** the shipped DKClaw profile has the `quakeBotInput` tile at `1,7` with its `2x2` footprint and original default payload
+- **WHEN** the panel selects another assistant and receives voice text, then changes profile
+- **THEN** the mounted input follows the selected assistant, rejects text for the previous assistant, and clears its buffer and selection on the profile reset
+- **AND** it cannot display late text from the previous profile until a new assistant is selected. This covers MGMT-350.
+
 #### Scenario: Platform and locale selection
 - **WHEN** a fresh macOS installation selects German
 - **THEN** eight built-ins appear, the stored catalog contains nine resources, Quick uses Mac actions, and available title keys resolve to recovered German strings
@@ -82,6 +88,21 @@ Management SHALL expose Knob Profile, Default Profile, Custom Profile, Add Item,
 #### Scenario: Recoverable initialization failure
 - **WHEN** initial profile storage fails and later recovers
 - **THEN** IPC returns a typed failure reason and a subsequent request retries initialization successfully
+
+
+### Requirement: Platform defaults and SysView preset
+
+Quick SHALL select Linux, macOS or Windows defaults and SHALL use region-neutral project and issue URLs. SysView SHALL ship one visible systemMonitorPanel at 1,1, spanning 8 by 2, with glass style, style background mode, Celsius, sub-touch enabled, touch feedback and knob disabled, and title/grid/icon/delete/drag locks false. Previously installed legacy SysView metric grids SHALL migrate to this panel without replacing custom profiles. Evidence: MGMT-340, MGMT-384. Legacy-grid migration remains an implementation obligation.
+
+#### Scenario: New catalog installation
+
+- **WHEN** any supported platform installs the catalog
+- **THEN** Quick points to the open-quake repository and issues independently of locale, and SysView has the exact full-panel preset
+
+#### Scenario: Installed legacy SysView
+
+- **WHEN** a previously installed SysView contains the legacy separate metric grid
+- **THEN** that built-in upgrades to the full monitor panel while unrelated custom profiles remain intact
 
 ### Requirement: Mounted manager and retained Quick payloads
 The manager SHALL render every visible platform default with localized names, settings and selection affordances, and SHALL support custom selection, confirmed deletion, duplicate, thumbnail refresh and inline weighted-name commit/rejection. External publications SHALL refresh selected properties. The standalone manager SHALL preserve active resource/device identity when reached from Keys and on return. Sources: MGMT-313, MGMT-315, MGMT-317, MGMT-319.

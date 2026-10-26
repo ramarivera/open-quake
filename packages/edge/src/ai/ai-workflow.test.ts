@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either, Option, Stream } from "effect";
 import * as fc from "fast-check";
 import type { CompatibleAdapter } from "./adapters/adapter.js";
+import type { NormalizedEvent } from "./ai-contracts.js";
 import { validateProfile } from "./ai-invariants.js";
 import { prepareWorkflow } from "./ai-provider-quirks.js";
 import { AiRepository } from "./ai-repository.js";
@@ -96,7 +97,16 @@ describe("profile workflows", () => {
 					workflowLayer({
 						open: (input) => {
 							calls.push(input);
-							return Effect.succeed(Stream.succeed({ _tag: "completed" }));
+							return Effect.succeed(
+								Stream.fromIterable<NormalizedEvent>([
+									{
+										_tag: "textDelta",
+										textDelta: "fixture answer",
+										kind: "generation",
+									},
+									{ _tag: "completed" },
+								]),
+							);
 						},
 					}),
 				),
@@ -226,7 +236,16 @@ describe("profile workflows", () => {
 					workflowLayer({
 						open: (input) => {
 							calls.push(input);
-							return Effect.succeed(Stream.succeed({ _tag: "completed" }));
+							return Effect.succeed(
+								Stream.fromIterable<NormalizedEvent>([
+									{
+										_tag: "textDelta",
+										textDelta: "fixture answer",
+										kind: "generation",
+									},
+									{ _tag: "completed" },
+								]),
+							);
 						},
 					}),
 				),

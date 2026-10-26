@@ -37,7 +37,7 @@ export function KnobDial({
 				rx="26"
 				fill="none"
 				stroke={accent}
-				strokeWidth="4"
+				strokeWidth="2"
 			/>
 			<circle
 				cx={cx}
