@@ -164,7 +164,7 @@
 	background: #2b1915;
 	box-shadow: inset 0 0 0 1.5px var(--strip-danger);
 	color: var(--strip-danger);
-	font-size: 18px;
+	font-size: 22px;
 }
 .strip-key-progress {
 	position: absolute;
@@ -239,33 +239,4 @@
 
 .strip-slot[data-invalid="true"] {
 	box-shadow: inset 0 0 0 3px var(--strip-danger);
-}
-
-/* Compact flat metric cells; a missing reading stays an explicit state. */
-.strip-metric {
-	position: absolute;
-	inset: 0;
-	box-sizing: border-box;
-	padding: 16px;
-	overflow: hidden;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	gap: 4px;
-	color: var(--strip-text);
-	font-size: 22px;
-	line-height: 1.2;
-}
-.strip-metric p {
-	margin: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.strip-metric .strip-metric-title {
-	color: var(--strip-muted);
-}
-.strip-metric-status {
-	color: var(--strip-muted);
-	font-size: 18px;
 }

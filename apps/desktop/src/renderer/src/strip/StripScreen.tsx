@@ -20,7 +20,7 @@ import {
 } from "./overlays/voice/voice-context";
 import { deviceRadius, stripPaletteProperties } from "./palette";
 import { selectStripPage } from "./selection";
-import { StripTileHost, stripTileFor } from "./tileRegistry";
+import { stripTileFor } from "./tileRegistry";
 import type { StripProfiles } from "./useStripProfiles";
 import "./strip.css";
 
@@ -378,33 +378,28 @@ export function StripScreen({
 				</div>
 			) : null}
 			{!vivid && layout ? (
-				<StripTileHost
+				<StripGrid
 					layout={layout}
-					live={interactive && voice.surface === "panel"}
-				>
-					<StripGrid
-						layout={layout}
-						pressedKeyCode={
-							feedbackKey === pressedKeyCode ? feedbackKey : undefined
-						}
-						now={now}
-						hourFormat={hourFormat}
-						voice={voice}
-						tileOverlay={tileOverlay}
-						interactive={interactive}
-						runtime={runtime}
-						clockSelection={
-							selection
-								? {
-										profileId: selection.profile.id,
-										pageId: selection.page.id,
-										revision: selection.profile.revision,
-										deviceId: serial ?? "desktop-preview",
-									}
-								: undefined
-						}
-					/>
-				</StripTileHost>
+					pressedKeyCode={
+						feedbackKey === pressedKeyCode ? feedbackKey : undefined
+					}
+					now={now}
+					hourFormat={hourFormat}
+					voice={voice}
+					tileOverlay={tileOverlay}
+					interactive={interactive}
+					runtime={runtime}
+					clockSelection={
+						selection
+							? {
+									profileId: selection.profile.id,
+									pageId: selection.page.id,
+									revision: selection.profile.revision,
+									deviceId: serial ?? "desktop-preview",
+								}
+							: undefined
+					}
+				/>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (
 				<div className="strip-status" role="status">

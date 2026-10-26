@@ -39,6 +39,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const close of cleanups.splice(0).reverse()) await close();
 	localStorage.clear();
+	window.history.replaceState({}, "", "/");
 	vi.unstubAllGlobals();
 });
 const profile = (types: readonly string[] = ["hotkey"]): Profile => ({
@@ -137,7 +138,11 @@ it("MGMT-055 SCREEN-030 SETTINGS-013 applies saved borders to mounted panel, pre
 });
 
 it("WIDGETS-001 dispatches all metric types from decoded live samples and retains one watch when a cell disappears", async () => {
-	let push: (value: unknown) => void = () => {};
+	window.history.replaceState({}, "", "?surface=panel");
+	const listeners = new Set<(value: unknown) => void>();
+	const push = (value: unknown) => {
+		for (const listener of listeners) listener(value);
+	};
 	const off = vi.fn();
 	const request = vi.fn<MonitorBridge["request"]>(async () => ({
 		_tag: "cancelled",
@@ -146,8 +151,11 @@ it("WIDGETS-001 dispatches all metric types from decoded live samples and retain
 		request,
 		onSettings: () => () => {},
 		onMetrics: (callback: (v: unknown) => void) => {
-			push = callback;
-			return off;
+			listeners.add(callback);
+			return () => {
+				listeners.delete(callback);
+				off();
+			};
 		},
 	});
 	const p = profile([
@@ -169,21 +177,21 @@ it("WIDGETS-001 dispatches all metric types from decoded live samples and retain
 	);
 	const m = await mount(show(p));
 	cleanups.push(m.close);
-	expect(m.host.querySelectorAll(".strip-metric")).toHaveLength(8);
+	expect(m.host.querySelectorAll(".monitor-metric-tile")).toHaveLength(8);
 	expect(
 		request.mock.calls.filter(([c]) => c._tag === "watch" && c.active),
 	).toHaveLength(1);
 	const snapshot: MonitorSnapshot = previewSnapshot();
 	await act(async () => push(snapshot));
 	const text = (id: string) =>
-		m.host.querySelector(`[data-module="${id}"]`)?.textContent;
+		m.host.querySelector(`[data-metric="${id}"]`)?.textContent;
 	expect(text("cpu")).toContain("37%");
-	expect(text("gpu")).toContain("NVIDIA GeForce RTX 4070");
-	expect(text("memory")).toContain("32 GB");
-	expect(text("disk")).toContain("C:");
+	expect(text("gpu")).toContain("12%");
+	expect(text("memory")).toContain("19 GB");
+	expect(text("disk")).toContain("3");
 	expect(text("power")).toContain("87%");
-	expect(text("network")).toContain("12.4 MB/s");
-	expect(text("process")).toContain("284 processes");
+	expect(text("network")).toContain("12.4MB/s");
+	expect(text("process")).toContain("284");
 	expect(text("bluetooth")).toContain("unsupported");
 	await act(async () =>
 		push({
@@ -216,7 +224,7 @@ it("WIDGETS-001 dispatches all metric types from decoded live samples and retain
 		request.mock.calls.filter(([c]) => c._tag === "watch" && !c.active),
 	).toHaveLength(0);
 	await m.render(null);
-	expect(off).toHaveBeenCalledOnce();
+	expect(off).toHaveBeenCalledTimes(8);
 	expect(
 		request.mock.calls.filter(([c]) => c._tag === "watch" && !c.active),
 	).toHaveLength(1);
@@ -229,8 +237,8 @@ it("WIDGETS-001 keeps metric preview fixtures labelled and never watches live me
 		<ProfilePreview profile={profile(["cpuInfo", "memInfo"])} />,
 	);
 	cleanups.push(m.close);
-	expect(m.host.querySelectorAll(".strip-metric-status")).toHaveLength(2);
-	expect(m.host.textContent).toContain("Preview");
+	expect(m.host.querySelectorAll(".monitor-metric-tile")).toHaveLength(2);
+	expect(m.host.textContent).toContain("Sample data");
 	expect(request.mock.calls.some((args) => args.length > 0)).toBe(true);
 	expect(request).not.toHaveBeenCalledWith({ _tag: "watch", active: true });
 });
