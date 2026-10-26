@@ -390,8 +390,11 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					if (
 						serial !== "desktop-preview" &&
 						sessions.get("desktop-preview")?.connected === false
-					)
+					) {
+						edges.panel(undefined, false, false, "desktop-preview");
+						edges.disposePanel?.("desktop-preview");
 						sessions.delete("desktop-preview");
+					}
 					selected = serial;
 					const state = session(serial);
 					const wasConnected = state.connected;

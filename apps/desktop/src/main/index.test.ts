@@ -1352,6 +1352,46 @@ describe("desktop main with the real device service and fake HID", () => {
 		}
 	});
 
+	it("disposes the visible preview before handing its ownership to real hardware", async () => {
+		vi.useFakeTimers();
+		try {
+			const two = await Effect.runPromise(makeTwoStrips);
+			two.devices.length = 0;
+			native.layer = two.layer;
+			await import("./index");
+			await vi.waitFor(() =>
+				expect(windows().panel.showInactive).toHaveBeenCalled(),
+			);
+			const preview = windows().panel;
+			two.devices.push(two.a);
+			const strip = makeDisplay({
+				id: 2,
+				label: "DK-QUAKE",
+				size: { width: 1920, height: 480 },
+			});
+			electron.screen.getAllDisplays.mockReturnValue([makeDisplay(), strip]);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.waitFor(() =>
+				expect(
+					vi.mocked(registerProfiles).mock.results.at(-1)?.value.connect,
+				).toHaveBeenCalledWith("A"),
+			);
+			await vi.waitFor(() => expect(preview.isDestroyed()).toBe(true));
+			const panels = electron.BrowserWindow.getAllWindows().filter(
+				(w) => w.options.title === "open-quake panel",
+			);
+			expect(panels).toHaveLength(1);
+			expect(panels[0]?.setBounds).toHaveBeenLastCalledWith(strip.bounds);
+			expect(vi.mocked(registerMonitor).mock.calls.at(-1)?.[2]()).toBe(
+				panels[0],
+			);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
 	it("enrolls the real serial for the native connection lifetime and reconnects", async () => {
 		fake = await Effect.runPromise(
 			makeFakeHidTransport([
