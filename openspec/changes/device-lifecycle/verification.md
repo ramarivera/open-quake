@@ -487,3 +487,58 @@ QUAKE behavior and native host display effects remain lead-owned and unverified.
 The existing `.husky/_` hook path was preserved. PR #21 remains open for the lead;
 this work does not merge it. Commit/push delivery evidence is recorded on bead
 `open-quake-lih.11.1.15` after checking the remote head.
+
+## PR #86 single bot-review fix round
+
+Starting head `8703988`; tested implementation head
+`0141f03cbf4c5557a7515936b1ab661c7362decf`. Every accepted code finding has a
+regression that failed before its fix. Each finding was committed, pushed
+normally to `parity/lifecycle`, and answered before proceeding to the next.
+The round adds no audit coverage beyond the lifecycle burn-down rows in section 8.
+
+| Finding | Fix | Regression |
+| --- | --- | --- |
+| Hosted Linux window type | `23d6c33` | Parameterized main-entrypoint test checks macOS panel, Linux dock, Windows default and ordinary fallback. 42 focused tests passed. |
+| Devin 4377860557, secondary input; Codex 4378016555 duplicate | `62bca11` | Two fake HID strips and fake timers check B touch/rotation, no A cross-talk, serial panel selection and knob consumption. 53 focused tests passed. |
+| Devin 4377860703, secondary hardware/profiles | `f32cb40` | Two-strip fixture checks both profile snapshots, serial hardware selection, lock callbacks, B-only cleanup and A survival. 52 focused tests passed. |
+| Devin 4377860894, destroyed selected panel | `42207c2` | Two-strip fake-clock regression checks grace disposal, surviving selection, monitor/voice/knob panel references and continued input. 60 focused tests passed. |
+| Devin 4377861513, reused display ID | `e087c49`, `5a8c38e`, `7f8d8b1` | TestClock scenarios change the label or geometry of an old display ID, keep the other strip bound, and require serial-targeted blanking. 71 lifecycle tests passed. |
+| Devin 4377861167, late pairing connection | `1669b04` | B connects during the Windows completion delay and pairs without another event; unchanged failed topology does not loop. 72 lifecycle tests passed. |
+| Copilot 4377915651/4377915718/4377915765/4377915820, span names | `135debb` | Existing allowlist regression now checks all seven new spans. Seven failures before, 21 diagnostic tests passed after. |
+| Copilot 4377915877, orientation translations | `99216c0`, `19bb7f0` | Required dictionary keys and feature-translator consumption failed before. EN/DE parity and standalone rendering remain covered. 21 focused tests passed. |
+| Codex 4378016504, disconnect during another serial's discovery | `68e418e` | TestClock pairs A, starts B discovery, disconnects A, then completes B without another action. 73 lifecycle tests passed. |
+| Codex 4378016521, orphan preview | `d58b9bb` | Main-entrypoint fake-HID/fake-clock regression shows preview, connects A, then checks preview disposal, one real panel and routing. 113 main/lifecycle tests passed. |
+| Codex 4378016538, stale Windows native failure | `0141f03` | TestClock verifies successful redetect clears the old failure and a new Extend failure remains visible despite a successful probe. 75 lifecycle tests passed. |
+
+Desktop typecheck passed after all fixes. Earlier fixture type errors were
+corrected in follow-up commits `5a8c38e` and `19bb7f0`, with corrected claims.
+No assertions were removed or weakened to make the gate pass.
+
+Final gates on the implementation head:
+
+- `pnpm biome check packages apps`: 1,237 files checked, zero errors, 14 existing warnings.
+- `pnpm typecheck`: six successful tasks, five cached and desktop executed.
+- `pnpm test`: edge 729 passed and three skipped, device 482 passed, protocol 63 passed, all three cached. Turbo's desktop run failed with 35 failures, including paths under `/tmp` despite SSD TMPDIR and concurrent wall-clock timeouts. The authorized direct fallback, `npx vitest run --maxWorkers=2` from `apps/desktop` with SSD TMPDIR, passed 247 files and skipped one; 1,908 tests passed and one skipped. Combined package results are 3,182 passed and four skipped.
+- `pnpm build`: one successful production build of main, preload and renderer.
+- `pnpm --filter @open-quake/desktop test:bundle`: default-HID and explicit-mock modes passed, with no hardware I/O.
+- `openspec validate --all --strict`: 47 passed, zero failed.
+- Documented native media smoke: rebuilt and exited zero with OBS, strip touch/integration, W6 Electron and runtime-disposal PASS. The anticipated stale-selector failure did not occur. Inspected `media/diagnostic-ready.png`; USB and HDMI success render together with Connection navigation.
+- `git diff --check`: passed. Normal commit and pre-push hooks remained enabled at `.husky/_`.
+
+All logs, before/after regressions and screenshots are retained under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/lifecycle/fix1/`.
+Gate logs use the `gate-` prefix; direct desktop evidence is
+`gate-desktop-direct.log`. The final GraphQL snapshot is `threads-final.json`.
+It found 15 unresolved threads, all with replies and none unanswered. No new
+findings appeared in that scan. No thread was resolved and PR #86 remains open.
+This implementation child does not watch or wait for another review round.
+Fresh final-head CI/bot approval remains for the parent to reconcile.
+
+OpenSpec tasks 9.1-9.12 map to beads `open-quake-lih.11.6` through `.17`.
+The existing hardware checklist on `open-quake-lih.11.3` covers Devin info
+4377861742, including shield lifetime, topmost behavior, mouse pass-through and
+native display placement. Physical behavior remains lead-owned and unverified.
+Every Electron run used `OPEN_QUAKE_MOCK_DEVICE=1` and
+`env -u ELECTRON_RUN_AS_NODE`; no real QUAKE or DK-Suite access occurred.
+Generated build output is removed after the gate run, and no started Electron
+process remains.

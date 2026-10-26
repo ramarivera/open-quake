@@ -57,8 +57,8 @@
 - [x] 9.5 Reject recycled display identities on grace reconnect. Bead `open-quake-lih.11.10`. Devin 4377861513.
 - [x] 9.6 Drain connections pending after the pairing loop. Bead `open-quake-lih.11.11`. Devin 4377861167.
 - [x] 9.7 Allowlist new lifecycle diagnostics spans. Bead `open-quake-lih.11.12`. Copilot 4377915651/4377915718/4377915765/4377915820.
-- [ ] 9.8 Move orientation confirmation copy into settings translations. Bead `open-quake-lih.11.13`. Copilot 4377915877.
-- [ ] 9.9 Run full gates and reconcile all unanswered review threads. Bead `open-quake-lih.11.14`. Devin info 4377861742; final Codex scan; no resolving or merging.
+- [x] 9.8 Move orientation confirmation copy into settings translations. Bead `open-quake-lih.11.13`. Copilot 4377915877.
+- [x] 9.9 Run full gates and reconcile all unanswered review threads. Bead `open-quake-lih.11.14`. Devin info 4377861742; final Codex scan; no resolving or merging. Evidence: verification.md, PR #86 single bot-review fix round.
 
 - [x] 9.10 Preserve another serial discovery when one device disconnects. Bead `open-quake-lih.11.15`. Codex4378016504.
 - [x] 9.11 Dispose preview ownership when real hardware connects. Bead `open-quake-lih.11.16`. Codex4378016521.
