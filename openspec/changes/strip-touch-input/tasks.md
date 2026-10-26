@@ -29,3 +29,13 @@
 - [ ] 5.2 Deliver mounted physical/DOM routing, focus/restore, volume, registration and window/mirror lifetime. KNOB-014, KNOB-015, KNOB-075, KNOB-080, KNOB-089, SCREEN-010, SCREEN-060, SCREEN-065, SCREEN-066, SCREEN-069, SCREEN-070, SCREEN-141. Bead open-quake-lih.29. Implemented except SCREEN-060 camera stream toggle, which awaits the verified camera gateway/renderer consumer in camera-and-printer-views. Shared camera-shaped input routing is tested but does not close that clause.
 - [x] 5.3 Deliver chat/disk fling, elastic return and moved child bounds. AI-163, SCREEN-067, WIDGETS-078. Bead open-quake-lih.30.
 - [ ] 5.4 Run the six gates and hidden mock smoke, capture EN/DE screenshots, push parity/touch and open a PR. Leave beads open for lead reconciliation after merge.
+
+## 6. PR #88 bot-review fixes, 2026-10-26
+
+Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the lead.
+
+- [x] 6.1 Reconcile current main and fix the disconnected QuakeEvent fixture reported by CI run 40332468892. Current origin/main 95f6a69 is already an ancestor of f60a85b; the requested merge is a no-op.
+- [ ] 6.2 Release held keys when committed page content changes through StripScreen's layout cleanup/replacement, preserving runtime-only repaint ownership. Devin 4377896158, SCREEN-010 and SCREEN-057.
+- [ ] 6.3 Preserve failed held-key releases for reset retry and expose the catalog error. Devin 4377896467, MAIN-065 and SCREEN-057.
+- [ ] 6.4 Fall back to the local-player tile press outside its child buttons. Devin 4377895969, KNOB-089.
+- [ ] 6.5 Reply to the known SCREEN-060 camera-gateway blocker, run all six gates, audit unanswered review threads including new Codex findings, and remove generated build output. Do not resolve threads or merge.

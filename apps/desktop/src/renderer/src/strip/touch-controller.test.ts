@@ -925,7 +925,12 @@ describe("mounted production touch lane", () => {
 			f.raw(200, 200);
 			vi.advanceTimersByTime(25);
 			f.raw(200, 150);
-			f.emit({ source: "hid", kind: "status", state: "disconnected" });
+			f.emit({
+				source: "hid",
+				kind: "status",
+				state: "disconnected",
+				reason: "transport-ended",
+			});
 			const cancelled = scroller.scrollTop;
 			vi.advanceTimersByTime(1200);
 			expect(scroller.scrollTop).toBe(cancelled);
