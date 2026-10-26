@@ -180,7 +180,7 @@ export function registerMedia(
 	const trackWindow = (window: BrowserWindow): void => {
 		const contents = window.webContents;
 		const deactivate = (): void => {
-			if (audioSender === contents || contents === panelWindow()?.webContents) {
+			if (audioSender === contents || window === panelWindow()) {
 				audioEpoch++;
 				audioSender = undefined;
 				audioRequest = undefined;

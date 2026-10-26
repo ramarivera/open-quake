@@ -219,6 +219,8 @@ describe("explicit media registration", () => {
 			runtime,
 			() => management as unknown as BrowserWindow,
 			"file:///app/index.html",
+			true,
+			() => panel as unknown as BrowserWindow,
 		);
 		try {
 			const handler = vi

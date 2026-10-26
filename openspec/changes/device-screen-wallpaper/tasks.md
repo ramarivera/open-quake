@@ -104,3 +104,9 @@ wallpaper-playlist-narrow.png and panel-vivid.png, stay under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/wallpaper-soundboard/fix2/screenshots/`.
 No real QUAKE or DK-Suite access, audible audio, thread resolution or merge.
 Hosted CI and fresh bot review remain with the lead agent after this fix round.
+
+Final lifecycle inspection extended the existing registration disposal regression
+with the real panel getter. It failed on 0089fdd because cleanup accessed destroyed
+web contents. Comparing BrowserWindow identity fixes shutdown while preserving
+hide revocation. The affected media and desktop lifecycle suites pass 77 tests;
+desktop types, build and both bundle scenarios pass afterward.
