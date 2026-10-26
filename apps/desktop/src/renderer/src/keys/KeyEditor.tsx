@@ -36,6 +36,7 @@ import {
 	isMonitorKey,
 	MonitorKeySettings,
 } from "../strip/tiles/monitor/MonitorKeySettings";
+import { AudioBotSettings } from "../strip/tiles/voiceKey/AudioBotSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
@@ -54,7 +55,11 @@ import { SelectedKeyPreview } from "./SelectedKeyPreview";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
-export function KeyEditor(): React.JSX.Element {
+export function KeyEditor({
+	onOpenLibrary = () => {},
+}: {
+	readonly onOpenLibrary?: (page: "shortcuts" | "emoji") => void;
+} = {}): React.JSX.Element {
 	const wallpaperController = useWallpaper();
 	const { snapshot: wallpaper } = wallpaperController;
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
@@ -669,6 +674,7 @@ export function KeyEditor(): React.JSX.Element {
 					keyEditOpen={selection !== undefined || saving}
 				/>
 				<GridEditor
+					onActivate={onOpenLibrary}
 					profile={profile}
 					page={page}
 					saving={saving}
@@ -899,6 +905,11 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						<AudioBotSettings
+							keyValue={key}
+							locale={locale}
+							onChange={(next) => void update(next)}
+						/>
 						{key.config.type === "clawbot" && (
 							<AgentKeyFields
 								value={key}

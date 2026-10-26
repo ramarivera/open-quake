@@ -341,6 +341,8 @@ export const SequenceLeaf = Schema.Union(
 		),
 	}),
 );
+export const MAX_SEQUENCE_OPERATIONS = 100;
+
 export const MultiActionConfig = Schema.Struct({
 	type: Schema.Literal("multiActions"),
 	actions: Schema.Array(Schema.Unknown),
@@ -353,7 +355,7 @@ export const MultiActionConfig = Schema.Struct({
 				}),
 			),
 		}),
-	).pipe(Schema.minItems(1), Schema.maxItems(100)),
+	).pipe(Schema.minItems(1), Schema.maxItems(MAX_SEQUENCE_OPERATIONS)),
 });
 
 export const ActionActivation = Schema.Struct({
@@ -402,5 +404,27 @@ export const EmojiConfig = Schema.Struct({
 				hash: Schema.String.pipe(Schema.pattern(/^[a-f0-9]{64}$/)),
 			}),
 		}),
+	),
+});
+
+/** MGMT-149/301: reader settings remain portable profile actions. */
+export const AudioBotConfig = Schema.Struct({
+	type: Schema.Literal("audioBot"),
+	actions: Schema.Array(ProfileAction).pipe(
+		Schema.filter(
+			(actions) =>
+				new Set(actions.map((a) => a.type)).size === actions.length &&
+				actions.some(
+					(a) => a.type === "agentId" && typeof a.value === "string",
+				) &&
+				actions.some(
+					(a) =>
+						a.type === "ttsEngine" &&
+						(a.value === "qwen" || a.value === "webSpeech"),
+				) &&
+				actions.some(
+					(a) => a.type === "modeltype" && typeof a.value === "string",
+				),
+		),
 	),
 });

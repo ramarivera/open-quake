@@ -6,7 +6,8 @@ import type {
 } from "../../../../../shared/voice-surface";
 import { errorCopy } from "../../tiles/clawBot/error-copy";
 import type { VoiceText } from "./overlay-state";
-import { type StripLocale, type StripStringKey, stripText } from "./strings";
+import { type StripLocale, stripText } from "./strings";
+import { STRIP_STRINGS } from "./strings-table";
 import {
 	initialVoiceView,
 	type StripToast,
@@ -65,11 +66,15 @@ export function overlayLine(view: VoiceView, locale: StripLocale): string {
 
 export const toastText = (
 	locale: StripLocale,
-	toast: Pick<StripToast, "key" | "name">,
-): string =>
-	stripText(locale, toast.key satisfies StripStringKey, {
-		name: Option.getOrElse(toast.name, () => ""),
-	});
+	toast: Pick<StripToast, "key" | "name" | "fallback">,
+): string => {
+	const catalog: Readonly<Record<string, string>> = STRIP_STRINGS[locale];
+	const template = catalog[toast.key] ?? toast.fallback ?? toast.key;
+	return template.replace(
+		/\{name\}/g,
+		Option.getOrElse(toast.name, () => ""),
+	);
+};
 
 const readMotion = (): "full" | "reduce" =>
 	document.documentElement.dataset.motion === "reduce" ? "reduce" : "full";

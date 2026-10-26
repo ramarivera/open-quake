@@ -154,3 +154,11 @@ These checkboxes describe software implementation and synthetic acceptance.
 Live provider, physical microphone/speaker and QUAKE acceptance remain open.
 The required broad test and native-media gates are reported separately in the
 lane PR, including unresolved failures; they don't establish complete delivery.
+
+## voice-runtime burn-down
+
+- [x] Implement meaningful short transcripts and stable failure stages, explicit output targets, AudioBot release toggle/settings and local synthesis, bounded segmentation/watchdogs and opt-in host tones. Rows AI-084/086/091/092/155/156, KNOB-068/073/074, MGMT-149/301, WIDGETS-015/108. Evidence: production runtime, reader-runtime/transcript-policy/local-speech/host-tones/ordered/read-aloud tests and device key-runtime tests. Bead open-quake-lih.5.7 stays open for lead merge.
+- [x] Add the eight-locale spoken-status catalog and normal completion speech after answer remainder. This is partial support for AI-080, not full row delivery.
+- [ ] AI-070: long-mode 300000ms deadline and 60001/300000ms mode execution acceptance are blocked by ChatService rejecting non-normal modes.
+- [ ] AI-071: PC/analysis stalled-runner failure behavior is blocked by the same missing mode runners; normal pending speech flush remains covered.
+- [ ] AI-080: action-specific spoken statuses for long/PC/analysis are blocked by those unavailable mode runners. Catalog and normal completion tests do not close the row.

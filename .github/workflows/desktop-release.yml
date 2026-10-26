@@ -33,11 +33,27 @@ jobs:
           BUILD_TAG: ${{ github.event_name == 'push' && github.ref_name || format('v0.0.0-pr.{0}.{1}', github.event.number, github.run_number) }}
         run: node apps/desktop/scripts/release.mjs version "$BUILD_TAG"
       - run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev
-      # FFmpeg backs the real-codec meeting integration tests. Skip recommended
-      # extras and retry: a slow Azure mirror otherwise consumes the job budget.
+      # FFmpeg backs the real-codec meeting integration tests. Use a pinned
+      # static build from GitHub: the Azure apt mirror repeatedly stalled for
+      # longer than the job budget while resolving FFmpeg's dependencies.
       - name: Install FFmpeg
-        timeout-minutes: 10
-        run: sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 ffmpeg
+        timeout-minutes: 5
+        env:
+          FFMPEG_RELEASE: https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0
+        run: |
+          # ffprobe is used by the meeting provider tests and smoke to inspect output.
+          while read -r tool sha; do
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/$tool.gz" "$FFMPEG_RELEASE/$tool-linux-x64.gz"
+            echo "$sha  $RUNNER_TEMP/$tool.gz" | sha256sum -c -
+            gunzip -c "$RUNNER_TEMP/$tool.gz" | sudo tee "/usr/local/bin/$tool" >/dev/null
+            sudo chmod 755 "/usr/local/bin/$tool"
+          done <<'TOOLS'
+          ffmpeg 17c1ae10b52ac499180679fe6ba77e17642390c4eedb0f1e3b0ac045da55128f
+          ffprobe 88ca6818d82a70e87de2bb6166026ad411528c72eda0e4e11ed25d185116ee17
+          TOOLS
+          ffprobe -hide_banner -version > "$RUNNER_TEMP/ffprobe-version.txt"
+          ffmpeg -hide_banner -encoders > "$RUNNER_TEMP/ffmpeg-encoders.txt"
+          grep ' libmp3lame ' "$RUNNER_TEMP/ffmpeg-encoders.txt"
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm --filter @open-quake/desktop test:release

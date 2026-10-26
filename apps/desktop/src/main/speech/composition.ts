@@ -7,6 +7,7 @@ import {
 	GridVoiceRuntime,
 	type VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface";
+import { readerSettings } from "../../shared/reader-settings";
 import type {
 	VoiceSurfaceEvent,
 	VoiceSurfaceReply,
@@ -41,6 +42,10 @@ export function createSpeechVoiceBinding(options: {
 	let speech: Speech | undefined;
 	const unavailable = () => new AiConfigInvalid();
 	const settings: SpeechSettingsController = {
+		hostTones: () =>
+			Effect.suspend(() =>
+				speech ? speech.settings.hostTones() : Effect.succeed(false),
+			),
 		microphone: () =>
 			Effect.suspend(() =>
 				speech ? speech.settings.microphone() : Effect.succeed(undefined),
@@ -103,6 +108,13 @@ export function createSpeechVoiceBinding(options: {
 		).pipe(Layer.provide(fallback));
 	return {
 		decorate,
+		playHostTone: (
+			serial: string,
+			tone: import("../../shared/voice-surface").VoiceTone,
+		): Promise<void> =>
+			speech
+				? options.run(speech.playHostTone(serial, tone))
+				: Promise.resolve(),
 		reconcileProfiles: (ids: readonly string[]): Promise<void> =>
 			speech ? options.run(speech.reconcileProfiles(ids)) : Promise.resolve(),
 		acquireWallpaperSound: (
@@ -119,6 +131,21 @@ export function createSpeechVoiceBinding(options: {
 						),
 					)
 				: Promise.resolve(undefined),
+		executeReaderKey: (
+			key: ProfileKey,
+			activation: KeyActivation,
+		): Promise<boolean> => {
+			if (!speech || key.config.type !== "audioBot")
+				return Promise.resolve(false);
+			return options
+				.run(
+					speech.toggleReader(
+						{ serial: activation.deviceId, keyCode: key.keyCode },
+						readerSettings(key.config.actions),
+					),
+				)
+				.then(() => true);
+		},
 		executeSoundKey: (
 			key: ProfileKey,
 			signal: AbortSignal,
@@ -146,6 +173,12 @@ export function createSpeechVoiceBinding(options: {
 				? Effect.runPromise(speech.soundboardKeys.reset(deviceId))
 				: Promise.resolve(),
 		settings,
+		toggleReader: async (
+			owner: { serial: string; keyCode: string },
+			settings: import("../../shared/voice-surface").ReaderSettings,
+		): Promise<void> => {
+			if (speech) await options.run(speech.toggleReader(owner, settings));
+		},
 		stopReadAloud: async (owner: {
 			readonly serial: string;
 			readonly keyCode: string;
@@ -158,9 +191,12 @@ export function createSpeechVoiceBinding(options: {
 		readAloud: async (
 			text: string,
 			owner?: { readonly serial: string; readonly keyCode: string },
+			settings?: import("../../shared/voice-surface").ReaderSettings,
 		): Promise<VoiceSurfaceReply> => {
 			if (!speech) return { _tag: "rejected", code: "VOICE.TTS.UNAVAILABLE" };
-			const outcome = await options.run(speech.readAloud(text, owner));
+			const outcome = await options.run(
+				speech.readAloud(text, owner, settings),
+			);
 			return outcome._tag === "completed"
 				? { _tag: "ok" }
 				: {

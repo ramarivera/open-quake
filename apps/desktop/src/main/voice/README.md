@@ -70,7 +70,12 @@ The parity smoke mounts the built strip in a hidden window. It checks the
 speech IPC, and stages 0–5 from the real meeting pipeline. Capture, synthesis,
 output and meeting adapters are fake. Native FocusPanel is intercepted so
 this test never activates a window or uses the microphone or speakers.
-It saves meter, pill and meeting screenshots plus `parity-evidence.json`.
+It also drives AudioBot through idle, thinking, speaking and repeat-release stop
+using the production queue with fake synthesis/output, then switches the real
+locale bridge between EN and DE for knob/grid, energy and warning/error toast
+captures. It checks computed toast sizes and that active reader indicators hide
+the idle artwork. It saves meter, reader, localized toast, pill and meeting
+screenshots plus `parity-evidence.json`.
 
 After `pnpm build`, use an absolute scratch directory for `TMPDIR` and the
 final argument:

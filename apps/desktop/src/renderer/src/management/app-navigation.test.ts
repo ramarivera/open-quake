@@ -130,3 +130,106 @@ it("MGMT-026 keeps an explicit no-device preview when the startup setup read com
 	expect(element(".content-inner").getAttribute("data-page")).toBe("screen");
 	Reflect.deleteProperty(window, "quakeSettings");
 });
+
+it("CENTER-105 SETTINGS-002/003 resolves retired sessions and general/device deep links", async () => {
+	for (const [name, target] of [
+		["ClawDashboard", "agents"],
+		["ClawInstall", "agents"],
+		["settings-general", "settings"],
+		["settings-device", "controls"],
+	]) {
+		window.history.replaceState(null, "", `/?activeTab=${name}`);
+		const view = await mount(createElement(App));
+		expect(element(".content-inner").getAttribute("data-page")).toBe(target);
+		if (target === "agents")
+			expect(
+				element("#agents-tab-sessions").getAttribute("aria-selected"),
+			).toBe("true");
+		await view.unmount();
+	}
+});
+
+it("MGMT-007/018/019/431 SETTINGS-001/003 keeps chrome, help and exit through focused settings navigation", async () => {
+	const command = vi.fn(async () => true);
+	Object.defineProperty(window, "quakeManagement", {
+		configurable: true,
+		value: {
+			platform: "linux",
+			command,
+			setTheme: async () => true,
+			onActivate: () => () => {},
+		},
+	});
+	window.history.replaceState(null, "", "/?activeTab=settings");
+	const view = await mount(createElement(App));
+	try {
+		const title = element(".mc-titlebar");
+		const general = element<HTMLButtonElement>("#shell-tab-settings");
+		general.focus();
+		await act(async () =>
+			general.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+			),
+		);
+		expect(element(".content-inner").getAttribute("data-page")).toBe(
+			"controls",
+		);
+		expect(document.activeElement?.id).toBe("shell-tab-controls");
+		expect(element("#shell-tab-controls").getAttribute("aria-selected")).toBe(
+			"true",
+		);
+		expect(element(".mc-titlebar")).toBe(title);
+		await act(async () =>
+			element("#shell-tab-controls").dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Home", bubbles: true }),
+			),
+		);
+		expect(document.activeElement?.id).toBe("shell-tab-settings");
+		const footer = element(".mc-sidebar-footer");
+		const exit = [...footer.querySelectorAll("button")].find(
+			(item) => item.textContent === "Exit",
+		);
+		const help = [...footer.querySelectorAll("button")].find(
+			(item) => item.textContent === "Help",
+		);
+		expect(help?.getAttribute("aria-haspopup")).toBe("dialog");
+		if (!exit) throw new Error("Exit missing");
+		await click(exit);
+		expect(command).toHaveBeenCalledWith({ action: "quit" });
+		expect(document.querySelector("webview")).toBeNull();
+		expect(document.body.textContent).not.toMatch(
+			/notificationCount|manualCalibration|gameModeMonitorConfig/,
+		);
+	} finally {
+		await view.unmount();
+		Object.defineProperty(window, "quakeManagement", {
+			configurable: true,
+			value: undefined,
+		});
+	}
+});
+
+it("MGMT-005 cancels device polling and ignores a late reply after renderer unmount", async () => {
+	vi.useFakeTimers();
+	const request = vi.fn(async () => ({ _tag: "offline" }));
+	Object.defineProperty(window, "quakeHardware", {
+		configurable: true,
+		value: { request },
+	});
+	window.history.replaceState(null, "", "/?activeTab=settings-device");
+	try {
+		const view = await mount(createElement(App));
+		await act(async () => vi.advanceTimersByTimeAsync(1000));
+		expect(request.mock.calls.length).toBeGreaterThan(1);
+		await view.unmount();
+		const count = request.mock.calls.length;
+		await act(async () => vi.advanceTimersByTimeAsync(3000));
+		expect(request).toHaveBeenCalledTimes(count);
+	} finally {
+		vi.useRealTimers();
+		Object.defineProperty(window, "quakeHardware", {
+			configurable: true,
+			value: undefined,
+		});
+	}
+});

@@ -198,3 +198,13 @@ The hotkey Audio group and Media selector SHALL retain exactly mute, volume down
 
 - **WHEN** a saved sequence contains mute and transport steps and one native command rejects
 - **THEN** prior steps run once in order and subsequent steps never run
+
+### Requirement: Directional media hotkeys
+
+Knob-enabled hotkeys SHALL route saved audio command tokens through the same media adapter as ordinary hotkeys. Device keyboard encoding SHALL receive only keyboard chords. Existing committed-profile and hardware-session checks SHALL guard both paths. Covers MGMT-226, MGMT-290, PR103 comment 4379836858 and bead open-quake-lih.7.5.
+
+#### Scenario: Both directions use shared media ownership
+
+- **WHEN** a committed knob hotkey contains audio_prev and audio_next and both directions turn
+- **THEN** the media adapter receives those commands in order and the keyboard sends no reports
+- **AND** a missing or unsupported media adapter fails without keyboard fallback, and a stale committed key dispatches nothing

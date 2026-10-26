@@ -1,6 +1,6 @@
 // Generated from DK-Suite 0.4.95 locales (dark-encyclopedia v0.4.95/locales),
 // verbatim, except `voiceOverlay.placeholder`, which DK hard-codes in Chinese.
-// Regenerate with the lane tool rather than editing by hand.
+// Additional voice admission keys are copied additively from those same catalogs.
 
 export const STRIP_LOCALES = [
 	"en",
@@ -16,6 +16,16 @@ export type StripLocale = (typeof STRIP_LOCALES)[number];
 
 export const STRIP_STRINGS = {
 	en: {
+		"voiceOutput.unavailable": "Speech playback is unavailable.",
+		"operationConfiguration.audioBotTtsEngine": "Audio Bot TTS engine",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"Cloud (same as global AI voice)",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"Local system voice (Web Speech)",
+
+		"meetingAssistantPrompt.meetingActive": "Meeting is active",
+		"meetingAssistantPrompt.liveTranslateActive": "Live translation is active",
+
 		"aiAudio.preparingMic": "Preparing microphone…",
 		"aiAudio.preparingRecord": "Preparing to record…",
 		"aiAudio.speakNow": "You can speak now",
@@ -96,6 +106,16 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "Waiting for voice input...",
 	},
 	zh: {
+		"voiceOutput.unavailable": "语音播放不可用。",
+		"operationConfiguration.audioBotTtsEngine": "Audio Bot 朗读引擎",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"云端合成（与全局 AI 语音一致）",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"本地系统语音（Web Speech）",
+
+		"meetingAssistantPrompt.meetingActive": "会议正在运行中",
+		"meetingAssistantPrompt.liveTranslateActive": "实时翻译正在运行中",
+
 		"aiAudio.preparingMic": "麦克风准备中…",
 		"aiAudio.preparingRecord": "录音准备中",
 		"aiAudio.speakNow": "可以说话了",
@@ -171,6 +191,16 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "等待语音输入...",
 	},
 	de: {
+		"voiceOutput.unavailable": "Die Sprachausgabe ist nicht verfügbar.",
+		"operationConfiguration.audioBotTtsEngine": "Audio Bot TTS-Engine",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"Cloud (wie globale KI-Stimme)",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"Lokale Systemstimme (Web Speech)",
+
+		"meetingAssistantPrompt.meetingActive": "Besprechung ist aktiv",
+		"meetingAssistantPrompt.liveTranslateActive": "Live-Übersetzung ist aktiv",
+
 		"aiAudio.preparingMic": "Mikrofon wird vorbereitet…",
 		"aiAudio.preparingRecord": "Aufnahme wird vorbereitet",
 		"aiAudio.speakNow": "Sie können jetzt sprechen",
@@ -260,6 +290,17 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "Warte auf Spracheingabe...",
 	},
 	es: {
+		"voiceOutput.unavailable": "La reproducción de voz no está disponible.",
+		"operationConfiguration.audioBotTtsEngine": "Motor TTS de Audio Bot",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"Nube (misma voz de IA global)",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"Voz del sistema local (Web Speech)",
+
+		"meetingAssistantPrompt.meetingActive": "La reunión está activa",
+		"meetingAssistantPrompt.liveTranslateActive":
+			"La traducción en vivo está activa",
+
 		"aiAudio.preparingMic": "Preparando micrófono…",
 		"aiAudio.preparingRecord": "Preparando grabación",
 		"aiAudio.speakNow": "Ya puede hablar",
@@ -344,6 +385,16 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "Esperando entrada de voz...",
 	},
 	fr: {
+		"voiceOutput.unavailable": "La lecture vocale n'est pas disponible.",
+		"operationConfiguration.audioBotTtsEngine": "Moteur TTS Audio Bot",
+		"operationConfiguration.audioBotTtsEngineQwen": "Cloud (voix IA globale)",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"Voix système locale (Web Speech)",
+
+		"meetingAssistantPrompt.meetingActive": "La réunion est active",
+		"meetingAssistantPrompt.liveTranslateActive":
+			"La traduction en direct est active",
+
 		"aiAudio.preparingMic": "Préparation du microphone…",
 		"aiAudio.preparingRecord": "Préparation de l'enregistrement",
 		"aiAudio.speakNow": "Vous pouvez parler",
@@ -427,6 +478,16 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "En attente de saisie vocale...",
 	},
 	it: {
+		"voiceOutput.unavailable": "La riproduzione vocale non è disponibile.",
+		"operationConfiguration.audioBotTtsEngine": "Motore TTS Audio Bot",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"Cloud (stessa voce IA globale)",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"Voce di sistema locale (Web Speech)",
+
+		"meetingAssistantPrompt.meetingActive": "La riunione è attiva",
+		"meetingAssistantPrompt.liveTranslateActive": "La traduzione live è attiva",
+
 		"aiAudio.preparingMic": "Preparazione microfono…",
 		"aiAudio.preparingRecord": "Preparazione registrazione",
 		"aiAudio.speakNow": "Puoi parlare ora",
@@ -510,6 +571,16 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "In attesa di input vocale...",
 	},
 	ja: {
+		"voiceOutput.unavailable": "音声を再生できません。",
+		"operationConfiguration.audioBotTtsEngine": "Audio Bot 読み上げエンジン",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"クラウド（グローバル AI 音声と同じ）",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"ローカルシステム音声（Web Speech）",
+
+		"meetingAssistantPrompt.meetingActive": "会議が実行中です",
+		"meetingAssistantPrompt.liveTranslateActive": "ライブ翻訳が実行中です",
+
 		"aiAudio.preparingMic": "マイク準備中…",
 		"aiAudio.preparingRecord": "録音準備中",
 		"aiAudio.speakNow": "話しかけてください",
@@ -592,6 +663,16 @@ export const STRIP_STRINGS = {
 		"voiceOverlay.placeholder": "音声入力を待っています...",
 	},
 	ko: {
+		"voiceOutput.unavailable": "음성을 재생할 수 없습니다.",
+		"operationConfiguration.audioBotTtsEngine": "Audio Bot TTS 엔진",
+		"operationConfiguration.audioBotTtsEngineQwen":
+			"클라우드(전역 AI 음성과 동일)",
+		"operationConfiguration.audioBotTtsEngineWebSpeech":
+			"로컬 시스템 음성(Web Speech)",
+
+		"meetingAssistantPrompt.meetingActive": "회의가 실행 중입니다",
+		"meetingAssistantPrompt.liveTranslateActive": "실시간 번역이 실행 중입니다",
+
 		"aiAudio.preparingMic": "마이크 준비 중…",
 		"aiAudio.preparingRecord": "녹음 준비 중",
 		"aiAudio.speakNow": "이제 말씀하세요",
