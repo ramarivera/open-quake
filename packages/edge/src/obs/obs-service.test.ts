@@ -16,7 +16,12 @@ import {
 	type ObsId,
 } from "../../../device/src/actions/obs-contracts.js";
 import { fakeObsServer } from "./fake-server.test-support.js";
-import { emptyObsSaved, type ObsSaved, type ObsTile } from "./obs-contracts.js";
+import {
+	emptyObsSaved,
+	type ObsDetection,
+	type ObsSaved,
+	type ObsTile,
+} from "./obs-contracts.js";
 import { ObsErrors, ObsNetworkFailed } from "./obs-errors.js";
 import { ObsStorage } from "./obs-repository.js";
 import { ObsPorts, ObsService } from "./obs-service.js";
@@ -57,7 +62,10 @@ const command = (id: ObsId, overrides?: Readonly<Record<string, unknown>>) => {
 	if (Either.isLeft(decoded)) throw decoded.left;
 	return decoded.right;
 };
-const fixture = (options: Parameters<typeof fakeObsServer>[0] = {}) =>
+const fixture = (
+	options: Parameters<typeof fakeObsServer>[0] = {},
+	detect: () => Promise<ObsDetection | undefined> = async () => undefined,
+) =>
 	Effect.gen(function* () {
 		const server = yield* Effect.acquireRelease(
 			Effect.promise(() => fakeObsServer(options)),
@@ -93,7 +101,7 @@ const fixture = (options: Parameters<typeof fakeObsServer>[0] = {}) =>
 						secrets.delete(ref);
 					},
 				},
-				detect: async () => undefined,
+				detect,
 			}),
 			Layer.succeed(ObsPorts, {
 				open: openObsConnection,
@@ -482,4 +490,72 @@ it.scoped(
 			expect((yield* service.detect()).state).toBe("connected");
 			expect(server.connections()).toBe(1);
 		}),
+);
+
+for (const autoConnect of [false, true])
+	it.scoped(
+		`Auto-fetch reconnects detected settings with autoConnect=${autoConnect}`,
+		() =>
+			Effect.gen(function* () {
+				const target = yield* Effect.acquireRelease(
+					Effect.promise(() => fakeObsServer({ password: "detected" })),
+					(server) => Effect.promise(server.close),
+				);
+				const f = yield* fixture({}, async () => ({
+					port: target.port,
+					password: "detected",
+					source: "fixture",
+				}));
+				f.setSaved({ ...emptyObsSaved, port: f.server.port, autoConnect });
+				yield* f.service.connect();
+				const status = yield* f.service.detect();
+				expect(status).toMatchObject({
+					state: "connected",
+					port: target.port,
+					detection: "found",
+					autoConnect,
+				});
+				yield* f.service.execute(command("obsStream"));
+				expect(target.calls.map((call) => call.type)).toEqual(["ToggleStream"]);
+				expect(f.server.calls).toHaveLength(0);
+			}),
+	);
+it.scoped(
+	"startup detection and a manual disconnect do not override auto-connect policy",
+	() =>
+		Effect.gen(function* () {
+			let port = 0;
+			const f = yield* fixture({}, async () => ({
+				port,
+				password: "",
+				source: "fixture",
+			}));
+			port = f.server.port;
+			f.setSaved({ ...emptyObsSaved, autoConnect: false });
+			yield* f.service.initialize();
+			expect(f.server.connections()).toBe(0);
+			yield* f.service.connect();
+			yield* f.service.disconnect();
+			expect((yield* f.service.detect()).state).toBe("disconnected");
+			yield* TestClock.adjust(10000);
+			expect(f.server.connections()).toBe(1);
+		}),
+);
+it.scoped("Auto-fetch authentication failure stays blocked and private", () =>
+	Effect.gen(function* () {
+		let port = 0;
+		const f = yield* fixture({ password: "correct" }, async () => ({
+			port,
+			password: "wrong-private",
+			source: "fixture",
+		}));
+		port = f.server.port;
+		f.setSaved({ ...emptyObsSaved });
+		const result = yield* Effect.either(f.service.detect());
+		expect(result._tag === "Left" && result.left.code).toBe("OBS.AUTH.FAILED");
+		expect((yield* f.service.status()).state).toBe("failed");
+		expect(JSON.stringify(result)).not.toContain("wrong-private");
+		yield* TestClock.adjust(10000);
+		expect(f.server.connections()).toBe(1);
+	}),
 );

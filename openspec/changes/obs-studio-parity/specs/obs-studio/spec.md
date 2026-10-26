@@ -19,6 +19,11 @@ The system SHALL use obs-websocket v5 at loopback by default, host 127.0.0.1 and
 - **WHEN** local OBS websocket settings are enabled and no manual override exists
 - **THEN** detection supplies its loopback port and securely stores its password, reporting the source and result without disclosing the password
 
+#### Scenario: Explicit Auto-fetch
+- **WHEN** Auto-fetch finds enabled local settings without a manual override or manual disconnect
+- **THEN** it connects to those settings before returning, even when auto-connect is disabled
+- **AND** startup detection still honors the auto-connect setting and authentication failures suppress retries
+
 #### Scenario: Authenticate and reconnect
 - **WHEN** OBS sends a v5 challenge
 - **THEN** the client sends the specified SHA256/base64 authentication response

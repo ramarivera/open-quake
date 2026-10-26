@@ -142,7 +142,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 				}).pipe(lock.withPermits(1)),
 		);
 		const detect = Effect.fn("ObsService.detect")(
-			(): Effect.Effect<ObsStatus, ObsError> =>
+			(reconnect = true): Effect.Effect<ObsStatus, ObsError> =>
 				Effect.gen(function* () {
 					const result = yield* repository.detect();
 					detection = result.found ? "found" : "not-found";
@@ -154,8 +154,12 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 					state = "disconnected";
 					code = "";
 					blocked = false;
+					if (reconnect && !manualDisconnect) {
+						started = true;
+						return yield* connectUnlocked();
+					}
 					return publicStatus();
-				}).pipe(lock.withPermits(1)),
+				}).pipe(Effect.tapError(failure), lock.withPermits(1)),
 		);
 		const disconnect = Effect.fn("ObsService.disconnect")(
 			(): Effect.Effect<ObsStatus> =>
@@ -333,7 +337,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 				Effect.gen(function* () {
 					if (started) return;
 					started = true;
-					yield* detect();
+					yield* detect(false);
 					if (config.autoConnect) yield* connect();
 				}).pipe(Effect.tapError(failure), Effect.ignore),
 		);

@@ -13,3 +13,10 @@
 
 - [x] 3.1 Test commands with an in-process fake server, refresh with TestClock, reconnect/auth failure, privacy and consumer wiring.
 - [x] 3.2 Run all lane gates and hidden mock native smoke, record evidence, commit, push and open a PR against main without merging or resolving review threads.
+
+## 4. PR80 review fixes
+
+- [x] 4.1 Reconnect after explicit Auto-fetch, preserving startup/manual-disconnect policy; regression for thread 4375829071. Bead open-quake-lih.18.1.9.
+- [ ] 4.2 Include recovered audio/media-capable input kinds in target editors; regressions for threads 4375829250 and 4375833109. Bead open-quake-lih.18.1.10.
+- [ ] 4.3 Authorize panel screenshots against committed active keys, revoke stale leases and retry after Save; regressions for thread 4375829386. Bead open-quake-lih.18.1.11.
+- [ ] 4.4 Preserve stale scene targets as unavailable, retain replacement choices and reject missing-scene dispatch; regressions for thread 4375833113. Bead open-quake-lih.18.1.12.
