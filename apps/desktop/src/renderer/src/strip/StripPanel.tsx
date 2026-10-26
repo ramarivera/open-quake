@@ -263,8 +263,15 @@ function ActiveStripPanel(): React.JSX.Element {
 					: `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
 			if (matrixKey === keyCode) return;
 			// Legacy frames contain state, not edges. Preserve holds until that state changes.
-			if (matrixKey)
+			if (matrixKey) {
+				// Match native touch: a completed contact selects knob focus on release.
+				root?.dispatchEvent(
+					new CustomEvent("quake-strip-tile-tap", {
+						detail: { keyCode: matrixKey },
+					}),
+				);
 				handleKey({ keyAction: 1, keyCode: matrixKey, voiceTouchEnd: true });
+			}
 			if (
 				!keyCode ||
 				!layout.current?.tiles.some((tile) => tile.keyCode === keyCode)

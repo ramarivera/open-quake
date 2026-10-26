@@ -163,6 +163,12 @@ handling, without changing the wire protocol.
 - **AND** repeated frames do not add contacts and disconnect cancels queued contacts while releasing the started contact
 - **AND** a mounted production dispatcher and KeyRuntime regression uses TestClock to prove B waits for A, covering PR #120 finding 4381194049 and MAIN-008/028, SCREEN-144
 
+#### Scenario: Matrix contact selects knob focus
+- **WHEN** a mounted panel receives a completed matrix contact on a knob-capable key
+- **THEN** its successful release emits the same quake-strip-tile-tap event as native touch, and the mounted KnobPanelLayer updates the production KnobModel focus
+- **AND** repeated held or empty frames add no taps, non-focusable contacts clear focus, and disconnect cancellation emits no tap
+- **AND** this covers PR #120 finding 4381208066 and MAIN-008/028, SCREEN-144; recovered DK-Suite 0.4.95 src/views/DKQuake/QuakeScreenView.vue:2984-2990 likewise changes knob focus on successful up
+
 #### Scenario: Legacy matrix emoji
 - **WHEN** repeated matrix reports select an emoji tile, followed by an empty matrix
 - **THEN** its owning emoji handler receives exactly one successful release for the captured profile and page

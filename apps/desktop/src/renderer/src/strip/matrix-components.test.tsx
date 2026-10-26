@@ -14,9 +14,11 @@ import {
 	KeyRuntime,
 	KeyRuntimePort,
 } from "../../../../../../packages/device/src/actions/key-runtime-service";
+import { KnobModel } from "../../../../../../packages/device/src/knob/model/service";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import type { QuakeEvent } from "../../../preload/quake";
 import type { KeyRequest } from "../../../shared/key-library";
+import type { KnobRequest } from "../../../shared/knob-contracts";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
@@ -43,7 +45,9 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-async function mountedMatrix(options: { delayFirstDown?: boolean } = {}) {
+async function mountedMatrix(
+	options: { delayFirstDown?: boolean; knobFocus?: boolean } = {},
+) {
 	const base = builtinProfiles("darwin")[0];
 	const original = base?.pages[0].keys[0];
 	if (!base || !original) throw new Error("Missing builtin key fixture");
@@ -62,7 +66,7 @@ async function mountedMatrix(options: { delayFirstDown?: boolean } = {}) {
 						...original.config,
 						type,
 						display: true,
-						supportKnob: false,
+						supportKnob: options.knobFocus === true && type === "hotkey",
 						actions:
 							type === "text"
 								? [{ type: "text", value: "matrix text" }]
@@ -281,4 +285,86 @@ it("matrix replacement waits for a delayed down acknowledgement before releasing
 	await f.matrix(-1);
 	expect(edges()).toEqual(["1,2:down", "1,2:up", "1,1:down", "1,1:up"]);
 	expect(f.effects).toEqual(["hold", "release", "text"]);
+});
+
+it("matrix completed contacts drive mounted knob focus through the same tap path as native touch", async () => {
+	const runtime = ManagedRuntime.make(KnobModel.Default);
+	disposals.push(() => runtime.dispose());
+	await runtime.runPromise(
+		KnobModel.configure({
+			session: {
+				deviceId: "matrix-device",
+				sessionId: "matrix-knob",
+				profileId: "matrix-profile",
+				revision: 0,
+			},
+			pageId: "matrix-page",
+			profiles: [
+				{
+					id: "matrix-profile",
+					name: "Matrix",
+					colorful: false,
+					thumbnail: { _tag: "missing" },
+				},
+			],
+			keys: [
+				{ keyCode: "1,2", kind: "hotkey", visible: true, supportKnob: true },
+			],
+			player: false,
+		}),
+	);
+	const listeners = new Set<(snapshot: unknown) => void>();
+	const knobRequest = vi.fn(async (command: KnobRequest) => {
+		if (command._tag !== "Read")
+			await runtime.runPromise(KnobModel.dispatch(command));
+		const snapshot = await runtime.runPromise(KnobModel.snapshot());
+		for (const listener of listeners) listener(snapshot);
+		return { _tag: "success" as const, snapshot };
+	});
+	vi.stubGlobal("quakeKnob", {
+		request: knobRequest,
+		onSnapshot: (listener: (snapshot: unknown) => void) => {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+	});
+	const f = await mountedMatrix({ knobFocus: true });
+	const paint = () =>
+		act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 30));
+		});
+	await paint();
+	const target = () => f.node.querySelector('[aria-label="Knob focus hotkey"]');
+	expect(target()?.getAttribute("aria-pressed")).toBe("false");
+	await f.matrix(1);
+	await f.matrix(1);
+	expect((await runtime.runPromise(KnobModel.snapshot())).focus._tag).toBe(
+		"none",
+	);
+	await f.matrix(-1);
+	await f.matrix(-1);
+	await paint();
+	expect((await runtime.runPromise(KnobModel.snapshot())).focus).toMatchObject({
+		_tag: "tile",
+		keyCode: "1,2",
+	});
+	expect(target()?.getAttribute("aria-pressed")).toBe("true");
+	expect(knobRequest.mock.calls.filter(([c]) => c._tag === "TapTile")).toEqual([
+		[{ _tag: "TapTile", sessionId: "matrix-knob", keyCode: "1,2" }],
+	]);
+	await f.matrix(0);
+	await f.matrix(-1);
+	await paint();
+	expect((await runtime.runPromise(KnobModel.snapshot())).focus._tag).toBe(
+		"none",
+	);
+	expect(target()?.getAttribute("aria-pressed")).toBe("false");
+	await f.matrix(1);
+	await f.disconnect();
+	await f.matrix(-1);
+	expect(
+		knobRequest.mock.calls.filter(([c]) => c._tag === "TapTile"),
+	).toHaveLength(2);
 });
