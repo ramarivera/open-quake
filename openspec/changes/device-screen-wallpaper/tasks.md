@@ -86,3 +86,7 @@ No renderer UI changes, real QUAKE access, DK-Suite execution or audible playbac
 - [x] 5.6 Probe video metadata once per content hash at import/save outside the controller semaphore; retain verified managed-byte reads. Evidence: WIDGETS-128/130; open-quake-lih.19.8, review 4375836049.
 - [x] 5.7 Ignore no-op playlist reorder in the editor and controller without revising storage. Evidence: WIDGETS-128; open-quake-lih.19.8, review 4375836057.
 - [ ] 5.8 Use media-aware EN/DE labels and the active-item hint; update stored schema and IPC documentation; run six gates and muted mock native smoke with screenshots. Evidence: WIDGETS-128/130; open-quake-lih.19.8, review 4375836089.
+
+Round-2 copy regression coverage now renders the real settings view in EN/DE,
+checks Add Media… / Remove All and asserts the hint uses activeIndex.
+Both locale cases failed before the copy fix; full gate and native evidence follow.

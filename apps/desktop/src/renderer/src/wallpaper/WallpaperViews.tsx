@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { FillMode, HourFormat } from "../../../shared/display";
+import { useAppTranslations } from "../i18n";
 import { useStripSettings } from "../strip/stripSettings";
 import { DeviceScreen } from "../ui/DeviceScreen";
 import {
@@ -46,6 +47,7 @@ export function WallpaperSettings({
 	wallpaper: WallpaperController;
 }): React.JSX.Element {
 	const { snapshot, notice, busy, request } = wallpaper;
+	const t = useAppTranslations("wallpaper");
 	const [serial, setSerial] = useState("");
 	const [preview, setPreview] = useState<PreviewView>("active");
 	const strip = useStripSettings();
@@ -57,7 +59,8 @@ export function WallpaperSettings({
 	const disabled = busy || !selection;
 	const fillMode = saved?.settings.bgFillMode ?? "cover";
 	const hourFormat = saved?.clock.actions[0].value ?? "24h";
-	const image = saved?.settings.displayMediaList[0];
+	const activeMedia =
+		saved?.settings.displayMediaList[snapshot?.activeIndex ?? 0];
 	const previewSession = saved?.serial === "desktop-preview";
 	const configure = (fill: FillMode, hours: HourFormat): void => {
 		if (selection)
@@ -117,9 +120,7 @@ export function WallpaperSettings({
 				footer={
 					<div role="status" aria-live="polite" className="status-notes">
 						{snapshot?.asset._tag === "unreadable" ? (
-							<Callout tone="warning">
-								The saved image can't be read. Choose it again or remove it.
-							</Callout>
+							<Callout tone="warning">{t("savedUnreadable")}</Callout>
 						) : null}
 						{snapshot?.recovered ? (
 							<Callout tone="warning">
@@ -128,9 +129,7 @@ export function WallpaperSettings({
 							</Callout>
 						) : null}
 						{snapshot?.normalizedFileUrl ? (
-							<Callout>
-								Imported the file URL as an app-managed image reference.
-							</Callout>
+							<Callout>{t("importedUrl")}</Callout>
 						) : null}
 						{notice ? <Callout tone="warning">{notice}</Callout> : null}
 						<p>
@@ -141,16 +140,16 @@ export function WallpaperSettings({
 				}
 			>
 				<Row
-					label="Media"
+					label={t("media")}
 					hint={
 						<span aria-live="polite">
 							{!snapshot
-								? "Loading saved wallpaper…"
+								? t("loading")
 								: snapshot.asset._tag === "ready"
-									? (image?.name ?? "Custom media")
+									? (activeMedia?.name ?? t("customMedia"))
 									: snapshot.asset._tag === "unreadable"
-										? "Unreadable media"
-										: "None · neutral background"}
+										? t("unreadableMedia")
+										: t("noMedia")}
 						</span>
 					}
 				>
@@ -164,17 +163,17 @@ export function WallpaperSettings({
 									void request({ _tag: "import", ...selection, append: true });
 							}}
 						>
-							Select Picture
+							{t("addMedia")}
 						</button>
 						<button
 							type="button"
 							className="button"
-							disabled={disabled || !image}
+							disabled={disabled || !saved?.settings.displayMediaList.length}
 							onClick={() => {
 								if (selection) void request({ _tag: "clear", ...selection });
 							}}
 						>
-							Remove
+							{t("removeAll")}
 						</button>
 					</div>
 				</Row>
