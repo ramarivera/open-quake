@@ -24,6 +24,8 @@ export function ClockEnrichmentSettings({
 	const saveHandler = useRef(onSave);
 	saveHandler.current = onSave;
 	const locale = useAppLocale().locale;
+	const currentLocale = useRef(locale);
+	currentLocale.current = locale;
 	const t = useLocaleText("clock");
 	const strings = WEATHER_MEDIA_STRINGS[locale].settings;
 	const id = useId();
@@ -47,7 +49,7 @@ export function ClockEnrichmentSettings({
 				const reply = await client.request({
 					_tag: "verifyCity",
 					query,
-					locale,
+					locale: currentLocale.current,
 				});
 				return reply?._tag === "city" ? reply.result : { _tag: "network" };
 			},
@@ -64,7 +66,7 @@ export function ClockEnrichmentSettings({
 			current.dispose();
 			verifier.current = null;
 		};
-	}, [client, locale]);
+	}, [client]);
 	const statusText =
 		status._tag === "checking"
 			? strings.weatherCityChecking

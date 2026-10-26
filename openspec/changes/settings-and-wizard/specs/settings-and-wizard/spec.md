@@ -75,6 +75,14 @@ Audit regression coverage: MGMT-003.
 - **WHEN** a locale event arrives while the saved locale read is pending
 - **THEN** all subscribed windows show the newer revision, and a late older read cannot revert their language or mounted drafts
 
+#### Scenario: Language changes during city verification
+- **WHEN** the user changes app language while an edited weather city is debouncing or its verification is in flight
+- **THEN** the mounted draft and pending verification survive, the result is saved, and a lookup started after the language change uses the current locale
+
+#### Scenario: Non-English profile thumbnail
+- **WHEN** a profile capture requests a supported non-English locale
+- **THEN** its validated capture locale reaches the passive clock before the preview becomes ready, including weekday, date and theme text
+
 ### Requirement: General preferences
 
 The system SHALL persist launch-at-login, start-hidden and window-size preferences as separate validated values, report unsupported/denied OS changes, and keep a reachable management entry when starting hidden.

@@ -156,6 +156,8 @@ Verification after correction: 46 focused edge tests and 32 focused desktop test
 - [x] 6.1 Bundle eight recovered locales, normalization/endonyms, mounted window/strip/profile/picker/voice/native propagation and all-six-role precedence tests. Rows AI-149, CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064. Bead open-quake-def.23.
 - [x] 6.2 Add local regional chat/speech suggestions, explicit-choice-safe legacy migration/bootstrap and eighteen translation languages through real settings controls/owners. Rows AI-015, SETTINGS-065, SETTINGS-067, SETTINGS-098, SETTINGS-099, SETTINGS-111. Bead open-quake-def.24.
 - [x] 6.3 Localize all clock/settings/enrichment labels, verify rendered eight-locale copy and independent weather/spoken routing, run lane gates and mock native EN/DE smoke. Row WIDGETS-063. Bead open-quake-def.23.
+- [x] 6.4 Preserve pending mounted city verification across app language changes, with debounce and in-flight regressions. PR #105 comment 4379719107, bead open-quake-def.23.1.
+- [ ] 6.5 Propagate the validated profile capture locale before passive clock rendering, with a non-English mounted capture regression. PR #105 comment 4379719124, bead open-quake-def.23.2.
 
 
 Locale lane implementation, 2026-10-26: all fifteen assigned software rows now
@@ -194,3 +196,5 @@ hardware, live microphone, paid-provider, OS-login and foreground native-menu
 acceptance remain unverified. PR #105 carries all fifteen row mappings. Beads
 open-quake-def.23 and open-quake-def.24 remain open for lead merge; the parent
 change's unrelated incomplete tasks are unchanged.
+
+PR #105 review fix 4379719107 keeps the mounted city verifier across locale changes and reads the current language when a lookup starts. Two mounted offline regressions fail on the previous implementation, covering a debounce that would be cancelled and an in-flight result that would be discarded. All 28 focused city/weather/live-locale cases pass.
