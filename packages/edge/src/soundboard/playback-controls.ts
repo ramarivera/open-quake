@@ -15,6 +15,7 @@ import type {
 	StartSound,
 } from "./playback-state.js";
 import {
+	type SoundEntry,
 	SoundFade,
 	SoundOperation,
 	SoundVolume,
@@ -36,6 +37,9 @@ export const makePlaybackControls = (ports: {
 		slot: PlaybackSlot,
 		index: number,
 	) => Effect.Effect<boolean>;
+	readonly inspectAvailable: (
+		path: string,
+	) => Effect.Effect<SoundEntry["status"]>;
 	readonly startTrack: (
 		slot: PlaybackSlot,
 		index: number,
@@ -76,6 +80,7 @@ export const makePlaybackControls = (ports: {
 		Effect.gen(function* () {
 			const command = ++slot.command;
 			slot.stopAfterRamp = Option.none();
+			slot.navigation = Option.none();
 			if (Option.isSome(slot.gain)) yield* slot.gain.value.cancel;
 			return command;
 		});
@@ -184,42 +189,60 @@ export const makePlaybackControls = (ports: {
 			invalidateOwner(slot.session.owner);
 			const command = yield* cancel(slot);
 			const wasPlaying = slot.session.state === "playing";
-			if (
-				wasPlaying &&
-				(selected.mode === "out" || selected.mode === "toggle")
-			) {
-				if (!(yield* ramp(slot, 0, selected.durationMs))) return;
-			}
-			const fadeIn =
-				selected.mode === "in" || (selected.mode === "toggle" && !wasPlaying);
-			let started = false;
-			yield* ports.locked(
-				Effect.gen(function* () {
-					if (!ports.current(slot) || command !== slot.command) return;
-					let index = slot.session.trackIndex;
-					for (
-						let visited = 0;
-						visited < slot.playlist.entries.length;
-						visited++
-					) {
+			slot.navigation = Option.some(command);
+			yield* Effect.gen(function* () {
+				if (
+					wasPlaying &&
+					(selected.mode === "out" || selected.mode === "toggle")
+				) {
+					if (!(yield* ramp(slot, 0, selected.durationMs))) return;
+				}
+				const fadeIn =
+					selected.mode === "in" || (selected.mode === "toggle" && !wasPlaying);
+				let started = false;
+				yield* ports.locked(
+					Effect.gen(function* () {
 						if (!ports.current(slot) || command !== slot.command) return;
-						index =
-							(index + direction + slot.playlist.entries.length) %
-							slot.playlist.entries.length;
-						if (yield* ports.inspect(slot, index)) {
+						let index = slot.session.trackIndex;
+						for (
+							let visited = 0;
+							visited < slot.playlist.entries.length;
+							visited++
+						) {
 							if (!ports.current(slot) || command !== slot.command) return;
-							yield* ports
-								.startTrack(slot, index, fadeIn ? 0 : undefined)
-								.pipe(Effect.tapError((error) => ports.failed(slot, error)));
-							started = true;
-							return;
+							index =
+								(index + direction + slot.playlist.entries.length) %
+								slot.playlist.entries.length;
+							if (yield* ports.inspect(slot, index)) {
+								if (!ports.current(slot) || command !== slot.command) return;
+								yield* ports
+									.startTrack(slot, index, fadeIn ? 0 : undefined)
+									.pipe(Effect.tapError((error) => ports.failed(slot, error)));
+								started = true;
+								return;
+							}
 						}
-					}
-					yield* ports.stopUnavailable(slot);
-				}),
+						yield* ports.stopUnavailable(slot);
+					}),
+				);
+				if (started && command === slot.command && fadeIn)
+					yield* ramp(slot, slot.targetGain, selected.durationMs);
+			}).pipe(
+				Effect.onInterrupt(() =>
+					slot.command === command ? ports.stopUnavailable(slot) : Effect.void,
+				),
+				Effect.ensuring(
+					Effect.sync(() => {
+						if (
+							Option.isSome(slot.navigation) &&
+							slot.navigation.value === command
+						)
+							slot.navigation = Option.none();
+					}),
+				),
 			);
-			if (started && command === slot.command && fadeIn)
-				yield* ramp(slot, slot.targetGain, selected.durationMs);
+			if (ports.current(slot) && slot.endPending)
+				yield* ports.finishPendingEnd(slot);
 		});
 	const previous = Effect.fn("SoundboardService.previous")(
 		(id: string): Effect.Effect<void, SoundPlaybackError> => navigate(id, -1),
@@ -229,23 +252,42 @@ export const makePlaybackControls = (ports: {
 	);
 	const rescan = Effect.fn("SoundboardService.rescan")(
 		(id: string): Effect.Effect<void> =>
-			ports.locked(
-				Effect.gen(function* () {
-					const slot = lookup(id);
-					if (!slot || !ports.current(slot)) return;
-					yield* Effect.forEach(
-						slot.playlist.entries,
-						(_, index) =>
-							Effect.suspend(() =>
-								ports.current(slot)
-									? ports.inspect(slot, index)
-									: Effect.succeed(false),
-							),
-						{ concurrency: 4 },
-					);
-					if (ports.current(slot)) yield* ports.publish(slot);
-				}),
-			),
+			Effect.gen(function* () {
+				const slot = lookup(id);
+				if (!slot || !ports.current(slot)) return;
+				const generation = slot.session.generation;
+				const scan = ++slot.scan;
+				const statuses = yield* Effect.forEach(
+					slot.playlist.entries,
+					(entry) =>
+						Effect.suspend(() =>
+							ports.current(slot) &&
+							slot.scan === scan &&
+							slot.session.generation === generation
+								? ports.inspectAvailable(entry.path)
+								: Effect.succeed(entry.status),
+						),
+					{ concurrency: 4 },
+				);
+				yield* ports.locked(
+					Effect.gen(function* () {
+						if (
+							!ports.current(slot) ||
+							slot.session.generation !== generation ||
+							slot.scan !== scan
+						)
+							return;
+						slot.session = {
+							...slot.session,
+							entries: slot.session.entries.map((entry, index) => ({
+								...entry,
+								status: statuses[index] ?? entry.status,
+							})),
+						};
+						yield* ports.publish(slot);
+					}),
+				);
+			}),
 	);
 	const stop = Effect.fn("SoundboardService.stop")(
 		(id: string, fade?: SoundFade): Effect.Effect<void, SoundPlaybackError> =>

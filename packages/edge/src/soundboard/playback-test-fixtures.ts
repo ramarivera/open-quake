@@ -34,6 +34,7 @@ export const rig = (
 	command: (
 		method: "gain" | "play" | "pause" | "position",
 	) => Effect.Effect<void, SoundboardDecodeFailed> = () => Effect.void,
+	acquired: Effect.Effect<void> = Effect.void,
 ) =>
 	Effect.gen(function* () {
 		const output = yield* makeAudioOutput;
@@ -50,6 +51,7 @@ export const rig = (
 					...output,
 					acquire: (kind, preempt) =>
 						output.acquire(kind, preempt).pipe(
+							Effect.tap(() => acquired),
 							Effect.map((lease) => ({
 								...lease,
 								release: released.pipe(Effect.zipRight(lease.release)),

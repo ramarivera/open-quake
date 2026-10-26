@@ -48,8 +48,10 @@ export interface PlaybackSlot {
 	readonly playlist: SoundPlaylist;
 	readonly group: PlaybackGroup;
 	command: number;
+	scan: number;
 	endPending: boolean;
 	stopAfterRamp: Option.Option<number>;
+	navigation: Option.Option<number>;
 	targetGain: number;
 	gain: Option.Option<SoundGain>;
 	track: Option.Option<{

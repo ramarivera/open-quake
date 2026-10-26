@@ -345,6 +345,11 @@ export const makeSoundboardService = Effect.gen(function* () {
 						yield* releaseIdle(slot.group);
 						return;
 					}
+					if (
+						Option.isSome(slot.navigation) &&
+						slot.navigation.value === slot.command
+					)
+						return;
 					slot.session = { ...slot.session, state: "loading" };
 					slot.endPending = false;
 					let index = slot.session.trackIndex;
@@ -424,11 +429,20 @@ export const makeSoundboardService = Effect.gen(function* () {
 					if (!accept() || epoch !== commandEpoch)
 						return yield* new AudioOutputBusy();
 					const target = yield* ensureGroup;
-					if (closed || !target.active) return yield* new AudioOutputBusy();
+					const accepted = () =>
+						!closed && target.active && accept() && epoch === commandEpoch;
+					if (!accepted()) {
+						yield* releaseIdle(target);
+						return yield* new AudioOutputBusy();
+					}
 					if (!additional)
 						for (const slot of [...target.slots])
 							if (soundOwnerKey(slot.session.owner) === key)
 								yield* stopSlot(slot);
+					if (!accepted()) {
+						yield* releaseIdle(target);
+						return yield* new AudioOutputBusy();
+					}
 					const session: SoundSession = {
 						playbackId: `sound-${++sequence}`,
 						generation: 0,
@@ -448,8 +462,10 @@ export const makeSoundboardService = Effect.gen(function* () {
 						session,
 						playlist: config,
 						command: 0,
+						scan: 0,
 						endPending: false,
 						stopAfterRamp: Option.none(),
+						navigation: Option.none(),
 						targetGain: config.volume / 100,
 						gain: Option.none(),
 						group: target,
@@ -459,7 +475,10 @@ export const makeSoundboardService = Effect.gen(function* () {
 						stop: Effect.void,
 					};
 					slot.stop = yield* Effect.cached(cleanupSlot(slot));
-					if (closed || !target.active) return yield* new AudioOutputBusy();
+					if (!accepted()) {
+						yield* releaseIdle(target);
+						return yield* new AudioOutputBusy();
+					}
 					slots.set(session.playbackId, slot);
 					target.slots.add(slot);
 					yield* startTrack(slot, index, initialGain).pipe(
@@ -521,6 +540,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 		current,
 		publish,
 		inspect,
+		inspectAvailable: selection.inspectAvailable,
 		startTrack,
 		start,
 		stopNow,

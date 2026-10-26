@@ -153,3 +153,17 @@ Reviewed delivery remains open under uv9.4. Task 2.3 and task 3.1 remain open fo
 production composition/consumers, despite direct shared-output and native source
 proof. The first-release unavailable key/renderer/IPC boundary is unchanged.
 Audible output, physical triggers and Linux audio acceptance remain unverified.
+
+## PR59 concurrency review, 2026-10-26
+
+Six deterministic regressions reproduced the reported failures before the fix:
+profile deactivation during output delivery and replacement cleanup, Stop All
+during replacement cleanup, natural completion during next/previous fades, and
+a stalled rescan blocking another key's pause. Starts now recheck request and
+epoch validity after each asynchronous ownership boundary and release an idle
+reservation when rejected. Explicit navigation defers automatic advancement until
+its selection settles. Interrupted navigation stops its player. Metadata rescan
+runs outside the shared command gate and publishes only for the current slot,
+track generation and latest scan. Two additional regressions cover interrupted
+navigation cleanup and a stale overlapping scan. The production release gate
+remains unchanged; this is service source proof, not user-facing playback.
