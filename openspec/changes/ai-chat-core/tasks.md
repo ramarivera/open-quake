@@ -61,3 +61,14 @@ under the external open-quake-finish/service-graph scratch directory.
 This addresses the failure boundary within 2.2/2.3; their broader unchecked
 acceptance requirements remain open. No physical device, microphone, live
 provider or OS preference mutation was used.
+
+PR74 review correction: AppLocaleProvider now retains the four allowlisted
+locale error codes instead of replacing every read/save failure. Setup uses
+its saved locale while the live locale cannot be read, including unavailable
+and invalid replies. The focused settings/i18n/preload suites pass 123 tests
+and desktop typecheck/build pass. In the hidden production renderer, removing
+only the locale IPC handler and reloading shows the existing localized
+"Language settings are unavailable here." message. The earlier corrupt-store
+checks still pass. The expected missing-handler log is induced by this test,
+not a startup-order observation. No window is shown or focused. Evidence:
+service-graph/error-identity-consumer{,-types,-build,-native}.log.

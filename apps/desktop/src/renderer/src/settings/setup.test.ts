@@ -292,6 +292,12 @@ describe("setup model", () => {
 			liveLocale({ ...app, error: "QUAKE.SETTINGS.READ_FAILED" }, "en"),
 		).toBe("en");
 		// A failed language write doesn't make the read locale unknown.
+		for (const error of [
+			"QUAKE.SETTINGS.INVALID",
+			"QUAKE.SETTINGS.UNAVAILABLE",
+		]) {
+			expect(liveLocale({ ...app, error }, "en")).toBe("en");
+		}
 		expect(
 			liveLocale({ ...app, error: "QUAKE.SETTINGS.PERSIST_FAILED" }, "en"),
 		).toBe("de");
