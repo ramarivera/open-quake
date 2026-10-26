@@ -65,7 +65,11 @@ export const KnobModelSnapshot = Schema.Struct({
 	}),
 	focus: Schema.Union(
 		Schema.TaggedStruct("none", {}),
-		Schema.TaggedStruct("tile", { keyCode: id, angle: Schema.Number }),
+		Schema.TaggedStruct("tile", {
+			keyCode: id,
+			angle: Schema.Number,
+			generation: Schema.optional(Schema.Int.pipe(Schema.nonNegative())),
+		}),
 	),
 	volume: Schema.Struct({
 		phase: Schema.Literal("inactive", "activating", "active", "unavailable"),
@@ -83,6 +87,11 @@ export const KnobModelInput = Schema.Union(
 		code: Schema.Literal(1, 2, 5, 255),
 	}),
 	Schema.TaggedStruct("TapTile", { ...session, keyCode: id }),
+	Schema.TaggedStruct("RestoreFocus", {
+		...session,
+		keyCode: id,
+		generation: Schema.Int.pipe(Schema.nonNegative()),
+	}),
 	Schema.TaggedStruct("ToggleVolume", session),
 	Schema.TaggedStruct("Page", { ...session, delta: Schema.Literal(-1, 1) }),
 	Schema.TaggedStruct("Select", { ...session, profileId: id }),

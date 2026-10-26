@@ -6,6 +6,9 @@ import type {
 } from "../../../../../shared/meeting-bridge";
 import { MeetingGlyph } from "./MeetingGlyph";
 
+// A remount may show the remaining success state, but must not replay its bursts.
+const celebrated = new Map<string, number>();
+
 export function MeetingAnimation({
 	record,
 	progress: latestProgress,
@@ -28,18 +31,31 @@ export function MeetingAnimation({
 		record && Option.isSome(record.provenance)
 			? record.provenance.value.generatedAt
 			: 0;
+	const main = record && Option.isNone(record.parentId);
 	useEffect(() => {
-		if (!panel || !completedAt || Date.now() - completedAt >= 5000) {
+		const now = Date.now();
+		for (const [id, at] of celebrated) {
+			if (now - at >= 5000) celebrated.delete(id);
+		}
+		if (
+			!panel ||
+			!main ||
+			record?.state !== "completed" ||
+			!completedAt ||
+			now - completedAt >= 5000 ||
+			celebrated.get(record.id) === completedAt
+		) {
 			setCelebrate(false);
 			return;
 		}
+		celebrated.set(record.id, completedAt);
 		setCelebrate(true);
 		const timer = setTimeout(
 			() => setCelebrate(false),
 			Math.max(0, 5000 - (Date.now() - completedAt)),
 		);
 		return () => clearTimeout(timer);
-	}, [completedAt, panel]);
+	}, [completedAt, panel, main, record?.id, record?.state]);
 	const state = progress
 		? progress.status === 0
 			? record?.state === "cancelled"

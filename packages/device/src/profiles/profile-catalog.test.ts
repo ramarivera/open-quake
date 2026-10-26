@@ -534,3 +534,111 @@ for (const platform of ["win32", "darwin", "linux"] as const) {
 		);
 	});
 }
+
+// AI-265, AI-318, MGMT-360, MGMT-365: independent fixture, not copied from the shipped JSON.
+describe("MeetAI recovered control contract", () => {
+	it.each(["darwin", "win32", "linux"] as const)(
+		"pins all six controls on %s",
+		(platform) => {
+			const profile = builtinProfiles(platform).find((p) => p.id === "1-1");
+			expect(profile?.name).toBe("MeetAI");
+			expect(profile && Option.getOrNull(profile.compatibility)).toMatchObject({
+				resourceId: "1-1",
+				builtin: "meetingAssistant",
+				mode: 1,
+			});
+			const keys = profile?.pages[0].keys.filter((k) => k.config.type);
+			expect(
+				keys?.map((k) => ({
+					keyCode: k.keyCode,
+					type: k.config.type,
+					title: k.config.title.text,
+					size: k.config.size,
+					icon: k.config.icon,
+					actions: k.config.actions,
+					alternateIcon: Option.getOrNull(k.config.alterIcon),
+				})),
+			).toEqual([
+				{
+					keyCode: "1,1",
+					type: "liveAudioTranslateDisplay",
+					title: "",
+					size: [5, 2],
+					icon: "0-80",
+					actions: [{ type: "targetLanguage", value: "zh" }],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "1,6",
+					type: "meetingMinutes",
+					title: "Start",
+					size: [1, 2],
+					icon: "0-61",
+					actions: [{ type: "generateReport", value: true }],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "1,7",
+					type: "tempMeetingMinutes",
+					title: "Record",
+					size: [1, 1],
+					icon: "0-99",
+					actions: [],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "1,8",
+					type: "mic",
+					title: "Mic Mute",
+					size: [1, 1],
+					icon: "0-59",
+					actions: [
+						{ type: "toggle", value: 0 },
+						{ type: "toggle", value: 1 },
+					],
+					alternateIcon: "0-100",
+				},
+				{
+					keyCode: "2,7",
+					type: "liveAudioTranslate",
+					title: "Translate",
+					size: [1, 1],
+					icon: "0-98",
+					actions: [{ type: "targetLanguage", value: "zh" }],
+					alternateIcon: null,
+				},
+				{
+					keyCode: "2,8",
+					type: "meetingRecordMark",
+					title: "Mark",
+					size: [1, 1],
+					icon: "0-99",
+					actions: [],
+					alternateIcon: null,
+				},
+			]);
+			expect(profile?.pages[0].keys).toHaveLength(16);
+			expect(keys?.[0]?.compatibility).toMatchObject({
+				value: {
+					source: {
+						config: {
+							hasTouchableSubElements: true,
+							supportTouchEffect: false,
+						},
+					},
+				},
+			});
+			for (const key of keys ?? []) {
+				for (const field of [
+					"title",
+					"grid",
+					"icon",
+					"allowDelete",
+					"allowDrag",
+				] as const)
+					expect(keyEditable(key, field)).toBe(key.keyCode === "1,1");
+				expect(key.config.supportKnob).toBe(false);
+			}
+		},
+	);
+});
