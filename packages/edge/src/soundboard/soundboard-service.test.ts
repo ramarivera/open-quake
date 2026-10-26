@@ -1,5 +1,6 @@
 import { it } from "@effect/vitest";
 import {
+	Cause,
 	Deferred,
 	Effect,
 	Either,
@@ -738,6 +739,56 @@ describe("soundboard session lifecycle with real shared output", () => {
 						right: { state: "playing", owner: { keyCode: "2" } },
 					});
 					expect(r.tracks.map((track) => track.fileId)).toEqual(["a", "a"]);
+				}),
+		);
+	}
+
+	for (const action of ["stop", "capture"] as const) {
+		it.effect(
+			`${action} settles after interrupting natural-advance teardown`,
+			() =>
+				Effect.gen(function* () {
+					const scope = yield* Scope.make();
+					const entered = yield* Deferred.make<void>();
+					const done = yield* Deferred.make<void>();
+					const r = yield* rig(
+						Effect.void,
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(done)),
+						),
+					).pipe(Effect.provideService(Scope.Scope, scope));
+					const session = yield* r.service.play(owner, playlist);
+					const first = r.tracks[0];
+					if (!first) return yield* Effect.die("missing player");
+					yield* Deferred.succeed(first.end, undefined);
+					yield* Deferred.await(entered);
+					const pending = yield* (
+						action === "stop"
+							? r.service.stop(session.playbackId)
+							: r.output
+									.acquire("capture", Effect.void)
+									.pipe(Effect.flatMap((lease) => lease.release))
+					).pipe(Effect.exit, Effect.forkDaemon);
+					yield* TestClock.adjust(1);
+					yield* Deferred.succeed(done, undefined);
+					yield* TestClock.adjust(10);
+					const settled = yield* Fiber.poll(pending);
+					// On the broken implementation cleanup is mutually blocked; keeping
+					// this explicit scope open lets the test report that failure directly.
+					if (Option.isSome(settled)) {
+						const closed = yield* Scope.close(scope, Exit.void).pipe(
+							Effect.exit,
+						);
+						expect(Exit.isSuccess(closed)).toBe(true);
+					}
+					expect(Option.isSome(settled)).toBe(true);
+					const outcome = yield* Fiber.join(pending);
+					expect(
+						Exit.isFailure(outcome) ? Cause.pretty(outcome.cause) : "success",
+					).toBe("success");
+					expect(r.tracks).toHaveLength(1);
+					expect(first.closed).toBe(1);
+					expect((yield* r.service.snapshot())[0]?.state).toBe("stopped");
 				}),
 		);
 	}

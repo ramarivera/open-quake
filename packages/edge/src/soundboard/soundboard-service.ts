@@ -81,9 +81,11 @@ export const makeSoundboardService = Effect.gen(function* () {
 			const watcher = slot.watcher;
 			slot.player = Option.none();
 			const self = yield* Effect.fiberId;
+			// Let shared native teardown settle before interrupting its observer.
+			// Otherwise an interrupted watcher can poison the cached close result.
+			if (Option.isSome(track)) yield* track.value.close;
 			if (Option.isSome(watcher) && !Equal.equals(self, watcher.value.id()))
 				yield* Fiber.interrupt(watcher.value);
-			if (Option.isSome(track)) yield* track.value.close;
 			if (slot.track === track) slot.track = Option.none();
 			if (slot.watcher === watcher) slot.watcher = Option.none();
 		});
@@ -222,7 +224,9 @@ export const makeSoundboardService = Effect.gen(function* () {
 		Effect.gen(function* () {
 			// A native finalizer can defect before loading starts. Retain unsafe
 			// teardown ownership and publish failure through the normal slot cleanup.
-			yield* closeTrack(slot).pipe(Effect.onError(() => stopSlot(slot)));
+			yield* closeTrack(slot).pipe(
+				Effect.onError(() => (current(slot) ? stopSlot(slot) : Effect.void)),
+			);
 			if (!current(slot)) return yield* new AudioOutputBusy();
 			const entry = slot.playlist.entries[index];
 			if (!entry) return yield* new SoundboardConfigInvalid();
