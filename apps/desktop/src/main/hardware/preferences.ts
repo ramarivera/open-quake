@@ -98,9 +98,10 @@ export function hardwarePreferencesLive(
 			try {
 				mtimeMs = (await stat(path)).mtimeMs;
 				text = await readFile(path, "utf8");
-			} catch (error) {
-				if (hasCode(error, "ENOENT")) continue;
-				throw error;
+			} catch {
+				// Discovery spans other devices. Unreadable entries cannot establish a
+				// matching legacy identity; the canonical read above still fails loudly.
+				continue;
 			}
 			let input: unknown;
 			try {

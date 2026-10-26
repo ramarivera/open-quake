@@ -270,3 +270,10 @@ On a normalized HID serial read, the hardware preference store SHALL first use a
 #### Scenario: Migration cannot publish
 - **WHEN** publishing the normalized file fails
 - **THEN** the old record remains intact, no partial normalized record becomes visible, and retry can migrate it
+
+
+#### Scenario: Another device has an unreadable or corrupt record
+- **WHEN** the requested normalized serial has no canonical record and another device's hashed file is unreadable or corrupt
+- **THEN** discovery ignores that candidate, returns no preferences for a fresh device, and can still migrate a readable matching legacy serial
+- **AND** reading the requested serial's own unreadable or corrupt canonical file still reports HardwarePreferencesFailed without replacing it
+- **AND** a disk-adapter regression covers PR #120 finding 4381207876 and MAIN-018, SETTINGS-075

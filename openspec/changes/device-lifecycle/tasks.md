@@ -98,6 +98,6 @@ Follow-up verification: 35 focused tests passed, including mounted matrix/runtim
 Bead `open-quake-lih.11.24` remains in progress for lead acceptance.
 
 - [x] 12.1 Serialize matrix replacement edges per device across delayed down acknowledgements. Mounted StripPanel plus production KeyRuntime/TestClock regression fails before the fix. Finding 4381194049; MAIN-008/028, SCREEN-144; owning contract in two-layer-sdk.
-- [ ] 12.2 Isolate unrelated unreadable legacy preference candidates while preserving canonical-file failures. Finding 4381207876; MAIN-018, SETTINGS-075.
+- [x] 12.2 Isolate unrelated unreadable legacy preference candidates while preserving canonical-file failures. Finding 4381207876; MAIN-018, SETTINGS-075.
 - [ ] 12.3 Emit matrix tile taps through the native knob-focus path and prove mounted knob focus follows matrix contacts. Finding 4381208066; MAIN-008/028, SCREEN-144.
 - [ ] 12.4 Run full review gates, commit/push/reply per finding, inspect unanswered threads, and remove this round's output/worktree without touching the original lane.

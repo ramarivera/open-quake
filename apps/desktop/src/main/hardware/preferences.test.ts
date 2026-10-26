@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import {
+	chmod,
 	link,
 	mkdtemp,
 	readdir,
@@ -88,6 +89,38 @@ describe("serial preferences disk adapter", () => {
 				Option.none(),
 			);
 		} finally {
+			await f.close();
+		}
+	});
+
+	it("ignores unreadable and corrupt unrelated records when migrating or starting a fresh serial", async () => {
+		const f = await migrationFixture();
+		try {
+			await f.runtime.runPromise(
+				f.store.write("EF:01", defaultHardwarePreferences),
+			);
+			await chmod(filename(f.root, "EF:01"), 0);
+			await writeFile(filename(f.root, "OTHER"), "corrupt unrelated JSON");
+			expect(await f.runtime.runPromise(f.store.read("NEW"))).toEqual(
+				Option.none(),
+			);
+			expect(await f.runtime.runPromise(f.store.read("ABCD"))).toEqual(
+				Option.some(legacy),
+			);
+			expect(await f.runtime.runPromise(f.store.read("AB:CD"))).toEqual(
+				Option.some(legacy),
+			);
+			const ownFailure = await f.runtime.runPromise(
+				f.store.read("EF:01").pipe(Effect.either),
+			);
+			expect(Either.isLeft(ownFailure)).toBe(true);
+			if (Either.isLeft(ownFailure)) {
+				expect(ownFailure.left.code).toBe("QUAKE.HARDWARE.PREFERENCES_FAILED");
+				expect(ownFailure.left.originalCause).toMatchObject({ code: "EACCES" });
+				expect(JSON.stringify(ownFailure.left)).not.toContain(f.root);
+			}
+		} finally {
+			await chmod(filename(f.root, "EF:01"), 0o600);
 			await f.close();
 		}
 	});
