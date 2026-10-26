@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { Effect, Option, Schema } from "effect";
+import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
 import {
 	KnobCapabilityUnavailable,
 	KnobDispatchFailed,
@@ -37,6 +38,7 @@ import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
 
 /** Other lanes compose their qualified action/voice runtimes here. */
 export interface DesktopKnobBindings {
+	readonly media?: MediaActionAdapter | undefined;
 	readonly deviceId?: () => string;
 	readonly locale?: () => ProfileLocale;
 	/** Owned by the existing profile manager; never creates a second service. */
@@ -235,6 +237,7 @@ export function desktopKnobAdapters(
 				: unavailable;
 		});
 	const hotkey = focusedHotkey({
+		media: bindings.media,
 		read,
 		deviceId,
 		hardware: () => bindings.hardware?.(),

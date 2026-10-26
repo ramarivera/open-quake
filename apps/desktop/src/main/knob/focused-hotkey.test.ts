@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { HardwareControls, QuakeDevice } from "@open-quake/device";
 import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
 import { Effect, Either, Layer, Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
 import { KnobModelPorts } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import {
@@ -12,6 +13,7 @@ import {
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { createDesktopDiagnostics } from "../diagnostics";
+import { systemMediaKeyActions } from "../weather-media/key-actions";
 import { desktopKnobAdapters } from "./desktop-adapters";
 import { makeKnobRuntime } from "./index";
 
@@ -48,7 +50,11 @@ const fixture = (actions: readonly string[] = ["control+a", "control+b"]) => {
 		activeByDevice: { device: { profileId: "p", pageId: "one" } },
 	};
 };
-const setup = (actions?: readonly string[], unsupported = false) =>
+const setup = (
+	actions?: readonly string[],
+	unsupported = false,
+	media?: MediaActionAdapter,
+) =>
 	Effect.gen(function* () {
 		const fake = yield* makeFakeHardwareTransport({ serial: "device" });
 		const device = yield* QuakeDevice.pipe(
@@ -87,6 +93,7 @@ const setup = (actions?: readonly string[], unsupported = false) =>
 			"/unused",
 			{
 				deviceId: () => serial,
+				media,
 				hardware: () => currentHardware,
 			},
 			{
@@ -474,4 +481,41 @@ it("persists the failed knob/keyboard/HID spans with one trace and scrubbed orig
 		await diagnostics.close();
 		await rm(directory, { recursive: true, force: true });
 	}
+});
+
+it("routes both directional audio hotkeys to the shared media adapter without keyboard writes", async () => {
+	const send = vi.fn(async (_command: string, _signal: AbortSignal) => ({
+		accepted: true,
+	}));
+	await run(
+		Effect.gen(function* () {
+			const h = yield* setup(
+				["audio_prev", "audio_next"],
+				false,
+				systemMediaKeyActions(send),
+			);
+			yield* h.turn(-1);
+			yield* h.turn(1);
+			expect(send.mock.calls.map(([command]) => command)).toEqual([
+				"audio_prev",
+				"audio_next",
+			]);
+			expect(yield* h.fake.writes).toHaveLength(0);
+			h.setEnvelope(fixture(["audio_mute", "audio_next"]));
+			expect((yield* Effect.either(h.turn(-1)))._tag).toBe("Left");
+			expect(send).toHaveBeenCalledTimes(2);
+		}),
+	);
+});
+it("rejects unsupported or missing knob media adapters without keyboard fallback", async () => {
+	await run(
+		Effect.gen(function* () {
+			const h = yield* setup(["audio_prev", "control+b"]);
+			expect(yield* h.turn(-1).pipe(Effect.either)).toMatchObject({
+				_tag: "Left",
+				left: { code: "QUAKE.KNOB.CAPABILITY_UNAVAILABLE" },
+			});
+			expect(yield* h.fake.writes).toHaveLength(0);
+		}),
+	);
 });
