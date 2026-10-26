@@ -1,6 +1,11 @@
 import { Rpc, RpcGroup } from "@effect/rpc";
 import { Schema } from "effect";
 import {
+	FileResult,
+	ProviderListing,
+	PublicFileRequest,
+} from "../ai/ai-file-contracts.js";
+import {
 	ChatChunk,
 	SessionId,
 	TurnId,
@@ -34,6 +39,15 @@ export class ChatRpcFailure extends Schema.TaggedError<ChatRpcFailure>()(
 const session = { sessionId: SessionId };
 const turn = { ...session, turnId: TurnId };
 export const ChatRpcs = RpcGroup.make(
+	Rpc.make("provider.files", {
+		payload: PublicFileRequest,
+		success: FileResult,
+		error: ChatRpcFailure,
+	}),
+	Rpc.make("provider.list", {
+		success: ProviderListing,
+		error: ChatRpcFailure,
+	}),
 	Rpc.make("chat.submit", {
 		payload: ChatInput,
 		success: TurnSnapshot,

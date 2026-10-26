@@ -461,7 +461,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 						const cancelled = yield* Deferred.poll(turn.stop);
 						const result = Option.isSome(cancelled)
 							? yield* cancelled.value
-							: terminal.outcome === "completed" && elapsedMs >= 60000
+							: terminal.outcome !== "cancelled" && elapsedMs >= 60000
 								? {
 										outcome: "timedOut" as const,
 										errorCode: "CHAT.RESPONSE.TIMEOUT",

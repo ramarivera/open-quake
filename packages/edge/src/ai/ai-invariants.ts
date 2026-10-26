@@ -73,10 +73,20 @@ export function validateProfile(
 	if (
 		(profile.adapter === "mock" &&
 			(profile.auth !== "none" || profile.credentialRef !== undefined)) ||
-		(profile.adapter === "openai-compatible" && profile.auth !== "apiKey") ||
+		(["openai-compatible", "xfy", "coze", "dashscope-media"].includes(
+			profile.adapter,
+		) &&
+			profile.auth !== "apiKey") ||
 		(profile.adapter === "codex" &&
 			(profile.auth !== "codexDevice" || profile.credentialRef !== undefined))
 	)
+		return Either.left({ reason: "config" });
+	if (
+		profile.adapter === "dashscope-media" &&
+		(profile.provider !== "qwen" || !profile.settings?.mediaKind)
+	)
+		return Either.left({ reason: "config" });
+	if (profile.adapter === "coze" && !profile.settings?.botId)
 		return Either.left({ reason: "config" });
 	for (const key of ["temperature", "topP"] as const) {
 		const range = profile.samplingLimits[key];
@@ -144,8 +154,48 @@ export function validateRequest(
 		!validSampling({ ...profile.sampling, ...request.sampling }, profile)
 	)
 		return Either.left({ reason: "config" });
+	const pending = new Map<string, string>();
+	const used = new Set<string>();
+	for (const message of request.messages) {
+		if (message.role === "tool") {
+			if (
+				!message.toolCallId ||
+				!message.toolName ||
+				pending.get(message.toolCallId) !== message.toolName ||
+				message.toolCalls?.length ||
+				message.reasoningContent !== undefined
+			)
+				return Either.left({ reason: "config" });
+			pending.delete(message.toolCallId);
+		} else {
+			if (pending.size || message.toolCallId || message.toolName)
+				return Either.left({ reason: "config" });
+			if (message.toolCalls?.length && message.role !== "assistant")
+				return Either.left({ reason: "config" });
+			for (const call of message.toolCalls ?? []) {
+				if (
+					used.has(call.id) ||
+					Either.isLeft(
+						Schema.decodeUnknownEither(Schema.parseJson(Schema.Unknown))(
+							call.arguments,
+						),
+					)
+				)
+					return Either.left({ reason: "config" });
+				used.add(call.id);
+				pending.set(call.id, call.name);
+			}
+		}
+	}
+	if (
+		pending.size ||
+		new Set(request.tools?.map((t) => t.name)).size !==
+			(request.tools?.length ?? 0)
+	)
+		return Either.left({ reason: "config" });
 	const capabilities: ReadonlyArray<Capability> = [
 		"text",
+		...(request.tools?.length || used.size ? ["tools" as const] : []),
 		...(request.modelRole === "vision"
 			? ["images" as const]
 			: request.modelRole === "image"

@@ -89,6 +89,8 @@ export function prepareWorkflow(
 		-readonly [K in keyof ProviderOptions]: ProviderOptions[K];
 	} = {};
 	const invalid = () => Either.left(new AiConfigInvalid());
+	if (controls.searchOptions && provider !== "qwen") return invalid();
+	if (controls.searchQuery && provider !== "zhipu") return invalid();
 	if (!providerSamplingValid({ provider, model: modelId, ...sampling }))
 		return invalid();
 	if (provider === "openai") {
@@ -123,10 +125,35 @@ export function prepareWorkflow(
 			options.max_completion_tokens = sampling.maxOutputTokens;
 	} else if (provider === "qwen") {
 		if (controls.reasoningEffort) return invalid();
+		if (controls.searchOptions && !controls.webSearch) return invalid();
+		if (controls.searchOptions) options.search_options = controls.searchOptions;
 		if (controls.thinking !== undefined)
 			options.enable_thinking = controls.thinking;
 		if (controls.webSearch !== undefined)
 			options.enable_search = controls.webSearch;
+	} else if (provider === "zhipu") {
+		if (controls.thinking || controls.reasoningEffort || controls.searchOptions)
+			return invalid();
+		if (controls.webSearch && request.tools?.length) return invalid();
+		if (controls.webSearch)
+			options.tools = [
+				{
+					type: "web_search",
+					web_search: {
+						enable: true,
+						search_result: true,
+						search_query:
+							controls.searchQuery ??
+							request.messages
+								.filter((m) => m.role === "user")
+								.flatMap((m) =>
+									m.content.flatMap((p) => (p._tag === "text" ? [p.text] : [])),
+								)
+								.join("\n")
+								.slice(-4096),
+					},
+				},
+			];
 	} else if (provider === "kimi") {
 		if (controls.webSearch || controls.reasoningEffort) return invalid();
 		if (modelId !== "kimi-k2.5" && modelId !== "kimi-k2.6") return invalid();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either, Schema, Stream } from "effect";
 import type { CompatibleAdapter } from "./adapters/adapter.js";
+import type { NormalizedEvent } from "./ai-contracts.js";
 import { AiRepository } from "./ai-repository.js";
 import { AiProviderService } from "./ai-service.js";
 import {
@@ -69,7 +70,16 @@ describe("workflow control intent through the facade", () => {
 					workflowLayer({
 						open: (input) => {
 							calls.push(input);
-							return Effect.succeed(Stream.succeed({ _tag: "completed" }));
+							return Effect.succeed(
+								Stream.fromIterable<NormalizedEvent>([
+									{
+										_tag: "textDelta",
+										textDelta: "fixture answer",
+										kind: "generation",
+									},
+									{ _tag: "completed" },
+								]),
+							);
 						},
 					}),
 				),
@@ -134,7 +144,16 @@ describe("workflow control intent through the facade", () => {
 				workflowLayer({
 					open: (input) => {
 						calls.push(input);
-						return Effect.succeed(Stream.succeed({ _tag: "completed" }));
+						return Effect.succeed(
+							Stream.fromIterable<NormalizedEvent>([
+								{
+									_tag: "textDelta",
+									textDelta: "fixture answer",
+									kind: "generation",
+								},
+								{ _tag: "completed" },
+							]),
+						);
 					},
 				}),
 			),

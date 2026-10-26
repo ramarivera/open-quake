@@ -112,6 +112,31 @@ const chunks = (events: Stream.Stream<ChatChunk, unknown>) =>
 	Stream.runCollect(events).pipe(Effect.map(Chunk.toReadonlyArray));
 
 describe("ChatService real facade consumers", () => {
+	for (const answer of ["", " \t\n"])
+		it.effect(
+			`AI-093 rejects completed blank answer ${JSON.stringify(answer)} once`,
+			() =>
+				Effect.gen(function* () {
+					const service = yield* initialize;
+					const turn = yield* service.submit("window-a", input());
+					const actual = yield* chunks(turn.events);
+					expect(actual.filter((event) => event.type === "end")).toMatchObject([
+						{ outcome: "failed", errorCode: "AI.PROVIDER.PROTOCOL_INVALID" },
+					]);
+					const history = yield* service.history("window-a", sid);
+					expect(history.turns[0]?.status).toBe("failed");
+					expect(yield* service.session("window-a", sid)).toMatchObject({
+						state: "EMPTY",
+						hasCompletedExchange: false,
+					});
+				}).pipe(
+					Effect.provide(
+						testLayer({
+							open: () => Effect.succeed(Stream.make(text(answer), complete)),
+						}),
+					),
+				),
+		);
 	it.effect(
 		"assembles exact chunks once, persists partial text and fans out through real reducers",
 		() => {

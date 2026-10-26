@@ -101,3 +101,47 @@ The shipped catalog SHALL preserve recovered role IDs, prompts, per-key thinking
 - **THEN** the request fails with AI.PROVIDER.CONFIG_INVALID before credentials or dispatch
 - **WHEN** role -1 supplies a custom prompt
 - **THEN** the facade uses it as the persona system prompt
+
+### Requirement: Retained local provider catalog and migration
+
+The catalog SHALL preserve all twelve legacy engine dispositions and every retained seeded model, expose shared assistant/direct defaults and model options, and merge user entries without removals (AI-001, AI-004, AI-005, AI-006, AI-011, AI-012, AI-017, AI-028, AI-048). Model names SHALL be used only for legacy migration, never to grant capabilities. Explicit custom models and endpoints SHALL survive. Unknown default-provider queries SHALL return gpt-5.1. Availability SHALL derive from local configured credentials and registered adapters without account, region or cloud fields.
+
+#### Scenario: Legacy and custom settings survive an upgrade
+- **WHEN** a retained legacy model or engine is imported, or seeded catalogs are merged with user entries
+- **THEN** the explicit provider disposition is retained, all original entries remain, and missing built-ins are appended once
+- **AND** known cross-family assistant models reconcile to qwen3.6-plus, kimi-k2.5, deepseek-v4-flash or gpt-5.1 while explicit custom IDs and endpoints remain unchanged
+
+#### Scenario: Shared assistant and direct options
+- **WHEN** assistant or direct consumers request models, including DeepSeek's four retained IDs
+- **THEN** both receive the same local options including their saved custom choice and truthful configured/unavailable state
+
+### Requirement: Explicit specialized provider settings
+
+Volc Ark SHALL select inference or agent entry method with explicit endpoint or bot ID and corresponding /api/v3 or /api/v3/bots URL. Coze SHALL select a bot ID and dedicated /v3/chat protocol. XFY SHALL use typed app ID, API key and secret resolved only in the host. Dedicated transports SHALL never silently fall back to OpenAI-compatible chat (AI-007, AI-034, AI-036, AI-051, AI-052).
+
+#### Scenario: Selected destination and protocol
+- **WHEN** a configured Groq, ZhiPu, Volc, Coze or Spark profile generates
+- **THEN** only its selected endpoint and credential are used and fixtures assert its exact request and stream framing
+- **AND** Spark uses generalv3.5, generalv3 or 4.0Ultra with HMAC SHA256 signing and a 60 second deadline, closes on failure or cancellation and rejects tools
+
+### Requirement: Structured tools and provider search
+
+The facade SHALL accept typed assistant tool calls, correlated tool results and retained reasoning content. OpenAI and Qwen SHALL transport explicitly declared tools and execute only through an injected host allowlist bridge. A tool declaration SHALL NOT grant host execution; a missing bridge SHALL reject execution. Tool loops SHALL be bounded to four steps and validate primitive arguments and output size. Kimi and DeepSeek assistant tool-call follow-ups SHALL preserve reasoning_content or insert an empty placeholder when absent. Qwen SHALL pass explicit search_options; ZhiPu SHALL encode explicit web_search query/result selection. Search SHALL remain disabled unless selected, with provenance emitted only for selected search (AI-031, AI-032, AI-033, AI-037, AI-118).
+
+#### Scenario: Tool follow-up preserves reasoning
+- **WHEN** a selected capable profile receives assistant tool calls and matching tool results
+- **THEN** their IDs, arguments and reasoning survive the outbound wire request and an unselected tool or unmatched result fails before I/O
+
+#### Scenario: Search remains opt-in
+- **WHEN** search is absent or explicitly disabled
+- **THEN** no search tool, search request or source provenance is emitted
+- **WHEN** Qwen or ZhiPu search is selected
+- **THEN** fixtures assert the exact allowed options and bounded returned source provenance
+
+### Requirement: Legacy assistant state compatibility
+
+Imports SHALL map assistant session start/end/error, animation ongoing/processing/idle, and chat/keyConfig type values to explicit local states without executing generated key configuration (MGMT-405).
+
+#### Scenario: Every retained assistant enum maps
+- **WHEN** each recovered session, animation or type enum is decoded
+- **THEN** its local state is returned, including keyConfig, and unknown values fail closed
