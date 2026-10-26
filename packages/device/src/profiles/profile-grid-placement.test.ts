@@ -2,6 +2,7 @@ import { Option, Schema } from "effect";
 import { expect, it } from "vitest";
 import { editKeyLayout } from "./key-geometry.js";
 import { createEmptyProfileKey, ProfileKey } from "./profile-contracts.js";
+import { inspectProfileImport } from "./profile-import.js";
 import { profileOverflow } from "./profile-invariants.js";
 
 const tile = (
@@ -74,4 +75,30 @@ it("SCREEN-139/MGMT-111 detects colliding and forced spans before decoding, whil
 			raw[1],
 		]),
 	).toHaveLength(2);
+});
+
+it("MGMT-111 counts normalized keys rather than legacy null sentinels at the page limit", () => {
+	const keys = Array.from({ length: 16 }, (_, index) =>
+		Schema.encodeSync(ProfileKey)(
+			tile(`${Math.floor(index / 8) + 1},${(index % 8) + 1}`),
+		),
+	);
+	const legacy = [...keys, null];
+	const profile = {
+		id: "import",
+		name: "Imported",
+		revision: 0,
+		pages: [{ id: "page", keys: legacy }],
+	};
+	for (const source of [legacy, profile]) {
+		expect(profileOverflow(source)).toEqual([]);
+		const report = inspectProfileImport(source);
+		expect(report.profile?.pages[0].keys).toHaveLength(16);
+		expect(report.diagnostics).toContainEqual({
+			code: "legacy-sentinel",
+			path: "pages.0.keys.16",
+			blocking: false,
+		});
+	}
+	expect(profileOverflow([...legacy, keys[0]])).toHaveLength(17);
 });
