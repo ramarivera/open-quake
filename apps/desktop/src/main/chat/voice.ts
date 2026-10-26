@@ -30,16 +30,18 @@ export const createDirectChatVoice = (
 				keyCode: string;
 			}
 		>();
+		const cancelTurn = (sessionId: SessionId, turnId: TurnId) =>
+			Effect.promise(() =>
+				host.runtime.runPromise(
+					host.cancel(sessionId, turnId).pipe(Effect.ignore),
+				),
+			);
 		const stop = (serial: string, keyCode?: string) =>
 			Effect.gen(function* () {
 				const turn = active.get(serial);
 				if (!turn || (keyCode !== undefined && turn.keyCode !== keyCode))
 					return;
-				yield* Effect.promise(() =>
-					host.runtime.runPromise(
-						host.cancel(turn.sessionId, turn.turnId).pipe(Effect.ignore),
-					),
-				);
+				yield* cancelTurn(turn.sessionId, turn.turnId);
 				// Cancellation queues the authoritative terminal. Let the surface consumer
 				// publish it and release activeFlow before returning.
 				yield* Fiber.await(turn.fiber);
@@ -146,6 +148,9 @@ export const createDirectChatVoice = (
 											},
 										}),
 									),
+									// Scoped shutdown interrupts this consumer before the adapter's
+									// finalizer sees active. Cancel upstream before removing ownership.
+									Effect.onInterrupt(() => cancelTurn(sessionId, turnId)),
 									Effect.ensuring(
 										Effect.sync(() => {
 											if (active.get(request.serial)?.turnId === turnId)

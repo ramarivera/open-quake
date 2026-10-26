@@ -1,7 +1,15 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { Deferred, Effect, Layer, Option, Queue, Stream } from "effect";
+import {
+	Deferred,
+	Effect,
+	Layer,
+	Option,
+	Queue,
+	Redacted,
+	Stream,
+} from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	ConversationRuntimePort,
@@ -18,6 +26,8 @@ import { wav } from "../../../../../packages/edge/src/ai/speech/speech-test-fixt
 import { GridVoiceRuntime } from "../../../../../packages/edge/src/voice/surface";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { createAgentHttpVoiceAdapter } from "../agent-http/voice-adapter";
+import { createDirectChat } from "../chat/host";
+import { createDirectChatVoice } from "../chat/voice";
 import { createDesktopDiagnostics } from "../diagnostics";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { voiceSurfaceLayer } from "../voice";
@@ -59,7 +69,37 @@ async function fixture(
 	const events: VoiceSurfaceEvent[] = [];
 	const requests: RuntimeConversationRequest[] = [];
 	const old = vi.fn(() => Effect.void);
-	const directTranscript = vi.fn(() => Effect.void);
+	const directRequests: { messages: { role: string; content: string }[] }[] =
+		[];
+	const directChat = directRoute
+		? createDirectChat({
+				directory: join(directory, "chat"),
+				diagnostics,
+				credentials: {
+					resolve: () => Effect.succeed(Redacted.make("private-model-key")),
+					revoked: () => Effect.never,
+				},
+				models: () =>
+					Effect.succeed([
+						{
+							id: "model",
+							role: "default",
+							provider: "generic",
+							model: "synthetic",
+							baseUrl: "http://localhost:8642/v1",
+							credentialRef: "00000000-0000-4000-8000-000000000001",
+							maxTokens: 1024,
+						},
+					]),
+				fetch: async (_url, init) => {
+					directRequests.push(JSON.parse(String(init?.body)));
+					return new Response(
+						'data: {"choices":[{"index":0,"delta":{"content":"Private direct spoken reply."},"finish_reason":null}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+						{ headers: { "content-type": "text/event-stream" } },
+					);
+				},
+			})
+		: undefined;
 	let closed = 0;
 	const stopped = await Effect.runPromise(Deferred.make<void>());
 	const messages = await Effect.runPromise(Queue.unbounded<unknown>());
@@ -109,14 +149,10 @@ async function fixture(
 	let pulled = false;
 	const binding = createSpeechVoiceBinding({
 		run: (effect) => background.runPromise(effect),
-		...(directRoute
+		...(directChat
 			? {
 					direct: (fallback: typeof GridVoiceRuntime.Service) =>
-						Effect.succeed({
-							runtime: GridVoiceRuntime.of({ ...fallback, sendText: old }),
-							sendTranscript: directTranscript,
-							cancelText: () => Effect.void,
-						}),
+						createDirectChatVoice(directChat, fallback),
 				}
 			: {}),
 		http: (fallback, fallbackTranscript) =>
@@ -282,7 +318,7 @@ async function fixture(
 		events,
 		requests,
 		old,
-		directTranscript,
+		directRequests,
 		drain,
 		played,
 		closed: () => closed,
@@ -290,6 +326,7 @@ async function fixture(
 			await background.runPromise(Deferred.succeed(drain, undefined));
 			await voice.dispose();
 			await conversations.dispose();
+			await directChat?.dispose();
 			await background.dispose();
 			await diagnostics.close();
 		},
@@ -409,7 +446,7 @@ describe("actual root speech and HTTP binding", () => {
 		expect(logs).not.toContain("private-STT-key");
 		await rm(directory, { recursive: true });
 	});
-	it("preserves final transcript routing when the external runtime is deselected", async () => {
+	it("routes finalized capture through the actual direct ChatService and speech when the external runtime is deselected", async () => {
 		const directory = await scratch();
 		const f = await fixture(directory, false, true, true);
 		try {
@@ -427,10 +464,24 @@ describe("actual root speech and HTTP binding", () => {
 			await f.voice.runPromise(
 				f.runtime.releaseCapture(capture.serial, capture.keyCode, 1),
 			);
-			await vi.waitFor(() => expect(f.directTranscript).toHaveBeenCalledOnce());
-			expect(f.directTranscript).toHaveBeenCalledWith(
-				expect.objectContaining({ message: "Private finalized transcript" }),
+			await f.background.runPromise(Deferred.await(f.played));
+			expect(f.directRequests).toHaveLength(1);
+			expect(f.directRequests[0]?.messages.at(-1)?.content).toBe(
+				"Private finalized transcript",
 			);
+			expect(
+				f.events.some(
+					(event) => event._tag === "TurnStarted" && event.source === "voice",
+				),
+			).toBe(true);
+			expect(
+				f.events.some(
+					(event) =>
+						event._tag === "Chunk" &&
+						event.chunk.type === "answer" &&
+						event.chunk.textDelta === "Private direct spoken reply.",
+				),
+			).toBe(true);
 			expect(f.old).not.toHaveBeenCalled();
 			expect(f.requests).toHaveLength(0);
 		} finally {
