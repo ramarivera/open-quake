@@ -1387,3 +1387,49 @@ it.scoped("omits output language from OpenAI source transcription hints", () =>
 		});
 	}),
 );
+
+it.scoped(
+	"keeps source recognition out of translations and links speaker identity",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			const live = yield* makeMeetingTranslation(s.transport, f.resolve);
+			yield* live.prepareTranslation(f.request.config);
+			for (const event of [
+				{
+					type: "input_audio_buffer.speech_started",
+					item_id: "source",
+					speaker_id: 2,
+				},
+				{
+					type: "conversation.item.input_audio_transcription.text",
+					item_id: "source",
+					text: "Guten Morgen",
+				},
+				{
+					type: "conversation.item.input_audio_transcription.completed",
+					item_id: "source",
+					transcript: "Guten Morgen",
+				},
+				{
+					type: "conversation.item.created",
+					previous_item_id: "source",
+					item: { id: "translated" },
+				},
+				{ type: "response.text.delta", item_id: "translated", delta: "Good " },
+				{
+					type: "response.text.done",
+					item_id: "translated",
+					text: "Good morning",
+				},
+			])
+				yield* Queue.offer(s.queue, event);
+			yield* Effect.yieldNow();
+			expect(
+				yield* live.translate(f.request.config, new Uint8Array(14400)),
+			).toMatchObject([
+				{ id: "0:translated", text: "Good morning", speaker: "2", final: true },
+			]);
+		}),
+);
