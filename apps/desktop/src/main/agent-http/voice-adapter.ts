@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Effect, Fiber, Layer, Schema, Stream } from "effect";
-import type { ConversationStart } from "../../../../../packages/edge/src/agent-http/conversation-repository.js";
+import type {
+	ConversationScope,
+	ConversationStart,
+} from "../../../../../packages/edge/src/agent-http/conversation-repository.js";
 import type { ConversationEvent } from "../../../../../packages/edge/src/agent-http/conversation-service.js";
 import type { RuntimeError } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
 import type { Usage } from "../../../../../packages/edge/src/ai/ai-contracts.js";
@@ -25,6 +28,10 @@ export interface AgentHttpVoiceOptions {
 		owner: string,
 		input: ConversationStart,
 	) => Stream.Stream<ConversationEvent, RuntimeError>;
+	readonly clear?: (
+		owner: string,
+		scope: ConversationScope,
+	) => Effect.Effect<void, RuntimeError>;
 	readonly cancel: (owner: string, requestId: string) => Effect.Effect<void>;
 	/** Changes synchronously before cancellation starts, suppressing stale output. */
 	readonly generation: () => number;
@@ -45,7 +52,17 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 		string,
 		{ keyCode: string; requestId: string; fiber: Fiber.RuntimeFiber<void> }
 	>();
-	const sessions = new Map<string, { local: string; ui: SessionId }>();
+	const sessions = new Map<
+		string,
+		{
+			local: string;
+			ui: SessionId;
+			serial: string;
+			keyCode: string;
+			connectionId: string;
+			agentId?: string;
+		}
+	>();
 	let closed = false;
 	const stop = (serial: string, keyCode?: string): Effect.Effect<void> =>
 		Effect.gen(function* () {
@@ -169,6 +186,10 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 									if (!current() || ended) return;
 									sessions.set(route, {
 										local: envelope.sessionId,
+										serial: request.serial,
+										keyCode: request.keyCode,
+										connectionId: selected.connectionId,
+										...(selected.agentId ? { agentId: selected.agentId } : {}),
 										ui: sessionId,
 									});
 									while (sessions.size > 16) {
@@ -291,6 +312,35 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 			lock.withPermits(1)(stop(serial, keyCode)),
 		runtime: GridVoiceRuntime.of({
 			...fallback,
+			resetContext: (serial, keyCode) =>
+				lock.withPermits(1)(
+					Effect.gen(function* () {
+						const selected = yield* options
+							.selected()
+							.pipe(
+								Effect.mapError((cause) => new VoiceRuntimeUnavailable(cause)),
+							);
+						if (!selected)
+							return yield* fallback.resetContext
+								? fallback.resetContext(serial, keyCode)
+								: new VoiceRuntimeUnavailable();
+						const clear = options.clear;
+						if (!clear) return yield* new VoiceRuntimeUnavailable();
+						yield* stop(serial, keyCode);
+						for (const [route, session] of sessions) {
+							if (session.serial !== serial || session.keyCode !== keyCode)
+								continue;
+							yield* clear("voice", {
+								connectionId: session.connectionId,
+								sessionId: session.local,
+								...(session.agentId ? { agentId: session.agentId } : {}),
+							}).pipe(
+								Effect.mapError((cause) => new VoiceRuntimeUnavailable(cause)),
+							);
+							sessions.delete(route);
+						}
+					}),
+				),
 			select: (serial, keyCode, type, agentId) =>
 				lock.withPermits(1)(
 					Effect.gen(function* () {

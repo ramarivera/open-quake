@@ -23,8 +23,33 @@ export class AgentDraftPort extends Context.Tag("AgentDraftPort")<
 	AgentDraftAdapter
 >() {}
 /** Resolves only when the backend reports the target state. Interruption must cancel its work. */
+export interface AgentRuntimeAdministration {
+	readonly logs: () => Effect.Effect<
+		readonly {
+			readonly status: RuntimeState["status"];
+			readonly operation: RuntimeState["operation"];
+			readonly code: string;
+		}[],
+		AgentError
+	>;
+	readonly settings: () => Effect.Effect<
+		import("./administration-contracts.js").ServiceSettings,
+		AgentError
+	>;
+	readonly save: (
+		settings: import("./administration-contracts.js").ServiceSettings,
+		restart: boolean,
+	) => Effect.Effect<void, AgentError>;
+	readonly clear: Effect.Effect<void, AgentError>;
+	readonly environment: (
+		settings: typeof import("./administration-contracts.js").ManagedEnvironment.Type,
+	) => Effect.Effect<void, AgentError>;
+}
 export interface AgentRuntimeAdapter {
+	/** Only a locally owned backend may expose these operations. HTTP adapters omit it. */
+	readonly administration?: AgentRuntimeAdministration;
 	readonly available: boolean;
+	readonly dispose?: Effect.Effect<void, AgentError>;
 	readonly initial: RuntimeState;
 	readonly start: Effect.Effect<void, AgentError>;
 	readonly stop: Effect.Effect<void, AgentError>;
