@@ -1,4 +1,4 @@
-import { Clock, Effect, Option, PubSub, Ref, Stream } from "effect";
+import { Clock, Effect, Option, PubSub, Ref, Schema, Stream } from "effect";
 import { defaultMeetingConfig } from "./meeting-defaults.js";
 
 export { defaultMeetingConfig } from "./meeting-defaults.js";
@@ -10,6 +10,7 @@ import {
 	type MeetingRecord,
 	type MeetingSnapshot,
 	type MeetingStageState,
+	MeetingTitle,
 	type TemplateId,
 	type Translation,
 } from "./meeting-contracts.js";
@@ -181,7 +182,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					marks: [],
 					transcript: [],
 					minutes: "",
-					template: "project-weekly",
+					template: yield* repo.defaultTemplate(),
 					appliedTemplate: Option.none(),
 					provenance: Option.none(),
 					errorCode: Option.none(),
@@ -410,6 +411,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			const generate = Effect.fn("MeetingService.generate")(function* (
 				id: MeetingId,
 				template: TemplateId,
+				incrementAttempt = true,
 			): Effect.fn.Return<void, MeetingError> {
 				const record = yield* lock.withPermits(1)(
 					Effect.gen(function* () {
@@ -424,6 +426,8 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 							...r,
 							state: "processing",
 							summary: "processing",
+							processingAttempt:
+								(r.processingAttempt ?? 0) + (incrementAttempt ? 1 : 0),
 							errorCode: Option.none(),
 						}));
 						if (!stages.has(id))
@@ -531,6 +535,12 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 										record.state === "cancelled"
 									)
 										return yield* meetingError("Invalid");
+									yield* patchWork(id, (r) => ({
+										...r,
+										processingAttempt: (r.processingAttempt ?? 0) + 1,
+										state: "processing",
+										audio: r.audio === "complete" ? "complete" : "processing",
+									}));
 									if (record.audio !== "complete") {
 										if (!stages.has(id))
 											stages.set(id, { stage: 1, origin: origins.get(id) });
@@ -549,7 +559,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 										}));
 										record = yield* find(id);
 									}
-									if (!record.transcript.length) {
+									if (
+										record.transcription !== "complete" ||
+										!record.transcript.length
+									) {
 										yield* patchWork(id, (r) => ({
 											...r,
 											state: "processing",
@@ -562,7 +575,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									return record;
 								}),
 							);
-							if (!record.transcript.length) {
+							if (
+								record.transcription !== "complete" ||
+								!record.transcript.length
+							) {
 								const transcript = yield* provider.transcribe(
 									record.config,
 									id,
@@ -577,7 +593,16 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 								}));
 								yield* stage(id, 4, 2);
 							}
-							yield* generate(id, record.template);
+							if (record.summary !== "complete" || !record.minutes)
+								yield* generate(id, record.template, false);
+							else {
+								yield* patchWork(id, (r) => ({
+									...r,
+									state: "completed",
+									errorCode: Option.none(),
+								}));
+								yield* stage(id, 5, 2);
+							}
 						}).pipe(
 							Effect.tapError((error) => failed(id, error)),
 							Effect.onInterrupt(() =>
@@ -604,12 +629,19 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 							Effect.tapError((error) => failed(id, error)),
 						),
 				),
-				rename: Effect.fn("MeetingService.rename")(
-					(id: MeetingId, title: string) => patch(id, (r) => ({ ...r, title })),
-				),
+				rename: Effect.fn("MeetingService.rename")(function* (
+					id: MeetingId,
+					title: string,
+				): Effect.fn.Return<void, MeetingError> {
+					const validated = yield* Schema.decodeUnknown(MeetingTitle)(
+						title.trim(),
+					).pipe(Effect.mapError((cause) => meetingError("Invalid", cause)));
+					yield* find(id);
+					yield* patch(id, (r) => ({ ...r, title: validated }));
+				}),
 				template: Effect.fn("MeetingService.template")(
 					(id: MeetingId, template: TemplateId) =>
-						patch(id, (r) => ({ ...r, template })),
+						repo.selectTemplate(id, template).pipe(Effect.zipRight(publish())),
 				),
 				tab: Effect.fn("MeetingService.tab")((tab: MeetingSnapshot["tab"]) =>
 					Ref.update(ephemeral, (s) => ({ ...s, tab })).pipe(

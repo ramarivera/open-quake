@@ -1355,3 +1355,140 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"SETTINGS-107 default template survives restart and applies to new main/side recordings without changing saved summaries",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.process(id);
+			const original = (yield* MeetingService.snapshot()).records[0];
+			yield* MeetingService.template(id, "interview");
+			expect(f.saved().summaryTemplate).toBe("interview");
+			expect(f.saved().records[0]?.minutes).toBe(original?.minutes);
+			expect(f.saved().records[0]?.appliedTemplate).toBe("project-weekly");
+			yield* Effect.gen(function* () {
+				const main = (yield* MeetingService.action("meetingMinutes"))
+					.records[0];
+				expect(main?.template).toBe("interview");
+				const side = (yield* MeetingService.action("tempMeetingMinutes"))
+					.records[0];
+				expect(side?.template).toBe("interview");
+				expect(Option.getOrUndefined(side?.parentId ?? Option.none())).toBe(
+					main?.id,
+				);
+				expect(
+					(yield* MeetingService.snapshot()).records.find((r) => r.id === id)
+						?.minutes,
+				).toBe(original?.minutes);
+			}).pipe(Effect.provide(Layer.fresh(f.layer)));
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"SETTINGS-107 failed template save preserves both record choice and next-record default",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.template(id, "standard");
+			f.failSave();
+			const result = yield* Effect.either(
+				MeetingService.template(id, "interview"),
+			);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"QUAKE.MEETING.STORAGE_FAILED",
+			);
+			expect(f.saved().summaryTemplate).toBe("standard");
+			expect((yield* MeetingService.snapshot()).records[0]?.template).toBe(
+				"standard",
+			);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"AI-313 SETTINGS-108 rejects blank and overweight titles at the conductor, saves trimmed CJK and reloads",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			const original = (yield* MeetingService.snapshot()).records[0]?.title;
+			for (const title of [
+				" ",
+				"汉".repeat(51),
+				"a".repeat(101),
+				"😀".repeat(51),
+			]) {
+				const rejected = yield* Effect.either(MeetingService.rename(id, title));
+				expect(rejected._tag === "Left" && rejected.left.code).toBe(
+					"QUAKE.MEETING.INVALID",
+				);
+				expect((yield* MeetingService.snapshot()).records[0]?.title).toBe(
+					original,
+				);
+			}
+			yield* MeetingService.rename(id, `  ${"汉".repeat(50)}  `);
+			const restarted = yield* MeetingService.snapshot().pipe(
+				Effect.provide(Layer.fresh(f.layer)),
+			);
+			expect(restarted.records[0]?.title).toBe("汉".repeat(50));
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"AI-312 persists a new processing attempt even when immediate regeneration failure keeps identical prior content",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			const id = yield* recordOnce;
+			yield* MeetingService.process(id);
+			const original = (yield* MeetingService.snapshot()).records[0];
+			f.failSummary(true);
+			yield* Effect.either(MeetingService.regenerate(id, "interview"));
+			const failed = (yield* MeetingService.snapshot()).records[0];
+			expect(failed?.processingAttempt).toBe(
+				(original?.processingAttempt ?? 0) + 1,
+			);
+			expect(failed?.minutes).toBe(original?.minutes);
+			expect(failed?.appliedTemplate).toEqual(original?.appliedTemplate);
+			expect(f.requests).toHaveLength(1);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+for (const task of ["audio", "transcription"] as const) {
+	it.effect(
+		`AI-311 SETTINGS-106 retries ${task} while preserving a completed summary`,
+		() => {
+			const f = setup();
+			return Effect.gen(function* () {
+				const id = yield* recordOnce;
+				yield* MeetingService.process(id);
+				const original = (yield* MeetingService.snapshot()).records[0];
+				yield* MeetingRepository.update((records) =>
+					records.map((record) =>
+						record.id === id
+							? { ...record, state: "failed", [task]: "failed" }
+							: record,
+					),
+				);
+				const transcriptions = f.requests.length;
+				const summaries = f.prompts.length;
+				yield* MeetingService.process(id);
+				const retried = (yield* MeetingService.snapshot()).records[0];
+				expect(retried?.state).toBe("completed");
+				expect(retried?.[task]).toBe("complete");
+				expect(retried?.minutes).toBe(original?.minutes);
+				expect(retried?.appliedTemplate).toEqual(original?.appliedTemplate);
+				expect(f.prompts).toHaveLength(summaries);
+				expect(f.requests).toHaveLength(
+					transcriptions + (task === "transcription" ? 1 : 0),
+				);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}

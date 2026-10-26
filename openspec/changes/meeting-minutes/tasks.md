@@ -90,3 +90,13 @@ providers remain unverified. No hardware or real capture was opened.
 - [x] Implement platform capture, deliberate microphone-only/cancel fallback and setup help with production consumer fixtures. Evidence: renderer capture platform/partial-acquisition tests, trusted host permission/fallback tests, and mounted setup missing/installed/refresh-error/cancel checks. Bead open-quake-c5w.16 stays open for lead merge.
 - [ ] Complete AI-283 driver installation and macOS multi-output configuration after separate host approval, then verify physical system audio on Windows/macOS/Linux. The lane only detects installed virtual inputs and provides manual setup help.
 - [ ] Reconcile the required media native smoke failure tracked by open-quake-c5w.16.1. Two hidden mock runs timed out on the OBS panel screenshot after configuration save. Capture-specific EN/DE UI and native typed-start-error checks passed. Logs and screenshots remain external under open-quake-parity/burndown/speech-capture.
+
+
+## meeting-ui burn-down lane
+
+Beads open-quake-lih.16.5, .6 and .7 remain open for lead merge. Scratch row plan is external under open-quake-parity/burndown/meeting-ui/ROWS.md.
+
+- [ ] 8.1 AI-301, AI-302, CENTER-106, SETTINGS-104: implement mounted literal search, refresh feedback, sorted stage-aware cards and activation/window lifecycle with responsive mock screenshots.
+- [ ] 8.2 AI-308, AI-311, AI-312, SETTINGS-105, SETTINGS-106, SETTINGS-107: render safe Markdown and attendee metadata, managed reveal and independent task feedback, persist template default and test restart/failure preservation.
+- [ ] 8.3 AI-310, AI-313, AI-314, AI-317, SETTINGS-108: implement word marks, bounded tooltips, weighted title modal/backend validation and neighbour deletion with mounted and service tests.
+- [ ] 8.4 Run six gates, EN/DE native mock smoke, commit/push and open PR without merging or resolving threads.

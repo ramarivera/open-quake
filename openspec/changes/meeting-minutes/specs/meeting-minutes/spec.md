@@ -374,3 +374,78 @@ Evidence: AI-283. The settings SHALL offer an explicit setup/help view, enumerat
 #### Scenario: Missing or installed virtual input
 - **WHEN** the user opens setup help with no BlackHole input, then refreshes after manually installing one or cancels
 - **THEN** help reports missing or available from fresh enumeration, a failed refresh reports unavailable, and cancel changes no capture or host setting
+
+
+### Requirement: History activation and refresh feedback
+
+Evidence: AI-301, AI-302, CENTER-106, SETTINGS-104. History SHALL refresh on mount, Management Center activation including reselect, and window focus or becoming visible. Literal trimmed case-insensitive title and formatted-time searches SHALL accept punctuation and Unicode without regular expressions. Refresh SHALL show busy feedback for at least 1000 ms and until the read finishes, retaining selection and reporting failures. Cards SHALL sort newest capture first with stable ID tie-breaking, distinguish all saved states and processing stages, show unknown duration when no finite end/transcript is available, and auto-select the newest only when no selection exists. Responsive layout SHALL keep document and inspector actions reachable.
+
+#### Scenario: External history changes and delayed replies
+
+- **WHEN** the meeting page is activated or reselected, or the window becomes visible with externally changed history
+- **THEN** it reads history, retains the selected identity and pending edits, and ignores lower-revision replies
+
+#### Scenario: Search and failed refresh
+
+- **WHEN** the user searches Unicode, punctuation or formatted time and refreshes a selected record
+- **THEN** matching is literal, empty and no-match states differ, refresh stays busy for at least one second, and failure leaves the selected document intact
+
+### Requirement: Safe summary document and metadata
+
+Evidence: AI-308, SETTINGS-105. Summaries SHALL render Markdown headings, tables, task lists and HTTP/HTTPS autolinks with the saved applied-template annotation. Provider HTML SHALL stay inert, unsafe link schemes SHALL be rejected, and images SHALL NOT fetch remote resources. Metadata SHALL show recorded attendee counts, otherwise attendees not recorded. Copy and export SHALL use the saved raw summary or plain transcript of the active tab.
+
+#### Scenario: Generated Markdown contains hostile content
+
+- **WHEN** a summary contains a heading, table, task list, autolink, raw script or unsafe URL
+- **THEN** supported Markdown renders, HTML remains text, unsafe URLs cannot navigate, and raw content remains available for copy and export
+
+### Requirement: Timed main-meeting mark details
+
+Evidence: AI-310, AI-317. Main and side tags SHALL remain explicit. A present legacy numeric parent zero SHALL identify a side record. Marks SHALL render only for main meetings, with optional provider word timestamps highlighting strictly overlapping words, numbered begin/end bookmarks and selection toggles. Transcript segments without word timestamps SHALL retain paragraph highlighting and mark boundary lines. Open or legacy sentinel ends SHALL resolve to the finite recording/transcript duration, never a fabricated year. Tooltips SHALL show millisecond start/end and remain within 20 px of viewport edges with width at most 260 px.
+
+#### Scenario: Word boundary and open mark
+
+- **WHEN** a main meeting mark begins exactly at a word's end or remains open
+- **THEN** the touching word stays unmarked, strictly overlapping words highlight with numbered bookmarks, and the open end uses the finite available duration
+
+#### Scenario: Side record contains legacy marks
+
+- **WHEN** a side record, including one with parent zero, contains saved marks
+- **THEN** its Temporary Record tag remains visible and no mark highlight or bookmark renders
+
+### Requirement: Independent task actions and regeneration feedback
+
+Evidence: AI-311, AI-312, SETTINGS-106. Audio, transcript and summary tasks SHALL show Complete, Processing, Needs attention or Pending independently. Completed actions SHALL reveal managed audio only after checking a real regular file under the managed UUID directory, or switch to the corresponding document tab. Missing audio SHALL report Audio file not found. Retry SHALL restart only unfinished processing, retain completed artifacts, and show pending/failure feedback. Regeneration SHALL show Regenerating with the selected template until the asynchronous job finishes, then Summary regenerated or Failed to regenerate summary. Stale pushes SHALL NOT clear pending work.
+
+#### Scenario: Summary retry fails after completed audio and transcript
+
+- **WHEN** the user retries only failed summary generation
+- **THEN** completed audio/transcript remain readable, no microphone or transcription restarts, and a failed summary retains the prior saved summary and applied template
+
+#### Scenario: Missing managed audio
+
+- **WHEN** View audio file targets an absent or symlinked file or directory
+- **THEN** the operation reports Audio file not found and never reveals another location
+
+### Requirement: Durable default summary template
+
+Evidence: AI-312, SETTINGS-107. The four template choices SHALL persist a global meeting summary-template preference alongside the selected record choice, defaulting to project-weekly for legacy stores. New main and side recordings SHALL use that preference after restart. Selecting a template SHALL NOT modify existing summaries or their applied-template labels. Successful regeneration SHALL save summary, applied template and provenance atomically; failure SHALL preserve originals.
+
+#### Scenario: Choose template then restart
+
+- **WHEN** a user selects interview and restarts before starting another recording
+- **THEN** new recordings use interview, while existing saved summaries and applied templates remain unchanged
+
+### Requirement: Weighted title modal and neighbour deletion
+
+Evidence: AI-313, AI-314, SETTINGS-108. Edit Meeting Title SHALL open a 400 px modal, remain open on outside clicks, show a live weighted counter out of 100, and support Enter, Save and Cancel. Each ASCII character SHALL weigh one and each non-ASCII Unicode code point two. UI and backend SHALL reject blank or overweight titles and preserve edits on save failure. Success SHALL show Meeting title updated successfully. Confirmed deletion SHALL select the surviving next visible record below, otherwise above, while cancellation or failure preserves selection. Cascade deletion SHALL skip removed side records when choosing the neighbour.
+
+#### Scenario: Weighted title validation and retry
+
+- **WHEN** a title contains 50 CJK characters, 51 CJK characters, blank text or a failed save
+- **THEN** weight 100 saves, weight 102 and blank fail without mutation, failed edits remain retryable, and a successful trimmed title survives restart
+
+#### Scenario: Delete middle or last meeting
+
+- **WHEN** a selected record is confirmed deleted
+- **THEN** selection moves below it or, when no survivor remains below, above it; failure keeps the dialog and original selection
