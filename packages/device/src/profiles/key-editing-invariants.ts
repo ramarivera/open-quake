@@ -8,7 +8,7 @@ import type {
 	ProfileKey,
 	ProfileTitle,
 } from "./profile-contracts.js";
-import type { ProfileLocale } from "./profile-manager-contracts.js";
+import { ProfileLocale } from "./profile-manager-contracts.js";
 
 const dictionaries: Readonly<
 	Record<ProfileLocale, Readonly<Record<string, string>>>
@@ -70,6 +70,21 @@ export function keyTitle(
 			locale,
 		);
 	if (key.config.userModifiedTitle === true) return key.config.title.text;
+	const text = key.config.title.text;
+	const isLegacyLabel = (name: string): boolean =>
+		ProfileLocale.literals.some((language) => text === keyText(name, language));
+	if (key.config.type === "hotkey" && isLegacyLabel("hotkey"))
+		return keyText("hotkey", locale);
+	if (key.config.type === "clawbot" && (!text || isLegacyLabel("clawbot"))) {
+		const agent = key.config.actions.find(
+			(action) => action.type === "agentId",
+		);
+		if (typeof agent?.value === "string") {
+			const name = `openclawAgents.${agent.value}.name`;
+			const translated = profileText(name, locale);
+			return translated === name ? keyText("clawbot", locale) : translated;
+		}
+	}
 	const source = Schema.decodeUnknownEither(RawSource)(
 		Option.isSome(key.compatibility)
 			? key.compatibility.value.source

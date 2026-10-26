@@ -51,3 +51,5 @@ Not verified: rendering on the real QUAKE strip, its colours, and frame timing.
 ## Device widget coverage lane
 
 - [x] test-device-widgets: mounted panel/device/manager/editor host resize, artwork and frame coverage for MGMT-051/056/060, WIDGETS-011; real timer/rendered runtime feedback for WIDGETS-107.
+
+- [x] Retained catalog geometry/action and nested-touch burn-down regressions for AI-145/146 and MGMT-351/353/357. Bead open-quake-lih.9.3 remains open for lead integration.

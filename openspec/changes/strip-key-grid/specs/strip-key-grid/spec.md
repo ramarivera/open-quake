@@ -264,3 +264,17 @@ The strip SHALL consume decoded runtime feedback only for the rendered device, p
 - **WHEN** a two-second timer advances one second, its profile becomes inactive, then it expires
 - **THEN** its countdown stays hidden on the other profile and no alarm appears on returning
 - **AND** a new active expiry shows Alarm, another key's 42 percent progress and Invalid operation stay scoped to that key, completion removes the bar, and disconnect removes all runtime feedback
+
+### Requirement: Exact retained AI and Vivid layouts
+The DKClaw catalog SHALL retain all recovered agent IDs, voice flags, TTS settings and knob route. Covered cells and hidden placeholders SHALL resolve through actual strip geometry. AI Chat SHALL occupy five by two cells with its immutable anchor. Vivid SHALL retain mode zero, empty artwork/actions and locked movement/overwrite. Sources: AI-146, MGMT-351, MGMT-353, MGMT-357.
+
+#### Scenario: Catalog to rendered geometry
+- **WHEN** DKClaw, AI Chat or Vivid is loaded from the shipped catalog
+- **THEN** actual layout and hit testing preserve the exact anchors, spans, hidden cells and locks, and the catalog retains the saved actions and knob route
+
+### Requirement: AI panel nested touch ownership
+AI Chat, DKClaw and live translation panels SHALL suppress host-cell touch effects and pressed transforms while preserving nested touch delivery. Sources: AI-145, MGMT-357.
+
+#### Scenario: Child interaction without host feedback
+- **WHEN** a touch begins and ends on a nested AI panel control
+- **THEN** the child receives its event, the host receives no key activation and has no pressed state, and the AI Chat copy control dispatches its saved text

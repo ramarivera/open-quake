@@ -154,7 +154,8 @@
 		"obsRecordSplit": "Split Record",
 		"obsSceneTransitionOverride": "Scene Transition Override",
 		"obsStats": "Stats",
-		"obsScreenshot": "Screenshot"
+		"obsScreenshot": "Screenshot",
+		"clawbot": "ClawBot Agent"
 	},
 	"zh": {
 		"editor.titleStyle": "标题样式",
@@ -311,7 +312,8 @@
 		"obsRecordSplit": "录制分段",
 		"obsSceneTransitionOverride": "场景转场覆盖",
 		"obsStats": "状态仪表",
-		"obsScreenshot": "源缩略图"
+		"obsScreenshot": "源缩略图",
+		"clawbot": "龙虾代理"
 	},
 	"de": {
 		"editor.titleStyle": "Titelstil",
@@ -468,7 +470,8 @@
 		"obsRecordSplit": "Aufnahme teilen",
 		"obsSceneTransitionOverride": "Szenenübergang überschreiben",
 		"obsStats": "Statistik",
-		"obsScreenshot": "Screenshot"
+		"obsScreenshot": "Screenshot",
+		"clawbot": "ClawBot-Agent"
 	},
 	"es": {
 		"editor.titleStyle": "Estilo del título",
@@ -625,7 +628,8 @@
 		"obsRecordSplit": "Dividir grabación",
 		"obsSceneTransitionOverride": "Anular transición de escena",
 		"obsStats": "Estadísticas",
-		"obsScreenshot": "Captura"
+		"obsScreenshot": "Captura",
+		"clawbot": "Agente ClawBot"
 	},
 	"fr": {
 		"editor.titleStyle": "Style du titre",
@@ -782,7 +786,8 @@
 		"obsRecordSplit": "Diviser l'enregistrement",
 		"obsSceneTransitionOverride": "Forcer la transition de scène",
 		"obsStats": "Statistiques",
-		"obsScreenshot": "Capture d'écran"
+		"obsScreenshot": "Capture d'écran",
+		"clawbot": "Agent ClawBot"
 	},
 	"it": {
 		"editor.titleStyle": "Stile del titolo",
@@ -939,7 +944,8 @@
 		"obsRecordSplit": "Dividi registrazione",
 		"obsSceneTransitionOverride": "Override transizione scena",
 		"obsStats": "Statistiche",
-		"obsScreenshot": "Screenshot"
+		"obsScreenshot": "Screenshot",
+		"clawbot": "Agente ClawBot"
 	},
 	"ja": {
 		"editor.titleStyle": "タイトルのスタイル",
@@ -1096,7 +1102,8 @@
 		"obsRecordSplit": "録画分割",
 		"obsSceneTransitionOverride": "シーン転換オーバーライド",
 		"obsStats": "ステータス",
-		"obsScreenshot": "スクリーンショット"
+		"obsScreenshot": "スクリーンショット",
+		"clawbot": "ClawBotエージェント"
 	},
 	"ko": {
 		"editor.titleStyle": "제목 스타일",
@@ -1253,6 +1260,7 @@
 		"obsRecordSplit": "녹화 분할",
 		"obsSceneTransitionOverride": "장면 전환 오버라이드",
 		"obsStats": "통계",
-		"obsScreenshot": "스크린샷"
+		"obsScreenshot": "스크린샷",
+		"clawbot": "ClawBot 에이전트"
 	}
 }

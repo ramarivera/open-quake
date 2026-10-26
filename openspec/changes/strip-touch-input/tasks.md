@@ -27,3 +27,33 @@
 ## Device widget coverage lane
 
 - [x] test-device-widgets: DOM observation, child discovery, non-bubbling detail and disposal for SCREEN-061.
+
+## 5. Touch burn-down lane, 2026-10-26
+
+- [x] 5.1 Deliver held input edges and scoped scrubbed diagnostics. MAIN-036, MAIN-065, SCREEN-057. Bead open-quake-lih.28.
+- [ ] 5.2 Deliver mounted physical/DOM routing, focus/restore, volume, registration and window/mirror lifetime. KNOB-014, KNOB-015, KNOB-075, KNOB-080, KNOB-089, SCREEN-010, SCREEN-060, SCREEN-065, SCREEN-066, SCREEN-069, SCREEN-070, SCREEN-141. Bead open-quake-lih.29. Implemented except SCREEN-060 camera stream toggle, which awaits the verified camera gateway/renderer consumer in camera-and-printer-views. Shared camera-shaped input routing is tested but does not close that clause.
+- [x] 5.3 Deliver chat/disk fling, elastic return and moved child bounds. AI-163, SCREEN-067, WIDGETS-078. Bead open-quake-lih.30.
+- [ ] 5.4 Run the six gates and hidden mock smoke, capture EN/DE screenshots, push parity/touch and open a PR. Leave beads open for lead reconciliation after merge.
+
+## 6. PR #88 bot-review fixes, 2026-10-26
+
+Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the lead.
+
+- [x] 6.1 Reconcile current main and fix the disconnected QuakeEvent fixture reported by CI run 40332468892. Current origin/main 95f6a69 is already an ancestor of f60a85b; the requested merge is a no-op.
+- [x] 6.2 Release held keys when committed page content changes through StripScreen's layout cleanup/replacement, preserving runtime-only repaint ownership. Devin 4377896158, SCREEN-010 and SCREEN-057.
+- [x] 6.3 Preserve failed held-key releases for reset retry and expose the catalog error. Devin 4377896467, MAIN-065 and SCREEN-057.
+- [x] 6.4 Verify local-player body fallback and exclusive child buttons. Devin 4377895969, KNOB-089. The mounted consumer test passes before any routing change: unmatched hits retain supportTouchEffect and already emit tile down/up. Retain regression coverage; decline the reported behavior bug with source/test evidence.
+- [x] 6.5 Reply to the known SCREEN-060 camera-gateway blocker, run all six gates, audit unanswered review threads including new Codex findings, and remove generated build output. Do not resolve threads or merge.
+
+- [x] 6.6 Preserve text-entry Space/Enter on textarea touch targets. Codex 4378002610.
+- [x] 6.7 Bind conditional copy buttons when they mount. Codex 4378002633.
+- [x] 6.8 Run release cleanup after failed synchronous press activation. Codex 4378002639.
+- [x] 6.9 Start disk gestures from native scroll position. Codex 4378002645.
+- [x] 6.10 Preserve running knob focus capture through busy rejection. Codex 4378002652.
+- [x] 6.11 Keep the hardware fail-safe keyboard release after a lost acknowledgement. Codex 4378002655.
+
+- [x] 6.12 Retain the DOM pointer owner until its own release/cancel. Codex 4378206064.
+- [x] 6.13 Preserve native caret and selection defaults for editable pointer targets. Codex 4378206071.
+- [x] 6.14 Keep directional knob hotkeys out of normal held touch activation. Codex 4378206080.
+
+Review verification: protocol 63, edge 729 with 3 existing skips, device 492, desktop 1893 with 1 existing skip, totaling 3177 passed and 4 skipped. Unbounded concurrent runs hit wall-clock timeouts; complete desktop and device reruns with two workers passed without changing assertions or timeouts. Every production fix has a regression that failed before the fix, including the safe diagnostics allowlist, pointer ownership, native editable defaults and directional knob hotkey exclusion. The directional regression observed two unwanted chord acquisitions before the fix and none afterward; all 31 key-runtime and 19 focused-hotkey tests pass. All 6 package typechecks, Biome 1227 files with 14 existing warnings, build, bundle smoke in default-HID and explicit-mock modes, and 47 strict OpenSpec items pass. Native hidden mock media smoke reaches the known OBS screenshot selector timeout owned by PR #90; that smoke did not pass. Current main was already an ancestor, the player body finding was disproven by mounted tests, and SCREEN-060 remains blocked. Review scope covers 13 threads; replies leave every thread unresolved, and the final unanswered-thread audit is recorded in bead open-quake-lih.29.1. No real QUAKE or DK-Suite was opened. Logs and screenshots: /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/touch/fix1/.
