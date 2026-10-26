@@ -19,7 +19,7 @@ import {
 	AGENTS_SNAPSHOT,
 } from "../../shared/agents";
 import type { DesktopDiagnostics } from "../diagnostics";
-import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { prepareDesktopModule } from "../diagnostics/module";
 import { agentRequestAllowed, createAgentsHandler } from "./controller";
 import { agentProfileBinding, type ProfilesRuntime } from "./profile-binding";
 import { createAgentStorage } from "./storage";
@@ -47,7 +47,7 @@ export interface RegisterAgentsOptions {
 	readonly credentials?: AgentCredentialAdapter;
 }
 /** No import side effects. The application root owns backend selection and shutdown. */
-export function registerAgents(options: RegisterAgentsOptions) {
+export function prepareAgents(options: RegisterAgentsOptions) {
 	const ports = Layer.mergeAll(
 		Layer.succeed(
 			AgentStorage,
@@ -64,51 +64,25 @@ export function registerAgents(options: RegisterAgentsOptions) {
 			? Layer.succeed(AgentCredentialPort, options.credentials)
 			: Layer.empty,
 	);
-	const runtime = makeDesktopRuntime(
+
+	const prepared = prepareDesktopModule(
 		AgentsService.Default.pipe(Layer.provide(ports)),
-		options.diagnostics,
-	);
-	const handler = createAgentsHandler(
-		runtime,
-		() => options.management()?.webContents.id,
-		options.renderer,
-	);
-	let disposed = false;
-	const pending = new Set<Promise<unknown>>();
-	const send = async (): Promise<void> => {
-		const snapshot = await runtime.runPromise(
-			AgentsService.view().pipe(Effect.option),
-		);
-		const win = options.management();
-		if (
-			!disposed &&
-			snapshot._tag === "Some" &&
-			win &&
-			!win.isDestroyed() &&
-			!win.webContents.isDestroyed() &&
-			agentRequestAllowed(
-				{
-					senderId: win.webContents.id,
-					frameURL: win.webContents.getURL(),
-					mainFrame: true,
-				},
-				win.webContents.id,
+		(runtime) => {
+			const handler = createAgentsHandler(
+				runtime,
+				() => options.management()?.webContents.id,
 				options.renderer,
-			)
-		)
-			win.webContents.send(AGENTS_SNAPSHOT, snapshot.value);
-	};
-	const setup = runtime.runPromise(
-		Effect.map(AgentsService, (service) => {
-			const off = service.subscribe(() => {
-				const work = send();
-				pending.add(work);
-				void work.finally(() => pending.delete(work));
-			});
-			const offProgress = service.subscribeProgress((progress) => {
+			);
+			let disposed = false;
+			const pending = new Set<Promise<unknown>>();
+			const send = async (): Promise<void> => {
+				const snapshot = await runtime.runPromise(
+					AgentsService.view().pipe(Effect.option),
+				);
 				const win = options.management();
 				if (
 					!disposed &&
+					snapshot._tag === "Some" &&
 					win &&
 					!win.isDestroyed() &&
 					!win.webContents.isDestroyed() &&
@@ -122,45 +96,80 @@ export function registerAgents(options: RegisterAgentsOptions) {
 						options.renderer,
 					)
 				)
-					win.webContents.send(AGENTS_PROGRESS, progress);
+					win.webContents.send(AGENTS_SNAPSHOT, snapshot.value);
+			};
+			const setup = runtime.runPromise(
+				Effect.map(AgentsService, (service) => {
+					const off = service.subscribe(() => {
+						const work = send();
+						pending.add(work);
+						void work.finally(() => pending.delete(work));
+					});
+					const offProgress = service.subscribeProgress((progress) => {
+						const win = options.management();
+						if (
+							!disposed &&
+							win &&
+							!win.isDestroyed() &&
+							!win.webContents.isDestroyed() &&
+							agentRequestAllowed(
+								{
+									senderId: win.webContents.id,
+									frameURL: win.webContents.getURL(),
+									mainFrame: true,
+								},
+								win.webContents.id,
+								options.renderer,
+							)
+						)
+							win.webContents.send(AGENTS_PROGRESS, progress);
+					});
+					return () => {
+						off();
+						offProgress();
+					};
+				}),
+			);
+			ipcMain.handle(AGENTS_REQUEST, async (event, input: unknown) => {
+				if (disposed)
+					return {
+						_tag: "rejected",
+						code: "AGENT.IPC.DISPOSED",
+						message: "Agent management is closed",
+					};
+				const work = handler(
+					{
+						senderId: event.sender.id,
+						frameURL: event.senderFrame?.url ?? "",
+						mainFrame: event.senderFrame === event.sender.mainFrame,
+					},
+					input,
+				);
+				pending.add(work);
+				try {
+					return await work;
+				} finally {
+					pending.delete(work);
+				}
 			});
-			return () => {
-				off();
-				offProgress();
-			};
-		}),
-	);
-	ipcMain.handle(AGENTS_REQUEST, async (event, input: unknown) => {
-		if (disposed)
 			return {
-				_tag: "rejected",
-				code: "AGENT.IPC.DISPOSED",
-				message: "Agent management is closed",
+				runtime,
+				dispose: async (): Promise<void> => {
+					if (disposed) return;
+					disposed = true;
+					ipcMain.removeHandler(AGENTS_REQUEST);
+					(await setup)();
+					await Promise.allSettled([...pending]);
+					await runtime.dispose();
+				},
 			};
-		const work = handler(
-			{
-				senderId: event.sender.id,
-				frameURL: event.senderFrame?.url ?? "",
-				mainFrame: event.senderFrame === event.sender.mainFrame,
-			},
-			input,
-		);
-		pending.add(work);
-		try {
-			return await work;
-		} finally {
-			pending.delete(work);
-		}
-	});
-	return {
-		runtime,
-		dispose: async (): Promise<void> => {
-			if (disposed) return;
-			disposed = true;
-			ipcMain.removeHandler(AGENTS_REQUEST);
-			(await setup)();
-			await Promise.allSettled([...pending]);
-			await runtime.dispose();
 		},
-	};
+		options.diagnostics,
+		"app.background",
+	);
+	return prepared;
+}
+
+export function registerAgents(...args: Parameters<typeof prepareAgents>) {
+	return prepareAgents(...args).standalone();
 }

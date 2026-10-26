@@ -1,11 +1,4 @@
-import {
-	Deferred,
-	Effect,
-	Fiber,
-	type ManagedRuntime,
-	Schema,
-	Stream,
-} from "effect";
+import { Deferred, Effect, Fiber, Schema, Stream } from "effect";
 import {
 	type ConversationEvent,
 	ConversationService,
@@ -20,10 +13,11 @@ import {
 	agentRequestAllowed,
 } from "../agents/controller.js";
 import type { DesktopDiagnostics } from "../diagnostics";
+import type { DesktopRuntime } from "../diagnostics/module";
 
 export interface ConversationControllerOptions {
 	readonly diagnostics?: DesktopDiagnostics;
-	readonly runtime: ManagedRuntime.ManagedRuntime<ConversationService, never>;
+	readonly runtime: DesktopRuntime<ConversationService, never>;
 	readonly managementId: () => number | undefined;
 	readonly renderer: string;
 	readonly send: (source: AgentsAuthority, event: ConversationEvent) => boolean;

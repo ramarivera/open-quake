@@ -1,9 +1,4 @@
-import {
-	Effect,
-	Array as EffectArray,
-	type ManagedRuntime,
-	Schema,
-} from "effect";
+import { Effect, Array as EffectArray, Schema } from "effect";
 import {
 	Profile,
 	ProfileEnvelope,
@@ -28,6 +23,7 @@ import {
 import type { ShortcutLibrary } from "../../../../../packages/edge/src/shortcuts/shortcut-contracts";
 import { executableChord } from "../../../../../packages/edge/src/shortcuts/shortcut-invariants";
 import type { KeyTarget } from "../../shared/integrations";
+import type { DesktopRuntime } from "../diagnostics/module";
 export const keyHaConfig = (key: ProfileKey): HaKey | null => {
 	if (key.config.type !== "homeAssistant") return null;
 	const action = key.config.actions.find(
@@ -88,10 +84,7 @@ const baseConfig = (
 	actions,
 });
 export function integrationProfiles<R>(
-	runtime: ManagedRuntime.ManagedRuntime<
-		R | ProfileService | ProfileRepository,
-		never
-	>,
+	runtime: DesktopRuntime<R | ProfileService | ProfileRepository, never>,
 ) {
 	return {
 		targets: (): Promise<readonly KeyTarget[]> =>

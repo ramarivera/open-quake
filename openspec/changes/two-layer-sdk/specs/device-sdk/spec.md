@@ -6,6 +6,23 @@ every open-quake consumer uses to talk to a QUAKE device.
 
 ## ADDED Requirements
 
+### Requirement: Desktop has one service graph owner
+The production desktop main process SHALL compose its domain layers into one
+application Layer graph owned by one ManagedRuntime. IPC registrations SHALL
+cancel and join their own work before the root disposes that runtime exactly
+once. A module teardown SHALL NOT dispose services used by another consumer.
+The graph SHALL preserve catalog errors and operation-specific diagnostics.
+
+#### Scenario: Quit while work is active
+- **WHEN** the desktop quits with active domain workers
+- **THEN** it stops incoming work, joins the workers and awaits graph finalizers before quitting
+- **AND** the diagnostic sink remains available through the finalizers
+
+#### Scenario: Shared service consumers
+- **WHEN** two desktop registrations use the same service layer
+- **THEN** they observe the same acquired service instance
+- **AND** stopping one registration does not dispose the application graph
+
 ### Requirement: Protocol layer is pure
 `packages/protocol` SHALL perform no I/O. Its deterministic plain functions
 SHALL return typed `Either` failures for invalid inputs, and its Effect Schema

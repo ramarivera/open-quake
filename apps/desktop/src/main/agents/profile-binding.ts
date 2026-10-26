@@ -1,4 +1,4 @@
-import { Effect, type ManagedRuntime, Option, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import {
 	type Profile,
 	ProfileDraft,
@@ -22,7 +22,8 @@ import type {
 	AgentPanelPort,
 	AgentPanelTransaction,
 } from "../../../../../packages/edge/src/agents/agents-ports.js";
-export type ProfilesRuntime = ManagedRuntime.ManagedRuntime<
+import type { DesktopRuntime } from "../diagnostics/module";
+export type ProfilesRuntime = DesktopRuntime<
 	ProfileService | ProfileManager | ProfileSwitching,
 	never
 >;

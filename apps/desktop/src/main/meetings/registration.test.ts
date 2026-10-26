@@ -1,12 +1,14 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { beforeEach, expect, it, vi } from "vitest";
 import { MeetingStore } from "../../../../../packages/edge/src/meetings/meeting-contracts";
 import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
 import {
 	CAPTURE_CHUNK,
+	CAPTURE_LOST,
+	CAPTURE_PCM,
 	MEETING_REQUEST,
 	MeetingReply,
 } from "../../shared/meeting-bridge";
@@ -23,9 +25,33 @@ const capture = vi.hoisted(() => ({
 	id: "",
 	written: vi.fn(),
 	stopped: vi.fn(),
+	created: vi.fn(),
+	disposed: vi.fn(),
 	lost: (_id: string) => {},
 	wait: (): Promise<void> => Promise.resolve(),
+	acquisition: undefined as Promise<void> | undefined,
 }));
+vi.mock("../diagnostics/runtime", async (importOriginal) => {
+	const original =
+		await importOriginal<typeof import("../diagnostics/runtime")>();
+	return {
+		...original,
+		makeDesktopRuntime: (
+			...args: Parameters<typeof original.makeDesktopRuntime>
+		) => {
+			const waiting = capture.acquisition;
+			return original.makeDesktopRuntime(
+				waiting
+					? args[0].pipe(
+							Layer.provide(Layer.effectDiscard(Effect.promise(() => waiting))),
+						)
+					: args[0],
+				args[1],
+				args[2],
+			);
+		},
+	};
+});
 vi.mock("electron", () => ({
 	app: ipc.app,
 	ipcMain: ipc,
@@ -35,6 +61,7 @@ vi.mock("electron", () => ({
 }));
 vi.mock("./capture-port", () => ({
 	createCapturePort: (options: { onLost: (id: string) => void }) => {
+		capture.created();
 		capture.lost = options.onLost;
 		return {
 			port: {
@@ -72,16 +99,18 @@ vi.mock("./capture-port", () => ({
 						await capture.wait();
 					}),
 			},
-			dispose: () => {},
+			dispose: capture.disposed,
 		};
 	},
 }));
 
-import { registerMeetings } from "./index";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { prepareMeetings, registerMeetings } from "./index";
 
 beforeEach(() => {
 	ipc.handlers.clear();
 	capture.wait = () => Promise.resolve();
+	capture.acquisition = undefined;
 	ipc.handle.mockImplementation(
 		(name: string, handler: (...args: unknown[]) => Promise<unknown>) => {
 			ipc.handlers.set(name, handler);
@@ -90,6 +119,62 @@ beforeEach(() => {
 	ipc.removeHandler.mockImplementation((name: string) => {
 		ipc.handlers.delete(name);
 	});
+});
+
+it("prepares without capture listeners and releases them once under shared ownership", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-shared-"));
+	capture.created.mockClear();
+	capture.disposed.mockClear();
+	const calls = ipc.handle.mock.calls.length;
+	const quitListeners = ipc.app.on.mock.calls.length;
+	const module = prepareMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+	});
+	expect(capture.created).not.toHaveBeenCalled();
+	expect(ipc.handle.mock.calls).toHaveLength(calls);
+	const application = makeDesktopRuntime(module.layer);
+	module.bind(application);
+	try {
+		await application.runtime();
+		expect(capture.created).toHaveBeenCalledOnce();
+		const meetings = module.start();
+		await meetings.ready;
+		expect(ipc.app.on.mock.calls).toHaveLength(quitListeners);
+		await meetings.dispose();
+		expect(capture.disposed).not.toHaveBeenCalled();
+		await application.runPromise(MeetingService.action("liveAudioTranslate"));
+		expect(
+			(await application.runPromise(MeetingService.snapshot())).translating,
+		).toBe(true);
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(true);
+		expect(ipc.handlers.has(CAPTURE_PCM)).toBe(true);
+		await expect(
+			ipc.handlers.get(CAPTURE_PCM)?.({}, new Uint8Array([0, 0])),
+		).resolves.toBeUndefined();
+		await application.runPromise(MeetingService.action("meetingMinutes"));
+		let release = () => {};
+		capture.wait = () =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		const disposal = application.dispose();
+		try {
+			await vi.waitFor(() => expect(capture.written).toHaveBeenCalledOnce());
+			expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(true);
+			expect(capture.disposed).not.toHaveBeenCalled();
+		} finally {
+			release();
+			await disposal;
+		}
+		expect(capture.disposed).toHaveBeenCalledOnce();
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(false);
+		expect(ipc.handlers.has(CAPTURE_PCM)).toBe(false);
+	} finally {
+		await application.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 it("keeps audio IPC registered until shutdown has drained the last dataavailable write", async () => {
@@ -262,6 +347,162 @@ it("keeps cancel and source loss coherent across concurrent production IPC reque
 	} finally {
 		release();
 		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("accepts an authorized request immediately after standalone registration", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-early-"));
+	const renderer = "file:///synthetic-meetings/index.html";
+	let release = () => {};
+	capture.acquisition = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing meeting handler");
+		const replyPending = handler(event, { _tag: "read" });
+		release();
+		const reply = Schema.decodeUnknownSync(MeetingReply)(await replyPending);
+		expect(reply._tag).toBe("ready");
+	} finally {
+		release();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("waits for acquisition before handling early capture chunks and PCM", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-early-audio-"));
+	let release = () => {};
+	capture.acquisition = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const meetings = registerMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+	});
+	try {
+		const chunk = ipc.handlers.get(CAPTURE_CHUNK);
+		const pcm = ipc.handlers.get(CAPTURE_PCM);
+		if (!chunk || !pcm) throw new Error("Missing audio handlers");
+		const pending = Promise.all([
+			chunk(
+				{},
+				{
+					id: "00000000-0000-4000-8000-000000000001",
+					track: "mic",
+					segment: 0,
+					bytes: new Uint8Array([1, 2, 3]),
+				},
+			),
+			pcm({}, new Uint8Array([0, 0])),
+		]);
+		release();
+		await pending;
+		expect(capture.written).toHaveBeenCalledOnce();
+	} finally {
+		release();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("returns a typed failure reply if standalone graph acquisition fails", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-early-failed-"));
+	await mkdir(join(root, "meetings-v1"));
+	await writeFile(join(root, "meetings-v1/history.json"), "broken", {
+		mode: 0o600,
+	});
+	const renderer = "file:///synthetic-meetings/index.html";
+	let release = () => {};
+	capture.acquisition = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing meeting handler");
+		const replyPending = handler(event, { _tag: "read" });
+		release();
+		const reply = Schema.decodeUnknownSync(MeetingReply)(await replyPending);
+		expect(reply._tag).toBe("failure");
+		expect(reply._tag === "failure" && reply.code).toBe(
+			"QUAKE.MEETING.STORAGE_FAILED",
+		);
+	} finally {
+		release();
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("rejects requests safely when capture acquisition itself throws", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-capture-failed-"));
+	capture.created.mockImplementationOnce(() => {
+		throw new TypeError("synthetic capture acquisition failure");
+	});
+	const renderer = "file:///synthetic-meetings/index.html";
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing meeting handler");
+		const reply = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "read" }),
+		);
+		expect(reply).toMatchObject({
+			_tag: "failure",
+			code: "QUAKE.MEETING.UNAVAILABLE",
+		});
+		await expect(ipc.handlers.get(CAPTURE_CHUNK)?.({}, {})).rejects.toThrow(
+			"Meeting audio chunk rejected",
+		);
+		await expect(
+			ipc.handlers.get(CAPTURE_PCM)?.({}, new Uint8Array()),
+		).rejects.toThrow("Meeting PCM rejected");
+	} finally {
+		await meetings.dispose();
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(false);
+		expect(ipc.handlers.has(CAPTURE_PCM)).toBe(false);
+		expect(ipc.removeListener).toHaveBeenCalledWith(
+			CAPTURE_LOST,
+			expect.any(Function),
+		);
 		await rm(root, { recursive: true, force: true });
 	}
 });

@@ -1,10 +1,11 @@
-import { Effect, type ManagedRuntime, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { type BrowserWindow, ipcMain } from "electron";
 import {
 	LIFECYCLE_CHANNEL,
 	LifecycleCommand,
 	type LifecycleReply,
 } from "../../shared/lifecycle-contracts";
+import type { DesktopRuntime } from "../diagnostics/module";
 import { canRequestWallpaper } from "../media/media-permissions";
 import { DeviceLifecycle } from "./lifecycle-service";
 
@@ -22,7 +23,7 @@ export function canRequestLifecycle(
 	);
 }
 export function registerLifecycle(
-	runtime: ManagedRuntime.ManagedRuntime<DeviceLifecycle, never>,
+	runtime: DesktopRuntime<DeviceLifecycle, never>,
 	management: () => BrowserWindow,
 	renderer: string,
 ): () => void {

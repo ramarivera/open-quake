@@ -66,7 +66,7 @@ export class ConversationService extends Effect.Service<ConversationService>()(
 	{
 		accessors: true,
 		dependencies: [ConversationRepository.Default],
-		effect: Effect.gen(function* () {
+		scoped: Effect.gen(function* () {
 			const repository = yield* ConversationRepository;
 			const resolver = yield* ConversationRuntimePort;
 			const active = new Map<string, ActiveConversation>();
@@ -331,6 +331,7 @@ export class ConversationService extends Effect.Service<ConversationService>()(
 					);
 				},
 			);
+			yield* Effect.addFinalizer(() => shutdown());
 			return { stream, cancel, cancelOwner, history, clear, shutdown };
 		}),
 	},

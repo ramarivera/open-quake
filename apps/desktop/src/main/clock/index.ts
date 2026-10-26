@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, type ManagedRuntime, Option } from "effect";
+import { Effect, Option } from "effect";
 import {
 	BrowserWindow,
 	dialog,
@@ -16,6 +16,7 @@ import {
 	type ClockReply,
 } from "../../shared/clock-contracts";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "../../shared/clock-style";
+import type { DesktopRuntime } from "../diagnostics/module";
 import {
 	canRequestClock,
 	canRequestClockMedia,
@@ -80,7 +81,7 @@ const chooseFile = (
 
 /** IPC for the clock bridge and the custom-media protocol. Main owns the runtime. */
 export function registerClock(
-	runtime: ManagedRuntime.ManagedRuntime<ClockStore, never>,
+	runtime: DesktopRuntime<ClockStore, never>,
 	managementWindow: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,

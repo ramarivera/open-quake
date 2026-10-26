@@ -1,5 +1,20 @@
 # Design
 
+## Desktop service ownership
+
+The desktop root prepares each domain's existing service layer before it registers
+IPC handlers or starts consumers. It merges those layers into one application
+graph and creates one ManagedRuntime. Registrations receive execution views of
+that owner, with their existing diagnostic operation labels, and cannot dispose
+the application runtime. Their explicit teardown still cancels and joins workers
+in dependency order. The root disposes the graph once after those writers stop,
+then flushes diagnostics. Standalone module tests may construct their own owner.
+This does not use a registry of runtimes or a shared memo map across owners.
+
+The runtime registry and conversation service participate in the same graph.
+Saved connection reads remain local, optional runtime setup failures retain their
+unavailable IPC response, and boot does not perform HTTP or acquire HID handles.
+
 ## Context
 
 Settled by the wayfinder map (`open-quake-2qs`): Effect devs first, non-Effect

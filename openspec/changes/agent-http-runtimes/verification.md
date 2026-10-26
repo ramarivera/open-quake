@@ -101,5 +101,11 @@ External evidence is under
 `live-run-2.log`, the three `oq-e2e-efe617461278e785-*-acceptance.json`
 checkpoints, `desktop-e2e-GwsCbT/`, `cleanup-probes.json` and
 `interruption-ready.json`.
-Review, hosted release checks and merge remain pending under task 6.2 and
-`open-quake-hwn.12`. Physical speech acceptance remains separately open.
+PR70 merged as `32ee8b7b6a1638ab5029e818e3a001c8236f7103` after Codex
+completed its review of head `8fd161b` with no findings, all review threads
+were resolved, and validation, all five platform packages and the complete
+download matrix passed. The permission fix keeps the snapshot at mode 0600
+and runs containers as the host UID/GID. Authenticated readiness passed with
+that mode before an intentional pre-inference failure verified cleanup again.
+Task 6.2 and `open-quake-hwn.12` are complete. Physical speech acceptance
+remains separately open.

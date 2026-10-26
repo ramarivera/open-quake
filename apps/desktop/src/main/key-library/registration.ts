@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Effect, Fiber, type ManagedRuntime, Schema, Stream } from "effect";
+import { Effect, Fiber, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import type { ActionError } from "../../../../../packages/device/src/actions/action-errors.js";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
@@ -19,6 +19,7 @@ import {
 	type KeyReply,
 	KeyRequest,
 } from "../../shared/key-library";
+import type { DesktopRuntime } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { applicationIconLibrary } from "./application-icons";
 import { renderFontIcons } from "./font-renderer";
@@ -59,10 +60,7 @@ const imageData = (bytes: Buffer): string => {
 	return normalized;
 };
 export function registerKeyLibrary<R>(
-	runtime: ManagedRuntime.ManagedRuntime<
-		R | ProfileService | KeyEditing | KeyRuntime,
-		never
-	>,
+	runtime: DesktopRuntime<R | ProfileService | KeyEditing | KeyRuntime, never>,
 	management: () => BrowserWindow | undefined,
 	renderer: string,
 	managementURL = renderer,
