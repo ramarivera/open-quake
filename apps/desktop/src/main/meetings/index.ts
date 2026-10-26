@@ -111,7 +111,7 @@ export function prepareMeetings(options: {
 			if (!win.isDestroyed())
 				win.webContents.send(MEETING_SNAPSHOT, failure(error));
 	};
-	let capture: ReturnType<typeof createCapturePort>;
+	let capture: ReturnType<typeof createCapturePort> | undefined;
 	const captureLayer = Layer.scoped(
 		MeetingCapture,
 		Effect.acquireRelease(
@@ -330,14 +330,20 @@ export function prepareMeetings(options: {
 					if (
 						event.senderFrame !== event.sender.mainFrame ||
 						!BrowserWindow.fromWebContents(event.sender) ||
-						!isAppRenderer(event.sender.getURL(), renderer) ||
-						capture.accepts(event)
+						!isAppRenderer(event.sender.getURL(), renderer)
 					)
 						return failure(meetingError("Invalid"));
 					const decoded = decodeMeetingCommand(value);
 					if (Either.isLeft(decoded)) return failure(meetingError("Invalid"));
-					await ready;
-					if (disposed) return failure(meetingError("Unavailable"));
+					const initialized = await ready;
+					if (initialized._tag === "Failure") {
+						const error = Cause.failureOption(initialized.cause);
+						return failure(
+							Option.getOrElse(error, () => meetingError("Unavailable")),
+						);
+					}
+					if (!capture || disposed) return failure(meetingError("Unavailable"));
+					if (capture.accepts(event)) return failure(meetingError("Invalid"));
 					const result = await runtime.runPromiseExit(
 						runCommand(decoded.right),
 					);
@@ -349,9 +355,10 @@ export function prepareMeetings(options: {
 				},
 			);
 			ipcMain.handle(CAPTURE_CHUNK, async (event, value: unknown) => {
+				await ready;
 				const chunk = Schema.decodeUnknownEither(CaptureChunk)(value);
 				if (
-					!capture.accepts(event) ||
+					!capture?.accepts(event) ||
 					Either.isLeft(chunk) ||
 					!capture.active(chunk.right.id)
 				)
@@ -359,8 +366,9 @@ export function prepareMeetings(options: {
 				await runtime.runPromise(capture.files.write(chunk.right));
 			});
 			ipcMain.handle(CAPTURE_PCM, async (event, value: unknown) => {
+				await ready;
 				if (
-					!capture.accepts(event) ||
+					!capture?.accepts(event) ||
 					!(value instanceof Uint8Array) ||
 					value.length > 14400
 				)
@@ -376,7 +384,7 @@ export function prepareMeetings(options: {
 				);
 			});
 			const lost = (event: Electron.IpcMainEvent, value: unknown): void => {
-				if (!capture.accepts(event) || !Schema.is(MeetingId)(value)) return;
+				if (!capture?.accepts(event) || !Schema.is(MeetingId)(value)) return;
 				runtime.runFork(
 					(value === "00000000-0000-4000-8000-000000000000"
 						? MeetingService.translationLost()
@@ -398,12 +406,11 @@ export function prepareMeetings(options: {
 					ipcMain.removeHandler(MEETING_REQUEST);
 					for (const fiber of jobs.values())
 						await runtime.runPromise(Fiber.interrupt(fiber));
-					await runtime.runPromiseExit(MeetingService.shutdown());
+					await runtime.runPromiseExit(MeetingService.suspend());
 					ipcMain.removeHandler(CAPTURE_CHUNK);
 					ipcMain.removeHandler(CAPTURE_PCM);
 					ipcMain.removeListener(CAPTURE_LOST, lost);
 					await runtime.runPromiseExit(Fiber.interrupt(published));
-					capture.dispose();
 					await runtime.dispose();
 					app.removeListener("before-quit", beforeQuit);
 				})();

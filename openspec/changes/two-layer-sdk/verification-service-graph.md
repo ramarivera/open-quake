@@ -79,3 +79,15 @@ actual-root active-work shutdown plus media/bundle acceptance on that graph.
 Preload and isolated test
 runtimes are separate process or fixture owners. Hardware, microphone and live
 provider behavior are not established by this change.
+
+
+PR72 review corrections, 2026-10-26: registration teardown suspends capture and
+interrupts its publisher without releasing the graph-owned capture port or
+shutting down the shared service PubSub. Only graph disposal releases the port.
+The shared-owner regression calls the service successfully after registration
+teardown, then observes exactly one port release at owner disposal. Early request,
+chunk and PCM handlers wait for acquisition; request authorization still runs
+before the wait, and acquisition failures retain the typed meeting error reply.
+Four regression assertions failed against the previous implementation. After the
+fix all 26 meeting desktop tests, desktop typecheck, scoped Biome and strict
+OpenSpec validation pass. No native audio or hardware acceptance was run here.
