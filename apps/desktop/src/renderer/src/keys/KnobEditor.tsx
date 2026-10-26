@@ -129,6 +129,8 @@ export function KnobEditor({
 								...slot.config.assistantSettings,
 								modelRowId: providerId,
 								modelId,
+								thinking: false,
+								webSearch: false,
 							},
 						}
 					: {}),
