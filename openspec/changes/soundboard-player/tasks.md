@@ -10,7 +10,7 @@ Implementation tasks. Configuration import and the first-release boundary have v
 ## 2. Playback lifecycle (macOS first)
 
 - [x] 2.1 Implement soundboard repository/conductor and audio adapter with per-key generation IDs and catalog errors; verify explicit-play replacement, PLAY_ADD independent instances, stale and duplicate natural-end rejection, independent keys, stop-all and the 10 s readiness timeout.
-- [ ] 2.2 Implement pause/resume/navigation, linear gain ramps, rescan and teardown; verify position continuity, first/last wrap, indefinitely looping playlists, bounded missing-file skip and all-unavailable stop (`KNOB-086`), interrupted ramps, zero gain, rescan without restart and no host-volume mutation with a fake player and TestClock.
+- [x] 2.2 Implement pause/resume/navigation, linear gain ramps, rescan and teardown; verify position continuity, first/last wrap, indefinitely looping playlists, bounded missing-file skip and all-unavailable stop (`KNOB-086`), interrupted ramps, zero gain, rescan without restart and no host-volume mutation with a fake player and TestClock.
 - [ ] 2.3 Integrate the shared AudioOutput lease; verify voice preemption of all sessions without fade, no auto-resume, busy while speech owns output, and a delayed soundboard stop leaving TTS intact against the real output service.
 
 ## 3. Player acceptance
@@ -125,3 +125,31 @@ the final unsupported-fade and queued ownership regressions. The full desktop
 suite passes 1,567 tests. Existing skips are three external edge cases and one
 native desktop case. Both typechecks, lint, production build, both bundle smoke
 modes and strict validation are required for delivery.
+
+
+## Playback controls source verification, 2026-10-26
+
+Task 2.2 source now supplies pause/resume, explicit wrapped navigation, rescan,
+linear element-gain ramps, all seven imported operations and profile teardown.
+The source tests exercise the real conductor and AudioOutput owner with Deferred
+and TestClock, including Stop All during metadata, replacement during fade-out,
+concurrent ramp cancellation awaiting native finalization, interrupted callers,
+natural end during Stop/paused states, invalid updates and missing-file traversal.
+A property test covers arbitrary volume/navigation sequences. Original lifecycle
+scenarios remain covered; task 2.1's interim rejection test now rejects invalid
+fade bounds because valid fades are implemented.
+
+A hidden muted Electron run verifies the actual decoder through service
+pause/resume with increasing position, unchanged generation during rescan,
+previous/next wrapping, zero-gain playback, outgoing fade timing, natural end,
+two-key capture preemption, stale Stop isolation, decode failure and cleanup.
+The final run measured a 150 ms fade at 158 ms and found zero player windows or
+worker directories. Diagnostics persist real open and pause failures with catalog
+identity, original EACCES cause and no private paths. Current tests and source
+notes live in the change; generated run evidence stays outside git under
+`open-quake-finish/soundboard-controls/` and `soundboard-playback/native/`.
+
+Reviewed delivery remains open under uv9.4. Task 2.3 and task 3.1 remain open for
+production composition/consumers, despite direct shared-output and native source
+proof. The first-release unavailable key/renderer/IPC boundary is unchanged.
+Audible output, physical triggers and Linux audio acceptance remain unverified.

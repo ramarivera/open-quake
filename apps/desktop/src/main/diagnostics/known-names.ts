@@ -2,7 +2,7 @@
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
 	`AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
-SoundboardService.play SoundboardService.stop SoundboardService.stopAll SoundboardService.naturalEnd SoundboardService.close SoundboardService.snapshot SoundboardRepository.list SoundboardRepository.put SoundboardPlayer.open
+SoundboardService.play SoundboardService.start SoundboardService.stopNow SoundboardService.pause SoundboardService.resume SoundboardService.previous SoundboardService.next SoundboardService.rescan SoundboardService.setVolume SoundboardService.stopProfile SoundboardService.execute SoundboardService.stop SoundboardService.stopAll SoundboardService.naturalEnd SoundboardService.close SoundboardService.snapshot SoundboardRepository.list SoundboardRepository.put SoundboardPlayer.open
 SystemMedia.nativeProcess SystemMedia.macRead SystemMedia.macControl SystemMedia.windowsRead SystemMedia.windowsControl SystemMedia.nativeRead SystemMedia.nativeControl SystemMedia.keyAction SystemMediaService.send
 GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
 WizardService.snapshot WizardService.save WizardService.seedRegion WizardService.replay WizardService.complete SettingsRepository.transact
@@ -179,7 +179,7 @@ test-fixtures.ts touch-contracts.ts touch-fixtures.ts touch-invariants.ts touch-
 touch-source.ts transport-decode.ts transport-fixtures.ts transport-limits.ts transport-sse.ts
 transport.ts update-service.ts voice-adapter.ts voice-fixtures.ts voice-surface-contracts.ts
 voice-surface-errors.ts voice-surface-invariants.ts voice-surface-ports.ts voice-surface-service.ts
-output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts soundboard-errors.ts soundboard-service.ts soundboard-repository.ts playback-contracts.ts playback-ports.ts player.ts player-worker.ts files.ts process.ts metadata.ts macos.ts windows.ts errors.ts key-actions.ts volume-discovery.ts weather-network.ts weather-service.ts zip.ts`.split(
+output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts soundboard-errors.ts soundboard-service.ts soundboard-repository.ts playback-contracts.ts playback-controls.ts playback-selection.ts playback-gain.ts playback-state.ts playback-ports.ts player.ts player-worker.ts files.ts process.ts metadata.ts macos.ts windows.ts errors.ts key-actions.ts volume-discovery.ts weather-network.ts weather-service.ts zip.ts`.split(
 		/\s+/,
 	),
 );

@@ -9,12 +9,8 @@ import {
 	Schema,
 	Scope,
 } from "effect";
-import {
-	AudioOutputBusy,
-	type AudioOutputError,
-	AudioOutputFailed,
-} from "../audio/output-errors.js";
-import { AudioOutput, type AudioOutputLease } from "../audio/output-service.js";
+import { AudioOutputBusy, AudioOutputFailed } from "../audio/output-errors.js";
+import { AudioOutput } from "../audio/output-service.js";
 import {
 	SoundOwner as OwnerSchema,
 	SoundEndToken,
@@ -23,39 +19,25 @@ import {
 	type SoundSession,
 	soundOwnerKey,
 } from "./playback-contracts.js";
+import { makePlaybackControls } from "./playback-controls.js";
+import { makeSoundGain } from "./playback-gain.js";
 import { SoundboardPlayer, type SoundPlayer } from "./playback-ports.js";
+import { makePlaybackSelection } from "./playback-selection.js";
+import type {
+	PlaybackGroup as Group,
+	PlaybackSlot as Slot,
+	SoundPlaybackError,
+	SoundStartOptions,
+} from "./playback-state.js";
 import {
 	SoundboardConfigInvalid,
 	type SoundboardDecodeFailed,
-	SoundboardFileUnavailable,
 	SoundboardLoadTimeout,
 } from "./soundboard-errors.js";
 import { SoundboardFiles } from "./soundboard-ports.js";
 import { SoundboardRepository } from "./soundboard-repository.js";
 
-export type SoundPlaybackError =
-	| SoundboardConfigInvalid
-	| SoundboardFileUnavailable
-	| SoundboardDecodeFailed
-	| SoundboardLoadTimeout
-	| AudioOutputError;
-interface Group {
-	active: boolean;
-	lease: Option.Option<AudioOutputLease>;
-	readonly slots: Set<Slot>;
-}
-interface Slot {
-	session: SoundSession;
-	readonly playlist: SoundPlaylist;
-	readonly group: Group;
-	track: Option.Option<{
-		readonly scope: Scope.CloseableScope;
-		readonly close: Effect.Effect<void>;
-	}>;
-	player: Option.Option<SoundPlayer>;
-	watcher: Option.Option<Fiber.RuntimeFiber<void, never>>;
-	stop: Effect.Effect<void>;
-}
+export type { SoundPlaybackError } from "./playback-state.js";
 
 export const makeSoundboardService = Effect.gen(function* () {
 	const scope = yield* Scope.Scope;
@@ -79,6 +61,9 @@ export const makeSoundboardService = Effect.gen(function* () {
 		Effect.gen(function* () {
 			const track = slot.track;
 			const watcher = slot.watcher;
+			const gain = slot.gain;
+			slot.gain = Option.none();
+			if (Option.isSome(gain)) yield* gain.value.cancel;
 			slot.player = Option.none();
 			const self = yield* Effect.fiberId;
 			if (Option.isSome(watcher) && !Equal.equals(self, watcher.value.id()))
@@ -189,18 +174,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 		Effect.gen(function* () {
 			const entry = slot.playlist.entries[index];
 			if (!entry) return false;
-			const status = yield* files.inspect(entry.path).pipe(
-				Effect.timeoutFail({
-					duration: "2 seconds",
-					onTimeout: () => new SoundboardFileUnavailable(),
-				}),
-				Effect.tapError((error) =>
-					Effect.logWarning("soundboard.file.inspection.failed", error),
-				),
-				Effect.catchTag("SoundboardFileUnavailable", () =>
-					Effect.succeed("unreadable" as const),
-				),
-			);
+			const status = yield* selection.inspectAvailable(entry.path);
 			slot.session = {
 				...slot.session,
 				entries: slot.session.entries.map((item, offset) =>
@@ -215,9 +189,11 @@ export const makeSoundboardService = Effect.gen(function* () {
 	const startTrack = (
 		slot: Slot,
 		index: number,
+		initialGain?: number,
 	): Effect.Effect<void, SoundPlaybackError> =>
 		Effect.gen(function* () {
 			yield* closeTrack(slot);
+			slot.endPending = false;
 			if (!current(slot)) return yield* new AudioOutputBusy();
 			const entry = slot.playlist.entries[index];
 			if (!entry) return yield* new SoundboardConfigInvalid();
@@ -234,7 +210,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 				generation: slot.session.generation + 1,
 				state: "loading",
 				positionMs: 0,
-				gain: slot.playlist.volume / 100,
+				gain: initialGain ?? slot.targetGain,
 			};
 			yield* publish(slot);
 			const loading = Effect.suspend(
@@ -268,6 +244,26 @@ export const makeSoundboardService = Effect.gen(function* () {
 			if (Exit.isFailure(loaded)) return yield* Effect.failCause(loaded.cause);
 			const player = loaded.value;
 			slot.player = Option.some(player);
+			const generation = slot.session.generation;
+			slot.gain = Option.some(
+				yield* makeSoundGain({
+					scope: track,
+					current: () =>
+						current(slot) && slot.session.generation === generation,
+					read: () => slot.session.gain,
+					write: (gain) =>
+						player.gain(gain).pipe(
+							Effect.tap(() =>
+								Effect.gen(function* () {
+									if (!current(slot) || slot.session.generation !== generation)
+										return;
+									slot.session = { ...slot.session, gain };
+									yield* publish(slot);
+								}),
+							),
+						),
+				}),
+			);
 			slot.session = { ...slot.session, state: "playing" };
 			yield* publish(slot);
 			const token: SoundEndToken = {
@@ -277,6 +273,15 @@ export const makeSoundboardService = Effect.gen(function* () {
 			yield* Effect.uninterruptibleMask((restore) =>
 				Effect.gen(function* () {
 					const observation = player.ended.pipe(
+						Effect.tap(() =>
+							Effect.sync(() => {
+								if (
+									current(slot) &&
+									slot.session.generation === token.generation
+								)
+									slot.endPending = true;
+							}),
+						),
 						Effect.zipRight(Effect.suspend(() => naturalEnd(token))),
 						Effect.matchEffect({
 							onSuccess: () => Effect.void,
@@ -332,7 +337,16 @@ export const makeSoundboardService = Effect.gen(function* () {
 						slot.session.state !== "playing"
 					)
 						return;
+					if (
+						Option.isSome(slot.stopAfterRamp) &&
+						slot.stopAfterRamp.value === slot.command
+					) {
+						yield* stopSlot(slot);
+						yield* releaseIdle(slot.group);
+						return;
+					}
 					slot.session = { ...slot.session, state: "loading" };
+					slot.endPending = false;
 					let index = slot.session.trackIndex;
 					for (
 						let visited = 0;
@@ -362,24 +376,33 @@ export const makeSoundboardService = Effect.gen(function* () {
 				Effect.forEach([...groups], releaseIdle, { discard: true }),
 			),
 		);
-	const play = Effect.fn("SoundboardService.play")(
+	const start = Effect.fn("SoundboardService.start")(
 		(
 			owner: SoundOwner,
 			playlist: SoundPlaylist,
-			additional = false,
-			loopTrack = false,
+			options: SoundStartOptions = {},
 		): Effect.Effect<SoundSession, SoundPlaybackError> =>
 			serializeStart((epoch) =>
 				Effect.gen(function* () {
+					const {
+						additional = false,
+						loopTrack = false,
+						initialGain,
+						expectedEpoch,
+						initialIndex,
+						accept = () => true,
+					} = options;
+					if (
+						!accept() ||
+						(expectedEpoch !== undefined && expectedEpoch !== epoch)
+					)
+						return yield* new AudioOutputBusy();
 					const parsedOwner = Schema.decodeUnknownEither(OwnerSchema)(owner);
 					const parsed = Schema.decodeUnknownEither(SoundPlaylist)(playlist);
 					if (Either.isLeft(parsedOwner))
 						return yield* new SoundboardConfigInvalid(parsedOwner.left);
 					if (Either.isLeft(parsed))
 						return yield* new SoundboardConfigInvalid(parsed.left);
-					// Task 2.2 owns ramp semantics. Reject them until implemented rather than silently ignoring them.
-					if (parsed.right.fade.mode !== "none")
-						return yield* new SoundboardConfigInvalid();
 					if (closed) return yield* new AudioOutputFailed();
 					const config: SoundPlaylist = {
 						...parsed.right,
@@ -396,35 +419,10 @@ export const makeSoundboardService = Effect.gen(function* () {
 							))
 					)
 						return yield* new SoundboardConfigInvalid();
-					const running = [...slots.values()]
-						.reverse()
-						.find(
-							(slot) =>
-								current(slot) && soundOwnerKey(slot.session.owner) === key,
-						);
-					const previous = running
-						? {
-								revision: running.playlist.revision,
-								index: running.session.trackIndex,
-							}
-						: remembered.get(key);
-					const index =
-						previous?.revision === config.revision
-							? Math.min(previous.index, config.entries.length - 1)
-							: 0;
-					// Validate the explicit target before stopping an unrelated or existing valid session.
-					const entry = config.entries[index];
-					if (
-						!entry ||
-						(yield* files.inspect(entry.path).pipe(
-							Effect.timeoutFail({
-								duration: "2 seconds",
-								onTimeout: () => new SoundboardFileUnavailable(),
-							}),
-						)) !== "available"
-					)
-						return yield* new SoundboardFileUnavailable();
-					if (epoch !== commandEpoch) return yield* new AudioOutputBusy();
+					const index = initialIndex ?? selection.index(owned, config);
+					yield* selection.validateIndex(config, index);
+					if (!accept() || epoch !== commandEpoch)
+						return yield* new AudioOutputBusy();
 					const target = yield* ensureGroup;
 					if (closed || !target.active) return yield* new AudioOutputBusy();
 					if (!additional)
@@ -449,6 +447,11 @@ export const makeSoundboardService = Effect.gen(function* () {
 					const slot: Slot = {
 						session,
 						playlist: config,
+						command: 0,
+						endPending: false,
+						stopAfterRamp: Option.none(),
+						targetGain: config.volume / 100,
+						gain: Option.none(),
 						group: target,
 						track: Option.none(),
 						player: Option.none(),
@@ -459,7 +462,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 					if (closed || !target.active) return yield* new AudioOutputBusy();
 					slots.set(session.playbackId, slot);
 					target.slots.add(slot);
-					yield* startTrack(slot, index).pipe(
+					yield* startTrack(slot, index, initialGain).pipe(
 						Effect.tapError((error) => failed(slot, error)),
 						Effect.onInterrupt(() => releaseIdle(target)),
 					);
@@ -471,7 +474,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 				}),
 			),
 	);
-	const stop = Effect.fn("SoundboardService.stop")(
+	const stopNow = Effect.fn("SoundboardService.stopNow")(
 		(playbackId: string): Effect.Effect<void> =>
 			Effect.gen(function* () {
 				const slot = slots.get(playbackId) ?? stopping.get(playbackId);
@@ -496,24 +499,45 @@ export const makeSoundboardService = Effect.gen(function* () {
 	const close = Effect.fn("SoundboardService.close")(
 		(): Effect.Effect<void> => closing,
 	);
-	const stopAll = Effect.fn("SoundboardService.stopAll")(
-		(): Effect.Effect<void> =>
-			Effect.uninterruptible(
-				Effect.gen(function* () {
-					commandEpoch++;
-					for (const target of [...groups]) {
-						yield* stopGroup(target);
-						yield* releaseIdle(target);
-					}
-					yield* gate.withPermits(1)(Effect.void);
-				}),
-			),
-	);
 	yield* Effect.addFinalizer(close);
 	const snapshot = Effect.fn("SoundboardService.snapshot")(
 		(): Effect.Effect<readonly SoundSession[]> => repository.list(),
 	);
-	return { play, stop, stopAll, naturalEnd, close, snapshot };
+	const selection = makePlaybackSelection({
+		slots,
+		remembered,
+		current,
+		closed: () => closed,
+		epoch: () => commandEpoch,
+		files,
+		start,
+	});
+	const controls = makePlaybackControls({
+		slots,
+		epoch: () => commandEpoch,
+		invalidatePending: () => {
+			commandEpoch++;
+		},
+		current,
+		publish,
+		inspect,
+		startTrack,
+		start,
+		stopNow,
+		drain: () => gate.withPermits(1)(Effect.void),
+		failed,
+		finishPendingEnd: (slot) =>
+			naturalEnd({
+				playbackId: slot.session.playbackId,
+				generation: slot.session.generation,
+			}),
+		navigateStopped: selection.navigate,
+		locked: <A, E>(effect: Effect.Effect<A, E>) => gate.withPermits(1)(effect),
+		stopUnavailable: (slot) =>
+			stopSlot(slot).pipe(Effect.zipRight(releaseIdle(slot.group))),
+		validatePlay: selection.validate,
+	});
+	return { ...controls, naturalEnd, close, snapshot };
 });
 
 export class SoundboardService extends Effect.Service<SoundboardService>()(

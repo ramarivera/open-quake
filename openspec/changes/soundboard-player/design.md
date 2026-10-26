@@ -128,3 +128,28 @@ carry instance and track generation; consumed and stale tokens do nothing. The
 ten-second readiness deadline includes native acquisition and readiness. These
 modules remain uncomposed behind the first-release boundary until their native
 adapter and consumer acceptance are delivered.
+
+
+## Playback controls, 2026-10-26
+
+The conductor delegates controls, explicit-list selection and track-scoped gain
+ramps to separate modules. Pause/resume retains the native player and position;
+previous/next wraps and performs at most one configured-list traversal. Rescan
+updates availability without reopening a decoded player. Navigation from a
+stopped key chooses its target before decoding rather than briefly starting the
+remembered file. Profile deactivation invalidates pending requests as well as
+active sessions.
+
+Ramps use the Effect clock, update element gain at most every 20 ms, retain the
+latest applied gain, and run outside the global command gate. Cancelling a ramp
+awaits its native write fiber before a successor starts. Every ramp is bound to
+the track's scope and generation. Stop/restart waits for applicable fade-out;
+capture and teardown bypass it. Stop intent survives natural completion during
+its fade, and an end observed while paused is retained until resume. Pending
+start requests are bounded at 128 and carry cancellation identity through metadata
+checks, fades and the serialized start. A newer command can supersede an older
+Stop All fade without its late completion stopping the replacement.
+
+Only service/native-adapter behavior is implemented here. The approved
+first-release key/renderer/IPC gate remains intact; task 3.1 owns production
+consumer composition and acceptance. No visual design decision changes.
