@@ -5,6 +5,8 @@ import {
 	readdir,
 	readFile,
 	rm,
+	symlink,
+	utimes,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -12,14 +14,19 @@ import { join } from "node:path";
 import { Option, Schema } from "effect";
 import { nativeImage } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	builtinProfiles,
+	translateProfile,
+} from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { profileThumbnailKey } from "./profile-thumbnail-key";
 import { createProfileThumbnailStore } from "./profile-thumbnails";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:fs/promises")>();
-	return { ...actual, open: vi.fn(actual.open) };
+	return { ...actual, open: vi.fn(actual.open), rename: vi.fn(actual.rename) };
 });
 const png = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlYAAAAAASUVORK5CYII=",
@@ -180,5 +187,109 @@ describe("canonical profile thumbnail storage", () => {
 				/private-profile|SCRATCHPADS_FOR_AGENTS/,
 			);
 		}
+	});
+	it("prunes obsolete owned files while preserving every live locale and unrelated entries", async () => {
+		const root = await directory();
+		const store = createProfileThumbnailStore(root);
+		const current = builtinProfiles("darwin")[0];
+		if (!current) throw new Error("Missing built-in fixture");
+		const live: string[] = [];
+		for (const locale of ProfileLocale.literals) {
+			const localized = translateProfile(current, locale);
+			await store.write(localized, locale, png);
+			live.push(`${profileThumbnailKey(localized, locale)}.png`);
+		}
+		const cache = join(root, "thumbnails");
+		const obsolete = `${"a".repeat(64)}.png`;
+		const oldPending = `${obsolete}.12345678-1234-4123-8123-123456789abc.pending`;
+		const freshPending = `${obsolete}.12345678-1234-4123-8123-123456789abd.pending`;
+		for (const name of [
+			obsolete,
+			oldPending,
+			freshPending,
+			"notes.txt",
+			"foreign.pending",
+		])
+			await writeFile(join(cache, name), "private-sentinel");
+		await utimes(join(cache, oldPending), new Date(0), new Date(0));
+		const directoryName = `${"b".repeat(64)}.png`;
+		await mkdir(join(cache, directoryName));
+		const link = `${"c".repeat(64)}.png`;
+		await symlink(join(cache, "notes.txt"), join(cache, link));
+		await store.prune([current]);
+		expect((await readdir(cache)).sort()).toEqual(
+			[
+				...live,
+				freshPending,
+				"notes.txt",
+				"foreign.pending",
+				directoryName,
+				link,
+			].sort(),
+		);
+		expect(await readFile(join(cache, "notes.txt"), "utf8")).toBe(
+			"private-sentinel",
+		);
+	});
+	it("serializes cleanup with atomic publication and keeps real filesystem causes", async () => {
+		const root = await directory();
+		const store = createProfileThumbnailStore(root);
+		let entered: () => void = () => {},
+			release: () => void = () => {};
+		const started = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const original =
+			await vi.importActual<typeof import("node:fs/promises")>(
+				"node:fs/promises",
+			);
+		const rename = vi
+			.spyOn(filesystem, "rename")
+			.mockImplementationOnce(async (...args) => {
+				entered();
+				await gate;
+				return original.rename(...args);
+			});
+		try {
+			const writing = store.write(profile, "en", png);
+			await started;
+			const pruning = store.prune([profile]);
+			release();
+			await Promise.all([writing, pruning]);
+			expect(Option.isSome(await store.read(profile, "en"))).toBe(true);
+		} finally {
+			release();
+			rename.mockRestore();
+		}
+		await rm(join(root, "thumbnails"), { recursive: true });
+		await writeFile(join(root, "thumbnails"), "not a directory");
+		const error: unknown = await store.prune([]).catch((cause) => cause);
+		expect(error).toBeInstanceOf(ProfileThumbnailFailed);
+		if (error instanceof ProfileThumbnailFailed) {
+			expect(error.originalCause).toMatchObject({ code: "ENOTDIR" });
+			expect(JSON.stringify(error)).not.toContain(root);
+		}
+	});
+	it("does not traverse a replaced cache directory and retries after a typed sweep failure", async () => {
+		const root = await directory();
+		const external = await directory();
+		const file = `${"a".repeat(64)}.png`;
+		await writeFile(join(external, file), png);
+		await symlink(external, join(root, "thumbnails"));
+		const store = createProfileThumbnailStore(root);
+		await store.prune([]);
+		expect(await readFile(join(external, file))).toEqual(png);
+		await rm(join(root, "thumbnails"));
+		await writeFile(join(root, "thumbnails"), "not a directory");
+		await expect(store.prune([])).rejects.toBeInstanceOf(
+			ProfileThumbnailFailed,
+		);
+		await rm(join(root, "thumbnails"));
+		await store.prune([]);
+		await store.write(profile, "en", png);
+		expect(Option.isSome(await store.read(profile, "en"))).toBe(true);
 	});
 });

@@ -7,10 +7,20 @@ import type { Profile } from "../../../../../packages/device/src/profiles/profil
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import type { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { profileThumbnailKey } from "./profile-thumbnail-key";
+import { pruneProfileThumbnails } from "./profile-thumbnail-retention";
 
 const maximumBytes = 1_000_000;
 /** One content/locale cache for manager capture and knob reads. Filenames are opaque hashes. */
 export function createProfileThumbnailStore(root: string) {
+	let tail: Promise<void> = Promise.resolve();
+	const serialize = <A>(operation: () => Promise<A>): Promise<A> => {
+		const next = tail.then(operation);
+		tail = next.then(
+			() => {},
+			() => {},
+		);
+		return next;
+	};
 	const path = (profile: Profile, locale: ProfileLocale) =>
 		join(root, "thumbnails", `${profileThumbnailKey(profile, locale)}.png`);
 	const decode = (bytes: Buffer): Option.Option<string> => {
@@ -41,6 +51,10 @@ export function createProfileThumbnailStore(root: string) {
 		}
 	};
 	return {
+		prune: (profiles: readonly Profile[]): Promise<void> =>
+			serialize(() =>
+				pruneProfileThumbnails(join(root, "thumbnails"), profiles),
+			),
 		read: async (
 			profile: Profile,
 			locale: ProfileLocale,
@@ -74,38 +88,39 @@ export function createProfileThumbnailStore(root: string) {
 				throw ProfileThumbnailFailed.fromCause(cause);
 			}
 		},
-		write: async (
+		write: (
 			profile: Profile,
 			locale: ProfileLocale,
 			bytes: Buffer,
-		): Promise<string> => {
-			const temporary = `${path(profile, locale)}.${randomUUID()}.pending`;
-			let failed = false;
-			try {
-				const decoded = decode(bytes);
-				if (Option.isNone(decoded))
-					throw new RangeError("Invalid profile thumbnail");
-				const data = decoded.value;
-				await mkdir(join(root, "thumbnails"), { recursive: true });
-				await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
-				await rename(temporary, path(profile, locale));
-				return data;
-			} catch (cause) {
-				failed = true;
-				throw ProfileThumbnailFailed.fromCause(cause);
-			} finally {
-				await unlink(temporary).catch((cause: unknown) => {
-					if (
-						!failed &&
-						!(
-							cause instanceof Error &&
-							"code" in cause &&
-							cause.code === "ENOENT"
+		): Promise<string> =>
+			serialize(async () => {
+				const temporary = `${path(profile, locale)}.${randomUUID()}.pending`;
+				let failed = false;
+				try {
+					const decoded = decode(bytes);
+					if (Option.isNone(decoded))
+						throw new RangeError("Invalid profile thumbnail");
+					const data = decoded.value;
+					await mkdir(join(root, "thumbnails"), { recursive: true });
+					await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
+					await rename(temporary, path(profile, locale));
+					return data;
+				} catch (cause) {
+					failed = true;
+					throw ProfileThumbnailFailed.fromCause(cause);
+				} finally {
+					await unlink(temporary).catch((cause: unknown) => {
+						if (
+							!failed &&
+							!(
+								cause instanceof Error &&
+								"code" in cause &&
+								cause.code === "ENOENT"
+							)
 						)
-					)
-						throw ProfileThumbnailFailed.fromCause(cause);
-				});
-			}
-		},
+							throw ProfileThumbnailFailed.fromCause(cause);
+					});
+				}
+			}),
 	};
 }

@@ -34,3 +34,16 @@ The subsequent main merge includes knob-model parity. Knob reads and selections 
 Catalog metadata includes stable resource and title keys for renderer themes. Translation restores those identifiers on older installed built-ins without changing custom metadata. The strip selects only visible profiles, including its no-selection fallback, so a fresh macOS panel agrees with the manager without requiring a mock device connection.
 
 The device-lifecycle main merge retains its single-instance guard, display discovery/recovery, lock/wake handling and Connection diagnostics. Bus status reaches both lifecycle and the mock profile session; stopping disconnects the profile session before lifecycle/native cleanup. The merged management navigation keeps both Connection and Knob Profile. Hardware acceptance and real serial/profile transport remain task 1.6.
+
+## Thumbnail retention follow-up
+
+The shared canonical thumbnail cache removes obsolete content hashes after startup
+and committed profile updates. All saved profiles, including hidden profiles, keep
+their current translated hash in all eight supported locales. Only regular files
+with the exact owned SHA-256 PNG or UUID pending filename are candidates; pending
+files have a 24-hour grace period. Directories, symlinks and unrelated names remain
+untouched. Cleanup shares the capture semaphore, reads the latest catalog after
+acquiring it, holds a read-only repository transaction while pruning so profile
+commits cannot invalidate the keep set, and serializes store writes with deletion.
+Reads keep their open-inode semantics. Cleanup failures retain ProfileThumbnailFailed and are logged through
+the owning Effect runtime without stopping profile snapshot publication.

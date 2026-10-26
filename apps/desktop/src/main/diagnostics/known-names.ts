@@ -95,7 +95,7 @@ NativeDisplay.hiddenMirroring NodeHidTransport.close NodeHidTransport.discover N
 NodeHidTransport.write OpenClawAdapter.authenticated OpenClawAdapter.capabilities
 OpenClawAdapter.catalog OpenClawAdapter.health OpenClawAdapter.listAgents
 OpenClawAdapter.probeProtocol ProfileDesktop.batch ProfileDesktop.capture ProfileDesktop.controller
-ProfileDesktop.publish ProfileDesktop.request ProfileDesktop.view
+ProfileDesktop.pruneThumbnails ProfileDesktop.publish ProfileDesktop.request ProfileDesktop.view
 ProfileFunctionContracts.dispatchSnapshot ProfileFunctionContracts.validateProfile
 ProfileManager.command ProfileManager.install ProfileManager.read ProfileRepository.load
 ProfileRepository.loadUnlocked ProfileRepository.save ProfileRepository.select
@@ -122,7 +122,7 @@ WeatherService.verifyCity`.split(/\s+/),
 export const knownSourceFiles = new Set(
 	`composition.ts capture.ts electron-audio.ts audio-worker.ts pcm.ts factory.ts settings.ts settings-ipc.ts websocket.ts ordered.ts runtime.ts errors.ts
 general-service.ts general-invariants.ts general-contracts.ts wizard-service.ts wizard-invariants.ts wizard-contracts.ts backend-rpc.ts backend-preload.ts os-adapter.ts wizard-owners.ts window-binding.ts
-native-volume.ts thumbnail-binding.ts volume-observer.ts profile-thumbnail-key.ts profile-thumbnails.ts
+native-volume.ts thumbnail-binding.ts volume-observer.ts profile-thumbnail-key.ts profile-thumbnails.ts profile-thumbnail-retention.ts
 windows-foreground.ts windows-foreground-script.ts
 account-config.ts action-adapters.ts action-contracts.ts action-errors.ts action-import.ts
 action-invariants.ts action-registry.ts action-service.ts adapter.ts agents-contracts.ts
@@ -200,6 +200,7 @@ export const knownLogEvents = new Set([
 	"Profile session cleanup failed",
 	"Profile session enrollment failed",
 	"Publishing profiles manager snapshot failed",
+	"profiles.thumbnail.cleanup.failed",
 	"Refreshing knob profiles failed",
 	"Settings window operation failed",
 	"Voice tone failed",
