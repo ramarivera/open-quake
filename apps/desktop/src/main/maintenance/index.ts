@@ -119,7 +119,10 @@ export function registerMaintenance(options: MaintenanceOptions) {
 	let pendingOperations = 0;
 	let disposed = false;
 	let mockVersion = "1.0.19";
-	const sessions = firmwareSessionStore(join(root, "firmware-session-v1.json"));
+	const sessions = firmwareSessionStore(
+		join(root, "firmware-session-v1.json"),
+		options.diagnostics,
+	);
 	const bookmarkReleases = new Set<() => void>();
 	const releaseBookmarks = () => {
 		for (const release of [...bookmarkReleases]) release();
