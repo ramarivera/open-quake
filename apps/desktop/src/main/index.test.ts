@@ -393,7 +393,8 @@ describe("desktop window lifecycle", () => {
 	it("focuses and restores the existing management window on second launch", async () => {
 		const { management } = windows();
 		expect(management.options.show).toBe(false);
-		expect(management.show).toHaveBeenCalledOnce();
+		// Connected status can arrive before asynchronous settings/window restoration.
+		await vi.waitFor(() => expect(management.show).toHaveBeenCalledOnce());
 		management.show.mockClear();
 		management.isMinimized.mockReturnValue(true);
 		appEvent("second-instance");
