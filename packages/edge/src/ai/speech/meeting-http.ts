@@ -88,3 +88,19 @@ export const transcriptUrl = (value: string, api: string) =>
 		},
 		catch: (cause) => meetingError("TranscriptionFailed", cause),
 	});
+
+/** Alibaba documents dashscope-file-* OSS buckets for temporary uploads:
+ * https://www.alibabacloud.com/help/en/model-studio/get-temporary-file-url */
+export const uploadPolicyUrl = (value: string, api: string) =>
+	transcriptUrl(value, api).pipe(
+		Effect.flatMap((href) => {
+			const url = new URL(href);
+			if (url.origin === new URL(api).origin && url.protocol === "http:")
+				return Effect.succeed(href);
+			return /^dashscope-file-[a-z0-9-]+\.oss-/.test(url.hostname) &&
+				url.pathname === "/" &&
+				!url.search
+				? Effect.succeed(href)
+				: Effect.fail(meetingError("TranscriptionFailed"));
+		}),
+	);

@@ -10,6 +10,7 @@ import {
 	providerUrl,
 	responseJson,
 	transcriptUrl,
+	uploadPolicyUrl,
 } from "./meeting-http.js";
 import type {
 	MeetingResource,
@@ -77,6 +78,10 @@ export function dashscopeFiletrans(options: {
 			).pipe(
 				Effect.mapError((cause) => meetingError("TranscriptionFailed", cause)),
 			);
+			const uploadUrl = yield* uploadPolicyUrl(
+				policy.upload_host,
+				(yield* resolve(resource.config)).api,
+			);
 			const key =
 				policy.object_key ?? `${policy.upload_dir}/${crypto.randomUUID()}.mp3`;
 			if (!key || key.includes("..") || key.length > 2048)
@@ -97,11 +102,10 @@ export function dashscopeFiletrans(options: {
 						}))
 							form.append(name, value);
 						form.append("file", blob, "meeting.mp3");
-						const response = yield* meetingRequest(
-							http,
-							providerUrl(policy.upload_host),
-							{ method: "POST", body: form },
-						);
+						const response = yield* meetingRequest(http, uploadUrl, {
+							method: "POST",
+							body: form,
+						});
 						if (!response.ok) return yield* meetingError("TranscriptionFailed");
 						yield* Effect.promise(
 							() => response.body?.cancel() ?? Promise.resolve(),

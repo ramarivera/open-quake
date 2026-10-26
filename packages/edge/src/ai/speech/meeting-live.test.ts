@@ -776,3 +776,37 @@ for (const target of [
 			}),
 	);
 }
+
+for (const host of [
+	"https://attacker.example",
+	"https://personal-bucket.oss-cn-beijing.aliyuncs.com",
+	"https://dashscope-file-example.oss-cn-beijing.aliyuncs.com.attacker.example",
+	"https://dashscope-file-example.oss-cn-beijing.aliyuncs.com:444",
+]) {
+	it.effect(`rejects unrelated audio upload policy host ${host}`, () =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const http: typeof SpeechHttp.Service = {
+				fetch: async (url, init) => {
+					if (url.includes("uploads?"))
+						return Response.json({
+							data: {
+								upload_host: host,
+								upload_dir: "private",
+								oss_access_key_id: "fake",
+								signature: "fake",
+								policy: "fake",
+							},
+						});
+					return f.http.fetch(url, init);
+				},
+			};
+			const adapter = dashscopeFiletrans({ ...f, http });
+			expect(
+				Either.isLeft(yield* Effect.either(adapter.submit(f.request))),
+			).toBe(true);
+			expect(f.requests).toEqual([]);
+			expect(f.released()).toBe(0);
+		}),
+	);
+}
