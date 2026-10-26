@@ -7,6 +7,16 @@ The Shortcuts page SHALL offer the five sample chips (Photoshop, Illustrator, Fi
 - **WHEN** the user clicks the Figma chip twice
 - **THEN** the first click fills the app and prompt and the second clears them
 
+#### Scenario: Saved production model
+- **WHEN** Generate Shortcuts runs with a saved default-role model in the default scope
+- **THEN** the adapter pins that model and resolves its native credential through the existing AI facade, without creating a chat session, enabling tools, saving a library or syncing a profile
+- **AND** a missing model or unavailable credential returns the existing AI-unavailable failure before inference
+
+#### Scenario: Generation bounds and shutdown
+- **WHEN** a generation exceeds 60 seconds or 32 KiB of UTF-8 text, overlaps another generation, or the app shuts down
+- **THEN** it fails without changing stored libraries or profiles, aborts its provider work and joins pending generation before inference disposal
+- **AND** generation uses at most the saved output-token budget or 4096 tokens, whichever is lower
+
 ### Requirement: Schema-decoded generation results
 Model output SHALL be parsed by taking the text from its first `{` to its last `}`, running `JSON.parse`, and decoding the result with a Schema of `{ConfigTitle, ConfigData: [{title, config: {functionType, actions}}]}`. It SHALL never be evaluated. Only `hotkey` entries whose chord passes the key-function-library hotkey token rules SHALL become rows. Other function types, including command lines, application launches and multi-actions, SHALL be dropped and counted, and nothing from the output SHALL execute. Output that fails decoding SHALL report an invalid configuration and leave the table as it was. Source: CENTER-094; GAP-MAP "Don't copy" (`eval` on AI shortcut output).
 

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIPv4 } from "node:net";
-import { Effect, Layer, Schema } from "effect";
+import { Cause, Effect, Exit, Layer, Schema } from "effect";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { AiCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/adapter";
 import { makeVercelCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/vercel";
@@ -14,6 +14,7 @@ import {
 	AiAuthRequired,
 	AiConfigInvalid,
 	type AiError,
+	AiUnavailable,
 } from "../../../../../packages/edge/src/ai/ai-errors";
 import { AiRepository } from "../../../../../packages/edge/src/ai/ai-repository";
 import type {
@@ -34,6 +35,7 @@ import {
 import { ChatService } from "../../../../../packages/edge/src/chat/chat-service";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { shortcutDraft } from "./shortcut-draft";
 
 const OWNER = "desktop-user";
 /** Endpoint changes create a different profile. A turn never reads mutable renderer settings. */
@@ -127,6 +129,10 @@ export function createDirectChat(options: DirectChatOptions) {
 		"chat.request",
 	);
 	const selectionLock = Effect.runSync(Effect.makeSemaphore(1));
+	const draftLifetime = new AbortController();
+	const drafts = new Set<Promise<string>>();
+	let drafting = false;
+	let disposal: Promise<void> | undefined;
 	const submit = Effect.fn("DesktopChat.submit")(
 		(input: ChatInput, scope = "main") =>
 			selectionLock.withPermits(1)(
@@ -163,6 +169,39 @@ export function createDirectChat(options: DirectChatOptions) {
 	return {
 		runtime,
 		submit,
+		draftShortcuts: (
+			request: string,
+			signal?: AbortSignal,
+		): Promise<string> => {
+			const operation = runtime
+				.runPromiseExit(
+					Effect.acquireUseRelease(
+						Effect.suspend(() => {
+							if (drafting || draftLifetime.signal.aborted)
+								return Effect.fail(new AiUnavailable());
+							drafting = true;
+							return Effect.void;
+						}),
+						() => shortcutDraft(request, options.models, profileFromModel),
+						() =>
+							Effect.sync(() => {
+								drafting = false;
+							}),
+					),
+					{
+						signal: signal
+							? AbortSignal.any([signal, draftLifetime.signal])
+							: draftLifetime.signal,
+					},
+				)
+				.then((result) => {
+					if (Exit.isFailure(result)) throw Cause.squash(result.cause);
+					return result.value;
+				});
+			drafts.add(operation);
+			void operation.finally(() => drafts.delete(operation)).catch(() => {});
+			return operation;
+		},
 		subscribe: Effect.fn("DesktopChat.subscribe")(
 			(sessionId: SessionId, turnId: TurnId) =>
 				ChatService.subscribe(OWNER, sessionId, turnId),
@@ -193,7 +232,12 @@ export function createDirectChat(options: DirectChatOptions) {
 				Effect.map((items) => items.map(publicHistory)),
 			),
 		),
-		dispose: () => runtime.dispose(),
+		dispose: () => {
+			if (disposal) return disposal;
+			draftLifetime.abort();
+			disposal = Promise.allSettled([...drafts]).then(() => runtime.dispose());
+			return disposal;
+		},
 	};
 }
 export type DirectChat = ReturnType<typeof createDirectChat>;

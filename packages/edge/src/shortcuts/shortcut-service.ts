@@ -21,7 +21,7 @@ export interface ShortcutPortShape {
 	readonly store: JsonStore;
 	readonly id: () => string;
 	readonly now: () => string;
-	readonly draft?: (request: string) => Promise<string>;
+	readonly draft?: (request: string, signal?: AbortSignal) => Promise<string>;
 	readonly sync: (library: ShortcutLibrary) => Promise<string>;
 }
 export class ShortcutPorts extends Context.Tag("integrations/ShortcutPorts")<
@@ -75,7 +75,7 @@ export class ShortcutService extends Effect.Service<ShortcutService>()(
 					const draft = ports.draft;
 					if (!draft) return yield* Effect.fail(new DraftUnavailable());
 					const text = yield* Effect.tryPromise({
-						try: () => draft(`${app.trim()}：${prompt.trim()}`),
+						try: (signal) => draft(`${app.trim()}：${prompt.trim()}`, signal),
 						catch: (c) => new DraftUnavailable(c),
 					});
 					return yield* Effect.try({

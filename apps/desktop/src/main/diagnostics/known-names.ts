@@ -13,7 +13,7 @@ DesktopBrightness.step DesktopBrightness.process DesktopBrightness.macRead Deskt
 ForegroundApp.acquire ForegroundApp.dispose
 ChatService.read ChatService.attach ChatService.submit ChatService.turn ChatService.cancel ChatService.close ChatService.clear ChatService.snapshot ChatService.subscribe ChatService.session ChatService.rename ChatService.supersede ChatService.history ChatService.list
 ChatRepository.get ChatRepository.list ChatRepository.put ChatRepository.remove ChatInference.open FileChatStorage.save PinnedAiRepository.get PinnedAiRepository.put VercelCompatibleAdapter.open
-DesktopChat.submit DesktopChat.subscribe DesktopChat.snapshot DesktopChat.cancel DesktopChat.close DesktopChat.clear DesktopChat.rename DesktopChat.history DesktopChat.list DesktopChat.credentials
+DesktopChat.submit DesktopChat.draftShortcuts DesktopChat.subscribe DesktopChat.snapshot DesktopChat.cancel DesktopChat.close DesktopChat.clear DesktopChat.rename DesktopChat.history DesktopChat.list DesktopChat.credentials
 DesktopSpeech.create DesktopSpeech.createRuntime DesktopSpeech.runtime DesktopSpeech.settings DesktopSpeech.settingsView DesktopSpeech.cleanupCredentials DesktopSpeech.request DesktopSpeech.reset DesktopSpeech.observe DesktopSpeech.readAloud
 DesktopSpeech.profiles DesktopSpeech.configure DesktopSpeech.cancelSpeech DesktopSpeech.stopCapture
 DesktopSpeech.credentials DesktopSpeech.resolveCredential DesktopSpeech.credentialRevoked

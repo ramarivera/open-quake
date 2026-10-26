@@ -20,9 +20,9 @@ export const attachHardware = (
 
 /** Synthetic events plus a real codec/conductor path backed only by fake HID. */
 export const startMockHardwareBus = Effect.fn("MockHardwareBus.start")(
-	function* () {
+	function* (scripted = true) {
 		const bus = yield* Effect.acquireRelease(
-			Effect.sync(startMockDeviceBus),
+			Effect.sync(() => startMockDeviceBus(scripted)),
 			(bus) => Effect.sync(() => bus.stop()),
 		);
 		const fake = yield* makeFakeHardwareTransport();
