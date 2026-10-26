@@ -86,3 +86,8 @@ are superseded and do not establish display acceptance.
 This proves software presentation on the connected display. Physical
 legibility, touch/knob behavior, audio, cable actions and firmware resource
 delivery remain open under `open-quake-lih.24` and their owning tasks.
+
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: KNOB-016 rendered focus outline/angle at three spans; align outline width with the existing two-pixel contract.

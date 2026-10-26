@@ -535,7 +535,11 @@ export function KeyEditor(): React.JSX.Element {
 	};
 	const resetIcon = (): void => {
 		if (!key) return;
-		const platform = navigator.platform.includes("Mac") ? "darwin" : "win32";
+		const platform = navigator.platform.includes("Mac")
+			? "darwin"
+			: navigator.platform.includes("Linux")
+				? "linux"
+				: "win32";
 		const original = builtinProfiles(platform)
 			.find((p) => p.id === profile.id)
 			?.pages.filter((p) => p.id === page.id)

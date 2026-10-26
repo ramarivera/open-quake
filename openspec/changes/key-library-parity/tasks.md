@@ -73,4 +73,9 @@
 
 - [x] 8.12 Keep unrelated strip taps responsive through the production panel dispatcher while Home Assistant is pending, and propagate reset/disconnect cancellation across the desktop Promise callback into the integration runtime. Prove both consumer paths and preserve same-key ordering and authorization. Bead `open-quake-lih.10.2.30`. Evidence: `verification-sound-gif-ha.md`, production-boundary follow-up; 92 focused desktop tests, desktop typecheck, build, both bundle modes, lint and strict change validation pass. Published-head review and checks remain goal-owned until reconciled.
 
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: MGMT-255/340 brightness/plugin/template reset precedence, real editor platform selection and blank Clock reset.
+
 - [x] Mounted editor and title-recovery burn-down regressions for MGMT-049/083/096/097/100/249. Beads open-quake-lih.9.2 and open-quake-lih.9.3 remain open for lead integration.

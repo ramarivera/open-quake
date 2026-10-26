@@ -30,6 +30,7 @@ function NavButton({
 }): React.JSX.Element {
 	const ref = useRef<HTMLButtonElement>(null);
 	const [pressed, setPressed] = useState(false);
+	const suppressClickUntil = useRef(0);
 	const cycle = useRef(onCycle);
 	cycle.current = onCycle;
 	useEffect(() => {
@@ -42,6 +43,7 @@ function NavButton({
 		const end = (event: Event): void => {
 			event.stopPropagation();
 			setPressed(false);
+			suppressClickUntil.current = performance.now() + 500;
 			if (isEffectiveTouch(event)) cycle.current();
 		};
 		element.addEventListener("quake-sub-touch-start", start);
@@ -54,6 +56,8 @@ function NavButton({
 	const release = (event: React.PointerEvent): void => {
 		event.stopPropagation();
 		setPressed(false);
+		if (event.type !== "pointerup")
+			suppressClickUntil.current = performance.now() + 500;
 	};
 	return (
 		<button
@@ -67,13 +71,18 @@ function NavButton({
 			title={title}
 			onPointerDown={(event) => {
 				event.stopPropagation();
+				suppressClickUntil.current = 0;
 				setPressed(true);
 			}}
 			onPointerUp={release}
 			onPointerCancel={release}
 			onPointerLeave={release}
+			onKeyDown={() => {
+				suppressClickUntil.current = 0;
+			}}
 			onClick={(event) => {
 				event.stopPropagation();
+				if (performance.now() < suppressClickUntil.current) return;
 				onCycle();
 			}}
 		>
