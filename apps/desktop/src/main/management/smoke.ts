@@ -2197,5 +2197,5 @@ void smoke()
 		if (server.listening)
 			await new Promise<void>((done) => server.close(() => done()));
 		await rm(directory, { recursive: true, force: true });
-		app.quit();
+		app.exit(Number(process.exitCode ?? 0));
 	});
