@@ -952,3 +952,76 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"keeps Qwen chat and media endpoints and credentials independent across saves",
+	() => {
+		const f = fixture();
+		return Effect.gen(function* () {
+			const service = yield* AgentsService;
+			let view = yield* service.view();
+			view = (yield* service.request({
+				type: "save-model",
+				scope: "default",
+				revision: view.revision,
+				secret: "chat-key",
+				row: {
+					...model(
+						"initial",
+						"default",
+						"qwen",
+						"https://dashscope.aliyuncs.com/compatible-mode/v1",
+					),
+					model: "qwen3.6-plus",
+				},
+			})).view;
+			const chat = f
+				.state()
+				.models.default?.find((row) => row.id === "initial");
+			view = (yield* service.request({
+				type: "save-model",
+				scope: "default",
+				revision: view.revision,
+				secret: "media-key",
+				row: {
+					...model(
+						"image",
+						"fallback",
+						"qwen",
+						"https://dashscope.aliyuncs.com/api/v1",
+					),
+					model: "wanx2.1-t2i-turbo",
+					settings: { mediaKind: "image" },
+				},
+			})).view;
+			const image = f.state().models.default?.find((row) => row.id === "image");
+			expect(
+				f.state().models.default?.find((row) => row.id === "initial"),
+			).toEqual(chat);
+			view = (yield* service.request({
+				type: "save-model",
+				scope: "default",
+				revision: view.revision,
+				secret: "",
+				row: {
+					...model(
+						"initial",
+						"default",
+						"qwen",
+						"https://chat-proxy.invalid/v1",
+					),
+					model: "qwen3.6-plus",
+				},
+			})).view;
+			expect(
+				f.state().models.default?.find((row) => row.id === "image"),
+			).toEqual(image);
+			expect(image?.credentialRef).toBe("vault-2");
+			expect(f.removals).toEqual(["vault-1"]);
+			expect(
+				view.models.default?.find((row) => row.id === "image")
+					?.credentialAvailable,
+			).toBe(true);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

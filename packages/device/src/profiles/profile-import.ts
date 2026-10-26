@@ -1,4 +1,9 @@
 import { Either, ParseResult, Schema } from "effect";
+import { legacyDiagnosticCode } from "../../../edge/src/ai/legacy-diagnostics.js";
+import {
+	legacyAssistantState,
+	migrateLegacyAiConfig,
+} from "../../../edge/src/ai/provider-catalog.js";
 import { validateAction } from "../actions/action-invariants.js";
 import { findAction } from "../actions/action-registry.js";
 import { actionProfileFunctionContracts } from "../actions/profile-function-contracts.js";
@@ -56,6 +61,28 @@ export function inspectProfileImport(
 			return input;
 		}
 		const next = { ...config };
+		if (typeof config.errorCode === "number") {
+			const diagnosticCode = legacyDiagnosticCode(config.errorCode);
+			if (diagnosticCode)
+				next.compatibility = {
+					...record(config.compatibility),
+					legacyErrorCode: config.errorCode,
+					diagnosticCode,
+				};
+		}
+		const ai = record(config.aiConfigData);
+		if (ai) {
+			const migrated = migrateLegacyAiConfig(ai);
+			const decoded = Schema.decodeUnknownEither(ProfileJsonObject)(migrated);
+			if (Either.isRight(decoded)) next.aiConfigData = decoded.right;
+		}
+		for (const field of ["sessionState", "animationState", "assistantType"]) {
+			const value = config[field];
+			if (typeof value === "string") {
+				const mapped = legacyAssistantState(value);
+				if (mapped) next[field] = mapped.state;
+			}
+		}
 		for (const field of [
 			"supportKnob",
 			"supportTouchEffect",

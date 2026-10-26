@@ -421,6 +421,53 @@ describe("page and diagnosed import scenarios", () => {
 			}).pipe(Effect.provide(f.layer));
 		},
 	);
+
+	it("AI-011/012 and MGMT-405 migrate imported assistant settings through the real profile importer", () => {
+		const input = [
+			encodedKey("1,1", {
+				type: "assistant",
+				errorCode: 2004,
+				aiConfigData: {
+					modelType: "gpt-4o",
+					aiEngineProvider: "DeepSeek",
+					supportedModels: [
+						{
+							value: "DeepSeek",
+							custom: true,
+							models: [{ value: "my-model", label: "Mine", extra: 42 }],
+						},
+					],
+				},
+				sessionState: "assistantSessionError",
+				animationState: "assistantAnimationProcessing",
+				assistantType: "assistantTypeKeyConfig",
+			}),
+		];
+		const report = inspectProfileImport(input);
+		expect(report.profile).toBeDefined();
+		expect(report.profile?.pages[0].keys[0]?.config).toMatchObject({
+			aiConfigData: {
+				modelType: "deepseek-v4-flash",
+				aiEngineProvider: "deepseek",
+				supportedModels: expect.arrayContaining([
+					expect.objectContaining({
+						value: "DeepSeek",
+						custom: true,
+						models: expect.arrayContaining([
+							{ value: "my-model", label: "Mine", extra: 42 },
+						]),
+					}),
+				]),
+			},
+			sessionState: "error",
+			animationState: "processing",
+			assistantType: "keyConfig",
+			compatibility: {
+				diagnosticCode: "CHAT.RESPONSE.TIMEOUT",
+				legacyErrorCode: 2004,
+			},
+		});
+	});
 	it("reports optional fields, unknown functions and legacy sentinels before import", () => {
 		const input = [
 			encodedKey("1,1", {
