@@ -3,9 +3,9 @@
 ## Purpose
 
 Render the active profile's key grid on the QUAKE strip and in the management
-preview the way DK-Suite 0.4.95 draws it. Geometry, colours and timings are the
-recovered values cited in `design.md`. Parity decisions 2 and 3 were approved by
-Ramiro on 2026-10-23.
+preview with recovered DK-Suite 0.4.95 geometry and behavior. The accepted
+`independent-device-design` owns the flat presentation. Parity decisions 2 and 3
+were approved by Ramiro on 2026-10-23.
 
 > **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (slot visuals, generic tile glow/ring/title metrics, DK press scale and glow) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
 
@@ -39,7 +39,7 @@ SCREEN-103.
 ### Requirement: Grid themes
 
 The grid SHALL use the profile theme's cell, gap and edge: common base 220/20/10
-radius 48, meeting assistant 236/4/2 radius 24, system info 221/20/10 radius 48,
+visible radius 28, meeting assistant 236/4/2 radius 14, system info 221/20/10 radius 28,
 monitor panel 220/20/10 radius 0. A cell's column SHALL start at
 `edge + (column−1)·(cell+gap)`, and the same formula SHALL apply to rows. The
 profile theme SHALL resolve in this order: compatibility `resourceId` `1-1` or
@@ -55,12 +55,12 @@ MGMT-052.
 #### Scenario: MeetAI geometry
 
 - **WHEN** the active profile's compatibility resourceId is `1-1`
-- **THEN** cell `1,8` spans x 1682–1918 and y 2–238 with corner radius 24
+- **THEN** cell `1,8` spans x 1682–1918 and y 2–238 with corner radius 14
 
 #### Scenario: Custom profile geometry
 
 - **WHEN** a profile named `Work` has no compatibility identity
-- **THEN** cell `2,1` spans x 10–230 and y 250–470 with corner radius 48
+- **THEN** cell `2,1` spans x 10–230 and y 250–470 with corner radius 28
 
 #### Scenario: Meeting mic cell
 
@@ -115,12 +115,15 @@ hit-testing. Covers SCREEN-028, MGMT-064.
 
 ### Requirement: Slot visuals and empty slot setting
 
-Every rendered cell SHALL have a slot with background `rgba(255,255,255,0.04)`
-and the profile theme's radius (0 for `playAudio`). An empty slot SHALL add
-`2px dashed rgba(107,120,145,0.8)` at opacity 0.7. The "Empty Slot Dashed Border"
-setting SHALL default to on, persist locally, and update both windows without
-reload. When off, empty slots SHALL have no border. Spanning slots SHALL stack
-above single slots. Covers SCREEN-029, SCREEN-030, MGMT-055, SETTINGS-013.
+Filled slots SHALL have the opaque device `surface` fill and one hairline border.
+Visible corners SHALL follow the accepted theme radii, with square full-bleed and
+monitor-panel slots. Empty slots SHALL draw only a two-logical-pixel dashed `line`
+border at full opacity. The "Empty Slot Dashed Border" setting SHALL default to
+on, persist locally, and update panel and management without reload. When off,
+empty slots SHALL have no border. Hidden slots SHALL stay inert and unbordered.
+Spanning slots SHALL retain local layer 10, full-bleed slots layer 1, and knob
+focus SHALL retain the opaque plate below its accent outline. Covers SCREEN-029,
+SCREEN-030, MGMT-055, SETTINGS-013.
 
 #### Scenario: Border setting off
 
@@ -160,49 +163,47 @@ WIDGETS-001, WIDGETS-018.
 
 ### Requirement: Generic icon-and-title tile
 
-The generic tile SHALL draw a `floor(min(box)·0.49)` px icon, shifted down 16.67 %
-of its height in common base and up 10 % otherwise. Its title SHALL measure
-`floor(min(box)·0.14·s)` px, where `s` is 0.7 for 2×2 tiles and is multiplied by
-0.9 in common base. In common base the title SHALL sit at top 9 %, weight 400,
-upright. Elsewhere it SHALL sit at top or bottom 10 % per `title.pos`, weight 900
-for `bold` and italic for `italic`. The strip SHALL never underline. Titles
-SHALL be cut to 94 % of the box width with `...` and drawn in `title.color`.
-Hidden titles SHALL not render. Common base SHALL draw the accent glow cover and
-a 2 px accent ring fading from 0.4 to 0.02 alpha (0.18 at the far end when the
-tile spans at least two columns). The accent SHALL come from the icon's averaged
-saturated pixels scaled by 1.2, falling back to the theme colour scheme, then
-rgb(116,128,239). System info SHALL draw its cyan bottom glow and ring. Meeting
-assistant and monitor panel SHALL draw neither. Only inline `data:image/` icons
-SHALL load. Covers SCREEN-022, SCREEN-033, WIDGETS-006, WIDGETS-007, WIDGETS-008,
-WIDGETS-009, WIDGETS-011, WIDGETS-013, MGMT-056, MGMT-060.
+The generic tile SHALL use the flat device palette and code-native plate. Inner
+padding SHALL be rounded 9 percent of the short edge. Icon size SHALL be rounded
+min(42 percent of the short edge,168). Default title size SHALL be rounded
+clamp(22,11 percent of the short edge,34), weight 550, upright and below the icon.
+Explicit user styling SHALL determine title position and supported text style.
+Titles SHALL be bounded by the inner width and ellipsized, and hidden titles
+SHALL not render. Missing, delayed or colourless artwork SHALL retain the flat
+plate without extracted accents, glow, decorative rings or theme SVG variants.
+Only inline `data:image/` icons SHALL load. Covers SCREEN-022, SCREEN-033,
+WIDGETS-006, WIDGETS-007, WIDGETS-008, WIDGETS-009, WIDGETS-011, WIDGETS-013,
+MGMT-056, MGMT-060.
 
 #### Scenario: Common-base 1×1
 
 - **WHEN** a hotkey with a visible title `Lock Screen` renders at 220×220 in common base
-- **THEN** the icon is 107 px and the title is 27 px at top 9 % with weight 400
+- **THEN** the icon is 92 px and the default title is 24 px below it with weight 550
 
 #### Scenario: Two-by-two title
 
 - **WHEN** a `[2,2]` key renders in common base
-- **THEN** its box is 460×460, the icon is 225 px and the title is 40 px
+- **THEN** its box is 460×460, the icon is 168 px and the default title is 34 px
 
 #### Scenario: Colourless icon
 
-- **WHEN** an icon has no pixel with alpha at least 50, brightness 30–225 and saturation at least 0.1
-- **THEN** the tile's accent is the theme colour scheme
+- **WHEN** an icon has no saturated pixels
+- **THEN** the tile keeps its flat device surface without extracting an accent or drawing a glow
 
 ### Requirement: Strip press motion
 
-A pressed tile's slot SHALL scale to 0.8 with a `0 0 25px rgba(255,255,255,0.4)`
-glow through an `all 0.3s ease` transition. `playAudio` SHALL not scale.
-`aiChatView`, `cameraView`, `cameraControlView` and `printerStatusView` SHALL
-show no press effect. With reduced motion requested, the glow SHALL show without
-scaling or transition. Covers SCREEN-034, WIDGETS-010.
+An eligible pressed tile SHALL use raised fill, a two-pixel accent inset ring,
+and a 120 ms transition. Panel scale SHALL be 0.96 and management scale 0.98.
+Visual feedback SHALL clear on release or after 200 ms independently of the held
+action lifetime. `playAudio` SHALL not scale. Conversation, camera and printer
+types, locked non-draggable previews and disabled editors SHALL suppress
+whole-card feedback. With OS or app reduced motion requested, fill and ring SHALL
+remain without scaling or transition. Covers SCREEN-034, WIDGETS-010.
 
 #### Scenario: Reduced motion press
 
-- **WHEN** a hotkey is pressed while the OS requests reduced motion
-- **THEN** its slot shows the glow at full size with no transition
+- **WHEN** a hotkey is pressed while the OS or app requests reduced motion
+- **THEN** its slot shows raised fill and accent ring at full size with no transition
 
 ### Requirement: Hit-testing contract
 
