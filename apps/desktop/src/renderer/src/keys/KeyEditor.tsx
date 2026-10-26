@@ -56,6 +56,7 @@ type Selection = {
 export function KeyEditor(): React.JSX.Element {
 	const { snapshot: wallpaper } = useWallpaper();
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
+	const [mirrorPressed, setMirrorPressed] = useState<string>();
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
 		[profileId, setProfileId] = useState(""),
 		[pageId, setPageId] = useState(""),
@@ -588,6 +589,29 @@ export function KeyEditor(): React.JSX.Element {
 				/>
 				<fieldset
 					className="keys-preview"
+					onPointerDownCapture={(event) => {
+						const rect = event.currentTarget.getBoundingClientRect();
+						const tile = tileAt(
+							{
+								x: ((event.clientX - rect.left) * 1920) / rect.width,
+								y: ((event.clientY - rect.top) * 480) / rect.height,
+							},
+							stripLayout(profile, page),
+						);
+						const key = page.keys.find((key) => key.keyCode === tile?.keyCode);
+						const locked =
+							key &&
+							Option.isSome(key.config.basicEditableItems) &&
+							!key.config.basicEditableItems.value.allowDrag;
+						setMirrorPressed(locked ? undefined : tile?.keyCode);
+					}}
+					onPointerUpCapture={() => setMirrorPressed(undefined)}
+					onPointerCancelCapture={() => setMirrorPressed(undefined)}
+					onPointerLeave={() => setMirrorPressed(undefined)}
+					onDragStartCapture={(event) => {
+						event.preventDefault();
+						setMirrorPressed(undefined);
+					}}
 					onKeyDown={(event) => {
 						if (event.key === "Escape") void revert();
 					}}
@@ -618,6 +642,7 @@ export function KeyEditor(): React.JSX.Element {
 					<StripViewport>
 						<StripScreen
 							titles="provided"
+							pressedKeyCode={mirrorPressed}
 							interactive={false}
 							previewSerial="editor-preview"
 							wallpaper={wallpaper}

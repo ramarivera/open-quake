@@ -758,6 +758,7 @@ function fixture(
 									Effect.orDie,
 								),
 							execute,
+							holdHotkey: () => execute().pipe(Effect.as(Effect.void)),
 							...(executeOwned ? { executeOwned } : {}),
 							select: (deviceId, profileId, pageId) =>
 								service
@@ -1350,7 +1351,7 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 			if (
 				command.type === "activate" &&
 				command.keyCode === "1,1" &&
-				command.kind === "press"
+				command.kind === "up"
 			)
 				pending = operation.catch(() => "interrupted");
 			return operation;
@@ -1358,7 +1359,7 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 	);
 	const tap = (keyCode: string) => {
 		dispatcher.key({ keyCode, keyAction: 0 });
-		dispatcher.key({ keyCode, keyAction: 1 });
+		dispatcher.key({ keyCode, keyAction: 1, voiceTouchEnd: true });
 	};
 	try {
 		const timer = { ...f.activation, keyCode: "1,3" };

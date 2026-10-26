@@ -62,3 +62,61 @@ export const transposeSubTargets = (
 		...entry,
 		bounds: portraitBounds(entry.bounds, height),
 	}));
+
+/** A mounted owner shares the bounded fallback scan budget across registrations. */
+export function createRegistrationSupervisor(options: {
+	readonly now: () => number;
+	readonly schedule: (action: () => void, delay: number) => () => void;
+	readonly request: () => boolean;
+	readonly globalRescan: () => boolean;
+	readonly change?: (
+		state: "idle" | "requesting" | "registered" | "failed",
+	) => void;
+}) {
+	let state: "idle" | "requesting" | "registered" | "failed" = "idle";
+	let attempts = 0;
+	let scans = 0;
+	let lastScan = Number.NEGATIVE_INFINITY;
+	let lastAttempt = Number.NEGATIVE_INFINITY;
+	let cancel: (() => void) | undefined;
+	let disposed = false;
+	const set = (next: typeof state): void => {
+		state = next;
+		options.change?.(next);
+	};
+	const request = (): void => {
+		if (
+			disposed ||
+			state === "registered" ||
+			attempts >= 5 ||
+			options.now() - lastAttempt < 2000
+		)
+			return;
+		cancel?.();
+		lastAttempt = options.now();
+		attempts++;
+		set("requesting");
+		let ready = options.request();
+		if (!ready && scans < 3 && options.now() - lastScan >= 3000) {
+			scans++;
+			lastScan = options.now();
+			ready = options.globalRescan();
+		}
+		set(ready ? "registered" : "failed");
+		if (!ready && attempts < 5) cancel = options.schedule(request, 2000);
+	};
+	return {
+		request,
+		noteDispatch(): void {
+			if (!disposed) {
+				cancel?.();
+				set("registered");
+			}
+		},
+		snapshot: () => ({ state, attempts, scans }),
+		dispose(): void {
+			disposed = true;
+			cancel?.();
+		},
+	};
+}
