@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { normalizeWeatherLocale } from "../../../shared/weather-invariants";
-import type { WeatherResult } from "../../../shared/weather-media-contracts";
+import type {
+	WeatherResult,
+	WeatherSettings,
+} from "../../../shared/weather-media-contracts";
 import { WeatherMediaClient } from "./client";
 import { WeatherRefresh } from "./refresh";
 
 const client = new WeatherMediaClient(
 	typeof window === "undefined" ? undefined : window.quakeWeatherMedia,
 );
-export const useWeatherMedia = () => ({
+const noSubscribe = () => () => {};
+const emptySnapshot = () => null;
+export const useWeatherMedia = (enabled = true) => ({
 	client,
 	snapshot: useSyncExternalStore(
-		client.subscribe,
-		client.getSnapshot,
+		enabled ? client.subscribe : noSubscribe,
+		enabled ? client.getSnapshot : emptySnapshot,
 		() => null,
 	),
 });
@@ -19,7 +24,12 @@ export const rendererWeatherLocale = () =>
 	normalizeWeatherLocale(
 		typeof navigator === "undefined" ? "en" : navigator.language,
 	);
-export function useWeather(enabled: boolean): {
+export function useWeather(
+	enabled: boolean,
+	override?: WeatherSettings,
+	instanceId?: string,
+	side: "panel" | "edit" = "panel",
+): {
 	result: WeatherResult;
 	loading: boolean;
 } {
@@ -29,8 +39,9 @@ export function useWeather(enabled: boolean): {
 		loading: boolean;
 	}>({ result: { _tag: "empty" }, loading: false });
 	const locale = rendererWeatherLocale();
-	const settings = snapshot?.settings;
-	const key = JSON.stringify([enabled, settings, locale]);
+	const settings = override ?? snapshot?.settings;
+	const refreshRevision = snapshot?.refreshRevision;
+	const key = JSON.stringify([enabled, settings, locale, refreshRevision]);
 	const latest = useRef(settings);
 	latest.current = settings;
 	const scheduler = useRef<WeatherRefresh | null>(null);
@@ -40,7 +51,12 @@ export function useWeather(enabled: boolean): {
 		if (!enabled || !ready) return;
 		const refresh = new WeatherRefresh(
 			async () => {
-				const reply = await client.request({ _tag: "weather", locale });
+				const reply = await client.request({
+					_tag: "weather",
+					locale,
+					...(latest.current ? { settings: latest.current } : {}),
+					...(instanceId ? { instanceId, side } : {}),
+				});
 				return reply?._tag === "weather"
 					? reply.result
 					: { _tag: "error", reason: "unavailable" };
@@ -62,7 +78,7 @@ export function useWeather(enabled: boolean): {
 			scheduler.current = null;
 			document.removeEventListener("visibilitychange", visibility);
 		};
-	}, [enabled, ready, locale]);
+	}, [enabled, ready, locale, instanceId, side]);
 	useEffect(() => {
 		if (key !== previousKey.current) {
 			previousKey.current = key;

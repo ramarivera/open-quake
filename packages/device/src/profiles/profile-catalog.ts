@@ -86,6 +86,18 @@ export const builtinProfiles = (
 					...(key.childrenName ? { childrenName: key.childrenName } : {}),
 					config: {
 						...key.config,
+						// Quick's built-in cells share the immutable preset policy on every OS.
+						...(entry.id === "1-2" && !key.config.basicEditableItems
+							? {
+									basicEditableItems: {
+										title: false,
+										grid: false,
+										icon: false,
+										allowDelete: false,
+										allowDrag: false,
+									},
+								}
+							: {}),
 						title: {
 							...Schema.decodeUnknownSync(ProfileJsonObject)(key.config.title),
 							text,

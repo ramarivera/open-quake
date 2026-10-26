@@ -51,3 +51,10 @@ A Home Assistant key in Default or Custom mode SHALL render its state on the str
 #### Scenario: Connection lost
 - **WHEN** the Home Assistant connection drops
 - **THEN** every tracked tile shows `unavailable` and no stale value remains
+
+### Requirement: Persisted AI entity picker selection
+The AI entity picker SHALL default to climate, light, media_player, person, sensor, switch and weather domains, show friendly labels grouped by room or domain with Other last, and persist checked leaf IDs independently of grouping. Source: CENTER-100.
+
+#### Scenario: Switch grouping and reload selection
+- **WHEN** a user switches from room to domain grouping, changes checked leaves, saves and reopens the picker
+- **THEN** only those leaf entity IDs persist, excluded domains are initially unchecked, and friendly labels and checked states survive remount

@@ -185,6 +185,7 @@ const FULL_BLEED_TYPES: ReadonlySet<string> = new Set([
 ]);
 /** shouldShowShortcutPressFx (QSC:1702-1708). */
 const NO_PRESS_FEEDBACK_TYPES: ReadonlySet<string> = new Set([
+	"quakeBot",
 	"liveAudioTranslateDisplay",
 	"aiChatView",
 	"cameraView",
@@ -193,6 +194,7 @@ const NO_PRESS_FEEDBACK_TYPES: ReadonlySet<string> = new Set([
 ]);
 /** fetchAllCurrentButtonAttributes overrides (QSC:3054-3112). */
 const SUB_TOUCH_TYPES: ReadonlySet<string> = new Set([
+	"aiChatView",
 	"liveAudioTranslateDisplay",
 	"quakeBot",
 	"quakeBotInput",

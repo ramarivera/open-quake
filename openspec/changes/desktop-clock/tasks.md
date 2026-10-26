@@ -62,3 +62,21 @@ Fix round evidence: migration/backup regressions reproduced six failures on the 
 Evidence directory: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/clock-profile/fix1/`. Logs: `regression-main-before.log`, `native-before3.log`, `privacy-before.log`, `test-final2.log`, `biome-final.log`, `typecheck-final2.log`, `build-final2.log`, `bundle-final2.log`, `spec-final.log`, `native-profile-final.log`, `native-media-final.log`. Native checks used the existing Electron 43.4.1 distribution through `ELECTRON_OVERRIDE_DIST_PATH` after the local download failed, with `OPEN_QUAKE_MOCK_DEVICE=1` and `ELECTRON_RUN_AS_NODE` unset.
 
 Codex 4375943149 duplicates 8.2, and 4375943171 duplicates 8.3. All six Devin findings and all three Codex findings are addressed. CodeRabbit is rate-limited and has no findings. Review replies reference the pushed fix commit; threads remain unresolved for the lead. Physical acceptance stays open under task 4.2 and `open-quake-t10.6`.
+
+
+## 9. Clock burn-down lane
+
+- [x] 9.1 Complete selected-key format/theme/weather/music ownership, authenticated theme publication, preset defaults/locks and draft preservation. Covers MAIN-141, MGMT-278/279/346, SCREEN-142 and WIDGETS-020/021/022/038/056/057. Evidence: `clock-profile-binding.test.ts`, `editorPatch.test.ts` and mounted `clock/profile-smoke.ts`. Bead `open-quake-lih.6.2` remains open for lead review/merge.
+- [x] 9.2 Freeze passive hosts without IPC, retain live boundary/resume/disposal behavior, add scoped weather cache read/clear/refresh and bounded decoded thumbnails. Covers MAIN-142 and WIDGETS-029/058/060. Evidence: `weather-media/controller.test.ts`, `registration.test.ts`, `capture-thumbnail.test.ts` and 35 hidden native clock assertions with seven EN/DE captures. Bead `open-quake-lih.6.3` remains open for lead review/merge. Evidence: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/clock/`. The baseline media smoke reaches Cluster 18 PASS, then reproduces the independently confirmed main OBS screenshot failure tracked by `open-quake-c5w.16.1`. Physical acceptance task 4.2 stays open.
+
+## 10. PR #89 review fixes
+
+- [x] 10.1 Replace renderer media selectors with opaque window/target-bound references, remove wildcard CORS, and prove same-target reads plus cross-target/window refusal. Review 4377943205, WIDGETS-034/038, bead `open-quake-lih.6.1.13`.
+- [x] 10.2 Make Overview and profile previews passive without clock/weather requests or tickers. Review 4377942844, WIDGETS-029/058, bead `open-quake-lih.6.1.14`.
+- [x] 10.3 Remove legacy global Screen weather/music controls so one set writes the selected key. Review 4377943008, WIDGETS-056, bead `open-quake-lih.6.1.15`.
+
+10.1 evidence: both registration-boundary regressions fail on a9aac66. After the fix, 24 focused clock/profile tests and desktop typecheck pass. Logs are under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/clock/fix1/`. Full gates and native acceptance follow after all review fixes.
+
+10.2 evidence: both actual management host renders mounted the live clock hook before the fix. With explicit passive StripScreen props they render frozen clocks without that hook. All 25 focused preview/strip tests and desktop typecheck pass. The native profile smoke now checks Overview and Profiles IPC independently.
+
+10.3 evidence: the hidden mock native smoke failed on duplicate Screen weather/music controls before App.tsx removed the legacy global component. It now passes 41 assertions with eight captures, proving selected profile B city/music writes preserve A and never configure global weather. The same run verifies passive Overview/Profiles and decoded video thumbnails under scoped media CORS. Six-package typecheck passes. Full gate reconciliation is still running. Scratch: `burndown/clock/fix1/native-final` under the lane root.

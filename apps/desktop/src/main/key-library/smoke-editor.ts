@@ -22,18 +22,15 @@ import {
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository.js";
-import {
-	KEY_REQUEST,
-	type KeyReply,
-	KeyRequest,
-} from "../../shared/key-library";
+import { CLOCK_REQUEST, ClockCommand } from "../../shared/clock-contracts";
+import { KEY_REQUEST, KeyRequest } from "../../shared/key-library";
 import type { registerProfiles } from "../profiles";
 
 type Phase = "before" | "after";
 export function interceptEditorRequests() {
 	const original = ipcMain.handle;
 	const pauses: {
-		type: KeyRequest["type"];
+		type: KeyRequest["type"] | "clock:setTheme";
 		phase: Phase;
 		enter: () => void;
 		released: Promise<void>;
@@ -44,14 +41,22 @@ export function interceptEditorRequests() {
 		original.call(
 			ipcMain,
 			channel,
-			channel !== KEY_REQUEST
+			channel !== KEY_REQUEST && channel !== CLOCK_REQUEST
 				? handler
 				: async (event, input: unknown) => {
-						const command = Schema.decodeUnknownSync(KeyRequest)(input);
-						requests.push(command);
+						const command =
+							channel === KEY_REQUEST
+								? Schema.decodeUnknownSync(KeyRequest)(input)
+								: undefined;
+						if (command) requests.push(command);
+						const type =
+							command?.type ??
+							(Schema.decodeUnknownSync(ClockCommand)(input)._tag === "setTheme"
+								? "clock:setTheme"
+								: undefined);
 						const pause = async (phase: Phase) => {
 							const index = pauses.findIndex(
-								(p) => p.type === command.type && p.phase === phase,
+								(p) => p.type === type && p.phase === phase,
 							);
 							if (index < 0) return;
 							const barrier = pauses.splice(index, 1)[0];
@@ -61,7 +66,7 @@ export function interceptEditorRequests() {
 							}
 						};
 						await pause("before");
-						const reply: KeyReply = await handler(event, input);
+						const reply: unknown = await handler(event, input);
 						await pause("after");
 						return reply;
 					},
@@ -74,7 +79,7 @@ export function interceptEditorRequests() {
 		restore: () => {
 			ipcMain.handle = original;
 		},
-		pause: (type: KeyRequest["type"], phase: Phase) => {
+		pause: (type: KeyRequest["type"] | "clock:setTheme", phase: Phase) => {
 			let release = () => {};
 			let enter = () => {};
 			const entered = new Promise<void>((done) => {
