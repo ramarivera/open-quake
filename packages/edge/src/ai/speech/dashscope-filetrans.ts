@@ -199,6 +199,7 @@ export function dashscopeFiletrans(options: {
 			yield* resources.save(request.audioRef, state);
 		}
 		if (state.task) return request.audioRef;
+		state = { ...state, internalRetries: 0 };
 		if (
 			!state.upload ||
 			state.upload.expiresAt <= (yield* Clock.currentTimeMillis)

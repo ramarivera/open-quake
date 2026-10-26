@@ -1636,3 +1636,33 @@ for (const provider of ["openai", "dashscope"] as const)
 				expect(partial).toBe(false);
 			}),
 	);
+
+it.effect(
+	"gives a new DashScope attempt a fresh internal retry budget but preserves recovery",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const provider = dashscopeFiletrans(f);
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				remoteFiles: [],
+				cleanupPending: false,
+				internalRetries: 3,
+				upload: { url: "oss://private/recording.mp3", expiresAt: 48 * 3600000 },
+			});
+			yield* provider.submit(f.request);
+			f.internalFailures(1);
+			const poll = yield* provider
+				.poll("meeting")
+				.pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(2001);
+			const result = yield* Fiber.join(poll);
+			expect(Either.isRight(result) && result.right.status).toBe("pending");
+			expect(f.states.get("meeting")?.internalRetries).toBe(1);
+			const task = f.states.get("meeting")?.task;
+			yield* provider.submit(f.request);
+			expect(f.states.get("meeting")?.internalRetries).toBe(1);
+			expect(f.states.get("meeting")?.task).toBe(task);
+		}),
+);
