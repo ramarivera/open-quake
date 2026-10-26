@@ -314,3 +314,46 @@ Backup completion SHALL sync the staged file before rename and the parent direct
 
 - **WHEN** a mock smoke supplies an absolute explicit scratch root with contained temporary and artifact paths
 - **THEN** it can run without author-specific directory names, while absent opt-in, escaping paths and real-userData overlap are rejected
+
+
+### Requirement: Owned desktop shell and background recovery
+
+Before creating windows, the host SHALL set its Windows identity to `net.roxasroot.open-quake`, apply a validated saved Chromium locale, disable native-window occlusion for background device rendering, register privileged media protocols, and acquire the single-instance lock. Management SHALL retain open-quake's 1100x760 initial size, 640x560 minimum, native macOS controls, Windows overlay and Linux frame. It SHALL block renderer navigation and popups; only explicit HTTPS and mailto links may open externally. Native minimize/maximize SHALL remain usable. Closing management SHALL hide it while a tray or macOS Dock can restore it, preserving device owners. On platforms without a usable tray, management SHALL remain reachable and last-window close SHALL quit safely. Tray Resume, Settings, Management Center and Exit SHALL share the existing owner. Exit and Restart SHALL drain all writers, runtimes and diagnostics before quitting; only Restart SHALL relaunch. Geometry retains the safer existing 250ms debounce rather than DK-Suite's 500ms. Evidence: MAIN-119, MAIN-121, MAIN-122, MAIN-127, MGMT-006, MGMT-015, MGMT-018, MGMT-019, SETTINGS-112, SETTINGS-113.
+
+#### Scenario: Background close and recovery
+
+- **WHEN** management closes with an available tray, then Resume, double-click or macOS activation occurs
+- **THEN** the same management window is restored and device subscriptions remain running; a destroyed management window is recreated with persisted geometry
+
+#### Scenario: Trusted application commands
+
+- **WHEN** management's exact top-level app document requests Quit or Restart
+- **THEN** shutdown runs once and completes before process exit or relaunch; a panel, subframe, foreign document, stale window, invalid command or request after disposal performs no action
+
+#### Scenario: Tray failure
+
+- **WHEN** Linux or Windows cannot create a tray
+- **THEN** hidden startup shows management and closing the last window uses the awaited shutdown path instead of stranding an unreachable background process
+
+### Requirement: Shell route and settings equivalence
+
+Management-hosted Settings SHALL replace the vendor's fixed 660x450 window with the existing resizable management window and independent design system. General is the default subsection; Device deep links SHALL open the canonical device controls. Settings tab navigation SHALL support arrow keys, Home and End with focus and horizontal scrolling. Settings, guide, setup, icons, panel and thumbnail routes SHALL select only their intended renderer. The management title strip SHALL remain visible across screen and diagnostic pages; panel and preview render without management chrome. Help and Exit SHALL be available from every management page. As approved by Ramiro on 2026-10-26, disabled vendor idle ads, the always-zero bell, unreachable game-mode/app-load settings handlers, and ARIS-only calibration/CommonDialog flows SHALL be excluded; no inert substitutes SHALL appear. Evidence: MAIN-124, MGMT-001, MGMT-007, MGMT-008, MGMT-014, MGMT-432, MGMT-433, SETTINGS-001, SETTINGS-002, SETTINGS-003, SETTINGS-017.
+
+#### Scenario: Settings activation and local help
+
+- **WHEN** Settings or its General/Device deep link is activated, or Help is chosen
+- **THEN** the requested subsection or bundled QUAKE guide is shown without opening vendor pages or allocating duplicate services
+
+#### Scenario: Approved dormant features
+
+- **WHEN** the QUAKE shell, settings and device controls render
+- **THEN** they offer no idle-ad webview, notification placeholder, unreachable settings actions, ARIS calibration or ARIS confirmation dialog
+
+### Requirement: Bounded daily local diagnostics
+
+Privacy-scrubbed local diagnostics SHALL rotate on the first write after local midnight and before exceeding 10 MiB, retaining at most 30 files including the active file. The writer SHALL serialize rollover with queued writes, retain 0700 directories and 0600 files, reject symlinks, and flush on shutdown. Evidence: MAIN-126.
+
+#### Scenario: Midnight and size rollover
+
+- **WHEN** records cross local midnight or the 10 MiB boundary
+- **THEN** each record is retained once in order within the size and 30-file limits, and no secret-bearing raw application data enters diagnostics

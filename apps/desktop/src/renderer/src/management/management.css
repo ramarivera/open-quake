@@ -1091,3 +1091,20 @@ fieldset.mc-tabs button {
 .management-window [hidden] {
 	display: none;
 }
+
+/* Settings and shell actions reuse the approved compact control vocabulary. */
+.shell-settings-tabs {
+	flex-wrap: nowrap;
+	max-width: 100%;
+	overflow-x: auto;
+	margin-bottom: var(--oq-space-4, 16px);
+}
+.shell-settings-tabs > button {
+	flex: 0 0 auto;
+}
+.mc-sidebar-footer {
+	flex-wrap: wrap;
+}
+.mc-sidebar-footer > .guide-entry {
+	min-width: 0;
+}

@@ -49,6 +49,10 @@ const electron = vi.hoisted(() => {
 		destroyed = false;
 		contentListeners = new Map<string, () => void>();
 		webContents = {
+			mainFrame: { url: "http://localhost:5173/?surface=management" },
+			isLoadingMainFrame: () => false,
+			once: vi.fn(),
+			setWindowOpenHandler: vi.fn(),
 			send: vi.fn(),
 			setAudioMuted: vi.fn(),
 			setZoomFactor: vi.fn(),
@@ -103,6 +107,9 @@ const electron = vi.hoisted(() => {
 	return {
 		BrowserWindow: Window,
 		app: {
+			commandLine: { appendSwitch: vi.fn() },
+			setAppUserModelId: vi.fn(),
+			relaunch: vi.fn(),
 			isPackaged: false,
 			requestSingleInstanceLock: vi.fn(() => true),
 			removeListener: vi.fn(),
@@ -123,6 +130,16 @@ const electron = vi.hoisted(() => {
 			removeListener: vi.fn(),
 			handle: vi.fn(),
 			removeHandler: vi.fn(),
+		},
+		nativeImage: {
+			createFromBitmap: vi.fn(() => ({ setTemplateImage: vi.fn() })),
+		},
+		Menu: { buildFromTemplate: vi.fn((items: readonly unknown[]) => items) },
+		Tray: class {
+			setToolTip = vi.fn();
+			setContextMenu = vi.fn();
+			on = vi.fn();
+			destroy = vi.fn();
 		},
 		nativeTheme: { themeSource: "system" },
 		safeStorage: { isEncryptionAvailable: () => false },
@@ -343,6 +360,7 @@ vi.mock("./profiles/profile-ipc", async () => {
 		"../../../../packages/device/src/profiles/profile-contracts.js"
 	);
 	return {
+		...actual,
 		desktopProfilesLive: vi.fn(() =>
 			actual.ProfilesLive({
 				read: async () => encodeProfileEnvelope(createInitialProfileEnvelope()),
@@ -1104,6 +1122,82 @@ describe("desktop window lifecycle", () => {
 			release();
 		}
 		await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+	});
+
+	it.each([false, true])(
+		"MAIN-127 MGMT-019 drains writers before shell quit with restart=%s",
+		async (restart) => {
+			const { management } = windows();
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([name]) => name === "management:command",
+			)?.[1];
+			if (!handler) throw new Error("Shell handler missing");
+			const voice = vi.mocked(registerVoiceSurface).mock.results[0]?.value;
+			if (!voice) throw new Error("Voice owner missing");
+			let release = () => {};
+			vi.mocked(voice.dispose).mockImplementationOnce(
+				() =>
+					new Promise<void>((resolve) => {
+						release = resolve;
+					}),
+			);
+			const call = Reflect.apply(handler, undefined, [
+				{
+					sender: management.webContents,
+					senderFrame: management.webContents.mainFrame,
+				},
+				{ action: restart ? "restart" : "quit" },
+			]);
+			expect(call).toBe(true);
+			expect(electron.app.quit).toHaveBeenCalledOnce();
+			electron.app.quit.mockClear();
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(voice.dispose).toHaveBeenCalledOnce());
+			try {
+				expect(electron.app.relaunch).not.toHaveBeenCalled();
+				expect(electron.app.quit).not.toHaveBeenCalled();
+			} finally {
+				release();
+			}
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+			expect(electron.app.relaunch).toHaveBeenCalledTimes(restart ? 1 : 0);
+			if (restart)
+				expect(electron.app.relaunch.mock.invocationCallOrder[0]).toBeLessThan(
+					electron.app.quit.mock.invocationCallOrder[0] ?? 0,
+				);
+		},
+	);
+
+	it("MGMT-006 blocks navigation and popups and retains the approved minimum and platform chrome", () => {
+		const { management } = windows();
+		expect(management.options).toMatchObject({
+			width: 1100,
+			height: 760,
+			minWidth: 640,
+			minHeight: 560,
+			webPreferences: { contextIsolation: true, nodeIntegration: false },
+		});
+		if (process.platform === "darwin")
+			expect(management.options.titleBarStyle).toBe("hiddenInset");
+		const navigate = management.contentListeners.get("will-navigate");
+		if (!navigate) throw new Error("Missing navigation guard");
+		const event = { preventDefault: vi.fn() };
+		for (const url of [
+			"https://docs.example.test",
+			"file:///private",
+			"javascript:alert(1)",
+		])
+			Reflect.apply(navigate, undefined, [event, url]);
+		expect(event.preventDefault).toHaveBeenCalledTimes(3);
+		expect(electron.shell.openExternal.mock.calls).toEqual([
+			["https://docs.example.test"],
+		]);
+		const popup =
+			management.webContents.setWindowOpenHandler.mock.calls[0]?.[0];
+		if (!popup) throw new Error("Missing popup guard");
+		expect(
+			Reflect.apply(popup, undefined, [{ url: "file:///private" }]),
+		).toEqual({ action: "deny" });
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {

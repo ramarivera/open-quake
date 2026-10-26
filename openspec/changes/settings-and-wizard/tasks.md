@@ -149,3 +149,13 @@ Sampling implementation, 2026-10-26: the approved optional finite fields flow th
 PR77 review found that the editor accepted OpenAI overrides which the provider workflow rejected. The new real desktop RPC/SDK regressions reproduced that failure on all three original GPT-4o cases before the correction. A shared pure policy now enables documented GPT-4o and GPT-4.1 text model overrides, preserves the existing default-only policy for other OpenAI models, and validates Kimi mandatory values consistently at save and inference time. Unsupported drafts show an en/de explanation, remain editable and block manual and role-triggered saves before credential or state writes. Clearing both fields restores defaults.
 
 Verification after correction: 46 focused edge tests and 32 focused desktop tests pass, both typechecks and the production build pass, scoped Biome and strict OpenSpec validation pass. The hidden production-root run uses an OpenAI-labelled GPT-4o row and a synthetic local HTTP provider. It confirms persisted zero/one values reach the actual SDK request, unsupported model edits block both save paths without changing revision, the explanation switches live to German, clearing permits saving again, and 1180x625/390x625 layouts have no horizontal overflow or unlabelled fields. The run leaves real device, microphone, login preferences and live providers untouched. Screenshots and logs remain external under `open-quake-finish/provider-sampling`. Reviewed delivery remains pending; broader task 3.2 is incomplete.
+
+
+## 8. Burn-down shell lane
+
+Beads open-quake-lih.17.14, open-quake-lih.17.15, open-quake-lih.17.16 and open-quake-lih.17.17 remain open for lead merge.
+
+- [ ] 8.1 Implement owned startup, tray recovery, authenticated shell commands, close-to-hide and drained restart/quit with production-root tests.
+- [ ] 8.2 Implement settings deep links, keyboard tab focus, global Help/Exit, route/chrome and timer-lifetime tests using the existing visual system.
+- [ ] 8.3 Implement daily bounded diagnostics and reconcile retained migration/capability boundaries with source and consumer tests.
+- [ ] 8.4 Merge latest main, run repository gates and native mock EN/DE captures, publish row-by-row PR evidence and exclusions.

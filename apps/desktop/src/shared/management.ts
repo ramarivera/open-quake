@@ -2,6 +2,10 @@ import { Schema } from "effect";
 
 export const MANAGEMENT_THEME = "management:theme";
 export const MANAGEMENT_ACTIVATE = "management:activate";
+export const MANAGEMENT_COMMAND = "management:command";
+export const ShellCommand = Schema.Struct({
+	action: Schema.Literal("minimize", "maximize", "hide", "quit", "restart"),
+});
 export const NativeThemeRequest = Schema.Struct({
 	base: Schema.Literal("dark", "light"),
 	titlebar: Schema.String.pipe(Schema.pattern(/^#[0-9a-f]{6}$/i)),
@@ -10,6 +14,7 @@ export const NativeThemeRequest = Schema.Struct({
 });
 export interface ManagementBridge {
 	readonly platform: string;
+	readonly command?: (command: typeof ShellCommand.Type) => Promise<boolean>;
 	readonly setTheme: (
 		theme: typeof NativeThemeRequest.Type,
 	) => Promise<boolean>;

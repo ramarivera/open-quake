@@ -78,6 +78,8 @@ import {
 	readNativeTheme,
 	registerManagementAppearance,
 } from "./management/appearance";
+import { createDesktopShell } from "./management/desktop-shell";
+import { prepareDesktopStartup } from "./management/startup";
 import { MediaLive, registerMedia } from "./media";
 import { prepareMeetings } from "./meetings";
 import { prepareMonitor } from "./monitor";
@@ -108,6 +110,7 @@ const rendererURL =
 	isDev && process.env.ELECTRON_RENDERER_URL
 		? process.env.ELECTRON_RENDERER_URL
 		: pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
+prepareDesktopStartup();
 registerClockScheme();
 
 function loadSurface(
@@ -162,6 +165,14 @@ function createManagementWindow(): BrowserWindow {
 			nodeIntegration: false,
 		},
 	});
+	win.webContents.on("will-navigate", (event, url) => {
+		event.preventDefault();
+		if (/^(https:|mailto:)/i.test(url)) void shell.openExternal(url);
+	});
+	win.webContents.setWindowOpenHandler(({ url }) => {
+		if (/^(https:|mailto:)/i.test(url)) void shell.openExternal(url);
+		return { action: "deny" };
+	});
 	return win;
 }
 
@@ -192,6 +203,7 @@ if (!app.requestSingleInstanceLock()) {
 							{ win: BrowserWindow; target: PanelTarget }
 						>();
 						let managementWin = createManagementWindow();
+						let managementReachable = () => process.platform === "darwin";
 						const removeManagementAppearance = registerManagementAppearance(
 							() => managementWin,
 							app.getPath("userData"),
@@ -317,10 +329,7 @@ if (!app.requestSingleInstanceLock()) {
 									},
 									workAreas: async () =>
 										screen.getAllDisplays().map((display) => display.workArea),
-									managementReachable: async () =>
-										process.platform === "darwin" &&
-										Boolean(app.dock?.isVisible()) &&
-										app.listenerCount("activate") > 0,
+									managementReachable: async () => managementReachable(),
 								}),
 								owners: createWizardOwners({
 									deviceId: async () => {
@@ -925,6 +934,18 @@ if (!app.requestSingleInstanceLock()) {
 							});
 						};
 						app.on("second-instance", focusManagement);
+						let restartRequested = false;
+						const desktopShell = createDesktopShell({
+							management: () => managementWin,
+							renderer: rendererURL,
+							focus: focusManagement,
+							quitting: () => quitting,
+							quit: (restart) => {
+								restartRequested = restart;
+								app.quit();
+							},
+						});
+						managementReachable = desktopShell.recoverable;
 						const profileUpdates = profiles.runtime.runFork(
 							ProfileService.subscribeCommittedProfiles().pipe(
 								Effect.flatMap((snapshots) =>
@@ -1291,6 +1312,7 @@ if (!app.requestSingleInstanceLock()) {
 							app.removeListener("second-instance", focusManagement);
 							removeLifecycle();
 							removeManagementAppearance();
+							desktopShell.dispose();
 							removeKnobLocale();
 							disposeHardware();
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
@@ -1355,6 +1377,7 @@ if (!app.requestSingleInstanceLock()) {
 							if (quitting) return;
 							quitting = true;
 							const reportFailure = (cause: unknown): void => {
+								restartRequested = false;
 								const error =
 									cause instanceof MaintenanceShutdownFailed
 										? cause
@@ -1392,6 +1415,7 @@ if (!app.requestSingleInstanceLock()) {
 											await diagnostics.close();
 										} finally {
 											quitFinished = true;
+											if (restartRequested) app.relaunch();
 											app.quit();
 										}
 									}
@@ -1404,6 +1428,7 @@ if (!app.requestSingleInstanceLock()) {
 								if (panelWin.isDestroyed())
 									syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
 								managementWin = createManagementWindow();
+								desktopShell.attach(managementWin);
 								removeLifecycle.bindManagement();
 								loadSurface(managementWin, "management");
 								managementReady = settingsWindow.initialize(
@@ -1422,7 +1447,7 @@ if (!app.requestSingleInstanceLock()) {
 						app.on("activate", focusManagement);
 						app.on("window-all-closed", () => {
 							void stopBus();
-							if (process.platform !== "darwin") app.quit();
+							if (!desktopShell.recoverable()) app.quit();
 						});
 						loadSurface(
 							panelWin,
@@ -1432,6 +1457,7 @@ if (!app.requestSingleInstanceLock()) {
 						loadSurface(managementWin, "management");
 						managementReady = settingsWindow.initialize(managementWin);
 						await managementReady;
+						if (!desktopShell.recoverable()) focusManagement();
 					}),
 					"app.startup",
 				)
