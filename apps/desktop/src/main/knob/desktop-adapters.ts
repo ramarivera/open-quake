@@ -39,6 +39,7 @@ import { knobThumbnailReader, sameThumbnail } from "./thumbnail-binding";
 export interface DesktopKnobBindings {
 	readonly deviceId?: () => string;
 	readonly locale?: () => ProfileLocale;
+	readonly thumbnailBorder?: () => boolean;
 	/** Owned by the existing profile manager; never creates a second service. */
 	readonly thumbnail?: (
 		id: string,
@@ -152,7 +153,11 @@ export function desktopKnobAdapters(
 				id: p.id,
 				name: p.name,
 				colorful: colorful(p),
-				thumbnailKey: profileThumbnailKey(translateProfile(p, locale), locale),
+				thumbnailKey: profileThumbnailKey(
+					translateProfile(p, locale),
+					locale,
+					bindings.thumbnailBorder?.() ?? true,
+				),
 				thumbnail: { _tag: "missing" },
 			})),
 			keys: keys(profile, pageId),
@@ -172,7 +177,11 @@ export function desktopKnobAdapters(
 			deviceId(),
 			locale,
 			catalog.map((p) =>
-				profileThumbnailKey(translateProfile(p, locale), locale),
+				profileThumbnailKey(
+					translateProfile(p, locale),
+					locale,
+					bindings.thumbnailBorder?.() ?? true,
+				),
 			),
 		]);
 		context = makeContext(
@@ -185,6 +194,7 @@ export function desktopKnobAdapters(
 		"DesktopKnob.warmThumbnails",
 	)((profiles) => {
 		const requestedLocale = locale;
+		const requestedBorder = bindings.thumbnailBorder?.() ?? true;
 		const requestedCatalog = catalog;
 		return Effect.forEach(profiles, (profile) => {
 			const source = requestedCatalog.find((p) => p.id === profile.id);
@@ -198,6 +208,7 @@ export function desktopKnobAdapters(
 								(p) => p.id === profile.id,
 							);
 							return requestedLocale === (bindings.locale?.() ?? "en") &&
+								requestedBorder === (bindings.thumbnailBorder?.() ?? true) &&
 								sameThumbnail(source, current, requestedLocale)
 								? ready
 								: missing;

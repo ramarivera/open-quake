@@ -76,6 +76,84 @@ const port = (): ProfileDesktopPort => ({
 });
 describe("real profile desktop controller", () => {
 	it.effect(
+		"continues after a style recapture fails and retries only failures on the same preference",
+		() =>
+			Effect.gen(function* () {
+				let fail = false;
+				const attempts: string[] = [];
+				const controller = yield* makeProfileController({
+					...port(),
+					capture: async (profile, _locale, _refresh, border) => {
+						attempts.push(`${profile.id}:${border}`);
+						if (fail && profile.id === "1-1")
+							throw new Error("Synthetic capture timeout");
+						return `data:image/png;base64,${profile.id}-${border}`;
+					},
+				});
+				for (const id of ["1-1", "1-2"])
+					yield* controller.request({ type: "thumbnail", id, locale: "en" });
+				fail = true;
+				const changed = yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				expect(
+					changed._tag === "success" && changed.view.thumbnails["1-2"],
+				).toContain("1-2-false");
+				expect(
+					changed._tag === "success" && changed.view.thumbnails["1-1"],
+				).toBe("");
+				fail = false;
+				const retried = yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				expect(
+					retried._tag === "success" && retried.view.thumbnails["1-1"],
+				).toContain("1-1-false");
+				expect(attempts.filter((value) => value === "1-1:false")).toHaveLength(
+					2,
+				);
+				expect(attempts.filter((value) => value === "1-2:false")).toHaveLength(
+					1,
+				);
+			}).pipe(Effect.provide(layer())),
+	);
+	it.effect(
+		"recaptures thumbnails for a changed border preference without editing the profile",
+		() =>
+			Effect.gen(function* () {
+				const captured: boolean[] = [];
+				const controller = yield* makeProfileController({
+					...port(),
+					capture: async (_p, _l, _r, border) => {
+						captured.push(border);
+						return `data:image/png;base64,borders-${border}`;
+					},
+				});
+				yield* controller.request({
+					type: "thumbnail",
+					id: "1-2",
+					locale: "en",
+				});
+				const before = yield* controller.request({
+					type: "read",
+					locale: "en",
+				});
+				expect(
+					before._tag === "success" && before.view.thumbnails["1-2"],
+				).toContain("borders-true");
+				const changed = yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				expect(
+					changed._tag === "success" && changed.view.thumbnails["1-2"],
+				).toContain("borders-false");
+				expect(captured).toEqual([true, false]);
+			}).pipe(Effect.provide(layer())),
+	);
+	it.effect(
 		"does not commit or publish a manager selection when delivery fails",
 		() => {
 			let failing = false;

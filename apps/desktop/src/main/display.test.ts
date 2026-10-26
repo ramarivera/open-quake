@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	findPanelDisplay,
+	PANEL_SIZE,
 	panelBounds,
 	panelRotation,
 	physicalLayout,
@@ -128,4 +129,25 @@ it("MAIN-054 projects mixed DPI adjacency and negative origins without scaling D
 		[2, 2560, 0, 1920, 480, 2],
 	]);
 	expect(right.bounds.x).toBe(1280);
+});
+
+it("MAIN-052 SCREEN-006 keeps one logical canvas through load, rebind, mixed DPI and portrait placement", () => {
+	const logical = { width: 1920, height: 480 };
+	for (const scaleFactor of [1, 1.25, 1.5, 2])
+		for (const rotated of [false, true]) {
+			const width = (rotated ? 480 : 1920) / scaleFactor,
+				height = (rotated ? 1920 : 480) / scaleFactor;
+			const display = makeDisplay({
+				id: 30,
+				label: "DK-QUAKE",
+				scaleFactor,
+				size: { width, height },
+				bounds: { x: -2000, y: 50, width, height },
+			});
+			const rebound = findPanelDisplay([makeDisplay(), display]);
+			expect(rebound).toBe(display);
+			expect(panelBounds(display, true)).toEqual(display.bounds);
+			expect(panelRotation(display, true)).toBe(rotated ? 90 : 0);
+			expect(PANEL_SIZE).toEqual(logical);
+		}
 });
