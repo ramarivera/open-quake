@@ -3,10 +3,14 @@ import { readFile, rename } from "node:fs/promises";
 import { Effect, Schema } from "effect";
 import { FirmwareSnapshot } from "../../../../../packages/edge/src/maintenance/contracts.js";
 import { FirmwarePersistenceFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import type { DesktopDiagnostics } from "../diagnostics";
 import { atomicJson } from "./firmware-files";
 
 /** Preserve unreadable records before allowing an explicit session save to replace them. */
-export function firmwareSessionStore(path: string) {
+export function firmwareSessionStore(
+	path: string,
+	diagnostics?: DesktopDiagnostics,
+) {
 	let preserveBeforeSave = false;
 	const preserve = async () => {
 		await rename(path, `${path}.recovery-${randomUUID()}`);
@@ -14,11 +18,22 @@ export function firmwareSessionStore(path: string) {
 	};
 	const report = (cause: unknown) => {
 		const error = new FirmwarePersistenceFailed(cause);
+		const warning = Effect.logWarning("Firmware session requires recovery", {
+			code: error.code,
+			diagnosticCause: error.diagnosticCause,
+		});
 		Effect.runSync(
-			Effect.logWarning("Firmware session requires recovery", {
-				code: error.code,
-				diagnosticCause: error.diagnosticCause,
-			}),
+			diagnostics
+				? diagnostics
+						.instrument(
+							Effect.fail(error).pipe(Effect.withSpan("FirmwareSession.load")),
+							"app.background",
+						)
+						.pipe(
+							Effect.catchTag("FirmwarePersistenceFailed", () => warning),
+							Effect.provide(diagnostics.layer),
+						)
+				: warning,
 		);
 	};
 	return {
