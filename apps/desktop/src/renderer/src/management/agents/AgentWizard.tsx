@@ -244,7 +244,7 @@ export function AgentWizard({
 									disabled={busy}
 									onClick={() => void run("reset")}
 								>
-									{strings.administration.confirm}
+									{strings.administration.confirmResetAction}
 								</button>
 							</section>
 						)}

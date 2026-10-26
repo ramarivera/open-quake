@@ -230,7 +230,8 @@
 			"unsupported": "Process settings require an explicitly configured, locally owned runtime.",
 			"resetTemplates": "Reset templates",
 			"localDiagnostic": "Local model diagnostic",
-			"deprecated": "The local model test is deprecated. Configure models in Models."
+			"deprecated": "The local model test is deprecated. Configure models in Models.",
+			"confirmResetAction": "Reset"
 		},
 		"keyFields": {
 			"title": "OpenClaw key",
@@ -477,7 +478,8 @@
 			"unsupported": "Prozesseinstellungen benötigen eine ausdrücklich konfigurierte, lokal verwaltete Laufzeit.",
 			"resetTemplates": "Vorlagen zurücksetzen",
 			"localDiagnostic": "Lokale Modelldiagnose",
-			"deprecated": "Der lokale Modelltest ist veraltet. Modelle unter Modelle konfigurieren."
+			"deprecated": "Der lokale Modelltest ist veraltet. Modelle unter Modelle konfigurieren.",
+			"confirmResetAction": "Zurücksetzen"
 		},
 		"keyFields": {
 			"title": "OpenClaw-Taste",

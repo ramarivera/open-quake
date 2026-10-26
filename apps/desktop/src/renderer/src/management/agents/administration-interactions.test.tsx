@@ -12,6 +12,7 @@ import { AppLocaleProvider } from "../../i18n";
 import { button, click, element, input, mount } from "../dom-test";
 import { AdministrationPanel } from "./AdministrationPanel";
 import { AgentsPage } from "./AgentsPage";
+import { AgentWizard } from "./AgentWizard";
 import { ModelsPanel } from "./ModelsPanel";
 import { SkillsPanel } from "./SkillsPanel";
 import { SKILL_DRAG_TYPE } from "./skill-transfer";
@@ -304,7 +305,7 @@ it("CENTER-050 edit name saves with revision and template-reset cancellation and
 		false,
 	);
 	await click(button("Reset templates"));
-	await click(button("Confirm clear", element("[role=alertdialog]")));
+	await click(button("Reset", element("[role=alertdialog]")));
 	expect(request).toHaveBeenCalledWith({
 		type: "reset-templates",
 		id: "writer",
@@ -505,5 +506,45 @@ it.each(["en", "de"] as const)(
 		);
 		expect(selector.value).toBe("writer");
 		expect(document.querySelector('[aria-label="Skill agent"]')).toBeNull();
+	},
+);
+
+it.each(["en", "de"] as const)(
+	"CENTER-048 reset confirmation names the reset action in %s",
+	async (locale) => {
+		const request = vi.fn<AgentRequest>(async () => ({
+			_tag: "success",
+			view,
+			draft: "",
+		}));
+		await mount(
+			<AppLocaleProvider initialLocale={locale} bridge={null}>
+				<AgentWizard
+					agent={view.agents[1]}
+					view={view}
+					request={request}
+					onClose={() => {}}
+				/>
+			</AppLocaleProvider>,
+			false,
+		);
+		await click(
+			button(locale === "de" ? "Vorlagen zurücksetzen" : "Reset templates"),
+		);
+		const confirmation = element("[role=alertdialog]");
+		const action = button(
+			locale === "de" ? "Zurücksetzen" : "Reset",
+			confirmation,
+		);
+		expect(confirmation.textContent).not.toContain(
+			locale === "de" ? "Löschen bestätigen" : "Confirm clear",
+		);
+		await click(action);
+		expect(request).toHaveBeenCalledWith({
+			type: "reset-templates",
+			id: "writer",
+			confirmed: true,
+			revision: view.revision,
+		});
 	},
 );
