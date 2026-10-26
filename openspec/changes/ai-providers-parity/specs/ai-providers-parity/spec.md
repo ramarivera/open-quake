@@ -195,3 +195,43 @@ Opt-in file operations SHALL use only the profile pinned by the requesting windo
 - **THEN** it fails before credentials or provider I/O
 - **WHEN** multibyte text fits both limits, including the exact byte boundary
 - **THEN** an upload and content retrieval round trip preserves it
+
+### Requirement: Persisted assistant controls
+
+Assistant keys SHALL expose typed settings and save/reopen without raw credentials. Defaults SHALL be voice input on, wake window off, history count zero, context timeout 5 seconds, role zero, temperature 1, topP .7, router on, and explicit search and HA off. Router selection SHALL force voice on and wake window off. Roles SHALL use the retained catalog or custom role -1 with at most 3000 characters. Personality SHALL span 0..1 and Reply Quality 0..2 in .05 steps; timeout SHALL span 5..30 in steps of 5; history SHALL span 0..50. Provider-unsupported controls SHALL explain their restriction. HA selection SHALL intersect the assistant entity IDs with the host allowlist before dispatch (AI-009, AI-041, AI-053, AI-054, AI-055, AI-056, AI-057, AI-058, AI-059, AI-060, MGMT-285).
+
+#### Scenario: Save and reopen key controls
+- **WHEN** a user selects a retained role or a custom prompt and changes bounded controls
+- **THEN** Save and reopen retain the settings, excluded role IDs and invalid combinations fail validation, and credentials never enter the key
+- **AND** router/plain-chat selection changes subsequent dispatch; unsupported routes report unavailable instead of executing another route
+
+#### Scenario: Context expiration and history
+- **WHEN** a subsequent assistant turn follows the selected 5..30 second idle timeout
+- **THEN** earlier context is excluded, and before expiry only the selected number of completed exchanges is eligible
+- **AND** already accepted turns keep their selection and profile snapshot
+
+### Requirement: Local assistant provider selection
+
+General Settings SHALL expose AI Model Provider using saved local rows in QWen, Kimi, DeepSeek, OpenAI order. Loading, empty, failed and fewer-than-two choices SHALL be visible; a single option SHALL be disabled. An explicit choice SHALL persist through the Models default role and apply to subsequent chat turns. Per-key settings SHALL display the resolved provider read-only and link General Settings. Direct choices SHALL share the provider catalog and retain custom model IDs (AI-003, AI-019, AI-042, AI-062, SETTINGS-008).
+
+#### Scenario: Local catalog and explicit choice
+- **WHEN** providers load or a user chooses another saved provider
+- **THEN** the fixed engine order is retained, unconfigured choices explain why, the saved default changes, and reopening uses it without cloud/account calls
+
+### Requirement: Named assistant models
+
+Models SHALL support Add, Rename, Copy and confirmed Delete. Names SHALL contain 1..30 trimmed characters. Copies SHALL own a fresh ID and independent settings with no credential or pending secret. Built-in rows SHALL disallow rename/delete. Deleting the default SHALL select a remaining row through existing default-role normalization; deleting the last global row SHALL fail (AI-043).
+
+#### Scenario: Isolated copy and delete fallback
+- **WHEN** a named model is copied, renamed and saved
+- **THEN** editing the copy leaves its source unchanged and the copy has no credentials until explicitly saved
+- **WHEN** its default is deleted with confirmation
+- **THEN** a remaining configured model becomes default and built-in protections remain enforced
+
+### Requirement: Reachable protected provider configuration
+
+Assistant settings SHALL link the existing Models and Speech settings consumers for Azure voice/key/region, Spark app ID/key/secret, custom model URL/name, HuoShan Inference/Agent and Coze bot configuration. Those consumers SHALL keep keys in the host protected credential store and expose readiness without secret values. The assistant editor SHALL expose roles, bounded sampling, timeout and HA configuration through the same production path (SETTINGS-102).
+
+#### Scenario: Configure a retained provider
+- **WHEN** a user follows assistant provider or speech configuration
+- **THEN** the existing protected settings editor is reachable and subsequent assistant turns use the saved model configuration without copying secrets into keys

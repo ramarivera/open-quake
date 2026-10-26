@@ -15,6 +15,7 @@ import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
 import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import {
+	copyModelRow,
 	reconcileModelDrafts,
 	reconcileModelRow,
 	samplingInput,
@@ -169,6 +170,16 @@ function ModelTable({
 									/>
 								</td>
 								<td data-label={t.modelCol}>
+									<label>
+										{"Name"}
+										<input
+											aria-label={`Name ${scope} ${index + 1}`}
+											maxLength={30}
+											value={row.name ?? row.model}
+											disabled={busy || row.builtIn}
+											onChange={(e) => update({ ...row, name: e.target.value })}
+										/>
+									</label>
 									<input
 										aria-label={`${t.modelCol} ${scope} ${index + 1}`}
 										value={row.model}
@@ -434,8 +445,23 @@ function ModelTable({
 									<button
 										type="button"
 										className="mc-button"
+										disabled={busy}
+										onClick={() =>
+											setDrafts((current) => [
+												...current,
+												copyModelRow(row, crypto.randomUUID()),
+											])
+										}
+									>
+										Copy
+									</button>
+									<button
+										type="button"
+										className="mc-button"
 										disabled={
 											busy ||
+											(row.name !== undefined &&
+												(!row.name.trim() || row.name.length > 30)) ||
 											!row.provider.trim() ||
 											!row.model.trim() ||
 											!Number.isSafeInteger(row.maxTokens) ||
@@ -451,7 +477,9 @@ function ModelTable({
 										className="mc-button"
 										data-variant="quiet"
 										disabled={
-											busy || (scope === "default" && drafts.length <= 1)
+											busy ||
+											row.builtIn ||
+											(scope === "default" && drafts.length <= 1)
 										}
 										onClick={() => {
 											if (!rows.some((r) => r.id === row.id)) {

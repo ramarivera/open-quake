@@ -31,6 +31,10 @@ export function reconcileModelRow(
 		...(settings === undefined ? {} : { settings }),
 		...(controls === undefined ? {} : { controls }),
 		id: draft.id,
+		...(next.builtIn === undefined ? {} : { builtIn: next.builtIn }),
+		...((draft.name === previous.name ? next.name : draft.name) === undefined
+			? {}
+			: { name: draft.name === previous.name ? next.name : draft.name }),
 		role: draft.role === previous.role ? next.role : draft.role,
 		provider:
 			draft.provider === previous.provider ? next.provider : draft.provider,
@@ -142,4 +146,16 @@ export function selectModelId(
 		...controls
 	} = selected.controls;
 	return { ...selected, controls };
+}
+
+/** A clone gets a fresh identity and no credential readiness or secret input. */
+export function copyModelRow(row: PublicModelRow, id: string): PublicModelRow {
+	return structuredClone({
+		...row,
+		id,
+		role: "none",
+		builtIn: false,
+		name: `${row.name ?? row.model} copy`.slice(0, 30),
+		credentialAvailable: false,
+	});
 }

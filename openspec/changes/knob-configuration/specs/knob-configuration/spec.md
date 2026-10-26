@@ -113,3 +113,19 @@ The Keys editor SHALL expose independent center, left and right slots for the se
 #### Scenario: Direct capture readiness
 - **WHEN** the saved direct route lacks a model, references a missing provider profile or contains fields belonging to another route
 - **THEN** capture is unavailable before microphone access and the editor shows the incomplete selection without adding credentials to actions
+
+### Requirement: Explicit assistant migration and agent selection
+
+The knob editor SHALL assign Assistant with its complete default record and recording/processing/idle preview. Preserved legacy assistant JSON SHALL be visible read-only, including malformed JSON, and SHALL never execute. An explicit migration preview SHALL show the selected supported direct replacement, with cancel leaving the saved profile unchanged and Save committing the replacement idempotently. DK Claw SHALL offer saved agent and model choices including Default Agent and retain an unknown saved model as an unavailable option. Unavailable routes SHALL explain their runtime restriction (AI-041, AI-065, KNOB-034, MGMT-212, MGMT-308).
+
+#### Scenario: Malformed legacy configuration and reviewed replacement
+- **WHEN** malformed assistant JSON is opened
+- **THEN** its original value remains visible and no runtime starts
+- **WHEN** a supported replacement is previewed then cancelled
+- **THEN** no write occurs
+- **WHEN** the replacement is explicitly accepted and saved twice
+- **THEN** the same canonical direct route persists without legacy credentials
+
+#### Scenario: Agent model retention
+- **WHEN** an agent is selected or an unavailable saved model is reopened
+- **THEN** the local agent/model catalog is offered, unknown saved IDs survive until changed, and Save persists the explicit choice

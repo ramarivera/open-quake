@@ -12,8 +12,10 @@ import {
 	Redacted,
 	Schema,
 	Scope,
+	Stream,
 } from "effect";
 import { describe, expect, it, vi } from "vitest";
+import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import {
 	SessionId,
 	TurnId,
@@ -26,6 +28,7 @@ import {
 } from "../../../../../packages/edge/src/voice/surface";
 import { CHAT_DISCONNECT, CHAT_EVENT, CHAT_REQUEST } from "../../shared/chat";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
+import type { AssistantHaPort } from "./assistant-ha";
 import { createModelCredentials } from "./credentials";
 import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
@@ -40,10 +43,10 @@ function fixtureServer() {
 		path: string;
 		auth: string | undefined;
 		body: {
-			temperature?: number;
-			top_p?: number;
+			temperature?: number | undefined;
+			top_p?: number | undefined;
 			model: string;
-			messages: { role: string; content: string }[];
+			messages: readonly { readonly role: string; readonly content: string }[];
 		};
 	}[] = [];
 	let release: (() => void) | undefined;
@@ -54,7 +57,19 @@ function fixtureServer() {
 	const server = createServer(async (req, res) => {
 		let text = "";
 		for await (const chunk of req) text += String(chunk);
-		const body = JSON.parse(text);
+		const body = Schema.decodeUnknownSync(
+			Schema.parseJson(
+				Schema.Struct({
+					model: Schema.String,
+					max_tokens: Schema.optional(Schema.Number),
+					temperature: Schema.optional(Schema.Number),
+					top_p: Schema.optional(Schema.Number),
+					messages: Schema.Array(
+						Schema.Struct({ role: Schema.String, content: Schema.String }),
+					),
+				}),
+			),
+		)(text);
 		calls.push({ path: req.url ?? "", auth: req.headers.authorization, body });
 		res.writeHead(200, { "content-type": "text/event-stream" });
 		const part = (content: string, finish_reason: string | null = null) =>
@@ -66,7 +81,31 @@ function fixtureServer() {
 				choices: [{ index: 0, delta: { content }, finish_reason }],
 			});
 		const unreported = body.messages.at(-1)?.content === "long without usage";
-		res.write(part(unreported ? "界".repeat(800) : "fixture answer"));
+		const routing = body.messages.some(
+			(m) => m.role === "system" && m.content.includes("userRequestAction"),
+		);
+		const answer = routing
+			? JSON.stringify({
+					userRequestAction: body.messages
+						.at(-1)
+						?.content.startsWith("operate HA")
+						? "operatingEquipment"
+						: "standardChat",
+					searchOptions: { shouldDoWebSearch: false, searchString: "" },
+				})
+			: body.messages.some((m) =>
+						m.content.startsWith("Choose one Home Assistant action"),
+					)
+				? JSON.stringify({
+						entity_id:
+							body.messages.at(-1)?.content === "operate HA denied"
+								? "light.denied"
+								: "light.allowed",
+						service: "toggle",
+						service_data: {},
+					})
+				: "fixture answer";
+		res.write(part(unreported ? "界".repeat(800) : answer));
 		if (body.messages.at(-1)?.content === "block") {
 			res.on("close", () => disconnected?.());
 			release = () => res.end();
@@ -91,6 +130,7 @@ async function fixture(
 	sampling: { temperature?: number; topP?: number } = {},
 	provider = "generic",
 	initialModel = "fixture-model",
+	homeAssistant?: AssistantHaPort,
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
 	const endpoint = fixtureServer();
@@ -125,6 +165,7 @@ async function fixture(
 	let baseUrl = `http://127.0.0.1:${address.port}/v1`;
 	const host = createDirectChat({
 		directory,
+		...(homeAssistant ? { homeAssistant } : {}),
 		credentials: creds.ai,
 		models: () =>
 			Effect.succeed([
@@ -957,3 +998,167 @@ it("AI-010: pins an in-flight model, refreshes the next submission and revokes a
 		await f.close();
 	}
 });
+
+it("AI-041/054/055/056/059/062 binds saved assistant settings to subsequent fake-provider turns", async () => {
+	const f = await fixture();
+	try {
+		const sid = sessionId();
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			modelRowId: "configured",
+			modelId: "my-custom-model",
+			roleId: -1,
+			customPrompt: "Custom system role",
+			temperature: 1.4,
+			topP: 0.65,
+		};
+		const first = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sid, turnId: turnId(), text: "one" },
+				"main",
+				undefined,
+				settings,
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(first.events));
+		expect(f.endpoint.calls[0]?.body).toMatchObject({
+			model: "my-custom-model",
+			temperature: 1.4,
+			top_p: 0.65,
+			messages: [
+				{ role: "system", content: "Custom system role" },
+				{ role: "user", content: "one" },
+			],
+		});
+		const second = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sid, turnId: turnId(), text: "two" },
+				"main",
+				undefined,
+				{
+					...settings,
+					customPrompt: "Next role",
+					modelId: "next-custom-model",
+				},
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(second.events));
+		expect(f.endpoint.calls[1]?.body.messages).toEqual([
+			{ role: "system", content: "Next role" },
+			{ role: "user", content: "two" },
+		]);
+		expect(f.endpoint.calls[0]?.body.model).toBe("my-custom-model");
+		expect(f.endpoint.calls[1]?.body.model).toBe("next-custom-model");
+	} finally {
+		await f.close();
+	}
+});
+it("AI-053/058 router switch classifies chat and blocks equipment without dispatch", async () => {
+	const f = await fixture();
+	try {
+		const settings = {
+			...defaultAssistantSettings(),
+			modelRowId: "configured",
+		};
+		const turn = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "chat" },
+				"main",
+				undefined,
+				settings,
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(turn.events));
+		expect(f.endpoint.calls).toHaveLength(2);
+		expect(f.endpoint.calls[0]?.body.messages[0]?.content).toContain(
+			"userRequestAction",
+		);
+		const blocked = await f.host.runtime.runPromise(
+			f.host
+				.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "operate HA" },
+					"main",
+					undefined,
+					{
+						...settings,
+						homeAssistantControl: true,
+						entityIds: ["light.allowed"],
+					},
+				)
+				.pipe(Effect.either),
+		);
+		expect(blocked._tag).toBe("Left");
+		expect(f.endpoint.calls).toHaveLength(3);
+	} finally {
+		await f.close();
+	}
+});
+
+it.each(["allowed", "denied", "revoked"] as const)(
+	"AI-058 executes only the current assistant/global HA intersection: %s",
+	async (permission) => {
+		const executed: string[] = [];
+		let reads = 0;
+		const f = await fixture({}, "generic", "fixture-model", {
+			snapshot: () =>
+				Effect.sync(() => ({
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected",
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: ["light.allowed", "light.denied"].map((entity_id) => ({
+						entity_id,
+						name: entity_id,
+						state: "off",
+						area: "",
+						attributes: {},
+					})),
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist:
+						++reads > 1 && permission === "revoked" ? [] : ["light.allowed"],
+				})),
+			execute: (key) =>
+				Effect.sync(() => {
+					executed.push(key.entity_id);
+				}),
+		});
+		try {
+			const result = await f.host.runtime.runPromise(
+				f.host
+					.submit(
+						{
+							sessionId: sessionId(),
+							turnId: turnId(),
+							text: `operate HA ${permission}`,
+						},
+						"main",
+						undefined,
+						{
+							...defaultAssistantSettings(),
+							homeAssistantControl: true,
+							entityIds: ["light.allowed"],
+						},
+					)
+					.pipe(Effect.either),
+			);
+			if (permission === "allowed") {
+				if (result._tag === "Left") throw result.left;
+				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
+				expect(executed).toEqual(["light.allowed"]);
+			} else {
+				expect(result._tag).toBe("Left");
+				expect(executed).toEqual([]);
+			}
+			const prompt = f.endpoint.calls[1]?.body.messages[0]?.content ?? "";
+			expect(prompt).toContain("light.allowed");
+			expect(prompt).not.toContain("light.denied");
+		} finally {
+			await f.close();
+		}
+	},
+);

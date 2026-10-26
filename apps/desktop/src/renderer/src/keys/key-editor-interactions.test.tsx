@@ -20,11 +20,13 @@ import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { profileKeyFunctionIssues } from "../../../../../../packages/device/src/profiles/profile-function-contracts";
 import {
 	ProfileRepository,
 	profileStorageLayer,
 } from "../../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../../packages/device/src/profiles/profile-service";
+import { managementProfileContracts } from "../../../main/management/profile-contracts";
 import type { QuakeEvent } from "../../../preload/quake";
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import type {
@@ -712,4 +714,81 @@ it("MGMT-096 repeated publications preserve an unchanged draft and a pending Sav
 		"Kept draft",
 	);
 	expect(f.calls.filter((c) => c.type === "save")).toHaveLength(1);
+});
+
+it("AI-041/054/060/062 MGMT-285 saves and reopens assistant controls through KeyEditor and KeyEditing", async () => {
+	const f = await fixture();
+	const envelope = Schema.decodeUnknownSync(ProfileEnvelope)(f.stored());
+	const original = envelope.profiles[0].pages[0].keys[0];
+	if (!original) throw new Error("fixture key missing");
+	const assistant: ProfileKey = {
+		...original,
+		childrenName: Option.some("aiChat"),
+		config: { ...original.config, type: "aiChat", actions: [] },
+	};
+	const next = Schema.decodeUnknownSync(ProfileEnvelope)({
+		...encodeProfileEnvelope(envelope),
+		profiles: envelope.profiles
+			.map((p) =>
+				Schema.encodeSync(ProfileEnvelope)(envelope).profiles.find(
+					(encoded) => encoded.id === p.id,
+				),
+			)
+			.map((p) =>
+				p?.id === "p"
+					? {
+							...p,
+							pages: p.pages.map((page) => ({
+								...page,
+								keys: [Schema.encodeSync(ProfileKey)(assistant)],
+							})),
+						}
+					: p,
+			),
+	});
+	await f.runtime.runPromise(
+		Effect.flatMap(ProfileRepository, (repository) =>
+			repository.transact(() => Effect.succeed(next)),
+		),
+	);
+	await f.publish(encodeProfileEnvelope(next));
+	await f.select();
+	await click(button(f.host, "Configure assistant"));
+	const labelField = (label: string) => {
+		const id = Array.from(f.host.querySelectorAll("label")).find(
+			(l) => l.textContent === label,
+		)?.htmlFor;
+		return query(f.host, `[id="${id}"]`, HTMLInputElement);
+	};
+	await click(labelField("Custom Role"));
+	await input(
+		query(f.host, "textarea", HTMLTextAreaElement),
+		"Retained system prompt",
+	);
+	await input(labelField("Chat Timeout(s)"), "20");
+	await click(labelField("Use Dekie Agent"));
+	await click(button(f.host, "Save"));
+	await settle(() =>
+		expect(f.host.textContent).toContain("Saved successfully"),
+	);
+	const saved = f.stored().profiles[0].pages[0].keys[0];
+	expect(saved?.config.assistantSettings).toMatchObject({
+		roleId: -1,
+		customPrompt: "Retained system prompt",
+		contextTimeoutSeconds: 20,
+		useAgent: false,
+	});
+	if (!saved) throw new Error("saved assistant missing");
+	expect(
+		profileKeyFunctionIssues(
+			Schema.decodeUnknownSync(ProfileKey)(saved),
+			managementProfileContracts,
+		),
+	).toEqual([]);
+	await click(button(f.host, "Cancel"));
+	await f.select();
+	expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe(
+		"Retained system prompt",
+	);
+	expect(labelField("Chat Timeout(s)").value).toBe("20");
 });

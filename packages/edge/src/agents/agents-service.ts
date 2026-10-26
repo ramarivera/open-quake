@@ -508,6 +508,12 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 									ownModelRows(state.models, "default") ??
 									[];
 								const previous = rows.find((r) => r.id === command.row.id);
+								if (
+									previous?.builtIn &&
+									(command.row.name !== previous.name ||
+										command.row.builtIn !== true)
+								)
+									return yield* new AgentModelInvalid();
 								const provider = command.row.provider.trim();
 								let row: ModelRow = {
 									...command.row,
@@ -571,6 +577,8 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 								if (!command.confirmed) return yield* new AgentInvalid();
 								const rows = ownModelRows(state.models, command.scope);
 								if (!rows?.some((r) => r.id === command.id))
+									return yield* new AgentModelInvalid();
+								if (rows.find((r) => r.id === command.id)?.builtIn)
 									return yield* new AgentModelInvalid();
 								if (command.scope === "default" && rows.length <= 1)
 									return yield* new AgentModelLastRow();

@@ -6,6 +6,7 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-function-contracts";
 import { HaKey } from "../../../../../packages/edge/src/home-assistant/ha-contracts";
 import { agentProfileFunctionContracts } from "../agents/profile-contracts";
+import { assistantProfileContracts } from "../chat/profile-contracts";
 import { monitorProfileContracts } from "../monitor/profile-contracts";
 /** One validation registry for the management-owned profile consumers. No action dispatch here. */
 export const managementProfileContracts = new Map<
@@ -15,6 +16,7 @@ export const managementProfileContracts = new Map<
 	...actionProfileFunctionContracts,
 	...monitorProfileContracts,
 	...agentProfileFunctionContracts,
+	...assistantProfileContracts,
 	[
 		"homeAssistant",
 		{

@@ -30,6 +30,9 @@ export const pinKnobProfile = Effect.fn("DesktopKnob.pinProfile")(function* (
 	if (Option.isNone(refs))
 		return yield* new VoiceKnobRejected("RouteIncomplete");
 	return {
+		...("assistantSettings" in center.config && center.config.assistantSettings
+			? { assistantSettings: center.config.assistantSettings }
+			: {}),
 		profileId: profile.id,
 		revision: profile.revision,
 		route: "direct",

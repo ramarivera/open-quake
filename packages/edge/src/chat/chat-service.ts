@@ -528,7 +528,12 @@ export class ChatService extends Effect.Service<ChatService>()(
 										updatedAt: now,
 										turns: [],
 									};
-							if (now - history.updatedAt >= idleMs)
+							if (
+								now - history.updatedAt >=
+								(input.contextTimeoutSeconds === undefined
+									? idleMs
+									: input.contextTimeoutSeconds * 1000)
+							)
 								history = {
 									...history,
 									contextEpoch: history.contextEpoch + 1,
@@ -550,6 +555,13 @@ export class ChatService extends Effect.Service<ChatService>()(
 										(turn) =>
 											turn.contextEpoch === history.contextEpoch &&
 											turn.status === "completed",
+									)
+									.slice(
+										input.historyCount === undefined
+											? 0
+											: input.historyCount === 0
+												? history.turns.length
+												: -input.historyCount,
 									)
 									.map((turn) => ({
 										input: turn.input,

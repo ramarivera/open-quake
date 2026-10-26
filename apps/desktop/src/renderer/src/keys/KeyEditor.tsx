@@ -40,6 +40,7 @@ import {
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
+import { AssistantEditor } from "./AssistantEditor";
 import { editableFocus } from "./editor-input";
 import { NativeIconPicker } from "./IconPicker";
 import { KeyGeometryControls } from "./KeyGeometryControls";
@@ -919,6 +920,14 @@ export function KeyEditor(): React.JSX.Element {
 								key={key.config.type}
 								keyValue={key}
 								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
+						{["assistant", "aiChat"].includes(key.config.type) && (
+							<AssistantEditor
+								key={selection?.target.token}
+								keyValue={key}
+								disabled={!keyEditable(key, "allowDelete")}
 								onChange={(next) => void update(next)}
 							/>
 						)}

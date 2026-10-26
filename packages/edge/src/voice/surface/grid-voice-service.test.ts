@@ -192,27 +192,30 @@ describe("GridVoice", () => {
 			}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
 		},
 	);
-	it.scoped("selects typed-only assistants without arming hold-to-talk", () => {
-		const rec = recorder();
-		return Effect.gen(function* () {
-			for (const kind of ["down", "touchEnd"] as const)
-				yield* GridVoice.input("QK", {
-					keyCode: "1,5",
-					type: "clawbot",
-					voiceInput: false,
-					agentId: "weather",
-					kind,
-				});
-			yield* at(2000);
-			expect(rec.calls).toEqual(["select 1,5"]);
-			expect(rec.events).toEqual([
-				{ _tag: "KeyPress", serial: "QK", keyCode: "1,5", action: "down" },
-				{ _tag: "KeyPress", serial: "QK", keyCode: "1,5", action: "up" },
-			]);
-			yield* GridVoice.knob("QK", "holdStart", 1);
-			expect(rec.calls).toContain("start 0,1 #1");
-		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
-	});
+	it.scoped.each(["clawbot", "aiChat"] as const)(
+		"selects typed-only %s without arming hold-to-talk",
+		(type) => {
+			const rec = recorder();
+			return Effect.gen(function* () {
+				for (const kind of ["down", "touchEnd"] as const)
+					yield* GridVoice.input("QK", {
+						keyCode: "1,5",
+						type,
+						voiceInput: false,
+						agentId: "weather",
+						kind,
+					});
+				yield* at(2000);
+				expect(rec.calls).toEqual(["select 1,5"]);
+				expect(rec.events).toEqual([
+					{ _tag: "KeyPress", serial: "QK", keyCode: "1,5", action: "down" },
+					{ _tag: "KeyPress", serial: "QK", keyCode: "1,5", action: "up" },
+				]);
+				yield* GridVoice.knob("QK", "holdStart", 1);
+				expect(rec.calls).toContain("start 0,1 #1");
+			}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+		},
+	);
 	it.scoped(
 		"starts at 1000 ms and releases 350 ms after the touch ends",
 		() => {

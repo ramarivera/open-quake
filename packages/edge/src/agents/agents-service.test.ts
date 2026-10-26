@@ -1025,3 +1025,74 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+it.effect(
+	"AI-043 bounds names, isolates credentials, protects built-ins and selects a delete fallback",
+	() => {
+		const f = fixture();
+		return Effect.gen(function* () {
+			const service = yield* AgentsService;
+			let view = yield* service.view();
+			const save = (
+				row: ReturnType<typeof model> & {
+					readonly name?: string;
+					readonly builtIn?: boolean;
+				},
+				secret = "",
+			) =>
+				service.request({
+					type: "save-model",
+					scope: "default",
+					row,
+					secret,
+					revision: view.revision,
+				});
+			for (const name of ["", " ", "a".repeat(31)]) {
+				const invalid = yield* save(
+					{ ...model("invalid"), name },
+					"fake key",
+				).pipe(Effect.either);
+				expect(invalid._tag).toBe("Left");
+			}
+			view = (yield* save(
+				{ ...model("builtin", "default"), name: "Built-in", builtIn: true },
+				"fake-key",
+			)).view;
+			for (const row of [
+				{ ...model("builtin"), name: "Renamed", builtIn: true },
+				{ ...model("builtin"), name: "Built-in", builtIn: false },
+			])
+				expect((yield* save(row).pipe(Effect.either))._tag).toBe("Left");
+			expect(
+				(yield* service
+					.request({
+						type: "delete-model",
+						scope: "default",
+						id: "builtin",
+						confirmed: true,
+						revision: view.revision,
+					})
+					.pipe(Effect.either))._tag,
+			).toBe("Left");
+			view = (yield* save({ ...model("copy", "default"), name: "Independent" }))
+				.view;
+			expect(
+				view.models.default?.find((r) => r.id === "copy")?.credentialAvailable,
+			).toBe(false);
+			expect(
+				f.state().models.default?.find((r) => r.id === "copy")?.credentialRef,
+			).toBe("");
+			view = (yield* service.request({
+				type: "delete-model",
+				scope: "default",
+				id: "copy",
+				confirmed: true,
+				revision: view.revision,
+			})).view;
+			expect(
+				view.models.default?.filter((r) => r.role === "default"),
+			).toHaveLength(1);
+			expect(view.models.default?.some((r) => r.id === "copy")).toBe(false);
+		}).pipe(Effect.provide(f.layer));
+	},
+);

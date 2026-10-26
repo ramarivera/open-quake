@@ -32,6 +32,10 @@ export const Skill = Schema.Struct({
 export type Skill = typeof Skill.Type;
 export const ModelRole = Schema.Literal("none", "default", "fallback");
 export const ModelRow = Schema.Struct({
+	name: Schema.optional(
+		Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(30)),
+	),
+	builtIn: Schema.optional(Schema.Boolean),
 	id: Schema.NonEmptyString,
 	role: ModelRole,
 	provider: Schema.String,

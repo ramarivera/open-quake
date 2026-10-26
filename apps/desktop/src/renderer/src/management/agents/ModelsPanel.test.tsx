@@ -127,3 +127,32 @@ it.each(["volc", "coze"])(
 		}
 	},
 );
+
+it("AI-043 copies named model metadata without secret input and protects built-in rows", async () => {
+	const f = await fixture("qwen", {
+		name: "Personal assistant",
+		builtIn: true,
+	});
+	const source = query(
+		f.host,
+		'[aria-label="Name default 1"]',
+		HTMLInputElement,
+	);
+	expect(source.disabled).toBe(true);
+	const secret = query(f.host, 'input[type="password"]', HTMLInputElement);
+	await input(secret, "unsaved-secret");
+	await click(button(f.host, "Copy"));
+	const copy = query(f.host, '[aria-label="Name default 2"]', HTMLInputElement);
+	expect(copy.value).toBe("Personal assistant copy");
+	expect(copy.disabled).toBe(false);
+	expect(
+		query(
+			f.host,
+			'input[type="password"][aria-label$="default 2"]',
+			HTMLInputElement,
+		).value,
+	).toBe("");
+	await input(copy, "Independent name");
+	expect(source.value).toBe("Personal assistant");
+	expect(copy.maxLength).toBe(30);
+});

@@ -21,6 +21,7 @@ import { ProfileRepository } from "../../../../packages/device/src/profiles/prof
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
+import { HomeAssistantService } from "../../../../packages/edge/src/home-assistant/ha-service";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
 import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
@@ -288,7 +289,40 @@ if (!app.requestSingleInstanceLock()) {
 							),
 						);
 						const directModule = prepareDirectChat({
+							homeAssistant: {
+								snapshot: () =>
+									Effect.tryPromise({
+										try: () =>
+											integrationsModule.runtime.runPromise(
+												HomeAssistantService.snapshot(),
+											),
+										catch: (cause) => new AiConfigInvalid(cause),
+									}),
+								execute: (key) =>
+									Effect.tryPromise({
+										try: () =>
+											integrationsModule.runtime.runPromise(
+												HomeAssistantService.execute(key, true),
+											),
+										catch: (cause) => new AiConfigInvalid(cause),
+									}),
+							},
 							directory: join(app.getPath("userData"), "chat"),
+							keySettings: (serial, keyCode) =>
+								Effect.tryPromise({
+									try: () =>
+										profilesModule.runtime
+											.runPromise(ProfileService.loadProfiles())
+											.then(({ envelope }) => {
+												const active = envelope.activeByDevice[serial];
+												return envelope.profiles
+													.find((p) => p.id === active?.profileId)
+													?.pages.find((p) => p.id === active?.pageId)
+													?.keys.find((k) => k.keyCode === keyCode)?.config
+													.assistantSettings;
+											}),
+									catch: (cause) => new AiConfigInvalid(cause),
+								}),
 							credentials: modelCredentials.ai,
 							diagnostics,
 							models: (scope) =>

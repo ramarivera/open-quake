@@ -13,6 +13,7 @@ import { resolveModelRows } from "../../../../../../packages/edge/src/agents/age
 import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
 import { Group, Row } from "../ui/Form";
+import { KnobAssistantSettings } from "./KnobAssistantSettings";
 import {
 	editKnobSlot,
 	knobAssignment,
@@ -121,6 +122,7 @@ export function KnobEditor({
 		replace({
 			childrenName: "assistant",
 			config: {
+				...slot.config,
 				type: "assistant",
 				actions: [
 					{ type: "voiceRoute", value: "direct" },
@@ -212,22 +214,45 @@ export function KnobEditor({
 							<select
 								id="knob-route"
 								value={String(route ?? "")}
-								onChange={() => {
-									changeDirect("", "");
+								onChange={(e) => {
+									const nextRoute = e.target.value;
+									if (nextRoute === "direct") changeDirect("", "");
+									else
+										replace({
+											childrenName: "assistant",
+											config: {
+												...slot.config,
+												type: "assistant",
+												actions:
+													nextRoute === "dkclaw"
+														? [
+																{ type: "voiceRoute", value: "dkclaw" },
+																{ type: "agentId", value: "main" },
+																{ type: "dkclawModel", value: "" },
+															]
+														: [
+																{
+																	type: "voiceRoute",
+																	value: "legacyAssistant",
+																},
+																{ type: "assistant", value: "" },
+															],
+											},
+										});
 									setReviewed(true);
 								}}
 							>
-								{route !== "direct" && (
-									<option value={String(route ?? "")} disabled>
-										{route === "dkclaw"
-											? "DK Claw (OpenClaw)"
-											: "Legacy assistant"}{" "}
-										· unavailable
-									</option>
-								)}
+								<option value="legacyAssistant">Legacy assistant</option>
+								<option value="dkclaw">DK Claw (OpenClaw)</option>
 								<option value="direct">Direct chat</option>
 							</select>
 						</Row>
+						<KnobAssistantSettings
+							key={String(route)}
+							slot={slot}
+							original={sourceActions}
+							onChange={replace}
+						/>
 						{route === "direct" && (
 							<>
 								<Row label="Chat provider:" htmlFor="knob-provider">

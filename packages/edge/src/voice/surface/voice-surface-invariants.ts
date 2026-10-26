@@ -15,6 +15,9 @@ export const isKnobVoiceKey = (keyCode: string): boolean =>
 /** Structural shape of a profile key; edge does not import the device domain. */
 export interface HoldToTalkCandidate {
 	readonly type: string;
+	readonly assistantSettings?:
+		| { readonly enableVoiceInput: boolean }
+		| undefined;
 	readonly actions: ReadonlyArray<{
 		readonly type: string;
 		readonly value: unknown;
@@ -22,7 +25,8 @@ export interface HoldToTalkCandidate {
 }
 /** `aiChat`, or `clawbot` with a truthy voiceInput action (QSC:1758-1767, BG@1099686). */
 export const isHoldToTalkKey = (key: HoldToTalkCandidate): boolean =>
-	key.type === "aiChat" ||
+	(key.type === "aiChat" &&
+		key.assistantSettings?.enableVoiceInput !== false) ||
 	(key.type === "clawbot" &&
 		key.actions.some(
 			(action) => action.type === "voiceInput" && Boolean(action.value),

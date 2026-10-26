@@ -58,3 +58,9 @@ native media and production direct-chat smoke checks passed using mock hardware
 and fake providers. Earlier pre-integration runs had load-related timeouts; the
 final required two-worker command passed. Hosted checks remain owned by the lead.
 Live providers and hardware remain unverified; this round made no paid calls.
+
+## 7. Assistant-config burn-down lane
+
+- [ ] 7.1 Implement typed key controls and fake consumer execution for AI-003/009/041/042/053/054/055/056/057/058/059/060 and MGMT-285. Bead: open-quake-lih.15.7.
+- [ ] 7.2 Implement named model controls, General provider choice and subsequent-turn synchronization for AI-019/043/062 and SETTINGS-008/102. Bead: open-quake-lih.15.8.
+- [ ] 7.3 Implement explicit knob migration, assignment/preview and agent/model retention for AI-065, KNOB-034 and MGMT-212/308. Owning knob-configuration spec updated. Bead: open-quake-lih.15.9.

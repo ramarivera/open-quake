@@ -79,6 +79,21 @@ export const createDirectChatVoice = (
 							}
 						}
 						const turnId = Schema.decodeUnknownSync(TurnId)(randomUUID());
+						const settings = request.knob
+							? request.knob.assistantSettings
+							: yield* Effect.tryPromise({
+									try: () =>
+										host.runtime.runPromise(
+											host.keySettings(request.serial, request.keyCode),
+										),
+									catch: (cause) => new VoiceRuntimeUnavailable(cause),
+								});
+						if (
+							settings &&
+							((source === "voice" && !settings.enableVoiceInput) ||
+								(source === "typed" && settings.useAgent))
+						)
+							return yield* new VoiceRuntimeUnavailable();
 						const accepted = yield* Effect.tryPromise({
 							try: () =>
 								host.runtime.runPromise(
@@ -86,6 +101,7 @@ export const createDirectChatVoice = (
 										{ sessionId, turnId, text: request.message },
 										request.agentId,
 										request.directModel,
+										settings,
 									),
 								),
 							catch: (cause) => new VoiceRuntimeUnavailable(cause),
