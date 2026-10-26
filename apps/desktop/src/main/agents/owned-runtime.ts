@@ -86,13 +86,19 @@ export function ownedRuntimeProcessDriver(
 				},
 			});
 			const cleanup = { pid: child.pid, treeStopped: false };
+			let spawnFailed = false;
 			const exited = new Promise<void>((resolve) => {
-				child.once("error", () => resolve());
+				child.once("error", () => {
+					spawnFailed = cleanup.pid === undefined;
+					resolve();
+				});
 				child.once("close", () => resolve());
 			});
 			return {
 				exited,
 				stop: async () => {
+					// A confirmed creation error with no PID cannot have a gateway tree.
+					if (spawnFailed) return;
 					if (
 						(child.exitCode !== null || child.signalCode !== null) &&
 						(platform !== "win32" || cleanup.treeStopped)

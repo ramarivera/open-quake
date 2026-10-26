@@ -10,7 +10,7 @@ import {
 	ownedRuntimeProcessDriver,
 } from "./owned-runtime";
 
-function fixture() {
+function fixture(failFirstSpawn = false) {
 	const settings = {
 		port: 18789,
 		logLevel: "info",
@@ -37,7 +37,15 @@ function fixture() {
 	const spawn = vi.fn(
 		(_command: string, _args: readonly string[], _options: SpawnOptions) => {
 			const child = new ChildProcess();
-			Object.defineProperty(child, "pid", { value: 4321 + children.length });
+			if (failFirstSpawn && children.length === 0)
+				queueMicrotask(() =>
+					child.emit(
+						"error",
+						Object.assign(new Error("fake spawn failure"), { code: "ENOENT" }),
+					),
+				);
+			else
+				Object.defineProperty(child, "pid", { value: 4321 + children.length });
 			children.push(child);
 			return child;
 		},
@@ -57,7 +65,15 @@ function fixture() {
 		driver: { ...driver, health },
 	});
 	if (!backend?.administration) throw new Error("fake runtime missing");
-	return { backend, spawn, runCommand, health, close, storage };
+	return {
+		backend,
+		admin: backend.administration,
+		spawn,
+		runCommand,
+		health,
+		close,
+		storage,
+	};
 }
 
 it.effect(
@@ -171,5 +187,30 @@ it.effect(
 			expect(f.spawn).toHaveBeenCalledTimes(2);
 			expect(f.health).toHaveBeenCalledTimes(2);
 			yield* f.backend.stop;
+		}),
+);
+
+it.effect(
+	"4381510116 failed Windows spawn with no PID releases ownership for recovery",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture(true);
+			expect(yield* f.backend.start.pipe(Effect.either)).toMatchObject({
+				_tag: "Left",
+				left: { code: "AGENT.RUNTIME.FAILED" },
+			});
+			yield* f.backend.stop;
+			expect(f.runCommand).not.toHaveBeenCalled();
+			yield* f.admin.clear;
+			expect(f.storage.clear).toHaveBeenCalledTimes(1);
+			yield* f.backend.start;
+			expect(f.spawn).toHaveBeenCalledTimes(2);
+			yield* f.backend.stop;
+			expect(f.runCommand).toHaveBeenCalledExactlyOnceWith("taskkill.exe", [
+				"/PID",
+				"4322",
+				"/T",
+				"/F",
+			]);
 		}),
 );

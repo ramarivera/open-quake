@@ -63,3 +63,4 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 - [x] R.3 Prove TestClock startup timeout plus failed tree cleanup retains an explicit Stop retry. CENTER-047, MAIN-144, 4381279552; same bead.
 - [x] R.4 Prove retained cleanup cannot report ready or admit a new process before successful cleanup. CENTER-047, MAIN-144, 4381290893; same bead.
 - [x] R.5 Verify pinned QR renderer and raw-payload availability; test all 40 versions with ANSI/plain, LF/CRLF and refresh framing. CENTER-078, 4381279720; same bead, owning integration-channels spec.
+- [x] R.6 Release cleanup on confirmed Windows creation failure with no PID, and prove recovery with fake spawning. CENTER-047, MAIN-144, mid-round finding 4381510116; same bead.
