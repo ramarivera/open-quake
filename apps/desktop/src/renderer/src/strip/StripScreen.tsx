@@ -180,12 +180,14 @@ export function StripScreen({
 	previewSerial,
 	titles = "key-locale",
 	interactive = true,
+	wallpaperSound = false,
 }: {
 	profiles: StripProfiles;
 	/** Profile Manager and the editor already resolve their own title locale. */
 	titles?: "key-locale" | "provided";
 	/** Selection previews paint live state but cannot operate nested controls. */
 	interactive?: boolean;
+	wallpaperSound?: boolean;
 	previewSerial?: string;
 	/** Reports the layout actually painted for the panel input adapter. */
 	onLayout?: (layout: StripLayout | undefined) => void;
@@ -338,7 +340,7 @@ export function StripScreen({
 		>
 			{vivid && wallpaper?.asset._tag === "ready" ? (
 				<div className="strip-wallpaper">
-					<WallpaperCanvas snapshot={wallpaper} />
+					<WallpaperCanvas snapshot={wallpaper} sound={wallpaperSound} />
 				</div>
 			) : null}
 			{!vivid && layout ? (

@@ -1,6 +1,6 @@
 # Desktop wallpaper media
 
-Implements `openspec/changes/device-screen-wallpaper` tasks 1.1–1.5.
+Implements `openspec/changes/device-screen-wallpaper` tasks 1.1–1.5 and cluster 18 tasks 5.1–5.3.
 The main process owns selected files, decoding, persistence and the host clock.
 The panel and management preview share one renderer on a logical 1920×480
 canvas. Since `strip-key-grid`, the strip draws the active profile's key grid;
@@ -26,6 +26,7 @@ The version 1 envelope contains `serial`, nonnegative `revision`, `settings`
 and `clock`. The device display Schemas define these fields:
 
 - `isTransparent`: false for this release.
+- `enableSound`: defaults to false when missing in a version-1 record.
 - `bgFillMode`: `contain`, `cover` or `center`, default `cover`.
 - `gapInterval` and `gapIntervalUnit`: integer seconds 3–86400 with unit 0,
   or minutes 1–1440 with unit 1. Defaults are 5 and 0.
@@ -125,3 +126,23 @@ The smoke also injects source-derived raw vendor touch frames into the mock bus
 and asserts the real preload/IPC and mounted panel emit one key down and one up.
 For parity lanes, set `OPEN_QUAKE_MOCK_DEVICE=1` and `TMPDIR` to the lane scratch
 directory, and use `env -u ELECTRON_RUN_AS_NODE` for the Electron invocation.
+
+## Wallpaper playlists and sound
+
+The editor appends managed JPEG/PNG images and decodable MP4, MOV or WebM
+videos, removes duplicates by content, and persists drag or move-button order.
+Videos need finite metadata, at least two seconds, at most 8 MiB and at most
+64 million pixels. Codec support follows the bundled Electron build. The hidden
+metadata worker never plays and stays muted, with an eight-second deadline.
+
+The existing media controller chooses the active item for both renderers and
+wraps sequential playlists. A singleton video loops in place. Management
+previews stay muted. Panel sound requests require current window identity,
+serial and revision and a lease from the canonical AudioOutput owner. Speech,
+capture and soundboard can preempt wallpaper, with no automatic sound resumption.
+Mock-device mode keeps the panel globally muted even with Video Sound on.
+
+For the native smoke's optional silent video check, supply a local silent fixture
+through OPEN_QUAKE_SMOKE_VIDEO. The smoke saves wallpaper-playlist.png,
+wallpaper-playlist-narrow.png and panel-vivid.png alongside the existing images.
+All smoke artifacts belong in the lane's external scratch directory.

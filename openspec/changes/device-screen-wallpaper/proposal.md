@@ -24,3 +24,7 @@ None.
 ## Impact
 
 `packages/device` will own display contracts, resource request orchestration, and display-state invariants. `apps/desktop` will own media persistence, decoding/composition, the panel and preview renderers, and typed IPC. `packages/protocol` and its `0xA2` encoding remain owned by `two-layer-sdk` / lane L1. This change consumes `panel-window-prototype`, `theming-animation-contract`, and `profiles-key-grid` without editing those changes. No shipped DK-Suite artwork or new dependencies are proposed. Tasks 1.1–1.5 implement the first-release desktop wallpaper and clock. Hardware behavior remains unverified and Beads updates belong to the parent.
+
+## Cluster 18
+
+Enable ordered app-managed image/video playlists, drag and keyboard reordering and per-serial Wallpaper sound with default off (`WIDGETS-128/130`). Extend the existing media repository and canvas. Management previews stay muted. No proprietary factory videos, hardware delivery or unrelated overlays are added.

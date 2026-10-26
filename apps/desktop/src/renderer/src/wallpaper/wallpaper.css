@@ -48,3 +48,25 @@
 .wallpaper-status p {
 	margin: 8px 0;
 }
+
+.wallpaper-playlist {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.wallpaper-playlist li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--border);
+	flex-wrap: wrap;
+}
+.wallpaper-playlist li[draggable="true"] {
+	cursor: grab;
+}
+.wallpaper-track-name {
+	overflow-wrap: anywhere;
+	min-width: 0;
+}

@@ -1,5 +1,8 @@
 import { Effect, Layer } from "effect";
+import type { KeyActivation } from "../../../../../packages/device/src/actions/key-runtime-service";
+import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts";
 import { AiConfigInvalid } from "../../../../../packages/edge/src/ai/ai-errors";
+import type { AudioOutputLease } from "../../../../../packages/edge/src/audio/output-service";
 import {
 	GridVoiceRuntime,
 	type VoiceSurface,
@@ -96,6 +99,34 @@ export function createSpeechVoiceBinding(options: {
 		).pipe(Layer.provide(fallback));
 	return {
 		decorate,
+		acquireWallpaperSound: (
+			mute: () => Promise<void>,
+		): Promise<AudioOutputLease | undefined> =>
+			speech
+				? Effect.runPromise(
+						speech.audioOutput.acquire("wallpaper", Effect.promise(mute)).pipe(
+							Effect.catchTags({
+								AudioOutputBusy: () => Effect.succeed(undefined),
+								AudioOutputFailed: (error) =>
+									Effect.logWarning(error).pipe(Effect.as(undefined)),
+							}),
+						),
+					)
+				: Promise.resolve(undefined),
+		executeSoundKey: (
+			key: ProfileKey,
+			signal: AbortSignal,
+			activation: KeyActivation,
+		): Promise<boolean> =>
+			speech
+				? Effect.runPromise(speech.soundboardKeys.execute(key, activation), {
+						signal,
+					})
+				: Promise.resolve(false),
+		resetSoundKeys: (deviceId?: string): Promise<void> =>
+			speech
+				? Effect.runPromise(speech.soundboardKeys.reset(deviceId))
+				: Promise.resolve(),
 		settings,
 		onEvent: (event: VoiceSurfaceEvent): void => {
 			if (speech)

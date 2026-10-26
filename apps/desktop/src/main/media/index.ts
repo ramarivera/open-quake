@@ -1,12 +1,15 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Fiber, Layer, Option } from "effect";
+import { Effect, Fiber, Layer, Option, Schema } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import type { AudioOutputLease } from "../../../../../packages/edge/src/audio/output-service";
 import { MediaUnreadable } from "../../shared/display";
 import {
+	WALLPAPER_AUDIO,
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
 	WALLPAPER_SNAPSHOT,
+	WallpaperAudioCommand,
 	type WallpaperReply,
 } from "../../shared/wallpaper-contracts";
 import type { DesktopRuntime } from "../diagnostics/module";
@@ -14,6 +17,7 @@ import { makeMediaController } from "./media-controller";
 import { MediaRoot } from "./media-files";
 import { canRequestWallpaper } from "./media-permissions";
 import { MediaRepository } from "./media-repository";
+import { wallpaperAudioSession } from "./wallpaper-audio";
 
 function broadcast(channel: string, value: unknown): Effect.Effect<void> {
 	return Effect.sync(() => {
@@ -34,7 +38,75 @@ export function registerMedia(
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	quitOwner = true,
+	panelWindow: () => BrowserWindow | undefined = () => undefined,
+	acquireSound: (
+		mute: () => Promise<void>,
+	) => Promise<AudioOutputLease | undefined> = async () => undefined,
 ): { dispose: () => Promise<void>; selectionSerial: () => Promise<string> } {
+	const audio = wallpaperAudioSession(acquireSound);
+	let audioEpoch = 0;
+	let audioKey = "";
+	let audioSender: Electron.WebContents | undefined;
+	let audioRequest: { id: string } | undefined;
+	ipcMain.handle(
+		WALLPAPER_AUDIO,
+		async (event, input: unknown): Promise<boolean> => {
+			if (
+				event.sender !== panelWindow()?.webContents ||
+				event.senderFrame !== event.sender.mainFrame ||
+				!canRequestWallpaper(
+					event.sender.getURL(),
+					renderer,
+					{ _tag: "read" },
+					false,
+				) ||
+				!Schema.is(WallpaperAudioCommand)(input)
+			)
+				return false;
+			if (!input.active) {
+				if (audioRequest?.id === input.id) audioRequest = undefined;
+				await audio.stop(input.id);
+				return false;
+			}
+			const request = { id: input.id };
+			audioRequest = request;
+			const service = await controller;
+			const snapshot = await runtime.runPromise(
+				service.request({ _tag: "read" }),
+			);
+			const media =
+				snapshot.saved.settings.displayMediaList[snapshot.activeIndex ?? 0];
+			if (
+				audioRequest !== request ||
+				!snapshot.saved.settings.enableSound ||
+				snapshot.saved.serial !== input.serial ||
+				snapshot.saved.revision !== input.revision ||
+				media?.type !== "video"
+			)
+				return false;
+			const expectedEpoch = audioEpoch;
+			audioSender = event.sender;
+			return audio.start(
+				input.id,
+				async () => {
+					if (!event.sender.isDestroyed()) event.sender.setAudioMuted(true);
+				},
+				() => {
+					if (
+						!event.sender.isDestroyed() &&
+						process.env.OPEN_QUAKE_MOCK_DEVICE !== "1"
+					)
+						event.sender.setAudioMuted(false);
+				},
+				() =>
+					audioRequest === request &&
+					expectedEpoch === audioEpoch &&
+					!disposed &&
+					!event.sender.isDestroyed() &&
+					event.sender === panelWindow()?.webContents,
+			);
+		},
+	);
 	const controller = runtime.runPromise(
 		makeMediaController({
 			chooseImage: Effect.tryPromise({
@@ -43,7 +115,10 @@ export function registerMedia(
 						title: "Choose wallpaper",
 						properties: ["openFile"],
 						filters: [
-							{ name: "JPEG or PNG", extensions: ["jpg", "jpeg", "png"] },
+							{
+								name: "Wallpaper media",
+								extensions: ["jpg", "jpeg", "png", "mp4", "mov", "webm"],
+							},
 						],
 					}),
 				catch: (cause) => new MediaUnreadable(cause),
@@ -54,7 +129,22 @@ export function registerMedia(
 						: Option.fromNullable(result.filePaths[0]),
 				),
 			),
-			publish: (snapshot) => broadcast(WALLPAPER_SNAPSHOT, snapshot),
+			publish: (snapshot) =>
+				Effect.gen(function* () {
+					const key = JSON.stringify([
+						snapshot.saved.serial,
+						snapshot.saved.revision,
+						snapshot.saved.settings.enableSound,
+						snapshot.activeIndex,
+						snapshot.asset._tag,
+					]);
+					if (key !== audioKey) {
+						audioKey = key;
+						audioEpoch++;
+						yield* Effect.promise(() => audio.stop());
+					}
+					yield* broadcast(WALLPAPER_SNAPSHOT, snapshot);
+				}),
 			publishClock: (clock) => broadcast(WALLPAPER_CLOCK, clock),
 		}),
 	);
@@ -82,6 +172,15 @@ export function registerMedia(
 			clockFiber = runtime.runFork(service.ticks);
 	};
 	const trackWindow = (window: BrowserWindow): void => {
+		const contents = window.webContents;
+		window.once("closed", () => {
+			if (audioSender === contents) {
+				audioEpoch++;
+				audioSender = undefined;
+				audioRequest = undefined;
+				void audio.stop();
+			}
+		});
 		void startClock();
 		window.once("closed", () => {
 			if (!BrowserWindow.getAllWindows().length) void stopClock();
@@ -145,9 +244,11 @@ export function registerMedia(
 		if (shutdown) return shutdown;
 		disposed = true;
 		ipcMain.removeHandler(WALLPAPER_REQUEST);
+		ipcMain.removeHandler(WALLPAPER_AUDIO);
 		app.removeListener("browser-window-created", onWindow);
 		shutdown = (async () => {
 			await stopClock();
+			await audio.close();
 			await controller;
 			await runtime.dispose();
 			app.removeListener("before-quit", onBeforeQuit);

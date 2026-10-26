@@ -1,10 +1,10 @@
 # Tasks
 
-Implementation tasks. Configuration import and the first-release boundary have verified source implementations; playback remains open. This change absorbed `soundboard-playback` on 2026-10-23, so its tasks are folded in below. One epic bead for this change, one issue bead per numbered task.
+Implementation tasks. Configuration import, playback lifecycle and cluster 18 key composition have source implementations. Desktop playback controls and physical acceptance remain open. This change absorbed `soundboard-playback` on 2026-10-23, so its tasks are folded in below. One epic bead for this change, one issue bead per numbered task.
 
 ## 1. First-release boundary and configuration
 
-- [x] 1.1 Keep imported playAudio visibly unavailable in the first release; verify through actual action dispatch that no file scan or player start happens and chat/voice output is unaffected.
+- [x] 1.1 Establish the original unavailable imported-key boundary with no file scan or player start. Cluster 18 task 4.1 supersedes this boundary for configured committed keys while retaining quarantine and silent import previews.
 - [x] 1.2 Add versioned playlist/action/fade Schemas, pure invariants and the legacy importer; verify ordered MP3 arrays and single-file values, per-entry status for missing/directory/non-MP3 entries, malformed JSON, every recovered action 0..6 / fade type 0..3 (`KNOB-082/083`) and out-of-mapping controls as needsConfiguration, gain/fade bounds and idempotence with unit/property tests.
 
 ## 2. Playback lifecycle (macOS first)
@@ -240,3 +240,32 @@ clean run reproduced every assertion and measurement. Reproduction sources and
 run artifacts remain outside git under `open-quake-finish/linux-audio/` in the
 project scratch directory; the Linux fixture is under the corresponding
 `~/dev/agentic-scratchpads/open-quake/linux-audio-30613c8/` directory.
+
+## 4. Cluster 18 recovered behavior
+
+- [x] 4.1 Wire guarded local soundboard key releases to the existing conductor using recovered actions 0..6 and fades 0..3; prove all codes, no work on press, stopAudio, profile teardown and shared output preemption with silent fakes (`KNOB-082/083/086`, open-quake-lih.19.2; links open-quake-uv9.5/7).
+- [x] 4.2 Verify natural-end and previous/next wrapping, missing-file skipping and interrupted fade timing using TestClock; run all lane gates and record audible/hardware limits (`KNOB-082/083/086`, open-quake-lih.19.5).
+
+
+## Cluster 18 verification, 2026-10-26
+
+Before this change, main already had the recovered parser, SoundboardService,
+native MP3 adapter, linear fades, indefinite wrapping and canonical AudioOutput.
+Committed key dispatch did not compose the soundboard owner. This lane supplies
+that existing conductor to guarded local key releases and shares the same
+AudioOutput instance with speech and wallpaper. Presses and import previews stay
+silent, quarantine stays enforced, stopAudio only stops soundboard, and device or
+profile teardown cancels its sessions. No second audio playback stack is added.
+
+KNOB-082/083/086 are covered by existing schema/property and TestClock tests plus
+new key-adapter and actual KeyRuntime regressions. Every action 0..6 and fade type
+0..3 is decoded, repeated natural ends wrap beyond the final track, and the new
+restart test observes the outgoing ramp before replacement. Existing real-owner
+tests cover capture/speech preemption, busy output and stale Stop isolation.
+All lane gates pass, with the same 2,890-test and 46-item validation results
+recorded in device-screen-wallpaper/tasks.md. Task 2.3 now has verified production composition in source;
+open-quake-uv9.7 stays open behind its existing open-quake-c5w prerequisite.
+This lane does not close the broader voice acceptance gate. Task 3.1 / open-quake-uv9.5
+retains live desktop playback controls and status, and task 3.2 retains physical
+trigger/hearing acceptance. No audio was played aloud, and no real QUAKE or
+DK-Suite process was used.

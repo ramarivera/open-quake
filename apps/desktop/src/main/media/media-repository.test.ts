@@ -3,7 +3,8 @@ import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Either, Layer, Option } from "effect";
+import { it as effectIt } from "@effect/vitest";
+import { Effect, Either, Fiber, Layer, Option, TestClock } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultClockTile, defaultWallpaper } from "../../shared/display";
 import { ImageDecoder, normalizeLocalSelection } from "./image-decoder";
@@ -89,6 +90,107 @@ describe("desktop media repository and actual disk adapter", () => {
 			}).pipe(Effect.provide(layer)),
 		);
 	});
+	it("persists ordered playlists and sound, deduplicates imports, rejects stale moves and removes one item", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				yield* repo.importLocal("A", 0, imagePath, true);
+				yield* repo.importLocal("A", 1, imagePath, true);
+				expect((yield* repo.load("A")).saved.revision).toBe(1);
+				const secondPath = join(directory, "second.jpg");
+				yield* Effect.promise(() => fs.writeFile(secondPath, jpeg));
+				yield* repo.importLocal("A", 1, secondPath, true);
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publish: () => Effect.void,
+					publishClock: () => Effect.void,
+				});
+				yield* controller.request({ _tag: "select", serial: "A" });
+				const original = (yield* repo.load("A")).saved.settings
+					.displayMediaList;
+				const moved = yield* controller.request({
+					_tag: "reorder",
+					serial: "A",
+					revision: 2,
+					from: 1,
+					to: 0,
+				});
+				expect(moved.saved.settings.displayMediaList).toEqual([
+					original[1],
+					original[0],
+				]);
+				const sound = yield* controller.request({
+					_tag: "sound",
+					serial: "A",
+					revision: 3,
+					enableSound: true,
+				});
+				expect(sound.saved.settings.enableSound).toBe(true);
+				for (const command of [
+					{ _tag: "reorder", from: 0, to: 9, revision: 4 },
+					{ _tag: "reorder", from: 0, to: 1, revision: 2 },
+				])
+					expect(
+						(yield* controller
+							.request({ serial: "A", ...command })
+							.pipe(Effect.either))._tag,
+					).toBe("Left");
+				expect((yield* repo.load("A")).saved).toEqual(sound.saved);
+				expect((yield* repo.load("B")).saved.settings.enableSound).toBe(false);
+				const removed = yield* controller.request({
+					_tag: "remove",
+					serial: "A",
+					revision: 4,
+					index: 0,
+				});
+				expect(removed.saved.settings.displayMediaList).toEqual([original[0]]);
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+
+	effectIt.scoped(
+		"advances the persisted playlist on its clock and wraps repeatedly",
+		() =>
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				yield* repo.importLocal("loop", 0, imagePath, true);
+				const secondPath = join(directory, "second.jpg");
+				yield* Effect.promise(() => fs.writeFile(secondPath, jpeg));
+				yield* repo.importLocal("loop", 1, secondPath, true);
+				const { saved: loopSaved } = yield* repo.load("loop");
+				const shown: number[] = [];
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publish: (snapshot) =>
+						Effect.sync(() => {
+							shown.push(snapshot.activeIndex ?? 0);
+						}),
+					publishClock: () => Effect.void,
+				}).pipe(
+					Effect.provideService(
+						MediaRepository,
+						MediaRepository.make({
+							...repo,
+							load: () =>
+								Effect.succeed({ saved: loopSaved, recovered: false }),
+							resolve: () => Effect.succeed(Option.none()),
+						}),
+					),
+				);
+				yield* controller.request({ _tag: "select", serial: "loop" });
+				const fiber = yield* Effect.forkScoped(controller.ticks);
+				yield* TestClock.adjust(4999);
+				expect(shown).toEqual([0]);
+				yield* TestClock.adjust(1);
+				expect(shown).toEqual([0, 1]);
+				yield* TestClock.adjust(15000);
+				expect(shown).toEqual([0, 1, 0, 1, 0]);
+				yield* Fiber.interrupt(fiber);
+				yield* TestClock.adjust(5000);
+				expect(shown).toEqual([0, 1, 0, 1, 0]);
+			}).pipe(Effect.provide(layer)),
+	);
+
 	it("keeps two serials independent across restart and source deletion", async () => {
 		await Effect.runPromise(
 			Effect.gen(function* () {

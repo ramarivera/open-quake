@@ -11,6 +11,7 @@ import {
 	type SegmentOption,
 } from "../ui/Form";
 import type { useWallpaper } from "./useWallpaper";
+import { WallpaperPlaylist } from "./WallpaperPlaylist";
 
 export type WallpaperController = ReturnType<typeof useWallpaper>;
 
@@ -112,7 +113,7 @@ export function WallpaperSettings({
 
 			<Group
 				title="Wallpaper"
-				description="One local JPEG or PNG for the vivid screen, saved for each device."
+				description="Local images and videos for the vivid screen, saved in playlist order for each device."
 				footer={
 					<div role="status" aria-live="polite" className="status-notes">
 						{snapshot?.asset._tag === "unreadable" ? (
@@ -140,15 +141,15 @@ export function WallpaperSettings({
 				}
 			>
 				<Row
-					label="Image"
+					label="Media"
 					hint={
 						<span aria-live="polite">
 							{!snapshot
 								? "Loading saved wallpaper…"
 								: snapshot.asset._tag === "ready"
-									? (image?.name ?? "Custom image")
+									? (image?.name ?? "Custom media")
 									: snapshot.asset._tag === "unreadable"
-										? "Unreadable image"
+										? "Unreadable media"
 										: "None · neutral background"}
 						</span>
 					}
@@ -159,10 +160,11 @@ export function WallpaperSettings({
 							className="button"
 							disabled={disabled}
 							onClick={() => {
-								if (selection) void request({ _tag: "import", ...selection });
+								if (selection)
+									void request({ _tag: "import", ...selection, append: true });
 							}}
 						>
-							Choose Image…
+							Select Picture
 						</button>
 						<button
 							type="button"
@@ -176,6 +178,40 @@ export function WallpaperSettings({
 						</button>
 					</div>
 				</Row>
+				<WallpaperPlaylist
+					items={saved?.settings.displayMediaList ?? []}
+					disabled={disabled}
+					move={(from, to) => {
+						if (selection)
+							void request({ _tag: "reorder", ...selection, from, to });
+					}}
+					remove={(index) => {
+						if (selection)
+							void request({ _tag: "remove", ...selection, index });
+					}}
+				/>
+				<Row
+					label="Video Sound"
+					labelId={`${ids}-sound`}
+					hint="Sound plays only on the panel. Previews stay muted."
+				>
+					<Segmented
+						name={`${ids}-sound`}
+						labelledBy={`${ids}-sound`}
+						value={saved?.settings.enableSound ? "on" : "off"}
+						options={borderOptions}
+						disabled={disabled}
+						onChange={(value) => {
+							if (selection)
+								void request({
+									_tag: "sound",
+									...selection,
+									enableSound: value === "on",
+								});
+						}}
+					/>
+				</Row>
+
 				<Row label="Fit" labelId={`${ids}-fit`} hint={fillHints[fillMode]}>
 					<Segmented
 						name={`${ids}-fit`}

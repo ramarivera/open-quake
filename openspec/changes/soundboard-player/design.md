@@ -181,3 +181,7 @@ three fail before the fix. All 130 soundboard/audio tests, both package types,
 scoped Biome and strict spec pass. A fresh muted native control harness also
 passes with no remaining windows/workers. External outputs use the
 `review-r2/second-*` names. Production consumer and physical limits are unchanged.
+
+## Cluster 18 composition
+
+The main application supplies one AudioOutput instance to speech and SoundboardService. KeyRuntime forwards only a committed key plus activation identity after its guards; local audio waits for release. The adapter decodes the recovered controls and supplies the profile revision to the existing conductor. The empty system-media preset stays with its current owner. No second decoder or soundboard playback service is introduced.

@@ -31,6 +31,7 @@ export const DisplayMedia = Schema.Union(
 export type DisplayMedia = typeof DisplayMedia.Type;
 export const WallpaperSettings = Schema.Struct({
 	isTransparent: Schema.Boolean,
+	enableSound: Schema.optionalWith(Schema.Boolean, { default: () => false }),
 	bgFillMode: FillMode,
 	gapInterval: Schema.Int,
 	gapIntervalUnit: Schema.Literal(0, 1),
@@ -62,6 +63,7 @@ export const StaticWallpaperSettings = WallpaperSettings.pipe(
 );
 export const defaultWallpaper: WallpaperSettings = {
 	isTransparent: false,
+	enableSound: false,
 	bgFillMode: "cover",
 	gapInterval: 5,
 	gapIntervalUnit: 0,
@@ -89,7 +91,15 @@ export const SavedWallpaper = Schema.Struct({
 	version: Schema.Literal(1),
 	serial: DisplayIdentity,
 	revision: Schema.Int.pipe(Schema.nonNegative()),
-	settings: StaticWallpaperSettings,
+	settings: WallpaperSettings.pipe(
+		Schema.filter(
+			(s) =>
+				!s.isTransparent &&
+				s.displayMediaList.length <= 128 &&
+				new Set(s.displayMediaList.map((m) => m.filePath)).size ===
+					s.displayMediaList.length,
+		),
+	),
 	clock: DesktopClockTile,
 });
 export type SavedWallpaper = typeof SavedWallpaper.Type;

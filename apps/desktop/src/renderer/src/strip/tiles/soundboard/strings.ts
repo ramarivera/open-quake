@@ -1,9 +1,8 @@
 /** Original open-quake release-limit copy, approved by the device design owner. */
 export const soundboardLabels = {
 	source: "Local playlist",
-	title: "Not available in this release",
-	detail:
-		"Imported files are kept. This key won't read or play them in this release.",
+	title: "Audio player is not configured properly",
+	detail: "Select local MP3 files and valid playback settings to use this key.",
 	compact: "Unavailable",
-	accessibleName: "Local playlist, not available in this release",
+	accessibleName: "Local playlist, configuration required",
 } as const;

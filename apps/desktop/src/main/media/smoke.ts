@@ -172,6 +172,8 @@ async function smoke(): Promise<void> {
 	const management = new BrowserWindow(options);
 	managementWindow = management;
 	const panel = new BrowserWindow(options);
+	management.webContents.setAudioMuted(true);
+	panel.webContents.setAudioMuted(true);
 	// This media-only fixture has no agent service; the management smoke owns it.
 	ipcMain.handle(
 		AGENTS_REQUEST,
@@ -412,6 +414,53 @@ async function smoke(): Promise<void> {
 		width: "480",
 		height: "480",
 	});
+	// Cluster 18: exercise the mounted playlist editor without foreground input.
+	selectedPath = pngPath;
+	await request(management, {
+		_tag: "import",
+		serial: "smoke-A",
+		revision: (await request(management, { _tag: "read" })).saved.revision,
+		append: true,
+	});
+	await settle(150);
+	await management.webContents.executeJavaScript(
+		`document.querySelector('button[aria-label="Move checkerboard.png up"]').click(); null;`,
+	);
+	await settle(150);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.settings
+			.displayMediaList[0]?.name,
+		"checkerboard.png",
+	);
+	await management.webContents.executeJavaScript(`(() => {
+ const rows = document.querySelectorAll('.wallpaper-playlist li'); const dataTransfer = new DataTransfer();
+ rows[0].dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer }));
+ rows[1].dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer }));
+ rows[1].dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer }));
+ return null;
+ })()`);
+	await settle(150);
+	assert.equal(
+		(await request(management, { _tag: "read" })).saved.settings
+			.displayMediaList[0]?.name,
+		"second.jpg",
+	);
+	for (const enabled of [true, false]) {
+		await management.webContents.executeJavaScript(
+			`(() => { const row = [...document.querySelectorAll('.row')].find(row => row.textContent.includes('Video Sound')); row.querySelector('input[value="${enabled ? "on" : "off"}"]').click(); return null; })()`,
+		);
+		await settle(150);
+		assert.equal(
+			(await request(management, { _tag: "read" })).saved.settings.enableSound,
+			enabled,
+		);
+	}
+	assert.equal(management.webContents.isAudioMuted(), true);
+	assert.equal(panel.webContents.isAudioMuted(), true);
+	process.stdout.write(
+		"Cluster 18 renderer PASS: move buttons, drag reorder, persisted order, sound on/off, muted windows.\n",
+	);
+
 	const errors: unknown = await management.webContents.executeJavaScript(
 		"document.body.innerText",
 	);
@@ -421,6 +470,31 @@ async function smoke(): Promise<void> {
 	const artifacts = process.argv[2];
 	if (artifacts) await mkdir(artifacts, { recursive: true });
 	management.setSize(1100, 1000);
+	await settle(150);
+	if (artifacts)
+		await writeFile(
+			join(artifacts, "wallpaper-playlist.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+	if (artifacts) {
+		management.setSize(390, 844);
+		await management.webContents.executeJavaScript(
+			"document.querySelector('.wallpaper-playlist').scrollIntoView(); null;",
+		);
+		await settle(150);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				"document.documentElement.scrollWidth > innerWidth",
+			),
+			false,
+		);
+		await writeFile(
+			join(artifacts, "wallpaper-playlist-narrow.png"),
+			(await management.webContents.capturePage()).toPNG(),
+		);
+		management.setSize(1100, 1000);
+	}
+
 	// Exercise the production diagnostic preload/handler/controller with synthetic topology.
 	await management.webContents.executeJavaScript(
 		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
@@ -644,6 +718,39 @@ async function smoke(): Promise<void> {
 			vivid: theme === undefined ? "true" : "false",
 			clock: name === "clock",
 		});
+		if (name === "vivid" && process.env.OPEN_QUAKE_SMOKE_VIDEO) {
+			selectedPath = process.env.OPEN_QUAKE_SMOKE_VIDEO;
+			const imported = await request(management, {
+				_tag: "import",
+				serial: "smoke-A",
+				revision: (await request(management, { _tag: "read" })).saved.revision,
+			});
+			assert.equal(imported.saved.settings.displayMediaList[0]?.type, "video");
+			assert.equal(imported.asset._tag, "ready");
+			await request(management, {
+				_tag: "sound",
+				serial: "smoke-A",
+				revision: imported.saved.revision,
+				enableSound: true,
+			});
+			await settle(3600);
+			const video: unknown = await panel.webContents.executeJavaScript(`(() => {
+    const video = document.querySelector('.wallpaper-canvas video');
+    return { loop: video?.loop, playing: video && !video.paused, advanced: video?.currentTime > 0, ready: video?.readyState >= 2 };
+   })()`);
+			assert.deepEqual(video, {
+				loop: true,
+				playing: true,
+				advanced: true,
+				ready: true,
+			});
+			assert.equal(panel.webContents.isAudioMuted(), true);
+			assert.equal(management.webContents.isAudioMuted(), true);
+			process.stdout.write(
+				"Cluster 18 native video PASS: managed import, metadata, real renderer playback and singleton loop; all windows muted.\n",
+			);
+		}
+
 		if (artifacts)
 			await writeFile(
 				join(artifacts, `panel-${name}.png`),
@@ -863,6 +970,16 @@ async function smoke(): Promise<void> {
 		"W6 Electron smoke PASS: spoofed panel mutations rejected, native PNG/JPEG decoding, isolated serials, real preload/IPC, three fill modes, synchronized one-second clock, light theme/reduced motion, hidden panel/preview, strip key grid for five built-in-like profiles. Hardware unverified.\n",
 	);
 }
+
+// Fail headlessly on native callback errors instead of opening Electron's modal dialog.
+const fatal = (cause: unknown): void => {
+	process.stderr.write(
+		`${cause instanceof Error ? cause.stack : String(cause)}\n`,
+	);
+	app.exit(1);
+};
+process.on("uncaughtException", fatal);
+process.on("unhandledRejection", fatal);
 
 smoke()
 	.then(async () => {

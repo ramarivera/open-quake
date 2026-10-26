@@ -4,6 +4,8 @@ import {
 	defaultClockTile,
 	displayClock,
 	InvalidWallpaper,
+	nextWallpaperIndex,
+	reorderWallpaper,
 } from "../../shared/display";
 import {
 	WallpaperCommand,
@@ -43,6 +45,12 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 				),
 			);
 			const semaphore = yield* Effect.makeSemaphore(1);
+			let activeIndex = 0;
+			let elapsed = 0;
+			let previousTick = yield* Effect.clockWith(
+				(source) => source.currentTimeMillis,
+			);
+			let playlistKey = "";
 			const snapshot = Effect.fn("MediaController.snapshot")(
 				(
 					serial: string,
@@ -50,7 +58,22 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 				): Effect.Effect<WallpaperSnapshot, MediaRepositoryError> =>
 					Effect.gen(function* () {
 						const { saved, recovered } = yield* repository.load(serial);
-						const asset = yield* repository.resolve(saved).pipe(
+						const key = JSON.stringify([
+							serial,
+							saved.settings.displayMediaList.map((media) => [
+								media.filePath,
+								media.duration,
+							]),
+						]);
+						if (key !== playlistKey) {
+							playlistKey = key;
+							activeIndex = 0;
+							elapsed = 0;
+							previousTick = yield* Effect.clockWith(
+								(source) => source.currentTimeMillis,
+							);
+						}
+						const asset = yield* repository.resolve(saved, activeIndex).pipe(
 							Effect.map(
 								Option.match({
 									onNone: () => ({ _tag: "empty" as const }),
@@ -63,6 +86,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						);
 						return {
 							saved,
+							activeIndex,
 							asset,
 							recovered,
 							normalizedFileUrl,
@@ -102,20 +126,50 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 										serial,
 										command.revision,
 										path.value,
+										command.append,
 									)).normalizedFileUrl;
 							} else if (command._tag === "restore")
 								yield* repository.restore(serial, command.revision);
 							else if (
 								command._tag === "configure" ||
-								command._tag === "clear"
+								command._tag === "clear" ||
+								command._tag === "reorder" ||
+								command._tag === "sound" ||
+								command._tag === "remove"
 							) {
 								const { saved } = yield* repository.load(serial);
+								const list = saved.settings.displayMediaList;
+								if (
+									(command._tag === "reorder" &&
+										(command.from >= list.length ||
+											command.to >= list.length)) ||
+									(command._tag === "remove" && command.index >= list.length)
+								)
+									return yield* new InvalidWallpaper(undefined);
 								yield* repository.save(
 									serial,
 									command.revision,
 									command._tag === "clear"
 										? { ...saved.settings, displayMediaList: [] }
-										: { ...saved.settings, bgFillMode: command.fillMode },
+										: command._tag === "sound"
+											? { ...saved.settings, enableSound: command.enableSound }
+											: command._tag === "reorder"
+												? {
+														...saved.settings,
+														displayMediaList: reorderWallpaper(
+															list,
+															command.from,
+															command.to,
+														),
+													}
+												: command._tag === "remove"
+													? {
+															...saved.settings,
+															displayMediaList: list.filter(
+																(_, index) => index !== command.index,
+															),
+														}
+													: { ...saved.settings, bgFillMode: command.fillMode },
 									command._tag === "configure"
 										? {
 												...defaultClockTile,
@@ -136,7 +190,42 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 			);
 			const ticks = displayClock.pipe(
 				Stream.runForEach((next) =>
-					Ref.set(clock, next).pipe(Effect.zipRight(edge.publishClock(next))),
+					semaphore
+						.withPermits(1)(
+							Effect.gen(function* () {
+								const now = yield* Effect.clockWith(
+									(source) => source.currentTimeMillis,
+								);
+								const delta = Math.max(0, now - previousTick);
+								previousTick = now;
+								yield* Ref.set(clock, next);
+								yield* edge.publishClock(next);
+								const serial = yield* Ref.get(activeSerial);
+								const { saved } = yield* repository.load(serial);
+								if (saved.settings.displayMediaList.length <= 1) return;
+								elapsed += delta;
+								if (
+									elapsed <
+									(saved.settings.displayMediaList[activeIndex]?.duration ??
+										5000)
+								)
+									return;
+								elapsed = 0;
+								activeIndex = nextWallpaperIndex(
+									activeIndex,
+									saved.settings.displayMediaList.length,
+									saved.settings.playMode,
+								);
+								yield* edge.publish(yield* snapshot(serial));
+							}),
+						)
+						.pipe(
+							Effect.catchTags({
+								InvalidWallpaper: () => Effect.void,
+								MediaUnreadable: () => Effect.void,
+								MediaPersistenceFailed: () => Effect.void,
+							}),
+						),
 				),
 			);
 			return { request, ticks, selectionSerial: Ref.get(activeSerial) };

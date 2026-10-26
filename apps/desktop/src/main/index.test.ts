@@ -46,7 +46,11 @@ const electron = vi.hoisted(() => {
 		}
 
 		destroyed = false;
-		webContents = { send: vi.fn(), isDestroyed: () => this.destroyed };
+		webContents = {
+			send: vi.fn(),
+			setAudioMuted: vi.fn(),
+			isDestroyed: () => this.destroyed,
+		};
 		loadURL = vi.fn();
 		loadFile = vi.fn();
 		setBounds = vi.fn<(bounds: Rectangle) => void>();
@@ -473,7 +477,14 @@ describe("desktop window lifecycle", () => {
 			},
 		});
 		const signal = new AbortController().signal;
-		expect(await execute?.(key, signal)).toBe(true);
+		expect(
+			await execute?.(key, signal, {
+				deviceId: "device",
+				profileId: "p",
+				pageId: "one",
+				revision: 1,
+			}),
+		).toBe(true);
 		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config, signal);
 	});
 

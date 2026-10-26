@@ -10,7 +10,7 @@ The DK-Player default profile includes audio action, fades and volume. Recovered
 - Specify play/pause/stop, track navigation, volume and fade behavior.
 - Keep playback state in one service shared by key events and desktop controls.
 
-This is the single soundboard contract; it absorbed the duplicate `soundboard-playback` change on 2026-10-23. It adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
+This is the single soundboard contract; it absorbed the duplicate `soundboard-playback` change on 2026-10-23. Contracts, the conductor and native adapters now exist. Cluster 18 composes guarded key execution with their shared output owner. Desktop playback controls and physical acceptance remain open.
 
 ## Capabilities
 
@@ -28,4 +28,8 @@ None. Existing in-flight SDK, profile, display, AI and theme contracts remain ow
 
 Recommended phase: Later phases item 3, soundboard/DK-Player, after profile actions and host media backend. No recording or new AI provider required.
 
-Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. No npm dependency is added in this spec-only change.
+Research: `/Users/ramarivera/dev/open-quake/.context/research/dk-suite-feature-inventory.md`, sections 7–9 and Later phases. Evidence and unresolved decisions are recorded in design.md. No npm dependency is added.
+
+## Cluster 18 implementation
+
+Wire committed local `playAudio`, `playAudioLegacy` and `stopAudio` releases through the existing SoundboardService and canonical AudioOutput owner. Preserve the empty system-media preset. Cover `KNOB-082`, `KNOB-083`, `KNOB-086` with decoded-code, fake-player and TestClock evidence. Native audible output and real QUAKE triggers remain unverified.

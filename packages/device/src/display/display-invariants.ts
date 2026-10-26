@@ -69,3 +69,40 @@ export function formatClock(
 	const hour = format === "12h" ? snapshot.hour % 12 || 12 : snapshot.hour;
 	return `${pad(hour)}:${pad(snapshot.minute)}:${pad(snapshot.second)}${format === "12h" ? (snapshot.hour < 12 ? " AM" : " PM") : ""}`;
 }
+
+/** A move is a permutation; invalid input cannot discard an asset. WIDGETS-128. */
+export function reorderWallpaper<A>(
+	items: readonly A[],
+	from: number,
+	to: number,
+): readonly A[] {
+	if (
+		!Number.isInteger(from) ||
+		!Number.isInteger(to) ||
+		from < 0 ||
+		to < 0 ||
+		from >= items.length ||
+		to >= items.length
+	)
+		return items;
+	const next = [...items];
+	const [item] = next.splice(from, 1);
+	if (item === undefined) return items;
+	next.splice(to, 0, item);
+	return next;
+}
+/** Sequential wraps. Random picks another item without an unbounded retry. */
+export function nextWallpaperIndex(
+	current: number,
+	count: number,
+	mode: "sequential" | "random",
+	random = Math.random(),
+): number {
+	if (count <= 1) return 0;
+	return mode === "sequential"
+		? (current + 1) % count
+		: (current +
+				1 +
+				Math.min(count - 2, Math.max(0, Math.floor(random * (count - 1))))) %
+				count;
+}

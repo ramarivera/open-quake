@@ -29,3 +29,40 @@ Parent-owned Beads should mirror one epic and one issue per checkbox in this dir
 - [ ] 4.1 Implement confirmed serial-to-display binding after multi-display behavior is approved; verify unplug produces unbound state and never silently captures another monitor, and document recovery.
 - [ ] 4.2 Investigate any requested legacy socket/binding compatibility before adding it; verify recovered localhost endpoint/server behavior and keep LAN control/arbitrary app mirroring unavailable without a separately approved contract.
 - [ ] 4.3 Run desktop end-to-end display scenarios, OpenSpec validation, and repository gates; verify recorded evidence separates mock/renderer tests from real resource delivery and attach remaining hardware gaps to open issues.
+
+## 5. Cluster 18 wallpaper behavior
+
+- [x] 5.1 Add backward-compatible sound and ordered managed media persistence, video metadata validation, per-item removal, deduplication and validated reorder; test reload, stale revisions and per-serial isolation (`WIDGETS-128/130`, open-quake-lih.19.1).
+- [x] 5.2 Add drag and keyboard reorder controls plus Wallpaper sound on/off; render ordered looping media with muted management previews and clean lifecycle; test reducer and renderer interactions (`WIDGETS-128/130`, open-quake-lih.19.3).
+- [x] 5.3 Run all lane gates and silent mock native smoke; save screenshots externally, record hardware and audible-output limits (`WIDGETS-128/130`, open-quake-lih.19.4).
+
+
+## Cluster 18 verification, 2026-10-26
+
+Before this change, main had the static managed image repository, shared vivid
+canvas and clock, but no playlist editor or wallpaper sound. Cluster 18 extends
+those owners with append/deduplication, revision-checked reorder/removal and
+backward-compatible enableSound persistence. Main broadcasts active selection;
+previews stay muted and panel sound uses the existing canonical AudioOutput.
+
+The full lane gates pass. The suite passes 2,890 tests with four existing skips
+using `TURBO_ENV_MODE=loose TMPDIR=<lane scratch> pnpm test -- --maxWorkers=2`.
+The limit avoids existing profile tests exceeding their unchanged five-second
+timeout under full host concurrency. Scratch TMPDIR preserves filesystem safety
+checks on macOS. Typecheck passes six packages, build passes, both bundle-smoke
+modes pass, Biome checks 1,156 files with zero errors and 14 existing warnings,
+and strict OpenSpec validation passes all 46 items.
+
+Hidden mock Electron exercises actual PNG/JPEG and silent WebM import, metadata,
+video playback and singleton looping, move buttons, drag reorder, persisted order,
+sound on/off, preview muting, light/reduced-motion/narrow layout and shutdown.
+All windows stay globally muted. Eighteen screenshots and logs live under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/wallpaper-soundboard/`.
+The desktop playlist, narrow playlist and native video images were inspected.
+All owned smoke processes exited. Native callback and pending-audio cancellation
+regressions are covered by tests.
+
+Coverage is WIDGETS-128 sound/order/deduplication/removal and WIDGETS-130 active
+video sound eligibility/singleton looping. Other portions of those broad rows,
+including crossfade/preload geometry, remain outside this lane. Physical sound,
+QUAKE delivery, display binding and the full codec matrix remain unverified.

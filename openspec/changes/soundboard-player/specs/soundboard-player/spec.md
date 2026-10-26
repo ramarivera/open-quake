@@ -8,12 +8,12 @@ The DK-Player default profile includes audio action, fades and volume. Recovered
 
 ### Requirement: Later local-only soundboard
 
-Soundboard SHALL remain disabled in the first release; imported playAudio keys SHALL stay visibly unavailable and SHALL NOT scan files or start a player. When enabled it SHALL use explicit user-selected local MP3 files and SHALL require no AI provider, account, cloud library, remote URL, or directory scan.
+Cluster 18 enables committed local playAudio, playAudioLegacy and stopAudio keys. Import preview alone SHALL NOT start playback; a guarded explicit release is required. Soundboard SHALL use explicit user-selected local MP3 files and SHALL require no AI provider, account, cloud library, remote URL, or directory scan.
 
-#### Scenario: First-release imported key
+#### Scenario: Import preview stays silent
 
-- **WHEN** a first-release user presses a key imported with a playAudio configuration
-- **THEN** the key reports soundboard unavailable, no file is read, and chat/voice output is unaffected
+- **WHEN** a user previews an imported playAudio configuration without activating its committed key
+- **THEN** no player starts and chat/voice output is unaffected
 
 #### Scenario: Remote sound URL supplied
 
@@ -172,3 +172,17 @@ The importer and runtime SHALL use these recovered mappings. Evidence: `KNOB-082
 
 - **WHEN** natural end occurs and no playlist entry is available
 - **THEN** the session stops after at most one traversal without an endless retry loop
+
+### Requirement: Cluster 18 local key execution
+
+Committed local playAudio and playAudioLegacy keys SHALL execute on a guarded release through the existing SoundboardService, sharing production speech AudioOutput. Key press and long-press SHALL NOT start playback. The exact recovered operations SHALL be 0 PLAY_STOP, 1 PLAY_ADD, 2 PLAY_RESTART, 3 PLAY_LOOP, 4 STOP_ALL, 5 PLAY_PREV, 6 PLAY_NEXT. Fade strings SHALL encode `<type>-<ms>` with 0 none, 1 in, 2 out, 3 in-out. Existing bounded linear ramps and cancellation SHALL apply. Playlists SHALL wrap indefinitely, including previous/next, skipping unavailable files within one traversal and stopping when none remain. This covers `KNOB-082/083/086`.
+
+#### Scenario: A recovered local action
+
+- **WHEN** a configured local key is pressed and released
+- **THEN** press opens no player and release decodes and executes the recovered operation and fade through the existing owner
+
+#### Scenario: Profile deactivation
+
+- **WHEN** a profile owning local sessions deactivates or its device disconnects
+- **THEN** its active and pending sessions stop without fading and another profile's playback remains intact

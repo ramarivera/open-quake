@@ -3,7 +3,10 @@ import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Option, Schedule, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters";
-import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import {
+	type KeyActivation,
+	KeyRuntime,
+} from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import type { HardwareSession } from "../../../../../packages/device/src/hardware/hardware-service.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import {
@@ -75,9 +78,14 @@ export function prepareProfiles(
 	managementURL = renderer,
 	hardware: () => HardwareSession | undefined = () => undefined,
 	panel: () => BrowserWindow | undefined = () => undefined,
-	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	executeOwned?: (
+		key: ProfileKey,
+		signal: AbortSignal,
+		activation: KeyActivation,
+	) => Promise<boolean>,
 	diagnostics?: DesktopDiagnostics,
 	mediaActions?: MediaActionAdapter,
+	resetOwned?: (deviceId?: string) => Promise<void>,
 ) {
 	const platform: ProfilePlatform =
 		process.platform === "darwin"
@@ -142,6 +150,8 @@ export function prepareProfiles(
 							Effect.tryPromise({
 								try: async () => {
 									guard?.();
+									await resetOwned?.(serial);
+									guard?.();
 									await deliver?.(serial, profile);
 									guard?.();
 									broadcast(PROFILE_SELECTION, {
@@ -169,6 +179,7 @@ export function prepareProfiles(
 						undefined,
 						executeOwned,
 						mediaActions,
+						resetOwned,
 					),
 				),
 			),

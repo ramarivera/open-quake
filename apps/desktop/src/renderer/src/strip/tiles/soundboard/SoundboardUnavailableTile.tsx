@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { importSoundConfig } from "../../../../../../../../packages/edge/src/soundboard/soundboard-invariants";
 import { stripPaletteProperties } from "../../palette";
 import type { StripTileProps } from "../../tileRegistry";
 import { GenericTile } from "../GenericTile";
@@ -12,6 +13,26 @@ export function SoundboardUnavailableTile(
 ): React.JSX.Element {
 	const { tile } = props;
 	const detailId = useId();
+	const parsed = importSoundConfig({
+		type: tile.key.config.type,
+		actions: tile.key.config.actions,
+	});
+	const configured =
+		parsed._tag === "Right" &&
+		parsed.right.issues.every((issue) => issue === "unverifiedFiles");
+	if (configured)
+		return (
+			<fieldset
+				className="oq-soundboard-unavailable"
+				data-state="configured"
+				data-testid="soundboard-local"
+				aria-label="Local Music"
+				style={{ ...palette, width: tile.box.width, height: tile.box.height }}
+			>
+				<GenericTile {...props} />
+				<span className="strip-key-chip">Play Audio</span>
+			</fieldset>
+		);
 	return (
 		<fieldset
 			className="oq-soundboard-unavailable"

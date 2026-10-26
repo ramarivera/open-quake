@@ -30,6 +30,12 @@ export interface KeyFeedback {
 	readonly progress?: number;
 	readonly alert?: 0 | 1 | 2 | 3;
 }
+export interface KeyActivation {
+	readonly deviceId: string;
+	readonly profileId: string;
+	readonly pageId: string;
+	readonly revision: number;
+}
 export class KeyRuntimePort extends Context.Tag(
 	"@open-quake/device/KeyRuntimePort",
 )<
@@ -42,7 +48,9 @@ export class KeyRuntimePort extends Context.Tag(
 		/** Host integrations receive only the committed key after activation guards. */
 		readonly executeOwned?: (
 			key: ProfileKey,
+			activation: KeyActivation,
 		) => Effect.Effect<boolean, ActionError>;
+		readonly resetOwned?: (deviceId?: string) => Effect.Effect<void>;
 		readonly publish: (state: KeyFeedback) => Effect.Effect<void>;
 		readonly select: (
 			deviceId: string,
@@ -79,6 +87,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					state.pageId,
 					state.keyCode,
 				]);
+			const audioPresses = new Map<string, KeyActivation>();
 			const held = new Set<string>(),
 				alternates = new Map<string, 0 | 1>(),
 				running = new Map<string, Fiber.RuntimeFiber<void, never>>();
@@ -189,11 +198,11 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			> {
 				const control = JSON.stringify([deviceId, keyCode]);
 				if (kind === "release") {
-					held.delete(control);
-					return;
+					if (!held.delete(control)) return;
+				} else {
+					if (held.has(control)) return;
+					held.add(control);
 				}
-				if (held.has(control)) return;
-				held.add(control);
 				const env = yield* port.read;
 				const { profile, page } = current(env, deviceId);
 				if (
@@ -221,6 +230,28 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				};
 				const input = Schema.encodeSync(ProfileKey)(key).config;
 				const type = key.config.type;
+				const localAudio =
+					type === "playAudio" ||
+					type === "playAudioLegacy" ||
+					type === "stopAudio";
+				if (localAudio) {
+					if (kind === "press") {
+						audioPresses.set(control, { ...base, revision: profile.revision });
+						return;
+					}
+					const pressed = audioPresses.get(control);
+					audioPresses.delete(control);
+					if (
+						!pressed ||
+						pressed.profileId !== profile.id ||
+						pressed.pageId !== page.id ||
+						pressed.revision !== profile.revision
+					)
+						return;
+				} else if (kind === "release") {
+					audioPresses.delete(control);
+					return;
+				}
 				if (type === "hotkeySwitch") {
 					const decoded = Schema.decodeUnknownEither(HotkeySwitchConfig)(input);
 					if (decoded._tag === "Left")
@@ -380,14 +411,16 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					running.set(identity, fiber);
 					return;
 				}
-				if (type === "homeAssistant" && port.executeOwned) {
+				if ((type === "homeAssistant" || localAudio) && port.executeOwned) {
 					// Reserve the committed press atomically, then await network work
 					// outside the input lock. Reset owns the scoped fiber's lifetime.
 					const execute = port.executeOwned;
 					let fiber: Fiber.RuntimeFiber<void, ActionError>;
 					fiber = yield* Effect.forkIn(
 						Effect.yieldNow().pipe(
-							Effect.zipRight(execute(key)),
+							Effect.zipRight(
+								execute(key, { ...base, revision: profile.revision }),
+							),
 							Effect.flatMap((handled) =>
 								handled
 									? Effect.void
@@ -410,8 +443,11 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			const reset = Effect.fn("KeyRuntime.reset")(function* (
 				deviceId?: string,
 			): Effect.fn.Return<void> {
+				for (const [id, press] of audioPresses)
+					if (!deviceId || press.deviceId === deviceId) audioPresses.delete(id);
 				for (const [fiber, owner] of owned)
 					if (!deviceId || owner === deviceId) yield* Fiber.interrupt(fiber);
+				if (port.resetOwned) yield* port.resetOwned(deviceId);
 				for (const [key, fiber] of running)
 					if (!deviceId || JSON.parse(key)[0] === deviceId) {
 						yield* Fiber.interrupt(fiber);
