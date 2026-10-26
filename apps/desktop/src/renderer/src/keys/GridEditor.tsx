@@ -19,6 +19,7 @@ import {
 	type ProfilePage,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { effectiveSpan } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
+import { isUnsupportedProfileKey } from "../../../../../../packages/device/src/profiles/profile-function-contracts.js";
 import { occupiedCells } from "../../../../../../packages/device/src/profiles/profile-invariants.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { footprintRect, stripLayout, tileAt } from "../strip/geometry";
@@ -346,7 +347,7 @@ export function GridEditor({
 				key.config.display &&
 				occupiedCells(key).includes(code),
 		);
-		if (!key) return;
+		if (!key || isUnsupportedProfileKey(key)) return;
 		if (key.config.type === "multiActions") {
 			await revert();
 			await choose(key.keyCode);

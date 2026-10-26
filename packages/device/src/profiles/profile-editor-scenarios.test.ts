@@ -266,6 +266,39 @@ describe("editor geometry scenarios", () => {
 });
 
 describe("page and diagnosed import scenarios", () => {
+	for (const sentinel of [null, {}, { type: "" }])
+		it(`reports original broken-link action indexes after sentinel ${JSON.stringify(sentinel)}`, () => {
+			const source = {
+				...encodedKey("1,1", {
+					type: "createFolder",
+					actions: [sentinel, { type: "folder", value: "missing" }],
+				}),
+				childrenName: "createFolder",
+			};
+			const report = inspectProfileImport([source]);
+			expect(report.profile).toBeDefined();
+			expect(
+				report.diagnostics.filter((d) => d.code === "invalid-action"),
+			).toEqual([
+				{
+					code: "invalid-action",
+					path: "pages.0.keys.0.config.actions.1.value",
+					blocking: false,
+				},
+			]);
+			expect(report.diagnostics).toContainEqual({
+				code: "legacy-sentinel",
+				path: "pages.0.keys.0.config.actions.0",
+				blocking: false,
+			});
+			expect(report.profile?.pages[0].keys[0]?.config.actions).toEqual([
+				{ type: "folder", value: "" },
+			]);
+			expect(report.profile?.pages[0].keys[0]?.compatibility).toMatchObject({
+				unsupported: true,
+				source,
+			});
+		});
 	it.effect(
 		"dispatch retains a valid imported hotkey while excluding the diagnosed mismatch",
 		() =>

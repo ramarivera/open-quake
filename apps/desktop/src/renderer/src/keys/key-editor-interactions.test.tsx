@@ -32,6 +32,7 @@ import {
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { profileFunctionContractsLayer } from "../../../../../../packages/device/src/profiles/profile-function-contracts";
+import { inspectProfileText } from "../../../../../../packages/device/src/profiles/profile-import";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -240,6 +241,22 @@ async function fixture({
 							groups: appGroups,
 						}),
 					} as const;
+				case "inspect-import":
+					return {
+						_tag: "success",
+						importReport: inspectProfileText(command.source),
+					} as const;
+				case "import-profile": {
+					const envelope = yield* ProfileService.importProfile(
+						command.source,
+						"imported",
+					);
+					return {
+						_tag: "success",
+						envelope: encodeProfileEnvelope(envelope),
+						importedProfileId: "imported",
+					} as const;
+				}
 				case "select":
 					yield* ProfileService.selectProfile({
 						deviceId: command.deviceId,
@@ -1615,6 +1632,283 @@ it("MGMT-077 enters emoji folders, returns to the originating page and wraps edi
 	await settle(() =>
 		expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe("one"),
 	);
+	expect(
+		f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+	).toHaveLength(0);
+});
+
+it("remaps imported folder, emoji and page links before mounted editor navigation with colliding source IDs", async () => {
+	const f = await gridFixture([]);
+	const existing = structuredClone(f.stored().profiles);
+	const source = {
+		id: "p",
+		name: "Imported folders",
+		revision: 7,
+		pages: [
+			{
+				id: "one",
+				keys: [
+					gridKey("1,1", "createFolder", {
+						actions: [{ type: "folder", value: "subfolder" }],
+					}),
+					gridKey("1,2", "emojiFolder", {
+						actions: [{ type: "emojiFolderId", value: "emoji-page" }],
+					}),
+					gridKey("1,3", "createFolder", {
+						actions: [{ type: "page", value: "emoji-page" }],
+					}),
+					gridKey("1,4", "goToPage", { actions: [{ type: "page", value: 2 }] }),
+				],
+			},
+			{
+				id: "subfolder",
+				keys: [
+					gridKey("1,1", "back", {
+						actions: [{ type: "parentFolder", value: "one" }],
+					}),
+				],
+			},
+			{
+				id: "emoji-page",
+				keys: [
+					gridKey("1,1", "emojiBack", {
+						actions: [{ type: "parentFolder", value: "one" }],
+					}),
+				],
+			},
+		],
+	};
+	await input(
+		query(f.host, "#keys-import-json", HTMLTextAreaElement),
+		JSON.stringify(source),
+	);
+	await click(button(f.host, "Inspect import"));
+	await settle(() =>
+		expect(
+			query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+		).toBe(false),
+	);
+	await click(button(f.host, "Import as new profile"));
+	await settle(() =>
+		expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+			"imported",
+		),
+	);
+	const imported = f.stored().profiles.find((p) => p.id === "imported");
+	expect(imported?.pages.map((p) => p.id)).toEqual([
+		"imported-page-1",
+		"imported-page-2",
+		"imported-page-3",
+	]);
+	expect(
+		imported?.pages[0].keys.map((k) => k.config.actions?.[0]?.value),
+	).toEqual(["imported-page-2", "imported-page-3", "imported-page-3", 2]);
+	expect(
+		imported?.pages.slice(1).map((p) => p.keys[0]?.config.actions?.[0]?.value),
+	).toEqual(["imported-page-1", "imported-page-1"]);
+	for (const [code, destination] of [
+		["1,1", "imported-page-2"],
+		["1,2", "imported-page-3"],
+		["1,3", "imported-page-3"],
+	] as const) {
+		await act(async () =>
+			button(f.host, code).dispatchEvent(
+				new MouseEvent("dblclick", { bubbles: true }),
+			),
+		);
+		await settle(() =>
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				destination,
+			),
+		);
+		await act(async () =>
+			button(f.host, "1,1").dispatchEvent(
+				new MouseEvent("dblclick", { bubbles: true }),
+			),
+		);
+		await settle(() =>
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				"imported-page-1",
+			),
+		);
+	}
+	expect(f.stored().profiles.slice(0, existing.length)).toEqual(existing);
+	expect(imported?.compatibility?.source).toEqual(source);
+	expect(
+		f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+	).toHaveLength(0);
+});
+
+for (const selfCycle of [false, true])
+	it(`quarantines imported ${selfCycle ? "self" : "two-folder"} cycles before editor navigation`, async () => {
+		const f = await gridFixture([]);
+		const source = {
+			id: "source",
+			name: "Cyclic folders",
+			revision: 0,
+			pages: [
+				{
+					id: "a",
+					keys: [
+						gridKey("1,1", "createFolder", {
+							actions: [{ type: "folder", value: selfCycle ? "a" : "b" }],
+						}),
+					],
+				},
+				...(selfCycle
+					? []
+					: [
+							{
+								id: "b",
+								keys: [
+									gridKey("1,1", "emojiFolder", {
+										actions: [{ type: "emojiFolderId", value: "a" }],
+									}),
+								],
+							},
+						]),
+			],
+		};
+		const text = JSON.stringify(source);
+		const report = inspectProfileText(text);
+		expect(report.profile).toBeDefined();
+		expect(
+			report.diagnostics.filter((d) => d.code === "invalid-action"),
+		).toEqual(
+			source.pages.map((_, i) => ({
+				code: "invalid-action",
+				path: `pages.${i}.keys.0.config.actions.0.value`,
+				blocking: false,
+			})),
+		);
+		await input(query(f.host, "#keys-import-json", HTMLTextAreaElement), text);
+		await click(button(f.host, "Inspect import"));
+		await settle(() =>
+			expect(
+				query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+			).toBe(false),
+		);
+		await click(button(f.host, "Import as new profile"));
+		await settle(() =>
+			expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+				"imported",
+			),
+		);
+		const imported = f.stored().profiles.find((p) => p.id === "imported");
+		expect(imported?.compatibility?.source).toEqual(source);
+		for (const [i, page] of source.pages.entries()) {
+			expect(imported?.pages[i]?.keys[0]?.config.actions?.[0]?.value).toBe("");
+			expect(imported?.pages[i]?.keys[0]?.compatibility).toMatchObject({
+				unsupported: true,
+				source: page.keys[0],
+			});
+			await input(
+				query(f.host, "#keys-page", HTMLSelectElement),
+				`imported-page-${i + 1}`,
+			);
+			await settle(() =>
+				expect(f.stored().activeByDevice["desktop-preview"]?.pageId).toBe(
+					`imported-page-${i + 1}`,
+				),
+			);
+			const selections = f.calls.filter((c) => c.type === "select").length;
+			await act(async () =>
+				button(f.host, "1,1").dispatchEvent(
+					new MouseEvent("dblclick", { bubbles: true }),
+				),
+			);
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				`imported-page-${i + 1}`,
+			);
+			expect(f.calls.filter((c) => c.type === "select")).toHaveLength(
+				selections,
+			);
+		}
+		expect(
+			f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+		).toHaveLength(0);
+	});
+
+it("does not follow a quarantined folder even when its destination is valid", async () => {
+	const key = {
+		...gridKey("1,1", "createFolder", {
+			actions: [{ type: "folder", value: "child" }],
+		}),
+		compatibility: { unsupported: true },
+	};
+	const f = await gridFixture([key], [{ id: "child", keys: [] }]);
+	const selections = f.calls.filter((c) => c.type === "select").length;
+	await act(async () =>
+		button(f.host, "1,1").dispatchEvent(
+			new MouseEvent("dblclick", { bubbles: true }),
+		),
+	);
+	expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe("one");
+	expect(f.calls.filter((c) => c.type === "select")).toHaveLength(selections);
+});
+
+it("diagnoses unresolved imported navigation without binding it to existing or newly allocated pages", async () => {
+	const f = await gridFixture([]);
+	const keys = [
+		gridKey("1,1", "createFolder", {
+			actions: [{ type: "folder", value: "imported-page-2" }],
+		}),
+		gridKey("1,2", "emojiFolder", {
+			actions: [{ type: "emojiFolderId", value: "subfolder" }],
+		}),
+		gridKey("1,3", "back", {
+			actions: [{ type: "parentFolder", value: "imported-page-1" }],
+		}),
+		gridKey("1,4", "emojiBack", {
+			actions: [{ type: "page", value: "missing" }],
+		}),
+	];
+	const source = JSON.stringify({
+		id: "source",
+		name: "Broken links",
+		revision: 0,
+		pages: [
+			{ id: "root", keys },
+			{ id: "child", keys: [] },
+		],
+	});
+	const report = inspectProfileText(source);
+	expect(
+		report.diagnostics
+			.filter((d) => d.code === "invalid-action")
+			.map((d) => d.path),
+	).toEqual(keys.map((_, i) => `pages.0.keys.${i}.config.actions.0.value`));
+	await input(query(f.host, "#keys-import-json", HTMLTextAreaElement), source);
+	await click(button(f.host, "Inspect import"));
+	await settle(() =>
+		expect(
+			query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+		).toBe(false),
+	);
+	await click(button(f.host, "Import as new profile"));
+	await settle(() =>
+		expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+			"imported",
+		),
+	);
+	const imported = f.stored().profiles.find((p) => p.id === "imported");
+	const selections = f.calls.filter((c) => c.type === "select").length;
+	for (const [i, key] of keys.entries()) {
+		expect(imported?.pages[0].keys[i]?.config.actions?.[0]?.value).toBe("");
+		expect(imported?.pages[0].keys[i]?.compatibility).toMatchObject({
+			unsupported: true,
+			source: key,
+		});
+		await act(async () =>
+			button(f.host, key.keyCode).dispatchEvent(
+				new MouseEvent("dblclick", { bubbles: true }),
+			),
+		);
+		expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+			"imported-page-1",
+		);
+	}
+	expect(f.calls.filter((c) => c.type === "select")).toHaveLength(selections);
 	expect(
 		f.calls.filter((c) => c.type === "activate" || c.type === "save"),
 	).toHaveLength(0);
