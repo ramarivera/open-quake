@@ -18,6 +18,7 @@ function install(request: IntegrationsBridge["request"]) {
 	});
 }
 afterEach(() => {
+	vi.useRealTimers();
 	Reflect.deleteProperty(window, "quakeIntegrations");
 });
 
@@ -178,3 +179,90 @@ it("CENTER-076 waits for confirmed QR progress and cancels its session on unmoun
 		session: "synthetic-qr",
 	});
 });
+
+it.each(["close", "unmount"])(
+	"CENTER-076 cancels pending QR login on %s and ignores its late confirmation",
+	async (closure) => {
+		vi.useFakeTimers();
+		const descriptor = CHANNEL_CATALOG.find(
+			(channel) => channel.id === "whatsapp",
+		);
+		if (!descriptor) throw new Error("Missing WhatsApp descriptor");
+		const session = {
+			id: "pending-qr",
+			state: "pending",
+			channelId: "whatsapp",
+			expiresAt: Date.now() + 60000,
+			image: "data:image/png;base64,c3ludGhldGlj",
+			url: "",
+			lines: [],
+		} as const;
+		let confirm: (reply: IntegrationReply) => void = () => {
+			throw new Error("QR read hasn't started");
+		};
+		const request = vi.fn<IntegrationsBridge["request"]>(
+			async (command): Promise<IntegrationReply> => {
+				if (command.type === "channels.qr.start")
+					return { type: "qr", session };
+				if (command.type === "channels.qr.read")
+					return new Promise((resolve) => {
+						confirm = resolve;
+					});
+				return { type: "ok", message: "" };
+			},
+		);
+		install(request);
+		const onClose = vi.fn();
+		const mounted = await mount(
+			createElement(ChannelSetupDrawer, {
+				descriptor,
+				configured: undefined,
+				onClose,
+			}),
+		);
+		await click(button(channelStrings.drawer.next));
+		expect(button(channelStrings.drawer.next).disabled).toBe(true);
+		expect(element<HTMLImageElement>("dialog img").src).toBe(session.image);
+		await act(async () => vi.advanceTimersByTimeAsync(750));
+		expect(request).toHaveBeenLastCalledWith({
+			type: "channels.qr.read",
+			session: session.id,
+		});
+		if (closure === "close") {
+			await click(
+				element(`button[aria-label='${channelStrings.drawer.close}']`),
+			);
+			expect(onClose).toHaveBeenCalledOnce();
+		} else {
+			await mounted.unmount();
+			expect(document.querySelector("dialog")).toBeNull();
+			expect(vi.getTimerCount()).toBe(0);
+		}
+		expect(request).toHaveBeenLastCalledWith({
+			type: "channels.qr.cancel",
+			session: session.id,
+		});
+		await act(async () => {
+			confirm({ type: "qr", session: { ...session, state: "confirmed" } });
+		});
+		if (closure === "close") {
+			// Keep the closed drawer mounted until the reply arrives to prove it
+			// ignores confirmation, independently of React discarding unmounted state.
+			expect(button(channelStrings.drawer.next).disabled).toBe(true);
+			expect(element("dialog").textContent).not.toContain("confirmed");
+			await mounted.unmount();
+		}
+		await act(async () => vi.advanceTimersByTimeAsync(3000));
+		expect(document.querySelector("dialog")).toBeNull();
+		expect(document.querySelector("img")).toBeNull();
+		expect(vi.getTimerCount()).toBe(0);
+		expect(
+			request.mock.calls.filter(
+				([command]) => command.type === "channels.qr.read",
+			),
+		).toHaveLength(1);
+		expect(request).not.toHaveBeenCalledWith(
+			expect.objectContaining({ type: "channels.save" }),
+		);
+	},
+);
