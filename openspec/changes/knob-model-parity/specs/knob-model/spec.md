@@ -110,6 +110,11 @@ Host brightness SHALL retain every logical 5 percent detent while coalescing con
 - **WHEN** multiple detents arrive in a burst or the native adapter is unavailable
 - **THEN** bounded writes reach the retained target with the specified fake-clock timing, or return the catalog failure without a fabricated reading
 
+#### Scenario: Physical brightness leaves device input responsive
+
+- **WHEN** a physical burst rotates a focused brightness key while native transitions are pending
+- **THEN** every detent contributes five percent, subsequent presses and disconnects dispatch before the native timer elapses, and focus/context replacement or disposal cancels pending native writes
+
 ### Requirement: Twelve audio operations and composite media leaves
 
 The hotkey Audio group and Media selector SHALL retain exactly mute, volume down/up, play, pause, stop, previous, next, rewind, forward, repeat and random. Pause SHALL be explicit and playPause SHALL retain fresh toggle semantics. Media tokens SHALL route to the same native media/host-volume owners and reject unsupported commands. Composite actions SHALL validate and execute mute and all eight media leaves in order, preserve corrected next-track identity and stop at the first native failure. Covers MGMT-208, MGMT-209, MGMT-226, MGMT-290.
