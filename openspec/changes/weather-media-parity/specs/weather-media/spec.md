@@ -249,3 +249,12 @@ The local player SHALL keep card controls scoped to the committed playback owner
 - **WHEN** one-second strip updates reconstruct an equivalent target while a local read is pending
 - **THEN** the read remains valid without restarting polling or clearing the card
 - **AND** an actual committed target revision change resets the card, covering PR103 comment 4379453339 and bead open-quake-lih.7.5
+
+### Requirement: Observed mute artwork
+
+The strip SHALL apply a mute key's alternate icon and title when the shared host-volume observation reports muted, and restore its primary artwork on unmute. Covers MAIN-073, MGMT-168, PR103 comment 4379453347 and bead open-quake-lih.7.5.
+
+#### Scenario: External mute observation reaches the mounted strip
+
+- **WHEN** external host mute observations change from unmuted to muted and back
+- **THEN** the mounted tile changes to alternate title and icon and restores the primary artwork
