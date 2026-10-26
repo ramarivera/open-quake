@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Either, Fiber, Layer, TestClock } from "effect";
+import { Effect, Either, Exit, Fiber, Layer, Scope, TestClock } from "effect";
 import { QuakeDevice } from "../../src/device-service.js";
 import {
 	fakeHardwareReply,
@@ -30,12 +30,57 @@ const setup = (options?: Parameters<typeof makeFakeHardwareTransport>[0]) =>
 			...defaultHardwarePreferences,
 			knobLedAlwaysOn: false,
 		});
-		return { fake, session };
+		return { fake, session, connection, controls };
 	});
 const commands = (writes: readonly Uint8Array[]) =>
 	writes.map((bytes) => [...bytes.slice(3, 3 + (bytes[2] ?? 0))]);
 
 describe("pre-lock knob lighting state", () => {
+	for (const phase of ["query", "disable"] as const) {
+		for (const scoped of [false, true]) {
+			it.scoped(
+				`finishes a pending ${phase} exchange when its session scope closes, scoped caller ${scoped}`,
+				() =>
+					Effect.gen(function* () {
+						const { fake, controls, connection } = yield* setup({
+							onCommand: (command) =>
+								phase === "disable" && command.opCode === 2
+									? [fakeHardwareReply(6, [1])]
+									: [],
+						});
+						const sessionScope = yield* Scope.make();
+						const session = yield* controls
+							.create(connection, { serial: "closing", session: phase })
+							.pipe(Scope.extend(sessionScope));
+						yield* session.configure({
+							...defaultHardwarePreferences,
+							knobLedAlwaysOn: false,
+						});
+						const locking = yield* session
+							.setLocked(true)
+							.pipe(
+								Effect.either,
+								scoped ? Effect.forkIn(sessionScope) : Effect.fork,
+							);
+						yield* TestClock.adjust(0);
+						yield* Scope.close(sessionScope, Exit.void);
+						const result = yield* Fiber.join(locking);
+						expect(Either.isLeft(result) && result.left.code).toBe(
+							"QUAKE.HARDWARE.UNAVAILABLE",
+						);
+						yield* session.setLocked(false).pipe(Effect.either);
+						expect(commands(yield* fake.writes)).toEqual(
+							phase === "query"
+								? [[2, 6]]
+								: [
+										[2, 6],
+										[1, 6, 0],
+									],
+						);
+					}),
+			);
+		}
+	}
 	it.scoped("leaves a ring that was already off untouched through unlock", () =>
 		Effect.gen(function* () {
 			const { fake, session } = yield* setup();

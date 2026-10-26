@@ -195,6 +195,9 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										Deferred.fail(result, new HardwareReplyTimeout()),
 									),
 									Effect.interruptible,
+									Effect.ensuring(
+										Deferred.fail(result, new HardwareUnavailable()),
+									),
 									Effect.forkIn(scope),
 								);
 								const reply = yield* Deferred.await(result).pipe(
