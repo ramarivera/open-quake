@@ -118,6 +118,25 @@ export function KeyEditor(): React.JSX.Element {
 				});
 		};
 	}, [accept]);
+	const publishedSelection = useRef("");
+	useEffect(() => {
+		if (saving) return;
+		const selected = envelope?.activeByDevice[serial];
+		const identity = selected
+			? `${serial}:${selected.profileId}:${selected.pageId}`
+			: "";
+		if (!selected || identity === publishedSelection.current) return;
+		publishedSelection.current = identity;
+		const draft = current.current;
+		if (
+			draft &&
+			(draft.target.profileId !== selected.profileId ||
+				draft.target.pageId !== selected.pageId)
+		)
+			void revert();
+		setProfileId(selected.profileId);
+		setPageId(selected.pageId);
+	}, [envelope, serial, saving, revert]);
 	const profile =
 		envelope?.profiles.find((p) => p.id === profileId) ?? envelope?.profiles[0];
 	const page =

@@ -328,19 +328,72 @@ async function smoke(): Promise<void> {
 			join(scratch, "profile-settings.png"),
 			(await management.webContents.capturePage()).toPNG(),
 		);
-		management.setContentSize(520, 1000);
-		await management.webContents.executeJavaScript(
-			"document.querySelector('.profiles-manager').scrollIntoView({behavior:'instant',block:'start'}); new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+		// MGMT-337: hidden Chromium windows emulate keyboard focus without OS input.
+		management.webContents.debugger.attach("1.3");
+		await management.webContents.debugger.sendCommand("DOM.enable");
+		await management.webContents.debugger.sendCommand("CSS.enable");
+		const documentNode =
+			await management.webContents.debugger.sendCommand("DOM.getDocument");
+		const propertyNode = await management.webContents.debugger.sendCommand(
+			"DOM.querySelector",
+			{
+				nodeId: documentNode.root.nodeId,
+				selector: ".profile-settings select",
+			},
 		);
-		assert(
-			await management.webContents.executeJavaScript(
-				"document.documentElement.scrollWidth <= innerWidth",
-			),
-			"Narrow management must not overflow horizontally",
-		);
-		await writeFile(
-			join(scratch, "manager-narrow.png"),
-			(await management.webContents.capturePage()).toPNG(),
+		await management.webContents.debugger.sendCommand("CSS.forcePseudoState", {
+			nodeId: propertyNode.nodeId,
+			forcedPseudoClasses: ["focus", "focus-visible"],
+		});
+		for (const locale of ["en", "de"] as const) {
+			await management.webContents.executeJavaScript(`(() => {
+				const select = document.querySelector('.profiles-manager > header select');
+				select.value = ${JSON.stringify(locale)};
+				select.dispatchEvent(new Event('change', {bubbles:true}));
+			})()`);
+			await ready(management, `[data-profile-ready="1-2"]`);
+			for (const width of [1280, 390]) {
+				management.setContentSize(width, 1000);
+				await management.webContents.executeJavaScript(
+					"document.querySelector('.profile-settings select').focus()",
+				);
+
+				const fields =
+					await management.webContents.executeJavaScript(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+					const field = document.querySelector('.profile-settings select');
+					field.scrollIntoView({behavior:'instant',block:'center'});
+					const style = getComputedStyle(field), rect = field.getBoundingClientRect();
+					resolve({focused:document.activeElement === field, width:rect.width,
+						left:rect.left,right:rect.right,color:style.color,background:style.backgroundColor,
+						fontSize:parseFloat(style.fontSize),outline:style.outlineStyle,shadow:style.boxShadow,
+						overflow:document.documentElement.scrollWidth > innerWidth});
+				})))`);
+				assert(
+					fields.focused &&
+						fields.width > 0 &&
+						fields.left >= 0 &&
+						fields.right <= width,
+				);
+				assert.notEqual(
+					fields.color,
+					fields.background,
+					"Property text must contrast with its field",
+				);
+				assert(fields.fontSize >= 12, "Property text must remain readable");
+				assert(
+					fields.outline !== "none" || fields.shadow !== "none",
+					`Focused property needs a visible indicator: ${JSON.stringify(fields)}`,
+				);
+				assert(!fields.overflow, "Management must not overflow horizontally");
+				await writeFile(
+					join(scratch, `profile-settings-${locale}-${width}.png`),
+					(await management.webContents.capturePage()).toPNG(),
+				);
+			}
+		}
+		management.webContents.debugger.detach();
+		process.stdout.write(
+			"profiles smoke: MGMT-337 EN/DE fields, focus and 390px layout passed\n",
 		);
 		management.setContentSize(1280, 1000);
 		const startup = await request(management, {
@@ -394,12 +447,13 @@ async function smoke(): Promise<void> {
 			}
 		});
 	} finally {
+		// Stop renderer reads before draining registration-owned requests.
+		for (const win of BrowserWindow.getAllWindows()) win.destroy();
 		await disposeLifecycle();
 		await knob?.dispose();
 		await profiles?.dispose();
 		await media?.dispose();
 		await clock?.dispose();
-		for (const win of BrowserWindow.getAllWindows()) win.destroy();
 		await rm(directory, { recursive: true, force: true });
 		app.exit(Number(process.exitCode ?? 0));
 	}

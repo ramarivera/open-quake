@@ -224,8 +224,17 @@ it("MGMT-351 / MGMT-357 use exact catalog footprints and hit-test covered and hi
 				tileAt({ x: tile.slot.x + 30, y: tile.slot.y + 30 }, layout)?.keyCode,
 			).toBe(tile.keyCode);
 		const hidden = profile.pages[0].keys.filter((k) => !k.config.display);
-		if (id === "1-8")
+		if (id === "1-8") {
 			expect(hidden.map((k) => k.keyCode)).toEqual(["1,8", "2,7", "2,8"]);
+			for (const code of ["1,4", "2,4", "1,8", "2,7", "2,8"]) {
+				const placeholder = profile.pages[0].keys.find(
+					(key) => key.keyCode === code,
+				);
+				if (!placeholder) throw new Error("Missing locked placeholder");
+				expect(keyEditable(placeholder, "grid")).toBe(false);
+				expect(keyEditable(placeholder, "icon")).toBe(false);
+			}
+		}
 		const view = layout.tiles[0];
 		if (!view) throw new Error("Missing AI panel");
 		expect(view?.footprint).toMatchObject({

@@ -475,3 +475,16 @@ it("MGMT-100 recovers polluted hotkey and agent titles from all eight locales wi
 		).toBe(hotkey.config.title.text);
 	}
 });
+
+it("MGMT-100 keeps a localized generic label when a custom agent has no catalog name", () => {
+	const custom = {
+		...key,
+		config: {
+			...key.config,
+			type: "clawbot",
+			title: { ...key.config.title, text: keyText("clawbot", "en") },
+			actions: [{ type: "agentId", value: "my-local-agent" }],
+		},
+	};
+	expect(keyTitle(custom, "de")).toBe(keyText("clawbot", "de"));
+});

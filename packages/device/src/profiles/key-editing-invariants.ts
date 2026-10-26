@@ -79,8 +79,11 @@ export function keyTitle(
 		const agent = key.config.actions.find(
 			(action) => action.type === "agentId",
 		);
-		if (typeof agent?.value === "string")
-			return profileText(`openclawAgents.${agent.value}.name`, locale);
+		if (typeof agent?.value === "string") {
+			const name = `openclawAgents.${agent.value}.name`;
+			const translated = profileText(name, locale);
+			return translated === name ? keyText("clawbot", locale) : translated;
+		}
 	}
 	const source = Schema.decodeUnknownEither(RawSource)(
 		Option.isSome(key.compatibility)
