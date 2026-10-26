@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { localizedKey } from "../../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import type { KeyRuntimeState } from "../../../shared/key-library";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
