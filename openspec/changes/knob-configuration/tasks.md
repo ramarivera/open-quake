@@ -6,7 +6,7 @@ Create parent-owned Beads epic and one issue per checkbox, each linking this dir
 
 - [x] 1.1 Record Ramiro's decisions on stable slot sentinels, focus precedence, panel brightness target/step, and direct-route defaults; verify design.md still identifies unverified physical direction and target details.
 - [x] 1.2 Add knob and route Schemas plus pure slot/route migrations in packages/device; verify right-only slot round-trip, duplicate rejection, model-reference migration, route field stripping, and normalization idempotence.
-- [ ] 1.3 Connect profile-scoped knob saves and the three-slot desktop editor to the profile conductor; verify edits preserve unrelated keys, page changes preserve the knob, and switching profiles discards old editor state.
+- [x] 1.3 Connect profile-scoped knob saves and the three-slot desktop editor to the profile conductor; verify edits preserve unrelated keys, page changes preserve the knob, and switching profiles discards old editor state.
 - [x] 1.4 Add compatibility handling for known center presets and ambiguous compact arrays; verify explicit holes survive and ambiguous left/right data stays preserved but inactive, and document supported import shapes.
 
 ## 2. First-release rotation and navigation
@@ -18,7 +18,7 @@ Create parent-owned Beads epic and one issue per checkbox, each linking this dir
 
 ## 3. First-release direct voice configuration handoff
 
-- [ ] 3.1 Add the direct provider/model editor and completeness checks without embedding credentials; verify missing model disables capture and route changes retain only allowed fields.
+- [x] 3.1 Add the direct provider/model editor and completeness checks without embedding credentials; verify missing model disables capture and route changes retain only allowed fields.
 - [ ] 3.2 Compose the voice lane's capture capability and session cleanup into knob dispatch; verify one hold starts once, release ends once, profile change/disconnect cancels, and a consumed hold cannot also fire a short press; document the handoff.
 - [ ] 3.3 Exercise real QUAKE rotation, brightness, page changes, and hold/release with the qualified voice runtime when hardware is available; verify firmware/session traces and visible/voice outcomes are attached, keeping hardware tasks open when unavailable.
 
@@ -51,3 +51,38 @@ read-only volume observations. It does not complete this change's editor, page
 assignment, monitor/hotkey, qualified voice, or physical acceptance tasks. Their
 checkboxes remain unchanged. See knob-model-parity/design.md and the desktop knob
 README for the parent composition contract and verification limits.
+
+## Knob route lane evidence, 2026-10-26
+
+Tasks 1.3 and 3.1 are implemented by `KnobEditor.tsx`, `knob-draft.ts`,
+`knob-profile.ts` and the decoded `save-knob` IPC consumer. Profile save and
+registration tests prove unrelated keys and pages survive revision-checked
+saves. Hidden mock Electron acceptance exercises three slots, page draft
+retention, profile draft discard, reviewed direct migration, provider/model
+reset and missing credentials. Audit KNOB-024/027/035/036/037/038.
+
+Beads open-quake-a74.3 and open-quake-a74.9 remain in progress for the lead to
+close after merge. This evidence supersedes the earlier W4 editor gap only.
+Hardware, brightness qualification, other slot types and later routes remain
+outside this lane. Screenshots and native smoke scripts stay in
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/knob-route/`.
+
+Delivery gates: Biome checked 1,155 files with zero errors and 14 existing
+CSS warnings; typecheck passed 6 tasks; tests passed 2,893 with 4 skipped
+across device 444, edge 669, protocol 63 and desktop 1,717. The suite used
+`TMPDIR` in the lane scratch directory with
+`pnpm test --env-mode=loose --concurrency=1 -- --maxWorkers=2` to pass that
+directory through Turbo and avoid concurrent-lane CPU contention. No test
+assertion or deadline changed. Production build, both bundle smoke modes and
+strict OpenSpec validation passed. Hidden mock native acceptance produced
+`delivery-screenshots/knob-{migration-preview,missing-credentials,saved-wide,saved-narrow}.png`
+under the lane scratch directory. Its scratch-built entry explicitly sets the
+production renderer URL and disables macOS app activation. No hardware IO.
+
+## PR84 fix1
+
+- [x] 6.1 Refuse knob saves while a grid key editor is open, explain how to save and close that editor, and retain the key draft without advancing its revision. Bead open-quake-a74.14, review 4376058979. Main IPC independently rejects same-profile pending drafts under its existing request lock. Registration and renderer regressions failed before the fix; they verify the unchanged revision, successful key save with the original target/title, and subsequent knob save. An extended hidden native regression also reproduced a stale knob revision after saving and closing the key editor. The knob editor now uses the latest revision only when committed knob content is unchanged, preserving its unsaved slot draft and retaining conflicts for concurrent knob changes.
+
+- [x] 6.2 Share configured default/fallback model selection between the knob editor and production model resolution. Bead open-quake-a74.15, review 4376059141. The extracted readiness check reproduced role `none` reporting ready while the actual `pinKnobModel` rejected it. `knob-model-readiness.test.ts` verifies readiness and production pinning agree for `none`, `default` and `fallback`, using synthetic credentials without opening capture or sending inference requests.
+
+Fix1 final gates on all functional changes: Biome checked 1,157 files with no errors and 14 existing CSS warnings; typecheck passed all 6 tasks; tests passed 2,904 with 4 skipped across desktop 1,728, device 444, edge 669 and protocol 63. Tests used `pnpm test --env-mode=loose --concurrency=1 -- --maxWorkers=2` with external-drive TMPDIR. Production build, both bundle modes and strict OpenSpec validation of 46 items passed. Hidden mock Electron acceptance verified the visible key-edit explanation, role-none exclusion, save-key/close/save-knob flow and preservation of an unsaved knob-slot change, plus wide/narrow screenshots. Build output and scratch-only module links were external to the checkout and are removed after verification; logs/screenshots remain under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/knob-route/fix1/`. No real microphone, QUAKE or DK-Suite used. The original three review findings and two follow-up bot findings were addressed without resolving threads; the existing imported-route info thread was untouched.

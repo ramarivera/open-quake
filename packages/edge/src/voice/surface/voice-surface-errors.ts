@@ -92,3 +92,49 @@ export class VoiceLinkRejected extends Schema.TaggedError<VoiceLinkRejected>()(
 		retain(this, cause);
 	}
 }
+
+export const VoiceKnobErrors = {
+	Busy: {
+		code: "VOICE.KNOB.BUSY",
+		category: "unavailable",
+		message: "Another voice capture or cleanup owns the microphone",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+	RouteIncomplete: {
+		code: "VOICE.KNOB.ROUTE_INCOMPLETE",
+		category: "validation",
+		message: "Choose a saved provider profile and model for this knob",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+	RouteUnavailable: {
+		code: "VOICE.KNOB.ROUTE_UNAVAILABLE",
+		category: "unavailable",
+		message: "This knob voice route is unavailable",
+		policy: { userFacing: true, userRecoverable: true, retry: "manual" },
+	},
+} as const;
+export class VoiceKnobRejected extends Schema.TaggedError<VoiceKnobRejected>()(
+	"VoiceKnobRejected",
+	{
+		code: Schema.Literal(
+			"VOICE.KNOB.BUSY",
+			"VOICE.KNOB.ROUTE_INCOMPLETE",
+			"VOICE.KNOB.ROUTE_UNAVAILABLE",
+		),
+		category: Schema.Literal("validation", "unavailable"),
+		message: Schema.String,
+		diagnosticCause: DiagnosticCause,
+	},
+) {
+	declare readonly originalCause: unknown;
+	constructor(kind: keyof typeof VoiceKnobErrors, cause: unknown = undefined) {
+		const definition = VoiceKnobErrors[kind];
+		super({
+			code: definition.code,
+			category: definition.category,
+			message: definition.message,
+			diagnosticCause: toSafeDiagnosticCause(cause),
+		});
+		retain(this, cause);
+	}
+}

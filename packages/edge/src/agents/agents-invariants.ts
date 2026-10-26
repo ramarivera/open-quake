@@ -70,8 +70,9 @@ export const initialAgentState = (): AgentState =>
 		},
 		slots: { "1,5": "main", "1,6": "main", "2,5": "main", "2,6": "main" },
 	});
-export const configured = (row: ModelRow): boolean =>
-	row.provider.trim().length > 0 && row.model.trim().length > 0;
+export const configured = (
+	row: Pick<ModelRow, "provider" | "model">,
+): boolean => row.provider.trim().length > 0 && row.model.trim().length > 0;
 export function normalizeRoles(
 	rows: readonly ModelRow[],
 	changedId: string,
@@ -102,11 +103,18 @@ export const resolveModels = (
 		ownModelRows(state.models, id) ??
 		ownModelRows(state.models, "default") ??
 		[];
-	return [
-		...rows.filter((r) => r.role === "default" && configured(r)),
-		...rows.filter((r) => r.role === "fallback" && configured(r)),
-	];
+	return resolveModelRows(rows);
 };
+/** The model roles available to direct chat, also used by credential-free editors. */
+export const resolveModelRows = <
+	A extends Pick<ModelRow, "provider" | "model" | "role">,
+>(
+	rows: readonly A[],
+): readonly A[] => [
+	...rows.filter((r) => r.role === "default" && configured(r)),
+	...rows.filter((r) => r.role === "fallback" && configured(r)),
+];
+
 export const modelValid = (row: ModelRow): boolean => {
 	if (
 		/[{}]|%7[bd]/i.test(row.baseUrl) ||

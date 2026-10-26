@@ -57,7 +57,7 @@ An assistant slot SHALL use only the route-specific action fields below, each at
 | voiceRoute | Allowed records and completeness |
 |---|---|
 | `direct` | voiceRoute direct, nonempty directProvider, nonempty directModel; both are required before capture |
-| `dkclaw` | voiceRoute dkclaw, agentId default main, optional dkclawModel; later runtime required |
+| `dkclaw` | voiceRoute dkclaw, explicit agentId or one unambiguous saved agent, dkclawModel; incomplete imports need configuration and the later runtime is required |
 | `legacyAssistant` | voiceRoute legacyAssistant, assistant string allowing empty compatibility value; later runtime required |
 
 #### Scenario: Direct configuration
@@ -101,3 +101,15 @@ An imported compact slot list whose original left/right positions cannot be dete
 
 - **WHEN** a two-entry compact legacy array has no reliable slot metadata
 - **THEN** import reports ambiguous positions and cannot silently assign the second entry to left or right
+
+### Requirement: Profile-owned desktop knob drafts
+
+The Keys editor SHALL expose independent center, left and right slots for the selected profile. Saving SHALL validate the knob domain, use the expected committed profile revision, and replace only profile.knob. Page selection SHALL retain the knob draft; profile selection SHALL discard it. Idle detents SHALL continue to select profiles and SHALL NOT execute stored slots. Audit KNOB-024/027/035.
+
+#### Scenario: Save a right-only assignment
+- **WHEN** a user saves a right assignment with the center and left empty
+- **THEN** all three positions persist and all unrelated pages, keys and metadata survive unchanged
+
+#### Scenario: Direct capture readiness
+- **WHEN** the saved direct route lacks a model, references a missing provider profile or contains fields belonging to another route
+- **THEN** capture is unavailable before microphone access and the editor shows the incomplete selection without adding credentials to actions

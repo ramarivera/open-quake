@@ -90,6 +90,7 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 			}
 		});
 		return {
+			isBusy: () => queued > 0 || current !== undefined,
 			push: Effect.fn("DesktopSpeech.pushOrdered")(
 				(delta: string): Effect.Effect<void> =>
 					gate.withPermits(1)(

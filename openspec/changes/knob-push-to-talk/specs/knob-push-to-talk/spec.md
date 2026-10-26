@@ -69,3 +69,19 @@ Capture SHALL reuse speech phase deadlines and stop after 60s of listening even 
 #### Scenario: Hold exceeds maximum duration
 - **WHEN** listening reaches 60s with nonempty audio
 - **THEN** it stops and transcribes once, and a subsequent physical release creates no additional work
+
+### Requirement: Review provider-profile migration
+
+Migration previews SHALL resolve a legacy provider alias to exactly one saved provider profile for its model. Missing or ambiguous matches SHALL be needsConfiguration. Explicit profile IDs SHALL take precedence. Missing agents SHALL never silently become main. Opening a preview SHALL perform no save; confirming a valid direct preview SHALL save only route-allowed references. legacyAssistant replacement UI remains a later task. Audit KNOB-036/037/038/045.
+
+#### Scenario: Ambiguous provider alias
+- **WHEN** two saved provider profiles match the imported provider and model
+- **THEN** preview preserves the original actions and requires explicit configuration
+
+### Requirement: Pinned direct ownership
+
+The hold-start consumer SHALL read committed profile data and pass its ID, revision and saved direct references into capture. Before microphone access it SHALL resolve a specific saved provider configuration. Route and provider edits SHALL affect only later captures. Removing the pinned profile SHALL cancel capture, response and speech, including a response that has already accepted the transcript. Same-device cancellation SHALL wait at most two seconds; incomplete cleanup SHALL retain ownership and fail busy without opening another microphone. Audit KNOB-038/040/042/043/045/052.
+
+#### Scenario: Stalled cleanup
+- **WHEN** same-device cleanup has not finished after two seconds
+- **THEN** the next hold fails VOICE.KNOB.BUSY and no successor microphone opens

@@ -388,20 +388,23 @@ describe("knob voice seam", () => {
 		},
 	);
 
-	it.scoped("cancels the knob's own running turn before a new hold", () => {
-		const rec = recorder();
-		return Effect.gen(function* () {
-			yield* VoiceSurface.publish({
-				_tag: "Stage",
-				serial: "QK",
-				keyCode: "0,1",
-				captureId: "old",
-				stage: { _tag: "processing" },
-			});
-			yield* GridVoice.knob("QK", "holdStart", 2);
-			expect(rec.calls).toEqual(["cancelFlow 0,1", "start 0,1 #2"]);
-		}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
-	});
+	it.scoped(
+		"delegates same-device cleanup to the bounded capture owner",
+		() => {
+			const rec = recorder();
+			return Effect.gen(function* () {
+				yield* VoiceSurface.publish({
+					_tag: "Stage",
+					serial: "QK",
+					keyCode: "0,1",
+					captureId: "old",
+					stage: { _tag: "processing" },
+				});
+				yield* GridVoice.knob("QK", "holdStart", 2);
+				expect(rec.calls).toEqual(["start 0,1 #2"]);
+			}).pipe(Effect.provide(stack(rec, fakeRuntime(rec))));
+		},
+	);
 
 	it.scoped("shows the error countdown when no knob runtime exists", () => {
 		const rec = recorder();

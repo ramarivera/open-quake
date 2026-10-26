@@ -199,7 +199,7 @@ export function registerKnobRuntime(
 						const nextVersion = observation?.contextVersion?.() ?? "";
 						return (
 							nextVersion !== version
-								? KnobModel.configure(context)
+								? KnobModel.configure(context, true)
 								: KnobModel.synchronize(context)
 						).pipe(
 							Effect.tap(() =>

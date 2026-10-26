@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIPv4 } from "node:net";
-import { Cause, Effect, Exit, Layer, Schema } from "effect";
+import { Cause, Effect, Either, Exit, Layer, Schema } from "effect";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
 import { AiCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/adapter";
 import { makeVercelCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/vercel";
@@ -16,6 +16,7 @@ import {
 	type AiError,
 	AiUnavailable,
 } from "../../../../../packages/edge/src/ai/ai-errors";
+import { validateProfile } from "../../../../../packages/edge/src/ai/ai-invariants";
 import { AiRepository } from "../../../../../packages/edge/src/ai/ai-repository";
 import type {
 	SessionId,
@@ -33,6 +34,8 @@ import {
 	type PublicChatHistory,
 } from "../../../../../packages/edge/src/chat/chat-rpc";
 import { ChatService } from "../../../../../packages/edge/src/chat/chat-service";
+import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
+import type { PinnedDirectModel } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { shortcutDraft } from "./shortcut-draft";
@@ -143,17 +146,23 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			let drafting = false;
 			let disposal: Promise<void> | undefined;
 			const submit = Effect.fn("DesktopChat.submit")(
-				(input: ChatInput, scope = "main") =>
+				(input: ChatInput, scope = "main", pinned?: PinnedDirectModel) =>
 					selectionLock.withPermits(1)(
 						Effect.gen(function* () {
-							const rows = yield* options.models(scope);
-							const row = rows.find((r) => r.role === "default");
-							if (!row?.model.trim()) return yield* new AiConfigInvalid();
-							if (!row.credentialRef) return yield* new AiAuthRequired();
-							const profile = yield* Effect.try({
-								try: () => profileFromModel(row),
-								catch: (cause) => new AiConfigInvalid(cause),
-							});
+							const selected =
+								pinned ??
+								(yield* Effect.gen(function* () {
+									const rows = yield* options.models(scope);
+									const row = rows.find((r) => r.role === "default");
+									if (!row?.model.trim()) return yield* new AiConfigInvalid();
+									if (!row.credentialRef) return yield* new AiAuthRequired();
+									const profile = yield* Effect.try({
+										try: () => profileFromModel(row),
+										catch: (cause) => new AiConfigInvalid(cause),
+									});
+									return { profile, maxTokens: row.maxTokens };
+								}));
+							const { profile } = selected;
 							yield* AiRepository.put(profile);
 							return yield* ChatService.submit(OWNER, {
 								...input,
@@ -164,7 +173,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								contextWindowTokens: 8192,
 								// The model setting is an upper bound. Until context metadata is
 								// available, reserve at most 1024 inside the conservative 8192 window.
-								outputReserveTokens: Math.min(row.maxTokens, 1024),
+								outputReserveTokens: Math.min(selected.maxTokens, 1024),
 							});
 						}),
 					),
@@ -178,6 +187,38 @@ export function prepareDirectChat(options: DirectChatOptions) {
 			return {
 				runtime,
 				submit,
+				pinKnobModel: Effect.fn("DesktopChat.pinKnobModel")(function* (
+					providerId: string,
+					modelId: string,
+				): Effect.fn.Return<PinnedDirectModel, VoiceKnobRejected> {
+					const rows = yield* options
+						.models("default")
+						.pipe(
+							Effect.mapError(
+								(cause) => new VoiceKnobRejected("RouteIncomplete", cause),
+							),
+						);
+					const matches = rows.filter(
+						(r) => r.id === providerId && r.model === modelId,
+					);
+					const row = matches.length === 1 ? matches[0] : undefined;
+					if (!row?.model.trim() || !row.credentialRef)
+						return yield* new VoiceKnobRejected("RouteIncomplete");
+					const profile = yield* Effect.try({
+						try: () => profileFromModel(row),
+						catch: (cause) => new VoiceKnobRejected("RouteIncomplete", cause),
+					});
+					if (Either.isLeft(validateProfile(profile)) || !profile.credentialRef)
+						return yield* new VoiceKnobRejected("RouteIncomplete");
+					yield* options.credentials
+						.resolve(profile.credentialRef, profile.authGeneration)
+						.pipe(
+							Effect.mapError(
+								(cause) => new VoiceKnobRejected("RouteIncomplete", cause),
+							),
+						);
+					return { profile, maxTokens: row.maxTokens };
+				}),
 				draftShortcuts: (
 					request: string,
 					signal?: AbortSignal,

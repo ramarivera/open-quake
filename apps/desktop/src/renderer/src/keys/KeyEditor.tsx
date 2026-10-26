@@ -38,6 +38,7 @@ import { KeyGeometryControls } from "./KeyGeometryControls";
 import { KeyImport } from "./KeyImport";
 import { KeyPageControls } from "./KeyPageControls";
 import { KeyTitleSettings } from "./KeyTitleSettings";
+import { KnobEditor } from "./KnobEditor";
 import { keyArtwork } from "./key-artwork";
 import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
@@ -515,6 +516,12 @@ export function KeyEditor(): React.JSX.Element {
 						</select>
 					</Row>
 				</Group>
+				<KnobEditor
+					key={profile.id}
+					profile={profile}
+					accept={accept}
+					keyEditOpen={selection !== undefined || saving}
+				/>
 				<fieldset
 					className="keys-preview"
 					onKeyDown={(event) => {

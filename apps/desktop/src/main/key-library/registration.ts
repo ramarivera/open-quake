@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { Effect, Fiber, Schema, Stream } from "effect";
+import { Effect, Fiber, Option, Schema, Stream } from "effect";
 import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import type { ActionError } from "../../../../../packages/device/src/actions/action-errors.js";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
+import { saveProfileKnob } from "../../../../../packages/device/src/knob/knob-profile.js";
 import { iconInUse } from "../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
@@ -343,6 +344,24 @@ export function registerKeyLibrary<R>(
 								};
 							if (result._tag === "rejected")
 								return { _tag: "rejected", reason: "layout-locked-or-invalid" };
+							break;
+						}
+						case "save-knob": {
+							const draft = yield* KeyEditing.pending;
+							if (
+								Option.isSome(draft) &&
+								draft.value.target.profileId === command.profileId
+							)
+								return {
+									_tag: "rejected",
+									reason:
+										"Save or cancel the selected key edit before saving knob settings.",
+								};
+							yield* saveProfileKnob(
+								command.profileId,
+								command.revision,
+								command.knob,
+							);
 							break;
 						}
 						case "add-page":

@@ -99,6 +99,8 @@ export function createSpeechVoiceBinding(options: {
 		).pipe(Layer.provide(fallback));
 	return {
 		decorate,
+		reconcileProfiles: (ids: readonly string[]): Promise<void> =>
+			speech ? options.run(speech.reconcileProfiles(ids)) : Promise.resolve(),
 		acquireWallpaperSound: (
 			mute: () => Promise<void>,
 		): Promise<AudioOutputLease | undefined> =>
