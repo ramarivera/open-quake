@@ -8,7 +8,15 @@ import type {
 	MenuItemConstructorOptions,
 	Rectangle,
 } from "electron";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import {
 	createEmptyProfileKey,
 	ProfileKey,
@@ -129,7 +137,7 @@ const electron = vi.hoisted(() => {
 			requestSingleInstanceLock: vi.fn(() => true),
 			removeListener: vi.fn(),
 			whenReady: vi.fn(() => Promise.resolve()),
-			getPath: vi.fn(() => join(tmpdir(), "open-quake-window-test")),
+			getPath: vi.fn(() => fixtureDirectory),
 			getVersion: () => "0.0.0",
 			getLocale: vi.fn(() => "en-US"),
 			on: vi.fn<
@@ -171,10 +179,56 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+
+// Compile the entry graph before timing individual behavior cases. Refusing the
+// fake lock prevents startup resources; every case still evaluates a fresh entry.
+beforeAll(async () => {
+	native.layer = (await Effect.runPromise(makeFakeHidTransport([]))).layer;
+	const output = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+	electron.app.requestSingleInstanceLock.mockReturnValueOnce(false);
+	try {
+		await import("./index");
+	} finally {
+		output.mockRestore();
+	}
+});
+let fixtureDirectory = "";
+beforeEach(async () => {
+	fixtureDirectory = await mkdtemp(join(tmpdir(), "open-quake-window-test-"));
+	electron.app.getPath.mockReturnValue(fixtureDirectory);
+});
+afterEach(async () => {
+	await rm(fixtureDirectory, { recursive: true, force: true });
+});
 vi.mock("./mockDeviceBus", async (original) => {
 	const actual = await original<typeof import("./mockDeviceBus")>();
 	return { ...actual, startMockDeviceBus: vi.fn(actual.startMockDeviceBus) };
 });
+// Lifecycle assertions need the real tracer, without unrelated diagnostic disk IO.
+vi.mock("./diagnostics/persistence", () => ({
+	createDiagnosticStorage: () => {
+		let written = 0;
+		let closed = false;
+		const status = () => ({
+			written,
+			closed,
+			dropped: 0,
+			storageFailures: 0,
+			queuedBytes: 0,
+		});
+		return {
+			emit: () => {
+				written++;
+			},
+			status,
+			flush: async () => status(),
+			close: async () => {
+				closed = true;
+				return status();
+			},
+		};
+	},
+}));
 vi.mock("./diagnostics/runtime", async (original) => {
 	const actual = await original<typeof import("./diagnostics/runtime")>();
 	return { ...actual, makeDesktopRuntime: vi.fn(actual.makeDesktopRuntime) };
@@ -1812,7 +1866,7 @@ describe("desktop main with the real device service and fake HID", () => {
 			expect(profiles?.disconnect).toHaveBeenCalledExactlyOnceWith(serial);
 			expect(await Effect.runPromise(fake.closes)).toBe(1);
 		} finally {
-			path.mockImplementation(() => join(tmpdir(), "open-quake-window-test"));
+			path.mockImplementation(() => fixtureDirectory);
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
@@ -1836,6 +1890,8 @@ describe("desktop main with the real device service and fake HID", () => {
 			)?.[1];
 		expect(resume).toBeDefined();
 		resume?.();
+		// Drive the 2.5 s resume settle and 1 s HID reconnect without host time.
+		await vi.advanceTimersByTimeAsync(3500);
 		await vi.waitFor(
 			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
 			{ timeout: 7000 },
@@ -2030,6 +2086,7 @@ describe("desktop main with the real device service and fake HID", () => {
 						direction: -1,
 					}),
 				);
+			await vi.advanceTimersByTimeAsync(2500);
 			await vi.waitFor(
 				() =>
 					expect(reopened.webContents.send).toHaveBeenCalledWith(
