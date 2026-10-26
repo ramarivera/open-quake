@@ -54,3 +54,8 @@ fixture-tested only. All three burn-down beads stay open for lead merge.
 - [x] 8.3 Skip unusable Linux DRM cards and temperature sensors with failing-before native collector fixtures. Bead open-quake-lih.8.6; review 4378997712.
 
 - [x] 8.4 Distinguish absent Linux hardware classes from confirmed empty inventory and real enumeration failures. Bead open-quake-lih.8.6; review 4378997864.
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: retained anime/tactical/wasteland groups, truthful values, gauges and disk drag lifecycle.
+- [ ] test-device-widgets remainder WIDGETS-071/072/073: reconcile device palette/readability, anime value motion and wasteland warning lamp/wobble; no artwork rewrite in this coverage lane.

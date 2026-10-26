@@ -15,6 +15,7 @@ import {
 import {
 	decodeDraft,
 	normalizeChord,
+	validateShortcutConfig,
 	validLibraryName,
 } from "./shortcut-invariants.js";
 export interface ShortcutPortShape {
@@ -103,11 +104,14 @@ export class ShortcutService extends Effect.Service<ShortcutService>()(
 								);
 							const rows = yield* Effect.try({
 								try: () =>
-									library.rows.map((row, index) => ({
-										...row,
-										name: row.name.trim() || `Shortcut ${index + 1}`,
-										chord: normalizeChord(row.chord),
-									})),
+									library.rows.map((row, index) => {
+										if (row.config) validateShortcutConfig(row.config);
+										return {
+											...row,
+											name: row.name.trim() || `Shortcut ${index + 1}`,
+											chord: row.config ? "" : normalizeChord(row.chord),
+										};
+									}),
 								catch: (c) =>
 									c instanceof InputRejected ? c : new InputRejected(c),
 							});
@@ -119,6 +123,7 @@ export class ShortcutService extends Effect.Service<ShortcutService>()(
 							const old = all.find((l) => l.id === library.id);
 							const next = {
 								...library,
+								name: library.name.trim(),
 								id: old?.id ?? ports.id(),
 								createdAt: old?.createdAt ?? ports.now(),
 								rows,

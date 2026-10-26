@@ -25,11 +25,24 @@ export const ProviderKind = Schema.Literal(
 	"qwen",
 	"kimi",
 	"deepseek",
+	"zhipu",
+	"groq",
+	"volc",
+	"coze",
+	"xfy",
 );
+export const SearchOptions = Schema.Struct({
+	search_strategy: Schema.optional(Schema.Literal("standard", "pro")),
+	enable_source: Schema.optional(Schema.Boolean),
+	enable_citation: Schema.optional(Schema.Boolean),
+	forced_search: Schema.optional(Schema.Boolean),
+});
 export const GenerationControls = Schema.Struct({
 	thinking: Schema.optional(Schema.Boolean),
 	reasoningEffort: Schema.optional(Schema.Literal("low", "medium", "high")),
 	webSearch: Schema.optional(Schema.Boolean),
+	searchOptions: Schema.optional(SearchOptions),
+	searchQuery: Schema.optional(Schema.String.pipe(Schema.maxLength(4096))),
 });
 export type GenerationControls = typeof GenerationControls.Type;
 /** Custom text belongs to role -1; preset prompts must not discard caller input. */
@@ -46,6 +59,19 @@ export const RoleSelection = Schema.Struct({
 /** A closed wire-options contract; secrets and arbitrary provider keys cannot enter it. */
 export const ProviderOptions = Schema.Struct({
 	max_completion_tokens: Schema.optional(Schema.Number),
+	search_options: Schema.optional(SearchOptions),
+	tools: Schema.optional(
+		Schema.Array(
+			Schema.Struct({
+				type: Schema.Literal("web_search"),
+				web_search: Schema.Struct({
+					enable: Schema.Literal(true),
+					search_result: Schema.Literal(true),
+					search_query: Schema.String,
+				}),
+			}),
+		),
+	),
 	enable_thinking: Schema.optional(Schema.Boolean),
 	enable_search: Schema.optional(Schema.Boolean),
 	reasoning_effort: Schema.optional(

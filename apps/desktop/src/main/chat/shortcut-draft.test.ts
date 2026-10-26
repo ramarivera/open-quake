@@ -67,6 +67,7 @@ async function fixture(
 	let aborted = false;
 	const host = createDirectChat({
 		directory,
+		online: () => true,
 		models: (scope) => {
 			expect(scope).toBe("default");
 			return Effect.succeed(rows);
@@ -176,7 +177,7 @@ describe("saved-model shortcut drafting through the production facade", () => {
 			authorization: "Bearer native-key",
 			body: {
 				model: "saved-model",
-				max_tokens: 4096,
+				max_tokens: 8000,
 				messages: [
 					{ role: "system" },
 					{ role: "user", content: "Editor：copy text" },
@@ -199,7 +200,7 @@ describe("saved-model shortcut drafting through the production facade", () => {
 				request.body.max_tokens,
 			]),
 		).toEqual([
-			["saved-model", 4096],
+			["saved-model", 8000],
 			["replacement", 200],
 		]);
 	});

@@ -71,3 +71,10 @@ The tile focus SHALL be a 2 px accent ring around the focused tile with a compac
 
 - **WHEN** the ring selector advances one entry
 - **THEN** the list sheet shows the new centre entry with the accent marker and the existing direction nudge, without a cyan arc or vignette
+
+
+#### Scenario: Focus gauge across tile sizes
+
+- **WHEN** knob focus renders at 220 by 220, 460 by 220 or 1920 by 480 with zero, positive or negative detent angles
+- **THEN** a two-pixel accent outline fits inside the focused tile, one compact gauge rotates its pointer around the tile centre, and no disc artwork, tick crown, filter or decorative label appears
+- **AND** these rendered properties establish the independent replacement for KNOB-016

@@ -10,8 +10,14 @@ export const EMOJI_REQUEST = "emoji:request";
 export const EMOJI_PRESS = "emoji:press";
 export const EmojiRequest = Schema.Union(
 	Schema.Struct({
+		type: Schema.Literal("suggest-caption"),
+		prompt: Schema.String,
+		locale: Schema.String,
+	}),
+	Schema.Struct({
 		type: Schema.Literal(
 			"read",
+			"cancel-generation",
 			"import-static",
 			"import-gif",
 			"installed-apps",
@@ -28,6 +34,8 @@ export const EmojiRequest = Schema.Union(
 	}),
 	Schema.Struct({
 		type: Schema.Literal("caption"),
+		name: Schema.optional(Schema.String),
+		mode: Schema.optional(Schema.Literal(0, 1, 2)),
 		id: Schema.String,
 		caption: EmojiCaption,
 		base64: Schema.String,
@@ -54,6 +62,10 @@ export const EmojiPressRequest = Schema.Struct({
 });
 export type EmojiPressRequest = typeof EmojiPressRequest.Type;
 export const EmojiReply = Schema.Union(
+	Schema.Struct({
+		_tag: Schema.Literal("caption-suggestion"),
+		text: Schema.String,
+	}),
 	Schema.Struct({
 		_tag: Schema.Literal("generated"),
 		base64: Schema.String,

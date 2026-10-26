@@ -80,3 +80,5 @@ Codex 4375943149 duplicates 8.2, and 4375943171 duplicates 8.3. All six Devin fi
 10.2 evidence: both actual management host renders mounted the live clock hook before the fix. With explicit passive StripScreen props they render frozen clocks without that hook. All 25 focused preview/strip tests and desktop typecheck pass. The native profile smoke now checks Overview and Profiles IPC independently.
 
 10.3 evidence: the hidden mock native smoke failed on duplicate Screen weather/music controls before App.tsx removed the legacy global component. It now passes 41 assertions with eight captures, proving selected profile B city/music writes preserve A and never configure global weather. The same run verifies passive Overview/Profiles and decoded video thumbnails under scoped media CORS. Six-package typecheck passes. Full gate reconciliation is still running. Scratch: `burndown/clock/fix1/native-final` under the lane root.
+
+- [x] Add test-device-widgets mounted consumer regressions for clock visibility/activation and weather/music states. Bead open-quake-lih.8.2; hardware remains unverified.

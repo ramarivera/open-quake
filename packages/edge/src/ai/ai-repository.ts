@@ -11,6 +11,9 @@ function immutableProfile(profile: ProviderProfile): ProviderProfile {
 	Object.freeze(profile.capabilities);
 	Object.freeze(profile.sampling);
 	if (profile.models) Object.freeze(profile.models);
+	if (profile.settings) Object.freeze(profile.settings);
+	if (profile.controls?.searchOptions)
+		Object.freeze(profile.controls.searchOptions);
 	if (profile.controls) Object.freeze(profile.controls);
 	for (const range of [
 		profile.samplingLimits.temperature,

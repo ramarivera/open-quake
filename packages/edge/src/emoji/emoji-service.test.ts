@@ -299,3 +299,62 @@ it("leaves a deleted grid slot vacant and fills it before appending", () => {
 		}).packages[0]?.emojiIds[5],
 	).toBe("wave");
 });
+
+for (const mode of [0, 1, 2] as const) {
+	it.effect(
+		`uses key mode ${mode} only on release when global mode is null`,
+		() => {
+			const f = setup({ ...initial, globalMode: null, appMatch: false });
+			return Effect.gen(function* () {
+				expect(yield* EmojiPress.press(ref, mode, 0)).toBe("ignored");
+				expect(yield* EmojiPress.press(ref, mode, 2)).toBe("ignored");
+				expect(f.calls).toEqual([]);
+				const release = yield* Effect.fork(EmojiPress.press(ref, mode, 1));
+				yield* TestClock.adjust("200 millis");
+				yield* Fiber.join(release);
+				expect(f.calls).toEqual([
+					`copy:${hash}`,
+					...(mode > 0 ? ["command+v"] : []),
+					...(mode === 2 ? ["enter"] : []),
+				]);
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+}
+
+it.effect(
+	"CENTER-089 applies saved app matching before clipboard or keyboard output",
+	() => {
+		const test = setup({ ...initial, globalMode: 0 });
+		return Effect.gen(function* () {
+			yield* EmojiLibrary.command({
+				type: "settings",
+				appMatch: true,
+				globalMode: 0,
+				apps: [
+					{
+						name: "Slack",
+						path: "/Applications/Slack.app",
+						identifier: "slack",
+					},
+				],
+			});
+			expect(yield* EmojiPress.press(ref, 0, 1)).toBe("ignored");
+			expect(test.calls).toEqual([]);
+			yield* EmojiLibrary.command({
+				type: "settings",
+				appMatch: true,
+				globalMode: 0,
+				apps: [
+					{
+						name: "Finder",
+						path: "/System/Library/CoreServices/Finder.app",
+						identifier: "com.apple.finder",
+					},
+				],
+			});
+			expect(yield* EmojiPress.press(ref, 0, 1)).toBe("copied");
+			expect(test.calls).toEqual([`copy:${hash}`]);
+		}).pipe(Effect.provide(test.layer));
+	},
+);

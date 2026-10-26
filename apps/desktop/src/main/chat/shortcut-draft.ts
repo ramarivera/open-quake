@@ -13,7 +13,14 @@ import { ChatInference } from "../../../../../packages/edge/src/chat/chat-ports"
 const instruction = `Draft keyboard shortcuts for the application and task in the user message.
 Return only JSON with this structure:
 {"ConfigTitle":"Short descriptive title","ConfigData":[{"title":"Action name","config":{"functionType":"hotkey","actions":[{"type":"key","value":"control+shift+k"}]}}]}
-Use at most 32 entries. Each entry must contain exactly one keyboard chord.
+Use at most 32 entries with localized short labels and optional mdi- icon names.
+Retained action types are hotkey, hotkeySwitch, website, text, timer, panelBrightness,
+playPause, stopPlay, skipBackward, skipForward, fastBackward, fastForward,
+repeatPlay and randomPlay. Use canonical actions {type,value}. A hotkey has one
+key action; hotkeySwitch has two. Website has a url action with an https URL.
+Text has a text action and optional key enter. Timer has time in milliseconds,
+sound empty and callback 1. PanelBrightness has stepPercent 1 through 100.
+Media keys use their matching audio_* key action. Never invent file paths.
 Use lowercase key tokens separated by +. Modifiers are control, shift, alt,
 command or meta. Use the actual target application's shortcuts and omit anything
 you don't know. Never include shell commands, scripts, application launches,
@@ -41,7 +48,14 @@ export const shortcutDraft = Effect.fn("DesktopChat.draftShortcuts")(
 		const generation = yield* inference.open(profile, {
 			profileId: profile.id,
 			requestedCapabilities: ["text"],
-			sampling: { maxOutputTokens: Math.min(row.maxTokens, 4096) },
+			modelRole: "daily",
+			controls:
+				row.provider === "qwen" ? { thinking: true, webSearch: true } : {},
+			sampling: {
+				temperature: 0.1,
+				topP: 0.2,
+				maxOutputTokens: Math.min(row.maxTokens, 16384),
+			},
 			messages: [
 				{ role: "system", content: [{ _tag: "text", text: instruction }] },
 				{ role: "user", content: [{ _tag: "text", text: request }] },
@@ -65,7 +79,7 @@ export const shortcutDraft = Effect.fn("DesktopChat.draftShortcuts")(
 	(effect) =>
 		effect.pipe(
 			Effect.timeoutFail({
-				duration: "60 seconds",
+				duration: "300 seconds",
 				onTimeout: () => new AiUnavailable(),
 			}),
 		),

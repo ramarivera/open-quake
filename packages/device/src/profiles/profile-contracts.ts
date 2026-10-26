@@ -112,6 +112,12 @@ const KeyConfigFields = Schema.Struct({
 		Schema.Literal("celsius", "fahrenheit"),
 		{ exact: true },
 	),
+	aiConfigData: Schema.optional(ProfileJsonObject),
+	sessionState: Schema.optional(Schema.Literal("start", "end", "error")),
+	animationState: Schema.optional(
+		Schema.Literal("recording", "processing", "idle"),
+	),
+	assistantType: Schema.optional(Schema.Literal("chat", "keyConfig")),
 	userModifiedTitle: Schema.optional(Schema.Boolean),
 	userModifiedAlterTitle: Schema.optional(Schema.Boolean),
 	type: Schema.String,

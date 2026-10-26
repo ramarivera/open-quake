@@ -1,8 +1,26 @@
-import type { IpcMainInvokeEvent } from "electron";
+import { Effect, ManagedRuntime } from "effect";
+import { BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import { describe, expect, it, vi } from "vitest";
-import { canRequestLifecycle } from "./registration";
+import { DeviceLifecycle } from "./lifecycle-service";
+import { canRequestLifecycle, registerLifecycle } from "./registration";
 
 const electron = vi.hoisted(() => ({
+	BrowserWindow: class {
+		webContents = {
+			listeners: new Map<string, Set<() => void>>(),
+			on(event: string, listener: () => void) {
+				const entries = this.listeners.get(event) ?? new Set<() => void>();
+				entries.add(listener);
+				this.listeners.set(event, entries);
+			},
+			removeListener(event: string, listener: () => void) {
+				this.listeners.get(event)?.delete(listener);
+			},
+			emit(event: string) {
+				for (const listener of this.listeners.get(event) ?? []) listener();
+			},
+		};
+	},
 	ipcMain: {
 		handle:
 			vi.fn<
@@ -39,4 +57,67 @@ describe("diagnostic authorization", () => {
 			).toBe(expected);
 		},
 	);
+});
+
+it("SETTINGS-087 clears wizard suppression on reload/destroy and transfers listeners to replacement management", async () => {
+	let management = new BrowserWindow();
+	const runtime = ManagedRuntime.make(
+		DeviceLifecycle.Default({
+			mock: true,
+			development: false,
+			displays: () => [],
+			watch: () => () => {},
+			bus: () => undefined,
+			panel: () => {},
+			notify: () => {},
+			prompts: {
+				platform: "linux",
+				mock: true,
+				displays: () => [],
+				primaryId: () => 1,
+				prompt: () => Effect.die("No native prompt in registration test"),
+				native: () => Effect.die("No native operation in registration test"),
+				openSettings: () => Effect.void,
+			},
+		}),
+	);
+	const service = await runtime.runPromise(DeviceLifecycle);
+	const wizard = vi.spyOn(service, "wizard");
+	const remove = registerLifecycle(
+		runtime,
+		() => management,
+		"file:///app/renderer/index.html",
+	);
+	try {
+		await vi.waitFor(() => expect(wizard).toHaveBeenCalledWith(false));
+		for (const event of ["did-start-loading", "destroyed"]) {
+			await runtime.runPromise(service.wizard(true));
+			wizard.mockClear();
+			management.webContents.emit(event);
+			await vi.waitFor(() =>
+				expect(wizard).toHaveBeenCalledExactlyOnceWith(false),
+			);
+		}
+		const previous = management;
+		management = new BrowserWindow();
+		wizard.mockClear();
+		remove.bindManagement();
+		await vi.waitFor(() =>
+			expect(wizard).toHaveBeenCalledExactlyOnceWith(false),
+		);
+		wizard.mockClear();
+		previous.webContents.emit("did-start-loading");
+		expect(wizard).not.toHaveBeenCalled();
+		management.webContents.emit("did-start-loading");
+		await vi.waitFor(() =>
+			expect(wizard).toHaveBeenCalledExactlyOnceWith(false),
+		);
+		remove();
+		wizard.mockClear();
+		management.webContents.emit("destroyed");
+		expect(wizard).not.toHaveBeenCalled();
+	} finally {
+		remove();
+		await runtime.dispose();
+	}
 });

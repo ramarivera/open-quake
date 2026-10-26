@@ -109,12 +109,21 @@ export const recoverRecord = (record: MeetingRecord): MeetingRecord =>
 					record.summary === "processing" ? "interrupted" : record.summary,
 			}
 		: record;
+export function markRanges(record: MeetingRecord, now: number) {
+	if (Option.isSome(record.parentId)) return [];
+	const limit = duration(record, now);
+	return record.marks.flatMap((mark, index) => {
+		const startMs = Math.min(mark.startMs, limit);
+		const savedEnd = Option.getOrUndefined(mark.endMs);
+		const open =
+			savedEnd === undefined ||
+			savedEnd <= mark.startMs ||
+			savedEnd - mark.startMs > 183 * 86400000;
+		const endMs = Math.min(open ? limit : savedEnd, limit);
+		return endMs > startMs ? [{ index: index + 1, startMs, endMs, open }] : [];
+	});
+}
 export const marked = (record: MeetingRecord, segment: Segment): boolean =>
-	record.marks.some(
-		(m) =>
-			segment.endMs >= m.startMs &&
-			segment.startMs <=
-				Option.getOrElse(m.endMs, () =>
-					duration(record, record.startedAt + segment.endMs),
-				),
+	markRanges(record, record.startedAt + segment.endMs).some(
+		(mark) => segment.endMs > mark.startMs && segment.startMs < mark.endMs,
 	);

@@ -1,4 +1,9 @@
 import type {
+	FileResult,
+	ProviderListing,
+	PublicFileRequest,
+} from "../../../../packages/edge/src/ai/ai-file-contracts";
+import type {
 	SessionId,
 	TurnId,
 	TurnSnapshot,
@@ -12,6 +17,8 @@ export const CHAT_REQUEST = "chat:rpc:request";
 export const CHAT_EVENT = "chat:rpc:event";
 export const CHAT_DISCONNECT = "chat:rpc:disconnect";
 export interface DirectChatBridge {
+	readonly files?: (input: PublicFileRequest) => Promise<FileResult>;
+	readonly providers?: () => Promise<ProviderListing>;
 	readonly submit: (input: ChatInput) => Promise<TurnSnapshot>;
 	readonly subscribe: (
 		sessionId: SessionId,

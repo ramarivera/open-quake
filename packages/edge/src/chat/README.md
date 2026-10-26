@@ -85,11 +85,11 @@ host-private and includes the owner; transport code must allowlist public fields
 ## Bounds and persistence
 
 Normal is the only enabled direct mode. Other product mode IDs fail with
-`CHAT.MODE.UNAVAILABLE` before inference. Normal turns have a 60,000ms absolute
-monotonic deadline including acceptance persistence and provider setup. Deltas
+`CHAT.MODE.UNAVAILABLE` before inference. Text turns have a 60,000ms absolute monotonic deadline. Explicit DashScope
+media profiles use the facade's 300,000ms budget. Both include acceptance
+persistence and provider setup. Deltas
 don't extend it. An in-flight atomic disk write must settle before terminal delivery, even though
-the provider abort signal fires at the deadline. No 300-second tool/media mode
-is enabled here. The default
+the provider abort signal fires at the deadline. Tool exchanges retain the text deadline. The default
 context window is 8192 estimated tokens; a host that knows the selected model
 window should pass it explicitly. Output reserve uses the request override,
 profile output setting, or a default capped at 1024. Estimates conservatively

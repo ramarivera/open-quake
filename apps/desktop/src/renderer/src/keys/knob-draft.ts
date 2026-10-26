@@ -12,6 +12,7 @@ import {
 } from "../../../../../../packages/device/src/knob/knob-invariants.js";
 import type { Profile } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
+import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
 
 export const profileKnobDraft = (profile: Profile): KnobResource => {
@@ -68,7 +69,9 @@ export const knobVoiceReady = (
 		resolveModelRows(models).some(
 			(m) =>
 				m.id === value("directProvider") &&
-				m.model === value("directModel") &&
+				modelOptions(m.provider, [m.model]).some(
+					(option) => option.id === value("directModel"),
+				) &&
 				m.credentialAvailable,
 		)
 	);

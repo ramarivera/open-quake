@@ -10,6 +10,7 @@ import {
 	type ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
+import { modelOptions } from "../../../../../../packages/edge/src/ai/provider-catalog";
 import type { PublicModelRow } from "../../../shared/agents";
 import { Group, Row } from "../ui/Form";
 import {
@@ -267,13 +268,18 @@ export function KnobEditor({
 										{typeof model === "string" &&
 											model &&
 											!models.some(
-												(m) => m.id === provider && m.model === model,
+												(m) =>
+													m.id === provider &&
+													modelOptions(m.provider, [m.model]).some(
+														(option) => option.id === model,
+													),
 											) && <option value={model}>{model} · unavailable</option>}
 										{models
-											.filter((m) => m.id === provider && m.model.trim())
+											.filter((m) => m.id === provider)
+											.flatMap((m) => modelOptions(m.provider, [m.model]))
 											.map((m) => (
-												<option key={m.id} value={m.model}>
-													{m.model}
+												<option key={m.id} value={m.id}>
+													{m.label}
 												</option>
 											))}
 									</select>

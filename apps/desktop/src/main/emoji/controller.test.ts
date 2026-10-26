@@ -37,6 +37,7 @@ import {
 } from "./controller";
 import { emojiFiles } from "./files";
 import { placeEmojiPackage } from "./profile-placement";
+import { renameLinkedEmojiProfile } from "./profile-rename";
 
 vi.mock("electron", () => ({
 	dialog: { showOpenDialog: vi.fn() },
@@ -62,6 +63,7 @@ const gif = (delay = 120, red = 255) =>
 async function setup(
 	generation?: EmojiGenerationPort,
 	place?: EmojiControllerPort["place"],
+	renameLinked?: EmojiControllerPort["renameLinked"],
 ) {
 	const root = await mkdtemp(join(tmpdir(), "oq-emoji-controller-"));
 	const files = emojiFiles(root);
@@ -93,6 +95,7 @@ async function setup(
 					return "profile";
 				}),
 			...(generation ? { generation } : {}),
+			...(renameLinked ? { renameLinked } : {}),
 		}),
 	);
 	return {
@@ -332,6 +335,7 @@ describe("emoji desktop controller", () => {
 				bytes: Buffer.from([1, 2, 3]),
 				format: "image/png",
 				prompt: "Wave",
+				signal: expect.any(AbortSignal),
 			});
 			expect((await f.files.read())?.drafts).toHaveLength(0);
 			if (result._tag !== "generated") throw Error("Expected generated motion");
@@ -690,3 +694,294 @@ for (const type of ["import-gif", "import-static"] as const) {
 		}
 	});
 }
+
+it("CENTER-084/087 edits draft metadata atomically and reloads it without creating a package", async () => {
+	const f = await setup();
+	try {
+		await f.runtime.runPromise(
+			f.controller.request({
+				type: "create-result",
+				name: "Draft",
+				base64: Buffer.from(gif()).toString("base64"),
+			}),
+		);
+		const initial = await f.runtime.runPromise(f.controller.snapshot());
+		if (initial._tag !== "ready") throw Error("Not ready");
+		const item = initial.store.items[0];
+		if (!item) throw Error("No item");
+		const result = await f.runtime.runPromise(
+			f.controller.request({
+				type: "caption",
+				id: item.id,
+				name: "Renamed",
+				mode: 2,
+				caption: { ...defaultCaption, text: "Hi" },
+				base64: Buffer.from(gif(120, 100)).toString("base64"),
+			}),
+		);
+		expect(result._tag).toBe("ready");
+		const disk = await f.files.read();
+		expect(disk?.packages).toEqual([]);
+		expect(disk?.drafts).toEqual([item.id]);
+		expect(disk?.items[0]).toMatchObject({
+			name: "Renamed",
+			mode: 2,
+			original: item.original,
+			caption: { text: "Hi" },
+		});
+		await expect(
+			f.runtime.runPromise(
+				f.controller.request({
+					type: "caption",
+					id: item.id,
+					name: "x".repeat(31),
+					caption: defaultCaption,
+					base64: Buffer.from(gif()).toString("base64"),
+				}),
+			),
+		).rejects.toBeDefined();
+		expect(await f.files.read()).toEqual(disk);
+	} finally {
+		await f.close();
+	}
+});
+it("CENTER-083 cancellation preserves sources and prevents a late candidate even when a port ignores abort", async () => {
+	let finish: ((bytes: Uint8Array) => void) | undefined;
+	const f = await setup({
+		generate: () =>
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+	});
+	try {
+		const operation = f.runtime.runPromise(
+			f.controller.request({
+				type: "generate",
+				assetId: f.hash,
+				prompt: "Wave",
+				caption: { ...defaultCaption, text: "Keep" },
+			}),
+		);
+		await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+		await f.runtime.runPromise(
+			f.controller.request({ type: "cancel-generation" }),
+		);
+		finish?.(gif());
+		await expect(operation).rejects.toBeDefined();
+		expect(await f.files.get(f.hash)).toEqual(Buffer.from([1, 2, 3]));
+		expect((await f.files.read())?.drafts).toEqual([]);
+	} finally {
+		await f.close();
+	}
+});
+it("CENTER-088 retains placed hashes after package deletion and collects after the final reference", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-emoji-collect-"));
+	const files = emojiFiles(root);
+	const hash = await files.put(gif());
+	const published = await files.clipboardPath(hash);
+	await files.write({
+		...emptyEmojiStore,
+		items: [
+			{
+				id: "pinned",
+				name: "Pinned",
+				original: hash,
+				rendered: hash,
+				caption: defaultCaption,
+			},
+		],
+		packages: [
+			{ id: "p", name: "Pack", emojiIds: ["pinned"], profileId: null },
+		],
+	});
+	let refs = { ids: ["pinned"], hashes: [hash] };
+	let collectionFails = true;
+	const runtime = ManagedRuntime.make(
+		Layer.mergeAll(
+			EmojiLibrary.DefaultWithoutDependencies,
+			ImageDecoder.Default,
+		).pipe(
+			Layer.provideMerge(
+				EmojiRepository.Default.pipe(Layer.provide(emojiStorageLayer(files))),
+			),
+		),
+	);
+	try {
+		const controller = await runtime.runPromise(
+			makeEmojiController({
+				files: {
+					...files,
+					collect: async (hashes) => {
+						if (collectionFails) throw Error("Synthetic cleanup failure");
+						await files.collect(hashes);
+					},
+				},
+				management: () => ({}) as Electron.BrowserWindow,
+				place: async () => "",
+				references: async () => refs,
+			}),
+		);
+		const deletion = await runtime.runPromise(
+			controller.request({
+				type: "command",
+				command: { type: "delete-package", id: "p" },
+			}),
+		);
+		expect(deletion).toMatchObject({
+			_tag: "ready",
+			notice: expect.stringContaining("cleanup was deferred"),
+		});
+		expect((await files.read())?.packages).toEqual([]);
+		collectionFails = false;
+		expect((await files.read())?.items).toHaveLength(1);
+		expect(await files.get(hash)).toEqual(Buffer.from(gif()));
+		refs = { ids: [], hashes: [] };
+		await runtime.runPromise(controller.request({ type: "read" }));
+		expect((await files.read())?.items).toEqual([]);
+		await expect(files.get(hash)).rejects.toMatchObject({ code: "ENOENT" });
+		// The native clipboard still advertises this path after its last library
+		// reference disappears. Reopening the library must not break paste.
+		expect(await readFile(published)).toEqual(Buffer.from(gif()));
+		await emojiFiles(root).collect([]);
+		expect(await readFile(published)).toEqual(Buffer.from(gif()));
+	} finally {
+		await runtime.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("preserves linked-name validation errors while retaining unexpected storage failures", async () => {
+	const initial = createInitialProfileEnvelope();
+	const template = initial.profiles[0];
+	if (!template) throw Error("Missing initial profile");
+	let disk = encodeProfileEnvelope({
+		...initial,
+		profiles: [
+			...initial.profiles,
+			{ ...template, id: "linked", name: "Pack" },
+			{ ...template, id: "other", name: "Other" },
+		],
+	});
+	let failWrite = false;
+	const writes = vi.fn(async (next: typeof disk) => {
+		if (failWrite) throw Error("secret-storage-token");
+		disk = next;
+	});
+	const profiles = ManagedRuntime.make(
+		ProfileRepository.Default.pipe(
+			Layer.provide(
+				profileStorageLayer({ read: async () => disk, write: writes }),
+			),
+		),
+	);
+	const refresh = vi.fn(async () => {});
+	const f = await setup(
+		undefined,
+		undefined,
+		renameLinkedEmojiProfile({ runtime: profiles, refresh }),
+	);
+	try {
+		await f.runtime.runPromise(
+			Effect.flatMap(EmojiRepository, (repository) =>
+				repository.transact((state) =>
+					Effect.succeed({
+						...state,
+						packages: [
+							{ id: "pack", name: "Pack", emojiIds: [], profileId: "linked" },
+						],
+					}),
+				),
+			),
+		);
+		const libraryBefore = await f.files.read();
+		const profilesBefore = disk;
+		for (const name of ["Other", "ElevenChars"]) {
+			const result = await f.runtime.runPromise(
+				Effect.either(
+					f.controller.request({
+						type: "command",
+						command: { type: "rename-package", id: "pack", name },
+					}),
+				),
+			);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: {
+					_tag: "EmojiInvalid",
+					code: "QUAKE.EMOJI.INVALID",
+					reason: "Use a unique profile name of at most 10 weighted units.",
+				},
+			});
+			expect(await f.files.read()).toEqual(libraryBefore);
+			expect(disk).toEqual(profilesBefore);
+		}
+		expect(writes).not.toHaveBeenCalled();
+		expect(refresh).not.toHaveBeenCalled();
+		failWrite = true;
+		const failed = await f.runtime.runPromise(
+			Effect.either(
+				f.controller.request({
+					type: "command",
+					command: { type: "rename-package", id: "pack", name: "Valid" },
+				}),
+			),
+		);
+		expect(failed).toMatchObject({
+			_tag: "Left",
+			left: { _tag: "EmojiLibraryFailed", code: "QUAKE.EMOJI.LIBRARY_FAILED" },
+		});
+		if (failed._tag !== "Left" || failed.left._tag !== "EmojiLibraryFailed")
+			throw Error("Expected storage failure");
+		expect(failed.left.originalCause).toBeDefined();
+		expect(Object.keys(failed.left)).not.toContain("originalCause");
+		expect(JSON.stringify(failed.left)).not.toContain("secret-storage-token");
+		expect(await f.files.read()).toEqual(libraryBefore);
+		expect(disk).toEqual(profilesBefore);
+	} finally {
+		await f.close();
+		await profiles.dispose();
+	}
+});
+
+it.each([
+	["darwin", "/Applications/Synthetic.app", "/Applications/not-an-app.txt"],
+	["win32", "C:\\Apps\\Synthetic.EXE", "C:\\Apps\\not-an-app.txt"],
+])(
+	"CENTER-089 validates %s native app-picker results and retains settings on cancel",
+	async (platform, accepted, invalid) => {
+		const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+		const f = await setup();
+		try {
+			Object.defineProperty(process, "platform", {
+				configurable: true,
+				value: platform,
+			});
+			for (const path of [accepted, invalid, undefined]) {
+				vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+					canceled: path === undefined,
+					filePaths: path ? [path] : [],
+				});
+				const result = await f.runtime.runPromise(
+					f.controller.request({ type: "pick-app" }).pipe(Effect.either),
+				);
+				if (path === invalid)
+					expect(result).toMatchObject({
+						_tag: "Left",
+						left: { _tag: "EmojiInvalid" },
+					});
+				else
+					expect(result).toMatchObject({
+						_tag: "Right",
+						right: {
+							_tag: "ready",
+							apps: path ? [expect.objectContaining({ path })] : [],
+						},
+					});
+			}
+			expect((await f.files.read())?.apps).toEqual([]);
+		} finally {
+			if (descriptor) Object.defineProperty(process, "platform", descriptor);
+			await f.close();
+		}
+	},
+);

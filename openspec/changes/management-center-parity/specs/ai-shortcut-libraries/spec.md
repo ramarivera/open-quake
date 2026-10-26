@@ -13,12 +13,18 @@ The Shortcuts page SHALL offer the five sample chips (Photoshop, Illustrator, Fi
 - **AND** a missing model or unavailable credential returns the existing AI-unavailable failure before inference
 
 #### Scenario: Generation bounds and shutdown
-- **WHEN** a generation exceeds 60 seconds or 32 KiB of UTF-8 text, overlaps another generation, or the app shuts down
+- **WHEN** a generation exceeds 300 seconds or 32 KiB of UTF-8 text, overlaps another generation, or the app shuts down
 - **THEN** it fails without changing stored libraries or profiles, aborts its provider work and joins pending generation before inference disposal
-- **AND** generation uses at most the saved output-token budget or 4096 tokens, whichever is lower
+- **AND** generation uses at most the saved output-token budget or 16384 tokens, whichever is lower
+
+Audit regression coverage: CENTER-093.
+
+#### Scenario: Generator controls submit the chosen application
+- **WHEN** the user toggles a preset, chooses a custom application and submits with Enter
+- **THEN** the chip can clear, the 180-character counter tracks input, empty input receives focus with an error, and the generated request uses the exact selected application prefix
 
 ### Requirement: Schema-decoded generation results
-Model output SHALL be parsed by taking the text from its first `{` to its last `}`, running `JSON.parse`, and decoding the result with a Schema of `{ConfigTitle, ConfigData: [{title, config: {functionType, actions}}]}`. It SHALL never be evaluated. Only `hotkey` entries whose chord passes the key-function-library hotkey token rules SHALL become rows. Other function types, including command lines, application launches and multi-actions, SHALL be dropped and counted, and nothing from the output SHALL execute. Output that fails decoding SHALL report an invalid configuration and leave the table as it was. Source: CENTER-094; GAP-MAP "Don't copy" (`eval` on AI shortcut output).
+Model output SHALL be parsed by taking the text from its first `{` to its last `}`, running `JSON.parse`, and decoding the result with a Schema of `{ConfigTitle, ConfigData: [{title, config: {functionType, actions}}]}`. It SHALL never be evaluated. Canonical registry-validated hotkey, hotkeySwitch, website, text, timer, panelBrightness and media action types SHALL become editable inert rows. Each SHALL preserve its validated actions and localized label for explicit library save and profile sync. Unsupported function types, command lines, model-supplied local application paths and multi-actions SHALL be dropped and counted. Nothing from the output SHALL execute during generation or save. These retained types implement part of AI-121; its remaining recovered types are still required and this subset does not retire them. Generation SHALL select the saved daily/default model and use temperature 0.1, top-p 0.2, thinking and optional search through the existing provider quirk adapter. Output that fails decoding SHALL report an invalid configuration and leave the table as it was. Source: CENTER-094; GAP-MAP "Don't copy" (`eval` on AI shortcut output).
 
 #### Scenario: Output tries to run code
 - **WHEN** the model returns `{"ConfigTitle":"x","ConfigData":[{"title":"t","config":{"functionType":"cmd","actions":[{"operationName":"cmdLine","operationValue":"rm -rf ~"}]}}]}`
@@ -56,3 +62,29 @@ Results SHALL appear in a table with columns: select (select all is indeterminat
 #### Scenario: Seventeen shortcuts
 - **WHEN** a library with 17 shortcuts is synced
 - **THEN** the profile has two pages, with 16 keys on the first and 1 on the second
+
+### Requirement: Retained legacy library editing
+The current Shortcuts page SHALL retain double-click and context-menu rename and an explicit legacy generation dialog with a 100-byte UTF-8 prompt limit. Cancel SHALL retain the current table and libraries. The results table SHALL resolve installed-app artwork through the existing app-library lookup and use a neutral fallback when lookup fails. Saved-library rename SHALL update the active table title only after persistence succeeds. Failed edits SHALL restore the prior table. Source: CENTER-095, CENTER-097, MGMT-108.
+
+#### Scenario: Rename the displayed library
+- **WHEN** a saved library is renamed from its context menu
+- **THEN** reload and the active results title show the new name; a failed save keeps the old name in both places
+
+#### Scenario: Multibyte legacy prompt
+- **WHEN** a legacy prompt is 100 UTF-8 bytes and another character exceeds it
+- **THEN** generation is enabled at 100 bytes and disabled above it without truncating the entered text, and Cancel sends no generation request
+
+#### Scenario: Table selection and rollback
+- **WHEN** a four-row draft arrives, select-all is toggled, two chords conflict, one is reset, and selected deletion is cancelled then accepted
+- **THEN** the first three rows start selected, partial selection is indeterminate, reset restores originals and only accepted deletion changes rows; a failed saved-library edit rolls back
+
+### Requirement: Retained ConfigDetail generation
+The retained ConfigDetail types SHALL be validated against the canonical action registry, retain labels and icons, and remain inert through generation and persistence. Explicit profile sync SHALL preserve their action types. Generated `mdi-` icon names SHALL resolve only against the bundled MDI catalog through the strip artwork owner, retaining the selected symbol on synced keys. Unknown or malformed names SHALL remain inert and unavailable. Model-generated application paths, shell commands, nested multi-actions and unavailable owning-domain actions SHALL be counted as unsupported instead of being executed. Source: AI-121.
+
+#### Scenario: Mixed configuration draft
+- **WHEN** output contains a hotkey, website, text, timer, switch, media key and shell command
+- **THEN** supported entries retain their action types and labels through save and sync, the shell command is counted as dropped, and inference aborts at the 300-second deadline without changing libraries
+
+#### Scenario: Generated MDI icon survives profile sync
+- **WHEN** a generated website row uses `mdi-star` and the user saves and syncs it
+- **THEN** the saved profile key renders the bundled star artwork rather than the default website symbol, and unknown names load no external resource

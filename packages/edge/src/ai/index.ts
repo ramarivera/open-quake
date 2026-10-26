@@ -10,6 +10,7 @@ export * from "./ai-router-contracts.js";
 export * from "./ai-router-service.js";
 export * from "./ai-service.js";
 export * from "./ai-workflow-contracts.js";
+export * from "./provider-catalog.js";
 export * from "./speech/speech-contracts.js";
 export * from "./speech/speech-errors.js";
 export * from "./speech/speech-ports.js";

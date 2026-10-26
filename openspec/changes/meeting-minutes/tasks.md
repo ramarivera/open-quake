@@ -90,3 +90,39 @@ providers remain unverified. No hardware or real capture was opened.
 - [x] Implement platform capture, deliberate microphone-only/cancel fallback and setup help with production consumer fixtures. Evidence: renderer capture platform/partial-acquisition tests, trusted host permission/fallback tests, and mounted setup missing/installed/refresh-error/cancel checks. Bead open-quake-c5w.16 stays open for lead merge.
 - [ ] Complete AI-283 driver installation and macOS multi-output configuration after separate host approval, then verify physical system audio on Windows/macOS/Linux. The lane only detects installed virtual inputs and provides manual setup help.
 - [ ] Reconcile the required media native smoke failure tracked by open-quake-c5w.16.1. Two hidden mock runs timed out on the OBS panel screenshot after configuration save. Capture-specific EN/DE UI and native typed-start-error checks passed. Logs and screenshots remain external under open-quake-parity/burndown/speech-capture.
+
+
+## meeting-ui burn-down lane
+
+Beads open-quake-lih.16.5, .6 and .7 remain open for lead merge. Scratch row plan is external under open-quake-parity/burndown/meeting-ui/ROWS.md.
+
+- [x] 8.1 AI-301, AI-302, CENTER-106, SETTINGS-104: implement mounted literal search, refresh feedback, sorted stage-aware cards and activation/window lifecycle with responsive mock screenshots.
+- [x] 8.2 AI-308, AI-311, AI-312, SETTINGS-105, SETTINGS-106, SETTINGS-107: render safe Markdown and attendee metadata, managed reveal and independent task feedback, persist template default and test restart/failure preservation.
+- [x] 8.3 AI-310, AI-313, AI-314, AI-317, SETTINGS-108: implement word marks, bounded tooltips, weighted title modal/backend validation and neighbour deletion with mounted and service tests.
+- [x] 8.4 Run six gates, EN/DE native mock smoke, commit/push and open PR without merging or resolving threads.
+
+Lane delivery: PR #98, functional head `08cbc3a1`. The required root loose-environment
+test run had four unchanged backup/profile 5s timeouts; the authorized full direct
+desktop single-worker fallback passed 254 active files and 1987 tests, with one
+skip. Combined with protocol/device/edge, 3278 tests pass and four skip. Biome
+checks 1251 files with 14 existing warnings; all six typechecks, build, both bundle
+modes and 47 strict OpenSpec items pass. Hidden muted meetings and combined media
+native mocks pass and exit. The combined media fixture still logs existing missing
+profiles/connections handlers and settings authorization diagnostics. EN/DE
+screenshots and logs stay external in the meeting-ui scratch root above. Bot
+review is handed to the parent; no thread was resolved and no merge was attempted.
+
+## PR #98 single bot-review fix round
+
+Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptance.
+
+- [x] Fix Devin 4378930331 by invalidating minutes atomically with replacement transcription and regenerating from the new text. Regression tests in `meeting-service.test.ts` fail before the fix for both successful and failed regeneration, including summary-only recovery.
+- [x] Fix Devin 4378930536 with segment-level highlighting and selectable bookmarks when aligned tokens omit words. Three mounted regressions for leading/middle/trailing omissions fail before the fix; punctuation and exact saved text remain intact.
+- [x] Reply to Devin 4378930892 with unit/consumer provider-settings coverage and the separate live hardware/provider checklist.
+- [x] Handle valid incoming Codex/Copilot findings, run full gates and hidden mock native smoke, then list unanswered GraphQL threads without resolving them. Proof and gate counts: `apps/desktop/src/main/meetings/README.md`; four fixes have fail-before consumer regressions. All five threads answered, left unresolved; no merge.
+
+- [x] Fix Codex 4378948017 by observing asynchronous failure events independently of saved processing state. Four mounted retry/regeneration cases fail before the fix and cover failure on both sides of acknowledgement and a repeated identical error.
+
+- [x] Fix Codex 4378948029 by marking processing audio interrupted on job interruption. Two fake-backed service regressions fail before the fix and cover failed/interrupted audio, persisted restart state and retry without repeating completed ASR/summary.
+
+- [x] Repair the native smoke fixture after main integration: honor inherited post-touch click suppression and await the selected main-tab recording animation. The required native smoke failed before the fixture correction and passes after it, without changing production behavior or assertions.
