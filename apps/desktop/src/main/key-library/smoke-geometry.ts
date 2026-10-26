@@ -466,6 +466,9 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 
 	win.setContentSize(1400, 1150);
 	await select(win, "#keys-language", "en");
+	// Exit sequence selection before using the ordinary library's folder entry.
+	await click(win, keyButton("1,3"));
+	await ready(win, '!document.querySelector(".key-sequence")');
 	await click(win, '[data-library-type="createFolder"]');
 	await click(win, keyButton("2,4"));
 	await ready(win, `document.querySelector("#keys-page").options.length === 2`);

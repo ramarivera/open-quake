@@ -319,7 +319,9 @@ export function StripScreen({
 					);
 					const translated =
 						titles === "provided" ? key : localizedKey(key, locale);
-					return key.config.type === "hotkeySwitch" && state?.alternate === 1
+					return (key.config.type === "hotkeySwitch" ||
+						key.config.type === "mute") &&
+						state?.alternate === 1
 						? {
 								...translated,
 								config: {
