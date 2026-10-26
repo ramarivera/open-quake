@@ -1,3 +1,4 @@
+import type { SpawnOptions } from "node:child_process";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,29 +9,43 @@ const converter = vi.hoisted(() => ({ failure: "corrupt", attempts: 0 }));
 vi.mock("node:child_process", async () => {
 	const { EventEmitter } = await import("node:events");
 	return {
-		spawn: vi.fn((_executable: string, args: string[]) => {
-			const child = new EventEmitter();
-			converter.attempts++;
-			queueMicrotask(() => {
-				if (converter.failure === "corrupt") child.emit("close", 1);
-				else if (converter.attempts === 1 || converter.failure !== "EAGAIN")
-					child.emit(
-						"error",
-						Object.assign(new Error("fake spawn failure"), {
-							code: converter.failure,
-						}),
-					);
-				else {
-					const output = args.at(-1);
-					if (!output) throw new Error("Missing output");
-					void writeFile(output, new Uint8Array([1, 2])).then(
-						() => child.emit("close", 0),
-						(error) => child.emit("error", error),
-					);
-				}
-			});
-			return child;
-		}),
+		spawn: vi.fn(
+			(_executable: string, args: string[], options: SpawnOptions) => {
+				const child = new EventEmitter();
+				converter.attempts++;
+				queueMicrotask(() => {
+					if (
+						converter.failure === "slow" &&
+						options.timeout &&
+						options.timeout < 121000
+					)
+						child.emit("close", 1);
+					else if (converter.failure === "slow") {
+						const output = args.at(-1);
+						if (!output) throw new Error("Missing output");
+						void writeFile(output, new Uint8Array([1, 2])).then(() =>
+							child.emit("close", 0),
+						);
+					} else if (converter.failure === "corrupt") child.emit("close", 1);
+					else if (converter.attempts === 1 || converter.failure !== "EAGAIN")
+						child.emit(
+							"error",
+							Object.assign(new Error("fake spawn failure"), {
+								code: converter.failure,
+							}),
+						);
+					else {
+						const output = args.at(-1);
+						if (!output) throw new Error("Missing output");
+						void writeFile(output, new Uint8Array([1, 2])).then(
+							() => child.emit("close", 0),
+							(error) => child.emit("error", error),
+						);
+					}
+				});
+				return child;
+			},
+		),
 	};
 });
 
@@ -63,6 +78,28 @@ it.each(["corrupt", "ENOENT", "EACCES", "EAGAIN"])(
 				expect(converter.attempts).toBe(1);
 				expect(Either.isLeft(result)).toBe(true);
 			}
+			expect(await readdir(directory)).toEqual(["final_recording.mp3"]);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+);
+
+// The fake converter models 121 seconds of work without wall-clock waiting.
+it.each(["pcm", "audio"] as const)(
+	"lets the ASR deadline bound slow %s conversion",
+	async (mode) => {
+		converter.failure = "slow";
+		converter.attempts = 0;
+		const root = await mkdtemp(join(tmpdir(), "oq-conversion-slow-"));
+		const id = "00000000-0000-4000-8000-000000000111";
+		const directory = await meetingDirectory(root, id);
+		try {
+			await writeFile(join(directory, "final_recording.mp3"), "fake audio");
+			const audio = await Effect.runPromise(
+				meetingResources(root, "fake-ffmpeg")[mode](id),
+			);
+			await Effect.runPromise(audio.release);
 			expect(await readdir(directory)).toEqual(["final_recording.mp3"]);
 		} finally {
 			await rm(root, { recursive: true, force: true });

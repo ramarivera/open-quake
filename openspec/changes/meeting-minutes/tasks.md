@@ -203,3 +203,12 @@ document locale; that fixture repair is in the same follow-up bead. No product
 assertion or safety gate was weakened. Evidence stays in SSD meeting-provider/fix2.
 No thread resolution or merge; execution bead open-quake-lih.16.13 stays open for
 the lead. Physical and paid-provider qualification remains unverified.
+
+## 13. PR #109 post-round follow-ups
+
+Execution: open-quake-lih.16.15 and open-quake-lih.16.14. Leave both in progress for lead-owned review and merge.
+
+- [ ] 13.1 Address the five Major findings with fail-before consumer regressions.
+- [ ] 13.2 Reconcile three overlapping/later Codex findings, paginated file ownership, upload deadlines and interruptible conversion.
+- [ ] 13.3 Address remaining Minor/Trivial findings with fail-before regressions and original-thread replies.
+- [ ] 13.4 Run requested full gates and hidden meetings smoke, open a PR with per-finding outcomes, and retain the SSD worktree.

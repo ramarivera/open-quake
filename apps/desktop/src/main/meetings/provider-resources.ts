@@ -74,7 +74,7 @@ export function meetingResources(
 								: ["-codec:a", "libmp3lame"]),
 							path,
 						],
-						{ signal, stdio: "ignore", timeout: 120000 },
+						{ signal, stdio: "ignore" },
 					);
 					child.once("error", reject);
 					child.once("close", (code) =>
