@@ -22,7 +22,7 @@ export const MenuProfile = Schema.Struct({
 export type MenuProfile = typeof MenuProfile.Type;
 export const FocusKey = Schema.Struct({
 	keyCode: id,
-	kind: Schema.Literal("vol", "luminance", "brightness", "hotkey"),
+	kind: Schema.Literal("vol", "luminance", "brightness", "hotkey", "obsVolume"),
 	visible: Schema.Boolean,
 	supportKnob: Schema.Boolean,
 	size: Schema.optional(

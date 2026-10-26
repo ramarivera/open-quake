@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import * as C from "./action-contracts.js";
+import { OBS_IDS, obsDraft, obsKeyConfig } from "./obs-contracts.js";
 
 const define = <A, const I extends string>(
 	id: I,
@@ -11,7 +12,8 @@ const define = <A, const I extends string>(
 			| "navigation"
 			| "deviceControl"
 			| "decoKeeAI"
-			| "display";
+			| "display"
+			| "obsStudio";
 		readonly requiredAdapter: string;
 		readonly binding:
 			| "website"
@@ -78,6 +80,34 @@ const media = <const I extends string, const Command extends C.MediaCommand>(
 
 /** The editor, validator and conductor consume these same declarations. */
 export const ACTION_REGISTRY = [
+	...OBS_IDS.map((id) =>
+		define(id, obsKeyConfig(id), {
+			submenu: "obsStudio",
+			requiredAdapter: "obs.runtime",
+			binding: "delegate",
+			supportKnob: id === "obsVolume",
+			permission:
+				id === "obsStats" || id === "obsScreenshot" ? "read" : "write",
+			defaults: {
+				actions: [{ type: "configData", value: obsDraft(id) }],
+				supportKnob: id === "obsVolume",
+				size: [1, 1],
+				basicEditableItems: { title: true, grid: true, icon: true },
+				...(id === "obsStats"
+					? {
+							size: [2, 1],
+							basicEditableItems: { title: false, grid: false, icon: false },
+						}
+					: {}),
+				...(id === "obsScreenshot"
+					? {
+							size: [2, 2],
+							basicEditableItems: { title: false, grid: false, icon: false },
+						}
+					: {}),
+			},
+		}),
+	),
 	define("website", C.WebsiteConfig, {
 		submenu: "shortcut",
 		requiredAdapter: "host.website",

@@ -69,6 +69,9 @@ import {
 import { MediaLive, registerMedia } from "./media";
 import { prepareMeetings } from "./meetings";
 import { prepareMonitor } from "./monitor";
+import { prepareObs } from "./obs";
+import { obsKeyAction } from "./obs/key-action";
+import { visibleObsKeys } from "./obs/visibility";
 import { prepareProfiles } from "./profiles";
 import { createSettingsOsAdapter } from "./settings/os-adapter";
 import { prepareAppLocale } from "./settings/registration";
@@ -352,6 +355,9 @@ if (!app.requestSingleInstanceLock()) {
 							() => bus?.hardware?.(),
 							() => panelWin,
 							async (key, signal, activation) =>
+								(await obsKeyAction((command, signal) =>
+									obs.execute(command, signal),
+								)(key, signal)) ||
 								(await speech.executeSoundKey(key, signal, activation)) ||
 								integrationKeyAction((key, signal) =>
 									integrations.executeHaFromKey(key, signal),
@@ -368,6 +374,21 @@ if (!app.requestSingleInstanceLock()) {
 							renderer: rendererURL,
 							profiles: profilesModule.runtime,
 							credentials: modelCredentials.management,
+						});
+						const obsModule = prepareObs({
+							renderer: rendererURL,
+							management: () => managementWin,
+							panel: () => panelWin,
+							visibleKeys: () =>
+								profilesModule.runtime.runPromise(
+									ProfileService.loadProfiles().pipe(
+										Effect.map(({ envelope }) =>
+											visibleObsKeys(envelope, activeDeviceId()),
+										),
+									),
+								),
+							diagnostics,
+							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 						});
 						const integrationsModule = prepareIntegrations({
 							diagnostics,
@@ -400,6 +421,8 @@ if (!app.requestSingleInstanceLock()) {
 									(...args) => profiles.select(...args),
 								),
 								thumbnail: (...args) => profiles.thumbnail(...args),
+								obs: (key, delta, signal, beforeWrite) =>
+									obs.turn(key, delta, signal, beforeWrite),
 								hardware: () => bus?.hardware?.(),
 								voice: (...args) => voice.knobVoice(...args),
 							},
@@ -588,6 +611,7 @@ if (!app.requestSingleInstanceLock()) {
 							profilesModule.layer,
 							agentsModule.layer.pipe(Layer.provide(httpModule.layer)),
 							integrationsModule.layer,
+							obsModule.layer,
 							emojiModule.layer,
 							knobModule.layer,
 							mediaModule.layer,
@@ -608,6 +632,7 @@ if (!app.requestSingleInstanceLock()) {
 						profilesModule.bind(application);
 						agentsModule.bind(application);
 						integrationsModule.bind(application);
+						obsModule.bind(application);
 						emojiModule.bind(application);
 						knobModule.bind(application);
 						mediaModule.bind(application);
@@ -632,6 +657,7 @@ if (!app.requestSingleInstanceLock()) {
 						const profiles = profilesModule.start();
 						const agents = agentsModule.start();
 						const integrations = integrationsModule.start();
+						const obs = obsModule.start();
 						const media = mediaModule.start();
 						const clock = clockModule.start();
 						const emoji = emojiModule.start();
@@ -991,6 +1017,7 @@ if (!app.requestSingleInstanceLock()) {
 									() => knob.dispose(),
 									() => agents.dispose(),
 									() => integrations.dispose(),
+									() => obs.dispose(),
 									() => emoji.dispose(),
 									() => settingsWindow.dispose(),
 									() => localeRegistration.dispose(),
