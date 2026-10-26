@@ -608,6 +608,9 @@ export function KeyEditor(): React.JSX.Element {
 									return old !== current.current;
 								}}
 								onSaved={() => choose(key.keyCode)}
+								isCurrent={() =>
+									current.current?.target.token === selection.target.token
+								}
 							/>
 						)}
 						{Option.isSome(key.compatibility) &&

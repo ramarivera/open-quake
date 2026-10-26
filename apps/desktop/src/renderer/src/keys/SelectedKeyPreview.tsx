@@ -15,11 +15,13 @@ export function SelectedKeyPreview({
 	target,
 	beforeWrite,
 	onSaved,
+	isCurrent,
 }: {
 	tile: StripTile;
 	target: ClockTarget;
 	beforeWrite: () => Promise<boolean>;
 	onSaved: () => Promise<void>;
+	isCurrent: () => boolean;
 }): React.JSX.Element {
 	const frame = useRef<HTMLDivElement>(null);
 	const [side, setSide] = useState(80 * 0.85);
@@ -88,20 +90,23 @@ export function SelectedKeyPreview({
 					target={target}
 					beforeWrite={beforeWrite}
 					onSaved={onSaved}
+					isCurrent={isCurrent}
 				/>
 			)}
 		</section>
 	);
 }
 
-function ClockPreviewControls({
+export function ClockPreviewControls({
 	target,
 	beforeWrite,
 	onSaved,
+	isCurrent,
 }: {
 	target: ClockTarget;
 	beforeWrite: () => Promise<boolean>;
 	onSaved: () => Promise<void>;
+	isCurrent: () => boolean;
 }): React.JSX.Element {
 	const clock = useClockSettings(undefined, target, beforeWrite);
 	const [busy, setBusy] = useState(false);
@@ -115,7 +120,7 @@ function ClockPreviewControls({
 			const result = await clock.selectTheme(
 				cycleTheme(active === "none" ? null : active, delta),
 			);
-			if (result.ok) await onSaved();
+			if (result.ok && isCurrent()) await onSaved();
 		} finally {
 			writing.current = false;
 			setBusy(false);

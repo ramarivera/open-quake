@@ -31,6 +31,7 @@ it("puts live tile buttons inside an inert subtree, keeping clock controls outsi
 				},
 				beforeWrite: async () => true,
 				onSaved: async () => {},
+				isCurrent: () => true,
 			}),
 		);
 	const html = render(false);
