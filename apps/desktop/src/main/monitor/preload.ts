@@ -6,6 +6,8 @@ import {
 	type MonitorBridge,
 } from "../../shared/monitor-contracts";
 
+import { createMonitoringStateBridge } from "./state-preload";
+
 const subscribe = (
 	channel: string,
 	callback: (value: unknown) => void,
@@ -17,9 +19,19 @@ const subscribe = (
 		ipcRenderer.off(channel, listener);
 	};
 };
+const state = createMonitoringStateBridge(ipcRenderer);
+window.addEventListener(
+	"unload",
+	() => {
+		void state.dispose();
+	},
+	{ once: true },
+);
 const bridge: MonitorBridge = {
 	request: (command) => ipcRenderer.invoke(MONITOR_REQUEST, command),
 	onSettings: (callback) => subscribe(MONITOR_SETTINGS, callback),
+	snapshot: () => state.snapshot(),
+	onState: (callback) => state.subscribe(callback),
 	onMetrics: (callback) => subscribe(MONITOR_METRICS, callback),
 };
 contextBridge.exposeInMainWorld("quakeMonitor", bridge);

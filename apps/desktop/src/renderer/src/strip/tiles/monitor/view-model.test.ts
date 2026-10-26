@@ -8,6 +8,7 @@ import {
 	STYLES,
 } from "../../../../../shared/monitor-contracts";
 import { MonitorPanel } from "./MonitorPanel";
+import { appName } from "./MonitorSettings";
 import {
 	bare,
 	diskView,
@@ -19,6 +20,43 @@ import {
 } from "./view-model";
 
 describe("source-backed monitor readouts", () => {
+	it("hides uncollected sample numbers in every panel consumer and style", () => {
+		for (const styleId of STYLES) {
+			for (const settings of [
+				{ ...defaults(), styleId, metrics: ["cpu" as const] },
+				{
+					...defaults(),
+					styleId,
+					override: { active: true, hz: 1, metrics: ["cpu" as const] },
+				},
+				{ ...defaults(), styleId, enabled: false },
+			]) {
+				const html = renderToStaticMarkup(
+					createElement(MonitorPanel, {
+						settings,
+						snapshot: previewSnapshot(),
+						preview: true,
+					}),
+				);
+				expect(html).toContain(
+					'data-testid="sys-monitor-value-mem-used-gb">--',
+				);
+				expect(html).toContain("Off");
+				expect(html).toContain("Preview · Sample data");
+			}
+		}
+	});
+	it("names the executable's closest app bundle without exposing its private path", () => {
+		expect(
+			appName(
+				"/Users/private/Outer.app/Contents/Helpers/Inner.app/Contents/MacOS/helper",
+			),
+		).toBe("Inner");
+		expect(appName("/Applications/Upper.APP/Contents/MacOS/helper")).toBe(
+			"Upper",
+		);
+		expect(appName("C:\\Users\\private\\Apps\\Editor.exe")).toBe("Editor");
+	});
 	it("keeps real zero distinct from missing values and converts valid temperatures", () => {
 		expect(bare(undefined)).toBe("--");
 		expect(bare(0)).toBe("0");
