@@ -150,3 +150,26 @@ it.effect(
 			);
 		}),
 );
+
+it.effect(
+	"4381290893 Start cleans the exited tree and checks a new process before reporting ready",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			yield* f.backend.start;
+			f.runCommand
+				.mockImplementationOnce(async () => {
+					f.close();
+					throw new Error("fake failure");
+				})
+				.mockRejectedValueOnce(new Error("fake failure"));
+			expect(yield* f.backend.stop.pipe(Effect.either)).toMatchObject({
+				_tag: "Left",
+			});
+			yield* f.backend.start;
+			expect(f.runCommand).toHaveBeenCalledTimes(3);
+			expect(f.spawn).toHaveBeenCalledTimes(2);
+			expect(f.health).toHaveBeenCalledTimes(2);
+			yield* f.backend.stop;
+		}),
+);

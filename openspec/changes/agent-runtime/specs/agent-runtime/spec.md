@@ -174,6 +174,13 @@ The owned runtime SHALL stop the entire Windows process tree, including the gate
 - **AND** failure to start never discards ownership of the possibly live gateway
 - **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381279552, bead open-quake-lih.17.24.1
 
+#### Scenario: Start cannot mistake retained cleanup for readiness
+- **WHEN** a Stop fails after the command processor has already exited and the user selects Start
+- **THEN** Start retries retained cleanup before spawning a new owned process and checking its health
+- **AND** if cleanup still fails Start reports failure without spawning or publishing ready
+- **AND** clear and unconsented settings changes remain unavailable while cleanup is owed
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381290893, bead open-quake-lih.17.24.1
+
 ### Requirement: Imported agent key voice default
 The clawbot key editor SHALL derive Voice Input and Task Prompt visibility from the runtime hold-to-talk predicate. An absent voiceInput action SHALL display voice disabled and Task Prompt editable. Sources: MGMT-302; open-quake-lih.17.24, PR108 finding 4380901936; DK-Suite v0.4.95 recovered_sources/src/plugins/KeyConfiguration.js:239-240 defaults voiceInput to false, and src/views/Components/QuakeShortCutView.vue:1758-1767 requires a truthy voiceInput action.
 
