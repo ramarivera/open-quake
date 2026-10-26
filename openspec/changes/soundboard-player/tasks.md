@@ -17,7 +17,7 @@ Implementation tasks. Configuration import and the first-release boundary have v
 
 - [ ] 3.1 Wire the DK-Player preset and actual key/UI controls through shared playback state with user documentation; verify both consumers observe the same session and profile deactivation stops its sessions.
 - [ ] 3.2 Run all soundboard-player scenarios against a fake backend, then native macOS MP3 playback when available; record output-device and physical-trigger evidence without claiming unrun hardware checks.
-- [ ] 3.3 Exercise Linux playback/focus with real audio and the same conformance fixtures.
+- [x] 3.3 Exercise Linux playback/focus with real audio and the same conformance fixtures. Native Electron/PipeWire loopback and 138 shared conformance tests pass; reviewed delivery tracked by `open-quake-uv9.8`. This does not establish physical speaker output or hearing.
 
 ## Configuration import verification, 2026-10-25
 
@@ -216,3 +216,27 @@ hidden, muted Electron MP3 run proves native playback/pause/end, two-key capture
 preemption, corrupt-file rejection and zero remaining windows/workers. External
 evidence is under `soundboard-controls/review-r2/cleanup-native` in project
 scratch. Real window-destruction failures still fail closed.
+
+## Native Linux audio conformance, 2026-10-26
+
+The merged playback source at `30613c8` ran on Linux x64 with Electron 43.4.1,
+Wayland and PipeWire 1.6.10. The same 138 soundboard/shared-output tests pass.
+The production sandboxed MP3 worker emitted a generated tone into a temporary
+private null sink. Its monitor measured RMS 0.070720 at gain 0.8, 0.035360 at
+0.4, and zero while paused or at zero gain. Pause/resume advanced position from
+163.556 to 239.003 ms, and a 150 ms fade completed in 156 ms. The production
+conductor also passed wrap, rescan without restart, natural advancement, two-key
+capture preemption, stale Stop isolation and typed corrupt-file rejection.
+
+Final cleanup found zero owned audio windows, workers, recorders or virtual
+sinks. Default input/output and physical-output volume remained unchanged. No
+physical microphone, speakers, key presses, provider or account were used.
+Task 3.2 retains physical-trigger/hearing acceptance; tasks 2.3 and 3.1 retain
+production consumer wiring. Imported sound keys remain unavailable in release.
+
+The first external test bundle combined two Effect versions. Resolving all
+imports to the workspace's exact 3.22.1 dependency removed that warning, and the
+clean run reproduced every assertion and measurement. Reproduction sources and
+run artifacts remain outside git under `open-quake-finish/linux-audio/` in the
+project scratch directory; the Linux fixture is under the corresponding
+`~/dev/agentic-scratchpads/open-quake/linux-audio-30613c8/` directory.
