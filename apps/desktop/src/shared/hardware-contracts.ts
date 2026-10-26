@@ -45,3 +45,39 @@ declare global {
 		readonly quakeHardware?: HardwareBridge;
 	}
 }
+
+export const DEVICE_READY = "quake:device-ready";
+export const DeviceReadySnapshot = Schema.Struct({
+	serialNumber: Schema.NonEmptyString,
+	connected: Schema.Boolean,
+	deviceModel: Schema.Literal("QUAKE_HID"),
+	connectionType: Schema.Literal("HID", "mock"),
+	session: Schema.optional(Schema.String),
+	version: Schema.optional(Schema.String),
+	rotation: Schema.optional(Schema.Literal(0, 90, 180, 270)),
+	keyMatrix: Schema.Struct({
+		row: Schema.Literal(1, 2),
+		col: Schema.Literal(8),
+	}),
+});
+export type DeviceReadySnapshot = typeof DeviceReadySnapshot.Type;
+export const DeviceReadyReply = Schema.Union(
+	Schema.TaggedStruct("ready", { snapshot: DeviceReadySnapshot }),
+	Schema.TaggedStruct("offline", {}),
+	Schema.TaggedStruct("failure", { code: Schema.String }),
+);
+export type DeviceReadyReply = typeof DeviceReadyReply.Type;
+export interface DeviceReadyBridge {
+	read(serial?: string): Promise<unknown>;
+}
+declare global {
+	interface Window {
+		readonly quakeDeviceReady?: DeviceReadyBridge;
+	}
+}
+export function negotiateDeviceMatrix(
+	row: number,
+	_col: number,
+): DeviceReadySnapshot["keyMatrix"] | undefined {
+	return row === 1 || row === 2 ? { row, col: 8 } : undefined;
+}

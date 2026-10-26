@@ -1,0 +1,302 @@
+{
+	"feishu": {
+		"zh": {
+			"name": "飞书",
+			"blurb": "企业协作与机器人私聊、群聊",
+			"source": "官方内置",
+			"eta": "~2 分钟"
+		},
+		"en": {
+			"name": "Feishu",
+			"blurb": "Enterprise messaging with DM and group chat",
+			"source": "Official bundled",
+			"eta": "~2 min"
+		},
+		"ja": {
+			"name": "Feishu",
+			"blurb": "エンタープライズコラボレーションとボットのDM・グループチャット",
+			"source": "公式ビルトイン",
+			"eta": "~2 分"
+		},
+		"ko": {
+			"name": "Feishu",
+			"blurb": "기업 협업과 봇 DM·그룹 채팅",
+			"source": "공식 내장",
+			"eta": "~2 분"
+		},
+		"de": {
+			"name": "Feishu",
+			"blurb": "Unternehmens-Kollaboration mit Bot-DM und Gruppenchats",
+			"source": "Offiziell integriert",
+			"eta": "~2 Min"
+		},
+		"fr": {
+			"name": "Feishu",
+			"blurb": "Collaboration d'entreprise avec DM et discussions de groupe du bot",
+			"source": "Intégré officiel",
+			"eta": "~2 min"
+		},
+		"es": {
+			"name": "Feishu",
+			"blurb": "Colaboración empresarial con DM y chats de grupo del bot",
+			"source": "Integrado oficial",
+			"eta": "~2 min"
+		},
+		"it": {
+			"name": "Feishu",
+			"blurb": "Collaborazione aziendale con DM e chat di gruppo del bot",
+			"source": "Integrato ufficiale",
+			"eta": "~2 min"
+		}
+	},
+	"qqbot": {
+		"zh": {
+			"name": "QQ Bot",
+			"blurb": "QQ 官方机器人 API，私聊与群聊",
+			"source": "官方内置",
+			"eta": "~3 分钟"
+		},
+		"en": {
+			"name": "QQ Bot",
+			"blurb": "Official QQ Bot API for DM and groups",
+			"source": "Official bundled",
+			"eta": "~3 min"
+		},
+		"ja": {
+			"name": "QQ Bot",
+			"blurb": "QQ公式ボットAPI、DMとグループチャット",
+			"source": "公式ビルトイン",
+			"eta": "~3 分"
+		},
+		"ko": {
+			"name": "QQ Bot",
+			"blurb": "QQ 공식 봇 API, DM 및 그룹 채팅",
+			"source": "공식 내장",
+			"eta": "~3 분"
+		},
+		"de": {
+			"name": "QQ Bot",
+			"blurb": "Offizielle QQ-Bot-API für DM und Gruppen",
+			"source": "Offiziell integriert",
+			"eta": "~3 Min"
+		},
+		"fr": {
+			"name": "QQ Bot",
+			"blurb": "API officielle du bot QQ pour DM et groupes",
+			"source": "Intégré officiel",
+			"eta": "~3 min"
+		},
+		"es": {
+			"name": "QQ Bot",
+			"blurb": "API oficial del bot de QQ para DM y grupos",
+			"source": "Integrado oficial",
+			"eta": "~3 min"
+		},
+		"it": {
+			"name": "QQ Bot",
+			"blurb": "API ufficiale del bot QQ per DM e gruppi",
+			"source": "Integrato ufficiale",
+			"eta": "~3 min"
+		}
+	},
+	"openclaw-weixin": {
+		"zh": {
+			"name": "个人微信",
+			"blurb": "扫码登录，私聊可用（腾讯官方插件）",
+			"source": "腾讯官方",
+			"eta": "~1 分钟"
+		},
+		"en": {
+			"name": "WeChat",
+			"blurb": "QR login for personal chat (Tencent official plugin)",
+			"source": "Tencent official",
+			"eta": "~1 min"
+		},
+		"ja": {
+			"name": "WeChat",
+			"blurb": "QRコードログイン、個人チャット対応（テンセント公式プラグイン）",
+			"source": "Tencent 公式",
+			"eta": "~1 分"
+		},
+		"ko": {
+			"name": "WeChat",
+			"blurb": "QR 로그인, 개인 채팅 지원(텐센트 공식 플러그인)",
+			"source": "Tencent 공식",
+			"eta": "~1 분"
+		},
+		"de": {
+			"name": "WeChat",
+			"blurb": "QR-Login für persönliche Chats (offizielles Tencent-Plugin)",
+			"source": "Tencent offiziell",
+			"eta": "~1 Min"
+		},
+		"fr": {
+			"name": "WeChat",
+			"blurb": "Connexion par QR pour chat personnel (plugin officiel Tencent)",
+			"source": "Tencent officiel",
+			"eta": "~1 min"
+		},
+		"es": {
+			"name": "WeChat",
+			"blurb": "Inicio de sesión por QR para chat personal (plugin oficial de Tencent)",
+			"source": "Tencent oficial",
+			"eta": "~1 min"
+		},
+		"it": {
+			"name": "WeChat",
+			"blurb": "Accesso QR per chat personale (plugin ufficiale Tencent)",
+			"source": "Tencent ufficiale",
+			"eta": "~1 min"
+		}
+	},
+	"wecom": {
+		"zh": {
+			"name": "企业微信",
+			"blurb": "企业微信会话与文档协作",
+			"source": "腾讯官方",
+			"eta": "~5 分钟"
+		},
+		"en": {
+			"name": "WeCom",
+			"blurb": "Enterprise WeChat messaging",
+			"source": "Tencent official",
+			"eta": "~5 min"
+		},
+		"ja": {
+			"name": "WeCom",
+			"blurb": "WeComセッションとドキュメントコラボレーション",
+			"source": "Tencent 公式",
+			"eta": "~5 分"
+		},
+		"ko": {
+			"name": "WeCom",
+			"blurb": "WeCom 세션 및 문서 협업",
+			"source": "Tencent 공식",
+			"eta": "~5 분"
+		},
+		"de": {
+			"name": "WeCom",
+			"blurb": "WeCom-Sitzungen und Dokumentenzusammenarbeit",
+			"source": "Tencent offiziell",
+			"eta": "~5 Min"
+		},
+		"fr": {
+			"name": "WeCom",
+			"blurb": "Sessions WeCom et collaboration documentaire",
+			"source": "Tencent officiel",
+			"eta": "~5 min"
+		},
+		"es": {
+			"name": "WeCom",
+			"blurb": "Sesiones de WeCom y colaboración documental",
+			"source": "Tencent oficial",
+			"eta": "~5 min"
+		},
+		"it": {
+			"name": "WeCom",
+			"blurb": "Sessioni WeCom e collaborazione documentale",
+			"source": "Tencent ufficiale",
+			"eta": "~5 min"
+		}
+	},
+	"whatsapp": {
+		"zh": {
+			"name": "WhatsApp",
+			"blurb": "Link via QR to WhatsApp Web",
+			"source": "Official plugin",
+			"eta": "~2 min"
+		},
+		"en": {
+			"name": "WhatsApp",
+			"blurb": "Link via QR to WhatsApp Web",
+			"source": "Official plugin",
+			"eta": "~2 min"
+		},
+		"ja": {
+			"name": "WhatsApp",
+			"blurb": "QRでWhatsApp Webにリンク",
+			"source": "公式プラグイン",
+			"eta": "~2 分"
+		},
+		"ko": {
+			"name": "WhatsApp",
+			"blurb": "QR로 WhatsApp Web 연결",
+			"source": "공식 플러그인",
+			"eta": "~2 분"
+		},
+		"de": {
+			"name": "WhatsApp",
+			"blurb": "Per QR mit WhatsApp Web verknüpfen",
+			"source": "Offizielles Plugin",
+			"eta": "~2 Min"
+		},
+		"fr": {
+			"name": "WhatsApp",
+			"blurb": "Lier via QR à WhatsApp Web",
+			"source": "Plugin officiel",
+			"eta": "~2 min"
+		},
+		"es": {
+			"name": "WhatsApp",
+			"blurb": "Vincular mediante QR a WhatsApp Web",
+			"source": "Plugin oficial",
+			"eta": "~2 min"
+		},
+		"it": {
+			"name": "WhatsApp",
+			"blurb": "Collega via QR a WhatsApp Web",
+			"source": "Plugin ufficiale",
+			"eta": "~2 min"
+		}
+	},
+	"discord": {
+		"zh": {
+			"name": "Discord",
+			"blurb": "Discord bot for DMs and servers",
+			"source": "Official bundled",
+			"eta": "~3 min"
+		},
+		"en": {
+			"name": "Discord",
+			"blurb": "Discord bot for DMs and servers",
+			"source": "Official bundled",
+			"eta": "~3 min"
+		},
+		"ja": {
+			"name": "Discord",
+			"blurb": "DMとサーバー向けDiscordボット",
+			"source": "公式ビルトイン",
+			"eta": "~3 分"
+		},
+		"ko": {
+			"name": "Discord",
+			"blurb": "DM 및 서버용 Discord 봇",
+			"source": "공식 내장",
+			"eta": "~3 분"
+		},
+		"de": {
+			"name": "Discord",
+			"blurb": "Discord-Bot für DMs und Server",
+			"source": "Offiziell integriert",
+			"eta": "~3 Min"
+		},
+		"fr": {
+			"name": "Discord",
+			"blurb": "Bot Discord pour DM et serveurs",
+			"source": "Intégré officiel",
+			"eta": "~3 min"
+		},
+		"es": {
+			"name": "Discord",
+			"blurb": "Bot de Discord para DM y servidores",
+			"source": "Integrado oficial",
+			"eta": "~3 min"
+		},
+		"it": {
+			"name": "Discord",
+			"blurb": "Bot Discord per DM e server",
+			"source": "Integrato ufficiale",
+			"eta": "~3 min"
+		}
+	}
+}

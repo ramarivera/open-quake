@@ -11,12 +11,14 @@ import { directChatModel } from "../chat/model-scope";
 import { ConversationWorkspace } from "../chat/Workspace";
 import "../chat/workspace.css";
 import "./agents.css";
+import { AdministrationPanel } from "./AdministrationPanel";
 import { AgentWizard } from "./AgentWizard";
 import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
 import { SkillsPanel } from "./SkillsPanel";
+import { SKILL_DRAG_TYPE, transferSkill } from "./skill-transfer";
 import { reconcileSlotDrafts } from "./slot-drafts";
 import { type AgentRequest, useAgents } from "./useAgents";
 
@@ -33,6 +35,7 @@ function Roster({
 	const strings = useAgentsCopy();
 	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
+	const [layout, setLayout] = useState("grid");
 	const [filter, setFilter] = useState("all");
 	const [selected, setSelected] = useState("main");
 	const [wizard, setWizard] = useState<{ readonly agent: Agent | undefined }>();
@@ -67,7 +70,6 @@ function Roster({
 					{t.createAgent}
 				</button>
 			</header>
-			<RuntimeIndicator runtime={view.runtime} request={request} />
 			<div
 				className="mc-tabs aw-subtabs"
 				role="tablist"
@@ -92,7 +94,7 @@ function Roster({
 					{t.skillManagementTab}
 				</button>
 			</div>
-			<div hidden={tab !== "loadout"} className="aw-split">
+			<div className="aw-split">
 				<section className="aw-list" aria-label={t.agentsList}>
 					<div className="aw-list-tools">
 						<label className="mc-field aw-search">
@@ -129,12 +131,43 @@ function Roster({
 							{t.refresh}
 						</button>
 					</p>
-					<ul className="aw-rows">
+					<fieldset className="aw-segmented">
+						<legend>{strings.administration.view}</legend>
+						{["grid", "list"].map((mode) => (
+							<button
+								key={mode}
+								type="button"
+								aria-pressed={layout === mode}
+								onClick={() => setLayout(mode)}
+							>
+								{mode === "grid"
+									? strings.administration.grid
+									: strings.administration.list}
+							</button>
+						))}
+					</fieldset>
+					<ul className="aw-rows" data-layout={layout}>
 						{visible.map((agent) => (
 							<li
 								className="mc-card aw-row"
 								data-selected={active?.id === agent.id}
 								key={agent.id}
+								onDragOver={(event) => {
+									if (
+										agent.id !== "main" &&
+										event.dataTransfer.types.includes(SKILL_DRAG_TYPE)
+									)
+										event.preventDefault();
+								}}
+								onDrop={(event) => {
+									event.preventDefault();
+									transferSkill(
+										event.dataTransfer.getData(SKILL_DRAG_TYPE),
+										agent.id,
+										view,
+										request,
+									);
+								}}
 							>
 								<button
 									type="button"
@@ -197,7 +230,11 @@ function Roster({
 						</div>
 					)}
 				</section>
-				<section className="aw-detail" aria-label={t.equippedSkills}>
+				<section
+					hidden={tab !== "loadout"}
+					className="aw-detail"
+					aria-label={t.equippedSkills}
+				>
 					{active ? (
 						<>
 							<header className="aw-detail-head">
@@ -247,9 +284,9 @@ function Roster({
 						<p className="cw-muted">{t.selectAgentHint}</p>
 					)}
 				</section>
-			</div>
-			<div hidden={tab !== "skills"}>
-				<SkillsPanel view={view} request={request} busy={busy} />
+				<div hidden={tab !== "skills"}>
+					<SkillsPanel view={view} request={request} busy={busy} />
+				</div>
 			</div>
 			{wizard && (
 				<AgentWizard
@@ -279,6 +316,7 @@ function Roster({
 	);
 }
 function PanelSettings({
+	active,
 	view,
 	request,
 	busy,
@@ -288,6 +326,7 @@ function PanelSettings({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 	readonly children: ReactNode;
+	readonly active: boolean;
 }) {
 	const strings = useAgentsCopy();
 	const [slots, setSlots] = useState<Slots>(view.slots);
@@ -384,6 +423,12 @@ function PanelSettings({
 					</div>
 				)}
 			</section>
+			<AdministrationPanel
+				active={active}
+				view={view}
+				request={request}
+				busy={busy}
+			/>
 			{children}
 		</>
 	);
@@ -393,12 +438,15 @@ export interface AgentsPageProps {
 	readonly activation?: { readonly tab: AgentsTab; readonly sequence: number };
 	readonly children?: ReactNode;
 	readonly bridge?: AgentsBridge;
+	readonly developmentDiagnostics?: boolean;
 }
 export function AgentsPage({
 	initialTab = "sessions",
 	activation,
 	children,
 	bridge,
+	developmentDiagnostics = import.meta.env.DEV &&
+		import.meta.env.VITE_ENABLE_CLAW_LOCAL_MODEL_TEST === "true",
 }: AgentsPageProps) {
 	const { locale } = useAppLocale();
 	const strings = useAgentsCopy();
@@ -414,7 +462,6 @@ export function AgentsPage({
 	// Narrow windows scroll the tab row horizontally; keep the selected tab
 	// visible after selection and resizes without moving the page vertically.
 	const tabRow = useRef<HTMLDivElement>(null);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: The selected tab is read from the DOM after each tab change.
 	useEffect(() => {
 		const row = tabRow.current;
 		if (!row) return;
@@ -433,6 +480,17 @@ export function AgentsPage({
 		observer.observe(row);
 		return () => observer.disconnect();
 	}, [tab]);
+	useEffect(() => {
+		if (tab === "settings") void request({ type: "read" });
+	}, [tab, request]);
+	useEffect(() => {
+		const reload = () => {
+			if (tab === "settings") void request({ type: "read" });
+		};
+		window.addEventListener("agents:settings-invalidated", reload);
+		return () =>
+			window.removeEventListener("agents:settings-invalidated", reload);
+	}, [tab, request]);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
 		{ id: "agents", label: strings.clawControlPanel.localLibraryTab },
@@ -447,6 +505,7 @@ export function AgentsPage({
 					<h1>{strings.clawControlPanel.agentsTab}</h1>
 					<p>{strings.clawControlPanel.libraryHint}</p>
 				</div>
+				{view && <RuntimeIndicator runtime={view.runtime} request={request} />}
 			</header>
 			<div
 				ref={tabRow}
@@ -496,6 +555,16 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
+				<SessionsRuntime view={view} busy={busy} request={request} />
+				{developmentDiagnostics && (
+					<section
+						className="mc-panel"
+						aria-label={strings.administration.localDiagnostic}
+					>
+						<h2>{strings.administration.localDiagnostic}</h2>
+						<p>{strings.administration.deprecated}</p>
+					</section>
+				)}
 				<ConversationWorkspace
 					locale={locale}
 					model={directChatModel(view?.models)}
@@ -525,9 +594,16 @@ export function AgentsPage({
 					hidden={tab === "sessions"}
 					className="mc-panel"
 					aria-busy={!error}
-					aria-label={t.loadingAgentMd}
+					aria-label={t.loadingAgents}
 				>
-					<p role="status">{error ? t.retry : t.loadingAgentMd}</p>
+					<p role="status">{error ? t.retry : t.loadingAgents}</p>
+					{!error && (
+						<ul className="aw-rows" aria-label={t.loadingAgents}>
+							{[0, 1, 2, 3].map((row) => (
+								<li className="aw-skeleton" key={row} aria-hidden="true" />
+							))}
+						</ul>
+					)}
 				</section>
 			) : (
 				<>
@@ -553,11 +629,78 @@ export function AgentsPage({
 						aria-labelledby="agents-tab-settings"
 						hidden={tab !== "settings"}
 					>
-						<PanelSettings view={view} request={request} busy={busy}>
+						<PanelSettings
+							active={tab === "settings"}
+							view={view}
+							request={request}
+							busy={busy}
+						>
 							{children}
 						</PanelSettings>
 					</section>
 				</>
+			)}
+		</div>
+	);
+}
+
+function SessionsRuntime({
+	view,
+	busy,
+	request,
+}: {
+	readonly view: AgentView | undefined;
+	readonly busy: boolean;
+	readonly request: AgentRequest;
+}) {
+	const t = useAgentsCopy();
+	const runtime = view?.runtime;
+	const mode = !runtime
+		? "detecting"
+		: runtime.status === "ready"
+			? "ready"
+			: runtime.status === "stopped"
+				? "offline"
+				: runtime.status;
+	return (
+		<div className="aw-session-runtime" data-session-mode={mode}>
+			<header className="aw-section-head">
+				<div>
+					<h2>{t.clawControlPanel.sessionsTab}</h2>
+					<span role="status">
+						{runtime
+							? t.openclawRuntimeIndicator[
+									runtime.status === "ready"
+										? "statusReady"
+										: runtime.status === "starting"
+											? "statusStarting"
+											: runtime.status === "stopping"
+												? "statusStopping"
+												: runtime.status === "error"
+													? "statusError"
+													: "statusStopped"
+								]
+							: t.clawAgentManagement.loadingAgentMd}
+					</span>
+					<span className="aw-session-count">
+						{format(t.clawAgentManagement.agentCount, {
+							count: view?.agents.length ?? 0,
+						})}
+					</span>
+				</div>
+				<button
+					type="button"
+					className="mc-button"
+					disabled={busy}
+					onClick={() => void request({ type: "read" })}
+				>
+					{t.clawAgentManagement.refresh}
+				</button>
+			</header>
+			{runtime && runtime.status !== "ready" && (
+				<div className="aw-session-offline">
+					<RuntimeIndicator runtime={runtime} request={request} />
+				</div>
 			)}
 		</div>
 	);

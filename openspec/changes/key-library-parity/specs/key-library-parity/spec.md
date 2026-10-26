@@ -204,6 +204,13 @@ Generic hotkey titles polluted with a default from any recovered locale SHALL re
 - **WHEN** a legacy generic hotkey or ClawBot title is localized without a user-origin marker
 - **THEN** the selected locale or configured agent supplies the title, while a title marked as user-modified survives unchanged
 
+### Requirement: Inline sequence entry and return
+The inline Multiple Operations editor SHALL show the contained operation count, focus a newly added step, and provide Back and Edit operations controls without discarding the draft (MGMT-280).
+
+#### Scenario: Add a step and return
+- **WHEN** a user adds an operation and selects Back
+- **THEN** the count increases and reopening Edit operations retains the added draft
+
 ### Requirement: Library placement and grid selection
 The mounted Keys editor SHALL offer pointer drag and keyboard placement from the action library and coordinate-only grid moves. Starting a drag SHALL revert unsaved artwork/title previews and cancel obsolete picker callbacks. Drops SHALL require entry into a valid current grid, confirm every replaced occupied footprint including the target anchor, honor all edit locks and protect Back, emojiBack and colorfulScreen. Successful drops SHALL autosave one complete revision and retarget selection. Cancellation, invalid drops, failed writes and revision conflicts SHALL preserve the committed profile. Sources: MGMT-068, MGMT-069, MGMT-070, MGMT-071, MGMT-073, MGMT-074, MGMT-075, MGMT-076, MGMT-078, SCREEN-136, SCREEN-137.
 

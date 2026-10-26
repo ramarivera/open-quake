@@ -52,6 +52,85 @@ const settle = TestClock.adjust(0);
 
 describe("hardware controls over actual device connection with fake transport", () => {
 	it.scoped(
+		"MAIN-018 missing optional version still synchronizes mic and luminance without poisoning readiness",
+		() =>
+			Effect.gen(function* () {
+				const queried: number[] = [];
+				const { session } = yield* setup({
+					onCommand: (c) => {
+						queried.push(c.cmdId);
+						return c.cmdId === 46
+							? []
+							: [fakeHardwareReply(c.cmdId, [c.cmdId === 3 ? 1 : 128])];
+					},
+				});
+				const refreshing = yield* session
+					.refresh()
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(3000);
+				expect(yield* Fiber.join(refreshing)).toEqual(Either.right(undefined));
+				expect(queried.filter((id) => id === 46)).toHaveLength(10);
+				expect(queried.slice(-2)).toEqual([3, 5]);
+				expect(yield* session.snapshot()).toMatchObject({
+					available: true,
+					mic: true,
+					luminance: 128,
+				});
+				expect((yield* session.snapshot()).firmware).toBeUndefined();
+			}),
+	);
+	it.scoped(
+		"MAIN-018 retries version at 300ms and accepts a delayed correlated reply",
+		() =>
+			Effect.gen(function* () {
+				let attempts = 0;
+				const { session } = yield* setup({
+					onCommand: (c) => {
+						if (c.cmdId !== 46) return [];
+						attempts++;
+						return attempts === 4 ? [fakeHardwareReply(46, [1, 2, 3, 4])] : [];
+					},
+				});
+				const reading = yield* session.readVersion().pipe(Effect.fork);
+				yield* TestClock.adjust(299);
+				expect(attempts).toBe(1);
+				yield* TestClock.adjust(1);
+				expect(attempts).toBe(2);
+				yield* TestClock.adjust(600);
+				expect(yield* Fiber.join(reading)).toBe("2.3.4");
+				yield* TestClock.adjust(3000);
+				expect(attempts).toBe(4);
+			}),
+	);
+	it.scoped("MAIN-018 exhausts exactly ten version attempts at 3000ms", () =>
+		Effect.gen(function* () {
+			let attempts = 0;
+			const { session } = yield* setup({
+				onCommand: (c) => {
+					if (c.cmdId === 46) attempts++;
+					return [];
+				},
+			});
+			const reading = yield* session
+				.readVersion()
+				.pipe(Effect.either, Effect.fork);
+			yield* TestClock.adjust(2699);
+			expect(attempts).toBe(9);
+			yield* TestClock.adjust(1);
+			expect(attempts).toBe(10);
+			yield* TestClock.adjust(299);
+			expect(Option.isNone(yield* Fiber.poll(reading))).toBe(true);
+			yield* TestClock.adjust(1);
+			const result = yield* Fiber.join(reading);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"QUAKE.HARDWARE.REPLY_TIMEOUT",
+			);
+			yield* TestClock.adjust(3000);
+			expect(attempts).toBe(10);
+		}),
+	);
+
+	it.scoped(
 		"generic DFU is rejected without a write or poisoning, while enterDfu still owns the transition",
 		() =>
 			Effect.gen(function* () {
@@ -66,7 +145,9 @@ describe("hardware controls over actual device connection with fake transport", 
 									),
 								],
 				});
-				const before = yield* fake.writes;
+				const before = (yield* fake.writes).filter(
+					(bytes) => bytes[4] !== 0xef,
+				);
 				const sending = yield* session
 					.send({ _tag: "Dfu" })
 					.pipe(Effect.either, Effect.fork);
@@ -75,7 +156,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				expect(Either.isLeft(result) && result.left.code).toBe(
 					"QUAKE.HARDWARE.COMMAND_REJECTED",
 				);
-				expect(yield* fake.writes).toEqual(before);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toEqual(before);
 				expect((yield* session.snapshot()).available).toBe(true);
 				expect(yield* session.readVersion()).toBe("1.0.21");
 				yield* session.enterDfu();
@@ -168,7 +251,10 @@ describe("hardware controls over actual device connection with fake transport", 
 		"times out after 3s and rejects late ack reuse without another write",
 		() =>
 			Effect.gen(function* () {
-				const { fake, session } = yield* setup({ onCommand: () => [] });
+				const { fake, session } = yield* setup({
+					onCommand: (c) =>
+						c.cmdId === 46 ? [fakeHardwareReply(46, [1, 1, 0, 21])] : [],
+				});
 				const refresh = yield* session
 					.refresh()
 					.pipe(Effect.either, Effect.fork);
@@ -177,7 +263,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				expect(Either.isLeft(result) && result.left.code).toBe(
 					"QUAKE.HARDWARE.REPLY_TIMEOUT",
 				);
-				const n = (yield* fake.writes).length;
+				const n = (yield* fake.writes).filter(
+					(bytes) => bytes[4] !== 0xef,
+				).length;
 				yield* fake.emit(fakeHardwareReply(0, [0x90]));
 				expect(
 					Either.isLeft(
@@ -186,7 +274,9 @@ describe("hardware controls over actual device connection with fake transport", 
 							.pipe(Effect.either),
 					),
 				).toBe(true);
-				expect((yield* fake.writes).length).toBe(n);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef).length,
+				).toBe(n);
 			}),
 	);
 	it.scoped(
@@ -206,7 +296,9 @@ describe("hardware controls over actual device connection with fake transport", 
 						yield* session.send({ _tag: "Mic", on: false }).pipe(Effect.either),
 					),
 				).toBe(true);
-				expect(yield* fake.writes).toHaveLength(1);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(1);
 			}),
 	);
 	it.scoped(
@@ -255,7 +347,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				const { fake, connection, session } = yield* setup();
 				yield* session.setLocked(true);
 				yield* session.setLocked(false);
-				expect(yield* fake.writes).toHaveLength(0);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(0);
 				yield* session.configure({
 					...defaultHardwarePreferences,
 					knobLedAlwaysOn: false,
@@ -302,7 +396,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				yield* session.setInputMode("host");
 				yield* keyboard.pressChord("control+a");
 				expect(yield* Ref.get(hostCalls)).toEqual(["control+a"]);
-				expect(yield* fake.writes).toHaveLength(2);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(2);
 			}),
 	);
 	it.scoped(
@@ -314,7 +410,9 @@ describe("hardware controls over actual device connection with fake transport", 
 				yield* settle;
 				expect(yield* commands(fake)).toEqual([[1, 2, 84]]);
 				yield* TestClock.adjust(99);
-				expect(yield* fake.writes).toHaveLength(1);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(1);
 				yield* TestClock.adjust(1);
 				expect(yield* commands(fake)).toEqual([
 					[1, 2, 84],
@@ -353,7 +451,9 @@ describe("hardware controls over actual device connection with fake transport", 
 					alertVolume: 100,
 				});
 				yield* TestClock.adjust(299);
-				expect(yield* fake.writes).toHaveLength(0);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(0);
 				yield* TestClock.adjust(1);
 				expect(yield* commands(fake)).toEqual([[1, 2, 100]]);
 				yield* TestClock.adjust(500);

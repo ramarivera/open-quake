@@ -76,6 +76,15 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 
 - [x] Mounted creation navigation and Home Assistant picker burn-down regressions for MGMT-118 and CENTER-100. Bead open-quake-lih.9.4 remains open for lead integration.
 
+## Agents burn-down lane, 2026-10-26
+
+- [x] A.1 Implement runtime heading controls, Sessions states/count/refresh, stale-reply guards and gated inert developer diagnostics. Sources CENTER-012/020/022/024/025/026/028/042. Bead `open-quake-lih.17.9`; `runtime-presentation.test.tsx` exercises the mounted UI, lifecycle matrix, bridge replacement and stale replies.
+- [x] A.2 Refresh mounted meeting history on every Meetings activation, including reselect. Source CENTER-009; `meetings/history-interactions.test.ts` verifies activation refresh and mounted-page preservation.
+- [x] A.3 Add roster grid/list/loading/search/selection behavior, skill drops and shared/agent/all transfers, existing-agent name/reset and model loading/reload/save feedback. Sources CENTER-049/050/052/055/065. Bead `open-quake-lih.17.10`; `administration-interactions.test.tsx` drives mounted consumers and `administration.test.ts` verifies durable skill moves and conflict rollback.
+- [x] A.4 Add service configuration, portable pack/backup export and diagnostics controls. Sources CENTER-047/048/104 and MAIN-144; owning contracts/scenarios are in agent-runtime, verified through the real controller plus mounted settings consumer.
+
+Account, cloud catalog, Agent Market, OpenClaw installer and editions remain OUT-OF-SCOPE under `audit/GAP-MAP.md:146`, decision 9. Embedded token-bearing WebChat remains excluded by the Don't-copy list.
+
 ## 9. Emoji and shortcuts burn-down
 
 - [x] 9.1 Implement direct fake-tested Qwen motion and explicit eight-locale caption suggestions, editor metadata/modes, untouched-locale composer, draft/package flow, legacy controls, reference-aware reclamation and pinned flat tiles. AI-134, AI-135, CENTER-082/083/084/087/088/091, MGMT-284, WIDGETS-106. Native mounted smoke and silent-video decode pass. Bead `open-quake-lih.17.2` stays open for merge acceptance.
@@ -89,3 +98,5 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 - [x] 9.8 Address PR94 finding 4378586520 by resolving generated mdi names through the canonical bundled artwork pipeline. Synced-profile-to-artwork regression fails before and passes after; unknown/malformed names stay inert. Bead `open-quake-lih.17.7`.
 - [x] 9.9 Address PR94 finding 4378586742 by preserving catalog validation identity at the linked rename Promise boundary. Actual profile transaction/controller regression proves duplicate and overlong names leave both stores untouched, while unexpected storage failures keep their private cause. Bead `open-quake-lih.17.7`.
 - [x] 9.10 Address new Codex finding 4378613145 by treating deleted linked profiles as independent packages. A real profile manager deletion/rename regression fails before and passes after without profile writes, recreation or refresh; library failures propagate. Bead `open-quake-lih.17.7`.
+- [x] 9.11 Reconcile the full management smoke with SCREEN-057/069 release-anywhere behavior after touch commit `f60a85ba`, merged by `ae869087` in PR88. Preserve no-copy cancellation assertions by resetting the mounted moved gesture before lift, and prove a normal moved release copies exactly once without navigating. Two consecutive full hidden mock runs pass with 82 screenshots each. Bead `open-quake-lih.17.18` stays open for lead merge; emoji rows CENTER-090 and MGMT-284.
+- [x] 9.12 Repair the required media smoke's EN/DE setup through the canonical `quakeLocale` bridge instead of the retired key-local storage preference. Preserve localized status assertions and all waits; the full hidden media smoke passes, including EN/DE player captures. Bead `open-quake-lih.17.23` stays open for lead merge, discovered during the 9.11 media gate.
