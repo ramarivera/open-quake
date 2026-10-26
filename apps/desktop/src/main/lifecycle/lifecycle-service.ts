@@ -76,6 +76,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 				let settling = false;
 				let checking = false;
 				let topologyPending = false;
+				const pendingConnections = new Set<string>();
 				let generation = 0;
 				let topologyFiber: Fiber.RuntimeFiber<void, never> | undefined;
 				let recovery: Fiber.RuntimeFiber<void, never> | undefined;
@@ -276,6 +277,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					if (locked || checking) return status();
 					checking = true;
 					const token = generation;
+					let attemptedTopology = candidateTopology();
 					const fiber = yield* Effect.gen(function* () {
 						sync();
 						if (refresh) {
@@ -314,6 +316,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						}
 						if (!edges.mock) {
 							for (const [serial, state] of sessions) {
+								pendingConnections.delete(serial);
 								if (!state.connected || locked || token !== generation)
 									continue;
 								if (current(serial) && state.stable && !refresh) continue;
@@ -322,6 +325,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 								while (true) {
 									topologyPending = false;
 									const before = candidateTopology();
+									attemptedTopology = before;
 									const result = yield* discovery.run();
 									if (
 										token !== generation ||
@@ -349,12 +353,32 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						}
 						if (refresh && !edges.mock && edges.prompts.platform === "win32")
 							yield* Effect.sleep(1500);
-					}).pipe(Effect.forkIn(scope));
+					}).pipe(
+						Effect.ensuring(
+							Effect.gen(function* () {
+								checking = false;
+								const pending =
+									pendingConnections.size > 0 ||
+									(topologyPending &&
+										attemptedTopology !== candidateTopology());
+								pendingConnections.clear();
+								topologyPending = false;
+								sync();
+								if (
+									pending &&
+									!locked &&
+									token === generation &&
+									[...sessions.entries()].some(
+										([serial, s]) => s.connected && !current(serial),
+									)
+								) {
+									yield* startPairing();
+								}
+							}),
+						),
+						Effect.forkIn(scope),
+					);
 					pairing = fiber;
-					fiber.addObserver(() => {
-						checking = false;
-						sync();
-					});
 					return yield* Fiber.join(fiber).pipe(Effect.map(() => status()));
 				});
 				const startPairing = () =>
@@ -394,8 +418,10 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 						yield* activeCount();
 						if (wasConnected || locked || edges.mock) sync();
 						if (!wasConnected && !locked) {
-							if (checking) topologyPending = true;
-							else yield* startPairing();
+							if (checking) {
+								topologyPending = true;
+								pendingConnections.add(serial);
+							} else yield* startPairing();
 						}
 					} else {
 						if (wasConnected) {

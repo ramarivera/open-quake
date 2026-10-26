@@ -361,6 +361,49 @@ describe("serial lifecycle consumer", () => {
 			),
 	);
 });
+describe("connections at pairing completion", () => {
+	it.scoped(
+		"pairs a connection arriving after the session loop without repeating unchanged failures",
+		() =>
+			withHarness(
+				(h) =>
+					Effect.gen(function* () {
+						yield* h.change([desktop, a]);
+						yield* h.service.onStatus(connected, "a");
+						yield* TestClock.adjust(1);
+						const pairing = yield* h.service.redetect().pipe(Effect.forkScoped);
+						yield* TestClock.adjust(1);
+						expect(h.service.status().checking).toBe(true);
+						yield* h.change([desktop, a, b]);
+						yield* h.service.onStatus(connected, "b");
+						yield* TestClock.adjust(1499);
+						yield* Fiber.join(pairing);
+						yield* TestClock.adjust(1);
+						expect(
+							h.service.status().orientations?.map((o) => o.serialNumber),
+						).toEqual(["a", "b"]);
+						expect(
+							h.panels.filter((p) => p.serial === "b").at(-1),
+						).toMatchObject({ id: b.id, visible: true });
+						const calls = h.power.length;
+						yield* TestClock.adjust(60000);
+						expect(h.power).toHaveLength(calls);
+					}),
+				{
+					prompts: {
+						platform: "win32",
+						mock: true,
+						displays: () => [],
+						primaryId: () => desktop.id,
+						prompt: () => Effect.succeed(1),
+						native: () => Effect.succeed("extended"),
+						openSettings: () => Effect.void,
+					},
+				},
+			),
+	);
+});
+
 describe("Windows redetect deadlines", () => {
 	for (const fails of [false, true])
 		it.scoped(
