@@ -118,11 +118,12 @@ real image decoding, the production preload and built renderer. It checks both
 serials, fill modes, matching clock notifications, the strip key grid for five
 built-in-like profiles (`main/test/strip-fixtures.ts`), light theme, reduced
 motion and narrow layout. An optional absolute directory receives screenshots,
-including `panel-<profile>.png` for each fixture:
+including `panel-<profile>.png` for each fixture. Replace the quoted placeholder
+with your own absolute output directory:
 
 ```sh
 pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/media/smoke.config.ts
-env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/media-smoke/smoke.js /Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/wallpaper-soundboard/fix2/screenshots
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/media-smoke/smoke.js "<absolute-screenshot-dir>"
 ```
 
 The smoke test creates a temporary user-data directory and removes it afterward.
