@@ -1,5 +1,6 @@
 import { Option } from "effect";
 import { memo, useCallback, useLayoutEffect, useRef } from "react";
+import { readerSettings } from "../voiceKey/reader-settings";
 import "../../css-properties";
 import { type StripLocale, stripText } from "../../overlays/voice/strings";
 import {
@@ -330,7 +331,13 @@ export function ClawBotTile({
 	const readKey = Option.getOrElse(state.activeKey, () => tile.keyCode);
 	const readAloud = (): void => {
 		if (surface !== "panel") return;
-		void request({ _tag: "ReadAloud", keyCode: readKey });
+		void request({
+			_tag: "ReadAloud",
+			keyCode: readKey,
+			...(tile.key.config.actions.some((a) => a.type === "ttsEngine")
+				? { settings: readerSettings(tile.key.config.actions) }
+				: {}),
+		});
 	};
 	useSubTouchTap(pill, readAloud);
 	const readPhase =

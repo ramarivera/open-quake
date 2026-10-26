@@ -2,6 +2,14 @@ import { Context, type Effect } from "effect";
 import type { AiError } from "../ai-errors.js";
 import type { GeneratedAudio } from "./speech-contracts.js";
 
+export type SpeechOutputTarget =
+	| { readonly kind: "assistant" }
+	| {
+			readonly kind: "device";
+			readonly serial: string;
+			readonly keyCode: string;
+	  };
+
 export class SpeechHttp extends Context.Tag("@open-quake/edge/SpeechHttp")<
 	SpeechHttp,
 	{
@@ -37,15 +45,17 @@ export class SpeechOutput extends Context.Tag("@open-quake/edge/SpeechOutput")<
 			{ readonly stop: Effect.Effect<void> },
 			AiError
 		>;
-		readonly acquire: Effect.Effect<
-			{
-				readonly ready: Effect.Effect<void, AiError>;
-				readonly contextState?: Effect.Effect<string, AiError>;
-				readonly resume?: Effect.Effect<void, AiError>;
-				readonly play: (audio: GeneratedAudio) => Effect.Effect<void, AiError>;
-				readonly stop: Effect.Effect<void>;
-			},
-			AiError
-		>;
+		readonly acquireFor?: (
+			target: SpeechOutputTarget,
+		) => Effect.Effect<SpeechPlaybackLease, AiError>;
+		readonly acquire: Effect.Effect<SpeechPlaybackLease, AiError>;
 	}
 >() {}
+
+export interface SpeechPlaybackLease {
+	readonly ready: Effect.Effect<void, AiError>;
+	readonly contextState?: Effect.Effect<string, AiError>;
+	readonly resume?: Effect.Effect<void, AiError>;
+	readonly play: (audio: GeneratedAudio) => Effect.Effect<void, AiError>;
+	readonly stop: Effect.Effect<void>;
+}

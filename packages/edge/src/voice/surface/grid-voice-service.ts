@@ -17,6 +17,7 @@ import {
 	GridVoiceRuntime,
 	type KnobCaptureSnapshot,
 	type TextRequest,
+	VoiceAdmission,
 } from "./voice-surface-ports.js";
 import { VoiceSurface } from "./voice-surface-service.js";
 
@@ -30,6 +31,36 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 	scoped: Effect.gen(function* () {
 		const surface = yield* VoiceSurface;
 		const runtime = yield* GridVoiceRuntime;
+		const admission = yield* Effect.serviceOption(VoiceAdmission);
+		const admitted = (serial: string, keyCode: string, type: string) =>
+			Effect.gen(function* () {
+				const reason = Option.isSome(admission)
+					? yield* admission.value.check(serial, type)
+					: Option.none();
+				if (Option.isSome(reason)) {
+					yield* surface.rejectBusy(serial, keyCode, reason.value);
+					return false;
+				}
+				if (yield* surface.foreignFlow(serial)) {
+					yield* surface.rejectBusy(serial, keyCode, "aiAudio.prevTurnBusy");
+					return false;
+				}
+				const gateway = yield* surface.agentStatus();
+				if (
+					type === "clawbot" &&
+					gateway._tag === "AgentStatus" &&
+					gateway.state === "connecting"
+				) {
+					yield* surface.rejectBusy(
+						serial,
+						keyCode,
+						"aiAudio.openClawGatewayStarting",
+					);
+					return false;
+				}
+				return true;
+			});
+		const knobEpochs = new Map<string, number>();
 		const scope = yield* Effect.scope;
 		const lock = yield* Effect.makeSemaphore(1);
 		const states = yield* Ref.make<ReadonlyMap<string, HoldState>>(new Map());
@@ -70,31 +101,37 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 					});
 				case "startCapture": {
 					const captureId = `${effect.keyCode}/${effect.generation}`;
-					return surface.reserve(serial, effect.keyCode, captureId).pipe(
-						Effect.zipRight(
-							runtime
-								.startCapture({
-									serial,
-									keyCode: effect.keyCode,
-									captureId,
-									generation: effect.generation,
-									type: effect.type,
-									agentId: effect.agentId,
-								})
-								.pipe(
-									Effect.catchTags({
-										VoiceRuntimeUnavailable: captureRejected(
-											serial,
-											effect.keyCode,
-											captureId,
+					return admitted(serial, effect.keyCode, effect.type).pipe(
+						Effect.flatMap((allowed) =>
+							!allowed
+								? Effect.void
+								: surface.reserve(serial, effect.keyCode, captureId).pipe(
+										Effect.zipRight(
+											runtime
+												.startCapture({
+													serial,
+													keyCode: effect.keyCode,
+													captureId,
+													generation: effect.generation,
+													type: effect.type,
+													agentId: effect.agentId,
+												})
+												.pipe(
+													Effect.catchTags({
+														VoiceRuntimeUnavailable: captureRejected(
+															serial,
+															effect.keyCode,
+															captureId,
+														),
+														VoiceKnobRejected: captureRejected(
+															serial,
+															effect.keyCode,
+															captureId,
+														),
+													}),
+												),
 										),
-										VoiceKnobRejected: captureRejected(
-											serial,
-											effect.keyCode,
-											captureId,
-										),
-									}),
-								),
+									),
 						),
 					);
 				}
@@ -170,49 +207,68 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 			serial: string,
 			event: GridVoiceInput,
 		): Effect.fn.Return<void> {
-			yield* Effect.annotateCurrentSpan({
-				keyCode: event.keyCode,
-				kind: event.kind,
-			});
-			if (event.voiceInput === false) {
-				if (event.kind === "down")
-					yield* runtime.select(
-						serial,
-						event.keyCode,
-						event.type,
-						Option.fromNullable(event.agentId),
-					);
-				return yield* surface.publish({
-					_tag: "KeyPress",
-					serial,
-					keyCode: event.keyCode,
-					action: event.kind === "down" ? "down" : "up",
-				});
-			}
-			yield* apply(serial, (now, activeFlow): HoldInput => {
-				switch (event.kind) {
-					case "down":
-						return {
-							_tag: "down",
+			yield* lock.withPermits(1)(
+				Effect.gen(function* () {
+					yield* Effect.annotateCurrentSpan({
+						keyCode: event.keyCode,
+						kind: event.kind,
+					});
+					const state =
+						(yield* Ref.get(states)).get(serial) ?? initialHoldState;
+					const cancelling =
+						event.kind === "down" &&
+						Option.isNone(state.held) &&
+						Option.exists(
+							yield* surface.activeFlow(serial),
+							(keyCode) => keyCode === event.keyCode,
+						);
+					if (
+						event.kind === "down" &&
+						!cancelling &&
+						!(yield* admitted(serial, event.keyCode, event.type))
+					)
+						return;
+					if (!cancelling && event.voiceInput === false) {
+						if (event.kind === "down")
+							yield* runtime.select(
+								serial,
+								event.keyCode,
+								event.type,
+								Option.fromNullable(event.agentId),
+							);
+						return yield* surface.publish({
+							_tag: "KeyPress",
+							serial,
 							keyCode: event.keyCode,
-							type: event.type,
-							agentId: Option.fromNullable(event.agentId),
-							now,
-							activeFlow,
-						};
-					case "touchEnd":
-						return { _tag: "touchEnd", keyCode: event.keyCode, now };
-					case "touchCancel":
-						return { _tag: "touchCancel", keyCode: event.keyCode, now };
-					case "up":
-						return {
-							_tag: "up",
-							keyCode: event.keyCode,
-							now,
-							voiceTouchEnd: event.voiceTouchEnd === true,
-						};
-				}
-			});
+							action: event.kind === "down" ? "down" : "up",
+						});
+					}
+					yield* applyUnlocked(serial, (now, activeFlow): HoldInput => {
+						switch (event.kind) {
+							case "down":
+								return {
+									_tag: "down",
+									keyCode: event.keyCode,
+									type: event.type,
+									agentId: Option.fromNullable(event.agentId),
+									now,
+									activeFlow,
+								};
+							case "touchEnd":
+								return { _tag: "touchEnd", keyCode: event.keyCode, now };
+							case "touchCancel":
+								return { _tag: "touchCancel", keyCode: event.keyCode, now };
+							case "up":
+								return {
+									_tag: "up",
+									keyCode: event.keyCode,
+									now,
+									voiceTouchEnd: event.voiceTouchEnd === true,
+								};
+						}
+					});
+				}),
+			);
 		});
 
 		/** Profile change or disconnect: disarm and cancel a running capture. */
@@ -282,6 +338,9 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 				Effect.gen(function* () {
 					switch (action) {
 						case "holdStart": {
+							if (generation <= (knobEpochs.get(serial) ?? -1)) return;
+							knobEpochs.set(serial, generation);
+							if (!(yield* admitted(serial, KNOB_VOICE_KEY, "knob"))) return;
 							const flow = yield* surface.activeFlow(serial);
 							const reserved = Option.isSome(
 								((yield* Ref.get(states)).get(serial) ?? initialHoldState).held,
@@ -327,8 +386,54 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 								KNOB_VOICE_KEY,
 								generation,
 							);
-						case "interrupt":
-							return yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
+						case "interrupt": {
+							if (generation < (knobEpochs.get(serial) ?? -1)) return;
+							const owner = yield* surface.flowOwner(serial);
+							const state =
+								(yield* Ref.get(states)).get(serial) ?? initialHoldState;
+							const tracked = yield* surface.activeFlow(serial);
+							const flow = Option.isSome(tracked)
+								? tracked
+								: yield* runtime.interruptOwner?.(serial) ??
+										Effect.succeed(Option.none<string>());
+							// Disarm the pending grid timer before cancelling its captured owner.
+							if (Option.isSome(state.held)) {
+								yield* applyUnlocked(serial, (now) => ({ _tag: "reset", now }));
+								if (state.held.value.phase === "capturing") {
+									const current = yield* surface.flowOwner(serial);
+									if (
+										Option.isSome(owner) &&
+										owner.value.captureId.startsWith("turn/") &&
+										Option.exists(
+											current,
+											(value) =>
+												value.keyCode === owner.value.keyCode &&
+												value.captureId === owner.value.captureId,
+										)
+									)
+										yield* runtime.cancelFlow(serial, owner.value.keyCode);
+									yield* surface.clearFlow(
+										serial,
+										state.held.value.keyCode,
+										Option.getOrUndefined(
+											Option.map(owner, (value) => value.captureId),
+										),
+									);
+									return;
+								}
+							}
+							if (Option.isSome(flow)) {
+								yield* runtime.cancelFlow(serial, flow.value);
+								yield* surface.clearFlow(
+									serial,
+									flow.value,
+									Option.getOrUndefined(
+										Option.map(owner, (value) => value.captureId),
+									),
+								);
+							}
+							return;
+						}
 						case "cancel":
 							return yield* runtime.cancelCapture(
 								serial,

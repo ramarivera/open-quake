@@ -12,7 +12,11 @@ import { DesktopSpeechError } from "./errors";
 export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 	function* (options: {
 		readonly speech: Pick<AiSpeechService, "createSpeech">;
-		readonly profile: TtsProfile;
+		readonly target?: import("../../../../../packages/edge/src/ai/speech/speech-ports").SpeechOutputTarget;
+		readonly phase?:
+			| ((phase: "thinking" | "speaking") => Effect.Effect<void>)
+			| undefined;
+		readonly profile: TtsProfile | undefined;
 		readonly report: (error: { readonly code: string }) => Effect.Effect<void>;
 		readonly instrument?: SpeechDiagnostics["instrument"] | undefined;
 	}) {
@@ -26,6 +30,7 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 		let worker: Fiber.RuntimeFiber<void> | undefined;
 		let timer: Fiber.RuntimeFiber<void> | undefined;
 		const segments: string[] = [];
+		const reported = new Set<string>();
 		const cancel = Effect.fn("DesktopSpeech.cancelOrdered")(function* () {
 			ended = true;
 			failed = true;
@@ -40,20 +45,29 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 			while (!failed && segments.length) {
 				const segment = segments.shift();
 				if (!segment) continue;
-				current = yield* options.speech.createSpeech(options.profile, segment);
+				current = yield* options.speech.createSpeech(
+					options.profile,
+					segment,
+					options.phase,
+					options.target,
+				);
 				const outcome = yield* instrumentSpeechOutcome(
 					current.result,
 					options.instrument,
 				);
 				queued -= segment.length;
 				current = undefined;
-				if (outcome._tag !== "completed") {
+				if (outcome._tag === "cancelled") {
 					failed = true;
 					text = "";
 					segments.length = 0;
 					queued = 0;
-					if (outcome._tag === "textOnly") yield* options.report(outcome.error);
 				}
+				if (outcome._tag === "textOnly" && !reported.has(outcome.error.code)) {
+					reported.add(outcome.error.code);
+					yield* options.report(outcome.error);
+				}
+				if (!failed) yield* options.phase?.("thinking") ?? Effect.void;
 			}
 		}).pipe(
 			Effect.ensuring(
@@ -77,7 +91,9 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 								? text.length
 								: 0;
 				if (!take) break;
-				segments.push(text.slice(0, take));
+				const segment = text.slice(0, take);
+				if (segment.trim()) segments.push(segment);
+				else queued -= segment.length;
 				text = text.slice(take);
 			}
 			if (!worker && segments.length) {
@@ -127,6 +143,7 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 			),
 			finish: Effect.fn("DesktopSpeech.finishOrdered")(function* (
 				outcome: "completed" | "cancelled" | "failed",
+				completion?: string,
 			) {
 				if (outcome !== "completed") return yield* cancel();
 				yield* gate.withPermits(1)(
@@ -138,6 +155,11 @@ export const createOrderedSpeech = Effect.fn("DesktopSpeech.ordered")(
 							timer = undefined;
 						}
 						yield* flush(true);
+						if (completion && queued + completion.length <= 4000) {
+							queued += completion.length;
+							segments.push(completion);
+							yield* flush(true);
+						}
 					}),
 				);
 			}),

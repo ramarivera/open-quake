@@ -448,3 +448,30 @@ for (const metadata of [false, true]) {
 			),
 	);
 }
+
+it.effect(
+	"AI-156 KNOB-074: resumed suspended output completes only on natural drain and its old watchdog cannot stop a successor",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const f = yield* fixture("play", true);
+				yield* Effect.gen(function* () {
+					const c = yield* controller();
+					const first = yield* c.readAloud("First", owner).pipe(Effect.fork);
+					yield* Queue.take(f.play);
+					yield* TestClock.adjust(8000);
+					expect(f.counts().resumes).toBe(1);
+					expect(Option.isNone(yield* Fiber.poll(first))).toBe(true);
+					yield* Deferred.succeed(f.drain, undefined);
+					expect(yield* Fiber.join(first)).toEqual({ _tag: "completed" });
+					yield* TestClock.adjust(30000);
+					expect(f.counts().stopped).toBe(1);
+					expect(
+						f.events
+							.filter((e) => e._tag === "ReadAloudState")
+							.map((e) => e.phase),
+					).toEqual(["thinking", "speaking", "idle"]);
+				}).pipe(Effect.provide(f.layer));
+			}),
+		),
+);

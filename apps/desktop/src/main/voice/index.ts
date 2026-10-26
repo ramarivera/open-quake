@@ -9,10 +9,12 @@ import {
 	ipcMain,
 	shell,
 } from "electron";
+import type { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts";
 import {
 	GridVoice,
 	GridVoiceRuntime,
 	MockVoiceRuntimeLive,
+	VoiceAdmission,
 	VoiceRuntimeUnavailable,
 	VoiceSurface,
 	VoiceSurfacePublisher,
@@ -35,6 +37,7 @@ import {
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { committedReader } from "./reader-authorization";
 
 /**
  * strip-voice-ui in main: the voice surface conductor, its Electron ports,
@@ -85,7 +88,9 @@ export const UnavailableRuntimeLive = Layer.succeed(GridVoiceRuntime, {
 });
 
 export interface VoiceSurfaceOptions {
+	readonly profiles?: () => Promise<ProfileEnvelope>;
 	readonly diagnostics?: DesktopDiagnostics;
+	readonly admission?: typeof VoiceAdmission.Service.check;
 	readonly knobRoute?: (
 		serial: string,
 	) => Effect.Effect<KnobCaptureSnapshot, VoiceKnobRejected>;
@@ -93,6 +98,10 @@ export interface VoiceSurfaceOptions {
 	readonly mock: boolean;
 	/** Explicit speech controller. Chat configuration alone never enables speech. */
 	readonly speech?: {
+		readonly toggleReader?: (
+			owner: { serial: string; keyCode: string },
+			settings: import("../../shared/voice-surface").ReaderSettings,
+		) => Promise<void>;
 		readonly stopReadAloud?: (owner: {
 			readonly serial: string;
 			readonly keyCode: string;
@@ -100,6 +109,7 @@ export interface VoiceSurfaceOptions {
 		readonly readAloud: (
 			text: string,
 			owner: { readonly serial: string; readonly keyCode: string },
+			settings?: import("../../shared/voice-surface").ReaderSettings,
 		) => Promise<VoiceSurfaceReply>;
 		readonly onEvent: (event: VoiceSurfaceEvent) => void;
 	};
@@ -116,11 +126,19 @@ export interface VoiceSurfaceOptions {
 }
 
 export const voiceSurfaceLayer = (
-	options: Pick<VoiceSurfaceOptions, "mock" | "tones" | "runtime">,
+	options: Pick<
+		VoiceSurfaceOptions,
+		"mock" | "tones" | "runtime" | "admission"
+	>,
 	publish: (event: VoiceSurfaceEvent) => void,
 ) => {
 	const fallback = options.mock ? MockVoiceRuntimeLive : UnavailableRuntimeLive;
 	return GridVoice.Default.pipe(
+		Layer.provide(
+			Layer.succeed(VoiceAdmission, {
+				check: options.admission ?? (() => Effect.succeed(Option.none())),
+			}),
+		),
 		Layer.provideMerge(
 			(options.runtime ? options.runtime(fallback) : fallback).pipe(
 				Layer.provideMerge(
@@ -327,6 +345,19 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 						if (!panel.isDestroyed()) panel.focus();
 						return ok;
 					}
+					case "ToggleReader": {
+						const envelope = await options.profiles?.().catch(() => undefined);
+						const settings =
+							envelope && committedReader(envelope, serial, request.keyCode);
+						if (!settings) return rejected("VOICE.SURFACE.REQUEST_INVALID");
+						if (!options.speech?.toggleReader)
+							return rejected("VOICE.TTS.UNAVAILABLE");
+						await options.speech.toggleReader(
+							{ serial, keyCode: request.keyCode },
+							settings,
+						);
+						return ok;
+					}
 					case "ReadAloud": {
 						const owner = { serial, keyCode: request.keyCode };
 						if (await options.speech?.stopReadAloud?.(owner)) return ok;
@@ -335,7 +366,9 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 						const text = answer?.text;
 						if (!options.speech || !text?.trim())
 							return rejected("VOICE.TTS.UNAVAILABLE");
-						return options.speech.readAloud(text, owner);
+						return request.settings
+							? options.speech.readAloud(text, owner, request.settings)
+							: options.speech.readAloud(text, owner);
 					}
 				}
 			};

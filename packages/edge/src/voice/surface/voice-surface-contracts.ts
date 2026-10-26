@@ -68,6 +68,8 @@ export const VoiceStage = Schema.Union(
 export type VoiceStage = typeof VoiceStage.Type;
 
 export const ToastKey = Schema.Literal(
+	"meetingAssistantPrompt.meetingActive",
+	"meetingAssistantPrompt.liveTranslateActive",
 	"aiIconViewTxt.busyToast",
 	"aiAudio.prevTurnBusy",
 	"aiAudio.openClawGatewayNotRunning",
@@ -154,7 +156,9 @@ export const VoiceSurfaceEvent = Schema.Union(
 	}),
 	Schema.TaggedStruct("Toast", {
 		serial: Serial,
-		messageKey: ToastKey,
+		messageKey: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(256)),
+		fallback: Schema.optional(Schema.String.pipe(Schema.maxLength(2000))),
+		type: Schema.optional(Schema.Literal("warning", "error")),
 		name: Schema.optional(Schema.String.pipe(Schema.maxLength(128))),
 	}),
 	Schema.TaggedStruct("AgentStatus", { state: AgentConnection }),
@@ -194,7 +198,19 @@ export const GridVoiceInput = Schema.Struct({
 export type GridVoiceInput = typeof GridVoiceInput.Type;
 
 /** Everything the strip may ask main to do (renderer → main), decoded at the IPC edge. */
+export const ReaderSettings = Schema.Struct({
+	engine: Schema.Literal("qwen", "webSpeech"),
+	rate: Schema.Number.pipe(Schema.between(0.5, 2)),
+	pitch: Schema.Number.pipe(Schema.between(0, 2)),
+	volume: Schema.Number.pipe(Schema.between(0, 1)),
+	voiceHint: Schema.String.pipe(Schema.maxLength(128)),
+});
+export type ReaderSettings = typeof ReaderSettings.Type;
 export const VoiceSurfaceRequest = Schema.Union(
+	Schema.TaggedStruct("ToggleReader", {
+		keyCode: VoiceKeyCode,
+		settings: ReaderSettings,
+	}),
 	Schema.TaggedStruct("Input", { input: GridVoiceInput }),
 	Schema.TaggedStruct("ResetContext", { keyCode: VoiceKeyCode }),
 	Schema.TaggedStruct("Reset", {
@@ -213,7 +229,10 @@ export const VoiceSurfaceRequest = Schema.Union(
 	}),
 	Schema.TaggedStruct("PickFiles", {}),
 	Schema.TaggedStruct("FocusPanel", {}),
-	Schema.TaggedStruct("ReadAloud", { keyCode: VoiceKeyCode }),
+	Schema.TaggedStruct("ReadAloud", {
+		keyCode: VoiceKeyCode,
+		settings: Schema.optional(ReaderSettings),
+	}),
 	/** A window subscribed; main answers with the current agent status. */
 	Schema.TaggedStruct("Hello", {}),
 );

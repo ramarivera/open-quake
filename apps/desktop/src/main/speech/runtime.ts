@@ -30,7 +30,11 @@ import type {
 	PinnedDirectModel,
 	TextRequest,
 } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
-import type { VoiceStage, VoiceSurfaceEvent } from "../../shared/voice-surface";
+import type {
+	ReaderSettings,
+	VoiceStage,
+	VoiceSurfaceEvent,
+} from "../../shared/voice-surface";
 import {
 	type CaptureDriver,
 	type CaptureSession,
@@ -40,6 +44,7 @@ import { type CaptureMetrics, createCaptureMetrics } from "./capture-metrics";
 import { instrumentSpeechOutcome, type SpeechDiagnostics } from "./diagnostics";
 import { DesktopSpeechError } from "./errors";
 import { createOrderedSpeech, type OrderedSpeech } from "./ordered";
+import { spokenStatus } from "./status-phrases";
 
 export interface SpeechProfiles {
 	readonly stt?: SttProfile;
@@ -51,6 +56,14 @@ export interface ProductionVoiceOptions {
 		snapshot: KnobCaptureSnapshot,
 	) => Effect.Effect<PinnedDirectModel, VoiceKnobRejected>;
 	readonly speech: AiSpeechService;
+	readonly hostTone?: (
+		serial: string,
+		tone: "start" | "end" | "error",
+	) => Effect.Effect<void>;
+	readonly localSpeech?: (
+		settings: ReaderSettings,
+		owner: { serial: string; keyCode: string },
+	) => Pick<AiSpeechService, "createSpeech">;
 	readonly capture: CaptureDriver;
 	readonly profiles: () => Effect.Effect<SpeechProfiles, AiError>;
 	readonly sendTranscript: (
@@ -74,8 +87,17 @@ export const createProductionVoiceRuntime = Effect.fn(
 	const scope = yield* Effect.scope;
 	const lock = yield* Effect.makeSemaphore(1);
 	const eventLock = yield* Effect.makeSemaphore(1);
-	const report = (error: { readonly code: string }) =>
-		options.speechError?.(error.code) ?? Effect.void;
+	const report = (error: { readonly code: string }, serial?: string) =>
+		Effect.gen(function* () {
+			yield* options.speechError?.(error.code) ?? Effect.void;
+			if (serial)
+				yield* surface.publish({
+					_tag: "Toast",
+					serial,
+					messageKey: "voiceOutput.unavailable",
+					type: "error",
+				});
+		});
 	const instrument = <A, E, R>(
 		effect: Effect.Effect<A, E, R>,
 		operation: "speech.capture" | "speech.recognize" | "speech.playback",
@@ -103,12 +125,34 @@ export const createProductionVoiceRuntime = Effect.fn(
 	let readAloudOwner: { serial: string; keyCode: string } | undefined;
 	let readAloudSequence = 0;
 	let cancelReadAloud: (() => Effect.Effect<void>) | undefined;
+	const readers = new Map<
+		string,
+		{ keyCode: string; settings: ReaderSettings; sessionId: string }
+	>();
+	const readerPhase = (
+		serial: string,
+		phase: "idle" | "thinking" | "speaking",
+	) =>
+		Effect.suspend(() => {
+			const owner = readers.get(serial);
+			return owner
+				? surface.publish({
+						_tag: "ReadAloudState",
+						serial,
+						keyCode: owner.keyCode,
+						sessionId: owner.sessionId,
+						phase,
+					})
+				: Effect.void;
+		});
 	const turns = new Map<
 		string,
 		{
 			readonly id: string;
+			readonly keyCode: string;
 			readonly speech: OrderedSpeech;
 			readonly capture: CaptureRequest | undefined;
+			readonly completionPhrase?: string | undefined;
 			seq: number;
 		}
 	>();
@@ -122,11 +166,18 @@ export const createProductionVoiceRuntime = Effect.fn(
 					stage: value,
 				})
 			: Effect.void;
-	const cancelSpeech = Effect.fn("DesktopSpeech.cancelSpeech")(function* () {
-		for (const turn of turns.values()) yield* turn.speech.cancel();
-		turns.clear();
+	const cancelSpeech = Effect.fn("DesktopSpeech.cancelSpeech")(function* (
+		serial?: string,
+	) {
+		for (const [id, turn] of turns)
+			if (!serial || id === serial) {
+				turns.delete(id);
+				yield* turn.speech.cancel();
+				yield* readerPhase(id, "thinking");
+			}
+
 		const reader = readAloud;
-		if (reader) {
+		if (reader && (!serial || readAloudOwner?.serial === serial)) {
 			if (cancelReadAloud) yield* cancelReadAloud();
 			yield* Fiber.interrupt(reader);
 			if (readAloud === reader) readAloud = undefined;
@@ -147,6 +198,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 			closed = true;
 			yield* stop();
 			yield* cancelSpeech();
+			for (const serial of readers.keys()) yield* readerPhase(serial, "idle");
+			readers.clear();
 		}),
 	);
 	const runtime = GridVoiceRuntime.of({
@@ -159,7 +212,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 						active.request.keyCode !== keyCode)
 				)
 					yield* stop();
-				yield* cancelSpeech();
+				yield* cancelSpeech(serial);
 			}),
 		startCapture: (request) =>
 			lock.withPermits(1)(
@@ -331,6 +384,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 								}),
 							metrics.stop,
 						);
+						yield* options.hostTone?.(request.serial, "start") ?? Effect.void;
 						const transcript = yield* instrument(
 							options.speech.recognize(profiles.stt, frames, (value) => {
 								owner.transcript = value.text.slice(0, 8000);
@@ -355,8 +409,9 @@ export const createProductionVoiceRuntime = Effect.fn(
 							"speech.recognize",
 						);
 						if (active !== owner) return;
+						yield* options.hostTone?.(request.serial, "end") ?? Effect.void;
 						yield* metrics.stop;
-						if (!transcript.trim()) {
+						if (!/[\p{L}\p{N}]/u.test(transcript)) {
 							terminal = "empty";
 							yield* stage(owner, {
 								_tag: "idle",
@@ -391,17 +446,23 @@ export const createProductionVoiceRuntime = Effect.fn(
 								error.originalCause instanceof DesktopSpeechError
 									? error.originalCause
 									: error;
-							return stage(owner, {
-								_tag: "failed",
-								reason:
-									failure instanceof DesktopSpeechError &&
-									(failure.code === "VOICE.CAPTURE.NO_DEVICE" ||
-										failure.code === "VOICE.CAPTURE.PERMISSION_DENIED" ||
-										failure.code === "VOICE.CAPTURE.RECORDER_UNAVAILABLE")
-										? "noMic"
-										: "server",
-								errorCode: failure.code,
-							});
+							return (
+								options.hostTone?.(request.serial, "error") ?? Effect.void
+							).pipe(
+								Effect.zipRight(
+									stage(owner, {
+										_tag: "failed",
+										reason:
+											failure instanceof DesktopSpeechError &&
+											(failure.code === "VOICE.CAPTURE.NO_DEVICE" ||
+												failure.code === "VOICE.CAPTURE.PERMISSION_DENIED" ||
+												failure.code === "VOICE.CAPTURE.RECORDER_UNAVAILABLE")
+												? "noMic"
+												: "server",
+										errorCode: failure.code,
+									}),
+								),
+							);
 						}),
 						Effect.onInterrupt(() =>
 							Effect.sync(() => {
@@ -477,10 +538,19 @@ export const createProductionVoiceRuntime = Effect.fn(
 					if (pinned?.keyCode === keyCode && pinned.generation === generation) {
 						knobProfiles.delete(serial);
 						yield* options.cancelText?.(serial, keyCode) ?? Effect.void;
-						yield* cancelSpeech();
+						yield* cancelSpeech(serial);
 					}
 				}),
 			),
+		interruptOwner: (serial) =>
+			Effect.sync(() => {
+				if (readAloud && readAloudOwner?.serial === serial)
+					return Option.some(readAloudOwner.keyCode);
+				const turn = turns.get(serial);
+				return turn?.speech.isBusy()
+					? Option.some(turn.keyCode)
+					: Option.none();
+			}),
 		cancelFlow: (serial, keyCode) =>
 			lock.withPermits(1)(
 				Effect.gen(function* () {
@@ -491,7 +561,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 						yield* stop();
 					if (knobProfiles.get(serial)?.keyCode === keyCode)
 						knobProfiles.delete(serial);
-					yield* cancelSpeech();
+					yield* cancelSpeech(serial);
 					yield* options.cancelText?.(serial, keyCode) ?? Effect.void;
 				}),
 			),
@@ -499,6 +569,30 @@ export const createProductionVoiceRuntime = Effect.fn(
 	});
 	return {
 		runtime,
+		toggleReader: Effect.fn("DesktopSpeech.toggleReader")(
+			(owner: { serial: string; keyCode: string }, settings: ReaderSettings) =>
+				lock.withPermits(1)(
+					Effect.gen(function* () {
+						const previous = readers.get(owner.serial);
+						const turn = turns.get(owner.serial);
+						if (previous) {
+							if (turn) {
+								yield* turn.speech.cancel();
+								turns.delete(owner.serial);
+							}
+							yield* readerPhase(owner.serial, "idle");
+							readers.delete(owner.serial);
+							if (previous.keyCode === owner.keyCode) return;
+						}
+						readers.set(owner.serial, {
+							keyCode: owner.keyCode,
+							settings,
+							sessionId: `reader/${++readAloudSequence}`,
+						});
+						yield* readerPhase(owner.serial, "thinking");
+					}),
+				),
+		),
 		cancelSpeech,
 		reconcileProfiles: Effect.fn("DesktopSpeech.reconcileProfiles")(
 			(ids: readonly string[]) =>
@@ -531,7 +625,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 							readAloudOwner.keyCode !== owner.keyCode
 						)
 							return false;
-						yield* cancelSpeech();
+						yield* cancelSpeech(owner.serial);
 						return true;
 					}),
 				),
@@ -539,10 +633,13 @@ export const createProductionVoiceRuntime = Effect.fn(
 		reset: Effect.fn("DesktopSpeech.reset")(function* () {
 			yield* lock.withPermits(1)(stop());
 			yield* cancelSpeech();
+			for (const serial of readers.keys()) yield* readerPhase(serial, "idle");
+			readers.clear();
 		}),
 		readAloud: Effect.fn("DesktopSpeech.readAloud")(function* (
 			text: string,
 			owner?: { readonly serial: string; readonly keyCode: string },
+			settings?: ReaderSettings,
 		): Effect.fn.Return<SpeechOutcome> {
 			const replacement = yield* lock.withPermits(1)(
 				Effect.gen(function* () {
@@ -580,7 +677,10 @@ export const createProductionVoiceRuntime = Effect.fn(
 								}),
 								Effect.either,
 							);
-							if (profile._tag === "Left" || !profile.right.tts)
+							if (
+								(profile._tag === "Left" || !profile.right.tts) &&
+								settings?.engine !== "webSpeech"
+							)
 								return {
 									_tag: "textOnly",
 									error:
@@ -588,15 +688,31 @@ export const createProductionVoiceRuntime = Effect.fn(
 											? profile.left
 											: new AiUnavailable(),
 								};
-							const turn = yield* options.speech.createSpeech(
-								profile.right.tts,
+							const engine =
+								settings?.engine === "webSpeech" && owner
+									? options.localSpeech?.(settings, owner)
+									: options.speech;
+							if (!engine)
+								return {
+									_tag: "textOnly",
+									error: new AiUnavailable(),
+								} as const;
+							const turn = yield* engine.createSpeech(
+								profile._tag === "Right" ? profile.right.tts : undefined,
 								text,
 								phase,
+								owner ? { kind: "device", ...owner } : { kind: "assistant" },
 							);
 							cancelReadAloud = turn.cancel;
 							return yield* instrumentSpeechOutcome(
 								turn.result,
 								options.diagnostics?.instrument,
+							).pipe(
+								Effect.tap((outcome) =>
+									outcome._tag === "textOnly"
+										? report(outcome.error, owner?.serial)
+										: Effect.void,
+								),
 							);
 						},
 					).pipe(
@@ -633,7 +749,9 @@ export const createProductionVoiceRuntime = Effect.fn(
 					Effect.gen(function* () {
 						if (closed) return;
 						if (event._tag === "Reset") {
-							yield* cancelSpeech();
+							yield* cancelSpeech(event.serial);
+							yield* readerPhase(event.serial, "idle");
+							readers.delete(event.serial);
 							return;
 						}
 						if (event._tag === "TurnStarted") {
@@ -645,17 +763,59 @@ export const createProductionVoiceRuntime = Effect.fn(
 							const old = turns.get(event.serial);
 							if (old) yield* old.speech.cancel();
 							turns.delete(event.serial);
-							const profiles = yield* options.profiles().pipe(Effect.either);
+							const reader = readers.get(event.serial);
+							const profiles = yield* options.profiles().pipe(
+								Effect.timeoutFail({
+									duration: "10 seconds",
+									onTimeout: () => new AiUnavailable(),
+								}),
+								Effect.either,
+							);
 							if (
-								profiles._tag === "Left" ||
-								!profiles.right.speakAnswers ||
-								!profiles.right.tts
-							)
+								(!reader &&
+									(profiles._tag === "Left" ||
+										!profiles.right.speakAnswers ||
+										!profiles.right.tts)) ||
+								(reader?.settings.engine !== "webSpeech" &&
+									(profiles._tag === "Left" || !profiles.right.tts))
+							) {
+								if (reader) {
+									yield* report(new AiUnavailable(), event.serial);
+									yield* readerPhase(event.serial, "idle");
+									readers.delete(event.serial);
+								}
 								return;
+							}
+							if (reader && readers.get(event.serial) !== reader) return;
+							const engine =
+								reader?.settings.engine === "webSpeech"
+									? options.localSpeech?.(reader.settings, {
+											serial: event.serial,
+											keyCode: reader.keyCode,
+										})
+									: options.speech;
+							if (!engine) {
+								yield* report(new AiUnavailable(), event.serial);
+								yield* readerPhase(event.serial, "idle");
+								readers.delete(event.serial);
+								return;
+							}
 							const speech = yield* createOrderedSpeech({
-								speech: options.speech,
-								profile: profiles.right.tts,
-								report,
+								speech: engine,
+								profile:
+									profiles._tag === "Right" ? profiles.right.tts : undefined,
+								target: {
+									kind: "device",
+									serial: event.serial,
+									keyCode: reader?.keyCode ?? event.keyCode,
+								},
+								phase: reader
+									? (phase) =>
+											readers.get(event.serial) === reader
+												? readerPhase(event.serial, phase)
+												: Effect.void
+									: undefined,
+								report: (error) => report(error, event.serial),
 								instrument: options.diagnostics?.instrument,
 							}).pipe(Effect.provideService(Scope.Scope, scope));
 							if (turns.size >= 16) {
@@ -667,8 +827,16 @@ export const createProductionVoiceRuntime = Effect.fn(
 							}
 							turns.set(event.serial, {
 								id: event.turnId,
+								keyCode: event.keyCode,
 								speech,
 								capture,
+								completionPhrase:
+									profiles._tag === "Right" && profiles.right.speakAnswers
+										? spokenStatus(
+												profiles.right.tts?.language ?? "en",
+												"finishedOutput",
+											)
+										: undefined,
 								seq: -1,
 							});
 							return;
@@ -684,12 +852,14 @@ export const createProductionVoiceRuntime = Effect.fn(
 						turn.seq = event.chunk.seq;
 						if (event.chunk.type === "answer")
 							yield* turn.speech.push(event.chunk.textDelta);
-						else if (event.chunk.type === "end")
+						else if (event.chunk.type === "end") {
 							yield* turn.speech.finish(
 								event.chunk.outcome === "timedOut"
 									? "failed"
 									: event.chunk.outcome,
+								turn.completionPhrase,
 							);
+						}
 					}),
 				),
 		),

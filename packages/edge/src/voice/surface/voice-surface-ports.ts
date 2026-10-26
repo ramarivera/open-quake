@@ -3,6 +3,7 @@ import type { AssistantSettings } from "../../../../device/src/profiles/assistan
 import type { ProviderProfile } from "../../ai/ai-contracts.js";
 import type { HoldKeyType } from "./hold-to-talk.js";
 import type {
+	ToastKey,
 	VoiceSurfaceEvent,
 	VoiceTone,
 } from "./voice-surface-contracts.js";
@@ -95,6 +96,10 @@ export class GridVoiceRuntime extends Context.Tag("GridVoiceRuntime")<
 			keyCode: string,
 			generation: number,
 		) => Effect.Effect<void>;
+		/** Audio may still drain after chat's terminal removed its visible flow. */
+		readonly interruptOwner?: (
+			serial: string,
+		) => Effect.Effect<Option.Option<string>>;
 		readonly cancelFlow: (
 			serial: string,
 			keyCode: string,
@@ -102,5 +107,16 @@ export class GridVoiceRuntime extends Context.Tag("GridVoiceRuntime")<
 		readonly sendText: (
 			request: TextRequest,
 		) => Effect.Effect<void, VoiceRuntimeUnavailable>;
+	}
+>() {}
+
+/** Process-wide capture admission, evaluated before selection/reservation and again at acquisition. */
+export class VoiceAdmission extends Context.Tag("VoiceAdmission")<
+	VoiceAdmission,
+	{
+		readonly check: (
+			serial: string,
+			type: string,
+		) => Effect.Effect<Option.Option<ToastKey>>;
 	}
 >() {}

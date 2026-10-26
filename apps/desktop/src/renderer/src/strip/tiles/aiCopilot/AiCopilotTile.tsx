@@ -35,15 +35,24 @@ function usePushToTalkHint(text: string, active: boolean): number {
 function CopilotPresence({
 	tone,
 	size,
+	energy,
+	phase,
+	motion,
 }: {
 	tone: string;
 	size: number;
+	energy: number;
+	phase: string;
+	motion: "full" | "reduce";
 }): React.JSX.Element {
 	return (
 		<div
 			className="copilot-presence"
 			data-tone={tone}
-			style={{ width: size, height: size }}
+			data-phase={phase}
+			data-motion={motion}
+			data-energy={energy}
+			style={{ width: size, height: size, "--copilot-energy": energy }}
 			aria-hidden="true"
 		>
 			<svg viewBox="0 0 24 24" aria-hidden="true">
@@ -167,6 +176,17 @@ export function AiCopilotTile({
 				>
 					<CopilotPresence
 						tone={tone}
+						energy={
+							view.bar.visible ? Math.max(0, Math.min(1, view.bar.rms)) : 0
+						}
+						phase={
+							view.bar.visible
+								? "listening"
+								: tone === "active"
+									? "processing"
+									: "idle"
+						}
+						motion={motion}
 						size={Math.min(layout.orbWidth, layout.left - layout.gap * 2)}
 					/>
 				</div>
