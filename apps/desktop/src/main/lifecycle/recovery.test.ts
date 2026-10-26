@@ -205,6 +205,50 @@ describe("serial lifecycle consumer", () => {
 				},
 			),
 	);
+	it.scoped(
+		"keeps another serial pairing when an already paired device disconnects",
+		() =>
+			withHarness(
+				(h) =>
+					Effect.gen(function* () {
+						yield* h.change([desktop, a]);
+						yield* h.service.onStatus(connected, "a");
+						yield* TestClock.adjust(1);
+						const unconfirmed = { ...b, label: "Unidentified strip" };
+						yield* h.change([desktop, a, unconfirmed]);
+						yield* h.service.onStatus(connected, "b");
+						yield* TestClock.adjust(1);
+						expect(h.service.status().checking).toBe(true);
+						yield* h.service.onStatus(
+							{
+								...connected,
+								state: "disconnected",
+								reason: "transport-ended",
+							},
+							"a",
+						);
+						expect(h.service.status().checking).toBe(true);
+						yield* h.change([desktop]);
+						yield* TestClock.adjust(1);
+						yield* h.change([desktop, unconfirmed]);
+						yield* TestClock.adjust(1);
+						expect(
+							h.service.status().orientations?.map((o) => o.serialNumber),
+						).toEqual(["b"]);
+						expect(
+							h.panels.filter((p) => p.serial === "b").at(-1),
+						).toMatchObject({ id: b.id, visible: true });
+					}),
+				{
+					busFor: () => ({
+						on: () => () => {},
+						currentStatus: () => undefined,
+						setScreenPower: () => Effect.succeed(true),
+					}),
+				},
+			),
+	);
+
 	for (const swapped of [
 		{ ...a, label: "Another strip" },
 		{ ...a, bounds: { ...a.bounds, x: a.bounds.x + 100 } },

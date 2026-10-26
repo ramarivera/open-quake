@@ -428,7 +428,8 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 							state.generation++;
 							state.grace = true;
 							state.closing = true;
-							if (pairing) yield* Fiber.interrupt(pairing);
+							if (pairing && discovering === serial)
+								yield* Fiber.interrupt(pairing);
 							state.loss = yield* Effect.gen(function* () {
 								yield* Effect.sleep(3000);
 								state.grace = false;
