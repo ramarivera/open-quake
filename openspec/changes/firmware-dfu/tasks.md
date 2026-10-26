@@ -36,3 +36,8 @@ Tracked by open-quake-18d.8. Each finding gets a regression, commit, push and re
 - [x] 5.6 Prune superseded update artifacts, review 4379259888.
 - [x] 5.7 Persist bounded intermediate copy progress, review 4379260103.
 - [ ] 5.8 Reconcile unanswered Codex/Copilot threads and run full gates plus synthetic native firmware smoke.
+
+- [x] 5.9 Scope version readback precedence to hardware sessions, Codex 4379316091.
+- [ ] 5.10 Serialize terminal expiry and close against other state transitions, Codex 4379316105.
+- [ ] 5.11 Interpolate expected firmware versions in guidance and toasts, Copilot 4379353834.
+- [ ] 5.12 Render one app-update failure alert, Copilot 4379353930.

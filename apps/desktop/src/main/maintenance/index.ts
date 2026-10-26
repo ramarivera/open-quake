@@ -153,7 +153,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 				: yield* current
 						.readVersion()
 						.pipe(Effect.mapError((cause) => new FirmwareUnavailable(cause)));
-			versions.readback(serial, reported);
+			versions.readback(serial, reported, snapshot.session);
 			return reported;
 		});
 	const confirm = async (message: string, detail = ""): Promise<boolean> => {
@@ -424,7 +424,12 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 								: "";
 					return {
 						firmware: yield* firmware.snapshot(),
-						...versions.observe(serial, reported, image),
+						...versions.observe(
+							serial,
+							reported,
+							image,
+							snapshot?.session ?? "",
+						),
 						imageVersion: image?.version ?? "",
 						imageTrusted: image?.trusted ?? false,
 						permissions: checks ? permissionRows(checks) : [],
@@ -587,12 +592,9 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 									);
 									break;
 								}
-								case "firmware-close": {
-									const refreshed = yield* firmware.close();
-									if (refreshed.version)
-										versions.readback(refreshed.serial, refreshed.version);
+								case "firmware-close":
+									yield* firmware.close();
 									break;
-								}
 								case "firmware-cancel":
 									yield* firmware.cancel();
 									break;

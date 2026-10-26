@@ -58,3 +58,16 @@ it("lets a newer observed version supersede readback while retaining offline and
 	v.readback("a", "1.0.18");
 	expect(v.observe("a", "", image).currentVersion).toBe("1.0.18");
 });
+
+it("invalidates readback precedence for a reconnected hardware session even after a downgrade", () => {
+	const v = firmwareVersions();
+	v.readback("a", "1.0.21", "session-1");
+	expect(v.observe("a", "1.0.19", image, "session-1").currentVersion).toBe(
+		"1.0.21",
+	);
+	v.observe("", "", image);
+	expect(v.observe("a", "1.0.19", image, "session-2")).toMatchObject({
+		currentVersion: "1.0.19",
+		firmwareAvailability: "newer_bundled",
+	});
+});
