@@ -265,7 +265,17 @@ it("MGMT-384: mounted disk sub-touch scrolls within bounds and cancellation/unmo
 			list,
 			new CustomEvent(
 				phase === "end" ? "quake-sub-touch-end" : "quake-sub-touch-start",
-				{ detail: { phase, x: 100, y, isEffective } },
+				{
+					detail: {
+						phase,
+						x: 100,
+						y,
+						startX: 100,
+						startY: 200,
+						isEffective,
+						cancelled: !isEffective,
+					},
+				},
 			),
 		);
 	};

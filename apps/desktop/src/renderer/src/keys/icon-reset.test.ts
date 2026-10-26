@@ -144,6 +144,8 @@ it.each(["brightness", "plugin"])(
 			...original,
 			config: {
 				...original.config,
+				// Imported custom keys can be explicitly unlocked independently of the shipped catalog.
+				basicEditableItems: Option.none(),
 				icon: "data:image/png;base64,AA==",
 				alterIcon: Option.some("data:image/png;base64,AQ=="),
 				compatibility: Option.some({

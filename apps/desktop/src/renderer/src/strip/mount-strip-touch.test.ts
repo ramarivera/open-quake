@@ -13,7 +13,10 @@ beforeEach(() => {
 	vi.stubGlobal("ResizeObserver", TestResizeObserver);
 	TestResizeObserver.instances = [];
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
 
 it("SCREEN-061: real DOM adapter refreshes element/parent/gadget bounds, discovers children and disposes non-bubbling routing", async () => {
 	const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
@@ -119,6 +122,8 @@ it("SCREEN-061: real DOM adapter refreshes element/parent/gadget bounds, discove
 		child.addEventListener("quake-sub-touch-end", childEnd);
 		parent.append(child);
 		await new Promise((resolve) => setTimeout(resolve, 0));
+		// Local discovery is throttled to 500 ms in the current production registry.
+		vi.spyOn(performance, "now").mockReturnValue(performance.now() + 501);
 		tap(830);
 		expect(childEnd).toHaveBeenCalledOnce();
 	} finally {
