@@ -267,3 +267,9 @@ A held hotkey containing a media command SHALL dispatch once on activation and S
 
 - **WHEN** a media hotkey is pressed and then released, canceled or reset
 - **THEN** the media adapter receives exactly one command on press and no command from cleanup
+
+#### Scenario: Additive playback selection survives sampling
+
+- **WHEN** a key has two additive sessions and its newest session is paused while the older session keeps playing
+- **THEN** position sampling preserves session selection order, the card stays paused and Toggle resumes the newest session
+- **AND** the older session receives no pause or resume, covering PR103 comment 4379737951 and bead open-quake-lih.7.5

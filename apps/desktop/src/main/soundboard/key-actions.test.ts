@@ -382,3 +382,42 @@ it.scoped(
 			expect(f.tracks[1]?.closed).toBe(0);
 		}),
 );
+
+it.scoped(
+	"position sampling preserves the newest additive playback selection while paused",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* rig();
+			const keys = soundboardKeyActions(f.service);
+			yield* keys.execute(key(1), activation);
+			yield* keys.execute(key(1), activation);
+			const before = yield* keys.snapshot();
+			const latest = before.at(-1);
+			if (!latest) throw new Error("missing session");
+			const original = key(1);
+			const toggle = {
+				...original,
+				config: {
+					...original.config,
+					actions: [
+						...original.config.actions,
+						{ type: "playerIntent", value: "toggle" },
+					],
+				},
+			};
+			yield* keys.execute(toggle, activation);
+			for (let i = 0; i < 2; i++) {
+				expect((yield* keys.read(original, activation)).state).toBe("paused");
+				expect((yield* keys.snapshot()).map((s) => s.playbackId)).toEqual(
+					before.map((s) => s.playbackId),
+				);
+			}
+			yield* keys.execute(toggle, activation);
+			expect(
+				(yield* keys.snapshot()).find((s) => s.playbackId === latest.playbackId)
+					?.state,
+			).toBe("playing");
+			expect(f.tracks[0]?.plays).toBe(1);
+			expect(f.tracks[1]?.plays).toBe(2);
+		}),
+);
