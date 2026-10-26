@@ -30,7 +30,10 @@ import {
 	meetingError,
 } from "../../../../../packages/edge/src/meetings/meeting-errors";
 import { exportArtifact } from "../../../../../packages/edge/src/meetings/meeting-invariants";
-import { MeetingCapture } from "../../../../../packages/edge/src/meetings/meeting-ports";
+import {
+	MeetingCapture,
+	MeetingProgress,
+} from "../../../../../packages/edge/src/meetings/meeting-ports";
 import { MeetingProvider } from "../../../../../packages/edge/src/meetings/meeting-provider";
 import { MeetingRepository } from "../../../../../packages/edge/src/meetings/meeting-repository";
 import {
@@ -46,6 +49,7 @@ import {
 	MEETING_REQUEST,
 	MEETING_SNAPSHOT,
 } from "../../shared/meeting-bridge";
+import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
@@ -98,6 +102,8 @@ export function prepareMeetings(
 		renderer?: string;
 		ffmpeg?: string;
 		adapter?: MeetingAdapter;
+		serial?: () => string;
+		publishVoice?: (event: VoiceSurfaceEvent) => Promise<void>;
 	},
 	quitOwner = false,
 ) {
@@ -212,6 +218,22 @@ export function prepareMeetings(
 					MeetingRepository.Default(meetingStorage(root)),
 					providers,
 					captureLayer,
+					Layer.succeed(MeetingProgress, {
+						publish: (event) =>
+							Effect.promise(async () => {
+								await options.publishVoice?.({
+									_tag: "MeetingStage",
+									serial:
+										event.origin?.serial ??
+										options.serial?.() ??
+										"desktop-preview",
+									keyCode: event.origin?.keyCode ?? "0,0",
+									meetingId: event.meetingId,
+									stage: event.stage,
+									status: event.status,
+								});
+							}),
+					}),
 				),
 			),
 			Layer.tap((context) =>
@@ -300,7 +322,10 @@ export function prepareMeetings(
 							break;
 						case "action": {
 							const before = yield* MeetingService.snapshot();
-							const next = yield* MeetingService.action(command.action);
+							const next = yield* MeetingService.action(command.action, {
+								serial: options.serial?.() ?? "desktop-preview",
+								keyCode: command.keyCode ?? "0,0",
+							});
 							for (const record of next.records)
 								if (
 									record.state === "recorded" &&

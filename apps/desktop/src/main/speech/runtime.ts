@@ -1,4 +1,4 @@
-import { Effect, Fiber, Option, Scope } from "effect";
+import { Cause, Clock, Effect, Exit, Fiber, Option, Scope } from "effect";
 import {
 	type AiError,
 	AiUnavailable,
@@ -16,6 +16,12 @@ import {
 	VoiceRuntimeUnavailable,
 	VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface";
+import {
+	initialVoiceActivity,
+	meterLevel,
+	shouldEmitLevel,
+	stepVoiceActivity,
+} from "../../../../../packages/edge/src/voice/surface/voice-surface-invariants";
 import type {
 	CaptureRequest,
 	TextRequest,
@@ -73,10 +79,13 @@ export const createProductionVoiceRuntime = Effect.fn(
 		released: boolean;
 		terminal: boolean;
 		listening: boolean;
+		transcript?: string;
 	};
 	let active: Active | undefined;
 	let closed = false;
 	let readAloud: Fiber.RuntimeFiber<SpeechOutcome> | undefined;
+	let readAloudOwner: { serial: string; keyCode: string } | undefined;
+	let readAloudSequence = 0;
 	let cancelReadAloud: (() => Effect.Effect<void>) | undefined;
 	const turns = new Map<
 		string,
@@ -95,10 +104,11 @@ export const createProductionVoiceRuntime = Effect.fn(
 	const cancelSpeech = Effect.fn("DesktopSpeech.cancelSpeech")(function* () {
 		for (const turn of turns.values()) yield* turn.speech.cancel();
 		turns.clear();
-		if (readAloud) {
+		const reader = readAloud;
+		if (reader) {
 			if (cancelReadAloud) yield* cancelReadAloud();
-			yield* Fiber.await(readAloud);
-			readAloud = undefined;
+			yield* Fiber.interrupt(reader);
+			if (readAloud === reader) readAloud = undefined;
 		}
 	});
 	const stop = Effect.fn("DesktopSpeech.stopCapture")(function* () {
@@ -157,6 +167,8 @@ export const createProductionVoiceRuntime = Effect.fn(
 								"permission",
 							);
 						if (owner.released || active !== owner) return;
+						let activity = initialVoiceActivity;
+						let lastLevel = Option.none<number>();
 						const frames = captureFrames(
 							options.capture,
 							request.captureId,
@@ -174,20 +186,37 @@ export const createProductionVoiceRuntime = Effect.fn(
 									});
 								}),
 							(frame) =>
-								active === owner && !owner.released
-									? surface.publish({
-											_tag: "Level",
-											serial: request.serial,
-											keyCode: request.keyCode,
-											captureId: request.captureId,
-											rms: frame.rms,
-											speaking: frame.rms > 0.02,
-										})
-									: Effect.void,
+								Effect.gen(function* () {
+									if (active !== owner || owner.released) return;
+									const next = stepVoiceActivity(activity, frame.peak);
+									if (next.detected !== activity.detected) {
+										yield* stage(owner, {
+											_tag: "recording",
+											status: next.detected ? "speaking" : "listening",
+											transcript: owner.transcript,
+										});
+									}
+									activity = next;
+									const level = meterLevel({
+										analyserRms: frame.rms,
+										peak: frame.peak,
+									});
+									const now = yield* Clock.currentTimeMillis;
+									if (!shouldEmitLevel(lastLevel, now, level.speaking)) return;
+									lastLevel = Option.some(now);
+									yield* surface.publish({
+										_tag: "Level",
+										serial: request.serial,
+										keyCode: request.keyCode,
+										captureId: request.captureId,
+										...level,
+									});
+								}),
 						);
 						const transcript = yield* instrument(
-							options.speech.recognize(profiles.stt, frames, (value) =>
-								value.final
+							options.speech.recognize(profiles.stt, frames, (value) => {
+								owner.transcript = value.text.slice(0, 8000);
+								return value.final
 									? Effect.void
 									: stage(
 											owner,
@@ -198,11 +227,13 @@ export const createProductionVoiceRuntime = Effect.fn(
 													}
 												: {
 														_tag: "recording",
-														status: "listening",
+														status: activity.detected
+															? "speaking"
+															: "listening",
 														transcript: value.text.slice(0, 8000),
 													},
-										),
-							),
+										);
+							}),
 							"speech.recognize",
 						);
 						if (active !== owner) return;
@@ -315,49 +346,111 @@ export const createProductionVoiceRuntime = Effect.fn(
 	return {
 		runtime,
 		cancelSpeech,
+		stopReadAloud: Effect.fn("DesktopSpeech.stopReadAloud")(
+			(owner: { readonly serial: string; readonly keyCode: string }) =>
+				lock.withPermits(1)(
+					Effect.gen(function* () {
+						if (
+							!readAloud ||
+							readAloudOwner?.serial !== owner.serial ||
+							readAloudOwner.keyCode !== owner.keyCode
+						)
+							return false;
+						yield* cancelSpeech();
+						return true;
+					}),
+				),
+		),
 		reset: Effect.fn("DesktopSpeech.reset")(function* () {
 			yield* lock.withPermits(1)(stop());
 			yield* cancelSpeech();
 		}),
 		readAloud: Effect.fn("DesktopSpeech.readAloud")(function* (
 			text: string,
+			owner?: { readonly serial: string; readonly keyCode: string },
 		): Effect.fn.Return<SpeechOutcome> {
 			const replacement = yield* lock.withPermits(1)(
 				Effect.gen(function* () {
+					const toggling =
+						owner &&
+						readAloud &&
+						readAloudOwner?.serial === owner.serial &&
+						readAloudOwner.keyCode === owner.keyCode;
 					yield* cancelSpeech();
-					const profile = yield* options.profiles().pipe(Effect.either);
-					if (profile._tag === "Left" || !profile.right.tts)
-						return {
-							_tag: "textOnly" as const,
-							error:
-								profile._tag === "Left" ? profile.left : new AiUnavailable(),
-						};
-					if (closed || active) return { _tag: "cancelled" as const };
-					const turn = yield* options.speech.createSpeech(
-						profile.right.tts,
-						text,
+					if (toggling) return { _tag: "completed" } as const;
+					if (closed || active) return { _tag: "cancelled" } as const;
+					const sessionId = `read-aloud/${++readAloudSequence}`;
+					const start = yield* Effect.makeLatch();
+					let fiber: Fiber.RuntimeFiber<SpeechOutcome>;
+					let lastPhase = "";
+					const phase = (phase: "idle" | "thinking" | "speaking") =>
+						Effect.suspend(() => {
+							if (!owner || readAloud !== fiber || lastPhase === phase)
+								return Effect.void;
+							lastPhase = phase;
+							return surface.publish({
+								_tag: "ReadAloudState",
+								...owner,
+								sessionId,
+								phase,
+							});
+						});
+					const body = Effect.gen(
+						function* (): Effect.fn.Return<SpeechOutcome> {
+							yield* phase("thinking");
+							const profile = yield* options.profiles().pipe(
+								Effect.timeoutFail({
+									duration: "10 seconds",
+									onTimeout: () => new AiUnavailable(),
+								}),
+								Effect.either,
+							);
+							if (profile._tag === "Left" || !profile.right.tts)
+								return {
+									_tag: "textOnly",
+									error:
+										profile._tag === "Left"
+											? profile.left
+											: new AiUnavailable(),
+								};
+							const turn = yield* options.speech.createSpeech(
+								profile.right.tts,
+								text,
+								phase,
+							);
+							cancelReadAloud = turn.cancel;
+							return yield* instrumentSpeechOutcome(
+								turn.result,
+								options.diagnostics?.instrument,
+							);
+						},
+					).pipe(
+						Effect.ensuring(
+							Effect.gen(function* () {
+								yield* phase("idle");
+								if (readAloud === fiber) {
+									readAloud = undefined;
+									readAloudOwner = undefined;
+									cancelReadAloud = undefined;
+								}
+							}),
+						),
 					);
-					const fiber = yield* instrumentSpeechOutcome(
-						turn.result,
-						options.diagnostics?.instrument,
-					).pipe(Effect.forkIn(scope));
+					fiber = yield* start.await.pipe(
+						Effect.zipRight(body),
+						Effect.forkIn(scope),
+					);
 					readAloud = fiber;
-					cancelReadAloud = turn.cancel;
-					return { _tag: "turn" as const, fiber };
+					readAloudOwner = owner;
+					yield* start.open;
+					return { _tag: "turn", fiber } as const;
 				}),
 			);
 			if (replacement._tag !== "turn") return replacement;
-			const fiber = replacement.fiber;
-			return yield* Fiber.join(fiber).pipe(
-				Effect.ensuring(
-					Effect.sync(() => {
-						if (readAloud === fiber) {
-							readAloud = undefined;
-							cancelReadAloud = undefined;
-						}
-					}),
-				),
-			);
+			const result = yield* Fiber.await(replacement.fiber);
+			if (Exit.isSuccess(result)) return result.value;
+			if (Cause.isInterruptedOnly(result.cause)) return { _tag: "cancelled" };
+			return yield* Effect.failCause(result.cause);
 		}),
 		observe: Effect.fn("DesktopSpeech.observe")(
 			(event: VoiceSurfaceEvent): Effect.Effect<void> =>

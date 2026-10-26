@@ -23,3 +23,23 @@ export interface CapturePort {
 export class MeetingCapture extends Context.Tag(
 	"@open-quake/edge/MeetingCapture",
 )<MeetingCapture, CapturePort>() {}
+
+export interface MeetingOrigin {
+	readonly serial: string;
+	readonly keyCode: string;
+}
+export interface MeetingProgressEvent {
+	readonly meetingId: MeetingId;
+	readonly stage: number;
+	readonly status: number;
+	readonly origin?: MeetingOrigin | undefined;
+}
+/** Strip feedback is optional for headless meeting consumers. */
+export class MeetingProgress extends Context.Tag(
+	"@open-quake/edge/MeetingProgress",
+)<
+	MeetingProgress,
+	{
+		readonly publish: (event: MeetingProgressEvent) => Effect.Effect<void>;
+	}
+>() {}

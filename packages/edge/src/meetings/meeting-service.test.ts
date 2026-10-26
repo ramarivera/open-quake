@@ -28,7 +28,12 @@ import {
 import { MeetingStore } from "./meeting-contracts.js";
 import { defaultMeetingConfig } from "./meeting-defaults.js";
 import { meetingError } from "./meeting-errors.js";
-import { type CapturePort, MeetingCapture } from "./meeting-ports.js";
+import {
+	type CapturePort,
+	MeetingCapture,
+	MeetingProgress,
+	type MeetingProgressEvent,
+} from "./meeting-ports.js";
 import { MeetingProvider } from "./meeting-provider.js";
 import {
 	MeetingRepository,
@@ -53,6 +58,7 @@ const selected = {
 	credentialRef: CredentialRef.make("00000000-0000-4000-8000-000000000002"),
 } satisfies typeof MOCK_PROFILE;
 function setup(recoveredDuration = 2500) {
+	const progress: MeetingProgressEvent[] = [];
 	const calls: string[] = [],
 		requests: MeetingAsrRequest[] = [],
 		prompts: Parameters<CompatibleAdapter["open"]>[0][] = [];
@@ -207,11 +213,18 @@ function setup(recoveredDuration = 2500) {
 				provider,
 				MeetingRepository.Default(storage),
 				Layer.succeed(MeetingCapture, capture),
+				Layer.succeed(MeetingProgress, {
+					publish: (event) =>
+						Effect.sync(() => {
+							progress.push(event);
+						}),
+				}),
 			),
 		),
 	);
 	return {
 		layer,
+		progress,
 		storage,
 		capture,
 		adapter,
@@ -1006,3 +1019,174 @@ describe("meeting conductor consumers", () => {
 		},
 	);
 });
+
+it.effect(
+	"AI-267 publishes every real pipeline stage with the originating strip serial/key and UUID",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			yield* configure;
+			const started = yield* MeetingService.action("meetingMinutes", {
+				serial: "QK",
+				keyCode: "1,7",
+			});
+			const record = started.records[0];
+			if (!record) return yield* Effect.die("missing meeting");
+			yield* TestClock.adjust(5000);
+			yield* MeetingService.action("meetingMinutes");
+			yield* MeetingService.process(record.id);
+			expect(f.progress.map((e) => [e.stage, e.status])).toEqual([
+				[0, 1],
+				[0, 2],
+				[1, 1],
+				[1, 2],
+				[2, 1],
+				[2, 2],
+				[3, 1],
+				[3, 2],
+				[4, 1],
+				[4, 2],
+				[5, 1],
+				[5, 2],
+			]);
+			expect(
+				f.progress.every(
+					(e) =>
+						e.meetingId === record.id &&
+						e.origin?.serial === "QK" &&
+						e.origin.keyCode === "1,7",
+				),
+			).toBe(true);
+			expect((yield* MeetingService.snapshot()).records[0]?.state).toBe(
+				"completed",
+			);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"AI-267 cancels the current stage and ignores late provider progress and summary completion",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			yield* configure;
+			const entered = yield* Deferred.make<void>();
+			const release = yield* Deferred.make<void>();
+			f.pauseSubmit(
+				Deferred.succeed(entered, undefined).pipe(
+					Effect.zipRight(Deferred.await(release)),
+				),
+			);
+			const started = yield* MeetingService.action("meetingMinutes", {
+				serial: "QK",
+				keyCode: "1,7",
+			});
+			const record = started.records[0];
+			if (!record) return yield* Effect.die("missing meeting");
+			yield* TestClock.adjust(5000);
+			yield* MeetingService.action("meetingMinutes");
+			const work = yield* MeetingService.process(record.id).pipe(Effect.fork);
+			yield* Deferred.await(entered);
+			yield* MeetingService.cancel(record.id);
+			expect(f.progress.at(-1)).toMatchObject({
+				meetingId: record.id,
+				stage: 2,
+				status: 0,
+			});
+			const count = f.progress.length;
+			yield* Deferred.succeed(release, undefined);
+			yield* Fiber.await(work);
+			expect(f.progress).toHaveLength(count);
+			expect((yield* MeetingService.snapshot()).records[0]?.state).toBe(
+				"cancelled",
+			);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"AI-267 reports a failed summary and can retry its stage, while shutdown cancels active recording",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			yield* configure;
+			const started = yield* MeetingService.action("meetingMinutes", {
+				serial: "QK",
+				keyCode: "1,7",
+			});
+			const record = started.records[0];
+			if (!record) return yield* Effect.die("missing meeting");
+			yield* TestClock.adjust(5000);
+			yield* MeetingService.action("meetingMinutes");
+			f.failSummary(true);
+			yield* MeetingService.process(record.id).pipe(Effect.either);
+			expect(f.progress.at(-1)).toMatchObject({ stage: 5, status: 0 });
+			f.failSummary(false);
+			yield* MeetingService.regenerate(record.id, "project-weekly");
+			expect(f.progress.at(-1)?.origin).toEqual({
+				serial: "QK",
+				keyCode: "1,7",
+			});
+			expect(f.progress.slice(-2).map((e) => [e.stage, e.status])).toEqual([
+				[5, 1],
+				[5, 2],
+			]);
+			yield* TestClock.adjust(5000);
+			yield* MeetingService.action("meetingMinutes");
+			yield* MeetingService.shutdown();
+			expect(f.progress.at(-1)).toMatchObject({ stage: 0, status: 0 });
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"meeting snapshots retain current and terminal stages for late strip mounts",
+	() => {
+		const f = setup();
+		return Effect.gen(function* () {
+			yield* configure;
+			const started = yield* MeetingService.action("meetingMinutes", {
+				serial: "QK",
+				keyCode: "1,7",
+			});
+			const record = started.records[0];
+			if (!record) return yield* Effect.die("missing meeting");
+			expect(started.progress?.[record.id]).toEqual({ stage: 0, status: 1 });
+			yield* TestClock.adjust(5000);
+			yield* MeetingService.action("meetingMinutes");
+			expect((yield* MeetingService.snapshot()).progress?.[record.id]).toEqual({
+				stage: 1,
+				status: 2,
+			});
+			const entered = yield* Deferred.make<void>();
+			const release = yield* Deferred.make<void>();
+			f.pauseSubmit(
+				Deferred.succeed(entered, undefined).pipe(
+					Effect.zipRight(Deferred.await(release)),
+				),
+			);
+			const work = yield* MeetingService.process(record.id).pipe(Effect.fork);
+			yield* Deferred.await(entered);
+			expect((yield* MeetingService.snapshot()).progress?.[record.id]).toEqual({
+				stage: 2,
+				status: 1,
+			});
+			yield* Deferred.succeed(release, undefined);
+			yield* Fiber.join(work);
+			expect((yield* MeetingService.snapshot()).progress?.[record.id]).toEqual({
+				stage: 5,
+				status: 2,
+			});
+			yield* TestClock.adjust(5000);
+			const next = (yield* MeetingService.action(
+				"meetingMinutes",
+			)).records.find((r) => r.state === "recording");
+			if (!next) return yield* Effect.die("missing next meeting");
+			yield* MeetingService.cancel(next.id);
+			expect((yield* MeetingService.snapshot()).progress?.[next.id]).toEqual({
+				stage: 0,
+				status: 0,
+			});
+		}).pipe(Effect.provide(f.layer));
+	},
+);

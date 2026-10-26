@@ -5,7 +5,13 @@ import { audioWorkerSource } from "./audio-worker";
 interface WorkerApi {
 	capture(id: string): Promise<void>;
 	pull(): {
-		frames: { captureId: string; seq: number; bytes: number[]; rms: number }[];
+		frames: {
+			captureId: string;
+			seq: number;
+			bytes: number[];
+			rms: number;
+			peak: number;
+		}[];
 		done: boolean;
 		failed: false | "overflow" | "recorder";
 	};
@@ -111,6 +117,7 @@ describe("actual serialized WebAudio worker with synthetic devices", () => {
 			captureId: "one",
 			seq: 0,
 			rms: 0.25,
+			peak: 0.25,
 		});
 		expect(first.frames[0]?.bytes).toHaveLength(960);
 		expect(first.done).toBe(false);

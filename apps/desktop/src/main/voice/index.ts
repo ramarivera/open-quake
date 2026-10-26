@@ -88,7 +88,14 @@ export interface VoiceSurfaceOptions {
 	readonly mock: boolean;
 	/** Explicit speech controller. Chat configuration alone never enables speech. */
 	readonly speech?: {
-		readonly readAloud: (text: string) => Promise<VoiceSurfaceReply>;
+		readonly stopReadAloud?: (owner: {
+			readonly serial: string;
+			readonly keyCode: string;
+		}) => Promise<boolean>;
+		readonly readAloud: (
+			text: string,
+			owner: { readonly serial: string; readonly keyCode: string },
+		) => Promise<VoiceSurfaceReply>;
 		readonly onEvent: (event: VoiceSurfaceEvent) => void;
 	};
 	readonly tones: VoiceToneSink;
@@ -294,12 +301,14 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 						return ok;
 					}
 					case "ReadAloud": {
+						const owner = { serial, keyCode: request.keyCode };
+						if (await options.speech?.stopReadAloud?.(owner)) return ok;
 						const answer = answers.get(answerKey(serial, request.keyCode));
 						if (answer?.overflow) return rejected("VOICE.TTS.QUEUE_FULL");
 						const text = answer?.text;
 						if (!options.speech || !text?.trim())
 							return rejected("VOICE.TTS.UNAVAILABLE");
-						return options.speech.readAloud(text);
+						return options.speech.readAloud(text, owner);
 					}
 				}
 			};
