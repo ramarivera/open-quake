@@ -310,7 +310,7 @@ The recovered grid pitches, edge gaps, inward spans and system-info overflow SHA
 
 ### Requirement: One explicit overlay stack
 
-The strip SHALL isolate one layer stack. Wallpaper SHALL be layer 0, grid 10, shared SVG controls 30, and voice HTML 40. Inside SVG controls, picker 50000, wheel 100000 and notices 100001 SHALL order within that parent only. The near-opaque voice backdrop and STT row SHALL cover picker and wheel. Inside voice HTML, backdrop 1, transcript sheet 3, mic meter 4 and toasts 30 SHALL preserve visibility. The accepted opaque wheel sheet replaces the vendor vignette. Covers SCREEN-003.
+The strip SHALL isolate one layer stack. Wallpaper SHALL be layer 0, grid 10, shared SVG controls 30, and voice HTML 40. Inside SVG controls, picker 50000, wheel 100000 and notices 100001 SHALL order within that parent only. The near-opaque voice backdrop and STT row SHALL cover picker and wheel. Inside voice HTML, backdrop 1, the combined transcript/mic sheet 3 and toasts 4 SHALL preserve visibility. Key-local alert decorations SHALL remain layer 30 inside their tile. The accepted opaque wheel sheet replaces the vendor vignette. Covers SCREEN-003.
 
 #### Scenario: Combined overlay visibility
 

@@ -56,6 +56,28 @@ Not verified: rendering on the real QUAKE strip, its colours, and frame timing.
 
 ## Strip burn-down 2026-10-26
 
-- [ ] Shared logical viewport, runtime placeholders, accepted theme/span rendering, overlay ordering and complete repaint. Bead open-quake-lih.10.10.
-- [ ] Live empty borders and bounded management feedback, exclusions and clock hover. Bead open-quake-lih.10.11.
+- [x] Shared logical viewport, runtime placeholders, accepted theme/span rendering, overlay ordering and complete repaint. Bead open-quake-lih.10.10.
+- [x] Live empty borders and bounded management feedback, exclusions and clock hover. Bead open-quake-lih.10.11.
 - [ ] Complete WIDGETS-001 specialized dispatch and provider coverage. Bead open-quake-lih.10.12.
+
+### Strip burn-down evidence
+
+Verified on 2026-10-26 after merging main 31c400cc, including monitor panels #100
+and locale #105. Root test command used `--env-mode=loose -- --maxWorkers=2`:
+protocol 63, device 515, edge 877 and desktop 2627 passed, with four existing
+skips. Biome checked 1401 files with zero errors, 14 warnings and one info.
+Typecheck passed all six tasks; build, bundle smoke and strict OpenSpec
+validation passed, with 47 spec items. The production hidden Electron smoke
+passed using mock devices, muted windows and the canonical locale bridge.
+The focused native render exercised 346 assertions and 96 theme/span/host
+renders, real picker/wheel/voice composition, portrait fitting and reduced motion.
+Evidence and English/German captures live under the strip lane scratch root,
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/strip/`.
+
+WIDGETS-001 remains partial. Main's individual monitor renderers are retained and
+covered by mounted decoded-bridge tests. Camera/printer sessions, AudioBot and
+reversible game mode still need their software providers and decoded bridges;
+local audio remains truthfully unavailable. This is not a hardware-only gap.
+No real QUAKE, camera, microphone or audio playback was used. Physical display
+colour, USB delivery, touch and frame timing remain unverified. All three lane
+beads remain open for lead integration.
