@@ -338,3 +338,49 @@ it("CENTER-104 exports the authored workspace backup through the mounted setting
 	expect(request).toHaveBeenCalledWith({ type: "export-workspace-backup" });
 	expect(element<HTMLTextAreaElement>("textarea[readonly]").value).toBe(backup);
 });
+
+it("CENTER-052 keeps a roster target visible beside a mounted skill drag source", async () => {
+	const request = vi.fn<AgentRequest>(async () => ({
+		_tag: "success",
+		view,
+		draft: "",
+	}));
+	await mount(
+		<AgentsPage
+			initialTab="agents"
+			bridge={{
+				request,
+				onSnapshot: () => () => {},
+				onProgress: () => () => {},
+			}}
+		/>,
+	);
+	await click(button("Skill management"));
+	const source = element<HTMLElement>(".aw-skill-list li[draggable]");
+	const target = element<HTMLElement>(
+		"#agents-agents .aw-rows li:nth-child(2)",
+	);
+	expect(source.closest("[hidden]")).toBeNull();
+	expect(target.closest("[hidden]")).toBeNull();
+	const dataTransfer = new DataTransfer();
+	const drag = async (node: HTMLElement, type: string) => {
+		const event = new Event(type, { bubbles: true, cancelable: true });
+		Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+		await act(async () => node.dispatchEvent(event));
+		return event;
+	};
+	request.mockClear();
+	await drag(source, "dragstart");
+	expect(dataTransfer.getData(SKILL_DRAG_TYPE)).toBe(
+		JSON.stringify({ owner: "", folder: "search" }),
+	);
+	expect((await drag(target, "dragover")).defaultPrevented).toBe(true);
+	await drag(target, "drop");
+	expect(request).toHaveBeenCalledExactlyOnceWith({
+		type: "move-skill",
+		owner: "",
+		folder: "search",
+		target: "writer",
+		revision: view.revision,
+	});
+});

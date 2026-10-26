@@ -136,7 +136,7 @@ The Agents heading SHALL contain the runtime indicator, with Start, Stop and Res
 - **THEN** the deprecated card is absent and no legacy model request is dispatched
 
 ### Requirement: Local loadout administration
-The roster SHALL offer grid/list modes and four loading placeholders, with accessible direct skill transfer controls equivalent to skill drops. Skills SHALL have shared, selected-agent and all scope filters; moves between agents and shared storage SHALL use the existing atomic revision-checked transaction. Existing agent display names SHALL save independently of Markdown and reset SHALL require confirmation before replacing files with authored templates. Protected main SHALL reject rename/reset. AI Config SHALL show local loading/reload and save-result feedback, with retry after errors. Sources: CENTER-049, CENTER-050, CENTER-052, CENTER-055, CENTER-065.
+The roster SHALL stay visible alongside the Skills panel so a user can drag a mounted skill to an agent without switching tabs. The roster SHALL offer grid/list modes and four loading placeholders, with accessible direct skill transfer controls equivalent to skill drops. Skills SHALL have shared, selected-agent and all scope filters; moves between agents and shared storage SHALL use the existing atomic revision-checked transaction. Existing agent display names SHALL save independently of Markdown and reset SHALL require confirmation before replacing files with authored templates. Protected main SHALL reject rename/reset. AI Config SHALL show local loading/reload and save-result feedback, with retry after errors. Sources: CENTER-049, CENTER-050, CENTER-052, CENTER-055, CENTER-065.
 
 #### Scenario: Transfer conflict
 - **WHEN** a skill is transferred from agent A to B and B already owns its folder
@@ -152,3 +152,9 @@ Management Center SHALL refresh meeting history on every Meetings activation, in
 #### Scenario: Reselect Meetings after history changes
 - **WHEN** Meetings is activated again while already mounted
 - **THEN** the real meeting bridge reads current history and renders the latest revision without replacing the page
+
+
+#### Scenario: Drag a skill to a reachable roster target
+- **WHEN** the user opens Skill management and drags a skill from its mounted list
+- **THEN** the roster remains visible alongside the source and permits a drop on a non-main agent
+- **AND** the move uses the existing revision-checked transaction with its distinct validation failures

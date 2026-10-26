@@ -94,7 +94,7 @@ function Roster({
 					{t.skillManagementTab}
 				</button>
 			</div>
-			<div hidden={tab !== "loadout"} className="aw-split">
+			<div className="aw-split">
 				<section className="aw-list" aria-label={t.agentsList}>
 					<div className="aw-list-tools">
 						<label className="mc-field aw-search">
@@ -230,7 +230,11 @@ function Roster({
 						</div>
 					)}
 				</section>
-				<section className="aw-detail" aria-label={t.equippedSkills}>
+				<section
+					hidden={tab !== "loadout"}
+					className="aw-detail"
+					aria-label={t.equippedSkills}
+				>
 					{active ? (
 						<>
 							<header className="aw-detail-head">
@@ -280,9 +284,9 @@ function Roster({
 						<p className="cw-muted">{t.selectAgentHint}</p>
 					)}
 				</section>
-			</div>
-			<div hidden={tab !== "skills"}>
-				<SkillsPanel view={view} request={request} busy={busy} />
+				<div hidden={tab !== "skills"}>
+					<SkillsPanel view={view} request={request} busy={busy} />
+				</div>
 			</div>
 			{wizard && (
 				<AgentWizard
