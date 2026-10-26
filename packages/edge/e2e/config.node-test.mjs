@@ -2,25 +2,76 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
-import { settings } from "./config.mjs";
+import { settings, validateSnapshot } from "./config.mjs";
 
 const input = {
-	OPEN_QUAKE_E2E_BASE_URL: "https://example.invalid/custom/v1",
-	OPEN_QUAKE_E2E_MODEL: "chosen-model",
 	OPEN_QUAKE_E2E_SCRATCH: "/external/scratch",
 };
-test("requires explicit generic provider settings and an external scratch root", () => {
+const args = [
+	"--user-data",
+	"/saved/app",
+	"--model-row",
+	"selected-row",
+	"--scope",
+	"default",
+	"--authorize-model",
+	"chosen-model",
+];
+const snapshot = {
+	baseURL: "https://example.invalid/custom/v1",
+	model: "chosen-model",
+	apiKey: "fixture-key",
+};
+test("requires explicit saved production selection and an external scratch root", () => {
 	assert.throws(() => settings({}));
-	assert.throws(() => settings({ ...input, OPEN_QUAKE_E2E_SCRATCH: "" }));
-	const result = settings({
-		...input,
-		OPEN_QUAKE_E2E_API_KEY: "test-provider-key",
-	});
-	assert.equal(result.baseURL, input.OPEN_QUAKE_E2E_BASE_URL);
-	assert.equal(result.apiKey, "test-provider-key");
-	assert.equal(result.model, "chosen-model");
-	assert.notEqual(result.token, settings(input).token);
-	assert.notEqual(result.project, settings(input).project);
+	assert.throws(() => settings(input));
+	assert.throws(() => settings({ ...input, OPEN_QUAKE_E2E_SCRATCH: "" }, args));
+	assert.throws(() => settings(input, args.slice(0, 4)));
+	assert.throws(() =>
+		settings(
+			input,
+			args.filter((value) => !["--scope", "default"].includes(value)),
+		),
+	);
+	const result = settings(input, args);
+	assert.equal(result.rowId, "selected-row");
+	assert.equal(result.authorizedModel, "chosen-model");
+	assert.equal(result.userData, "/saved/app");
+	assert.equal(result.scope, "default");
+	assert.equal("apiKey" in result, false);
+	assert.equal("baseURL" in result, false);
+	assert.notEqual(result.token, settings(input, args).token);
+	assert.notEqual(result.project, settings(input, args).project);
+});
+test("rejects every legacy provider environment override without exposing values", () => {
+	for (const key of [
+		"OPEN_QUAKE_E2E_BASE_URL",
+		"OPEN_QUAKE_E2E_API_KEY",
+		"OPEN_QUAKE_E2E_MODEL",
+	]) {
+		assert.throws(
+			() => settings({ ...input, [key]: "" }, args),
+			/Generic provider/,
+		);
+		assert.throws(
+			() => settings({ ...input, [key]: "private-value" }, args),
+			(error) =>
+				error.message.includes("Generic provider") &&
+				!error.message.includes("private-value"),
+		);
+	}
+});
+test("native snapshot must retain the authorized model and a resolved credential", () => {
+	assert.doesNotThrow(() => validateSnapshot(snapshot, "chosen-model"));
+	for (const change of [
+		{ model: "different" },
+		{ apiKey: "" },
+		{ apiKey: null },
+		{ baseURL: null },
+	])
+		assert.throws(() =>
+			validateSnapshot({ ...snapshot, ...change }, "chosen-model"),
+		);
 });
 test("rejects inline credentials and non-HTTP provider locations", () => {
 	for (const url of [
@@ -29,7 +80,9 @@ test("rejects inline credentials and non-HTTP provider locations", () => {
 		"https://example.invalid/v1?key=secret",
 		"https://example.invalid/v1#secret",
 	])
-		assert.throws(() => settings({ ...input, OPEN_QUAKE_E2E_BASE_URL: url }));
+		assert.throws(() =>
+			validateSnapshot({ ...snapshot, baseURL: url }, "chosen-model"),
+		);
 });
 
 test("rejects host loopback providers before starting unreachable container requests", () => {
@@ -44,18 +97,17 @@ test("rejects host loopback providers before starting unreachable container requ
 	])
 		assert.throws(
 			() =>
-				settings({
-					...input,
-					OPEN_QUAKE_E2E_BASE_URL: `http://${host}:8000/v1`,
-				}),
+				validateSnapshot(
+					{ ...snapshot, baseURL: `http://${host}:8000/v1` },
+					"chosen-model",
+				),
 			/reachable from containers/,
 		);
-	assert.equal(
-		settings({
-			...input,
-			OPEN_QUAKE_E2E_BASE_URL: "http://host.docker.internal:8000/v1",
-		}).baseURL,
-		"http://host.docker.internal:8000/v1",
+	assert.doesNotThrow(() =>
+		validateSnapshot(
+			{ ...snapshot, baseURL: "http://host.docker.internal:8000/v1" },
+			"chosen-model",
+		),
 	);
 });
 
@@ -73,8 +125,12 @@ test("OpenClaw bootstrap requires denied tools before writing config or starting
 				{
 					assert,
 					process: {
-						env: { ...input, OPEN_QUAKE_E2E_API_KEY: "fixture-key" },
+						env: input,
 						on: () => {},
+					},
+					readFileSync: (path) => {
+						assert.equal(path, "/run/secrets/production_provider");
+						return JSON.stringify(snapshot);
 					},
 					writeFileSync: (_path, json) => {
 						saved = JSON.parse(json);
@@ -93,10 +149,7 @@ test("OpenClaw bootstrap requires denied tools before writing config or starting
 			run();
 			assert.equal(started, true);
 			assert.equal(saved.models.providers.e2e.apiKey, "fixture-key");
-			assert.equal(
-				saved.models.providers.e2e.baseUrl,
-				input.OPEN_QUAKE_E2E_BASE_URL,
-			);
+			assert.equal(saved.models.providers.e2e.baseUrl, snapshot.baseURL);
 		}
 	}
 });

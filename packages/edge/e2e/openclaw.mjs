@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
-const model = process.env.OPEN_QUAKE_E2E_MODEL;
+const profile = JSON.parse(
+	readFileSync("/run/secrets/production_provider", "utf8"),
+);
+const model = profile.model;
 const config = {
 	gateway: {
 		mode: "local",
@@ -27,8 +30,8 @@ const config = {
 		mode: "replace",
 		providers: {
 			e2e: {
-				baseUrl: process.env.OPEN_QUAKE_E2E_BASE_URL,
-				apiKey: process.env.OPEN_QUAKE_E2E_API_KEY || "no-key-required",
+				baseUrl: profile.baseURL,
+				apiKey: profile.apiKey,
 				api: "openai-completions",
 				authHeader: true,
 				models: [

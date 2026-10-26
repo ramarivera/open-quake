@@ -7,10 +7,8 @@ services:
       HOME: /state
       OPENCLAW_STATE_DIR: /state
       OPENCLAW_CONFIG_PATH: /state/openclaw.json
-      OPEN_QUAKE_E2E_BASE_URL: ${OPEN_QUAKE_E2E_BASE_URL:?set an OpenAI-compatible base URL}
-      OPEN_QUAKE_E2E_API_KEY: ${OPEN_QUAKE_E2E_API_KEY:-}
-      OPEN_QUAKE_E2E_MODEL: ${OPEN_QUAKE_E2E_MODEL:?set a model}
       OPEN_QUAKE_E2E_RUNTIME_TOKEN: ${OPEN_QUAKE_E2E_RUNTIME_TOKEN:?runner-owned token}
+    secrets: [production_provider]
     ports: ["127.0.0.1::18789"]
     volumes: ["./openclaw.mjs:/fixture/openclaw.mjs:ro"]
     tmpfs: ["/state:uid=1000,gid=1000,mode=0700", "/tmp:uid=1000,gid=1000"]
@@ -38,9 +36,7 @@ services:
       API_SERVER_PORT: "8642"
       API_SERVER_MODEL_NAME: e2e-default
       API_SERVER_KEY: ${OPEN_QUAKE_E2E_RUNTIME_TOKEN}
-      OPEN_QUAKE_E2E_BASE_URL: ${OPEN_QUAKE_E2E_BASE_URL}
-      OPEN_QUAKE_E2E_API_KEY: ${OPEN_QUAKE_E2E_API_KEY:-}
-      OPEN_QUAKE_E2E_MODEL: ${OPEN_QUAKE_E2E_MODEL}
+    secrets: [production_provider]
     ports: ["127.0.0.1::8642"]
     volumes: ["./hermes.py:/fixture/hermes.py:ro"]
     tmpfs: ["/state:uid=1000,gid=1000,mode=0700", "/tmp:uid=1000,gid=1000"]
@@ -50,3 +46,6 @@ services:
     mem_limit: 2g
     cpus: 2
     stop_grace_period: 10s
+secrets:
+  production_provider:
+    file: ${OPEN_QUAKE_E2E_PROFILE_FILE:?runner-owned saved production profile snapshot}

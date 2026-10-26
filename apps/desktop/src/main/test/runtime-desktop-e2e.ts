@@ -23,6 +23,16 @@ app.setPath("sessionData", directory);
 // This background acceptance doesn't need to activate a foreground window.
 if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 app.disableHardwareAcceleration();
+// Keep every production window invisible and unable to take foreground input,
+// including the settings owner's normal first-run show call.
+app.on("browser-window-created", (_event, window) => {
+	window.setOpacity(0);
+	window.setFocusable(false);
+	window.setIgnoreMouseEvents(true);
+	window.show = () => {};
+	window.showInactive = () => {};
+	window.focus = () => {};
+});
 // Verify recovery through the actual renderer/preload/main path in fresh userData.
 await writeFile(join(directory, "speech-v1.json"), "{invalid synthetic", {
 	mode: 0o600,
@@ -87,6 +97,8 @@ async function run() {
 		if (!win) await delay(50);
 	}
 	assert(win, "Production management window required");
+	win.setMinimumSize(390, 560);
+	win.setContentSize(1180, 625);
 	await wait(
 		win,
 		"typeof window.quakeAgentConnections?.request==='function' && document.querySelector('.nav')",
@@ -223,10 +235,33 @@ async function run() {
 			"document.querySelector('section[aria-label=Conversation]').scrollIntoView({block:'start'}); true",
 		);
 		await delay(100);
-		await writeFile(
-			join(directory, `${kind}-conversation.png`),
-			(await win.webContents.capturePage()).toPNG(),
-		);
+		for (const width of [1180, 390]) {
+			win.setContentSize(width, 625);
+			await delay(200);
+			const size = win.getContentSize();
+			assert.equal(size[0], width);
+			assert.equal(
+				await evaluate(
+					win,
+					`(() => {
+				const field = document.querySelector('.agent-http textarea');
+				const bounds = field?.getBoundingClientRect();
+				return Boolean(bounds && bounds.top >= 0 && bounds.bottom <= innerHeight &&
+				 document.documentElement.scrollWidth <= innerWidth);
+			})()`,
+				),
+				true,
+				"Reachable composer and no horizontal overflow required",
+			);
+			const capture = await win.webContents.capturePage();
+			assert.deepEqual(capture.getSize(), { width: size[0], height: size[1] });
+			await writeFile(
+				join(directory, `${kind}-conversation-${width}.png`),
+				capture.toPNG(),
+			);
+		}
+		win.setContentSize(1180, 625);
+		await delay(100);
 		await evaluate(win, "window.__oqE2eOff(); true");
 		step = `${kind} clear local history`;
 		await button(win, "Clear local history");

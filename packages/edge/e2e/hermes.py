@@ -5,8 +5,11 @@ from pathlib import Path
 import runpy
 
 state = Path(os.environ["HERMES_HOME"])
-os.environ["OPEN_QUAKE_E2E_API_KEY"] = os.environ.get("OPEN_QUAKE_E2E_API_KEY") or "no-key-required"
-model = os.environ["OPEN_QUAKE_E2E_MODEL"]
+profile = json.loads(Path("/run/secrets/production_provider").read_text())
+# Hermes' production custom-provider adapter resolves key_env. This variable
+# is process-local, sourced only from the native owner's private snapshot.
+os.environ["OPEN_QUAKE_SAVED_PROFILE_KEY"] = profile["apiKey"]
+model = profile["model"]
 config = {
     "agent": {"max_turns": 1},
     "compression": {"enabled": False},
@@ -19,9 +22,9 @@ config = {
     "model": {"default": model, "provider": "e2e"},
     "platform_toolsets": {"api_server": []},
     "providers": {"e2e": {
-        "base_url": os.environ["OPEN_QUAKE_E2E_BASE_URL"],
+        "base_url": profile["baseURL"],
         "default_model": model,
-        "key_env": "OPEN_QUAKE_E2E_API_KEY",
+        "key_env": "OPEN_QUAKE_SAVED_PROFILE_KEY",
         "api_mode": "chat_completions",
         "request_timeout_seconds": 75,
     }},

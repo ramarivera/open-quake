@@ -36,3 +36,21 @@ Ramiro authorized real Docker Compose runtime tests and merging reviewed PRs on 
 ## Production desktop acceptance extension
 
 The opt-in desktop entry imports the production composition root after setting an isolated scratch userData directory. It drives the real renderer controls and preload bridges, captures synthetic-conversation screenshots, and uses the same environment-configured disposable runtimes as adapter acceptance. Mock device access is mandatory; no application configuration or physical device is shared with the user's running instance. A bounded process deadline and production quit sequence own cleanup. This establishes the desktop path independently from adapter-only fixtures.
+
+## Production profile selection, 2026-10-26
+
+The active finish goal supersedes the historical generic provider environment
+input above. The runner requires an explicit saved model row, scope, source app
+data directory and authorized model. A windowless Electron reader uses the
+production agent storage, model-to-profile conversion and native credential owner.
+It reads one snapshot without changing the source state. A missing row, mismatched
+model or unavailable native credential fails before runtime startup or inference.
+No caller-supplied provider URL, key or model environment fallback remains.
+
+Only the selected profile and resolved credential enter a short-lived snapshot
+inside the runner's private scratch directory. The two disposable containers
+mount that single file read-only, never the source app data or credential vault.
+The snapshot is removed even when resource cleanup fails; the retained recovery
+file contains no credentials. Container state stays in tmpfs. The explicit live
+model for this effort remains gpt-6.1-sol. Synthetic offline tests and actual
+desktop-to-container acceptance remain separate evidence requirements.
