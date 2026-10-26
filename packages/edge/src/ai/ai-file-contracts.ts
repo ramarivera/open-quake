@@ -1,12 +1,20 @@
 import { Schema } from "effect";
 import { ProfileId } from "./ai-contracts.js";
 
+export const FILE_CONTENT_MAX_BYTES = 2097152;
+const FileContent = Schema.String.pipe(
+	Schema.maxLength(1048576),
+	Schema.filter(
+		(value) =>
+			new TextEncoder().encode(value).byteLength <= FILE_CONTENT_MAX_BYTES,
+	),
+);
 const FileId = Schema.String.pipe(Schema.pattern(/^[a-zA-Z0-9_-]{1,256}$/));
 const Correlation = { requestId: Schema.UUID };
 export const FileOperation = Schema.Union(
 	Schema.TaggedStruct("upload", {
 		name: Schema.String.pipe(Schema.pattern(/^[a-zA-Z0-9_. -]{1,128}$/)),
-		content: Schema.String.pipe(Schema.maxLength(1048576)),
+		content: FileContent,
 	}),
 	Schema.TaggedStruct("list", {}),
 	Schema.TaggedStruct("retrieve", { fileId: FileId }),
@@ -40,7 +48,7 @@ export const FileResult = Schema.Struct({
 			files: Schema.Array(FileMetadata).pipe(Schema.maxItems(1000)),
 		}),
 		Schema.TaggedStruct("content", {
-			content: Schema.String.pipe(Schema.maxLength(1048576)),
+			content: FileContent,
 		}),
 		Schema.TaggedStruct("deleted", {
 			fileId: FileId,

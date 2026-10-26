@@ -189,3 +189,9 @@ Opt-in file operations SHALL use only the profile pinned by the requesting windo
 - **WHEN** a second RPC connection supplies a known session and file ID, or tries to acquire the first window's session by submitting a turn
 - **THEN** it fails before provider I/O
 - **AND** the owning window can use its pinned row, while another row and closed conversation fail
+
+#### Scenario: UTF-8 upload and download bounds agree
+- **WHEN** an upload's text exceeds 2097152 UTF-8 bytes or 1048576 characters
+- **THEN** it fails before credentials or provider I/O
+- **WHEN** multibyte text fits both limits, including the exact byte boundary
+- **THEN** an upload and content retrieval round trip preserves it

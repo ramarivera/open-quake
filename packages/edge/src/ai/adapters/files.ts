@@ -13,6 +13,7 @@ import {
 	translateProviderFailure,
 } from "../ai-errors.js";
 import {
+	FILE_CONTENT_MAX_BYTES,
 	FileMetadata,
 	type FileRequest,
 	FileResult,
@@ -41,7 +42,7 @@ export async function boundedText(response: Response): Promise<string> {
 			const next = await reader.read();
 			if (next.done) return text + decoder.decode();
 			bytes += next.value.length;
-			if (bytes > 2097152) throw new AiProtocolInvalid();
+			if (bytes > FILE_CONTENT_MAX_BYTES) throw new AiProtocolInvalid();
 			text += decoder.decode(next.value, { stream: true });
 		}
 	} finally {

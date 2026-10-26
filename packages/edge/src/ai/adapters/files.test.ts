@@ -282,3 +282,70 @@ it.effect("AI-038 credential revocation aborts an in-flight upload", () =>
 		}).pipe(Effect.provide(testLayer));
 	}),
 );
+
+it.effect(
+	"rejects uploads exceeding the UTF-8 download byte budget before I/O",
+	() => {
+		let calls = 0;
+		return Effect.gen(function* () {
+			yield* AiRepository.put(profile);
+			const result = yield* Effect.either(
+				AiProviderService.file(
+					request({
+						_tag: "upload",
+						name: "large.txt",
+						content: "界".repeat(750000),
+					}),
+				),
+			);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: { code: "AI.PROVIDER.CONFIG_INVALID" },
+			});
+			expect(calls).toBe(0);
+		}).pipe(
+			Effect.provide(
+				layer(async () => {
+					calls++;
+					return Response.json(file);
+				}),
+			),
+		);
+	},
+);
+
+it.effect(
+	"round trips a multibyte text upload at the UTF-8 byte boundary",
+	() => {
+		const content = `${"界".repeat(Math.floor(2097152 / 3))}aa`;
+		let uploaded = "";
+		return Effect.gen(function* () {
+			yield* AiRepository.put(profile);
+			yield* AiProviderService.file(
+				request({ _tag: "upload", name: "boundary.txt", content }),
+			);
+			const result = yield* AiProviderService.file(
+				request({ _tag: "content", fileId: file.id }),
+			);
+			expect(result).toEqual({
+				requestId,
+				result: { _tag: "content", content },
+			});
+			expect(new TextEncoder().encode(uploaded)).toHaveLength(2097152);
+		}).pipe(
+			Effect.provide(
+				layer(async (_url, init) => {
+					if (init?.body instanceof FormData) {
+						const value = init.body.get("file");
+						if (value instanceof File) uploaded = await value.text();
+						return Response.json({
+							...file,
+							bytes: new TextEncoder().encode(uploaded).length,
+						});
+					}
+					return new Response(uploaded);
+				}),
+			),
+		);
+	},
+);
