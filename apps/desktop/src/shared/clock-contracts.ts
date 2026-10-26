@@ -17,7 +17,9 @@ export const ClockMediaView = Schema.Struct({
 	/** File name only, for "▶ name" labels. */
 	name: Schema.String,
 	url: Schema.String.pipe(
-		Schema.pattern(/^oq-clock-media:\/\/theme\/[a-z]+\?r=\d+(?:&t=[^#]+)?$/),
+		Schema.pattern(
+			/^oq-clock-media:\/\/theme\/[a-z]+\?r=\d+(?:&t=[^#]+)?$|^oq-clock-media:\/\/ref\/[a-f0-9]{64}$/,
+		),
 	),
 	available: Schema.Boolean,
 });
@@ -131,7 +133,9 @@ export const ClockReply = Schema.Union(
 		themeId: ThemeIdSchema,
 		token: Schema.String,
 		url: Schema.String.pipe(
-			Schema.pattern(/^oq-clock-media:\/\/candidate\/[a-f0-9]+$/),
+			Schema.pattern(
+				/^oq-clock-media:\/\/(?:candidate\/[a-f0-9]+|ref\/[a-f0-9]{64})$/,
+			),
 		),
 		name: Schema.String,
 	}),

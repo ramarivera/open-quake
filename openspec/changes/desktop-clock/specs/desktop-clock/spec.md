@@ -374,3 +374,12 @@ Custom video theme cards SHALL capture a decoded first frame at min(0.1 seconds,
 
 - **WHEN** metadata loads but a frame never decodes within 4 seconds
 - **THEN** the card shows its filename placeholder, saves no empty thumbnail, and releases the decoder
+
+### Requirement: Window-owned clock media references
+
+Main SHALL issue opaque, unguessable custom-media references only after an authenticated clock request resolves a committed target. References SHALL belong to that window and target, expire on target change or navigation, and require the panel's current committed selection on every read. Raw profile selectors SHALL never authorize renderer media reads. Responses SHALL never grant wildcard CORS. Covers WIDGETS-034/038 and review 4377943205.
+
+#### Scenario: Media from another profile or window
+
+- **WHEN** a panel requests a management window's reference, guesses a profile selector, or reuses its reference after switching profiles
+- **THEN** main refuses the request, while the issuing window can load its current target's media and capture its decoded thumbnail

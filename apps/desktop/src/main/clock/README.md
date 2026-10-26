@@ -50,8 +50,7 @@ and device-screen-wallpaper specs now agree on this behavior, resolving b1b.
 `window.quakeClock` exposes `request(command)` and `onSnapshot`. Only the
 app's renderer document may call it. The strip may `read` and `setTheme`;
 `setMode`, `setHourFormat`, `setSeconds`, `chooseMedia`, `commitMedia` and `restoreMedia`
-need the management window. Every successful change is broadcast to all
-windows. Listeners accept only their explicit or initially resolved target.
+need the management window. Every successful change is published only to authorized windows subscribed to the matching target. Listeners accept only their explicit or initially resolved target.
 
 ## Custom media
 
@@ -60,10 +59,10 @@ Renderer profile responses and broadcasts replace clock media paths with opaque
 `clock-media:` references, including compatibility copies. Main restores references
 only against the original saved key when the editor previews or saves a draft.
 Renderers get `{ kind, name, url, available }` with
-`url = oq-clock-media://theme/<id>?r=<revision>&t=<encoded profile/page/key>`. The privileged scheme is
-registered before `app.whenReady()`, resolves the theme's saved slot, answers
+`url = oq-clock-media://ref/<256-bit random token>`. The privileged scheme is
+registered before `app.whenReady()`, resolves a main-owned reference to the committed target and theme slot, answers
 404 for anything else and streams through `net.fetch` with the request's
-`Range` header. Electron webRequest checks the browser-owned requesting frame before serving media. Only subresources of the exact app document and the isolated main-owned video probe may load it. Navigating an app window away revokes that document's access. Images save at once. Videos are staged as
+`Range` header. Electron webRequest checks the browser-owned requesting frame before serving media. Only the issuing window can load its references. The panel must still own that committed target; changing targets or navigating revokes old references. Canvas CORS names only the exact app origin after authorization. The isolated main-owned video probe may load only its assigned candidate. Images save at once. Videos are staged as
 `oq-clock-media://candidate/<token>`. Management probes for feedback, and main independently decodes the candidate in a hidden sandboxed window without a preload or app bridge before committing. Both probes have a 6 s timeout; management's supplied duration is only a hint. Shorter than 2 s is refused with DK-Suite's message.
 The tile falls back to the theme's built-in art if custom media errors or has
 not loaded or started playing within 5 s.
