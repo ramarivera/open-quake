@@ -52,46 +52,35 @@ export function RuntimeIndicator({
 				/>
 				{runtime.available ? labels[runtime.status] : s.notInstalled}
 			</span>
-			{runtime.available && (
-				<span className="aw-runtime-actions">
-					{runtime.status === "ready" ? (
-						<>
-							<button
-								type="button"
-								className="mc-button"
-								data-variant="quiet"
-								aria-label={s.restart}
-								onClick={() =>
-									void request({ type: "runtime", action: "restart" })
-								}
-							>
-								{s.restartShort}
-							</button>
-							<button
-								type="button"
-								className="mc-button"
-								data-variant="quiet"
-								aria-label={s.stop}
-								onClick={() =>
-									void request({ type: "runtime", action: "stop" })
-								}
-							>
-								{s.stopShort}
-							</button>
-						</>
-					) : (
+			<span className="aw-runtime-actions">
+				{(["start", "stop", "restart"] as const).map((action) => {
+					const disabled =
+						!runtime.available ||
+						transitioning ||
+						(action === "start"
+							? runtime.status === "ready"
+							: runtime.status !== "ready");
+					return (
 						<button
+							key={action}
 							type="button"
 							className="mc-button"
-							aria-label={s.start}
-							disabled={transitioning}
-							onClick={() => void request({ type: "runtime", action: "start" })}
+							data-variant="quiet"
+							aria-label={s[action]}
+							disabled={disabled}
+							onClick={() => {
+								if (!disabled) void request({ type: "runtime", action });
+							}}
 						>
-							{s.startShort}
+							{action === "start"
+								? s.startShort
+								: action === "stop"
+									? s.stopShort
+									: s.restartShort}
 						</button>
-					)}
-				</span>
-			)}
+					);
+				})}
+			</span>
 			{runtime.status === "error" && (
 				<span role="alert" className="aw-runtime-error">
 					{runtime.operation === "stop"

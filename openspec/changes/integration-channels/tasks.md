@@ -16,3 +16,10 @@ These are future implementation tasks. This lane creates specs only; no checkbox
 
 - [ ] 3.1 Wire catalog cards, setup drawer, QR progress, disable/remove and error states through the typed client with adapter-author documentation; verify actual UI flows on empty and controllable fixture catalogs.
 - [ ] 3.2 Run all integration-channels scenarios and one real adapter pairing after runtime readiness; retain the source-verified catalog evidence and record external pairing as unverified until exercised.
+
+## Agents burn-down lane, 2026-10-26
+
+- [x] A.1 Preserve all six recovered channel descriptors and localized metadata in eight locales, with fallback and both regional groups. Sources CENTER-072/073. Bead `open-quake-lih.17.11`; `channel-catalog.test.ts` checks the source-derived fields and locale fallback.
+- [x] A.2 Bind the production integrations composition to an explicitly selected local OpenClaw CLI using isolated state. Keep installed-capability checks, configuration, verified status, disable/remove, QR cancellation/expiry and pairing approval distinct from installation. Sources CENTER-074/077/078/079. `channel-runtime.test.ts` and `channel-registration.test.ts` drive the adapter and production registration with fake command runners. No real channel credentials or messaging accounts were used.
+- [x] A.3 Localize cards, distinguish Configured from Connected, dispatch settings invalidation and expose portal failures. Source CENTER-075; mounted `channel-cards.test.tsx` covers the actual controls.
+- [ ] A.4 Live acceptance remains required for CENTER-074/077/078/079. Plugin installation is deliberately absent. CLI version/plugin compatibility and ASCII-only QR output remain unverified; URL and PNG data-URL events work at the fake transport boundary. Do not count a configured fake channel as a paired real channel.
