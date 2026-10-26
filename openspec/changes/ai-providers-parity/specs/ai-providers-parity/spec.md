@@ -210,6 +210,11 @@ Assistant keys SHALL expose typed settings and save/reopen without raw credentia
 - **THEN** earlier context is excluded, and before expiry only the selected number of completed exchanges is eligible
 - **AND** already accepted turns keep their selection and profile snapshot
 
+#### Scenario: Wake the conversation window without voice capture
+- **WHEN** a saved assistant key has Wake Chat Window enabled and is pressed
+- **THEN** the host restores and focuses the existing management conversation window, including when Voice Input is disabled
+- **AND** selection alone sends no model request; keys with wake disabled and external-agent keys do not trigger assistant window activation (AI-060)
+
 ### Requirement: Local assistant provider selection
 
 General Settings SHALL expose AI Model Provider using saved local rows in QWen, Kimi, DeepSeek, OpenAI order. Loading, empty, failed and fewer-than-two choices SHALL be visible; a single option SHALL be disabled. An explicit choice SHALL persist through the Models default role and apply to subsequent chat turns. Per-key settings SHALL display the resolved provider read-only and link General Settings. Direct choices SHALL share the provider catalog and retain custom model IDs (AI-003, AI-019, AI-042, AI-062, SETTINGS-008).

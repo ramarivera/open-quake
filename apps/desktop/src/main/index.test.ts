@@ -13,10 +13,12 @@ import {
 	createEmptyProfileKey,
 	ProfileKey,
 } from "../../../../packages/device/src/profiles/profile-contracts";
+import { GridVoiceRuntime } from "../../../../packages/edge/src/voice/surface";
 import lifecycleStrings from "../shared/lifecycle-strings.json";
 import { APP_LANGUAGES, LOCALE_REQUEST } from "../shared/locale";
 import { MANAGEMENT_ACTIVATE } from "../shared/management";
 import { registerAgentHttp } from "./agent-http";
+import { createDirectChatVoice } from "./chat/voice";
 import { makeDesktopRuntime } from "./diagnostics/runtime";
 import { registerIntegrations } from "./integrations";
 import { registerKnob } from "./knob";
@@ -26,6 +28,7 @@ import { registerMeetings } from "./meetings";
 import { startMockDeviceBus } from "./mockDeviceBus";
 import { registerMonitor } from "./monitor";
 import { registerProfiles } from "./profiles";
+import { createSpeechVoiceBinding } from "./speech/composition";
 import { makeDisplay } from "./test/display";
 import { makeTwoStrips, report } from "./test/hid";
 import { registerVoiceSurface } from "./voice";
@@ -152,6 +155,20 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => electron);
+vi.mock("./chat/voice", async (original) => {
+	const actual = await original<typeof import("./chat/voice")>();
+	return {
+		...actual,
+		createDirectChatVoice: vi.fn(actual.createDirectChatVoice),
+	};
+});
+vi.mock("./speech/composition", async (original) => {
+	const actual = await original<typeof import("./speech/composition")>();
+	return {
+		...actual,
+		createSpeechVoiceBinding: vi.fn(actual.createSpeechVoiceBinding),
+	};
+});
 vi.mock("./mockDeviceBus", async (original) => {
 	const actual = await original<typeof import("./mockDeviceBus")>();
 	return { ...actual, startMockDeviceBus: vi.fn(actual.startMockDeviceBus) };
@@ -522,6 +539,36 @@ describe("desktop window lifecycle", () => {
 			}),
 		).toBe(true);
 		expect(integrations?.executeHaFromKey).toHaveBeenCalledWith(config, signal);
+	});
+
+	it("wires assistant wake to the existing conversation window activation", async () => {
+		const direct = vi.mocked(createSpeechVoiceBinding).mock.calls[0]?.[0]
+			.direct;
+		if (!direct) throw new Error("Missing direct assistant composition");
+		direct(
+			GridVoiceRuntime.of({
+				select: () => Effect.void,
+				startCapture: () => Effect.void,
+				releaseCapture: () => Effect.void,
+				cancelCapture: () => Effect.void,
+				cancelFlow: () => Effect.void,
+				sendText: () => Effect.void,
+			}),
+		);
+		const wake = vi.mocked(createDirectChatVoice).mock.calls.at(-1)?.[2];
+		if (!wake) throw new Error("Missing assistant wake action");
+		const { management } = windows();
+		management.isMinimized.mockReturnValueOnce(true);
+		await Effect.runPromise(wake);
+		await vi.waitFor(() =>
+			expect(management.webContents.send).toHaveBeenCalledWith(
+				MANAGEMENT_ACTIVATE,
+				"claw",
+			),
+		);
+		expect(management.restore).toHaveBeenCalledOnce();
+		expect(management.show).toHaveBeenCalled();
+		expect(management.focus).toHaveBeenCalled();
 	});
 
 	it("SETTINGS-064: saved locale refreshes the native Dock menu and Settings activates the existing management route", async () => {

@@ -16,6 +16,7 @@ import type { DirectChat } from "./host";
 export const createDirectChatVoice = (
 	host: DirectChat,
 	fallback: typeof GridVoiceRuntime.Service,
+	wakeChatWindow: Effect.Effect<void> = Effect.void,
 ) =>
 	Effect.gen(function* () {
 		const surface = yield* VoiceSurface;
@@ -255,6 +256,32 @@ export const createDirectChatVoice = (
 								stop(serial).pipe(
 									Effect.zipRight(
 										fallback.select(serial, keyCode, type, agentId),
+									),
+									Effect.zipRight(
+										type === "aiChat"
+											? Effect.tryPromise({
+													try: (signal) =>
+														host.runtime.runPromise(
+															host.keySettings(serial, keyCode),
+															{
+																signal,
+															},
+														),
+													catch: (cause) => new VoiceRuntimeUnavailable(cause),
+												}).pipe(
+													Effect.flatMap((settings) =>
+														settings?.enableWakeTalkWindow
+															? wakeChatWindow
+															: Effect.void,
+													),
+													Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+														Effect.logWarning(
+															"Assistant window settings unavailable",
+															error,
+														),
+													),
+												)
+											: Effect.void,
 									),
 								),
 							),

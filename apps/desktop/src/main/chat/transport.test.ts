@@ -10,6 +10,7 @@ import {
 	Fiber,
 	Layer,
 	ManagedRuntime,
+	Option,
 	Redacted,
 	Schema,
 	Scope,
@@ -251,6 +252,7 @@ function voiceFixture(
 	host: ReturnType<typeof createDirectChat>,
 	publish: (event: VoiceSurfaceEvent) => Effect.Effect<void>,
 	decorate = false,
+	wakeChatWindow = Effect.void,
 ) {
 	let direct:
 		| Effect.Effect.Success<ReturnType<typeof createDirectChatVoice>>
@@ -267,7 +269,7 @@ function voiceFixture(
 		Layer.scoped(
 			GridVoiceRuntime,
 			Effect.gen(function* () {
-				direct = yield* createDirectChatVoice(host, fallback);
+				direct = yield* createDirectChatVoice(host, fallback, wakeChatWindow);
 				return decorate
 					? (yield* createAgentHttpVoiceAdapter(
 							{
@@ -304,6 +306,47 @@ function voiceFixture(
 			),
 	};
 }
+
+it.each([
+	{ wake: true, voice: false, type: "aiChat", expected: 1 },
+	{ wake: true, voice: true, type: "aiChat", expected: 1 },
+	{ wake: false, voice: false, type: "aiChat", expected: 0 },
+	{ wake: true, voice: false, type: "clawbot", expected: 0 },
+] as const)(
+	"wakes saved assistant selection without inference: $wake/$voice/$type",
+	async ({ wake, voice, type, expected }) => {
+		const f = await fixture({}, "generic", "fixture-model", undefined, {
+			keySettings: () =>
+				Effect.succeed({
+					...defaultAssistantSettings(),
+					useAgent: false,
+					enableVoiceInput: voice,
+					enableWakeTalkWindow: wake,
+				}),
+		});
+		const activate = vi.fn();
+		const v = voiceFixture(
+			f.host,
+			() => Effect.void,
+			false,
+			Effect.sync(activate),
+		);
+		try {
+			await v.voice.runPromise(
+				GridVoiceRuntime.pipe(
+					Effect.flatMap((runtime) =>
+						runtime.select("device", "1,1", type, Option.none()),
+					),
+				),
+			);
+			expect(activate).toHaveBeenCalledTimes(expected);
+			expect(f.endpoint.calls).toHaveLength(0);
+		} finally {
+			await v.voice.dispose();
+			await f.close();
+		}
+	},
+);
 
 it("pins a specific saved knob model before edits and dispatches through the actual direct chat consumer", async () => {
 	const f = await fixture();

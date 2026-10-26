@@ -394,7 +394,23 @@ if (!app.requestSingleInstanceLock()) {
 							},
 						});
 						const speech = createSpeechVoiceBinding({
-							direct: (fallback) => createDirectChatVoice(directChat, fallback),
+							direct: (fallback) =>
+								createDirectChatVoice(
+									directChat,
+									fallback,
+									Effect.sync(() => {
+										focusManagement();
+										const target = managementWin;
+										void managementReady.then(() => {
+											if (
+												!quitting &&
+												!target.isDestroyed() &&
+												target === managementWin
+											)
+												target.webContents.send(MANAGEMENT_ACTIVATE, "claw");
+										});
+									}),
+								),
 							speech: {
 								localResume: fileStore(
 									app.getPath("userData"),
