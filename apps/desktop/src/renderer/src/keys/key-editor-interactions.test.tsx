@@ -1470,24 +1470,26 @@ it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved
 			change: "setTheme",
 		};
 		await f.runtime.runPromise(
-			ProfileRepository.transact((envelope) =>
-				Effect.succeed({
-					...envelope,
-					profiles: EffectArray.map(envelope.profiles, (profile) =>
-						profile.id !== "p"
-							? profile
-							: {
-									...profile,
-									revision: snapshot.revision,
-									pages: EffectArray.map(profile.pages, (page) => ({
-										...page,
-										keys: page.keys.map((key) =>
-											patchClockEditorKey(key, snapshot),
-										),
-									})),
-								},
-					),
-				}),
+			Effect.flatMap(ProfileRepository, (repository) =>
+				repository.transact((envelope) =>
+					Effect.succeed({
+						...envelope,
+						profiles: EffectArray.map(envelope.profiles, (profile) =>
+							profile.id !== "p"
+								? profile
+								: {
+										...profile,
+										revision: snapshot.revision,
+										pages: EffectArray.map(profile.pages, (page) => ({
+											...page,
+											keys: page.keys.map((key) =>
+												patchClockEditorKey(key, snapshot),
+											),
+										})),
+									},
+						),
+					}),
+				),
 			),
 		);
 	};
