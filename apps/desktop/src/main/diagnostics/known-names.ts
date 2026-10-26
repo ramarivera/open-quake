@@ -1,7 +1,7 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
+	`FirmwareSession.load AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
 SoundboardService.play SoundboardService.stop SoundboardService.stopAll SoundboardService.naturalEnd SoundboardService.close SoundboardService.snapshot SoundboardRepository.list SoundboardRepository.put SoundboardPlayer.open
 SystemMedia.nativeProcess SystemMedia.macRead SystemMedia.macControl SystemMedia.windowsRead SystemMedia.windowsControl SystemMedia.nativeRead SystemMedia.nativeControl SystemMedia.keyAction SystemMediaService.send
 GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
