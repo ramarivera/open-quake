@@ -56,7 +56,8 @@ The key-library result is in `keys-review-run.log`; monitor artifacts are in
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/monitor-panel/redesign-final/`.
 Isolated harnesses still report missing unrelated IPC handlers; these captures
 do not establish physical strip appearance or microphone/audio acceptance.
-The reviewed PR merge is pending.
+PR47 merged as `3acd5f7` after current-head review and the complete native
+package/download matrix. All device redesign implementation tasks are closed.
 
 ## Parent actual-display acceptance, 2026-10-25
 

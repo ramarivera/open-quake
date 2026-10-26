@@ -5,4 +5,4 @@
 - [x] 1.3 Verify actual desktop runtime interaction and speech/device failure evidence in production composition, inspect retained records and prove shutdown flushing. Physical microphone/hearing acceptance remains separate. Bead open-quake-q0f.2.
 - [x] 1.4 Document local retrieval, safe fields, retention limits and export without remote shipping. See apps/desktop/src/main/diagnostics/README.md. Bead open-quake-hbe.3.
 
-Source and automated acceptance are reconciled in verification.md. Reviewed delivery remains tracked by open-quake-q0f.1 and open-quake-q0f.2 until the final integration PR merges. Physical microphone, hearing and physical-trigger acceptance remain with their owning changes.
+Source and automated acceptance are reconciled in verification.md. PR61 merged as `695ba82` after review and the complete native package/download matrix. Integration beads open-quake-q0f.1 and open-quake-q0f.2 are closed. Physical microphone, hearing and physical-trigger acceptance remain with their owning changes.

@@ -67,7 +67,8 @@ translated Stop without reloading the renderer.
 Artifacts are outside the repo under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/redesign/`:
 `integrated/direct-chat-IMnRjy/` and `runtime-final/desktop-e2e-QlVZ5A/`.
-PR47 review fixes and merge remain pending. Physical QUAKE and microphone/audio
+PR47 merged as `3acd5f7` after current-head review, resolved findings and
+the complete native package/download matrix. Physical QUAKE and microphone/audio
 acceptance are separate and remain unverified.
 
 The actual-root synthetic Hermes regression also holds a reply open, opens the

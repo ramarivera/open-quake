@@ -20,7 +20,7 @@ deferred to the parent per lane COMMON.md.
 - [x] 2.6 Device: plain-JS entry point (L2)
 - [x] 2.7 Replace the mock source in `apps/desktop/src/main/deviceBus.ts` with the scoped QuakeDevice stream, HID catalog status events, retry after absence/unplug, and an explicit development mock flag (W1, `open-quake-l86.9`)
 - [x] 2.8 Integrate protocol codecs and errors in the device adapter, declare the default transport dependency, verify custom layers, and regress unknown opcode/command handling
-- [ ] 2.9 Compose all production desktop main-process services into one Layer graph and one ManagedRuntime. Separate service preparation from IPC activation, retain operation-specific diagnostics, cancel registration-owned work before the single awaited runtime disposal, and verify the actual root plus bundle and media consumers. Bead: open-quake-l86.10.
+- [x] 2.9 Compose all production desktop main-process services into one Layer graph and one ManagedRuntime. Separate service preparation from IPC activation, retain operation-specific diagnostics, cancel registration-owned work before the single awaited runtime disposal, and verify the actual root plus bundle and media consumers. Bead: open-quake-l86.10.
 - [x] 2.10 Separate domain layer preparation from registration activation and use execution-only views with explicit standalone ownership. Verify shared settings IPC/state, cancellation, diagnostic labels and delayed finalizer ownership. This is preparation for 2.9, not root integration. Bead: open-quake-l86.10.1.
 
 ## 3. Verify and resolve partial evidence
@@ -132,3 +132,5 @@ from Turbo cache); `pnpm run build` (desktop built here);
 `openspec validate panel-window-prototype --strict`; `git diff --check`.
 No dependencies were added. Parent should attach this evidence to
 `open-quake-l86.9`; hardware acceptance in task 3.2 remains open.
+
+Root graph delivery, 2026-10-26: PR73 squash merged as f147032 after current-head Codex review with no findings, all threads reconciled, validation, five native package jobs and the complete download matrix. Source includes awaited persistence finalizers before reset/import, failed HTTP repository direct-voice fallback, actual-root shutdown, and corrupt-store acceptance documented in verification-service-graph.md. A thumbnail cleanup test timed out in the first hosted run; its seven-test file passed twice locally and the exact failed-job rerun passed without changing assertions or source. Bead open-quake-l86.10 is delivered.
