@@ -369,3 +369,78 @@ it("activates all five shipped MeetAI keys through native touch without profile 
 		vi.useRealTimers();
 	}
 });
+
+it.each(["playAudio", "playAudioLegacy"])(
+	"dispatches configured %s touches while preserving system-media sub-controls",
+	(type) => {
+		vi.useFakeTimers();
+		try {
+			const profile = builtinProfiles("darwin").find((p) => p.id === "1-6");
+			const preset = profile?.pages[0]?.keys[0];
+			if (!profile || !preset) throw new Error("Missing player preset");
+			for (const local of [true, false]) {
+				if (!local && type === "playAudioLegacy") continue;
+				const key = {
+					...preset,
+					config: {
+						...preset.config,
+						type,
+						actions: local
+							? [
+									{ type: "sound", value: "/private/test.mp3" },
+									{ type: "audioAction", value: 0 },
+									{ type: "audioFade", value: "0-0" },
+									{ type: "volume", value: 50 },
+								]
+							: preset.config.actions,
+					},
+				};
+				const layout = stripLayout(profile, { keys: [key] });
+				const tile = layout.tiles[0];
+				if (!tile) throw new Error("Missing player tile");
+				const keys: StripKeyEvent[] = [],
+					subs: SubTouchEvent[] = [];
+				const controller = createStripTouchController({
+					view: () => ({ width: 1920, height: 480, rotation: 0 }),
+					layout: () => layout,
+					tileAt: (point, current) => {
+						const hit = tileAt(point, current);
+						return hit && !local
+							? {
+									...hit,
+									subTargets: [
+										{ id: "play", scrollable: false, bounds: tile.slot },
+									],
+								}
+							: hit;
+					},
+					onKey: (event) => keys.push(event),
+					onSubTouch: (event) => subs.push(event),
+					overlay: { active: () => false, point: () => {} },
+					now: () => Date.now(),
+					schedule: (action, delay) => {
+						const timer = setTimeout(action, delay);
+						return () => clearTimeout(timer);
+					},
+				});
+				controller.event(touch(tile.slot.x + 30, tile.slot.y + 30));
+				controller.event(touch(tile.slot.x + 30, tile.slot.y + 30, 0));
+				vi.advanceTimersByTime(10);
+				expect(keys).toEqual(
+					local
+						? [
+								{ keyCode: key.keyCode, keyAction: 0 },
+								{ keyCode: key.keyCode, keyAction: 1, voiceTouchEnd: true },
+							]
+						: [],
+				);
+				expect(subs.filter((event) => event.confirmedTap)).toHaveLength(
+					local ? 0 : 1,
+				);
+				controller.dispose();
+			}
+		} finally {
+			vi.useRealTimers();
+		}
+	},
+);

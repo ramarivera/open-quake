@@ -1,8 +1,8 @@
 import { useId } from "react";
-import { importSoundConfig } from "../../../../../../../../packages/edge/src/soundboard/soundboard-invariants";
 import { stripPaletteProperties } from "../../palette";
 import type { StripTileProps } from "../../tileRegistry";
 import { GenericTile } from "../GenericTile";
+import { soundboardConfigured } from "./soundboard-state";
 import { soundboardLabels as labels } from "./strings";
 import "./soundboard.css";
 
@@ -13,13 +13,7 @@ export function SoundboardUnavailableTile(
 ): React.JSX.Element {
 	const { tile } = props;
 	const detailId = useId();
-	const parsed = importSoundConfig({
-		type: tile.key.config.type,
-		actions: tile.key.config.actions,
-	});
-	const configured =
-		parsed._tag === "Right" &&
-		parsed.right.issues.every((issue) => issue === "unverifiedFiles");
+	const configured = soundboardConfigured(tile.key.config);
 	if (configured)
 		return (
 			<fieldset

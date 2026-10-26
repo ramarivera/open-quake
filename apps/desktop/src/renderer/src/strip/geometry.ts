@@ -16,6 +16,8 @@ import {
  * openspec/changes/strip-key-grid/design.md for the source lines.
  */
 
+import { soundboardConfigured } from "./tiles/soundboard/soundboard-state";
+
 export interface Rgb {
 	readonly r: number;
 	readonly g: number;
@@ -263,6 +265,7 @@ function placeTile(
 ): StripTile {
 	const type = key.config.type;
 	const fullBleed = FULL_BLEED_TYPES.has(type);
+	const localSound = soundboardConfigured(key.config);
 	const slot = fullBleed
 		? { x: 0, y: 0, ...STRIP_CANVAS }
 		: footprintRect(profileTheme, footprint);
@@ -280,13 +283,15 @@ function placeTile(
 		cellTheme: tileTheme,
 		fullBleed,
 		zIndex: fullBleed ? 1 : area(footprint) > 1 ? 10 : 0,
-		supportTouchEffect: NO_TOUCH_EFFECT_TYPES.has(type)
-			? false
-			: MEETING_ASSISTANT_TYPES.has(type) ||
-				(type === "mic" && meetingPage) ||
-				key.config.supportTouchEffect,
+		supportTouchEffect: localSound
+			? true
+			: NO_TOUCH_EFFECT_TYPES.has(type)
+				? false
+				: MEETING_ASSISTANT_TYPES.has(type) ||
+					(type === "mic" && meetingPage) ||
+					key.config.supportTouchEffect,
 		hasTouchableSubElements:
-			SUB_TOUCH_TYPES.has(type) || hasSubElementsFlag(key),
+			!localSound && (SUB_TOUCH_TYPES.has(type) || hasSubElementsFlag(key)),
 		pressFeedback: !NO_PRESS_FEEDBACK_TYPES.has(type),
 		pressScale: type !== "playAudio",
 	};

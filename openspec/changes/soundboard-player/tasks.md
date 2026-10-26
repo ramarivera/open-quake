@@ -281,3 +281,7 @@ skips, six package typechecks, production build, both bundle modes, Biome
 items. External logs, including `regressions-final-before.log`, stay under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/wallpaper-soundboard/fix1/`.
 No renderer UI changes, real QUAKE access, DK-Suite execution or audible playback.
+
+## PR79 round 2
+
+- [x] 4.4 Dispatch configured local soundboard touches through the strip controller while retaining native-media preset sub-controls. Evidence: KNOB-082/086; open-quake-lih.19.8, review 4375809599.
