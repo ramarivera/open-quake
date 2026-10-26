@@ -90,3 +90,10 @@ Audit regression coverage: CENTER-017.
 #### Scenario: Workbench reflows after navigation
 - **WHEN** Emoji, Shortcuts and Meetings are opened at narrow and wide viewport sizes
 - **THEN** each content panel fits its scroll container without horizontal document overflow
+
+### Requirement: Creation workflow entry points
+Management navigation SHALL expose Emoji and AI Shortcuts as direct replacements for the recovered library plus-menu destinations. Each entry SHALL open the real creation workflow. Source: MGMT-118.
+
+#### Scenario: Navigate to creation
+- **WHEN** the user activates Emoji or AI Shortcuts from Keys
+- **THEN** the corresponding mounted page permits creating an emoji package or adding a shortcut without losing the existing selected profile

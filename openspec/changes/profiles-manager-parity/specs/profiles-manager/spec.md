@@ -88,3 +88,28 @@ Management SHALL expose Knob Profile, Default Profile, Custom Profile, Add Item,
 #### Scenario: Recoverable initialization failure
 - **WHEN** initial profile storage fails and later recovers
 - **THEN** IPC returns a typed failure reason and a subsequent request retries initialization successfully
+
+### Requirement: Mounted manager and retained Quick payloads
+The manager SHALL render every visible platform default with localized names, settings and selection affordances, and SHALL support custom selection, confirmed deletion, duplicate, thumbnail refresh and inline weighted-name commit/rejection. External publications SHALL refresh selected properties. The standalone manager SHALL preserve active resource/device identity when reached from Keys and on return. Sources: MGMT-313, MGMT-315, MGMT-317, MGMT-319.
+
+#### Scenario: Default rows and custom editing
+- **WHEN** the manager is opened on each host platform and switched to German
+- **THEN** every eligible default appears with its localized label and settings, custom row actions persist through the real controller, and Enter/blur commit valid ten-unit names while empty or duplicate input reverts
+
+#### Scenario: Return to Keys
+- **WHEN** the user navigates from Keys to Knob Profile, selects a custom resource, then returns to Keys
+- **THEN** Keys shows that selected resource on the same device
+
+### Requirement: Immutable Quick action regressions
+Quick SHALL retain each platform's project and Help destinations, Clipboard shortcut and settings action. All preset edit locks SHALL apply on every platform. Native command execution SHALL require approval and cancellation SHALL execute nothing. Sources: MGMT-370, MGMT-371, MGMT-381, MGMT-382.
+
+#### Scenario: Saved Quick dispatch
+- **WHEN** committed project, Help, Clipboard and settings keys are activated on their platform
+- **THEN** the real action consumer receives the exact saved URL, keyboard encoder emits the recovered chord press/release, macOS Expose emits Control+Down, and Windows/Linux settings commands run only after native approval
+
+### Requirement: Readable responsive profile properties
+Profile property fields and dropdowns SHALL remain readable and keyboard-focusable at desktop and narrow widths, without horizontal overflow. Source: MGMT-337.
+
+#### Scenario: Narrow localized properties
+- **WHEN** English or German profile properties render at 390 pixels and desktop width
+- **THEN** labels and fields remain visible, keyboard focus has a visible indicator, and the management document has no horizontal overflow
