@@ -33,6 +33,10 @@ import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
+import {
+	isMonitorKey,
+	MonitorKeySettings,
+} from "../strip/tiles/monitor/MonitorKeySettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
@@ -903,6 +907,14 @@ export function KeyEditor(): React.JSX.Element {
 							</button>
 						</Row>
 
+						{isMonitorKey(key) && (
+							<MonitorKeySettings
+								key={selection?.target.token}
+								keyValue={key}
+								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						{isObsId(key.config.type) && (
 							<ObsSettings
 								key={key.config.type}
@@ -929,7 +941,8 @@ export function KeyEditor(): React.JSX.Element {
 									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
 									key.config.type !== "clawbot" &&
-									!isObsId(key.config.type),
+									!isObsId(key.config.type) &&
+									!isMonitorKey(key),
 							)
 							.map((action, index) => (
 								<Row
