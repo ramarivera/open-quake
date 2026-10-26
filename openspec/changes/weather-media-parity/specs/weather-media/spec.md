@@ -228,3 +228,12 @@ The music settings SHALL default to System and SHALL provide Local and System so
 
 - **WHEN** the user chooses Local, closes settings and opens them again
 - **THEN** Local remains selected, and choosing System restores the shared system session
+
+### Requirement: Scoped local transport follow-ups
+
+The local player SHALL keep card controls scoped to the committed playback owner. Card Stop SHALL NOT invoke the global STOP_ALL operation, including when the card is idle. Covers KNOB-092, WIDGETS-111 and PR103 comment 4379453311, bead open-quake-lih.7.5.
+
+#### Scenario: Stop with another key playing
+
+- **WHEN** two local keys play and one card receives Stop twice
+- **THEN** only its session stops and the other key keeps playing

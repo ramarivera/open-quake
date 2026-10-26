@@ -353,3 +353,32 @@ for (const terminal of ["stop", "preempt", "reset"] as const) {
 			}),
 	);
 }
+
+it.scoped(
+	"card Stop only stops its committed owner, including when already idle",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* rig();
+			const keys = soundboardKeyActions(f.service);
+			const other = { ...activation, deviceId: "other" };
+			yield* keys.execute(key(0), activation);
+			yield* keys.execute(key(0), other);
+			const stop = key(4);
+			const cardStop = {
+				...stop,
+				config: {
+					...stop.config,
+					actions: [
+						...stop.config.actions,
+						{ type: "playerIntent", value: "stop" },
+					],
+				},
+			};
+			for (let i = 0; i < 2; i++) {
+				yield* keys.execute(cardStop, activation);
+				expect((yield* keys.read(key(0), activation)).state).toBe("stopped");
+				expect((yield* keys.read(key(0), other)).state).toBe("playing");
+			}
+			expect(f.tracks[1]?.closed).toBe(0);
+		}),
+);
