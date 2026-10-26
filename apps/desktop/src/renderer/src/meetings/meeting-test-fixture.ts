@@ -108,6 +108,7 @@ export function meetingDom(
 					};
 					break;
 			}
+			snapshot = { ...snapshot, revision: snapshot.revision + 1 };
 			return ready();
 		},
 	);

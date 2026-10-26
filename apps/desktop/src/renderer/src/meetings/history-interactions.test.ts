@@ -282,6 +282,7 @@ describe("meeting history consumers", () => {
 		expect(element(".meeting-document h2").textContent).toContain(
 			"Newest selected title",
 		);
+		const beforeRename = dom.ready();
 		dom.request.mockResolvedValueOnce({
 			_tag: "failure",
 			code: "QUAKE.MEETING.STORAGE_FAILED",
@@ -303,6 +304,10 @@ describe("meeting history consumers", () => {
 		expect(dom.host.querySelector("header form")).not.toBeNull();
 		await submit();
 		expect(dom.host.querySelector("header form")).toBeNull();
+		expect(element(".meeting-document h2").textContent).toContain(
+			"Recovered save",
+		);
+		await dom.emit(beforeRename);
 		expect(element(".meeting-document h2").textContent).toContain(
 			"Recovered save",
 		);
