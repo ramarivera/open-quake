@@ -92,7 +92,7 @@ The active composer SHALL replace the legacy emoji pane while retaining package 
 - **THEN** generation is rejected without truncating the text, and cancelling the dialog leaves drafts and packages unchanged
 
 ### Requirement: Direct generated motion and caption suggestions
-Production composition SHALL supply direct BYO-key Qwen image-to-video generation, using the saved Qwen credential, 480P, five seconds, prompt extension and no watermark. It SHALL create and poll the task, download the result without forwarding credentials to the asset origin, and decode it into a bounded animated GIF in a hidden muted worker. The full job SHALL abort after 300 seconds, explicit cancellation or shutdown. No vendor proxy SHALL be used. Failed or cancelled jobs SHALL preserve the static source, user caption, drafts and saved renderings. An explicit caption suggestion SHALL use the saved daily/default text model, temperature 0.1, at most 2048 tokens and no thinking, and SHALL validate at most ten Unicode characters in zh/en/ja/ko/de/fr/es/it. Suggestions SHALL be shown separately until accepted. Source: AI-134, AI-135, CENTER-083, CENTER-087.
+Production composition SHALL supply direct BYO-key Qwen image-to-video generation, using the saved Qwen credential, 480P, five seconds, prompt extension and no watermark. It SHALL create and poll the task, download the result without forwarding credentials to the asset origin, and decode it into a bounded animated GIF in a hidden muted worker. Downloads SHALL use HTTPS only and an exact allowlist of documented DashScope result origins. Connection-time DNS resolution SHALL reject non-public IPv4/IPv6 answers and pin the socket to validated addresses. Redirects SHALL be rejected, with a 32 MiB download limit and a 30-second download deadline. The full job SHALL abort after 300 seconds, explicit cancellation or shutdown. No vendor proxy SHALL be used. Failed or cancelled jobs SHALL preserve the static source, user caption, drafts and saved renderings. An explicit caption suggestion SHALL use the saved daily/default text model, temperature 0.1, at most 2048 tokens and no thinking, and SHALL validate at most ten Unicode characters in zh/en/ja/ko/de/fr/es/it. Suggestions SHALL be shown separately until accepted. Source: AI-134, AI-135, CENTER-083, CENTER-087.
 
 #### Scenario: Provider creates and completes a task
 - **WHEN** fake HTTP returns a task id, pending status, success and video bytes
@@ -141,3 +141,7 @@ Emoji tiles SHALL use app-owned flat artwork sizing: a contained square at 80 pe
 #### Scenario: Three release modes
 - **WHEN** committed mode 0, 1 or 2 keys are pressed down, held and released with no global override
 - **THEN** only release copies, mode 1 also pastes after 100 ms, and mode 2 also sends Enter after another 100 ms
+
+#### Scenario: Untrusted provider media URL
+- **WHEN** a provider returns an internal URL, an approved hostname resolving to private addresses, or a redirect to internal metadata
+- **THEN** the adapter rejects it before contacting the internal destination or decoding any video

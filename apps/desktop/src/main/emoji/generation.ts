@@ -9,6 +9,11 @@ import {
 } from "../../../../../packages/edge/src/emoji/emoji-errors";
 import { profileFromModel } from "../chat/host";
 import type { EmojiGenerationPort } from "./controller";
+import {
+	downloadEmojiVideo,
+	type MediaLookup,
+	type MediaRequest,
+} from "./media-download";
 import { videoToGif } from "./video-to-gif";
 
 const taskResponse = Schema.Struct({
@@ -50,6 +55,8 @@ export function createEmojiGeneration(options: {
 		signal: AbortSignal,
 	) => Promise<string>;
 	readonly fetch?: typeof globalThis.fetch;
+	readonly mediaLookup?: MediaLookup;
+	readonly mediaRequest?: MediaRequest;
 	readonly decode?: typeof videoToGif;
 	readonly endpoint?: string;
 	readonly pollMs?: number;
@@ -180,18 +187,13 @@ export function createEmojiGeneration(options: {
 					});
 					result = await request(`tasks/${id}`);
 				}
-				const url = new URL(result.output.video_url ?? "");
-				if (
-					url.username ||
-					url.password ||
-					(url.protocol !== "https:" &&
-						!(endpoint.protocol === "http:" && url.origin === endpoint.origin))
-				)
-					throw new EmojiInvalid("The provider returned an invalid asset URL.");
-				// Result storage receives no bearer credential and redirects cannot leak it.
-				const video = await bytes(
-					await fetcher(url, { signal, redirect: "error" }),
-					32 * 1024 * 1024,
+				const video = await downloadEmojiVideo(
+					result.output.video_url ?? "",
+					signal,
+					{
+						lookup: options.mediaLookup,
+						request: options.mediaRequest,
+					},
 				);
 				return (options.decode ?? videoToGif)(video, signal);
 			}),

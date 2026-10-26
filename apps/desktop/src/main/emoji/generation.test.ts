@@ -1,4 +1,5 @@
-import { createServer } from "node:http";
+import { createServer, IncomingMessage } from "node:http";
+import { Socket } from "node:net";
 import { Effect, Redacted, Stream } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
@@ -63,7 +64,8 @@ async function fixture(
 							: mode === "pending" || polls === 1
 								? "RUNNING"
 								: "SUCCEEDED",
-					video_url: `http://127.0.0.1:${port}/asset`,
+					video_url:
+						"https://dashscope-result-bj.oss-cn-beijing.aliyuncs.com/asset",
 				},
 			}),
 		);
@@ -94,6 +96,19 @@ async function fixture(
 		pollMs: 1,
 		deadlineMs,
 		decode,
+		mediaLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+		mediaRequest: (_url, _options, respond) => {
+			const response = new IncomingMessage(new Socket());
+			response.statusCode = 200;
+			return {
+				once: () => {},
+				end: () => {
+					respond(response);
+					response.push(Buffer.from("synthetic-video"));
+					response.push(null);
+				},
+			};
+		},
 	});
 	return { adapter, requests, decode };
 }
@@ -111,7 +126,6 @@ describe("direct BYO-key emoji generation", () => {
 			"/api/v1/services/aigc/video-generation/video-synthesis",
 			"/api/v1/tasks/task-1",
 			"/api/v1/tasks/task-1",
-			"/asset",
 		]);
 		expect(JSON.parse(f.requests[0]?.body ?? "")).toMatchObject({
 			model: "wan2.2-i2v-flash",
@@ -123,10 +137,7 @@ describe("direct BYO-key emoji generation", () => {
 				watermark: false,
 			},
 		});
-		expect(
-			f.requests.slice(0, -1).every((r) => r.auth === "Bearer private-key"),
-		).toBe(true);
-		expect(f.requests.at(-1)?.auth).toBeUndefined();
+		expect(f.requests.every((r) => r.auth === "Bearer private-key")).toBe(true);
 		expect(f.decode).toHaveBeenCalledOnce();
 	});
 	it.each(["failure", "create-failure"] as const)(
