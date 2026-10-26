@@ -107,3 +107,19 @@ Appearance migrates from version 1 to version 2 in memory (Decision 3). The new 
 ## Verification
 
 Unit and property tests per domain (Effect TestClock for timeouts and delays), consumer tests through the real IPC handlers with fakes, and the native mock smoke. The smoke screenshots every page in Dark, Light and Grey, plus the narrow rail and the popover, into `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/management-center/`. The following stay unverified until the lead runs them on the hardware: paste and Enter through the real device keyboard, the clipboard file on the real host, Home Assistant against a real server, and the strip tiles on the QUAKE.
+
+## Saved-model shortcut drafting, 2026-10-26
+
+The existing shortcut generation control will use the same saved default model,
+production credentials and Vercel facade as direct chat. The host pins that row
+for one stateless generation. It does not create a chat session or enable tools.
+An authored system instruction requests the existing GeneratedConfig format;
+ShortcutService remains the sole output decoder and drops non-hotkey actions.
+No generated content saves a library, syncs a profile or executes an action.
+
+One draft may run at a time. The full operation has a 60-second deadline and a
+32 KiB UTF-8 output limit, with at most 4096 output tokens or the saved model's
+lower bound. Provider failures retain catalog identity privately and project
+through the existing integration failure. Shutdown interrupts active generation
+and joins it before disposing inference. No shared wire schema, dependency or UI
+layout changes are needed. The existing Generate action is the inference opt-in.

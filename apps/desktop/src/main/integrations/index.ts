@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
+	Cause,
 	Effect,
+	Exit,
 	Fiber,
 	Layer,
 	type ManagedRuntime,
@@ -19,7 +21,10 @@ import {
 	ChannelPorts,
 	ChannelService,
 } from "../../../../../packages/edge/src/channels/channel-service";
-import { RuntimeUnavailable } from "../../../../../packages/edge/src/channels/integration-errors";
+import {
+	DraftUnavailable,
+	RuntimeUnavailable,
+} from "../../../../../packages/edge/src/channels/integration-errors";
 import { unavailableChannelRuntime } from "../../../../../packages/edge/src/channels/runtime-adapter";
 import {
 	EMPTY_HA_STORE,
@@ -61,7 +66,10 @@ export function registerIntegrations<R>(options: {
 	readonly channelRuntime?: ChannelRuntime;
 	readonly vault?: CredentialVault;
 	readonly openHa?: HaPortShape["open"];
-	readonly draftShortcuts?: (request: string) => Promise<string>;
+	readonly draftShortcuts?: (
+		request: string,
+		signal?: AbortSignal,
+	) => Promise<string>;
 }) {
 	const root = join(app.getPath("userData"), "integrations-v1");
 	const vault =
@@ -121,6 +129,7 @@ export function registerIntegrations<R>(options: {
 	let disposed = false;
 	let disposal: Promise<void> | undefined;
 	const pending = new Set<Promise<unknown>>();
+	const draftingLifetime = new AbortController();
 	const updateVisible = (envelope: Parameters<typeof visibleHaEntities>[0]) =>
 		Effect.promise(() =>
 			runtime.runPromise(
@@ -202,9 +211,27 @@ export function registerIntegrations<R>(options: {
 					message: "Integration request was rejected",
 					field: "",
 				};
-			const operation = controller.then((c) =>
-				runtime.runPromise(c.request(request.right)),
-			);
+			const operation = controller.then(async (c) => {
+				if (request.right.type !== "shortcuts.generate")
+					return runtime.runPromise(c.request(request.right));
+				const result = await runtime.runPromiseExit(c.request(request.right), {
+					signal: draftingLifetime.signal,
+				});
+				if (Exit.isSuccess(result)) return result.value;
+				if (
+					draftingLifetime.signal.aborted &&
+					Cause.isInterruptedOnly(result.cause)
+				) {
+					const error = new DraftUnavailable();
+					return {
+						type: "error" as const,
+						code: error.code,
+						message: error.message,
+						field: "",
+					};
+				}
+				throw Cause.squash(result.cause);
+			});
 			pending.add(operation);
 			try {
 				return await operation;
@@ -235,6 +262,7 @@ export function registerIntegrations<R>(options: {
 			if (disposal) return disposal;
 			disposal = (async () => {
 				disposed = true;
+				draftingLifetime.abort();
 				clearInterval(timer);
 				ipcMain.removeHandler(INTEGRATIONS_REQUEST);
 				await options.profileRuntime.runPromise(

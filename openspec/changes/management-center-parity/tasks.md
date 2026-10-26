@@ -69,3 +69,7 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 - [x] 7.14 Preserve legacy inline/custom emoji tile images and reconcile committed partial multi-file imports with an explicit notice. Prove renderer previews and successful/invalid import consumers, run fresh gates/native mocks and reply before resolving both findings. Bead `open-quake-lih.17.1.38`. Evidence: `verification-review-round-5-top.md`; source `7d85745afe06dc5476cf09c381a7fe3bb3e59acf`.
 
 - [x] 7.15 Preserve sidebar width on offset clicks and use pointer deltas during drag. Wait for the actual native theme request before checking font-only IPC deduplication. Verify mounted pointer/persistence behavior and sequential native mocks plus fresh gates. Bead `open-quake-lih.17.1.39`. Evidence: `verification-review-round-6.md`.
+
+## 8. Production drafting
+
+- [ ] 8.1 Bind shortcut generation to the saved default model and native credential owner through the existing AI facade. Keep output inert, bounded and validated by ShortcutService; preserve explicit library save/profile sync. Verify the real IPC/root path, missing/failed credentials, malformed/oversized output, no chat history changes, concurrent generation, cancellation and shutdown. Deliver a reviewed merged PR. Bead `open-quake-lih.17.1.40`.
