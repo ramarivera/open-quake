@@ -156,6 +156,134 @@
 				"read": "Preferences couldn’t be read.",
 				"unknown": "The settings service didn’t respond. Try again."
 			}
+		},
+		"guide": {
+			"title": "QUAKE guide",
+			"subtitle": "Included with open-quake, so it opens without a network connection.",
+			"rowLabel": "QUAKE guide",
+			"rowHint": "How the device, keys, knob and voice work in open-quake, and what isn’t supported yet.",
+			"open": "Open guide",
+			"close": "Close guide",
+			"topicsLabel": "Guide topics",
+			"topicOf": "Topic {current} of {total}",
+			"previous": "Previous",
+			"next": "Next: {topic}",
+			"done": "Done",
+			"go": "Open",
+			"openPage": "Open {page}",
+			"topics": {
+				"start": {
+					"label": "Getting started",
+					"title": "Your QUAKE or the desktop preview",
+					"intro": "open-quake runs the DecoKee QUAKE without DK-Suite. The QUAKE connects over USB for the knob, touch input and its settings, and over HDMI for its 1920 × 480 screen strip.",
+					"preview": "No QUAKE yet? Choose Desktop preview in setup. Overview and Keys show the strip’s screen inside this window, so you can arrange profiles and keys first. The preview sends nothing to a device and can’t show how the hardware will respond.",
+					"check": {
+						"heading": "When something seems off",
+						"overview": "Overview shows whether a QUAKE is connected, its latest heartbeat, and each turn and press as it arrives.",
+						"connection": "If the QUAKE isn’t found, Device › Connection checks USB and HDMI.",
+						"busy": "Quit DK-Suite first. Only one app can use the QUAKE at a time.",
+						"mock": "“Simulated QUAKE” means input comes from the development mock device, not from hardware."
+					}
+				},
+				"keys": {
+					"label": "Keys and profiles",
+					"title": "Keys and profiles",
+					"intro": "A profile is a complete layout for the strip. Each of its pages holds 16 keys in two rows of eight. Tap a key on the strip to run its function.",
+					"edit": {
+						"heading": "Edit a key in Device › Keys",
+						"choose": "Choose the profile and the page.",
+						"select": "Select a key in the preview or the key list, then choose its function and settings.",
+						"save": "Save writes the key to that profile. Cancel discards your changes."
+					},
+					"manage": {
+						"heading": "Manage profiles in Device › Knob profiles",
+						"lists": "Default and custom profiles are listed separately. You can keep up to 30.",
+						"default": "Add a custom profile, or choose the profile open-quake starts with.",
+						"linked": "Link a profile to apps, and open-quake switches to it while one of those apps is in front."
+					},
+					"permissions": "On macOS some functions need system permissions. Settings › Permissions shows their live status and opens System Settings."
+				},
+				"knob": {
+					"label": "The knob",
+					"title": "Using the knob",
+					"intro": "The knob turns and presses. What it does depends on what is on the strip at that moment.",
+					"turn": {
+						"term": "Turn",
+						"detail": "Switches profiles. A ring or a picker with profile previews appears on the strip; stop turning and it switches after a moment."
+					},
+					"press": {
+						"term": "Press",
+						"detail": "While the picker is open, switches to the highlighted profile right away. Otherwise, stops a voice reply that is playing."
+					},
+					"double": {
+						"term": "Press twice",
+						"detail": "Switches to the Colorful Screen profile, if you have one."
+					},
+					"hold": {
+						"term": "Press and hold",
+						"detail": "Talks to your assistant once voice is set up. Release to send."
+					},
+					"focus": "Some keys, such as a volume key, take over the knob while they are active on the strip. Turning then adjusts that key instead of switching profiles.",
+					"controls": "Device › Controls sets the screen luminance, whether the knob stays lit while your computer is locked, the buzzer and alert volume, and the device microphone.",
+					"unverified": "Gestures follow what the QUAKE reports for each turn and press. Turn direction and timing haven’t been verified on hardware for this build."
+				},
+				"voice": {
+					"label": "Voice",
+					"title": "Voice: setup, privacy and limits",
+					"intro": "Voice is off until you set it up. open-quake doesn’t include an assistant or a speech engine; it connects to services you choose.",
+					"setup": {
+						"heading": "Set it up",
+						"agent": "Choose who answers in Assistant › Agents: a model under AI configuration, or a saved Hermes or OpenClaw connection.",
+						"recognition": "Turn on speech recognition in Settings › Speech. It uses DashScope with your own key.",
+						"answers": "Optionally turn on spoken answers there too, with the OpenAI Speech API or DashScope."
+					},
+					"privacy": {
+						"heading": "What leaves this computer",
+						"microphone": "Voice uses your computer’s default microphone, and only while you hold to talk. macOS asks for permission the first time.",
+						"audio": "What you say goes to the recognition service you chose, and the text goes to your assistant. Spoken answers come from the speech service.",
+						"keys": "Speech keys are kept in the system’s secure storage, apart from chat keys, and aren’t shown again."
+					},
+					"limits": {
+						"heading": "Limits",
+						"online": "Voice works only while your speech service and assistant are reachable.",
+						"unverified": "Voice with real speech services and the knob’s hold gesture hasn’t been accepted on hardware yet."
+					}
+				},
+				"places": {
+					"label": "Where things are",
+					"title": "Where things are",
+					"intro": "Everything is in the sidebar. The names below match it."
+				},
+				"limits": {
+					"label": "Not supported yet",
+					"title": "What open-quake doesn’t do yet",
+					"list": {
+						"heading": "Current boundaries",
+						"firmware": "Firmware updates are manual. In Settings › Device, select a trusted QUAKE UF2 image; open-quake checks it before offering the upgrade and confirms it by reading the version back. No firmware is included or downloaded.",
+						"calibration": "There’s no knob or touch calibration for the QUAKE. The calibration in DK-Suite belongs to a different keyboard, the ARIS-68, and open-quake never sends it.",
+						"lighting": "DK-Suite’s lighting effects aren’t available. Device › Controls has the light and sound settings that are.",
+						"hostKeyboard": "Shortcuts are typed by the QUAKE, acting as a keyboard. Typing them from this computer instead isn’t available in this build.",
+						"appUpdates": "App updates aren’t set up for this build. Settings shows the installed version.",
+						"cloud": "There are no accounts, cloud sync or DecoKee online services. To keep a copy, export a backup in Settings › Updates and backups, in DK-Suite’s backup format."
+					},
+					"simulated": "open-quake is tested with simulated devices. Your QUAKE may behave differently; Overview always shows what it actually reports."
+				}
+			},
+			"places": {
+				"overview": "Connection status, heartbeat and live input.",
+				"keys": "Functions for every key on each profile page.",
+				"profiles": "Default and custom profiles, the startup profile and linked apps.",
+				"screen": "Wallpaper, clock, weather and media, and system monitor tiles.",
+				"controls": "Luminance, knob light, buzzer, alert volume and the device microphone.",
+				"connection": "USB and HDMI checks when the QUAKE isn’t found.",
+				"agents": "Assistant models, Hermes and OpenClaw connections, and conversations.",
+				"shortcuts": "Shortcuts that AI creates from your description.",
+				"emoji": "Animated emoji made from one of your images.",
+				"meetings": "Meeting minutes records.",
+				"home-assistant": "Home Assistant entities on keys, and what the assistant may see.",
+				"appearance": "Graphite, Paper or Midnight theme, text size and motion.",
+				"settings": "Language, startup, setup, this guide, speech, firmware, backups and permissions."
+			}
 		}
 	},
 	"de": {
@@ -314,6 +442,134 @@
 				"invalid": "Dieser Wert ist ungültig.",
 				"read": "Die Einstellungen konnten nicht gelesen werden.",
 				"unknown": "Der Einstellungsdienst hat nicht geantwortet. Versuche es erneut."
+			}
+		},
+		"guide": {
+			"title": "QUAKE-Anleitung",
+			"subtitle": "Gehört zu open-quake und öffnet sich auch ohne Netzwerkverbindung.",
+			"rowLabel": "QUAKE-Anleitung",
+			"rowHint": "Wie Gerät, Tasten, Drehknopf und Sprache in open-quake funktionieren und was noch nicht unterstützt wird.",
+			"open": "Anleitung öffnen",
+			"close": "Anleitung schließen",
+			"topicsLabel": "Themen der Anleitung",
+			"topicOf": "Thema {current} von {total}",
+			"previous": "Zurück",
+			"next": "Weiter: {topic}",
+			"done": "Fertig",
+			"go": "Öffnen",
+			"openPage": "{page} öffnen",
+			"topics": {
+				"start": {
+					"label": "Erste Schritte",
+					"title": "Dein QUAKE oder die Desktop-Vorschau",
+					"intro": "open-quake steuert den DecoKee QUAKE ohne DK-Suite. Der QUAKE wird über USB für Drehknopf, Touch-Eingaben und Einstellungen verbunden und über HDMI für seine 1920 × 480 große Bildschirmleiste.",
+					"preview": "Noch kein QUAKE? Wähle in der Einrichtung die Desktop-Vorschau. Overview und Keys zeigen dann den Bildschirm der Leiste in diesem Fenster, damit du Profile und Tasten schon vorbereiten kannst. Die Vorschau sendet nichts an ein Gerät und kann nicht zeigen, wie die Hardware reagiert.",
+					"check": {
+						"heading": "Wenn etwas nicht stimmt",
+						"overview": "Overview zeigt, ob ein QUAKE verbunden ist, seinen letzten Heartbeat und jedes Drehen und Drücken, sobald es ankommt.",
+						"connection": "Wird der QUAKE nicht gefunden, prüft Device › Connection USB und HDMI.",
+						"busy": "Beende zuerst DK-Suite. Den QUAKE kann immer nur eine App verwenden.",
+						"mock": "„Simulated QUAKE“ bedeutet, dass die Eingaben vom simulierten Entwicklungsgerät kommen, nicht von Hardware."
+					}
+				},
+				"keys": {
+					"label": "Tasten und Profile",
+					"title": "Tasten und Profile",
+					"intro": "Ein Profil ist eine vollständige Belegung der Leiste. Jede seiner Seiten hat 16 Tasten in zwei Reihen zu je acht. Tippe auf der Leiste auf eine Taste, um ihre Funktion auszuführen.",
+					"edit": {
+						"heading": "Eine Taste unter Device › Keys bearbeiten",
+						"choose": "Wähle Profil und Seite.",
+						"select": "Wähle eine Taste in der Vorschau oder in der Tastenliste und dann ihre Funktion und Einstellungen.",
+						"save": "Speichern übernimmt die Taste in dieses Profil, Abbrechen verwirft deine Änderungen."
+					},
+					"manage": {
+						"heading": "Profile unter Device › Knob profiles verwalten",
+						"lists": "Standard- und eigene Profile werden getrennt aufgeführt. Du kannst bis zu 30 behalten.",
+						"default": "Füge ein eigenes Profil hinzu oder wähle das Profil, mit dem open-quake startet.",
+						"linked": "Verknüpfe ein Profil mit Apps, dann wechselt open-quake zu ihm, solange eine dieser Apps im Vordergrund ist."
+					},
+					"permissions": "Unter macOS brauchen manche Funktionen Systemberechtigungen. Settings › Permissions zeigt ihren aktuellen Status und öffnet die Systemeinstellungen."
+				},
+				"knob": {
+					"label": "Der Drehknopf",
+					"title": "Den Drehknopf verwenden",
+					"intro": "Der Drehknopf lässt sich drehen und drücken. Was er tut, hängt davon ab, was gerade auf der Leiste zu sehen ist.",
+					"turn": {
+						"term": "Drehen",
+						"detail": "Wechselt das Profil. Auf der Leiste erscheint ein Ring oder eine Auswahl mit Profilvorschauen; hörst du auf zu drehen, wird nach kurzer Zeit gewechselt."
+					},
+					"press": {
+						"term": "Drücken",
+						"detail": "Wechselt bei geöffneter Auswahl sofort zum markierten Profil. Sonst stoppt es eine Sprachantwort, die gerade läuft."
+					},
+					"double": {
+						"term": "Zweimal drücken",
+						"detail": "Wechselt zum Profil Colorful Screen, falls du eines hast."
+					},
+					"hold": {
+						"term": "Gedrückt halten",
+						"detail": "Spricht mit deinem Assistenten, sobald die Sprachsteuerung eingerichtet ist. Loslassen sendet."
+					},
+					"focus": "Manche Tasten, etwa eine Lautstärketaste, übernehmen den Drehknopf, solange sie auf der Leiste aktiv sind. Drehen verstellt dann diese Taste, statt das Profil zu wechseln.",
+					"controls": "Unter Device › Controls stellst du die Bildschirmhelligkeit ein, ob der Drehknopf bei gesperrtem Computer leuchtet, Summer und Hinweislautstärke sowie das Gerätemikrofon.",
+					"unverified": "Die Gesten folgen dem, was der QUAKE für jedes Drehen und Drücken meldet. Drehrichtung und Timing sind für diese Version noch nicht an Hardware geprüft."
+				},
+				"voice": {
+					"label": "Sprache",
+					"title": "Sprache: Einrichtung, Datenschutz und Grenzen",
+					"intro": "Die Sprachsteuerung ist aus, bis du sie einrichtest. open-quake enthält weder einen Assistenten noch eine Spracherkennung; es verbindet sich mit Diensten, die du auswählst.",
+					"setup": {
+						"heading": "Einrichten",
+						"agent": "Lege unter Assistant › Agents fest, wer antwortet: ein Modell unter KI-Konfiguration oder eine gespeicherte Hermes- oder OpenClaw-Verbindung.",
+						"recognition": "Schalte unter Settings › Speech die Spracherkennung ein. Sie nutzt DashScope mit deinem eigenen Schlüssel.",
+						"answers": "Optional schaltest du dort auch gesprochene Antworten ein, mit der OpenAI Speech API oder DashScope."
+					},
+					"privacy": {
+						"heading": "Was diesen Computer verlässt",
+						"microphone": "Die Sprachsteuerung nutzt das Standardmikrofon deines Computers, und nur solange du zum Sprechen gedrückt hältst. macOS fragt beim ersten Mal nach der Berechtigung.",
+						"audio": "Was du sagst, geht an den gewählten Erkennungsdienst, der Text an deinen Assistenten. Gesprochene Antworten kommen vom Sprachdienst.",
+						"keys": "Sprachschlüssel liegen im sicheren Speicher des Systems, getrennt von Chat-Schlüsseln, und werden nicht wieder angezeigt."
+					},
+					"limits": {
+						"heading": "Grenzen",
+						"online": "Die Sprachsteuerung funktioniert nur, solange Sprachdienst und Assistent erreichbar sind.",
+						"unverified": "Sprache mit echten Sprachdiensten und die Haltegeste des Drehknopfs sind noch nicht an Hardware abgenommen."
+					}
+				},
+				"places": {
+					"label": "Wo du was findest",
+					"title": "Wo du was findest",
+					"intro": "Alles findest du in der Seitenleiste. Die Namen unten entsprechen ihr."
+				},
+				"limits": {
+					"label": "Noch nicht unterstützt",
+					"title": "Was open-quake noch nicht kann",
+					"list": {
+						"heading": "Aktuelle Grenzen",
+						"firmware": "Firmware-Updates sind manuell. Wähle unter Settings › Device ein vertrauenswürdiges QUAKE-UF2-Image; open-quake prüft es, bevor es das Update anbietet, und bestätigt es, indem es die Version zurückliest. Firmware wird weder mitgeliefert noch heruntergeladen.",
+						"calibration": "Für den QUAKE gibt es keine Kalibrierung von Drehknopf oder Touch. Die Kalibrierung in DK-Suite gehört zu einer anderen Tastatur, der ARIS-68, und open-quake sendet sie nie.",
+						"lighting": "Die Lichteffekte aus DK-Suite sind nicht verfügbar. Unter Device › Controls findest du die Licht- und Toneinstellungen, die es gibt.",
+						"hostKeyboard": "Kurzbefehle tippt der QUAKE selbst, als Tastatur. Sie stattdessen von diesem Computer aus zu tippen, ist in dieser Version nicht verfügbar.",
+						"appUpdates": "App-Updates sind für diese Version nicht eingerichtet. Settings zeigt die installierte Version.",
+						"cloud": "Es gibt keine Konten, keine Cloud-Synchronisierung und keine Onlinedienste von DecoKee. Für eine Kopie exportierst du unter Settings › Updates and backups eine Sicherung im Sicherungsformat von DK-Suite."
+					},
+					"simulated": "open-quake wird mit simulierten Geräten getestet. Dein QUAKE kann sich anders verhalten; Overview zeigt immer, was er tatsächlich meldet."
+				}
+			},
+			"places": {
+				"overview": "Verbindungsstatus, Heartbeat und Live-Eingaben.",
+				"keys": "Funktionen für jede Taste auf jeder Profilseite.",
+				"profiles": "Standard- und eigene Profile, Startprofil und verknüpfte Apps.",
+				"screen": "Hintergrund, Uhr, Wetter und Medien sowie Systemmonitor-Kacheln.",
+				"controls": "Helligkeit, Knopfbeleuchtung, Summer, Hinweislautstärke und Gerätemikrofon.",
+				"connection": "USB- und HDMI-Prüfung, wenn der QUAKE nicht gefunden wird.",
+				"agents": "Assistenten-Modelle, Hermes- und OpenClaw-Verbindungen und Unterhaltungen.",
+				"shortcuts": "Kurzbefehle, die KI aus deiner Beschreibung erstellt.",
+				"emoji": "Animierte Emoji aus einem deiner Bilder.",
+				"meetings": "Aufzeichnungen von Besprechungsprotokollen.",
+				"home-assistant": "Home-Assistant-Entitäten auf Tasten und was der Assistent sehen darf.",
+				"appearance": "Design Graphite, Paper oder Midnight, Textgröße und Bewegung.",
+				"settings": "Sprache, Start, Einrichtung, diese Anleitung, Sprachdienste, Firmware, Sicherungen und Berechtigungen."
 			}
 		}
 	}

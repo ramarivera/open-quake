@@ -197,3 +197,71 @@ decisions); tokens and shell come from independent-management-design.
   as a generic read/save failure. Copy is bundled en/de through the existing
   GT dictionaries. Layout is one column at 390px and a step rail plus form
   at desktop widths, verified in Graphite, Midnight and Paper.
+
+## QUAKE guide and task 3.2 audit, 2026-10-26
+
+Opus 5.5 owns these renderer decisions.
+
+- **Entry.** Settings › General has a QUAKE guide row below Setup. Its Open
+  guide button opens a native modal dialog. The guide doesn't depend on the
+  settings service, so it stays available when setup or login state can't be
+  read. Reopening resumes at the last topic read in that page view.
+- **Shape.** One topic at a time: a numbered topic rail beside the text, with
+  Previous and Next: <topic> in the footer and Done on the last topic. Below
+  560px of dialog width, the dialog fills the window, the rail becomes a native
+  topic select, and gesture tables stack. Esc, × and Done close it and return
+  focus to Open guide. Opening and Previous/Next move focus to the topic heading.
+  Choosing from the rail keeps focus there. The backdrop doesn't dismiss the
+  dialog. Styling uses `--oq-*` tokens and shared buttons and callouts. The
+  entrance animation runs only with full motion.
+- **Content.** Six topics are written from current source:
+  1. Getting started: QUAKE or desktop preview.
+  2. Keys and profiles.
+  3. The knob.
+  4. Voice: setup, privacy and limits.
+  5. Where things are.
+  6. Not supported yet.
+
+  The copy says what is unverified. It covers knob direction and timing,
+  voice with real services, and simulated-device testing. It names manual
+  firmware, the absence of QUAKE calibration (ARIS-68 calibration is never
+  sent), unavailable DK-Suite lighting effects, unavailable host-keyboard
+  output, unconfigured app updates and the lack of accounts or cloud. It
+  claims no bundled assistant, speech engine, firmware or hardware
+  acceptance.
+- **Text and locale.** All sentences are in the `settings.guide` en/de
+  dictionaries and follow the live app locale while the dialog is open. Page
+  names in Where things are come from `pageLocation()`, so they always match
+  the sidebar, which is not translated. The guide has no images, links or
+  network use.
+- **Navigation seam.** `GeneralSettings` accepts an optional
+  `onOpenPage(page: ManagementPage)`. With it, each place gets an Open button
+  that closes the guide and calls the root. Without it, places are text only.
+  The root passes its page navigation callback. After the destination commits, it focuses the stable destination page container, including when opening Settings again. Dismissal still restores focus to Open guide.
+
+Task 3.2 audit against source. These items are reported for the parent and
+are not implemented here:
+
+- Provider sampling is a genuine gap. No UI exposes temperature or topP.
+  `main/chat/host.ts` projects only `maxOutputTokens`, and `ai-invariants`
+  bounds topP limits to 0–1 but never bounds temperature limits to 0–2. The
+  owner is Agents › AI configuration, not Settings. When the backend accepts
+  them, put both values on each model row behind an advanced disclosure.
+  Blank should mean provider default, with field-level invalid messages and no
+  write.
+- QUAKE lighting modes are a genuine gap. `packages/device/src/lighting` is
+  capability-gated but has no desktop composition or consumer. The owner is
+  Device › Controls, not Settings. List only advertised fields, and show
+  requested-but-unconfirmed until readback.
+- The remaining requirements already have owners. Luminance, knob light,
+  buzzer, alert volume and device mic are in Controls, behind a hardware
+  session guard. Wallpaper, clock and monitor are on Screen. Firmware and
+  backups are in Settings › Device and Settings › Updates and backups. Speech
+  is in Settings › Speech, and chat and agent models are in Agents. No
+  duplicate settings owner is added. Provider-switch secret preservation and
+  unavailable-adapter states belong to those owners and were not re-verified
+  here.
+- Calibration has no code path anywhere. No UI row is added; the guide is the
+  explanation. ARIS-68 is filtered out at HID discovery by the QUAKE vendor
+  and usage page. That means it is invisible rather than shown as
+  unsupported, which is a spec mismatch for the parent to decide.
