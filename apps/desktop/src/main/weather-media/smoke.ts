@@ -23,7 +23,11 @@ import { MediaLive, registerMedia } from "../media";
 import { registerMeetings } from "../meetings";
 import { registerMonitor } from "../monitor";
 import { ProfilesLive, registerProfiles } from "../profiles/profile-ipc";
-import { clockProfile, stripFixtureEnvelope } from "../test/strip-fixtures";
+import {
+	clockProfile,
+	STRIP_GLYPHS,
+	stripFixtureEnvelope,
+} from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { waitForVoice } from "../voice/smoke-wait";
 import { WeatherMediaController } from "./controller";
@@ -631,7 +635,17 @@ async function smoke(): Promise<void> {
 				{
 					id: "player-1",
 					keys: [
-						{ ...source, config: { ...source.config, type: "playAudio" } },
+						{
+							...source,
+							config: {
+								...source.config,
+								type: "playAudio",
+								actions: [
+									{ type: "sound", value: "" },
+									{ type: "audioAction", value: 0 },
+								],
+							},
+						},
 					],
 				},
 			],
@@ -773,12 +787,95 @@ async function smoke(): Promise<void> {
 		await panel.reload();
 		await waitFor(
 			panel,
-			"!!document.querySelector('.strip-tile[data-type=playAudio]')",
-			"local sound renderer retained",
+			"!!document.querySelector('[data-testid=soundboard-unavailable]')",
+			"local sound visibly unavailable",
 		);
 		assert.equal(
 			await evaluate(panel, "document.querySelectorAll('.oq-player').length"),
 			0,
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				"document.querySelectorAll('[data-testid=soundboard-unavailable] button,[data-testid=soundboard-unavailable] [data-quake-sub-touch]').length",
+			),
+			0,
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				"document.querySelector('[data-testid=soundboard-unavailable]').textContent.includes('fixture.mp3')",
+			),
+			false,
+		);
+		await capture(panel, "soundboard-unavailable");
+		const soundBounds = await evaluate(
+			panel,
+			"(()=>{const t=document.querySelector('.oq-soundboard-unavailable .oq-player-title'),d=document.querySelector('.oq-soundboard-detail');return {title:{scroll:t.scrollWidth,client:t.clientWidth,box:t.getBoundingClientRect().toJSON()},detail:{scroll:d.scrollHeight,client:d.clientHeight,box:d.getBoundingClientRect().toJSON()}};})()",
+		);
+		await writeFile(
+			join(artifacts, "soundboard-bounds.json"),
+			JSON.stringify(soundBounds, null, 2),
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				"(()=>{const t=document.querySelector('.oq-soundboard-unavailable .oq-player-title'),d=document.querySelector('.oq-soundboard-detail');return t.scrollWidth<=t.clientWidth && d.scrollHeight<=d.clientHeight && d.getBoundingClientRect().bottom<=480;})()",
+			),
+			true,
+			"release-limit copy fits the device canvas",
+		);
+		// Legacy imported keys keep their compact artwork, with an explicit limit.
+		envelope = stripFixtureEnvelope({
+			...clockProfile,
+			id: "fixture-legacy-sound",
+			name: "Local sound",
+			pages: [
+				{
+					id: "legacy-1",
+					keys: [
+						{
+							...source,
+							config: {
+								...source.config,
+								type: "playAudioLegacy",
+								size: [1, 1],
+								icon: STRIP_GLYPHS.mic,
+								title: {
+									...source.config.title,
+									text: "Local playlist",
+									display: true,
+								},
+								actions: [{ type: "sound", value: "fixture.mp3" }],
+							},
+						},
+					],
+				},
+			],
+		});
+		await profiles.dispose();
+		profiles = makeProfiles();
+		await panel.reload();
+		await waitFor(
+			panel,
+			"document.querySelector('[data-kind=unavailable]')?.textContent === 'Unavailable'",
+			"legacy sound visibly unavailable",
+		);
+		assert.equal(
+			await evaluate(
+				panel,
+				"document.querySelectorAll('.oq-player,[data-testid=soundboard-unavailable] button,[data-testid=soundboard-unavailable] [data-quake-sub-touch]').length",
+			),
+			0,
+		);
+		await capture(panel, "soundboard-legacy-unavailable");
+		assert.equal(
+			await evaluate(
+				panel,
+				"(()=>{const t=document.querySelector('[data-testid=soundboard-unavailable]'),c=t.querySelector('[data-kind=unavailable]'),a=t.getBoundingClientRect(),b=c.getBoundingClientRect();return b.left>=a.left && b.right<=a.right && b.top>=a.top && b.bottom<=a.bottom && !!t.querySelector('.strip-tile-icon img');})()",
+			),
+			true,
+			"compact limit chip fits and retains artwork",
 		);
 		assert.deepEqual(actions, ["pause"]);
 		assert(

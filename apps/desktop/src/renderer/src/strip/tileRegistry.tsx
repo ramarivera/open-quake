@@ -27,6 +27,8 @@ import { MeetingKey } from "./tiles/meeting/MeetingKey";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
 import { useMonitor } from "./tiles/monitor/useMonitor";
 import { previewSnapshot } from "./tiles/monitor/view-model";
+import { SoundboardUnavailableTile } from "./tiles/soundboard/SoundboardUnavailableTile";
+import { soundboardOwned } from "./tiles/soundboard/soundboard-state";
 import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
 /**
@@ -117,14 +119,8 @@ function PlayerSlot({
 	const { snapshot, client } = useWeatherMedia();
 	// Local soundboard execution stays with its owner. A configured local key
 	// must never turn into an unrelated OS transport action.
-	const localSound = tile.key.config.actions.some(
-		(action) =>
-			action.type === "sound" &&
-			(typeof action.value === "string"
-				? action.value.trim().length > 0
-				: Array.isArray(action.value) && action.value.length > 0),
-	);
-	if (localSound) return <GenericTile tile={tile} context={context} />;
+	if (soundboardOwned(tile.key.config))
+		return <SoundboardUnavailableTile tile={tile} context={context} />;
 	return snapshot ? (
 		<PlayerCard
 			widthPx={tile.box.width}
@@ -174,6 +170,7 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
 		["dkDesktopClock", ClockSlot],
 		["playAudio", PlayerSlot],
+		["playAudioLegacy", SoundboardUnavailableTile],
 		["meetingMinutes", MeetingKey],
 		["tempMeetingMinutes", MeetingKey],
 		["meetingRecordMark", MeetingKey],
