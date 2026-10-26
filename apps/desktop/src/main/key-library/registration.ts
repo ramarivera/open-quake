@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Effect, Fiber, Schema, Stream } from "effect";
@@ -12,6 +12,7 @@ import {
 	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import type { ProfileRepositoryError } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { inspectProfileText } from "../../../../../packages/device/src/profiles/profile-import.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
 	KEY_PREVIEW,
@@ -319,9 +320,45 @@ export function registerKeyLibrary<R>(
 							});
 							yield* KeyRuntime.refresh(command.deviceId);
 							break;
-						case "preview":
-							yield* KeyEditing.preview(command.target, command.key);
+						case "preview": {
+							const result = yield* KeyEditing.preview(
+								command.target,
+								command.key,
+								command.geometry,
+							);
+							if (result._tag !== "ready") yield* publish;
+							if (result._tag === "confirmation")
+								return {
+									_tag: "rejected",
+									reason: "overlap-confirmation",
+									keyCodes: result.keyCodes,
+								};
+							if (result._tag === "rejected")
+								return { _tag: "rejected", reason: "layout-locked-or-invalid" };
 							break;
+						}
+						case "add-page":
+						case "delete-page":
+							yield* ProfileService.editPages(command);
+							yield* KeyEditing.discard();
+							break;
+						case "inspect-import":
+							return {
+								_tag: "success",
+								importReport: inspectProfileText(command.source),
+							};
+						case "import-profile": {
+							const id = randomUUID();
+							const envelope = yield* ProfileService.importProfile(
+								command.source,
+								id,
+							);
+							return {
+								_tag: "success",
+								envelope: encodeProfileEnvelope(envelope),
+								importedProfileId: id,
+							};
+						}
 						case "save":
 							yield* KeyEditing.save(command.token);
 							break;

@@ -117,6 +117,146 @@ afterEach(async () => {
 		await rm(dir, { recursive: true, force: true });
 });
 
+it("routes geometry and page edits through the authorized typed Keys consumer", async () => {
+	const f = fixture();
+	const target = {
+		token: "geometry-ipc",
+		profileId: "p",
+		pageId: "one",
+		keyCode: "1,1",
+		revision: 0,
+	};
+	try {
+		const commands = [
+			{ type: "preview", target, key: f.key, geometry: { destination: "2,8" } },
+			{
+				type: "add-page",
+				profileId: "p",
+				pageId: "two",
+				revision: 0,
+				deviceId: "device",
+			},
+			{ type: "inspect-import", source: JSON.stringify([f.key]) },
+			{ type: "import-profile", source: JSON.stringify([f.key]) },
+		];
+		for (const command of commands)
+			expect(await f.request(f.panel, command)).toEqual({
+				_tag: "rejected",
+				reason: "unauthorized",
+			});
+		expect((await f.request(f.manager, commands[0]))._tag).toBe("success");
+		const saved = await f.request(f.manager, {
+			type: "save",
+			token: target.token,
+		});
+		expect(
+			saved._tag === "success" &&
+				saved.envelope?.profiles[0].pages[0].keys[0]?.keyCode,
+		).toBe("2,8");
+		const added = await f.request(f.manager, {
+			type: "add-page",
+			profileId: "p",
+			pageId: "two",
+			revision: 1,
+			deviceId: "device",
+		});
+		expect(
+			added._tag === "success" && added.envelope?.activeByDevice.device?.pageId,
+		).toBe("two");
+		const removed = await f.request(f.manager, {
+			type: "delete-page",
+			profileId: "p",
+			pageId: "two",
+			revision: 2,
+			deviceId: "device",
+		});
+		expect(
+			removed._tag === "success" &&
+				removed.envelope?.activeByDevice.device?.pageId,
+		).toBe("one");
+		expect(
+			(
+				await f.request(f.manager, {
+					type: "delete-page",
+					profileId: "p",
+					pageId: "one",
+					revision: 3,
+					deviceId: "device",
+				})
+			)._tag,
+		).toBe("rejected");
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it("returns import diagnostics without writing, then imports quarantined JSON without runtime calls", async () => {
+	let calls = 0;
+	const f = fixture({}, () =>
+		Effect.sync(() => {
+			calls++;
+		}),
+	);
+	try {
+		const source = JSON.stringify([
+			{
+				...f.key,
+				config: {
+					...f.key.config,
+					type: "cameraView",
+					supportKnob: null,
+					actions: [null, {}, { type: "", value: "" }],
+				},
+			},
+		]);
+		const inspected = await f.request(f.manager, {
+			type: "inspect-import",
+			source,
+		});
+		expect(
+			inspected._tag === "success" && inspected.importReport?.profile,
+		).toBeDefined();
+		if (inspected._tag !== "success") throw new Error("Inspection rejected");
+		expect(
+			new Set(inspected.importReport?.diagnostics.map((d) => d.code)),
+		).toEqual(
+			new Set(["unknown-function", "missing-optional", "legacy-sentinel"]),
+		);
+		const before = await f.request(f.manager, { type: "read", locale: "en" });
+		expect(before._tag === "success" && before.envelope?.profiles.length).toBe(
+			2,
+		);
+		const imported = await f.request(f.manager, {
+			type: "import-profile",
+			source,
+		});
+		expect(
+			imported._tag === "success" && imported.envelope?.profiles.length,
+		).toBe(3);
+		if (imported._tag !== "success") throw new Error("Import rejected");
+		const p = imported.envelope?.profiles.find(
+			(p) => p.id === imported.importedProfileId,
+		);
+		expect(p?.pages[0].keys[0]?.compatibility?.unsupported).toBe(true);
+		expect(p?.pages[0].keys[0]?.compatibility?.source).toEqual(
+			JSON.parse(source)[0],
+		);
+		expect(calls).toBe(0);
+		expect(
+			(
+				await f.request(f.manager, {
+					type: "import-profile",
+					source: "{invalid",
+				})
+			)._tag,
+		).toBe("rejected");
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
 it("restricts the owned picker to icon operations and returns pixels without editing the draft", async () => {
 	const f = fixture();
 	try {

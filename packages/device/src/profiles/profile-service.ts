@@ -1,10 +1,12 @@
-import { Effect, type Stream } from "effect";
-import type { Profile, ProfileEnvelope } from "./profile-contracts.js";
+import { Effect, Option, Schema, type Stream } from "effect";
+import { Profile, type ProfileEnvelope } from "./profile-contracts.js";
 import {
 	ProfileNotFound,
 	type ProfileRepositoryError,
-	type ProfileValidationFailed,
+	ProfileValidationFailed,
 } from "./profile-errors.js";
+import { inspectProfileText } from "./profile-import.js";
+import { editProfilePages, type PageEdit } from "./profile-pages.js";
 import {
 	type ProfileCommitGuard,
 	type ProfileLoadResult,
@@ -32,6 +34,52 @@ export class ProfileService extends Effect.Service<ProfileService>()(
 					const profile = envelope.profiles.find((entry) => entry.id === id);
 					return profile ?? (yield* ProfileNotFound.fromCause(undefined));
 				}),
+				importProfile: Effect.fn("ProfileService.importProfile")(
+					(
+						text: string,
+						id: string,
+					): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
+						repository.transact((envelope) =>
+							Effect.gen(function* () {
+								const report = inspectProfileText(text);
+								if (
+									!report.profile ||
+									envelope.profiles.some((p) => p.id === id) ||
+									envelope.profiles.length >= 30
+								)
+									return yield* ProfileValidationFailed.fromCause(undefined);
+								const decoded = yield* Schema.decodeUnknown(Profile)({
+									...report.profile,
+									id,
+									revision: 0,
+									pages: report.profile.pages.map((page, i) => ({
+										...page,
+										id: `${id}-page-${i + 1}`,
+									})),
+								}).pipe(
+									Effect.catchTag("ParseError", (cause) =>
+										Effect.fail(ProfileValidationFailed.fromCause(cause)),
+									),
+								);
+								return {
+									...envelope,
+									profiles: [...envelope.profiles, decoded] as const,
+									manager: Option.map(envelope.manager, (manager) => ({
+										...manager,
+										revision: manager.revision + 1,
+									})),
+								};
+							}),
+						),
+				),
+				editPages: Effect.fn("ProfileService.pages")(
+					(
+						request: PageEdit,
+					): Effect.Effect<ProfileEnvelope, ProfileRepositoryError> =>
+						repository.transact((envelope) =>
+							editProfilePages(envelope, request),
+						),
+				),
 				saveProfile: Effect.fn("ProfileService.saveProfile")(
 					(
 						request: unknown,

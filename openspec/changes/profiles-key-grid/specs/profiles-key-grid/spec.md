@@ -133,12 +133,12 @@ A save SHALL carry the expected profile revision, validate the complete result, 
 
 ### Requirement: First-release page navigation
 
-The system SHALL support adding an empty page, selecting a one-based page number, previous page, next page, and removing a page while retaining at least one page. Previous and next SHALL clamp at the first and last page. Explicit go-to requests outside `1..pageCount` SHALL fail without changing selection. Deleting the selected page SHALL choose the page now at its former index, or the last remaining page when that index no longer exists. Profile-scoped knob settings SHALL survive page changes.
+The system SHALL support adding an empty page, selecting a one-based page number, previous page, next page, and removing a page while retaining at least one page. Previous and next SHALL wrap at the first and last page. Explicit go-to requests SHALL clamp to `1..pageCount`, following the approved `key-library-parity` navigation contract, MAIN-077 and MAIN-078. Deleting the selected page SHALL choose the page now at its former index, or the last remaining page when that index no longer exists. Profile-scoped knob settings SHALL survive page changes.
 
 #### Scenario: Navigation boundaries
 
 - **WHEN** next-page is activated on page 2 of a two-page profile, then go-to-page 3 is requested
-- **THEN** selection stays on page 2 and only the go-to request reports an invalid page
+- **THEN** selection first wraps to page 1 and then clamps to page 2
 
 #### Scenario: Delete last page
 
@@ -186,3 +186,17 @@ When folder support is enabled, a folder key SHALL reference an existing page ID
 
 - **WHEN** imported folder links form A to B to A
 - **THEN** the links remain preserved as unsupported compatibility data and cannot create an executable navigation cycle
+
+### Requirement: Diagnosed local profile import
+
+The Keys editor SHALL inspect a user-selected JSON profile or legacy flat key array before explicit import as a new local profile. It SHALL show field-path diagnostics for unknown function types, missing optional fields and normalized legacy null or empty-action sentinels. Unknown functions SHALL be quarantined and their complete source JSON SHALL survive unrelated edits. Invalid required fields SHALL block import. Import SHALL never activate a key or access DK-Suite storage. Sources: MGMT-061, MGMT-070, MGMT-073, MGMT-074, MGMT-080, MGMT-082; profiles-key-grid unsupported-import policy.
+
+#### Scenario: Diagnose and preserve a legacy camera key
+- **WHEN** a legacy array contains an unknown camera function, absent support flags, null optional fields and empty action sentinels
+- **THEN** the editor shows each normalization and unsupported status before import
+- **AND** explicit import preserves the raw source and knob record while dispatch excludes the camera key
+
+#### Scenario: Confirm span replacement
+- **WHEN** a span edit covers another visible key
+- **THEN** preview and Save require explicit replacement confirmation and honor the covered key's deletion and drag locks
+- **AND** cancellation leaves the committed revision unchanged

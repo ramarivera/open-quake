@@ -33,6 +33,7 @@ import {
 	verifyEditorTransactions,
 } from "./smoke-editor";
 import { verifyFinalReview } from "./smoke-final-review";
+import { verifyGeometryPagesImport } from "./smoke-geometry";
 import { verifyIconReview } from "./smoke-icon-review";
 import { verifyReviewEditor } from "./smoke-review";
 
@@ -112,6 +113,8 @@ const select = async (
 	selector: string,
 	value: string,
 ): Promise<void> => {
+	process.stdout.write(`keys smoke: select ${selector} ${value}\n`);
+	await ready(win, `document.querySelector(${JSON.stringify(selector)})`);
 	await evalIn(
 		win,
 		`(()=>{const el=document.querySelector(${JSON.stringify(selector)});el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));})()`,
@@ -384,6 +387,10 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "geometry-pages-import") {
+			await verifyGeometryPagesImport(harness);
+			return;
+		}
 		await verifyIconReview(
 			harness,
 			directory,
@@ -920,6 +927,10 @@ async function smoke(): Promise<void> {
 		);
 	} catch (cause) {
 		failed = true;
+		await writeFile(
+			join(scratch, "keys-requests-failure.json"),
+			JSON.stringify(delays?.requests, null, 2),
+		);
 		process.stderr.write(
 			`${cause instanceof Error ? cause.stack : String(cause)}\n`,
 		);
