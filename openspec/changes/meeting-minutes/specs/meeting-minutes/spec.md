@@ -403,6 +403,10 @@ Evidence: AI-308, SETTINGS-105. Summaries SHALL render Markdown headings, tables
 
 Evidence: AI-310, AI-317. Main and side tags SHALL remain explicit. A present legacy numeric parent zero SHALL identify a side record. Marks SHALL render only for main meetings, with optional provider word timestamps highlighting strictly overlapping words, numbered begin/end bookmarks and selection toggles. Transcript segments without word timestamps SHALL retain paragraph highlighting and mark boundary lines. Open or legacy sentinel ends SHALL resolve to the finite recording/transcript duration, never a fabricated year. Tooltips SHALL show millisecond start/end and remain within 20 px of viewport edges with width at most 260 px.
 
+#### Scenario: Word timing preserves saved transcript text
+- **WHEN** AI-310 provider tokens omit punctuation, whitespace or part of the saved paragraph
+- **THEN** the renderer preserves the complete saved text around aligned tokens and falls back to paragraph highlighting if tokens cannot align
+
 #### Scenario: Word boundary and open mark
 
 - **WHEN** a main meeting mark begins exactly at a word's end or remains open

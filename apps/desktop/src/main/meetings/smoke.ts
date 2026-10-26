@@ -15,7 +15,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { HardwareControls } from "@open-quake/device";
 import { Effect, Exit, ManagedRuntime, Option, Schema, Scope } from "effect";
-import { app, BrowserWindow, dialog, nativeTheme } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from "electron";
 import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog";
 import { Profile } from "../../../../../packages/device/src/profiles/profile-contracts";
 import type { MeetingAdapter } from "../../../../../packages/edge/src/ai/meeting-adapter";
@@ -32,6 +32,14 @@ import {
 	APPEARANCE_STORAGE_KEY,
 	defaultAppearance,
 } from "../../renderer/src/theme/appearance";
+import {
+	AGENT_CONNECTIONS_REQUEST,
+	type AgentConnectionReply,
+} from "../../shared/agent-connections";
+import {
+	SPEECH_SETTINGS_CHANNEL,
+	type SpeechSettingsReply,
+} from "../../shared/speech";
 import { registerAgents } from "../agents";
 import { registerHardware } from "../hardware";
 import { startMockHardwareBus } from "../hardware/bus";
@@ -278,6 +286,22 @@ async function smoke(): Promise<void> {
 		});
 		management.webContents.setAudioMuted(true);
 		panel.webContents.setAudioMuted(true);
+		// Credential/provider settings aren't part of this fake meeting fixture.
+		ipcMain.handle(
+			SPEECH_SETTINGS_CHANNEL,
+			(): SpeechSettingsReply => ({
+				_tag: "rejected",
+				code: "SPEECH.IPC.UNAVAILABLE",
+			}),
+		);
+		ipcMain.handle(
+			AGENT_CONNECTIONS_REQUEST,
+			(): AgentConnectionReply => ({
+				_tag: "rejected",
+				code: "AGENT.IPC.UNAVAILABLE",
+				message: "Connections are outside the meeting smoke fixture",
+			}),
+		);
 		disposeAppearance = registerManagementAppearance(
 			() => management,
 			directory,
@@ -529,6 +553,54 @@ async function smoke(): Promise<void> {
 		await click(management, ".meeting-record:last-child");
 		await click(management, ".meeting-document-tabs [role=tab]:first-child");
 		await capture(management, "meetings-history-summary");
+
+		// meeting-ui: host route and activation refresh use the production bridge.
+		const readRevision = async () =>
+			Number(
+				await management.webContents.executeJavaScript(
+					"document.querySelector('.meetings-page').dataset.revision",
+				),
+			);
+		const beforeReselect = await readRevision();
+		await click(management, '[data-nav-page="meetings"]');
+		await wait(
+			management,
+			`Number(document.querySelector('.meetings-page').dataset.revision)>${beforeReselect}`,
+		);
+		const beforeActivation = await readRevision();
+		management.webContents.send("management:activate", "meetings");
+		await wait(
+			management,
+			`Number(document.querySelector('.meetings-page').dataset.revision)>${beforeActivation}`,
+		);
+		await click(management, '[data-nav-page="overview"]');
+		await click(management, '[data-nav-page="meetings"]');
+		await wait(management, "document.querySelector('.meeting-document')");
+		await capture(management, "meeting-ui-en-summary");
+		await management.webContents.executeJavaScript(
+			"window.quakeLocale.set('de')",
+		);
+		await wait(management, "document.documentElement.lang==='de'");
+		await capture(management, "meeting-ui-de-summary");
+		await management.webContents.executeJavaScript(
+			"window.quakeLocale.set('en')",
+		);
+		await wait(management, "document.documentElement.lang==='en'");
+		await click(management, '[aria-label="Edit meeting title"]');
+		await wait(
+			management,
+			"document.querySelector('.meeting-title-dialog[open]')",
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				"document.querySelector('.meeting-title-dialog').getBoundingClientRect().width",
+			),
+			400,
+		);
+		await capture(management, "meeting-ui-en-title");
+		await click(management, ".meeting-title-dialog button[type=button]");
+		await click(management, `.meeting-record[data-record-id="${id}"]`);
+
 		// AI-334: the real owner preserves the forced 5x2 viewer footprint.
 		assert.deepEqual(
 			await management.webContents.executeJavaScript(`(async () => {
@@ -661,6 +733,17 @@ async function smoke(): Promise<void> {
 			);
 			assert.equal(parsed.overflow, false, `history overflow at ${width}`);
 			await capture(management, `meetings-history-layout-${width}`);
+			if (width === 520) {
+				await management.webContents.executeJavaScript(
+					"window.quakeLocale.set('de')",
+				);
+				await wait(management, "document.documentElement.lang==='de'");
+				await capture(management, "meeting-ui-de-narrow");
+				await management.webContents.executeJavaScript(
+					"window.quakeLocale.set('en')",
+				);
+				await wait(management, "document.documentElement.lang==='en'");
+			}
 		}
 		management.setContentSize(520, 1000);
 		await capture(management, "meetings-history-narrow");
@@ -844,6 +927,7 @@ async function smoke(): Promise<void> {
 			storage.save(
 				Schema.encodeSync(MeetingStore)({
 					version: 1,
+					summaryTemplate: history.summaryTemplate,
 					records: [
 						{
 							...saved,
@@ -960,6 +1044,8 @@ async function smoke(): Promise<void> {
 		await profiles?.dispose();
 		await media?.dispose();
 		await knob?.dispose();
+		ipcMain.removeHandler(SPEECH_SETTINGS_CHANNEL);
+		ipcMain.removeHandler(AGENT_CONNECTIONS_REQUEST);
 		unregisterHardware();
 		for (const win of BrowserWindow.getAllWindows()) win.destroy();
 		await rm(directory, { recursive: true, force: true });

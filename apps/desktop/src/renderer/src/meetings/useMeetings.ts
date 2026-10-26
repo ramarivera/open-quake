@@ -66,6 +66,7 @@ function subscribe(listener: () => void): () => void {
 		if (!listeners.size) {
 			stop?.();
 			stop = undefined;
+			view = { snapshot: undefined, error: "" };
 		}
 	};
 }
@@ -82,4 +83,31 @@ export function useMeetingNow(): number {
 		return () => clearInterval(timer);
 	}, []);
 	return now;
+}
+
+/** Mount reads are owned by the store; subsequent host activations refresh again. */
+export function useMeetingActivation(activation: number): void {
+	const mounted = useState(() => ({ activation }))[0];
+	useEffect(() => {
+		if (mounted.activation !== activation) {
+			mounted.activation = activation;
+			void meetingRequest({ _tag: "read" });
+		}
+	}, [activation, mounted]);
+	useEffect(() => {
+		const focus = () => {
+			void meetingRequest({ _tag: "read" });
+		};
+		const shown = () => {
+			if (document.visibilityState === "visible") focus();
+		};
+		window.addEventListener("focus", focus);
+		document.addEventListener("visibilitychange", shown);
+		// CaptureHost can keep the store subscribed while the history page is absent.
+		void meetingRequest({ _tag: "read" });
+		return () => {
+			window.removeEventListener("focus", focus);
+			document.removeEventListener("visibilitychange", shown);
+		};
+	}, []);
 }
