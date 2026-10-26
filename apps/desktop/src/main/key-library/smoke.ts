@@ -42,7 +42,11 @@ registerClockScheme();
 // Retain explicit failure status while the final owned window is disposed.
 app.on("window-all-closed", () => {});
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
-if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "icons-lane") {
+if (
+	["icons-lane", "geometry-pages-import"].includes(
+		process.env.OPEN_QUAKE_KEY_REVIEW_PROBE ?? "",
+	)
+) {
 	// Native renderer checks stay hidden and never activate the desktop.
 	if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 	BrowserWindow.prototype.showInactive = () => {};
