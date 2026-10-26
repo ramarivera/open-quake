@@ -167,3 +167,13 @@ runs outside the shared command gate and publishes only for the current slot,
 track generation and latest scan. Two additional regressions cover interrupted
 navigation cleanup and a stale overlapping scan. The production release gate
 remains unchanged; this is service source proof, not user-facing playback.
+
+
+PR59 follow-up review reproduced three additional failures before correction.
+A precomposed profile-stop effect now snapshots sessions only when it executes.
+Navigation rechecks command ownership after the final unavailable-file probe,
+so a newer pause or volume command survives instead of losing its player. All
+133 soundboard/audio tests, both typechecks, scoped Biome and strict validation
+pass. The fresh hidden muted native MP3 smoke passes playback controls, natural
+end, two-key preemption, stale-stop isolation and cleanup with zero windows or
+workers. This remains source acceptance with the release boundary unchanged.

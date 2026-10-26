@@ -4,6 +4,59 @@ import { describe, expect } from "vitest";
 import { owner, playlist, rig } from "./playback-test-fixtures.js";
 
 describe("soundboard command concurrency", () => {
+	it.scoped("a precomposed profile stop captures sessions when executed", () =>
+		Effect.gen(function* () {
+			const r = yield* rig();
+			const deactivate = r.service.stopProfile(owner.profileId);
+			yield* r.service.play(owner, playlist).pipe(Effect.zipRight(deactivate));
+			expect((yield* r.service.snapshot())[0]?.state).toBe("stopped");
+			expect(r.tracks[0]?.closed).toBe(1);
+		}),
+	);
+	for (const method of ["pause", "volume"] as const) {
+		it.scoped(`a newer ${method} survives stale unavailable navigation`, () =>
+			Effect.gen(function* () {
+				const entered = yield* Deferred.make<void>();
+				const done = yield* Deferred.make<void>();
+				let inspections = 0;
+				let block = false;
+				const r = yield* rig(
+					Effect.void,
+					Effect.void,
+					Effect.suspend(() =>
+						block && ++inspections === playlist.entries.length
+							? Deferred.succeed(entered, undefined).pipe(
+									Effect.zipRight(Deferred.await(done)),
+								)
+							: Effect.void,
+					),
+				);
+				const session = yield* r.service.play(owner, playlist);
+				for (const entry of playlist.entries) r.unavailable.add(entry.path);
+				block = true;
+				const navigation = yield* r.service
+					.next(session.playbackId)
+					.pipe(Effect.fork);
+				yield* Deferred.await(entered);
+				const newer = yield* (
+					method === "pause"
+						? r.service.pause(session.playbackId)
+						: r.service.setVolume(session.playbackId, 35)
+				).pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(1);
+				yield* Deferred.succeed(done, undefined);
+				yield* Fiber.join(navigation);
+				expect(yield* Fiber.join(newer)).toMatchObject({ _tag: "Right" });
+				expect((yield* r.service.snapshot())[0]).toMatchObject(
+					method === "pause"
+						? { state: "paused" }
+						: { state: "playing", gain: 0.35 },
+				);
+				expect(r.tracks[0]?.closed).toBe(0);
+			}),
+		);
+	}
+
 	for (const mode of ["out", "toggle"] as const) {
 		it.scoped(`natural end during ${mode} replacement preserves restart`, () =>
 			Effect.gen(function* () {

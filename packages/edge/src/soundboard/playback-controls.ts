@@ -224,6 +224,7 @@ export const makePlaybackControls = (ports: {
 								return;
 							}
 						}
+						if (!ports.current(slot) || command !== slot.command) return;
 						yield* ports.stopUnavailable(slot);
 					}),
 				);
@@ -487,20 +488,17 @@ export const makePlaybackControls = (ports: {
 	);
 	const stopProfile = Effect.fn("SoundboardService.stopProfile")(
 		(profileId: string): Effect.Effect<void> =>
-			Effect.sync(() => {
+			Effect.gen(function* () {
 				for (const request of requests)
 					if (request.profileId === profileId) request.valid = false;
-			}).pipe(
-				Effect.zipRight(
-					Effect.forEach(
-						[...ports.slots.values(), ...ports.stopping.values()].filter(
-							(slot) => slot.session.owner.profileId === profileId,
-						),
-						(slot) => ports.stopNow(slot.session.playbackId),
-						{ concurrency: "unbounded", discard: true },
+				yield* Effect.forEach(
+					[...ports.slots.values(), ...ports.stopping.values()].filter(
+						(slot) => slot.session.owner.profileId === profileId,
 					),
-				),
-			),
+					(slot) => ports.stopNow(slot.session.playbackId),
+					{ concurrency: "unbounded", discard: true },
+				);
+			}),
 	);
 	const execute = Effect.fn("SoundboardService.execute")(
 		(
