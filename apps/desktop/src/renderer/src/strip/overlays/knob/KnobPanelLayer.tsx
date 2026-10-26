@@ -53,7 +53,10 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 				value.serial !== snapshot.context.session.deviceId
 			)
 				return;
-			if (value.stage._tag !== "idle") {
+			if (
+				value.stage._tag === "recording" ||
+				value.stage._tag === "processing"
+			) {
 				if (capture.current?.captureId === value.captureId) return;
 				capture.current =
 					snapshot.focus._tag === "tile" &&
@@ -65,7 +68,10 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 								generation: snapshot.focus.generation,
 							}
 						: undefined;
-			} else if (capture.current?.captureId === value.captureId) {
+			} else if (
+				value.stage._tag === "idle" &&
+				capture.current?.captureId === value.captureId
+			) {
 				const { captureId: _captureId, ...identity } = capture.current;
 				capture.current = undefined;
 				void request({ _tag: "RestoreFocus", ...identity });

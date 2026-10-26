@@ -44,5 +44,5 @@ Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the le
 - [x] 6.7 Bind conditional copy buttons when they mount. Codex 4378002633.
 - [x] 6.8 Run release cleanup after failed synchronous press activation. Codex 4378002639.
 - [x] 6.9 Start disk gestures from native scroll position. Codex 4378002645.
-- [ ] 6.10 Preserve running knob focus capture through busy rejection. Codex 4378002652.
+- [x] 6.10 Preserve running knob focus capture through busy rejection. Codex 4378002652.
 - [ ] 6.11 Keep the hardware fail-safe keyboard release after a lost acknowledgement. Codex 4378002655.

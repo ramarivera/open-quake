@@ -297,6 +297,13 @@ describe("touch production components", () => {
 				_tag: "Stage",
 				serial: "mock-device",
 				keyCode: "0,1",
+				captureId: "busy/0,1/1",
+				stage: { _tag: "busy" },
+			});
+			voice?.({
+				_tag: "Stage",
+				serial: "mock-device",
+				keyCode: "0,1",
 				captureId: "capture-2",
 				stage: { _tag: "idle", outcome: "completed" },
 			});
