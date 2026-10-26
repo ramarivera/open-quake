@@ -19,9 +19,12 @@ import { SoundboardPlayerLive } from "../soundboard/player";
 import type { CaptureDriver } from "./capture";
 import { createSpeechCredentials } from "./credentials";
 import {
+	createDesktopAudioOutput,
 	createElectronCaptureDriver,
 	desktopSpeechPorts,
 } from "./electron-audio";
+import { createHostTones } from "./host-tones";
+import { localSpeech } from "./local-speech";
 import {
 	createProductionVoiceRuntime,
 	type ProductionVoiceOptions,
@@ -82,14 +85,27 @@ export const createDesktopSpeech = Effect.fn("DesktopSpeech.create")(function* (
 		credentials,
 		changed: Effect.suspend(() => reset),
 	});
+	const playHostTone = createHostTones(
+		createDesktopAudioOutput(audioOutput, undefined, "soundboard"),
+		settings.hostTones,
+	);
 	const controller = yield* createProductionVoiceRuntime({
 		...options,
+		hostTone: playHostTone,
 		speech,
+		localSpeech: (settings, owner) =>
+			localSpeech(audioOutput, settings, { kind: "device", ...owner }),
 		capture:
 			options.capture ??
 			createElectronCaptureDriver(undefined, settings.microphone),
 		profiles: settings.profiles,
 	});
 	reset = controller.reset();
-	return { ...controller, settings, audioOutput, soundboardKeys };
+	return {
+		...controller,
+		settings,
+		audioOutput,
+		soundboardKeys,
+		playHostTone,
+	};
 });

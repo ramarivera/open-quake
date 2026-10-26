@@ -184,8 +184,12 @@ When folder support is enabled, a folder key SHALL reference an existing page ID
 
 #### Scenario: Cyclic folder import
 
-- **WHEN** imported folder links form A to B to A
-- **THEN** the links remain preserved as unsupported compatibility data and cannot create an executable navigation cycle
+- **WHEN** imported forward folder links form A to B to A or A to itself
+- **THEN** inspection diagnoses every participating link, clears its active destination and preserves its complete source JSON as unsupported compatibility data
+- **AND** page-ID remapping keeps quarantined links inactive and editor navigation refuses quarantined keys, even when a stored destination exists
+- **AND** known folder and Back functions have import contracts, and normal Back return links do not count as forward folder edges and remain usable
+
+This scenario covers MGMT-077/090 and PR121 review 4381219052. DK-Suite 0.4.95 `app-resources/background.js`, `ResourcesManager.importResources`, character offsets 6376700 to 6380150 builds its resource map before rewriting `emojiFolderId` destinations. Open-quake applies its folder-navigation policy during inspection before that remapping step, preserving raw data while quarantining cycles. The recovered importer establishes the remapping order, not cycle rejection.
 
 ### Requirement: Diagnosed local profile import
 
@@ -195,6 +199,21 @@ The Keys editor SHALL inspect a user-selected JSON profile or legacy flat key ar
 - **WHEN** a legacy array contains an unknown camera function, absent support flags, null optional fields and empty action sentinels
 - **THEN** the editor shows each normalization and unsupported status before import
 - **AND** explicit import preserves the raw source and knob record while dispatch excludes the camera key
+
+#### Scenario: Broken-link diagnostics use original source action indexes
+- **WHEN** a legacy null, empty-object or empty-type action sentinel precedes a broken folder link
+- **THEN** inspection reports the link's original unfiltered action index and separately reports the removed sentinel's source index
+- **AND** the normalized array excludes the sentinel, the broken destination stays inactive and unsupported compatibility retains the full original JSON
+
+This scenario covers MGMT-073/074 and PR121 review 4381219261.
+
+#### Scenario: Imported folder links survive new page identities
+- **WHEN** a profile is imported with folder, emoji-folder, Back or string-valued page references whose source IDs collide with existing pages
+- **THEN** import allocates all new page IDs before remapping `folder`, `emojiFolderId`, `parentFolder` and string-valued `page` actions through the source profile's ID map
+- **AND** editor navigation enters and returns through the imported pages, numeric page actions retain their page numbers, and existing profiles remain unchanged
+- **AND** a reference missing from the source profile receives an `invalid-action` diagnostic, an empty inactive destination and unsupported compatibility status with its original JSON preserved, even if its old value matches a newly allocated page ID
+
+This scenario covers `open-quake-lih.10.14`, PR107 review 4380208827 and MGMT-077/090. DK-Suite 0.4.95 `app-resources/background.js`, `ResourcesManager.importResources`, at character offsets 6376700 to 6380150 first builds its resource ID map and then rewrites `emojiFolderId` references in imported configurations. Open-quake applies the same ordering to canonical folder/page links and keeps unresolved references inactive under the folder-navigation policy.
 
 #### Scenario: Diagnose a registered function rejected by dispatch
 - **WHEN** an imported hotkey has valid actions but a different `childrenName`, or another field rejected by its dispatch function contract

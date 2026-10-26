@@ -1,0 +1,61 @@
+.audio-bot-key {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	border: 0;
+	padding: 0;
+	background: transparent;
+	color: var(--strip-text);
+	font: inherit;
+	cursor: pointer;
+}
+.audio-bot-key:disabled {
+	opacity: 1;
+	cursor: default;
+}
+.audio-bot-key[data-phase="thinking"] .strip-tile-icon,
+.audio-bot-key[data-phase="speaking"] .strip-tile-icon {
+	visibility: hidden;
+}
+.audio-bot-state {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	pointer-events: none;
+}
+.audio-bot-state i {
+	display: block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--strip-accent);
+}
+.audio-bot-key[data-phase="speaking"] .audio-bot-state i {
+	height: 65%;
+	border-radius: 4px;
+}
+@media (prefers-reduced-motion: no-preference) {
+	:root[data-motion="full"] .audio-bot-key[data-phase="thinking"] i {
+		animation: audio-bot-think 1.05s ease-in-out infinite alternate;
+	}
+	:root[data-motion="full"] .audio-bot-key[data-phase="speaking"] i {
+		animation: audio-bot-speak 0.55s ease-in-out infinite alternate;
+	}
+}
+@keyframes audio-bot-think {
+	to {
+		opacity: 0.4;
+		transform: translateY(-4px);
+	}
+}
+@keyframes audio-bot-speak {
+	to {
+		transform: scaleY(0.3);
+	}
+}

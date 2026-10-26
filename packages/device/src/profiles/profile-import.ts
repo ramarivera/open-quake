@@ -39,6 +39,41 @@ const record = (input: unknown) => {
 	return decoded._tag === "Right" ? decoded.right : undefined;
 };
 
+const isPageReference = (type: string, value: unknown): boolean =>
+	["folder", "emojiFolderId", "parentFolder"].includes(type) ||
+	(type === "page" && typeof value === "string");
+
+/** Allocate every destination before rewriting links, including forward references. */
+export function remapImportedProfile(
+	profile: typeof Profile.Encoded,
+	id: string,
+) {
+	const ids = new Map(
+		profile.pages.map((page, i) => [page.id, `${id}-page-${i + 1}`]),
+	);
+	return {
+		...profile,
+		id,
+		revision: 0,
+		pages: profile.pages.map((page, i) => ({
+			...page,
+			id: `${id}-page-${i + 1}`,
+			keys: page.keys.map((key) => ({
+				...key,
+				config: {
+					...key.config,
+					actions: (key.config.actions ?? []).map((action) =>
+						isPageReference(action.type, action.value) &&
+						typeof action.value === "string"
+							? { ...action, value: ids.get(action.value) ?? "" }
+							: action,
+					),
+				},
+			})),
+		})),
+	};
+}
+
 /** No evaluation, host IO or action execution. Original JSON stays inert. */
 export function inspectProfileImport(
 	input: unknown,
@@ -53,7 +88,7 @@ export function inspectProfileImport(
 		path: string,
 		blocking = false,
 	) => diagnostics.push({ code, path, blocking });
-	const normalizeKey = (input: unknown, path: string) => {
+	const normalizeKey = (input: unknown, path: string, pageId?: string) => {
 		const source = record(input);
 		const config = record(source?.config);
 		if (!source || !config) {
@@ -99,21 +134,42 @@ export function inspectProfileImport(
 				delete next[field];
 			}
 		}
+		let unsupported = record(source.compatibility)?.unsupported === true;
 		if (Array.isArray(config.actions))
-			next.actions = config.actions.filter((action, index) => {
+			next.actions = config.actions.flatMap((action, index) => {
 				const a = record(action);
 				if (
 					action === null ||
 					(a && (Object.keys(a).length === 0 || a.type === ""))
 				) {
 					report("legacy-sentinel", `${path}.config.actions.${index}`);
-					return false;
+					return [];
 				}
-				return true;
+				if (
+					!a ||
+					typeof a.type !== "string" ||
+					!isPageReference(a.type, a.value)
+				)
+					return [action];
+				if (
+					typeof a.value === "string" &&
+					pageIds.has(a.value) &&
+					!(
+						pageId &&
+						["createFolder", "emojiFolder"].includes(String(config.type)) &&
+						a.type !== "parentFolder" &&
+						closesFolderCycle(pageId, a.value)
+					)
+				)
+					return [action];
+				report("invalid-action", `${path}.config.actions.${index}.value`);
+				unsupported = true;
+				// Keep the complete original in compatibility.source. Empty destinations
+				// cannot accidentally bind to a page allocated later during import.
+				return [{ ...a, value: "" }];
 			});
 		if (config.type === "" && source.childrenName === "")
 			report("legacy-sentinel", `${path}.childrenName`);
-		let unsupported = record(source.compatibility)?.unsupported === true;
 		if (typeof config.type === "string" && config.type !== "") {
 			if (!contracts.has(config.type)) {
 				report("unknown-function", `${path}.config.type`);
@@ -167,6 +223,53 @@ export function inspectProfileImport(
 		report("invalid-field", "pages", true);
 		return { diagnostics };
 	}
+	const pageIds = new Set(
+		rawPages.flatMap((page) => {
+			const id = record(page)?.id;
+			return typeof id === "string" ? [id] : [];
+		}),
+	);
+	// Back actions are return associations, not forward folder edges.
+	const folderLinks = new Map<string, readonly string[]>();
+	for (const value of rawPages) {
+		const page = record(value);
+		if (typeof page?.id !== "string" || !Array.isArray(page.keys)) continue;
+		folderLinks.set(
+			page.id,
+			page.keys.flatMap((key) => {
+				const config = record(record(key)?.config);
+				if (
+					!config ||
+					!["createFolder", "emojiFolder"].includes(String(config.type)) ||
+					!Array.isArray(config.actions)
+				)
+					return [];
+				return config.actions.flatMap((action) => {
+					const a = record(action);
+					return a &&
+						typeof a.type === "string" &&
+						a.type !== "parentFolder" &&
+						typeof a.value === "string" &&
+						pageIds.has(a.value) &&
+						isPageReference(a.type, a.value)
+						? [a.value]
+						: [];
+				});
+			}),
+		);
+	}
+	const closesFolderCycle = (from: string, to: string): boolean => {
+		const pending = [to];
+		const visited = new Set<string>();
+		while (pending.length) {
+			const page = pending.pop();
+			if (page === from) return true;
+			if (page === undefined || visited.has(page)) continue;
+			visited.add(page);
+			pending.push(...(folderLinks.get(page) ?? []));
+		}
+		return false;
+	};
 	let knob = source?.knob;
 	const pages = rawPages.map((value, index) => {
 		const page = record(value);
@@ -184,7 +287,13 @@ export function inspectProfileImport(
 				knob = key;
 				return [];
 			}
-			return [normalizeKey(key, `pages.${index}.keys.${keyIndex}`)];
+			return [
+				normalizeKey(
+					key,
+					`pages.${index}.keys.${keyIndex}`,
+					typeof page.id === "string" ? page.id : undefined,
+				),
+			];
 		});
 		return { ...page, keys };
 	});

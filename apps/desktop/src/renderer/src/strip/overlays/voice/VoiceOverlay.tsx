@@ -120,7 +120,12 @@ export function StripToasts({
 	const toast = view.toasts.at(-1);
 	if (!toast) return null;
 	return (
-		<div className="voice-toast" role="status" key={toast.id}>
+		<div
+			className="voice-toast"
+			role={toast.type === "error" ? "alert" : "status"}
+			data-type={toast.type ?? "warning"}
+			key={toast.id}
+		>
 			<svg className="voice-toast-icon" viewBox="0 0 28 28" aria-hidden="true">
 				<circle cx="14" cy="14" r="14" />
 				<rect x="12.5" y="6.5" width="3" height="10" rx="1.5" />

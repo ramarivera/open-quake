@@ -243,3 +243,64 @@ Evidence: AI-246. Speech settings SHALL persist configuration in main rather tha
 - **THEN** old sessions close before the new settings become visible, the latest selected profile replays, and stale old events cannot alter it
 
 The direct committed-turn model and endpoint follow [official OpenAI realtime transcription documentation](https://developers.openai.com/api/docs/guides/realtime-transcription), accessed 2026-10-26. This replaces the recovered gpt-4o-transcribe configuration with the documented gpt-transcribe profile and transcription-only transport. The geographic suggestion retains its historical live-translation model string as an inert suggestion, never an activated profile.
+
+### Requirement: Voice-runtime transcript and failure policy
+
+AI-084 and AI-086 SHALL accept one-character and two-character utterances containing a Unicode letter or number, including Chinese. Whitespace and punctuation-only finals SHALL be empty and never submitted. This intentionally replaces DK's length cutoff. No-audio and unclear audio SHALL remain distinct from permission denial, missing device, recorder start failure, authentication and provider timeout; visible failures SHALL carry stable catalog codes without inspecting message substrings. Every terminal SHALL release capture ownership.
+
+#### Scenario: Short meaningful final
+- **WHEN** recognition returns `好`, `a`, `你好`, punctuation-only or whitespace
+- **THEN** meaningful finals submit once and the other finals end empty with no chat submission
+
+### Requirement: Voice-runtime speech ownership
+
+AI-091, AI-155, KNOB-073, MGMT-149, MGMT-301 and WIDGETS-015 SHALL use an explicit assistant/device output target independent of request-id spelling. AudioBot SHALL toggle an owned same-device reader which consumes ordered answer chunks without follow-up prompts, exposes thinking/speaking state from the actual queue, stops on repeat release/reset and leaves other devices untouched. Its default-agent and model labels SHALL round trip through saved actions. Cloud `qwen` SHALL use the independently configured global TTS profile; local `webSpeech` SHALL use installed system voices with rate 0.5–2, pitch 0–2, volume 0–1 and an optional voice-name hint. Missing local voices SHALL fail visibly without selecting cloud. The ClawBot read-aloud pill SHALL toggle its existing owned controller once per gesture and render active/playing state.
+
+#### Scenario: Reader toggle and engine isolation
+- **WHEN** a reader receives ordered reply chunks then a second effective release
+- **THEN** its unsaid text and playback stop, other device owners remain intact, and no microphone or alternate engine starts
+
+#### Scenario: Committed reader authorization
+- **WHEN** a renderer requests an AudioBot reader toggle for MGMT-149 and MGMT-301
+- **THEN** main verifies the sender frame and the visible AudioBot binding on the device's committed active profile page, uses its saved settings, and rejects unbound keys or unavailable profile storage before activating speech
+
+#### Scenario: Delayed local voice enumeration
+- **WHEN** a fresh local worker initially has no system voices for KNOB-073 and MGMT-301
+- **THEN** it waits for voiceschanged for at most 1000ms before rejecting an empty list, and stop or close removes the listener and timer without allowing late playback
+
+### Requirement: Bounded segmentation and stalled output
+
+AI-092 explicitly retains the app's punctuation/200-character/two-second pending-text segmentation as a supported replacement for DK's first-20/later-50 segmentation. Tests SHALL pin punctuation boundaries, 200-character splitting, remainder, exact idle flush and the 4000-character queue bound. AI-156, KNOB-074 and WIDGETS-108 SHALL reuse the shared 12s no-audio watchdog and one suspended-context resume at 8s. Playback SHALL complete only on natural drain. A failed segment SHALL report its stable timeout, release output and allow later queued segments; stop SHALL invalidate timers. A stalled resume SHALL be bounded by declared duration plus 5s or 30s when unknown, with at least 8s observation after a resume attempt.
+
+#### Scenario: Suspended segment resumes once
+- **WHEN** received audio remains suspended for 8s
+- **THEN** one resume is attempted, natural drain can complete, and a hung resume fails within the bounded deadline without reporting successful playback
+
+### Requirement: App-owned optional host tones
+
+KNOB-068 SHALL register app-generated start/end/error tone resources without copying proprietary WAVs. Host tone playback SHALL be opt-in, carry the explicit device target and use the shared output owner. Disabled host tones SHALL acquire no audio output and SHALL preserve the existing hardware buzzer behavior.
+
+#### Scenario: Opt-in tone lookup
+- **WHEN** host tones are disabled or a registered tone is requested
+- **THEN** disabled requests perform no playback; enabled requests select the app-owned bounded PCM resource and exact target
+
+
+### Requirement: Mode deadlines and truthful spoken status
+
+AI-070 SHALL preserve the normal-chat absolute 60000ms deadline and require a 300000ms absolute deadline for long-mode execution. AI-071 SHALL flush pending normal-chat speech after its two-second text idle boundary, and PC/analysis runners SHALL terminate stalled work with a stable failure rather than manufacture success. AI-080 SHALL select recovered assistantConfig status phrases from a bounded eight-locale catalog and speak each action status at most once in its turn. Normal answer completion SHALL flush its remainder before the localized finishedOutput phrase. Cancellation or failure SHALL NOT speak successful completion.
+
+The long, PC and analysis runners are not implemented: ChatService rejects every non-normal mode with ChatModeUnavailable. AI-070, AI-071 and AI-080 remain blocked as complete rows until their owning mode runners can exercise the deadlines, stall policies and action statuses. The catalog and normal completion path do not establish those missing behaviors.
+
+#### Scenario: Absolute mode deadlines
+- **WHEN** a normal stream reaches 60001ms or a long-mode stream reaches 300000ms without completing
+- **THEN** that runner cancels its provider and releases its owner with a stable timeout, without successful completion speech
+
+#### Scenario: Stalled mode and localized completion
+- **WHEN** normal speech text stops arriving for two seconds or a PC/analysis action stalls
+- **THEN** normal speech flushes its pending remainder while the stalled action fails truthfully under its runner policy
+- **AND** an otherwise successful normal turn speaks finishedOutput exactly once in the selected TTS language after answer drain
+
+#### Scenario: Interrupting an armed AudioBot reader
+- **WHEN** a knob interrupt, selection change or shared speech cancellation stops an AudioBot-owned queue
+- **THEN** main stops playback, drops stale chunks and publishes thinking for the still-armed reader with the same key and session
+- **AND** the next answer can speak without toggling the reader again, while disarming or reset publishes idle

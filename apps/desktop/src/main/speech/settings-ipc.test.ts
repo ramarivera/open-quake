@@ -19,6 +19,7 @@ describe("production speech settings IPC authorization", () => {
 		);
 		const dispose = registerSpeechSettings({
 			controller: {
+				hostTones: () => Effect.succeed(false),
 				microphone: () => Effect.succeed(undefined),
 				profiles: () => Effect.succeed({ speakAnswers: false }),
 				request,
