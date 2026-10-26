@@ -407,8 +407,10 @@ setup SHALL not complete it. Development controls SHALL expose a debug override
 and explicit reset of first-run state, hidden in packaged production builds.
 All eight supported language choices SHALL apply immediately, persist and
 refresh localized profile titles. The welcome step SHALL hide progress and
-use Get Started. Welcome SHALL include project-owned license, privacy and
-software-notice reading, never imply agreement to vendor terms. Reduced motion
+use Get Started. Welcome SHALL include project-owned privacy and
+software-notice reading, never imply agreement to vendor terms. SETTINGS-054
+remains incomplete for project license/consent text pending owner approval;
+this repository has no project LICENSE, so setup SHALL not invent terms. Reduced motion
 SHALL suppress welcome motion. Lifecycle orientation snapshots SHALL be consumed
 for the selected serial, and setup ownership SHALL suppress automatic display
 prompts until it closes, reloads or its owner is destroyed.
@@ -419,9 +421,9 @@ prompts until it closes, reloads or its owner is destroyed.
 - **AND** completed state stays closed, leaving preserves progress and replay
   returns to welcome without changing existing device or profile preferences
 
-#### Scenario: Welcome and local consent
+#### Scenario: Welcome and local project information
 - **WHEN** Welcome renders
-- **THEN** Get Started and project-owned legal reading are available, progress
+- **THEN** Get Started and project-owned privacy/software reading are available, progress
   is hidden and leaving does not complete setup
 
 #### Scenario: Language and display ownership
@@ -494,3 +496,26 @@ There is no second native window, so no empty child-window URL to recreate.
 - **WHEN** the user selects Finish later and reloads the management renderer
 - **THEN** Overview is reachable, saved progress is unchanged, and a fresh startup
   read can resume unfinished setup without a stale native child or prompt owner
+
+### Requirement: Selected-device setup handoff
+
+MGMT-042 and MGMT-044 SHALL use the canonical profile and selected-hardware
+owners. Connecting a serial SHALL resolve an existing visible profile using the
+owner's startup/reported/saved/fallback policy, deliver it before publishing its
+selection and return the same serial selection to the editor. Missing or invalid
+active references SHALL not publish a nonexistent profile. Switching settings
+devices SHALL use the shell's serial/session picker and remount device drafts;
+in-flight edits SHALL retain their original session and never write to the newly
+selected device. A user SHALL be able to return to the entrance while a save is
+pending. The selected-device settings picker is the existing independent design,
+not a second picker inside the strip/key editor.
+
+#### Scenario: Missing active selection at connection
+- **WHEN** a serial connects with a missing or invalid saved profile reference
+- **THEN** a valid visible fallback is delivered, its serial selection is
+  published and the profile editor reads the same active profile
+
+#### Scenario: Switch with an old device draft pending
+- **WHEN** a user leaves device settings and chooses a different serial/session
+- **THEN** the new device's saved state replaces the old draft, and settling the
+  old device request cannot mutate or overwrite the new device

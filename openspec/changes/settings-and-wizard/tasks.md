@@ -207,6 +207,22 @@ PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated 
 - [ ] 8.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
 - [ ] 8.3 User-triggered permission recovery and once-only startup guidance with mock probes. MAIN-128, SETTINGS-015. Bead open-quake-lih.14.3.
 - [ ] 8.4 Verify selected-device handoff and pending-edit switching after shell dependency merges. MGMT-042/044. Bead open-quake-lih.14.2.
-- [ ] 8.5 Deliver fixed native modal wizard shell or obtain explicit equivalent-window approval. SETTINGS-052. Bead open-quake-lih.14.1.
-- [ ] 8.6 Prove QUAKE calibration rejection before writes. SETTINGS-072. Bead open-quake-lih.14.2.
+- [x] 8.5 Retain the existing management-owned setup page under Ramiro's explicit equivalent-window approval, with close-to-overview and reload recovery tests. SETTINGS-052. Bead open-quake-lih.14.1.
+- [x] 8.6 Prove QUAKE calibration rejection before writes. SETTINGS-072. Bead open-quake-lih.14.2.
 - [x] 8.7 Record Ramiro's explicit SETTINGS-071 exclusion, 2026-10-26. Bead open-quake-lih.14.2; memory oq-scope-exclusions-setup.
+
+Setup lane implementation evidence, 2026-10-26: `setup-mounted.test.tsx` covers
+first-run admission, explicit-navigation races, leave/reload/resume, development
+controls, region confirmation/cancel and all eight immediately persisted language
+tiles with localized profile title refresh. Lifecycle registration/recovery/prompt
+tests cover shared re-detection, orientation broadcasts and wizard suppression.
+The calibration boundary drives fake HID and rejects generic/ARIS requests before
+writes. Mock permission tests exercise explicit requests, status ordering, cleanup,
+timeouts and restart now/later without changing host access.
+
+Task 8.1 remains incomplete only for SETTINGS-054 project license/consent approval.
+No project LICENSE exists; setup presents factual privacy/software information
+without inventing terms or implying vendor consent. Tasks 8.2/8.3/8.4 await shell
+PR #113 for safe external support-link handling, permission visibility pinning and
+the serial/session picker integration. The setup lane uses compatible existing
+owners and doesn't duplicate shell window ownership. SETTINGS-071 is excluded.

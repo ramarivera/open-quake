@@ -9,6 +9,7 @@ import {
 	settingsBridge,
 } from "./bridge";
 import { subscribeGeneralRefresh } from "./general-refresh";
+import { InstallationGuide } from "./InstallationGuide";
 import { QuakeGuideEntry } from "./QuakeGuide";
 import { useSetupState } from "./SetupWizard";
 import {
@@ -17,6 +18,7 @@ import {
 	type GeneralState,
 	type SetupStore,
 } from "./stores";
+import { WizardDevelopmentControls } from "./WizardDevelopmentControls";
 import "./settings.css";
 
 type T = ReturnType<typeof useAppTranslations>;
@@ -203,7 +205,9 @@ export function GeneralSettings({
 			</Row>
 			<Row label={t("guide.rowLabel")} hint={t("guide.rowHint")}>
 				<QuakeGuideEntry onOpenPage={onOpenPage} />
+				<InstallationGuide />
 			</Row>
+			<WizardDevelopmentControls store={setup} onOpen={onOpenSetup} />
 		</Group>
 	);
 }
