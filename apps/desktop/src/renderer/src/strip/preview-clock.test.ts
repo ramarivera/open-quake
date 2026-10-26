@@ -31,8 +31,11 @@ vi.mocked(useStripProfiles).mockReturnValue({
 
 describe("passive management clock hosts", () => {
 	for (const [name, element] of [
-		["Overview bezel", createElement(DeviceScreen)],
-		["profile preview", createElement(ProfilePreview, { profile })],
+		["Overview bezel", createElement(DeviceScreen, { key: "overview" })],
+		[
+			"profile preview",
+			createElement(ProfilePreview, { profile, key: "profile" }),
+		],
 	] as const) {
 		it(`${name} paints a clock without mounting live clock/weather consumers`, () => {
 			const markup = renderToStaticMarkup(element);
