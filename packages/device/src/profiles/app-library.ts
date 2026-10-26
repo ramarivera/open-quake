@@ -1,7 +1,7 @@
 import { Option, Schema } from "effect";
 import { keyText } from "./key-editing-invariants.js";
 import { createEmptyProfileKey, ProfileKey } from "./profile-contracts.js";
-import type { ProfileLocale } from "./profile-manager-contracts.js";
+import { ProfileLocale } from "./profile-manager-contracts.js";
 
 /** Local resource bound, not a DK-Suite interoperability limit. Includes inline artwork. */
 export const APP_LIBRARY_MAX_BYTES = 8 * 1024 * 1024;
@@ -113,12 +113,23 @@ export function appLibraryKey(
 		defaults?.children.find(
 			(value) =>
 				value.keyCode === key.keyCode &&
-				value.config.title.text === key.config.title.text,
+				(value.config.title.text === key.config.title.text ||
+					(!!value.config.title.i18nKey &&
+						ProfileLocale.literals.some(
+							(locale) =>
+								key.config.title.text ===
+								keyText(value.config.title.i18nKey ?? "", locale),
+						))),
 		);
+	const renamed =
+		!!defaults &&
+		!fingerprint &&
+		key.config.title.i18nKey?.startsWith("defaultAppMenu.");
 	return {
 		...key,
 		config: {
 			...key.config,
+			...(renamed ? { userModifiedTitle: true } : {}),
 			title: fingerprint
 				? {
 						...key.config.title,

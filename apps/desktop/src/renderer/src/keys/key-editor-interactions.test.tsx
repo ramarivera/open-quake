@@ -75,7 +75,9 @@ async function fixture({
 	agentKey = false,
 	knobKey = false,
 	configure,
+	appGroups = defaultAppLibrary(),
 }: {
+	appGroups?: AppLibrarySnapshot["groups"];
 	locked?: boolean;
 	agentKey?: boolean;
 	knobKey?: boolean;
@@ -235,7 +237,7 @@ async function fixture({
 						appLibrary: Schema.encodeSync(AppLibrarySnapshot)({
 							version: 1,
 							revision: 1,
-							groups: defaultAppLibrary(),
+							groups: appGroups,
 						}),
 					} as const;
 				case "select":
@@ -1866,4 +1868,53 @@ it("MGMT-127 blocks the 101st library operation with feedback and preserves a sa
 		f.stored().profiles[0].pages[0].keys[0]?.config.subActions,
 	).toHaveLength(100);
 	expect(f.writes()).toBe(1);
+});
+
+it("MGMT-121 keeps an unmarked renamed preset on the saved grid and localized editor after placement", async () => {
+	const groups = defaultAppLibrary();
+	const renamed = groups.map((group, i) =>
+		i
+			? group
+			: {
+					...group,
+					children: group.children.map((key, j) =>
+						j
+							? key
+							: {
+									...key,
+									config: {
+										...key.config,
+										title: { ...key.config.title, text: "My mute" },
+									},
+								},
+					),
+				},
+	);
+	const f = await fixture({
+		appGroups: renamed,
+		configure: (value) => ({
+			...value,
+			profiles: [
+				{ ...value.profiles[0], pages: [{ id: "one", keys: [] }] },
+				...value.profiles.slice(1),
+			],
+		}),
+	});
+	await libraryPlace(f.host, "apps:Discord:0", "1,2");
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	const key = f
+		.stored()
+		.profiles[0].pages[0].keys.find((key) => key.keyCode === "1,2");
+	expect(key?.config.title.text).toBe("My mute");
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe("My mute");
+	expect(
+		f.host.querySelector('[data-key-code="1,2"] .strip-tile-title')
+			?.textContent,
+	).toBe("My mute");
+	await input(query(f.host, "#keys-language", HTMLSelectElement), "de");
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe("My mute");
+	expect(
+		f.host.querySelector('[data-key-code="1,2"] .strip-tile-title')
+			?.textContent,
+	).toBe("My mute");
 });

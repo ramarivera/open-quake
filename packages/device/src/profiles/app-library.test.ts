@@ -13,7 +13,9 @@ import {
 	defaultAppLibrary,
 	mergeMissingDefaultAppMenu,
 } from "./app-library.js";
+import { keyText, keyTitle } from "./key-editing-invariants.js";
 import { createEmptyProfileKey, ProfileKey } from "./profile-contracts.js";
+import { ProfileLocale } from "./profile-manager-contracts.js";
 
 describe("MGMT-110/386/391 persistent app defaults", () => {
 	it("merges OBS-first and partial groups once, preserving object identity and edits", () => {
@@ -165,4 +167,49 @@ it("MGMT-127 declares all active recovered entries and filters plugin opt-outs",
 	expect(
 		allowedInSequence("plugin.action", { SupportedInMultiActions: false }),
 	).toBe(false);
+});
+
+it("MGMT-121 preserves unmarked renamed preset titles through profile serialization and both title consumers", () => {
+	const group = defaultAppLibrary()[0],
+		mute = group?.children[0];
+	if (!group || !mute) throw new Error("Missing preset");
+	for (const text of ["My mute", "", "Mein Stummschalter"]) {
+		const source = {
+			...mute,
+			config: { ...mute.config, title: { ...mute.config.title, text } },
+		};
+		const placed = appLibraryKey(group, source);
+		const rebooted = Schema.decodeUnknownSync(ProfileKey)(
+			Schema.encodeSync(ProfileKey)(placed),
+		);
+		for (const locale of ProfileLocale.literals) {
+			expect(keyTitle(rebooted, locale)).toBe(text);
+			expect(appLibraryLabel(rebooted, locale)).toBe(text);
+		}
+		expect(source.config.userModifiedTitle).toBeUndefined();
+	}
+});
+it("MGMT-121 recognizes localized defaults without classifying them as renamed user titles", () => {
+	const group = defaultAppLibrary()[0],
+		mute = group?.children[0];
+	if (!group || !mute?.config.title.i18nKey)
+		throw new Error("Missing preset");
+	for (const language of ProfileLocale.literals) {
+		const source = {
+			...mute,
+			config: {
+				...mute.config,
+				title: {
+					...mute.config.title,
+					text: keyText(mute.config.title.i18nKey, language),
+				},
+			},
+		};
+		const recovered = appLibraryKey(group, source);
+		expect(keyTitle(recovered, "de")).toBe("Stummschalten");
+		expect(appLibraryLabel(recovered, "en")).toBe("Mute");
+		expect(source.config.title.text).toBe(
+			keyText(mute.config.title.i18nKey, language),
+		);
+	}
 });

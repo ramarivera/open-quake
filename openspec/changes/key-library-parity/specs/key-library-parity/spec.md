@@ -266,6 +266,11 @@ Library labels SHALL resolve explicit user titles first, otherwise multiLanguage
 - **WHEN** default, renamed, empty OBS-title and imported locked items render in English or German
 - **THEN** labels follow the precedence without translating user names, gameMode locks return by childrenName, and icon matching uses the best score above 30 or its semantic fallback
 
+#### Scenario: Unmarked renamed defaults after placement
+- **WHEN** an imported default preset retains a defaultAppMenu translation key without an explicit user-title marker
+- **THEN** recovery SHALL compare its title to the original and eight localized defaults, preserve a renamed title including empty text as user-originated through save, placement and restart, and keep unchanged localized defaults translatable
+- **AND** the library, grid, strip and selected editor SHALL agree without mutating the source preset. Source: MGMT-121 and PR117 comment 4380869996.
+
 ### Requirement: Searchable grouped library and activation
 The Keys editor SHALL mount grouped function and app libraries with readable icons, indented labels, hover/focus feedback and a drag preview without a selected-item highlight. Search SHALL debounce for 500 ms, match identifiers and translated labels case-insensitively, omit empty groups, expand results and collapse groups when cleared. Clearing SHALL restore all groups immediately. Source changes and unmount SHALL cancel stale search work. Saved generated libraries, persisted app presets, OBS and emoji groups SHALL compose without Excel or legacy placeholder plugins. Changes SHALL replace obsolete children rather than append stale copies. AI and emoji entry clicks SHALL activate their respective management workflows; app/function entry clicks SHALL arm placement. An explicit add menu SHALL expose both workflows. Sources: MGMT-047, MGMT-107, MGMT-115, MGMT-117, MGMT-119, MGMT-124, MGMT-125.
 
