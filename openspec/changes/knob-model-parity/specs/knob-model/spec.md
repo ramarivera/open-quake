@@ -151,7 +151,7 @@ SCREEN-087, SCREEN-088, SCREEN-089 and SCREEN-094 SHALL retain the recovered 58 
 
 ### Requirement: Complete painting and deliberate management entry omission
 
-SCREEN-081 SHALL keep tile painting complete before, during and after selector visibility. Flat opaque clock, monitor and chat surfaces SHALL replace the source's backdrop-filter toggle and repaint nudges; no private compositor events SHALL be required. SCREEN-084 SHALL deliberately omit the source's dormant management button from both strip selector and management preview; existing management navigation remains the accessible route and selector rendering SHALL NOT invoke management opening.
+SCREEN-081 SHALL keep tile painting complete before, during and after selector visibility. Clock and chat SHALL retain their existing flat surfaces. Monitor cards SHALL use opaque, blur-free fallbacks while a selector is visible, restoring their selected theme on exit. The shared selector visibility state SHALL replace private compositor events and repaint nudges. SCREEN-084 SHALL deliberately omit the source's dormant management button from both strip selector and management preview; existing management navigation remains the accessible route and selector rendering SHALL NOT invoke management opening.
 
 #### Scenario: Selector compositor and management preview
 

@@ -83,6 +83,6 @@ The first probe attempted Rotate IPC, correctly denied by the existing renderer 
 
 ## 8. Wheel-selector burn-down
 
-- [ ] 8.1 Deliver SCREEN-078/079/090/100/106 committed timing, transition and menu reconciliation with domain and renderer tests. Bead open-quake-lih.4.3.
-- [ ] 8.2 Deliver SCREEN-075/076/077/080/081/084 recovered dimensions with independent flat rendering, motion, clipping and compositor tests. Bead open-quake-lih.4.4.
-- [ ] 8.3 Deliver SCREEN-087/088/089/094 localized picker states, exact shared paging bounds and incomplete-page centering tests. Bead open-quake-lih.4.5.
+- [x] 8.1 Deliver SCREEN-078/079/090/100/106 committed timing, transition and menu reconciliation with domain and renderer tests. Bead open-quake-lih.4.3.
+- [x] 8.2 Deliver SCREEN-075/076/077/080/081/084 recovered dimensions with independent flat rendering, motion, clipping and compositor tests. Bead open-quake-lih.4.4.
+- [x] 8.3 Deliver SCREEN-087/088/089/094 localized picker states, exact shared paging bounds and incomplete-page centering tests. Bead open-quake-lih.4.5.

@@ -100,7 +100,11 @@ function StripGrid({
 	interactive: boolean;
 }): React.JSX.Element {
 	return (
-		<div className="strip-grid" data-theme={layout.theme.name}>
+		<div
+			className="strip-grid"
+			data-theme={layout.theme.name}
+			inert={!interactive}
+		>
 			{layout.cells.map((cell) => (
 				<div
 					key={cell.keyCode}
@@ -205,8 +209,11 @@ export function StripScreen({
 	titles = "key-locale",
 	interactive = true,
 	wallpaperSound = false,
+	pendingProfile = false,
 }: {
 	profiles: StripProfiles;
+	/** Committed profile is waiting for its matching grid snapshot. */
+	pendingProfile?: boolean;
 	/** Profile Manager and the editor already resolve their own title locale. */
 	titles?: "key-locale" | "provided";
 	/** Selection previews paint live state but cannot operate nested controls. */
@@ -331,9 +338,9 @@ export function StripScreen({
 	}, [profiles, serial, locale, runtimeStates, titles]);
 	const vivid = view === "vivid" || (layout?.vivid ?? false);
 	useLayoutEffect(() => {
-		onLayout?.(vivid ? undefined : layout);
+		onLayout?.(vivid || pendingProfile ? undefined : layout);
 		return () => onLayout?.(undefined);
-	}, [layout, vivid, onLayout]);
+	}, [layout, vivid, pendingProfile, onLayout]);
 	const selection =
 		profiles._tag === "ready"
 			? selectStripPage(profiles.envelope, serial)
@@ -360,6 +367,7 @@ export function StripScreen({
 			data-vivid={vivid}
 			data-dashed={showEmptyGridDashedBorder}
 			data-profiles={profiles._tag}
+			data-wheel-open={voice.wheelOpen || undefined}
 			style={{ ...palette, ...STRIP_CANVAS }}
 		>
 			{vivid && wallpaper?.asset._tag === "ready" ? (
@@ -375,7 +383,7 @@ export function StripScreen({
 					hourFormat={hourFormat}
 					voice={voice}
 					tileOverlay={tileOverlay}
-					interactive={interactive}
+					interactive={interactive && !pendingProfile}
 					runtime={runtime}
 					clockSelection={
 						selection

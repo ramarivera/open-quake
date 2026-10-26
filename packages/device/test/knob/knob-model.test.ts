@@ -656,6 +656,18 @@ describe("wheel-selector committed state and menu mutations", () => {
 						page: 0,
 						progress: 0,
 					});
+					const added = {
+						...changed,
+						profiles: [
+							...changed.profiles,
+							...modelContext(ready, 18).profiles.slice(17),
+						],
+					};
+					yield* KnobModel.synchronize(added);
+					expect((yield* KnobModel.snapshot()).context.profiles).toHaveLength(
+						18,
+					);
+					expect((yield* KnobModel.snapshot()).selector.index).toBe(1);
 					yield* TestClock.adjust(ready ? 5000 : 200);
 					expect(h.selections).toEqual([]);
 					yield* send({ _tag: "Dismiss" });
@@ -679,3 +691,60 @@ describe("wheel-selector committed state and menu mutations", () => {
 			},
 		);
 });
+
+it.effect(
+	"SCREEN-106: inactive edits preserve focused controls and cached thumbnails, active content resets focus and volume",
+	() => {
+		const base = modelContext();
+		const context = {
+			...base,
+			profiles: base.profiles.map((p) => ({
+				...p,
+				thumbnailKey: `key-${p.id}`,
+			})),
+		};
+		const h = harness(context);
+		return Effect.gen(function* () {
+			yield* KnobModel.configure(context);
+			yield* send({ _tag: "TapTile", keyCode: "1,1" });
+			const focus = (yield* KnobModel.snapshot()).focus;
+			const inactive = {
+				...context,
+				profiles: context.profiles.map((p) =>
+					p.id === "p1"
+						? { ...p, name: "Changed inactive", thumbnailKey: "new-key" }
+						: { ...p, thumbnail: { _tag: "missing" as const } },
+				),
+			};
+			yield* KnobModel.synchronize(inactive);
+			expect((yield* KnobModel.snapshot()).focus).toEqual(focus);
+			expect(
+				(yield* KnobModel.snapshot()).context.profiles[0]?.thumbnail._tag,
+			).toBe("ready");
+			expect((yield* KnobModel.snapshot()).selector.mode).toBe("closed");
+			const active = {
+				...inactive,
+				session: { ...context.session, revision: 1 },
+				keys: context.keys.slice(1),
+			};
+			yield* KnobModel.synchronize(active);
+			expect((yield* KnobModel.snapshot()).focus._tag).toBe("none");
+			yield* send({ _tag: "ToggleVolume" });
+			yield* TestClock.adjust(1);
+			expect((yield* KnobModel.snapshot()).volume.phase).toBe("active");
+			yield* KnobModel.synchronize({
+				...active,
+				profiles: active.profiles.map((p) => ({
+					...p,
+					name: p.name + " edited",
+				})),
+			});
+			expect((yield* KnobModel.snapshot()).volume.phase).toBe("active");
+			yield* KnobModel.synchronize({
+				...active,
+				session: { ...active.session, revision: 2 },
+			});
+			expect((yield* KnobModel.snapshot()).volume.phase).toBe("inactive");
+		}).pipe(Effect.provide(h.layer));
+	},
+);

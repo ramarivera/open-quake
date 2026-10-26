@@ -15,6 +15,7 @@ import type { StripLayout } from "./geometry";
 import { mountStripTouch } from "./mount-strip-touch";
 import { KnobPanelLayer } from "./overlays/knob/KnobPanelLayer";
 import { useKnob } from "./overlays/knob/useKnob";
+import { useProfileFrame } from "./overlays/knob/useProfileFrame";
 import { KeyAlert } from "./overlays/voice/KeyDecorations";
 import {
 	useVoiceSurface,
@@ -83,10 +84,11 @@ function ActiveStripPanel(): React.JSX.Element {
 	const [pressedKeyCode, setPressedKeyCode] = useState<string>();
 	const committedLayoutIdentity = useRef<string | undefined>(undefined);
 	const { snapshot } = useWallpaper();
+	const serial = snapshot?.saved.serial ?? "desktop-preview";
 	const feedback = usePanelFeedback(useQuakeEvents());
 	const observeSelection = (next: StripProfiles): void => {
 		if (next._tag === "ready") {
-			const current = selectStripPage(next.envelope, snapshot?.saved.serial);
+			const current = selectStripPage(next.envelope, serial);
 			const previous = emojiSelection.current;
 			emojiSelection.current = {
 				profileId: current.profile.id,
@@ -105,7 +107,8 @@ function ActiveStripPanel(): React.JSX.Element {
 	const profiles = useStripProfiles(observeSelection);
 	observeSelection(profiles);
 	const { settings } = useStripSettings();
-	const serial = snapshot?.saved.serial;
+	const knob = useKnob().snapshot;
+	const frame = useProfileFrame(profiles, knob, serial);
 	const stripLayout = useStripLayout(profiles, serial);
 	const onLayout = useCallback(
 		(current: StripLayout | undefined) => {
@@ -124,14 +127,14 @@ function ActiveStripPanel(): React.JSX.Element {
 						?.dispatchEvent(new Event("quake-strip-reset"));
 				committedLayoutIdentity.current = identity;
 			}
-			layout.current = current;
+			layout.current = frame.pending ? undefined : current;
 		},
-		[stripLayout],
+		[stripLayout, frame.pending],
 	);
 	const voice = useVoiceSurface(stripLayout);
 	const motion = useStripMotion();
 	// Chat cards go opaque while the FunctionWheel or picker is open (AI-207).
-	const knobSelector = useKnob().snapshot?.selector.mode;
+	const knobSelector = knob?.selector.mode;
 	const wheelOpen = knobSelector !== undefined && knobSelector !== "closed";
 	const main = useRef<HTMLElement>(null);
 	const { request, view, locale } = voice.context;
@@ -220,13 +223,10 @@ function ActiveStripPanel(): React.JSX.Element {
 			};
 		}
 	}, []);
-	if (profiles._tag === "ready") {
-		const { profile, page } = selectStripPage(
-			profiles.envelope,
-			snapshot?.saved.serial,
-		);
+	if (profiles._tag === "ready" && !frame.pending) {
+		const { profile, page } = selectStripPage(profiles.envelope, serial);
 		target.current = {
-			deviceId: snapshot?.saved.serial ?? "desktop-preview",
+			deviceId: serial,
 			profileId: profile.id,
 			pageId: page.id,
 			revision: profile.revision,
@@ -237,7 +237,9 @@ function ActiveStripPanel(): React.JSX.Element {
 		profiles._tag === "ready"
 			? (() => {
 					const { profile, page } = selectStripPage(profiles.envelope, serial);
-					return `${profile.id}/${page.id}`;
+					return knob && knob.context.session.deviceId === serial
+						? `${knob.context.session.profileId}/${knob.context.pageId ?? profiles.envelope.profiles.find((entry) => entry.id === knob.context.session.profileId)?.pages[0].id ?? page.id}`
+						: `${profile.id}/${page.id}`;
 				})()
 			: undefined;
 	const previous = useRef(selection);
@@ -258,8 +260,15 @@ function ActiveStripPanel(): React.JSX.Element {
 			<StripViewport>
 				<StripScreen
 					onLayout={onLayout}
+					previewSerial={serial}
 					pressedKeyCode={pressedKeyCode}
-					profiles={profiles}
+					pendingProfile={frame.pending}
+					profiles={frame.profiles}
+					view={
+						frame.vivid && frame.profiles._tag !== "failure"
+							? "vivid"
+							: "active"
+					}
 					wallpaper={snapshot}
 					wallpaperSound
 					showEmptyGridDashedBorder={settings.showEmptyGridDashedBorder}

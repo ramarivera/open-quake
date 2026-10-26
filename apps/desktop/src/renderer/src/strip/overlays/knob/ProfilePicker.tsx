@@ -4,18 +4,36 @@ import type {
 	KnobRequest,
 	MenuProfile,
 } from "../../../../../shared/knob-contracts";
-import { cardRect, pickerLayout } from "./geometry";
+import { KEY_LOCALE_STORAGE, storedKeyLocale } from "../../../keys/key-locale";
+import { cardRect, pageArrowRect, pickerLayout } from "./geometry";
 import { mountPickerTouch } from "./picker-touch";
+import strings from "./strings.json";
 
 export function ProfilePicker({
 	snapshot,
 	entries,
 	request,
+	locale: providedLocale,
 }: {
 	snapshot: KnobModelSnapshot;
+	locale?: keyof typeof strings;
 	entries: readonly MenuProfile[];
 	request: (command: KnobRequest) => Promise<void>;
 }): React.JSX.Element {
+	const [storedLocale, setStoredLocale] = useState(storedKeyLocale);
+	useEffect(() => {
+		const update = () => setStoredLocale(storedKeyLocale());
+		const storage = (event: StorageEvent) => {
+			if (event.key === KEY_LOCALE_STORAGE || event.key === null) update();
+		};
+		window.addEventListener("storage", storage);
+		window.addEventListener("key-locale", update);
+		return () => {
+			window.removeEventListener("storage", storage);
+			window.removeEventListener("key-locale", update);
+		};
+	}, []);
+	const copy = strings[providedLocale ?? storedLocale] ?? strings.en;
 	const { context, selector } = snapshot;
 	const sessionId = context.session.sessionId;
 	const layout = pickerLayout(entries.length);
@@ -23,7 +41,7 @@ export function ProfilePicker({
 	const currentEntries = useRef(entries);
 	currentEntries.current = entries;
 	const [pressed, setPressed] = useState(-1);
-	const focus = cardRect(entries.length, selector.index % 15);
+	const focus = cardRect(entries.length, selector.index % 15, selector.page);
 	const current = context.profiles.find(
 		(p) => p.id === context.session.profileId,
 	);
@@ -53,7 +71,7 @@ export function ProfilePicker({
 			className="knob-picker"
 			role="dialog"
 			aria-modal="true"
-			aria-label="Switch profile"
+			aria-label={copy.title}
 			data-testid="profile-picker"
 			onKeyDown={(event) => {
 				if (event.key === "Escape")
@@ -61,18 +79,16 @@ export function ProfilePicker({
 			}}
 		>
 			<header>
-				<span>Switch profile</span>
+				<span className="knob-picker-title">{copy.title}</span>
 				<span className="knob-current-label">
-					Current · <em>{current?.name}</em>
+					{copy.currentPrefix} · <em>{current?.name}</em>
 				</span>
-				<span className="knob-picker-hint">
-					Rotate to choose · press to confirm
-				</span>
+				<span className="knob-picker-hint">{copy.knobHint}</span>
 			</header>
 			{entries
 				.slice(selector.page * 15, (selector.page + 1) * 15)
 				.map((entry, offset) => {
-					const rect = cardRect(entries.length, offset);
+					const rect = cardRect(entries.length, offset, selector.page);
 					const index = selector.page * 15 + offset;
 					return (
 						<button
@@ -101,11 +117,13 @@ export function ProfilePicker({
 						>
 							{entry.thumbnail._tag === "ready" ? (
 								<img src={entry.thumbnail.dataUrl} alt="" draggable="false" />
-							) : null}
+							) : (
+								<span className="knob-card-placeholder" aria-hidden="true" />
+							)}
 							<span className="knob-card-scrim" />
 							<span className="knob-card-name">{entry.name}</span>
 							{entry.id === context.session.profileId && !layout.paged ? (
-								<span className="knob-current-badge">Current</span>
+								<span className="knob-current-badge">{copy.currentBadge}</span>
 							) : null}
 						</button>
 					);
@@ -120,37 +138,41 @@ export function ProfilePicker({
 			/>
 			{layout.paged ? (
 				<>
-					{selector.page > 0 ? (
-						<button
-							type="button"
-							className="knob-page-arrow knob-page-previous"
-							aria-label="Previous page"
-							onClick={(event) => {
-								if (event.detail === 0)
-									void request({ _tag: "Page", sessionId, delta: -1 });
-							}}
-						>
-							‹
-						</button>
-					) : null}
-					{selector.page < Math.ceil(entries.length / 15) - 1 ? (
-						<button
-							type="button"
-							className="knob-page-arrow knob-page-next"
-							aria-label="Next page"
-							onClick={(event) => {
-								if (event.detail === 0)
-									void request({ _tag: "Page", sessionId, delta: 1 });
-							}}
-						>
-							›
-						</button>
-					) : null}
+					{([-1, 1] as const).map((delta) => {
+						const rect = pageArrowRect(delta);
+						const hidden =
+							delta < 0
+								? selector.page === 0
+								: selector.page >= Math.ceil(entries.length / 15) - 1;
+						return (
+							<button
+								key={delta}
+								type="button"
+								className={`knob-page-arrow knob-page-${delta < 0 ? "previous" : "next"}`}
+								aria-label={delta < 0 ? "Previous page" : "Next page"}
+								aria-hidden={hidden}
+								disabled={hidden}
+								style={{
+									left: rect.x,
+									top: rect.y,
+									width: rect.width,
+									height: rect.height,
+									visibility: hidden ? "hidden" : "visible",
+								}}
+								onClick={(event) => {
+									if (event.detail === 0 && !hidden)
+										void request({ _tag: "Page", sessionId, delta });
+								}}
+							>
+								{delta < 0 ? "‹" : "›"}
+							</button>
+						);
+					})}
 					<footer>
 						<span>
 							{selector.page + 1} / {Math.ceil(entries.length / 15)}
 						</span>
-						<span>Tap to switch, or it switches automatically on timeout</span>
+						<span>{copy.pageHint}</span>
 					</footer>
 				</>
 			) : null}

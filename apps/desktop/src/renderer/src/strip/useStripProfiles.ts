@@ -27,15 +27,24 @@ export function subscribeStripProfiles(
 		const reply = decode(value);
 		if (live && Either.isRight(reply)) update(reply.right);
 	};
-	const off = bridge.onSnapshot(accept);
-	bridge.read().then(accept, () => {
-		if (live)
-			update({
-				_tag: "failure",
-				code: "QUAKE.PROFILE.READ_FAILED",
-				message: "Reading local profiles failed",
-			});
+	let pushed = false;
+	const off = bridge.onSnapshot((value) => {
+		if (Either.isRight(decode(value))) pushed = true;
+		accept(value);
 	});
+	bridge.read().then(
+		(value) => {
+			if (!pushed) accept(value);
+		},
+		() => {
+			if (live && !pushed)
+				update({
+					_tag: "failure",
+					code: "QUAKE.PROFILE.READ_FAILED",
+					message: "Reading local profiles failed",
+				});
+		},
+	);
 	return () => {
 		live = false;
 		off();

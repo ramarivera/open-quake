@@ -4,6 +4,7 @@ import { selectorProfiles } from "../../../../../shared/knob-contracts";
 import { VoiceSurfaceEvent } from "../../../../../shared/voice-surface";
 import { stripLayout } from "../../geometry";
 import { useStripProfiles } from "../../useStripProfiles";
+import { useStripMotion } from "../voice/voice-context";
 import { FunctionWheel } from "./FunctionWheel";
 import { focusTargetRect } from "./geometry";
 import { KnobDial } from "./KnobDial";
@@ -15,6 +16,7 @@ import "./knob.css";
 /** SVG child of the strip canvas, so rotation/scaling match the base panel. */
 export function KnobPanelLayer(): React.JSX.Element | null {
 	const { snapshot, notice, request } = useKnob();
+	const motion = useStripMotion();
 	const profiles = useStripProfiles();
 	const capture = useRef<
 		| {
@@ -171,6 +173,7 @@ export function KnobPanelLayer(): React.JSX.Element | null {
 						entries={entries}
 						index={selector.index}
 						direction={selector.direction}
+						motion={motion}
 					/>
 				) : null}
 				{notice || snapshot.notice ? (
