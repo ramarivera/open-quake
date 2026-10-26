@@ -72,3 +72,8 @@
 - [x] 8.11 Release the shared key input lock before awaiting Home Assistant network work; retain atomic activation guards and held-key deduplication, interrupt scoped owned work on reset, and prove blocked requests do not delay unrelated keys, navigation or cleanup. Address PR38 final-head review with attributed reply and fresh checks. Bead `open-quake-lih.10.2.29`. Evidence: `verification-sound-gif-ha.md`, PR38 review follow-up; 424 device and 67 focused desktop tests, both types, build, bundles, lint and strict change validation pass.
 
 - [x] 8.12 Keep unrelated strip taps responsive through the production panel dispatcher while Home Assistant is pending, and propagate reset/disconnect cancellation across the desktop Promise callback into the integration runtime. Prove both consumer paths and preserve same-key ordering and authorization. Bead `open-quake-lih.10.2.30`. Evidence: `verification-sound-gif-ha.md`, production-boundary follow-up; 92 focused desktop tests, desktop typecheck, build, both bundle modes, lint and strict change validation pass. Published-head review and checks remain goal-owned until reconciled.
+
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: MGMT-255/340 brightness/plugin/template reset precedence, real editor platform selection and blank Clock reset.

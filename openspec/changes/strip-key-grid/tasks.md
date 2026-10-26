@@ -46,3 +46,8 @@ Run in `/Volumes/ExtSSD/devplane/oq-strip-grid` on 2026-10-24:
 - `openspec validate --all --strict`: pass.
 
 Not verified: rendering on the real QUAKE strip, its colours, and frame timing.
+
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: mounted panel/device/manager/editor host resize, artwork and frame coverage for MGMT-051/056/060, WIDGETS-011; real timer/rendered runtime feedback for WIDGETS-107.

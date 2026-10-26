@@ -170,12 +170,21 @@ export const resetKeyIcons = (
 			)(key.compatibility.value.source)
 		: undefined;
 	const sourceConfig = source?._tag === "Right" ? source.right.config : {};
+	// Brightness owns its semantic default before plugin or template metadata.
 	const icon =
-		metadata.defaultIcon ?? sourceConfig.defaultIcon ?? original?.config.icon;
+		key.config.type === "brightness"
+			? "0-1"
+			: (metadata.defaultIcon ??
+				sourceConfig.defaultIcon ??
+				original?.config.icon);
 	const alternate =
-		metadata.defaultAlterIcon ??
-		sourceConfig.defaultAlterIcon ??
-		(original ? Option.getOrUndefined(original.config.alterIcon) : undefined);
+		key.config.type === "brightness"
+			? undefined
+			: (metadata.defaultAlterIcon ??
+				sourceConfig.defaultAlterIcon ??
+				(original
+					? Option.getOrUndefined(original.config.alterIcon)
+					: undefined));
 	return {
 		...key,
 		config: {

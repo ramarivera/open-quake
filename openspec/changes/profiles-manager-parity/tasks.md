@@ -11,3 +11,9 @@
 - [x] 1.9 Bound canonical thumbnail cache retention. Keep current content hashes for every saved profile in all eight locales; remove obsolete owned PNGs and regular pending files older than 24 hours, preserve unrelated files/directories/symlinks, serialize cleanup with captures, and prove production registration and cleanup failures. Verified by 192 focused profile/knob/diagnostic tests, the full desktop suite, typecheck/build, and windowless native Electron cache-to-knob decoding. Bead `open-quake-57m` remains open through reviewed delivery.
 
 - [ ] 1.10 Avoid repeated thumbnail translation/encoding for content-identical committed catalogs. Preserve all eight locale hashes, same-revision content invalidation, per-sweep orphan inspection, bounded current-catalog retention, cleanup error identity and capture/repository serialization. Verify through the actual store and production registration without increasing test timeouts. Bead `open-quake-tqb`.
+
+
+## Device widget coverage lane
+
+- [x] test-device-widgets: platform template resets/project URLs and exact SysView preset for MGMT-340/384.
+- [ ] test-device-widgets remainder MGMT-384: migrate already-installed legacy SysView grids without altering custom profiles.

@@ -166,3 +166,19 @@ The committed key runtime SHALL route configured Home Assistant keys to the dire
 - **AND** reset interrupts scoped pending integration work without waiting for the network response
 - **AND** cancellation crosses the desktop Promise boundary into the integration runtime so queued service actions cannot execute after reset
 - **AND** committed-key validation and held-press deduplication remain atomic
+
+
+### Requirement: Default artwork reset precedence
+
+Reset SHALL affect the current editor draft until explicit Save. Brightness SHALL restore its semantic brightness resource before plugin or template defaults, leaving its alternate state unchanged. Other keys SHALL prefer current default metadata, retained source defaults, then the matching built-in platform template; absent defaults SHALL preserve each state's artwork. Plugin primary and alternate defaults SHALL remain independent. Every built-in template, including Linux Quick and Clock, SHALL participate. An intentionally blank Clock default SHALL stay blank. Actions and titles SHALL remain unchanged. Evidence: MGMT-255, MGMT-340.
+
+#### Scenario: Reset an imported platform template
+
+- **WHEN** an unlocked imported Quick key without retained defaults resets on Linux, macOS or Windows
+- **THEN** the real editor selects that platform's catalog, publishes its portable draft artwork and source identity, and does not send Save
+- **AND** the Clock template can reset to blank without replacing its clock settings
+
+#### Scenario: Brightness and plugin conflict
+
+- **WHEN** brightness and an imported plugin have conflicting current and retained default metadata
+- **THEN** brightness restores its brightness resource, the plugin uses current primary and alternate defaults, and neither operation changes actions or commits the draft

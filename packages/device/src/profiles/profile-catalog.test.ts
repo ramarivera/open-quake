@@ -1,5 +1,6 @@
-import { Array as EffectArray } from "effect";
+import { Array as EffectArray, Option } from "effect";
 import { describe, expect, it } from "vitest";
+import { resetKeyIcons } from "./key-editing-invariants.js";
 import {
 	builtinProfiles,
 	profileText,
@@ -132,5 +133,81 @@ describe("recovered catalog", () => {
 			_tag: "rejected",
 			reason: "limit",
 		});
+	});
+});
+
+it("MGMT-255/340: reset uses every platform template, including Linux and clock, and keeps project URLs region-neutral", () => {
+	for (const platform of ["linux", "darwin", "win32"] as const) {
+		const catalog = builtinProfiles(platform);
+		for (const profile of catalog)
+			for (const page of profile.pages)
+				for (const original of page.keys) {
+					if (!original.config.type) continue;
+					const edited = {
+						...original,
+						config: {
+							...original.config,
+							icon: "custom",
+							alterIcon: Option.some("custom-alternate"),
+							compatibility: Option.none(),
+						},
+						compatibility: Option.none(),
+					};
+					const reset = resetKeyIcons(edited, original);
+					expect(reset.config.icon).toBe(
+						original.config.type === "brightness"
+							? "0-1"
+							: original.config.icon,
+					);
+					expect(reset.config.actions).toEqual(original.config.actions);
+					expect(reset.config.title).toEqual(original.config.title);
+					if (Option.isSome(original.config.alterIcon))
+						expect(reset.config.alterIcon).toEqual(original.config.alterIcon);
+					else expect(reset.config.alterIcon).toEqual(edited.config.alterIcon);
+				}
+		const quick = catalog.find((p) => p.id === "1-2");
+		const urls = quick?.pages.flatMap((p) =>
+			p.keys.flatMap((k) =>
+				k.config.actions.filter((a) => a.type === "url").map((a) => a.value),
+			),
+		);
+		expect(urls).toContain("https://github.com/ramarivera/open-quake");
+		expect(urls).toContain("https://github.com/ramarivera/open-quake/issues");
+	}
+});
+
+it("MGMT-384: SysView ships one full-strip glass Celsius panel with exact input and lock flags", () => {
+	const profile = builtinProfiles("linux").find((p) => p.id === "1-3");
+	expect(profile?.pages[0].keys).toHaveLength(1);
+	const key = profile?.pages[0].keys[0];
+	expect(key?.keyCode).toBe("1,1");
+	expect(key?.config).toMatchObject({
+		type: "systemMonitorPanel",
+		size: [8, 2],
+		supportTouchEffect: false,
+		supportKnob: false,
+		display: true,
+		actions: [
+			{
+				type: "monitorStyle",
+				value: { styleId: "glass", background: { mode: "style", themes: {} } },
+			},
+		],
+	});
+	expect(
+		Option.getOrUndefined(key?.compatibility ?? Option.none()),
+	).toMatchObject({
+		source: {
+			config: { temperatureUnit: "celsius", hasTouchableSubElements: true },
+		},
+	});
+	expect(
+		Option.getOrUndefined(key?.config.basicEditableItems ?? Option.none()),
+	).toEqual({
+		title: false,
+		grid: false,
+		icon: false,
+		allowDelete: false,
+		allowDrag: false,
 	});
 });

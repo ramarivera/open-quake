@@ -175,3 +175,13 @@ The rendered weather card SHALL use clear codes 0/1, partly cloudy 2, cloudy 3, 
 - **WHEN** every documented WMO code or an unknown/null code reaches a weather card and a music cover fails or transport is rejected
 - **THEN** the card renders the corresponding SVG geometry, the music cover falls back, and the transient tip clears after 1800 ms
 - **AND** subsequent snapshots update disabled capabilities while idle and unavailable remain distinct and passive previews cannot mutate playback
+
+
+### Requirement: Music source selection
+
+The music settings SHALL default to System and SHALL provide Local and System source controls with persisted mode. Local selection SHALL use the local playback path and System selection SHALL use the shared system session. Spotify SHALL remain excluded by approved decision 12. Evidence: MGMT-270. Source controls and mode persistence remain implementation obligations.
+
+#### Scenario: Source mode survives reopening
+
+- **WHEN** the user chooses Local, closes settings and opens them again
+- **THEN** Local remains selected, and choosing System restores the shared system session

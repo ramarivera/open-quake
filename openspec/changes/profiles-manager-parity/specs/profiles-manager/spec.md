@@ -82,3 +82,18 @@ Management SHALL expose Knob Profile, Default Profile, Custom Profile, Add Item,
 #### Scenario: Recoverable initialization failure
 - **WHEN** initial profile storage fails and later recovers
 - **THEN** IPC returns a typed failure reason and a subsequent request retries initialization successfully
+
+
+### Requirement: Platform defaults and SysView preset
+
+Quick SHALL select Linux, macOS or Windows defaults and SHALL use region-neutral project and issue URLs. SysView SHALL ship one visible systemMonitorPanel at 1,1, spanning 8 by 2, with glass style, style background mode, Celsius, sub-touch enabled, touch feedback and knob disabled, and title/grid/icon/delete/drag locks false. Previously installed legacy SysView metric grids SHALL migrate to this panel without replacing custom profiles. Evidence: MGMT-340, MGMT-384. Legacy-grid migration remains an implementation obligation.
+
+#### Scenario: New catalog installation
+
+- **WHEN** any supported platform installs the catalog
+- **THEN** Quick points to the open-quake repository and issues independently of locale, and SysView has the exact full-panel preset
+
+#### Scenario: Installed legacy SysView
+
+- **WHEN** a previously installed SysView contains the legacy separate metric grid
+- **THEN** that built-in upgrades to the full monitor panel while unrelated custom profiles remain intact

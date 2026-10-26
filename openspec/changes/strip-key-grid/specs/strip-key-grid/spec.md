@@ -243,3 +243,24 @@ page. Covers SCREEN-134, MGMT-051, SCREEN-018.
 
 - **WHEN** main cannot read local profiles
 - **THEN** both windows show a profile-unavailable status with code `QUAKE.PROFILE.READ_FAILED` and no diagnostic cause
+
+
+### Requirement: Shared management host geometry
+
+The device preview, profile thumbnail, key editor and panel SHALL retain one fixed 1920 by 480 strip canvas, scaled uniformly by the smaller host dimension ratio. Resizing SHALL preserve tile artwork, theme, edge and inner gaps, and proportional radii. Independent-device-design supersedes the recovered host border treatments: management previews SHALL use a one-pixel app hairline frame, the device bezel SHALL add no padding, and the panel SHALL add no frame. Filled tiles SHALL use flat surface plates and a one-pixel inset hairline, with a two-pixel accent inset on press. Passive previews SHALL remain inert, without a hover operation. Full-bleed clocks SHALL render a square face at the canvas origin. Evidence: MGMT-051, MGMT-056, MGMT-060, WIDGETS-011.
+
+#### Scenario: Preview resize across hosts
+
+- **WHEN** the same Quick, MeetAI or Clock profile renders in the panel, DeviceScreen, ProfilePreview and KeyEditor at 960 by 240, then resizes to 480 by 200 or 1200 by 120
+- **THEN** the fixed canvas scales by 0.5 then 0.25, the hosts retain identical tile geometry, and the management previews cannot operate the tile
+- **AND** common-base and meeting corners draw at 28 and 14 logical pixels, while the full-bleed clock face covers 1920 by 480 without rounding
+
+### Requirement: Scoped rendered key runtime feedback
+
+The strip SHALL consume decoded runtime feedback only for the rendered device, profile, page and key. Countdown updates SHALL use the real timer lifetime, disappear on expiry, and show Alarm only if expiry belongs to the active profile. Progress below 100 SHALL draw a bounded bar, 100 SHALL remove it, and invalid-operation feedback SHALL render a labelled chip. Link loss SHALL clear rendered state through the runtime reset. Chips SHALL have opaque backgrounds and progress SHALL remain six logical pixels high. Evidence: WIDGETS-107.
+
+#### Scenario: Timer switches profile and disconnects
+
+- **WHEN** a two-second timer advances one second, its profile becomes inactive, then it expires
+- **THEN** its countdown stays hidden on the other profile and no alarm appears on returning
+- **AND** a new active expiry shows Alarm, another key's 42 percent progress and Invalid operation stay scoped to that key, completion removes the bar, and disconnect removes all runtime feedback
