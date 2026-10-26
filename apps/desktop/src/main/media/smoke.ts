@@ -38,6 +38,7 @@ import {
 	type WallpaperSnapshot,
 } from "../../shared/wallpaper-contracts";
 import { ClockLive, registerClock, registerClockScheme } from "../clock";
+import { registerDeviceReady } from "../device-ready";
 import { registerHardware } from "../hardware";
 import { registerKeyLibrary } from "../key-library/registration";
 import { desktopKeyRuntimePort } from "../key-library/runtime-port";
@@ -192,6 +193,15 @@ async function smoke(): Promise<void> {
 	const management = new BrowserWindow(options);
 	managementWindow = management;
 	const panel = new BrowserWindow(options);
+	// Media-only fixture has no device session. Register the production offline reader.
+	const removeDeviceReady = registerDeviceReady({
+		bus: () => undefined,
+		rotation: () => undefined,
+		mock: true,
+		panelSerial: (sender) =>
+			sender === panel.webContents ? "smoke-A" : undefined,
+		management: () => management.webContents,
+	});
 	const locale = registerAppLocale({
 		directory,
 		osLocale: "en-US",
@@ -1373,7 +1383,7 @@ async function smoke(): Promise<void> {
 			query: { surface: "panel" },
 		});
 		await panel.webContents.executeJavaScript(
-			`localStorage.setItem('open-quake-key-locale', '${language}')`,
+			`window.quakeLocale.set('${language}')`,
 		);
 		await panel.reload();
 		await settle(600);
@@ -1416,7 +1426,7 @@ async function smoke(): Promise<void> {
 	);
 	for (const language of ["en", "de"]) {
 		await panel.webContents.executeJavaScript(
-			`localStorage.setItem('open-quake-key-locale','${language}')`,
+			`window.quakeLocale.set('${language}')`,
 		);
 		await panel.reload();
 		await settle(600);
@@ -1627,6 +1637,7 @@ async function smoke(): Promise<void> {
 	process.stdout.write(
 		"Strip integration smoke PASS: real grid hits, press feedback, gaps and dynamic clickable discovery inside an existing scroller.\n",
 	);
+	removeDeviceReady();
 	unregisterHardware();
 	ipcMain.removeHandler(AGENTS_REQUEST);
 	removeAppearance();

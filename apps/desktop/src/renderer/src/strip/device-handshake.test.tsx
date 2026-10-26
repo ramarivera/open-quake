@@ -135,12 +135,22 @@ it("SCREEN-009/013 subscribes before readiness and reports config before the act
 	});
 	expect(node.textContent).toBe("A:2.0.1");
 	expect(sent).toHaveLength(4);
+	current = { ...current, keyMatrix: { row: 1, col: 8 } };
+	await act(async () => {
+		emit({
+			source: "hid",
+			kind: "json",
+			value: { type: "reportConfig", keyMatrix: { row: 1, col: 5 } },
+		});
+	});
+	expect(sent).toHaveLength(6);
+
 	current = snapshot("B");
 	await act(async () => {
 		root.render(<Panel serial="B" />);
 	});
 	expect(node.textContent).toBe("B:1.0.21");
-	expect(sent).toHaveLength(6);
+	expect(sent).toHaveLength(8);
 	expect(listeners.size).toBe(1);
 	await act(async () => {
 		root.unmount();

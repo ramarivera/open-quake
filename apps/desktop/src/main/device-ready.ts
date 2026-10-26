@@ -1,4 +1,4 @@
-import type { HardwareSession } from "@open-quake/device";
+import { type HardwareSession, HardwareUnavailable } from "@open-quake/device";
 import { Effect } from "effect";
 import { ipcMain } from "electron";
 import {
@@ -13,7 +13,7 @@ export function createDeviceReadyReader(options: {
 	readonly rotation: (serial: string) => number | undefined;
 	readonly mock: boolean;
 }) {
-	const syncing = new WeakMap<HardwareSession, Promise<void>>();
+	const syncing = new WeakMap<HardwareSession, Promise<string | undefined>>();
 	return async (serial: string): Promise<DeviceReadyReply> => {
 		const bus = options.bus(serial);
 		if (bus?.currentStatus()?.state !== "connected") return { _tag: "offline" };
@@ -21,13 +21,23 @@ export function createDeviceReadyReader(options: {
 		if (!hardware) return { _tag: "offline" };
 		let refresh = syncing.get(hardware);
 		if (!refresh) {
-			refresh = Effect.runPromise(hardware.refresh());
+			refresh = Effect.runPromise(
+				hardware
+					.refresh()
+					.pipe(
+						Effect.match({
+							onSuccess: () => undefined,
+							onFailure: (error) => error.code,
+						}),
+					),
+			);
 			syncing.set(hardware, refresh);
 		}
 		try {
-			await refresh;
-		} catch {
-			return { _tag: "failure", code: "QUAKE.HARDWARE.SYNC_FAILED" };
+			const failure = await refresh;
+			if (failure) return { _tag: "failure", code: failure };
+		} catch (cause) {
+			return { _tag: "failure", code: new HardwareUnavailable(cause).code };
 		} finally {
 			if (syncing.get(hardware) === refresh) syncing.delete(hardware);
 		}

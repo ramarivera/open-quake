@@ -65,6 +65,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	let sequence = 0;
 	let hardware: HardwareSession | undefined;
 	let connectionNow: QuakeConnection | undefined;
+	let matrix: { row: 1 | 2; col: 8 } = { row: 2, col: 8 };
 	let retry = 0;
 	let selectedPath: string | undefined;
 	let exhaustedPresence: string | undefined;
@@ -189,6 +190,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 				selectedPath ? { path: selectedPath } : {},
 			);
 			connectionNow = connection;
+			matrix = { row: 2, col: 8 };
 			lastSerial = connection.info.serialNumber;
 			selectedPath = connection.info.path;
 			const openedAt = yield* Clock.currentTimeMillis;
@@ -287,7 +289,6 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 	).pipe(Effect.forkScoped);
 	const missingScans = new Map<string, number>();
 	let presenceDelay = 1000;
-	let matrix: { row: 1 | 2; col: 8 } = { row: 2, col: 8 };
 	if (!selection)
 		yield* Effect.forever(
 			Effect.suspend(() => Effect.sleep(presenceDelay)).pipe(

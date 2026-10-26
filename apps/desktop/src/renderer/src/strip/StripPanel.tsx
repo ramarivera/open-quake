@@ -192,6 +192,8 @@ function ActiveStripPanel(): React.JSX.Element {
 			const index = event.matrix.states.indexOf(1);
 			if (index < 0) return;
 			const keyCode = `${Math.floor(index / 5) + 1},${(index % 5) + 1}`;
+			if (!layout.current?.tiles.some((tile) => tile.keyCode === keyCode))
+				return;
 			dispatch.key({ keyAction: 0, keyCode });
 			dispatch.key({ keyAction: 1, keyCode, voiceTouchEnd: true });
 		});

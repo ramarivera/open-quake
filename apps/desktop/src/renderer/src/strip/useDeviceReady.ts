@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DeviceReadySnapshot } from "../../../shared/hardware-contracts";
 import {
@@ -7,6 +8,11 @@ import {
 import type { StripMessage } from "../../../shared/strip-transport";
 import { createStripDeviceSession } from "./device-session";
 import type { StripProfiles } from "./useStripProfiles";
+
+const matrixReport = Schema.Struct({
+	type: Schema.Literal("reportConfig"),
+	keyMatrix: Schema.Struct({ row: Schema.Literal(1, 2), col: Schema.Number }),
+});
 
 export function useDeviceReady(
 	serial: string | undefined,
@@ -32,6 +38,8 @@ export function useDeviceReady(
 		});
 		recovery.current = session;
 		const off = window.openQuake?.onQuakeEvent((event) => {
+			if (event.kind === "json" && Schema.is(matrixReport)(event.value))
+				session.recover();
 			if (event.kind === "status") {
 				if (event.state === "connected") session.recover();
 				else {
@@ -91,6 +99,7 @@ export function useDeviceReady(
 			snapshot.session,
 			snapshot.version,
 			snapshot.rotation,
+			snapshot.keyMatrix.row,
 			profile.id,
 			profile.revision,
 		]);
