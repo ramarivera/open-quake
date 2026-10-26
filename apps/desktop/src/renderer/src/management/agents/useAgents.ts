@@ -13,9 +13,13 @@ export function useAgents(bridge: AgentsBridge | undefined) {
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const apply = useCallback(
-		(next: AgentView) =>
+		(next: AgentView, acceptEqual = true) =>
 			setView((current) =>
-				!current || next.revision >= current.revision ? next : current,
+				!current ||
+				next.revision > current.revision ||
+				(acceptEqual && next.revision === current.revision)
+					? next
+					: current,
 			),
 		[],
 	);
@@ -39,8 +43,7 @@ export function useAgents(bridge: AgentsBridge | undefined) {
 				const reply = await bridge.request(input);
 				if (owner !== generation.current) return reply;
 				if (reply._tag === "success") {
-					if (input.type !== "read" || atEvent === events.current)
-						apply(reply.view);
+					apply(reply.view, atEvent === events.current);
 				} else setError(`${reply.message} · ${reply.code}`);
 				return reply;
 			} catch {
@@ -52,8 +55,10 @@ export function useAgents(bridge: AgentsBridge | undefined) {
 				if (owner === generation.current) setError(reply.message);
 				return reply;
 			} finally {
-				pending.current--;
-				if (owner === generation.current) setBusy(pending.current > 0);
+				if (owner === generation.current) {
+					pending.current--;
+					setBusy(pending.current > 0);
+				}
 			}
 		},
 		[bridge, apply],
@@ -64,6 +69,7 @@ export function useAgents(bridge: AgentsBridge | undefined) {
 			return;
 		}
 		const owner = ++generation.current;
+		pending.current = 0;
 		const atEvent = events.current;
 		setView(undefined);
 		setBusy(true);
@@ -84,7 +90,7 @@ export function useAgents(bridge: AgentsBridge | undefined) {
 				if (owner !== generation.current) return;
 				setBusy(pending.current > 0);
 				if (reply._tag === "success") {
-					if (atEvent === events.current) apply(reply.view);
+					apply(reply.view, atEvent === events.current);
 				} else setError(`${reply.message} · ${reply.code}`);
 			},
 			() => {

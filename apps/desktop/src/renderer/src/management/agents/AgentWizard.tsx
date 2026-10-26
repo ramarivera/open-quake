@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	agentIdError,
 	sanitizeAgentId,
@@ -39,7 +39,35 @@ export function AgentWizard({
 	);
 	const [prompt, setPrompt] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [resetting, setResetting] = useState(false);
+	const [savedName, setSavedName] = useState(agent?.name ?? "");
 	const [error, setError] = useState("");
+	const revisionRef = useRef(view.revision);
+	revisionRef.current = Math.max(revisionRef.current, view.revision);
+	const naming = useRef(false);
+	const saveName = async () => {
+		if (!created || id === "main" || name === savedName || naming.current)
+			return;
+		naming.current = true;
+		setBusy(true);
+		try {
+			const reply = await request({
+				type: "rename",
+				id,
+				name,
+				revision: revisionRef.current,
+			});
+			if (reply._tag === "rejected")
+				setError(`${reply.message} · ${reply.code}`);
+			else {
+				revisionRef.current = reply.view.revision;
+				setSavedName(name);
+			}
+		} finally {
+			naming.current = false;
+			setBusy(false);
+		}
+	};
 	const invalid = created ? "" : agentIdError(id, view.agents);
 	const validation =
 		invalid === "reserved"
@@ -49,16 +77,30 @@ export function AgentWizard({
 				: invalid === "format"
 					? t.agentIdFormatError
 					: "";
-	const run = async (kind: "next" | "draft" | "save"): Promise<void> => {
+	const run = async (
+		kind: "next" | "draft" | "save" | "reset",
+	): Promise<void> => {
+		if (naming.current) return;
 		setBusy(true);
 		setError("");
 		try {
 			if (kind === "save") {
+				let revision = revisionRef.current;
+				if (name !== savedName) {
+					const reply = await request({ type: "rename", id, name, revision });
+					if (reply._tag === "rejected") {
+						setError(`${reply.message} · ${reply.code}`);
+						return;
+					}
+					revision = reply.view.revision;
+					revisionRef.current = revision;
+					setSavedName(name);
+				}
 				const rejected = await saveWorkspaceFiles({
 					id,
 					files,
 					saved: savedFiles,
-					revision: view.revision,
+					revision,
 					request,
 					onSaved: (file, content) =>
 						setSavedFiles((current) => ({ ...current, [file]: content })),
@@ -68,14 +110,28 @@ export function AgentWizard({
 				return;
 			}
 			const reply = await request(
-				kind === "next"
-					? { type: "create", id, name, emoji }
-					: { type: "draft-agent", id, prompt, revision: view.revision },
+				kind === "reset"
+					? {
+							type: "reset-templates",
+							id,
+							confirmed: true,
+							revision: revisionRef.current,
+						}
+					: kind === "next"
+						? { type: "create", id, name, emoji }
+						: {
+								type: "draft-agent",
+								id,
+								prompt,
+								revision: revisionRef.current,
+							},
 			);
 			if (reply._tag === "rejected") {
 				setError(`${reply.message} · ${reply.code}`);
 				return;
 			}
+			revisionRef.current = reply.view.revision;
+			setResetting(false);
 			const current = reply.view.agents.find((a) => a.id === id);
 			if (current) {
 				setCreated(true);
@@ -150,6 +206,48 @@ export function AgentWizard({
 					</div>
 				) : (
 					<>
+						<label className="mc-field">
+							{t.displayName}
+							<input
+								aria-label={t.displayName}
+								value={name}
+								maxLength={200}
+								disabled={busy || id === "main"}
+								onChange={(e) => setName(e.target.value)}
+								onBlur={() => void saveName()}
+							/>
+						</label>
+						<button
+							type="button"
+							className="mc-button"
+							disabled={busy || id === "main"}
+							onClick={() => setResetting(true)}
+						>
+							{strings.administration.resetTemplates}
+						</button>
+						{resetting && (
+							<section
+								role="alertdialog"
+								aria-label={strings.administration.resetTemplates}
+							>
+								<p>{strings.administration.confirmReset}</p>
+								<button
+									type="button"
+									className="mc-button"
+									onClick={() => setResetting(false)}
+								>
+									{t.cancel}
+								</button>
+								<button
+									type="button"
+									className="mc-button"
+									disabled={busy}
+									onClick={() => void run("reset")}
+								>
+									{strings.administration.confirm}
+								</button>
+							</section>
+						)}
 						<p className="aw-wizard-agent">
 							<span aria-hidden="true">{emoji}</span> <strong>{name}</strong>{" "}
 							<code className="cw-code">{id}</code>

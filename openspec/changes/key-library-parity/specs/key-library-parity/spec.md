@@ -203,3 +203,10 @@ Generic hotkey titles polluted with a default from any recovered locale SHALL re
 #### Scenario: Eight-locale default recovery
 - **WHEN** a legacy generic hotkey or ClawBot title is localized without a user-origin marker
 - **THEN** the selected locale or configured agent supplies the title, while a title marked as user-modified survives unchanged
+
+### Requirement: Inline sequence entry and return
+The inline Multiple Operations editor SHALL show the contained operation count, focus a newly added step, and provide Back and Edit operations controls without discarding the draft (MGMT-280).
+
+#### Scenario: Add a step and return
+- **WHEN** a user adds an operation and selects Back
+- **THEN** the count increases and reopening Edit operations retains the added draft

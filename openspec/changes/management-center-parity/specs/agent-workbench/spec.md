@@ -145,3 +145,10 @@ The roster SHALL offer grid/list modes and four loading placeholders, with acces
 #### Scenario: Cancel template reset
 - **WHEN** the user cancels reset confirmation
 - **THEN** no command is sent and unsaved Markdown remains intact
+
+### Requirement: Meeting activation refresh
+Management Center SHALL refresh meeting history on every Meetings activation, including selection of the already-active page (CENTER-009). Refresh SHALL preserve the mounted document and reject older snapshots.
+
+#### Scenario: Reselect Meetings after history changes
+- **WHEN** Meetings is activated again while already mounted
+- **THEN** the real meeting bridge reads current history and renders the latest revision without replacing the page

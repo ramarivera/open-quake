@@ -35,6 +35,7 @@ import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
+import { AgentKeyFields } from "./AgentKeyFields";
 import { editableFocus } from "./editor-input";
 import { NativeIconPicker } from "./IconPicker";
 import { KeyGeometryControls } from "./KeyGeometryControls";
@@ -907,10 +908,17 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						{key.config.type === "clawbot" && (
+							<AgentKeyFields
+								value={key}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						{key.config.actions
 							.filter(
 								() =>
 									key.config.type !== "dkDesktopClock" &&
+									key.config.type !== "clawbot" &&
 									!isObsId(key.config.type),
 							)
 							.map((action, index) => (

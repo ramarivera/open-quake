@@ -9,6 +9,8 @@ import {
 } from "effect";
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import { actionProfileFunctionContracts } from "../../../../../../packages/device/src/actions/profile-function-contracts";
+import { saveProfileKnob } from "../../../../../../packages/device/src/knob/knob-profile";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -20,11 +22,13 @@ import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { profileFunctionContractsLayer } from "../../../../../../packages/device/src/profiles/profile-function-contracts";
 import {
 	ProfileRepository,
 	profileStorageLayer,
 } from "../../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../../packages/device/src/profiles/profile-service";
+import { initialAgentState } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import type { QuakeEvent } from "../../../preload/quake";
 import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import type {
@@ -52,7 +56,7 @@ afterEach(async () => {
 	localStorage.clear();
 	vi.unstubAllGlobals();
 });
-async function fixture(locked = false) {
+async function fixture(locked = false, agentKey = false, knobKey = false) {
 	let stored = Schema.encodeSync(ProfileEnvelope)(
 		Schema.decodeUnknownSync(ProfileEnvelope)({
 			schemaVersion: 1,
@@ -69,12 +73,32 @@ async function fixture(locked = false) {
 									...Schema.encodeSync(ProfileKey)(
 										createEmptyProfileKey("1,1"),
 									),
-									childrenName: "multiActions",
+									childrenName: agentKey
+										? "clawbot"
+										: knobKey
+											? "text"
+											: "multiActions",
 									config: {
 										...Schema.encodeSync(ProfileKey)(
 											createEmptyProfileKey("1,1"),
 										).config,
-										type: "multiActions",
+										type: agentKey
+											? "clawbot"
+											: knobKey
+												? "text"
+												: "multiActions",
+										...(knobKey
+											? { actions: [{ type: "text", value: "Ready" }] }
+											: {}),
+										...(agentKey
+											? {
+													actions: [
+														{ type: "agentId", value: "main" },
+														{ type: "voiceInput", value: true },
+														{ type: "taskPrompt", value: "" },
+													],
+												}
+											: {}),
 										title: {
 											...Schema.encodeSync(ProfileKey)(
 												createEmptyProfileKey("1,1"),
@@ -108,16 +132,19 @@ async function fixture(locked = false) {
 	);
 	let failWrites = false;
 	let writePause: Promise<void> | undefined;
-	const repository = ProfileRepository.Default.pipe(
+	const repository = ProfileRepository.DefaultWithoutDependencies.pipe(
 		Layer.provide(
-			profileStorageLayer({
-				read: async () => stored,
-				write: async (next) => {
-					await writePause;
-					if (failWrites) throw new Error("Synthetic disk failure");
-					stored = next;
-				},
-			}),
+			Layer.mergeAll(
+				profileFunctionContractsLayer(actionProfileFunctionContracts),
+				profileStorageLayer({
+					read: async () => stored,
+					write: async (next) => {
+						await writePause;
+						if (failWrites) throw new Error("Synthetic disk failure");
+						stored = next;
+					},
+				}),
+			),
 		),
 	);
 	const runtime = ManagedRuntime.make(
@@ -134,10 +161,39 @@ async function fixture(locked = false) {
 	const calls: KeyRequest[] = [];
 	vi.stubGlobal("quakeAgents", {
 		request: async () => ({
-			_tag: "rejected",
-			message: "No saved providers in regression fixture",
+			_tag: "success",
+			view: {
+				...initialAgentState(),
+				agents: [
+					...initialAgentState().agents,
+					{ id: "writer", name: "Writer", files: {}, emoji: "" },
+				],
+				models: {
+					default: [
+						{
+							id: "fake-model",
+							provider: "custom",
+							model: "fake-model",
+							maxTokens: 1024,
+							baseUrl: "http://localhost:19999/v1",
+							role: "default",
+							credentialAvailable: false,
+						},
+					],
+				},
+				runtime: {
+					available: false,
+					status: "stopped",
+					operation: "none",
+					code: "",
+				},
+				progress: { percent: 0, stage: "idle", deviceApplied: false },
+				draftingAvailable: false,
+			},
+			draft: "",
 		}),
 		onSnapshot: () => () => {},
+		onProgress: () => () => {},
 	});
 	const request = async (command: KeyRequest): Promise<KeyReply> => {
 		calls.push(command);
@@ -172,6 +228,13 @@ async function fixture(locked = false) {
 					break;
 				case "delete":
 					yield* editing.remove(command.target);
+					break;
+				case "save-knob":
+					yield* saveProfileKnob(
+						command.profileId,
+						command.revision,
+						command.knob,
+					);
 					break;
 				case "read":
 					break;
@@ -712,4 +775,114 @@ it("MGMT-096 repeated publications preserve an unchanged draft and a pending Sav
 		"Kept draft",
 	);
 	expect(f.calls.filter((c) => c.type === "save")).toHaveLength(1);
+});
+
+it("MGMT-280 count/add-step focus and Back preserve the real key draft", async () => {
+	const f = await fixture();
+	await f.select();
+	expect(f.host.textContent).toContain("Contain: 3 Project");
+	await click(button(f.host, "Add Operation"));
+	expect(f.host.textContent).toContain("Contain: 4 Project");
+	expect(document.activeElement).toBe(
+		f.host.querySelector(".key-sequence-step:last-of-type select"),
+	);
+	await click(button(f.host, "Back"));
+	expect(
+		f.host.querySelector(".key-sequence > div")?.hasAttribute("hidden"),
+	).toBe(true);
+	await click(button(f.host, "Edit operations"));
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(4);
+	await click(button(f.host, "Save"));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.subActions,
+	).toHaveLength(4);
+});
+
+it("MGMT-302 mounted local agent/model/voice/task Save retains typed actions and reset uses the isolated context command", async () => {
+	const f = await fixture(false, true);
+	await f.select();
+	await input(query(f.host, "#local-agent", HTMLSelectElement), "writer");
+	await input(
+		query(f.host, "#local-agent-model", HTMLSelectElement),
+		"fake-model",
+	);
+	await click(query(f.host, "#agent-key-voice", HTMLInputElement));
+	await input(
+		query(f.host, "#agent-key-task", HTMLTextAreaElement),
+		"Prepare a local report",
+	);
+	const reset = vi.fn(async () => ({ _tag: "ok" }));
+	vi.stubGlobal("quakeVoice", { request: reset });
+	await click(button(f.host, "Reset Context"));
+	expect(reset).toHaveBeenCalledWith({ _tag: "ResetContext", keyCode: "1,1" });
+	expect(f.host.textContent).toContain("Context reset");
+	await click(button(f.host, "Save"));
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.actions).toEqual(
+		expect.arrayContaining([
+			{ type: "agentId", value: "writer" },
+			{ type: "model", value: "fake-model" },
+			{ type: "voiceInput", value: false },
+			{ type: "taskPrompt", value: "Prepare a local report" },
+		]),
+	);
+	await click(button(f.host, "Gateway settings"));
+	expect(query(f.host, "input[type=password]", HTMLInputElement).value).toBe(
+		"",
+	);
+	expect(
+		f
+			.stored()
+			.profiles[0].pages[0].keys[0]?.config.actions?.some((a) =>
+				/token|credential/i.test(a.type),
+			),
+	).toBe(false);
+});
+
+it("MGMT-306 saves/reopens DK Claw agent and model through the mounted knob consumer and canonical profile storage", async () => {
+	const f = await fixture(false, false, true);
+	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
+	await input(query(f.host, "#knob-route", HTMLSelectElement), "dkclaw");
+	await input(query(f.host, "#local-agent", HTMLSelectElement), "writer");
+	await input(
+		query(f.host, "#local-agent-model", HTMLSelectElement),
+		"fake-model",
+	);
+	await click(button(f.host, "Save knob"));
+	expect(f.host.textContent).toContain("Knob voice settings saved");
+	const saved = await f.runtime.runPromise(ProfileService.getProfile("p"));
+	expect(
+		Option.isSome(saved.knob) && saved.knob.value.config.subActions,
+	).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				config: expect.objectContaining({
+					actions: expect.arrayContaining([
+						{ type: "voiceRoute", value: "dkclaw" },
+						{ type: "agentId", value: "writer" },
+						{ type: "dkclawModel", value: "fake-model" },
+					]),
+				}),
+			}),
+		]),
+	);
+	await click(button(f.host, "Cancel"));
+	expect(query(f.host, "#local-agent", HTMLSelectElement).value).toBe("writer");
+	await input(query(f.host, "#local-agent", HTMLSelectElement), "main");
+	await input(query(f.host, "#local-agent-model", HTMLSelectElement), "");
+	await click(button(f.host, "Save knob"));
+	const reset = await f.runtime.runPromise(ProfileService.getProfile("p"));
+	expect(
+		Option.isSome(reset.knob) && reset.knob.value.config.subActions,
+	).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				config: expect.objectContaining({
+					actions: [
+						{ type: "voiceRoute", value: "dkclaw" },
+						{ type: "agentId", value: "main" },
+					],
+				}),
+			}),
+		]),
+	);
 });

@@ -11,12 +11,14 @@ import { directChatModel } from "../chat/model-scope";
 import { ConversationWorkspace } from "../chat/Workspace";
 import "../chat/workspace.css";
 import "./agents.css";
+import { AdministrationPanel } from "./AdministrationPanel";
 import { AgentWizard } from "./AgentWizard";
 import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
 import { ModelsPanel } from "./ModelsPanel";
 import { RuntimeIndicator } from "./RuntimeIndicator";
 import { SkillsPanel } from "./SkillsPanel";
+import { SKILL_DRAG_TYPE, transferSkill } from "./skill-transfer";
 import { reconcileSlotDrafts } from "./slot-drafts";
 import { type AgentRequest, useAgents } from "./useAgents";
 
@@ -130,7 +132,7 @@ function Roster({
 						</button>
 					</p>
 					<fieldset className="aw-segmented">
-						<legend>View</legend>
+						<legend>{strings.administration.view}</legend>
 						{["grid", "list"].map((mode) => (
 							<button
 								key={mode}
@@ -138,7 +140,9 @@ function Roster({
 								aria-pressed={layout === mode}
 								onClick={() => setLayout(mode)}
 							>
-								{mode === "grid" ? "Grid" : "List"}
+								{mode === "grid"
+									? strings.administration.grid
+									: strings.administration.list}
 							</button>
 						))}
 					</fieldset>
@@ -148,6 +152,22 @@ function Roster({
 								className="mc-card aw-row"
 								data-selected={active?.id === agent.id}
 								key={agent.id}
+								onDragOver={(event) => {
+									if (
+										agent.id !== "main" &&
+										event.dataTransfer.types.includes(SKILL_DRAG_TYPE)
+									)
+										event.preventDefault();
+								}}
+								onDrop={(event) => {
+									event.preventDefault();
+									transferSkill(
+										event.dataTransfer.getData(SKILL_DRAG_TYPE),
+										agent.id,
+										view,
+										request,
+									);
+								}}
 							>
 								<button
 									type="button"
@@ -292,6 +312,7 @@ function Roster({
 	);
 }
 function PanelSettings({
+	active,
 	view,
 	request,
 	busy,
@@ -301,6 +322,7 @@ function PanelSettings({
 	readonly request: AgentRequest;
 	readonly busy: boolean;
 	readonly children: ReactNode;
+	readonly active: boolean;
 }) {
 	const strings = useAgentsCopy();
 	const [slots, setSlots] = useState<Slots>(view.slots);
@@ -397,6 +419,12 @@ function PanelSettings({
 					</div>
 				)}
 			</section>
+			<AdministrationPanel
+				active={active}
+				view={view}
+				request={request}
+				busy={busy}
+			/>
 			{children}
 		</>
 	);
@@ -430,7 +458,6 @@ export function AgentsPage({
 	// Narrow windows scroll the tab row horizontally; keep the selected tab
 	// visible after selection and resizes without moving the page vertically.
 	const tabRow = useRef<HTMLDivElement>(null);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: The selected tab is read from the DOM after each tab change.
 	useEffect(() => {
 		const row = tabRow.current;
 		if (!row) return;
@@ -449,6 +476,17 @@ export function AgentsPage({
 		observer.observe(row);
 		return () => observer.disconnect();
 	}, [tab]);
+	useEffect(() => {
+		if (tab === "settings") void request({ type: "read" });
+	}, [tab, request]);
+	useEffect(() => {
+		const reload = () => {
+			if (tab === "settings") void request({ type: "read" });
+		};
+		window.addEventListener("agents:settings-invalidated", reload);
+		return () =>
+			window.removeEventListener("agents:settings-invalidated", reload);
+	}, [tab, request]);
 	const tabs = [
 		{ id: "sessions", label: strings.clawControlPanel.sessionsTab },
 		{ id: "agents", label: strings.clawControlPanel.localLibraryTab },
@@ -515,13 +553,12 @@ export function AgentsPage({
 			>
 				<SessionsRuntime view={view} busy={busy} request={request} />
 				{developmentDiagnostics && (
-					<section className="mc-panel" aria-label="Local model diagnostic">
-						<h2>Local model test (deprecated)</h2>
-						<p>
-							Use AI Config to select a model and agentId. QuakeModelGateway,
-							quake/cuixue and openclaw-providers-bundle are legacy identifiers.
-							legacyAssistant is retained only for migration.
-						</p>
+					<section
+						className="mc-panel"
+						aria-label={strings.administration.localDiagnostic}
+					>
+						<h2>{strings.administration.localDiagnostic}</h2>
+						<p>{strings.administration.deprecated}</p>
 					</section>
 				)}
 				<ConversationWorkspace
@@ -588,7 +625,12 @@ export function AgentsPage({
 						aria-labelledby="agents-tab-settings"
 						hidden={tab !== "settings"}
 					>
-						<PanelSettings view={view} request={request} busy={busy}>
+						<PanelSettings
+							active={tab === "settings"}
+							view={view}
+							request={request}
+							busy={busy}
+						>
 							{children}
 						</PanelSettings>
 					</section>

@@ -348,3 +348,42 @@ it("AI-275 AI-296 template selection preserves the applied summary until regener
 		template: "interview",
 	});
 });
+
+it("CENTER-009 refreshes an already-mounted Meetings page on each activation and retains current document", async () => {
+	await mount([meetingRecord()]);
+	const before = dom.request.mock.calls.filter(
+		([c]) => c._tag === "read",
+	).length;
+	const next = {
+		...dom.ready(),
+		snapshot: {
+			...dom.ready().snapshot,
+			revision: dom.ready().snapshot.revision + 1,
+			records: [
+				{
+					...dom.ready().snapshot.records[0],
+					title: "Changed outside the page",
+				},
+			],
+		},
+	};
+	dom.request.mockResolvedValueOnce(next);
+	await dom.render(createElement(MeetingHistory, { activation: 1 }));
+	expect(
+		dom.request.mock.calls.filter(([c]) => c._tag === "read"),
+	).toHaveLength(before + 1);
+	expect(element(".meeting-document h2").textContent).toContain(
+		"Changed outside the page",
+	);
+	dom.request.mockResolvedValueOnce({
+		...next,
+		snapshot: { ...next.snapshot, revision: next.snapshot.revision + 1 },
+	});
+	await dom.render(createElement(MeetingHistory, { activation: 2 }));
+	expect(
+		dom.request.mock.calls.filter(([c]) => c._tag === "read"),
+	).toHaveLength(before + 2);
+	expect(element(".meeting-document h2").textContent).toContain(
+		"Changed outside the page",
+	);
+});

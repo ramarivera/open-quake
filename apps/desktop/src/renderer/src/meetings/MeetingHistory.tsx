@@ -357,7 +357,14 @@ function MeetingDocument({
 		</>
 	);
 }
-export function MeetingHistory(): React.JSX.Element {
+export function MeetingHistory({
+	activation = 0,
+}: {
+	readonly activation?: number;
+}): React.JSX.Element {
+	useEffect(() => {
+		if (activation > 0) void meetingRequest({ _tag: "read" });
+	}, [activation]);
 	const { snapshot, error } = useMeetings();
 	const now = useMeetingNow();
 	const [filter, setFilter] = useState(""),

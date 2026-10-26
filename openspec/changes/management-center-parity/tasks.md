@@ -75,3 +75,12 @@ Epic bead: `open-quake-lih.17.1` (cluster `open-quake-lih.17`; redesign `open-qu
 - [x] 8.1 Bind shortcut generation to the saved default model and native credential owner through the existing AI facade. Keep output inert, bounded and validated by ShortcutService; preserve explicit library save/profile sync. Verify the real IPC/root path, missing/failed credentials, malformed/oversized output, no chat history changes, concurrent generation, cancellation and shutdown. Deliver a reviewed merged PR. Bead `open-quake-lih.17.1.40`. PR71 merged as `0c9cde3` after current-head review and the complete package/download matrix; evidence in `verification-shortcut-drafting.md`.
 
 - [x] Mounted creation navigation and Home Assistant picker burn-down regressions for MGMT-118 and CENTER-100. Bead open-quake-lih.9.4 remains open for lead integration.
+
+## Agents burn-down lane, 2026-10-26
+
+- [x] A.1 Implement runtime heading controls, Sessions states/count/refresh, stale-reply guards and gated inert developer diagnostics. Sources CENTER-012/020/022/024/025/026/028/042. Bead `open-quake-lih.17.9`; `runtime-presentation.test.tsx` exercises the mounted UI, lifecycle matrix, bridge replacement and stale replies.
+- [x] A.2 Refresh mounted meeting history on every Meetings activation, including reselect. Source CENTER-009; `meetings/history-interactions.test.ts` verifies activation refresh and mounted-page preservation.
+- [x] A.3 Add roster grid/list/loading/search/selection behavior, skill drops and shared/agent/all transfers, existing-agent name/reset and model loading/reload/save feedback. Sources CENTER-049/050/052/055/065. Bead `open-quake-lih.17.10`; `administration-interactions.test.tsx` drives mounted consumers and `administration.test.ts` verifies durable skill moves and conflict rollback.
+- [x] A.4 Add service configuration, portable pack/backup export and diagnostics controls. Sources CENTER-047/048/104 and MAIN-144; owning contracts/scenarios are in agent-runtime, verified through the real controller plus mounted settings consumer.
+
+Account, cloud catalog, Agent Market, OpenClaw installer and editions remain OUT-OF-SCOPE under `audit/GAP-MAP.md:146`, decision 9. Embedded token-bearing WebChat remains excluded by the Don't-copy list.

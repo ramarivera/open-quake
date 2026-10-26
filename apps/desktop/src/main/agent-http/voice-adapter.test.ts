@@ -143,6 +143,7 @@ async function setup(
 										),
 									stream: service.stream,
 									cancel: service.cancel,
+									clear: service.clear,
 									generation: () => generation,
 								},
 								fallback,
@@ -654,4 +655,52 @@ describe("HTTP conversations through the production GridVoice consumer", () => {
 		await fixture.dispose();
 		expect(aborted).toBe(1);
 	});
+});
+
+it("MGMT-302 clears only one key's HTTP context and starts its next turn without that session", async () => {
+	const f = await setup();
+	try {
+		await f.runtime.runPromise(GridVoice.sendText(request));
+		await vi.waitFor(() =>
+			expect(
+				f.events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toHaveLength(1),
+		);
+		await f.runtime.runPromise(
+			GridVoice.sendText({ ...request, keyCode: "1,6" }),
+		);
+		await vi.waitFor(() =>
+			expect(
+				f.events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toHaveLength(2),
+		);
+		const before = await Effect.runPromise(
+			f.service.history("voice", { connectionId: connection.id }),
+		);
+		expect(before).toHaveLength(2);
+		await f.runtime.runPromise(
+			Effect.flatMap(GridVoiceRuntime, (runtime) =>
+				runtime.resetContext
+					? runtime.resetContext(request.serial, request.keyCode)
+					: Effect.die("missing reset"),
+			),
+		);
+		expect(
+			await Effect.runPromise(
+				f.service.history("voice", { connectionId: connection.id }),
+			),
+		).toHaveLength(1);
+		await f.runtime.runPromise(GridVoice.sendText(request));
+		await vi.waitFor(() => expect(f.stream).toHaveBeenCalledTimes(3));
+		expect(f.stream.mock.calls[2]?.[1].sessionId).toBeUndefined();
+		expect(
+			(
+				await Effect.runPromise(
+					f.service.history("voice", { connectionId: connection.id }),
+				)
+			).map((h) => h.sessionId),
+		).toContain(before[1]?.sessionId);
+	} finally {
+		await f.dispose();
+	}
 });
