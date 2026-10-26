@@ -123,3 +123,25 @@ Audit regression coverage: CENTER-070.
 #### Scenario: Slot is not a clawbot key
 - **WHEN** the user has replaced key `2,6` with a hotkey
 - **THEN** sync stops at preflight with the invalid-slot error and nothing is written
+
+### Requirement: Runtime presentation and refresh
+The Agents heading SHALL contain the runtime indicator, with Start, Stop and Restart always visible. All controls SHALL be disabled for an unavailable backend or an active transition; Start SHALL additionally be disabled when ready, and Stop/Restart unless ready. Sessions SHALL expose a refresh action, current local agent count, runtime status and detecting/offline/starting/stopping/error presentation. Local chat SHALL remain usable independently of runtime availability. Newer status snapshots SHALL win over delayed reads, and disposed listeners and replies SHALL not update a replacement bridge. A deprecated local-model diagnostic card SHALL appear only in development with explicit `VITE_ENABLE_CLAW_LOCAL_MODEL_TEST=true`, without inference controls. Sources: CENTER-012, CENTER-020, CENTER-022, CENTER-024, CENTER-025, CENTER-026, CENTER-028, CENTER-042.
+
+#### Scenario: Runtime stops during Sessions
+- **WHEN** a ready snapshot is followed by a stopped snapshot and an older read reply
+- **THEN** Sessions shows offline, retains the newer count, and exposes disabled Stop/Restart with Start available only to an owned runtime
+
+#### Scenario: Development diagnostic gate
+- **WHEN** the explicit diagnostic flag is absent or the build is production
+- **THEN** the deprecated card is absent and no legacy model request is dispatched
+
+### Requirement: Local loadout administration
+The roster SHALL offer grid/list modes and four loading placeholders, with accessible direct skill transfer controls equivalent to skill drops. Skills SHALL have shared, selected-agent and all scope filters; moves between agents and shared storage SHALL use the existing atomic revision-checked transaction. Existing agent display names SHALL save independently of Markdown and reset SHALL require confirmation before replacing files with authored templates. Protected main SHALL reject rename/reset. AI Config SHALL show local loading/reload and save-result feedback, with retry after errors. Sources: CENTER-049, CENTER-050, CENTER-052, CENTER-055, CENTER-065.
+
+#### Scenario: Transfer conflict
+- **WHEN** a skill is transferred from agent A to B and B already owns its folder
+- **THEN** both copies remain unchanged and the UI reports the conflict
+
+#### Scenario: Cancel template reset
+- **WHEN** the user cancels reset confirmation
+- **THEN** no command is sent and unsaved Markdown remains intact

@@ -33,6 +33,7 @@ function Roster({
 	const strings = useAgentsCopy();
 	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
+	const [layout, setLayout] = useState("grid");
 	const [filter, setFilter] = useState("all");
 	const [selected, setSelected] = useState("main");
 	const [wizard, setWizard] = useState<{ readonly agent: Agent | undefined }>();
@@ -67,7 +68,6 @@ function Roster({
 					{t.createAgent}
 				</button>
 			</header>
-			<RuntimeIndicator runtime={view.runtime} request={request} />
 			<div
 				className="mc-tabs aw-subtabs"
 				role="tablist"
@@ -129,7 +129,20 @@ function Roster({
 							{t.refresh}
 						</button>
 					</p>
-					<ul className="aw-rows">
+					<fieldset className="aw-segmented">
+						<legend>View</legend>
+						{["grid", "list"].map((mode) => (
+							<button
+								key={mode}
+								type="button"
+								aria-pressed={layout === mode}
+								onClick={() => setLayout(mode)}
+							>
+								{mode === "grid" ? "Grid" : "List"}
+							</button>
+						))}
+					</fieldset>
+					<ul className="aw-rows" data-layout={layout}>
 						{visible.map((agent) => (
 							<li
 								className="mc-card aw-row"
@@ -393,12 +406,15 @@ export interface AgentsPageProps {
 	readonly activation?: { readonly tab: AgentsTab; readonly sequence: number };
 	readonly children?: ReactNode;
 	readonly bridge?: AgentsBridge;
+	readonly developmentDiagnostics?: boolean;
 }
 export function AgentsPage({
 	initialTab = "sessions",
 	activation,
 	children,
 	bridge,
+	developmentDiagnostics = import.meta.env.DEV &&
+		import.meta.env.VITE_ENABLE_CLAW_LOCAL_MODEL_TEST === "true",
 }: AgentsPageProps) {
 	const { locale } = useAppLocale();
 	const strings = useAgentsCopy();
@@ -447,6 +463,7 @@ export function AgentsPage({
 					<h1>{strings.clawControlPanel.agentsTab}</h1>
 					<p>{strings.clawControlPanel.libraryHint}</p>
 				</div>
+				{view && <RuntimeIndicator runtime={view.runtime} request={request} />}
 			</header>
 			<div
 				ref={tabRow}
@@ -496,6 +513,17 @@ export function AgentsPage({
 				aria-labelledby="agents-tab-sessions"
 				hidden={tab !== "sessions"}
 			>
+				<SessionsRuntime view={view} busy={busy} request={request} />
+				{developmentDiagnostics && (
+					<section className="mc-panel" aria-label="Local model diagnostic">
+						<h2>Local model test (deprecated)</h2>
+						<p>
+							Use AI Config to select a model and agentId. QuakeModelGateway,
+							quake/cuixue and openclaw-providers-bundle are legacy identifiers.
+							legacyAssistant is retained only for migration.
+						</p>
+					</section>
+				)}
 				<ConversationWorkspace
 					locale={locale}
 					model={directChatModel(view?.models)}
@@ -528,6 +556,13 @@ export function AgentsPage({
 					aria-label={t.loadingAgentMd}
 				>
 					<p role="status">{error ? t.retry : t.loadingAgentMd}</p>
+					{!error && (
+						<ul className="aw-rows" aria-label="Loading agents">
+							{[0, 1, 2, 3].map((row) => (
+								<li className="aw-skeleton" key={row} aria-hidden="true" />
+							))}
+						</ul>
+					)}
 				</section>
 			) : (
 				<>
@@ -558,6 +593,68 @@ export function AgentsPage({
 						</PanelSettings>
 					</section>
 				</>
+			)}
+		</div>
+	);
+}
+
+function SessionsRuntime({
+	view,
+	busy,
+	request,
+}: {
+	readonly view: AgentView | undefined;
+	readonly busy: boolean;
+	readonly request: AgentRequest;
+}) {
+	const t = useAgentsCopy();
+	const runtime = view?.runtime;
+	const mode = !runtime
+		? "detecting"
+		: runtime.status === "ready"
+			? "ready"
+			: runtime.status === "stopped"
+				? "offline"
+				: runtime.status;
+	return (
+		<div className="aw-session-runtime" data-session-mode={mode}>
+			<header className="aw-section-head">
+				<div>
+					<h2>{t.clawControlPanel.sessionsTab}</h2>
+					<span role="status">
+						{runtime
+							? t.openclawRuntimeIndicator[
+									runtime.status === "ready"
+										? "statusReady"
+										: runtime.status === "starting"
+											? "statusStarting"
+											: runtime.status === "stopping"
+												? "statusStopping"
+												: runtime.status === "error"
+													? "statusError"
+													: "statusStopped"
+								]
+							: t.clawAgentManagement.loadingAgentMd}
+					</span>
+					<span className="aw-session-count">
+						{format(t.clawAgentManagement.agentCount, {
+							count: view?.agents.length ?? 0,
+						})}
+					</span>
+				</div>
+				<button
+					type="button"
+					className="mc-button"
+					disabled={busy}
+					onClick={() => void request({ type: "read" })}
+				>
+					{t.clawAgentManagement.refresh}
+				</button>
+			</header>
+			{runtime && runtime.status !== "ready" && (
+				<div className="aw-session-offline">
+					<RuntimeIndicator runtime={runtime} request={request} />
+				</div>
 			)}
 		</div>
 	);

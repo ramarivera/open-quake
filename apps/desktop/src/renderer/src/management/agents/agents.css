@@ -650,3 +650,38 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+
+.aw-session-count {
+	margin-inline-start: 1rem;
+}
+.aw-session-offline {
+	max-width: 580px;
+	margin: 1rem auto;
+}
+.aw-session-offline .aw-runtime-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+.aw-session-offline .aw-runtime-actions button {
+	width: 148px;
+	min-height: 84px;
+	border-radius: 12px;
+}
+.aw-skeleton {
+	height: 52px;
+	border-radius: 8px;
+	background: var(--mc-surface);
+	opacity: 0.5;
+	margin-block: 0.5rem;
+}
+.aw-rows[data-layout="grid"] {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+	gap: 0.5rem;
+}
+@media (max-width: 640px) {
+	.aw-session-offline .aw-runtime-actions {
+		flex-direction: column;
+	}
+}
