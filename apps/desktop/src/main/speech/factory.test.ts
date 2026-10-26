@@ -1,11 +1,11 @@
 import { Effect, Fiber, Layer, Option } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import {
 	SpeechHttp,
 	SpeechOutput,
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
+import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import { wav } from "../../../../../packages/edge/src/ai/speech/speech-test-fixtures";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import {
