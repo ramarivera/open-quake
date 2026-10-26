@@ -125,6 +125,10 @@ The owned runtime SHALL allow a port, log level, opt-in autostart and a private 
 - **WHEN** a stopped runtime selects a private child directory and the user confirms clear
 - **THEN** only that directory's runtime data is removed, preferences and other workspaces remain, and escaping or symbolic-link directories are rejected
 
+#### Scenario: Select a private child directory on Windows
+- **WHEN** the user selects a named child of the private data folder using Windows path separators
+- **THEN** validation accepts it and rejects parent escapes, sibling prefixes, nested paths and other drives using the same containment rules as POSIX
+
 #### Scenario: Export authored workspaces without provider credentials
 - **WHEN** the user exports a workspace backup from Settings
 - **THEN** the result includes every local agent, skill and panel slot, validates against the bounded backup contract, and contains no provider model configuration or credential reference

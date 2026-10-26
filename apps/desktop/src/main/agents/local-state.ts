@@ -9,7 +9,7 @@ import {
 	rename,
 	rm,
 } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { Schema } from "effect";
 import {
 	AgentInvalid,
@@ -30,6 +30,19 @@ const Gateway = Schema.Struct({
 		token: Schema.NonEmptyString,
 	}),
 });
+export function validateLocalAgentDirectory(
+	root: string,
+	path: string,
+	paths: Pick<typeof import("node:path"), "join" | "relative"> = {
+		join,
+		relative,
+	},
+) {
+	if (path === root) return;
+	const child = paths.relative(paths.join(root, "data"), path);
+	// A single allowed name rejects parents, nested paths and other Windows drives.
+	if (!/^[A-Za-z0-9_-]{1,64}$/.test(child)) throw new AgentInvalid();
+}
 /** One private state owner shared by process administration and channel configuration. */
 export function createLocalAgentState(path: string) {
 	const root = resolve(path);
@@ -47,15 +60,6 @@ export function createLocalAgentState(path: string) {
 		if ((await lstat(path)).isSymbolicLink() || (await realpath(path)) !== path)
 			throw new AgentStorageFailed();
 	};
-	const validateDirectory = (path: string) => {
-		if (
-			path !== root &&
-			!/^[A-Za-z0-9_-]{1,64}$/.test(path.slice(join(root, "data").length + 1))
-		)
-			throw new AgentInvalid();
-		if (path !== root && !path.startsWith(`${join(root, "data")}/`))
-			throw new AgentInvalid();
-	};
 	const defaults: typeof ServiceSettings.Type = {
 		port: 18789,
 		logLevel: "info",
@@ -68,7 +72,7 @@ export function createLocalAgentState(path: string) {
 			const settings = Schema.decodeUnknownSync(
 				Schema.parseJson(ServiceSettings),
 			)(await readFile(join(root, "service-settings.json"), "utf8"));
-			validateDirectory(settings.dataDirectory);
+			validateLocalAgentDirectory(root, settings.dataDirectory);
 			return settings;
 		} catch (cause) {
 			if (cause instanceof Error && "code" in cause && cause.code === "ENOENT")
@@ -140,7 +144,7 @@ export function createLocalAgentState(path: string) {
 				Schema.decodeUnknownSync(ServiceSettings)(settings, {
 					onExcessProperty: "error",
 				});
-				validateDirectory(settings.dataDirectory);
+				validateLocalAgentDirectory(root, settings.dataDirectory);
 				await directory(root);
 				if (settings.dataDirectory !== root)
 					await directory(join(root, "data"));
