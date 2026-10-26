@@ -458,7 +458,7 @@ function Canvas({
 					? l.activeGraphicsUnit
 					: l.hardwareIdentifier}
 			</Heading>
-			<span data-testid="sys-monitor-value-gpu-model">
+			<span data-testid="sys-monitor-value-gpu-model" title={gpu.values.model}>
 				{gpu.values.model || "--"}
 			</span>
 		</div>
@@ -651,6 +651,28 @@ function PanelWithMedia({
 }): React.JSX.Element {
 	const [failed, setFailed] = useState(false);
 	const [playing, setPlaying] = useState(false);
+	const [visible, setVisible] = useState(
+		() => typeof document === "undefined" || !document.hidden,
+	);
+	const video = useRef<HTMLVideoElement>(null);
+	useEffect(() => {
+		const visibility = () => {
+			setVisible(!document.hidden);
+			setPlaying(false);
+		};
+		document.addEventListener("visibilitychange", visibility);
+		return () => document.removeEventListener("visibilitychange", visibility);
+	}, []);
+	useEffect(() => {
+		const element = visible ? video.current : null;
+		return () => {
+			if (element) {
+				element.pause();
+				element.removeAttribute("src");
+				element.load();
+			}
+		};
+	}, [visible]);
 	const collected = effectiveMonitoring(settings).metrics;
 	const visibleSnapshot: MonitorSnapshot = {
 		...snapshot,
@@ -665,10 +687,10 @@ function PanelWithMedia({
 	const invalid =
 		settings.background === "custom" && (media?.available === false || failed);
 	useEffect(() => {
-		if (!custom || media.kind !== "video" || playing) return;
+		if (!custom || media.kind !== "video" || playing || !visible) return;
 		const timer = setTimeout(() => setFailed(true), 5000);
 		return () => clearTimeout(timer);
-	}, [custom, media, playing]);
+	}, [custom, media, playing, visible]);
 	return (
 		<section
 			className="oq-monitor"
@@ -689,8 +711,9 @@ function PanelWithMedia({
 						alt=""
 						onError={() => setFailed(true)}
 					/>
-				) : (
+				) : visible ? (
 					<video
+						ref={video}
 						className="monitor-background"
 						src={media.url}
 						autoPlay
@@ -700,7 +723,7 @@ function PanelWithMedia({
 						onPlaying={() => setPlaying(true)}
 						onError={() => setFailed(true)}
 					/>
-				)
+				) : null
 			) : null}
 			<div className="monitor-scrim" />
 			<PanelStyle.Provider value={settings.styleId}>
@@ -723,5 +746,10 @@ function PanelWithMedia({
 export function MonitorPanel(
 	props: Parameters<typeof PanelWithMedia>[0],
 ): React.JSX.Element {
-	return <PanelWithMedia key={props.media?.url ?? "builtin"} {...props} />;
+	return (
+		<PanelWithMedia
+			key={`${props.settings.styleId}:${props.settings.background}:${props.media?.url ?? "builtin"}`}
+			{...props}
+		/>
+	);
 }

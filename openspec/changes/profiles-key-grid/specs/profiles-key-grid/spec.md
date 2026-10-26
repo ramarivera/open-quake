@@ -210,3 +210,10 @@ The Keys editor SHALL inspect a user-selected JSON profile or legacy flat key ar
 - **WHEN** a span edit covers another visible key
 - **THEN** preview and Save require explicit replacement confirmation and honor the covered key's deletion and drag locks
 - **AND** cancellation leaves the committed revision unchanged
+
+### Requirement: Import overflow recovery
+Decoded import inspection SHALL detect layouts exceeding sixteen records or containing invalid anchors, spans or overlapping occupied cells. Before import the editor SHALL show Layout Overflow Warning with every affected page item, coordinate and effective span, retain the full source for correction and allow cancellation without changing profiles. The unreachable vendor overflow-dialog condition is not reproduced. Sources: MGMT-111, SCREEN-139.
+
+#### Scenario: Seventeen imported items
+- **WHEN** an import contains seventeen items including multi-cell spans
+- **THEN** the warning lists all seventeen items and their spans, import remains blocked, and cancel preserves the original profile and pasted JSON
