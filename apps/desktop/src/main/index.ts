@@ -24,7 +24,6 @@ import { ProfileRepository } from "../../../../packages/device/src/profiles/prof
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
-import { HomeAssistantService } from "../../../../packages/edge/src/home-assistant/ha-service";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { MeetingService } from "../../../../packages/edge/src/meetings/meeting-service";
 import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
@@ -40,6 +39,7 @@ import { prepareAgents } from "./agents";
 import { createLocalChannelRuntime } from "./agents/channel-runtime";
 import { createLocalAgentState } from "./agents/local-state";
 import { createOwnedAgentRuntime } from "./agents/owned-runtime";
+import { createAssistantHaPort } from "./chat/assistant-ha-port";
 import { createModelCredentials } from "./chat/credentials";
 import { prepareDirectChat } from "./chat/host";
 import { registerDirectChat } from "./chat/registration";
@@ -316,24 +316,9 @@ if (!app.requestSingleInstanceLock()) {
 							),
 						);
 						const directModule = prepareDirectChat({
-							homeAssistant: {
-								snapshot: () =>
-									Effect.tryPromise({
-										try: () =>
-											integrationsModule.runtime.runPromise(
-												HomeAssistantService.snapshot(),
-											),
-										catch: (cause) => new AiConfigInvalid(cause),
-									}),
-								execute: (key) =>
-									Effect.tryPromise({
-										try: () =>
-											integrationsModule.runtime.runPromise(
-												HomeAssistantService.execute(key, true),
-											),
-										catch: (cause) => new AiConfigInvalid(cause),
-									}),
-							},
+							homeAssistant: createAssistantHaPort(
+								() => integrationsModule.runtime,
+							),
 							directory: join(app.getPath("userData"), "chat"),
 							keySettings: (serial, keyCode) =>
 								Effect.tryPromise({

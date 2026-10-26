@@ -15,7 +15,10 @@ import { validateHaAction } from "../../../../../packages/edge/src/home-assistan
 
 export interface AssistantHaPort {
 	readonly snapshot: () => Effect.Effect<HaSnapshot, AiError>;
-	readonly execute: (key: HaKey) => Effect.Effect<void, AiError>;
+	readonly execute: (
+		key: HaKey,
+		isCurrent: () => boolean,
+	) => Effect.Effect<void, AiError>;
 }
 const Command = Schema.Struct({
 	entity_id: Schema.NonEmptyString,
@@ -29,7 +32,7 @@ export const executeAssistantHa = Effect.fn("DesktopAssistant.homeAssistant")(
 		settings: AssistantSettings,
 		profileId: ProfileId,
 		text: string,
-		assertCurrent: Effect.Effect<void, AiError> = Effect.void,
+		isCurrent: () => boolean = () => true,
 	) {
 		if (!port || !settings.homeAssistantControl || !settings.useAgent)
 			return yield* new AiUnavailable();
@@ -101,7 +104,7 @@ export const executeAssistantHa = Effect.fn("DesktopAssistant.homeAssistant")(
 			try: () => validateHaAction(key, current.entities, current.services),
 			catch: (cause) => new AiConfigInvalid(cause),
 		});
-		yield* assertCurrent;
-		yield* port.execute(key);
+		if (!isCurrent()) return yield* new AiUnavailable();
+		yield* port.execute(key, isCurrent);
 	},
 );

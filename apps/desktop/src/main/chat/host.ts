@@ -428,7 +428,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 																		settings,
 																		profile.id,
 																		input.text,
-																		assertCurrent,
+																		isCurrent,
 																	).pipe(
 																		Effect.provideService(
 																			AiProviderService,

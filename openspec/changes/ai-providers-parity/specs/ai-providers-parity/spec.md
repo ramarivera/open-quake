@@ -252,6 +252,11 @@ Assistant settings SHALL link the existing Models and Speech settings consumers 
 - **THEN** the turn worker interrupts provider I/O and cannot execute Home Assistant actions later
 - **AND** equipment dispatch rechecks the owning session/profile identity after generation immediately before execution (AI-058)
 
+#### Scenario: Cancel or supersede equipment work queued in the production integration owner
+- **WHEN** an accepted assistant action waits behind another Home Assistant integration operation and its turn is cancelled or its owning identity is superseded
+- **THEN** interruption crosses the production runtime bridge and the integration owner rechecks the owning identity after acquiring its lock and loading the allowlist, immediately before the equipment call
+- **AND** releasing the earlier integration operation produces zero equipment calls for the retired turn (AI-058)
+
 #### Scenario: Concurrent chat cannot replace accepted routing metadata
 - **WHEN** another session submits plain chat for the same model while an accepted Auto turn awaits classification
 - **THEN** classification and Home Assistant action generation retain that turn's pinned provider profile and routing model

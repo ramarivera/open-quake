@@ -25,6 +25,14 @@ import {
 	TurnId,
 } from "../../../../../packages/edge/src/chat/chat-contracts";
 import {
+	EMPTY_HA_STORE,
+	HaStore,
+} from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import {
+	HaPorts,
+	HomeAssistantService,
+} from "../../../../../packages/edge/src/home-assistant/ha-service";
+import {
 	GridVoiceRuntime,
 	VoiceSurface,
 	VoiceSurfacePublisher,
@@ -33,7 +41,9 @@ import {
 import { CHAT_DISCONNECT, CHAT_EVENT, CHAT_REQUEST } from "../../shared/chat";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { createAgentHttpVoiceAdapter } from "../agent-http/voice-adapter";
+import { prepareDesktopModule } from "../diagnostics/module";
 import type { AssistantHaPort } from "./assistant-ha";
+import { createAssistantHaPort } from "./assistant-ha-port";
 import { createModelCredentials } from "./credentials";
 import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
@@ -1814,3 +1824,126 @@ it("default assistant typed messages reach Auto routing", async () => {
 		await f.close();
 	}
 });
+
+it.each(["cancelled", "superseded"] as const)(
+	"production HA composition drops a %s assistant turn queued behind integration work",
+	async (ending) => {
+		const executed: string[] = [];
+		const entities = [
+			{
+				entity_id: "light.allowed",
+				state: "off",
+				attributes: {},
+				area: "Other",
+			},
+		];
+		let stored = { ...EMPTY_HA_STORE, allowlist: ["light.allowed"] };
+		let pauseWrite: Promise<void> | undefined;
+		let release = () => {};
+		let entered = () => {};
+		const writing = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const integrations = prepareDesktopModule(
+			HomeAssistantService.Default.pipe(
+				Layer.provide(
+					Layer.succeed(HaPorts, {
+						store: {
+							read: async () => stored,
+							write: async (value) => {
+								entered();
+								await pauseWrite;
+								stored = Schema.decodeUnknownSync(HaStore)(value);
+							},
+						},
+						vault: {
+							put: async () => "fake-ref",
+							get: async () => "fake-token",
+							remove: async () => {},
+						},
+						open: async () => ({
+							entities: async () => entities,
+							services: async () => [
+								{
+									domain: "light",
+									service: "toggle",
+									name: "Toggle",
+									fields: [],
+								},
+							],
+							states: async () => entities,
+							execute: async (_domain, _service, data) => {
+								executed.push(String(data.entity_id));
+							},
+							close: () => {},
+						}),
+						place: async () => {},
+					}),
+				),
+			),
+			() => ({}),
+		);
+		integrations.standalone();
+		await integrations.runtime.runPromise(
+			HomeAssistantService.connect("http://fake.invalid", "fake-token", true),
+		);
+		pauseWrite = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		// Keep the actual HA semaphore occupied without operating equipment.
+		const holding = integrations.runtime.runPromise(
+			HomeAssistantService.allowlist(["light.allowed"]),
+		);
+		await writing;
+		const calls = vi.spyOn(integrations.runtime, "runPromise");
+		const f = await fixture(
+			{},
+			"generic",
+			"fixture-model",
+			createAssistantHaPort(() => integrations.runtime),
+		);
+		let current = true;
+		try {
+			const session = sessionId(),
+				turn = turnId();
+			const accepted = await f.host.runtime.runPromise(
+				f.host.submit(
+					{ sessionId: session, turnId: turn, text: "operate HA" },
+					"main",
+					undefined,
+					{
+						...defaultAssistantSettings(),
+						homeAssistantControl: true,
+						entityIds: ["light.allowed"],
+					},
+					() => current,
+				),
+			);
+			// Two production snapshots, then execute is queued on the held semaphore.
+			await vi.waitFor(() => expect(calls).toHaveBeenCalledTimes(3));
+			if (ending === "cancelled")
+				await f.host.runtime.runPromise(f.host.cancel(session, turn));
+			else current = false;
+			release();
+			await holding;
+			await f.host.runtime.runPromise(Stream.runDrain(accepted.events));
+			// Join a subsequent locked integration operation so no detached work is left pending.
+			await integrations.runtime.runPromise(
+				HomeAssistantService.allowlist(["light.allowed"]),
+			);
+			expect(executed).toEqual([]);
+			expect(
+				(await f.host.runtime.runPromise(f.host.snapshot(session, turn)))
+					.terminal,
+			).toMatchObject({
+				_tag: "Some",
+				value: { outcome: ending === "cancelled" ? "cancelled" : "failed" },
+			});
+		} finally {
+			release();
+			await holding;
+			await f.close();
+			await integrations.runtime.dispose();
+		}
+	},
+);
