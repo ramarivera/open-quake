@@ -1837,7 +1837,7 @@ it.each(["cancelled", "superseded"] as const)(
 				area: "Other",
 			},
 		];
-		let stored = { ...EMPTY_HA_STORE, allowlist: ["light.allowed"] };
+		let stored: HaStore = { ...EMPTY_HA_STORE, allowlist: ["light.allowed"] };
 		let pauseWrite: Promise<void> | undefined;
 		let release = () => {};
 		let entered = () => {};
