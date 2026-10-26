@@ -37,7 +37,7 @@ Supported slot layouts are:
 
 A compact two-entry list without reliable slot tags stays entirely inactive in `compatibility.inactiveSlots.compact`. A single unknown preset also stays ambiguous. No guessed left/right assignment is made. Raw unknown slot data, unsupported slot capabilities, malformed assistant actions, and unknown routes remain in compatibility, with empty executable positions. Other valid slots still import. Invalid reserved identity, too many slots, duplicate tags, duplicate reserved knobs, and duplicate voice discriminators reject the import, including duplicate discriminators with malformed values.
 
-`migrateKnobVoiceActions` splits old model references at the first slash, fills missing or blank route-specific fields, removes model and out-of-route actions, and retains the complete original JSON. Missing route and assistant/legacy aliases normalize to legacyAssistant only during import. Unknown routes stay inactive, without redirection. dkclaw agentId defaults to main. Built-in route locks are metadata; they never override explicit direct settings, including in custom profiles. Both migration functions accept their returned envelope unchanged, so repeated normalization preserves the original backup and diagnostics.
+`migrateKnobVoiceActions` splits old model references at the first slash, fills missing or blank route-specific fields, removes model and out-of-route actions, and retains the complete original JSON. Missing route and assistant/legacy aliases normalize to legacyAssistant only during import. Unknown routes stay inactive, without redirection. A missing dkclaw agent requires configuration unless the caller supplies exactly one eligible saved agent. It never defaults to main. Built-in route locks are metadata; they never override explicit direct settings, including in custom profiles. Both migration functions accept their returned envelope unchanged, so repeated normalization preserves the original backup and diagnostics.
 
 pageUp/pageDown aliases normalize only with `{navigationContext:true}`. The caller must establish navigation context from the import, rather than infer it globally from a type string. Imported malformed titles reject root validation or make the affected slot inactive.
 
@@ -72,3 +72,33 @@ Matching releases retire their gesture before snapshot reads or dispatch, so rea
 All dependency callbacks are translated at the boundary to catalog errors. Create leaves with `ErrorClass.fromCause(cause)` to retain the original non-enumerably; the normal Schema constructor remains available for codecs. Known catalog failures from dispatch keep their identity and original cause. Diagnostics use the existing bounded scrubber and never expose imported values or upstream messages. Consumers branch on tag/code and use the catalog policy to select user-visible fields.
 
 Tests in `packages/device/test/knob/` property-check slots and route migrations and drive the conductor's actual dispatch callback, including focused precedence, per-detent snapshots, session races, duplicate releases, and dependency failures. They establish host contract behavior with controlled adapters; desktop/profile/action/voice integration and hardware qualification remain separate tasks.
+
+
+## Profile editor and pinned direct capture
+
+`saveProfileKnob(profileId, expectedRevision, knob)` validates the three slots,
+reads the committed profile and saves only its knob through ProfileService.
+Pages, keys, selections and compatibility data survive the save. A first
+replacement keeps the imported knob at `compatibility.knobImportBackup`.
+Stale revisions fail instead of overwriting another editor.
+
+The desktop Keys page keeps a knob draft across page selection and remounts it
+when the profile changes. Direct routes contain only saved model row ID and
+model ID. The Models catalog owns endpoint settings and credentials.
+A legacy direct route requires a reviewed preview and explicit save.
+Alias/model pairs resolve only to one saved row; missing or ambiguous matches
+remain needsConfiguration. The original import survives normalization.
+
+The production hold consumer validates committed center actions before capture,
+then pins the provider configuration before microphone permission. Request
+identity includes device, key, generation, profile ID and revision. Profile
+edits affect future captures. Removing the pinned profile cancels capture and
+an accepted response. Same-device re-press reserves a preparing owner while
+cleanup runs, so a release during cleanup cancels the successor immediately.
+Cleanup gets two seconds and retains the microphone reservation until it
+actually finishes. Other devices receive VOICE.KNOB.BUSY without cancelling
+the owner. Idle detents still select profiles and never execute saved slots.
+
+`runtime-knob.test.ts`, `voice-route.test.ts`, the direct chat transport tests
+and profile save tests use fakes or loopback inference. They don't qualify
+physical gestures, microphone permission, provider connectivity or Linux audio.

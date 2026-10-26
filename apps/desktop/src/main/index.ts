@@ -22,6 +22,7 @@ import { AgentsService } from "../../../../packages/edge/src/agents/agents-servi
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
+import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
@@ -49,6 +50,7 @@ import { fileStore, systemCredentialVault } from "./integrations/storage";
 import { resetKeysOnLinkLoss } from "./key-library/device-status";
 import { prepareKnob } from "./knob";
 import { knobProfileBinding } from "./knob/profile-binding";
+import { pinKnobProfile } from "./knob/voice-route";
 import { arrangementState } from "./lifecycle/arrangement-state";
 import { DeviceLifecycle } from "./lifecycle/lifecycle-service";
 import {
@@ -286,6 +288,22 @@ if (!app.requestSingleInstanceLock()) {
 									join(app.getPath("userData"), "credentials"),
 								),
 								diagnostics,
+								pinDirectModel: (snapshot) =>
+									Effect.tryPromise({
+										try: () =>
+											profiles.runtime.runPromise(
+												ProfileService.getProfile(snapshot.profileId),
+											),
+										catch: (cause) =>
+											new VoiceKnobRejected("RouteIncomplete", cause),
+									}).pipe(
+										Effect.zipRight(
+											directChat.pinKnobModel(
+												snapshot.providerId,
+												snapshot.modelId,
+											),
+										),
+									),
 							},
 							http: httpModule.createVoiceAdapter,
 							run: (effect) => background.runPromise(effect),
@@ -293,6 +311,17 @@ if (!app.requestSingleInstanceLock()) {
 						const voiceModule = prepareVoiceSurface({
 							diagnostics,
 							runtime: speech.decorate,
+							knobRoute: (serial) =>
+								Effect.tryPromise({
+									try: () =>
+										profiles.runtime.runPromise(ProfileService.loadProfiles()),
+									catch: (cause) =>
+										new VoiceKnobRejected("RouteIncomplete", cause),
+								}).pipe(
+									Effect.flatMap(({ envelope }) =>
+										pinKnobProfile(envelope, serial),
+									),
+								),
 							speech,
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 							tones: toneSinks(createToneRecorder(), {
@@ -757,9 +786,14 @@ if (!app.requestSingleInstanceLock()) {
 						const profileUpdates = profiles.runtime.runFork(
 							ProfileService.subscribeCommittedProfiles().pipe(
 								Effect.flatMap((snapshots) =>
-									Stream.runForEach(snapshots, () =>
+									Stream.runForEach(snapshots, (envelope) =>
 										Effect.tryPromise({
-											try: () => knob.refresh(),
+											try: async () => {
+												await speech.reconcileProfiles(
+													envelope.profiles.map((p) => p.id),
+												);
+												await knob.refresh();
+											},
 											catch: KnobDispatchFailed.fromCause,
 										}).pipe(
 											Effect.catchTag("KnobDispatchFailed", (error) =>

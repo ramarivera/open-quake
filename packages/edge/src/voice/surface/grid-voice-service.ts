@@ -13,7 +13,11 @@ import {
 	type VoiceResetReason,
 } from "./voice-surface-contracts.js";
 import type { VoiceRuntimeUnavailable } from "./voice-surface-errors.js";
-import { GridVoiceRuntime, type TextRequest } from "./voice-surface-ports.js";
+import {
+	GridVoiceRuntime,
+	type KnobCaptureSnapshot,
+	type TextRequest,
+} from "./voice-surface-ports.js";
 import { VoiceSurface } from "./voice-surface-service.js";
 
 /**
@@ -34,6 +38,20 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 		>(new Map());
 		const texts = yield* Ref.make(0);
 
+		const captureRejected =
+			(serial: string, keyCode: string, captureId: string) =>
+			(error: { readonly code: string }) =>
+				surface.publish({
+					_tag: "Stage",
+					serial,
+					keyCode,
+					captureId,
+					stage: {
+						_tag: "failed",
+						reason: "unavailable",
+						errorCode: error.code,
+					},
+				});
 		const run = (serial: string, effect: HoldEffect): Effect.Effect<void> => {
 			switch (effect._tag) {
 				case "select":
@@ -64,19 +82,18 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 									agentId: effect.agentId,
 								})
 								.pipe(
-									Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
-										surface.publish({
-											_tag: "Stage",
+									Effect.catchTags({
+										VoiceRuntimeUnavailable: captureRejected(
 											serial,
-											keyCode: effect.keyCode,
+											effect.keyCode,
 											captureId,
-											stage: {
-												_tag: "failed",
-												reason: "unavailable",
-												errorCode: error.code,
-											},
-										}),
-									),
+										),
+										VoiceKnobRejected: captureRejected(
+											serial,
+											effect.keyCode,
+											captureId,
+										),
+									}),
 								),
 						),
 					);
@@ -257,6 +274,7 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 			serial: string,
 			action: "holdStart" | "release" | "interrupt" | "cancel",
 			generation: number,
+			snapshot?: KnobCaptureSnapshot,
 		): Effect.fn.Return<void> {
 			yield* Effect.annotateCurrentSpan({ action, generation });
 			const captureId = `${KNOB_VOICE_KEY}/knob-${generation}`;
@@ -277,8 +295,6 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 									KNOB_VOICE_KEY,
 									"aiAudio.prevTurnBusy",
 								);
-							if (Option.isSome(flow))
-								yield* runtime.cancelFlow(serial, KNOB_VOICE_KEY);
 							yield* surface.reserve(serial, KNOB_VOICE_KEY, captureId);
 							return yield* runtime
 								.startCapture({
@@ -287,22 +303,22 @@ export class GridVoice extends Effect.Service<GridVoice>()("GridVoice", {
 									captureId,
 									generation,
 									type: "knob",
+									...(snapshot ? { knob: snapshot } : {}),
 									agentId: Option.none(),
 								})
 								.pipe(
-									Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
-										surface.publish({
-											_tag: "Stage",
+									Effect.catchTags({
+										VoiceRuntimeUnavailable: captureRejected(
 											serial,
-											keyCode: KNOB_VOICE_KEY,
+											KNOB_VOICE_KEY,
 											captureId,
-											stage: {
-												_tag: "failed",
-												reason: "unavailable",
-												errorCode: error.code,
-											},
-										}),
-									),
+										),
+										VoiceKnobRejected: captureRejected(
+											serial,
+											KNOB_VOICE_KEY,
+											captureId,
+										),
+									}),
 								);
 						}
 						case "release":

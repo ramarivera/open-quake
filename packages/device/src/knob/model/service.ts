@@ -194,12 +194,21 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 			});
 			const replace = (
 				context: KnobModelContext,
+				preserveVoice = false,
 			): Effect.Effect<void, KnobError> =>
 				Effect.gen(function* () {
 					contextGeneration++;
 					yield* stopSelection;
 					yield* stopVolume;
-					yield* cancelVoice;
+					// Route edits are future-capture changes. Keep a held generation alive
+					// while its committed profile still owns this device.
+					if (
+						!preserveVoice ||
+						!connected ||
+						context.session.deviceId !== state.context.session.deviceId ||
+						context.session.profileId !== state.context.session.profileId
+					)
+						yield* cancelVoice;
 					connected = true;
 					lastTurn = Number.NEGATIVE_INFINITY;
 					yield* emit({
@@ -592,13 +601,16 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 			yield* Effect.addFinalizer(() => quiet(cancelVoice));
 			return {
 				configure: Effect.fn("KnobModel.configure")(
-					(input: unknown): Effect.Effect<void, KnobError> =>
+					(
+						input: unknown,
+						preserveVoice = false,
+					): Effect.Effect<void, KnobError> =>
 						Schema.decodeUnknown(KnobModelContext)(input).pipe(
 							Effect.catchTag("ParseError", (cause) =>
 								Effect.fail(InvalidKnobConfig.fromCause(cause)),
 							),
 							Effect.flatMap((context) =>
-								mutex.withPermits(1)(replace(context)),
+								mutex.withPermits(1)(replace(context, preserveVoice)),
 							),
 						),
 				),
@@ -630,7 +642,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 											});
 										return identity(context) === identity(state.context)
 											? Effect.void
-											: replace(context);
+											: replace(context, true);
 									}),
 								),
 							),

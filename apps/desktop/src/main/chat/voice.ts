@@ -9,6 +9,7 @@ import {
 	VoiceRuntimeUnavailable,
 	VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface";
+import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import type { TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import type { DirectChat } from "./host";
 /** Direct Copilot route. The outer HTTP decorator exclusively owns external-agent selection. */
@@ -56,11 +57,17 @@ export const createDirectChatVoice = (
 			lock.withPermits(1)(
 				Effect.uninterruptibleMask((restore) =>
 					Effect.gen(function* () {
+						if (request.knob && !request.directModel)
+							return yield* new VoiceRuntimeUnavailable(
+								new VoiceKnobRejected("RouteIncomplete"),
+							);
 						yield* stop(request.serial);
 						const route = JSON.stringify([
 							request.serial,
 							request.keyCode,
 							request.agentId,
+							request.knob,
+							request.directModel?.profile.id,
 						]);
 						let sessionId = sessions.get(route);
 						if (!sessionId) {
@@ -78,6 +85,7 @@ export const createDirectChatVoice = (
 									host.submit(
 										{ sessionId, turnId, text: request.message },
 										request.agentId,
+										request.directModel,
 									),
 								),
 							catch: (cause) => new VoiceRuntimeUnavailable(cause),

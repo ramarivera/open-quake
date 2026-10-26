@@ -18,6 +18,8 @@ import {
 	VoiceSurfacePublisher,
 	VoiceTonePort,
 } from "../../../../../packages/edge/src/voice/surface/index.js";
+import type { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors.js";
+import type { KnobCaptureSnapshot } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
 import type { QuakeEvent } from "../../preload/quake";
 import {
 	safeHttpUrl,
@@ -84,6 +86,9 @@ export const UnavailableRuntimeLive = Layer.succeed(GridVoiceRuntime, {
 
 export interface VoiceSurfaceOptions {
 	readonly diagnostics?: DesktopDiagnostics;
+	readonly knobRoute?: (
+		serial: string,
+	) => Effect.Effect<KnobCaptureSnapshot, VoiceKnobRejected>;
 	/** `OPEN_QUAKE_MOCK_DEVICE=1`: bind the scripted runtime. */
 	readonly mock: boolean;
 	/** Explicit speech controller. Chat configuration alone never enables speech. */
@@ -156,6 +161,11 @@ const ok: VoiceSurfaceReply = { _tag: "ok" };
 export interface KnobVoiceRequest {
 	readonly action: "holdStart" | "release" | "interrupt" | "cancel";
 	readonly generation: number;
+	readonly session?: {
+		readonly deviceId: string;
+		readonly profileId: string;
+		readonly revision: number;
+	};
 }
 
 export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
@@ -208,6 +218,10 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 			): Promise<A> => runtime.runPromise(effect);
 			let disconnected = false;
 			let linkGeneration = 0;
+			const knobHolds = new Map<
+				string,
+				{ generation: number; cancelled: boolean }
+			>();
 
 			const handle = async (
 				event: IpcMainInvokeEvent,
@@ -327,18 +341,77 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 					disconnected = event.state !== "connected";
 					if (!disconnected) return Promise.resolve();
 					linkGeneration++;
+					const hold = knobHolds.get(options.serial());
+					if (hold) hold.cancelled = true;
 					return run(GridVoice.reset(options.serial(), "disconnected"));
 				},
-				knobVoice: ({ action, generation }: KnobVoiceRequest) =>
-					Effect.promise(() =>
-						run(
-							Effect.suspend(() =>
-								disconnected && action === "holdStart"
-									? Effect.void
-									: GridVoice.knob(options.serial(), action, generation),
-							),
-						),
-					),
+				knobVoice: ({ action, generation, session }: KnobVoiceRequest) =>
+					Effect.suspend(() => {
+						const serial = session?.deviceId ?? options.serial();
+						if (disconnected && action === "holdStart") return Effect.void;
+						const link = linkGeneration;
+						const prior = knobHolds.get(serial);
+						if (action === "holdStart" && prior?.generation === generation)
+							return Effect.void;
+						const hold =
+							action === "holdStart" ? { generation, cancelled: false } : prior;
+						if (action === "holdStart" && hold) knobHolds.set(serial, hold);
+						else if (
+							hold &&
+							(action === "interrupt" || hold.generation === generation)
+						)
+							hold.cancelled = true;
+						const dispatch = Effect.gen(function* () {
+							const snapshot =
+								action === "holdStart" && options.knobRoute
+									? yield* options.knobRoute(serial).pipe(Effect.either)
+									: undefined;
+							if (
+								action === "holdStart" &&
+								(disconnected ||
+									link !== linkGeneration ||
+									hold?.cancelled ||
+									knobHolds.get(serial) !== hold)
+							)
+								return;
+							if (
+								snapshot?._tag === "Left" ||
+								(snapshot?._tag === "Right" &&
+									session &&
+									(session.profileId !== snapshot.right.profileId ||
+										session.revision !== snapshot.right.revision))
+							) {
+								return yield* VoiceSurface.publish({
+									_tag: "Stage",
+									serial,
+									keyCode: "0,1",
+									captureId: `0,1/knob-${generation}`,
+									stage: {
+										_tag: "failed",
+										reason: "unavailable",
+										errorCode:
+											snapshot._tag === "Left"
+												? snapshot.left.code
+												: "VOICE.KNOB.ROUTE_INCOMPLETE",
+									},
+								});
+							}
+							yield* GridVoice.knob(
+								serial,
+								action,
+								generation,
+								snapshot?._tag === "Right" ? snapshot.right : undefined,
+							);
+						});
+						// Don't hold the physical device queue while committed storage is loading.
+						// The module runtime owns this setup fiber and cancels it on disposal.
+						return action === "holdStart"
+							? Effect.sync(() => {
+									runtime.runFork(dispatch);
+								})
+							: Effect.promise(() => run(dispatch));
+					}),
+
 				dispose: () => {
 					if (shutdown) return shutdown;
 					ipcMain.removeHandler(VOICE_REQUEST_CHANNEL);

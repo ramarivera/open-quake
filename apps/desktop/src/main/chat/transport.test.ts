@@ -122,6 +122,7 @@ async function fixture(
 	);
 	let model = initialModel;
 	let maxTokens = 512;
+	let baseUrl = `http://127.0.0.1:${address.port}/v1`;
 	const host = createDirectChat({
 		directory,
 		credentials: creds.ai,
@@ -132,7 +133,7 @@ async function fixture(
 					role: "default",
 					provider,
 					model,
-					baseUrl: `http://127.0.0.1:${address.port}/v1`,
+					baseUrl,
 					maxTokens,
 					credentialRef: reference,
 					...sampling,
@@ -166,6 +167,9 @@ async function fixture(
 		endpoint,
 		reference,
 		creds,
+		setBaseUrl: (value: string) => {
+			baseUrl = value;
+		},
 		setMaxTokens: (value: number) => {
 			maxTokens = value;
 		},
@@ -230,6 +234,92 @@ function voiceFixture(
 			),
 	};
 }
+
+it("pins a specific saved knob model before edits and dispatches through the actual direct chat consumer", async () => {
+	const f = await fixture();
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(f.host, (event) =>
+		Effect.sync(() => {
+			events.push(event);
+		}),
+	);
+	try {
+		await v.voice.runPromise(GridVoiceRuntime);
+		const pinned = await f.host.runtime.runPromise(
+			f.host.pinKnobModel("configured", "fixture-model"),
+		);
+		f.changeModel("later-model");
+		const knob = {
+			profileId: "profile",
+			revision: 7,
+			route: "direct" as const,
+			providerId: "configured",
+			modelId: "fixture-model",
+		};
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "0,1",
+				agentId: "",
+				message: "pinned",
+				knob,
+				directModel: pinned,
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(
+				events.some((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toBe(true),
+		);
+		expect(f.endpoint.calls).toHaveLength(1);
+		expect(f.endpoint.calls[0]?.body.model).toBe("fixture-model");
+		for (const [id, model] of [
+			["missing", "later-model"],
+			["configured", "fixture-model"],
+		]) {
+			expect(
+				(
+					await f.host.runtime.runPromise(
+						f.host.pinKnobModel(id ?? "", model ?? "").pipe(Effect.either),
+					)
+				)._tag,
+			).toBe("Left");
+		}
+		const denied = await v.voice.runPromise(
+			v
+				.send({
+					serial: "QK",
+					keyCode: "0,1",
+					agentId: "",
+					message: "must not fall back",
+					knob,
+				})
+				.pipe(Effect.either),
+		);
+		expect(denied._tag).toBe("Left");
+		expect(f.endpoint.calls).toHaveLength(1);
+		f.setBaseUrl("http://remote.invalid/v1?api_key=must-not-run");
+		expect(
+			(
+				await f.host.runtime.runPromise(
+					f.host.pinKnobModel("configured", "later-model").pipe(Effect.either),
+				)
+			)._tag,
+		).toBe("Left");
+		f.setBaseUrl("https://example.invalid/v1");
+		await Effect.runPromise(f.creds.management.remove(f.reference));
+		expect(
+			(
+				await f.host.runtime.runPromise(
+					f.host.pinKnobModel("configured", "later-model").pipe(Effect.either),
+				)
+			)._tag,
+		).toBe("Left");
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
 
 describe("desktop chat RPC through actual SDK and HTTP", () => {
 	it.each([

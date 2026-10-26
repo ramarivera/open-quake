@@ -296,7 +296,7 @@ describe("voice migration", () => {
 		});
 		expect(right(migrateKnobVoiceActions(migrated))).toEqual(migrated);
 	});
-	it("migrates dkclaw model while preserving explicit fields and defaulting main", () => {
+	it("migrates dkclaw model while preserving explicit fields without inventing an agent", () => {
 		expect(
 			right(
 				migrateKnobVoiceActions([
@@ -307,7 +307,7 @@ describe("voice migration", () => {
 			).actions,
 		).toEqual([
 			{ type: "voiceRoute", value: "dkclaw" },
-			{ type: "agentId", value: "main" },
+			{ type: "agentId", value: "" },
 			{ type: "dkclawModel", value: "p/m" },
 		]);
 		expect(
