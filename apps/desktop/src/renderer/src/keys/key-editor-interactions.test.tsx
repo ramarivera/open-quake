@@ -859,6 +859,65 @@ it("MGMT-066/067 SCREEN-138/143 excludes translation tiles and localizes empty/d
 	);
 });
 
+it("MGMT-066/078 retargets the open picker across keys and discards replies after profile changes", async () => {
+	const f = await gridFixture([gridKey("1,1"), gridKey("1,2")]);
+	const original = window.quakeKeyLibrary.request;
+	const openings: { token: string; resolve: (reply: KeyReply) => void }[] = [];
+	const request = vi
+		.spyOn(window.quakeKeyLibrary, "request")
+		.mockImplementation((command) => {
+			if (command.type === "open-icons")
+				return new Promise<KeyReply>((resolve) => {
+					openings.push({ token: command.token, resolve });
+				});
+			return original(command);
+		});
+	await f.select();
+	await click(button(f.host, "Icon Library"));
+	expect(openings).toHaveLength(1);
+	await click(button(f.host, "1,2"));
+	await settle(() => expect(openings).toHaveLength(2));
+	expect(openings[0]?.token).not.toBe(openings[1]?.token);
+	await act(async () =>
+		openings[0]?.resolve({ _tag: "success", icon: "obsolete-one" }),
+	);
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe(
+		"hotkey 1,2",
+	);
+	await input(query(f.host, "#keys-profile", HTMLSelectElement), "other");
+	await act(async () =>
+		openings[1]?.resolve({ _tag: "success", icon: "obsolete-two" }),
+	);
+	expect(f.host.querySelector("#key-title")).toBeNull();
+	expect(
+		f.calls.filter(
+			(command) =>
+				command.type === "preview" &&
+				command.key.config.icon.startsWith("obsolete"),
+		),
+	).toHaveLength(0);
+	expect(
+		f.calls.filter((command) => command.type === "cancel-icons"),
+	).toHaveLength(2);
+	request.mockRestore();
+});
+
+it("MGMT-066/078 SCREEN-138 click-away reverts an unsaved preview without writing", async () => {
+	const f = await gridFixture([gridKey("1,1")]);
+	await f.select();
+	await input(query(f.host, "#key-title", HTMLInputElement), "Unsaved");
+	await act(async () =>
+		document.body.dispatchEvent(
+			new PointerEvent("pointerdown", { bubbles: true }),
+		),
+	);
+	await settle(() => expect(f.host.querySelector("#key-title")).toBeNull());
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.title.text).toBe(
+		"hotkey 1,1",
+	);
+	expect(f.writes()).toBe(0);
+});
+
 it("MGMT-068/069/076/078 SCREEN-136 pointer placement reverts drafts, isolates defaults and autosaves exactly once", async () => {
 	const f = await gridFixture([gridKey("1,1")]);
 	await f.select();

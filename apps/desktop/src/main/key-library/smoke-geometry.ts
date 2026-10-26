@@ -432,6 +432,25 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		await evalIn(win, `document.documentElement.scrollWidth <= innerWidth`),
 		true,
 	);
+	await evalIn(
+		win,
+		`[...document.querySelectorAll('.knob-editor button')].find(button => button.textContent === 'Left').click()`,
+	);
+	await select(win, "#knob-function", "panelBrightness");
+	await input(win, "#knob-number", "15");
+	await evalIn(
+		win,
+		`document.querySelector(".knob-editor").scrollIntoView({block:"center"})`,
+	);
+	assert.equal(
+		await evalIn(
+			win,
+			`document.documentElement.scrollWidth <= innerWidth && document.querySelector('#knob-number').value === "15"`,
+		),
+		true,
+	);
+	await snapshot(win, "grid-placement-knob-narrow-de");
+
 	win.setContentSize(1400, 1150);
 	await select(win, "#keys-language", "en");
 	await click(win, '[data-library-type="createFolder"]');
@@ -468,8 +487,8 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 	await select(win, "#keys-profile", vividProfile.id);
 	await ready(win, `document.querySelector('.keys-vivid-configure')`);
 	await evalIn(win, `document.querySelector('.keys-vivid-configure').focus()`);
-	win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
-	win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+	win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Space" });
+	win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Space" });
 	await ready(
 		win,
 		`document.querySelector('[data-profile-id="grid-editor-vivid"]')`,
