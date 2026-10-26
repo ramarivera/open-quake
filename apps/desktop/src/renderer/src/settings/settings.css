@@ -746,3 +746,10 @@
 	flex: 1;
 	min-width: 150px;
 }
+
+.setup-notice-content pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+	line-height: 1.6;
+}

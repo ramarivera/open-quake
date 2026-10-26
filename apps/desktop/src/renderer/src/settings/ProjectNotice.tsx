@@ -1,10 +1,18 @@
 import { useEffect, useId, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import privacyDe from "../../../../../../docs/privacy.de.md?raw";
+import privacy from "../../../../../../docs/privacy.md?raw";
+import noticeDe from "../../../../../../docs/software-notice.de.md?raw";
+import notice from "../../../../../../docs/software-notice.md?raw";
+import license from "../../../../../../LICENSE?raw";
 import { useAppLocale } from "../i18n";
 
 /** Project-owned reading, independent of service region and vendor legal terms. */
 export function ProjectNotice(): React.JSX.Element {
 	const de = useAppLocale().locale === "de";
-	const [page, setPage] = useState<"privacy" | "notice" | null>(null);
+	const [page, setPage] = useState<"license" | "privacy" | "notice" | null>(
+		null,
+	);
 	const opener = useRef<HTMLButtonElement | null>(null);
 	return (
 		<div className="setup-legal">
@@ -13,11 +21,16 @@ export function ProjectNotice(): React.JSX.Element {
 					? "open-quake ist ein unabhängiges Projekt für QUAKE."
 					: "open-quake is an independent project for QUAKE."}
 			</p>
+			<p>
+				{de
+					? "Mit Los geht's stimmst du der MIT-Lizenz zu und bestätigst die lokalen Datenschutz- und Softwarehinweise."
+					: 'By selecting "Get Started", you agree to the MIT license and acknowledge the local privacy information and software notice.'}
+			</p>
 			<nav
 				aria-label={de ? "Rechtliche Hinweise" : "Project legal documents"}
 				className="button-row"
 			>
-				{(["privacy", "notice"] as const).map((key) => (
+				{(["license", "privacy", "notice"] as const).map((key) => (
 					<button
 						key={key}
 						type="button"
@@ -27,13 +40,17 @@ export function ProjectNotice(): React.JSX.Element {
 							setPage(key);
 						}}
 					>
-						{key === "privacy"
+						{key === "license"
 							? de
-								? "Datenschutz"
-								: "Privacy information"
-							: de
-								? "Softwarehinweise"
-								: "Software notice"}
+								? "MIT-Lizenz"
+								: "MIT license"
+							: key === "privacy"
+								? de
+									? "Datenschutz"
+									: "Privacy information"
+								: de
+									? "Softwarehinweise"
+									: "Software notice"}
 					</button>
 				))}
 			</nav>
@@ -55,7 +72,7 @@ function NoticeDialog({
 	de,
 	onClose,
 }: {
-	page: "privacy" | "notice";
+	page: "license" | "privacy" | "notice";
 	de: boolean;
 	onClose: () => void;
 }): React.JSX.Element {
@@ -77,27 +94,33 @@ function NoticeDialog({
 			}}
 		>
 			<h2 id={id}>
-				{page === "privacy"
+				{page === "license"
 					? de
-						? "Datenschutz"
-						: "Privacy information"
-					: de
-						? "Softwarehinweise"
-						: "Software notice"}
+						? "MIT-Lizenz"
+						: "MIT license"
+					: page === "privacy"
+						? de
+							? "Datenschutz"
+							: "Privacy information"
+						: de
+							? "Softwarehinweise"
+							: "Software notice"}
 			</h2>
-			{page === "privacy" ? (
-				<p>
-					{de
-						? "Diese lokale Einrichtung speichert deine Auswahl auf diesem Computer. Sie fragt keine IP-Geolokalisierung ab und meldet dich bei keinem Herstellerkonto an. Anbieter, Mikrofon, Bildschirm und Eingabeberechtigungen brauchen separate Aktionen. Wenn du später einen KI-Anbieter oder eine Integration aktivierst, können diese die ausgewählten Daten an deren konfigurierte Dienste senden."
-						: "This local setup saves your choices on this computer. It doesn't look up your IP location or sign in to a vendor account. Providers, microphone, screen and input permissions require separate actions. If you later enable an AI provider or integration, it can send selected data to its configured services."}
-				</p>
-			) : (
-				<p>
-					{de
-						? "open-quake ist kein offizielles DecoKee-Produkt. Lokale Einrichtung bestätigt keine physische Gerätefunktion. QUAKE-Kalibrierung ist nicht verfügbar. Herstellerbedingungen werden hier nicht übernommen."
-						: "open-quake is an independent project, not an official DecoKee product. Completing local setup doesn't verify physical device behavior. QUAKE calibration is unavailable. Vendor terms aren't adopted by this setup."}
-				</p>
-			)}
+			<div className="setup-notice-content">
+				{page === "license" ? (
+					<pre lang="en">{license}</pre>
+				) : (
+					<Markdown skipHtml>
+						{page === "privacy"
+							? de
+								? privacyDe
+								: privacy
+							: de
+								? noticeDe
+								: notice}
+					</Markdown>
+				)}
+			</div>
 			<button type="button" className="mc-button" onClick={onClose}>
 				{de ? "Schließen" : "Close"}
 			</button>

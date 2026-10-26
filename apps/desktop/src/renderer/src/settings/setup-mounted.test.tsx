@@ -269,3 +269,59 @@ it.each(WIZARD_LANGUAGES)(
 		expect(document.body.textContent).toContain(title);
 	},
 );
+
+it("SETTINGS-054 bundles project legal documents and advances only on explicit Get Started consent", async () => {
+	let saved = wizard();
+	const saveWizard = vi.fn(
+		async (draft: Parameters<SettingsBackendBridge["saveWizard"]>[0]) => {
+			saved = {
+				...saved,
+				step: draft.step ?? saved.step,
+				revision: saved.revision + 1,
+			};
+			return saved;
+		},
+	);
+	const store = createSetupStore(fakeBridge({ saveWizard }));
+	await store.load();
+	await mount(
+		createElement(SetupWizard, {
+			store,
+			runtime: { state: "unsupported" },
+			onLeave: () => {},
+		}),
+	);
+	expect(document.body.textContent).toContain(
+		'By selecting "Get Started", you agree to the MIT license',
+	);
+	await click(button("MIT license"));
+	expect(element("dialog[open]").textContent).toContain(
+		"Copyright (c) 2026 Ramiro Rivera",
+	);
+	expect(element("dialog[open]").textContent).toContain(
+		'THE SOFTWARE IS PROVIDED "AS IS"',
+	);
+	await click(button("Close"));
+	expect(document.activeElement).toBe(button("MIT license"));
+	await click(button("Privacy information"));
+	expect(element("dialog[open]").textContent).toContain(
+		"doesn't look up your IP location",
+	);
+	expect(element("dialog[open]").textContent).toContain("configured service");
+	await click(button("Close"));
+	await click(button("Software notice"));
+	expect(element("dialog[open]").textContent).toContain(
+		"Third-party dependencies",
+	);
+	expect(element("dialog[open]").textContent).toContain(
+		"doesn't accept vendor terms",
+	);
+	await act(async () =>
+		element("dialog").dispatchEvent(new Event("cancel", { cancelable: true })),
+	);
+	expect(saveWizard).not.toHaveBeenCalled();
+	expect(saved.step).toBe("welcome");
+	await click(button("Get Started"));
+	expect(saveWizard).toHaveBeenCalledExactlyOnceWith({ step: "locale-region" });
+	expect(saved.step).toBe("locale-region");
+});

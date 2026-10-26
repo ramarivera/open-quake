@@ -203,7 +203,7 @@ PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated 
 
 ## 8. Setup burn-down lane
 
-- [ ] 8.1 First-run startup, welcome/legal reading, locale/region confirmation and lifecycle ownership. MAIN-055/056/125, SETTINGS-011/051/053/054/055/056. Bead open-quake-lih.14.1.
+- [x] 8.1 First-run startup, welcome/legal reading, locale/region confirmation and lifecycle ownership. MAIN-055/056/125, SETTINGS-011/051/053/054/055/056. Bead open-quake-lih.14.1.
 - [ ] 8.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
 - [ ] 8.3 User-triggered permission recovery and once-only startup guidance with mock probes. MAIN-128, SETTINGS-015. Bead open-quake-lih.14.3.
 - [ ] 8.4 Verify selected-device handoff and pending-edit switching after shell dependency merges. MGMT-042/044. Bead open-quake-lih.14.2.
@@ -220,9 +220,11 @@ The calibration boundary drives fake HID and rejects generic/ARIS requests befor
 writes. Mock permission tests exercise explicit requests, status ordering, cleanup,
 timeouts and restart now/later without changing host access.
 
-Task 8.1 remains incomplete only for SETTINGS-054 project license/consent approval.
-No project LICENSE exists; setup presents factual privacy/software information
-without inventing terms or implying vendor consent. Tasks 8.2/8.3/8.4 await shell
+Ramiro approved SETTINGS-054 on 2026-10-26. The root MIT LICENSE with Ramiro
+Rivera's copyright and local EN/DE privacy/software notices are bundled into
+Welcome. The mounted consent test reads all three offline, proves reading/closing
+doesn't save, then advances only on Get Started. No vendor terms or OS permission
+grants follow from that consent. Tasks 8.2/8.3/8.4 await shell
 PR #113 for safe external support-link handling, permission visibility pinning and
 the serial/session picker integration. The setup lane uses compatible existing
 owners and doesn't duplicate shell window ownership. SETTINGS-071 is excluded.

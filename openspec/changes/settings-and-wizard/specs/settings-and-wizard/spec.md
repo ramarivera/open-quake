@@ -408,9 +408,12 @@ and explicit reset of first-run state, hidden in packaged production builds.
 All eight supported language choices SHALL apply immediately, persist and
 refresh localized profile titles. The welcome step SHALL hide progress and
 use Get Started. Welcome SHALL include project-owned privacy and
-software-notice reading, never imply agreement to vendor terms. SETTINGS-054
-remains incomplete for project license/consent text pending owner approval;
-this repository has no project LICENSE, so setup SHALL not invent terms. Reduced motion
+software-notice reading, never imply agreement to vendor terms. For SETTINGS-054,
+Ramiro approved the MIT project license with the owner's copyright and local
+privacy/software notices on 2026-10-26. Welcome SHALL bundle those documents and
+state that selecting Get Started agrees to MIT and acknowledges the notices.
+Only that explicit action SHALL advance saved progress. It SHALL not request
+permissions or accept vendor terms. Reduced motion
 SHALL suppress welcome motion. Lifecycle orientation snapshots SHALL be consumed
 for the selected serial, and setup ownership SHALL suppress automatic display
 prompts until it closes, reloads or its owner is destroyed.
@@ -423,8 +426,10 @@ prompts until it closes, reloads or its owner is destroyed.
 
 #### Scenario: Welcome and local project information
 - **WHEN** Welcome renders
-- **THEN** Get Started and project-owned privacy/software reading are available, progress
-  is hidden and leaving does not complete setup
+- **THEN** Get Started and the complete MIT license plus local privacy/software reading
+  are available offline, progress is hidden and leaving does not complete setup
+- **AND** reading or closing a notice doesn't save progress; selecting Get Started
+  acknowledges the displayed documents and persists the next step
 
 #### Scenario: Language and display ownership
 - **WHEN** a language changes or lifecycle reports a selected serial's orientation
