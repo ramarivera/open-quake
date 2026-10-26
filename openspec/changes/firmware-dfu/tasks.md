@@ -41,3 +41,5 @@ Tracked by open-quake-18d.8. Each finding gets a regression, commit, push and re
 - [x] 5.10 Serialize terminal expiry and close against other state transitions, Codex 4379316105.
 - [x] 5.11 Interpolate expected firmware versions in guidance and toasts, Copilot 4379353834.
 - [x] 5.12 Render one app-update failure alert, Copilot 4379353930.
+
+- [x] 5.13 Reconcile the Agents provider suggestion fixture with the five supported providers inherited from main; full-gate failure reproduced before the fixture correction.
