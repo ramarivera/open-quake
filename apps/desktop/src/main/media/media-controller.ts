@@ -46,6 +46,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 			);
 			const semaphore = yield* Effect.makeSemaphore(1);
 			let activeIndex = 0;
+			let playbackId = 0;
 			let deadline = 0;
 			const playlistChanged = yield* Queue.sliding<void>(1);
 			let playlistKey = "";
@@ -61,6 +62,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 				]);
 				if (key !== playlistKey) {
 					playlistKey = key;
+					playbackId++;
 					activeIndex = 0;
 					deadline =
 						(yield* Effect.clockWith((source) => source.currentTimeMillis)) +
@@ -90,6 +92,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						return {
 							saved,
 							activeIndex,
+							playbackId,
 							asset,
 							recovered,
 							normalizedFileUrl,
@@ -210,6 +213,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 								saved.settings.playMode,
 							);
 							deadline += list[activeIndex]?.duration ?? 5000;
+							playbackId++;
 							yield* edge.publish(yield* snapshot(serial));
 						}
 						return Option.some(

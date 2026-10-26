@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { fillGeometry, PANEL_CANVAS } from "../../../shared/display";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import "./wallpaper.css";
@@ -22,22 +22,32 @@ export function WallpaperCanvas({
 		asset?._tag === "ready" && media?.type === "video"
 			? asset.dataUrl
 			: undefined;
+	const playback = useMemo(
+		() => ({ url: videoUrl, id: snapshot?.playbackId }),
+		[videoUrl, snapshot?.playbackId],
+	);
+	const playbackKey = JSON.stringify([
+		snapshot?.saved.serial,
+		playback.id,
+		playback.url,
+	]);
 	useEffect(() => {
 		const element = video.current;
-		if (!element || !videoUrl) return;
+		if (!element || !playback.url) return;
 		void element.play().catch(() => undefined);
 		return () => {
 			element.pause();
 			element.removeAttribute("src");
 			element.load();
 		};
-	}, [videoUrl]);
+	}, [playback]);
 	const serial = snapshot?.saved.serial;
 	const revision = snapshot?.saved.revision;
 	const enableSound = sound && snapshot?.saved.settings.enableSound;
 	useEffect(() => {
-		if (!videoUrl || !serial || revision === undefined || !enableSound) return;
-		const id = crypto.randomUUID();
+		if (!playback.url || !serial || revision === undefined || !enableSound)
+			return;
+		const id = `${playback.id ?? 0}:${crypto.randomUUID()}`;
 		void window.quakeWallpaper?.audio?.({ id, active: true, serial, revision });
 		return () => {
 			void window.quakeWallpaper?.audio?.({
@@ -47,7 +57,7 @@ export function WallpaperCanvas({
 				revision,
 			});
 		};
-	}, [videoUrl, serial, revision, enableSound]);
+	}, [playback, serial, revision, enableSound]);
 	const geometry =
 		asset?._tag === "ready"
 			? fillGeometry(
@@ -70,7 +80,7 @@ export function WallpaperCanvas({
 				media?.type === "video" ? (
 					<foreignObject x="0" y="0" width="1920" height="480">
 						<video
-							key={videoUrl}
+							key={playbackKey}
 							ref={video}
 							src={videoUrl}
 							autoPlay

@@ -136,6 +136,7 @@ export function registerMedia(
 						snapshot.saved.revision,
 						snapshot.saved.settings.enableSound,
 						snapshot.activeIndex,
+						snapshot.playbackId,
 						snapshot.asset._tag,
 					]);
 					if (key !== audioKey) {

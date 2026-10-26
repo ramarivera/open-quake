@@ -76,3 +76,68 @@ it.scoped(
 			expect(shown).toHaveLength(7);
 		}),
 );
+
+it.scoped(
+	"changes playback identity on singleton append and advances from the reset deadline",
+	() =>
+		Effect.gen(function* () {
+			const video = {
+				name: "a.webm",
+				type: "video" as const,
+				format: "video/webm" as const,
+				filePath: `media:${"a".repeat(64)}`,
+				duration: 60000,
+			};
+			let saved = {
+				version: 1 as const,
+				serial: "A",
+				revision: 0,
+				clock: defaultClockTile,
+				settings: { ...defaultWallpaper, displayMediaList: [video] },
+			};
+			const controller = yield* makeMediaController({
+				chooseImage: Effect.succeed(Option.none()),
+				publish: () => Effect.void,
+				publishClock: () => Effect.void,
+			}).pipe(
+				Effect.provide(
+					Layer.succeed(
+						MediaRepository,
+						MediaRepository.make({
+							load: () => Effect.sync(() => ({ saved, recovered: false })),
+							resolve: () => Effect.succeed(Option.none()),
+							save: () => Effect.die("unused"),
+							restore: () => Effect.die("unused"),
+							importLocal: () => Effect.die("unused"),
+						}),
+					),
+				),
+			);
+			const before = yield* controller.request({ _tag: "select", serial: "A" });
+			const ticks = yield* Effect.forkScoped(controller.ticks);
+			yield* TestClock.adjust(50000);
+			saved = {
+				...saved,
+				revision: 1,
+				settings: {
+					...saved.settings,
+					displayMediaList: [
+						video,
+						{ ...video, name: "b.webm", filePath: `media:${"b".repeat(64)}` },
+					],
+				},
+			};
+			const after = yield* controller.request({ _tag: "read" });
+			expect(after.playbackId).not.toBe(before.playbackId);
+			expect((yield* controller.request({ _tag: "read" })).playbackId).toBe(
+				after.playbackId,
+			);
+			yield* TestClock.adjust(59999);
+			expect((yield* controller.request({ _tag: "read" })).activeIndex).toBe(0);
+			yield* TestClock.adjust(1);
+			const next = yield* controller.request({ _tag: "read" });
+			expect(next.activeIndex).toBe(1);
+			expect(next.playbackId).not.toBe(after.playbackId);
+			yield* Fiber.interrupt(ticks);
+		}),
+);
