@@ -31,6 +31,7 @@ export function captureFrames(
 	captureId: string,
 	ready: (session: CaptureSession) => Effect.Effect<void, never, Scope.Scope>,
 	meter: (frame: PcmFrame) => Effect.Effect<void>,
+	released: Effect.Effect<void> = Effect.void,
 ): Stream.Stream<Uint8Array, AiError> {
 	return Stream.unwrapScoped(
 		Effect.gen(function* () {
@@ -42,7 +43,7 @@ export function captureFrames(
 						onTimeout: () => new DesktopSpeechError("PhaseTimeout", "recorder"),
 					}),
 				),
-				(value) => value.close,
+				(value) => released.pipe(Effect.ensuring(value.close)),
 			);
 			yield* ready(session);
 			let nextSequence = 0;

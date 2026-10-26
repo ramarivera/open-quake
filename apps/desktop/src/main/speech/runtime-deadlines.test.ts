@@ -55,6 +55,7 @@ const fixture = Effect.fn("SpeechTest.fixture")(function* (
 		| "auto"
 		| "completed"
 		| "denied",
+	finalDelayMs = 0,
 ) {
 	const packets = yield* Queue.unbounded<unknown>();
 	const published = yield* Queue.unbounded<VoiceSurfaceEvent>();
@@ -138,6 +139,7 @@ const fixture = Effect.fn("SpeechTest.fixture")(function* (
 								},
 							});
 						} else if (mode !== "final") {
+							yield* Effect.sleep(finalDelayMs);
 							if (mode === "completed")
 								yield* Queue.offer(packets, {
 									header: {
@@ -649,3 +651,56 @@ it.effect(
 			});
 		}),
 );
+
+for (const [mode, finalWait] of [
+	["auto", 10000],
+	["final", 15000],
+] as const) {
+	it.effect(
+		`automatic capture duration excludes ${mode === "final" ? "final timeout" : "provider response delay"}`,
+		() =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const f = yield* fixture(mode, finalWait);
+					const records = yield* Queue.unbounded<CaptureMetrics>();
+					yield* Effect.gen(function* () {
+						const controller = yield* createProductionVoiceRuntime({
+							speech: yield* AiSpeechService,
+							capture: f.driver,
+							profiles: f.profiles,
+							sendText: () => Effect.void,
+							sendTranscript: () => Effect.die("empty"),
+							diagnostics: {
+								layer: Layer.empty,
+								instrument: (effect) => effect,
+								recordCapture: (value) =>
+									Queue.offer(records, value).pipe(Effect.asVoid),
+							},
+						});
+						yield* controller.runtime.startCapture(captureRequest);
+						yield* Deferred.await(f.listening);
+						yield* TestClock.adjust(60000);
+						expect(f.counts()).toEqual({
+							opened: 1,
+							closed: 1,
+							socketClosed: 0,
+						});
+						expect(f.actions).toEqual(["run-task", "pcm", "finish-task"]);
+						yield* TestClock.adjust(finalWait);
+						const result = yield* Queue.take(records);
+						expect(result).toMatchObject({
+							terminal: mode === "final" ? "failed" : "empty",
+							startupMs: 60000 + finalWait,
+							captureDurationMs: 60000,
+							hasAudioFrame: true,
+						});
+						expect(f.counts()).toEqual({
+							opened: 1,
+							closed: 1,
+							socketClosed: 1,
+						});
+					}).pipe(Effect.provide(f.layer));
+				}),
+			),
+	);
+}

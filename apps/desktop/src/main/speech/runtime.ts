@@ -326,6 +326,7 @@ export const createProductionVoiceRuntime = Effect.fn(
 										...level,
 									});
 								}),
+							metrics.stop,
 						);
 						const transcript = yield* instrument(
 							options.speech.recognize(profiles.stt, frames, (value) => {

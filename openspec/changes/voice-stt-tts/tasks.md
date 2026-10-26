@@ -122,3 +122,5 @@ acceptance is claimed.
 ## PR85 review corrections
 
 - [x] Resolve saved microphones against capture-local identities, excluding foreign document group IDs and retaining exact or unambiguous label selection. Regression drives the production Electron worker bridge with distinct settings/worker salts. Tracked in open-quake-c5w.17; physical acceptance remains on the checklist above.
+
+- [x] Stop recording duration at capture-stream release, including automatic 60-second capture, delayed final results and provider timeout. Two TestClock regressions drive the production STT consumer; startup timing still includes final processing. Tracked in open-quake-c5w.17.
