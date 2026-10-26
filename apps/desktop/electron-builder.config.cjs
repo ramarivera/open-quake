@@ -16,6 +16,7 @@ module.exports = {
 	files: ["out/**/*", "package.json"],
 	asar: true,
 	asarUnpack: [
+		"out/native-media/**/*",
 		"node_modules/node-hid/**/*",
 		"node_modules/koffi/**/*",
 		"node_modules/@koromix/**/*",

@@ -3,7 +3,10 @@ import { platform } from "node:os";
 import { promisify } from "node:util";
 import { Effect, Layer, Option } from "effect";
 import { clipboard, shell } from "electron";
-import type { ActionHostAdapters } from "../../../../../packages/device/src/actions/action-adapters.js";
+import type {
+	ActionHostAdapters,
+	MediaActionAdapter,
+} from "../../../../../packages/device/src/actions/action-adapters.js";
 import {
 	HOTKEY_KEYS,
 	HOTKEY_MODIFIERS,
@@ -30,6 +33,7 @@ export const desktopKeyRuntimePort = (
 	publish: (state: KeyFeedback) => void,
 	mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 	executeOwned?: (key: ProfileKey, signal: AbortSignal) => Promise<boolean>,
+	mediaActions?: MediaActionAdapter,
 ) =>
 	Layer.effect(
 		KeyRuntimePort,
@@ -103,7 +107,7 @@ export const desktopKeyRuntimePort = (
 						}).pipe(textLock.withPermits(1));
 					}),
 				}),
-				media: Option.none(),
+				media: mock ? Option.none() : Option.fromNullable(mediaActions),
 				website: Option.some({
 					openUrl: (url) =>
 						mock
