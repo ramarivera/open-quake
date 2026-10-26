@@ -10,6 +10,7 @@ import {
 	migrateKnobResource,
 	replaceKnobSlot,
 } from "../../../../../../packages/device/src/knob/knob-invariants.js";
+import { defaultAssistantSettings } from "../../../../../../packages/device/src/profiles/assistant-contracts";
 import type { Profile } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import type { PublicModelRow } from "../../../shared/agents";
@@ -29,7 +30,11 @@ export const knobAssignment = (type: string): KnobSlot =>
 				config: {
 					type,
 					...(type === "assistant"
-						? { icon: "0-50", animations: ["0-47", "0-48", "0-49", "0-51"] }
+						? {
+								icon: "0-50",
+								animations: ["0-47", "0-48", "0-49", "0-51"],
+								assistantSettings: defaultAssistantSettings(),
+							}
 						: {}),
 					actions:
 						type === "assistant"

@@ -581,3 +581,36 @@ it("General Settings default resolves new row before writing direct knob actions
 			saved.config.assistantSettings?.modelRowId,
 	).toBe("");
 });
+
+it("new knob assistant saves the displayed defaults through canonical direct selectors", async () => {
+	bridge();
+	const profile = Schema.decodeUnknownSync(Profile)({
+		id: "p",
+		name: "Custom",
+		revision: 0,
+		pages: [{ id: "one", keys: [] }],
+	});
+	let saved: KnobSlot | undefined;
+	vi.stubGlobal("quakeKeyLibrary", {
+		request: async (
+			command: import("../../../shared/key-library").KeyRequest,
+		) => {
+			if (command.type !== "save-knob") throw new Error("Unexpected command");
+			saved = command.knob.config.subActions[0];
+			return { _tag: "success" };
+		},
+	});
+	const f = await mount(<KnobEditor profile={profile} accept={() => {}} />);
+	closes.push(f.close);
+	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
+	await input(query(f.host, "#knob-provider", HTMLSelectElement), "openai");
+	await input(query(f.host, "#knob-model", HTMLSelectElement), "custom-openai");
+	await click(button(f.host, "Save knob"));
+	expect(saved?.config).toMatchObject({
+		assistantSettings: {
+			...defaultAssistantSettings(),
+			modelRowId: "openai",
+			modelId: "custom-openai",
+		},
+	});
+});
