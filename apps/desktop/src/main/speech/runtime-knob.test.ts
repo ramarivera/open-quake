@@ -10,6 +10,7 @@ import {
 	Stream,
 	TestClock,
 } from "effect";
+import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import { AiUnavailable } from "../../../../../packages/edge/src/ai/ai-errors";
 import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import { AiSpeechService } from "../../../../../packages/edge/src/ai/speech/speech-service";
@@ -556,3 +557,32 @@ describe("profile-removal speech isolation", () => {
 		);
 	}
 });
+
+it.scoped(
+	"disabled knob Voice Input rejects before permission, capture or STT",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* fixture();
+			if (!request.knob) throw new Error("missing knob fixture");
+			const result = yield* f.runtime
+				.startCapture({
+					...request,
+					knob: {
+						...request.knob,
+						assistantSettings: {
+							...defaultAssistantSettings(),
+							useAgent: false,
+							enableVoiceInput: false,
+						},
+					},
+				})
+				.pipe(Effect.either);
+			expect(Either.isLeft(result) && result.left.code).toBe(
+				"VOICE.KNOB.ROUTE_UNAVAILABLE",
+			);
+			yield* tick;
+			expect(f.counts().permissions).toBe(0);
+			expect(yield* Queue.size(f.opened)).toBe(0);
+			expect(f.sent).toEqual([]);
+		}),
+);

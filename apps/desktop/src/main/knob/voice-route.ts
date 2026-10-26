@@ -19,6 +19,8 @@ export const pinKnobProfile = Effect.fn("DesktopKnob.pinProfile")(function* (
 	const center = knob.value.config.subActions[0];
 	if (center.config.type !== "assistant")
 		return yield* new VoiceKnobRejected("RouteUnavailable");
+	if (center.config.assistantSettings?.enableVoiceInput === false)
+		return yield* new VoiceKnobRejected("RouteUnavailable");
 	const actions = Schema.decodeUnknownEither(KnobVoiceActions, {
 		onExcessProperty: "error",
 	})(center.config.actions);

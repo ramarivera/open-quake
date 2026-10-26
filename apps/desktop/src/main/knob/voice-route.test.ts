@@ -4,6 +4,10 @@ import {
 	emptyKnobResource,
 	emptyKnobSlot,
 } from "../../../../../packages/device/src/knob/knob-invariants";
+import {
+	type AssistantSettings,
+	defaultAssistantSettings,
+} from "../../../../../packages/device/src/profiles/assistant-contracts";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts";
 import { VoiceKnobRejected } from "../../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { pinKnobProfile } from "./voice-route";
@@ -13,7 +17,10 @@ const route = [
 	{ type: "directProvider", value: "saved-provider" },
 	{ type: "directModel", value: "org/model" },
 ];
-const envelope = (actions: unknown = route) =>
+const envelope = (
+	actions: unknown = route,
+	assistantSettings?: AssistantSettings,
+) =>
 	Schema.decodeUnknownSync(ProfileEnvelope)({
 		schemaVersion: 1,
 		profiles: [
@@ -29,7 +36,11 @@ const envelope = (actions: unknown = route) =>
 						subActions: [
 							{
 								childrenName: "assistant",
-								config: { type: "assistant", actions },
+								config: {
+									type: "assistant",
+									actions,
+									...(assistantSettings ? { assistantSettings } : {}),
+								},
 							},
 							emptyKnobSlot(),
 							emptyKnobSlot(),
@@ -97,3 +108,19 @@ describe("committed knob route pinning", () => {
 		expect(JSON.stringify(error)).not.toContain("must-not-serialize");
 	});
 });
+
+it.effect("disabled knob voice input cannot pin a capture route", () =>
+	Effect.gen(function* () {
+		const result = yield* pinKnobProfile(
+			envelope(route, {
+				...defaultAssistantSettings(),
+				useAgent: false,
+				enableVoiceInput: false,
+			}),
+			"QK",
+		).pipe(Effect.either);
+		expect(result._tag === "Left" && result.left.code).toBe(
+			"VOICE.KNOB.ROUTE_UNAVAILABLE",
+		);
+	}),
+);

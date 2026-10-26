@@ -135,3 +135,7 @@ The knob editor SHALL expose Agent and Model for a DK Claw route, including Defa
 #### Scenario: Save a DK Claw agent and model
 - **WHEN** a user selects a DK Claw agent and model and saves the knob
 - **THEN** the profile retains both fields and reopening selects them
+
+#### Scenario: Voice input disabled before capture
+- **WHEN** a direct knob's committed assistant settings disable Voice Input
+- **THEN** route pinning and capture startup reject it before requesting microphone permission, opening capture or invoking speech recognition (AI-060, KNOB-034)
