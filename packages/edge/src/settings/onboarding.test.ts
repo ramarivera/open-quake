@@ -136,7 +136,7 @@ function fixture(initial: unknown = legacy) {
 }
 const snapshot = WizardService.snapshot();
 describe("general preferences and resumable onboarding consumers", () => {
-	it("reads locale-only v1 documents without rewriting and shares locale/general/wizard commits", async () => {
+	it("bootstraps locale-only v1 documents once and shares locale/general/wizard commits", async () => {
 		const f = fixture(),
 			runtime = f.create();
 		try {
@@ -145,7 +145,7 @@ describe("general preferences and resumable onboarding consumers", () => {
 				completed: false,
 				locale: "en",
 			});
-			expect(f.writes()).toBe(0);
+			expect(f.writes()).toBe(1);
 			await Promise.all([
 				runtime.runPromise(SettingsService.use((s) => s.setLocale("de"))),
 				runtime.runPromise(GeneralSettingsService.save({ startHidden: true })),

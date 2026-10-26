@@ -52,7 +52,7 @@ The wizard SHALL validate locale, display selection and at least one usable prof
 
 ### Requirement: Locale and region choices
 
-The system SHALL offer only translated locales, seed an initial suggestion once from OS locale and an explicitly chosen region, fall back to English when needed, and preserve subsequent user choices. Locale changes SHALL update management and panel views without restart.
+The system SHALL bundle the eight UI locales zh, en, es, fr, ko, de, it and ja, normalize trimmed primary subtags case-insensitively across hyphens and underscores, seed the initial locale once from OS metadata, and fall back to English for unsupported values. Locale changes SHALL update mounted management, profile manager, panel, voice, picker, clock and native prompt/background-menu consumers without restart and SHALL survive restart. The macOS Dock menu SHALL provide the localized native background-menu equivalent with working Resume, Settings and Exit actions. Settings language labels SHALL use fixed endonyms, with 中文 in settings and 简体中文 in setup. Existing English/German product namespaces SHALL retain their conventions; recovered strings SHALL be copied verbatim, with English fallback for app-specific untranslated copy. Evidence: CENTER-006, MGMT-327, SCREEN-011, SCREEN-099, SETTINGS-007, SETTINGS-063, SETTINGS-064, SETTINGS-065.
 
 #### Scenario: Unsupported OS locale
 
@@ -74,6 +74,14 @@ Audit regression coverage: MGMT-003.
 #### Scenario: Bootstrap and cross-window language race
 - **WHEN** a locale event arrives while the saved locale read is pending
 - **THEN** all subscribed windows show the newer revision, and a late older read cannot revert their language or mounted drafts
+
+#### Scenario: Language changes during city verification
+- **WHEN** the user changes app language while an edited weather city is debouncing or its verification is in flight
+- **THEN** the mounted draft and pending verification survive, the result is saved, and a lookup started after the language change uses the current locale
+
+#### Scenario: Non-English profile thumbnail
+- **WHEN** a profile capture requests a supported non-English locale
+- **THEN** its validated capture locale reaches the passive clock before the preview becomes ready, including weekday, date and theme text
 
 ### Requirement: General preferences
 
@@ -314,3 +322,45 @@ Backup completion SHALL sync the staged file before rename and the parent direct
 
 - **WHEN** a mock smoke supplies an absolute explicit scratch root with contained temporary and artifact paths
 - **THEN** it can run without author-specific directory names, while absent opt-in, escaping paths and real-userData overlap are rejected
+
+
+### Requirement: Local advisory region defaults and legacy migration
+
+Region suggestions SHALL use only the explicitly selected ISO country, independently of UI locale, credentials and vendor catalogs. China SHALL suggest DeepSeek with deepseek-v4-flash and Qwen speech with qwen-audio-3.1-asr-flash-streaming, qwen-audio-3.1-tts-flash and qwen3.5-livetranslate-flash-realtime. Other valid countries SHALL suggest OpenAI with gpt-5.1, gpt-4o-transcribe and gpt-4o-mini-tts. Unknown region SHALL yield no suggestion. Suggestions SHALL remain visible advisory values, never create credentials, choose a configured model profile, enable speech or perform geographic lookup. A versioned local legacy-settings migration SHALL replace only a China QWen default explicitly marked seeded and not user-chosen with the DeepSeek suggestion. Explicit and unmarked existing choices SHALL survive migration, region changes and restart. Evidence: AI-015, SETTINGS-065, SETTINGS-098, SETTINGS-099.
+
+#### Scenario: Region changes with configured providers
+
+- **WHEN** China and international region choices are saved and settings are reloaded
+- **THEN** the real wizard owner returns the corresponding chat and independent speech model suggestions, while existing provider and speech settings stay byte-equivalent
+
+#### Scenario: Legacy default and failed region lookup
+
+- **WHEN** a seeded non-user-chosen China QWen legacy default is loaded
+- **THEN** it migrates once to DeepSeek; manual QWen, other providers, unknown origin and unknown region remain unchanged without network requests
+
+### Requirement: Independent translation language catalog
+
+Translation controls SHALL offer the localized eighteen-code catalog en, zh, ru, fr, de, pt, es, it, id, ko, ja, vi, th, ar, yue, hi, el and tr, independently of UI locale and adapter availability. Selecting UI language SHALL NOT replace saved speech or translation target languages. Evidence: SETTINGS-067.
+
+#### Scenario: Translation options in every UI locale
+
+- **WHEN** translation controls render in each supported UI locale
+- **THEN** all eighteen codes have the recovered localized labels, and a UI language change keeps the selected target language
+
+### Requirement: Selective versioned bootstrap migration
+
+The desktop settings owner SHALL seed start-hidden false and the missing legacy global wake accelerator CommandOrControl+Shift+D, preserve explicit values and durable unknown fields, and remove only legacy currentSelectedDevice, mainscreen.deviceName, plugin/via/web port fields and system.upgradeInfo during the versioned local legacy import. Migration SHALL be idempotent, persist atomically and leave invalid/future-version documents untouched. It SHALL NOT register a native hotkey merely by migrating a preference. Evidence: SETTINGS-111.
+
+#### Scenario: Restart after legacy bootstrap
+
+- **WHEN** a valid legacy-containing settings document is read twice across restarts
+- **THEN** transient keys disappear once, missing defaults appear, explicit wake/startup and provider/speech preferences survive, and the second read performs no migration write
+
+### Requirement: Localized strip titles and enrichment copy
+
+The six AI role titles SHALL resolve explicit user edits first, then multilingual i18n keys, then legacy role labels, then raw text, across all eight locales without persisting translated titles. The profile picker SHALL localize title, current prefix/badge and knob/page hints from the saved locale. Clock settings and weather/media cards SHALL localize visible settings, seconds, cached, loading/error, button and interpolation copy from the same saved locale; weather locale routing and spoken/translation language selections SHALL remain independent. Evidence: AI-149, SCREEN-099, WIDGETS-063.
+
+#### Scenario: Live relocalization preserves data
+
+- **WHEN** the app language changes with the strip, voice, picker, profile manager and clock mounted
+- **THEN** their labels update for all eight locales, an unsupported value renders English, drafts and user-edited titles survive, and no translated title is written to a profile

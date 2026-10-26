@@ -14,7 +14,8 @@ sets `runtimeUrl` to null and uses local loaders. The provider overrides GT's
 normal reload behavior with the saved main-process choice.
 
 `SettingsService` owns the saved language in `settings-v1.json` under userData.
-It seeds en/de once from the OS, serializes validated changes, preserves unrelated
+It seeds zh/en/es/fr/ko/de/it/ja once from the OS primary subtag, uses English
+for unsupported values, serializes validated changes, preserves unrelated
 fields and publishes only locale/revision projections. Unknown versions and
 corrupt files fail without automatic overwrite. Atomic private-file replacement
 finishes before the new locale becomes visible. A failed write keeps the previous
@@ -41,3 +42,25 @@ read a current-copy getter so a language change does not replace subscriptions
 or cancel a reply. The actual direct-chat smoke checks the German Stop label
 while a provider socket remains open, then switches back and cancels normally.
 General settings, onboarding and physical speech acceptance remain separate tasks.
+
+
+The locale lane bundles recovered picker, native menu and translation-language
+copy verbatim for all eight locales. Existing English/German product namespaces
+keep their conventions. Other product-specific untranslated namespaces fall back
+to English. Clock/enrichment copy uses the saved locale through `useLocaleText`,
+including independent profile captures which have no GT provider. App language
+never changes spoken language, translation targets, weather locale routing or
+user-authored titles. The eighteen translation codes are independent of adapter
+availability.
+
+Native lifecycle prompts read the current saved locale at action time. On macOS,
+the Dock background menu refreshes on locale changes and retains working Resume,
+Settings and Exit actions. Main and both renderers share the same committed
+locale/revision owner.
+
+The versioned bootstrap removes only the documented legacy transient keys,
+adds missing startup/global wake preferences and preserves durable extensions.
+Only explicitly geo-seeded, non-user-chosen China QWen defaults migrate to
+DeepSeek. Regional chat/speech/model suggestions are local advisory copy in setup,
+never automatic profile selection, credentials, network lookups or hotkey
+registration. Invalid/future settings remain untouched.
