@@ -3,6 +3,7 @@ import {
 	Deferred,
 	Effect,
 	Either,
+	Fiber,
 	Layer,
 	Option,
 	Queue,
@@ -10,8 +11,16 @@ import {
 	TestClock,
 } from "effect";
 import { AiUnavailable } from "../../../../../packages/edge/src/ai/ai-errors";
+import type { SpeechOutcome } from "../../../../../packages/edge/src/ai/speech/speech-service";
 import { AiSpeechService } from "../../../../../packages/edge/src/ai/speech/speech-service";
-import { sttProfile } from "../../../../../packages/edge/src/ai/speech/speech-test-fixtures";
+import {
+	sttProfile,
+	ttsProfile,
+} from "../../../../../packages/edge/src/ai/speech/speech-test-fixtures";
+import {
+	SessionId,
+	TurnId,
+} from "../../../../../packages/edge/src/chat/chat-contracts";
 import {
 	VoiceSurface,
 	VoiceSurfacePublisher,
@@ -62,6 +71,8 @@ const fixture = Effect.fn("KnobTest.fixture")(function* (
 	const cancels: string[] = [];
 	const opened = yield* Queue.unbounded<string>();
 	const listening = yield* Queue.unbounded<void>();
+	const spoken = yield* Queue.unbounded<string>();
+	const cancelledSpeech: string[] = [];
 	const clean = yield* Deferred.make<void>();
 	const pinned = yield* Deferred.make<void>();
 	const pin = yield* Deferred.make<void>();
@@ -70,10 +81,18 @@ const fixture = Effect.fn("KnobTest.fixture")(function* (
 	let selected = profile;
 	const speech = AiSpeechService.make({
 		synthesize: () => Effect.fail(new AiUnavailable()),
-		createSpeech: () =>
-			Effect.succeed({
-				result: Effect.succeed({ _tag: "completed" as const }),
-				cancel: () => Effect.void,
+		createSpeech: (_profile, text) =>
+			Effect.gen(function* () {
+				const result = yield* Deferred.make<SpeechOutcome>();
+				yield* Queue.offer(spoken, text);
+				return {
+					result: Deferred.await(result),
+					cancel: () =>
+						Effect.gen(function* () {
+							cancelledSpeech.push(text);
+							yield* Deferred.succeed(result, { _tag: "cancelled" });
+						}),
+				};
 			}),
 		recognize: (_input, frames) =>
 			Stream.runDrain(frames).pipe(Effect.as("final transcript")),
@@ -109,7 +128,8 @@ const fixture = Effect.fn("KnobTest.fixture")(function* (
 				if (delayedPin) yield* Deferred.await(pin);
 				return { profile: result, maxTokens: 1024 };
 			}),
-		profiles: () => Effect.succeed({ stt: sttProfile, speakAnswers: false }),
+		profiles: () =>
+			Effect.succeed({ stt: sttProfile, tts: ttsProfile, speakAnswers: true }),
 		capture: {
 			permission: Effect.sync(() => {
 				permissions++;
@@ -148,6 +168,8 @@ const fixture = Effect.fn("KnobTest.fixture")(function* (
 		cancels,
 		opened,
 		listening,
+		spoken,
+		cancelledSpeech,
 		clean,
 		pinned,
 		pin,
@@ -361,5 +383,87 @@ describe("pinned knob capture ownership", () => {
 				yield* tick;
 				expect(f.sent).toHaveLength(1);
 			}),
+	);
+});
+
+describe("profile-removal speech isolation", () => {
+	const sessionId = SessionId.make("00000000-0000-4000-8000-000000000010");
+	const turnId = TurnId.make("00000000-0000-4000-8000-000000000011");
+	it.scoped(
+		"profile removal cancels only the affected device answer turn",
+		() =>
+			Effect.gen(function* () {
+				const f = yield* fixture();
+				for (const capture of [
+					request,
+					{
+						...request,
+						serial: "two",
+						knob: {
+							profileId: "kept",
+							revision: 7,
+							route: "direct" as const,
+							providerId: "saved",
+							modelId: "old/model",
+						},
+					},
+				]) {
+					yield* f.runtime.startCapture(capture);
+					yield* Queue.take(f.opened);
+					yield* Queue.take(f.listening);
+					yield* f.runtime.releaseCapture(capture.serial, "0,1", 1);
+					yield* tick;
+				}
+				for (const serial of ["one", "two"]) {
+					yield* f.observe({
+						_tag: "TurnStarted",
+						serial,
+						keyCode: "0,1",
+						sessionId,
+						turnId,
+						prompt: "input",
+						source: "voice",
+					});
+					yield* f.observe({
+						_tag: "Chunk",
+						serial,
+						keyCode: "0,1",
+						chunk: {
+							version: 1,
+							sessionId,
+							turnId,
+							seq: 0,
+							type: "answer",
+							textDelta: `${serial} answer.`,
+						},
+					});
+					expect(yield* Queue.take(f.spoken)).toBe(`${serial} answer.`);
+				}
+				const prior = f.cancels.length;
+				yield* f.reconcileProfiles(["kept"]);
+				expect(f.cancels.slice(prior)).toEqual(["one"]);
+				expect(f.cancelledSpeech).toEqual(["one answer."]);
+				yield* f.cancelSpeech();
+				expect(f.cancelledSpeech).toEqual(["one answer.", "two answer."]);
+			}),
+	);
+	it.scoped("profile removal preserves unrelated read-aloud playback", () =>
+		Effect.gen(function* () {
+			const f = yield* fixture();
+			yield* f.runtime.startCapture(request);
+			yield* Queue.take(f.opened);
+			yield* Queue.take(f.listening);
+			yield* f.runtime.releaseCapture("one", "0,1", 1);
+			yield* tick;
+			const reading = yield* f
+				.readAloud("unrelated read-aloud")
+				.pipe(Effect.fork);
+			expect(yield* Queue.take(f.spoken)).toBe("unrelated read-aloud");
+			yield* f.reconcileProfiles([]);
+			expect(f.cancelledSpeech).toEqual([]);
+			expect(Option.isNone(yield* Fiber.poll(reading))).toBe(true);
+			yield* f.cancelSpeech();
+			expect(yield* Fiber.join(reading)).toEqual({ _tag: "cancelled" });
+		}),
 	);
 });

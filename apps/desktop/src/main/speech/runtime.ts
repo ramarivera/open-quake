@@ -417,7 +417,12 @@ export const createProductionVoiceRuntime = Effect.fn(
 							knobProfiles.delete(serial);
 							if (active?.request.serial === serial) yield* stop();
 							yield* options.cancelText?.(serial, "0,1") ?? Effect.void;
-							yield* cancelSpeech();
+							const turn = turns.get(serial);
+							if (turn) {
+								turns.delete(serial);
+								yield* turn.speech.cancel();
+							}
+							// Read-aloud is independent of device/profile capture ownership.
 						}
 					}),
 				),

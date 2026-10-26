@@ -43,3 +43,7 @@ this lane.
 Full delivery gates and screenshots are recorded in
 `openspec/changes/knob-configuration/tasks.md`. The final focused race rerun
 passed 24 tests across `voice-ipc.test.ts` and `runtime-knob.test.ts`.
+
+## PR84 fix1
+
+- [x] 4.1 Scope profile-removal cancellation to the affected device answer turn. Bead open-quake-e2r.9, review 4376058796. Both new `runtime-knob.test.ts` regressions failed before the fix, proving another device answer and unrelated read-aloud were cancelled. They pass after the fix; the removed device capture/text/answer still cancel. Read-aloud has no device/profile owner and survives reconciliation. No real microphone or hardware used.
