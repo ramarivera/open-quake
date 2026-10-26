@@ -49,8 +49,12 @@ export const readObsTile = Effect.fn("ObsService.readTile")(function* (
 			};
 		}
 		case "obsScreenshot": {
+			// The UUID survives scene renames; imported settings may only have a name.
+			const source = command.settings.sceneUuid
+				? { sourceUuid: command.settings.sceneUuid }
+				: { sourceName: command.settings.sourceName };
 			const shot = yield* request("GetSourceScreenshot", {
-				sourceName: command.settings.sourceName,
+				...source,
 				imageFormat: "jpeg",
 				imageWidth: 128,
 				imageHeight: 128,

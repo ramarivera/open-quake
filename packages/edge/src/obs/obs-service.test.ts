@@ -375,6 +375,38 @@ it.scoped(
 		}),
 );
 it.scoped(
+	"screenshots request the saved scene by UUID so renamed scenes keep working",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* fixture();
+			yield* f.service.connect();
+			yield* f.service.setVisible("panel", [
+				{
+					id: "renamed",
+					command: command("obsScreenshot", {
+						sceneUuid: "scene-1",
+						sourceName: "Old name",
+					}),
+				},
+			]);
+			yield* TestClock.adjust(2000);
+			yield* Effect.promise(() =>
+				f.server.waitFor(() =>
+					f.server.calls.some((c) => c.type === "GetSourceScreenshot"),
+				),
+			);
+			expect(
+				f.server.calls.find((c) => c.type === "GetSourceScreenshot")?.data,
+			).toEqual({
+				sourceUuid: "scene-1",
+				imageFormat: "jpeg",
+				imageWidth: 128,
+				imageHeight: 128,
+			});
+			yield* f.service.release("panel");
+		}),
+);
+it.scoped(
 	"replacing visible entries discards responses from a previous profile",
 	() =>
 		Effect.gen(function* () {
