@@ -90,10 +90,20 @@ export const KeyRequest = Schema.Union(
 		id: Schema.String,
 	}),
 	Schema.Struct({
+		type: Schema.Literal("player-control"),
+		deviceId: Schema.NonEmptyString,
+		profileId: Schema.NonEmptyString,
+		pageId: Schema.NonEmptyString,
+		keyCode: Schema.NonEmptyString,
+		revision: Schema.Int.pipe(Schema.nonNegative()),
+		intent: Schema.Literal("previous", "toggle", "next", "stop"),
+	}),
+
+	Schema.Struct({
 		type: Schema.Literal("activate"),
 		deviceId: Schema.String,
 		keyCode: Schema.String,
-		kind: Schema.Literal("press", "release"),
+		kind: Schema.Literal("press", "release", "down", "up", "cancel"),
 		profileId: Schema.String,
 		pageId: Schema.String,
 		revision: Schema.Int.pipe(Schema.nonNegative()),

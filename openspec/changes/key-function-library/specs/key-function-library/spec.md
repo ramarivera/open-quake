@@ -131,3 +131,9 @@ multiActions SHALL contain an ordered non-recursive subActions list of validated
 
 - **WHEN** a sequence inserts text, waits 1000 ms, fails to open an app, then contains a website action
 - **THEN** text and delay complete in order, the app failure is reported, and the website never opens
+
+#### Scenario: Selected device changes without a saved profile
+- **WHEN** the Keys editor receives a different device serial without an active profile or page
+- **THEN** the editor uses the same first visible profile and first page as the strip, replacing the previous device's profile and page together
+- **AND** changing devices discards the previous device's unsaved key even when both devices use the same effective page
+- **AND** returning to the previous device or removing its active selection recalculates its effective selection

@@ -44,6 +44,7 @@ import { MediaLive, registerMedia } from "../media";
 import { registerMonitor } from "../monitor";
 import { registerProfiles } from "../profiles";
 import { reportSmokeFailure } from "../profiles/smoke-failure";
+import { registerAppLocale } from "../settings/registration";
 import { stripFixtureEnvelope } from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { audioFiles } from "./audio-files";
@@ -88,6 +89,7 @@ async function smoke(): Promise<void> {
 	let monitor: ReturnType<typeof registerMonitor> | undefined;
 	let agents: ReturnType<typeof registerAgents> | undefined;
 	let disposeAppearance = () => {};
+	let locale: ReturnType<typeof registerAppLocale> | undefined;
 	let unregisterHardware = () => {};
 	let disposeLifecycle = async () => {};
 	let exitCode = 0;
@@ -120,6 +122,59 @@ async function smoke(): Promise<void> {
 			join(scratch, `${name}.png`),
 			(await win.webContents.capturePage()).toPNG(),
 		);
+	};
+	// AI-333: computed styles on actual mounted states, with both motion owners.
+	const reducedMotion = async (
+		win: BrowserWindow,
+		selectors: readonly string[],
+	) => {
+		win.webContents.debugger.attach("1.3");
+		try {
+			for (const mode of ["os", "app"] as const) {
+				await win.webContents.debugger.sendCommand(
+					"Emulation.setEmulatedMedia",
+					{
+						features: [
+							{
+								name: "prefers-reduced-motion",
+								value: mode === "os" ? "reduce" : "no-preference",
+							},
+						],
+					},
+				);
+				await win.webContents.executeJavaScript(
+					`new BroadcastChannel(${JSON.stringify(APPEARANCE_STORAGE_KEY)}).postMessage(${JSON.stringify({ ...defaultAppearance, motion: mode === "app" ? "reduce" : "system" })});null;`,
+				);
+				await wait(
+					win,
+					`document.documentElement.dataset.motion==='reduce' && matchMedia('(prefers-reduced-motion: reduce)').matches===${mode === "os"}`,
+				);
+				for (const selector of selectors) {
+					const style = await win.webContents.executeJavaScript(
+						`(() => {const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw new Error('Missing motion subject '+${JSON.stringify(selector)});const s=getComputedStyle(e);return {animation:s.animationName,transition:s.transitionDuration};})()`,
+					);
+					assert.deepEqual(
+						style,
+						{ animation: "none", transition: "0s" },
+						`${mode} reduced motion: ${selector}`,
+					);
+				}
+				assert(
+					await win.webContents.executeJavaScript(
+						"document.querySelector('.meeting-display').getBoundingClientRect().width>0 && !!document.querySelector('.meeting-animation p, .meeting-translations p, footer')?.textContent",
+					),
+					"Reduced motion keeps status visible",
+				);
+			}
+		} finally {
+			await win.webContents.debugger.sendCommand("Emulation.setEmulatedMedia", {
+				features: [],
+			});
+			win.webContents.debugger.detach();
+			await win.webContents.executeJavaScript(
+				`new BroadcastChannel(${JSON.stringify(APPEARANCE_STORAGE_KEY)}).postMessage(${JSON.stringify(defaultAppearance)});null;`,
+			);
+		}
 	};
 	try {
 		await app.whenReady();
@@ -215,6 +270,14 @@ async function smoke(): Promise<void> {
 		};
 		const management = new BrowserWindow(options);
 		const panel = new BrowserWindow({ ...options, width: 1920, height: 480 });
+		locale = registerAppLocale({
+			directory,
+			osLocale: "en-US",
+			renderer,
+			windows: () => [management, panel],
+		});
+		management.webContents.setAudioMuted(true);
+		panel.webContents.setAudioMuted(true);
 		disposeAppearance = registerManagementAppearance(
 			() => management,
 			directory,
@@ -418,6 +481,12 @@ async function smoke(): Promise<void> {
 			).length,
 			2,
 		);
+		await click(panel, '[aria-label="Main minutes"]');
+		await reducedMotion(panel, [
+			".meeting-animation[data-animation=recording] .meeting-orbit i",
+			".meeting-start[data-active=true] .meeting-key-glyph",
+			".meeting-mark-count",
+		]);
 		await capture(panel, "meetings-recording-side-mark");
 		await nativeKey("liveAudioTranslate");
 		await runtime.runPromise(MeetingService.translate(new Uint8Array(14400)));
@@ -436,13 +505,22 @@ async function smoke(): Promise<void> {
 			),
 			"26px",
 		);
+		await reducedMotion(panel, [".meeting-display[data-translating=true]"]);
 		await capture(panel, "meetings-live-translation");
 		await click(panel, '[aria-label="Main minutes"]');
 		await new Promise((resolve) => setTimeout(resolve, 5100));
 		await nativeKey("meetingMinutes");
 		await wait(panel, "document.querySelector('[data-animation=processing]')");
+		await reducedMotion(panel, [".meeting-gear", ".meeting-gear.small"]);
 		await capture(panel, "meetings-processing");
 		await wait(panel, "document.querySelector('[data-animation=success]')");
+		assert.equal(
+			await panel.webContents.executeJavaScript(
+				"document.querySelectorAll('.meeting-firework').length",
+			),
+			35,
+		);
+		await reducedMotion(panel, [".meeting-firework"]);
 		await capture(panel, "meetings-success");
 		await wait(
 			management,
@@ -451,6 +529,45 @@ async function smoke(): Promise<void> {
 		await click(management, ".meeting-record:last-child");
 		await click(management, ".meeting-document-tabs [role=tab]:first-child");
 		await capture(management, "meetings-history-summary");
+		// AI-334: the real owner preserves the forced 5x2 viewer footprint.
+		assert.deepEqual(
+			await management.webContents.executeJavaScript(`(async () => {
+    const state=await window.quakeKeyLibrary.request({type:'read',locale:'en'});
+    if(state._tag!=='success')throw new Error('Key read rejected');
+    const p=state.envelope.profiles.find(p=>p.id==='1-1'), page=p.pages[0], key=page.keys.find(k=>k.keyCode==='1,1');
+    const target={token:'meeting-viewer-size',profileId:p.id,pageId:page.id,keyCode:key.keyCode,revision:p.revision};
+    return window.quakeKeyLibrary.request({type:'preview',target,key:{...key,config:{...key.config,size:[3,1]}}});
+   })()`),
+			{ _tag: "rejected", reason: "layout-locked-or-invalid" },
+		);
+		for (const tab of ["main", "temp"] as const) {
+			await request(panel, { _tag: "tab", tab });
+			await wait(panel, "!!document.querySelector('.meeting-safe-text')");
+			const target = Schema.decodeUnknownSync(
+				Schema.Struct({ x: Schema.Number, y: Schema.Number }),
+			)(
+				await panel.webContents.executeJavaScript(`(() => {
+    const tile=document.querySelector('.meeting-display'),t=tile.getBoundingClientRect(),b=tile.querySelector('[aria-label=Clear]').getBoundingClientRect();
+    if(b.x<t.x||b.right>t.right+1||b.y<t.y||b.bottom>t.bottom+1)throw new Error('Clear outside scaled viewer');
+    return {x:b.x+b.width/2,y:480-b.y-b.height/2};
+   })()`),
+			);
+			for (const action of [1, 0])
+				panel.webContents.send("quake:event", {
+					source: "mock",
+					kind: "touch",
+					points: [{ ...target, action }],
+				});
+			await wait(panel, "!document.querySelector('.meeting-safe-text')");
+			assert(
+				(await request(panel, { _tag: "read" })).records.find(
+					(r) => r.id === id,
+				)?.minutes,
+				"Clear erased durable minutes",
+			);
+		}
+		await request(panel, { _tag: "tab", tab: "main" });
+
 		await click(management, 'input[value="executive"]');
 		await wait(
 			management,
@@ -507,6 +624,44 @@ async function smoke(): Promise<void> {
 		);
 		await click(management, ".meeting-document-tabs [role=tab]:nth-child(2)");
 		await capture(management, "meetings-history-transcript");
+		// AI-299/304: actual CSS columns and reachable inspector/header at every width.
+		for (const width of [1440, 980, 520]) {
+			management.setContentSize(width, 1000);
+			await management.webContents.executeJavaScript(
+				"new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+			);
+			const layout = await management.webContents.executeJavaScript(`(() => {
+    const workspace=document.querySelector('.meeting-workspace'), inspector=document.querySelector('.meeting-inspector'), doc=document.querySelector('.meeting-document');
+    const r=inspector.getBoundingClientRect(),d=doc.getBoundingClientRect();
+    const controls=[...inspector.querySelectorAll('input,button:not(:disabled)'),...doc.querySelectorAll('header button:not(:disabled)')];
+    const reach=controls.map(e=>{e.scrollIntoView({block:'center'});e.focus({preventScroll:true});const b=e.getBoundingClientRect();const hit=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return document.activeElement===e && b.width>0 && b.height>0 && b.x>=0 && b.right<=innerWidth && (hit===e||e.contains(hit));});
+    return { columns:getComputedStyle(workspace).gridTemplateColumns.split(' ').length, inspectorBelow:r.top>=d.bottom-1, reach, overflow:document.documentElement.scrollWidth>innerWidth };
+   })()`);
+			const parsed = Schema.decodeUnknownSync(
+				Schema.Struct({
+					columns: Schema.Number,
+					inspectorBelow: Schema.Boolean,
+					reach: Schema.Array(Schema.Boolean),
+					overflow: Schema.Boolean,
+				}),
+			)(layout);
+			assert.equal(
+				parsed.columns,
+				width === 1440 ? 3 : width === 980 ? 2 : 1,
+				`history columns at ${width}`,
+			);
+			assert.equal(
+				parsed.inspectorBelow,
+				width !== 1440,
+				`inspector position at ${width}`,
+			);
+			assert(
+				parsed.reach.length >= 8 && parsed.reach.every(Boolean),
+				`keyboard/pointer inspector/header reach at ${width}: ${JSON.stringify(parsed)}`,
+			);
+			assert.equal(parsed.overflow, false, `history overflow at ${width}`);
+			await capture(management, `meetings-history-layout-${width}`);
+		}
 		management.setContentSize(520, 1000);
 		await capture(management, "meetings-history-narrow");
 		assert(
@@ -525,6 +680,19 @@ async function smoke(): Promise<void> {
 			"document.documentElement.dataset.theme === 'light'",
 		);
 		await capture(management, "meetings-history-light");
+		await management.webContents.executeJavaScript(
+			"window.quakeLocale.set('de')",
+		);
+		await wait(management, "document.documentElement.lang === 'de'");
+		await capture(management, "meetings-history-de");
+		await capture(panel, "meetings-panel-de");
+		await management.webContents.executeJavaScript(
+			"window.quakeLocale.set('en')",
+		);
+		await wait(management, "document.documentElement.lang === 'en'");
+		await capture(management, "meetings-history-en");
+		await capture(panel, "meetings-panel-en");
+
 		await capture(panel, "meetings-reduced-motion");
 		await management.webContents.executeJavaScript(
 			`new BroadcastChannel(${JSON.stringify(APPEARANCE_STORAGE_KEY)}).postMessage(${JSON.stringify({ ...defaultAppearance, theme: "dark", motion: "system" })}); null;`,
@@ -778,6 +946,7 @@ async function smoke(): Promise<void> {
 				}
 		});
 	} finally {
+		await locale?.dispose();
 		await maintenance?.dispose();
 		disposeAppearance();
 		await agents?.dispose();

@@ -1,4 +1,5 @@
 import type { Cause } from "effect";
+import { Schema } from "effect";
 import { ActionErrors } from "../../../../../packages/device/src/actions/action-errors.js";
 import {
 	DeviceErrors,
@@ -9,6 +10,7 @@ import { HardwareErrors } from "../../../../../packages/device/src/hardware/hard
 import { KnobErrors } from "../../../../../packages/device/src/knob/knob-errors.js";
 import { LightingErrors } from "../../../../../packages/device/src/lighting/lighting-errors.js";
 import { ProfileErrors } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import { TouchState } from "../../../../../packages/device/src/touch/touch-contracts.js";
 import { RuntimeErrors } from "../../../../../packages/edge/src/agent-http/runtime-errors.js";
 import { AgentErrors } from "../../../../../packages/edge/src/agents/agents-errors.js";
 import { AiErrors } from "../../../../../packages/edge/src/ai/ai-errors.js";
@@ -204,4 +206,35 @@ export function safeLogEvent(messages: readonly unknown[]): string {
 				typeof value === "string" && knownLogEvents.has(value),
 		) ?? "effect.log"
 	);
+}
+
+/** Closed projection for the touch owner's periodic counters. No native text. */
+export function safeTouchLog(messages: readonly unknown[]): object {
+	const event = messages[0];
+	if (event !== "touch.health" && event !== "touch.state") return {};
+	const data = messages[1];
+	const state = field(data, "state");
+	if (!Schema.is(TouchState)(state)) return {};
+	if (event === "touch.state") {
+		const previous = field(data, "previous");
+		return Schema.is(TouchState)(previous)
+			? { touch: { previous, state } }
+			: {};
+	}
+	const counters = Object.fromEntries(
+		["reports", "frames", "bindAttempts", "recoveryCycle"].map((key) => {
+			const value = field(data, key);
+			return [
+				key,
+				typeof value === "number" && Number.isFinite(value)
+					? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(value)))
+					: 0,
+			];
+		}),
+	);
+	const errorCode = field(data, "errorCode");
+	const safeCode =
+		typeof errorCode === "string" &&
+		Object.values(DeviceErrors).some((error) => error.code === errorCode);
+	return { touch: { state, ...counters, ...(safeCode ? { errorCode } : {}) } };
 }

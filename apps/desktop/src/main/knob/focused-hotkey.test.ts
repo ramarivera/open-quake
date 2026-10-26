@@ -212,6 +212,7 @@ describe("focused knob hotkeys", () => {
 						_tag: "tile",
 						keyCode: "1,1",
 						angle: 0,
+						generation: 1,
 					});
 					expect(snapshot.notice).toBe("");
 					expect(snapshot.selector.mode).toBe("closed");
@@ -412,6 +413,7 @@ it("persists the failed knob/keyboard/HID spans with one trace and scrubbed orig
 							_tag: "tile",
 							keyCode: "1,1",
 							angle: 0,
+							generation: 1,
 						});
 					} finally {
 						await runtime.dispose();

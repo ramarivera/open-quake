@@ -238,28 +238,30 @@ function Disks({
 				data-support-quake-move="true"
 				aria-label="Storage drives"
 			>
-				{disks.empty ? (
-					<p>{l.noDiskDetected}</p>
-				) : disks.rows.length === 0 ? (
-					<p>Unavailable</p>
-				) : (
-					disks.rows.map((disk) => (
-						<div key={disk.name} className="monitor-disk-row">
-							<div className="monitor-disk-label">
-								<span>
-									{l.disk} ({disk.name})
-								</span>
-								<span data-testid={`sys-monitor-value-disk-${disk.name}`}>
-									{disk.summary}
-								</span>
+				<div className="monitor-disk-content">
+					{disks.empty ? (
+						<p>{l.noDiskDetected}</p>
+					) : disks.rows.length === 0 ? (
+						<p>Unavailable</p>
+					) : (
+						disks.rows.map((disk) => (
+							<div key={disk.name} className="monitor-disk-row">
+								<div className="monitor-disk-label">
+									<span>
+										{l.disk} ({disk.name})
+									</span>
+									<span data-testid={`sys-monitor-value-disk-${disk.name}`}>
+										{disk.summary}
+									</span>
+								</div>
+								<Bar value={disk.usedPercent} />
 							</div>
-							<Bar value={disk.usedPercent} />
-						</div>
-					))
-				)}
-				{disks.overflow ? (
-					<p className="monitor-overflow">{disks.overflow}</p>
-				) : null}
+						))
+					)}
+					{disks.overflow ? (
+						<p className="monitor-overflow">{disks.overflow}</p>
+					) : null}
+				</div>
 			</section>
 		</div>
 	);

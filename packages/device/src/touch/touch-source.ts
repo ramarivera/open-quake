@@ -1,4 +1,4 @@
-import { Effect, Fiber, Option, type Scope, Stream } from "effect";
+import { Effect, Fiber, Option, Schedule, type Scope, Stream } from "effect";
 import type { HidTransport } from "../hid-transport.js";
 import {
 	isTouchDevice,
@@ -36,15 +36,27 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 	};
 	let locked = false;
 	let worker = Option.none<Fiber.RuntimeFiber<void>>();
-	const state = (state: TouchState, errorCode?: string): void => {
-		const { errorCode: _previous, ...counters } = health;
-		health = { ...counters, state, ...(errorCode ? { errorCode } : {}) };
-	};
+	const state = (state: TouchState, errorCode?: string): Effect.Effect<void> =>
+		Effect.gen(function* () {
+			const previous = health.state;
+			const { errorCode: _previous, ...counters } = health;
+			health = { ...counters, state, ...(errorCode ? { errorCode } : {}) };
+			if (previous !== state)
+				yield* Effect.logInfo("touch.state", { previous, state });
+		});
+	// The application Logger owns persistence and projects only this fixed shape.
+	yield* Effect.suspend(() =>
+		Effect.logInfo("touch.health", { ...health }),
+	).pipe(
+		Effect.repeat(Schedule.spaced(60000)),
+		Effect.delay(60000),
+		Effect.forkIn(scope),
+	);
 	const bind = Effect.gen(function* () {
 		health = { ...health, bindAttempts: health.bindAttempts + 1 };
 		const discovered = yield* Effect.either(transport.discover());
 		if (discovered._tag === "Left") {
-			state("HID_ENUM_EMPTY", discovered.left.code);
+			yield* state("HID_ENUM_EMPTY", discovered.left.code);
 			return false;
 		}
 		const unique = new Map(
@@ -60,12 +72,12 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 				]),
 		);
 		if (!unique.size) {
-			state("HID_ENUM_EMPTY");
+			yield* state("HID_ENUM_EMPTY");
 			return false;
 		}
 		const info = [...unique.values()].find(isTouchDevice);
 		if (!info) {
-			state("DK_TARGET_NOT_FOUND");
+			yield* state("DK_TARGET_NOT_FOUND");
 			return false;
 		}
 		return yield* Effect.scoped(
@@ -78,18 +90,18 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 							.close()
 							.pipe(
 								Effect.catchTag("QuakeHidCloseFailed", (error) =>
-									Effect.sync(() => state("HID_READ_FAILED", error.code)),
+									state("HID_READ_FAILED", error.code),
 								),
 							),
 					),
 				);
 				if (opened._tag === "Left") {
-					state("DK_TARGET_OPEN_FAILED", opened.left.code);
+					yield* state("DK_TARGET_OPEN_FAILED", opened.left.code);
 					return false;
 				}
 				const handle = opened.right;
 				yield* Effect.addFinalizer(session.release);
-				state("TOUCH_OK");
+				yield* state("TOUCH_OK");
 				health = { ...health, recoveryCycle: 0 };
 				yield* Stream.runForEach(handle.reports, (bytes) =>
 					Effect.gen(function* () {
@@ -99,10 +111,10 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 					}),
 				).pipe(
 					Effect.catchTag("QuakeHidReadFailed", (error) =>
-						Effect.sync(() => state("HID_READ_FAILED", error.code)),
+						state("HID_READ_FAILED", error.code),
 					),
 				);
-				if (health.state === "TOUCH_OK") state("HID_READ_FAILED");
+				if (health.state === "TOUCH_OK") yield* state("HID_READ_FAILED");
 				return true;
 			}),
 		);
@@ -132,7 +144,7 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 						health.state === "HID_ENUM_EMPTY",
 					);
 					health = { ...health, recoveryCycle: health.recoveryCycle + 1 };
-					state("RECOVERING");
+					yield* state("RECOVERING");
 					failures = 0;
 					yield* Effect.sleep(delay);
 				} else yield* Effect.sleep(2000);
@@ -145,7 +157,7 @@ export const startTouchSource = Effect.fn("TouchInput.start")(function* (
 			yield* session.release();
 			if (locked) return;
 			health = { ...health, recoveryCycle: 0 };
-			state(wake ? "RECOVERING" : "UNKNOWN");
+			yield* state(wake ? "RECOVERING" : "UNKNOWN");
 			worker = Option.some(yield* supervise(wake).pipe(Effect.forkIn(scope)));
 		});
 	// DK-Suite's first poll is after 2 seconds.
