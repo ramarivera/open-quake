@@ -140,15 +140,33 @@ async function setup(
 describe("production manager thumbnail producer", () => {
 	it("cleans startup orphans and edited captures through actual profile commits while retaining other locales", async () => {
 		const obsolete = `${"a".repeat(64)}.png`;
+		const nativeUnlink = (
+			await vi.importActual<typeof import("node:fs/promises")>(
+				"node:fs/promises",
+			)
+		).unlink;
+		let startupDeleted: () => void = () => {};
+		const startupDeletion = new Promise<void>((resolve) => {
+			startupDeleted = resolve;
+		});
+		const startupUnlink = vi
+			.spyOn(filesystem, "unlink")
+			.mockImplementation(async (path) => {
+				await nativeUnlink(path);
+				if (String(path).endsWith(obsolete)) startupDeleted();
+			});
 		const profiles = await setup(undefined, async (root) => {
 			await mkdir(join(root, "profiles", "thumbnails"), { recursive: true });
 			await writeFile(join(root, "profiles", "thumbnails", obsolete), png);
 		});
 		const cache = join(fixture.root, "profiles", "thumbnails");
-		await profiles.refresh();
-		await vi.waitFor(async () =>
-			expect(await readdir(cache)).not.toContain(obsolete),
-		);
+		try {
+			await profiles.refresh();
+			await startupDeletion;
+			expect(await readdir(cache)).not.toContain(obsolete);
+		} finally {
+			startupUnlink.mockRestore();
+		}
 		await profiles.thumbnail("1-2", "de", new AbortController().signal);
 		const original = await profiles.runtime.runPromise(ProfileManager.read());
 		const manager = await profiles.runtime.runPromise(ProfileManager);

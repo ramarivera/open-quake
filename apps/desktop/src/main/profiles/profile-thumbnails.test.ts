@@ -26,7 +26,12 @@ import { createProfileThumbnailStore } from "./profile-thumbnails";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:fs/promises")>();
-	return { ...actual, open: vi.fn(actual.open), rename: vi.fn(actual.rename) };
+	return {
+		...actual,
+		open: vi.fn(actual.open),
+		rename: vi.fn(actual.rename),
+		lstat: vi.fn(actual.lstat),
+	};
 });
 vi.mock("./profile-thumbnail-key", async (importOriginal) => {
 	const actual =
@@ -264,6 +269,7 @@ describe("canonical profile thumbnail storage", () => {
 			await vi.importActual<typeof import("node:fs/promises")>(
 				"node:fs/promises",
 			);
+		vi.mocked(filesystem.lstat).mockClear();
 		const rename = vi
 			.spyOn(filesystem, "rename")
 			.mockImplementationOnce(async (...args) => {
@@ -274,10 +280,13 @@ describe("canonical profile thumbnail storage", () => {
 		try {
 			const writing = store.write(profile, "en", png);
 			await started;
-			const pruning = store.prune([profile]);
+			const pruning = store.prune([]);
+			await Promise.resolve();
+			expect(filesystem.lstat).not.toHaveBeenCalled();
 			release();
 			await Promise.all([writing, pruning]);
-			expect(Option.isSome(await store.read(profile, "en"))).toBe(true);
+			expect(Option.isNone(await store.read(profile, "en"))).toBe(true);
+			expect(await readdir(join(root, "thumbnails"))).toEqual([]);
 		} finally {
 			release();
 			rename.mockRestore();
