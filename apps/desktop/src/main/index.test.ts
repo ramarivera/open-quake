@@ -1889,6 +1889,17 @@ describe("desktop main with the real device service and fake HID", () => {
 			async () => expect(await Effect.runPromise(fake.opens)).toBe(2),
 			{ timeout: 3000 },
 		);
+		// Opening the fake handle precedes stream subscription. Wait for the bus.
+		await vi.waitFor(() =>
+			expect(
+				panel.webContents.send.mock.calls.filter(
+					([channel, event]) =>
+						channel === "quake:event" &&
+						event.kind === "status" &&
+						event.state === "connected",
+				),
+			).toHaveLength(2),
+		);
 		await Effect.runPromise(fake.emit(report(3, 2, [1])));
 		for (const window of [panel, management])
 			await vi.waitFor(() =>
@@ -2002,6 +2013,14 @@ describe("desktop main with the real device service and fake HID", () => {
 				expect(reopened.show).toHaveBeenCalledOnce();
 				expect(reopened.focus).toHaveBeenCalledOnce();
 			}
+			// The native open counter doesn't prove the new bus subscribed yet.
+			await vi.waitFor(() =>
+				expect(reopened.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "status",
+					state: "connected",
+				}),
+			);
 			await Effect.runPromise(fake.emit(report(3, 1, [0])));
 			for (const window of electron.BrowserWindow.getAllWindows())
 				await vi.waitFor(() =>
