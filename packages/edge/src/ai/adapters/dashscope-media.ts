@@ -42,13 +42,14 @@ export function makeDashscopeMediaAdapter(
 			const kind = input.profile.settings?.mediaKind;
 			if (input.profile.provider !== "qwen" || !kind)
 				return yield* new AiConfigInvalid();
+			if (input.request.tools?.length)
+				return yield* new AiCapabilityUnsupported("tools");
 			if (
-				input.request.tools?.length ||
 				input.request.messages.some((m) =>
 					m.content.some((p) => p._tag !== "text"),
 				)
 			)
-				return yield* new AiCapabilityUnsupported("tools");
+				return yield* new AiCapabilityUnsupported("images");
 			if (
 				input.profile.capabilities[
 					kind === "image" ? "imageGeneration" : "videoGeneration"

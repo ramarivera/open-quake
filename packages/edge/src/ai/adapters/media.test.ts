@@ -5,6 +5,7 @@ import {
 	Effect,
 	Either,
 	Fiber,
+	Redacted,
 	Stream,
 	TestClock,
 } from "effect";
@@ -31,6 +32,64 @@ for (const kind of ["image", "video"] as const)
 				videoGeneration: "supported" as const,
 			},
 		};
+		it.effect(
+			"identifies image and tool rejection before network access",
+			() => {
+				const adapter = makeProviderAdapter(async () => {
+					throw new Error("Rejected capabilities must not reach the network");
+				});
+				return Effect.gen(function* () {
+					for (const capability of ["images", "tools"] as const) {
+						const result = yield* Effect.either(
+							adapter.open({
+								profile,
+								request: {
+									...workflowRequest,
+									messages: [
+										{
+											role: "user",
+											content:
+												capability === "images"
+													? [
+															{
+																_tag: "image",
+																url: "https://image.invalid/fixture.png",
+															},
+														]
+													: [{ _tag: "text", text: "hello" }],
+										},
+									],
+									...(capability === "tools"
+										? {
+												tools: [
+													{
+														name: "fixture",
+														description: "fixture",
+														properties: {},
+														required: [],
+													},
+												],
+											}
+										: {}),
+								},
+								providerOptions: {},
+								credential: Redacted.make("fixture-key"),
+								signal: new AbortController().signal,
+								redirectPolicy: "error",
+								maxRetries: 0,
+							}),
+						);
+						expect(Either.isLeft(result)).toBe(true);
+						if (Either.isRight(result))
+							throw new Error("Expected capability refusal");
+						expect(result.left.code).toBe("AI.PROVIDER.CAPABILITY_UNSUPPORTED");
+						if (result.left._tag !== "AiCapabilityUnsupported")
+							throw new Error("Expected capability error");
+						expect(result.left.capability).toBe(capability);
+					}
+				});
+			},
+		);
 		it.effect(
 			"uses selected endpoint and credentials, polls correlated task, emits validated asset",
 			() => {
