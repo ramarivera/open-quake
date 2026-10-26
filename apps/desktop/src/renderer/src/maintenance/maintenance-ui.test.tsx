@@ -366,3 +366,23 @@ it("subscribes for the controller lifetime and does not let a delayed read overw
 	await ui.close();
 	expect(off).toHaveBeenCalledOnce();
 });
+
+for (const reason of ["QUAKE.APP.UPDATE_FAILED", ""]) {
+	it(`announces app update failure once with ${reason || "only a request error"}`, async () => {
+		const c = controller({
+			...view(),
+			update: {
+				state: "failed",
+				version: "1.1.0",
+				progress: 0,
+				reason,
+				prompt: true,
+			},
+		});
+		const { host } = await render(
+			{ ...c, error: "Upgrade failed, please retry later." },
+			"update",
+		);
+		expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1);
+	});
+}

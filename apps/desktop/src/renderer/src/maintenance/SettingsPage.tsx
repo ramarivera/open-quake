@@ -468,7 +468,7 @@ export function AppUpdateDialog({
 			{update.reason ? (
 				<p role="alert">Upgrade failed, please retry later.</p>
 			) : null}
-			{update.state === "failed" && c.error ? (
+			{update.state === "failed" && !update.reason && c.error ? (
 				<p role="alert">{c.error}</p>
 			) : null}
 			<footer>
