@@ -61,6 +61,9 @@ export function KnobAssistantSettings({
 	const replacementProvider = settings.modelRowId || resolvedRow?.id || "";
 	const replacementModel = settings.modelId || resolvedRow?.model || "";
 	const update = (next: AssistantSettings) => {
+		const nextRow = next.modelRowId
+			? (view?.models.default ?? []).find((r) => r.id === next.modelRowId)
+			: (view?.models.default ?? []).find((r) => r.role === "default");
 		const valid = Schema.is(AssistantSettings)(next);
 		setInvalid(!valid);
 		if (!valid || slot.config.type === "") return;
@@ -75,18 +78,11 @@ export function KnobAssistantSettings({
 								{ type: "voiceRoute", value: "direct" },
 								{
 									type: "directProvider",
-									value:
-										next.modelRowId || resolvedRow?.id || replacementProvider,
+									value: next.modelRowId || nextRow?.id || "",
 								},
 								{
 									type: "directModel",
-									value:
-										next.modelId ||
-										(view?.models.default ?? []).find(
-											(r) => r.id === next.modelRowId,
-										)?.model ||
-										resolvedRow?.model ||
-										replacementModel,
+									value: next.modelId || nextRow?.model || "",
 								},
 							],
 						}

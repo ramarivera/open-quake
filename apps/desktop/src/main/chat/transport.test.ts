@@ -345,7 +345,7 @@ it("pins a specific saved knob model before edits and dispatches through the act
 		expect(f.endpoint.calls[0]?.body.model).toBe("fixture-model");
 		for (const [id, model] of [
 			["missing", "later-model"],
-			["configured", "fixture-model"],
+			["configured", " "],
 		]) {
 			expect(
 				(
@@ -355,6 +355,10 @@ it("pins a specific saved knob model before edits and dispatches through the act
 				)._tag,
 			).toBe("Left");
 		}
+		const custom = await f.host.runtime.runPromise(
+			f.host.pinKnobModel("configured", "fixture-model"),
+		);
+		expect(custom.profile.modelId).toBe("fixture-model");
 		const denied = await v.voice.runPromise(
 			v
 				.send({

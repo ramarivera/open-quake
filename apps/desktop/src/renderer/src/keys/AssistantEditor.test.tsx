@@ -505,3 +505,49 @@ it("inactive named rows stay visible but cannot be selected for assistant dispat
 	expect(option?.hasAttribute("disabled")).toBe(true);
 	expect(option?.textContent).toContain("unavailable");
 });
+
+it("General Settings default resolves new row before writing direct knob actions", async () => {
+	bridge();
+	let saved: KnobSlot = {
+		childrenName: "assistant",
+		config: {
+			type: "assistant",
+			assistantSettings: {
+				...defaultAssistantSettings(),
+				useAgent: false,
+				modelRowId: "qwen",
+				modelId: "custom-knob",
+			},
+			actions: [
+				{ type: "voiceRoute", value: "direct" },
+				{ type: "directProvider", value: "qwen" },
+				{ type: "directModel", value: "custom-knob" },
+			],
+		},
+	};
+	function Consumer() {
+		const [slot, set] = useState(saved);
+		return (
+			<KnobAssistantSettings
+				slot={slot}
+				original={slot.config.actions}
+				onChange={(next) => {
+					saved = next;
+					set(next);
+				}}
+			/>
+		);
+	}
+	const f = await mount(<Consumer />);
+	closes.push(f.close);
+	await input(query(f.host, 'select[id$="-model"]', HTMLSelectElement), "");
+	expect(saved.config.actions).toEqual([
+		{ type: "voiceRoute", value: "direct" },
+		{ type: "directProvider", value: "openai" },
+		{ type: "directModel", value: "custom-openai" },
+	]);
+	expect(
+		"assistantSettings" in saved.config &&
+			saved.config.assistantSettings?.modelRowId,
+	).toBe("");
+});

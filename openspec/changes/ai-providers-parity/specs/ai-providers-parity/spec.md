@@ -249,3 +249,9 @@ Assistant settings SHALL link the existing Models and Speech settings consumers 
 #### Scenario: Typed input with default router enabled
 - **WHEN** a default assistant key submits typed text with Use Dekie Agent enabled
 - **THEN** text reaches Auto classification and its supported chat/HA route; voice-input settings restrict microphone transcripts independently (AI-053, AI-060)
+
+#### Scenario: Saved custom knob and General default agree with execution
+- **WHEN** a direct knob explicitly saves a bounded custom model ID outside the built-in catalog
+- **THEN** readiness and runtime pinning both accept it using the selected eligible credentialed row, without requiring duplicate assistant settings
+- **WHEN** its model selection changes to General Settings default
+- **THEN** directProvider and directModel resolve the new default before saving, never the previous row (AI-005, AI-048, AI-062)

@@ -529,7 +529,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 				pinKnobModel: Effect.fn("DesktopChat.pinKnobModel")(function* (
 					providerId: string,
 					modelId: string,
-					assistant?: AssistantSettings,
+					_assistant?: AssistantSettings,
 				): Effect.fn.Return<PinnedDirectModel, VoiceKnobRejected> {
 					const rows = yield* options
 						.models("default")
@@ -542,12 +542,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 						(r) =>
 							r.id === providerId &&
 							modelId.trim().length > 0 &&
-							modelId.length <= 200 &&
-							(modelOptions(r.provider, [r.model]).some(
-								(m) => m.id === modelId,
-							) ||
-								(assistant?.modelId === modelId &&
-									assistant.modelRowId === providerId)),
+							modelId.length <= 200,
 					);
 					const row = matches.length === 1 ? matches[0] : undefined;
 					if (!row?.model.trim() || !row.credentialRef)
