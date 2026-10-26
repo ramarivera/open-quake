@@ -4,21 +4,34 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	Deferred,
 	Effect,
 	Exit,
 	Fiber,
 	Layer,
 	ManagedRuntime,
+	Option,
 	Redacted,
 	Schema,
 	Scope,
 	Stream,
+	TestClock,
+	TestContext,
 } from "effect";
 import { describe, expect, it, vi } from "vitest";
+import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import {
 	SessionId,
 	TurnId,
 } from "../../../../../packages/edge/src/chat/chat-contracts";
+import {
+	EMPTY_HA_STORE,
+	HaStore,
+} from "../../../../../packages/edge/src/home-assistant/ha-contracts";
+import {
+	HaPorts,
+	HomeAssistantService,
+} from "../../../../../packages/edge/src/home-assistant/ha-service";
 import {
 	GridVoiceRuntime,
 	VoiceSurface,
@@ -28,6 +41,9 @@ import {
 import { CHAT_DISCONNECT, CHAT_EVENT, CHAT_REQUEST } from "../../shared/chat";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { createAgentHttpVoiceAdapter } from "../agent-http/voice-adapter";
+import { prepareDesktopModule } from "../diagnostics/module";
+import type { AssistantHaPort } from "./assistant-ha";
+import { createAssistantHaPort } from "./assistant-ha-port";
 import { createModelCredentials } from "./credentials";
 import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
@@ -42,10 +58,12 @@ function fixtureServer() {
 		path: string;
 		auth: string | undefined;
 		body: {
-			temperature?: number;
-			top_p?: number;
+			temperature?: number | undefined;
+			top_p?: number | undefined;
+			enable_search?: boolean | undefined;
+			enable_thinking?: boolean | undefined;
 			model: string;
-			messages: { role: string; content: string }[];
+			messages: readonly { readonly role: string; readonly content: string }[];
 		};
 	}[] = [];
 	let release: (() => void) | undefined;
@@ -56,7 +74,21 @@ function fixtureServer() {
 	const server = createServer(async (req, res) => {
 		let text = "";
 		for await (const chunk of req) text += String(chunk);
-		const body = JSON.parse(text);
+		const body = Schema.decodeUnknownSync(
+			Schema.parseJson(
+				Schema.Struct({
+					model: Schema.String,
+					max_tokens: Schema.optional(Schema.Number),
+					temperature: Schema.optional(Schema.Number),
+					top_p: Schema.optional(Schema.Number),
+					enable_search: Schema.optional(Schema.Boolean),
+					enable_thinking: Schema.optional(Schema.Boolean),
+					messages: Schema.Array(
+						Schema.Struct({ role: Schema.String, content: Schema.String }),
+					),
+				}),
+			),
+		)(text);
 		calls.push({ path: req.url ?? "", auth: req.headers.authorization, body });
 		res.writeHead(200, { "content-type": "text/event-stream" });
 		const part = (content: string, finish_reason: string | null = null) =>
@@ -68,7 +100,31 @@ function fixtureServer() {
 				choices: [{ index: 0, delta: { content }, finish_reason }],
 			});
 		const unreported = body.messages.at(-1)?.content === "long without usage";
-		res.write(part(unreported ? "界".repeat(800) : "fixture answer"));
+		const routing = body.messages.some(
+			(m) => m.role === "system" && m.content.includes("userRequestAction"),
+		);
+		const answer = routing
+			? JSON.stringify({
+					userRequestAction: body.messages
+						.at(-1)
+						?.content.startsWith("operate HA")
+						? "operatingEquipment"
+						: "standardChat",
+					searchOptions: { shouldDoWebSearch: false, searchString: "" },
+				})
+			: body.messages.some((m) =>
+						m.content.startsWith("Choose one Home Assistant action"),
+					)
+				? JSON.stringify({
+						entity_id:
+							body.messages.at(-1)?.content === "operate HA denied"
+								? "light.denied"
+								: "light.allowed",
+						service: "toggle",
+						service_data: {},
+					})
+				: "fixture answer";
+		res.write(part(unreported ? "界".repeat(800) : answer));
 		if (body.messages.at(-1)?.content === "block") {
 			res.on("close", () => disconnected?.());
 			release = () => res.end();
@@ -93,6 +149,11 @@ async function fixture(
 	sampling: { temperature?: number; topP?: number } = {},
 	provider = "generic",
 	initialModel = "fixture-model",
+	homeAssistant?: AssistantHaPort,
+	extra: Pick<
+		Parameters<typeof createDirectChat>[0],
+		"fetch" | "keySettings"
+	> = {},
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
 	const endpoint = fixtureServer();
@@ -122,18 +183,22 @@ async function fixture(
 	const reference = await Effect.runPromise(
 		creds.management.store(Redacted.make("fixture-key")),
 	);
+	let selectedProvider = provider;
 	let model = initialModel;
+	let role: "none" | "default" | "fallback" = "default";
 	let maxTokens = 512;
 	let baseUrl = `http://127.0.0.1:${address.port}/v1`;
 	const host = createDirectChat({
+		...extra,
 		directory,
+		...(homeAssistant ? { homeAssistant } : {}),
 		credentials: creds.ai,
 		models: () =>
 			Effect.succeed([
 				{
 					id: "configured",
-					role: "default",
-					provider,
+					role,
+					provider: selectedProvider,
 					model,
 					baseUrl,
 					maxTokens,
@@ -175,6 +240,12 @@ async function fixture(
 		setMaxTokens: (value: number) => {
 			maxTokens = value;
 		},
+		changeRole: (value: typeof role) => {
+			role = value;
+		},
+		changeProvider: (value: string) => {
+			selectedProvider = value;
+		},
 		changeModel: (value: string) => {
 			model = value;
 		},
@@ -195,6 +266,7 @@ function voiceFixture(
 	host: ReturnType<typeof createDirectChat>,
 	publish: (event: VoiceSurfaceEvent) => Effect.Effect<void>,
 	decorate = false,
+	wakeChatWindow = Effect.void,
 ) {
 	let direct:
 		| Effect.Effect.Success<ReturnType<typeof createDirectChatVoice>>
@@ -211,7 +283,7 @@ function voiceFixture(
 		Layer.scoped(
 			GridVoiceRuntime,
 			Effect.gen(function* () {
-				direct = yield* createDirectChatVoice(host, fallback);
+				direct = yield* createDirectChatVoice(host, fallback, wakeChatWindow);
 				return decorate
 					? (yield* createAgentHttpVoiceAdapter(
 							{
@@ -248,6 +320,47 @@ function voiceFixture(
 			),
 	};
 }
+
+it.each([
+	{ wake: true, voice: false, type: "aiChat", expected: 1 },
+	{ wake: true, voice: true, type: "aiChat", expected: 1 },
+	{ wake: false, voice: false, type: "aiChat", expected: 0 },
+	{ wake: true, voice: false, type: "clawbot", expected: 0 },
+] as const)(
+	"wakes saved assistant selection without inference: $wake/$voice/$type",
+	async ({ wake, voice, type, expected }) => {
+		const f = await fixture({}, "generic", "fixture-model", undefined, {
+			keySettings: () =>
+				Effect.succeed({
+					...defaultAssistantSettings(),
+					useAgent: false,
+					enableVoiceInput: voice,
+					enableWakeTalkWindow: wake,
+				}),
+		});
+		const activate = vi.fn();
+		const v = voiceFixture(
+			f.host,
+			() => Effect.void,
+			false,
+			Effect.sync(activate),
+		);
+		try {
+			await v.voice.runPromise(
+				GridVoiceRuntime.pipe(
+					Effect.flatMap((runtime) =>
+						runtime.select("device", "1,1", type, Option.none()),
+					),
+				),
+			);
+			expect(activate).toHaveBeenCalledTimes(expected);
+			expect(f.endpoint.calls).toHaveLength(0);
+		} finally {
+			await v.voice.dispose();
+			await f.close();
+		}
+	},
+);
 
 it("pins a specific saved knob model before edits and dispatches through the actual direct chat consumer", async () => {
 	const f = await fixture();
@@ -289,7 +402,7 @@ it("pins a specific saved knob model before edits and dispatches through the act
 		expect(f.endpoint.calls[0]?.body.model).toBe("fixture-model");
 		for (const [id, model] of [
 			["missing", "later-model"],
-			["configured", "fixture-model"],
+			["configured", " "],
 		]) {
 			expect(
 				(
@@ -299,6 +412,10 @@ it("pins a specific saved knob model before edits and dispatches through the act
 				)._tag,
 			).toBe("Left");
 		}
+		const custom = await f.host.runtime.runPromise(
+			f.host.pinKnobModel("configured", "fixture-model"),
+		);
+		expect(custom.profile.modelId).toBe("fixture-model");
 		const denied = await v.voice.runPromise(
 			v
 				.send({
@@ -972,6 +1089,264 @@ it("AI-010: pins an in-flight model, refreshes the next submission and revokes a
 	}
 });
 
+it("AI-041/054/055/056/059/062 binds saved assistant settings to subsequent fake-provider turns", async () => {
+	const f = await fixture();
+	try {
+		const sid = sessionId();
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			modelRowId: "configured",
+			modelId: "my-custom-model",
+			roleId: -1,
+			customPrompt: "Custom system role",
+			temperature: 1.4,
+			topP: 0.65,
+		};
+		const first = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sid, turnId: turnId(), text: "one" },
+				"main",
+				undefined,
+				settings,
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(first.events));
+		expect(f.endpoint.calls[0]?.body).toMatchObject({
+			model: "my-custom-model",
+			temperature: 1.4,
+			top_p: 0.65,
+			messages: [
+				{ role: "system", content: "Custom system role" },
+				{ role: "user", content: "one" },
+			],
+		});
+		const second = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sid, turnId: turnId(), text: "two" },
+				"main",
+				undefined,
+				{
+					...settings,
+					customPrompt: "Next role",
+					modelId: "next-custom-model",
+				},
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(second.events));
+		expect(f.endpoint.calls[1]?.body.messages).toEqual([
+			{ role: "system", content: "Next role" },
+			{ role: "user", content: "two" },
+		]);
+		expect(f.endpoint.calls[0]?.body.model).toBe("my-custom-model");
+		expect(f.endpoint.calls[1]?.body.model).toBe("next-custom-model");
+	} finally {
+		await f.close();
+	}
+});
+it("AI-053/058 router switch classifies chat and blocks equipment without dispatch", async () => {
+	const f = await fixture();
+	try {
+		const settings = {
+			...defaultAssistantSettings(),
+			modelRowId: "configured",
+		};
+		const turn = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "chat" },
+				"main",
+				undefined,
+				settings,
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(turn.events));
+		expect(f.endpoint.calls).toHaveLength(2);
+		expect(f.endpoint.calls[0]?.body.messages[0]?.content).toContain(
+			"userRequestAction",
+		);
+		const blocked = await f.host.runtime.runPromise(
+			f.host
+				.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "operate HA" },
+					"main",
+					undefined,
+					{
+						...settings,
+						homeAssistantControl: true,
+						entityIds: ["light.allowed"],
+					},
+				)
+				.pipe(Effect.either),
+		);
+		if (blocked._tag === "Left") throw blocked.left;
+		const chunks = await f.host.runtime.runPromise(
+			Stream.runCollect(blocked.right.events),
+		);
+		expect(Array.from(chunks).at(-1)).toMatchObject({
+			type: "end",
+			outcome: "failed",
+		});
+		expect(f.endpoint.calls).toHaveLength(3);
+	} finally {
+		await f.close();
+	}
+});
+
+it.each(["allowed", "denied", "revoked"] as const)(
+	"AI-058 executes only the current assistant/global HA intersection: %s",
+	async (permission) => {
+		const executed: string[] = [];
+		let reads = 0;
+		const f = await fixture({}, "generic", "fixture-model", {
+			snapshot: () =>
+				Effect.sync(() => ({
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected",
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: ["light.allowed", "light.denied"].map((entity_id) => ({
+						entity_id,
+						name: entity_id,
+						state: "off",
+						area: "",
+						attributes: {},
+					})),
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist:
+						++reads > 1 && permission === "revoked" ? [] : ["light.allowed"],
+				})),
+			execute: (key) =>
+				Effect.sync(() => {
+					executed.push(key.entity_id);
+				}),
+		});
+		try {
+			const result = await f.host.runtime.runPromise(
+				f.host
+					.submit(
+						{
+							sessionId: sessionId(),
+							turnId: turnId(),
+							text: `operate HA ${permission}`,
+						},
+						"main",
+						undefined,
+						{
+							...defaultAssistantSettings(),
+							homeAssistantControl: true,
+							entityIds: ["light.allowed"],
+						},
+					)
+					.pipe(Effect.either),
+			);
+			if (permission === "allowed") {
+				if (result._tag === "Left") throw result.left;
+				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
+				expect(executed).toEqual(["light.allowed"]);
+			} else {
+				if (result._tag === "Left") throw result.left;
+				const chunks = await f.host.runtime.runPromise(
+					Stream.runCollect(result.right.events),
+				);
+				expect(Array.from(chunks).at(-1)).toMatchObject({
+					type: "end",
+					outcome: "failed",
+				});
+				expect(executed).toEqual([]);
+			}
+			const prompt = f.endpoint.calls[1]?.body.messages[0]?.content ?? "";
+			expect(prompt).toContain("light.allowed");
+			expect(prompt).not.toContain("light.denied");
+		} finally {
+			await f.close();
+		}
+	},
+);
+
+it("AI-059 MGMT-285 sends explicit search/thinking controls and rejects unsupported search before I/O", async () => {
+	const f = await fixture({}, "qwen", "qwen3.6-plus");
+	try {
+		for (const enabled of [false, true]) {
+			const turn = await f.host.runtime.runPromise(
+				f.host.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+					"main",
+					undefined,
+					{
+						...defaultAssistantSettings(),
+						useAgent: false,
+						webSearch: enabled,
+						thinking: enabled,
+					},
+				),
+			);
+			await f.host.runtime.runPromise(Stream.runDrain(turn.events));
+			expect(f.endpoint.calls.at(-1)?.body).toMatchObject({
+				enable_search: enabled,
+				enable_thinking: enabled,
+			});
+		}
+	} finally {
+		await f.close();
+	}
+	const unsupported = await fixture();
+	try {
+		const result = await unsupported.host.runtime.runPromise(
+			unsupported.host
+				.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+					"main",
+					undefined,
+					{ ...defaultAssistantSettings(), useAgent: false, webSearch: true },
+				)
+				.pipe(Effect.either),
+		);
+		expect(result._tag).toBe("Left");
+		expect(unsupported.endpoint.calls).toHaveLength(0);
+	} finally {
+		await unsupported.close();
+	}
+});
+it.each([false, true])(
+	"AI-056 clears incompatible saved-row sampling for reasoning models, pinned=%s",
+	async (isPinned) => {
+		const f = await fixture(
+			{ temperature: 1.2, topP: 0.8 },
+			"openai",
+			"gpt-4o",
+		);
+		try {
+			const settings = {
+				...defaultAssistantSettings(),
+				useAgent: false,
+				modelId: "gpt-5.1",
+			};
+			const pinned = isPinned
+				? await f.host.runtime.runPromise(
+						f.host.pinKnobModel("configured", "gpt-5.1"),
+					)
+				: undefined;
+			const turn = await f.host.runtime.runPromise(
+				f.host.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+					"main",
+					pinned,
+					settings,
+				),
+			);
+			await f.host.runtime.runPromise(Stream.runDrain(turn.events));
+			expect(f.endpoint.calls[0]?.body.model).toBe("gpt-5.1");
+			expect(f.endpoint.calls[0]?.body.temperature).toBeUndefined();
+			expect(f.endpoint.calls[0]?.body.top_p).toBeUndefined();
+		} finally {
+			await f.close();
+		}
+	},
+);
 it("MGMT-302 resets only the selected key through the production HTTP and direct-chat composition", async () => {
 	const f = await fixture();
 	const events: VoiceSurfaceEvent[] = [];
@@ -1022,3 +1397,609 @@ it("MGMT-302 resets only the selected key through the production HTTP and direct
 		await f.close();
 	}
 });
+
+it.each(["busy", "duplicate"] as const)(
+	"rejected HA turn never executes equipment: %s",
+	async (reason) => {
+		const executed: string[] = [];
+		const f = await fixture({}, "generic", "fixture-model", {
+			snapshot: () =>
+				Effect.succeed({
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected",
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: [
+						{
+							entity_id: "light.allowed",
+							name: "Fake",
+							state: "off",
+							area: "",
+							attributes: {},
+						},
+					],
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist: ["light.allowed"],
+				}),
+			execute: (key) =>
+				Effect.sync(() => {
+					executed.push(key.entity_id);
+				}),
+		});
+		try {
+			const sid = sessionId();
+			const tid = turnId();
+			const first = await f.host.runtime.runPromise(
+				f.host.submit({
+					sessionId: sid,
+					turnId: tid,
+					text: reason === "busy" ? "block" : "hello",
+				}),
+			);
+			if (reason === "busy")
+				await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+			else await f.host.runtime.runPromise(Stream.runDrain(first.events));
+			const result = await f.host.runtime.runPromise(
+				f.host
+					.submit(
+						{
+							sessionId: sid,
+							turnId: reason === "busy" ? turnId() : tid,
+							text: "operate HA",
+						},
+						"main",
+						undefined,
+						{
+							...defaultAssistantSettings(),
+							homeAssistantControl: true,
+							entityIds: ["light.allowed"],
+						},
+					)
+					.pipe(Effect.either),
+			);
+			expect(result._tag).toBe("Left");
+			expect(executed).toEqual([]);
+			expect(f.endpoint.calls).toHaveLength(1);
+			if (reason === "busy")
+				await f.host.runtime.runPromise(f.host.cancel(sid, tid));
+		} finally {
+			await f.close();
+		}
+	},
+);
+
+it("rechecks session/profile identity after pending HA generation with TestClock", async () => {
+	const clock = ManagedRuntime.make(TestContext.TestContext);
+	const testClock = await clock.runPromise(TestClock.testClock());
+	const entered = await clock.runPromise(Deferred.make<void>());
+	const executed: string[] = [];
+	let current = true;
+	let reads = 0;
+	const f = await fixture({}, "generic", "fixture-model", {
+		snapshot: () =>
+			Effect.gen(function* () {
+				if (++reads === 1) {
+					yield* Deferred.succeed(entered, undefined);
+					yield* Effect.sleep("5 seconds");
+				}
+				return {
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected" as const,
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: [
+						{
+							entity_id: "light.allowed",
+							name: "Fake",
+							state: "off",
+							area: "",
+							attributes: {},
+						},
+					],
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist: ["light.allowed"],
+				};
+			}).pipe(Effect.withClock(testClock)),
+		execute: (key) =>
+			Effect.sync(() => {
+				executed.push(key.entity_id);
+			}),
+	});
+	try {
+		const turn = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "operate HA" },
+				"main",
+				undefined,
+				{
+					...defaultAssistantSettings(),
+					homeAssistantControl: true,
+					entityIds: ["light.allowed"],
+				},
+				() => current,
+			),
+		);
+		await clock.runPromise(Deferred.await(entered));
+		current = false;
+		await clock.runPromise(TestClock.adjust("10 seconds"));
+		const chunks = await f.host.runtime.runPromise(
+			Stream.runCollect(turn.events),
+		);
+		expect(executed).toEqual([]);
+		expect(Array.from(chunks).at(-1)).toMatchObject({
+			type: "end",
+			outcome: "failed",
+		});
+	} finally {
+		await f.close();
+		await clock.dispose();
+	}
+});
+
+it("pins Auto routing metadata while another session submits plain chat", async () => {
+	let release = () => {};
+	let entered = () => {};
+	const paused = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const classifying = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const executed: string[] = [];
+	const f = await fixture(
+		{},
+		"generic",
+		"fixture-model",
+		{
+			snapshot: () =>
+				Effect.succeed({
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected",
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: [
+						{
+							entity_id: "light.allowed",
+							name: "Fake",
+							state: "off",
+							area: "",
+							attributes: {},
+						},
+					],
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist: ["light.allowed"],
+				}),
+			execute: (key) =>
+				Effect.sync(() => {
+					executed.push(key.entity_id);
+				}),
+		},
+		{
+			fetch: async (input, init) => {
+				if (String(init?.body).includes("userRequestAction")) {
+					entered();
+					await paused;
+				}
+				return globalThis.fetch(input, init);
+			},
+		},
+	);
+	try {
+		const settings = {
+			...defaultAssistantSettings(),
+			homeAssistantControl: true,
+			entityIds: ["light.allowed"],
+		};
+		const routed = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "operate HA" },
+				"main",
+				undefined,
+				settings,
+			),
+		);
+		await classifying;
+		const plain = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+				"main",
+				undefined,
+				{ ...settings, useAgent: false },
+			),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(plain.events));
+		release();
+		const chunks = await f.host.runtime.runPromise(
+			Stream.runCollect(routed.events),
+		);
+		expect(Array.from(chunks).at(-1)).toMatchObject({
+			type: "end",
+			outcome: "completed",
+		});
+		expect(executed).toEqual(["light.allowed"]);
+		expect(f.endpoint.calls).toHaveLength(4);
+	} finally {
+		release();
+		await f.close();
+	}
+});
+
+it.each(["classification", "action"] as const)(
+	"disconnect/profile reset interrupts pending %s before equipment execution",
+	async (phase) => {
+		const clock = ManagedRuntime.make(TestContext.TestContext);
+		const entered = await clock.runPromise(Deferred.make<void>());
+		let interrupted = false;
+		const executed: string[] = [];
+		const f = await fixture(
+			{},
+			"generic",
+			"fixture-model",
+			{
+				snapshot: () =>
+					Effect.succeed({
+						origin: "http://fake.invalid",
+						tokenMask: "",
+						state: "Connected",
+						reason: "",
+						certificate: null,
+						trusted: [],
+						entities: [
+							{
+								entity_id: "light.allowed",
+								name: "Fake",
+								state: "off",
+								area: "",
+								attributes: {},
+							},
+						],
+						services: [
+							{
+								domain: "light",
+								service: "toggle",
+								name: "Toggle",
+								fields: [],
+							},
+						],
+						allowlist: ["light.allowed"],
+					}),
+				execute: (key) =>
+					Effect.sync(() => {
+						executed.push(key.entity_id);
+					}),
+			},
+			{
+				fetch: async (input, init) => {
+					const request = new Request(input, init);
+					const body = await request.clone().text();
+					if (
+						body.includes(
+							phase === "classification"
+								? "userRequestAction"
+								: "Choose one Home Assistant action",
+						)
+					)
+						await clock.runPromise(
+							Deferred.succeed(entered, undefined).pipe(
+								Effect.zipRight(Effect.sleep("5 seconds")),
+								Effect.onInterrupt(() =>
+									Effect.sync(() => {
+										interrupted = true;
+									}),
+								),
+							),
+							{ signal: request.signal },
+						);
+					return fetch(request);
+				},
+			},
+		);
+		const events: VoiceSurfaceEvent[] = [];
+		const v = voiceFixture(f.host, (event) =>
+			Effect.sync(() => {
+				events.push(event);
+			}),
+		);
+		try {
+			const runtime = await v.voice.runPromise(GridVoiceRuntime);
+			const pinned = await f.host.runtime.runPromise(
+				f.host.pinKnobModel("configured", "fixture-model"),
+			);
+			await v.voice.runPromise(
+				v.send({
+					serial: "fixture",
+					keyCode: "0,1",
+					agentId: "main",
+					message: "operate HA",
+					directModel: pinned,
+					knob: {
+						profileId: "profile",
+						revision: 1,
+						route: "direct",
+						providerId: "configured",
+						modelId: "fixture-model",
+						assistantSettings: {
+							...defaultAssistantSettings(),
+							homeAssistantControl: true,
+							entityIds: ["light.allowed"],
+						},
+					},
+				}),
+			);
+			await clock.runPromise(Deferred.await(entered));
+			await v.voice.runPromise(runtime.cancelFlow("fixture", "0,1"));
+			await clock.runPromise(TestClock.adjust("10 seconds"));
+			expect(interrupted).toBe(true);
+			expect(executed).toEqual([]);
+			expect(
+				events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toMatchObject([{ chunk: { outcome: "cancelled" } }]);
+		} finally {
+			await v.voice.dispose();
+			await f.close();
+			await clock.dispose();
+		}
+	},
+);
+
+it.each(["none", "default", "fallback"] as const)(
+	"explicit assistant row obeys saved eligibility: %s",
+	async (role) => {
+		const f = await fixture();
+		f.changeRole(role);
+		try {
+			const result = await f.host.runtime.runPromise(
+				f.host
+					.submit(
+						{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+						"main",
+						undefined,
+						{
+							...defaultAssistantSettings(),
+							useAgent: false,
+							modelRowId: "configured",
+						},
+					)
+					.pipe(Effect.either),
+			);
+			if (role === "none") {
+				expect(result._tag).toBe("Left");
+				expect(f.endpoint.calls).toHaveLength(0);
+			} else {
+				if (result._tag === "Left") throw result.left;
+				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
+				expect(f.endpoint.calls).toHaveLength(1);
+			}
+		} finally {
+			await f.close();
+		}
+	},
+);
+
+it("default assistant typed messages reach Auto routing", async () => {
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () => Effect.succeed(defaultAssistantSettings()),
+	});
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(f.host, (event) =>
+		Effect.sync(() => {
+			events.push(event);
+		}),
+	);
+	try {
+		const runtime = await v.voice.runPromise(GridVoiceRuntime);
+		await v.voice.runPromise(
+			runtime.sendText({
+				serial: "fixture",
+				keyCode: "1,1",
+				agentId: "main",
+				message: "typed hello",
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(
+				events.some((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toBe(true),
+		);
+		expect(f.endpoint.calls).toHaveLength(2);
+		expect(f.endpoint.calls[0]?.body.messages[0]?.content).toContain(
+			"userRequestAction",
+		);
+		expect(f.endpoint.calls[1]?.body.messages.at(-1)?.content).toBe(
+			"typed hello",
+		);
+		expect(events.find((e) => e._tag === "TurnStarted")).toMatchObject({
+			source: "typed",
+		});
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it.each(["cancelled", "superseded"] as const)(
+	"production HA composition drops a %s assistant turn queued behind integration work",
+	async (ending) => {
+		const executed: string[] = [];
+		const entities = [
+			{
+				entity_id: "light.allowed",
+				state: "off",
+				attributes: {},
+				area: "Other",
+			},
+		];
+		let stored: HaStore = { ...EMPTY_HA_STORE, allowlist: ["light.allowed"] };
+		let pauseWrite: Promise<void> | undefined;
+		let release = () => {};
+		let entered = () => {};
+		const writing = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const integrations = prepareDesktopModule(
+			HomeAssistantService.Default.pipe(
+				Layer.provide(
+					Layer.succeed(HaPorts, {
+						store: {
+							read: async () => stored,
+							write: async (value) => {
+								entered();
+								await pauseWrite;
+								stored = Schema.decodeUnknownSync(HaStore)(value);
+							},
+						},
+						vault: {
+							put: async () => "fake-ref",
+							get: async () => "fake-token",
+							remove: async () => {},
+						},
+						open: async () => ({
+							entities: async () => entities,
+							services: async () => [
+								{
+									domain: "light",
+									service: "toggle",
+									name: "Toggle",
+									fields: [],
+								},
+							],
+							states: async () => entities,
+							execute: async (_domain, _service, data) => {
+								executed.push(String(data.entity_id));
+							},
+							close: () => {},
+						}),
+						place: async () => {},
+					}),
+				),
+			),
+			() => ({}),
+		);
+		integrations.standalone();
+		await integrations.runtime.runPromise(
+			HomeAssistantService.connect("http://fake.invalid", "fake-token", true),
+		);
+		pauseWrite = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		// Keep the actual HA semaphore occupied without operating equipment.
+		const holding = integrations.runtime.runPromise(
+			HomeAssistantService.allowlist(["light.allowed"]),
+		);
+		await writing;
+		const calls = vi.spyOn(integrations.runtime, "runPromise");
+		const f = await fixture(
+			{},
+			"generic",
+			"fixture-model",
+			createAssistantHaPort(() => integrations.runtime),
+		);
+		let current = true;
+		try {
+			const session = sessionId(),
+				turn = turnId();
+			const accepted = await f.host.runtime.runPromise(
+				f.host.submit(
+					{ sessionId: session, turnId: turn, text: "operate HA" },
+					"main",
+					undefined,
+					{
+						...defaultAssistantSettings(),
+						homeAssistantControl: true,
+						entityIds: ["light.allowed"],
+					},
+					() => current,
+				),
+			);
+			// Two production snapshots, then execute is queued on the held semaphore.
+			await vi.waitFor(() => expect(calls).toHaveBeenCalledTimes(3));
+			if (ending === "cancelled")
+				await f.host.runtime.runPromise(f.host.cancel(session, turn));
+			else current = false;
+			release();
+			await holding;
+			await f.host.runtime.runPromise(Stream.runDrain(accepted.events));
+			// Join a subsequent locked integration operation so no detached work is left pending.
+			await integrations.runtime.runPromise(
+				HomeAssistantService.allowlist(["light.allowed"]),
+			);
+			expect(executed).toEqual([]);
+			expect(
+				(await f.host.runtime.runPromise(f.host.snapshot(session, turn)))
+					.terminal,
+			).toMatchObject({
+				_tag: "Some",
+				value: { outcome: ending === "cancelled" ? "cancelled" : "failed" },
+			});
+		} finally {
+			release();
+			await holding;
+			await f.close();
+			await integrations.runtime.dispose();
+		}
+	},
+);
+
+it.each(["", "qwen3.6-plus", "my-custom-model"])(
+	"followed General Settings provider reconciles saved Qwen controls and model on the next turn: %s",
+	async (modelId) => {
+		const f = await fixture({}, "qwen", "qwen3.6-plus");
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			thinking: true,
+			webSearch: true,
+			modelId,
+		};
+		try {
+			const submit = async () => {
+				const turn = await f.host.runtime.runPromise(
+					f.host.submit(
+						{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+						"main",
+						undefined,
+						settings,
+					),
+				);
+				return Array.from(
+					await f.host.runtime.runPromise(Stream.runCollect(turn.events)),
+				).at(-1);
+			};
+			expect(await submit()).toMatchObject({
+				type: "end",
+				outcome: "completed",
+			});
+			expect(f.endpoint.calls[0]?.body).toMatchObject({
+				model: modelId || "qwen3.6-plus",
+				enable_thinking: true,
+				enable_search: true,
+			});
+			f.changeProvider("deepseek");
+			f.changeModel("deepseek-v4-flash");
+			expect(await submit()).toMatchObject({
+				type: "end",
+				outcome: "completed",
+			});
+			expect(f.endpoint.calls).toHaveLength(2);
+			expect(f.endpoint.calls[1]?.body.model).toBe(
+				modelId === "my-custom-model" ? modelId : "deepseek-v4-flash",
+			);
+			expect(f.endpoint.calls[1]?.body.enable_thinking).toBeUndefined();
+			expect(f.endpoint.calls[1]?.body.enable_search).toBeUndefined();
+		} finally {
+			await f.close();
+		}
+	},
+);

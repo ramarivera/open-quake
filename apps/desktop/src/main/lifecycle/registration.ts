@@ -27,6 +27,7 @@ export function registerLifecycle(
 	management: () => BrowserWindow,
 	renderer: string,
 ): (() => void) & { bindManagement(): void } {
+	let pendingRedetect: Promise<LifecycleReply> | undefined;
 	ipcMain.handle(
 		LIFECYCLE_CHANNEL,
 		async (event, input: unknown): Promise<LifecycleReply> => {
@@ -42,7 +43,9 @@ export function registerLifecycle(
 				return { ok: false, code: "DESKTOP.LIFECYCLE.FORBIDDEN" };
 			if (!Schema.is(LifecycleCommand)(input))
 				return { ok: false, code: "DESKTOP.LIFECYCLE.INVALID" };
-			return runtime.runPromise(
+			if (input.action === "redetect" && pendingRedetect)
+				return pendingRedetect;
+			const operation = runtime.runPromise(
 				Effect.gen(function* () {
 					const lifecycle = yield* DeviceLifecycle;
 					switch (input.action) {
@@ -86,6 +89,13 @@ export function registerLifecycle(
 					),
 				),
 			);
+			if (input.action !== "redetect") return operation;
+			pendingRedetect = operation;
+			try {
+				return await operation;
+			} finally {
+				if (pendingRedetect === operation) pendingRedetect = undefined;
+			}
 		},
 	);
 	const clearWizard = () => {

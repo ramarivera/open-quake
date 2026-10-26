@@ -226,6 +226,12 @@ export function migrateKnobResource(
 			config: {
 				type,
 				actions: actions ?? [],
+				...(oldConfig.assistantSettings === undefined
+					? {}
+					: { assistantSettings: oldConfig.assistantSettings }),
+				...(oldConfig.animations === undefined
+					? {}
+					: { animations: oldConfig.animations }),
 				...(oldConfig.title === undefined ? {} : { title: oldConfig.title }),
 				...(oldConfig.icon === undefined ? {} : { icon: oldConfig.icon }),
 			},

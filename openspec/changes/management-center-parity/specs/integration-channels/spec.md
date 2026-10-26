@@ -52,3 +52,19 @@ Channels configured with DM pairing (Feishu's `dmPolicy: 'pairing'` and QR chann
 #### Scenario: Double click
 - **WHEN** the user clicks Approve twice quickly
 - **THEN** only one approval is sent
+
+### Requirement: WhatsApp terminal QR display
+WhatsApp setup SHALL consume the compact terminal output emitted by pinned OpenClaw 3cd1240aa7750a40a23028abbaf582b94d641868, extensions/whatsapp/src/login.ts and src/media/qr-terminal.ts. It SHALL decode ANSI-wrapped half-block modules into a PNG with a four-module quiet zone, render it in the setup drawer, replace refreshed codes, and ignore incomplete or malformed blocks. It SHALL NOT require a real account or expose the QR as a log. Sources: CENTER-078; open-quake-lih.17.24, PR108 finding 4380901925.
+
+#### Scenario: Recorded compact login output
+- **WHEN** the selected runtime prints the recorded compact WhatsApp QR output
+- **THEN** the session becomes ready with a PNG preserving every QR module and the drawer displays it
+- **AND** readiness alone never confirms authentication, while cancellation rejects later output
+
+### Requirement: Pinned WhatsApp terminal QR variants
+The channel adapter SHALL decode every compact QR size emitted by OpenClaw 3cd1240aa7750a40a23028abbaf582b94d641868 src/media/qr-terminal.ts with small:true, preserving the exact modules and a four-module PNG quiet zone. That renderer uses qrcode@1.5.4 directly, not qrcode-terminal, with no platform-dependent rendering branch. Sources: CENTER-078, PR122 finding 4381279720, bead open-quake-lih.17.24.1; extensions/whatsapp/src/login.ts onQr, src/media/qr-runtime.ts, src/cli/channels-cli.ts login, src/runtime.ts console logging. Raw QR exists in the socket callback and gateway login API but is not exposed by the selected channels login CLI, which has no JSON option. Piped Node stdout carries UTF-8 independently of Windows console code pages.
+
+#### Scenario: Every compact version and supported stream framing
+- **WHEN** the CLI emits any QR version 1 through 40, with ANSI or plain lines, LF or CRLF, or the refresh clear-screen prefix
+- **THEN** the PNG contains exactly the recorded QR modules and a white four-module quiet zone
+- **AND** tests use outputs recorded from the unmodified pinned renderer with inert payloads and no live account

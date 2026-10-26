@@ -2,28 +2,23 @@ import { Schema } from "effect";
 import { useEffect, useRef, useState } from "react";
 import {
 	newerVersion,
-	type PermissionKey,
 	RecoverySerial,
 	runningFirmware,
 } from "../../../shared/maintenance-contracts";
 import strings from "../../../shared/maintenance-strings.json";
+import { PermissionDashboard } from "../settings/PermissionDashboard";
 import { Group, PageHeader, Row } from "../ui/Form";
 import type { MaintenanceController } from "./useMaintenance";
 import "./maintenance.css";
 import { SpeechSettingsPanel } from "../speech/SpeechSettings";
 
+import { AssistantProviderSettings } from "./AssistantProviderSettings";
 import { firmwareHint } from "./firmware-guidance";
 
 export { firmwareHint } from "./firmware-guidance";
 
 const fw = strings.firmwareUpgrade;
-const permissionNames: Readonly<Record<PermissionKey, string>> = {
-	accessibility: strings.permissions.nameAccessibility,
-	inputMonitoring: strings.permissions.nameInputMonitoring,
-	microphone: strings.permissions.nameMicrophone,
-	screenRecording: strings.permissions.nameScreenRecording,
-	systemAudio: strings.permissions.nameSystemAudio,
-};
+
 export function SettingsPage({
 	controller: c,
 	children,
@@ -46,6 +41,7 @@ export function SettingsPage({
 			) : null}
 			{c.message ? <p role="status">{c.message}</p> : null}
 			{children}
+			<AssistantProviderSettings />
 			{!view ? (
 				<p role="status">Loading settings…</p>
 			) : (
@@ -192,42 +188,7 @@ export function SettingsPage({
 							</button>
 						</Row>
 					</Group>
-					{view.macOS ? (
-						<Group
-							title={strings.permissions.sectionTitle}
-							description="Live permission status. Open Settings to change access; restart the app after granting Accessibility."
-						>
-							{view.permissions.map((permission) => (
-								<Row
-									key={permission.key}
-									label={permissionNames[permission.key]}
-								>
-									<span
-										className="permission-status"
-										data-status={permission.status}
-									>
-										<span aria-hidden="true">●</span>{" "}
-										{permission.status[0]?.toUpperCase()}
-										{permission.status.slice(1)}
-									</span>
-									<button
-										type="button"
-										className="button"
-										disabled={c.busy}
-										onClick={() =>
-											void c.request({
-												action: "permission",
-												key: permission.key,
-											})
-										}
-										aria-label={`Open ${permissionNames[permission.key]} settings`}
-									>
-										Open Settings
-									</button>
-								</Row>
-							))}
-						</Group>
-					) : null}
+					{view.macOS ? <PermissionDashboard controller={c} /> : null}
 					<div className="maintenance-danger">
 						<button
 							type="button"

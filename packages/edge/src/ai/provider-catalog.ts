@@ -144,6 +144,15 @@ export function inferenceProvider(provider: string, model: string): string {
 		: canonical;
 }
 
+export function supportsThinking(provider: string, model: string): boolean {
+	const canonical = canonicalProvider(provider);
+	return (
+		canonical === "qwen" ||
+		(canonical === "openai" && model === "gpt-5.1") ||
+		(canonical === "kimi" && model === "kimi-k2.6")
+	);
+}
+
 export function supportsWebSearch(provider: string, model: string): boolean {
 	const canonical = canonicalProvider(provider);
 	return (

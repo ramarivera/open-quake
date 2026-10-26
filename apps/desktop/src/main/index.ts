@@ -18,6 +18,7 @@ import {
 } from "electron";
 import { KeyRuntime } from "../../../../packages/device/src/actions/key-runtime-service";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
+import { assistantSettingsFromActions } from "../../../../packages/device/src/profiles/assistant-contracts";
 import { ProfileManager } from "../../../../packages/device/src/profiles/profile-manager-service.js";
 import { ProfileRepository } from "../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
@@ -38,6 +39,7 @@ import { prepareAgents } from "./agents";
 import { createLocalChannelRuntime } from "./agents/channel-runtime";
 import { createLocalAgentState } from "./agents/local-state";
 import { createOwnedAgentRuntime } from "./agents/owned-runtime";
+import { createAssistantHaPort } from "./chat/assistant-ha-port";
 import { createModelCredentials } from "./chat/credentials";
 import { prepareDirectChat } from "./chat/host";
 import { registerDirectChat } from "./chat/registration";
@@ -315,7 +317,30 @@ if (!app.requestSingleInstanceLock()) {
 							),
 						);
 						const directModule = prepareDirectChat({
+							homeAssistant: createAssistantHaPort(
+								() => integrationsModule.runtime,
+							),
 							directory: join(app.getPath("userData"), "chat"),
+							keySettings: (serial, keyCode) =>
+								Effect.tryPromise({
+									try: () =>
+										profilesModule.runtime
+											.runPromise(ProfileService.loadProfiles())
+											.then(({ envelope }) => {
+												const active = envelope.activeByDevice[serial];
+												const key = envelope.profiles
+													.find((p) => p.id === active?.profileId)
+													?.pages.find((p) => p.id === active?.pageId)
+													?.keys.find((k) => k.keyCode === keyCode);
+												return (
+													key?.config.assistantSettings ??
+													(key?.config.type === "aiChat"
+														? assistantSettingsFromActions(key.config.actions)
+														: undefined)
+												);
+											}),
+									catch: (cause) => new AiConfigInvalid(cause),
+								}),
 							credentials: modelCredentials.ai,
 							diagnostics,
 							models: (scope) =>
@@ -366,7 +391,14 @@ if (!app.requestSingleInstanceLock()) {
 							},
 						});
 						const speech = createSpeechVoiceBinding({
-							direct: (fallback) => createDirectChatVoice(directChat, fallback),
+							direct: (fallback) =>
+								createDirectChatVoice(
+									directChat,
+									fallback,
+									Effect.sync(() => {
+										desktopShell.open("claw");
+									}),
+								),
 							speech: {
 								localResume: fileStore(
 									app.getPath("userData"),
@@ -395,6 +427,7 @@ if (!app.requestSingleInstanceLock()) {
 											directChat.pinKnobModel(
 												snapshot.providerId,
 												snapshot.modelId,
+												snapshot.assistantSettings,
 											),
 										),
 									),

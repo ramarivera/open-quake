@@ -804,10 +804,21 @@ async function smoke(): Promise<void> {
 		`document.querySelector('.nav-item[title="Connection"]').click(); null;`,
 	);
 	await new Promise((resolve) => setTimeout(resolve, 100));
-	assert(
-		(
-			await management.webContents.executeJavaScript("document.body.innerText")
-		).includes("both connections are normal"),
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			'document.querySelectorAll(".connection-state[data-pass=true]").length',
+		),
+		2,
+		"Both passing results persist without a background announcement",
+	);
+	// An earlier explicit retry may still own a notice. Check after its 2600ms lifetime.
+	await settle(2700);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			'document.querySelector(".connection-check [role=status]").textContent',
+		),
+		"",
+		"Background readiness must not bypass the timed notice",
 	);
 	if (artifacts)
 		await writeFile(

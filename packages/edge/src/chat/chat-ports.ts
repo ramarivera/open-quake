@@ -10,6 +10,10 @@ import { TurnSelection } from "./chat-contracts.js";
 
 export const ChatSubmit = Schema.Struct({
 	...TurnSelection.fields,
+	contextTimeoutSeconds: Schema.optional(
+		Schema.Int.pipe(Schema.between(5, 30)),
+	),
+	historyCount: Schema.optional(Schema.Int.pipe(Schema.between(0, 50))),
 	text: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(32768)),
 	systemPrompt: Schema.optional(Schema.String.pipe(Schema.maxLength(32768))),
 	contextWindowTokens: Schema.optional(

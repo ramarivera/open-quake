@@ -657,3 +657,99 @@
 		gap: 2px;
 	}
 }
+
+.installation-dialog {
+	width: min(920px, calc(100vw - 32px));
+}
+.installation-dialog .guide-frame {
+	max-height: 88vh;
+	overflow: auto;
+}
+.installation-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 16px 24px;
+}
+.installation-tabs [aria-current="step"] {
+	border-color: var(--oq-accent);
+}
+.installation-body {
+	padding: 0 28px 28px;
+}
+.installation-body li {
+	margin-block: 12px;
+	line-height: 1.6;
+}
+.installation-diagram {
+	display: block;
+	width: 100%;
+	max-height: 180px;
+	color: var(--oq-text-muted);
+	margin-block: 20px;
+}
+@media (max-width: 600px) {
+	.installation-tabs {
+		padding-inline: 16px;
+	}
+	.installation-body {
+		padding-inline: 16px;
+	}
+}
+
+.setup [hidden] {
+	display: none;
+}
+.setup-legal {
+	margin-top: 24px;
+	padding-top: 16px;
+	border-top: 1px solid var(--oq-border);
+	font-size: 12px;
+	color: var(--oq-text-muted);
+}
+.setup-notice {
+	padding: 28px;
+	max-width: min(600px, calc(100vw - 32px));
+	line-height: 1.6;
+}
+.setup-service-region {
+	display: flex;
+	gap: 12px;
+	padding: 12px 0;
+	border: 0;
+}
+.setup-service-region [aria-pressed="true"] {
+	border-color: var(--oq-accent);
+}
+.setup-dev {
+	margin-top: 20px;
+	padding: 16px;
+	border: 1px solid var(--oq-border);
+}
+.setup-permissions {
+	margin-bottom: 20px;
+	padding: 16px 20px;
+	border-left: 3px solid var(--oq-accent);
+	background: var(--oq-surface);
+}
+.setup[data-step="welcome"] .setup-layout {
+	grid-template-columns: minmax(0, 1fr);
+}
+.setup-permission-dashboard .mc-row {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding-block: 10px;
+	flex-wrap: wrap;
+}
+.setup-permission-dashboard .mc-row > :first-child {
+	flex: 1;
+	min-width: 150px;
+}
+
+.setup-notice-content pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font: inherit;
+	line-height: 1.6;
+}

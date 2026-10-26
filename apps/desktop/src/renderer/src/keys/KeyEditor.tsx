@@ -42,6 +42,7 @@ import { useWallpaper } from "../wallpaper/useWallpaper";
 import { WallpaperSettings } from "../wallpaper/WallpaperViews";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
 import { AgentKeyFields } from "./AgentKeyFields";
+import { AssistantEditor } from "./AssistantEditor";
 import { editableFocus } from "./editor-input";
 import { GridEditor, type Selection } from "./GridEditor";
 import { NativeIconPicker } from "./IconPicker";
@@ -906,6 +907,14 @@ export function KeyEditor({
 								key={key.config.type}
 								keyValue={key}
 								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
+						{["assistant", "aiChat"].includes(key.config.type) && (
+							<AssistantEditor
+								key={selection?.target.token}
+								keyValue={key}
+								disabled={saving}
 								onChange={(next) => void update(next)}
 							/>
 						)}

@@ -20,6 +20,7 @@ import {
 	channelCommandRunner,
 } from "./channel-command";
 import { createLocalAgentState, type LocalAgentState } from "./local-state";
+import { terminalQrDecoder } from "./terminal-qr";
 
 const json = <A, I>(schema: Schema.Schema<A, I>, text: string): A =>
 	Schema.decodeUnknownSync(Schema.parseJson(schema))(text);
@@ -254,6 +255,7 @@ export function createLocalChannelRuntime(options: {
 				},
 			}));
 			const controller = new AbortController();
+			const decodeQr = terminalQrDecoder();
 			let cancelled = false;
 			const cancel = () => {
 				cancelled = true;
@@ -265,9 +267,9 @@ export function createLocalChannelRuntime(options: {
 				timeoutMs: 300000,
 				onLine: (line) => {
 					if (cancelled) return;
-					const image = line.match(
-						/data:image\/png;base64,[A-Za-z0-9+/=]+/,
-					)?.[0];
+					const image =
+						decodeQr(line) ??
+						line.match(/data:image\/png;base64,[A-Za-z0-9+/=]+/)?.[0];
 					const url = line.match(/https:\/\/[^\s<>"']+/)?.[0];
 					if (image || url)
 						receive({ ...(image ? { image } : {}), ...(url ? { url } : {}) });
