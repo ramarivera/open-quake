@@ -32,11 +32,25 @@ export function pickerLayout(count: number) {
 		nameSize: Math.min(48, Math.max(26, Math.round(0.26 * height))),
 	};
 }
-export function cardRect(count: number, offset: number): Rect {
+export const pageArrowRect = (delta: -1 | 1): Rect => ({
+	x: delta === -1 ? 0 : 1760,
+	y: 130,
+	width: 160,
+	height: 220,
+});
+export function cardRect(count: number, offset: number, page = 0): Rect {
 	const layout = pickerLayout(count);
+	const rowsInPage = Math.max(
+		1,
+		Math.ceil(Math.min(15, count - page * 15) / layout.columns),
+	);
+	const gridHeight = rowsInPage * layout.height + (rowsInPage - 1) * 16;
 	return {
 		x: layout.x + (offset % layout.columns) * (layout.width + 16),
-		y: layout.y + Math.floor(offset / layout.columns) * (layout.height + 16),
+		y:
+			66 +
+			(370 - gridHeight) / 2 +
+			Math.floor(offset / layout.columns) * (layout.height + 16),
 		width: layout.width,
 		height: layout.height,
 	};
@@ -58,15 +72,12 @@ export function pickerTarget(
 ): PickerTarget {
 	const start = page * 15;
 	for (let index = start; index < Math.min(start + 15, count); index++)
-		if (inside(cardRect(count, index - start), x, y))
+		if (inside(cardRect(count, index - start, page), x, y))
 			return { kind: "card", index };
 	if (count > 15) {
-		if (page > 0 && inside({ x: 20, y: 130, width: 160, height: 220 }, x, y))
+		if (page > 0 && inside(pageArrowRect(-1), x, y))
 			return { kind: "page", delta: -1 };
-		if (
-			page < Math.ceil(count / 15) - 1 &&
-			inside({ x: 1740, y: 130, width: 160, height: 220 }, x, y)
-		)
+		if (page < Math.ceil(count / 15) - 1 && inside(pageArrowRect(1), x, y))
 			return { kind: "page", delta: 1 };
 	}
 	return { kind: "blank" };
