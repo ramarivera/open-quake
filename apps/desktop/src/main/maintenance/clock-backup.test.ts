@@ -10,19 +10,133 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, ManagedRuntime, Option } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { expect, it } from "vitest";
+import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog.js";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
+	Profile,
+	ProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import {
+	ProfileRepository,
+	profileStorageLayer,
+} from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { BackupFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { ClockLive, ClockStore } from "../clock/clock-store";
+import { clockProfileLayer } from "../profiles/clock-profile-binding";
+import { createDesktopProfileStorage } from "../profiles/local-profile-storage";
 import { readBackup } from "./backup-archive";
 import { exportBackup, prepareRestore } from "./backup-store";
 
 const profiles = () =>
 	JSON.stringify(encodeProfileEnvelope(createInitialProfileEnvelope()));
+
+it("archives every canonical profile clock and restores its media after the external source is removed", async () => {
+	const scratch = await mkdtemp(join(tmpdir(), "profile-clock-backup-"));
+	const source = join(scratch, "source");
+	const destination = join(scratch, "destination");
+	await Promise.all([source, destination].map((path) => mkdir(path)));
+	const image = join(scratch, "profile-image.png");
+	await writeFile(image, "profile-clock-image");
+	const preset = builtinProfiles("darwin").find((p) =>
+		p.pages.some((page) =>
+			page.keys.some((k) => k.config.type === "dkDesktopClock"),
+		),
+	);
+	if (!preset) throw new Error("Clock fixture missing");
+	const first = Schema.encodeSync(Profile)(preset);
+	const second = { ...first, id: "second-clock" };
+	const envelope = {
+		schemaVersion: 1,
+		clockConfigVersion: 1,
+		profiles: [first, second],
+		activeByDevice: {},
+	};
+	const owner = (root: string) =>
+		ManagedRuntime.make(
+			ProfileRepository.Default.pipe(
+				Layer.provide(
+					profileStorageLayer(
+						createDesktopProfileStorage(join(root, "profiles-v1.json")),
+					),
+				),
+			),
+		);
+	await writeFile(join(source, "profiles-v1.json"), JSON.stringify(envelope));
+	await writeFile(join(destination, "profiles-v1.json"), profiles());
+	const repository = owner(source);
+	const clocks = ManagedRuntime.make(
+		ClockLive(source, { duration: () => Effect.succeed(3000) }).pipe(
+			Layer.provide(clockProfileLayer(repository)),
+		),
+	);
+	try {
+		for (const profile of [first, second]) {
+			const target = {
+				profileId: profile.id,
+				pageId: profile.pages[0].id,
+				keyCode: "1,1",
+			};
+			await clocks.runPromise(ClockStore.stageMedia("season", image, target));
+			if (profile.id === first.id)
+				await clocks.runPromise(ClockStore.setHourFormat("12h", target));
+		}
+		const archive = await exportBackup(source);
+		await clocks.dispose();
+		await repository.dispose();
+		await rm(image);
+		await rm(source, { recursive: true });
+		const restore = await prepareRestore(archive, "profile-clocks.zip");
+		await restore.validate(destination);
+		await restore.commit(destination);
+		const restoredEnvelope = Schema.decodeUnknownSync(ProfileEnvelope)(
+			JSON.parse(await readFile(join(destination, "profiles-v1.json"), "utf8")),
+		);
+		const restoredOwner = owner(destination);
+		const restored = ManagedRuntime.make(
+			ClockLive(destination, { duration: () => Effect.succeed(3000) }).pipe(
+				Layer.provide(clockProfileLayer(restoredOwner)),
+			),
+		);
+		try {
+			const formats: string[] = [];
+			for (const profile of restoredEnvelope.profiles) {
+				const page = profile.pages.find((p) =>
+					p.keys.some((k) => k.config.type === "dkDesktopClock"),
+				);
+				if (!page) continue;
+				const target = {
+					profileId: profile.id,
+					pageId: page.id,
+					keyCode: "1,1",
+				};
+				const snapshot = await restored.runPromise(ClockStore.read(target));
+				formats.push(snapshot.hourFormat ?? "missing");
+				expect(snapshot.media.season?.available).toBe(true);
+				const selected = await restored.runPromise(
+					ClockStore.mediaPath({ theme: "season", target }),
+				);
+				if (Option.isNone(selected)) throw new Error("Restored media missing");
+				expect(
+					selected.value.startsWith(`${destination}/clock-v1/assets/`),
+				).toBe(true);
+				expect(await readFile(selected.value, "utf8")).toBe(
+					"profile-clock-image",
+				);
+			}
+			expect(formats.sort()).toEqual(["12h", "24h"]);
+		} finally {
+			await restored.dispose();
+			await restoredOwner.dispose();
+		}
+	} finally {
+		await clocks.dispose();
+		await repository.dispose();
+		await rm(scratch, { recursive: true, force: true });
+	}
+});
 
 it("restores selected external image and video through ClockStore after the originals are removed", async () => {
 	const scratch = await mkdtemp(join(tmpdir(), "clock-backup-"));

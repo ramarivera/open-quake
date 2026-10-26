@@ -5,6 +5,7 @@ import {
 	type ClockCommand,
 	ClockReply,
 	ClockSnapshot,
+	ClockTarget,
 } from "../../../../../shared/clock-contracts";
 import {
 	CLOCK_KEY_CODE,
@@ -45,7 +46,11 @@ export function newest(
 	current: ClockSnapshot | undefined,
 	next: ClockSnapshot,
 ): ClockSnapshot {
-	return current && current.revision > next.revision ? current : next;
+	return current &&
+		JSON.stringify(current.target) === JSON.stringify(next.target) &&
+		current.revision > next.revision
+		? current
+		: next;
 }
 
 export interface ClockSettings {
@@ -61,41 +66,86 @@ export function useClockSettings(
 	bridge: ClockBridge | undefined = typeof window === "undefined"
 		? undefined
 		: window.quakeClock,
+	target?: ClockTarget,
+	beforeWrite?: (() => Promise<boolean>) | undefined,
 ): ClockSettings {
 	const [snapshot, setSnapshot] = useState<ClockSnapshot>();
+	const targetId = JSON.stringify(target);
+	const resolvedTarget = useRef<ClockTarget | undefined>(undefined);
+	const sequence = useRef(0);
+	const before = useRef(beforeWrite);
+	before.current = beforeWrite;
+	const active = useRef(targetId);
+	active.current = targetId;
 	const [settled, setSettled] = useState(false);
 	const mounted = useRef(true);
 	const request = useCallback(
 		async (command: ClockCommand): Promise<ClockReply | undefined> => {
 			if (!bridge) return undefined;
+			const ticket = ++sequence.current;
+			if (
+				command._tag !== "read" &&
+				before.current &&
+				!(await before.current())
+			)
+				return undefined;
 			let reply: unknown;
 			try {
-				reply = await bridge.request(command);
+				const commandTarget = targetId
+					? Schema.decodeUnknownSync(ClockTarget)(JSON.parse(targetId))
+					: command._tag !== "read"
+						? resolvedTarget.current
+						: undefined;
+				reply = await bridge.request({
+					...command,
+					...(commandTarget ? { target: commandTarget } : {}),
+				});
 			} catch {
 				return undefined;
 			}
 			if (!Schema.is(ClockReply)(reply)) return undefined;
-			if (reply._tag === "success" && mounted.current)
+			if (
+				reply._tag === "success" &&
+				mounted.current &&
+				active.current === targetId &&
+				sequence.current === ticket
+			) {
+				resolvedTarget.current = reply.snapshot.target;
 				setSnapshot((current) => newest(current, reply.snapshot));
+			}
 			return reply;
 		},
-		[bridge],
+		[bridge, targetId],
 	);
 	useEffect(() => {
 		mounted.current = true;
 		if (!bridge) return;
+		setSnapshot(undefined);
+		setSettled(false);
+		resolvedTarget.current = targetId
+			? Schema.decodeUnknownSync(ClockTarget)(JSON.parse(targetId))
+			: undefined;
 		const off = bridge.onSnapshot((value) => {
-			if (Schema.is(ClockSnapshot)(value))
+			if (
+				Schema.is(ClockSnapshot)(value) &&
+				(!value.target ||
+					JSON.stringify(value.target) ===
+						(targetId ?? JSON.stringify(resolvedTarget.current)))
+			)
 				setSnapshot((current) => newest(current, value));
 		});
+		const offProfiles = window.quakeProfiles?.onSnapshot(() => {
+			void request({ _tag: "read" });
+		});
 		void request({ _tag: "read" }).finally(() => {
-			if (mounted.current) setSettled(true);
+			if (mounted.current && active.current === targetId) setSettled(true);
 		});
 		return () => {
 			mounted.current = false;
 			off();
+			offProfiles?.();
 		};
-	}, [bridge, request]);
+	}, [bridge, request, targetId]);
 	const selectTheme = useCallback(
 		async (themeId: ThemeId): Promise<ClockThemeResult> => {
 			if (!bridge) return { ok: false, reason: "no-target" };
@@ -110,7 +160,12 @@ export function useClockSettings(
 		[bridge, request, snapshot?.keyCode],
 	);
 	return {
-		snapshot,
+		snapshot:
+			!targetId ||
+			!snapshot?.target ||
+			JSON.stringify(snapshot.target) === targetId
+				? snapshot
+				: undefined,
 		available: !!bridge,
 		ready: !bridge || snapshot !== undefined || settled,
 		request,

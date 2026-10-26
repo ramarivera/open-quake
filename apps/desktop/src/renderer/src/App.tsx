@@ -217,11 +217,7 @@ function ManagementSurface({
 				) : page === "screen" ? (
 					<>
 						<WallpaperSettings wallpaper={wallpaper} />
-						<ClockSettings
-							hourFormat={
-								wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
-							}
-						/>
+						<ClockSettings />
 						<WeatherMediaSettings />
 						<MonitorSettings />
 					</>

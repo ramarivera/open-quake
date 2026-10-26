@@ -4,6 +4,7 @@ import {
 	ClockCommand as ClockCommandSchema,
 	type ClockReply,
 	type ClockSnapshot,
+	ClockTarget,
 	PANEL_CLOCK_COMMANDS,
 } from "../../shared/clock-contracts";
 import {
@@ -45,7 +46,7 @@ export function canRequestClock(
 }
 
 export type ClockMediaTarget =
-	| { readonly theme: string }
+	| { readonly theme: string; readonly target?: ClockTarget }
 	| { readonly candidate: string };
 
 /** Only subresource requests from the app document may read selected files. */
@@ -68,8 +69,12 @@ export function parseMediaUrl(input: string): ClockMediaTarget | null {
 		const segments = url.pathname.split("/").filter(Boolean);
 		const [value, ...rest] = segments;
 		if (!value || rest.length) return null;
-		if (url.hostname === "theme" && /^[a-z]+$/.test(value))
-			return { theme: value };
+		if (url.hostname === "theme" && /^[a-z]+$/.test(value)) {
+			const encoded = url.searchParams.get("t");
+			if (!encoded) return { theme: value };
+			const target: unknown = JSON.parse(encoded);
+			return Schema.is(ClockTarget)(target) ? { theme: value, target } : null;
+		}
 		if (url.hostname === "candidate" && /^[a-f0-9]{32}$/.test(value))
 			return { candidate: value };
 		return null;
@@ -99,34 +104,44 @@ function execute(
 ): Effect.Effect<ClockReply, ClockError> {
 	switch (command._tag) {
 		case "read":
-			return store.read().pipe(Effect.map(success));
+			return store.read(command.target).pipe(Effect.map(success));
 		case "setTheme":
-			return store.setTheme(command.keyCode, command.themeId).pipe(
-				Effect.map((outcome): ClockReply => {
-					if (outcome.ok) return success(outcome.snapshot);
-					const entry =
-						outcome.reason === "write-failed"
-							? ClockErrors.ClockPersistenceFailed
-							: ClockErrors.ClockConfigInvalid;
-					return {
-						_tag: "failure",
-						code: entry.code,
-						message: entry.message,
-						reason: outcome.reason,
-					};
-				}),
-			);
+			return store
+				.setTheme(command.keyCode, command.themeId, command.target)
+				.pipe(
+					Effect.map((outcome): ClockReply => {
+						if (outcome.ok) return success(outcome.snapshot);
+						const entry =
+							outcome.reason === "write-failed"
+								? ClockErrors.ClockPersistenceFailed
+								: ClockErrors.ClockConfigInvalid;
+						return {
+							_tag: "failure",
+							code: entry.code,
+							message: entry.message,
+							reason: outcome.reason,
+						};
+					}),
+				);
 		case "setMode":
-			return store.setMode(command.mode).pipe(Effect.map(success));
+			return store
+				.setMode(command.mode, command.target)
+				.pipe(Effect.map(success));
+		case "setHourFormat":
+			return store
+				.setHourFormat(command.hourFormat, command.target)
+				.pipe(Effect.map(success));
 		case "setSeconds":
-			return store.setSeconds(command.showSeconds).pipe(Effect.map(success));
+			return store
+				.setSeconds(command.showSeconds, command.target)
+				.pipe(Effect.map(success));
 		case "chooseMedia":
 			return chooseFile.pipe(
 				Effect.flatMap(
 					Option.match({
-						onNone: () => store.read().pipe(Effect.map(success)),
+						onNone: () => store.read(command.target).pipe(Effect.map(success)),
 						onSome: (path) =>
-							store.stageMedia(command.themeId, path).pipe(
+							store.stageMedia(command.themeId, path, command.target).pipe(
 								Effect.map(
 									(staged): ClockReply =>
 										staged._tag === "saved"
@@ -148,7 +163,9 @@ function execute(
 				.commitMedia(command.token, command.durationMs)
 				.pipe(Effect.map(success));
 		case "restoreMedia":
-			return store.restoreMedia(command.themeId).pipe(Effect.map(success));
+			return store
+				.restoreMedia(command.themeId, command.target)
+				.pipe(Effect.map(success));
 	}
 }
 

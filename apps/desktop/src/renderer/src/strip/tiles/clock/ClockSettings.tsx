@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { ClockCommand } from "../../../../../shared/clock-contracts";
+import type {
+	ClockCommand,
+	ClockTarget,
+} from "../../../../../shared/clock-contracts";
 import { THEME_IDS } from "../../../../../shared/clock-style";
-import type { HourFormat } from "../../../../../shared/display";
 import {
 	Callout,
 	Group,
@@ -47,14 +49,28 @@ const secondsOptions: ReadonlyArray<SegmentOption<"off" | "on">> = [
  * Management "Desktop clock" settings on the Screen page: live preview,
  * Theme / None, the seconds option, and theme cards with custom media. Every
  * change saves at once and reaches the strip through the snapshot broadcast
- * (WIDGETS-056/058/059). Hour format stays in the Clock group above.
+ * (WIDGETS-022/056/058/059). The selected profile key owns every setting.
  */
 export function ClockSettings({
-	hourFormat,
+	target,
+	onSaved,
+	beforeWrite,
 }: {
-	hourFormat: HourFormat;
+	target?: ClockTarget | undefined;
+	onSaved?: (() => void) | undefined;
+	beforeWrite?: (() => Promise<boolean>) | undefined;
 }): React.JSX.Element {
-	const { snapshot, available, request, selectTheme } = useClockSettings();
+	const {
+		snapshot,
+		available,
+		request,
+		selectTheme: saveTheme,
+	} = useClockSettings(undefined, target, beforeWrite);
+	const selectTheme: typeof saveTheme = async (themeId) => {
+		const result = await saveTheme(themeId);
+		if (result.ok) onSaved?.();
+		return result;
+	};
 	const enrichment = useWeatherMedia();
 	const ids = useId();
 	const strings =
@@ -97,7 +113,9 @@ export function ClockSettings({
 					durationMs: duration,
 				});
 				if (committed?._tag === "failure") setNotice(committed.message);
+				if (committed?._tag === "success") onSaved?.();
 			}
+			if (reply._tag === "success") onSaved?.();
 		} finally {
 			setBusy(false);
 		}
@@ -133,7 +151,7 @@ export function ClockSettings({
 							heightPx={width / 4}
 							now={now}
 							theme={themeOf(snapshot)}
-							hourFormat={hourFormat}
+							hourFormat={snapshot.hourFormat ?? "24h"}
 							showSeconds={snapshot.showSeconds}
 							media={mediaOf(snapshot)}
 							onThemeSelect={selectTheme}
@@ -150,6 +168,21 @@ export function ClockSettings({
 						/>
 					) : null}
 				</div>
+				<Row label={strings.settings.formatCard} labelId={`${ids}-format`}>
+					<Segmented
+						name={`${ids}-format`}
+						labelledBy={`${ids}-format`}
+						value={snapshot?.hourFormat ?? "24h"}
+						options={[
+							{ value: "24h", label: strings.settings.hourFormat24h },
+							{ value: "12h", label: strings.settings.hourFormat12h },
+						]}
+						disabled={disabled}
+						onChange={(hourFormat) =>
+							void run({ _tag: "setHourFormat", hourFormat })
+						}
+					/>
+				</Row>
 				<Row label={strings.settings.themeSection} labelId={`${ids}-mode`}>
 					<Segmented
 						name={`${ids}-mode`}

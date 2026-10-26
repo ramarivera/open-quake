@@ -88,29 +88,19 @@ export function prepareProfiles(
 	const root = join(app.getPath("userData"), "profiles");
 	const data = createDesktopProfileStorage(
 		join(app.getPath("userData"), "profiles-v1.json"),
+		undefined,
+		() =>
+			encodeProfileEnvelope(
+				Schema.decodeUnknownSync(ProfileEnvelope)({
+					schemaVersion: 1,
+					profiles: builtinProfiles(platform).map((p) =>
+						Schema.encodeSync(Profile)(p),
+					),
+					activeByDevice: {},
+				}),
+			),
 	);
-	const storage = {
-		...data,
-		read: async (): Promise<unknown> => {
-			const raw = await data.read();
-			// Only an adapter-created fresh seed is replaced. Existing users keep their custom profiles.
-			if (data.recoveries.at(-1)?.reason === "seeded") {
-				const profiles = builtinProfiles(platform);
-				const first = profiles[0];
-				if (first)
-					return {
-						...encodeProfileEnvelope(
-							Schema.decodeUnknownSync(ProfileEnvelope)({
-								schemaVersion: 1,
-								profiles: profiles.map((p) => Schema.encodeSync(Profile)(p)),
-								activeByDevice: {},
-							}),
-						),
-					};
-			}
-			return raw;
-		},
-	};
+	const storage = data;
 	const broadcast = (channel: string, value: unknown): void => {
 		for (const win of BrowserWindow.getAllWindows())
 			if (!win.isDestroyed() && !win.webContents.isDestroyed())

@@ -6,27 +6,48 @@ this folder is its main-process half: settings, IPC and custom media.
 
 ## Stored schema
 
-`<userData>/clock-v1/clock.json` keeps DK-Suite's cell shape for the
-DK-Desktop-Clock profile: `{ version: 1, revision, keys }`, where the key at
-`1,1` (`dkDesktopClock`) holds the `clockStyle` action exactly as DK-Suite
-stores it (`background.mode/themeId/themes`, `musicEnabled`) plus the
-open-quake `showSeconds` action. Profile wiring can move these actions into the
-profile key verbatim. Writes go to a temp file and are renamed into place;
-`revision` only changes when content does. Unknown key, config and action metadata survives decoding and saving. A completed rename stays successful even if temp cleanup fails. Legacy image/video media migrates before a theme patch. An unreadable file reads as
-defaults with `recovered: true` until the next save.
+Production clock settings live in `<userData>/profiles-v1.json`. Each
+`dkDesktopClock` key owns `hourFormat`, `clockStyle` and `showSeconds` actions.
+The profile owner commits updates to the explicitly named profile, page and key,
+increments that profile's revision, and preserves unrelated fields. Both the key
+editor and strip read this configuration. Two profiles can keep different formats,
+seconds options, themes and custom media after restart. Screen settings follow the
+selected preview profile's clock, falling back to the first clock when necessary.
+The editor saves its pending key draft before changing clock configuration, then
+refreshes its editing revision. Wallpaper settings no longer own clock rendering.
 
-A device theme switch (`setTheme {keyCode, themeId}`, DK-Suite's
-`clock-style:set-theme`) applies `buildClockThemePatch`: only `themeId`
-changes and `mode` becomes `theme`. Failures answer DK-Suite's reasons
-(`invalid-keycode`, `invalid-theme`, `cell-missing`, `cell-not-clock`,
-`write-failed`, …), and the tile rolls its preview back. Hour format stays in
-the wallpaper store.
+Before the first profile snapshot, the owner migrates the legacy
+`clock-v1/clock.json` and `wallpaper-v1/settings/<sha256(serial)>.json` stores.
+Existing non-default profile actions win. Missing actions and actions equal to the
+built-in defaults inherit legacy settings, then defaults. Styles match by key code.
+For hour format, serials selecting the profile win in lexical order, followed by
+`desktop-preview`, then all remaining saved serials in lexical order. Valid backup
+wallpaper files supply missing primaries. A fresh installation persists built-in
+profiles before migration, so an interrupted migration can't leave an empty seed.
+
+The profile file's atomic rename commits both migrated values and
+`clockConfigVersion: 1`. Failure keeps migration retryable. A completed migration
+doesn't read or overwrite legacy data again. Both legacy stores remain untouched,
+including on failure. Invalid legacy data stops migration without committing the
+marker. The standalone `ClockLive` without a profile port retains the legacy file
+adapter for isolated compatibility tests; the application always supplies its
+profile owner. Backups collect custom media from every canonical clock key and
+restore paths through the existing portable archive owner.
+
+A theme switch applies `buildClockThemePatch` to that clock key. Only `themeId`
+changes and `mode` becomes `theme`. Failures retain DK-Suite's reasons and the
+tile rolls its preview back. Defaults remain 24h, minute-only, season theme.
+DK-Suite 0.4.95 itself has no seconds. Evidence is
+`~/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95/audit/AUDIT_WIDGETS.md`,
+WIDGETS-030, backed by `recovered_sources/src/views/Components/dkDesktopClock.vue:140-153`.
+GAP-MAP decision 6 retains optional seconds, off by default. Both desktop-clock
+and device-screen-wallpaper specs now agree on this behavior, resolving b1b.
 
 ## Bridge and permissions
 
 `window.quakeClock` exposes `request(command)` and `onSnapshot`. Only the
 app's renderer document may call it. The strip may `read` and `setTheme`;
-`setMode`, `setSeconds`, `chooseMedia`, `commitMedia` and `restoreMedia`
+`setMode`, `setHourFormat`, `setSeconds`, `chooseMedia`, `commitMedia` and `restoreMedia`
 need the management window. Every successful change is broadcast to all
 windows.
 
@@ -34,7 +55,7 @@ windows.
 
 Slots store `{ kind, path }` like DK-Suite, but only main reads `path`.
 Renderers get `{ kind, name, url, available }` with
-`url = oq-clock-media://theme/<id>?r=<revision>`. The privileged scheme is
+`url = oq-clock-media://theme/<id>?r=<revision>&t=<encoded profile/page/key>`. The privileged scheme is
 registered before `app.whenReady()`, resolves the theme's saved slot, answers
 404 for anything else and streams through `net.fetch` with the request's
 `Range` header. Electron webRequest checks the browser-owned requesting frame before serving media. Only subresources of the exact app document and the isolated main-owned video probe may load it. Navigating an app window away revokes that document's access. Images save at once. Videos are staged as
@@ -60,3 +81,37 @@ back, 12h with seconds, custom image and recorded video, broken-media
 fallback, short-video refusal despite a forged management duration, media denial after navigation, shared wallpaper subscriptions, raw synthetic touch frames through the merged sub-target registry, and the missing-file marker. Each effective theme-button tap saves exactly once. Set
 `OPEN_QUAKE_SCRATCH` to keep its throwaway profile off the system temp
 directory. The strip itself and touch on the ◀/▶ buttons need the hardware.
+
+## Profile configuration acceptance, 2026-10-26
+
+`profiles/clock-migration.test.ts` covers fresh, legacy-only, partial, failed-write,
+repeat, serial conflicts, a physical-serial-only legacy store, corrupt legacy and
+interrupted first-start migration. `profiles/clock-profile-binding.test.ts` covers
+profile independence, restart, failed saves, invalid targets and scoped media URLs.
+`maintenance/clock-backup.test.ts` proves both profile formats and media survive an
+archive restore after the external source disappears. Existing clock timing,
+midnight/noon, locale and DST tests remain part of the full gate.
+
+The hidden native profile smoke uses the production profile owner, clock IPC,
+preload, editor and panel. It saves 12h plus seconds in A, proves B and unrelated
+fields stay unchanged, switches to 24h without seconds in B, and restarts the
+owners before checking both again. It never starts a native device bus.
+
+```sh
+pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/clock/profile-smoke.config.ts
+env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/clock-profile-smoke/profile-smoke.js <screenshot dir>
+```
+
+Native evidence is under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/clock-profile/`.
+`screenshots/profile-smoke-result.json` records 11 passing assertions. Screenshots are
+`screenshots/profile-a-12h-seconds.png`, `screenshots/profile-b-24h-minutes.png`
+and `screenshots/profile-a-after-restart.png`. Physical QUAKE acceptance remains
+open in task 4.2 and bead open-quake-t10.6.
+
+Final gates passed: Biome 1,155 files, 14 existing warnings; six-package typecheck;
+2,881 passing tests and four existing skips; build; two-mode bundle smoke;
+46/46 strict OpenSpec changes. Run the full suite with scratch variables passed
+through Turbo and package concurrency 1 to avoid parallel host contention.
+The required wallpaper native smoke passed too. Full logs are named in the
+OpenSpec tasks file. The three assigned beads remain open for lead acceptance.

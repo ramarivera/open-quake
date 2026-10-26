@@ -1,10 +1,14 @@
 import { createHash } from "node:crypto";
 import { extname, join } from "node:path";
 import { Schema } from "effect";
+import {
+	encodeProfileEnvelope,
+	ProfileAction,
+	ProfileEnvelope,
+} from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { BackupFailed } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import {
-	CLOCK_KEY_CODE,
-	isClockKey,
+	type ClockAction,
 	mediaKindOfPath,
 	normalizeClockStyle,
 	THEME_IDS,
@@ -20,66 +24,106 @@ export async function archiveClockMedia(
 	budget: BackupReadBudget,
 	signal?: AbortSignal,
 ): Promise<void> {
-	const name = "open-quake/clock-v1/clock.json";
-	const bytes = files.get(name);
-	if (!bytes) return;
 	try {
-		const record = Schema.decodeUnknownSync(ClockRecord, {
-			onExcessProperty: "preserve",
-		})(JSON.parse(Buffer.from(bytes).toString("utf8")));
-		const key = record.keys.find(
-			(key) => key.keyCode === CLOCK_KEY_CODE && isClockKey(key),
-		);
-		const action = key?.config.actions.find(
-			(action) => action.type === "clockStyle",
-		);
-		if (!action) return;
-		const normalized = normalizeClockStyle(action.value);
-		const themes = { ...normalized.background.themes };
-		if (!Object.keys(themes).length) return;
-		for (const id of THEME_IDS) {
-			const slot = themes[id];
-			if (!slot) continue;
-			if (mediaKindOfPath(slot.path) !== slot.kind) throw new BackupFailed();
-			const content = await readBackupFile(slot.path, budget, signal);
-			const hash = createHash("sha256").update(content).digest("hex");
-			const relative = `clock-v1/assets/${hash}${extname(slot.path).toLowerCase()}`;
-			const entry = `open-quake/${relative}`;
-			files.set(entry, content);
-			themes[id] = { kind: slot.kind, path: join(root, relative) };
-		}
-		const value = Schema.decodeUnknownSync(
-			Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-		)(action.value);
-		const background = Schema.decodeUnknownSync(
-			Schema.Record({ key: Schema.String, value: Schema.Unknown }),
-		)(value.background ?? {});
-		const { source: _legacy, ...rest } = background;
-		const replacement = {
-			...value,
-			background: { ...rest, ...normalized.background, themes },
+		const archiveActions = async (
+			actions: readonly ClockAction[],
+		): Promise<readonly ClockAction[]> => {
+			const result: ClockAction[] = [];
+			for (const action of actions) {
+				if (action.type !== "clockStyle") {
+					result.push(action);
+					continue;
+				}
+				const normalized = normalizeClockStyle(action.value);
+				const themes = { ...normalized.background.themes };
+				if (!Object.keys(themes).length) {
+					result.push(action);
+					continue;
+				}
+				for (const id of THEME_IDS) {
+					const slot = themes[id];
+					if (!slot) continue;
+					if (mediaKindOfPath(slot.path) !== slot.kind)
+						throw new BackupFailed();
+					const content = await readBackupFile(slot.path, budget, signal);
+					const hash = createHash("sha256").update(content).digest("hex");
+					const relative = `clock-v1/assets/${hash}${extname(slot.path).toLowerCase()}`;
+					const entry = `open-quake/${relative}`;
+					files.set(entry, content);
+					themes[id] = { kind: slot.kind, path: join(root, relative) };
+				}
+				const value = Schema.decodeUnknownSync(
+					Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+				)(action.value);
+				const background = Schema.decodeUnknownSync(
+					Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+				)(value.background ?? {});
+				const { source: _legacy, ...rest } = background;
+				const replacement = {
+					...value,
+					background: { ...rest, ...normalized.background, themes },
+				};
+				result.push({ ...action, value: replacement });
+			}
+			return result;
 		};
-		files.set(
-			name,
-			Buffer.from(
-				JSON.stringify({
-					...record,
-					keys: record.keys.map((item) =>
-						item === key
-							? {
-									...item,
-									config: {
-										...item.config,
-										actions: item.config.actions.map((item) =>
-											item === action ? { ...item, value: replacement } : item,
-										),
+		const legacyName = "open-quake/clock-v1/clock.json";
+		const legacyBytes = files.get(legacyName);
+		if (legacyBytes) {
+			const record = Schema.decodeUnknownSync(ClockRecord, {
+				onExcessProperty: "preserve",
+			})(JSON.parse(Buffer.from(legacyBytes).toString("utf8")));
+			const keys = [];
+			for (const key of record.keys)
+				keys.push(
+					key.config.type !== "dkDesktopClock"
+						? key
+						: {
+								...key,
+								config: {
+									...key.config,
+									actions: await archiveActions(key.config.actions),
+								},
+							},
+				);
+			files.set(legacyName, Buffer.from(JSON.stringify({ ...record, keys })));
+		}
+		const profileName = "open-quake/profiles-v1.json";
+		const profileBytes = files.get(profileName);
+		if (profileBytes) {
+			const envelope = encodeProfileEnvelope(
+				Schema.decodeUnknownSync(ProfileEnvelope)(
+					JSON.parse(Buffer.from(profileBytes).toString("utf8")),
+				),
+			);
+			const profiles = [];
+			for (const profile of envelope.profiles) {
+				const pages = [];
+				for (const page of profile.pages) {
+					const keys = [];
+					for (const key of page.keys)
+						keys.push(
+							key.config.type !== "dkDesktopClock"
+								? key
+								: {
+										...key,
+										config: {
+											...key.config,
+											actions: Schema.decodeUnknownSync(
+												Schema.Array(ProfileAction),
+											)(await archiveActions(key.config.actions ?? [])),
+										},
 									},
-								}
-							: item,
-					),
-				}),
-			),
-		);
+						);
+					pages.push({ ...page, keys });
+				}
+				profiles.push({ ...profile, pages });
+			}
+			files.set(
+				profileName,
+				Buffer.from(JSON.stringify({ ...envelope, profiles })),
+			);
+		}
 	} catch (cause) {
 		throw cause instanceof BackupFailed ? cause : new BackupFailed(cause);
 	}
