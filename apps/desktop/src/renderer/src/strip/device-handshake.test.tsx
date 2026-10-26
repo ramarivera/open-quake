@@ -11,7 +11,10 @@ import {
 import type { OpenQuakeBridge, QuakeEvent } from "../../../preload/quake";
 import type { DeviceReadySnapshot } from "../../../shared/hardware-contracts";
 import { ProfileEnvelope } from "../../../shared/profiles";
-import { initialStripProfile } from "../../../shared/strip-selection";
+import {
+	initialStripProfile,
+	selectStripPage,
+} from "../../../shared/strip-selection";
 import type { StripMessage } from "../../../shared/strip-transport";
 import { stripLayout } from "./geometry";
 import { useDeviceReady } from "./useDeviceReady";
@@ -300,5 +303,27 @@ it("SCREEN-018 never reports a transient emoji-back page as a persisted active p
 		type: "reportConfig",
 		keyMatrix: { row: 2, col: 8 },
 		appVersion: "0.0.0",
+	});
+});
+
+it("SCREEN-018 first-run panel and outbound handshake select the same colorful profile", async () => {
+	vi.stubGlobal("openQuake", events());
+	vi.stubGlobal("quakeDeviceReady", {
+		read: async () => ({ _tag: "ready", snapshot: snapshot() }),
+	});
+	const send = vi.fn(async () => ({ ok: true }));
+	vi.stubGlobal("quakeStripTransport", { send });
+	const value = { ...decode(stripFixtureEnvelope()), activeByDevice: {} };
+	function Panel() {
+		useDeviceReady("A", { _tag: "ready", envelope: value });
+		return <output>{selectStripPage(value, "A").profile.id}</output>;
+	}
+	const { root, node } = host();
+	await act(async () => root.render(<Panel />));
+	expect(node.textContent).toBe(vividProfile.id);
+	expect(send).toHaveBeenLastCalledWith("session-A", {
+		type: "reportActiveProfile",
+		resourceId: node.textContent,
+		version: vividProfile.revision,
 	});
 });

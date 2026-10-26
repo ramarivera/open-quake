@@ -1,5 +1,9 @@
 import { Option, Predicate } from "effect";
-import type { ProfileKey } from "./profile-contracts.js";
+import type {
+	Profile,
+	ProfileEnvelope,
+	ProfileKey,
+} from "./profile-contracts.js";
 import {
 	effectiveSpan,
 	type Footprint,
@@ -185,3 +189,24 @@ export const moveOrSwapProfileKeys = (
 		? { _tag: "Applied", keys: moved }
 		: { _tag: "Rejected", reason: "layout" };
 };
+
+/** The first screen-ready menu selects Colorful Screen for first connection enrollment. */
+export function initialStripProfile(envelope: ProfileEnvelope): Profile {
+	const hidden = Option.isSome(envelope.manager)
+		? envelope.manager.value.hidden
+		: [];
+	const visible = envelope.profiles.filter(
+		(profile) => !hidden.includes(profile.id),
+	);
+	return (
+		visible.find(
+			(profile) =>
+				profile.id === "1-4" ||
+				profile.pages.some((page) =>
+					page.keys.some((key) => key.config.type === "colorfulScreen"),
+				),
+		) ??
+		visible[0] ??
+		envelope.profiles[0]
+	);
+}
