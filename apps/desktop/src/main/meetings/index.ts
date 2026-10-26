@@ -1,3 +1,4 @@
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -373,9 +374,20 @@ export function prepareMeetings(
 							);
 							if (!record) return yield* meetingError("Invalid");
 							if (command._tag === "reveal") {
-								shell.showItemInFolder(
-									join(root, record.id, "final_recording.mp3"),
-								);
+								yield* Effect.tryPromise({
+									try: async () => {
+										const directory = join(root, record.id);
+										const audio = join(directory, "final_recording.mp3");
+										if (
+											!(await lstat(root)).isDirectory() ||
+											!(await lstat(directory)).isDirectory() ||
+											!(await lstat(audio)).isFile()
+										)
+											throw new Error("Invalid managed audio");
+										shell.showItemInFolder(audio);
+									},
+									catch: (cause) => meetingError("AudioMissing", cause),
+								});
 								break;
 							}
 							const artifact = exportArtifact(record, command.artifact);

@@ -12,13 +12,38 @@ export const TemplateId = Schema.Literal(
 	"interview",
 );
 export type TemplateId = typeof TemplateId.Type;
+export const titleWeight = (title: string): number =>
+	Array.from(title).reduce(
+		(weight, character) =>
+			weight + ((character.codePointAt(0) ?? 0) <= 127 ? 1 : 2),
+		0,
+	);
+export const MeetingTitle = Schema.NonEmptyTrimmedString.pipe(
+	Schema.filter((title) => titleWeight(title) <= 100, {
+		message: () => "Meeting title must be at most 100 weighted characters",
+	}),
+);
+export const Word = Schema.Struct({ text: Text, startMs: Count, endMs: Count });
 export const Segment = Schema.Struct({
 	id: Schema.NonEmptyString,
 	speaker: Schema.String,
 	startMs: Count,
 	endMs: Count,
 	text: Text,
-});
+	words: Schema.optional(Schema.Array(Word).pipe(Schema.maxItems(20000))),
+}).pipe(
+	Schema.filter(
+		(segment) =>
+			segment.endMs >= segment.startMs &&
+			(segment.words ?? []).every(
+				(word, index, words) =>
+					word.startMs >= segment.startMs &&
+					word.endMs >= word.startMs &&
+					word.endMs <= segment.endMs &&
+					(index === 0 || word.startMs >= (words[index - 1]?.endMs ?? 0)),
+			),
+	),
+);
 export type Segment = typeof Segment.Type;
 export const Mark = Schema.Struct({
 	startMs: Count,
@@ -48,7 +73,7 @@ export const MeetingConfig = Schema.Struct({
 export type MeetingConfig = typeof MeetingConfig.Type;
 export const MeetingRecord = Schema.Struct({
 	id: MeetingId,
-	parentId: Schema.OptionFromNullOr(MeetingId),
+	parentId: Schema.OptionFromNullOr(Schema.Union(MeetingId, Count)),
 	title: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(100)),
 	startedAt: Count,
 	endedAt: Schema.OptionFromNullOr(Count),
@@ -61,6 +86,7 @@ export const MeetingRecord = Schema.Struct({
 		"failed",
 		"interrupted",
 	),
+	processingAttempt: Schema.optional(Count),
 	audio: TaskState,
 	transcription: TaskState,
 	summary: TaskState,
@@ -78,11 +104,15 @@ export const MeetingRecord = Schema.Struct({
 		}),
 	),
 	errorCode: Schema.OptionFromNullOr(Schema.String),
+	attendeeCount: Schema.optional(Count),
 	config: MeetingConfig,
 });
 export type MeetingRecord = typeof MeetingRecord.Type;
 export const MeetingStore = Schema.Struct({
 	version: Schema.Literal(1),
+	summaryTemplate: Schema.optionalWith(TemplateId, {
+		default: () => "project-weekly" as const,
+	}),
 	records: Schema.Array(MeetingRecord),
 });
 export type MeetingStore = typeof MeetingStore.Type;
@@ -138,7 +168,7 @@ export const MeetingCommand = Schema.Union(
 	Schema.TaggedStruct("template", { id: MeetingId, template: TemplateId }),
 	Schema.TaggedStruct("rename", {
 		id: MeetingId,
-		title: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(100)),
+		title: MeetingTitle,
 	}),
 	Schema.TaggedStruct("delete", {
 		id: MeetingId,
