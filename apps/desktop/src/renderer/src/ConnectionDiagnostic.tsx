@@ -59,8 +59,7 @@ export function DiagnosticView({
 		status?.usb === "pass" && status.hdmi === "pass" && status.issue === "none";
 	const supportAvailable =
 		typeof window !== "undefined" &&
-		!!window.quakeManagement &&
-		"command" in window.quakeManagement;
+		window.quakeManagement?.externalLinks === true;
 	return (
 		<section className="connection-check" aria-labelledby="connection-title">
 			<header>

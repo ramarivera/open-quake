@@ -249,7 +249,7 @@ it.each(["missing", "invalid"] as const)(
 			.spyOn(BrowserWindow, "getAllWindows")
 			.mockReturnValue([management]);
 		const deliver = vi.fn(async (_serial: string, _profile: unknown) => {});
-		const profiles = registerProfiles(
+		const profiles = registerTestProfiles(
 			() => management,
 			electron.frame.url,
 			deliver,

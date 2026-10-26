@@ -493,7 +493,7 @@ silent. A failed request SHALL leave the last results readable and retryable.
 #### Scenario: Project support
 - **WHEN** the user follows Contact Support
 - **THEN** the app opens only the fixed project GitHub issues URL through the
-  native external-link handler, never a vendor account or arbitrary URL
+  management-only isolated preload after a trusted top-frame click, never a vendor account or arbitrary URL. The link SHALL be available only when that preload advertises external-link handling
 
 ### Requirement: Setup first-run ownership and welcome
 
@@ -623,6 +623,7 @@ not a second picker inside the strip/key editor.
 - **WHEN** a user leaves device settings and chooses a different serial/session
 - **THEN** the new device's saved state replaces the old draft, and settling the
   old device request cannot mutate or overwrite the new device
+- **AND** the actual serial/session picker delegates selection to the canonical owner and remounts controls with the new session
 ### Requirement: Retained migration and host capability ownership
 
 The shell SHALL keep retained capabilities behind decoded, authenticated feature contracts with context isolation enabled and Node integration disabled. Plugin configuration and per-user ChatHistory migration SHALL preserve local durable data through their canonical feature owners, omit credentials, and never import transient selected-device, port or upgrade state. Missing plugin, camera, gaming, assistant-window or report owners SHALL remain explicit incomplete parity, rather than unimplemented successful replies. Evidence: MAIN-124, MAIN-129, MAIN-130, MAIN-133, MAIN-134, SCREEN-012.

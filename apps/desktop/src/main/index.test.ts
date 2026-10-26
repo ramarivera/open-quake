@@ -1256,6 +1256,51 @@ describe("desktop window lifecycle", () => {
 		},
 	);
 
+	it("SETTINGS-015 production permission composition restores Settings and blocks hide/close through the 1600ms handoff", async () => {
+		if (process.platform !== "darwin") return;
+		const { management } = windows();
+		const options = vi.mocked(registerMaintenance).mock.calls[0]?.[0];
+		if (
+			!options ||
+			typeof options !== "object" ||
+			!("permissionFlow" in options) ||
+			typeof options.permissionFlow !== "function"
+		)
+			throw new Error("Missing shell permission flow");
+		const command = electron.ipcMain.handle.mock.calls.find(
+			([name]) => name === "management:command",
+		)?.[1];
+		const close = management.on.mock.calls.find(
+			([name]) => name === "close",
+		)?.[1];
+		if (!command || !close) throw new Error("Missing shell guards");
+		const sender = {
+			sender: management.webContents,
+			senderFrame: management.webContents.mainFrame,
+		};
+		const hide = () =>
+			Reflect.apply(command, undefined, [sender, { action: "hide" }]);
+		management.hide.mockClear();
+		management.isMinimized.mockReturnValue(true);
+		const release: unknown = options.permissionFlow();
+		if (typeof release !== "function")
+			throw new Error("Missing permission release");
+		expect(management.restore).toHaveBeenCalled();
+		expect(management.show).toHaveBeenCalled();
+		hide();
+		const event = { preventDefault: vi.fn() };
+		close(event);
+		expect(event.preventDefault).toHaveBeenCalledOnce();
+		expect(management.hide).not.toHaveBeenCalled();
+		release();
+		await vi.advanceTimersByTimeAsync(1599);
+		hide();
+		expect(management.hide).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		hide();
+		expect(management.hide).toHaveBeenCalledOnce();
+	});
+
 	it("MGMT-006 blocks navigation and popups and retains the approved minimum and platform chrome", () => {
 		const { management } = windows();
 		expect(management.options).toMatchObject({
@@ -1300,6 +1345,16 @@ describe("desktop window lifecycle", () => {
 		);
 		expect(electron.shell.openExternal).toHaveBeenCalledExactlyOnceWith(
 			"https://github.com/ramarivera/open-quake",
+		);
+		external(
+			{
+				sender: management.webContents,
+				senderFrame: management.webContents.mainFrame,
+			},
+			"https://github.com/ramarivera/open-quake/issues",
+		);
+		expect(electron.shell.openExternal).toHaveBeenLastCalledWith(
+			"https://github.com/ramarivera/open-quake/issues",
 		);
 	});
 

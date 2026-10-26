@@ -5,13 +5,15 @@ import type {
 	HardwareBridge,
 	HardwareResponse,
 } from "../../../shared/hardware-contracts";
+import type { DeviceChoiceRequest } from "../../../shared/management";
 import { App } from "../App";
-import { button, click, element, mount } from "../management/dom-test";
+import { button, click, element, input, mount } from "../management/dom-test";
 
 vi.mock("../keys/KeyEditor", () => ({ KeyEditor: () => null }));
 vi.mock("../keys/IconPicker", () => ({ IconPickerSurface: () => null }));
 afterEach(() => {
 	Reflect.deleteProperty(window, "quakeHardware");
+	Reflect.deleteProperty(window, "quakeManagement");
 	localStorage.clear();
 });
 it("MGMT-044 leaves device controls during a pending save and drops its old-session completion after returning for another device", async () => {
@@ -33,6 +35,25 @@ it("MGMT-044 leaves device controls during a pending save and drops its old-sess
 		},
 	});
 	let selected = "A";
+	const devices = vi.fn(async (command: typeof DeviceChoiceRequest.Type) => {
+		if (command.action === "select") selected = command.device.serial;
+		return {
+			selected,
+			devices: ["A", "B"].map((serial) => ({
+				serial,
+				session: `session-${serial}`,
+			})),
+		};
+	});
+	Object.defineProperty(window, "quakeManagement", {
+		configurable: true,
+		value: {
+			devices,
+			platform: "darwin",
+			onActivate: () => () => {},
+			setTheme: async () => true,
+		},
+	});
 	let finish: (value: HardwareResponse) => void = () => {};
 	const request = vi.fn<HardwareBridge["request"]>(async (command) => {
 		if (command._tag === "configure")
@@ -53,8 +74,12 @@ it("MGMT-044 leaves device controls during a pending save and drops its old-sess
 	);
 	await click(element("[data-nav-page=overview]"));
 	expect(element(".content-inner").getAttribute("data-page")).toBe("overview");
-	selected = "B"; // The selected-hardware owner changes while controls are unmounted.
 	await click(element("[data-nav-page=controls]"));
+	await input(element<HTMLSelectElement>(".shell-device-picker select"), "B");
+	expect(devices).toHaveBeenCalledWith({
+		action: "select",
+		device: { serial: "B", session: "session-B" },
+	});
 	expect(document.body.textContent).toContain("B · Mock device");
 	await act(async () => finish(reply("A")));
 	expect(document.body.textContent).toContain("B · Mock device");

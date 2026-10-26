@@ -213,15 +213,15 @@ PR #105 review fix 4379719107 keeps the mounted city verifier across locale chan
 
 PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated profile capture locale before mounting App. The real renderer-entry regression fails with English MON on the preceding implementation and passes with German MO, OKT 26 and localized theme navigation, including every observed ready preview. Fourteen focused profile/live-locale cases and desktop typecheck pass. Capture windows still use no management/panel locale bridge.
 
-## 8. Setup burn-down lane
+## 9. Setup burn-down lane
 
-- [x] 8.1 First-run startup, welcome/legal reading, locale/region confirmation and lifecycle ownership. MAIN-055/056/125, SETTINGS-011/051/053/054/055/056. Bead open-quake-lih.14.1.
-- [ ] 8.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
-- [ ] 8.3 User-triggered permission recovery and once-only startup guidance with mock probes. MAIN-128, SETTINGS-015. Bead open-quake-lih.14.3.
-- [ ] 8.4 Verify selected-device handoff and pending-edit switching after shell dependency merges. MGMT-042/044. Bead open-quake-lih.14.2.
-- [x] 8.5 Retain the existing management-owned setup page under Ramiro's explicit equivalent-window approval, with close-to-overview and reload recovery tests. SETTINGS-052. Bead open-quake-lih.14.1.
-- [x] 8.6 Prove QUAKE calibration rejection before writes. SETTINGS-072. Bead open-quake-lih.14.2.
-- [x] 8.7 Record Ramiro's explicit SETTINGS-071 exclusion, 2026-10-26. Bead open-quake-lih.14.2; memory oq-scope-exclusions-setup.
+- [x] 9.1 First-run startup, welcome/legal reading, locale/region confirmation and lifecycle ownership. MAIN-055/056/125, SETTINGS-011/051/053/054/055/056. Bead open-quake-lih.14.1.
+- [ ] 9.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
+- [ ] 9.3 User-triggered permission recovery and once-only startup guidance with mock probes. MAIN-128, SETTINGS-015. Bead open-quake-lih.14.3.
+- [x] 9.4 Verify selected-device handoff and pending-edit switching after shell dependency merges. MGMT-042/044. Bead open-quake-lih.14.2.
+- [x] 9.5 Retain the existing management-owned setup page under Ramiro's explicit equivalent-window approval, with close-to-overview and reload recovery tests. SETTINGS-052. Bead open-quake-lih.14.1.
+- [x] 9.6 Prove QUAKE calibration rejection before writes. SETTINGS-072. Bead open-quake-lih.14.2.
+- [x] 9.7 Record Ramiro's explicit SETTINGS-071 exclusion, 2026-10-26. Bead open-quake-lih.14.2; memory oq-scope-exclusions-setup.
 
 Setup lane implementation evidence, 2026-10-26: `setup-mounted.test.tsx` covers
 first-run admission, explicit-navigation races, leave/reload/resume, development
@@ -236,10 +236,7 @@ Ramiro approved SETTINGS-054 on 2026-10-26. The root MIT LICENSE with Ramiro
 Rivera's copyright and local EN/DE privacy/software notices are bundled into
 Welcome. The mounted consent test reads all three offline, proves reading/closing
 doesn't save, then advances only on Get Started. No vendor terms or OS permission
-grants follow from that consent. Tasks 8.2/8.3/8.4 await shell
-PR #113 for safe external support-link handling, permission visibility pinning and
-the serial/session picker integration. The setup lane uses compatible existing
-owners and doesn't duplicate shell window ownership. SETTINGS-071 is excluded.
+grants follow from that consent. Shell PR #113 is merged as b160a2e. PR #118 now uses the management-only preload command for Restart Now, its explicit external-link capability for the fixed support destination, the shell visibility owner for permission requests, and its serial/session picker for pending-edit switching. Production-root tests cover restart draining, trusted support navigation and the 1600ms close/hide pin; mounted tests use the actual preload and picker. Bead open-quake-lih.14.4 retains integration and review delivery evidence. SETTINGS-071 is excluded.
 
 
 Shell scope decision, 2026-10-26: Ramiro explicitly excluded dormant vendor features and ARIS-only flows. MGMT-008, MGMT-014, MGMT-432, MGMT-433 and SETTINGS-017 are approved exclusions, not implemented parity. The corresponding decision remains open in open-quake-lih.17.17 for lead reconciliation.
