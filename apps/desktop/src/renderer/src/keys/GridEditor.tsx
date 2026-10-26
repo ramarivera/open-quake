@@ -26,6 +26,7 @@ import { occupiedCells } from "../../../../../../packages/device/src/profiles/pr
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { footprintRect, stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
+import { useStripSettings } from "../strip/stripSettings";
 import {
 	type WallpaperController,
 	WallpaperSettings,
@@ -100,6 +101,7 @@ function libraryKey(
 export function GridEditor({
 	profile,
 	page,
+	saving,
 	serial,
 	locale,
 	selection,
@@ -118,6 +120,7 @@ export function GridEditor({
 }: {
 	readonly profile: Profile;
 	readonly page: ProfilePage;
+	readonly saving: boolean;
 	readonly serial: string;
 	readonly locale: ProfileLocale;
 	readonly selection: Selection | undefined;
@@ -137,7 +140,11 @@ export function GridEditor({
 	const key = selection?.key;
 	const layout = stripLayout(profile, page);
 	const wallpaper = wallpaperController.snapshot;
+	const { settings: stripSettings } = useStripSettings();
 	const [mirrorPressed, setMirrorPressed] = useState<string>();
+	useEffect(() => {
+		if (saving) setMirrorPressed(undefined);
+	}, [saving]);
 	const drag = useRef<GridDrag | undefined>(undefined);
 	const placementPending = useRef(false);
 	const [dragging, setDragging] = useState<GridDrag>();
@@ -487,7 +494,12 @@ export function GridEditor({
 			<fieldset
 				className="keys-preview"
 				onPointerDownCapture={(event) => {
-					const rect = event.currentTarget.getBoundingClientRect();
+					if (savePending.current) return;
+					const rect =
+						event.currentTarget
+							.querySelector(".strip-screen")
+							?.getBoundingClientRect() ??
+						event.currentTarget.getBoundingClientRect();
 					const tile = tileAt(
 						{
 							x: ((event.clientX - rect.left) * 1920) / rect.width,
@@ -517,6 +529,7 @@ export function GridEditor({
 					// Capture before nested controls, including programmatic clicks.
 					event.preventDefault();
 					event.stopPropagation();
+					if (savePending.current) return;
 					if (layout.vivid) {
 						void revert();
 						setVividSettings(true);
@@ -536,7 +549,11 @@ export function GridEditor({
 						else void choose(hit);
 						return;
 					}
-					const frame = event.currentTarget.getBoundingClientRect();
+					const frame =
+						event.currentTarget
+							.querySelector(".strip-screen")
+							?.getBoundingClientRect() ??
+						event.currentTarget.getBoundingClientRect();
 					const point = {
 						x: ((event.clientX - frame.left) * 1920) / frame.width,
 						y: ((event.clientY - frame.top) * 480) / frame.height,
@@ -572,7 +589,7 @@ export function GridEditor({
 						previewSerial="editor-preview"
 						wallpaper={wallpaper}
 						profiles={{ _tag: "ready", envelope: previewEnvelope }}
-						showEmptyGridDashedBorder
+						showEmptyGridDashedBorder={stripSettings.showEmptyGridDashedBorder}
 					/>
 				</StripViewport>
 				{layout.vivid ? (

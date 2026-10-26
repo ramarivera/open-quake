@@ -672,6 +672,7 @@ export function KeyEditor(): React.JSX.Element {
 				<GridEditor
 					profile={profile}
 					page={page}
+					saving={saving}
 					serial={serial}
 					locale={locale}
 					selection={selection}

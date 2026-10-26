@@ -827,6 +827,81 @@ it("MGMT-096 repeated publications preserve an unchanged draft and a pending Sav
 	expect(f.calls.filter((c) => c.type === "save")).toHaveLength(1);
 });
 
+it("MGMT-055 SETTINGS-013 shares the saved border preference with the actual key editor", async () => {
+	const storageKey = "open-quake.strip.v1";
+	localStorage.setItem(
+		storageKey,
+		JSON.stringify({ version: 1, showEmptyGridDashedBorder: false }),
+	);
+	const f = await fixture();
+	const screen = query(f.host, ".keys-preview .strip-screen", HTMLDivElement);
+	expect(screen.dataset.dashed).toBe("false");
+	for (const show of [true, false]) {
+		await act(async () =>
+			window.dispatchEvent(
+				new StorageEvent("storage", {
+					key: storageKey,
+					newValue: JSON.stringify({
+						version: 1,
+						showEmptyGridDashedBorder: show,
+					}),
+				}),
+			),
+		);
+		expect(screen.dataset.dashed).toBe(String(show));
+	}
+});
+
+it("MGMT-058 uses the painted mirror bounds and suppresses disabled press feedback", async () => {
+	const f = await fixture();
+	const preview = query(f.host, ".keys-preview", HTMLFieldSetElement);
+	const screen = query(preview, ".strip-screen", HTMLDivElement);
+	// Painted canvas can be inset by the border or by letterboxing.
+	vi.spyOn(preview, "getBoundingClientRect").mockReturnValue(
+		new DOMRect(0, 0, 1000, 500),
+	);
+	vi.spyOn(screen, "getBoundingClientRect").mockReturnValue(
+		new DOMRect(20, 130, 960, 240),
+	);
+	const down = async () =>
+		act(async () =>
+			preview.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					clientX: 70,
+					clientY: 180,
+				}),
+			),
+		);
+	await down();
+	expect(
+		preview
+			.querySelector('[data-key-code="1,1"]')
+			?.getAttribute("data-pressed"),
+	).toBe("true");
+	await act(async () =>
+		preview.dispatchEvent(new PointerEvent("pointerup", { bubbles: true })),
+	);
+	expect(preview.querySelector('[data-pressed="true"]')).toBeNull();
+	await f.select();
+	const release = f.pauseWrite();
+	try {
+		await click(button(f.host, "Save"));
+		await settle(() =>
+			expect(
+				f.host.querySelector(".key-editor")?.getAttribute("aria-busy"),
+			).toBe("true"),
+		);
+		await down();
+		expect(preview.querySelector('[data-pressed="true"]')).toBeNull();
+	} finally {
+		release();
+	}
+	await settle(() =>
+		expect(f.host.textContent).toContain("Saved successfully"),
+	);
+});
+
 it("MGMT-280 count/add-step focus and Back preserve the real key draft", async () => {
 	const f = await fixture();
 	await f.select();
