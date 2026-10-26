@@ -206,6 +206,7 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 		settings.background === "custom"
 			? settings.media[settings.styleId]
 			: undefined,
+		tile.key.keyCode,
 	);
 	return (
 		<div

@@ -92,7 +92,10 @@ export const MonitorCommand = Schema.Union(
 		settings: MonitorSettings,
 	}),
 	Schema.TaggedStruct("chooseMedia", { styleId: StyleId }),
-	Schema.TaggedStruct("resolveMedia", { slot: MediaSlot }),
+	Schema.TaggedStruct("resolveMedia", {
+		slot: MediaSlot,
+		keyCode: Schema.optionalWith(Schema.String, { exact: true }),
+	}),
 	Schema.TaggedStruct("watch", { active: Schema.Boolean }),
 );
 export type MonitorCommand = typeof MonitorCommand.Type;

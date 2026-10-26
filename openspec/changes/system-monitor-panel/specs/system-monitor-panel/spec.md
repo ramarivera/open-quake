@@ -150,3 +150,9 @@ The gameModeMonitorConfig compatibility field SHALL round-trip in monitor storag
 
 - **WHEN** an imported record contains an active gameModeMonitorConfig and is saved and restarted
 - **THEN** the legacy value survives as inert data while only the explicit current override controls monitoring
+
+#### Scenario: Panel media reads enforce committed selected-key ownership
+
+- **WHEN** a live panel requests media for a key code and opaque slot
+- **THEN** main resolves the key from the committed active profile and page, verifies the active custom style's exact slot, and refuses cross-profile, other-key, missing-key and forged-slot requests before reading bytes
+- **AND** panel settings reads and broadcasts contain metadata only; an allowed same-key request returns its media bytes

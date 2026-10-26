@@ -44,3 +44,7 @@ and disk sub-touch. Screenshots and logs are external to git under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/monitor-panels/`.
 Physical acceptance remains task 6.1. Windows/Linux native commands remain
 fixture-tested only. All three burn-down beads stay open for lead merge.
+
+## 8. PR #100 review round
+
+- [x] 8.1 Enforce committed selected-key media ownership in main with failing-before IPC regression coverage. Bead open-quake-lih.8.5; review 4378998297.

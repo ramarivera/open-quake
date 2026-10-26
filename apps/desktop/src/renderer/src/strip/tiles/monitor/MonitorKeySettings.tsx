@@ -18,6 +18,7 @@ export const isMonitorKey = (key: ProfileKey): boolean =>
 	["systemMonitorPanel", "cpuInfo", "gpuInfo"].includes(key.config.type);
 export function useMonitorKeyMedia(
 	slot: ReturnType<typeof monitorKeySettings>["media"][StyleId],
+	keyCode?: string,
 ): MediaView | undefined {
 	const [resolved, setResolved] = useState<{ id: string; view: MediaView }>();
 	const id = slot?.id,
@@ -29,7 +30,11 @@ export function useMonitorKeyMedia(
 			id && kind && name !== undefined ? { id, kind, name } : undefined;
 		if (slot && window.quakeMonitor)
 			void window.quakeMonitor
-				.request({ _tag: "resolveMedia", slot })
+				.request({
+					_tag: "resolveMedia",
+					slot,
+					...(keyCode === undefined ? {} : { keyCode }),
+				})
 				.then((reply) => {
 					if (
 						active &&
@@ -53,7 +58,7 @@ export function useMonitorKeyMedia(
 		return () => {
 			active = false;
 		};
-	}, [id, kind, name]);
+	}, [id, kind, name, keyCode]);
 	return slot && resolved?.id === slot.id ? resolved.view : undefined;
 }
 export function MonitorKeySettings({

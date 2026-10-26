@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { BrowserWindow, dialog, ipcMain } from "electron";
+import type { ProfileKey } from "../../../../../packages/device/src/profiles/profile-contracts";
 import {
 	type MetricCollector,
 	MonitorCollector,
@@ -18,6 +19,7 @@ import {
 	type SettingsView,
 } from "../../shared/monitor-contracts";
 import {
+	MonitorConfigInvalid,
 	MonitorErrors,
 	MonitorMediaUnusable,
 	MonitorVideoTooShort,
@@ -45,6 +47,7 @@ export function prepareMonitor(
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
 	diagnostics?: DesktopDiagnostics,
+	panelKey?: (keyCode: string) => Promise<ProfileKey | undefined>,
 ) {
 	const prepared = prepareDesktopModule(
 		Layer.merge(
@@ -68,7 +71,10 @@ export function prepareMonitor(
 			const broadcastSettings = (view: SettingsView): void => {
 				for (const win of new Set([management(), panel()]))
 					if (win && !win.isDestroyed() && trusted(win.webContents))
-						win.webContents.send(MONITOR_SETTINGS, view);
+						win.webContents.send(
+							MONITOR_SETTINGS,
+							win === management() ? view : { ...view, media: {} },
+						);
 			};
 			const restart = (): Promise<void> => {
 				const next = transition.then(async () => {
@@ -201,22 +207,34 @@ export function prepareMonitor(
 						await restart();
 						return {
 							_tag: "success",
-							view: await runtime.runPromise(MonitorStore.read()),
+							view: await runtime.runPromise(
+								MonitorStore.read(undefined, isManagement),
+							),
 						};
 					}
 					const execute = Effect.gen(function* () {
 						const store = yield* MonitorStore;
 						switch (command._tag) {
-							case "resolveMedia":
+							case "resolveMedia": {
+								const key =
+									!isManagement && command.keyCode !== undefined && panelKey
+										? yield* Effect.tryPromise({
+												try: () => panelKey(command.keyCode ?? ""),
+												catch: () => new MonitorConfigInvalid(),
+											})
+										: undefined;
 								return {
 									_tag: "media",
 									slot: command.slot,
-									view: yield* store.resolveMedia(command.slot),
+									view: yield* isManagement
+										? store.resolveMedia(command.slot)
+										: store.resolvePanelMedia(command.slot, key),
 								} as const;
+							}
 							case "read":
 								return {
 									_tag: "success",
-									view: yield* store.read(command.styleId),
+									view: yield* store.read(command.styleId, isManagement),
 								} as const;
 							case "save":
 								return {

@@ -45,6 +45,7 @@ import { stripFixtureEnvelope } from "../test/strip-fixtures";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { registerMonitor } from "./index";
 import { nativeCollector } from "./native-collector";
+import { activeMonitorKey } from "./panel-media";
 
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1");
 const artifactsArgument = process.argv[2] ?? "";
@@ -323,6 +324,13 @@ async function smoke(): Promise<void> {
 					}),
 			},
 			renderer,
+			undefined,
+			async (keyCode) => {
+				const { envelope } = await profileRuntime.runPromise(
+					ProfileRepository.load(),
+				);
+				return activeMonitorKey(envelope, "desktop-preview", keyCode);
+			},
 		);
 		const knob = registerKnob(
 			() => panel,

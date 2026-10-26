@@ -72,6 +72,7 @@ import {
 import { MediaLive, registerMedia } from "./media";
 import { prepareMeetings } from "./meetings";
 import { prepareMonitor } from "./monitor";
+import { activeMonitorKey } from "./monitor/panel-media";
 import { prepareObs } from "./obs";
 import { obsKeyAction } from "./obs/key-action";
 import { visibleObsKeys } from "./obs/visibility";
@@ -498,6 +499,12 @@ if (!app.requestSingleInstanceLock()) {
 							undefined,
 							rendererURL,
 							diagnostics,
+							async (keyCode) => {
+								const { envelope } = await profilesModule.runtime.runPromise(
+									ProfileRepository.load(),
+								);
+								return activeMonitorKey(envelope, activeDeviceId(), keyCode);
+							},
 						);
 						const hardwareModule = prepareDesktopModule(
 							Layer.merge(
