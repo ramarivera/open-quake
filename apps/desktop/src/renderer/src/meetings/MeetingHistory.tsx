@@ -221,7 +221,7 @@ function MeetingDocument({
 export function MeetingHistory({
 	activation = 0,
 }: {
-	activation?: number;
+	readonly activation?: number;
 }): React.JSX.Element {
 	useMeetingActivation(activation);
 	const { snapshot, error } = useMeetings();

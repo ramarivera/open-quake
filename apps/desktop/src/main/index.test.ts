@@ -1554,6 +1554,32 @@ describe("desktop main with the real device service and fake HID", () => {
 				"quake:event",
 				expect.objectContaining({ kind: "rotate" }),
 			);
+			const json = new Uint8Array(32);
+			json.set([0xa1, 0, 7, 123, 34, 120, 34, 58, 49, 125, 33]);
+			const resource = new Uint8Array(32);
+			resource.set([0xa2, 0, 11, 2, 1, 2, 8, 0, 0, 0, 255, 216, 255, 217, 191]);
+			await Effect.runPromise(two.second.emit(json));
+			await Effect.runPromise(two.second.emit(resource));
+			await vi.waitFor(() =>
+				expect(second.webContents.send).toHaveBeenCalledWith(
+					"quake:event",
+					expect.objectContaining({
+						kind: "resource",
+						envelope: expect.objectContaining({ metadata: [1, 2, 8, 0, 0] }),
+					}),
+				),
+			);
+			expect(second.webContents.send).toHaveBeenCalledWith("quake:event", {
+				source: "hid",
+				kind: "json",
+				value: { x: 1 },
+			});
+			for (const kind of ["json", "resource"])
+				expect(first.webContents.send).not.toHaveBeenCalledWith(
+					"quake:event",
+					expect.objectContaining({ kind }),
+				);
+
 			await vi.waitFor(() =>
 				expect(knob?.onDevice).toHaveBeenCalledWith({
 					source: "hid",
@@ -1604,7 +1630,7 @@ describe("desktop main with the real device service and fake HID", () => {
 			});
 
 			two.devices.splice(1, 1);
-			await vi.advanceTimersByTimeAsync(1000);
+			await vi.advanceTimersByTimeAsync(7000);
 			await vi.waitFor(() =>
 				expect(profiles?.disconnect).toHaveBeenCalledWith("B"),
 			);
@@ -1633,7 +1659,7 @@ describe("desktop main with the real device service and fake HID", () => {
 			const panel = vi.mocked(registerMonitor).mock.calls.at(-1)?.[2];
 			await vi.waitFor(() => expect(panel?.()).toBe(removed));
 			two.devices.splice(1, 1);
-			await vi.advanceTimersByTimeAsync(1000);
+			await vi.advanceTimersByTimeAsync(7000);
 			await vi.advanceTimersByTimeAsync(2500);
 			expect(removed.isDestroyed()).toBe(false);
 			await vi.advanceTimersByTimeAsync(2500);

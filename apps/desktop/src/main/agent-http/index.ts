@@ -177,6 +177,8 @@ export function prepareAgentHttp(options: AgentHttpOptions) {
 			service ? service.stream(...args) : Stream.fail(new RuntimeUnavailable()),
 		cancel: (...args: Parameters<typeof ConversationService.Service.cancel>) =>
 			service ? service.cancel(...args) : Effect.void,
+		clear: (...args: Parameters<typeof ConversationService.Service.clear>) =>
+			service ? service.clear(...args) : Effect.fail(new RuntimeUnavailable()),
 		generation: () => generation,
 	};
 	const backend = createAgentRuntimeAdapter({

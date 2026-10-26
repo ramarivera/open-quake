@@ -25,7 +25,9 @@ export const startMockHardwareBus = Effect.fn("MockHardwareBus.start")(
 			Effect.sync(() => startMockDeviceBus(scripted)),
 			(bus) => Effect.sync(() => bus.stop()),
 		);
-		const fake = yield* makeFakeHardwareTransport();
+		const fake = yield* makeFakeHardwareTransport({
+			serial: "desktop-preview",
+		});
 		const device = yield* QuakeDevice.pipe(
 			Effect.provide(
 				QuakeDevice.DefaultWithoutDependencies.pipe(Layer.provide(fake.layer)),

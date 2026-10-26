@@ -1,4 +1,5 @@
 import type { ChannelDescriptor } from "./channel-contracts.js";
+import metadata from "./channel-locales.json";
 /** CENTER-072/073, recovered background.js channel catalog, all regions visible. */
 export const CHANNEL_CATALOG: readonly ChannelDescriptor[] = [
 	{
@@ -129,3 +130,24 @@ export const credentialFields = (
 };
 export const maskSecret = (value: string) =>
 	value ? `••••${value.slice(-4)}` : "";
+
+/** CENTER-072/073. Metadata transcribed from DK-Suite 0.4.95's recovered catalog. */
+export function localizedChannelCatalog(
+	locale: string,
+): readonly ChannelDescriptor[] {
+	const language = locale.toLowerCase().split(/[-_]/)[0];
+	const key =
+		language === "zh" ||
+		language === "ja" ||
+		language === "ko" ||
+		language === "de" ||
+		language === "fr" ||
+		language === "es" ||
+		language === "it"
+			? language
+			: "en";
+	return CHANNEL_CATALOG.map((entry) => ({
+		...entry,
+		...metadata[entry.id][key],
+	}));
+}
