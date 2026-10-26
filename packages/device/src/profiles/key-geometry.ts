@@ -7,16 +7,25 @@ import {
 	keyFootprint,
 	layoutIssues,
 	occupiedCells,
+	parseProfileCoordinate,
 } from "./profile-invariants.js";
 
 export interface KeyGeometry {
 	readonly destination?: string | undefined;
 	readonly replaceOverlaps?: boolean | undefined;
+	readonly placement?: boolean | undefined;
 }
 export type KeyLayoutResult =
 	| { readonly _tag: "ready"; readonly keys: readonly ProfileKey[] }
 	| { readonly _tag: "confirmation"; readonly keyCodes: readonly string[] }
-	| { readonly _tag: "rejected" };
+	| {
+			readonly _tag: "rejected";
+			readonly reason?:
+				| "outOfBounds"
+				| "locked"
+				| "sizeMismatch"
+				| "spaceNotEnough";
+	  };
 
 /** Apply one editor draft to committed keys. Swaps retain both complete configs. */
 export function editKeyLayout(
@@ -27,6 +36,47 @@ export function editKeyLayout(
 	const original = keys.find((k) => k.keyCode === key.keyCode);
 	const destination = geometry.destination ?? key.keyCode;
 	const moving = destination !== key.keyCode;
+	if (Option.isNone(parseProfileCoordinate(destination)))
+		return { _tag: "rejected", reason: "outOfBounds" };
+	if (geometry.placement) {
+		if (
+			original &&
+			(!keyEditable(original, "allowDelete") ||
+				!keyEditable(original, "allowDrag") ||
+				original.config.type === "colorfulScreen")
+		)
+			return { _tag: "rejected", reason: "locked" };
+		const cells = new Set(occupiedCells(key));
+		const overlaps = keys.filter(
+			(other) =>
+				!isEmptyCell(other) &&
+				other.config.display &&
+				occupiedCells(other).some((cell) => cells.has(cell)),
+		);
+		if (
+			overlaps.some(
+				(other) =>
+					!keyEditable(other, "allowDelete") ||
+					!keyEditable(other, "allowDrag") ||
+					["back", "emojiBack", "colorfulScreen"].includes(other.config.type),
+			)
+		)
+			return { _tag: "rejected", reason: "locked" };
+		if (overlaps.length && !geometry.replaceOverlaps)
+			return {
+				_tag: "confirmation",
+				keyCodes: overlaps.map((other) => other.keyCode),
+			};
+		const next = [
+			...keys.filter(
+				(other) => other.keyCode !== key.keyCode && !overlaps.includes(other),
+			),
+			key,
+		];
+		return layoutIssues(next).length === 0
+			? { _tag: "ready", keys: next }
+			: { _tag: "rejected" };
+	}
 	if (original) {
 		const sizeChanged = original.config.size.some(
 			(n, i) => n !== key.config.size[i],
@@ -47,8 +97,16 @@ export function editKeyLayout(
 	let next = [...keys.filter((k) => k.keyCode !== key.keyCode), key];
 	if (moving) {
 		const target = keys.find((k) => k.keyCode === destination);
+		if (
+			target &&
+			!isEmptyCell(target) &&
+			effectiveSpan(target.config.type, target.config.size).some(
+				(n, i) => n !== effectiveSpan(key.config.type, key.config.size)[i],
+			)
+		)
+			return { _tag: "rejected", reason: "sizeMismatch" };
 		if (target && !keyEditable(target, "allowDrag"))
-			return { _tag: "rejected" };
+			return { _tag: "rejected", reason: "locked" };
 		next = next.map((k) =>
 			k === key
 				? { ...k, keyCode: destination }

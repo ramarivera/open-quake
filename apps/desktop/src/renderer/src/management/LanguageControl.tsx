@@ -1,11 +1,10 @@
-import { type AppLocale, useAppLocale, useAppTranslations } from "../i18n";
+import "../i18n/language-control.css";
+import { APP_LANGUAGES } from "../../../shared/locale";
+import { useAppLocale, useAppTranslations } from "../i18n";
 import { Segmented } from "../ui/Form";
 
 /** Languages are always offered in their own name, never translated. */
-const languages: ReadonlyArray<{ value: AppLocale; label: string }> = [
-	{ value: "en", label: "English" },
-	{ value: "de", label: "Deutsch" },
-];
+const languages = APP_LANGUAGES;
 
 const failures: Readonly<Record<string, string>> = {
 	"QUAKE.SETTINGS.READ_FAILED": "The saved language could not be read.",
@@ -27,7 +26,7 @@ export function LanguageControl({
 }): React.JSX.Element {
 	const { locale, setLocale, loading, error } = useAppLocale();
 	return (
-		<>
+		<div className="app-language-control">
 			<Segmented
 				name={name}
 				labelledBy={labelledBy}
@@ -41,6 +40,6 @@ export function LanguageControl({
 					{failures[error] ?? "The language could not be changed."}
 				</span>
 			) : null}
-		</>
+		</div>
 	);
 }

@@ -1,0 +1,570 @@
+{
+	"zh": {
+		"picker": {
+			"title": "Profile 切换",
+			"currentPrefix": "当前",
+			"currentBadge": "当前",
+			"knobHint": "转动选择 · 短按确认",
+			"pageHint": "请点击切换或超时后自动切换",
+			"previousPage": "上一页",
+			"nextPage": "下一页",
+			"language": "语言"
+		},
+		"translationLanguages": {
+			"en": "英语",
+			"zh": "中文",
+			"ru": "俄语",
+			"fr": "法语",
+			"de": "德语",
+			"pt": "葡萄牙语",
+			"es": "西班牙语",
+			"it": "意大利语",
+			"id": "印尼语",
+			"ko": "韩语",
+			"ja": "日语",
+			"vi": "越南语",
+			"th": "泰语",
+			"ar": "阿拉伯语",
+			"yue": "粤语",
+			"hi": "印地语",
+			"el": "希腊语",
+			"tr": "土耳其语"
+		},
+		"app": {
+			"language": "语言"
+		},
+		"settings": {
+			"general": {
+				"heading": "通用",
+				"language": "语言",
+				"login": "开机自启动",
+				"hidden": "后台启动"
+			},
+			"setup": {
+				"locale": {
+					"language": "语言"
+				}
+			}
+		},
+		"clock": {
+			"title": "桌面时钟",
+			"description": "屏幕条上的时钟按键。‹ 和 › 按钮也会切换并保存主题。",
+			"theme": "主题",
+			"seconds": "秒",
+			"secondsHint": "关闭后仅显示小时和分钟。",
+			"on": "开",
+			"off": "关",
+			"themeDescription": "使用内置图片，或为每个主题选择自己的图片或至少 2 秒的视频。",
+			"selected": "已选择",
+			"unavailable": "时钟服务不可用。请重新加载窗口。",
+			"openDesktop": "请打开桌面应用以更改时钟设置。",
+			"recovered": "无法读取已保存的时钟设置，当前显示默认值。任何更改都会保存新设置。",
+			"cached": "已缓存",
+			"high": "高",
+			"low": "低",
+			"saveFailed": "无法保存设置，请重试。",
+			"ipLookup": "通过 IP 地址查找我的城市",
+			"ipConsent": "默认关闭。城市为空时，会将你的公网 IP 地址发送至 ipapi.co，失败时发送至 ipwho.is，以估算城市。在上方输入城市即可在不查询 IP 的情况下使用天气。"
+		},
+		"regionSuggestions": {
+			"advisory": "仅供参考。请在设置中配置服务商及凭据。已有选择保持不变。",
+			"chat": "聊天",
+			"speech": "语音",
+			"translation": "实时翻译模型",
+			"title": "地区建议"
+		}
+	},
+	"en": {
+		"picker": {
+			"title": "Switch profile",
+			"currentPrefix": "Current",
+			"currentBadge": "Current",
+			"knobHint": "Rotate to choose · press to confirm",
+			"pageHint": "Tap to switch, or it switches automatically on timeout",
+			"previousPage": "Previous Page",
+			"nextPage": "Next Page",
+			"language": "Language"
+		},
+		"translationLanguages": {
+			"en": "English",
+			"zh": "Chinese",
+			"ru": "Russian",
+			"fr": "French",
+			"de": "German",
+			"pt": "Portuguese",
+			"es": "Spanish",
+			"it": "Italian",
+			"id": "Indonesian",
+			"ko": "Korean",
+			"ja": "Japanese",
+			"vi": "Vietnamese",
+			"th": "Thai",
+			"ar": "Arabic",
+			"yue": "Cantonese",
+			"hi": "Hindi",
+			"el": "Greek",
+			"tr": "Turkish"
+		},
+		"clock": {
+			"title": "Desktop clock",
+			"description": "The clock key on your strip. Its ‹ and › buttons switch and save the theme too.",
+			"theme": "Theme",
+			"seconds": "Seconds",
+			"secondsHint": "Off shows hours and minutes only.",
+			"on": "On",
+			"off": "Off",
+			"themeDescription": "Built-in art, or your own image or video of at least 2 seconds per theme.",
+			"selected": "Selected",
+			"unavailable": "Clock service is unavailable. Reload the window.",
+			"openDesktop": "Open the desktop app to change clock settings.",
+			"recovered": "Saved clock settings couldn't be read, so defaults are shown. Any change saves new settings.",
+			"cached": "Cached",
+			"high": "H",
+			"low": "L",
+			"saveFailed": "Settings could not be saved. Please retry.",
+			"ipLookup": "Find my city from my IP address",
+			"ipConsent": "Off by default. With an empty city, this sends your public IP address to ipapi.co, or ipwho.is if that fails, to estimate your city. Enter a city above to use weather without IP lookup."
+		},
+		"regionSuggestions": {
+			"advisory": "Suggestions only. Configure a provider and credentials in settings to use it. Existing choices stay selected.",
+			"chat": "Chat",
+			"speech": "Speech",
+			"translation": "Live translation model",
+			"title": "Regional suggestions"
+		}
+	},
+	"es": {
+		"picker": {
+			"title": "Cambiar perfil",
+			"currentPrefix": "Actual",
+			"currentBadge": "Actual",
+			"knobHint": "Gira para elegir · pulsa para confirmar",
+			"pageHint": "Toca para cambiar o cambiará automáticamente al agotarse el tiempo",
+			"previousPage": "Página anterior",
+			"nextPage": "Página siguiente",
+			"language": "Idioma"
+		},
+		"translationLanguages": {
+			"en": "Inglés",
+			"zh": "Chino",
+			"ru": "Ruso",
+			"fr": "Francés",
+			"de": "Alemán",
+			"pt": "Portugués",
+			"es": "Español",
+			"it": "Italiano",
+			"id": "Indonesio",
+			"ko": "Coreano",
+			"ja": "Japonés",
+			"vi": "Vietnamita",
+			"th": "Tailandés",
+			"ar": "Árabe",
+			"yue": "Cantonés",
+			"hi": "Hindi",
+			"el": "Griego",
+			"tr": "Turco"
+		},
+		"app": {
+			"language": "Idioma"
+		},
+		"settings": {
+			"general": {
+				"heading": "General",
+				"language": "Idioma",
+				"login": "Iniciar al arrancar",
+				"hidden": "Inicio en segundo plano"
+			},
+			"setup": {
+				"locale": {
+					"language": "Idioma"
+				}
+			}
+		},
+		"clock": {
+			"title": "Reloj de escritorio",
+			"description": "La tecla de reloj de la barra. Los botones ‹ y › también cambian y guardan el tema.",
+			"theme": "Tema",
+			"seconds": "Segundos",
+			"secondsHint": "Desactivado muestra solo horas y minutos.",
+			"on": "Activado",
+			"off": "Desactivado",
+			"themeDescription": "Imágenes incluidas o una imagen o un vídeo propio de al menos 2 segundos por tema.",
+			"selected": "Seleccionado",
+			"unavailable": "El servicio del reloj no está disponible. Recarga la ventana.",
+			"openDesktop": "Abre la aplicación de escritorio para cambiar el reloj.",
+			"recovered": "No se pudieron leer los ajustes del reloj. Se muestran los valores predeterminados. Cualquier cambio guarda nuevos ajustes.",
+			"cached": "En caché",
+			"high": "Máx.",
+			"low": "Mín.",
+			"saveFailed": "No se pudieron guardar los ajustes. Inténtalo de nuevo.",
+			"ipLookup": "Buscar mi ciudad a partir de mi dirección IP",
+			"ipConsent": "Desactivado por defecto. Sin ciudad, se envía tu IP pública a ipapi.co, o a ipwho.is si falla, para estimar tu ciudad. Introduce una ciudad arriba para usar el tiempo sin buscar la IP."
+		},
+		"regionSuggestions": {
+			"advisory": "Solo sugerencias. Configura un proveedor y sus credenciales en Ajustes. Se conserva tu selección actual.",
+			"chat": "Chat",
+			"speech": "Voz",
+			"translation": "Modelo de traducción en directo",
+			"title": "Sugerencias regionales"
+		}
+	},
+	"fr": {
+		"picker": {
+			"title": "Changer de profil",
+			"currentPrefix": "Actuel",
+			"currentBadge": "Actuel",
+			"knobHint": "Tournez pour choisir · appuyez pour confirmer",
+			"pageHint": "Touchez pour changer, sinon changement automatique à l’expiration du délai",
+			"previousPage": "Page précédente",
+			"nextPage": "Page suivante",
+			"language": "Langue"
+		},
+		"translationLanguages": {
+			"en": "Anglais",
+			"zh": "Chinois",
+			"ru": "Russe",
+			"fr": "Français",
+			"de": "Allemand",
+			"pt": "Portugais",
+			"es": "Espagnol",
+			"it": "Italien",
+			"id": "Indonésien",
+			"ko": "Coréen",
+			"ja": "Japonais",
+			"vi": "Vietnamien",
+			"th": "Thaïlandais",
+			"ar": "Arabe",
+			"yue": "Cantonais",
+			"hi": "Hindi",
+			"el": "Grec",
+			"tr": "Turc"
+		},
+		"app": {
+			"language": "Langue"
+		},
+		"settings": {
+			"general": {
+				"heading": "Général",
+				"language": "Langue",
+				"login": "Démarrer au démarrage",
+				"hidden": "Démarrage en arrière-plan"
+			},
+			"setup": {
+				"locale": {
+					"language": "Langue"
+				}
+			}
+		},
+		"clock": {
+			"title": "Horloge de bureau",
+			"description": "La touche horloge de votre bandeau. Ses boutons ‹ et › changent et enregistrent aussi le thème.",
+			"theme": "Thème",
+			"seconds": "Secondes",
+			"secondsHint": "Désactivé affiche uniquement les heures et les minutes.",
+			"on": "Activé",
+			"off": "Désactivé",
+			"themeDescription": "Images intégrées, ou une image ou une vidéo personnelle d’au moins 2 secondes par thème.",
+			"selected": "Sélectionné",
+			"unavailable": "Le service d’horloge est indisponible. Rechargez la fenêtre.",
+			"openDesktop": "Ouvrez l’application de bureau pour régler l’horloge.",
+			"recovered": "Les réglages enregistrés sont illisibles. Les valeurs par défaut sont affichées. Toute modification enregistre de nouveaux réglages.",
+			"cached": "En cache",
+			"high": "Max.",
+			"low": "Min.",
+			"saveFailed": "Impossible d’enregistrer les réglages. Réessayez.",
+			"ipLookup": "Trouver ma ville à partir de mon adresse IP",
+			"ipConsent": "Désactivé par défaut. Sans ville, votre IP publique est envoyée à ipapi.co, ou à ipwho.is en cas d’échec, pour estimer votre ville. Saisissez une ville ci-dessus pour éviter la recherche IP."
+		},
+		"regionSuggestions": {
+			"advisory": "Suggestions uniquement. Configurez un fournisseur et ses identifiants dans les réglages. Vos choix actuels sont conservés.",
+			"chat": "Chat",
+			"speech": "Voix",
+			"translation": "Modèle de traduction en direct",
+			"title": "Suggestions régionales"
+		}
+	},
+	"ko": {
+		"picker": {
+			"title": "프로필 전환",
+			"currentPrefix": "현재",
+			"currentBadge": "현재",
+			"knobHint": "돌려서 선택 · 눌러서 확인",
+			"pageHint": "탭하여 전환하거나 시간 초과 시 자동 전환됩니다",
+			"previousPage": "이전 페이지",
+			"nextPage": "다음 페이지",
+			"language": "언어"
+		},
+		"translationLanguages": {
+			"en": "영어",
+			"zh": "중국어",
+			"ru": "러시아어",
+			"fr": "프랑스어",
+			"de": "독일어",
+			"pt": "포르투갈어",
+			"es": "스페인어",
+			"it": "이탈리아어",
+			"id": "인도네시아어",
+			"ko": "한국어",
+			"ja": "일본어",
+			"vi": "베트남어",
+			"th": "태국어",
+			"ar": "아랍어",
+			"yue": "광둥어",
+			"hi": "힌디어",
+			"el": "그리스어",
+			"tr": "터키어"
+		},
+		"app": {
+			"language": "언어"
+		},
+		"settings": {
+			"general": {
+				"heading": "일반",
+				"language": "언어",
+				"login": "부팅 시 시작",
+				"hidden": "백그라운드 시작"
+			},
+			"setup": {
+				"locale": {
+					"language": "언어"
+				}
+			}
+		},
+		"clock": {
+			"title": "데스크톱 시계",
+			"description": "스트립의 시계 키입니다. ‹ 및 › 버튼으로 테마를 바꾸고 저장합니다.",
+			"theme": "테마",
+			"seconds": "초",
+			"secondsHint": "끄면 시와 분만 표시합니다.",
+			"on": "켜기",
+			"off": "끄기",
+			"themeDescription": "기본 이미지 또는 테마별 사용자 이미지나 2초 이상의 동영상입니다.",
+			"selected": "선택됨",
+			"unavailable": "시계 서비스를 사용할 수 없습니다. 창을 새로 고치세요.",
+			"openDesktop": "시계 설정을 바꾸려면 데스크톱 앱을 여세요.",
+			"recovered": "저장된 시계 설정을 읽지 못해 기본값을 표시합니다. 변경하면 새 설정을 저장합니다.",
+			"cached": "캐시됨",
+			"high": "최고",
+			"low": "최저",
+			"saveFailed": "설정을 저장하지 못했습니다. 다시 시도하세요.",
+			"ipLookup": "IP 주소로 내 도시 찾기",
+			"ipConsent": "기본적으로 꺼져 있습니다. 도시가 비어 있으면 공개 IP 주소를 ipapi.co로 보내고, 실패하면 ipwho.is로 보내 도시를 추정합니다. IP 조회 없이 날씨를 사용하려면 위에 도시를 입력하세요."
+		},
+		"regionSuggestions": {
+			"advisory": "제안일 뿐입니다. 설정에서 제공업체와 인증 정보를 구성하세요. 기존 선택은 유지됩니다.",
+			"chat": "채팅",
+			"speech": "음성",
+			"translation": "실시간 번역 모델",
+			"title": "지역별 제안"
+		}
+	},
+	"de": {
+		"picker": {
+			"title": "Profil wechseln",
+			"currentPrefix": "Aktuell",
+			"currentBadge": "Aktuell",
+			"knobHint": "Drehen zum Auswählen · drücken zum Bestätigen",
+			"pageHint": "Zum Wechseln tippen – bei Zeitablauf wird automatisch gewechselt",
+			"previousPage": "Vorherige Seite",
+			"nextPage": "Nächste Seite",
+			"language": "Sprache"
+		},
+		"translationLanguages": {
+			"en": "Englisch",
+			"zh": "Chinesisch",
+			"ru": "Russisch",
+			"fr": "Französisch",
+			"de": "Deutsch",
+			"pt": "Portugiesisch",
+			"es": "Spanisch",
+			"it": "Italienisch",
+			"id": "Indonesisch",
+			"ko": "Koreanisch",
+			"ja": "Japanisch",
+			"vi": "Vietnamesisch",
+			"th": "Thailändisch",
+			"ar": "Arabisch",
+			"yue": "Kantonesisch",
+			"hi": "Hindi",
+			"el": "Griechisch",
+			"tr": "Türkisch"
+		},
+		"clock": {
+			"title": "Desktop-Uhr",
+			"description": "Die Uhrtaste auf deiner Leiste. Ihre Tasten ‹ und › wechseln und speichern das Thema.",
+			"theme": "Thema",
+			"seconds": "Sekunden",
+			"secondsHint": "Aus zeigt nur Stunden und Minuten.",
+			"on": "Ein",
+			"off": "Aus",
+			"themeDescription": "Integrierte Bilder oder eigene Bilder und Videos von mindestens 2 Sekunden je Thema.",
+			"selected": "Ausgewählt",
+			"unavailable": "Der Uhrdienst ist nicht verfügbar. Lade das Fenster neu.",
+			"openDesktop": "Öffne die Desktop-App, um die Uhr einzustellen.",
+			"recovered": "Die gespeicherten Uhreinstellungen konnten nicht gelesen werden. Standardwerte werden angezeigt. Eine Änderung speichert neue Einstellungen.",
+			"cached": "Zwischengespeichert",
+			"high": "H",
+			"low": "T",
+			"saveFailed": "Die Einstellungen konnten nicht gespeichert werden. Versuche es erneut.",
+			"ipLookup": "Meine Stadt anhand meiner IP-Adresse finden",
+			"ipConsent": "Standardmäßig aus. Ohne Stadt wird deine öffentliche IP-Adresse an ipapi.co oder bei einem Fehler an ipwho.is gesendet, um deine Stadt zu schätzen. Gib oben eine Stadt ein, um Wetter ohne IP-Suche zu nutzen."
+		},
+		"regionSuggestions": {
+			"advisory": "Nur Vorschläge. Richte Anbieter und Zugangsdaten in den Einstellungen ein. Deine bisherige Auswahl bleibt erhalten.",
+			"chat": "Chat",
+			"speech": "Sprache",
+			"translation": "Modell für Live-Übersetzung",
+			"title": "Regionale Vorschläge"
+		}
+	},
+	"it": {
+		"picker": {
+			"title": "Cambia profilo",
+			"currentPrefix": "Attuale",
+			"currentBadge": "Attuale",
+			"knobHint": "Ruota per scegliere · premi per confermare",
+			"pageHint": "Tocca per cambiare, oppure cambia automaticamente allo scadere del tempo",
+			"previousPage": "Pagina precedente",
+			"nextPage": "Pagina successiva",
+			"language": "Lingua"
+		},
+		"translationLanguages": {
+			"en": "Inglese",
+			"zh": "Cinese",
+			"ru": "Russo",
+			"fr": "Francese",
+			"de": "Tedesco",
+			"pt": "Portoghese",
+			"es": "Spagnolo",
+			"it": "Italiano",
+			"id": "Indonesiano",
+			"ko": "Coreano",
+			"ja": "Giapponese",
+			"vi": "Vietnamita",
+			"th": "Tailandese",
+			"ar": "Arabo",
+			"yue": "Cantonese",
+			"hi": "Hindi",
+			"el": "Greco",
+			"tr": "Turco"
+		},
+		"app": {
+			"language": "Lingua"
+		},
+		"settings": {
+			"general": {
+				"heading": "Generale",
+				"language": "Lingua",
+				"login": "Avvia all'avvio",
+				"hidden": "Avvio in background"
+			},
+			"setup": {
+				"locale": {
+					"language": "Lingua"
+				}
+			}
+		},
+		"clock": {
+			"title": "Orologio desktop",
+			"description": "Il tasto orologio della barra. I pulsanti ‹ e › cambiano e salvano anche il tema.",
+			"theme": "Tema",
+			"seconds": "Secondi",
+			"secondsHint": "Disattivato mostra solo ore e minuti.",
+			"on": "Attivo",
+			"off": "Disattivo",
+			"themeDescription": "Immagini incluse o una propria immagine o un video di almeno 2 secondi per tema.",
+			"selected": "Selezionato",
+			"unavailable": "Il servizio orologio non è disponibile. Ricarica la finestra.",
+			"openDesktop": "Apri l’app desktop per cambiare le impostazioni dell’orologio.",
+			"recovered": "Impossibile leggere le impostazioni salvate. Vengono mostrati i valori predefiniti. Una modifica salva nuove impostazioni.",
+			"cached": "In cache",
+			"high": "Max",
+			"low": "Min",
+			"saveFailed": "Impossibile salvare le impostazioni. Riprova.",
+			"ipLookup": "Trova la mia città dal mio indirizzo IP",
+			"ipConsent": "Disattivo per impostazione predefinita. Senza città, il tuo IP pubblico viene inviato a ipapi.co, o a ipwho.is se non riesce, per stimare la città. Inserisci una città sopra per usare il meteo senza ricerca IP."
+		},
+		"regionSuggestions": {
+			"advisory": "Solo suggerimenti. Configura un fornitore e le credenziali nelle impostazioni. Le scelte esistenti restano selezionate.",
+			"chat": "Chat",
+			"speech": "Voce",
+			"translation": "Modello di traduzione in diretta",
+			"title": "Suggerimenti regionali"
+		}
+	},
+	"ja": {
+		"picker": {
+			"title": "プロファイル切り替え",
+			"currentPrefix": "現在",
+			"currentBadge": "現在",
+			"knobHint": "回して選択 · 押して確定",
+			"pageHint": "タップで切り替え、時間切れで自動的に切り替わります",
+			"previousPage": "前のページ",
+			"nextPage": "次のページ",
+			"language": "言語"
+		},
+		"translationLanguages": {
+			"en": "英語",
+			"zh": "中国語",
+			"ru": "ロシア語",
+			"fr": "フランス語",
+			"de": "ドイツ語",
+			"pt": "ポルトガル語",
+			"es": "スペイン語",
+			"it": "イタリア語",
+			"id": "インドネシア語",
+			"ko": "韓国語",
+			"ja": "日本語",
+			"vi": "ベトナム語",
+			"th": "タイ語",
+			"ar": "アラビア語",
+			"yue": "広東語",
+			"hi": "ヒンディー語",
+			"el": "ギリシャ語",
+			"tr": "トルコ語"
+		},
+		"app": {
+			"language": "言語"
+		},
+		"settings": {
+			"general": {
+				"heading": "一般",
+				"language": "言語",
+				"login": "起動時に開始",
+				"hidden": "バックグラウンドで開始"
+			},
+			"setup": {
+				"locale": {
+					"language": "言語"
+				}
+			}
+		},
+		"clock": {
+			"title": "デスクトップ時計",
+			"description": "ストリップの時計キーです。‹ と › ボタンでもテーマを切り替えて保存できます。",
+			"theme": "テーマ",
+			"seconds": "秒",
+			"secondsHint": "オフにすると時と分のみを表示します。",
+			"on": "オン",
+			"off": "オフ",
+			"themeDescription": "内蔵画像、またはテーマごとの独自画像や2秒以上の動画を使います。",
+			"selected": "選択済み",
+			"unavailable": "時計サービスを利用できません。ウィンドウを再読み込みしてください。",
+			"openDesktop": "時計の設定を変更するにはデスクトップアプリを開いてください。",
+			"recovered": "保存済みの時計設定を読み込めないため、既定値を表示しています。変更すると新しい設定を保存します。",
+			"cached": "キャッシュ済み",
+			"high": "最高",
+			"low": "最低",
+			"saveFailed": "設定を保存できませんでした。再試行してください。",
+			"ipLookup": "IPアドレスから自分の都市を検索",
+			"ipConsent": "既定ではオフです。都市が空の場合、公開IPアドレスをipapi.coに送信し、失敗時はipwho.isに送信して都市を推定します。IP検索せずに天気を利用するには上に都市を入力してください。"
+		},
+		"regionSuggestions": {
+			"advisory": "提案のみです。設定でプロバイダーと認証情報を構成してください。既存の選択は維持されます。",
+			"chat": "チャット",
+			"speech": "音声",
+			"translation": "リアルタイム翻訳モデル",
+			"title": "地域別の提案"
+		}
+	}
+}
