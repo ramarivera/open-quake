@@ -60,6 +60,80 @@ describe("soundboard command concurrency", () => {
 			}),
 		);
 	}
+
+	for (const operation of ["PLAY_NEXT", "PLAY_PREV"] as const) {
+		it.scoped(
+			`pause during stopped ${operation} readiness prevents a later ramp`,
+			() =>
+				Effect.gen(function* () {
+					const entered = yield* Deferred.make<void>();
+					const ready = yield* Deferred.make<void>();
+					const r = yield* rig(
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(ready)),
+						),
+					);
+					const navigation = yield* r.service
+						.execute(
+							owner,
+							{ ...playlist, fade: { mode: "in", durationMs: 1000 } },
+							operation,
+						)
+						.pipe(Effect.fork);
+					yield* Deferred.await(entered);
+					const loading = (yield* r.service.snapshot())[0];
+					if (!loading) return yield* Effect.die("missing loading session");
+					const pause = yield* r.service
+						.pause(loading.playbackId)
+						.pipe(Effect.fork);
+					yield* TestClock.adjust(1);
+					yield* Deferred.succeed(ready, undefined);
+					yield* Fiber.join(pause);
+					const gainCount = r.tracks[0]?.gains.length;
+					yield* TestClock.adjust(1000);
+					yield* Fiber.join(navigation);
+					expect((yield* r.service.snapshot())[0]?.state).toBe("paused");
+					expect(r.tracks[0]?.gains).toHaveLength(gainCount ?? 0);
+				}),
+		);
+	}
+	for (const operation of ["PLAY_RESTART", "PLAY_NEXT"] as const) {
+		it.scoped(
+			`volume superseding ended ${operation} advances the deferred end`,
+			() =>
+				Effect.gen(function* () {
+					const r = yield* rig();
+					const first = yield* r.service.play(owner, playlist);
+					const pending = yield* r.service
+						.execute(
+							owner,
+							{ ...playlist, fade: { mode: "out", durationMs: 1000 } },
+							operation,
+						)
+						.pipe(Effect.either, Effect.fork);
+					yield* TestClock.adjust(200);
+					const track = r.tracks[0];
+					if (!track) return yield* Effect.die("missing player");
+					yield* Deferred.succeed(track.end, undefined);
+					yield* TestClock.adjust(1);
+					yield* r.service.setVolume(first.playbackId, 40);
+					yield* Fiber.join(pending);
+					yield* TestClock.adjust(1000);
+					expect(r.tracks.map((item) => item.fileId)).toEqual(["a", "b"]);
+					expect(track.closed).toBe(1);
+					expect((yield* r.service.snapshot())[0]).toMatchObject({
+						state: "playing",
+						trackIndex: 1,
+						gain: 0.4,
+					});
+					yield* r.service.stopAll();
+					const speech = yield* r.output.acquire("speech", Effect.void);
+					expect(yield* speech.current).toBe(true);
+					yield* speech.release;
+				}),
+		);
+	}
+
 	it.scoped(
 		"interrupted replacement after natural end releases its outgoing player",
 		() =>

@@ -103,6 +103,8 @@ its outgoing fade and never stops that command's replacement afterward.
 
 Natural completion during an explicit replacement defers to that replacement,
 including its outgoing fade. A control accepted during native readiness prevents
-the superseded play from starting a later gain ramp. Stop All and profile
+the superseded play or stopped-key navigation from starting a later gain ramp.
+If volume supersedes a replacement after natural completion, the deferred end
+advances once at the new target gain rather than leaving an ended player active. Stop All and profile
 deactivation await applicable sessions already tearing down as well as active
 sessions, without selecting newer replacements for cleanup.

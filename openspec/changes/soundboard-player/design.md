@@ -171,3 +171,13 @@ navigation, rescan, natural end, capture preemption, gain ramps and teardown wit
 zero remaining windows/workers. Artifacts stay external in
 `open-quake-finish/soundboard-controls/review-r2/`. Production consumer composition
 and audible/physical acceptance remain open.
+
+The next PR59 review identified the separate stopped-key navigation readiness
+path and volume superseding a replacement after natural completion. Navigation
+now checks its request after readiness before ramping. A successful, still-owned
+volume command processes any deferred end after applying its gain. Four cases
+cover both navigation directions and volume superseding replacement/navigation;
+three fail before the fix. All 130 soundboard/audio tests, both package types,
+scoped Biome and strict spec pass. A fresh muted native control harness also
+passes with no remaining windows/workers. External outputs use the
+`review-r2/second-*` names. Production consumer and physical limits are unchanged.

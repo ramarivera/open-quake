@@ -346,8 +346,15 @@ export const makePlaybackControls = (ports: {
 						return true;
 					}),
 				);
-				if (accepted && slot.command === command)
+				if (accepted && slot.command === command) {
 					yield* ramp(slot, slot.targetGain, durationMs);
+					if (
+						ports.current(slot) &&
+						slot.command === command &&
+						slot.endPending
+					)
+						yield* ports.finishPendingEnd(slot);
+				}
 			}),
 	);
 	const play = Effect.fn("SoundboardService.play")(
@@ -560,7 +567,7 @@ export const makePlaybackControls = (ports: {
 								Effect.flatMap((session) => {
 									if (Option.isNone(session)) return Effect.void;
 									const slot = lookup(session.value.playbackId);
-									if (!slot) return Effect.void;
+									if (!slot || !request.valid) return Effect.void;
 									return ramp(
 										slot,
 										config.right.fade.mode === "out" ? 0 : slot.targetGain,
