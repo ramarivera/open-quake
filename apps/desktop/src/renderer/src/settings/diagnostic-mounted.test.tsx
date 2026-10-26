@@ -106,6 +106,39 @@ it("MGMT-037 a fresh passing topology replaces an older retry-error notice", asy
 	await click(button("Re-detect"));
 	expect(document.body.textContent).toContain("Detection error");
 	await act(async () => receive({ ...status, usb: "pass", hdmi: "pass" }));
-	expect(document.body.textContent).toContain("both connections are normal");
+	expect(
+		document.querySelectorAll(".connection-state[data-pass=true]"),
+	).toHaveLength(2);
+	expect(element("[role=status]").textContent).toBe("");
 	expect(document.body.textContent).not.toContain("Detection error");
+});
+
+it("MGMT-037 successful redetect notice expires at 2600ms while passing rows remain", async () => {
+	vi.useFakeTimers();
+	const ready = { ...status, usb: "pass", hdmi: "pass" } as const;
+	Object.defineProperty(window, "quakeLifecycle", {
+		configurable: true,
+		value: {
+			request: async (command) => ({
+				ok: true,
+				status: command.action === "read" ? status : ready,
+			}),
+			onStatus: () => () => {},
+		} satisfies LifecycleBridge,
+	});
+	await mount(createElement(ConnectionCheck));
+	expect(element("[role=status]").textContent).toBe("");
+	await click(button("Re-detect"));
+	expect(element("[role=status]").textContent).toContain(
+		"both connections are normal",
+	);
+	await act(async () => vi.advanceTimersByTimeAsync(2599));
+	expect(element("[role=status]").textContent).toContain(
+		"both connections are normal",
+	);
+	await act(async () => vi.advanceTimersByTimeAsync(1));
+	expect(element("[role=status]").textContent).toBe("");
+	expect(
+		document.querySelectorAll(".connection-state[data-pass=true]"),
+	).toHaveLength(2);
 });

@@ -177,7 +177,7 @@ export function DiagnosticView({
 				</a>
 			</div>
 			<p role="status" aria-live="polite">
-				{ready ? text.toast.allPass : notice}
+				{notice}
 			</p>
 			{!ready && (
 				<p className="muted">
@@ -266,7 +266,15 @@ export function ConnectionCheck({
 		mounted.current = true;
 		const off = window.quakeLifecycle?.onStatus((next) => {
 			generation.current++;
-			if (mounted.current) setStatus(next);
+			if (mounted.current) {
+				setStatus(next);
+				if (
+					next.usb === "pass" &&
+					next.hdmi === "pass" &&
+					next.issue === "none"
+				)
+					setNotice((old) => (old === text.toast.checkError ? "" : old));
+			}
 		});
 		void run("read");
 		return () => {

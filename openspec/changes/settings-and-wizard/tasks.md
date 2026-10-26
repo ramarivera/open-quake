@@ -216,7 +216,7 @@ PR #105 review fix 4379719124 seeds AppLocaleProvider from the schema-validated 
 ## 9. Setup burn-down lane
 
 - [x] 9.1 First-run startup, welcome/legal reading, locale/region confirmation and lifecycle ownership. MAIN-055/056/125, SETTINGS-011/051/053/054/055/056. Bead open-quake-lih.14.1.
-- [ ] 9.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
+- [x] 9.2 Diagnostic retry, project support and illustrated EN/zh installation guide entries. MGMT-029/030/037/038/039, SETTINGS-068/069/070. Bead open-quake-lih.14.2.
 - [x] 9.3 User-triggered permission recovery and once-only startup guidance with mock probes. MAIN-128, SETTINGS-015. Bead open-quake-lih.14.3.
 - [x] 9.4 Verify selected-device handoff and pending-edit switching after shell dependency merges. MGMT-042/044. Bead open-quake-lih.14.2.
 - [x] 9.5 Retain the existing management-owned setup page under Ramiro's explicit equivalent-window approval, with close-to-overview and reload recovery tests. SETTINGS-052. Bead open-quake-lih.14.1.
@@ -242,3 +242,5 @@ grants follow from that consent. Shell PR #113 is merged as b160a2e. PR #118 now
 Shell scope decision, 2026-10-26: Ramiro explicitly excluded dormant vendor features and ARIS-only flows. MGMT-008, MGMT-014, MGMT-432, MGMT-433 and SETTINGS-017 are approved exclusions, not implemented parity. The corresponding decision remains open in open-quake-lih.17.17 for lead reconciliation.
 
 PR #118 permission review 4381119069 and 4381129730: denied requests, rejected System Audio capture and unavailable Input Monitoring/Screen Recording API symbols retain the System Settings handoff. Mock-only regressions fail before the correction; unexpected causes remain private in the typed permission error.
+
+PR #118 diagnostic review 4381129985: the live region renders the timed notice, not the persistent ready status. The mounted regression reproduces all-pass text remaining at 2600ms before the fix, then verifies expiry at exactly 2600ms with both passing channel rows retained. Background status remains silent and clears obsolete retry errors.
