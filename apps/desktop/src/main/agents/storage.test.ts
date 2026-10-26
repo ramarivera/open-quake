@@ -28,6 +28,64 @@ const backend = {
 	subscribe: () => () => {},
 } satisfies typeof AgentRuntimePort.Service;
 describe("agent generation storage through the real service", () => {
+	it("CENTER-053 edits skill name, description and content and reloads a fresh service", async () => {
+		const root = await mkdtemp(join(await realpath(tmpdir()), "agents-edit-"));
+		roots.push(root);
+		const make = () =>
+			ManagedRuntime.make(
+				AgentsService.Default.pipe(
+					Layer.provide(
+						Layer.mergeAll(
+							Layer.succeed(AgentStorage, createAgentStorage(root)),
+							Layer.succeed(AgentRuntimePort, backend),
+						),
+					),
+				),
+			);
+		let runtime = make();
+		try {
+			const initial = await runtime.runPromise(AgentsService.view());
+			const created = await runtime.runPromise(
+				AgentsService.request({
+					type: "save-skill",
+					create: true,
+					folder: "search",
+					owner: "",
+					name: "Search",
+					content:
+						"---\nname: Search\ndescription: Old description\n---\nOld instructions.",
+					revision: initial.revision,
+				}),
+			);
+			const content =
+				"---\nname: Evidence\ndescription: New description\n---\nCite primary sources.";
+			await runtime.runPromise(
+				AgentsService.request({
+					type: "save-skill",
+					create: false,
+					folder: "search",
+					owner: "",
+					name: "Evidence",
+					content,
+					revision: created.view.revision,
+				}),
+			);
+			await runtime.dispose();
+			runtime = make();
+			const reloaded = await runtime.runPromise(AgentsService.view());
+			expect(
+				reloaded.skills.find((skill) => skill.folder === "search"),
+			).toEqual({
+				folder: "search",
+				owner: "",
+				name: "Evidence",
+				description: "New description",
+				content,
+			});
+		} finally {
+			await runtime.dispose();
+		}
+	});
 	it("persists actual workspace and skill Markdown, reloads it and removes a deleted workspace", async () => {
 		const root = await mkdtemp(join(await realpath(tmpdir()), "agents-store-"));
 		roots.push(root);

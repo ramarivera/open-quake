@@ -29,6 +29,12 @@ Confirm SHALL list the values with secrets masked as `••••` plus the las
 - **WHEN** a Discord token is saved and the catalog is listed again
 - **THEN** no listing, status or log contains the token, only its masked form on the Confirm step
 
+Audit regression coverage: CENTER-076.
+
+#### Scenario: Credential and backdrop interactions
+- **WHEN** the user prepares QQ, Feishu or WeCom and advances through credentials and confirmation
+- **THEN** QQ combined paste splits credentials, Feishu retains its domain, required fields block advancement, secrets are masked, and the backdrop dismisses only on Done
+
 ### Requirement: QR login panel
 For `qr_login` setup the drawer SHALL start a QR session with its own ID through the runtime adapter. It SHALL show the platform hint ("Scan with WeChat on your phone", "Scan with WhatsApp on your phone", or the default), a 220×220 QR image, the open-link fallback, "Waiting for QR code…" while pending, "Start / refresh login" to replace the session, and the last six log lines with block-character QR art filtered out. Unlike DK, Next SHALL NOT mark success until the adapter confirms the session. Closing the drawer SHALL cancel the session. Source: CENTER-078; integration-channels "QR session lifecycle".
 

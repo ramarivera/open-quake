@@ -62,6 +62,12 @@ An emoji key SHALL be `{type: "emoji", size: [1,1], supportKnob: false}` with ac
 - **WHEN** the user adds Slack twice, once from the list and once from its `.app` file
 - **THEN** the list keeps one Slack entry and the second add says it already exists
 
+Audit regression coverage: CENTER-089.
+
+#### Scenario: Native picker cancellation and duplicate applications
+- **WHEN** the same application is selected through installed-app and file pickers or a picker is canceled
+- **THEN** only one identifier or path is saved, invalid app extensions are rejected, canceled selection changes nothing, and removal survives reload and changes foreground matching
+
 ### Requirement: Add to main screen and export
 "Add to Main Settings Screen" SHALL write the current package to a custom profile named after the package: one page of emoji keys in row-major order across the 2×8 grid. It SHALL then select that profile so the strip shows it. Adding the same package again SHALL update that profile rather than create another. The profile manager's capacity and naming rules SHALL apply. A failure SHALL leave every profile unchanged and report why. "Export Emoji Pack" SHALL copy the package's rendered GIFs, named after each emoji, into a folder the user picks; DK only shows a toast. Source: CENTER-085, CENTER-086, CENTER-088.
 

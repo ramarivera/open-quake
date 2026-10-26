@@ -116,6 +116,18 @@ Management SHALL expose a USB and HDMI diagnostic with the recovered quakeDiagno
 - **THEN** management returns to Connection to show checking or failure, and a later passing check enters Screen again
 - **AND** Screen remains available as a deliberate desktop preview while offline
 
+Audit regression coverage: MGMT-023, MGMT-027, MGMT-028, MGMT-036, MGMT-043.
+
+#### Scenario: Connection transitions use both channels
+- **WHEN** USB arrives before a valid landscape or portrait display, repeats, and is later lost
+- **THEN** management enters Screen only after both channels pass, ignores repeated pass notifications, returns to Connection after loss, and still permits explicit desktop preview
+
+Audit regression coverage: MGMT-032, MGMT-033, MGMT-035, MGMT-040.
+
+#### Scenario: Diagnostic details remain accessible
+- **WHEN** a completed check reports USB failure, missing HDMI, resolution mismatch or both passing
+- **THEN** the first failed row expands, keyboard activation exposes each troubleshooting branch or stable-connection advice, and narrow layout, focus visibility and reduced motion remain supported
+
 ### Requirement: Display prompts and explicit host consent
 The app SHALL detect mirroring and portrait orientation, using displayMode English strings. Portrait SHALL persist 2500 ms and be ignored within 6000 ms of landscape. Later SHALL snooze prompts for ten minutes. macOS arrangement remediation SHALL require explicit consent describing a CoreGraphics call to make QUAKE non-primary, disable mirroring if requested, and move it to the far right. No host change SHALL occur before consent or in mock mode. Windows SHALL open display settings; DisplaySwitch /extend is a future platform-gated consent action. Sources: MAIN-056-058, SETTINGS-087-089.
 
