@@ -141,7 +141,14 @@ export class AiSpeechService extends Effect.Service<AiSpeechService>()(
 							const nextEpoch = yield* Deferred.make<void>();
 							const previous = yield* Ref.getAndSet(outputEpoch, nextEpoch);
 							yield* Deferred.succeed(previous, undefined);
-							if (Option.isSome(output)) yield* output.value.suspendForCapture;
+							if (Option.isSome(output)) {
+								if (output.value.capture)
+									yield* Effect.acquireRelease(
+										output.value.capture,
+										(value) => value.stop,
+									);
+								else yield* output.value.suspendForCapture;
+							}
 							return yield* lease.withPermits(1)(
 								Effect.raceFirst(
 									Effect.gen(function* () {

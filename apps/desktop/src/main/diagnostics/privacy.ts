@@ -13,6 +13,7 @@ import { RuntimeErrors } from "../../../../../packages/edge/src/agent-http/runti
 import { AgentErrors } from "../../../../../packages/edge/src/agents/agents-errors.js";
 import { AiErrors } from "../../../../../packages/edge/src/ai/ai-errors.js";
 import { SpeechErrors } from "../../../../../packages/edge/src/ai/speech/speech-errors.js";
+import { AudioOutputErrors } from "../../../../../packages/edge/src/audio/output-errors.js";
 import { IntegrationErrors } from "../../../../../packages/edge/src/channels/integration-errors.js";
 import { ChatErrors } from "../../../../../packages/edge/src/chat/chat-errors";
 import { emojiErrors } from "../../../../../packages/edge/src/emoji/emoji-errors.js";
@@ -63,6 +64,7 @@ const identities = new Map<string, { code: string; category: string }>(
 		DesktopSpeechErrors,
 		SystemMediaErrors,
 		SoundboardErrors,
+		AudioOutputErrors,
 		RuntimeErrors,
 		VoiceSurfaceErrors,
 		ActionErrors,

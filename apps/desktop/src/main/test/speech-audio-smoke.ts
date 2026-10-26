@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { Effect, Either } from "effect";
 import { app, BrowserWindow } from "electron";
-import { openAudioWorker } from "../speech/electron-audio";
+import { PCM_24K } from "../../../../../packages/edge/src/ai/speech/speech-contracts";
+import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
+import {
+	createDesktopAudioOutput,
+	openAudioWorker,
+} from "../speech/electron-audio";
 
 // Explicit synthetic devices and muted output. Never records a physical mic.
 assert.equal(process.env.OPEN_QUAKE_SYNTHETIC_AUDIO_TEST, "1");
@@ -84,19 +90,84 @@ async function run() {
 			[],
 		);
 		stage = "output acquisition";
-		const output = await openAudioWorker(new AbortController().signal);
+		const ownership = await Effect.runPromise(makeAudioOutput);
+		let stopped = 0;
+		const board = await Effect.runPromise(
+			ownership.acquire(
+				"soundboard",
+				Effect.sync(() => {
+					stopped++;
+				}),
+			),
+		);
+		const outputPort = createDesktopAudioOutput(ownership);
+		const output = await Effect.runPromise(outputPort.acquire);
+		assert.equal(
+			stopped,
+			1,
+			"Speech must preempt the entire registered soundboard group",
+		);
 		try {
-			await output.invoke("ready");
+			await Effect.runPromise(output.ready);
+			await Effect.runPromise(output.ready);
+			assert.equal(
+				BrowserWindow.getAllWindows().length,
+				1,
+				"Repeated readiness must reuse its worker",
+			);
+			const busy = await Effect.runPromise(
+				ownership.acquire("soundboard", Effect.void).pipe(Effect.either),
+			);
+			assert(
+				Either.isLeft(busy) && busy.left.code === "QUAKE.AUDIO.OUTPUT_BUSY",
+			);
+			await Effect.runPromise(board.release);
+			assert.equal(
+				BrowserWindow.getAllWindows().length,
+				1,
+				"Stale soundboard stop must leave speech alive",
+			);
 			const start = performance.now();
 			stage = "muted natural playback drain";
-			await output.invoke("play", [Array(9600).fill(0)]);
+			await Effect.runPromise(
+				output.play({
+					bytes: new Uint8Array(9600),
+					format: "pcm",
+					durationMs: 200,
+					provenance: "generation",
+					descriptor: PCM_24K,
+				}),
+			);
 			assert(
 				performance.now() - start >= 100,
 				"Playback must await natural drain",
 			);
 		} finally {
-			await output.close();
+			await Effect.runPromise(output.stop);
+			await Effect.runPromise(output.stop);
 		}
+		stage = "capture preemption and release";
+		const pendingSpeech = await Effect.runPromise(outputPort.acquire);
+		await Effect.runPromise(pendingSpeech.ready);
+		assert(outputPort.capture);
+		const captureLease = await Effect.runPromise(outputPort.capture);
+		assert.equal(
+			BrowserWindow.getAllWindows().length,
+			0,
+			"Capture must close native output before mic acquisition",
+		);
+		const captureBusy = await Effect.runPromise(
+			ownership.acquire("soundboard", Effect.void).pipe(Effect.either),
+		);
+		assert(Either.isLeft(captureBusy));
+		await Effect.runPromise(captureLease.stop);
+		await Effect.runPromise(pendingSpeech.stop);
+		const afterCapture = await Effect.runPromise(
+			ownership.acquire("soundboard", Effect.void),
+		);
+		assert.equal(stopped, 1, "Capture must never auto-resume soundboard");
+		await Effect.runPromise(afterCapture.release);
+		await Effect.runPromise(ownership.close());
 		stage = "aborted acquisition cleanup";
 		const aborted = new AbortController();
 		aborted.abort();
@@ -112,6 +183,9 @@ async function run() {
 				framedPcm: true,
 				naturalDrain: true,
 				workerCleanup: true,
+				sharedOwnership: true,
+				capturePreemption: true,
+				staleSoundboardStopSafe: true,
 				physicalAudioVerified: false,
 			}),
 			{ mode: 0o600 },

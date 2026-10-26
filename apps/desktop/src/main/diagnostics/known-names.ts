@@ -1,7 +1,7 @@
 // Static application names only. Unknown names and paths never serialize.
 // Update this allowlist when a new source file, named span, log event or error tag is added.
 export const knownSpans = new Set(
-	`SoundboardImporter.preview SoundboardFiles.inspect
+	`AudioOutput.acquire AudioOutput.stop AudioOutput.close AudioOutput.suspend DesktopAudioOutput.ready SoundboardImporter.preview SoundboardFiles.inspect
 SystemMedia.nativeProcess SystemMedia.macRead SystemMedia.macControl SystemMedia.windowsRead SystemMedia.windowsControl SystemMedia.nativeRead SystemMedia.nativeControl SystemMedia.keyAction SystemMediaService.send
 GeneralSettingsService.snapshot GeneralSettingsService.loginStatus GeneralSettingsService.save GeneralSettingsService.startup
 WizardService.snapshot WizardService.save WizardService.seedRegion WizardService.replay WizardService.complete SettingsRepository.transact
@@ -179,7 +179,7 @@ test-fixtures.ts touch-contracts.ts touch-fixtures.ts touch-invariants.ts touch-
 touch-source.ts transport-decode.ts transport-fixtures.ts transport-limits.ts transport-sse.ts
 transport.ts update-service.ts voice-adapter.ts voice-fixtures.ts voice-surface-contracts.ts
 voice-surface-errors.ts voice-surface-invariants.ts voice-surface-ports.ts voice-surface-service.ts
-soundboard-import.ts soundboard-invariants.ts soundboard-errors.ts files.ts process.ts metadata.ts macos.ts windows.ts errors.ts key-actions.ts volume-discovery.ts weather-network.ts weather-service.ts zip.ts`.split(
+output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts soundboard-errors.ts files.ts process.ts metadata.ts macos.ts windows.ts errors.ts key-actions.ts volume-discovery.ts weather-network.ts weather-service.ts zip.ts`.split(
 		/\s+/,
 	),
 );
@@ -206,7 +206,7 @@ export const knownLogEvents = new Set([
 ]);
 
 export const knownErrorTags = new Set(
-	`SoundboardConfigInvalid SoundboardFileUnavailable MediaHelperUnavailable MediaProcessFailed MediaResponseInvalid SettingsOsApplyFailed WizardIncomplete SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
+	`AudioOutputBusy AudioOutputFailed SoundboardConfigInvalid SoundboardFileUnavailable MediaHelperUnavailable MediaProcessFailed MediaResponseInvalid SettingsOsApplyFailed WizardIncomplete SettingsInvalid SettingsReadFailed SettingsPersistFailed ChatBusy ChatContextTooLarge ChatInterrupted ChatInvalid ChatLimitExceeded ChatModeUnavailable ChatNotFound ChatResyncRequired ChatStorageFailed ChatTimeout
 ActionApplicationMissing ActionPermissionDenied ActionSnapshotFailed AgentCredentialUnavailable
 AgentDraftFailed AgentDraftUnavailable AgentDuplicate AgentInvalid AgentMissing AgentModelInvalid
 AgentModelLastRow AgentPanelFailed AgentProfileMissing AgentProtected AgentRevisionConflict

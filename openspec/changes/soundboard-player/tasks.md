@@ -25,6 +25,37 @@ Task 1.2 now has a version-1 review-only preview, actual saved playAudio action-
 
 PR55 review found that trimming a legacy single-file value could inspect a different path. The targeted regression failed before the fix; single-file values now retain exact whitespace while JSON detection and deliberate empty values retain syntax trimming. Missing production UI/IPC consumers are explicitly tracked by task 3.1 and open-quake-uv9.5; source import completion does not claim desktop availability.
 
+
+## Shared output prerequisite, 2026-10-25
+
+Task 2.3 now has a canonical `AudioOutput` Effect service and production desktop
+speech/capture composition. It serializes transitions, invalidates old tokens
+before native teardown, caches cleanup per token, stops all resources registered
+by a soundboard group without fades, rejects new soundboard ownership during
+speech/capture, and bounds native cleanup at two seconds. Failed teardown blocks
+future acquisition. Interrupted acquisition, late worker creation, duplicate
+release and stale soundboard stop cannot acquire or stop a replacement output.
+Catalog errors and allowlisted spans retain source identity without private paths.
+Recognition holds the scoped capture reservation through protocol errors and
+cancellation; completion never resumes prior soundboard playback.
+
+The actual hidden native Electron smoke uses a synthetic microphone and muted
+output. It passes production output readiness, natural drain, voice/capture
+preemption, busy rejection, stale group-release isolation and cleanup. Artifacts
+are external under `shared-output/speech-electron-J8aEEj`. Unit and real-service
+consumer tests cover concurrent teardown, capture failure/cancellation, retained
+original causes, and persisted diagnostic correlation. This does not establish
+MP3 playback or actual soundboard-session wiring. Task 2.3 and open-quake-uv9.7
+remain incomplete until the conductor supplies its live session group; prerequisite
+source/delivery is tracked separately by open-quake-uv9.9. Tasks 2.1/2.2/3.1 and
+native/physical acceptance remain open.
+
+PR56 review found shutdown could return while preempted native resources were
+still stopping. Shutdown now invalidates ownership immediately and waits through
+the same transition gate as acquisition. Two deterministic regressions fail on
+the previous source and cover both completed and timed-out prior cleanup, with
+no replacement lease granted after shutdown.
+
 PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
 allowlists retain both native-media and importer names; the final diff contains
 only the importer scope. All 53 importer tests, 16 filesystem/diagnostics tests,
