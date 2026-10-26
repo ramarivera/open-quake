@@ -24,8 +24,9 @@ export const renameLinkedEmojiProfile =
 				yield* repo.transact((current) =>
 					Effect.gen(function* () {
 						before = current.profiles.find((p) => p.id === id);
-						if (!before)
-							return yield* new EmojiInvalid("Linked emoji profile not found.");
+						// Deleting a generated profile leaves the package independent.
+						// Return the same envelope to avoid a write or profile validation.
+						if (!before) return current;
 						if (
 							!name ||
 							weightedNameLength(name) > 10 ||
@@ -79,5 +80,5 @@ export const renameLinkedEmojiProfile =
 				);
 			throw cause;
 		}
-		await profiles.refresh?.();
+		if (before) await profiles.refresh?.();
 	};

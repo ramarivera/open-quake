@@ -1,10 +1,13 @@
 import { Effect, Layer, ManagedRuntime, Option } from "effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 } from "../../../../../packages/device/src/profiles/profile-contracts";
-import { managerState } from "../../../../../packages/device/src/profiles/profile-manager-invariants";
+import {
+	applyManagerCommand,
+	managerState,
+} from "../../../../../packages/device/src/profiles/profile-manager-invariants";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -326,6 +329,53 @@ it("MGMT-101 renames linked profiles, rejects existing names and rolls back libr
 		expect(
 			(await f.read()).envelope.profiles.find((p) => p.id === id)?.name,
 		).toBe("Renamed");
+	} finally {
+		await f.runtime.dispose();
+	}
+});
+
+it("allows package renames after its generated profile is deleted", async () => {
+	const f = setup();
+	try {
+		const id = await placeEmojiPackage({
+			runtime: f.runtime,
+			select: async () => {},
+		})("daily", fixture);
+		await f.runtime.runPromise(
+			Effect.flatMap(ProfileRepository, (repo) =>
+				repo.transact((current) =>
+					Effect.try({
+						try: () => {
+							const result = applyManagerCommand(current, {
+								type: "delete",
+								id,
+								confirmed: true,
+							});
+							if (result._tag !== "updated")
+								throw Error("Expected profile deletion");
+							return result.envelope;
+						},
+						catch: (cause) => cause,
+					}),
+				),
+			),
+		);
+		const before = f.disk;
+		const save = vi.fn(async () => {});
+		const refresh = vi.fn(async () => {});
+		const rename = renameLinkedEmojiProfile({ runtime: f.runtime, refresh });
+		// The standalone package limit is 20, even though linked profiles allow 10.
+		await expect(rename(id, "Standalone Pack", save)).resolves.toBeUndefined();
+		expect(save).toHaveBeenCalledOnce();
+		expect(f.disk).toEqual(before);
+		expect(refresh).not.toHaveBeenCalled();
+		const failure = new Error("library write failed");
+		await expect(
+			rename(id, "Retry", async () => {
+				throw failure;
+			}),
+		).rejects.toBe(failure);
+		expect(f.disk).toEqual(before);
 	} finally {
 		await f.runtime.dispose();
 	}

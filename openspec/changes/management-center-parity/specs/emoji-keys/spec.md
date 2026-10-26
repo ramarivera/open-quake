@@ -121,7 +121,7 @@ Collection SHALL retain every static asset, package/draft item and saved-profile
 - **THEN** the pinned item and hash survive, and a later collection after deleting that profile reclaims them
 
 ### Requirement: Linked package title updates
-Renaming an emoji package SHALL rename its linked profile and publish a profile refresh only after the emoji library save succeeds. It SHALL roll back the profile update if the emoji library save fails. Duplicate profile names or invalid profile names SHALL reject before either store changes, preserving the catalog validation code `QUAKE.EMOJI.INVALID` and its actionable reason across the profile runtime boundary. Unexpected storage failures SHALL retain their private original cause under `QUAKE.EMOJI.LIBRARY_FAILED`. Saving an emoji-folder tile title SHALL also rename its referenced package and publish the title-sync change only after both writes succeed. Source: MGMT-101.
+Renaming an emoji package SHALL rename its linked profile and publish a profile refresh only after the emoji library save succeeds. It SHALL roll back the profile update if the emoji library save fails. Duplicate profile names or invalid profile names SHALL reject before either store changes, preserving the catalog validation code `QUAKE.EMOJI.INVALID` and its actionable reason across the profile runtime boundary. Unexpected storage failures SHALL retain their private original cause under `QUAKE.EMOJI.LIBRARY_FAILED`. A deleted linked profile SHALL leave an independent package whose name can still be saved under the package limit without recreating, writing or refreshing a profile. Saving an emoji-folder tile title SHALL also rename its referenced package and publish the title-sync change only after both writes succeed. Source: MGMT-101.
 
 #### Scenario: Linked rename save failure
 - **WHEN** the linked profile rename succeeds but the emoji library save fails
@@ -149,3 +149,7 @@ Emoji tiles SHALL use app-owned flat artwork sizing: a contained square at 80 pe
 #### Scenario: Clipboard still references a removed emoji
 - **WHEN** a copied emoji loses its last library/profile reference and the library reopens
 - **THEN** its source assets are collected but the published clipboard GIF remains readable, including after reopening the file store
+
+#### Scenario: Rename after generated profile deletion
+- **WHEN** the user deletes a generated profile and then renames its package to a valid independent package name
+- **THEN** the package save succeeds without a profile write or refresh, and a package save failure preserves the original library failure
