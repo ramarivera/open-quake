@@ -44,3 +44,17 @@ it("retains offline versions, distinguishes all availability reasons and isolate
 		firmwareAvailability: "newer_bundled",
 	});
 });
+
+it("lets a newer observed version supersede readback while retaining offline and stale-snapshot protection", () => {
+	const v = firmwareVersions();
+	v.readback("a", "1.0.19");
+	v.observe("", "", image);
+	expect(v.observe("a", "1.0.21", image)).toMatchObject({
+		currentVersion: "1.0.21",
+		firmwareAvailability: "up_to_date",
+	});
+	expect(v.observe("a", "1.0.19", image).currentVersion).toBe("1.0.21");
+	expect(v.observe("", "", image).currentVersion).toBe("1.0.21");
+	v.readback("a", "1.0.18");
+	expect(v.observe("a", "", image).currentVersion).toBe("1.0.18");
+});

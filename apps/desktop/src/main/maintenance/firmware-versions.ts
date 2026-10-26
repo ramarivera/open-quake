@@ -3,13 +3,13 @@ import type { FirmwareImage } from "../../../../../packages/edge/src/maintenance
 /** A version belongs to a serial, never to whichever device happens to be present. */
 export function firmwareVersions() {
 	const known = new Map<string, string>();
-	const fresh = new Map<string, string>();
+	const fresh = new Set<string>();
 	let lastSerial = "";
 	return {
 		readback: (serial: string, version: string) => {
 			if (version) {
 				known.set(serial, version);
-				fresh.set(serial, version);
+				fresh.add(serial);
 			}
 		},
 		observe: (
@@ -18,7 +18,12 @@ export function firmwareVersions() {
 			image: FirmwareImage | undefined,
 		) => {
 			if (serial) lastSerial = serial;
-			if (serial && reported && !fresh.has(serial)) known.set(serial, reported);
+			if (
+				serial &&
+				reported &&
+				(!fresh.has(serial) || newerVersion(reported, known.get(serial) ?? ""))
+			)
+				known.set(serial, reported);
 			const currentVersion = known.get(serial || lastSerial) ?? "";
 			const firmwareAvailability = !serial
 				? ("no_device" as const)
