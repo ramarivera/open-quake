@@ -953,7 +953,7 @@ async function smoke(): Promise<void> {
 	})()`);
 	await settle(100);
 	await management.webContents.executeJavaScript(
-		`document.querySelector('.key-editor .button-primary').click(); null;`,
+		`[...document.querySelectorAll('.key-editor .button-primary')].find(button => button.textContent === 'Save').click(); null;`,
 	);
 	await settle(100);
 	assert.equal(
@@ -1022,7 +1022,7 @@ async function smoke(): Promise<void> {
 	})()`);
 	await settle(100);
 	await management.webContents.executeJavaScript(
-		`document.querySelector('.key-editor .button-primary').click(); null;`,
+		`[...document.querySelectorAll('.key-editor .button-primary')].find(button => button.textContent === 'Save').click(); null;`,
 	);
 	await settle(100);
 	assert.equal(

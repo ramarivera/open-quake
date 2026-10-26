@@ -44,6 +44,6 @@
 
 ## 8. Lifecycle burn-down lane
 
-- [ ] 8.1 Implement scoped native strip windows, 3s/5s disposal and app suspension lease. Bead open-quake-lih.11.3. Rows MAIN-012,048,049,050,061; SCREEN-146; SETTINGS-079,084.
-- [ ] 8.2 Implement serial-safe recovery, ambiguity, scaled layout, debounced orientation and wake generations. Bead open-quake-lih.11.4. Rows MAIN-046,047,053,054,060; SCREEN-147; SETTINGS-085.
-- [ ] 8.3 Implement consented Windows probe/extend, arrangement persistence and wizard orientation ownership. Bead open-quake-lih.11.5. Rows MAIN-043,044,057,058,059; SETTINGS-058,087.
+- [x] 8.1 Implement scoped native strip windows, 3s/5s disposal and app suspension lease. Bead open-quake-lih.11.3. Rows MAIN-012,048,049,050,061; SCREEN-146; SETTINGS-079,084.
+- [x] 8.2 Implement serial-safe recovery, ambiguity, scaled layout, debounced orientation and wake generations. Bead open-quake-lih.11.4. Rows MAIN-046,047,053,054,060; SCREEN-147; SETTINGS-085.
+- [x] 8.3 Implement consented Windows probe/extend, arrangement persistence and wizard orientation ownership. Bead open-quake-lih.11.5. Rows MAIN-043,044,057,058,059; SETTINGS-058,087.
