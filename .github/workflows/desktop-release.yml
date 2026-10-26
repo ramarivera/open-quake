@@ -15,7 +15,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -32,7 +32,12 @@ jobs:
         env:
           BUILD_TAG: ${{ github.event_name == 'push' && github.ref_name || format('v0.0.0-pr.{0}.{1}', github.event.number, github.run_number) }}
         run: node apps/desktop/scripts/release.mjs version "$BUILD_TAG"
-      - run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev ffmpeg
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+      # FFmpeg backs the real-codec meeting integration tests. Skip recommended
+      # extras and retry: a slow Azure mirror otherwise consumes the job budget.
+      - name: Install FFmpeg
+        timeout-minutes: 10
+        run: sudo apt-get install -y --no-install-recommends -o Acquire::Retries=3 ffmpeg
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm --filter @open-quake/desktop test:release
