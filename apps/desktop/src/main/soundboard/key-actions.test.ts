@@ -463,7 +463,7 @@ for (const intent of ["stop", "toggle", "previous", "next"] as const) {
 						.pipe(Effect.either),
 				).toMatchObject({
 					_tag: "Left",
-					left: { code: "QUAKE.SOUNDBOARD.CONFIG_INVALID" },
+					left: { code: "QUAKE.AUDIO.CONFIG_INVALID" },
 				});
 				expect(oldTrack?.pauses).toBe(0);
 				expect(oldTrack?.plays).toBe(1);
