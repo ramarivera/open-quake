@@ -21,3 +21,25 @@ Agents remain later-phase. The first group protects the first-release chat loop.
 - [ ] 3.1 Implement/exercise Linux runtime and action adapters; verify identical tool policy/lifecycle suites and actual platform permissions, and document unsupported host capabilities.
 - [ ] 3.2 Research an optional user-managed OpenClaw gateway only if selected; deliver versioned handshake/auth/capability/stream/cancel fixtures and clarify the printer gateway's role, then verify a real compatible backend or keep the adapter unavailable with evidence.
 - [ ] 3.3 Add panel approval only after the device/panel lane validates deliberate touch identity; verify matching nonce/target, stale touches, and no action from markdown/card parsing, and document the additional approval control.
+
+## 4. Existing lifecycle hardening
+
+- [x] 4.1 Make ready Start and stopped Stop idempotent, settle interrupted or defective transitions without inventing a confirmed backend state, preserve adapter-confirmed terminal states, and release ownership before an explicit retry. Verify conflict exclusion, exact timeout boundaries and typed failure identity through the real lifecycle and management request consumers. Tracked in `open-quake-9h3.7.1`. This does not complete task 2.5 or enable the local tool loop.
+
+### Lifecycle hardening verification, 2026-10-26
+
+Six assertions failed against the prior implementation, reproducing ready Start
+rejection and interrupted Start/Stop/Restart remaining transitional. The actual
+lifecycle consumer now passes fourteen tests covering idempotence, conflict
+exclusion, all three interruption/retry paths, adapter-confirmed cleanup,
+external transitions, defects, typed original-cause retention, and the exact
+10s/5s deadlines. The actual management request handler also recovers after an
+interrupted service request and returns the ready view twice with one retry
+dispatch. HTTP management adapters still reject local process control.
+
+The complete edge suite passes 645 tests with three existing external skips.
+Focused desktop agents and HTTP management tests, both typechecks, scoped
+Biome, the production build, bundle smoke, and strict OpenSpec validation pass.
+No real runtime process, provider, device, UI interaction, or host action ran.
+Task 2.5 remains open, including the local tool loop and its UI/approval work.
+Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.

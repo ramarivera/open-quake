@@ -1,4 +1,4 @@
-import { Effect, Layer, ManagedRuntime, Option } from "effect";
+import { Deferred, Effect, Fiber, Layer, ManagedRuntime, Option } from "effect";
 import { describe, expect, it } from "vitest";
 import type { AgentState } from "../../../../../packages/edge/src/agents/agents-contracts.js";
 import { AgentRuntimePort } from "../../../../../packages/edge/src/agents/agents-ports.js";
@@ -57,6 +57,72 @@ describe("agents IPC real consumer", () => {
 			).toBe(false);
 		}
 	});
+	it("returns idempotent ready views and exposes interrupted-control recovery through management requests", async () => {
+		const entered = await Effect.runPromise(Deferred.make<void>());
+		let starts = 0;
+		const runtime = ManagedRuntime.make(
+			AgentsService.Default.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						Layer.succeed(AgentStorage, {
+							read: () => Effect.succeed(Option.none()),
+							write: () => Effect.void,
+						}),
+						Layer.succeed(AgentRuntimePort, {
+							available: true,
+							initial: {
+								available: true,
+								status: "stopped",
+								code: "",
+								operation: "none",
+							},
+							start: Effect.suspend(() =>
+								++starts === 1
+									? Deferred.succeed(entered, undefined).pipe(
+											Effect.zipRight(Effect.never),
+										)
+									: Effect.void,
+							),
+							stop: Effect.void,
+							restart: Effect.void,
+							subscribe: () => () => {},
+						}),
+					),
+				),
+			),
+		);
+		const request = createAgentsHandler(
+			runtime,
+			() => 17,
+			"file:///app/index.html",
+		);
+		try {
+			const pending = runtime.runFork(
+				AgentsService.request({ type: "runtime", action: "start" }),
+			);
+			await Effect.runPromise(Deferred.await(entered));
+			expect(await runtime.runPromise(AgentsService.view())).toMatchObject({
+				runtime: { status: "starting" },
+			});
+			await Effect.runPromise(Fiber.interrupt(pending));
+			expect(await request(source, { type: "read" })).toMatchObject({
+				_tag: "success",
+				view: { runtime: { status: "error", code: "AGENT.RUNTIME.FAILED" } },
+			});
+			for (let n = 0; n < 2; n++) {
+				expect(
+					await request(source, { type: "runtime", action: "start" }),
+				).toMatchObject({
+					_tag: "success",
+					view: { runtime: { status: "ready" } },
+				});
+			}
+			expect(starts).toBe(2);
+		} finally {
+			await runtime.dispose();
+		}
+	});
+
 	it("routes authorized commands, rejects extra properties and forged panel callers, and returns no stored credentials", async () => {
 		let saved: Option.Option<AgentState> = Option.none();
 		let writes = 0;

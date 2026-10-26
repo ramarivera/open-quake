@@ -1,8 +1,9 @@
-import { Effect, Ref } from "effect";
+import { Effect, Exit, Ref } from "effect";
 import type { RuntimeState } from "./agents-contracts.js";
 import {
 	type AgentError,
 	AgentRuntimeBusy,
+	AgentRuntimeFailed,
 	AgentRuntimeTimeout,
 	AgentRuntimeUnavailable,
 } from "./agents-errors.js";
@@ -21,8 +22,6 @@ export class AgentsRuntime extends Effect.Service<AgentsRuntime>()(
 					state = next;
 					for (const listener of listeners) listener(next);
 				});
-			// Subscription callbacks enter through a scoped dispatcher owned by the layer.
-			const queue = yield* Effect.makeSemaphore(1);
 			yield* Effect.acquireRelease(
 				Effect.sync(() =>
 					port.subscribe((next) => {
@@ -35,44 +34,44 @@ export class AgentsRuntime extends Effect.Service<AgentsRuntime>()(
 			const read = Effect.fn("AgentsRuntime.read")(
 				(): Effect.Effect<RuntimeState> => Effect.sync(() => state),
 			);
-			return {
-				read,
-				subscribe: (listener: (state: RuntimeState) => void): (() => void) => {
-					listeners.add(listener);
-					return () => {
-						listeners.delete(listener);
-					};
-				},
-				control: Effect.fn("AgentsRuntime.control")(function* (
+			const control = Effect.fn("AgentsRuntime.control")(
+				(
 					action: "start" | "stop" | "restart",
-				): Effect.fn.Return<void, AgentError> {
-					if (!port.available) return yield* new AgentRuntimeUnavailable();
-					if (yield* Ref.getAndSet(busy, true))
-						return yield* new AgentRuntimeBusy();
-					return yield* queue
-						.withPermits(1)(
-							Effect.gen(function* () {
+				): Effect.Effect<void, AgentError> =>
+					Effect.uninterruptibleMask((restore) =>
+						Effect.gen(function* () {
+							if (!port.available) return yield* new AgentRuntimeUnavailable();
+							if (yield* Ref.getAndSet(busy, true))
+								return yield* new AgentRuntimeBusy();
+							let transitionStarted = false;
+							return yield* Effect.gen(function* () {
 								const current = yield* read();
 								if (
-									(action === "start" &&
-										(current.status === "ready" ||
-											current.status === "starting")) ||
-									(action !== "start" && current.status !== "ready")
+									(action === "start" && current.status === "ready") ||
+									(action === "stop" && current.status === "stopped")
+								)
+									return;
+								if (
+									current.status === "starting" ||
+									current.status === "stopping" ||
+									(action === "restart" && current.status === "stopped")
 								)
 									return yield* new AgentRuntimeBusy();
+								transitionStarted = true;
 								yield* publish({
 									available: true,
 									status: action === "stop" ? "stopping" : "starting",
 									code: "",
 									operation: action,
 								});
-								const outcome = yield* port[action].pipe(
-									Effect.timeoutFail({
-										duration: action === "stop" ? "5 seconds" : "10 seconds",
-										onTimeout: () => new AgentRuntimeTimeout(),
-									}),
-									Effect.either,
-								);
+								const outcome = yield* restore(
+									port[action].pipe(
+										Effect.timeoutFail({
+											duration: action === "stop" ? "5 seconds" : "10 seconds",
+											onTimeout: () => new AgentRuntimeTimeout(),
+										}),
+									),
+								).pipe(Effect.either);
 								if (outcome._tag === "Left") {
 									yield* publish({
 										available: true,
@@ -88,10 +87,37 @@ export class AgentsRuntime extends Effect.Service<AgentsRuntime>()(
 									code: "",
 									operation: action,
 								});
-							}),
-						)
-						.pipe(Effect.ensuring(Ref.set(busy, false)));
-				}),
+							}).pipe(
+								// A cancelled/defective adapter cannot leave an unconfirmed transition
+								// looking active forever. Keep terminal states confirmed by its cleanup.
+								Effect.onExit((exit) =>
+									Effect.suspend(() =>
+										transitionStarted &&
+										Exit.isFailure(exit) &&
+										(state.status === "starting" || state.status === "stopping")
+											? publish({
+													available: true,
+													status: "error",
+													code: new AgentRuntimeFailed(exit.cause).code,
+													operation: action,
+												})
+											: Effect.void,
+									),
+								),
+								Effect.ensuring(Ref.set(busy, false)),
+							);
+						}),
+					),
+			);
+			return {
+				read,
+				subscribe: (listener: (state: RuntimeState) => void): (() => void) => {
+					listeners.add(listener);
+					return () => {
+						listeners.delete(listener);
+					};
+				},
+				control,
 			};
 		}),
 	},
