@@ -1459,3 +1459,34 @@ it.scoped(
 			).toMatchObject([{ id: "0:target", text: "translated words" }]);
 		}),
 );
+
+it.scoped(
+	"deletes owned files after explicit cancellation leaves a non-cancellable task",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			f.states.set("meeting", {
+				version: 1,
+				config: f.request.config,
+				task: "running",
+				remoteFiles: ["owned-file"],
+				cleanupPending: true,
+			});
+			const adapter = yield* makeLiveMeetingAdapter({
+				...f,
+				socket: s.transport,
+				http: {
+					fetch: async (url, init) =>
+						url.endsWith("/cancel")
+							? Response.json({ code: "UnsupportedOperation" }, { status: 400 })
+							: f.http.fetch(url, init),
+				},
+			});
+			yield* adapter.cancel("meeting");
+			expect(f.states.get("meeting")?.task).toBe("running");
+			yield* adapter.cleanup?.("meeting");
+			expect(f.states.get("meeting")?.remoteFiles).toEqual([]);
+			expect(f.states.get("meeting")?.task).toBeUndefined();
+		}),
+);
