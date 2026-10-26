@@ -1,7 +1,12 @@
 import { EventEmitter } from "node:events";
 import { beforeEach, expect, it, vi } from "vitest";
-import { MANAGEMENT_COMMAND } from "../../shared/management";
+import {
+	MANAGEMENT_COMMAND,
+	MANAGEMENT_EXTERNAL,
+} from "../../shared/management";
+import { managementExternalLinks } from "../../shared/management-external";
 import { createDesktopShell } from "./desktop-shell";
+import { registerManagementNavigation } from "./external-navigation";
 
 type Sender = {
 	readonly sender: object;
@@ -14,6 +19,8 @@ const native = vi.hoisted(() => {
 	>();
 	return {
 		handlers,
+		listeners: new Map<string, (event: Sender, value: unknown) => void>(),
+		openExternal: vi.fn(async (_url: string) => {}),
 		template: [] as Electron.MenuItemConstructorOptions[],
 		fail: false,
 		destroy: vi.fn(),
@@ -21,7 +28,11 @@ const native = vi.hoisted(() => {
 	};
 });
 vi.mock("electron", () => ({
+	shell: { openExternal: native.openExternal },
 	ipcMain: {
+		on: (name: string, listener: (event: Sender, value: unknown) => void) =>
+			native.listeners.set(name, listener),
+		removeListener: (name: string) => native.listeners.delete(name),
 		handle: (
 			name: string,
 			handler: (event: Sender, input: unknown) => unknown,
@@ -57,6 +68,10 @@ function fixture(
 			mainFrame: { url: "https://app.test/index.html?surface=management" },
 			send: vi.fn(),
 			isLoadingMainFrame: () => false,
+			setWindowOpenHandler:
+				vi.fn<
+					(handler: (details: { url: string }) => { action: "deny" }) => void
+				>(),
 		}),
 		isDestroyed: () => false,
 		hide: vi.fn(),
@@ -90,6 +105,8 @@ function fixture(
 }
 beforeEach(() => {
 	native.handlers.clear();
+	native.listeners.clear();
+	native.openExternal.mockClear();
 	native.events.clear();
 	native.fail = false;
 	native.destroy.mockClear();
@@ -210,4 +227,74 @@ it("SETTINGS-002 rejects close/hide during privacy handoff but permits explicit 
 	} finally {
 		f.shell.dispose();
 	}
+});
+
+it("external links require an exact destination and trusted management main frame", () => {
+	const f = fixture();
+	registerManagementNavigation(
+		f.win.webContents,
+		"https://app.test/index.html",
+	);
+	const open = (url: unknown, event: Sender = f.event) =>
+		native.listeners.get(MANAGEMENT_EXTERNAL)?.(event, url);
+	for (const url of managementExternalLinks) open(url);
+	expect(native.openExternal.mock.calls).toEqual(
+		managementExternalLinks.map((url) => [url]),
+	);
+	native.openExternal.mockClear();
+	for (const url of [
+		"https://evil.test",
+		"https://github.com/ramarivera/open-quake?secret=private",
+		"https://github.com/ramarivera/open-quake#private",
+		"https://github.com/ramarivera/open-quake/redirect",
+		"https://user:pass@github.com/ramarivera/open-quake",
+		"javascript:alert(1)",
+		"file:///etc/passwd",
+		"mailto:attacker@example.com",
+		{ url: managementExternalLinks[0] },
+	])
+		open(url);
+	open(managementExternalLinks[0], { ...f.event, sender: {} });
+	open(managementExternalLinks[0], {
+		...f.event,
+		senderFrame: { ...f.win.webContents.mainFrame },
+	});
+	f.win.webContents.mainFrame.url =
+		"https://evil.test/index.html?surface=management";
+	open(managementExternalLinks[0]);
+	f.win.webContents.mainFrame.url = "https://app.test/index.html?surface=panel";
+	open(managementExternalLinks[0]);
+	expect(native.openExternal).not.toHaveBeenCalled();
+	for (const name of ["will-navigate", "will-frame-navigate"]) {
+		const event = { preventDefault: vi.fn() };
+		f.win.webContents.emit(name, event, managementExternalLinks[0]);
+		expect(event.preventDefault).toHaveBeenCalledOnce();
+	}
+	const popup = f.win.webContents.setWindowOpenHandler.mock.calls[0]?.[0];
+	expect(popup?.({ url: managementExternalLinks[0] })).toEqual({
+		action: "deny",
+	});
+	expect(native.openExternal).not.toHaveBeenCalled();
+	f.win.webContents.emit("destroyed");
+	expect(native.listeners.has(MANAGEMENT_EXTERNAL)).toBe(false);
+	f.shell.dispose();
+});
+
+it("automatic navigation and child-frame popups cannot open the system browser", () => {
+	const f = fixture();
+	registerManagementNavigation(
+		f.win.webContents,
+		"https://app.test/index.html",
+	);
+	f.win.webContents.emit(
+		"will-navigate",
+		{ preventDefault: vi.fn() },
+		"https://evil.test/leak",
+	);
+	f.win.webContents.setWindowOpenHandler.mock.calls[0]?.[0]({
+		url: "https://evil.test/leak",
+	});
+	expect(native.openExternal).not.toHaveBeenCalled();
+	f.win.webContents.emit("destroyed");
+	f.shell.dispose();
 });

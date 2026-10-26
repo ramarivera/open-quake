@@ -82,6 +82,7 @@ import {
 } from "./management/appearance";
 import { createDesktopShell } from "./management/desktop-shell";
 import { registerDevicePicker } from "./management/device-picker";
+import { registerManagementNavigation } from "./management/external-navigation";
 import { createPrivacyVisibility } from "./management/privacy-visibility";
 import { prepareDesktopStartup } from "./management/startup";
 import { MediaLive, registerMedia } from "./media";
@@ -170,14 +171,7 @@ function createManagementWindow(): BrowserWindow {
 			nodeIntegration: false,
 		},
 	});
-	win.webContents.on("will-navigate", (event, url) => {
-		event.preventDefault();
-		if (/^(https:|mailto:)/i.test(url)) void shell.openExternal(url);
-	});
-	win.webContents.setWindowOpenHandler(({ url }) => {
-		if (/^(https:|mailto:)/i.test(url)) void shell.openExternal(url);
-		return { action: "deny" };
-	});
+	registerManagementNavigation(win.webContents, rendererURL);
 	return win;
 }
 

@@ -3,9 +3,16 @@ import {
 	MANAGEMENT_ACTIVATE,
 	MANAGEMENT_COMMAND,
 	MANAGEMENT_DEVICES,
+	MANAGEMENT_EXTERNAL,
 	MANAGEMENT_THEME,
 	type ManagementBridge,
 } from "../../shared/management";
+
+import { installManagementExternalLinks } from "./external-preload";
+
+installManagementExternalLinks(document, process.isMainFrame, (url) => {
+	ipcRenderer.send(MANAGEMENT_EXTERNAL, url);
+});
 
 const bridge: ManagementBridge = {
 	platform: process.platform,

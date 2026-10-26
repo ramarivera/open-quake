@@ -326,7 +326,7 @@ Backup completion SHALL sync the staged file before rename and the parent direct
 
 ### Requirement: Owned desktop shell and background recovery
 
-Before creating windows, the host SHALL set its Windows identity to `net.roxasroot.open-quake`, apply a validated saved Chromium locale, disable native-window occlusion for background device rendering, register privileged media protocols, and acquire the single-instance lock. Management SHALL retain open-quake's 1100x760 initial size, 640x560 minimum, native macOS controls, Windows overlay and Linux frame. It SHALL block renderer navigation and popups; only explicit HTTPS and mailto links may open externally. Native minimize/maximize SHALL remain usable. Closing management SHALL hide it while a tray or macOS Dock can restore it, preserving device owners. On platforms without a usable tray, management SHALL remain reachable and last-window close SHALL quit safely. Tray Resume, Settings, Management Center and Exit SHALL share the existing owner. Exit and Restart SHALL drain all writers, runtimes and diagnostics before quitting; only Restart SHALL relaunch. Geometry retains the safer existing 250ms debounce rather than DK-Suite's 500ms. Evidence: MAIN-119, MAIN-121, MAIN-122, MAIN-127, MGMT-006, MGMT-015, MGMT-018, MGMT-019, SETTINGS-112, SETTINGS-113.
+Before creating windows, the host SHALL set its Windows identity to `net.roxasroot.open-quake`, apply a validated saved Chromium locale, disable native-window occlusion for background device rendering, register privileged media protocols, and acquire the single-instance lock. Management SHALL retain open-quake's 1100x760 initial size, 640x560 minimum, native macOS controls, Windows overlay and Linux frame. It SHALL block renderer navigation and popups; only trusted user clicks from the exact management main frame may open an exact allowlisted project URL externally. The allowlist SHALL contain only `https://github.com/ramarivera/open-quake` and `https://github.com/ramarivera/open-quake/issues`, the project destinations shipped in the built-in shortcut profiles. No mailto destination is defined. Native minimize/maximize SHALL remain usable. Closing management SHALL hide it while a tray or macOS Dock can restore it, preserving device owners. On platforms without a usable tray, management SHALL remain reachable and last-window close SHALL quit safely. Tray Resume, Settings, Management Center and Exit SHALL share the existing owner. Exit and Restart SHALL drain all writers, runtimes and diagnostics before quitting; only Restart SHALL relaunch. Geometry retains the safer existing 250ms debounce rather than DK-Suite's 500ms. Evidence: MAIN-119, MAIN-121, MAIN-122, MAIN-127, MGMT-006, MGMT-015, MGMT-018, MGMT-019, SETTINGS-112, SETTINGS-113.
 
 #### Scenario: Background close and recovery
 
@@ -337,6 +337,12 @@ Before creating windows, the host SHALL set its Windows identity to `net.roxasro
 
 - **WHEN** management's exact top-level app document requests Quit or Restart
 - **THEN** shutdown runs once and completes before process exit or relaunch; a panel, subframe, foreign document, stale window, invalid command or request after disposal performs no action
+
+#### Scenario: Trusted external project links
+
+- **WHEN** a user clicks either exact project URL in the trusted management main frame
+- **THEN** the isolated preload requests the native opener and main validates frame identity and the destination
+- **AND** foreign hosts, extra paths, credentials, query/fragment data, javascript/file/mailto schemes, synthetic clicks, child frames, automatic navigation and popups never reach the system browser
 
 #### Scenario: Tray failure
 
