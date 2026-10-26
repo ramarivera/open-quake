@@ -15,7 +15,11 @@ import {
 } from "../../../../packages/device/src/profiles/profile-contracts";
 import lifecycleStrings from "../shared/lifecycle-strings.json";
 import { APP_LANGUAGES, LOCALE_REQUEST } from "../shared/locale";
-import { MANAGEMENT_ACTIVATE } from "../shared/management";
+import {
+	MANAGEMENT_ACTIVATE,
+	MANAGEMENT_EXTERNAL,
+	MANAGEMENT_READY,
+} from "../shared/management";
 import { registerAgentHttp } from "./agent-http";
 import { makeDesktopRuntime } from "./diagnostics/runtime";
 import { registerIntegrations } from "./integrations";
@@ -156,7 +160,7 @@ const electron = vi.hoisted(() => {
 		powerSaveBlocker: { start: vi.fn(() => 7), stop: vi.fn() },
 		powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
 		dialog: { showMessageBox: vi.fn(() => Promise.resolve({ response: 1 })) },
-		shell: { openExternal: vi.fn() },
+		shell: { openExternal: vi.fn(async (_url: string) => {}) },
 		screen: {
 			getAllDisplays: vi.fn<() => Display[]>(),
 			getPrimaryDisplay: vi.fn<() => Display>(),
@@ -572,6 +576,18 @@ describe("desktop window lifecycle", () => {
 		// Electron passes native arguments; this callback intentionally needs none.
 		if (!settings?.click) throw new Error("Missing native Settings action");
 		Reflect.apply(settings.click, undefined, []);
+		expect(management.webContents.send).not.toHaveBeenCalledWith(
+			MANAGEMENT_ACTIVATE,
+			"settings",
+		);
+		const ready = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === MANAGEMENT_READY,
+		)?.[1];
+		if (!ready) throw new Error("Missing management renderer-ready owner");
+		ready({
+			sender: management.webContents,
+			senderFrame: management.webContents.mainFrame,
+		});
 		await vi.waitFor(() =>
 			expect(management.webContents.send).toHaveBeenCalledWith(
 				MANAGEMENT_ACTIVATE,
@@ -1242,15 +1258,30 @@ describe("desktop window lifecycle", () => {
 		])
 			Reflect.apply(navigate, undefined, [event, url]);
 		expect(event.preventDefault).toHaveBeenCalledTimes(3);
-		expect(electron.shell.openExternal.mock.calls).toEqual([
-			["https://docs.example.test"],
-		]);
+		expect(electron.shell.openExternal).not.toHaveBeenCalled();
 		const popup =
 			management.webContents.setWindowOpenHandler.mock.calls[0]?.[0];
 		if (!popup) throw new Error("Missing popup guard");
 		expect(
-			Reflect.apply(popup, undefined, [{ url: "file:///private" }]),
+			Reflect.apply(popup, undefined, [
+				{ url: "https://github.com/ramarivera/open-quake" },
+			]),
 		).toEqual({ action: "deny" });
+		expect(electron.shell.openExternal).not.toHaveBeenCalled();
+		const external = electron.ipcMain.on.mock.calls.find(
+			([channel]) => channel === MANAGEMENT_EXTERNAL,
+		)?.[1];
+		if (!external) throw new Error("Missing authenticated external-link owner");
+		external(
+			{
+				sender: management.webContents,
+				senderFrame: management.webContents.mainFrame,
+			},
+			"https://github.com/ramarivera/open-quake",
+		);
+		expect(electron.shell.openExternal).toHaveBeenCalledExactlyOnceWith(
+			"https://github.com/ramarivera/open-quake",
+		);
 	});
 
 	it("unregisters display callbacks and stops the bus before quitting", async () => {

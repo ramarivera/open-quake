@@ -45,16 +45,14 @@ class Window extends EventEmitter {
 		Window.windows.push(this);
 	}
 	url = "";
-	webContents = {
+	webContents = Object.assign(new EventEmitter(), {
 		setWindowOpenHandler: () => {},
 		setAudioMuted: () => {},
 		setZoomFactor: () => {},
-		on: () => {},
-		removeListener: () => {},
 		send: (channel, event) => events.push({ channel, event }),
 		isDestroyed: () => false,
 		getURL: () => this.url,
-	};
+	});
 	isDestroyed() {
 		return false;
 	}
@@ -65,6 +63,23 @@ class Window extends EventEmitter {
 		this.url = url;
 	}
 	hide() {
+		this.shown = false;
+	}
+	isMinimized() {
+		return this.minimized;
+	}
+	restores = 0;
+	restore() {
+		this.minimized = false;
+		this.restores++;
+	}
+	focused = false;
+	focus() {
+		this.focused = true;
+	}
+	minimized = false;
+	minimize() {
+		this.minimized = true;
 		this.shown = false;
 	}
 	shown = false;
@@ -279,6 +294,21 @@ try {
 			(window) => window.options.title?.includes("management") && window.shown,
 		),
 	);
+	const management = Window.windows.find((window) =>
+		window.options.title?.includes("management"),
+	);
+	assert(management, "Management BrowserWindow exists");
+	management.minimize();
+	app.emit("activate");
+	await until(() => management.shown);
+	assert.equal(
+		management.isMinimized(),
+		false,
+		"Activation restores a minimized BrowserWindow",
+	);
+	assert.equal(management.restores, 1);
+	assert.equal(management.focused, true);
+
 	app.quit();
 	await until(() => quit);
 	for (const channel of [
