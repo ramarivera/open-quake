@@ -173,6 +173,7 @@ async function fixture(
 		creds.management.store(Redacted.make("fixture-key")),
 	);
 	let model = initialModel;
+	let role: "none" | "default" | "fallback" = "default";
 	let maxTokens = 512;
 	let baseUrl = `http://127.0.0.1:${address.port}/v1`;
 	const host = createDirectChat({
@@ -184,7 +185,7 @@ async function fixture(
 			Effect.succeed([
 				{
 					id: "configured",
-					role: "default",
+					role,
 					provider,
 					model,
 					baseUrl,
@@ -226,6 +227,9 @@ async function fixture(
 		},
 		setMaxTokens: (value: number) => {
 			maxTokens = value;
+		},
+		changeRole: (value: typeof role) => {
+			role = value;
 		},
 		changeModel: (value: string) => {
 			model = value;
@@ -1593,6 +1597,40 @@ it.each(["classification", "action"] as const)(
 			await v.voice.dispose();
 			await f.close();
 			await clock.dispose();
+		}
+	},
+);
+
+it.each(["none", "default", "fallback"] as const)(
+	"explicit assistant row obeys saved eligibility: %s",
+	async (role) => {
+		const f = await fixture();
+		f.changeRole(role);
+		try {
+			const result = await f.host.runtime.runPromise(
+				f.host
+					.submit(
+						{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+						"main",
+						undefined,
+						{
+							...defaultAssistantSettings(),
+							useAgent: false,
+							modelRowId: "configured",
+						},
+					)
+					.pipe(Effect.either),
+			);
+			if (role === "none") {
+				expect(result._tag).toBe("Left");
+				expect(f.endpoint.calls).toHaveLength(0);
+			} else {
+				if (result._tag === "Left") throw result.left;
+				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
+				expect(f.endpoint.calls).toHaveLength(1);
+			}
+		} finally {
+			await f.close();
 		}
 	},
 );

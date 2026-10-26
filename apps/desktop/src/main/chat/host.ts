@@ -266,9 +266,10 @@ export function prepareDirectChat(options: DirectChatOptions) {
 									const rows = yield* options.models(
 										settings ? "default" : scope,
 									);
+									const eligible = resolveModelRows(rows);
 									const saved = settings?.modelRowId
-										? rows.find((r) => r.id === settings.modelRowId)
-										: rows.find((r) => r.role === "default");
+										? eligible.find((r) => r.id === settings.modelRowId)
+										: eligible.find((r) => r.role === "default");
 									let row =
 										saved && settings
 											? {

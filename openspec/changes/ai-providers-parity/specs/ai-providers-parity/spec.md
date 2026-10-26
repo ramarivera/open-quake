@@ -122,8 +122,8 @@ The catalog SHALL preserve all twelve legacy engine dispositions and every retai
 
 #### Scenario: Inactive model rows cannot provide a direct voice route
 - **WHEN** a saved row has role none
-- **THEN** the provider listing and knob pinning both report no usable direct route using the shared role readiness rule
-- **AND** default and fallback rows remain eligible
+- **THEN** the provider listing, knob readiness/pinning and per-key assistant submit all report no usable direct route using the shared role readiness rule
+- **AND** default and fallback rows remain eligible; named role-none rows stay visible as unavailable selections and cannot use retained credentials
 
 ### Requirement: Explicit specialized provider settings
 

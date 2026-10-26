@@ -5,6 +5,7 @@ import {
 	assistantSettingsFromActions,
 } from "../../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import { ROLE_PRESETS } from "../../../../../../packages/edge/src/ai/ai-role-presets";
 import { providerSamplingValid } from "../../../../../../packages/edge/src/ai/ai-sampling";
 import {
@@ -77,9 +78,10 @@ export function AssistantControls({
 	const [filter, setFilter] = useState("");
 	const [entities, setEntities] = useState<readonly string[]>([]);
 	const [haStatus, setHaStatus] = useState("");
-	const row =
-		rows.find((r) => r.id === value.modelRowId) ??
-		rows.find((r) => r.role === "default");
+	const eligible = resolveModelRows(rows);
+	const row = value.modelRowId
+		? eligible.find((r) => r.id === value.modelRowId)
+		: eligible.find((r) => r.role === "default");
 	const model = value.modelId || row?.model || "";
 	const thinking =
 		row &&
@@ -197,9 +199,13 @@ export function AssistantControls({
 						</option>
 					)}
 					{rows.map((r) => (
-						<option key={r.id} value={r.id}>
+						<option key={r.id} value={r.id} disabled={!eligible.includes(r)}>
 							{r.name ?? `${r.provider} / ${r.model || "Model not set"}`}
-							{r.credentialAvailable ? "" : " · credentials required"}
+							{!eligible.includes(r)
+								? " · unavailable"
+								: r.credentialAvailable
+									? ""
+									: " · credentials required"}
 						</option>
 					))}
 				</select>

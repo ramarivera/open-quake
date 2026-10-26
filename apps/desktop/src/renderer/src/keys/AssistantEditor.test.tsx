@@ -70,6 +70,7 @@ function bridge(initial = view()) {
 			return { _tag: "success", view: current, draft: "" };
 		},
 		onSnapshot: () => () => {},
+		onProgress: () => () => {},
 	});
 	return calls;
 }
@@ -251,9 +252,9 @@ it("AI-065 MGMT-212 retains unknown agent model and previews recording states", 
 		<KnobAssistantSettings slot={slot} original={[]} onChange={() => {}} />,
 	);
 	closes.push(f.close);
-	expect(query(f.host, "#knob-agent-model", HTMLSelectElement).value).toBe(
-		"private/unknown",
-	);
+	expect(
+		query(f.host, "#knob-local-agent-model", HTMLSelectElement).value,
+	).toBe("private/unknown");
 	await click(button(f.host, "recording"));
 	expect(f.host.querySelector('[data-stage="recording"]')).not.toBeNull();
 	await click(button(f.host, "processing"));
@@ -434,15 +435,15 @@ it("AI-065 selects an agent and model and retains the saved assignment on reopen
 	}
 	const f = await mount(<Consumer />);
 	closes.push(f.close);
-	await input(query(f.host, "#knob-agent", HTMLSelectElement), "helper");
+	await input(query(f.host, "#knob-local-agent", HTMLSelectElement), "helper");
 	await input(
-		query(f.host, "#knob-agent-model", HTMLSelectElement),
-		"qwen/qwen3.6-plus",
+		query(f.host, "#knob-local-agent-model", HTMLSelectElement),
+		"qwen3.6-plus",
 	);
 	expect(saved.config.actions).toEqual([
 		{ type: "voiceRoute", value: "dkclaw" },
 		{ type: "agentId", value: "helper" },
-		{ type: "dkclawModel", value: "qwen/qwen3.6-plus" },
+		{ type: "dkclawModel", value: "qwen3.6-plus" },
 	]);
 	await f.render(
 		<KnobAssistantSettings
@@ -451,10 +452,12 @@ it("AI-065 selects an agent and model and retains the saved assignment on reopen
 			onChange={() => {}}
 		/>,
 	);
-	expect(query(f.host, "#knob-agent", HTMLSelectElement).value).toBe("helper");
-	expect(query(f.host, "#knob-agent-model", HTMLSelectElement).value).toBe(
-		"qwen/qwen3.6-plus",
+	expect(query(f.host, "#knob-local-agent", HTMLSelectElement).value).toBe(
+		"helper",
 	);
+	expect(
+		query(f.host, "#knob-local-agent-model", HTMLSelectElement).value,
+	).toBe("qwen3.6-plus");
 });
 
 it("AI-019 SETTINGS-008 shows pending and failed provider reads", async () => {
@@ -467,6 +470,7 @@ it("AI-019 SETTINGS-008 shows pending and failed provider reads", async () => {
 				rejectRead = reject;
 			}),
 		onSnapshot: () => () => {},
+		onProgress: () => () => {},
 	});
 	const f = await mount(<AssistantProviderSettings />);
 	closes.push(f.close);
@@ -477,4 +481,27 @@ it("AI-019 SETTINGS-008 shows pending and failed provider reads", async () => {
 		expect(f.host.textContent).toContain("couldn't be loaded"),
 	);
 	expect(f.host.querySelector("select")).toBeNull();
+});
+
+it("inactive named rows stay visible but cannot be selected for assistant dispatch", async () => {
+	const source = rows[0];
+	if (!source) throw new Error("missing model fixture");
+	const inactive = {
+		...source,
+		id: "inactive",
+		name: "Retired copy",
+		role: "none" as const,
+	};
+	const f = await mount(
+		<AssistantControls
+			value={{ ...defaultAssistantSettings(), modelRowId: "inactive" }}
+			rows={[...rows, inactive]}
+			onChange={() => {}}
+		/>,
+	);
+	closes.push(f.close);
+	const option = f.host.querySelector('option[value="inactive"]');
+	expect(option).toBeInstanceOf(HTMLOptionElement);
+	expect(option?.hasAttribute("disabled")).toBe(true);
+	expect(option?.textContent).toContain("unavailable");
 });
