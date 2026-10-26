@@ -659,6 +659,89 @@ describe("soundboard session lifecycle with real shared output", () => {
 				).toBe(true);
 			}),
 	);
+	it.effect(
+		"natural advancement publishes native teardown failure and fails output closed",
+		() =>
+			Effect.gen(function* () {
+				const scope = yield* Scope.make();
+				const r = yield* rig(
+					Effect.void,
+					Effect.die(new Error("private natural teardown")),
+				).pipe(Effect.provideService(Scope.Scope, scope));
+				yield* r.service.play(owner, playlist);
+				const first = r.tracks[0];
+				if (!first) return yield* Effect.die("missing player");
+				yield* Deferred.succeed(first.end, undefined);
+				yield* TestClock.adjust(1);
+				const snapshot = yield* r.service.snapshot();
+				const capture = yield* r.output
+					.acquire("capture", Effect.void)
+					.pipe(Effect.either);
+				yield* Scope.close(scope, Exit.void).pipe(Effect.exit);
+				expect(snapshot[0]).toMatchObject({
+					state: "failed",
+					errorCode: "QUAKE.AUDIO.OUTPUT_FAILED",
+				});
+				expect(capture).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.AUDIO.OUTPUT_FAILED" },
+				});
+				expect(r.tracks).toHaveLength(1);
+			}),
+	);
+	for (const kind of ["decode", "timeout"] as const) {
+		it.scoped(
+			`a queued different key survives ${kind} idle-group release`,
+			() =>
+				Effect.gen(function* () {
+					const entered = yield* Deferred.make<void>();
+					const done = yield* Deferred.make<void>();
+					let first = true;
+					const r = yield* rig(
+						Effect.suspend(() => {
+							if (!first) return Effect.void;
+							first = false;
+							return Deferred.succeed(entered, undefined).pipe(
+								Effect.zipRight(
+									kind === "timeout"
+										? Effect.never
+										: Deferred.await(done).pipe(
+												Effect.zipRight(
+													Effect.fail(new SoundboardDecodeFailed()),
+												),
+											),
+								),
+							);
+						}),
+					);
+					const failing = yield* r.service
+						.play(owner, playlist)
+						.pipe(Effect.either, Effect.fork);
+					yield* Deferred.await(entered);
+					const waiting = yield* r.service
+						.play({ ...owner, keyCode: "2" }, playlist)
+						.pipe(Effect.either, Effect.fork);
+					yield* TestClock.adjust(1);
+					if (kind === "timeout") yield* TestClock.adjust(10_000);
+					else yield* Deferred.succeed(done, undefined);
+					expect(yield* Fiber.join(failing)).toMatchObject({
+						_tag: "Left",
+						left: {
+							code:
+								kind === "timeout"
+									? "QUAKE.AUDIO.LOAD_TIMEOUT"
+									: "QUAKE.AUDIO.DECODE_FAILED",
+						},
+					});
+					expect(yield* Fiber.join(waiting)).toMatchObject({
+						_tag: "Right",
+						right: { state: "playing", owner: { keyCode: "2" } },
+					});
+					expect(r.tracks.map((track) => track.fileId)).toEqual(["a", "a"]);
+				}),
+		);
+	}
+
 	it.scoped("duplicate shutdown waits for pending native teardown", () =>
 		Effect.gen(function* () {
 			const entered = yield* Deferred.make<void>();

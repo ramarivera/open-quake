@@ -152,11 +152,14 @@ export const makeSoundboardService = Effect.gen(function* () {
 			);
 		});
 	const releaseIdle = (target: Group): Effect.Effect<void> =>
-		Effect.suspend(() =>
-			target.slots.size === 0 && Option.isSome(target.lease)
-				? target.lease.value.release
-				: Effect.void,
-		);
+		Effect.suspend(() => {
+			if (target.slots.size !== 0 || Option.isNone(target.lease))
+				return Effect.void;
+			// Empty-group disposal isn't an explicit stop or voice preemption. Queued
+			// commands remain valid while the idle lease closes its own resources.
+			target.active = false;
+			return target.lease.value.release;
+		});
 	const ensureGroup = Effect.gen(function* () {
 		if (closed) return yield* new AudioOutputFailed();
 		if (
@@ -217,7 +220,9 @@ export const makeSoundboardService = Effect.gen(function* () {
 		index: number,
 	): Effect.Effect<void, SoundPlaybackError> =>
 		Effect.gen(function* () {
-			yield* closeTrack(slot);
+			// A native finalizer can defect before loading starts. Retain unsafe
+			// teardown ownership and publish failure through the normal slot cleanup.
+			yield* closeTrack(slot).pipe(Effect.onError(() => stopSlot(slot)));
 			if (!current(slot)) return yield* new AudioOutputBusy();
 			const entry = slot.playlist.entries[index];
 			if (!entry) return yield* new SoundboardConfigInvalid();
