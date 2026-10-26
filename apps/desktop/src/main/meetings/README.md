@@ -318,3 +318,50 @@ threads are answered and remain unresolved. Hosted CI/current-head review,
 physical audio and paid-provider qualification remain lead-owned.
 
 Evidence: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/fix1/`.
+
+## PR #109 final provider review fixes
+
+The default LiveTranslate session uses the provider-documented `pcm` format
+and 16 kHz sample rate. The adapter resamples each internal 7200-sample 24 kHz
+block into exactly 4800 signed little-endian wire samples. The regression checks
+the session payload and every sample of two nonzero blocks. Contract source:
+https://www.alibabacloud.com/help/en/model-studio/live-translator-client-events.
+
+Saved Qwen profiles accept the documented Beijing/Singapore workspace domains
+and both legacy hosts. A workspace is one valid DNS label; private, metadata,
+arbitrary, suffix-spoofed, malformed and nondefault-port remote destinations
+remain rejected. Configured offline loopback providers stay supported. Source:
+https://www.alibabacloud.com/help/en/model-studio/fun-asr-recorded-speech-recognition-http-api.
+
+OpenAI EOF tracks provisional VAD timing separately from committed items, so
+a manual commit with a replacement ID cannot block finality. Removing the saved
+credential races the complete PCM/socket operation against that exact credential
+generation's revocation. Regressions use the real CredentialVault with fake
+keychain/socket backends during paced and blocked sends, and assert socket abort,
+cleanup and no partial artifacts. DashScope task and subtask failures share durable
+upload invalidation; restarted retries replace rejected URLs or report expired
+audio when the managed recording is missing.
+
+All five findings have regressions observed failing before their fixes, and each
+fix was committed, pushed and answered separately. Current main `31c400cc` was
+merged first in `ff20d0f9`, preserving both sides. The exact root loose-environment
+suite passes 4162 tests with four existing skips across 422 passing files and two
+skipped files. Counts are protocol 63, device 515, edge 921 and desktop 2663.
+All six package typechecks, Biome 1415 files with zero errors, 14 existing warnings
+and one info, production build, both bundle modes and all 47 strict OpenSpec
+items pass. The hidden, muted meetings mock smoke passes and exits with 28
+captures. Chromium cache and macOS process-policy diagnostics remain in its log.
+
+Execution is tracked in open-quake-lih.16.13, left open for lead merge. Evidence
+and screenshots stay outside the repository under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/fix2/`.
+No real device, microphone, paid provider or audible output was used. No further
+review round, thread resolution or merge is part of this final fix round.
+
+The supplemental combined media smoke reached its wallpaper and OBS passes but
+failed the German local-player label. Its fixture writes the retired
+`open-quake-key-locale` storage key, while merged main reads the document locale.
+The assertion remains unchanged; this failure is tracked in open-quake-lih.16.14.
+That same follow-up records valid new bot findings 4380486754 and 4380486762 for
+size-appropriate OSS upload deadlines and interruptible conversion acquisition.
+Both receive follow-up replies without another fix round.

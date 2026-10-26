@@ -187,4 +187,19 @@ Execution: open-quake-lih.16.13, left open for lead merge.
 - [x] 12.3 Fix 4380327483 by waiting only for committed OpenAI items, preserving VAD timing.
 - [x] 12.4 Fix 4380327495 by cancelling active OpenAI transcription when its saved credential is revoked.
 - [x] 12.5 Fix 4380327502 by invalidating rejected uploads on failed DashScope subtasks.
-- [ ] 12.6 Run full gates and hidden meetings mock smoke, list unanswered GraphQL threads and track further valid findings without another review round.
+- [x] 12.6 Run full gates and hidden meetings mock smoke, list unanswered GraphQL threads and track further valid findings without another review round.
+
+Final round evidence: exact root suite 4162 passing tests and four existing skips,
+six package typechecks, Biome 1415 files with zero errors, 14 existing warnings
+and one info, production build, both bundle modes and 47 strict OpenSpec items
+pass. Hidden muted meetings mock passes and exits with 28 captures. Five findings
+were fixed and replied to separately, each with a fail-before regression.
+
+Further valid bot findings 4380486754 and 4380486762 are tracked as follow-up
+in open-quake-lih.16.14 and receive replies without another implementation round.
+The supplemental media smoke fails its German local-player label because the
+fixture still selects the retired localStorage locale while main now reads the
+document locale; that fixture repair is in the same follow-up bead. No product
+assertion or safety gate was weakened. Evidence stays in SSD meeting-provider/fix2.
+No thread resolution or merge; execution bead open-quake-lih.16.13 stays open for
+the lead. Physical and paid-provider qualification remains unverified.
