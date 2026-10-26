@@ -84,8 +84,16 @@ async function smoke(): Promise<void> {
 			backgroundThrottling: false,
 		},
 	};
-	const evaluate = (win: BrowserWindow, source: string): Promise<unknown> =>
-		win.webContents.executeJavaScript(source);
+	const evaluate = async (
+		win: BrowserWindow,
+		source: string,
+	): Promise<unknown> => {
+		try {
+			return await win.webContents.executeJavaScript(source);
+		} catch (cause) {
+			throw new Error(`Native script failed: ${source}`, { cause });
+		}
+	};
 	const wait = (win: BrowserWindow, expression: string) =>
 		evaluate(
 			win,
@@ -155,12 +163,19 @@ async function smoke(): Promise<void> {
 				),
 			),
 		);
-	const calls: { sender: number; channel: string }[] = [];
+	const calls: { sender: number; channel: string; tag: unknown }[] = [];
 	const handle = ipcMain.handle.bind(ipcMain);
 	ipcMain.handle = (channel, listener) =>
 		handle(channel, (event, input: unknown) => {
 			if (channel === CLOCK_REQUEST || channel === WEATHER_MEDIA_REQUEST)
-				calls.push({ sender: event.sender.id, channel });
+				calls.push({
+					sender: event.sender.id,
+					channel,
+					tag:
+						typeof input === "object" && input !== null && "_tag" in input
+							? input._tag
+							: undefined,
+				});
 			return listener(event, input);
 		});
 
@@ -256,6 +271,21 @@ async function smoke(): Promise<void> {
 		check(
 			!calls.some((call) => call.sender === management.webContents.id),
 			"profile previews make no clock/weather requests",
+		);
+		await evaluate(
+			management,
+			"document.querySelector('[data-nav-page=screen]').click()",
+		);
+		await wait(
+			management,
+			"!!document.querySelector('.clock-settings .weather-settings')",
+		);
+		check(
+			await evaluate(
+				management,
+				"document.querySelectorAll('.weather-settings').length===1",
+			),
+			"Screen exposes exactly one selected-key weather/music control set",
 		);
 		calls.length = 0;
 		await evaluate(
@@ -662,7 +692,7 @@ async function smoke(): Promise<void> {
 		// Preserve the PR82 regression: Screen controls follow the displayed serial.
 		await evaluate(
 			management,
-			`(async()=>{await window.quakeKeyLibrary.request({type:'select',deviceId:'QUAKE-MOCK',profileId:'clock-b',pageId:${JSON.stringify(targetB.pageId)}});await window.quakeWallpaper.request({_tag:'select',serial:'QUAKE-MOCK'});document.querySelector('[data-nav-page=screen]').click()})()`,
+			`(async()=>{await window.quakeKeyLibrary.request({type:'select',deviceId:'QUAKE-MOCK',profileId:'clock-b',pageId:${JSON.stringify(targetB.pageId)}});await window.quakeWallpaper.request({_tag:'select',serial:'QUAKE-MOCK'});Object.defineProperty(navigator,'language',{value:'en',configurable:true});document.querySelector('[data-nav-page=screen]').click()})()`,
 		);
 		await wait(
 			management,
@@ -699,6 +729,56 @@ async function smoke(): Promise<void> {
 			(await readClock(targetB)).hourFormat === "12h",
 			"Screen format writes reach its displayed profile",
 		);
+		const globalBefore = await evaluate(
+			management,
+			"window.quakeWeatherMedia.request({_tag:'read'}).then(reply=>JSON.stringify(reply.snapshot.settings))",
+		);
+		calls.length = 0;
+		await evaluate(
+			management,
+			input('.weather-settings input[aria-label="City"]', "Paris"),
+		);
+		await wait(
+			management,
+			"document.querySelector('.weather-verification').textContent.includes('Weather for Berlin')",
+		);
+		await evaluate(
+			management,
+			"document.querySelector('input[aria-label=\"Music controls\"]').click()",
+		);
+		await wait(
+			management,
+			"!document.querySelector('input[aria-label=\"Music controls\"]').checked",
+		);
+		// Wait for the serialized selected-key saves, rather than just the optimistic input.
+		for (let attempt = 0; attempt < 100; attempt++) {
+			const current = await readClock(targetB);
+			if (current.weather?.city === "Paris" && current.musicEnabled === false)
+				break;
+			await evaluate(management, "new Promise(r=>setTimeout(r,20))");
+		}
+		const screenSaved = await readClock(targetB);
+		check(
+			screenSaved.weather?.city === "Paris" &&
+				screenSaved.musicEnabled === false,
+			"Screen city and music controls save the selected clock key",
+		);
+		check(
+			(await readClock(targetA)).weather?.city === savedA.weather?.city,
+			"Screen city changes preserve the other clock profile",
+		);
+		check(
+			!calls.some(
+				(call) =>
+					call.channel === WEATHER_MEDIA_REQUEST && call.tag === "configure",
+			) &&
+				(await evaluate(
+					management,
+					"window.quakeWeatherMedia.request({_tag:'read'}).then(reply=>JSON.stringify(reply.snapshot.settings))",
+				)) === globalBefore,
+			"Screen controls never configure the legacy global weather settings",
+		);
+		await capture(management, "clock-screen-selected-key");
 		await evaluate(
 			management,
 			"window.quakeWallpaper.request({_tag:'select',serial:'desktop-preview'})",

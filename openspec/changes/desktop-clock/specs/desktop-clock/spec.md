@@ -383,3 +383,12 @@ Main SHALL issue opaque, unguessable custom-media references only after an authe
 
 - **WHEN** a panel requests a management window's reference, guesses a profile selector, or reuses its reference after switching profiles
 - **THEN** main refuses the request, while the issuing window can load its current target's media and capture its decoded thumbnail
+
+### Requirement: Selected-key Screen enrichment controls
+
+Screen SHALL expose one weather/music control set backed by the selected clock key and SHALL leave legacy global weather settings unchanged. Covers WIDGETS-056 and review 4377943008.
+
+#### Scenario: One Screen weather and music editor
+
+- **WHEN** Screen displays clock B while clock A and the legacy global weather settings differ
+- **THEN** it shows exactly one weather/music control set, saves city and music to B, and leaves A and global settings unchanged

@@ -73,8 +73,10 @@ Codex 4375943149 duplicates 8.2, and 4375943171 duplicates 8.3. All six Devin fi
 
 - [x] 10.1 Replace renderer media selectors with opaque window/target-bound references, remove wildcard CORS, and prove same-target reads plus cross-target/window refusal. Review 4377943205, WIDGETS-034/038, bead `open-quake-lih.6.1.13`.
 - [x] 10.2 Make Overview and profile previews passive without clock/weather requests or tickers. Review 4377942844, WIDGETS-029/058, bead `open-quake-lih.6.1.14`.
-- [ ] 10.3 Remove legacy global Screen weather/music controls so one set writes the selected key. Review 4377943008, WIDGETS-056, bead `open-quake-lih.6.1.15`.
+- [x] 10.3 Remove legacy global Screen weather/music controls so one set writes the selected key. Review 4377943008, WIDGETS-056, bead `open-quake-lih.6.1.15`.
 
 10.1 evidence: both registration-boundary regressions fail on a9aac66. After the fix, 24 focused clock/profile tests and desktop typecheck pass. Logs are under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/clock/fix1/`. Full gates and native acceptance follow after all review fixes.
 
 10.2 evidence: both actual management host renders mounted the live clock hook before the fix. With explicit passive StripScreen props they render frozen clocks without that hook. All 25 focused preview/strip tests and desktop typecheck pass. The native profile smoke now checks Overview and Profiles IPC independently.
+
+10.3 evidence: the hidden mock native smoke failed on duplicate Screen weather/music controls before App.tsx removed the legacy global component. It now passes 41 assertions with eight captures, proving selected profile B city/music writes preserve A and never configure global weather. The same run verifies passive Overview/Profiles and decoded video thumbnails under scoped media CORS. Six-package typecheck passes. Full gate reconciliation is still running. Scratch: `burndown/clock/fix1/native-final` under the lane root.
