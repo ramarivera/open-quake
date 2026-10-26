@@ -40,6 +40,18 @@ The system SHALL use obs-websocket v5 at loopback by default, host 127.0.0.1 and
 - **WHEN** the user selects an OBS function in the existing editor
 - **THEN** the app attempts a connection and shows the connection dialog/help after 2000 ms if disconnected
 
+#### Scenario: Reconnect to another OBS instance
+- **WHEN** a connected user changes the endpoint and successfully clicks Connect or Auto-fetch
+- **THEN** the editor invalidates its previous catalog and reloads scenes, inputs, transitions and scene items from the new connection
+- **AND** a reconnect that completes between status polls still refreshes the catalog
+- **AND** catalog responses from the previous connection cannot restore its targets
+- **AND** a failed catalog reload leaves the previous instance's targets unavailable
+
+#### Scenario: Change a source key's scene
+- **WHEN** the user changes the selected scene for an OBS source key
+- **THEN** the old scene's item choices clear immediately
+- **AND** only items loaded for the newly selected scene become selectable
+
 ### Requirement: OBS knob volume binding
 The system SHALL route focused obsVolume rotation through the existing knob action path. It SHALL adjust current inputVolumeMul by the configured step, default 0.05, clamp between zero and one when allowGain is false and toggle mute on press. Audit rows MGMT-181, MGMT-219 and WIDGETS-123.
 
@@ -66,6 +78,11 @@ The system SHALL refresh visible OBS status, stats and screenshot tiles every 20
 - **AND** uncommitted sources are rejected before OBS IO
 - **AND** profile changes revoke polling and prevent publication of in-flight screenshots
 - **AND** management can preview unsaved targets and a panel retries after Save
+
+#### Scenario: Read-only editor preview
+- **WHEN** the key editor displays an OBS tile with input actions disabled
+- **THEN** its visible status, stats and screenshot still subscribe to live data
+- **AND** previewing never sends control actions and hiding the preview releases its subscription
 
 #### Scenario: Repair a missing saved scene
 - **WHEN** a saved scene target is absent from the current collection

@@ -14,6 +14,17 @@ export async function fakeObsServer(
 		readonly password?: string;
 		readonly rpcVersion?: number;
 		readonly rejectAuth?: boolean;
+		readonly scenes?: readonly {
+			readonly sceneUuid: string;
+			readonly sceneName: string;
+		}[];
+		readonly transitions?: readonly { readonly transitionName: string }[];
+		readonly sceneItems?: Readonly<
+			Record<
+				string,
+				readonly { readonly sceneItemId: number; readonly sourceName: string }[]
+			>
+		>;
 		readonly inputs?: readonly {
 			readonly inputUuid: string;
 			readonly inputName: string;
@@ -29,6 +40,7 @@ export async function fakeObsServer(
 		throw new Error("Expected loopback port");
 	const calls: FakeCall[] = [],
 		clients = new Set<WebSocket>();
+	const delays = new Map<string, number>();
 	const waits: {
 		readonly predicate: () => boolean;
 		readonly resolve: () => void;
@@ -152,7 +164,11 @@ export async function fakeObsServer(
 					response = { imageData: screenshot };
 					break;
 				case "GetSceneList":
-					response = { scenes: [{ sceneUuid: "scene-1", sceneName: "Main" }] };
+					response = {
+						scenes: options.scenes ?? [
+							{ sceneUuid: "scene-1", sceneName: "Main" },
+						],
+					};
 					break;
 				case "GetInputList":
 					response = {
@@ -169,32 +185,42 @@ export async function fakeObsServer(
 					response = { mic1: "Mic", desktop1: "Desktop Audio" };
 					break;
 				case "GetSceneTransitionList":
-					response = { transitions: [{ transitionName: "Fade" }] };
+					response = {
+						transitions: options.transitions ?? [{ transitionName: "Fade" }],
+					};
 					break;
 				case "GetSceneItemList":
-					response = { sceneItems: [{ sceneItemId: 7, sourceName: "Camera" }] };
+					response = {
+						sceneItems: options.sceneItems?.[String(values.sceneUuid)] ?? [
+							{ sceneItemId: 7, sourceName: "Camera" },
+						],
+					};
 					break;
 			}
-			socket.send(
-				JSON.stringify({
-					op: 7,
-					d: {
-						requestType: type,
-						requestId: frame.d.requestId,
-						requestStatus: {
-							result:
-								!failures.has(type) &&
-								!(
-									type === "GetInputVolume" &&
-									options.silentInputs?.includes(String(values.inputUuid))
-								),
-							code: failures.has(type) ? 600 : 100,
-							comment: "do-not-leak private remote comment",
-						},
-						responseData: response,
+			const reply = JSON.stringify({
+				op: 7,
+				d: {
+					requestType: type,
+					requestId: frame.d.requestId,
+					requestStatus: {
+						result:
+							!failures.has(type) &&
+							!(
+								type === "GetInputVolume" &&
+								options.silentInputs?.includes(String(values.inputUuid))
+							),
+						code: failures.has(type) ? 600 : 100,
+						comment: "do-not-leak private remote comment",
 					},
-				}),
-			);
+					responseData: response,
+				},
+			});
+			const delay = delays.get(type);
+			if (delay)
+				setTimeout(() => {
+					if (socket.readyState === socket.OPEN) socket.send(reply);
+				}, delay);
+			else socket.send(reply);
 		});
 	});
 	return {
@@ -203,6 +229,8 @@ export async function fakeObsServer(
 			screenshot = data;
 		},
 		calls,
+		delay: (type: string, milliseconds: number) =>
+			delays.set(type, milliseconds),
 		state,
 		connections: () => connections,
 		authRejected: () => authRejected,

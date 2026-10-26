@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { obsCommandFromKey } from "../../../../../../packages/device/src/actions/obs-contracts";
 import type { ProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts";
@@ -36,6 +36,13 @@ export function ObsSettings({
 		[busy, setBusy] = useState(false),
 		[expanded, setExpanded] = useState(false);
 	const [catalog, setCatalog] = useState<ObsCatalog>(emptyCatalog);
+	const catalogGeneration = useRef(0);
+	const [catalogRevision, setCatalogRevision] = useState(0);
+	const invalidateCatalog = () => {
+		catalogGeneration.current += 1;
+		setCatalogRevision(catalogGeneration.current);
+		setCatalog(emptyCatalog);
+	};
 	const text = useCallback(
 		(key: string) => obsText(locale, "config", key),
 		[locale],
@@ -124,26 +131,34 @@ export function ObsSettings({
 	}, [text]);
 	const sceneUuid = field("sceneUuid");
 	useEffect(() => {
-		if (status?.state !== "connected") return;
+		setCatalog(emptyCatalog);
+		if (busy || status?.state !== "connected") return;
 		let active = true;
 		void window.quakeObs
 			?.request({ type: "catalog", sceneUuid })
 			.then((reply) => {
-				if (active && reply.type === "catalog") setCatalog(reply.catalog);
+				if (
+					active &&
+					catalogGeneration.current === catalogRevision &&
+					reply.type === "catalog"
+				)
+					setCatalog(reply.catalog);
 			})
 			.catch(() => {});
 		return () => {
 			active = false;
 		};
-	}, [sceneUuid, status?.state]);
+	}, [busy, catalogRevision, sceneUuid, status?.state]);
 	const request = async (input: ObsRequest) => {
 		if (!window.quakeObs || busy) return;
 		setBusy(true);
+		invalidateCatalog();
 		setError("");
 		try {
 			const reply = await window.quakeObs.request(input);
 			if (reply.type === "status") {
 				setStatus(reply.status);
+				if (reply.status.state === "connected") invalidateCatalog();
 				if (input.type === "detect") {
 					setHost(reply.status.host);
 					setPort(reply.status.port);
@@ -159,6 +174,7 @@ export function ObsSettings({
 	const connect = async () => {
 		if (!window.quakeObs || busy) return;
 		setBusy(true);
+		invalidateCatalog();
 		setError("");
 		try {
 			const saved = await window.quakeObs.request({
@@ -170,10 +186,14 @@ export function ObsSettings({
 				setError(saved.message);
 				return;
 			}
+			if (saved.type === "status") setStatus(saved.status);
 			setPassword("");
 			setPasswordEdited(false);
 			const connected = await window.quakeObs.request({ type: "connect" });
-			if (connected.type === "status") setStatus(connected.status);
+			if (connected.type === "status") {
+				setStatus(connected.status);
+				if (connected.status.state === "connected") invalidateCatalog();
+			}
 			if (connected.type === "error") setError(connected.message);
 		} catch {
 			setError(text("disconnected"));
@@ -334,6 +354,8 @@ export function ObsSettings({
 							const scene = catalog.scenes.find(
 								(entry) => entry.sceneUuid === e.target.value,
 							);
+							if (type === "obsSource")
+								setCatalog((current) => ({ ...current, items: [] }));
 							update({
 								sceneUuid: e.target.value,
 								...(["obsScene", "obsPreviewScene", "obsSource"].includes(type)

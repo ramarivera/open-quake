@@ -22,3 +22,9 @@
 - [x] 4.4 Preserve stale scene targets as unavailable, retain replacement choices and reject missing-scene dispatch; regressions for thread 4375833113. Bead open-quake-lih.18.1.12.
 
 - [x] 4.5 Honor OBS SessionInvalidated close code 4011 until explicit reconnect; regression for thread 4376190765. Bead open-quake-lih.18.1.13.
+
+## 5. Final PR80 integration
+
+- [x] 5.1 Merge current main while preserving OBS and per-profile clock/model behavior, explicitly invalidate and reload the editor catalog after reconnect, add a mounted regression for thread 4376364138, handle other unanswered bot feedback, and run all gates. Bead open-quake-lih.18.1.14.
+- [x] 5.2 Clear source choices immediately when changing scenes and cover a delayed catalog reload for thread 4376500025. Bead open-quake-lih.18.1.15.
+- [x] 5.3 Subscribe read-only editor previews to live OBS data without enabling input actions for thread 4376500032. Bead open-quake-lih.18.1.16.

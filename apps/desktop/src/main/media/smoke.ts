@@ -641,6 +641,14 @@ async function smoke(): Promise<void> {
 	await lifecycleRuntime.runPromise(lifecycle.topology());
 	// Built-in-like profiles on the panel, swapped through the read-only channel.
 	const obsServer = await fakeObsServer({
+		scenes: [
+			{ sceneUuid: "scene-1", sceneName: "Main" },
+			{ sceneUuid: "scene-2", sceneName: "Second scene" },
+		],
+		sceneItems: {
+			"scene-1": [{ sceneItemId: 7, sourceName: "Camera" }],
+			"scene-2": [{ sceneItemId: 42, sourceName: "Second camera" }],
+		},
 		silentInputs: ["image-1"],
 		inputs: [
 			{
@@ -677,6 +685,11 @@ async function smoke(): Promise<void> {
 		})
 		.toJPEG(50)
 		.toString("base64");
+	let obsSaved: unknown = {
+		...emptyObsSaved,
+		port: obsServer.port,
+		manualOverride: true,
+	};
 	// The fake server supplies a valid jpeg for the real Chromium decoder.
 	const obsRegistration = prepareObs({
 		renderer: pathToFileURL(resolve("out/renderer/index.html")).href,
@@ -686,12 +699,10 @@ async function smoke(): Promise<void> {
 		mock: true,
 		storage: {
 			store: {
-				read: async () => ({
-					...emptyObsSaved,
-					port: obsServer.port,
-					manualOverride: true,
-				}),
-				write: async () => {},
+				read: async () => obsSaved,
+				write: async (value) => {
+					obsSaved = value;
+				},
 			},
 			vault: {
 				put: async () => "fixture-reference",
@@ -796,6 +807,17 @@ async function smoke(): Promise<void> {
 	await waitForVoice(
 		management,
 		"document.querySelector('#obs-scene option[value=\"scene-1\"]') !== null",
+	);
+	await waitForVoice(
+		management,
+		"document.querySelector('.keys-preview .obs-screenshot')?.naturalWidth > 0",
+	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('.keys-preview .obs-tile')].some(tile => tile.textContent.includes('CPU 12.3%'))`,
+		),
+		true,
+		"Read-only management preview must show live OBS stats and decoded screenshots",
 	);
 	assert.equal(
 		await management.webContents.executeJavaScript(
@@ -920,6 +942,146 @@ async function smoke(): Promise<void> {
 			join(artifacts, "panel-obs.png"),
 			(await panel.webContents.capturePage()).toPNG(),
 		);
+	const replacementObs = await fakeObsServer({
+		scenes: [
+			{ sceneUuid: "replacement-scene", sceneName: "Replacement scene" },
+		],
+		transitions: [{ transitionName: "Replacement transition" }],
+		inputs: [
+			{
+				inputUuid: "replacement-input",
+				inputName: "Replacement input",
+				inputKind: "wasapi_input_capture",
+			},
+		],
+	});
+	const changeObsFunction = async (type: string) => {
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#key-function'); select.value = ${JSON.stringify(type)};
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await settle(100);
+	};
+	const reconnectObs = async (host: string, port: number) => {
+		await management.webContents.executeJavaScript(`(() => {
+			const toggle = document.querySelector('.obs-controls button');
+			if (toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
+		})()`);
+		await waitForVoice(
+			management,
+			"document.querySelector('#obs-port') !== null",
+		);
+		await management.webContents.executeJavaScript(`(() => {
+			const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+			for (const [id, value] of [['obs-host', ${JSON.stringify(host)}], ['obs-port', '${port}']]) {
+				const input = document.getElementById(id); set.call(input, value);
+				input.dispatchEvent(new Event('input', {bubbles:true}));
+			}
+		})()`);
+		await settle(50);
+		await management.webContents.executeJavaScript(
+			`[...document.querySelectorAll('.obs-connection button')].find(button => button.textContent === 'Connect').click(); null;`,
+		);
+		await waitForVoice(
+			management,
+			`document.querySelector('.obs-controls [role="status"]').textContent === 'Connected' && [...document.querySelectorAll('.obs-connection button')].some(button => button.textContent === 'Connect' && !button.disabled)`,
+		);
+	};
+	try {
+		await changeObsFunction("obsSource");
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#obs-scene'); select.value = 'scene-1';
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-item option[value="7"]') !== null`,
+		);
+		obsServer.delay("GetSceneItemList", 600);
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#obs-scene'); select.value = 'scene-2';
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-scene').value === 'scene-2'`,
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				`document.querySelector('#obs-item option[value="7"]') === null && document.querySelector('#obs-item option[value="42"]') === null`,
+			),
+			true,
+			"Changing scenes clears source choices before the delayed new catalog arrives",
+		);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-item option[value="42"]') !== null`,
+		);
+		obsServer.delay("GetSceneItemList", 0);
+		process.stdout.write(
+			"OBS scene regression PASS: old sources clear during delayed scene-item loading.\n",
+		);
+		await changeObsFunction("obsSceneTransitionOverride");
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-scene option[value="scene-1"]') !== null`,
+		);
+		await reconnectObs("localhost", replacementObs.port);
+		assert.equal(
+			replacementObs.connections(),
+			1,
+			"Connect must actually establish the replacement endpoint",
+		);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-scene option[value="replacement-scene"]') !== null`,
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(`(() => {
+				const values = [...document.querySelectorAll('.obs-connection select option')].map(option => option.value);
+				return values.includes('Replacement transition') && !values.includes('scene-1') && !values.includes('Fade');
+			})()`),
+			true,
+			"Connected-to-connected reconnect must replace scene and transition choices",
+		);
+		await changeObsFunction("obsVolume");
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-input option[value="replacement-input"]') !== null`,
+		);
+		assert.equal(
+			await management.webContents.executeJavaScript(
+				`document.querySelector('#obs-input option[value="plugin-1"]') === null`,
+			),
+			true,
+			"Reconnect must remove the previous instance's input choices",
+		);
+		const catalogCalls = obsServer.calls.filter(
+			(call) => call.type === "GetSceneList",
+		).length;
+		obsServer.fail(["GetSceneList"]);
+		await reconnectObs("127.0.0.1", obsServer.port);
+		await waitForVoice(
+			management,
+			`document.querySelector('#obs-input option[value="replacement-input"]') === null`,
+		);
+		assert(
+			obsServer.calls.filter((call) => call.type === "GetSceneList").length >
+				catalogCalls,
+			"Reconnect must attempt a fresh catalog even when loading fails",
+		);
+		if (artifacts)
+			await writeFile(
+				join(artifacts, "management-obs-reconnect.png"),
+				(await management.webContents.capturePage()).toPNG(),
+			);
+		process.stdout.write(
+			"OBS reconnect regression PASS: changed host/port replaces scenes, inputs and transitions; failed reload clears old targets.\n",
+		);
+	} finally {
+		obsServer.fail([]);
+		await replacementObs.close();
+	}
 	await panel.loadURL("about:blank");
 	await management.loadURL("about:blank");
 	await settle(50);

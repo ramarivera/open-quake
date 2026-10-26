@@ -9,7 +9,7 @@ import { storedKeyLocale } from "../keys/key-locale";
 import type { StripTileProps } from "../strip/tileRegistry";
 import { obsText } from "./strings";
 import "./obs.css";
-export function ObsTile({ tile, context }: StripTileProps): React.JSX.Element {
+export function ObsTile({ tile }: StripTileProps): React.JSX.Element {
 	const lease = useId(),
 		host = useRef<HTMLDivElement>(null);
 	const [live, setLive] = useState<Tile>();
@@ -23,7 +23,7 @@ export function ObsTile({ tile, context }: StripTileProps): React.JSX.Element {
 	}, []);
 	useEffect(() => {
 		const bridge = window.quakeObs;
-		if (!bridge || context.interactive === false || !encoded) return;
+		if (!bridge || !encoded) return;
 		let intersection = true;
 		const decoded = Schema.decodeUnknownEither(Schema.parseJson(ObsCommand))(
 			encoded,
@@ -67,7 +67,7 @@ export function ObsTile({ tile, context }: StripTileProps): React.JSX.Element {
 				.request({ type: "visible", lease, tiles: [] })
 				.catch(() => {});
 		};
-	}, [encoded, lease, tile.keyCode, context.interactive]);
+	}, [encoded, lease, tile.keyCode]);
 	const label = obsText(locale, "labels", tile.type);
 	const connected = live?.connected === true;
 	return (
