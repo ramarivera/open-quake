@@ -167,6 +167,11 @@ export function SkillsPanel({
 	const [selectedAgent, setSelectedAgent] = useState(
 		view.agents.find((a) => a.id !== "main")?.id ?? "",
 	);
+	const effectiveAgent = view.agents.some(
+		(a) => a.id !== "main" && a.id === selectedAgent,
+	)
+		? selectedAgent
+		: (view.agents.find((a) => a.id !== "main")?.id ?? "");
 	const [editing, setEditing] = useState<{
 		readonly skill: Skill | undefined;
 	}>();
@@ -176,7 +181,9 @@ export function SkillsPanel({
 	const visible = view.skills.filter(
 		(skill) =>
 			(scope === "all" ||
-				(scope === "shared" ? !skill.owner : skill.owner === selectedAgent)) &&
+				(scope === "shared"
+					? !skill.owner
+					: Boolean(effectiveAgent) && skill.owner === effectiveAgent)) &&
 			[
 				skill.name,
 				skill.folder,
@@ -253,7 +260,7 @@ export function SkillsPanel({
 						Agent
 						<select
 							aria-label="Skill agent"
-							value={selectedAgent}
+							value={effectiveAgent}
 							onChange={(e) => setSelectedAgent(e.target.value)}
 						>
 							{view.agents

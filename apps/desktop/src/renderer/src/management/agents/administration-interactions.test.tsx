@@ -421,3 +421,60 @@ it("CENTER-047 pack export follows the visible agent after roster replacement", 
 	await click(button("Export pack"));
 	expect(request).toHaveBeenLastCalledWith({ type: "export-pack", id: "main" });
 });
+
+it("CENTER-052 skill agent scope follows additions and deletions in the roster", async () => {
+	let publish: (next: AgentView) => void = () => {};
+	const request = vi.fn<AgentRequest>(async () => ({
+		_tag: "success",
+		view,
+		draft: "",
+	}));
+	function Panel() {
+		const [current, setCurrent] = useState({
+			...view,
+			agents: [view.agents[0]],
+		});
+		publish = setCurrent;
+		return <SkillsPanel view={current} request={request} busy={false} />;
+	}
+	await mount(<Panel />);
+	await input(
+		element<HTMLSelectElement>('select[aria-label="Skill scope"]'),
+		"agent",
+	);
+	expect(document.querySelectorAll(".aw-skill-list li")).toHaveLength(0);
+	await act(async () => publish(view));
+	expect(
+		element<HTMLSelectElement>('select[aria-label="Skill agent"]').value,
+	).toBe("writer");
+	expect(element(".aw-skill-list").textContent).toContain("Draft");
+	const reviewer = Schema.decodeUnknownSync(AgentId)("reviewer");
+	await act(async () =>
+		publish({
+			...view,
+			agents: [
+				view.agents[0],
+				{ ...view.agents[1], id: reviewer, name: "Reviewer" },
+			],
+			skills: [
+				...view.skills,
+				{
+					...view.skills[1],
+					owner: "reviewer",
+					folder: "review",
+					name: "Review",
+				},
+			],
+		}),
+	);
+	expect(
+		element<HTMLSelectElement>('select[aria-label="Skill agent"]').value,
+	).toBe("reviewer");
+	expect(element(".aw-skill-list").textContent).toContain("Review");
+	expect(element(".aw-skill-list").textContent).not.toContain("Draft");
+	await act(async () => publish({ ...view, agents: [view.agents[0]] }));
+	expect(
+		element<HTMLSelectElement>('select[aria-label="Skill agent"]').value,
+	).toBe("");
+	expect(document.querySelectorAll(".aw-skill-list li")).toHaveLength(0);
+});
