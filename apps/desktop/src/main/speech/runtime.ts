@@ -299,9 +299,10 @@ export const createProductionVoiceRuntime = Effect.fn(
 								}),
 							(frame) =>
 								Effect.gen(function* () {
-									if (active !== owner || owner.released) return;
+									if (active !== owner) return;
 									owner.hasAudioFrame = true;
 									yield* metrics.frame;
+									if (owner.released) return;
 									const next = stepVoiceActivity(activity, frame.peak);
 									if (next.detected !== activity.detected) {
 										yield* stage(owner, {

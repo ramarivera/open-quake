@@ -56,6 +56,7 @@ const fixture = Effect.fn("SpeechTest.fixture")(function* (
 		| "completed"
 		| "denied",
 	finalDelayMs = 0,
+	tailOnRelease = false,
 ) {
 	const packets = yield* Queue.unbounded<unknown>();
 	const published = yield* Queue.unbounded<VoiceSurfaceEvent>();
@@ -94,13 +95,17 @@ const fixture = Effect.fn("SpeechTest.fixture")(function* (
 										{
 											captureId: id,
 											seq: 0,
-											bytes: new Uint8Array(960),
+											bytes: new Uint8Array(tailOnRelease ? 480 : 960),
 											rms: 0.1,
 											peak: 0.1,
 										},
 									],
 									done: false,
-								})
+								}).pipe(
+									Effect.zipLeft(
+										tailOnRelease ? Deferred.await(stopped) : Effect.void,
+									),
+								)
 							: Deferred.await(stopped).pipe(
 									Effect.as({ frames: [], done: true }),
 								),
@@ -704,3 +709,62 @@ for (const [mode, finalWait] of [
 			),
 	);
 }
+
+it.effect(
+	"counts a short recording's final tail after release without publishing recording activity",
+	() =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const f = yield* fixture("auto", 0, true);
+				const records = yield* Queue.unbounded<CaptureMetrics>();
+				yield* Effect.gen(function* () {
+					const controller = yield* createProductionVoiceRuntime({
+						speech: yield* AiSpeechService,
+						capture: f.driver,
+						profiles: f.profiles,
+						sendText: () => Effect.void,
+						sendTranscript: () => Effect.die("empty"),
+						diagnostics: {
+							layer: Layer.empty,
+							instrument: (effect) => effect,
+							recordCapture: (value) =>
+								Queue.offer(records, value).pipe(Effect.asVoid),
+						},
+					});
+					yield* controller.runtime.startCapture(captureRequest);
+					yield* Deferred.await(f.listening);
+					yield* TestClock.adjust(10);
+					yield* controller.runtime.releaseCapture("fixture", "1,5", 1);
+					const record = yield* Queue.take(records);
+					expect(record).toMatchObject({
+						terminal: "empty",
+						captureDurationMs: 10,
+						hasAudioFrame: true,
+						firstFrameLatencyMs: 10,
+					});
+					expect(f.actions).toEqual(["run-task", "pcm", "finish-task"]);
+					const events = Array.from(yield* Queue.takeAll(f.published));
+					expect(
+						events.find(
+							(event) => event._tag === "Stage" && event.stage._tag === "idle",
+						),
+					).toMatchObject({
+						stage: { _tag: "idle", outcome: "empty", emptyReason: "unclear" },
+					});
+					expect(events.filter((event) => event._tag === "Level")).toEqual([]);
+					const processing = events.findIndex(
+						(event) =>
+							event._tag === "Stage" && event.stage._tag === "processing",
+					);
+					expect(
+						events
+							.slice(processing)
+							.filter(
+								(event) =>
+									event._tag === "Stage" && event.stage._tag === "recording",
+							),
+					).toEqual([]);
+				}).pipe(Effect.provide(f.layer));
+			}),
+		),
+);

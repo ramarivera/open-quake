@@ -128,3 +128,5 @@ acceptance is claimed.
 - [x] Propagate the effective microphone-only retry configuration into meeting history without changing the configured system-audio preference. Port and MeetingService persistence regressions fail before the fix. Tracked in open-quake-c5w.17; meeting-minutes owns the source-fallback scenario.
 
 - [x] Bound opt-in archives to the first 60 seconds without failing Stop/export, and close the audio context in a finalizer when graph teardown rejects. Serialized-worker regressions cover partial-frame/full-frame overflow and failing disconnect; all fail before the fix. Tracked in open-quake-c5w.17.
+
+- [x] Count validated final-tail PCM after release for the current owner before suppressing level/activity events. A short-press production STT/runtime regression fails before the fix and verifies unclear rather than noAudio, first-frame metrics, transmitted PCM and no post-release recording activity. Tracked in open-quake-c5w.17.
