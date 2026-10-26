@@ -128,3 +128,10 @@ Profile property fields and dropdowns SHALL remain readable and keyboard-focusab
 #### Scenario: Narrow localized properties
 - **WHEN** English or German profile properties render at 390 pixels and desktop width
 - **THEN** labels and fields remain visible, keyboard focus has a visible indicator, and the management document has no horizontal overflow
+
+### Requirement: Exact saved DK Claw payloads
+The DK Claw preset SHALL retain the 1,1 quakeBot conversation tile with agentId default, ttsEngine qwen, modeltype qwen-audio-3.1-tts-flash, 4 by 2 size, and top title size 6 (MGMT-348). Its four clawbot tiles SHALL occupy 1,5 materialfinder, 1,6 stockmaster, 2,5 dataorganizer, and 2,6 techex, each with voiceInput true and empty taskPrompt (MGMT-349). Save/reload SHALL retain preset protection and activation SHALL select the saved agent without inference.
+
+#### Scenario: Round trip the protected preset
+- **WHEN** the shipped DK Claw preset is installed, saved and reloaded through ProfileService
+- **THEN** all exact tile payloads and protection flags remain and each agent tile activates its matching identity through the fake voice runtime

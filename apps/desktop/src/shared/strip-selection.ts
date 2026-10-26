@@ -1,5 +1,12 @@
 import { Option } from "effect";
-import type { Profile, ProfileEnvelope, ProfilePage } from "./profiles";
+import {
+	initialStripProfile,
+	type Profile,
+	type ProfileEnvelope,
+	type ProfilePage,
+} from "./profiles";
+
+export { initialStripProfile } from "./profiles";
 
 export interface StripSelection {
 	readonly profile: Profile;
@@ -7,7 +14,8 @@ export interface StripSelection {
 }
 
 /**
- * The device's visible saved selection, else the first visible profile's first page
+ * The device's visible saved selection, else its colorful initial profile.
+ * Desktop preview without a serial and invalid saved references use the first visible page
  * (profiles-key-grid "Invalid active reference"). Until device discovery
  * supplies a serial, callers pass the wallpaper session's serial.
  */
@@ -23,7 +31,13 @@ export function selectStripPage(
 	);
 	// The manager keeps at least one built-in visible. Retain a safe fallback
 	// for envelopes that predate or bypass that invariant.
-	const first = visible[0] ?? envelope.profiles[0];
+	const first =
+		serial !== undefined &&
+		serial !== "desktop-preview" &&
+		serial !== "__proto__" &&
+		!Object.hasOwn(envelope.activeByDevice, serial)
+			? initialStripProfile(envelope)
+			: (visible[0] ?? envelope.profiles[0]);
 	const fallback = {
 		profile: first,
 		page: first.pages[0],
@@ -34,4 +48,14 @@ export function selectStripPage(
 	const profile = visible.find((entry) => entry.id === selection?.profileId);
 	const page = profile?.pages.find((entry) => entry.id === selection?.pageId);
 	return profile && page ? { profile, page } : fallback;
+}
+
+/** Emoji folder screens are temporary; reconnect restores the committed page. */
+export function isTransientStripPage(
+	profile: Profile,
+	pageId?: string,
+): boolean {
+	const page =
+		profile.pages.find((page) => page.id === pageId) ?? profile.pages[0];
+	return page.keys.some((key) => key.config.type === "emojiBack");
 }

@@ -212,6 +212,7 @@ export const VoiceSurfaceRequest = Schema.Union(
 		settings: ReaderSettings,
 	}),
 	Schema.TaggedStruct("Input", { input: GridVoiceInput }),
+	Schema.TaggedStruct("ResetContext", { keyCode: VoiceKeyCode }),
 	Schema.TaggedStruct("Reset", {
 		reason: VoiceResetReason,
 	}),

@@ -74,3 +74,10 @@ Bead `open-quake-lih.11.18` owns this final-round scope.
 - [x] 10.4 Use live bound-display position and rotation during concurrent pairing. Codex4378546838. The concurrent-pairing regression failed before and passes with live lookup; 28 lifecycle tests pass.
 - [x] 10.5 Refresh secondary HID paths by serial after re-enumeration. Codex4378546848. Two-strip regression fails on the old path selection and passes after serial lookup, including repeated path changes, recovery and input isolation. 14 HID tests pass.
 - [x] 10.6 Run full gates and native media smoke, push and reply per fix, remove build output. Leave threads unresolved and PR unmerged.
+
+## Device burn-down lane 2026-10-26
+
+- [x] Implement device lane requirements with fixture/TestClock/native mock coverage. Beads open-quake-lih.11.20-.22.
+- [x] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.
+
+Device lane validation: current main `4aa4a9f1` merged. Root test command with SSD TMPDIR passed 4,137 tests with four existing skips. Lint, six-package typecheck, build, bundle smoke, 47 strict OpenSpec items and hidden muted native media smoke passed. EN/DE screenshots and per-row evidence are in the lane scratch directory; hardware stays unverified. Beads remain open for the lead.

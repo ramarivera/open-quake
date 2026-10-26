@@ -12,6 +12,19 @@ import "../main/clock/preload";
 import "../main/monitor/preload";
 import "../main/media/preload";
 import "./lifecycle";
+import { STRIP_MESSAGE, type StripMessage } from "../shared/strip-transport";
+
+contextBridge.exposeInMainWorld("quakeStripTransport", {
+	send: (session: string, message: StripMessage) =>
+		ipcRenderer.invoke(STRIP_MESSAGE, session, message),
+});
+
+import { DEVICE_READY } from "../shared/hardware-contracts";
+
+contextBridge.exposeInMainWorld("quakeDeviceReady", {
+	read: (serial?: string) => ipcRenderer.invoke(DEVICE_READY, serial),
+});
+
 import "../main/management/preload";
 import "../main/emoji/preload";
 import "../main/agents/preload";

@@ -6,6 +6,7 @@ import {
 	ProfileNotFound,
 	type ProfileSwitchingError,
 } from "./profile-errors.js";
+import { initialStripProfile } from "./profile-invariants.js";
 import type { ProfilePlatform } from "./profile-manager-contracts.js";
 import { managerState, visibleProfiles } from "./profile-manager-invariants.js";
 import {
@@ -110,7 +111,7 @@ export class ProfileSwitching extends Effect.Service<ProfileSwitching>()(
 						visible.find(
 							(p) => p.id === envelope.activeByDevice[serial]?.profileId,
 						)?.id ??
-						visible.at(-1)?.id;
+						initialStripProfile(envelope).id;
 					if (!id) {
 						sessions.delete(serial);
 						return;

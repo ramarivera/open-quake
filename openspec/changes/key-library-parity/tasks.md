@@ -80,6 +80,10 @@
 
 - [x] Mounted editor and title-recovery burn-down regressions for MGMT-049/083/096/097/100/249. Beads open-quake-lih.9.2 and open-quake-lih.9.3 remain open for lead integration.
 
+## Agents burn-down lane, 2026-10-26
+
+- [x] A.1 Expose sequence count, Add step focus and Back navigation for MGMT-280. Bead `open-quake-lih.17.12`; production `SequenceEditor.tsx`, mounted `key-editor-interactions.test.tsx` verifies the saved sequence survives the return flow.
+
 ## Grid-editor burn-down lane
 
 - [x] Implement grid-editor placement, movement, selection, navigation, sizing, hints and scheduling with mounted consumer tests. Beads open-quake-lih.10.7/.8/.9.

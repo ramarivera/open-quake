@@ -3,6 +3,7 @@ import { skillFolderName } from "../../../../../../../packages/edge/src/agents/a
 import type { AgentView, Skill } from "../../../../shared/agents";
 import { useAgentsCopy } from "./copy";
 import { AgentDialog, ConfirmDialog, format } from "./Dialog";
+import { SKILL_DRAG_TYPE, skillDragPayload } from "./skill-transfer";
 import type { AgentRequest } from "./useAgents";
 
 function SkillEditor({
@@ -162,23 +163,37 @@ export function SkillsPanel({
 	const strings = useAgentsCopy();
 	const t = strings.clawAgentManagement;
 	const [search, setSearch] = useState("");
+	const [scope, setScope] = useState("all");
+	const [selectedAgent, setSelectedAgent] = useState(
+		view.agents.find((a) => a.id !== "main")?.id ?? "",
+	);
+	const effectiveAgent = view.agents.some(
+		(a) => a.id !== "main" && a.id === selectedAgent,
+	)
+		? selectedAgent
+		: (view.agents.find((a) => a.id !== "main")?.id ?? "");
 	const [editing, setEditing] = useState<{
 		readonly skill: Skill | undefined;
 	}>();
 	const [deleting, setDeleting] = useState<Skill>();
 	const [equip, setEquip] = useState("");
 	const [message, setMessage] = useState("");
-	const visible = view.skills.filter((skill) =>
-		[
-			skill.name,
-			skill.folder,
-			skill.description,
-			skill.owner,
-			view.agents.find((a) => a.id === skill.owner)?.name ?? "",
-		]
-			.join(" ")
-			.toLowerCase()
-			.includes(search.toLowerCase()),
+	const visible = view.skills.filter(
+		(skill) =>
+			(scope === "all" ||
+				(scope === "shared"
+					? !skill.owner
+					: Boolean(effectiveAgent) && skill.owner === effectiveAgent)) &&
+			[
+				skill.name,
+				skill.folder,
+				skill.description,
+				skill.owner,
+				view.agents.find((a) => a.id === skill.owner)?.name ?? "",
+			]
+				.join(" ")
+				.toLowerCase()
+				.includes(search.toLowerCase()),
 	);
 	const move = async (skill: Skill, target: string): Promise<void> => {
 		const reply = await request({
@@ -228,6 +243,36 @@ export function SkillsPanel({
 				</button>
 			</header>
 			<div className="aw-list-tools">
+				<label className="mc-field">
+					{strings.administration.scope}
+					<select
+						aria-label={strings.administration.scope}
+						value={scope}
+						onChange={(e) => setScope(e.target.value)}
+					>
+						<option value="shared">{strings.administration.shared}</option>
+						<option value="agent">{strings.administration.agent}</option>
+						<option value="all">{strings.administration.all}</option>
+					</select>
+				</label>
+				{scope === "agent" && (
+					<label className="mc-field">
+						{strings.administration.agent}
+						<select
+							aria-label={strings.administration.agent}
+							value={effectiveAgent}
+							onChange={(e) => setSelectedAgent(e.target.value)}
+						>
+							{view.agents
+								.filter((a) => a.id !== "main")
+								.map((a) => (
+									<option key={a.id} value={a.id}>
+										{a.name}
+									</option>
+								))}
+						</select>
+					</label>
+				)}
 				<label className="mc-field aw-search">
 					<span className="visually-hidden">{t.searchSkills}</span>
 					<input
@@ -262,7 +307,17 @@ export function SkillsPanel({
 								t.unknownAgent)
 							: t.publicLibrary;
 						return (
-							<li key={`${skill.owner}/${skill.folder}`}>
+							<li
+								key={`${skill.owner}/${skill.folder}`}
+								draggable
+								onDragStart={(event) => {
+									event.dataTransfer.effectAllowed = "move";
+									event.dataTransfer.setData(
+										SKILL_DRAG_TYPE,
+										skillDragPayload(skill),
+									);
+								}}
+							>
 								<div className="aw-skill-text">
 									<p className="aw-row-title">
 										{skill.name}{" "}
@@ -277,11 +332,11 @@ export function SkillsPanel({
 									<p className="cw-muted">
 										{skill.description || t.noDescription}
 									</p>
-									{equip === skill.folder && (
+									{equip === `${skill.owner}/${skill.folder}` && (
 										<fieldset className="aw-equip">
 											<legend>{t.chooseTargetAgent}</legend>
 											{view.agents
-												.filter((a) => a.id !== "main")
+												.filter((a) => a.id !== "main" && a.id !== skill.owner)
 												.map((a) => (
 													<button
 														type="button"
@@ -300,19 +355,30 @@ export function SkillsPanel({
 									)}
 								</div>
 								<div className="aw-row-actions">
-									{!skill.owner ? (
-										<button
-											type="button"
-											className="mc-button"
-											disabled={busy}
-											aria-expanded={equip === skill.folder}
-											onClick={() =>
-												setEquip(equip === skill.folder ? "" : skill.folder)
-											}
-										>
-											{equip === skill.folder ? t.cancelEquip : t.equipToAgent}
-										</button>
-									) : (
+									{
+										<>
+											<button
+												type="button"
+												className="mc-button"
+												disabled={busy}
+												aria-expanded={
+													equip === `${skill.owner}/${skill.folder}`
+												}
+												onClick={() =>
+													setEquip(
+														equip === `${skill.owner}/${skill.folder}`
+															? ""
+															: `${skill.owner}/${skill.folder}`,
+													)
+												}
+											>
+												{equip === `${skill.owner}/${skill.folder}`
+													? t.cancelEquip
+													: t.equipToAgent}
+											</button>
+										</>
+									}
+									{skill.owner && (
 										<button
 											type="button"
 											className="mc-button"
