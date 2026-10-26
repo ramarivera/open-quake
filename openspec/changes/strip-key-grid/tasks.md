@@ -46,3 +46,5 @@ Run in `/Volumes/ExtSSD/devplane/oq-strip-grid` on 2026-10-24:
 - `openspec validate --all --strict`: pass.
 
 Not verified: rendering on the real QUAKE strip, its colours, and frame timing.
+
+- [ ] Retained catalog geometry/action and nested-touch burn-down regressions for AI-145/146 and MGMT-351/353/357. Bead open-quake-lih.9.3 remains open for lead integration.

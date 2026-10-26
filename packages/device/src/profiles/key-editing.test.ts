@@ -12,13 +12,14 @@ import {
 	editKeyTitle,
 	editKeyTitleStyle,
 	iconInUse,
+	keyText,
 	keyTitle,
 	resetKeyIcons,
 	titleWeight,
 	truncateKeyTitle,
 } from "./key-editing-invariants.js";
 import { KeyEditing } from "./key-editing-service.js";
-import { builtinProfiles } from "./profile-catalog.js";
+import { builtinProfiles, profileText } from "./profile-catalog.js";
 import {
 	createEmptyProfileKey,
 	encodeProfileEnvelope,
@@ -416,4 +417,61 @@ it("preserves imported source identity independently for reset states without de
 	expect(
 		Option.getOrThrow(alternate.config.compatibility).alternateIconSource,
 	).toBe("alternate-default");
+});
+
+it("MGMT-100 recovers polluted hotkey and agent titles from all eight locales without changing custom text", () => {
+	for (const origin of [
+		"en",
+		"zh",
+		"de",
+		"fr",
+		"it",
+		"es",
+		"ja",
+		"ko",
+	] as const) {
+		const hotkey = {
+			...key,
+			config: {
+				...key.config,
+				title: { ...key.config.title, text: keyText("hotkey", origin) },
+			},
+		};
+		for (const locale of [
+			"en",
+			"zh",
+			"de",
+			"fr",
+			"it",
+			"es",
+			"ja",
+			"ko",
+		] as const) {
+			expect(keyTitle(hotkey, locale)).toBe(keyText("hotkey", locale));
+			const agent = {
+				...key,
+				config: {
+					...key.config,
+					type: "clawbot",
+					title: { ...key.config.title, text: keyText("clawbot", origin) },
+					actions: [{ type: "agentId", value: "materialfinder" }],
+				},
+			};
+			expect(keyTitle(agent, locale)).toBe(
+				profileText("openclawAgents.materialfinder.name", locale),
+			);
+			expect(
+				keyTitle(
+					{ ...agent, config: { ...agent.config, userModifiedTitle: true } },
+					locale,
+				),
+			).toBe(agent.config.title.text);
+		}
+		expect(
+			keyTitle(
+				{ ...hotkey, config: { ...hotkey.config, userModifiedTitle: true } },
+				"en",
+			),
+		).toBe(hotkey.config.title.text);
+	}
 });
