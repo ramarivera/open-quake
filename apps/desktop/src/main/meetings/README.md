@@ -62,6 +62,31 @@ document and top frame. Navigation/popups are blocked, and actual navigation
 revokes capture. A renderer crash reports standalone translation loss and stops
 the provider even when no meeting recorder is active.
 
+## History documents
+
+Search matches literal title text or the displayed recording time, ignoring case
+and surrounding spaces. Refresh keeps the selected record and title draft, shows
+feedback for at least one second, and reports read failures without clearing the
+document. Activating or reselecting Meetings refreshes history too.
+
+Summaries render Markdown headings, tables, checklists and HTTP(S) links. Provider
+HTML stays inert and images show alt text without downloading. Copy and export
+use saved source text. The task inspector opens the appropriate audio, transcript
+or summary; missing managed audio reports `Audio file not found`. Retrying a failed
+task preserves completed artifacts. Template choice persists as the default for
+future recordings, while the current summary changes only after regeneration
+succeeds. Regeneration reports progress, success or failure and retains old text
+on failure.
+
+Edit Meeting Title accepts up to 100 weighted characters. ASCII characters count
+one and other Unicode code points count two. Enter or Save submits; Cancel
+discards the draft. Failed saves keep it open. Confirmed deletion selects the
+next surviving visible record below, otherwise above, skipping deleted children.
+Timed words keep their original punctuation and spacing. Main-meeting mark
+bookmarks toggle selection and show finite start/end times in tooltips; side
+records don't inherit main-meeting marks. Attendance appears only when recorded
+explicitly, since speaker diarization doesn't establish attendee count.
+
 ## Provider integration boundary
 
 `packages/edge/src/ai/meeting-adapter.ts` defines `AiMeetingAdapter` behind the

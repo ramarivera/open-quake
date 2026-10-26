@@ -99,4 +99,15 @@ Beads open-quake-lih.16.5, .6 and .7 remain open for lead merge. Scratch row pla
 - [x] 8.1 AI-301, AI-302, CENTER-106, SETTINGS-104: implement mounted literal search, refresh feedback, sorted stage-aware cards and activation/window lifecycle with responsive mock screenshots.
 - [x] 8.2 AI-308, AI-311, AI-312, SETTINGS-105, SETTINGS-106, SETTINGS-107: render safe Markdown and attendee metadata, managed reveal and independent task feedback, persist template default and test restart/failure preservation.
 - [x] 8.3 AI-310, AI-313, AI-314, AI-317, SETTINGS-108: implement word marks, bounded tooltips, weighted title modal/backend validation and neighbour deletion with mounted and service tests.
-- [ ] 8.4 Run six gates, EN/DE native mock smoke, commit/push and open PR without merging or resolving threads.
+- [x] 8.4 Run six gates, EN/DE native mock smoke, commit/push and open PR without merging or resolving threads.
+
+Lane delivery: PR #98, functional head `08cbc3a1`. The required root loose-environment
+test run had four unchanged backup/profile 5s timeouts; the authorized full direct
+desktop single-worker fallback passed 254 active files and 1987 tests, with one
+skip. Combined with protocol/device/edge, 3278 tests pass and four skip. Biome
+checks 1251 files with 14 existing warnings; all six typechecks, build, both bundle
+modes and 47 strict OpenSpec items pass. Hidden muted meetings and combined media
+native mocks pass and exit. The combined media fixture still logs existing missing
+profiles/connections handlers and settings authorization diagnostics. EN/DE
+screenshots and logs stay external in the meeting-ui scratch root above. Bot
+review is handed to the parent; no thread was resolved and no merge was attempted.
