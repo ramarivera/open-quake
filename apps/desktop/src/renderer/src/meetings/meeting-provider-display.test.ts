@@ -106,3 +106,20 @@ it.each([
 		meetingFailure(code, "fallback", "en"),
 	);
 });
+
+it.each([
+	["AUDIO_MISSING", "Audio recording file is missing. Please record again."],
+	["AUDIO_EXPIRED", "Audio file expired and was deleted. Please record again."],
+	[
+		"TRANSCRIPT_MISSING",
+		"Transcription file is missing. Please retry transcription before regenerating.",
+	],
+	[
+		"NO_VALID_SPEECH",
+		"No valid speech detected. Please check the audio source and record again.",
+	],
+])("gives an actionable English recovery for %s", (suffix, message) => {
+	expect(meetingFailure(`QUAKE.MEETING.${suffix}`, "fallback", "en")).toBe(
+		message,
+	);
+});
