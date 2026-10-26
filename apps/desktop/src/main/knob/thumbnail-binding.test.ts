@@ -63,6 +63,39 @@ async function fixture() {
 	return root;
 }
 describe("profile manager to knob thumbnail handoff", () => {
+	it("recaptures manager images and changes knob context identity when empty borders change", async () => {
+		const root = await fixture();
+		const saved = initial();
+		let border = true;
+		const store = createProfileThumbnailStore(join(root, "profiles"));
+		const thumbnail = vi.fn(async (id: string, locale: ProfileLocale) => {
+			const source = saved.profiles.find((p) => p.id === id);
+			if (!source) throw new Error("Missing fixture");
+			return store.write(translateProfile(source, locale), locale, png, border);
+		});
+		const adapter = desktopKnobAdapters(root, {
+			thumbnailBorder: () => border,
+			thumbnail,
+			profiles: {
+				read: Effect.succeed(saved),
+				select: () => Effect.succeed(saved),
+			},
+		});
+		const first = await Effect.runPromise(adapter.load);
+		const version = adapter.contextVersion();
+		await Effect.runPromise(adapter.ports.warmThumbnails(first.profiles));
+		border = false;
+		const next = await Effect.runPromise(adapter.load);
+		expect(adapter.contextVersion()).not.toBe(version);
+		expect(next.profiles[0]?.thumbnailKey).not.toBe(
+			first.profiles[0]?.thumbnailKey,
+		);
+		const images = await Effect.runPromise(
+			adapter.ports.warmThumbnails(next.profiles),
+		);
+		expect(images.every((p) => p.thumbnail._tag === "ready")).toBe(true);
+		expect(thumbnail).toHaveBeenCalledTimes(4);
+	});
 	it("uses the manager producer once, reads the same canonical file, and invalidates locale and same-revision edits", async () => {
 		const root = await fixture();
 		let saved = initial();

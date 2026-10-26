@@ -78,6 +78,21 @@ afterEach(async () => {
 		await rm(dir, { recursive: true, force: true });
 });
 describe("canonical profile thumbnail storage", () => {
+	it("separates saved border variants and retains both across pruning", async () => {
+		const root = await directory();
+		const store = createProfileThumbnailStore(root);
+		const data = await store.write(profile, "en", png, true);
+		expect(Option.isNone(await store.read(profile, "en", false))).toBe(true);
+		await store.write(profile, "en", png, false);
+		await store.prune([profile]);
+		expect(Option.getOrUndefined(await store.read(profile, "en", true))).toBe(
+			data,
+		);
+		expect(Option.getOrUndefined(await store.read(profile, "en", false))).toBe(
+			data,
+		);
+		expect(await readdir(join(root, "thumbnails"))).toHaveLength(2);
+	});
 	it("atomically publishes content/locale keys and never reuses stale same-revision content", async () => {
 		const root = await directory();
 		const store = createProfileThumbnailStore(root);

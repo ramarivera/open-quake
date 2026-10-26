@@ -9,8 +9,10 @@ import {
 import {
 	cellTheme,
 	resolveProfileTheme,
+	runtimePlaceholder,
 	type StripLayout,
 	stripLayout,
+	stripViewportScale,
 	tileAt,
 } from "./geometry";
 
@@ -293,7 +295,7 @@ describe("DK-Suite geometry", () => {
 		expect(tile?.box).toEqual({ x: 10, y: 10, width: 1900, height: 460 });
 		expect(tile?.cellTheme).toBe("systemMonitorPanelTheme");
 		expect(tile?.tileRadius).toBe(0);
-		expect(tile?.slotRadius).toBe(48);
+		expect(tile?.slotRadius).toBe(0);
 	});
 
 	it("hit-tests the rendered slot, not DK's anchor rectangle", () => {
@@ -389,5 +391,69 @@ describe("theme resolution", () => {
 		expect(page.tiles[1]?.cellTheme).toBe("meetingAssistantTheme");
 		expect(page.tiles[1]?.slot.width).toBe(220);
 		expect(page.tiles[1]?.tileRadius).toBe(24);
+	});
+});
+
+describe("strip burn-down geometry", () => {
+	it("SCREEN-022 runtime cell records carry no unused configuration or event payload", () => {
+		for (const cell of layoutOf([]).cells) {
+			expect(cell.placeholder).not.toHaveProperty("config");
+			expect(cell.placeholder).not.toHaveProperty("eventInfo");
+			expect(cell.placeholder.keyCode).toBe(cell.keyCode);
+		}
+	});
+	it("SCREEN-022 builds runtime placeholders without changing new-editor defaults or leaking old state", () => {
+		expect(runtimePlaceholder("2,8")).toEqual({ keyCode: "2,8" });
+		const empty = createEmptyProfileKey("2,8");
+		expect(empty.config.title.display).toBe(true);
+		const first = layoutOf([
+			key("1,1", "hotkey"),
+			key("2,8", "hotkey", [1, 1], false),
+		]);
+		expect(first.cells.find((c) => c.keyCode === "2,8")?.state).toBe("hidden");
+		const next = layoutOf([]);
+		expect(next.cells).toHaveLength(16);
+		for (const cell of next.cells) {
+			expect(cell.state).toBe("empty");
+			expect(cell.placeholder).toEqual(runtimePlaceholder(cell.keyCode));
+		}
+		expect(empty.config.title.display).toBe(true);
+	});
+	it("SCREEN-023/029 keeps the panel slot and tile square", () => {
+		const tile = layoutOf([key("1,1", "systemMonitorPanel")]).tiles[0];
+		expect(tile).toMatchObject({
+			slotRadius: 0,
+			tileRadius: 0,
+			cellTheme: "systemMonitorPanelTheme",
+			zIndex: 10,
+		});
+	});
+	it("MAIN-052 SCREEN-006/126/134 uniformly fits any positive host without changing logical hit targets", () => {
+		fc.assert(
+			fc.property(
+				fc.integer({ min: 1, max: 8000 }),
+				fc.integer({ min: 1, max: 8000 }),
+				(width, height) => {
+					const scale = stripViewportScale(width, height);
+					expect(scale).toBeGreaterThan(0);
+					expect(1920 * scale).toBeLessThanOrEqual(width + 1e-8);
+					expect(480 * scale).toBeLessThanOrEqual(height + 1e-8);
+					const layout = layoutOf([key("2,8", "hotkey", [2, 2])]);
+					const tile = layout.tiles[0];
+					if (!tile) throw new Error("No tile");
+					const point = {
+						x: (tile.slot.x + 20) * scale,
+						y: (tile.slot.y + 20) * scale,
+					};
+					expect(
+						tileAt({ x: point.x / scale, y: point.y / scale }, layout)?.keyCode,
+					).toBe("2,8");
+				},
+			),
+		);
+		for (const width of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
+			expect(stripViewportScale(width, 480)).toBe(1);
+		for (const height of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
+			expect(stripViewportScale(1920, height)).toBe(1);
 	});
 });
