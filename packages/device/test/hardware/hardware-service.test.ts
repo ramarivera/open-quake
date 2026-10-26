@@ -254,6 +254,7 @@ describe("hardware controls over actual device connection with fake transport", 
 			Effect.gen(function* () {
 				const { fake, connection, session } = yield* setup();
 				yield* session.setLocked(true);
+				yield* session.setLocked(false);
 				expect(yield* fake.writes).toHaveLength(0);
 				yield* session.configure({
 					...defaultHardwarePreferences,
@@ -263,6 +264,7 @@ describe("hardware controls over actual device connection with fake transport", 
 				yield* session.setLocked(true);
 				yield* session.setLocked(false);
 				expect(yield* commands(fake)).toEqual([
+					[2, 6],
 					[1, 6, 0],
 					[1, 6, 1],
 				]);
