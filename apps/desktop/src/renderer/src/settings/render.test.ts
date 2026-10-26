@@ -213,13 +213,18 @@ describe("setup review fixes", () => {
 	it("reads orientation copy through the settings feature translator", () => {
 		const html = render(
 			"de",
-			createElement(DisplayStep, {
-				t: (key) => `translated ${key}`,
-				choices,
-				setChoices: () => {},
-				devices: { state: "connected", serial: "QK-A", mock: true },
-				busy: false,
-				onCheckDevices: () => {},
+			createElement(Step, {
+				part: (t) =>
+					createElement(DisplayStep, {
+						t: Object.assign((key: string) => `translated ${key}`, {
+							obj: t.obj,
+						}),
+						choices,
+						setChoices: () => {},
+						devices: { state: "connected", serial: "QK-A", mock: true },
+						busy: false,
+						onCheckDevices: () => {},
+					}),
 			}),
 		);
 		expect(html).toContain("translated setup.orientation.title");
