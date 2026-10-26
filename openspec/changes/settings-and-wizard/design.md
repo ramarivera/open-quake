@@ -237,7 +237,7 @@ Opus 5.5 owns these renderer decisions.
 - **Navigation seam.** `GeneralSettings` accepts an optional
   `onOpenPage(page: ManagementPage)`. With it, each place gets an Open button
   that closes the guide and calls the root. Without it, places are text only.
-  The root currently passes nothing.
+  The root passes its page navigation callback. After the destination commits, it focuses the stable destination page container, including when opening Settings again. Dismissal still restores focus to Open guide.
 
 Task 3.2 audit against source. These items are reported for the parent and
 are not implemented here:

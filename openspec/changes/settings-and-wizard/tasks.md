@@ -91,3 +91,15 @@ Combined verification passes 1,450 desktop tests, typecheck, production build an
 These controls do not prove physical HID swapping, real OS login-item mutation, providers, microphone capture or packaged attribution. The refreshed full-theme run at `settings-ui/review-full/shots/` also passes with 54 screenshots and 57 audits across Graphite, Midnight and Paper, desktop and narrow widths, English/German, normal initialized offline Hermes, simulated QUAKE and explicit preview completion, resume/replay and General controls. Reviewed delivery remains pending. Task 3.2 and the aggregate remain incomplete.
 
 PR50 current-head review found that the sidebar Resume setup action bypassed drawer dismissal. It now receives the shell's existing navigation callback, so it closes the narrow drawer and returns focus through the same path as ordinary navigation. A hidden production-root Electron run at `settings-ui/resume-drawer-HLbt7Q` opened Menu at 390x625, resumed setup, and confirmed the sidebar is closed and inert, the scrim is absent, focus is on Menu and setup is visible without horizontal overflow. The launcher used an isolated mock device and no microphone, provider, OS login change or foreground input. Shutdown emitted existing missing-handler messages for in-flight meetings/maintenance reads after disposal; this run proves the navigation path only.
+
+PR62 keyboard navigation review: guide destination links now move focus to the
+stable destination page container after navigation, including Settings-to-Settings
+links. The first attempted heading query found the mounted-but-hidden connection
+heading, so the actual-root check rejected it. The stable content container keeps
+focus through asynchronous page loads. A fresh hidden production-root run on
+reviewed main passes 35 states across all themes and widths, en/de, focus return,
+live locale, reopening, Device Keys navigation and same-page Settings navigation.
+No overflow, unnamed controls or console errors; OS login item unchanged. The
+external final evidence is settings-guide/final-run2/. The design note now
+describes the integrated callback. All52 settings tests, desktop typecheck, scoped
+Biome and strict validation pass. Task3.2 remains incomplete for its other gaps.
