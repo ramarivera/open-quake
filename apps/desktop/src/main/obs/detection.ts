@@ -11,7 +11,8 @@ export function parseObsSettings(
 	for (const raw of text.split(/\r?\n/)) {
 		const line = raw.trim();
 		if (line.startsWith("[") && line.endsWith("]")) {
-			section = line === "[WebSocketServer]";
+			// obs-websocket writes [OBSWebSocket]; DK-Suite only reads [WebSocketServer].
+			section = line === "[OBSWebSocket]" || line === "[WebSocketServer]";
 			continue;
 		}
 		if (!section || line.startsWith(";") || line.startsWith("#")) continue;

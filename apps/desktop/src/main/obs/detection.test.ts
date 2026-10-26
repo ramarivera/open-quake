@@ -29,6 +29,14 @@ it("reads the recovered INI section, respects auth-disabled and rejects invalid 
 		parseObsSettings("[WebSocketServer]\nServerEnabled=false\nServerPort=4455"),
 	).toBeUndefined();
 });
+it("reads obs-websocket's own [OBSWebSocket] section, not only DK-Suite's name", () => {
+	// obs-websocket 5.x Config.cpp stores these keys under [OBSWebSocket].
+	expect(
+		parseObsSettings(
+			"[General]\nName=Untitled\n[OBSWebSocket]\nServerEnabled=true\nServerPort=4460\nAuthRequired=true\nServerPassword=real-section\n",
+		),
+	).toEqual({ port: 4460, password: "real-section" });
+});
 it("selects only the platform-local OBS directory", () => {
 	expect(obsSettingsDirectory("darwin", "/home/test", {})).toBe(
 		"/home/test/Library/Application Support/obs-studio",
