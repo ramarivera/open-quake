@@ -68,3 +68,4 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 - [x] R.8 Verify Windows creation identity before every tree kill, hold the verified native handle through termination, and reject reused/unknown/late identities without killing. CENTER-047, MAIN-144, safety finding 4381625938; same bead.
 
 - [x] R.9 Own the Windows tree with a kernel Job Object assigned before the suspended root can run; retain descendants and retryable cleanup after root exit without PID kills. CENTER-047, MAIN-144, finding 4381720098; same bead.
+- [x] R.10 Confirm absent-tree cleanup after initial identity sampling fails, while preserving the prohibition on unverified PID kills. CENTER-047, MAIN-144, finding 4381720113; same bead.

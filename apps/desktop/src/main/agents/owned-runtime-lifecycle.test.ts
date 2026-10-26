@@ -326,3 +326,26 @@ for (const identity of ["missing", "failed query"]) {
 			}),
 	);
 }
+
+it.effect(
+	"4381720113 absent-tree cleanup recovers after initial identity sampling fails",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			f.processIdentity.mockRejectedValueOnce(
+				new Error("fake initial query failure"),
+			);
+			yield* f.backend.start;
+			f.close();
+			f.processIdentity.mockResolvedValue(undefined);
+			f.treeExists.mockResolvedValue(false);
+			yield* f.backend.stop;
+			expect(f.runCommand).not.toHaveBeenCalled();
+			expect(f.treeExists).toHaveBeenCalledExactlyOnceWith(4321);
+			f.processIdentity.mockResolvedValue("638970000000000001");
+			yield* f.backend.start;
+			expect(f.spawn).toHaveBeenCalledTimes(2);
+			yield* f.backend.stop;
+			expect(f.runCommand).toHaveBeenCalledTimes(1);
+		}),
+);

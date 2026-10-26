@@ -179,7 +179,6 @@ export function ownedRuntimeProcessDriver(
 							try {
 								await bounded(
 									(async () => {
-										if (!identity) throw identityFailed();
 										const observed = await processIdentity(pid);
 										if (
 											observed === undefined &&
@@ -187,7 +186,7 @@ export function ownedRuntimeProcessDriver(
 											!(await treeExists(pid))
 										)
 											return;
-										if (!active || observed !== identity)
+										if (!active || !identity || observed !== identity)
 											throw identityFailed();
 										try {
 											await terminateTree(pid, identity);
