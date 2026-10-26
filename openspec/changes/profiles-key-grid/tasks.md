@@ -1,5 +1,10 @@
 # Tasks
 
+## PR121 bot-review fixes
+
+- [x] Quarantine imported forward folder cycles, including self-links, preserve source JSON, and make editor navigation honor unsupported status. Regress both cycle shapes and a quarantined key with an otherwise valid destination. Bead `open-quake-lih.10.20`, MGMT-077/090, review 4381219052.
+- [ ] Retain original source action indexes in broken-link diagnostics after legacy action sentinel normalization. Bead `open-quake-lih.10.20`, review 4381219261.
+
 ## PR107 import-link follow-up
 
 - [x] Remap imported folder, emoji-folder, Back and string page links after allocating all page IDs; diagnose and preserve unresolved links as inactive compatibility data. Verify colliding IDs through ProfileService and the mounted key-editor-interactions fixture, then run typecheck, Biome, root tests, strict OpenSpec, build, bundle and hidden geometry smoke. Bead `open-quake-lih.10.14`, MGMT-077/090, review 4380208827.

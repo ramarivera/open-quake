@@ -184,8 +184,12 @@ When folder support is enabled, a folder key SHALL reference an existing page ID
 
 #### Scenario: Cyclic folder import
 
-- **WHEN** imported folder links form A to B to A
-- **THEN** the links remain preserved as unsupported compatibility data and cannot create an executable navigation cycle
+- **WHEN** imported forward folder links form A to B to A or A to itself
+- **THEN** inspection diagnoses every participating link, clears its active destination and preserves its complete source JSON as unsupported compatibility data
+- **AND** page-ID remapping keeps quarantined links inactive and editor navigation refuses quarantined keys, even when a stored destination exists
+- **AND** known folder and Back functions have import contracts, and normal Back return links do not count as forward folder edges and remain usable
+
+This scenario covers MGMT-077/090 and PR121 review 4381219052. DK-Suite 0.4.95 `app-resources/background.js`, `ResourcesManager.importResources`, character offsets 6376700 to 6380150 builds its resource map before rewriting `emojiFolderId` destinations. Open-quake applies its folder-navigation policy during inspection before that remapping step, preserving raw data while quarantining cycles. The recovered importer establishes the remapping order, not cycle rejection.
 
 ### Requirement: Diagnosed local profile import
 

@@ -1725,6 +1725,114 @@ it("remaps imported folder, emoji and page links before mounted editor navigatio
 	).toHaveLength(0);
 });
 
+for (const selfCycle of [false, true])
+	it(`quarantines imported ${selfCycle ? "self" : "two-folder"} cycles before editor navigation`, async () => {
+		const f = await gridFixture([]);
+		const source = {
+			id: "source",
+			name: "Cyclic folders",
+			revision: 0,
+			pages: [
+				{
+					id: "a",
+					keys: [
+						gridKey("1,1", "createFolder", {
+							actions: [{ type: "folder", value: selfCycle ? "a" : "b" }],
+						}),
+					],
+				},
+				...(selfCycle
+					? []
+					: [
+							{
+								id: "b",
+								keys: [
+									gridKey("1,1", "emojiFolder", {
+										actions: [{ type: "emojiFolderId", value: "a" }],
+									}),
+								],
+							},
+						]),
+			],
+		};
+		const text = JSON.stringify(source);
+		const report = inspectProfileText(text);
+		expect(report.profile).toBeDefined();
+		expect(
+			report.diagnostics.filter((d) => d.code === "invalid-action"),
+		).toEqual(
+			source.pages.map((_, i) => ({
+				code: "invalid-action",
+				path: `pages.${i}.keys.0.config.actions.0.value`,
+				blocking: false,
+			})),
+		);
+		await input(query(f.host, "#keys-import-json", HTMLTextAreaElement), text);
+		await click(button(f.host, "Inspect import"));
+		await settle(() =>
+			expect(
+				query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+			).toBe(false),
+		);
+		await click(button(f.host, "Import as new profile"));
+		await settle(() =>
+			expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+				"imported",
+			),
+		);
+		const imported = f.stored().profiles.find((p) => p.id === "imported");
+		expect(imported?.compatibility?.source).toEqual(source);
+		for (const [i, page] of source.pages.entries()) {
+			expect(imported?.pages[i]?.keys[0]?.config.actions?.[0]?.value).toBe("");
+			expect(imported?.pages[i]?.keys[0]?.compatibility).toMatchObject({
+				unsupported: true,
+				source: page.keys[0],
+			});
+			await input(
+				query(f.host, "#keys-page", HTMLSelectElement),
+				`imported-page-${i + 1}`,
+			);
+			await settle(() =>
+				expect(f.stored().activeByDevice["desktop-preview"]?.pageId).toBe(
+					`imported-page-${i + 1}`,
+				),
+			);
+			const selections = f.calls.filter((c) => c.type === "select").length;
+			await act(async () =>
+				button(f.host, "1,1").dispatchEvent(
+					new MouseEvent("dblclick", { bubbles: true }),
+				),
+			);
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				`imported-page-${i + 1}`,
+			);
+			expect(f.calls.filter((c) => c.type === "select")).toHaveLength(
+				selections,
+			);
+		}
+		expect(
+			f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+		).toHaveLength(0);
+	});
+
+it("does not follow a quarantined folder even when its destination is valid", async () => {
+	const key = {
+		...gridKey("1,1", "createFolder", {
+			actions: [{ type: "folder", value: "child" }],
+		}),
+		compatibility: { unsupported: true },
+	};
+	const f = await gridFixture([key], [{ id: "child", keys: [] }]);
+	const selections = f.calls.filter((c) => c.type === "select").length;
+	await act(async () =>
+		button(f.host, "1,1").dispatchEvent(
+			new MouseEvent("dblclick", { bubbles: true }),
+		),
+	);
+	expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe("one");
+	expect(f.calls.filter((c) => c.type === "select")).toHaveLength(selections);
+});
+
 it("diagnoses unresolved imported navigation without binding it to existing or newly allocated pages", async () => {
 	const f = await gridFixture([]);
 	const keys = [

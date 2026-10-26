@@ -88,7 +88,7 @@ export function inspectProfileImport(
 		path: string,
 		blocking = false,
 	) => diagnostics.push({ code, path, blocking });
-	const normalizeKey = (input: unknown, path: string) => {
+	const normalizeKey = (input: unknown, path: string, pageId?: string) => {
 		const source = record(input);
 		const config = record(source?.config);
 		if (!source || !config) {
@@ -158,7 +158,17 @@ export function inspectProfileImport(
 					!isPageReference(a.type, a.value)
 				)
 					return action;
-				if (typeof a.value === "string" && pageIds.has(a.value)) return action;
+				if (
+					typeof a.value === "string" &&
+					pageIds.has(a.value) &&
+					!(
+						pageId &&
+						["createFolder", "emojiFolder"].includes(String(config.type)) &&
+						a.type !== "parentFolder" &&
+						closesFolderCycle(pageId, a.value)
+					)
+				)
+					return action;
 				report("invalid-action", `${path}.config.actions.${index}.value`);
 				unsupported = true;
 				// Keep the complete original in compatibility.source. Empty destinations
@@ -224,6 +234,47 @@ export function inspectProfileImport(
 			return typeof id === "string" ? [id] : [];
 		}),
 	);
+	// Back actions are return associations, not forward folder edges.
+	const folderLinks = new Map<string, readonly string[]>();
+	for (const value of rawPages) {
+		const page = record(value);
+		if (typeof page?.id !== "string" || !Array.isArray(page.keys)) continue;
+		folderLinks.set(
+			page.id,
+			page.keys.flatMap((key) => {
+				const config = record(record(key)?.config);
+				if (
+					!config ||
+					!["createFolder", "emojiFolder"].includes(String(config.type)) ||
+					!Array.isArray(config.actions)
+				)
+					return [];
+				return config.actions.flatMap((action) => {
+					const a = record(action);
+					return a &&
+						typeof a.type === "string" &&
+						a.type !== "parentFolder" &&
+						typeof a.value === "string" &&
+						pageIds.has(a.value) &&
+						isPageReference(a.type, a.value)
+						? [a.value]
+						: [];
+				});
+			}),
+		);
+	}
+	const closesFolderCycle = (from: string, to: string): boolean => {
+		const pending = [to];
+		const visited = new Set<string>();
+		while (pending.length) {
+			const page = pending.pop();
+			if (page === from) return true;
+			if (page === undefined || visited.has(page)) continue;
+			visited.add(page);
+			pending.push(...(folderLinks.get(page) ?? []));
+		}
+		return false;
+	};
 	let knob = source?.knob;
 	const pages = rawPages.map((value, index) => {
 		const page = record(value);
@@ -241,7 +292,13 @@ export function inspectProfileImport(
 				knob = key;
 				return [];
 			}
-			return [normalizeKey(key, `pages.${index}.keys.${keyIndex}`)];
+			return [
+				normalizeKey(
+					key,
+					`pages.${index}.keys.${keyIndex}`,
+					typeof page.id === "string" ? page.id : undefined,
+				),
+			];
 		});
 		return { ...page, keys };
 	});
