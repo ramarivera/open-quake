@@ -46,7 +46,11 @@ export function useMaintenance() {
 						)
 					: strings.firmwareUpgrade.toast.failed.replace(
 							"{reason}",
-							firmwareReason(next.firmware.reason, next.firmware.from),
+							firmwareReason(
+								next.firmware.reason,
+								next.firmware.from,
+								next.firmware.to,
+							),
 						),
 			);
 		}

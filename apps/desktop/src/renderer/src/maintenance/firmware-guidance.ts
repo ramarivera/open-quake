@@ -21,20 +21,26 @@ const reasons: Readonly<Record<string, string>> = {
 	cancelled_before_write:
 		"Writing was cancelled before any bytes were copied. The device may still be in download mode.",
 };
-export function firmwareReason(reason: string, current = ""): string {
+export function firmwareReason(
+	reason: string,
+	current = "",
+	expected = "",
+): string {
 	return (
 		reasons[reason] ??
 		Object.entries(fw.error).find(([key]) => key === reason)?.[1] ??
 		"The firmware update could not finish. Reconnect the intended QUAKE and inspect a trusted image before trying again."
-	).replace("{current}", current);
+	)
+		.replace("{current}", current)
+		.replace("{expected}", expected);
 }
 export function firmwareHint(snapshot: FirmwareSnapshot): string {
 	if (snapshot.state === "success")
 		return fw.success.replace("{version}", snapshot.to);
 	if (snapshot.state === "needs_recovery")
-		return `${firmwareReason(snapshot.reason, snapshot.from)} Update unverified. Reconnect the intended QUAKE, enter its bootloader manually, and select the trusted image again. Do not unplug during writing.`;
+		return `${firmwareReason(snapshot.reason, snapshot.from, snapshot.to)} Update unverified. Reconnect the intended QUAKE, enter its bootloader manually, and select the trusted image again. Do not unplug during writing.`;
 	if (snapshot.state === "failed")
-		return firmwareReason(snapshot.reason, snapshot.from);
+		return firmwareReason(snapshot.reason, snapshot.from, snapshot.to);
 	const hints: Readonly<Record<string, string>> = {
 		checking: fw.hint.checking,
 		entering_download_mode: fw.hint.enteringDownloadMode,

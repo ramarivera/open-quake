@@ -164,14 +164,17 @@ for (const reason of [
 						: "failed",
 				reason,
 				from: "1.0.19",
+				to: "1.0.21",
 			}),
 		);
 		const { host } = await render(c);
-		expect(host.textContent).toContain(firmwareReason(reason, "1.0.19"));
+		expect(host.textContent).toContain(
+			firmwareReason(reason, "1.0.19", "1.0.21"),
+		);
 		expect(host.querySelector('[role="status"]')?.textContent).not.toContain(
 			reason,
 		);
-		expect(host.textContent).not.toMatch(/\{current\}/);
+		expect(host.textContent).not.toMatch(/\{(?:current|expected)\}/);
 	});
 }
 it("renders offline retained current-to-bundled version and requires online idle target to Upgrade", async () => {
