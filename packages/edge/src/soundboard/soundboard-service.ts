@@ -346,8 +346,10 @@ export const makeSoundboardService = Effect.gen(function* () {
 						return;
 					}
 					if (
-						Option.isSome(slot.navigation) &&
-						slot.navigation.value === slot.command
+						(Option.isSome(slot.navigation) &&
+							slot.navigation.value === slot.command) ||
+						(Option.isSome(slot.replacement) &&
+							slot.replacement.value === slot.command)
 					)
 						return;
 					slot.session = { ...slot.session, state: "loading" };
@@ -466,6 +468,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 						endPending: false,
 						stopAfterRamp: Option.none(),
 						navigation: Option.none(),
+						replacement: Option.none(),
 						targetGain: config.volume / 100,
 						gain: Option.none(),
 						group: target,
@@ -533,6 +536,7 @@ export const makeSoundboardService = Effect.gen(function* () {
 	});
 	const controls = makePlaybackControls({
 		slots,
+		stopping,
 		epoch: () => commandEpoch,
 		invalidatePending: () => {
 			commandEpoch++;

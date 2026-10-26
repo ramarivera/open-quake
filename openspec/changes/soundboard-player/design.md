@@ -153,3 +153,21 @@ Stop All fade without its late completion stopping the replacement.
 Only service/native-adapter behavior is implemented here. The approved
 first-release key/renderer/IPC gate remains intact; task 3.1 owns production
 consumer composition and acceptance. No visual design decision changes.
+
+### PR59 follow-up concurrency fixes
+
+Natural completion now defers to a command-owned replacement through its outgoing
+fade. New controls clear that intent; interruption/failure releases resources
+still owned by the cancelled replacement. Play checks its request again after
+native readiness before beginning either incoming or fresh-play outgoing gain.
+Stop All and profile deactivation include matching already-stopping sessions in
+their snapshot, awaiting cached cleanup without selecting later replacements.
+
+Six deterministic real-service regressions failed before these fixes and pass
+afterward. A seventh covers interrupted replacement after natural end. All 126
+soundboard/audio tests, both package typechecks, scoped Biome and strict spec pass.
+The hidden muted Electron control harness passes actual MP3 decode, pause/resume,
+navigation, rescan, natural end, capture preemption, gain ramps and teardown with
+zero remaining windows/workers. Artifacts stay external in
+`open-quake-finish/soundboard-controls/review-r2/`. Production consumer composition
+and audible/physical acceptance remain open.

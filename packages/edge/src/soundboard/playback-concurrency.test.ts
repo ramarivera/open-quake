@@ -4,6 +4,121 @@ import { describe, expect } from "vitest";
 import { owner, playlist, rig } from "./playback-test-fixtures.js";
 
 describe("soundboard command concurrency", () => {
+	for (const mode of ["out", "toggle"] as const) {
+		it.scoped(`natural end during ${mode} replacement preserves restart`, () =>
+			Effect.gen(function* () {
+				const r = yield* rig();
+				yield* r.service.play(owner, playlist);
+				const restart = yield* r.service
+					.execute(
+						owner,
+						{
+							...playlist,
+							fade: { mode, durationMs: 1000 },
+						},
+						"PLAY_RESTART",
+					)
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(200);
+				const first = r.tracks[0];
+				if (!first) return yield* Effect.die("missing player");
+				yield* Deferred.succeed(first.end, undefined);
+				yield* TestClock.adjust(800);
+				expect(yield* Fiber.join(restart)).toMatchObject({ _tag: "Right" });
+				expect(r.tracks.map((track) => track.fileId)).toEqual(["a", "a"]);
+				expect(first.closed).toBe(1);
+			}),
+		);
+	}
+	for (const mode of ["in", "out"] as const) {
+		it.scoped(`pause during readiness prevents a later ${mode} ramp`, () =>
+			Effect.gen(function* () {
+				const entered = yield* Deferred.make<void>();
+				const ready = yield* Deferred.make<void>();
+				const r = yield* rig(
+					Deferred.succeed(entered, undefined).pipe(
+						Effect.zipRight(Deferred.await(ready)),
+					),
+				);
+				const play = yield* r.service
+					.play(owner, { ...playlist, fade: { mode, durationMs: 1000 } })
+					.pipe(Effect.fork);
+				yield* Deferred.await(entered);
+				const loading = (yield* r.service.snapshot())[0];
+				if (!loading) return yield* Effect.die("missing loading session");
+				const pause = yield* r.service
+					.pause(loading.playbackId)
+					.pipe(Effect.fork);
+				yield* TestClock.adjust(1);
+				yield* Deferred.succeed(ready, undefined);
+				yield* Fiber.join(pause);
+				const gainCount = r.tracks[0]?.gains.length;
+				yield* TestClock.adjust(1000);
+				yield* Fiber.join(play);
+				expect((yield* r.service.snapshot())[0]?.state).toBe("paused");
+				expect(r.tracks[0]?.gains).toHaveLength(gainCount ?? 0);
+			}),
+		);
+	}
+	it.scoped(
+		"interrupted replacement after natural end releases its outgoing player",
+		() =>
+			Effect.gen(function* () {
+				const r = yield* rig();
+				yield* r.service.play(owner, playlist);
+				const restart = yield* r.service
+					.execute(
+						owner,
+						{ ...playlist, fade: { mode: "out", durationMs: 1000 } },
+						"PLAY_RESTART",
+					)
+					.pipe(Effect.fork);
+				yield* TestClock.adjust(200);
+				const first = r.tracks[0];
+				if (!first) return yield* Effect.die("missing player");
+				yield* Deferred.succeed(first.end, undefined);
+				yield* TestClock.adjust(1);
+				yield* Fiber.interrupt(restart);
+				yield* TestClock.adjust(1000);
+				expect(r.tracks).toHaveLength(1);
+				expect(first.closed).toBe(1);
+				expect((yield* r.service.snapshot())[0]?.state).toBe("stopped");
+			}),
+	);
+	for (const all of [true, false]) {
+		it.scoped(
+			`${all ? "Stop All" : "stopProfile"} awaits a teardown already in progress`,
+			() =>
+				Effect.gen(function* () {
+					const entered = yield* Deferred.make<void>();
+					const done = yield* Deferred.make<void>();
+					const r = yield* rig(
+						Effect.void,
+						Deferred.succeed(entered, undefined).pipe(
+							Effect.zipRight(Deferred.await(done)),
+						),
+					);
+					const session = yield* r.service.play(owner, playlist);
+					const stop = yield* r.service
+						.stop(session.playbackId)
+						.pipe(Effect.fork);
+					yield* Deferred.await(entered);
+					const stopMany = yield* (
+						all ? r.service.stopAll() : r.service.stopProfile(owner.profileId)
+					).pipe(Effect.fork);
+					yield* TestClock.adjust(1);
+					const early = yield* Fiber.poll(stopMany);
+					yield* Deferred.succeed(done, undefined);
+					yield* Fiber.join(stop);
+					yield* Fiber.join(stopMany);
+					expect(Option.isNone(early)).toBe(true);
+					expect(r.tracks[0]?.closed).toBe(1);
+					const speech = yield* r.output.acquire("speech", Effect.void);
+					expect(yield* speech.current).toBe(true);
+					yield* speech.release;
+				}),
+		);
+	}
 	it.scoped(
 		"profile deactivation cancels a start awaiting output delivery",
 		() =>

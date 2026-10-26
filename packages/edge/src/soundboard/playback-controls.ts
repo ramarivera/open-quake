@@ -28,6 +28,7 @@ import { copySoundSession } from "./soundboard-repository.js";
 
 export const makePlaybackControls = (ports: {
 	readonly slots: Map<string, PlaybackSlot>;
+	readonly stopping: Map<string, PlaybackSlot>;
 	readonly epoch: () => number;
 	readonly invalidatePending: () => void;
 	readonly current: (slot: PlaybackSlot) => boolean;
@@ -81,6 +82,7 @@ export const makePlaybackControls = (ports: {
 			const command = ++slot.command;
 			slot.stopAfterRamp = Option.none();
 			slot.navigation = Option.none();
+			slot.replacement = Option.none();
 			if (Option.isSome(slot.gain)) yield* slot.gain.value.cancel;
 			return command;
 		});
@@ -372,6 +374,16 @@ export const makePlaybackControls = (ports: {
 				};
 				requests.add(request);
 				let started = Option.none<PlaybackSlot>();
+				const commands: { slot: PlaybackSlot; command: number }[] = [];
+				const stopOwned = () =>
+					Effect.forEach(
+						commands,
+						({ slot, command }) =>
+							slot.command === command && ports.current(slot)
+								? ports.stopNow(slot.session.playbackId)
+								: Effect.void,
+						{ discard: true },
+					);
 				return yield* Effect.gen(function* () {
 					const config: SoundPlaylist = {
 						...decoded.right.playlist,
@@ -388,10 +400,12 @@ export const makePlaybackControls = (ports: {
 					if (running.length > 0) yield* ports.validatePlay(owned, config);
 					if (!request.valid || epoch !== ports.epoch())
 						return yield* new AudioOutputBusy();
-					const commands: { slot: PlaybackSlot; command: number }[] = [];
 					for (const slot of running) {
 						const command = yield* cancel(slot);
 						commands.push({ slot, command });
+						slot.replacement = Option.some(command);
+					}
+					for (const { slot, command } of commands) {
 						if (outgoing && slot.session.state === "playing") {
 							if (
 								!(yield* ramp(slot, 0, config.fade.durationMs)) ||
@@ -414,20 +428,34 @@ export const makePlaybackControls = (ports: {
 					});
 					const slot = lookup(session.playbackId);
 					started = Option.fromNullable(slot);
-					if (slot && fadeIn)
+					if (slot && request.valid && fadeIn)
 						yield* ramp(slot, slot.targetGain, config.fade.durationMs);
-					else if (slot && config.fade.mode === "out" && running.length === 0)
+					else if (
+						slot &&
+						request.valid &&
+						config.fade.mode === "out" &&
+						running.length === 0
+					)
 						yield* ramp(slot, 0, config.fade.durationMs);
 					return slot ? copySoundSession(slot.session) : session;
 				}).pipe(
+					Effect.tapError(stopOwned),
 					Effect.onInterrupt(() =>
-						Option.isSome(started) && request.valid
-							? ports.stopNow(started.value.session.playbackId)
-							: Effect.void,
+						Effect.gen(function* () {
+							if (Option.isSome(started) && request.valid)
+								yield* ports.stopNow(started.value.session.playbackId);
+							yield* stopOwned();
+						}),
 					),
 					Effect.ensuring(
 						Effect.sync(() => {
 							requests.delete(request);
+							for (const { slot, command } of commands)
+								if (
+									Option.isSome(slot.replacement) &&
+									slot.replacement.value === command
+								)
+									slot.replacement = Option.none();
 						}),
 					),
 				);
@@ -443,7 +471,7 @@ export const makePlaybackControls = (ports: {
 				}
 				ports.invalidatePending();
 				yield* Effect.forEach(
-					[...ports.slots.values()],
+					[...ports.slots.values(), ...ports.stopping.values()],
 					(slot) => stop(slot.session.playbackId, fade),
 					{ concurrency: "unbounded", discard: true },
 				);
@@ -458,7 +486,7 @@ export const makePlaybackControls = (ports: {
 			}).pipe(
 				Effect.zipRight(
 					Effect.forEach(
-						[...ports.slots.values()].filter(
+						[...ports.slots.values(), ...ports.stopping.values()].filter(
 							(slot) => slot.session.owner.profileId === profileId,
 						),
 						(slot) => ports.stopNow(slot.session.playbackId),

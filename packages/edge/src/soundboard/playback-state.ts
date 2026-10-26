@@ -52,6 +52,7 @@ export interface PlaybackSlot {
 	endPending: boolean;
 	stopAfterRamp: Option.Option<number>;
 	navigation: Option.Option<number>;
+	replacement: Option.Option<number>;
 	targetGain: number;
 	gain: Option.Option<SoundGain>;
 	track: Option.Option<{

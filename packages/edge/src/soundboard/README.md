@@ -100,3 +100,9 @@ independent instances; PLAY_RESTART replaces them at the remembered track;
 PLAY_PREV/PLAY_NEXT navigate the latest instance or the remembered selection;
 STOP_ALL applies to soundboard only. `stopAll()` allows a newer command to cancel
 its outgoing fade and never stops that command's replacement afterward.
+
+Natural completion during an explicit replacement defers to that replacement,
+including its outgoing fade. A control accepted during native readiness prevents
+the superseded play from starting a later gain ramp. Stop All and profile
+deactivation await applicable sessions already tearing down as well as active
+sessions, without selecting newer replacements for cleanup.
