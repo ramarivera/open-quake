@@ -3,9 +3,9 @@
 ## Purpose
 
 Render the active profile's key grid on the QUAKE strip and in the management
-preview the way DK-Suite 0.4.95 draws it. Geometry, colours and timings are the
-recovered values cited in `design.md`. Parity decisions 2 and 3 were approved by
-Ramiro on 2026-10-23.
+preview with recovered DK-Suite 0.4.95 geometry and behavior. The accepted
+`independent-device-design` owns the flat presentation. Parity decisions 2 and 3
+were approved by Ramiro on 2026-10-23.
 
 > **Visuals superseded (2026-10-25).** Ramiro rejected the DK-Suite imitation on the strip. Visual clauses in this delta (slot visuals, generic tile glow/ring/title metrics, DK press scale and glow) are superseded by `independent-device-design` (`device-visual-design`). Behavior clauses here remain authoritative.
 
@@ -39,7 +39,7 @@ SCREEN-103.
 ### Requirement: Grid themes
 
 The grid SHALL use the profile theme's cell, gap and edge: common base 220/20/10
-radius 48, meeting assistant 236/4/2 radius 24, system info 221/20/10 radius 48,
+visible radius 28, meeting assistant 236/4/2 radius 14, system info 221/20/10 radius 28,
 monitor panel 220/20/10 radius 0. A cell's column SHALL start at
 `edge + (column−1)·(cell+gap)`, and the same formula SHALL apply to rows. The
 profile theme SHALL resolve in this order: compatibility `resourceId` `1-1` or
@@ -55,12 +55,12 @@ MGMT-052.
 #### Scenario: MeetAI geometry
 
 - **WHEN** the active profile's compatibility resourceId is `1-1`
-- **THEN** cell `1,8` spans x 1682–1918 and y 2–238 with corner radius 24
+- **THEN** cell `1,8` spans x 1682–1918 and y 2–238 with corner radius 14
 
 #### Scenario: Custom profile geometry
 
 - **WHEN** a profile named `Work` has no compatibility identity
-- **THEN** cell `2,1` spans x 10–230 and y 250–470 with corner radius 48
+- **THEN** cell `2,1` spans x 10–230 and y 250–470 with corner radius 28
 
 #### Scenario: Meeting mic cell
 
@@ -115,12 +115,15 @@ hit-testing. Covers SCREEN-028, MGMT-064.
 
 ### Requirement: Slot visuals and empty slot setting
 
-Every rendered cell SHALL have a slot with background `rgba(255,255,255,0.04)`
-and the profile theme's radius (0 for `playAudio`). An empty slot SHALL add
-`2px dashed rgba(107,120,145,0.8)` at opacity 0.7. The "Empty Slot Dashed Border"
-setting SHALL default to on, persist locally, and update both windows without
-reload. When off, empty slots SHALL have no border. Spanning slots SHALL stack
-above single slots. Covers SCREEN-029, SCREEN-030, MGMT-055, SETTINGS-013.
+Filled slots SHALL have the opaque device `surface` fill and one hairline border.
+Visible corners SHALL follow the accepted theme radii, with square full-bleed and
+monitor-panel slots. Empty slots SHALL draw only a two-logical-pixel dashed `line`
+border at full opacity. The "Empty Slot Dashed Border" setting SHALL default to
+on, persist locally, and update panel and management without reload. When off,
+empty slots SHALL have no border. Hidden slots SHALL stay inert and unbordered.
+Spanning slots SHALL retain local layer 10, full-bleed slots layer 1, and knob
+focus SHALL retain the opaque plate below its accent outline. Covers SCREEN-029,
+SCREEN-030, MGMT-055, SETTINGS-013.
 
 #### Scenario: Border setting off
 
@@ -160,49 +163,47 @@ WIDGETS-001, WIDGETS-018.
 
 ### Requirement: Generic icon-and-title tile
 
-The generic tile SHALL draw a `floor(min(box)·0.49)` px icon, shifted down 16.67 %
-of its height in common base and up 10 % otherwise. Its title SHALL measure
-`floor(min(box)·0.14·s)` px, where `s` is 0.7 for 2×2 tiles and is multiplied by
-0.9 in common base. In common base the title SHALL sit at top 9 %, weight 400,
-upright. Elsewhere it SHALL sit at top or bottom 10 % per `title.pos`, weight 900
-for `bold` and italic for `italic`. The strip SHALL never underline. Titles
-SHALL be cut to 94 % of the box width with `...` and drawn in `title.color`.
-Hidden titles SHALL not render. Common base SHALL draw the accent glow cover and
-a 2 px accent ring fading from 0.4 to 0.02 alpha (0.18 at the far end when the
-tile spans at least two columns). The accent SHALL come from the icon's averaged
-saturated pixels scaled by 1.2, falling back to the theme colour scheme, then
-rgb(116,128,239). System info SHALL draw its cyan bottom glow and ring. Meeting
-assistant and monitor panel SHALL draw neither. Only inline `data:image/` icons
-SHALL load. Covers SCREEN-022, SCREEN-033, WIDGETS-006, WIDGETS-007, WIDGETS-008,
-WIDGETS-009, WIDGETS-011, WIDGETS-013, MGMT-056, MGMT-060.
+The generic tile SHALL use the flat device palette and code-native plate. Inner
+padding SHALL be rounded 9 percent of the short edge. Icon size SHALL be rounded
+min(42 percent of the short edge,168). Default title size SHALL be rounded
+clamp(22,11 percent of the short edge,34), weight 550, upright and below the icon.
+Explicit user styling SHALL determine title position and supported text style.
+Titles SHALL be bounded by the inner width and ellipsized, and hidden titles
+SHALL not render. Missing, delayed or colourless artwork SHALL retain the flat
+plate without extracted accents, glow, decorative rings or theme SVG variants.
+Only inline `data:image/` icons SHALL load. Covers SCREEN-022, SCREEN-033,
+WIDGETS-006, WIDGETS-007, WIDGETS-008, WIDGETS-009, WIDGETS-011, WIDGETS-013,
+MGMT-056, MGMT-060.
 
 #### Scenario: Common-base 1×1
 
 - **WHEN** a hotkey with a visible title `Lock Screen` renders at 220×220 in common base
-- **THEN** the icon is 107 px and the title is 27 px at top 9 % with weight 400
+- **THEN** the icon is 92 px and the default title is 24 px below it with weight 550
 
 #### Scenario: Two-by-two title
 
 - **WHEN** a `[2,2]` key renders in common base
-- **THEN** its box is 460×460, the icon is 225 px and the title is 40 px
+- **THEN** its box is 460×460, the icon is 168 px and the default title is 34 px
 
 #### Scenario: Colourless icon
 
-- **WHEN** an icon has no pixel with alpha at least 50, brightness 30–225 and saturation at least 0.1
-- **THEN** the tile's accent is the theme colour scheme
+- **WHEN** an icon has no saturated pixels
+- **THEN** the tile keeps its flat device surface without extracting an accent or drawing a glow
 
 ### Requirement: Strip press motion
 
-A pressed tile's slot SHALL scale to 0.8 with a `0 0 25px rgba(255,255,255,0.4)`
-glow through an `all 0.3s ease` transition. `playAudio` SHALL not scale.
-`aiChatView`, `cameraView`, `cameraControlView` and `printerStatusView` SHALL
-show no press effect. With reduced motion requested, the glow SHALL show without
-scaling or transition. Covers SCREEN-034, WIDGETS-010.
+An eligible pressed tile SHALL use raised fill, a two-pixel accent inset ring,
+and a 120 ms transition. Panel scale SHALL be 0.96 and management scale 0.98.
+Visual feedback SHALL clear on release or after 200 ms independently of the held
+action lifetime. `playAudio` SHALL not scale. Conversation, camera and printer
+types, locked non-draggable previews and disabled editors SHALL suppress
+whole-card feedback. With OS or app reduced motion requested, fill and ring SHALL
+remain without scaling or transition. Covers SCREEN-034, WIDGETS-010.
 
 #### Scenario: Reduced motion press
 
-- **WHEN** a hotkey is pressed while the OS requests reduced motion
-- **THEN** its slot shows the glow at full size with no transition
+- **WHEN** a hotkey is pressed while the OS or app requests reduced motion
+- **THEN** its slot shows raised fill and accent ring at full size with no transition
 
 ### Requirement: Hit-testing contract
 
@@ -286,3 +287,89 @@ AI Chat, DKClaw and live translation panels SHALL suppress host-cell touch effec
 - **WHEN** a new serial connects without a configured startup, reported or saved profile
 - **THEN** enrollment commits the visible colorful profile before hardware readiness
 - **AND** the rendered grid and reportActiveProfile use that same profile
+
+### Requirement: Logical viewport updates and mirror fitting
+
+The panel and management mirror SHALL fit the same fixed 1920 by 480 logical canvas uniformly, using the smaller positive host width/1920 and height/480 ratios. Nonfinite or nonpositive host dimensions SHALL use a safe scale of one until measurable. Display placement, load, rebind, DPI changes and macOS cover reinforcement SHALL retain that canvas; physical display dimensions SHALL NOT become logical artwork dimensions. Portrait framebuffers SHALL rotate the whole canvas, including wallpaper, grid, SVG and HTML overlays, as one unit. Management mirrors SHALL fit their available host rather than separately floor theme cells into the recovered 948 by 237 frame. Covers MAIN-052, SCREEN-006, SCREEN-126, SCREEN-134.
+
+#### Scenario: Resize, DPI and portrait updates
+
+- **WHEN** the panel is loaded, rebound, scaled at mixed DPI, or rotated into a portrait framebuffer and its mirror is resized
+- **THEN** wallpaper, slots, overlays and touch targets share the same 1920 by 480 coordinate system, the same uniform scale, and the inward span anchors remain aligned
+- **AND** invalid reference dimensions cannot create an infinite, negative or NaN transform
+
+### Requirement: Normalized runtime empty cells
+
+An absent or empty runtime cell SHALL carry only its keyCode in its placeholder record. Layout SHALL own its rectangle and empty or hidden state; the renderer SHALL NOT allocate unused key configuration or event payloads for empty slots. Runtime placeholders SHALL remain independent of new-editor key defaults, whose title display remains true. Hidden configured keys SHALL remain inert hidden slots. Runtime normalization SHALL NOT mutate saved keys or retain title, artwork or visibility from a previous profile. Covers SCREEN-022.
+
+#### Scenario: Replace a profile with absent cells
+
+- **WHEN** a profile with titles and hidden keys is replaced by a page with absent cells
+- **THEN** all absent cells carry coordinate-only placeholders and paint empty slots without old titles or artwork
+
+### Requirement: Accepted flat theme and span rendering
+
+The recovered grid pitches, edge gaps, inward spans and system-info overflow SHALL remain authoritative. Independent-device-design SHALL govern plate colors, radii, title/icon metrics and feedback. All four themes and every supported span SHALL use the same code-native plate and image sizing, with no theme SVG variant selection, icon color extraction or fallback glow. Monitor-panel corners SHALL be square, including the slot. Enlarged slots SHALL keep local z-index 10, full-bleed slots 1. Knob focus SHALL retain the opaque plate under its accent outline rather than make the slot transparent. Covers SCREEN-023, SCREEN-029, SCREEN-033, SCREEN-126.
+
+#### Scenario: Theme, span and artwork replacements
+
+- **WHEN** common, meeting, system-info and monitor-panel tiles render at retained spans with missing, delayed or alternate artwork and long top or bottom titles
+- **THEN** the accepted flat plate, clipped image, bounded title and proportional radius remain present with no glow or stale artwork
+
+### Requirement: One explicit overlay stack
+
+The strip SHALL isolate one layer stack. Wallpaper SHALL be layer 0, grid 10, shared SVG controls 30, and voice HTML 40. Inside SVG controls, picker 50000, wheel 100000 and notices 100001 SHALL order within that parent only. The near-opaque voice backdrop and STT row SHALL cover picker and wheel. Inside voice HTML, backdrop 1, the combined transcript/mic sheet 3 and toasts 4 SHALL preserve visibility. Key-local alert decorations SHALL remain layer 30 inside their tile. The accepted opaque wheel sheet replaces the vendor vignette. Covers SCREEN-003.
+
+#### Scenario: Combined overlay visibility
+
+- **WHEN** wallpaper, grid, picker, wheel, voice backdrop and transcript row are present together
+- **THEN** each has the specified stacking parent and the voice sheet and transcript paint above the wheel without a decorative vignette
+
+### Requirement: Live empty borders and bounded management feedback
+
+The saved empty-border preference SHALL drive panel, device preview and KeyEditor through the shared settings subscription, including live changes and restart. Empty slots SHALL have a two-logical-pixel dashed line border at full opacity with no hover animation; hidden and filled slots SHALL never acquire that border. Management press feedback SHALL use the accepted raised fill and accent ring with a 120 ms transition and 0.98 scale. Panel scale SHALL remain 0.96. Locked non-draggable, disabled and conversation/camera/printer tiles SHALL suppress whole-card feedback. playAudio SHALL not scale. OS or app reduced motion SHALL remove scale and transition but retain fill and ring. Passive clock hover SHALL not resize or transform its face. Covers MGMT-055, MGMT-058, MGMT-059, SCREEN-030, SCREEN-034, SETTINGS-013, WIDGETS-010.
+
+#### Scenario: Saved preference and feedback exclusions
+
+- **WHEN** the empty-border preference changes while panel and editor are mounted and eligible, locked, hidden, disabled and conversation keys receive down/up or press expiry
+- **THEN** both windows update empty borders immediately, only eligible keys show bounded feedback, and release or expiry clears it
+- **AND** hovering the desktop clock preserves its geometry with no transform flicker
+
+### Requirement: Full-grid replacement and compositor correctness
+
+Every accepted configuration SHALL paint its complete visible grid immediately, independent of artwork readiness. Theme/config replacements, delayed artwork and wheel open/close SHALL not omit cells or retain stale key bodies in either panel or management preview. React's complete layout rendering replaces the recovered progressive gate and repaint nudge; no arbitrary 0/2/4/8-cell gate or forced compositor workaround SHALL be required. Covers SCREEN-035, SCREEN-036.
+
+#### Scenario: Repeated sixteen-cell replacement
+
+- **WHEN** sixteen keys repeatedly change profile, theme and artwork while the wheel opens and closes
+- **THEN** all sixteen current keys remain painted in the panel and preview with their current titles and flat surfaces
+
+### Requirement: Specialized recovered widget dispatch
+
+The registry SHALL dispatch recovered monitor types to metric renderers consuming decoded monitor snapshots, and preserve existing clock, player, meeting, AI, emoji, home-assistant and OBS specializations. Unknown types SHALL retain the generic renderer. Missing camera/printer, AudioBot-session and reversible game-mode providers SHALL NOT be replaced with fabricated live readings or working controls. WIDGETS-001 remains incomplete until every recovered type has its actual specialized content and capability provider.
+
+#### Scenario: Decoded live monitor tile
+
+- **WHEN** a CPU, GPU, memory, disk, power, network, Bluetooth or process tile receives a valid metric snapshot
+- **THEN** its specialized body shows the relevant available fields and explicit unavailable state, rejects malformed updates, and retains passive preview behavior
+
+#### Scenario: Border preference invalidates manager and knob thumbnails
+
+- **GIVEN** a profile has cached thumbnail pixels captured with empty borders on
+- **WHEN** the saved empty-border preference changes without a profile edit
+- **THEN** manager and knob cache identities include the new preference, existing manager captures are regenerated, and each hidden capture pins the preference used for its cache key even if it changes while rendering
+- **AND** old captures from before border-aware cache identity are never reused
+
+#### Scenario: Retained thumbnail pixels keep their capture style
+
+- **GIVEN** the manager displays a cached thumbnail and the saved border preference changes
+- **WHEN** regeneration is pending or fails and the manager retains the previous pixels
+- **THEN** those pixels keep the border preference associated with their capture and remain stale
+- **AND** a matching replacement becomes ready even when its image bytes equal the previous capture
+
+#### Scenario: A failed style capture doesn't block other profiles
+
+- **GIVEN** multiple profiles have cached thumbnails and one capture fails after the border preference changes
+- **WHEN** the manager regenerates the images
+- **THEN** it continues with the remaining profiles and publishes their new captures
+- **AND** another request with the same preference retries failed captures without regenerating successful ones
