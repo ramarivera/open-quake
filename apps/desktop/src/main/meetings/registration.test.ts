@@ -125,6 +125,7 @@ it("prepares without capture listeners and releases them once under shared owner
 	capture.created.mockClear();
 	capture.disposed.mockClear();
 	const calls = ipc.handle.mock.calls.length;
+	const quitListeners = ipc.app.on.mock.calls.length;
 	const module = prepareMeetings({
 		userData: root,
 		mock: true,
@@ -139,16 +140,36 @@ it("prepares without capture listeners and releases them once under shared owner
 		expect(capture.created).toHaveBeenCalledOnce();
 		const meetings = module.start();
 		await meetings.ready;
+		expect(ipc.app.on.mock.calls).toHaveLength(quitListeners);
 		await meetings.dispose();
 		expect(capture.disposed).not.toHaveBeenCalled();
 		await application.runPromise(MeetingService.action("liveAudioTranslate"));
 		expect(
 			(await application.runPromise(MeetingService.snapshot())).translating,
 		).toBe(true);
-		await application.runPromise(MeetingService.shutdown());
-		expect(await application.runPromise(Effect.succeed("alive"))).toBe("alive");
-		await application.dispose();
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(true);
+		expect(ipc.handlers.has(CAPTURE_PCM)).toBe(true);
+		await expect(
+			ipc.handlers.get(CAPTURE_PCM)?.({}, new Uint8Array([0, 0])),
+		).resolves.toBeUndefined();
+		await application.runPromise(MeetingService.action("meetingMinutes"));
+		let release = () => {};
+		capture.wait = () =>
+			new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		const disposal = application.dispose();
+		try {
+			await vi.waitFor(() => expect(capture.written).toHaveBeenCalledOnce());
+			expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(true);
+			expect(capture.disposed).not.toHaveBeenCalled();
+		} finally {
+			release();
+			await disposal;
+		}
 		expect(capture.disposed).toHaveBeenCalledOnce();
+		expect(ipc.handlers.has(CAPTURE_CHUNK)).toBe(false);
+		expect(ipc.handlers.has(CAPTURE_PCM)).toBe(false);
 	} finally {
 		await application.dispose();
 		await rm(root, { recursive: true, force: true });
