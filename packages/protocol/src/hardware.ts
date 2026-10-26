@@ -27,7 +27,7 @@ export const HardwareCommand = Schema.Union(
 		usage: Schema.Uint8,
 	}),
 	Schema.TaggedStruct("Query", {
-		feature: Schema.Literal("mic", "luminance", "version"),
+		feature: Schema.Literal("mic", "luminance", "knobLed", "version"),
 	}),
 );
 export type HardwareCommand = typeof HardwareCommand.Type;
@@ -40,11 +40,17 @@ export const FirmwareIdentity = Schema.Struct({
 export const HardwareReply = Schema.Union(
 	Schema.TaggedStruct("Ack", { status: Schema.Uint8 }),
 	Schema.TaggedStruct("MicState", { on: Schema.Boolean }),
+	Schema.TaggedStruct("KnobLedState", { on: Schema.Boolean }),
 	Schema.TaggedStruct("LuminanceState", { value: Schema.Uint8 }),
 	Schema.TaggedStruct("FirmwareVersion", FirmwareIdentity.fields),
 );
 export type HardwareReply = typeof HardwareReply.Type;
-export const queryId = { mic: 3, luminance: 5, version: 0x2e } as const;
+export const queryId = {
+	mic: 3,
+	luminance: 5,
+	knobLed: 6,
+	version: 0x2e,
+} as const;
 
 /** MAIN-018..026: flag/set and query semantics recovered from background.js. */
 export function hardwareShortCommand(command: HardwareCommand): ShortCommand {
@@ -87,7 +93,7 @@ export function decodeHardwareReply(
 	if (command.opCode !== 0x55) return Either.right(Option.none());
 	const { cmdId, subData } = command;
 	const first = subData[0];
-	if (![0, 3, 5, 0x2e].includes(cmdId)) return Either.right(Option.none());
+	if (![0, 3, 5, 6, 0x2e].includes(cmdId)) return Either.right(Option.none());
 	if (subData.length !== (cmdId === 0x2e ? 4 : 1))
 		return Either.left(new ProtocolInputInvalid("hardware-reply-length"));
 	let input: unknown;
@@ -99,6 +105,11 @@ export function decodeHardwareReply(
 			if (first !== 0 && first !== 1)
 				return Either.left(new ProtocolInputInvalid("mic-state-bit"));
 			input = { _tag: "MicState", on: first === 1 };
+			break;
+		case 6:
+			if (first !== 0 && first !== 1)
+				return Either.left(new ProtocolInputInvalid("knob-led-state-bit"));
+			input = { _tag: "KnobLedState", on: first === 1 };
 			break;
 		case 5:
 			input = { _tag: "LuminanceState", value: first };
@@ -133,9 +144,11 @@ export function decodeHardwareCommand(
 						? "mic"
 						: cmdId === 5
 							? "luminance"
-							: cmdId === 46
-								? "version"
-								: undefined;
+							: cmdId === 6
+								? "knobLed"
+								: cmdId === 46
+									? "version"
+									: undefined;
 				return validate(HardwareCommand, { _tag: "Query", feature });
 			}
 			if (opCode !== 1 || subData.length !== (cmdId === 16 ? 3 : 1))
