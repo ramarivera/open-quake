@@ -438,3 +438,43 @@ it("returns a typed failure reply if standalone graph acquisition fails", async 
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+it("rejects requests safely when capture acquisition itself throws", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-capture-failed-"));
+	capture.created.mockImplementationOnce(() => {
+		throw new TypeError("synthetic capture acquisition failure");
+	});
+	const renderer = "file:///synthetic-meetings/index.html";
+	const meetings = registerMeetings({
+		userData: root,
+		renderer,
+		mock: true,
+		hardware: () => undefined,
+	});
+	const frame = {};
+	const event = {
+		command: true,
+		senderFrame: frame,
+		sender: { mainFrame: frame, getURL: () => renderer },
+	};
+	try {
+		const handler = ipc.handlers.get(MEETING_REQUEST);
+		if (!handler) throw new Error("Missing meeting handler");
+		const reply = Schema.decodeUnknownSync(MeetingReply)(
+			await handler(event, { _tag: "read" }),
+		);
+		expect(reply).toMatchObject({
+			_tag: "failure",
+			code: "QUAKE.MEETING.UNAVAILABLE",
+		});
+		await expect(ipc.handlers.get(CAPTURE_CHUNK)?.({}, {})).rejects.toThrow(
+			"Meeting audio chunk rejected",
+		);
+		await expect(
+			ipc.handlers.get(CAPTURE_PCM)?.({}, new Uint8Array()),
+		).rejects.toThrow("Meeting PCM rejected");
+	} finally {
+		await meetings.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
+});

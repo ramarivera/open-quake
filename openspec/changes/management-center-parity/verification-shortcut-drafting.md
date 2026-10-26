@@ -1,7 +1,7 @@
 # Saved-model shortcut drafting
 
-Verified on 2026-10-26. Task 8.1 and `open-quake-lih.17.1.40` remain open for
-reviewed delivery and merge.
+Verified on 2026-10-26. Task 8.1 and `open-quake-lih.17.1.40` are complete
+after reviewed delivery and the merge of PR71.
 
 The production root now supplies the shortcut draft callback from the existing
 direct-inference host. It resolves the saved default-role model in the default
