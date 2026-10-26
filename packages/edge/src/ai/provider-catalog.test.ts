@@ -18,6 +18,21 @@ import {
 } from "./provider-catalog.js";
 
 describe("providers retained catalog", () => {
+	it.each(["constructor", "toString", "__proto__", "hasOwnProperty"])(
+		"retains inherited property name %s as an unknown provider string during migration",
+		(provider) => {
+			expect(canonicalProvider(provider)).toBe(provider);
+			const migrated = migrateLegacyAiConfig({
+				aiEngineProvider: provider,
+				modelType: "custom-model",
+			});
+			expect(migrated).toMatchObject({
+				aiEngineProvider: provider,
+				modelType: "custom-model",
+			});
+			expect(JSON.parse(JSON.stringify(migrated))).toEqual(migrated);
+		},
+	);
 	it("AI-001/006 retains every numeric engine disposition and explicit custom choices", () => {
 		expect(LEGACY_ENGINES).toEqual([
 			"xfy",

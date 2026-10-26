@@ -125,7 +125,7 @@ const aliases: Readonly<Record<string, string>> = {
 	ArixoChat: "retired-account",
 };
 export const canonicalProvider = (provider: string): string =>
-	aliases[provider] ?? provider;
+	Object.hasOwn(aliases, provider) ? (aliases[provider] ?? provider) : provider;
 
 /** Retain the compatible protocol used by saved Moonshot models without
  * applying the distinct K2.5/K2.6 sampling and thinking policy to them. */
