@@ -292,6 +292,13 @@ The sequence library SHALL use the same translated search and groups and SHALL d
 - **WHEN** saved AI library JSON contains malformed placeholders beside a valid user group or a retained pluginAction manifest
 - **THEN** valid groups survive independently, explicit SupportedInMultiActions false excludes the plugin entry, and allowed unsupported plugin actions remain disabled
 
+#### Scenario: Sequence library capacity
+- **WHEN** a selected multi-action draft already contains 100 operations and the user activates a grouped-library entry
+- **THEN** the editor SHALL block the append and show capacity feedback without changing the draft or committed profile
+- **AND** 99 operations SHALL accept one final entry and remain saveable through the normal validated consumer
+- **AND** the existing 100-operation executable contract SHALL govern both library additions and the operation editor. Source: MGMT-127 and PR117 comment 4380859220.
+
+
 ### Requirement: Bounded app-library persistence
 The ConfigLibrary snapshot SHALL use the same 8 MiB UTF-8 byte limit for reads, saves and default-group migration. The writer SHALL measure the complete encoded snapshot before creating directories or replacing storage, reject oversized data with a typed user-facing error and preserve the prior file, cached revision and groups. This is an open-quake resource bound, not a recovered DK-Suite limit. Selected artwork SHALL remain portable inline data as required by the native icon picker contract. Sources: MGMT-386, MGMT-391, PR117 comments 4380858790 and 4380870003.
 

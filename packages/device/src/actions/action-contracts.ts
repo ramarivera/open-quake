@@ -341,6 +341,8 @@ export const SequenceLeaf = Schema.Union(
 		),
 	}),
 );
+export const MAX_SEQUENCE_OPERATIONS = 100;
+
 export const MultiActionConfig = Schema.Struct({
 	type: Schema.Literal("multiActions"),
 	actions: Schema.Array(Schema.Unknown),
@@ -353,7 +355,7 @@ export const MultiActionConfig = Schema.Struct({
 				}),
 			),
 		}),
-	).pipe(Schema.minItems(1), Schema.maxItems(100)),
+	).pipe(Schema.minItems(1), Schema.maxItems(MAX_SEQUENCE_OPERATIONS)),
 });
 
 export const ActionActivation = Schema.Struct({

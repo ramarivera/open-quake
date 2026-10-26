@@ -1,6 +1,9 @@
 import { Option, Schema } from "effect";
 import { useRef, useState } from "react";
-import { SequenceLeaf } from "../../../../../../packages/device/src/actions/action-contracts";
+import {
+	MAX_SEQUENCE_OPERATIONS,
+	SequenceLeaf,
+} from "../../../../../../packages/device/src/actions/action-contracts";
 import {
 	ACTION_REGISTRY,
 	createActionDraft,
@@ -239,7 +242,7 @@ export function SequenceEditor({
 				})}
 				<button
 					type="button"
-					disabled={value.length >= 100}
+					disabled={value.length >= MAX_SEQUENCE_OPERATIONS}
 					onClick={() => {
 						onChange([
 							...value,

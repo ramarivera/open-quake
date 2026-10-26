@@ -1,5 +1,6 @@
 import { Option, Schema } from "effect";
 import { type RefObject, useEffect, useRef, useState } from "react";
+import { MAX_SEQUENCE_OPERATIONS } from "../../../../../../packages/device/src/actions/action-contracts";
 import {
 	type KeyTarget,
 	keyEditable,
@@ -146,6 +147,15 @@ export function GridEditor({
 		if (entry.disabled) return;
 		if (current.current?.key.config.type === "multiActions") {
 			const old = current.current;
+			const steps = Option.getOrElse(old.key.config.subActions, () => []);
+			if (steps.length >= MAX_SEQUENCE_OPERATIONS) {
+				setStatus(
+					locale === "de"
+						? "Maximale Konfigurationen erreicht, bitte zuerst löschen."
+						: "Max configurations reached, please delete first.",
+				);
+				return;
+			}
 			const next = {
 				...old,
 				key: {
@@ -153,7 +163,7 @@ export function GridEditor({
 					config: {
 						...old.key.config,
 						subActions: Option.some([
-							...Option.getOrElse(old.key.config.subActions, () => []),
+							...steps,
 							{
 								editorId: crypto.randomUUID(),
 								config: Schema.decodeUnknownSync(ProfileJsonObject)(

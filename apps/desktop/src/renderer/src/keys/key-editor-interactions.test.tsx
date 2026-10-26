@@ -1840,3 +1840,30 @@ it("MGMT-302/306 keeps knob and key agent route IDs and labels distinct", async 
 	await input(key, "main");
 	expect(knob.value).toBe("writer");
 });
+
+it("MGMT-127 blocks the 101st library operation with feedback and preserves a saveable sequence", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "multiActions", {
+			subActions: Array.from({ length: 99 }, (_, i) => ({
+				config: { type: "delay", actions: [{ type: "time", value: i }] },
+			})),
+		}),
+	]);
+	await f.select();
+	const delay = () =>
+		query(f.host, '[data-library-type="delay"]', HTMLButtonElement);
+	await click(delay());
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(100);
+	await click(delay());
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(100);
+	expect(f.host.textContent).toContain(
+		"Max configurations reached, please delete first.",
+	);
+	expect(f.stored().profiles[0].revision).toBe(0);
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.subActions,
+	).toHaveLength(100);
+	expect(f.writes()).toBe(1);
+});

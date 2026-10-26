@@ -102,5 +102,5 @@ Lane verification: exact root turbo command passes 4131 tests with four existing
 ## 13. PR117 review fixes
 
 - [x] 13.1 Enforce one UTF-8 snapshot size limit on read, save and migration, preserve existing storage on rejection and return typed user-visible feedback. Comments 4380858790 and 4380870003. Bead open-quake-lih.10.19.
-- [ ] 13.2 Block grouped-library sequence additions at capacity with mounted feedback and saveability regression coverage. Comment 4380859220. Bead open-quake-lih.10.19.
+- [x] 13.2 Block grouped-library sequence additions at capacity with mounted feedback and saveability regression coverage. Comment 4380859220. Bead open-quake-lih.10.19.
 - [ ] 13.3 Recover unmarked renamed preset titles against localized defaults and preserve them through placement. Comment 4380869996. Bead open-quake-lih.10.19.
