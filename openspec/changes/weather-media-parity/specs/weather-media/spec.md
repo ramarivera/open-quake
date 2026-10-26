@@ -243,3 +243,9 @@ The local player SHALL keep card controls scoped to the committed playback owner
 - **WHEN** a playAudioLegacy key explicitly selects System Media
 - **THEN** physical activation routes to the shared media owner, while local and implicit legacy keys retain local ownership
 - **AND** unrelated key types cannot claim system-player ownership, covering PR103 comment 4379453327 and bead open-quake-lih.7.5
+
+#### Scenario: Equivalent local polling targets
+
+- **WHEN** one-second strip updates reconstruct an equivalent target while a local read is pending
+- **THEN** the read remains valid without restarting polling or clearing the card
+- **AND** an actual committed target revision change resets the card, covering PR103 comment 4379453339 and bead open-quake-lih.7.5

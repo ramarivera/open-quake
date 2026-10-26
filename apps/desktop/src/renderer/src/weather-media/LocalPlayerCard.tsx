@@ -27,12 +27,20 @@ export function LocalPlayerCard({
 	const pending = useRef(false);
 	const generation = useRef(0);
 	const locale = rendererWeatherLocale();
+	const deviceId = context.keyTarget?.deviceId;
+	const profileId = context.keyTarget?.profileId;
+	const pageId = context.keyTarget?.pageId;
+	const revision = context.keyTarget?.revision;
+	const keyCode = tile.keyCode;
 	const target = useMemo(
 		() =>
-			context.keyTarget
-				? { ...context.keyTarget, keyCode: tile.keyCode }
+			deviceId !== undefined &&
+			profileId !== undefined &&
+			pageId !== undefined &&
+			revision !== undefined
+				? { deviceId, profileId, pageId, revision, keyCode }
 				: undefined,
-		[context.keyTarget, tile.keyCode],
+		[deviceId, profileId, pageId, revision, keyCode],
 	);
 	const targetId = JSON.stringify(target);
 	const current = useRef(targetId);
