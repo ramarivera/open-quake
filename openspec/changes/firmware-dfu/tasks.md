@@ -17,3 +17,9 @@ Implementation is tracked by open-quake-18d under open-quake-lih.13. Checked tas
 
 - [x] 3.1 Wire real firmware inspect/DFU/update/recovery controls through the typed client with local recovery documentation; verify each state and every confirmation/cancel path.
 - [ ] 3.2 Run all firmware-dfu scenarios with synthetic images and fake hardware/filesystem layers, then supervised hardware DFU/flash/reconnect checks when available; record exact report bytes, target/version evidence and leave unrun hardware steps open.
+
+## 4. Firmware burn-down lane
+
+- [ ] 4.1 Implement trusted bundled discovery and retained availability with synthetic fixtures, tracked by open-quake-lih.13.1.
+- [ ] 4.2 Implement bounded progress, Windows lookup cadence, close reconciliation and renderer lifecycle/guidance tests, tracked by open-quake-lih.13.2.
+- [ ] 4.3 Validate the actual audited production image. Blocked by this lane's synthetic-only instruction; no real firmware binary may be opened or downloaded.

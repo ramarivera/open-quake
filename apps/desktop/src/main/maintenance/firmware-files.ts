@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { Effect, Either } from "effect";
+import { newerVersion } from "../../../../../packages/edge/src/maintenance/contracts.js";
 import type {
 	FirmwareImage,
 	FirmwareVolume,
@@ -135,11 +136,14 @@ export function firmwareFiles(
 					? cause
 					: new FirmwareImageInvalid(cause),
 		});
-	const volumeRecord = async (path: string): Promise<VolumeRecord> => {
+	const volumeRecord = async (
+		path: string,
+		fresh = false,
+	): Promise<VolumeRecord> => {
 		if (
 			additional &&
 			/^[A-Za-z]:[\\/]$/.test(path) &&
-			!(await additional(true)).includes(path)
+			!(await additional(fresh)).includes(path)
 		)
 			throw new FirmwareVolumeInvalid();
 		const meta = await lstat(path);
@@ -183,6 +187,61 @@ export function firmwareFiles(
 	};
 	return {
 		inspect,
+		bundled: (
+			directories: readonly string[],
+		): Effect.Effect<FirmwareImage | undefined, FirmwareImageInvalid> =>
+			Effect.tryPromise({
+				try: async () => {
+					let best: { path: string; image: FirmwareImage } | undefined;
+					for (const directory of directories) {
+						const names = await readdir(directory).catch((cause: unknown) => {
+							if (
+								typeof cause === "object" &&
+								cause !== null &&
+								"code" in cause &&
+								cause.code === "ENOENT"
+							)
+								return [];
+							throw cause;
+						});
+						for (const name of names.sort()) {
+							const match =
+								/^QUAKE_(\d+)\.(\d+)\.(\d+)(?:_[A-Za-z0-9_-]+)?\.uf2$/i.exec(
+									name,
+								);
+							if (!match) continue;
+							const version = match.slice(1, 4).map(Number).join(".");
+							if (!descriptors.some((d) => d.version === version)) continue;
+							const path = join(directory, name);
+							let next: FirmwareImage;
+							try {
+								next = validateFirmware(
+									await readFirmware(path),
+									name,
+									descriptors,
+								);
+							} catch {
+								continue;
+							}
+							if (
+								next.trusted &&
+								next.version === version &&
+								(!best || newerVersion(next.version, best.image.version))
+							)
+								best = { path, image: next };
+						}
+					}
+					if (best) {
+						imagePath = resolve(best.path);
+						image = best.image;
+					}
+					return best?.image;
+				},
+				catch: (cause) =>
+					cause instanceof FirmwareImageInvalid
+						? cause
+						: new FirmwareImageInvalid(cause),
+			}),
 		selected: (): Effect.Effect<FirmwareImage, FirmwareTargetMismatch> =>
 			image ? Effect.succeed(image) : Effect.fail(new FirmwareTargetMismatch()),
 		discover: (): Effect.Effect<
@@ -231,7 +290,7 @@ export function firmwareFiles(
 				try: async () => {
 					const record = known.get(volume.id);
 					if (!record) throw new FirmwareVolumeInvalid();
-					const live = await volumeRecord(record.path);
+					const live = await volumeRecord(record.path, true);
 					if (
 						live.id !== record.id ||
 						live.device !== record.device ||
