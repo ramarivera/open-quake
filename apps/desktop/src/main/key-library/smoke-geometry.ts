@@ -379,12 +379,23 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 	const keyButton = (code: string) => `.keys-cells [data-drop-code="${code}"]`;
 	const dragRevision = async () =>
 		(await saved()).profiles.find((p) => p.id === dragProfile.id)?.revision;
+	const waitForDragRevision = async (revision: number) => {
+		const deadline = Date.now() + 8000;
+		while ((await dragRevision()) !== revision) {
+			assert(
+				Date.now() < deadline,
+				`Grid save did not reach revision ${revision}`,
+			);
+			await new Promise<void>((done) => setTimeout(done, 30));
+		}
+	};
 	await click(win, '[data-library-type="timer"]');
 	await click(win, keyButton("2,8"));
 	await ready(
 		win,
 		`document.querySelector('.keys-cells [data-drop-code="2,8"]').getAttribute("aria-pressed") === "true"`,
 	);
+	await waitForDragRevision(1);
 	assert.equal(await dragRevision(), 1);
 	await evalIn(
 		win,
@@ -398,6 +409,7 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 		win,
 		`document.querySelector('.keys-cells [data-drop-code="1,1"]').getAttribute("aria-pressed") === "true"`,
 	);
+	await waitForDragRevision(2);
 	assert.equal(await dragRevision(), 2);
 	await click(win, '[data-library-type="playAudio"]');
 	await click(win, keyButton("2,8"));
@@ -408,6 +420,7 @@ export async function verifyGeometryPagesImport(h: Harness): Promise<void> {
 	);
 	await snapshot(win, "grid-placement-replace-en");
 	await button(win, "Cancel");
+	await waitForDragRevision(2);
 	assert.equal(await dragRevision(), 2);
 	await select(win, "#keys-language", "de");
 	await click(win, '[data-library-type="playAudio"]');

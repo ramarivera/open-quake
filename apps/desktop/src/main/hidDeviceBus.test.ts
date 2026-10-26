@@ -13,6 +13,7 @@ import {
 } from "@open-quake/device/fake";
 import { Effect, Exit, Layer, Queue, Scope, TestClock } from "effect";
 import { vi } from "vitest";
+import { TOUCH_IDENTITY } from "../../../../packages/device/src/touch/touch-contracts";
 import type { QuakeEvent } from "../preload/quake";
 import {
 	appendQuakeEvent,
@@ -471,7 +472,7 @@ describe("HID desktop bus", () => {
 					off();
 					if (failure === "write") {
 						yield* fake.failWrite(new Error("private-write"));
-						yield* TestClock.adjust(15_000);
+						yield* TestClock.adjust(2500);
 					} else if (failure === "protocol") {
 						const corrupt = report(3, 1, [1]);
 						corrupt[5] = 0;
@@ -534,7 +535,7 @@ it.scoped(
 					second.serialNumber,
 				);
 				devices.splice(1, 1);
-				yield* TestClock.adjust(1000);
+				yield* TestClock.adjust(7000);
 				expect(events).toContainEqual({
 					serial: second.serialNumber,
 					state: "disconnected",
@@ -544,5 +545,115 @@ it.scoped(
 				yield* harness.close;
 				expect(yield* fake.closes).toBe(2);
 			}).pipe(Effect.provide(withTransport(fake.layer)));
+		}),
+);
+
+it.scoped(
+	"MAIN-003 scans present paths at five seconds, missing at two, and debounces brief absence",
+	() =>
+		Effect.gen(function* () {
+			const info = { ...FAKE_QUAKE_DEVICE, serialNumber: "A" };
+			const touch = { ...TOUCH_IDENTITY, path: "fake:touch" };
+			const fake = yield* makeFakeHidTransport([info, touch]);
+			let present = true;
+			let scans = 0;
+			const layer = Layer.succeed(HidTransport, {
+				...fake.transport,
+				discover: () =>
+					Effect.sync(() => {
+						scans++;
+						return present ? [info, touch] : [touch];
+					}),
+			});
+			yield* Effect.gen(function* () {
+				const h = yield* makeHarness;
+				yield* h.next;
+				// Let the independent touch poll bind before measuring control scans.
+				yield* TestClock.adjust(2000);
+				scans = 0;
+				yield* TestClock.adjust(3999);
+				expect(scans).toBe(0);
+				present = false;
+				yield* TestClock.adjust(1);
+				expect(scans).toBe(1);
+				expect(yield* fake.closes).toBe(0);
+				yield* TestClock.adjust(1999);
+				expect(scans).toBe(1);
+				present = true;
+				yield* TestClock.adjust(1);
+				expect(scans).toBe(2);
+				expect(yield* fake.opens).toBe(2);
+				present = false;
+				yield* TestClock.adjust(5000);
+				expect(yield* fake.closes).toBe(0);
+				yield* TestClock.adjust(2000);
+				// Control teardown also closes its scoped touch handle.
+				expect(yield* fake.closes).toBe(2);
+			}).pipe(Effect.provide(withTransport(layer)));
+		}),
+);
+it.scoped(
+	"MAIN-011 closes every disappeared serial once and resolves ws aliases to the same bus",
+	() =>
+		Effect.gen(function* () {
+			const two = yield* makeTwoStrips;
+			two.devices.push(two.b);
+			yield* Effect.gen(function* () {
+				const h = yield* makeHarness;
+				yield* h.next;
+				yield* TestClock.adjust(1000);
+				expect(h.bus.device?.("ws_A")).toBe(h.bus.device?.("A"));
+				two.devices.length = 0;
+				yield* TestClock.adjust(5000);
+				expect(yield* two.first.closes).toBe(0);
+				expect(yield* two.second.closes).toBe(0);
+				yield* TestClock.adjust(2000);
+				expect(yield* two.first.closes).toBe(1);
+				expect(yield* two.second.closes).toBe(1);
+				yield* h.close;
+				expect(yield* two.first.closes).toBe(1);
+				expect(yield* two.second.closes).toBe(1);
+			}).pipe(Effect.provide(withTransport(two.layer)));
+		}),
+);
+
+it.scoped(
+	"SCREEN-013 forwards independent JSON and raw resources only under their serial identity",
+	() =>
+		Effect.gen(function* () {
+			const two = yield* makeTwoStrips;
+			two.devices.push(two.b);
+			yield* Effect.gen(function* () {
+				const h = yield* makeHarness;
+				yield* h.next;
+				yield* TestClock.adjust(1000);
+				const a: QuakeEvent[] = [];
+				const b: QuakeEvent[] = [];
+				h.bus.on((event, serial) => {
+					if (serial === "A") a.push(event);
+					if (serial === "B") b.push(event);
+				});
+				const json = new Uint8Array(32);
+				json.set([0xa1, 0, 7, 123, 34, 120, 34, 58, 49, 125, 33]);
+				// Resource body: op=2, metadata=[1,2,8,0,0], sequence=0, JPEG marker bytes.
+				const raw = new Uint8Array(32);
+				raw.set([0xa2, 0, 11, 2, 1, 2, 8, 0, 0, 0, 255, 216, 255, 217, 191]);
+				yield* two.first.emit(json);
+				yield* two.second.emit(raw);
+				yield* TestClock.adjust(0);
+				expect(a.filter((e) => e.kind === "json")).toMatchObject([
+					{ value: { x: 1 } },
+				]);
+				expect(a.some((e) => e.kind === "resource")).toBe(false);
+				expect(b.filter((e) => e.kind === "resource")).toMatchObject([
+					{
+						envelope: {
+							metadata: [1, 2, 8, 0, 0],
+							payload: [255, 216, 255, 217],
+						},
+					},
+				]);
+				expect(b.some((e) => e.kind === "json")).toBe(false);
+			}).pipe(Effect.provide(withTransport(two.layer)));
 		}),
 );

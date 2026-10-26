@@ -1,5 +1,11 @@
 import { Effect, Option, Redacted, Schema } from "effect";
 import {
+	AgentPack,
+	ManagedEnvironment,
+	ServiceSettings,
+	WorkspaceBackup,
+} from "./administration-contracts.js";
+import {
 	AgentCommand,
 	AgentId,
 	type AgentState,
@@ -21,6 +27,7 @@ import {
 	AgentProtected,
 	AgentRevisionConflict,
 	AgentRollbackFailed,
+	AgentRuntimeUnavailable,
 	SkillConflict,
 	SkillMoved,
 	SkillMoveIncomplete,
@@ -40,6 +47,7 @@ import {
 	AgentDraftPort,
 	type AgentMutation,
 	AgentPanelPort,
+	AgentRuntimePort,
 } from "./agents-ports.js";
 import { AgentsRepository } from "./agents-repository.js";
 import { AgentsRuntime } from "./agents-runtime.js";
@@ -53,6 +61,7 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 			const repository = yield* AgentsRepository;
 			const mutationLock = yield* Effect.makeSemaphore(1);
 			const runtime = yield* AgentsRuntime;
+			const backend = yield* AgentRuntimePort;
 			const draft = yield* Effect.serviceOption(AgentDraftPort);
 			const credentials = yield* Effect.serviceOption(AgentCredentialPort);
 			const panel = yield* Effect.serviceOption(AgentPanelPort);
@@ -183,6 +192,157 @@ export class AgentsService extends Effect.Service<AgentsService>()(
 					case "runtime":
 						yield* runtime.control(command.action);
 						break;
+					case "rename":
+					case "reset-templates":
+						yield* repository.transact((state) =>
+							Effect.gen(function* () {
+								yield* check(state, command.revision);
+								yield* editable(state, command.id);
+								if (command.type === "reset-templates" && !command.confirmed)
+									return yield* new AgentInvalid();
+								return {
+									...state,
+									agents: state.agents.map((agent) =>
+										agent.id !== command.id
+											? agent
+											: command.type === "rename"
+												? { ...agent, name: command.name }
+												: {
+														...agent,
+														files: workspaceTemplates(agent.name, agent.emoji),
+													},
+									),
+								};
+							}),
+						);
+						break;
+					case "export-pack": {
+						const state = yield* repository.read();
+						const agent = state.agents.find((a) => a.id === command.id);
+						if (!agent) return yield* new AgentMissing();
+						draftText = JSON.stringify({
+							version: 1,
+							agent,
+							skills: state.skills.filter((s) => s.owner === agent.id),
+						});
+						if (new TextEncoder().encode(draftText).length > 2097152)
+							return yield* new AgentInvalid();
+						break;
+					}
+					case "import-pack": {
+						const pack = yield* Schema.decodeUnknown(
+							Schema.parseJson(AgentPack),
+						)(command.pack, { onExcessProperty: "error" }).pipe(
+							Effect.mapError((cause) => new AgentInvalid(cause)),
+						);
+						if (pack.agent.id === "main" || pack.agent.id === "default")
+							return yield* new AgentProtected();
+						if (
+							Object.keys(pack.agent.files).length > 64 ||
+							pack.skills.some(
+								(s) =>
+									s.owner !== pack.agent.id || !skillFrontMatter(s.content),
+							) ||
+							new Set(pack.skills.map((s) => s.folder)).size !==
+								pack.skills.length
+						)
+							return yield* new AgentInvalid();
+						yield* repository.transact((state) =>
+							Effect.gen(function* () {
+								yield* check(state, command.revision);
+								if (state.agents.some((a) => a.id === pack.agent.id))
+									return yield* new AgentDuplicate();
+								return {
+									...state,
+									agents: [...state.agents, pack.agent],
+									skills: [...state.skills, ...pack.skills],
+								};
+							}),
+						);
+						break;
+					}
+					case "export-workspace-backup": {
+						const state = yield* repository.read();
+						const backup = yield* Schema.decodeUnknown(WorkspaceBackup)({
+							version: 1,
+							kind: "local-agent-workspaces",
+							revision: state.revision,
+							agents: state.agents,
+							skills: state.skills,
+							slots: state.slots,
+						}).pipe(Effect.mapError((cause) => new AgentInvalid(cause)));
+						draftText = JSON.stringify(backup);
+						if (new TextEncoder().encode(draftText).length > 2097152)
+							return yield* new AgentInvalid();
+						break;
+					}
+					case "diagnostics": {
+						const state = yield* repository.read();
+						const status = yield* runtime.read();
+						draftText = JSON.stringify({
+							version: 1,
+							runtimeMode:
+								backend.administration && backend.available
+									? "owned"
+									: "external-or-unavailable",
+							runtime: { status: status.status, code: status.code },
+							agents: state.agents.length,
+							skills: state.skills.length,
+							revision: state.revision,
+							backup: {
+								kind: "user-exported-workspaces",
+								maxBytes: 2097152,
+								includesCredentials: false,
+							},
+							logs: backend.administration
+								? yield* backend.administration.logs()
+								: [],
+							processAdministration:
+								!!backend.administration && backend.available,
+						});
+						break;
+					}
+					case "service-settings":
+					case "save-service-settings":
+					case "clear-runtime-data":
+					case "update-environment": {
+						const admin = backend.administration;
+						if (!backend.available || !admin)
+							return yield* new AgentRuntimeUnavailable();
+						if (command.type === "service-settings") {
+							draftText = JSON.stringify(yield* admin.settings());
+							break;
+						}
+						const state = yield* repository.read();
+						yield* check(state, command.revision);
+						if (command.type === "save-service-settings") {
+							const settings = yield* Schema.decodeUnknown(ServiceSettings)(
+								command.settings,
+								{ onExcessProperty: "error" },
+							).pipe(Effect.mapError((cause) => new AgentInvalid(cause)));
+							if (
+								(yield* runtime.read()).status === "ready" &&
+								!command.restart
+							)
+								return yield* new AgentInvalid();
+							yield* admin.save(settings, command.restart);
+						} else if (command.type === "clear-runtime-data") {
+							if (
+								!command.confirmed ||
+								(yield* runtime.read()).status !== "stopped"
+							)
+								return yield* new AgentInvalid();
+							yield* admin.clear;
+						} else {
+							const environment = yield* Schema.decodeUnknown(
+								ManagedEnvironment,
+							)(command.environment, { onExcessProperty: "error" }).pipe(
+								Effect.mapError((cause) => new AgentInvalid(cause)),
+							);
+							yield* admin.environment(environment);
+						}
+						break;
+					}
 					case "create":
 						yield* repository.transact((state) =>
 							Effect.gen(function* () {

@@ -1,6 +1,23 @@
 // The smoke entry never imports the application composition root, opens a
 // device, or registers OS action adapters. It runs inside the packaged runtime.
-export {};
+import { app } from "electron";
+import {
+	startTestParentGuard,
+	validateDeviceTestPolicy,
+} from "./device-test-policy";
+
+validateDeviceTestPolicy(app.isPackaged, process.env);
+const stopGuard = startTestParentGuard({
+	enabled: process.env.OPEN_QUAKE_E2E === "1",
+	parent: () => process.ppid,
+	quit: () => app.quit(),
+	schedule: (check, interval) => {
+		const timer = setInterval(check, interval);
+		timer.unref();
+		return () => clearInterval(timer);
+	},
+});
+app.once("will-quit", stopGuard);
 
 if (process.argv.includes("--package-smoke")) {
 	const { runPackageSmoke } = await import("./test/package-smoke");

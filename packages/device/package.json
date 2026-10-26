@@ -19,12 +19,13 @@
 	"dependencies": {
 		"@open-quake/protocol": "workspace:*",
 		"effect": "catalog:",
+		"koffi": "3.3.3",
 		"node-hid": "3.4.0"
 	},
 	"devDependencies": {
 		"@effect/vitest": "catalog:",
+		"@types/node": "catalog:",
 		"typescript": "catalog:",
-		"vitest": "catalog:",
-		"@types/node": "catalog:"
+		"vitest": "catalog:"
 	}
 }

@@ -312,6 +312,27 @@ import { Profile } from "./profile-contracts.js";
 
 describe("automatic profile selection", () => {
 	it.effect(
+		"SCREEN-018 enrolls a new serial with the colorful fallback before publishing its selection",
+		() => {
+			const pushes: string[] = [];
+			return Effect.gen(function* () {
+				const switching = yield* ProfileSwitching;
+				const repo = yield* ProfileRepository;
+				expect((yield* repo.load()).envelope.activeByDevice.A).toBeUndefined();
+				yield* switching.connect("A");
+				const selection = (yield* repo.load()).envelope.activeByDevice.A;
+				expect(selection).toMatchObject({ profileId: "1-4" });
+				expect(pushes).toEqual(["A:1-4"]);
+				yield* switching.disconnect("A");
+				yield* switching.connect("A", "1-2");
+				expect((yield* repo.load()).envelope.activeByDevice.A?.profileId).toBe(
+					"1-2",
+				);
+			}).pipe(Effect.provide(makeLayer(memory(), pushes)));
+		},
+	);
+
+	it.effect(
 		"failed delivery leaves storage and subscribers unchanged and allows reconnect retry",
 		() => {
 			const storage = memory();

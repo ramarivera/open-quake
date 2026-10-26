@@ -57,7 +57,11 @@ describe("hardware consumers and failure cleanup", () => {
 				yield* TestClock.adjust(50);
 				expect(yield* Fiber.join(first)).toBe("executed");
 				expect(h.calls).toEqual([]);
-				expect((yield* fake.writes).map((b) => [...b.slice(3, 8)])).toEqual([
+				expect(
+					(yield* fake.writes)
+						.filter((bytes) => bytes[4] !== 0xef)
+						.map((b) => [...b.slice(3, 8)]),
+				).toEqual([
 					[1, 16, 1, 1, 4],
 					[1, 16, 0, 1, 4],
 				]);
@@ -65,7 +69,9 @@ describe("hardware consumers and failure cleanup", () => {
 				yield* session.setInputMode("host");
 				yield* actions.activate({ ...press, sequence: 3 });
 				expect(h.calls).toEqual([["key", "control+a"]]);
-				expect(yield* fake.writes).toHaveLength(2);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(2);
 			}),
 	);
 	for (const [token, usage] of [
@@ -95,7 +101,11 @@ describe("hardware consumers and failure cleanup", () => {
 					const running = yield* actions.activate(press).pipe(Effect.fork);
 					yield* TestClock.adjust(50);
 					expect(yield* Fiber.join(running)).toBe("executed");
-					expect((yield* fake.writes).map((b) => [...b.slice(3, 8)])).toEqual([
+					expect(
+						(yield* fake.writes)
+							.filter((bytes) => bytes[4] !== 0xef)
+							.map((b) => [...b.slice(3, 8)]),
+					).toEqual([
 						[1, 16, 1, 1, usage],
 						[1, 16, 0, 1, usage],
 					]);
@@ -113,7 +123,11 @@ describe("hardware consumers and failure cleanup", () => {
 					.pipe(Effect.either, Effect.fork);
 				yield* TestClock.adjust(3000);
 				expect(Either.isLeft(yield* Fiber.join(fiber))).toBe(true);
-				expect((yield* fake.writes).map((b) => [...b.slice(3, 8)])).toEqual([
+				expect(
+					(yield* fake.writes)
+						.filter((bytes) => bytes[4] !== 0xef)
+						.map((b) => [...b.slice(3, 8)]),
+				).toEqual([
 					[1, 16, 1, 1, 4],
 					[1, 16, 0, 1, 4],
 				]);
@@ -128,7 +142,11 @@ describe("hardware consumers and failure cleanup", () => {
 				const tone = yield* session.playTone("error").pipe(Effect.fork);
 				yield* TestClock.adjust(0);
 				yield* Fiber.interrupt(tone);
-				expect((yield* fake.writes).map((b) => [...b.slice(3, 6)])).toEqual([
+				expect(
+					(yield* fake.writes)
+						.filter((bytes) => bytes[4] !== 0xef)
+						.map((b) => [...b.slice(3, 6)]),
+				).toEqual([
 					[1, 2, 84],
 					[1, 2, 0],
 				]);
@@ -143,7 +161,9 @@ describe("hardware consumers and failure cleanup", () => {
 				});
 				yield* TestClock.adjust(300);
 				yield* session.playTone("end");
-				expect(yield* fake.writes).toHaveLength(2);
+				expect(
+					(yield* fake.writes).filter((bytes) => bytes[4] !== 0xef),
+				).toHaveLength(2);
 			}),
 	);
 	it.scoped(
@@ -156,7 +176,12 @@ describe("hardware consumers and failure cleanup", () => {
 					concurrency: "unbounded",
 				});
 				expect((yield* session.snapshot()).mic).toBe(true);
-				expect((yield* fake.writes).slice(-2).map((b) => b[5])).toEqual([0, 1]);
+				expect(
+					(yield* fake.writes)
+						.filter((bytes) => bytes[4] !== 0xef)
+						.slice(-2)
+						.map((b) => b[5]),
+				).toEqual([0, 1]);
 				yield* fake.failWrite(new Error("sensitive cause sk-example-token"));
 				const failed = yield* session.toggleMic().pipe(Effect.either);
 				expect(Either.isLeft(failed)).toBe(true);
@@ -226,7 +251,11 @@ describe("hardware consumers and failure cleanup", () => {
 				const tone = yield* session.playTone(name).pipe(Effect.fork);
 				yield* TestClock.adjust(duration);
 				yield* Fiber.join(tone);
-				expect((yield* fake.writes).map((b) => b[5])).toEqual(levels);
+				expect(
+					(yield* fake.writes)
+						.filter((bytes) => bytes[4] !== 0xef)
+						.map((b) => b[5]),
+				).toEqual(levels);
 			}),
 	);
 });
