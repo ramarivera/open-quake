@@ -5,6 +5,7 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectQwenGeneration,
 } from "./model-drafts";
 
 const first: PublicModelRow = {
@@ -129,4 +130,34 @@ it("blocks unsupported model sampling before every row save while allowing clear
 			temperature: 0,
 		}),
 	).toBe(false);
+});
+
+it("selects a Qwen model for each new generation kind and preserves explicit same-kind custom models", () => {
+	const chat: PublicModelRow = {
+		...first,
+		provider: "qwen",
+		model: "qwen3.6-plus",
+	};
+	const image = selectQwenGeneration(chat, "image");
+	expect(image).toMatchObject({
+		model: "wanx2.1-t2i-turbo",
+		baseUrl: "https://dashscope.aliyuncs.com/api/v1",
+		settings: { mediaKind: "image" },
+	});
+	const video = selectQwenGeneration(image, "video");
+	expect(video).toMatchObject({
+		model: "wan2.2-t2v-plus",
+		settings: { mediaKind: "video" },
+	});
+	expect(selectQwenGeneration(video, "chat")).toMatchObject({
+		model: "qwen3.6-plus",
+		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+	});
+	const custom = {
+		...image,
+		model: "custom-image",
+		baseUrl: "https://custom.invalid/api/v1",
+	};
+	expect(selectQwenGeneration(custom, "image")).toEqual(custom);
+	expect(chat.model).toBe("qwen3.6-plus");
 });

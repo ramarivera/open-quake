@@ -16,6 +16,7 @@ import {
 	reconcileModelRow,
 	samplingInput,
 	samplingValid,
+	selectQwenGeneration,
 } from "./model-drafts";
 import type { AgentRequest } from "./useAgents";
 
@@ -218,20 +219,14 @@ function ModelTable({
 												value={row.settings?.mediaKind ?? "chat"}
 												onChange={(event) => {
 													const kind = event.target.value;
-													update({
-														...row,
-														settings: {
-															...row.settings,
-															mediaKind:
-																kind === "image" || kind === "video"
-																	? kind
-																	: undefined,
-														},
-														baseUrl:
-															kind === "chat"
-																? "https://dashscope.aliyuncs.com/compatible-mode/v1"
-																: "https://dashscope.aliyuncs.com/api/v1",
-													});
+													update(
+														selectQwenGeneration(
+															row,
+															kind === "image" || kind === "video"
+																? kind
+																: "chat",
+														),
+													);
 												}}
 											>
 												<option value="chat">{t.chatGeneration}</option>

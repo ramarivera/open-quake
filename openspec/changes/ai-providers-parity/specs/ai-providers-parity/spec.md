@@ -124,6 +124,11 @@ Volc Ark SHALL select inference or agent entry method with explicit endpoint or 
 - **THEN** only its selected endpoint and credential are used and fixtures assert its exact request and stream framing
 - **AND** Spark uses generalv3.5, generalv3 or 4.0Ultra with HMAC SHA256 signing and a 60 second deadline, closes on failure or cancellation and rejects tools
 
+#### Scenario: Qwen generation type selects the matching model
+- **WHEN** a saved Qwen chat row switches to image or video generation
+- **THEN** its model changes to wanx2.1-t2i-turbo or wan2.2-t2v-plus and its endpoint changes to the media API
+- **AND** returning to chat selects qwen3.6-plus, while reselecting the current generation kind preserves an explicit custom model and endpoint
+
 ### Requirement: Structured tools and provider search
 
 The facade SHALL accept typed assistant tool calls, correlated tool results and retained reasoning content. OpenAI and Qwen SHALL transport explicitly declared tools and execute only through an injected host allowlist bridge. A tool declaration SHALL NOT grant host execution; a missing bridge SHALL reject execution. Tool loops SHALL be bounded to four steps and validate primitive arguments and output size. Kimi and DeepSeek assistant tool-call follow-ups SHALL preserve reasoning_content or insert an empty placeholder when absent. Qwen SHALL pass explicit search_options; ZhiPu SHALL encode explicit web_search query/result selection. Search SHALL remain disabled unless selected, with provenance emitted only for selected search (AI-031, AI-032, AI-033, AI-037, AI-118).

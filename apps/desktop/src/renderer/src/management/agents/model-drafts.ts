@@ -81,3 +81,28 @@ export function samplingValid(
 			(Number.isFinite(row.topP) && row.topP >= 0 && row.topP <= 1))
 	);
 }
+
+/** Apply an explicit Qwen generation selection to the editable row. */
+export function selectQwenGeneration(
+	row: PublicModelRow,
+	kind: "chat" | "image" | "video",
+): PublicModelRow {
+	if ((row.settings?.mediaKind ?? "chat") === kind) return row;
+	return {
+		...row,
+		model:
+			kind === "image"
+				? "wanx2.1-t2i-turbo"
+				: kind === "video"
+					? "wan2.2-t2v-plus"
+					: "qwen3.6-plus",
+		settings: {
+			...row.settings,
+			mediaKind: kind === "chat" ? undefined : kind,
+		},
+		baseUrl:
+			kind === "chat"
+				? "https://dashscope.aliyuncs.com/compatible-mode/v1"
+				: "https://dashscope.aliyuncs.com/api/v1",
+	};
+}
