@@ -62,6 +62,7 @@ function fixture() {
 	const resolve = () =>
 		Effect.succeed({
 			key: "fake-secret",
+			revoked: Effect.never,
 			api: "http://127.0.0.1:1234/api/v1/",
 			realtime: "ws://127.0.0.1:1234/realtime",
 		});
@@ -882,6 +883,7 @@ for (const target of [
 					resolve: () =>
 						Effect.succeed({
 							key: "fake",
+							revoked: Effect.never,
 							api: "https://dashscope.aliyuncs.com/api/v1/",
 							realtime: "wss://dashscope.aliyuncs.com/realtime",
 						}),

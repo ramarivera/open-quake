@@ -140,6 +140,11 @@ export function liveMeetingProviders(
 						return yield* meetingError("Unavailable");
 					return {
 						key: Redacted.value(secret),
+						revoked: options.credentials
+							.revoked(profile.credentialRef, profile.authGeneration)
+							.pipe(
+								Effect.mapError((cause) => meetingError("Unavailable", cause)),
+							),
 						api: api.href,
 						files: new URL("/compatible-mode/v1/", base).href,
 						realtime: ws.href,

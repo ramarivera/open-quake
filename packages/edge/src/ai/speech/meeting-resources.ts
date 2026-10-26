@@ -48,6 +48,8 @@ export interface MeetingResources {
 }
 export interface MeetingConnection {
 	readonly key: string;
+	/** Revokes this exact saved credential generation for the lifetime of a job. */
+	readonly revoked: Effect.Effect<never, MeetingError>;
 	readonly api: string;
 	readonly files?: string;
 	readonly realtime: string;

@@ -307,6 +307,7 @@ export const openaiMeeting = (
 				),
 			(audio) => audio.release,
 		).pipe(
+			Effect.raceFirst(connection.revoked),
 			Effect.mapError((cause) =>
 				isMeetingError(cause)
 					? cause

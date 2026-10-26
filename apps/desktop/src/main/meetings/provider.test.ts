@@ -5,15 +5,163 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
-import { Effect, Either, Queue, Redacted } from "effect";
+import {
+	Deferred,
+	Effect,
+	Either,
+	Fiber,
+	Layer,
+	Option,
+	Queue,
+	Redacted,
+} from "effect";
 import { expect, it, vi } from "vitest";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
+import { object } from "../../../../../packages/edge/src/ai/speech/speech-session";
 import { MeetingProvider } from "../../../../../packages/edge/src/meetings/meeting-provider";
+import { CredentialVault, MacOsKeychain } from "../credentials/keychain";
 import { connectSpeechSocket } from "../speech/websocket";
 import { meetingDirectory } from "./private-files";
 import { liveMeetingProviders } from "./provider";
 
 vi.mock("electron", () => ({ net: { isOnline: () => true } }));
+
+for (const blockedSend of [false, true]) {
+	it(`removing the saved OpenAI credential cancels active transcription, blocked send=${blockedSend}`, async () => {
+		const root = await mkdtemp(join(tmpdir(), "oq-revoked-meeting-"));
+		const id = "00000000-0000-4000-8000-000000000222";
+		try {
+			const directory = await meetingDirectory(root, id);
+			await new Promise<void>((resolve, reject) => {
+				const child = spawn(
+					"ffmpeg",
+					[
+						"-v",
+						"error",
+						"-f",
+						"lavfi",
+						"-i",
+						"sine=frequency=440:duration=1",
+						"-y",
+						join(directory, "final_recording.mp3"),
+					],
+					{ stdio: "ignore" },
+				);
+				child.once("error", reject);
+				child.once("close", (code) =>
+					code === 0
+						? resolve()
+						: reject(new Error("Synthetic encoding failed")),
+				);
+			});
+			const secrets = new Map<string, Redacted.Redacted<string>>();
+			const vault = await Effect.runPromise(
+				CredentialVault.pipe(
+					Effect.provide(
+						CredentialVault.Default.pipe(
+							Layer.provide(
+								Layer.succeed(MacOsKeychain, {
+									write: async (_namespace, ref, key) => {
+										secrets.set(ref, key);
+									},
+									read: async (_namespace, ref) =>
+										Option.fromNullable(secrets.get(ref)),
+									remove: async (_namespace, ref) => {
+										secrets.delete(ref);
+									},
+								}),
+							),
+						),
+					),
+				),
+			);
+			const credential = await Effect.runPromise(
+				vault.store(Redacted.make("fake-meeting-secret")),
+			);
+			const firstAudio = await Effect.runPromise(Deferred.make<void>());
+			const queue = await Effect.runPromise(Queue.unbounded<unknown>());
+			let appends = 0;
+			let closed = 0;
+			let signal: AbortSignal | undefined;
+			const production = liveMeetingProviders(root, "ffmpeg", {
+				models: () =>
+					Effect.succeed([
+						{
+							id: "saved-openai",
+							role: "default",
+							provider: "openai",
+							model: "gpt-5.1",
+							baseUrl: "https://api.openai.com/v1",
+							maxTokens: 2048,
+							credentialRef: credential.reference,
+						},
+					]),
+				credentials: vault,
+				socket: {
+					connect: (input) =>
+						Effect.sync(() => {
+							signal = input.signal;
+							return {
+								send: (raw) =>
+									Effect.gen(function* () {
+										const event = object(JSON.parse(String(raw)));
+										if (event.type === "session.update")
+											yield* Queue.offer(queue, { type: "session.updated" });
+										if (event.type === "input_audio_buffer.append") {
+											appends++;
+											yield* Deferred.succeed(firstAudio, undefined);
+											if (blockedSend) yield* Effect.never;
+										}
+									}),
+								receive: Queue.take(queue),
+								close: Effect.sync(() => {
+									closed++;
+								}),
+							};
+						}),
+				},
+			});
+			const config = await Effect.runPromise(production.initialConfig);
+			if (!config) throw new Error("Missing saved profile");
+			const job = Effect.runFork(
+				Effect.scoped(
+					MeetingProvider.transcribe(config, id, 1000).pipe(
+						Effect.either,
+						Effect.provide(production.layer),
+					),
+				),
+			);
+			try {
+				await Effect.runPromise(
+					Deferred.await(firstAudio).pipe(Effect.timeout(2000)),
+				);
+				await Effect.runPromise(vault.remove(credential.reference));
+				const finished = await Effect.runPromise(
+					Fiber.join(job).pipe(Effect.timeoutOption(1000)),
+				);
+				expect(Option.isSome(finished)).toBe(true);
+				if (Option.isNone(finished))
+					throw new Error("Transcription survived credential removal");
+				expect(Either.isLeft(finished.value) && finished.value.left.code).toBe(
+					"QUAKE.MEETING.UNAVAILABLE",
+				);
+				expect(appends).toBe(1);
+				expect(closed).toBe(1);
+				expect(signal?.aborted).toBe(true);
+				expect(secrets.size).toBe(0);
+				expect(
+					(await readdir(directory)).filter((name) =>
+						/^(?:provider-|MM_)/.test(name),
+					),
+				).toEqual([]);
+			} finally {
+				await Effect.runPromise(Fiber.interrupt(job));
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+}
 
 const documentedQwenHosts = [
 	"dashscope.aliyuncs.com",

@@ -550,3 +550,8 @@ Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, 
 
 - **WHEN** AI-272 reaches EOF during speech and the explicit commit uses the pending VAD ID or a different ID
 - **THEN** only committed items SHALL require final transcripts or appear in saved segments; provisional speech timing SHALL survive into the committed segment and an unstopped segment SHALL end at the submitted audio duration
+
+#### Scenario: Saved credential removal stops active transcription
+
+- **WHEN** AI-272 is sending file audio or waiting in a blocked socket send and the saved credential is removed
+- **THEN** the operation SHALL observe revocation of that credential generation, stop sending further audio, abort and close its owned socket, release private PCM and save no partial transcript
