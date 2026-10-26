@@ -22,6 +22,7 @@ export type FileRequest = typeof FileRequest.Type;
 export const PublicFileRequest = Schema.Struct({
 	...Correlation,
 	modelRowId: Schema.NonEmptyString,
+	sessionId: Schema.UUID,
 	operation: FileOperation,
 });
 export type PublicFileRequest = typeof PublicFileRequest.Type;

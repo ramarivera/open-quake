@@ -145,3 +145,12 @@ Imports SHALL map assistant session start/end/error, animation ongoing/processin
 #### Scenario: Every retained assistant enum maps
 - **WHEN** each recovered session, animation or type enum is decoded
 - **THEN** its local state is returned, including keyConfig, and unknown values fail closed
+
+### Requirement: Window-owned provider files
+
+Opt-in file operations SHALL use only the profile pinned by the requesting window's owned conversation (AI-038, AI-244). Renderer-supplied row or session IDs SHALL NOT grant credential access.
+
+#### Scenario: Another window requests provider files
+- **WHEN** a second RPC connection supplies a known session and file ID, or tries to acquire the first window's session by submitting a turn
+- **THEN** it fails before provider I/O
+- **AND** the owning window can use its pinned row, while another row and closed conversation fail

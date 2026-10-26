@@ -1,4 +1,5 @@
 import { Effect, Mailbox, Option, Schema, Stream } from "effect";
+import type { ProfileId } from "../../../../../packages/edge/src/ai/ai-contracts";
 import type {
 	SessionId,
 	TurnId,
@@ -11,6 +12,8 @@ import {
 	RpcServer,
 } from "../../../../../packages/edge/src/chat/chat-rpc";
 import { type DirectChat, rpcFailure } from "./host";
+
+const sessionOwners = new WeakMap<DirectChat, Map<string, symbol>>();
 
 const id = Schema.String.pipe(Schema.pattern(/^[0-9]{1,20}$/));
 const WireRequest = Schema.Union(
@@ -61,15 +64,39 @@ export const makeDesktopChatConnection = (
 ) =>
 	Effect.gen(function* () {
 		const owned = new Map<SessionId, TurnId>();
+		const selections = new Map<string, ProfileId>();
+		const owner = Symbol("chat-window");
+		const owners = sessionOwners.get(host) ?? new Map<string, symbol>();
+		sessionOwners.set(host, owners);
 		const handlers = ChatRpcs.toLayer({
 			"provider.files": (input) =>
-				host.file(input).pipe(Effect.mapError(rpcFailure)),
+				Effect.gen(function* () {
+					const profileId = selections.get(input.sessionId);
+					if (!profileId || owners.get(input.sessionId) !== owner)
+						return yield* new ChatInvalid();
+					return yield* host.file(input, profileId);
+				}).pipe(Effect.mapError(rpcFailure)),
 			"provider.list": () => host.providers().pipe(Effect.mapError(rpcFailure)),
 			"chat.submit": (input) =>
-				host.submit(input).pipe(
-					Effect.tap(() =>
-						Effect.sync(() => owned.set(input.sessionId, input.turnId)),
-					),
+				Effect.suspend(() => {
+					const current = owners.get(input.sessionId);
+					if (current && current !== owner)
+						return Effect.fail(new ChatInvalid());
+					owners.set(input.sessionId, owner);
+					return host.submit(input).pipe(
+						Effect.tap((turn) =>
+							Effect.sync(() => {
+								owned.set(input.sessionId, input.turnId);
+								selections.set(input.sessionId, turn.selection.profileId);
+							}),
+						),
+						Effect.onError(() =>
+							Effect.sync(() => {
+								if (!owned.has(input.sessionId)) owners.delete(input.sessionId);
+							}),
+						),
+					);
+				}).pipe(
 					Effect.map((turn) => turn.snapshot),
 					Effect.mapError(rpcFailure),
 				),
@@ -99,9 +126,19 @@ export const makeDesktopChatConnection = (
 					: Effect.fail(new ChatInvalid())
 				).pipe(Effect.mapError(rpcFailure)),
 			"chat.close": (input) =>
-				host.close(input.sessionId).pipe(Effect.mapError(rpcFailure)),
+				host.close(input.sessionId).pipe(
+					Effect.tap(() =>
+						Effect.sync(() => selections.delete(input.sessionId)),
+					),
+					Effect.mapError(rpcFailure),
+				),
 			"chat.clear": (input) =>
-				host.clear(input.sessionId).pipe(Effect.mapError(rpcFailure)),
+				host.clear(input.sessionId).pipe(
+					Effect.tap(() =>
+						Effect.sync(() => selections.delete(input.sessionId)),
+					),
+					Effect.mapError(rpcFailure),
+				),
 			"chat.rename": (input) =>
 				host
 					.rename(input.sessionId, input.title)
@@ -138,11 +175,20 @@ export const makeDesktopChatConnection = (
 			Effect.forkScoped,
 		);
 		yield* Effect.addFinalizer(() =>
-			Effect.forEach(
-				owned,
-				([sessionId, turnId]) =>
-					host.cancel(sessionId, turnId).pipe(Effect.ignore),
-				{ discard: true },
+			Effect.sync(() => {
+				for (const [sessionId, current] of owners) {
+					if (current === owner) owners.delete(sessionId);
+				}
+				selections.clear();
+			}).pipe(
+				Effect.zipRight(
+					Effect.forEach(
+						owned,
+						([sessionId, turnId]) =>
+							host.cancel(sessionId, turnId).pipe(Effect.ignore),
+						{ discard: true },
+					),
+				),
 			),
 		);
 		return {

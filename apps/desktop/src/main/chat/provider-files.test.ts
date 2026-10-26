@@ -2,15 +2,19 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Exit, Redacted, Scope } from "effect";
+import { Effect, Exit, Redacted, Schema, Scope } from "effect";
 import { expect, it } from "vitest";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
+import {
+	SessionId,
+	TurnId,
+} from "../../../../../packages/edge/src/chat/chat-contracts";
 import { CHAT_DISCONNECT, CHAT_REQUEST } from "../../shared/chat";
 import { createDirectChat } from "./host";
 import { createDirectChatBridge } from "./preload";
 import { makeDesktopChatConnection } from "./rpc-server";
 
-async function fixture(fetcher: typeof fetch) {
+async function fixture(fetcher: typeof fetch, own = true) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-provider-files-"));
 	let row: ModelRow = {
 		id: "saved",
@@ -24,40 +28,66 @@ async function fixture(fetcher: typeof fetch) {
 	};
 	const host = createDirectChat({
 		directory,
-		models: () => Effect.succeed([row]),
+		models: () => Effect.succeed([row, { ...row, id: "other" }]),
 		credentials: {
 			resolve: () => Effect.succeed(Redacted.make("selected-secret")),
 			revoked: () => Effect.never,
 		},
-		fetch: fetcher,
+		fetch: (url, init) =>
+			String(url).endsWith("/chat/completions")
+				? Promise.resolve(
+						new Response(
+							'data: {"choices":[{"index":0,"delta":{"content":"fixture"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+							{ headers: { "content-type": "text/event-stream" } },
+						),
+					)
+				: fetcher(url, init),
 		online: () => true,
 	});
-	const listeners = new Set<(event: unknown, input: unknown) => void>();
-	const scope = await host.runtime.runPromise(Scope.make());
-	const connection = await host.runtime.runPromise(
-		makeDesktopChatConnection(host, (message) => {
-			for (const listener of listeners) listener({}, message);
-		}).pipe(Scope.extend(scope)),
-	);
-	const bridge = createDirectChatBridge({
-		invoke: async (channel, input) => {
-			if (channel === CHAT_REQUEST)
-				return host.runtime.runPromise(connection.write(input));
-			if (channel === CHAT_DISCONNECT)
-				return host.runtime.runPromise(Scope.close(scope, Exit.void));
-			throw new Error("channel");
-		},
-		on: (_channel, listener) => listeners.add(listener),
-		removeListener: (_channel, listener) => listeners.delete(listener),
-	});
+	const windows: { bridge: ReturnType<typeof createDirectChatBridge> }[] = [];
+	const createWindow = async () => {
+		const listeners = new Set<(event: unknown, input: unknown) => void>();
+		const scope = await host.runtime.runPromise(Scope.make());
+		const connection = await host.runtime.runPromise(
+			makeDesktopChatConnection(host, (message) => {
+				for (const listener of listeners) listener({}, message);
+			}).pipe(Scope.extend(scope)),
+		);
+		const bridge = createDirectChatBridge({
+			invoke: async (channel, input) => {
+				if (channel === CHAT_REQUEST)
+					return host.runtime.runPromise(connection.write(input));
+				if (channel === CHAT_DISCONNECT)
+					return host.runtime.runPromise(Scope.close(scope, Exit.void));
+				throw new Error("channel");
+			},
+			on: (_channel, listener) => listeners.add(listener),
+			removeListener: (_channel, listener) => listeners.delete(listener),
+		});
+		windows.push({ bridge });
+		return bridge;
+	};
+	const bridge = await createWindow();
+	const sessionId = Schema.decodeUnknownSync(SessionId)(randomUUID());
+	const submit = (target = bridge, id = sessionId) =>
+		target.submit({
+			sessionId: id,
+			turnId: Schema.decodeUnknownSync(TurnId)(randomUUID()),
+			text: "fixture",
+		});
+	if (own) await submit();
+
 	return {
 		disableFiles: () => {
 			row = { ...row, settings: { filesEnabled: false } };
 		},
 		host,
 		bridge,
+		sessionId,
+		createWindow,
+		submit,
 		close: async () => {
-			await bridge.dispose();
+			await Promise.all(windows.map(({ bridge }) => bridge.dispose()));
 			await host.dispose();
 			await rm(directory, { recursive: true, force: true });
 		},
@@ -81,24 +111,33 @@ it("AI-017/038/244 typed preload IPC isolates destinations and correlates concur
 	try {
 		expect(await f.bridge.providers?.()).toMatchObject([
 			{ id: "saved", available: true, directCapable: true },
+			{ id: "other", available: true, directCapable: true },
 		]);
 		const a = randomUUID(),
 			b = randomUUID();
 		const result = await Promise.all([
 			f.bridge.files?.({
 				requestId: a,
+				sessionId: f.sessionId,
 				modelRowId: "saved",
 				operation: { _tag: "retrieve", fileId: "file-a" },
 			}),
 			f.bridge.files?.({
 				requestId: b,
+				sessionId: f.sessionId,
 				modelRowId: "saved",
 				operation: { _tag: "retrieve", fileId: "file-b" },
 			}),
 		]);
 		expect(result).toMatchObject([
-			{ requestId: a, result: { _tag: "metadata", file: { id: "file-a" } } },
-			{ requestId: b, result: { _tag: "metadata", file: { id: "file-b" } } },
+			{
+				requestId: a,
+				result: { _tag: "metadata", file: { id: "file-a" } },
+			},
+			{
+				requestId: b,
+				result: { _tag: "metadata", file: { id: "file-b" } },
+			},
 		]);
 		expect(calls.sort()).toEqual([
 			"https://selected.invalid/v1/files/file-a",
@@ -107,6 +146,7 @@ it("AI-017/038/244 typed preload IPC isolates destinations and correlates concur
 		await expect(
 			f.bridge.files?.({
 				requestId: randomUUID(),
+				sessionId: f.sessionId,
 				modelRowId: "other",
 				operation: { _tag: "list" },
 			}),
@@ -115,6 +155,7 @@ it("AI-017/038/244 typed preload IPC isolates destinations and correlates concur
 		await expect(
 			f.bridge.files?.({
 				requestId: randomUUID(),
+				sessionId: f.sessionId,
 				modelRowId: "saved",
 				operation: { _tag: "upload", name: "fixture.txt", content: "local" },
 			}),
@@ -148,6 +189,7 @@ it("AI-244 disposal interrupts a pending upload and aborts provider I/O", async 
 		const pending = f.bridge
 			.files?.({
 				requestId: randomUUID(),
+				sessionId: f.sessionId,
 				modelRowId: "saved",
 				operation: { _tag: "upload", name: "fixture.txt", content: "fixture" },
 			})
@@ -183,4 +225,74 @@ it("AI-051 profile entry method preserves custom endpoint and settings pin ident
 			settings: { entryMethod: "inference", botId: "ep-selected" },
 		}).id,
 	).not.toBe(profileFromModel(row).id);
+});
+
+it("refuses provider files before a window owns a conversation", async () => {
+	const calls: string[] = [];
+	const f = await fixture(async (url) => {
+		calls.push(String(url));
+		return Response.json({
+			id: "file-a",
+			filename: "fixture.txt",
+			bytes: 7,
+			purpose: "assistants",
+		});
+	}, false);
+	try {
+		await expect(
+			f.bridge.files?.({
+				requestId: randomUUID(),
+				sessionId: f.sessionId,
+				modelRowId: "saved",
+				operation: { _tag: "retrieve", fileId: "file-a" },
+			}),
+		).rejects.toMatchObject({ code: "CHAT.INPUT.INVALID" });
+		expect(calls).toHaveLength(0);
+	} finally {
+		await f.close();
+	}
+});
+
+it("binds file credentials to the owning window and its pinned conversation", async () => {
+	const calls: string[] = [];
+	const f = await fixture(async (url) => {
+		calls.push(String(url));
+		return Response.json({
+			id: "file-a",
+			filename: "fixture.txt",
+			bytes: 7,
+			purpose: "assistants",
+		});
+	});
+	try {
+		const other = await f.createWindow();
+		const request = {
+			requestId: randomUUID(),
+			sessionId: f.sessionId,
+			modelRowId: "saved",
+			operation: { _tag: "retrieve", fileId: "file-a" },
+		} as const;
+		await expect(other.files?.(request)).rejects.toMatchObject({
+			code: "CHAT.INPUT.INVALID",
+		});
+		await expect(f.submit(other)).rejects.toMatchObject({
+			code: "CHAT.INPUT.INVALID",
+		});
+		expect(calls).toHaveLength(0);
+		await expect(
+			f.bridge.files?.({ ...request, modelRowId: "other" }),
+		).rejects.toMatchObject({ code: "AI.PROVIDER.CONFIG_INVALID" });
+		expect(calls).toHaveLength(0);
+		expect(await f.bridge.files?.(request)).toMatchObject({
+			result: { _tag: "metadata" },
+		});
+		expect(calls).toHaveLength(1);
+		await f.bridge.close(f.sessionId);
+		await expect(f.bridge.files?.(request)).rejects.toMatchObject({
+			code: "CHAT.INPUT.INVALID",
+		});
+		expect(calls).toHaveLength(1);
+	} finally {
+		await f.close();
+	}
 });

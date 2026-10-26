@@ -295,7 +295,10 @@ export function prepareDirectChat(options: DirectChatOptions) {
 						}),
 					);
 				}),
-				file: Effect.fn("DesktopChat.file")(function* (input: unknown) {
+				file: Effect.fn("DesktopChat.file")(function* (
+					input: unknown,
+					ownedProfileId: ProfileId,
+				) {
 					const request = yield* Schema.decodeUnknown(PublicFileRequest, {
 						onExcessProperty: "error",
 					})(input).pipe(
@@ -308,7 +311,8 @@ export function prepareDirectChat(options: DirectChatOptions) {
 						try: () => profileFromModel(row),
 						catch: (cause) => new AiConfigInvalid(cause),
 					});
-					yield* AiRepository.put(profile);
+					if (profile.id !== ownedProfileId)
+						return yield* new AiConfigInvalid();
 					return yield* AiProviderService.file({
 						requestId: request.requestId,
 						profileId: profile.id,

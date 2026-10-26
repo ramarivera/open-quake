@@ -39,3 +39,7 @@ Review-round-2 evidence: [review-round-2.md](review-round-2.md).
 Implementation and synthetic verification cover the providers lane's 25 rows.
 The three beads stay open for lead review and merge. Live provider and hardware
 qualification remains unverified; this lane made no paid calls or speech edits.
+
+## 6. PR #93 review fixes
+
+- [ ] 6.1 Bind provider files to window-owned pinned conversations; allow bounded tool exchanges; select Qwen media models; align direct readiness; retain keyless catalog options. Regress each finding before its fix, commit/push/reply separately, then run full gates and reconcile unanswered threads. Bead: open-quake-lih.15.5.
