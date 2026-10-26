@@ -1715,7 +1715,7 @@ for (const operation of ["cleanup", "list", "upload", "delete"] as const) {
 					yield* TestClock.adjust(5001);
 					yield* MeetingService.action("meetingMinutes");
 					yield* MeetingService.rename(record.id, "Preserved local record");
-					// Upload requires saved transcript; use a normal fake transcription first.
+					// Upload requires a transcript saved through the real repository.
 					if (operation === "upload")
 						yield* MeetingRepository.update((records) =>
 							records.map((r) =>

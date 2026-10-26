@@ -208,7 +208,15 @@ the lead. Physical and paid-provider qualification remains unverified.
 
 Execution: open-quake-lih.16.15 and open-quake-lih.16.14. Leave both in progress for lead-owned review and merge.
 
-- [ ] 13.1 Address the five Major findings with fail-before consumer regressions.
-- [ ] 13.2 Reconcile three overlapping/later Codex findings, paginated file ownership, upload deadlines and interruptible conversion.
-- [ ] 13.3 Address remaining Minor/Trivial findings with fail-before regressions and original-thread replies.
-- [ ] 13.4 Run requested full gates and hidden meetings smoke, open a PR with per-finding outcomes, and retain the SSD worktree.
+- [x] 13.1 Address the five Major findings with fail-before consumer regressions.
+- [x] 13.2 Reconcile three overlapping/later Codex findings, paginated file ownership, upload deadlines and interruptible conversion.
+- [x] 13.3 Address remaining Minor/Trivial findings with fail-before regressions and original-thread replies.
+- [x] 13.4 Run requested full gates and hidden meetings smoke, open a PR with per-finding outcomes, and retain the SSD worktree.
+
+
+Post-round delivery: PR #124, all 16 original PR109 comments answered with fix
+commit and model attribution. Exact root suite 4418 pass / four existing skips,
+six package typechecks, Biome zero errors, build, both bundle modes, strict
+OpenSpec 47/47 and hidden meetings smoke pass. Source and evidence details:
+`apps/desktop/src/main/meetings/README.md`. Both execution beads remain in progress
+with the PR link; parent owns hosted review/check reconciliation and merge.
