@@ -240,3 +240,8 @@ with stale host values. The SDK handle SHALL connect immediately, with its first
 #### Scenario: Reload and replaced device
 - **WHEN** a strip reloads late or a version arrives after its session was replaced
 - **THEN** a ready request returns the current matching serial only and ignores the obsolete reply
+
+#### Scenario: Firmware ignores version discovery
+- **WHEN** ten version requests get no reply but mic and luminance queries succeed
+- **THEN** refresh continues those queries, preserves the usable session, and readiness omits version
+- **AND** an actual write failure, disconnect or missing mandatory state still fails readiness

@@ -3,7 +3,10 @@ import {
 	type HardwareSession,
 	QuakeDevice,
 } from "@open-quake/device";
-import { makeFakeHardwareTransport } from "@open-quake/device/hardware/fake";
+import {
+	fakeHardwareReply,
+	makeFakeHardwareTransport,
+} from "@open-quake/device/hardware/fake";
 import { Effect, Exit, Layer, Scope } from "effect";
 import { expect, it, vi } from "vitest";
 
@@ -15,69 +18,93 @@ import { ipcMain } from "electron";
 import { createDeviceReadyReader, registerDeviceReady } from "./device-ready";
 import type { DeviceBus } from "./deviceBus";
 
-it("refreshes real hardware commands and returns one coherent serial/version/rotation snapshot", async () => {
-	const scope = await Effect.runPromise(Scope.make());
-	try {
-		const hardware = await Effect.runPromise(
-			Scope.extend(
-				Effect.gen(function* () {
-					const fake = yield* makeFakeHardwareTransport({ serial: "A" });
-					const device = yield* QuakeDevice.pipe(
-						Effect.provide(
-							QuakeDevice.DefaultWithoutDependencies.pipe(
-								Layer.provide(fake.layer),
+it.each([true, false])(
+	"refreshes real hardware commands with optional firmware reply %s",
+	async (versionReply) => {
+		const scope = await Effect.runPromise(Scope.make());
+		try {
+			const hardware = await Effect.runPromise(
+				Scope.extend(
+					Effect.gen(function* () {
+						const fake = yield* makeFakeHardwareTransport({
+							serial: "A",
+							...(versionReply
+								? {}
+								: {
+										onCommand: (c: { readonly cmdId: number }) =>
+											c.cmdId === 46
+												? []
+												: [
+														fakeHardwareReply(c.cmdId, [
+															c.cmdId === 3 ? 1 : 128,
+														]),
+													],
+									}),
+						});
+						const device = yield* QuakeDevice.pipe(
+							Effect.provide(
+								QuakeDevice.DefaultWithoutDependencies.pipe(
+									Layer.provide(fake.layer),
+								),
 							),
-						),
-					);
-					const connection = yield* device.connect();
-					return yield* (yield* HardwareControls.pipe(
-						Effect.provide(HardwareControls.Default),
-					)).create(connection, { serial: "A", session: "session-A" });
+						);
+						const connection = yield* device.connect();
+						return yield* (yield* HardwareControls.pipe(
+							Effect.provide(HardwareControls.Default),
+						)).create(connection, { serial: "A", session: "session-A" });
+					}),
+					scope,
+				),
+			);
+			const bus: DeviceBus = {
+				on: () => () => {},
+				currentStatus: () => ({
+					source: "mock",
+					kind: "status",
+					state: "connected",
 				}),
-				scope,
-			),
-		);
-		const bus: DeviceBus = {
-			on: () => () => {},
-			currentStatus: () => ({
-				source: "mock",
-				kind: "status",
-				state: "connected",
-			}),
-			hardware: () => hardware,
-		};
-		const read = createDeviceReadyReader({
-			bus: (serial) => (serial === "A" ? bus : undefined),
-			rotation: () => 270,
-			mock: true,
-		});
-		expect(await read("unknown")).toEqual({ _tag: "offline" });
-		expect(await read("A")).toEqual({
-			_tag: "ready",
-			snapshot: {
-				serialNumber: "A",
-				connected: true,
-				deviceModel: "QUAKE_HID",
-				connectionType: "mock",
-				session: "session-A",
-				version: "1.0.21",
-				rotation: 270,
-				keyMatrix: { row: 2, col: 8 },
-			},
-		});
-		const unknown = createDeviceReadyReader({
-			bus: () => bus,
-			rotation: () => undefined,
-			mock: true,
-		});
-		const withoutDisplay = await unknown("A");
-		expect(
-			withoutDisplay._tag === "ready" && withoutDisplay.snapshot.rotation,
-		).toBeUndefined();
-	} finally {
-		await Effect.runPromise(Scope.close(scope, Exit.void));
-	}
-});
+				hardware: () => hardware,
+			};
+			const read = createDeviceReadyReader({
+				bus: (serial) => (serial === "A" ? bus : undefined),
+				rotation: () => 270,
+				mock: true,
+			});
+			expect(await read("unknown")).toEqual({ _tag: "offline" });
+			expect(await read("A")).toEqual({
+				_tag: "ready",
+				snapshot: {
+					serialNumber: "A",
+					connected: true,
+					deviceModel: "QUAKE_HID",
+					connectionType: "mock",
+					session: "session-A",
+					...(versionReply ? { version: "1.0.21" } : {}),
+					rotation: 270,
+					keyMatrix: { row: 2, col: 8 },
+				},
+			});
+			expect(await Effect.runPromise(hardware.snapshot())).toMatchObject({
+				available: true,
+				mic: true,
+				luminance: versionReply ? 255 : 128,
+			});
+			if (versionReply) {
+				const unknown = createDeviceReadyReader({
+					bus: () => bus,
+					rotation: () => undefined,
+					mock: true,
+				});
+				const withoutDisplay = await unknown("A");
+				expect(
+					withoutDisplay._tag === "ready" && withoutDisplay.snapshot.rotation,
+				).toBeUndefined();
+			}
+		} finally {
+			await Effect.runPromise(Scope.close(scope, Exit.void));
+		}
+	},
+);
 it("suppresses an old serial/session reply when its device is replaced during refresh", async () => {
 	let release = () => {};
 	const pending = new Promise<void>((resolve) => {

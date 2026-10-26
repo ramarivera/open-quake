@@ -52,6 +52,34 @@ const settle = TestClock.adjust(0);
 
 describe("hardware controls over actual device connection with fake transport", () => {
 	it.scoped(
+		"MAIN-018 missing optional version still synchronizes mic and luminance without poisoning readiness",
+		() =>
+			Effect.gen(function* () {
+				const queried: number[] = [];
+				const { session } = yield* setup({
+					onCommand: (c) => {
+						queried.push(c.cmdId);
+						return c.cmdId === 46
+							? []
+							: [fakeHardwareReply(c.cmdId, [c.cmdId === 3 ? 1 : 128])];
+					},
+				});
+				const refreshing = yield* session
+					.refresh()
+					.pipe(Effect.either, Effect.fork);
+				yield* TestClock.adjust(3000);
+				expect(yield* Fiber.join(refreshing)).toEqual(Either.right(undefined));
+				expect(queried.filter((id) => id === 46)).toHaveLength(10);
+				expect(queried.slice(-2)).toEqual([3, 5]);
+				expect(yield* session.snapshot()).toMatchObject({
+					available: true,
+					mic: true,
+					luminance: 128,
+				});
+				expect((yield* session.snapshot()).firmware).toBeUndefined();
+			}),
+	);
+	it.scoped(
 		"MAIN-018 retries version at 300ms and accepts a delayed correlated reply",
 		() =>
 			Effect.gen(function* () {
@@ -223,7 +251,10 @@ describe("hardware controls over actual device connection with fake transport", 
 		"times out after 3s and rejects late ack reuse without another write",
 		() =>
 			Effect.gen(function* () {
-				const { fake, session } = yield* setup({ onCommand: () => [] });
+				const { fake, session } = yield* setup({
+					onCommand: (c) =>
+						c.cmdId === 46 ? [fakeHardwareReply(46, [1, 1, 0, 21])] : [],
+				});
 				const refresh = yield* session
 					.refresh()
 					.pipe(Effect.either, Effect.fork);

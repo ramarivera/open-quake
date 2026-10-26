@@ -232,7 +232,11 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 											Exit.isFailure(exit) &&
 											!Option.exists(
 												Cause.failureOption(exit.cause),
-												(error) => error._tag === "HardwareCommandRejected",
+												(error) =>
+													error._tag === "HardwareCommandRejected" ||
+													(command._tag === "Query" &&
+														command.feature === "version" &&
+														error._tag === "HardwareReplyTimeout"),
 											)
 										)
 											poisoned = true;
@@ -412,7 +416,17 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										"mic",
 										"luminance",
 									] as const) {
-										const reply = yield* exchange({ _tag: "Query", feature });
+										const reply = yield* exchange({
+											_tag: "Query",
+											feature,
+										}).pipe(
+											Effect.catchTag("HardwareReplyTimeout", (error) => {
+												if (feature !== "version") return Effect.fail(error);
+												firmware = undefined;
+												return Effect.succeed(undefined);
+											}),
+										);
+										if (!reply) continue;
 										if (reply._tag === "MicState") mic = reply.on;
 										if (reply._tag === "LuminanceState")
 											luminance = reply.value;
