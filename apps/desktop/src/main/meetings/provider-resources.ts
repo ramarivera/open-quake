@@ -85,7 +85,20 @@ export function meetingResources(
 				if (!stat.isFile() || !stat.size) throw meetingError("CaptureFailed");
 			}).pipe(
 				Effect.onError(() => release),
-				Effect.retry({ times: 1 }),
+				Effect.retry({
+					times: 1,
+					while: (error) => {
+						const cause = error.originalCause;
+						return (
+							typeof cause === "object" &&
+							cause !== null &&
+							"code" in cause &&
+							["EAGAIN", "EBUSY", "ETXTBSY", "EMFILE", "ENFILE"].includes(
+								String(cause.code),
+							)
+						);
+					},
+				}),
 			);
 			return { path, release };
 		});
