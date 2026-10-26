@@ -1,9 +1,21 @@
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
-import { homedir } from "node:os";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { Deferred, Effect, Either, Layer, Schema } from "effect";
+import {
+	Deferred,
+	Effect,
+	Either,
+	Layer,
+	ManagedRuntime,
+	Option,
+	Schema,
+} from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts";
+import { MeetingCapture } from "../../../../../packages/edge/src/meetings/meeting-ports";
+import { MeetingProvider } from "../../../../../packages/edge/src/meetings/meeting-provider";
+import { MeetingRepository } from "../../../../../packages/edge/src/meetings/meeting-repository";
+import { MeetingService } from "../../../../../packages/edge/src/meetings/meeting-service";
 import { GridVoiceRuntime } from "../../../../../packages/edge/src/voice/surface";
 import type { CaptureRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports";
 import {
@@ -16,6 +28,7 @@ import {
 	createDesktopDiagnostics,
 	type DesktopDiagnostics,
 } from "../diagnostics";
+import { meetingStorage } from "../meetings/storage";
 import { copilotProfile } from "../test/voice-fixtures";
 import { meetingAdmission } from "./admission";
 import { createToneRecorder, registerVoiceSurface } from "./index";
@@ -841,3 +854,132 @@ it("KNOB-008/064 SCREEN-050: desktop meeting/translation admission reaches real 
 		await registration.dispose();
 	}
 });
+
+for (const failure of ["malformed", "unreadable"] as const)
+	it(`meeting admission ${failure} history returns visible busy feedback without a defect or capture`, async () => {
+		const directory = await mkdtemp(join(tmpdir(), "voice-admission-"));
+		const root = join(directory, "meetings-v1");
+		await mkdir(root);
+		if (failure === "malformed")
+			await writeFile(
+				join(root, "history.json"),
+				"private-transcript sk-private",
+			);
+		else await mkdir(join(root, "history.json"));
+		const diagnostics = createDesktopDiagnostics({
+			directory: join(directory, "logs"),
+		});
+		const meetings = ManagedRuntime.make(
+			MeetingService.DefaultWithoutDependencies.pipe(
+				Layer.provide(
+					Layer.mergeAll(
+						MeetingRepository.Default(meetingStorage(root)),
+						MeetingProvider.Default,
+						Layer.succeed(MeetingCapture, {
+							start: () => Effect.die("meeting capture must not start"),
+							drain: () => Effect.die("meeting drain must not run"),
+							duration: () => Effect.die("meeting duration must not run"),
+							stop: () => Effect.die("meeting stop must not run"),
+							cancel: () => Effect.void,
+							startTranslation: () => Effect.die("translation must not start"),
+							stopTranslation: () => Effect.void,
+							mic: () => Effect.succeed(Option.none()),
+							toggleMic: () => Effect.die("microphone must not toggle"),
+						}),
+					),
+				),
+			),
+		);
+		const tones = createToneRecorder();
+		const registration = registerVoiceSurface({
+			mock: true,
+			tones,
+			diagnostics,
+			serial: () => "QK-1",
+			panel: () => undefined,
+			management: () => undefined,
+			renderer: RENDERER,
+			admission: meetingAdmission(() =>
+				meetings.runPromise(MeetingService.snapshot()),
+			),
+		});
+		try {
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([channel]) => channel === VOICE_REQUEST_CHANNEL,
+			)?.[1];
+			if (typeof handler !== "function") throw new Error("No voice handler");
+			const reply = await handler(
+				{
+					sender: electron.webContents,
+					senderFrame: electron.webContents.mainFrame,
+				},
+				{
+					_tag: "Input",
+					input: { keyCode: "1,5", type: "clawbot", kind: "down" },
+				},
+			);
+			expect(decodeReply(reply)).toEqual({ _tag: "ok" });
+			await Effect.runPromise(
+				registration.knobVoice({ action: "holdStart", generation: 1 }),
+			);
+			await vi.waitFor(() => expect(tones.played()).toHaveLength(2));
+			const events = sent().flatMap((value) =>
+				Either.isRight(value) ? [value.right] : [],
+			);
+			expect(events.filter((value) => value._tag === "Toast")).toEqual([
+				expect.objectContaining({
+					messageKey: "aiIconViewTxt.busyToast",
+				}),
+				expect.objectContaining({
+					messageKey: "aiIconViewTxt.busyToast",
+				}),
+			]);
+			expect(
+				events.some(
+					(value) => value._tag === "Stage" && value.stage._tag === "recording",
+				),
+			).toBe(false);
+			expect(tones.played().map((value) => value.tone)).toEqual([
+				"busy",
+				"busy",
+			]);
+			await rm(join(root, "history.json"), { recursive: true, force: true });
+			await writeFile(join(root, "history.json"), '{"version":1,"records":[]}');
+			await Effect.runPromise(
+				registration.knobVoice({ action: "holdStart", generation: 2 }),
+			);
+			await vi.waitFor(() =>
+				expect(
+					sent().some(
+						(value) =>
+							Either.isRight(value) &&
+							value.right._tag === "Stage" &&
+							value.right.stage._tag === "recording",
+					),
+				).toBe(true),
+			);
+		} finally {
+			await registration.dispose();
+			await meetings.dispose();
+			await diagnostics.close();
+		}
+		try {
+			const log = await readFile(
+				join(directory, "logs", "diagnostics.0.ndjson"),
+				"utf8",
+			);
+			expect(log).toContain('"code":"VOICE.SURFACE.REQUEST_FAILED"');
+			expect(log).toContain('"code":"QUAKE.MEETING.STORAGE_FAILED"');
+			expect(log).toContain('"_tag":"VoiceSurfaceRequestFailed"');
+			expect(log).not.toContain('"kind":"Die"');
+			for (const privateText of [
+				directory,
+				"history.json",
+				"private-transcript",
+				"sk-private",
+			])
+				expect(log).not.toContain(privateText);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});

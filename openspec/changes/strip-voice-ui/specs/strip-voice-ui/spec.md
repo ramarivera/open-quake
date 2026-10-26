@@ -512,6 +512,12 @@ The real meeting pipeline SHALL publish MeetingStage events for recording 0, rec
 
 For KNOB-007, KNOB-008, KNOB-064 and SCREEN-050, grid and knob voice SHALL check the process meeting/translation owner before selection and again before capture acquisition. Recording or processing meetings SHALL reject with `meetingAssistantPrompt.meetingActive`; live translation SHALL reject with `meetingAssistantPrompt.liveTranslateActive`. Rejection SHALL emit a busy tone and warning toast without closing the current flow. Knob short press SHALL disarm a pending grid reservation or cancel the current same-device capture/chat owner once. A stale knob generation SHALL NOT cancel a newer knob capture. Other devices SHALL remain untouched.
 
+#### Scenario: Meeting ownership snapshot is unavailable
+- **WHEN** malformed or unreadable meeting history prevents the process ownership snapshot from loading before a grid press or knob hold
+- **THEN** voice admission fails closed with the localized `aiIconViewTxt.busyToast` warning and busy tone, without selecting a key or acquiring a microphone
+- **AND** main records a typed `VoiceSurfaceRequestFailed` diagnostic with a private original cause and scrubbed public fields, and a later successful snapshot restores admission without restarting
+- **AND** this unknown-owner policy conservatively extends KNOB-008 and SCREEN-050 exclusivity, whose recovered `QuakeShortCutView.vue:3335-3354` checks active meeting stage/status and live translation before admitting voice, rather than treating a failed read as proof of no active owner
+
 #### Scenario: Meeting releases voice
 - **WHEN** a grid press and knob hold arrive while a meeting owns capture, then another hold arrives after release
 - **THEN** the first two attempts emit localized warnings with no selection or microphone acquisition, and the new hold starts capture
