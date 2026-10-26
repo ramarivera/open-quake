@@ -89,6 +89,7 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 							import("../ai-errors.js").AiError
 						>();
 						const text = new Map<string, string>();
+						let disconnected = false;
 						const reader = yield* Effect.gen(function* () {
 							while (true) {
 								const event = yield* receiveObject(socket);
@@ -137,6 +138,7 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 								}
 								const updateId = `${sessionId}:${id}`;
 								const previous = updates.findIndex((u) => u.id === updateId);
+								if (previous >= 0 && updates[previous]?.final) continue;
 								if (previous >= 0) updates.splice(previous, 1);
 								updates.push({
 									id: updateId,
@@ -158,6 +160,7 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 						}).pipe(
 							Effect.catchAll((error) =>
 								Effect.gen(function* () {
+									disconnected = true;
 									yield* Deferred.fail(ready, error);
 									if (generation === epoch) {
 										active = undefined;
@@ -194,7 +197,7 @@ export const makeMeetingTranslation = Effect.fn("MeetingTranslation.make")(
 								),
 							),
 						);
-						if (epoch !== generation) {
+						if (epoch !== generation || disconnected) {
 							controller.abort();
 							yield* socket.close;
 							yield* Fiber.interrupt(reader);

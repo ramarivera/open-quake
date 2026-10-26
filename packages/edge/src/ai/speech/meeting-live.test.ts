@@ -674,3 +674,45 @@ it.scoped(
 			expect(s.closed()).toBe(2);
 		}),
 );
+
+it.scoped(
+	"AI-137 AI-338 live result queues retain final text and cap total characters before any consumer drains",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const s = yield* fakeSocket();
+			const live = yield* makeMeetingTranslation(s.transport, f.resolve);
+			yield* live.prepareTranslation(f.request.config);
+			yield* Queue.offer(s.queue, {
+				type: "response.text.done",
+				response_id: "final",
+				text: "committed",
+			});
+			yield* Queue.offer(s.queue, {
+				type: "response.text.text",
+				response_id: "final",
+				text: "stale interim",
+			});
+			yield* Effect.yieldNow();
+			expect(
+				yield* live.translate(f.request.config, new Uint8Array(14400)),
+			).toMatchObject([{ text: "committed", final: true }]);
+			for (let i = 0; i < 40; i++)
+				yield* Queue.offer(s.queue, {
+					type: "response.text.done",
+					response_id: String(i),
+					text: "x".repeat(5000),
+				});
+			yield* Effect.yieldNow();
+			const result = yield* live.translate(
+				f.request.config,
+				new Uint8Array(14400),
+			);
+			expect(result.length).toBeGreaterThan(0);
+			expect(result.length).toBeLessThanOrEqual(200);
+			expect(result.reduce((n, u) => n + u.text.length, 0)).toBeLessThanOrEqual(
+				64000,
+			);
+			expect(result.every((u) => u.text.length <= 4000)).toBe(true);
+		}),
+);

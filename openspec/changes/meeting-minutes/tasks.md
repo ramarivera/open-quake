@@ -134,12 +134,21 @@ Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptanc
 - [x] 10.2 AI-272: per-job OpenAI realtime PCM, finality, timing and cleanup. Bead open-quake-lih.16.10.
 - [x] 10.3 AI-136,137,292,327,338,SCREEN-110: bounded live transport, resampling, reconnect, cancellation and display consumers. Bead open-quake-lih.16.11.
 - [x] 10.4 AI-285,286,288,294: encoded continuous rollover, optional-track fallback, numeric merge order and mono submission. Bead open-quake-lih.16.12.
-- [ ] 10.5 Run lane gates and desktop suite after current main merge, open PR. Leave beads open for lead merge; list physical/provider acceptance separately.
+- [x] 10.5 Run lane gates and desktop suite after current main merge, open PR. Leave beads open for lead merge; list physical/provider acceptance separately.
 
-Tasks 10.1-10.4 are implemented and tested to fake boundaries. Focused checks
-pass 76 edge and 82 desktop tests, including actual FFmpeg normalization and a
-loopback fake HTTP upload through saved-profile/vault composition. Initial root
-run passed 872 edge, 511 device, 63 protocol and 2395 desktop tests; the one
-CENTER-070 catalog expectation failure is fixed in current main and will be
-reconciled by task 10.5. Native audio/OS/device and paid-provider qualification
-remain open for all 18 lane rows. No live acceptance is claimed.
+Tasks 10.1-10.4 are implemented and tested to fake boundaries. Latest main
+`aab428f7` is merged without conflicts. All six gates pass: root loose-environment
+suite 4,036 passing / four existing skips, six package typechecks, Biome 1,388
+files / 14 existing warnings, production build, both bundle modes, and 47 strict
+OpenSpec items. Desktop passes 2,570 tests after the main merge. Native meetings
+and baseline media smokes pass with 28 and 22 EN/DE captures. Actual local HTTP,
+masked WebSocket and SSE fixtures verify saved-vault composition, mono uploaded
+bytes, OpenAI per-job PCM and existing summary generation. Final/interim queue
+protection and total adapter text bounds have direct regressions.
+
+Physical acceptance remains open for AI-285, AI-286, AI-288, AI-292, AI-294,
+AI-327, AI-338 and SCREEN-110. Paid-provider qualification for AI-136, AI-137,
+AI-269, AI-270, AI-272 and AI-278 remains unverified. No real microphone/system
+capture, HID or DK-Suite was opened. Beads stay open for lead merge. Evidence,
+row mappings, logs and screenshots are external under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/`.

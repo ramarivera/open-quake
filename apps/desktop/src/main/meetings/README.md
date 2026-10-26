@@ -253,3 +253,34 @@ physical QUAKE, OS capture or paid-provider acceptance is closed.
 Logs and captures remain external under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-ui/fix1/`.
 Review threads stay unresolved and merge/hosted-check ownership stays with the lead.
+
+
+## meeting-provider fake-boundary acceptance
+
+The direct adapter uses the saved default Qwen/OpenAI model profile and existing
+credential vault. DashScope file operations use its compatible file API and only
+locally recorded remote IDs. Upload/task expiry and raw/compatibility transcript
+artifacts remain private under the managed meeting directory. Hourly capture
+starts replacement recorders before draining old ones; optional unusable system
+tracks fall back to microphone-only mixing. PCM resamples the actual input rate
+to exact 300 ms / 24 kHz / s16le blocks. Adapter and display queues both cap text;
+reconnects use a new result identity, and a final result ignores stale interim
+updates.
+
+All 18 meeting-provider rows have requirements and production consumer tests in
+OpenSpec section 10. Local fake HTTP/WebSocket/SSE servers verify actual mono
+uploads, saved model/vault selection, OpenAI file transcription with per-job PCM
+cleanup, and the existing summary facade. No new dependency or second credential
+store was added. After merging main `aab428f7`, the root suite passes 4,036 tests
+with four existing skips, including 2,570 desktop tests. Six typechecks, Biome
+1,388 files, production build, both bundle modes and 47 strict OpenSpec items pass.
+Both hidden, muted native mock smokes pass; 28 meeting and 22 media captures,
+including EN/DE, stay in the meeting-provider SSD scratch directory. Logs retain
+Chromium cache/process-policy diagnostics and existing combined-fixture missing
+profiles/connections/knob handlers; this isn't a console-clean claim.
+
+Physical acceptance remains open for AI-285, AI-286, AI-288, AI-292, AI-294,
+AI-327, AI-338 and SCREEN-110; paid-provider qualification remains unverified for
+AI-136, AI-137, AI-269, AI-270, AI-272 and AI-278. No microphone, system capture,
+physical device or paid request is part of this evidence. Beads
+open-quake-lih.16.9 through .12 stay open for lead merge.
