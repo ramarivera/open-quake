@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Layer, TestClock } from "effect";
+import { Deferred, Effect, Fiber, Layer, Logger, TestClock } from "effect";
+import { KnobDispatchFailed } from "../../../../../packages/device/src/knob/knob-errors.js";
 import { KnobModelPorts } from "../../../../../packages/device/src/knob/model/ports.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import { observeVolume } from "./volume-observer";
@@ -27,6 +28,45 @@ const armed = Effect.gen(function* () {
 	return { model, context };
 });
 describe("external-volume observation", () => {
+	it.scoped(
+		"logs a persistent failure once and logs recurrence after recovery",
+		() =>
+			Effect.gen(function* () {
+				yield* armed;
+				let broken = true;
+				let warnings = 0;
+				const failure = KnobDispatchFailed.fromCause(
+					Object.assign(new Error("private"), { code: "EACCES" }),
+				);
+				const fiber = yield* observeVolume(
+					Effect.suspend(() =>
+						broken
+							? Effect.fail(failure)
+							: Effect.succeed({ level: 50, muted: false }),
+					),
+					() => true,
+				).pipe(
+					Effect.provide(
+						Logger.replace(
+							Logger.defaultLogger,
+							Logger.make(() => {
+								warnings++;
+							}),
+						),
+					),
+					Effect.forkScoped,
+				);
+				yield* TestClock.adjust(4000);
+				expect(warnings).toBe(1);
+				broken = false;
+				yield* TestClock.adjust(1000);
+				broken = true;
+				yield* TestClock.adjust(2000);
+				expect(warnings).toBe(2);
+				yield* Fiber.interrupt(fiber);
+			}).pipe(Effect.provide(layer)),
+	);
+
 	it.scoped(
 		"reads only while armed, updates the real model without writes, and stops after disposal",
 		() =>

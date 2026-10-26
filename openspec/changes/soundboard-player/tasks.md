@@ -55,3 +55,12 @@ still stopping. Shutdown now invalidates ownership immediately and waits through
 the same transition gate as acquisition. Two deterministic regressions fail on
 the previous source and cover both completed and timed-out prior cleanup, with
 no replacement lease granted after shutdown.
+
+PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
+allowlists retain both native-media and importer names; the final diff contains
+only the importer scope. All 53 importer tests, 16 filesystem/diagnostics tests,
+both typechecks, scoped Biome and strict OpenSpec pass. This disposable worktree
+initially lacked generated Husky shims; installing frozen dependencies restored
+them, and the first merge's commit-message/post-commit consumers were checked
+explicitly before the normal final merge and push gates. Reviewed delivery is
+still pending; no playback is enabled by this restack.
