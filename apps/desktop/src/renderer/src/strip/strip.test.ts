@@ -446,6 +446,17 @@ describe("tile registry", () => {
 });
 
 describe("strip selection and settings", () => {
+	it("follows the device selection and falls back to the first page", () => {
+		const envelope = decode(stripFixtureEnvelope(meetAiProfile, "SN-1"));
+		expect(selectStripPage(envelope, "SN-1").profile.name).toBe("MeetAI");
+		expect(selectStripPage(envelope, "desktop-preview").profile.id).toBe(
+			envelope.profiles[0].id,
+		);
+		expect(selectStripPage(envelope, "__proto__").page.id).toBe(
+			envelope.profiles[0].pages[0].id,
+		);
+	});
+
 	it("follows saved selection, uses colorful for new serials and preserves preview fallback", () => {
 		const envelope = decode(stripFixtureEnvelope(meetAiProfile, "SN-1"));
 		expect(selectStripPage(envelope, "SN-1").profile.name).toBe("MeetAI");

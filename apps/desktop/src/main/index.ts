@@ -24,12 +24,12 @@ import { ProfileService } from "../../../../packages/device/src/profiles/profile
 import { AgentsService } from "../../../../packages/edge/src/agents/agents-service";
 import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
+import { MeetingService } from "../../../../packages/edge/src/meetings/meeting-service";
 import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
 import { GridVoice } from "../../../../packages/edge/src/voice/surface/grid-voice-service";
 import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
-import { MANAGEMENT_ACTIVATE } from "../shared/management";
 import { isTransientStripPage } from "../shared/strip-selection";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
@@ -87,6 +87,11 @@ import {
 	readNativeTheme,
 	registerManagementAppearance,
 } from "./management/appearance";
+import { createDesktopShell } from "./management/desktop-shell";
+import { registerDevicePicker } from "./management/device-picker";
+import { registerManagementNavigation } from "./management/external-navigation";
+import { createPrivacyVisibility } from "./management/privacy-visibility";
+import { prepareDesktopStartup } from "./management/startup";
 import { MediaLive, registerMedia } from "./media";
 import { applyWallpaperBackground } from "./media/native-background";
 import { prepareMeetings } from "./meetings";
@@ -106,6 +111,7 @@ import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
 import { registerStripTransport } from "./strip-transport";
 import { createToneRecorder, prepareVoiceSurface, toneSinks } from "./voice";
+import { meetingAdmission } from "./voice/admission";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 import { HostVolume } from "./weather-media/host-volume";
 import {
@@ -120,6 +126,7 @@ const rendererURL =
 	isDev && process.env.ELECTRON_RENDERER_URL
 		? process.env.ELECTRON_RENDERER_URL
 		: pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href;
+prepareDesktopStartup();
 registerClockScheme();
 
 function loadSurface(
@@ -174,6 +181,7 @@ function createManagementWindow(): BrowserWindow {
 			nodeIntegration: false,
 		},
 	});
+	registerManagementNavigation(win.webContents, rendererURL);
 	return win;
 }
 
@@ -204,6 +212,7 @@ if (!app.requestSingleInstanceLock()) {
 							{ win: BrowserWindow; target: PanelTarget }
 						>();
 						let managementWin = createManagementWindow();
+						let managementReachable = () => process.platform === "darwin";
 						const removeManagementAppearance = registerManagementAppearance(
 							() => managementWin,
 							app.getPath("userData"),
@@ -271,6 +280,10 @@ if (!app.requestSingleInstanceLock()) {
 							bus?.device
 								? bus.device(activeDeviceId())?.hardware?.()
 								: bus?.hardware?.();
+						let settingsSerial: string | undefined;
+						let settingsHardware: ReturnType<typeof currentHardware>;
+						const selectedHardware = () =>
+							settingsSerial ? settingsHardware : currentHardware();
 						const hardwareSessions = () =>
 							bus?.device
 								? [...connectedSerials].flatMap((serial) => {
@@ -282,6 +295,7 @@ if (!app.requestSingleInstanceLock()) {
 									: [];
 						let knobLocale: LocaleSnapshot["locale"] = "en";
 						let refreshNativeMenu = () => {};
+						let refreshTray = () => {};
 						let resetVoice = (): Promise<void> => Promise.resolve();
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 							Promise.resolve();
@@ -330,10 +344,7 @@ if (!app.requestSingleInstanceLock()) {
 									},
 									workAreas: async () =>
 										screen.getAllDisplays().map((display) => display.workArea),
-									managementReachable: async () =>
-										process.platform === "darwin" &&
-										Boolean(app.dock?.isVisible()) &&
-										app.listenerCount("activate") > 0,
+									managementReachable: async () => managementReachable(),
 								}),
 								owners: createWizardOwners({
 									deviceId: async () => {
@@ -392,6 +403,13 @@ if (!app.requestSingleInstanceLock()) {
 							run: (effect) => background.runPromise(effect),
 						});
 						const voiceModule = prepareVoiceSurface({
+							profiles: () =>
+								profiles.runtime
+									.runPromise(ProfileService.loadProfiles())
+									.then(({ envelope }) => envelope),
+							admission: meetingAdmission(() =>
+								meetingsModule.runtime.runPromise(MeetingService.snapshot()),
+							),
 							diagnostics,
 							runtime: speech.decorate,
 							knobRoute: (serial) =>
@@ -409,6 +427,7 @@ if (!app.requestSingleInstanceLock()) {
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 							tones: toneSinks(createToneRecorder(), {
 								play: (serial, tone) => {
+									if (tone === "busy") void speech.playHostTone(serial, tone);
 									const hardware = bus?.device
 										? bus.device(serial)?.hardware?.()
 										: currentHardware();
@@ -442,6 +461,7 @@ if (!app.requestSingleInstanceLock()) {
 									obs.execute(command, signal),
 								)(key, signal)) ||
 								(await speech.executeSoundKey(key, signal, activation)) ||
+								(await speech.executeReaderKey(key, activation)) ||
 								(isSystemPlayerKey(key)
 									? await weatherModule.runtime
 											.runPromise(SystemMediaService.control("toggle"), {
@@ -814,7 +834,16 @@ if (!app.requestSingleInstanceLock()) {
 							(runtime) => runtime,
 							diagnostics,
 						);
+						const privacyVisibility = createPrivacyVisibility({
+							show: () => {
+								if (quitting || managementWin.isDestroyed()) return;
+								if (managementWin.isMinimized()) managementWin.restore();
+								managementWin.show();
+								managementWin.focus();
+							},
+						});
 						const maintenanceModule = prepareMaintenance({
+							permissionFlow: privacyVisibility.begin,
 							diagnostics,
 							root: app.getPath("userData"),
 							mock,
@@ -989,26 +1018,13 @@ if (!app.requestSingleInstanceLock()) {
 							});
 						};
 						refreshNativeMenu = () => {
+							refreshTray();
 							if (app.dock?.setMenu)
 								app.dock.setMenu(
 									Menu.buildFromTemplate(
 										nativeLocaleMenu(knobLocale, {
 											resume: focusManagement,
-											settings: () => {
-												focusManagement();
-												const target = managementWin;
-												void managementReady.then(() => {
-													if (
-														!quitting &&
-														!target.isDestroyed() &&
-														target === managementWin
-													)
-														target.webContents.send(
-															MANAGEMENT_ACTIVATE,
-															"settings",
-														);
-												});
-											},
+											settings: () => desktopShell.open("settings"),
 											exit: () => app.quit(),
 										}),
 									),
@@ -1016,6 +1032,63 @@ if (!app.requestSingleInstanceLock()) {
 						};
 						refreshNativeMenu();
 						app.on("second-instance", focusManagement);
+						let restartRequested = false;
+						const desktopShell = createDesktopShell({
+							keepVisible: privacyVisibility.active,
+							locale: () => knobLocale,
+							management: () => managementWin,
+							renderer: rendererURL,
+							focus: focusManagement,
+							quitting: () => quitting,
+							quit: (restart) => {
+								restartRequested = restart;
+								app.quit();
+							},
+						});
+						refreshTray = desktopShell.refresh;
+						managementReachable = desktopShell.recoverable;
+						const removeDevicePicker = registerDevicePicker({
+							management: () => managementWin,
+							renderer: rendererURL,
+							read: async () => {
+								const sessions = hardwareSessions();
+								const devices = await Promise.all(
+									sessions.map((session) =>
+										Effect.runPromise(session.snapshot()),
+									),
+								);
+								settingsSerial ??= devices[0]?.serial;
+								const selected = devices.findIndex(
+									(device) => device.serial === settingsSerial,
+								);
+								if (selected >= 0) settingsHardware = sessions[selected];
+								return {
+									selected: settingsSerial ?? null,
+									devices: devices
+										.filter((device) => device.available)
+										.map(({ serial, session }) => ({ serial, session })),
+								};
+							},
+							select: async (serial, session) => {
+								const target = bus?.device
+									? bus.device(serial)?.hardware?.()
+									: currentHardware();
+								if (!target) return false;
+								const snapshot = await Effect.runPromise(target.snapshot());
+								if (
+									snapshot.serial !== serial ||
+									snapshot.session !== session ||
+									!snapshot.available ||
+									(bus?.device
+										? bus.device(serial)?.hardware?.()
+										: currentHardware()) !== target
+								)
+									return false;
+								settingsSerial = serial;
+								settingsHardware = target;
+								return true;
+							},
+						});
 						const profileUpdates = profiles.runtime.runFork(
 							ProfileService.subscribeCommittedProfiles().pipe(
 								Effect.flatMap((snapshots) =>
@@ -1099,7 +1172,7 @@ if (!app.requestSingleInstanceLock()) {
 									);
 								});
 						const disposeHardware = registerHardware(
-							currentHardware,
+							selectedHardware,
 							() => managementWin,
 							mock,
 							rendererURL,
@@ -1474,6 +1547,9 @@ if (!app.requestSingleInstanceLock()) {
 							app.removeListener("second-instance", focusManagement);
 							removeLifecycle();
 							removeManagementAppearance();
+							desktopShell.dispose();
+							privacyVisibility.dispose();
+							removeDevicePicker();
 							removeKnobLocale();
 							removeKnobThumbnailStyle();
 							disposeHardware();
@@ -1541,6 +1617,7 @@ if (!app.requestSingleInstanceLock()) {
 							if (quitting) return;
 							quitting = true;
 							const reportFailure = (cause: unknown): void => {
+								restartRequested = false;
 								const error =
 									cause instanceof MaintenanceShutdownFailed
 										? cause
@@ -1578,6 +1655,7 @@ if (!app.requestSingleInstanceLock()) {
 											await diagnostics.close();
 										} finally {
 											quitFinished = true;
+											if (restartRequested) app.relaunch();
 											app.quit();
 										}
 									}
@@ -1590,6 +1668,7 @@ if (!app.requestSingleInstanceLock()) {
 								if (panelWin.isDestroyed())
 									syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
 								managementWin = createManagementWindow();
+								desktopShell.attach(managementWin);
 								removeLifecycle.bindManagement();
 								loadSurface(managementWin, "management");
 								managementReady = settingsWindow.initialize(
@@ -1608,7 +1687,7 @@ if (!app.requestSingleInstanceLock()) {
 						app.on("activate", focusManagement);
 						app.on("window-all-closed", () => {
 							void stopBus();
-							if (process.platform !== "darwin") app.quit();
+							if (!desktopShell.recoverable()) app.quit();
 						});
 						loadSurface(
 							panelWin,
@@ -1618,6 +1697,7 @@ if (!app.requestSingleInstanceLock()) {
 						loadSurface(managementWin, "management");
 						managementReady = settingsWindow.initialize(managementWin);
 						await managementReady;
+						if (!desktopShell.recoverable()) focusManagement();
 					}),
 					"app.startup",
 				)

@@ -53,9 +53,10 @@ proof that an operation didn't run.
 
 ## Retention and privacy
 
-Defaults retain four files of at most 2 MiB each and at most 512 KiB queued in
-memory. Old files rotate out. Retention settings have hard upper bounds of
-eight files, 16 MiB per file, and 2 MiB queued memory. A full queue drops new
+Defaults retain thirty files of at most 10 MiB each and at most 512 KiB queued
+in memory. The first write after local midnight also rotates the active file.
+Old files rotate out. Retention settings have hard upper bounds of thirty files,
+16 MiB per file, and 2 MiB queued memory. A full queue drops new
 records and increments `dropped`. It never blocks microphone or input work.
 Existing files over the configured size limit are discarded on acquisition.
 

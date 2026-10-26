@@ -10,6 +10,7 @@ import type { GeneratedAudio } from "../../../../../packages/edge/src/ai/speech/
 import {
 	SpeechHttp,
 	SpeechOutput,
+	type SpeechOutputTarget,
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import type { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
@@ -35,6 +36,7 @@ const WorkerReply = Schema.Union(
 /** No window exists until a user starts capture/playback. The worker never shows or focuses. */
 export async function openAudioWorker(
 	signal: AbortSignal,
+	target: SpeechOutputTarget = { kind: "assistant" },
 ): Promise<AudioWorker> {
 	const directory = await mkdtemp(
 		join(app.getPath("sessionData"), "speech-worker-"),
@@ -50,6 +52,10 @@ export async function openAudioWorker(
 		);
 		const audioSession = session.fromPartition(`speech-audio-${randomUUID()}`);
 		window = new BrowserWindow({
+			title:
+				target.kind === "device"
+					? `Device speech ${target.serial}`
+					: "Assistant speech",
 			show: false,
 			focusable: false,
 			webPreferences: {
@@ -111,7 +117,7 @@ export async function openAudioWorker(
 				if (
 					closed ||
 					!window ||
-					!/^(capture|pull|ready|play|stop|state|resume|pause|resumeCapture|export|level|close)$/.test(
+					!/^(capture|pull|ready|play|stop|state|resume|pause|resumeCapture|export|level|close|speakLocal|localState)$/.test(
 						method,
 					)
 				)
@@ -288,19 +294,15 @@ export function createElectronCaptureDriver(
 export function createDesktopAudioOutput(
 	ownership: Effect.Effect.Success<typeof makeAudioOutput>,
 	open = openAudioWorker,
+	priority: "speech" | "soundboard" = "speech",
 ): typeof SpeechOutput.Service {
-	return {
-		suspendForCapture: ownership.suspend(),
-		capture: ownership.acquire("capture", Effect.void).pipe(
-			Effect.map((lease) => ({ stop: lease.release })),
-			Effect.mapError((cause) => new AiUnavailable(cause)),
-		),
-		acquire: Effect.gen(function* () {
+	const acquireFor = (target: SpeechOutputTarget) =>
+		Effect.gen(function* () {
 			const controller = new AbortController();
 			let worker: AudioWorker | undefined;
 			const reservation = yield* ownership
 				.acquire(
-					"speech",
+					priority,
 					Effect.promise(async () => {
 						controller.abort();
 						await worker?.close();
@@ -309,7 +311,7 @@ export function createDesktopAudioOutput(
 				.pipe(Effect.mapError((cause) => new AiUnavailable(cause)));
 			let preparing: Promise<void> | undefined;
 			const prepare = async () => {
-				worker = await open(controller.signal);
+				worker = await open(controller.signal, target);
 				if (controller.signal.aborted) {
 					await worker.close();
 					throw new AiUnavailable();
@@ -374,7 +376,15 @@ export function createDesktopAudioOutput(
 				stop: reservation.release,
 			};
 			return lease;
-		}),
+		});
+	return {
+		suspendForCapture: ownership.suspend(),
+		capture: ownership.acquire("capture", Effect.void).pipe(
+			Effect.map((lease) => ({ stop: lease.release })),
+			Effect.mapError((cause) => new AiUnavailable(cause)),
+		),
+		acquire: acquireFor({ kind: "assistant" }),
+		acquireFor,
 	};
 }
 export const desktopSpeechPorts = (

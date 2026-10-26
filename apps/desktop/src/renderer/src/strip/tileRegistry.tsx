@@ -42,6 +42,7 @@ import { useMonitor } from "./tiles/monitor/useMonitor";
 import { previewSnapshot } from "./tiles/monitor/view-model";
 import { SoundboardUnavailableTile } from "./tiles/soundboard/SoundboardUnavailableTile";
 import { soundboardOwned } from "./tiles/soundboard/soundboard-state";
+import { AudioBotTile } from "./tiles/voiceKey/AudioBotTile";
 import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
 
 /**
@@ -257,6 +258,7 @@ export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 		["aiChatView", AiCopilotTile],
 		["quakeBot", ClawBotTile],
 		["quakeBotInput", ClawBotInputTile],
+		["audioBot", AudioBotTile],
 		["aiChat", VoiceKeyTile],
 		["clawbot", VoiceKeyTile],
 		["systemMonitorPanel", MonitorSlot],

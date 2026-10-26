@@ -123,6 +123,7 @@ const XfyCredentials = Schema.Struct({
 export const SpeechSettings = Schema.Struct({
 	version: Schema.Literal(1),
 	speakAnswers: Schema.Boolean,
+	hostTones: Schema.optional(Schema.Boolean),
 	geographicSeed: Schema.optional(
 		Schema.Struct({
 			country: Schema.optional(

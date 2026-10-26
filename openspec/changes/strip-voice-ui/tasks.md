@@ -208,3 +208,8 @@ and composition tests plus desktop typecheck pass. Logs: `strip-voice-2/fix1d/62
 - [x] AI-191, AI-194, AI-195, AI-196, AI-197, AI-198, AI-199, AI-201, AI-204, AI-207, AI-208 and SCREEN-115 cover Copilot copy/status/scroll/hint/cancel, localized overlays and busy expiry in both motion modes, knob stream isolation, and real knob model-to-wheel routing. Evidence: native `test/copilot-smoke.tsx`, `test/overlay-smoke.tsx` and `test/knob-conversation-smoke.tsx`, plus offline renderer SSR coverage.
 
 All native tests use a hidden, muted Electron window and synthetic bridges. Vitest reuses the existing Node/SSR and happy-dom renderer setup; `conversation-render.test.tsx` and `voice-render.test.tsx` exercise mounted interactions and exact timer boundaries through the shared DOM helper. No Playwright, browser dependency or CI/workflow change. Bead open-quake-cby.10 remains open for lead delivery; physical device, microphone and paid-provider acceptance remains unverified.
+
+## voice-runtime burn-down
+
+- [x] Admission and current-owner interruption. Rows KNOB-007/008/064, SCREEN-050. Evidence: GridVoice and main voice IPC tests for meeting/translation ownership, foreign flows, gateway phase, reservation/capture/chat interruption and stale knob generations. Bead open-quake-lih.5.6 stays open for lead merge.
+- [x] Independent overlays, meters, energy and toast contract. Rows SCREEN-020/112/113/118/119/120. Evidence: voice-render tests for both capture sources, reduced motion, volume states/deduplication and escaped fallback/error toasts. Bead open-quake-lih.5.8 stays open for lead merge.

@@ -87,6 +87,18 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 						next.delete(event.serial);
 						return next;
 					});
+				if (event._tag === "TurnStarted")
+					yield* reserve(event.serial, event.keyCode, `turn/${event.turnId}`);
+				if (event._tag === "Chunk" && event.chunk.type === "end")
+					yield* Ref.update(flows, (map) => {
+						if (
+							map.get(event.serial)?.captureId !== `turn/${event.chunk.turnId}`
+						)
+							return map;
+						const next = new Map(map);
+						next.delete(event.serial);
+						return next;
+					});
 				if (event._tag !== "Stage") return yield* publisher.publish(event);
 				yield* Effect.annotateCurrentSpan({
 					keyCode: event.keyCode,
@@ -154,7 +166,38 @@ export class VoiceSurface extends Effect.Service<VoiceSurface>()(
 				},
 			);
 
-			return { publish, activeFlow, reserve, rejectBusy, agentStatus };
+			const clearFlow = Effect.fn("VoiceSurface.clearFlow")(
+				(serial: string, keyCode: string, captureId?: string) =>
+					Ref.update(flows, (map) => {
+						const current = map.get(serial);
+						if (
+							current?.keyCode !== keyCode ||
+							(captureId !== undefined && current.captureId !== captureId)
+						)
+							return map;
+						const next = new Map(map);
+						next.delete(serial);
+						return next;
+					}),
+			);
+			return {
+				publish,
+				activeFlow,
+				flowOwner: (serial: string) =>
+					Ref.get(flows).pipe(
+						Effect.map((map) => Option.fromNullable(map.get(serial))),
+					),
+				foreignFlow: (serial: string) =>
+					Ref.get(flows).pipe(
+						Effect.map((map) =>
+							[...map.keys()].some((owner) => owner !== serial),
+						),
+					),
+				reserve,
+				clearFlow,
+				rejectBusy,
+				agentStatus,
+			};
 		}),
 	},
 ) {}

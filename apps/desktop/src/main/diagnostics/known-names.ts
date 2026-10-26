@@ -190,6 +190,7 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 );
 
 export const knownLogEvents = new Set([
+	"Voice admission state unavailable",
 	"touch.health",
 	"touch.state",
 	"soundboard.worker.cleanup.failed",
