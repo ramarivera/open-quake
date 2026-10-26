@@ -393,6 +393,88 @@ it("routes Read Aloud through the selected speech consumer using accumulated rea
 	}
 });
 
+it.each(["overflow", "empty"])(
+	"stop tap precedes %s answer validation for active read-aloud",
+	async (answerState) => {
+		const { SessionId, TurnId } = await import(
+			"../../../../../packages/edge/src/chat/chat-contracts"
+		);
+		const sessionId = SessionId.make(crypto.randomUUID());
+		const turnId = TurnId.make(crypto.randomUUID());
+		const owner = { serial: "QK-1", keyCode: "1,5" };
+		const readAloud = vi.fn(async () => ({ _tag: "ok" }) as const);
+		let active = true;
+		const stopReadAloud = vi.fn(async (request: typeof owner) => {
+			if (
+				active &&
+				request.serial === owner.serial &&
+				request.keyCode === owner.keyCode
+			) {
+				active = false;
+				return true;
+			}
+			return false;
+		});
+		const registration = registerVoiceSurface({
+			mock: false,
+			tones: createToneRecorder(),
+			serial: () => "QK-1",
+			panel: () => undefined,
+			management: () => undefined,
+			renderer: RENDERER,
+			speech: { readAloud, stopReadAloud, onEvent: () => {} },
+		});
+		try {
+			const handler = electron.ipcMain.handle.mock.calls.find(
+				([channel]) => channel === VOICE_REQUEST_CHANNEL,
+			)?.[1];
+			if (!handler) throw new Error("missing voice handler");
+			await registration.publish({
+				_tag: "TurnStarted",
+				...owner,
+				sessionId,
+				turnId,
+				prompt: "New answer",
+				source: "typed",
+			});
+			if (answerState === "overflow")
+				await registration.publish({
+					_tag: "Chunk",
+					...owner,
+					chunk: {
+						version: 1,
+						sessionId,
+						turnId,
+						seq: 0,
+						type: "answer",
+						textDelta: "x".repeat(4001),
+					},
+				});
+			const tap = () =>
+				handler(
+					{
+						sender: electron.webContents,
+						senderFrame: electron.webContents.mainFrame,
+					},
+					{ _tag: "ReadAloud", keyCode: owner.keyCode },
+				);
+			expect(decodeReply(await tap())).toEqual({ _tag: "ok" });
+			expect(stopReadAloud).toHaveBeenCalledExactlyOnceWith(owner);
+			expect(active).toBe(false);
+			expect(readAloud).not.toHaveBeenCalled();
+			expect(decodeReply(await tap())).toEqual({
+				_tag: "rejected",
+				code:
+					answerState === "overflow"
+						? "VOICE.TTS.QUEUE_FULL"
+						: "VOICE.TTS.UNAVAILABLE",
+			});
+		} finally {
+			await registration.dispose();
+		}
+	},
+);
+
 it("retains the original failed voice span through actual IPC recovery without retaining text", async () => {
 	const root =
 		process.env.OPEN_QUAKE_TEST_SCRATCH ??

@@ -97,6 +97,11 @@ export function createSpeechVoiceBinding(options: {
 	return {
 		decorate,
 		settings,
+		stopReadAloud: async (owner: {
+			readonly serial: string;
+			readonly keyCode: string;
+		}): Promise<boolean> =>
+			speech ? options.run(speech.stopReadAloud(owner)) : false,
 		onEvent: (event: VoiceSurfaceEvent): void => {
 			if (speech)
 				void options.run(speech.observe(event)).catch(() => undefined);

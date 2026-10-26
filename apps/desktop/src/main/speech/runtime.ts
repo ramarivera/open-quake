@@ -346,6 +346,21 @@ export const createProductionVoiceRuntime = Effect.fn(
 	return {
 		runtime,
 		cancelSpeech,
+		stopReadAloud: Effect.fn("DesktopSpeech.stopReadAloud")(
+			(owner: { readonly serial: string; readonly keyCode: string }) =>
+				lock.withPermits(1)(
+					Effect.gen(function* () {
+						if (
+							!readAloud ||
+							readAloudOwner?.serial !== owner.serial ||
+							readAloudOwner.keyCode !== owner.keyCode
+						)
+							return false;
+						yield* cancelSpeech();
+						return true;
+					}),
+				),
+		),
 		reset: Effect.fn("DesktopSpeech.reset")(function* () {
 			yield* lock.withPermits(1)(stop());
 			yield* cancelSpeech();

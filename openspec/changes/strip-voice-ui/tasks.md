@@ -158,7 +158,7 @@ and the Auto router `open-quake-lih.15` remain unverified and out of scope.
 - [x] 8.2 Render stopped manual recordings as recorded/idle after stage 1 completes. Review 4375970758, AI-267, bead `open-quake-lih.5.1.19`.
 - [x] 8.3 Count WAV sample payload rather than metadata for the 12 s no-audio deadline. Review 4375970956, AI-156, bead `open-quake-lih.5.1.20`.
 - [x] 8.4 Include current meeting stage/status in snapshots for late strip mounts. Review 4375971137, AI-267, bead `open-quake-lih.5.1.21`.
-- [ ] 8.5 Stop active read-aloud before validating a newer streaming answer. Review 4376016267, AI-155, bead `open-quake-lih.5.1.22`.
+- [x] 8.5 Stop active read-aloud before validating a newer streaming answer. Review 4376016267, AI-155, bead `open-quake-lih.5.1.22`.
 
 Each fix requires a regression observed failing before implementation, its own
 normal commit/push and an attributed thread reply. Leave threads unresolved
@@ -191,3 +191,11 @@ bounded latest progress for extant records, including completed/cancelled stages
 A new strip uses the decoded snapshot until a live event arrives and respects
 reset exclusions. Meeting service 42 tests, desktop meeting display/registration
 11 tests and all six package typechecks pass. Logs: `strip-voice-2/fix1d/1137-*`.
+
+8.5 regressions `stop tap precedes overflow answer validation for active
+read-aloud` and `stop tap precedes empty answer validation for active read-aloud`
+failed before implementation. The IPC edge now attempts an owner-checked stop
+before inspecting cached answer text. The production binding and hidden smoke
+use the serialized runtime stop operation. Playing and pending-synthesis tests
+also prove foreign/stale owner stops do nothing. All 36 focused IPC, read-aloud
+and composition tests plus desktop typecheck pass. Logs: `strip-voice-2/fix1d/6267-*`.

@@ -175,6 +175,40 @@ const controller = () =>
 		});
 	});
 
+for (const mode of ["play", "noAudio"] as const) {
+	it.effect(
+		`owner stop cancels ${mode} without starting speech for stale or foreign owners`,
+		() =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const f = yield* fixture(mode);
+					yield* Effect.gen(function* () {
+						const c = yield* controller();
+						const first = yield* c
+							.readAloud("Streaming answer", owner)
+							.pipe(Effect.fork);
+						if (mode === "play") yield* Queue.take(f.play);
+						else yield* tick;
+						expect(
+							yield* c.stopReadAloud({ ...owner, serial: "foreign" }),
+						).toBe(false);
+						expect(yield* c.stopReadAloud({ ...owner, keyCode: "1,6" })).toBe(
+							false,
+						);
+						expect(yield* c.stopReadAloud(owner)).toBe(true);
+						expect(yield* Fiber.join(first)).toEqual({ _tag: "cancelled" });
+						expect(f.view().readAloud.get(owner.keyCode)?.phase).toBe("idle");
+						expect(yield* c.stopReadAloud(owner)).toBe(false);
+						expect(f.counts()).toMatchObject({
+							requests: 1,
+							stopped: mode === "play" ? 1 : 0,
+						});
+					}).pipe(Effect.provide(f.layer));
+				}),
+			),
+	);
+}
+
 for (const mode of ["ready", "play", "noAudio"] as const) {
 	it.effect(
 		`second tap stops ${mode} without another synthesis and publishes idle to the consumer`,

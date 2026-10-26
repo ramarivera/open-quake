@@ -140,6 +140,10 @@ async function smoke(): Promise<void> {
 				management: () => undefined,
 				renderer,
 				speech: {
+					stopReadAloud: async (owner) => {
+						assert(controller);
+						return Effect.runPromise(controller.stopReadAloud(owner));
+					},
 					readAloud: async (text, owner) => {
 						assert(controller);
 						const outcome = await Effect.runPromise(
