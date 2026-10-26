@@ -269,8 +269,8 @@ it("SCREEN-018 never reports a transient emoji-back page as a persisted active p
 	});
 	const send = vi.fn(async () => ({ ok: true }));
 	vi.stubGlobal("quakeStripTransport", { send });
-	const source = decode(envelope(2));
-	const transient = {
+	const source = envelope(2);
+	const transient = decode({
 		...source,
 		profiles: source.profiles.map((profile) =>
 			profile.id !== quickProfile.id
@@ -287,7 +287,7 @@ it("SCREEN-018 never reports a transient emoji-back page as a persisted active p
 						})),
 					},
 		),
-	};
+	});
 	function Panel() {
 		useDeviceReady("A", { _tag: "ready", envelope: transient });
 		return null;

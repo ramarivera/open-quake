@@ -137,5 +137,7 @@ Root graph delivery, 2026-10-26: PR73 squash merged as f147032 after current-hea
 
 ## Device burn-down lane 2026-10-26
 
-- [ ] Implement device lane requirements with fixture/TestClock/native mock coverage. Beads open-quake-lih.11.20-.22.
-- [ ] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.
+- [x] Implement device lane requirements with fixture/TestClock/native mock coverage. Beads open-quake-lih.11.20-.22.
+- [x] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.
+
+Device lane validation: current main `4aa4a9f1` merged. Root test command with SSD TMPDIR passed 4,137 tests with four existing skips. Lint, six-package typecheck, build, bundle smoke, 47 strict OpenSpec items and hidden muted native media smoke passed. EN/DE screenshots and per-row evidence are in the lane scratch directory; hardware stays unverified. Beads remain open for the lead.
