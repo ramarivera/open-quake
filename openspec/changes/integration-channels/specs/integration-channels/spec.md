@@ -84,3 +84,25 @@ The system SHALL require explicit channel removal, release its connection and se
 
 - **WHEN** the credential store refuses deletion
 - **THEN** the hub reports incomplete removal and permits retry without claiming all credentials were removed
+
+### Requirement: Localized recovered channel descriptors
+The six descriptor IDs, setup types, minimum host versions, install specs and China/International grouping SHALL remain stable. Blurb, source and ETA SHALL resolve the recovered zh/en/ja/ko/de/fr/es/it metadata with English fallback. Both groups SHALL remain visible. Catalog cards SHALL retain accessible Connect/Manage actions and report portal errors. Sources: CENTER-072, CENTER-073, CENTER-075.
+
+#### Scenario: Unknown catalog locale
+- **WHEN** the requested locale has no metadata
+- **THEN** the six descriptors use their English labels and preserve setup contracts
+
+### Requirement: Owned channel transport boundary
+Production registration SHALL supply a capability-gated channel adapter for an explicitly configured local OpenClaw command owner. It SHALL map validated fields and isolated secrets to channel configuration, verify readiness separately from configuration, and execute only fixed argv without a shell. It SHALL never install plugins or change a user-managed HTTP runtime. QR login SHALL have bounded output, cancellation and expiry and SHALL confirm only after successful verified login. Pairing SHALL list pending codes and approve a known code once, retaining service dispatch guards. Missing command ownership SHALL remain explicitly unavailable. All acceptance in lane agents SHALL use fake transports; real channel pairing requires separate live acceptance. Sources: CENTER-074, CENTER-077, CENTER-078, CENTER-079, MAIN-144.
+
+#### Scenario: Saved configuration with offline gateway
+- **WHEN** channel configuration persists but the runtime does not report connected
+- **THEN** the hub shows Configured or Unavailable rather than Connected
+
+#### Scenario: Cancel QR then receive completion
+- **WHEN** a QR session is cancelled before the transport reports successful login
+- **THEN** the owned process is cancelled and late completion cannot connect the channel
+
+#### Scenario: Duplicate approval
+- **WHEN** approval is requested twice for the same pending code
+- **THEN** only one transport approval occurs and an unknown or consumed code is rejected

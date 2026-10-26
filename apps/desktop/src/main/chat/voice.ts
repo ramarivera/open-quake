@@ -21,7 +21,10 @@ export const createDirectChatVoice = (
 		const surface = yield* VoiceSurface;
 		const scope = yield* Effect.scope;
 		const lock = yield* Effect.makeSemaphore(1);
-		const sessions = new Map<string, SessionId>();
+		const sessions = new Map<
+			string,
+			{ sessionId: SessionId; serial: string; keyCode: string }
+		>();
 		const active = new Map<
 			string,
 			{
@@ -69,10 +72,14 @@ export const createDirectChatVoice = (
 							request.knob,
 							request.directModel?.profile.id,
 						]);
-						let sessionId = sessions.get(route);
+						let sessionId = sessions.get(route)?.sessionId;
 						if (!sessionId) {
 							sessionId = Schema.decodeUnknownSync(SessionId)(randomUUID());
-							sessions.set(route, sessionId);
+							sessions.set(route, {
+								sessionId,
+								serial: request.serial,
+								keyCode: request.keyCode,
+							});
 							while (sessions.size > 16) {
 								const first = sessions.keys().next();
 								if (!first.done) sessions.delete(first.value);
@@ -192,6 +199,22 @@ export const createDirectChatVoice = (
 				lock.withPermits(1)(stop(serial, keyCode)),
 			runtime: GridVoiceRuntime.of({
 				...fallback,
+				resetContext: (serial, keyCode) =>
+					lock.withPermits(1)(
+						Effect.gen(function* () {
+							yield* stop(serial, keyCode);
+							for (const [route, session] of sessions) {
+								if (session.serial !== serial || session.keyCode !== keyCode)
+									continue;
+								yield* Effect.tryPromise({
+									try: () =>
+										host.runtime.runPromise(host.clear(session.sessionId)),
+									catch: (cause) => new VoiceRuntimeUnavailable(cause),
+								});
+								sessions.delete(route);
+							}
+						}),
+					),
 				sendText: (request) => send(request, "typed"),
 				select: (serial, keyCode, type, agentId) =>
 					lock.withPermits(1)(

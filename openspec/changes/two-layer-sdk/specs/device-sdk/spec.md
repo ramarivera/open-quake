@@ -129,6 +129,22 @@ row `floor(index/5)+1`, column `(index%5)+1`, keyCode `row,column`, and keyActio
 zero. It SHALL expose the states and preserve remaining report bytes.
 It SHALL NOT invent a release event or a physical layout from an empty matrix.
 
+The panel SHALL route legacy matrix presses through its complete strip key handler.
+The recovered DK-Suite v0.4.95 `app-resources/background.js`, character offset
+642254, `checkDataValid` case 1, emits only keyAction 0 for the first pressed
+state and an empty result for an empty matrix. Audit rows MAIN-008/028 and
+SCREEN-144 do not establish a release edge. Repeated downs SHALL be suppressed;
+held actions SHALL remain held until a confirmed release or lifecycle cancel.
+Momentary delegated emoji and meeting actions SHALL activate once on a matrix
+press without fabricating a release for held actions. Loss, selection reset,
+unmount or a different matrix key SHALL cancel the prior held action.
+
+#### Scenario: Legacy matrix hold and emoji
+- **WHEN** repeated matrix reports select a held key, followed by an empty report
+- **THEN** the key receives one down and no up, and link loss cancels it
+- **WHEN** a matrix press selects an emoji tile
+- **THEN** the owning emoji handler executes once despite repeated reports
+
 #### Scenario: Last matrix cell pressed
 - **WHEN** only state index 14 is one
 - **THEN** the first press is key `3,5`
@@ -200,7 +216,10 @@ matching control interfaces without opening hardware or starting keep-alives.
 A connection SHALL write a 33-byte report consisting of report ID zero,
 `frameHostCommand(2, [0xEF])`, and zero padding on a configurable positive,
 finite interval. The default SHALL be 15 seconds and the first write SHALL
-occur after the first interval. Encoding SHALL use protocol kernel codecs.
+occur 1000 ms after connect. Failed pings SHALL receive at most three retries,
+500 ms apart, before failing the session. Subsequent pings SHALL run every
+15 seconds by default. Encoding SHALL use protocol kernel codecs.
+Audit rows MAIN-017 and SETTINGS-076.
 
 #### Scenario: Configured cadence
 - **WHEN** a connection uses a 1-second interval
@@ -249,3 +268,66 @@ before connect resolves, and supports idempotent asynchronous disconnect.
 #### Scenario: Plain JavaScript subscription
 - **WHEN** a consumer subscribes and awaits connect
 - **THEN** incoming knob events invoke the callback and disconnect releases the connection and runtime
+
+### Requirement: Canonical HID identity and native discovery
+Audit rows MAIN-004, MAIN-006, MAIN-014 and SETTINGS-073. The transport SHALL
+prefer read-only Win32 enumeration on Windows, permanently select node-hid
+on native failure and report that failure once. Control filtering SHALL retain
+all four USB identity fields. HID serials SHALL remove colons. Imported `ws_`
+aliases SHALL resolve to the same physical serial without creating another
+handle. Ambiguous normalized serials SHALL fail discovery. A newer connection
+for a serial SHALL close the prior session before opening its replacement.
+All macOS opens SHALL request nonexclusive access.
+
+#### Scenario: Native enumeration fails
+- **WHEN** the first Windows enumeration throws
+- **THEN** that call and subsequent scans use node-hid and the native operation is never retried
+
+#### Scenario: Alias and stale handle
+- **WHEN** serial `AB:CD` reconnects through alias `ws_ABCD`
+- **THEN** its canonical identity is `ABCD`, its old handle closes once and no parallel handle survives
+
+### Requirement: Explicit framing compatibility
+Audit row MAIN-007. The default SHALL retain validated padded 33-byte reports.
+An explicit DK-Suite framing mode MAY emit compact short commands with report
+ID zero and compact A1 frames without report ID. Transport errors on macOS
+SHALL retry at most twice after 10 ms sleeps, never after a successful write.
+Partial native writes SHALL fail without retry to avoid duplicating delivery.
+
+#### Scenario: Transient native write failure
+- **WHEN** a macOS write rejects twice and then succeeds
+- **THEN** exactly three writes occur, each separated by 10 ms, with no fourth write
+
+### Requirement: Live input dispatch
+Audit row MAIN-008. The live read adapter SHALL decode A1 JSON, A2 resource
+envelopes and 01 matrix reports through the protocol codecs. It SHALL assemble
+split wide envelopes in order within one connection, preserve resource metadata
+and sequence, and reject checksum or truncation errors. Replaced sessions SHALL
+never deliver their remaining bytes into the replacement.
+
+#### Scenario: Independent input fixtures
+- **WHEN** independent A1, split A2 and matrix fixtures enter the read stream
+- **THEN** subscribers receive typed JSON, resource and matrix events in order
+
+### Requirement: Safe mock startup
+Audit row MAIN-005. Explicit mock runs SHALL never open native HID. Custom fake
+device fixtures SHALL be rejected in packaged builds. Test-only parent guards
+SHALL quit on parent loss and dispose their timer on shutdown. Firmware safety
+limits SHALL not be weakened through environment overrides.
+
+#### Scenario: Packaged custom fixtures
+- **WHEN** a packaged application starts with custom fake-device JSON
+- **THEN** startup fails before importing the production composition root
+
+### Requirement: Incoming device images have bounded decoded dimensions
+Audit rows MAIN-008 and SCREEN-144. Before publishing an A2 JPEG to a renderer
+image element, the resource receiver SHALL enforce both 8 MiB compressed bytes
+and 64 million decoded pixels, matching the desktop image budget. It SHALL read
+JPEG SOF dimensions before rendering and reject missing, zero, truncated,
+conflicting or excessive dimensions, including progressive JPEG frames.
+
+#### Scenario: Small compressed image expands beyond the pixel budget
+- **WHEN** an otherwise valid bounded A2 image declares a 65535 by 65535 JPEG frame
+- **THEN** no data URL is published or rendered
+- **WHEN** a complete JPEG frame is within the decoded-pixel budget
+- **THEN** ordinary sequenced resource assembly still publishes it to its target cell

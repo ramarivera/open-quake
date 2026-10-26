@@ -17,6 +17,7 @@ import {
 } from "effect";
 import {
 	type ConnectOptions,
+	canonicalHidSerial,
 	DEFAULT_KEEP_ALIVE_MS,
 	type DeviceEvent,
 	type HidDeviceInfo,
@@ -27,17 +28,17 @@ import {
 	QuakeConnectionConfigInvalid,
 	QuakeDeviceNotFound,
 	type QuakeHidCloseFailed,
-	type QuakeHidDiscoveryFailed,
-	type QuakeHidOpenFailed,
+	QuakeHidDiscoveryFailed,
+	QuakeHidOpenFailed,
 	type QuakeHidReadFailed,
 	QuakeHidWriteFailed,
 } from "./device-errors.js";
 import { HidTransport } from "./hid-transport.js";
 import { NodeHidLive } from "./node-hid.js";
 import {
-	decodeReport,
 	keepAliveFrame,
 	keepAliveReport,
+	makeReportDecoder,
 } from "./protocol-adapter.js";
 import { recoverHidReads } from "./read-recovery.js";
 
@@ -96,14 +97,33 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 		dependencies: [NodeHidLive],
 		effect: Effect.gen(function* () {
 			const transport = yield* HidTransport;
+			const sessions = new Map<string, QuakeConnection>();
+			const ownership = yield* Effect.makeSemaphore(1);
 			const discover = Effect.fn("QuakeDevice.discover")(
 				(): Effect.Effect<
 					ReadonlyArray<HidDeviceInfo>,
 					QuakeHidDiscoveryFailed
 				> =>
-					Effect.map(transport.discover(), (devices) =>
-						devices.filter(isQuakeDevice),
-					),
+					Effect.flatMap(transport.discover(), (devices) => {
+						const selected = devices.filter(isQuakeDevice).map((info) => ({
+							...info,
+							...(info.serialNumber
+								? { serialNumber: canonicalHidSerial(info.serialNumber) }
+								: {}),
+						}));
+						const seen = new Set<string>();
+						for (const info of selected) {
+							if (!info.serialNumber) continue;
+							if (seen.has(info.serialNumber))
+								return Effect.fail(
+									new QuakeHidDiscoveryFailed(
+										new Error("Ambiguous HID serial"),
+									),
+								);
+							seen.add(info.serialNumber);
+						}
+						return Effect.succeed(selected);
+					}),
 			);
 			const connect = Effect.fn("QuakeDevice.connect")(function* (
 				options: ConnectOptions = {},
@@ -116,6 +136,16 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 					? devices.find((device) => device.path === options.path)
 					: devices[0];
 				if (!info) return yield* new QuakeDeviceNotFound();
+				const identity = info.serialNumber ?? info.path;
+				const prior = sessions.get(identity);
+				if (prior)
+					yield* prior
+						.disconnect()
+						.pipe(
+							Effect.catchTag("QuakeHidCloseFailed", (cause) =>
+								Effect.fail(new QuakeHidOpenFailed(cause)),
+							),
+						);
 				const events =
 					yield* PubSub.unbounded<Take.Take<DeviceEvent, DeviceStreamError>>();
 				yield* Effect.addFinalizer(() => PubSub.shutdown(events));
@@ -191,10 +221,11 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						yield* Deferred.succeed(touchReady, touch);
 						// toPull acquires the incoming stream and its listeners before we signal ready.
 						const pull = yield* Stream.toPull(reports);
+						const decoder = makeReportDecoder();
 						yield* Stream.runForEach(
 							Stream.repeatEffectChunkOption(pull),
 							(report) => {
-								const decoded = decodeReport(report);
+								const decoded = decoder.push(report);
 								if (Either.isLeft(decoded)) return Effect.fail(decoded.left);
 								return Option.match(decoded.right, {
 									onNone: () => Effect.void,
@@ -205,20 +236,35 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						).pipe(
 							Effect.matchEffect({
 								onFailure: fail,
-								onSuccess: () => stop("transport-ended"),
+								onSuccess: () =>
+									decoder.finish().pipe(
+										Effect.matchEffect({
+											onFailure: fail,
+											onSuccess: () => stop("transport-ended"),
+										}),
+									),
 							}),
 							Effect.forkScoped,
 						);
-						yield* Effect.forever(
-							Effect.sleep(interval).pipe(
-								Effect.zipRight(
-									Effect.suspend(keepAliveReport).pipe(
-										Effect.flatMap(write),
-										Effect.uninterruptible,
-									),
+						const ping = Effect.gen(function* () {
+							const report = yield* keepAliveReport();
+							for (let attempt = 0; ; attempt++) {
+								const result = yield* write(report).pipe(
+									Effect.uninterruptible,
+									Effect.either,
+								);
+								if (Either.isRight(result)) return;
+								if (attempt === 3) return yield* result.left;
+								yield* Effect.sleep(500);
+							}
+						});
+						yield* Effect.sleep(1000).pipe(
+							Effect.zipRight(ping),
+							Effect.zipRight(
+								Effect.forever(
+									Effect.sleep(interval).pipe(Effect.zipRight(ping)),
 								),
 							),
-						).pipe(
 							Effect.matchEffect({
 								onFailure: fail,
 								onSuccess: () => Effect.void,
@@ -288,7 +334,7 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						);
 					},
 				);
-				return {
+				const connection: QuakeConnection = {
 					touch: yield* Deferred.await(touchReady),
 					info,
 					sendHardware: (command) => sendHardware(command),
@@ -310,10 +356,19 @@ export class QuakeDevice extends Effect.Service<QuakeDevice>()(
 						},
 					),
 				};
+				sessions.set(identity, connection);
+				yield* Effect.addFinalizer(() =>
+					Effect.sync(() => {
+						if (sessions.get(identity) === connection)
+							sessions.delete(identity);
+					}),
+				);
+				return connection;
 			});
 			return {
 				discover,
-				connect,
+				connect: (options?: ConnectOptions) =>
+					ownership.withPermits(1)(connect(options)),
 				disconnect: Effect.fn("QuakeDevice.disconnect")(
 					(
 						connection: QuakeConnection,

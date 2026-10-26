@@ -1,8 +1,20 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Cause, Deferred, Effect, Fiber, Layer, TestClock } from "effect";
+import {
+	Cause,
+	Deferred,
+	Effect,
+	Fiber,
+	Layer,
+	Logger,
+	TestClock,
+} from "effect";
 import type { RuntimeState } from "./agents-contracts.js";
-import { AgentRuntimeFailed } from "./agents-errors.js";
-import { type AgentRuntimeAdapter, AgentRuntimePort } from "./agents-ports.js";
+import { AgentRuntimeFailed, AgentStorageFailed } from "./agents-errors.js";
+import {
+	type AgentRuntimeAdapter,
+	type AgentRuntimeAdministration,
+	AgentRuntimePort,
+} from "./agents-ports.js";
 import { AgentsRuntime } from "./agents-runtime.js";
 
 const stopped: RuntimeState = {
@@ -22,7 +34,121 @@ const port = (
 	subscribe: () => () => {},
 	...overrides,
 });
+const administration = (
+	settings: AgentRuntimeAdministration["settings"],
+): AgentRuntimeAdministration => ({
+	settings,
+	logs: () => Effect.succeed([]),
+	save: () => Effect.void,
+	clear: Effect.void,
+	environment: () => Effect.void,
+});
+
 describe("AgentsRuntime real lifecycle consumer", () => {
+	for (const cause of [
+		new SyntaxError("malformed settings token=private-settings"),
+		Object.assign(new Error("/private/settings token=private-settings"), {
+			code: "EACCES",
+		}),
+	])
+		it.effect(
+			"keeps management available and reports scrubbed typed settings failures",
+			() => {
+				const failure = new AgentStorageFailed(cause);
+				const messages: unknown[] = [];
+				let starts = 0;
+				return Effect.gen(function* () {
+					const service = yield* AgentsRuntime;
+					expect(yield* service.read()).toEqual({
+						...stopped,
+						code: failure.code,
+					});
+					expect(starts).toBe(0);
+					expect(messages).toHaveLength(1);
+					expect(messages[0]).toMatchObject({
+						_tag: "AgentStorageFailed",
+						code: "AGENT.STORAGE.FAILED",
+						diagnosticCause: failure.diagnosticCause,
+					});
+					expect(failure.originalCause).toBe(cause);
+					expect(JSON.stringify(messages)).not.toContain("private-settings");
+					expect(JSON.stringify(messages)).not.toContain("/private/settings");
+					yield* service.control("start");
+					expect(starts).toBe(1);
+				}).pipe(
+					Effect.provide(
+						AgentsRuntime.Default.pipe(
+							Layer.provide(
+								Layer.succeed(
+									AgentRuntimePort,
+									port({
+										administration: administration(() => Effect.fail(failure)),
+										start: Effect.sync(() => {
+											starts++;
+										}),
+									}),
+								),
+							),
+						),
+					),
+					Effect.provide(
+						Logger.replace(
+							Logger.defaultLogger,
+							Logger.make((event) => {
+								if (Array.isArray(event.message))
+									messages.push(...event.message);
+								else messages.push(event.message);
+							}),
+						),
+					),
+				);
+			},
+		);
+	it.effect(
+		"returns the service while autostart waits and cancels it on scope close",
+		() =>
+			Effect.gen(function* () {
+				const entered = yield* Deferred.make<void>();
+				let cancelled = false;
+				yield* Effect.scoped(
+					Effect.gen(function* () {
+						const service = yield* AgentsRuntime;
+						yield* Deferred.await(entered);
+						expect((yield* service.read()).status).toBe("starting");
+					}).pipe(
+						Effect.provide(
+							AgentsRuntime.Default.pipe(
+								Layer.provide(
+									Layer.succeed(
+										AgentRuntimePort,
+										port({
+											administration: administration(() =>
+												Effect.succeed({
+													port: 18789,
+													logLevel: "info",
+													autoStart: true,
+													dataDirectory: "/private/runtime",
+												}),
+											),
+											start: Deferred.succeed(entered, undefined).pipe(
+												Effect.zipRight(Effect.never),
+												Effect.ensuring(
+													Effect.sync(() => {
+														cancelled = true;
+													}),
+												),
+											),
+										}),
+									),
+								),
+							),
+						),
+					),
+				);
+				expect(cancelled).toBe(true);
+			}),
+	);
+
 	it.effect(
 		"disables an unavailable runtime and never calls its backend",
 		() => {
