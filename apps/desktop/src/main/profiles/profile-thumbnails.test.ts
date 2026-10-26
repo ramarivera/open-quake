@@ -28,6 +28,11 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:fs/promises")>();
 	return { ...actual, open: vi.fn(actual.open), rename: vi.fn(actual.rename) };
 });
+vi.mock("./profile-thumbnail-key", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("./profile-thumbnail-key")>();
+	return { ...actual, profileThumbnailKey: vi.fn(actual.profileThumbnailKey) };
+});
 const png = Buffer.from(
 	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlYAAAAAASUVORK5CYII=",
 	"base64",
@@ -188,6 +193,19 @@ describe("canonical profile thumbnail storage", () => {
 			);
 		}
 	});
+	it("does not translate and hash the full catalog when no owned PNG exists", async () => {
+		const root = await directory();
+		const store = createProfileThumbnailStore(root);
+		const profiles = builtinProfiles("linux");
+		vi.mocked(profileThumbnailKey).mockClear();
+		await store.prune(profiles);
+		const cache = join(root, "thumbnails");
+		await mkdir(cache);
+		await writeFile(join(cache, "notes.txt"), "keep");
+		await store.prune(profiles);
+		expect(profileThumbnailKey).not.toHaveBeenCalled();
+	});
+
 	it("prunes obsolete owned files while preserving every live locale and unrelated entries", async () => {
 		const root = await directory();
 		const store = createProfileThumbnailStore(root);

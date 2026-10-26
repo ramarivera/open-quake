@@ -47,3 +47,11 @@ acquiring it, holds a read-only repository transaction while pruning so profile
 commits cannot invalidate the keep set, and serializes store writes with deletion.
 Reads keep their open-inode semantics. Cleanup failures retain ProfileThumbnailFailed and are logged through
 the owning Effect runtime without stopping profile snapshot publication.
+
+PR65 Linux validation exposed unnecessary catalog work on empty caches. Retention
+now checks for an owned PNG before translating and hashing the saved profiles.
+The Linux regression observes zero hashes without owned images and failed on the
+previous source. Production registration tests await actual deletion/publication
+events instead of a one-second polling window; their assertions and suite timeout
+remain intact. Linux and macOS profile/knob/diagnostic suites, the native
+cache-to-knob decoder check and desktop typecheck pass after the correction.

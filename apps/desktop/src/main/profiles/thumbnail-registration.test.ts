@@ -163,16 +163,29 @@ describe("production manager thumbnail producer", () => {
 		await profiles.thumbnail(custom.id, "en", new AbortController().signal);
 		const before = `${profileThumbnailKey(translateProfile(custom, "en"), "en")}.png`;
 		expect(await readdir(cache)).toContain(before);
-		await profiles.runtime.runPromise(
-			manager.command({
-				type: "rename",
-				id: custom.id,
-				name: "Changed",
-			}),
-		);
-		await vi.waitFor(async () =>
-			expect(await readdir(cache)).not.toContain(before),
-		);
+		const native =
+			await vi.importActual<typeof import("node:fs/promises")>(
+				"node:fs/promises",
+			);
+		let deleted: () => void = () => {};
+		const deletion = new Promise<void>((resolve) => {
+			deleted = resolve;
+		});
+		const unlink = vi
+			.spyOn(filesystem, "unlink")
+			.mockImplementation(async (path) => {
+				await native.unlink(path);
+				if (String(path).endsWith(before)) deleted();
+			});
+		try {
+			await profiles.runtime.runPromise(
+				manager.command({ type: "rename", id: custom.id, name: "Changed" }),
+			);
+			await deletion;
+			expect(await readdir(cache)).not.toContain(before);
+		} finally {
+			unlink.mockRestore();
+		}
 		const retained = original.profiles.find((p) => p.id === "1-2");
 		if (!retained) throw new Error("Missing retained fixture");
 		expect(await readdir(cache)).toContain(
@@ -204,7 +217,13 @@ describe("production manager thumbnail producer", () => {
 				return original.unlink(path);
 			});
 		try {
-			const before = fixture.published.mock.calls.length;
+			let published: () => void = () => {};
+			const publication = new Promise<void>((resolve) => {
+				published = resolve;
+			});
+			fixture.published.mockImplementation((channel) => {
+				if (channel === PROFILE_SNAPSHOT) published();
+			});
 			const profiles = await setup(
 				undefined,
 				async (root) => {
@@ -215,13 +234,7 @@ describe("production manager thumbnail producer", () => {
 				},
 				diagnostics,
 			);
-			await vi.waitFor(() =>
-				expect(
-					fixture.published.mock.calls
-						.slice(before)
-						.some(([channel]) => channel === PROFILE_SNAPSHOT),
-				).toBe(true),
-			);
+			await publication;
 			await profiles.dispose();
 			const status = await diagnostics.close();
 			expect(status.dropped).toBe(0);
@@ -256,6 +269,7 @@ describe("production manager thumbnail producer", () => {
 			);
 		} finally {
 			unlink.mockRestore();
+			fixture.published.mockReset();
 			await diagnostics.close();
 		}
 	});

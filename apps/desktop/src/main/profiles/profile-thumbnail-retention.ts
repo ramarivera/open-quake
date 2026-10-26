@@ -18,23 +18,27 @@ export async function pruneProfileThumbnails(
 	directory: string,
 	profiles: readonly Profile[],
 ): Promise<void> {
-	const keep = new Set(
-		profiles.flatMap((profile) =>
-			ProfileLocale.literals.map(
-				(locale) =>
-					`${profileThumbnailKey(translateProfile(profile, locale), locale)}.png`,
-			),
-		),
-	);
 	try {
 		const directoryInfo = await lstat(directory);
 		if (directoryInfo.isSymbolicLink()) return;
 		const entries = await opendir(directory);
+		let keep: Set<string> | undefined;
 		// Iterate instead of loading an arbitrarily large orphan directory into memory.
 		for await (const entry of entries) {
-			if (!entry.isFile() || keep.has(entry.name)) continue;
+			if (!entry.isFile()) continue;
 			const pending = pendingName.test(entry.name);
-			if (!pending && !pngName.test(entry.name)) continue;
+			if (!pending) {
+				if (!pngName.test(entry.name)) continue;
+				keep ??= new Set(
+					profiles.flatMap((profile) =>
+						ProfileLocale.literals.map(
+							(locale) =>
+								`${profileThumbnailKey(translateProfile(profile, locale), locale)}.png`,
+						),
+					),
+				);
+				if (keep.has(entry.name)) continue;
+			}
 			const path = join(directory, entry.name);
 			try {
 				const info = await lstat(path);
