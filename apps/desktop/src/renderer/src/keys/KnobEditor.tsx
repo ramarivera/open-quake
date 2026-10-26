@@ -1,13 +1,13 @@
-import { Either, Option } from "effect";
+import { Either, Option, Schema } from "effect";
 import { useEffect, useRef, useState } from "react";
 import {
 	KNOB_SLOT_INDEX,
 	type KnobSlotName,
 } from "../../../../../../packages/device/src/knob/knob-contracts.js";
 import { migrateKnobVoiceActions } from "../../../../../../packages/device/src/knob/knob-voice-migration.js";
-import type {
+import {
 	Profile,
-	ProfileEnvelope,
+	type ProfileEnvelope,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { resolveModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import type { PublicModelRow } from "../../../shared/agents";
@@ -15,6 +15,7 @@ import { Group, Row } from "../ui/Form";
 import {
 	editKnobSlot,
 	knobAssignment,
+	knobDraftRevision,
 	knobVoiceReady,
 	profileKnobDraft,
 } from "./knob-draft";
@@ -30,7 +31,8 @@ export function KnobEditor({
 	readonly accept: (envelope: typeof ProfileEnvelope.Encoded) => void;
 }): React.JSX.Element {
 	const [draft, setDraft] = useState(() => profileKnobDraft(profile));
-	const [revision, setRevision] = useState(profile.revision);
+	const [baseline, setBaseline] = useState(profile);
+	const revision = knobDraftRevision(baseline, profile);
 	const [slotName, setSlotName] = useState<KnobSlotName>("center");
 	const [savedModels, setModels] = useState<readonly PublicModelRow[]>([]);
 	const [catalogState, setCatalogState] = useState("Loading saved providers…");
@@ -145,10 +147,8 @@ export function KnobEditor({
 			}
 			if (reply.envelope) {
 				accept(reply.envelope);
-				setRevision(
-					reply.envelope.profiles.find((p) => p.id === profile.id)?.revision ??
-						revision,
-				);
+				const saved = reply.envelope.profiles.find((p) => p.id === profile.id);
+				if (saved) setBaseline(Schema.decodeUnknownSync(Profile)(saved));
 			}
 			setNotice("Knob voice settings saved");
 		} catch {
@@ -397,7 +397,7 @@ export function KnobEditor({
 						type="button"
 						onClick={() => {
 							setDraft(profileKnobDraft(profile));
-							setRevision(profile.revision);
+							setBaseline(profile);
 							setNotice("");
 							setReviewed(false);
 							setPreviewed(false);

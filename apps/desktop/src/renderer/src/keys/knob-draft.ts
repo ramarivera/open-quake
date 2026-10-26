@@ -73,3 +73,14 @@ export const knobVoiceReady = (
 		)
 	);
 };
+
+/** Grid-key-only saves advance the shared revision without changing a knob draft. */
+export const knobDraftRevision = (
+	baseline: Profile,
+	latest: Profile,
+): number =>
+	baseline.id === latest.id &&
+	latest.revision >= baseline.revision &&
+	JSON.stringify(baseline.knob) === JSON.stringify(latest.knob)
+		? latest.revision
+		: baseline.revision;
