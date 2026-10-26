@@ -15,6 +15,12 @@ The Core › Agents page SHALL have four tabs: "Agent sessions", "Agent manageme
 - **WHEN** the runtime has not reported ready 10 s after Start
 - **THEN** the status becomes Error with a timeout code and the start is cancelled
 
+Audit regression coverage: CENTER-019.
+
+#### Scenario: Workbench drafts survive tab switches
+- **WHEN** the user edits local state in sessions, agents, AI config and Settings then switches away and back
+- **THEN** each panel retains its draft and keyboard tab navigation exposes the selected panel
+
 ### Requirement: Local agent roster
 "Agent management" SHALL list local agents with a count, search by display name and ID, the filter chips All and Local, and a four-row skeleton while loading. Each row SHALL show an emoji avatar, display name, ID, a badge (System for `main`, Local otherwise) and Edit and Delete actions. The `main` agent SHALL always exist, SHALL show a lock labelled as a protected agent, and SHALL offer neither edit nor delete. Deleting SHALL ask for confirmation naming the agent and remove its workspace. Empty states SHALL offer "Clear search" or "Create agent". Selection SHALL persist and fall back to the first agent when the selected one is removed. Agent Market filters, share and install requests are out of scope (decision 9). Source: CENTER-049, CENTER-051, CENTER-054, CENTER-055, CENTER-059.
 
@@ -56,6 +62,12 @@ Skills SHALL be folders holding a `SKILL.md` with `name` and `description` front
 - **WHEN** `researcher` already has a skill folder `web-search`
 - **THEN** the move fails as a conflict and both copies are unchanged
 
+Audit regression coverage: CENTER-053, CENTER-060.
+
+#### Scenario: Edit and reload a skill
+- **WHEN** the user searches skill metadata, edits its name, description and Markdown, and saves
+- **THEN** the saved skill reloads with all edits; empty fields prevent submission, failed saves retain the editor, deletion requires confirmation and move conflicts show their reason
+
 ### Requirement: Model routing table
 "AI Config" SHALL have "Default Config" and "Agents Config" sub-tabs. The default table SHALL show one row per model with role (None, Default, Fallback), provider (free text with suggestions from the bundled provider defaults), model (free text with that provider's common models), base URL, credentials, max tokens (an integer of at least 1, default 4096), and Save row / Delete. An "Add model" action SHALL add a row; DK fills rows only from its cloud, which is out of scope. The rules SHALL be DK's:
 - At most one row is Default; if none is, the first configured row becomes Default.
@@ -90,6 +102,12 @@ Credentials SHALL be write-only: rows show "Available" or "Missing" and never re
 #### Scenario: Agent inherits
 - **WHEN** agent `researcher` has "Use default config" on
 - **THEN** resolving its models returns the default scope's rows, and editing the default table changes what it resolves
+
+Audit regression coverage: CENTER-070.
+
+#### Scenario: Suggested models and custom endpoints
+- **WHEN** the user selects a catalog provider or known model and then supplies a custom endpoint
+- **THEN** the table fills the provider, default endpoint and 4096 token suggestion while preserving an explicit custom endpoint and rejecting an unchanged Azure resource template
 
 ### Requirement: DK-Claw agent tiles
 "Settings" SHALL show a DK-Claw panel section with four slots for keys `1,5`, `1,6`, `2,5` and `2,6` of the DK-Claw built-in profile, each set to a local agent. "Sync DK-Claw Panel" SHALL first check that the profile exists, that all four slots are `clawbot` keys and that every chosen agent exists (preflight, 5 %). It SHALL then write each key's `agentId` action and its title, set to the agent's display name, through a revision-checked profile save (40 %). Next it SHALL apply to the device (80 %), reporting "Synced to the DK-Claw panel." when the DK-Claw profile is active, or the deferred message otherwise, and finish at 100 %. A failure after the profile save SHALL restore the previous profile and the previous slot assignment, and a failed restore SHALL report its own message. Scene editions, which bundle vendor agent sets, are out of scope (decision 9); the slots take any local agent instead. Source: CENTER-103, CENTER-045, CENTER-046.
