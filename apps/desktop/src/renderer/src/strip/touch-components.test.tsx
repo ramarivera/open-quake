@@ -27,6 +27,7 @@ import { previewVoiceContext } from "./overlays/voice/voice-context";
 import { StripPanel } from "./StripPanel";
 import { StripScreen } from "./StripScreen";
 import { SoundboardUnavailableTile } from "./tiles/soundboard/SoundboardUnavailableTile";
+import type { StripKeyEvent } from "./touch-controller";
 
 const roots: Root[] = [];
 const disposals: Array<() => void | Promise<void>> = [];
@@ -74,7 +75,11 @@ function fixtureProfile(): Profile {
 		],
 	};
 }
-function input(node: HTMLElement, layout: ReturnType<typeof stripLayout>) {
+function input(
+	node: HTMLElement,
+	layout: ReturnType<typeof stripLayout>,
+	onKey?: (event: StripKeyEvent) => void,
+) {
 	let callback: ((event: QuakeEvent) => void) | undefined;
 	const off = vi.fn();
 	const dispose = mountStripTouch(
@@ -88,6 +93,7 @@ function input(node: HTMLElement, layout: ReturnType<typeof stripLayout>) {
 		},
 		0,
 		() => layout,
+		onKey,
 	);
 	disposals.push(dispose);
 	const frame = (x: number, y: number, action: 0 | 1) =>
@@ -434,99 +440,115 @@ describe("touch production components", () => {
 			expect(press).toHaveBeenCalledOnce();
 		},
 	);
-	it("KNOB-089 local-player controls dispatch committed intents once through native touches and remain inert in preview", async () => {
-		const { node, root } = host(),
-			base = fixtureProfile(),
-			original = base.pages[0].keys[0];
-		if (!original) throw new Error("Missing key");
-		const profile: Profile = {
-			...base,
-			pages: [
-				{
-					id: "page",
-					compatibility: Option.none(),
-					keys: [
-						{
-							...original,
-							config: {
-								...original.config,
-								type: "playAudio",
-								actions: [
-									{ type: "sound", value: '["/private/music/a.mp3"]' },
-									{ type: "audioAction", value: 0 },
-									{ type: "audioFade", value: "0-0" },
-									{ type: "volume", value: 50 },
-								],
+	it.each(["playAudio", "playAudioLegacy"])(
+		"KNOB-089 %s local-player controls are exclusive and body taps preserve tile presses",
+		async (type) => {
+			const { node, root } = host(),
+				base = fixtureProfile(),
+				original = base.pages[0].keys[0];
+			if (!original) throw new Error("Missing key");
+			const profile: Profile = {
+				...base,
+				pages: [
+					{
+						id: "page",
+						compatibility: Option.none(),
+						keys: [
+							{
+								...original,
+								config: {
+									...original.config,
+									type,
+									actions: [
+										{ type: "sound", value: '["/private/music/a.mp3"]' },
+										{ type: "audioAction", value: 0 },
+										{ type: "audioFade", value: "0-0" },
+										{ type: "volume", value: 50 },
+									],
+								},
 							},
-						},
-					],
-				},
-			],
-		};
-		const layout = stripLayout(profile, profile.pages[0]),
-			tile = layout.tiles[0];
-		if (!tile) throw new Error("Missing local player");
-		const request = vi.fn(
-			async (_command: import("../../../shared/key-library").KeyRequest) => ({
-				_tag: "success" as const,
-			}),
-		);
-		window.quakeKeyLibrary = {
-			request,
-			onPreview: () => () => {},
-			onRuntime: () => () => {},
-		};
-		const context = {
-			now: undefined,
-			hourFormat: "24h" as const,
-			voice: previewVoiceContext,
-			keyTarget: {
-				deviceId: "device",
-				profileId: profile.id,
-				pageId: "page",
-				revision: 0,
-			},
-		};
-		await act(async () =>
-			root.render(
-				<div className="strip-slot" data-state="tile" data-key-code="1,1">
-					<SoundboardUnavailableTile tile={tile} context={context} />
-				</div>,
-			),
-		);
-		const native = input(node, layout);
-		const controls = Array.from(node.querySelectorAll("button"));
-		expect(controls).toHaveLength(4);
-		controls.forEach((button, index) => {
-			vi.spyOn(button, "getBoundingClientRect").mockReturnValue(
-				new DOMRect(100 + index * 150, 100, 100, 60),
+						],
+					},
+				],
+			};
+			const layout = stripLayout(profile, profile.pages[0]),
+				tile = layout.tiles[0];
+			if (!tile) throw new Error("Missing local player");
+			const request = vi.fn(
+				async (_command: import("../../../shared/key-library").KeyRequest) => ({
+					_tag: "success" as const,
+				}),
 			);
-		});
-		for (let index = 0; index < controls.length; index++) {
-			await act(async () => {
-				native.frame(130 + index * 150, 120, 1);
-				native.frame(130 + index * 150, 120, 0);
-				controls[index]?.click();
+			window.quakeKeyLibrary = {
+				request,
+				onPreview: () => () => {},
+				onRuntime: () => () => {},
+			};
+			const context = {
+				now: undefined,
+				hourFormat: "24h" as const,
+				voice: previewVoiceContext,
+				keyTarget: {
+					deviceId: "device",
+					profileId: profile.id,
+					pageId: "page",
+					revision: 0,
+				},
+			};
+			await act(async () =>
+				root.render(
+					<div className="strip-slot" data-state="tile" data-key-code="1,1">
+						<SoundboardUnavailableTile tile={tile} context={context} />
+					</div>,
+				),
+			);
+			const keys: StripKeyEvent[] = [];
+			const native = input(node, layout, (event) => keys.push(event));
+			const controls = Array.from(node.querySelectorAll("button"));
+			expect(controls).toHaveLength(4);
+			controls.forEach((button, index) => {
+				vi.spyOn(button, "getBoundingClientRect").mockReturnValue(
+					new DOMRect(20 + index * 45, 100, 35, 60),
+				);
 			});
-		}
-		expect(request.mock.calls.map(([command]) => command)).toHaveLength(4);
-		await act(async () =>
-			root.render(
-				<div className="strip-slot" data-state="tile" data-key-code="1,1">
-					<SoundboardUnavailableTile
-						tile={tile}
-						context={{ ...context, interactive: false }}
-					/>
-				</div>,
-			),
-		);
-		await act(async () => {
-			native.frame(130, 120, 1);
-			native.frame(130, 120, 0);
-			controls[0]?.click();
-		});
-		expect(request).toHaveBeenCalledTimes(4);
-	});
+			for (let index = 0; index < controls.length; index++) {
+				await act(async () => {
+					native.frame(30 + index * 45, 120, 1);
+					native.frame(30 + index * 45, 120, 0);
+					controls[index]?.click();
+				});
+			}
+			expect(request.mock.calls.map(([command]) => command)).toHaveLength(4);
+			expect(keys).toEqual([]);
+			await act(async () => {
+				native.frame(50, 50, 1);
+				native.frame(50, 50, 0);
+			});
+			await flush();
+			expect(keys).toEqual([
+				{ keyCode: "1,1", keyAction: 0 },
+				{ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true },
+			]);
+			expect(request).toHaveBeenCalledTimes(4);
+
+			await act(async () =>
+				root.render(
+					<div className="strip-slot" data-state="tile" data-key-code="1,1">
+						<SoundboardUnavailableTile
+							tile={tile}
+							context={{ ...context, interactive: false }}
+						/>
+					</div>,
+				),
+			);
+			await act(async () => {
+				native.frame(30, 120, 1);
+				native.frame(30, 120, 0);
+				controls[0]?.click();
+			});
+			expect(request).toHaveBeenCalledTimes(4);
+		},
+	);
 	it("SCREEN-010 cancels held keys after same-page content replacement but preserves runtime repaint ownership", async () => {
 		const { node, root } = host();
 		const base = fixtureProfile();
