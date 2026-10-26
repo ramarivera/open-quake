@@ -156,3 +156,19 @@ it("AI-043 copies named model metadata without secret input and protects built-i
 	expect(source.value).toBe("Personal assistant");
 	expect(copy.maxLength).toBe(30);
 });
+
+it("AI-043 locks built-in names and deletion while allowing an isolated copy", async () => {
+	const f = await fixture("openai", {
+		builtIn: true,
+		name: "Built-in",
+		model: "gpt-4o",
+	});
+	expect(
+		query(f.host, '[aria-label="Name default 1"]', HTMLInputElement).disabled,
+	).toBe(true);
+	expect(button(f.host, agentsStrings.clawAIConfig.delete).disabled).toBe(true);
+	await click(button(f.host, "Copy"));
+	expect(
+		query(f.host, '[aria-label="Name default 2"]', HTMLInputElement).disabled,
+	).toBe(false);
+});

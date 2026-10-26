@@ -61,6 +61,21 @@ Live providers and hardware remain unverified; this round made no paid calls.
 
 ## 7. Assistant-config burn-down lane
 
-- [ ] 7.1 Implement typed key controls and fake consumer execution for AI-003/009/041/042/053/054/055/056/057/058/059/060 and MGMT-285. Bead: open-quake-lih.15.7.
-- [ ] 7.2 Implement named model controls, General provider choice and subsequent-turn synchronization for AI-019/043/062 and SETTINGS-008/102. Bead: open-quake-lih.15.8.
-- [ ] 7.3 Implement explicit knob migration, assignment/preview and agent/model retention for AI-065, KNOB-034 and MGMT-212/308. Owning knob-configuration spec updated. Bead: open-quake-lih.15.9.
+- [x] 7.1 Implement typed key controls and fake consumer execution for AI-003/009/041/042/053/054/055/056/057/058/059/060 and MGMT-285. Bead: open-quake-lih.15.7.
+- [x] 7.2 Implement named model controls, General provider choice and subsequent-turn synchronization for AI-019/043/062 and SETTINGS-008/102. Bead: open-quake-lih.15.8.
+- [x] 7.3 Implement explicit knob migration, assignment/preview and agent/model retention for AI-065, KNOB-034 and MGMT-212/308. Owning knob-configuration spec updated. Bead: open-quake-lih.15.9.
+
+
+The assistant-config lane implements the 22 assigned software handoffs with
+portable key controls, a named Models editor, General provider selection and an
+explicit reviewed knob replacement. Mounted Save/reopen tests and fake-provider
+consumer tests cover persistence, sampling, search/thinking, context expiration,
+history and the assistant/global HA allowlist intersection. Imported role/control
+actions remain readable until the first typed save. Models and Speech links use
+in-document navigation so management write authorization remains valid.
+
+Software coverage does not qualify physical device display/animation, microphone,
+live provider credentials, speech playback or real HA. Auto device targets other
+than allowed HA remain unavailable in the desktop binding; the editor says so.
+DK Claw knob assignments persist but capture remains unavailable in its owning
+route. The three task beads stay open for lead review and merge.

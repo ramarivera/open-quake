@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import {
 	AssistantSettings,
+	assistantSettingsFromActions,
 	defaultAssistantSettings,
 } from "./assistant-contracts";
 
@@ -57,4 +58,18 @@ describe("AI-009/041/054/055/056/057/060 assistant settings", () => {
 			}),
 		).toBe(true),
 	);
+});
+
+it("MGMT-285 retains imported role/search/thinking before the first typed save", () => {
+	expect(
+		assistantSettingsFromActions([
+			{ type: "roleConfig", value: { roleId: 128, rolePrompt: "Preset" } },
+			{ type: "enableThinking", value: true },
+		]),
+	).toMatchObject({
+		roleId: 128,
+		thinking: true,
+		webSearch: false,
+		customPrompt: "",
+	});
 });

@@ -8,6 +8,7 @@ import {
 import { ownModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import { Row } from "../ui/Form";
 import { AssistantControls, useAssistantCatalog } from "./AssistantEditor";
+import { useAssistantText } from "./assistant-copy";
 
 export function KnobAssistantSettings({
 	slot,
@@ -18,6 +19,7 @@ export function KnobAssistantSettings({
 	readonly original: unknown;
 	readonly onChange: (slot: KnobSlot) => void;
 }) {
+	const t = useAssistantText();
 	const { view, status } = useAssistantCatalog();
 	const [review, setReview] = useState(false);
 	const [stage, setStage] = useState("idle");
@@ -42,11 +44,17 @@ export function KnobAssistantSettings({
 		Schema.parseJson(AssistantSettings),
 		{ onExcessProperty: "error" },
 	)(actions.find((a) => a.type === "assistant")?.value ?? "");
+	const fallback = {
+		...defaultAssistantSettings(),
+		modelRowId: String(
+			actions.find((a) => a.type === "directProvider")?.value ?? "",
+		),
+		modelId: String(actions.find((a) => a.type === "directModel")?.value ?? ""),
+	};
 	const settings =
 		("assistantSettings" in slot.config
 			? slot.config.assistantSettings
-			: undefined) ??
-		(Either.isRight(parsed) ? parsed.right : defaultAssistantSettings());
+			: undefined) ?? (Either.isRight(parsed) ? parsed.right : fallback);
 	const resolvedRow =
 		(view?.models.default ?? []).find((r) => r.id === settings.modelRowId) ??
 		(view?.models.default ?? []).find((r) => r.role === "default");
@@ -61,35 +69,28 @@ export function KnobAssistantSettings({
 			config: {
 				...slot.config,
 				assistantSettings: next,
-				...(route === "legacyAssistant"
+				...(route === "direct"
 					? {
 							actions: [
-								{ type: "voiceRoute", value: "legacyAssistant" },
-								{ type: "assistant", value: JSON.stringify(next) },
+								{ type: "voiceRoute", value: "direct" },
+								{
+									type: "directProvider",
+									value:
+										next.modelRowId || resolvedRow?.id || replacementProvider,
+								},
+								{
+									type: "directModel",
+									value:
+										next.modelId ||
+										(view?.models.default ?? []).find(
+											(r) => r.id === next.modelRowId,
+										)?.model ||
+										resolvedRow?.model ||
+										replacementModel,
+								},
 							],
 						}
-					: route === "direct"
-						? {
-								actions: [
-									{ type: "voiceRoute", value: "direct" },
-									{
-										type: "directProvider",
-										value:
-											next.modelRowId || resolvedRow?.id || replacementProvider,
-									},
-									{
-										type: "directModel",
-										value:
-											next.modelId ||
-											(view?.models.default ?? []).find(
-												(r) => r.id === next.modelRowId,
-											)?.model ||
-											resolvedRow?.model ||
-											replacementModel,
-									},
-								],
-							}
-						: {}),
+					: {}),
 			},
 		});
 	};
@@ -118,7 +119,7 @@ export function KnobAssistantSettings({
 	return (
 		<section aria-label="Knob assistant configuration">
 			{status && <p role="status">{status}</p>}
-			<Row label="Assistant preview">
+			<Row label={t("Assistant preview")}>
 				<output
 					className="knob-assistant-preview"
 					data-stage={stage}
@@ -165,7 +166,7 @@ export function KnobAssistantSettings({
 							value={model}
 							onChange={(e) => selectAgent(agent, e.target.value)}
 						>
-							<option value="">Default (Agent)</option>
+							<option value="">{t("Default (Agent)")}</option>
 							{model &&
 								!models.some((m) => `${m.provider}/${m.model}` === model) && (
 									<option value={model}>{model} · unavailable</option>
@@ -192,16 +193,16 @@ export function KnobAssistantSettings({
 								Legacy assistant is preserved and won't execute. Review and save
 								a Direct chat replacement to enable capture.
 							</p>
-							<Row label="Preserved assistant JSON">
+							<Row label={t("Preserved assistant JSON")}>
 								<textarea
-									aria-label="Preserved assistant JSON"
+									aria-label={t("Preserved assistant JSON")}
 									readOnly
 									rows={5}
 									value={originalText}
 								/>
 							</Row>
 							<button type="button" onClick={() => setReview(true)}>
-								Preview migration
+								{t("Preview migration")}
 							</button>
 							{review && (
 								<section aria-label="Migration preview">
@@ -232,17 +233,17 @@ export function KnobAssistantSettings({
 											setReview(false);
 										}}
 									>
-										Use reviewed replacement
+										{t("Use reviewed replacement")}
 									</button>
 									<button type="button" onClick={() => setReview(false)}>
-										Cancel migration
+										{t("Cancel migration")}
 									</button>
 								</section>
 							)}
 						</>
 					)}
 					<details>
-						<summary>Assistant settings</summary>
+						<summary>{t("Assistant settings")}</summary>
 						<AssistantControls
 							value={settings}
 							rows={view?.models.default ?? []}
@@ -251,7 +252,7 @@ export function KnobAssistantSettings({
 					</details>
 					{invalid && (
 						<p role="alert">
-							Assistant settings are outside the allowed bounds.
+							{t("Assistant settings are outside the allowed bounds.")}
 						</p>
 					)}
 				</>

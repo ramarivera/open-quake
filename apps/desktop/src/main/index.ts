@@ -17,6 +17,7 @@ import {
 	shell,
 } from "electron";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
+import { assistantSettingsFromActions } from "../../../../packages/device/src/profiles/assistant-contracts";
 import { ProfileManager } from "../../../../packages/device/src/profiles/profile-manager-service.js";
 import { ProfileRepository } from "../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../packages/device/src/profiles/profile-service.js";
@@ -319,11 +320,16 @@ if (!app.requestSingleInstanceLock()) {
 											.runPromise(ProfileService.loadProfiles())
 											.then(({ envelope }) => {
 												const active = envelope.activeByDevice[serial];
-												return envelope.profiles
+												const key = envelope.profiles
 													.find((p) => p.id === active?.profileId)
 													?.pages.find((p) => p.id === active?.pageId)
-													?.keys.find((k) => k.keyCode === keyCode)?.config
-													.assistantSettings;
+													?.keys.find((k) => k.keyCode === keyCode);
+												return (
+													key?.config.assistantSettings ??
+													(key?.config.type === "aiChat"
+														? assistantSettingsFromActions(key.config.actions)
+														: undefined)
+												);
 											}),
 									catch: (cause) => new AiConfigInvalid(cause),
 								}),
@@ -409,6 +415,7 @@ if (!app.requestSingleInstanceLock()) {
 											directChat.pinKnobModel(
 												snapshot.providerId,
 												snapshot.modelId,
+												snapshot.assistantSettings,
 											),
 										),
 									),

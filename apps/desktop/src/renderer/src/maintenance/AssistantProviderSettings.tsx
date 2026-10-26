@@ -4,8 +4,11 @@ import {
 	ASSISTANT_ENGINES,
 	useAssistantCatalog,
 } from "../keys/AssistantEditor";
+import { AssistantLink } from "../keys/AssistantLink";
+import { useAssistantText } from "../keys/assistant-copy";
 import { Group, Row } from "../ui/Form";
 export function AssistantProviderSettings() {
+	const t = useAssistantText();
 	const { view, status, setView } = useAssistantCatalog();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
@@ -20,8 +23,8 @@ export function AssistantProviderSettings() {
 	});
 	const selected = rows.find((r) => r.role === "default");
 	return (
-		<Group title="Assistant">
-			<Row label="AI Model Provider" htmlFor="assistant-provider">
+		<Group title={t("Assistant")}>
+			<Row label={t("AI Model Provider")} htmlFor="assistant-provider">
 				{status ? (
 					<span role="status">{status}</span>
 				) : !options.length ? (
@@ -58,7 +61,7 @@ export function AssistantProviderSettings() {
 						}}
 					>
 						<option value="" disabled>
-							Select AI chat provider
+							{t("Select AI chat provider")}
 						</option>
 						{options.map((o) => (
 							<option key={o.id} value={o.row.id}>
@@ -68,7 +71,9 @@ export function AssistantProviderSettings() {
 						))}
 					</select>
 				)}
-				<a href="?activeTab=openclaw-ai">Configure Models</a>
+				<AssistantLink page="openclaw-ai">
+					{t("Configure Models")}
+				</AssistantLink>
 			</Row>
 			{error && <p role="alert">{error}</p>}
 			<p>

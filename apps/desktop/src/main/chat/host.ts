@@ -323,7 +323,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 												webSearch: settings.webSearch,
 											},
 											sampling: {
-												...baseProfile.sampling,
+												maxOutputTokens: baseProfile.sampling.maxOutputTokens,
 												...(providerSamplingValid({
 													provider: baseProfile.provider ?? "generic",
 													model: baseProfile.modelId,
@@ -528,6 +528,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 				pinKnobModel: Effect.fn("DesktopChat.pinKnobModel")(function* (
 					providerId: string,
 					modelId: string,
+					assistant?: AssistantSettings,
 				): Effect.fn.Return<PinnedDirectModel, VoiceKnobRejected> {
 					const rows = yield* options
 						.models("default")
@@ -539,9 +540,13 @@ export function prepareDirectChat(options: DirectChatOptions) {
 					const matches = resolveModelRows(rows).filter(
 						(r) =>
 							r.id === providerId &&
-							modelOptions(r.provider, [r.model]).some(
-								(option) => option.id === modelId,
-							),
+							modelId.trim().length > 0 &&
+							modelId.length <= 200 &&
+							(modelOptions(r.provider, [r.model]).some(
+								(m) => m.id === modelId,
+							) ||
+								(assistant?.modelId === modelId &&
+									assistant.modelRowId === providerId)),
 					);
 					const row = matches.length === 1 ? matches[0] : undefined;
 					if (!row?.model.trim() || !row.credentialRef)

@@ -45,6 +45,8 @@ function fixtureServer() {
 		body: {
 			temperature?: number | undefined;
 			top_p?: number | undefined;
+			enable_search?: boolean | undefined;
+			enable_thinking?: boolean | undefined;
 			model: string;
 			messages: readonly { readonly role: string; readonly content: string }[];
 		};
@@ -64,6 +66,8 @@ function fixtureServer() {
 					max_tokens: Schema.optional(Schema.Number),
 					temperature: Schema.optional(Schema.Number),
 					top_p: Schema.optional(Schema.Number),
+					enable_search: Schema.optional(Schema.Boolean),
+					enable_thinking: Schema.optional(Schema.Boolean),
 					messages: Schema.Array(
 						Schema.Struct({ role: Schema.String, content: Schema.String }),
 					),
@@ -1157,6 +1161,87 @@ it.each(["allowed", "denied", "revoked"] as const)(
 			const prompt = f.endpoint.calls[1]?.body.messages[0]?.content ?? "";
 			expect(prompt).toContain("light.allowed");
 			expect(prompt).not.toContain("light.denied");
+		} finally {
+			await f.close();
+		}
+	},
+);
+
+it("AI-059 MGMT-285 sends explicit search/thinking controls and rejects unsupported search before I/O", async () => {
+	const f = await fixture({}, "qwen", "qwen3.6-plus");
+	try {
+		for (const enabled of [false, true]) {
+			const turn = await f.host.runtime.runPromise(
+				f.host.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+					"main",
+					undefined,
+					{
+						...defaultAssistantSettings(),
+						useAgent: false,
+						webSearch: enabled,
+						thinking: enabled,
+					},
+				),
+			);
+			await f.host.runtime.runPromise(Stream.runDrain(turn.events));
+			expect(f.endpoint.calls.at(-1)?.body).toMatchObject({
+				enable_search: enabled,
+				enable_thinking: enabled,
+			});
+		}
+	} finally {
+		await f.close();
+	}
+	const unsupported = await fixture();
+	try {
+		const result = await unsupported.host.runtime.runPromise(
+			unsupported.host
+				.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+					"main",
+					undefined,
+					{ ...defaultAssistantSettings(), useAgent: false, webSearch: true },
+				)
+				.pipe(Effect.either),
+		);
+		expect(result._tag).toBe("Left");
+		expect(unsupported.endpoint.calls).toHaveLength(0);
+	} finally {
+		await unsupported.close();
+	}
+});
+it.each([false, true])(
+	"AI-056 clears incompatible saved-row sampling for reasoning models, pinned=%s",
+	async (isPinned) => {
+		const f = await fixture(
+			{ temperature: 1.2, topP: 0.8 },
+			"openai",
+			"gpt-4o",
+		);
+		try {
+			const settings = {
+				...defaultAssistantSettings(),
+				useAgent: false,
+				modelId: "gpt-5.1",
+			};
+			const pinned = isPinned
+				? await f.host.runtime.runPromise(
+						f.host.pinKnobModel("configured", "gpt-5.1"),
+					)
+				: undefined;
+			const turn = await f.host.runtime.runPromise(
+				f.host.submit(
+					{ sessionId: sessionId(), turnId: turnId(), text: "hello" },
+					"main",
+					pinned,
+					settings,
+				),
+			);
+			await f.host.runtime.runPromise(Stream.runDrain(turn.events));
+			expect(f.endpoint.calls[0]?.body.model).toBe("gpt-5.1");
+			expect(f.endpoint.calls[0]?.body.temperature).toBeUndefined();
+			expect(f.endpoint.calls[0]?.body.top_p).toBeUndefined();
 		} finally {
 			await f.close();
 		}

@@ -53,3 +53,33 @@ export const defaultAssistantSettings = (): AssistantSettings => ({
 	homeAssistantControl: false,
 	entityIds: [],
 });
+
+/** Imported Copilot actions retain explicit role/control choices until edited. */
+export function assistantSettingsFromActions(
+	actions: readonly { readonly type: string; readonly value: unknown }[],
+): AssistantSettings {
+	const value = (type: string) => actions.find((a) => a.type === type)?.value;
+	const role = value("roleConfig");
+	const roleId =
+		typeof role === "object" &&
+		role !== null &&
+		"roleId" in role &&
+		typeof role.roleId === "number"
+			? role.roleId
+			: 0;
+	const rolePrompt =
+		typeof role === "object" &&
+		role !== null &&
+		"rolePrompt" in role &&
+		typeof role.rolePrompt === "string"
+			? role.rolePrompt
+			: "";
+	const next = {
+		...defaultAssistantSettings(),
+		thinking: value("enableThinking") === true,
+		webSearch: value("enableSearch") === true,
+		roleId,
+		customPrompt: roleId === -1 ? rolePrompt : "",
+	};
+	return Schema.is(AssistantSettings)(next) ? next : defaultAssistantSettings();
+}

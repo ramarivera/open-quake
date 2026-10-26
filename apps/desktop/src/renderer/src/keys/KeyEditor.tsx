@@ -902,7 +902,7 @@ export function KeyEditor(): React.JSX.Element {
 							<AssistantEditor
 								key={selection?.target.token}
 								keyValue={key}
-								disabled={!keyEditable(key, "allowDelete")}
+								disabled={saving}
 								onChange={(next) => void update(next)}
 							/>
 						)}

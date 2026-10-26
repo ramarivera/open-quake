@@ -2,12 +2,14 @@
 import { Option, Schema } from "effect";
 import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
+import type { KnobSlot } from "../../../../../../packages/device/src/knob/knob-contracts";
 import { defaultAssistantSettings } from "../../../../../../packages/device/src/profiles/assistant-contracts";
 import {
 	createEmptyProfileKey,
 	Profile,
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
+import { Agent } from "../../../../../../packages/edge/src/agents/agents-contracts";
 import { initialAgentState } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import type {
 	AgentInput,
@@ -17,6 +19,7 @@ import type {
 import { button, click, input, mount, query, settle } from "../../test/dom";
 import { AssistantProviderSettings } from "../maintenance/AssistantProviderSettings";
 import { AssistantControls, AssistantEditor } from "./AssistantEditor";
+import { AssistantLink } from "./AssistantLink";
 import { KnobAssistantSettings } from "./KnobAssistantSettings";
 import { KnobEditor } from "./KnobEditor";
 import { knobAssignment } from "./knob-draft";
@@ -34,7 +37,7 @@ const rows: readonly PublicModelRow[] = [
 ].map((provider, index) => ({
 	id: provider,
 	provider,
-	model: provider === "qwen" ? "qwen3.6-plus" : "custom-" + provider,
+	model: provider === "qwen" ? "qwen3.6-plus" : `custom-${provider}`,
 	role: index === 0 ? "default" : "fallback",
 	baseUrl: "https://fake.invalid/v1",
 	maxTokens: 512,
@@ -342,4 +345,136 @@ it("KNOB-034 MGMT-308 confirms migration, saves through KnobEditor and reopens i
 	expect(query(f.host, "#knob-provider", HTMLSelectElement).value).toBe(
 		"openai",
 	);
+});
+
+it("AI-042 SETTINGS-102 links preserve the authorized document and request management navigation", async () => {
+	const receive = vi.fn();
+	window.addEventListener("open-quake:navigate", receive);
+	try {
+		const f = await mount(
+			<AssistantLink page="settings">Open settings</AssistantLink>,
+		);
+		closes.push(f.close);
+		const before = window.location.href;
+		await click(query(f.host, "a", HTMLAnchorElement));
+		expect(window.location.href).toBe(before);
+		expect(receive).toHaveBeenCalledWith(
+			expect.objectContaining({ detail: "settings" }),
+		);
+	} finally {
+		window.removeEventListener("open-quake:navigate", receive);
+	}
+});
+
+it("AI-058 saves the local entity subset without exposing unavailable entities as choices", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "ha",
+			snapshot: { state: "Connected", allowlist: ["light.allowed"] },
+		}),
+	});
+	let saved = defaultAssistantSettings();
+	function Consumer() {
+		const [value, setValue] = useState(saved);
+		return (
+			<AssistantControls
+				value={value}
+				rows={rows}
+				onChange={(next) => {
+					saved = next;
+					setValue(next);
+				}}
+			/>
+		);
+	}
+	const f = await mount(<Consumer />);
+	closes.push(f.close);
+	await click(button(f.host, "Select entities"));
+	await settle(() => expect(f.host.textContent).toContain("light.allowed"));
+	const checkbox = Array.from(f.host.querySelectorAll("label"))
+		.find((l) => l.textContent === "light.allowed")
+		?.querySelector("input");
+	if (!(checkbox instanceof HTMLInputElement))
+		throw new Error("entity checkbox missing");
+	await click(checkbox);
+	expect(saved.entityIds).toEqual(["light.allowed"]);
+	expect(f.host.textContent).not.toContain("light.denied");
+});
+
+it("AI-065 selects an agent and model and retains the saved assignment on reopen", async () => {
+	bridge({
+		...view(),
+		agents: ["main", "helper"].map((id) =>
+			Schema.decodeUnknownSync(Agent)({ id, name: id, emoji: "", files: {} }),
+		),
+	});
+	let saved: KnobSlot = {
+		childrenName: "assistant",
+		config: {
+			type: "assistant",
+			actions: [
+				{ type: "voiceRoute", value: "dkclaw" },
+				{ type: "agentId", value: "main" },
+				{ type: "dkclawModel", value: "private/unknown" },
+			],
+		},
+	};
+	function Consumer() {
+		const [slot, setSlot] = useState(saved);
+		return (
+			<KnobAssistantSettings
+				slot={slot}
+				original={slot.config.actions}
+				onChange={(next) => {
+					saved = next;
+					setSlot(saved);
+				}}
+			/>
+		);
+	}
+	const f = await mount(<Consumer />);
+	closes.push(f.close);
+	await input(query(f.host, "#knob-agent", HTMLSelectElement), "helper");
+	await input(
+		query(f.host, "#knob-agent-model", HTMLSelectElement),
+		"qwen/qwen3.6-plus",
+	);
+	expect(saved.config.actions).toEqual([
+		{ type: "voiceRoute", value: "dkclaw" },
+		{ type: "agentId", value: "helper" },
+		{ type: "dkclawModel", value: "qwen/qwen3.6-plus" },
+	]);
+	await f.render(
+		<KnobAssistantSettings
+			slot={saved}
+			original={saved.config.actions}
+			onChange={() => {}}
+		/>,
+	);
+	expect(query(f.host, "#knob-agent", HTMLSelectElement).value).toBe("helper");
+	expect(query(f.host, "#knob-agent-model", HTMLSelectElement).value).toBe(
+		"qwen/qwen3.6-plus",
+	);
+});
+
+it("AI-019 SETTINGS-008 shows pending and failed provider reads", async () => {
+	let rejectRead: (reason: Error) => void = () => {
+		throw new Error("missing read");
+	};
+	vi.stubGlobal("quakeAgents", {
+		request: () =>
+			new Promise((_, reject) => {
+				rejectRead = reject;
+			}),
+		onSnapshot: () => () => {},
+	});
+	const f = await mount(<AssistantProviderSettings />);
+	closes.push(f.close);
+	expect(f.host.textContent).toContain("Loading saved providers");
+	expect(f.host.querySelector("select")).toBeNull();
+	rejectRead(new Error("fixture unavailable"));
+	await settle(() =>
+		expect(f.host.textContent).toContain("couldn't be loaded"),
+	);
+	expect(f.host.querySelector("select")).toBeNull();
 });

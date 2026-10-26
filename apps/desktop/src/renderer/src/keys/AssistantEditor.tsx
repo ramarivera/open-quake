@@ -2,7 +2,7 @@ import { Either, Schema } from "effect";
 import { useEffect, useId, useState } from "react";
 import {
 	AssistantSettings,
-	defaultAssistantSettings,
+	assistantSettingsFromActions,
 } from "../../../../../../packages/device/src/profiles/assistant-contracts";
 import type { ProfileKey } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { ROLE_PRESETS } from "../../../../../../packages/edge/src/ai/ai-role-presets";
@@ -15,6 +15,8 @@ import {
 import type { AgentView, PublicModelRow } from "../../../shared/agents";
 import { useAppLocale } from "../i18n";
 import { Row } from "../ui/Form";
+import { AssistantLink } from "./AssistantLink";
+import { useAssistantText } from "./assistant-copy";
 
 export const ASSISTANT_ENGINES = [
 	{ id: "qwen", label: "QWen" },
@@ -23,13 +25,14 @@ export const ASSISTANT_ENGINES = [
 	{ id: "openai", label: "OpenAI" },
 ] as const;
 export function useAssistantCatalog() {
+	const t = useAssistantText();
 	const [view, setView] = useState<AgentView>();
-	const [status, setStatus] = useState("Loading saved providers…");
+	const [status, setStatus] = useState(t("Loading saved providers…"));
 	useEffect(() => {
 		let alive = true;
 		const bridge = window.quakeAgents;
 		if (!bridge) {
-			setStatus("Saved providers are unavailable.");
+			setStatus(t("Saved providers are unavailable."));
 			return;
 		}
 		void bridge
@@ -42,7 +45,7 @@ export function useAssistantCatalog() {
 				} else setStatus(reply.message);
 			})
 			.catch(() => {
-				if (alive) setStatus("Saved providers couldn't be loaded.");
+				if (alive) setStatus(t("Saved providers couldn't be loaded."));
 			});
 		const off = bridge.onSnapshot((next) => {
 			if (alive) {
@@ -54,7 +57,7 @@ export function useAssistantCatalog() {
 			alive = false;
 			off();
 		};
-	}, []);
+	}, [t]);
 	return { view, status, setView };
 }
 export function AssistantControls({
@@ -68,6 +71,7 @@ export function AssistantControls({
 	readonly rows: readonly PublicModelRow[];
 	readonly disabled?: boolean;
 }) {
+	const t = useAssistantText();
 	const id = useId();
 	const { locale } = useAppLocale();
 	const [filter, setFilter] = useState("");
@@ -129,7 +133,7 @@ export function AssistantControls({
 	);
 	return (
 		<fieldset disabled={disabled} aria-label="Assistant controls">
-			<Row label="Direct provider" htmlFor={`${id}-engine`}>
+			<Row label={t("Direct provider")} htmlFor={`${id}-engine`}>
 				<select
 					id={`${id}-engine`}
 					value={canonicalProvider(row?.provider ?? "")}
@@ -147,7 +151,7 @@ export function AssistantControls({
 					}}
 				>
 					<option value="" disabled>
-						Select AI chat provider
+						{t("Select AI chat provider")}
 					</option>
 					{!ASSISTANT_ENGINES.some(
 						(e) => e.id === canonicalProvider(row?.provider ?? ""),
@@ -173,7 +177,7 @@ export function AssistantControls({
 					))}
 				</select>
 			</Row>
-			<Row label="Model" htmlFor={`${id}-model`}>
+			<Row label={t("Model")} htmlFor={`${id}-model`}>
 				<select
 					id={`${id}-model`}
 					value={value.modelRowId}
@@ -186,7 +190,7 @@ export function AssistantControls({
 						})
 					}
 				>
-					<option value="">General Settings default</option>
+					<option value="">{t("General Settings default")}</option>
 					{value.modelRowId && !rows.some((r) => r.id === value.modelRowId) && (
 						<option value={value.modelRowId}>
 							{value.modelRowId} · unavailable
@@ -200,7 +204,7 @@ export function AssistantControls({
 					))}
 				</select>
 			</Row>
-			<Row label="Model ID" htmlFor={`${id}-model-id`}>
+			<Row label={t("Model ID")} htmlFor={`${id}-model-id`}>
 				<input
 					id={`${id}-model-id`}
 					value={value.modelId}
@@ -226,21 +230,23 @@ export function AssistantControls({
 			</Row>
 			{row && !row.credentialAvailable && (
 				<p role="status">
-					Add credentials in Models before using this assistant.
+					{t("Add credentials in Models before using this assistant.")}
 				</p>
 			)}
-			{check("Use Dekie Agent", "useAgent")}
+			{check(t("Use Dekie Agent"), "useAgent")}
 			<p className="cw-muted">
-				After closing, only the chat function will be available, and device
-				control will be disabled.
+				{t(
+					"After closing, only the chat function will be available, and device control will be disabled.",
+				)}
 			</p>
 			<p role="status">
-				Auto supports chat and allowed Home Assistant entities. Other device
-				control routes are unavailable in this build.
+				{t(
+					"Auto supports chat and allowed Home Assistant entities. Other device control routes are unavailable in this build.",
+				)}
 			</p>
-			{check("Voice Input", "enableVoiceInput")}
-			{check("Wake Chat Window", "enableWakeTalkWindow")}
-			<Row label="Chat history count" htmlFor={`${id}-history`}>
+			{check(t("Voice Input"), "enableVoiceInput")}
+			{check(t("Wake Chat Window"), "enableWakeTalkWindow")}
+			<Row label={t("Chat history count")} htmlFor={`${id}-history`}>
 				<input
 					id={`${id}-history`}
 					type="number"
@@ -250,7 +256,7 @@ export function AssistantControls({
 					onChange={(e) => patch({ chatHistoryCount: e.target.valueAsNumber })}
 				/>
 			</Row>
-			<Row label="Custom Role" htmlFor={`${id}-custom`}>
+			<Row label={t("Custom Role")} htmlFor={`${id}-custom`}>
 				<input
 					id={`${id}-custom`}
 					type="checkbox"
@@ -261,7 +267,7 @@ export function AssistantControls({
 				/>
 			</Row>
 			{value.roleId === -1 ? (
-				<Row label="Role Prompt" htmlFor={`${id}-prompt`}>
+				<Row label={t("Role Prompt")} htmlFor={`${id}-prompt`}>
 					<textarea
 						id={`${id}-prompt`}
 						rows={5}
@@ -274,14 +280,14 @@ export function AssistantControls({
 				</Row>
 			) : (
 				<>
-					<Row label="Filter roles" htmlFor={`${id}-filter`}>
+					<Row label={t("Filter roles")} htmlFor={`${id}-filter`}>
 						<input
 							id={`${id}-filter`}
 							value={filter}
 							onChange={(e) => setFilter(e.target.value)}
 						/>
 					</Row>
-					<Row label="System Role" htmlFor={`${id}-role`}>
+					<Row label={t("System Role")} htmlFor={`${id}-role`}>
 						<select
 							id={`${id}-role`}
 							value={value.roleId}
@@ -302,30 +308,34 @@ export function AssistantControls({
 					</Row>
 				</>
 			)}
-			{check("Enable Thinking", "thinking", !thinking)}
+			{check(t("Enable Thinking"), "thinking", !thinking)}
 			{!thinking && (
-				<p role="status">Thinking is unsupported by this provider/model.</p>
+				<p role="status">
+					{t("Thinking is unsupported by this provider/model.")}
+				</p>
 			)}
 			{check(
-				"Web Search",
+				t("Web Search"),
 				"webSearch",
 				Boolean(row && !supportsWebSearch(row.provider, model)),
 			)}
 			{row && !supportsWebSearch(row.provider, model) && (
-				<p role="status">Web Search is unsupported by this provider/model.</p>
+				<p role="status">
+					{t("Web Search is unsupported by this provider/model.")}
+				</p>
 			)}
 			{(
 				[
 					{
 						field: "topP",
-						label: "Personality",
+						label: t("Personality"),
 						max: 1,
 						left: "Fastidious",
 						right: "Flexible",
 					},
 					{
 						field: "temperature",
-						label: "Reply Quality",
+						label: t("Reply Quality"),
 						max: 2,
 						left: "Conservative",
 						right: "Gibberish",
@@ -345,17 +355,18 @@ export function AssistantControls({
 					/>
 					<output>{value[s.field]}</output>
 					<span>
-						{s.left} / {s.right}
+						{t(s.left)} / {t(s.right)}
 					</span>
 				</Row>
 			))}
 			{!sampling && (
 				<p role="status">
-					This provider/model requires its own sampling values. Saved assistant
-					slider values are retained; provider defaults apply.
+					{t(
+						"This provider/model requires its own sampling values. Saved assistant slider values are retained; provider defaults apply.",
+					)}
 				</p>
 			)}
-			<Row label="Chat Timeout(s)" htmlFor={`${id}-timeout`}>
+			<Row label={t("Chat Timeout(s)")} htmlFor={`${id}-timeout`}>
 				<input
 					id={`${id}-timeout`}
 					type="range"
@@ -371,9 +382,11 @@ export function AssistantControls({
 			</Row>
 			{value.useAgent && (
 				<>
-					{check("HomeAssistant Control", "homeAssistantControl")}
-					<Row label="HA Configuration">
-						<a href="?activeTab=home-assistant">HA Configuration</a>
+					{check(t("HomeAssistant Control"), "homeAssistantControl")}
+					<Row label={t("HA Configuration")}>
+						<AssistantLink page="home-assistant">
+							{t("HA Configuration")}
+						</AssistantLink>
 						<button
 							type="button"
 							onClick={() => {
@@ -401,7 +414,7 @@ export function AssistantControls({
 									);
 							}}
 						>
-							Select entities
+							{t("Select entities")}
 						</button>
 					</Row>
 					{[...new Set([...entities, ...value.entityIds])].map((entity) => (
@@ -429,8 +442,8 @@ export function AssistantControls({
 				</>
 			)}
 			<p>
-				<a href="?activeTab=openclaw-ai">Models</a> ·{" "}
-				<a href="?activeTab=settings">Speech settings</a>
+				<AssistantLink page="openclaw-ai">{t("Models")}</AssistantLink> ·{" "}
+				<AssistantLink page="settings">{t("Speech settings")}</AssistantLink>
 			</p>
 		</fieldset>
 	);
@@ -444,13 +457,16 @@ export function AssistantEditor({
 	readonly onChange: (key: ProfileKey) => void;
 	readonly disabled?: boolean;
 }) {
+	const t = useAssistantText();
 	const { view, status } = useAssistantCatalog();
 	const rows = view?.models.default ?? [];
-	const value = keyValue.config.assistantSettings ?? defaultAssistantSettings();
+	const value =
+		keyValue.config.assistantSettings ??
+		assistantSettingsFromActions(keyValue.config.actions);
 	const [invalid, setInvalid] = useState(false);
 	const selected = rows.find((r) => r.role === "default");
 	return (
-		<section aria-label="Assistant settings">
+		<section aria-label={t("Assistant settings")}>
 			{!keyValue.config.assistantSettings && (
 				<button
 					type="button"
@@ -460,19 +476,26 @@ export function AssistantEditor({
 							...keyValue,
 							config: {
 								...keyValue.config,
-								assistantSettings: defaultAssistantSettings(),
+								assistantSettings: value,
 							},
 						})
 					}
 				>
-					Configure assistant
+					{t("Configure assistant")}
 				</button>
 			)}
-			<Row label="AI Model Provider">
-				<span>{selected?.provider ?? "Unconfigured"}</span>
-				<a href="?activeTab=settings">
-					Change the AI provider in General Settings
-				</a>
+			<Row label={t("AI Model Provider")}>
+				<span>
+					{ASSISTANT_ENGINES.find(
+						(engine) =>
+							engine.id === canonicalProvider(selected?.provider ?? ""),
+					)?.label ??
+						selected?.provider ??
+						t("Unconfigured")}
+				</span>
+				<AssistantLink page="settings">
+					{t("Change the AI provider in General Settings")}
+				</AssistantLink>
 			</Row>
 			{status && <p role="status">{status}</p>}
 			<AssistantControls
@@ -492,7 +515,9 @@ export function AssistantEditor({
 				}}
 			/>
 			{invalid && (
-				<p role="alert">Assistant settings are outside the allowed bounds.</p>
+				<p role="alert">
+					{t("Assistant settings are outside the allowed bounds.")}
+				</p>
 			)}
 		</section>
 	);

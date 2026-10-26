@@ -123,6 +123,15 @@ export function KnobEditor({
 			childrenName: "assistant",
 			config: {
 				...slot.config,
+				...("assistantSettings" in slot.config && slot.config.assistantSettings
+					? {
+							assistantSettings: {
+								...slot.config.assistantSettings,
+								modelRowId: providerId,
+								modelId,
+							},
+						}
+					: {}),
 				type: "assistant",
 				actions: [
 					{ type: "voiceRoute", value: "direct" },

@@ -752,41 +752,28 @@ it("MGMT-096 repeated publications preserve an unchanged draft and a pending Sav
 });
 
 it("AI-041/054/060/062 MGMT-285 saves and reopens assistant controls through KeyEditor and KeyEditing", async () => {
-	const f = await fixture();
-	const envelope = Schema.decodeUnknownSync(ProfileEnvelope)(f.stored());
-	const original = envelope.profiles[0].pages[0].keys[0];
-	if (!original) throw new Error("fixture key missing");
-	const assistant: ProfileKey = {
-		...original,
-		childrenName: Option.some("aiChat"),
-		config: { ...original.config, type: "aiChat", actions: [] },
-	};
-	const next = Schema.decodeUnknownSync(ProfileEnvelope)({
-		...encodeProfileEnvelope(envelope),
-		profiles: envelope.profiles
-			.map((p) =>
-				Schema.encodeSync(ProfileEnvelope)(envelope).profiles.find(
-					(encoded) => encoded.id === p.id,
+	const f = await fixture(false, (envelope) =>
+		Schema.encodeSync(ProfileEnvelope)(
+			Schema.decodeUnknownSync(ProfileEnvelope)({
+				...envelope,
+				profiles: envelope.profiles.map((p) =>
+					p.id === "p"
+						? {
+								...p,
+								pages: p.pages.map((page) => ({
+									...page,
+									keys: page.keys.map((key) => ({
+										...key,
+										childrenName: "aiChat",
+										config: { ...key.config, type: "aiChat", actions: [] },
+									})),
+								})),
+							}
+						: p,
 				),
-			)
-			.map((p) =>
-				p?.id === "p"
-					? {
-							...p,
-							pages: p.pages.map((page) => ({
-								...page,
-								keys: [Schema.encodeSync(ProfileKey)(assistant)],
-							})),
-						}
-					: p,
-			),
-	});
-	await f.runtime.runPromise(
-		Effect.flatMap(ProfileRepository, (repository) =>
-			repository.transact(() => Effect.succeed(next)),
+			}),
 		),
 	);
-	await f.publish(encodeProfileEnvelope(next));
 	await f.select();
 	await click(button(f.host, "Configure assistant"));
 	const labelField = (label: string) => {
@@ -820,7 +807,7 @@ it("AI-041/054/060/062 MGMT-285 saves and reopens assistant controls through Key
 			managementProfileContracts,
 		),
 	).toEqual([]);
-	await click(button(f.host, "Cancel"));
+	await click(button(f.host, "1,1"));
 	await f.select();
 	expect(query(f.host, "textarea", HTMLTextAreaElement).value).toBe(
 		"Retained system prompt",
