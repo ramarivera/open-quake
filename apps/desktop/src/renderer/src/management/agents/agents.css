@@ -424,6 +424,27 @@
 	outline: 2px solid var(--cw-accent);
 	outline-offset: 1px;
 }
+.aw-sampling {
+	margin-top: 8px;
+	max-width: 200px;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.aw-sampling summary {
+	cursor: pointer;
+}
+.aw-sampling p {
+	margin: 6px 0;
+	color: var(--cw-muted);
+	font-size: var(--mc-font-meta);
+}
+.aw-sampling label {
+	display: block;
+	margin-top: 8px;
+}
+.aw-sampling .aw-field-error {
+	color: var(--cw-danger);
+}
 .aw-credential {
 	display: flex;
 	align-items: center;

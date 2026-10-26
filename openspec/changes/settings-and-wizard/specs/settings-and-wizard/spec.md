@@ -91,6 +91,14 @@ Settings SHALL store provider ID, endpoint, model, temperature and topP with a p
 - **WHEN** the user saves temperature 2.1 or topP below zero
 - **THEN** the save identifies the invalid field and preserves the last valid provider configuration
 
+#### Scenario: Provider sampling policy
+
+- **WHEN** a saved GPT-4o or GPT-4.1 text model has valid explicit sampling overrides
+- **THEN** direct inference forwards them through the real RPC and SDK path
+- **WHEN** a model requires defaults or supplied Kimi values conflict with its mandatory values
+- **THEN** the editor explains the restriction and blocks saving, and backend validation preserves stored configuration and credentials
+- **AND** clearing both overrides allows saving provider defaults
+
 #### Scenario: Provider switch
 
 - **WHEN** a user switches from configured provider A to B and back

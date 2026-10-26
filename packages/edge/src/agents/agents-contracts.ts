@@ -36,6 +36,12 @@ export const ModelRow = Schema.Struct({
 	model: Schema.String,
 	baseUrl: Schema.String,
 	maxTokens: Schema.Int.pipe(Schema.positive()),
+	temperature: Schema.optional(
+		Schema.Number.pipe(Schema.finite(), Schema.between(0, 2)),
+	),
+	topP: Schema.optional(
+		Schema.Number.pipe(Schema.finite(), Schema.between(0, 1)),
+	),
 	credentialRef: Schema.String,
 });
 export type ModelRow = typeof ModelRow.Type;

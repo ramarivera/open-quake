@@ -111,6 +111,120 @@ const model = (
 });
 describe("AgentsService real consumer", () => {
 	it.effect(
+		"rejects unsupported provider sampling without saving credentials or state",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				const before = f.state();
+				for (const row of [
+					{ ...model("bad"), model: "gpt-5.1", temperature: 0 },
+					{ ...model("bad"), model: "o3", topP: 1 },
+					{ ...model("bad"), model: "unqualified", temperature: 1 },
+					{
+						...model("bad"),
+						provider: "kimi",
+						model: "kimi-k2.5",
+						temperature: 1,
+					},
+				]) {
+					const result = yield* service
+						.request({
+							type: "save-model",
+							scope: "default",
+							row,
+							secret: "must-not-store",
+							revision: (yield* service.view()).revision,
+						})
+						.pipe(Effect.either);
+					expect(result._tag === "Left" && result.left._tag).toBe(
+						"AgentModelInvalid",
+					);
+					expect(f.state()).toBe(before);
+					expect(f.keys.size).toBe(0);
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"persists optional sampling through model commands, public views and inference selection",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				const row = {
+					...model("sampling", "default"),
+					temperature: 0,
+					topP: 1,
+				};
+				const result = yield* service.request({
+					type: "save-model",
+					scope: "default",
+					row,
+					secret: "sample-key",
+					revision: (yield* service.view()).revision,
+				});
+				expect(
+					result.view.models.default?.find((r) => r.id === row.id),
+				).toMatchObject(row);
+				expect(
+					f.state().models.default?.find((r) => r.id === row.id),
+				).toMatchObject(row);
+				expect(
+					(yield* service.view()).models.default?.find((r) => r.id === row.id),
+				).toMatchObject(row);
+				expect(
+					(yield* service.resolve("main")).find((r) => r.id === row.id),
+				).toMatchObject(row);
+				const omitted = yield* service.request({
+					type: "save-model",
+					scope: "default",
+					row: model("sampling", "default"),
+					secret: "",
+					revision: (yield* service.view()).revision,
+				});
+				expect(
+					omitted.view.models.default?.find((r) => r.id === row.id),
+				).not.toHaveProperty("temperature");
+				const saved = f.state().models.default?.find((r) => r.id === row.id);
+				expect(saved).not.toHaveProperty("temperature");
+				expect(saved).not.toHaveProperty("topP");
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+	it.effect(
+		"rejects nonfinite and out-of-range sampling before persistence or credential writes",
+		() => {
+			const f = fixture();
+			return Effect.gen(function* () {
+				const service = yield* AgentsService;
+				const before = f.state();
+				for (const row of [
+					{ ...model("bad"), temperature: -0.01 },
+					{ ...model("bad"), temperature: 2.01 },
+					{ ...model("bad"), temperature: Number.NaN },
+					{ ...model("bad"), topP: 1.01 },
+					{ ...model("bad"), topP: -0.01 },
+					{ ...model("bad"), topP: Number.POSITIVE_INFINITY },
+				]) {
+					const result = yield* service
+						.request({
+							type: "save-model",
+							scope: "default",
+							row,
+							secret: "must-not-store",
+							revision: (yield* service.view()).revision,
+						})
+						.pipe(Effect.either);
+					expect(result._tag).toBe("Left");
+					expect(f.state()).toBe(before);
+					expect(f.keys.size).toBe(0);
+				}
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+
+	it.effect(
 		"drops credentials from every affected row when a provider URL changes",
 		() => {
 			const f = fixture();

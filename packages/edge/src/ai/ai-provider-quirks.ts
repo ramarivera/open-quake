@@ -5,6 +5,7 @@ import {
 	AiConfigInvalid,
 	type AiError,
 } from "./ai-errors.js";
+import { providerSamplingValid } from "./ai-sampling.js";
 import type { ProviderOptions } from "./ai-workflow-contracts.js";
 
 /** AI-008 source catalog, never used as a fallback or evidence of live availability.
@@ -52,7 +53,7 @@ export const RECOVERED_WORKFLOW_MODELS = Object.freeze({
 /** Recovered behavior, with rejection replacing silent stripping and fallback. AI-030–033. */
 export const PROVIDER_QUIRKS = Object.freeze({
 	openai:
-		"max_completion_tokens; reject sampling; gpt-5.1 thinking/search; gpt-5.1-mini low reasoning only",
+		"max_completion_tokens; GPT-4o/4.1 sampling; other models default-only; gpt-5.1 thinking/search; gpt-5.1-mini low reasoning only",
 	qwen: "temperature/top_p and enable_thinking/enable_search pass through",
 	kimi: "k2.5 T=.6 top_p=.95 thinking disabled; k2.6 T=1 top_p=.95; unknown models unverified",
 	deepseek:
@@ -88,9 +89,9 @@ export function prepareWorkflow(
 		-readonly [K in keyof ProviderOptions]: ProviderOptions[K];
 	} = {};
 	const invalid = () => Either.left(new AiConfigInvalid());
+	if (!providerSamplingValid({ provider, model: modelId, ...sampling }))
+		return invalid();
 	if (provider === "openai") {
-		if (sampling.temperature !== undefined || sampling.topP !== undefined)
-			return invalid();
 		const reasoning = modelId === "gpt-5.1" || modelId === "gpt-5.1-mini";
 		if ((controls.thinking || controls.reasoningEffort) && !reasoning)
 			return invalid();
@@ -130,13 +131,7 @@ export function prepareWorkflow(
 		if (controls.webSearch || controls.reasoningEffort) return invalid();
 		if (modelId !== "kimi-k2.5" && modelId !== "kimi-k2.6") return invalid();
 		const temperature = modelId === "kimi-k2.5" ? 0.6 : 1;
-		if (
-			(sampling.temperature !== undefined &&
-				sampling.temperature !== temperature) ||
-			(sampling.topP !== undefined && sampling.topP !== 0.95) ||
-			(modelId === "kimi-k2.5" && controls.thinking)
-		)
-			return invalid();
+		if (modelId === "kimi-k2.5" && controls.thinking) return invalid();
 		sampling.temperature = temperature;
 		sampling.topP = 0.95;
 		// Caller sampling was validated before preparation. Supply constraints for

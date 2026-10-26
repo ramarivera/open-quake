@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
+import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
 import type { AgentView, PublicModelRow } from "../../../../shared/agents";
 import { DIRECT_CHAT_SCOPE, directChatModel } from "../chat/model-scope";
 import { useAgentsCopy } from "./copy";
 import { ConfirmDialog, format } from "./Dialog";
-import { reconcileModelDrafts, reconcileModelRow } from "./model-drafts";
+import {
+	reconcileModelDrafts,
+	reconcileModelRow,
+	samplingInput,
+	samplingValid,
+} from "./model-drafts";
 import type { AgentRequest } from "./useAgents";
 
 function ModelTable({
@@ -46,6 +52,7 @@ function ModelTable({
 		row: PublicModelRow,
 		previous?: PublicModelRow,
 	): Promise<void> => {
+		if (!samplingValid(row)) return;
 		const { credentialAvailable, ...input } = row;
 		const submittedSecret = Object.hasOwn(secrets, row.id)
 			? (secrets[row.id] ?? "")
@@ -238,6 +245,69 @@ function ModelTable({
 											update({ ...row, maxTokens: event.target.valueAsNumber })
 										}
 									/>
+									<details className="aw-sampling">
+										<summary>{t.advanced}</summary>
+										<p id={`sampling-hint-${scope}-${row.id}`}>
+											{t.samplingDefault}
+										</p>
+										{!providerSamplingValid(row) ? (
+											<p
+												id={`sampling-policy-${scope}-${row.id}`}
+												className="aw-field-error"
+											>
+												{t.samplingUnsupported}
+											</p>
+										) : null}
+										{(["temperature", "topP"] as const).map((field) => {
+											const value = row[field];
+											const maximum = field === "temperature" ? 2 : 1;
+											const invalid =
+												value !== undefined &&
+												(!Number.isFinite(value) ||
+													value < 0 ||
+													value > maximum);
+											const id = `sampling-${scope}-${row.id}-${field}`;
+											return (
+												<div key={field}>
+													<label htmlFor={id}>{t[field]}</label>
+													<input
+														id={id}
+														type="number"
+														min={0}
+														max={maximum}
+														step="any"
+														disabled={busy}
+														aria-label={`${t[field]} ${scope} ${index + 1}`}
+														aria-invalid={
+															invalid || !providerSamplingValid(row)
+														}
+														aria-describedby={`sampling-hint-${scope}-${row.id}${invalid ? ` ${id}-error` : ""}${!providerSamplingValid(row) ? ` sampling-policy-${scope}-${row.id}` : ""}`}
+														value={
+															value === undefined || Number.isNaN(value)
+																? ""
+																: value
+														}
+														onChange={(event) =>
+															update({
+																...row,
+																[field]: samplingInput(
+																	event.target.value,
+																	event.target.validity.badInput,
+																),
+															})
+														}
+													/>
+													{invalid ? (
+														<p id={`${id}-error`} className="aw-field-error">
+															{field === "temperature"
+																? t.temperatureInvalid
+																: t.topPInvalid}
+														</p>
+													) : null}
+												</div>
+											);
+										})}
+									</details>
 								</td>
 								<td className="aw-table-actions" data-label={t.actions}>
 									<button
@@ -248,7 +318,8 @@ function ModelTable({
 											!row.provider.trim() ||
 											!row.model.trim() ||
 											!Number.isSafeInteger(row.maxTokens) ||
-											row.maxTokens < 1
+											row.maxTokens < 1 ||
+											!samplingValid(row)
 										}
 										onClick={() => void save(row)}
 									>
