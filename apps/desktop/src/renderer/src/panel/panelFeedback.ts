@@ -50,6 +50,10 @@ export function applyPanelEvent(
 	now: number,
 ): PanelFeedback {
 	switch (event.kind) {
+		case "json":
+		case "resource":
+		case "matrix":
+			return state;
 		case "status":
 			return {
 				...state,
