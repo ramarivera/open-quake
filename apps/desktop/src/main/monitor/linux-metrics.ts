@@ -50,21 +50,26 @@ export async function linuxMetrics(
 			.filter((c) => /^card\d+$/.test(c))
 			.sort()) {
 			const base = `/sys/class/drm/${card}/device`;
-			const load = sensorNumber(await read(`${base}/gpu_busy_percent`));
+			const rawLoad = sensorNumber(await read(`${base}/gpu_busy_percent`));
+			const load =
+				rawLoad !== undefined && rawLoad >= 0 && rawLoad <= 100
+					? rawLoad
+					: undefined;
 			let temperature: number | undefined;
 			for (const hw of await list(`${base}/hwmon`)) {
-				temperature = sensorNumber(
+				const candidate = sensorNumber(
 					await read(`${base}/hwmon/${hw}/temp1_input`),
 					1000,
 				);
-				if (temperature !== undefined) break;
+				if (candidate !== undefined && candidate > 0 && candidate <= 150) {
+					temperature = candidate;
+					break;
+				}
 			}
 			if (load !== undefined || temperature !== undefined)
 				return {
-					...(load !== undefined && load >= 0 && load <= 100 ? { load } : {}),
-					...(temperature !== undefined && temperature > 0 && temperature <= 150
-						? { temperature }
-						: {}),
+					...(load !== undefined ? { load } : {}),
+					...(temperature !== undefined ? { temperature } : {}),
 				};
 		}
 	}

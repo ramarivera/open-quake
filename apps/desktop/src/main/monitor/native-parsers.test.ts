@@ -322,3 +322,62 @@ describe("qualified platform fixtures", () => {
 		).toBe(1);
 	});
 });
+
+it.each([
+	{ load: "255", temperature: "200000" },
+	{ load: "-1", temperature: "0" },
+	{ load: "invalid", temperature: "-1000" },
+])(
+	"skips an unusable first DRM card and collects the next valid GPU: %j",
+	async (invalid) => {
+		const run = vi.fn(async () => {
+			throw new Error("fallback must not run");
+		});
+		const c = nativeCollector("linux", run, () => ({}), {
+			list: async (path) =>
+				path === "/sys/class/drm"
+					? ["card1", "card0", "card0-DP-1"]
+					: path.endsWith("/hwmon")
+						? ["hwmon0"]
+						: [],
+			read: async (path) =>
+				path.includes("/card0/")
+					? path.endsWith("gpu_busy_percent")
+						? invalid.load
+						: invalid.temperature
+					: path.endsWith("gpu_busy_percent")
+						? "42"
+						: "52000",
+		});
+		expect(await Effect.runPromise(c.collect("gpu"))).toEqual({
+			state: "available",
+			values: { load: 42, temperature: 52 },
+		});
+		expect(run).not.toHaveBeenCalled();
+	},
+);
+it("skips invalid GPU temperature sensors on the same card", async () => {
+	const c = nativeCollector(
+		"linux",
+		async () => "",
+		() => ({}),
+		{
+			list: async (path) =>
+				path === "/sys/class/drm"
+					? ["card0"]
+					: path.endsWith("/hwmon")
+						? ["invalid", "valid"]
+						: [],
+			read: async (path) =>
+				path.endsWith("gpu_busy_percent")
+					? ""
+					: path.includes("/invalid/")
+						? "200000"
+						: "52000",
+		},
+	);
+	expect(await Effect.runPromise(c.collect("gpu"))).toEqual({
+		state: "available",
+		values: { temperature: 52 },
+	});
+});

@@ -149,6 +149,11 @@ Windows SHALL use local typed subprocess output through stdio, never an unauthen
 - **WHEN** independent Windows, Linux and macOS fixtures supply partial metrics, permission failures or disconnects
 - **THEN** supported values render and unsupported fields remain absent; no service or network listener starts
 
+#### Scenario: Invalid first Linux GPU
+
+- **WHEN** a DRM card or temperature sensor is out of range and a later card or sensor supplies valid measurements
+- **THEN** collection skips the unusable readings and returns the valid GPU measurements without invoking the optional fallback
+
 #### Scenario: Error budget and cancellation
 
 - **WHEN** sixty checks fail after a successful sample, or the rate changes or the last subscriber leaves
