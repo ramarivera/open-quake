@@ -11,6 +11,9 @@ export async function mount(node: ReactNode) {
 	await act(async () => root.render(node));
 	return {
 		host,
+		async render(next: ReactNode) {
+			await act(async () => root.render(next));
+		},
 		async close() {
 			await act(async () => root.unmount());
 			host.remove();

@@ -643,3 +643,20 @@ it("retains the original failed voice span through actual IPC recovery without r
 	expect(output).not.toContain("private-local-agent");
 	await rm(directory, { recursive: true });
 });
+
+it("AI-185: cancelled picker returns no paths and dispatches no turn", async () => {
+	const { request, registration } = setup();
+	try {
+		electron.dialog.showOpenDialog.mockResolvedValueOnce({
+			canceled: true,
+			filePaths: ["/must/not/append.txt"],
+		});
+		expect(await request({ _tag: "PickFiles" })).toEqual({
+			_tag: "files",
+			paths: [],
+		});
+		expect(sent()).toHaveLength(0);
+	} finally {
+		await registration.dispose();
+	}
+});

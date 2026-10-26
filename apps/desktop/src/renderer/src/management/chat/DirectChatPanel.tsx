@@ -269,6 +269,7 @@ export function DirectChatPanel({
 							disabled={busy || (!state.current && !state.turn)}
 							onClick={() => {
 								setListOpen(false);
+								setText("");
 								void controller.select();
 								input.current?.focus();
 							}}

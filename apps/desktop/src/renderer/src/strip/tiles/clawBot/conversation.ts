@@ -395,13 +395,20 @@ export function reduceConversation(
 		}
 		case "Chunk": {
 			const chunk = event.chunk;
-			const next = updateTurn(state, chunk.turnId, (messages) =>
-				messages.map((message) =>
-					message._tag === "answer"
-						? { ...message, view: reduceChunk(message.view, chunk) }
-						: message,
-				),
-			);
+			const next = updateTurn(state, chunk.turnId, (messages) => {
+				const answer = messages.find((message) => message._tag === "answer");
+				if (answer?._tag !== "answer") return messages;
+				const view = reduceChunk(answer.view, chunk);
+				const resumed =
+					chunk.type === "answer" && view.text !== answer.view.text;
+				return messages.map((message) =>
+					message === answer
+						? { ...answer, view }
+						: message._tag === "tool" && message.phase === "start" && resumed
+							? { ...message, phase: "result" }
+							: message,
+				);
+			});
 			if (chunk.type !== "end" || chunk.outcome === "completed") return next;
 			const code =
 				chunk.errorCode ??

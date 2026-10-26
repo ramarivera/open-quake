@@ -30,6 +30,12 @@ The system SHALL store redacted provider metadata locally and resolve credential
 
 Remote credential-bearing requests SHALL require HTTPS and SHALL NOT forward credentials across origin-changing redirects. Explicit loopback HTTP profiles MAY be supported. Renderers, history, exports, and diagnostics SHALL receive no raw keys or OAuth tokens. Logout or credential removal SHALL invalidate the corresponding auth generation and terminate its active requests without switching providers.
 
+#### Scenario: Live consumer configuration AI-010
+
+- **WHEN** a saved chat model changes during an accepted stream or speech voice and credentials change between requests
+- **THEN** the accepted chat stream keeps its pinned model, the next chat submission reads the edited model and token limit, and the next speech request uses the saved voice and key
+- **AND** saving changed speech settings cancels the previous playback before exposing the new voice, while removing the old chat key terminates its active request and rejects another submission before transmission
+
 #### Scenario: Endpoint redirect
 - **WHEN** a provider responds with a redirect to another origin
 - **THEN** the adapter rejects the redirect before forwarding the Authorization header

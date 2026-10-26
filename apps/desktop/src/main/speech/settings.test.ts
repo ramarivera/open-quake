@@ -349,3 +349,54 @@ for (const legacy of [
 			}).pipe(Effect.provide(layer())),
 	);
 }
+
+it.effect(
+	"AI-108: derives both TTS models on provider switch and durable reload",
+	() =>
+		Effect.gen(function* () {
+			let stored: unknown = emptySpeechSettings;
+			const vault = yield* CredentialVault;
+			const storage = {
+				read: async () => stored,
+				write: async (value: unknown) => {
+					stored = value;
+				},
+			};
+			let controller = yield* createSpeechSettings({
+				storage,
+				credentials: vault,
+				changed: Effect.void,
+			});
+			for (const provider of ["openai", "dashscope", "openai"] as const) {
+				const tts =
+					provider === "openai"
+						? { provider, voice: "marin", language: "en" }
+						: {
+								provider,
+								voice: "longanlingxin_v3.1",
+								language: "en",
+								workspace: "fixture",
+								region: "cn-beijing",
+							};
+				yield* controller.request({
+					_tag: "Save",
+					settings: { version: 1, speakAnswers: false, tts },
+					ttsKey: `synthetic-${provider}`,
+				});
+				const expected =
+					provider === "openai"
+						? "gpt-4o-mini-tts"
+						: "qwen-audio-3.1-tts-flash";
+				expect((yield* controller.profiles()).tts?.model).toBe(expected);
+				controller = yield* createSpeechSettings({
+					storage,
+					credentials: vault,
+					changed: Effect.void,
+				});
+				expect((yield* controller.profiles()).tts?.model).toBe(expected);
+				expect(
+					(yield* controller.request({ _tag: "Get" })).settings.tts?.provider,
+				).toBe(provider);
+			}
+		}).pipe(Effect.provide(layer())),
+);
