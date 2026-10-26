@@ -573,6 +573,46 @@ describe("mounted production touch lane", () => {
 		vi.useRealTimers();
 		vi.unstubAllGlobals();
 	});
+	it("disk touch starts at the current native scroll position and clears elastic paint", () => {
+		const element = document.createElement("div");
+		const content = document.createElement("div");
+		element.append(content);
+		document.body.append(element);
+		Object.defineProperties(element, {
+			scrollHeight: { value: 1200 },
+			clientHeight: { value: 200 },
+		});
+		const off = mountDiskScroll(element);
+		element.scrollTop = 300;
+		content.style.transform = "translateY(20px)";
+		const touch = (phase: string, y = 100) =>
+			element.dispatchEvent(
+				new CustomEvent(
+					phase === "end" ? "quake-sub-touch-end" : "quake-sub-touch-start",
+					{
+						detail: {
+							phase,
+							x: 100,
+							y,
+							startX: 100,
+							startY: 100,
+							isEffective: true,
+						},
+					},
+				),
+			);
+		touch("start");
+		expect(element.scrollTop).toBe(300);
+		expect(content.style.transform).toBe("translateY(0px)");
+		touch("end");
+		expect(element.scrollTop).toBe(300);
+		element.scrollTop = 450;
+		touch("start");
+		touch("move", 70);
+		expect(element.scrollTop).toBe(480);
+		off();
+	});
+
 	it("SCREEN-057 MAIN-065 sends committed down before lift, ignores moves and releases once at 10ms", async () => {
 		const f = mounted();
 		const calls: string[] = [];

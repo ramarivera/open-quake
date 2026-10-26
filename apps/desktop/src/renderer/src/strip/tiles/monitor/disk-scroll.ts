@@ -104,7 +104,7 @@ export function mountDiskScroll(element: HTMLElement): () => void {
 		const now = performance.now();
 		if ("phase" in d && d.phase === "start") {
 			stop();
-			paint(clamp(offset, 0, range()));
+			paint(clamp(element.scrollTop, 0, range()));
 			origin = element.scrollTop;
 			active = true;
 			admitted = false;
