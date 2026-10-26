@@ -894,3 +894,83 @@ for (const empty of [false, true]) {
 			}),
 	);
 }
+
+it.effect(
+	"resubmits completed DashScope speech while recovering pending tasks",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			const http: typeof SpeechHttp.Service = {
+				fetch: async (url, init) => {
+					if (url.endsWith("/result"))
+						return Response.json({
+							transcripts: [
+								{
+									sentences: [
+										{
+											speaker_id: 1,
+											begin_time: 0,
+											end_time: 200,
+											text:
+												f.requests.filter((r) =>
+													r.url.endsWith("/transcription"),
+												).length === 1
+													? "Ship Friday"
+													: "Ship Monday",
+										},
+									],
+								},
+							],
+						});
+					return f.http.fetch(url, init);
+				},
+			};
+			let adapter = dashscopeFiletrans({ ...f, http });
+			yield* adapter.submit(f.request);
+			yield* adapter.poll("meeting");
+			adapter = dashscopeFiletrans({ ...f, http });
+			yield* adapter.submit(f.request);
+			expect(f.states.get("meeting")?.segments).toBeUndefined();
+			expect(yield* adapter.poll("meeting")).toMatchObject({
+				status: "complete",
+				segments: [{ text: "Ship Monday" }],
+			});
+			expect(
+				f.requests.filter((r) => r.url.endsWith("/transcription")),
+			).toHaveLength(2);
+		}),
+);
+
+it.scoped(
+	"retranscribes completed OpenAI speech on an explicit replacement attempt",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			let connections = 0;
+			const socket: typeof SpeechWebSocket.Service = {
+				connect: () =>
+					fakeSocket(++connections === 1 ? "Ship Friday" : "Ship Monday").pipe(
+						Effect.map((s) => s.socket),
+					),
+			};
+			const adapter = yield* makeLiveMeetingAdapter({ ...f, socket });
+			const request = {
+				...f.request,
+				config: {
+					...f.request.config,
+					asrProvider: "openai" as const,
+					asrModel: "gpt-realtime-mini",
+				},
+			};
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const job = yield* adapter.submit(request).pipe(Effect.fork);
+				yield* TestClock.adjust(700);
+				yield* Fiber.join(job);
+			}
+			expect(connections).toBe(2);
+			expect(f.states.get("meeting")?.segments).toMatchObject([
+				{ text: "Ship Monday" },
+			]);
+			expect(f.released()).toBe(2);
+		}),
+);

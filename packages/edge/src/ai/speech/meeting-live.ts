@@ -60,13 +60,6 @@ export const makeLiveMeetingAdapter = Effect.fn("AiMeetingAdapter.live")(
 					if (request.config.asrProvider !== "openai")
 						return yield* meetingError("Unavailable");
 					const state = yield* options.resources.load(request.audioRef);
-					if (
-						state?.segments?.length &&
-						state.config.profileId === request.config.profileId &&
-						state.config.asrModel === request.config.asrModel &&
-						state.config.asrProvider === request.config.asrProvider
-					)
-						return request.audioRef;
 					if (state?.remoteFiles.length) return yield* meetingError("Invalid");
 					const segments = yield* openai(request);
 					yield* options.resources.save(request.audioRef, {

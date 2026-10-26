@@ -180,7 +180,18 @@ export function dashscopeFiletrans(options: {
 						remoteFiles: [],
 						cleanupPending: false,
 					};
-		if (state.segments?.length || state.task) return request.audioRef;
+		if (state.segments !== undefined) {
+			// submit is a new attempt; only unfinished task IDs are recovery state.
+			state = {
+				...state,
+				config: request.config,
+				segments: undefined,
+				task: undefined,
+				internalRetries: 0,
+			};
+			yield* resources.save(request.audioRef, state);
+		}
+		if (state.task) return request.audioRef;
 		if (
 			!state.upload ||
 			state.upload.expiresAt <= (yield* Clock.currentTimeMillis)
