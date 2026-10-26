@@ -7,7 +7,7 @@ The clock has empty weather and music slots, and DK-Player has no turntable rend
 ## What Changes
 
 - Add typed weather adapters, manual city verification, opt-in IP lookup, open-meteo forecasts with wttr.in fallback, units, cache and refresh.
-- Fill the clock cards and render the full-strip DK-Player from one system-media snapshot and intent controls.
+- Fill the clock cards and render the full-strip DK-Player from one system-media snapshot and intent controls. Each clock key owns weather preferences and its music switch; typed cache read/clear and refresh operations isolate clock instances and edit/panel sides.
 - Specify macOS MediaRemote and Windows SMTC boundaries. Ship explicit unavailable platform stubs. Ramiro approved a separate follow-up to vendor a reviewed MediaRemote helper, tracked in open-quake-lih.7.1.6. Do not install or vendor a native dependency in this PR.
 - Expose session/progress/capability state and a volume-overlay insertion point for the knob lane.
 

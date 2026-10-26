@@ -83,7 +83,12 @@ function StripGrid({
 	clockSelection,
 }: {
 	clockSelection?:
-		| { readonly profileId: string; readonly pageId: string }
+		| {
+				readonly profileId: string;
+				readonly pageId: string;
+				readonly deviceId: string;
+				readonly revision: number;
+		  }
 		| undefined;
 	runtime: (keyCode: string) => KeyRuntimeState | undefined;
 	layout: StripLayout;
@@ -118,14 +123,20 @@ function StripGrid({
 					tileRadius: deviceRadius(painted.tileRadius),
 				};
 				const Tile = stripTileFor(tile.type);
+				const locked =
+					!interactive &&
+					Option.isSome(tile.key.config.basicEditableItems) &&
+					!tile.key.config.basicEditableItems.value.allowDrag;
 				return (
 					<div
 						key={tile.keyCode}
 						className="strip-slot"
 						data-key-code={tile.keyCode}
 						data-state="tile"
+						data-edit-locked={locked || undefined}
+						draggable={locked ? false : undefined}
 						data-pressed={
-							pressedKeyCode === tile.keyCode && tile.pressFeedback
+							!locked && pressedKeyCode === tile.keyCode && tile.pressFeedback
 								? "true"
 								: undefined
 						}
@@ -146,6 +157,7 @@ function StripGrid({
 								hourFormat,
 								voice,
 								interactive,
+								keyTarget: clockSelection,
 								clockTarget: clockSelection
 									? { ...clockSelection, keyCode: tile.keyCode }
 									: undefined,
@@ -367,7 +379,12 @@ export function StripScreen({
 					runtime={runtime}
 					clockSelection={
 						selection
-							? { profileId: selection.profile.id, pageId: selection.page.id }
+							? {
+									profileId: selection.profile.id,
+									pageId: selection.page.id,
+									revision: selection.profile.revision,
+									deviceId: serial ?? "desktop-preview",
+								}
 							: undefined
 					}
 				/>

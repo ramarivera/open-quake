@@ -4,6 +4,7 @@ import {
 	activeThemeOf,
 	buildClockThemePatch,
 	type ClockKey,
+	clockWeatherSettings,
 	cycleTheme,
 	isThemeId,
 	mediaKindOfPath,
@@ -16,6 +17,57 @@ const clockKey = (actions: ClockKey["config"]["actions"]): ClockKey => ({
 	keyCode: "1,1",
 	childrenName: "dkDesktopClock",
 	config: { type: "dkDesktopClock", actions },
+});
+
+describe("per-key weather backfill (MGMT-278/346, WIDGETS-021)", () => {
+	it("backfills partial actions without replacing saved city, unit or switches", () => {
+		expect(
+			clockWeatherSettings([
+				{
+					type: "weather",
+					value: {
+						enabled: false,
+						city: "Paris",
+						unit: "fahrenheit",
+						location: { invalid: true },
+					},
+				},
+				{ type: "clockStyle", value: { musicEnabled: false } },
+			]),
+		).toMatchObject({
+			enabled: false,
+			city: "Paris",
+			unit: "fahrenheit",
+			location: null,
+			forecastUrl: "",
+			ipLookup: false,
+			musicEnabled: false,
+		});
+	});
+	it("retains DK nested service settings and backfills missing weather without IP consent", () => {
+		expect(clockWeatherSettings([])).toMatchObject({
+			enabled: true,
+			city: "",
+			unit: "celsius",
+			musicEnabled: false,
+			ipLookup: false,
+		});
+		expect(
+			clockWeatherSettings([
+				{
+					type: "weather",
+					value: {
+						city: "Berlin",
+						service: { forecastUrl: "https://weather.example/forecast" },
+					},
+				},
+			]),
+		).toMatchObject({
+			city: "Berlin",
+			forecastUrl: "https://weather.example/forecast",
+			ipLookup: false,
+		});
+	});
 });
 
 describe("clock style contract (WIDGETS-031/033/034/062)", () => {

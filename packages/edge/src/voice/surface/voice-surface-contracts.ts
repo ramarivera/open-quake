@@ -60,7 +60,10 @@ export const VoiceStage = Schema.Union(
 		message: Schema.optional(DisplayText),
 	}),
 	Schema.TaggedStruct("busy", { message: Schema.optional(DisplayText) }),
-	Schema.TaggedStruct("idle", { outcome: IdleOutcome }),
+	Schema.TaggedStruct("idle", {
+		outcome: IdleOutcome,
+		emptyReason: Schema.optional(Schema.Literal("noAudio", "unclear")),
+	}),
 );
 export type VoiceStage = typeof VoiceStage.Type;
 

@@ -25,6 +25,7 @@ export function DeviceScreen({
 				<div className="device-glass">
 					<StripViewport>
 						<StripScreen
+							interactive={false}
 							profiles={profiles}
 							wallpaper={snapshot}
 							view={view}

@@ -1,3 +1,11 @@
+import { Schema } from "effect";
+import {
+	DEFAULT_WEATHER_SETTINGS,
+	ForecastUrl,
+	WeatherLocation,
+	WeatherSettings,
+} from "./weather-media-contracts";
+
 /**
  * DK-Suite 0.4.95 desktop-clock style contract (`shared/clockContract.js` and
  * `shared/clockThemePatch.js`). Pure and total: main, preload and renderer all
@@ -268,4 +276,39 @@ export function buildClockThemePatch(
 		keys: patched,
 		changed: JSON.stringify(patched) !== JSON.stringify(keys),
 	};
+}
+
+/** Per-key enrichment, accepting DK's nested service field and older partial actions. */
+export function clockWeatherSettings(
+	actions: readonly ClockAction[],
+): WeatherSettings {
+	const raw = actions.find((a) => a.type === "weather")?.value;
+	const weather = isRecord(raw) ? raw : {};
+	const service = isRecord(weather.service) ? weather.service : {};
+	const style = normalizeClockStyle(
+		actions.find((a) => a.type === "clockStyle")?.value,
+	);
+	const candidate = {
+		...DEFAULT_WEATHER_SETTINGS,
+		enabled: weather.enabled === undefined ? true : weather.enabled === true,
+		city: typeof weather.city === "string" ? weather.city : "",
+		unit: weather.unit === "fahrenheit" ? "fahrenheit" : "celsius",
+		location: Schema.is(WeatherLocation)(weather.location)
+			? weather.location
+			: null,
+		ipLookup: weather.ipLookup === true,
+		forecastUrl: Schema.is(ForecastUrl)(
+			service.forecastUrl ?? weather.forecastUrl,
+		)
+			? (service.forecastUrl ?? weather.forecastUrl)
+			: "",
+		musicEnabled: style.musicEnabled,
+	};
+	return Schema.is(WeatherSettings)(candidate)
+		? candidate
+		: {
+				...DEFAULT_WEATHER_SETTINGS,
+				enabled: candidate.enabled,
+				musicEnabled: style.musicEnabled,
+			};
 }

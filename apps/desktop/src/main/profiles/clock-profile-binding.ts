@@ -134,3 +134,14 @@ export const clockProfileLayer = (runtime: DesktopRuntime<ProfileRepository>) =>
 			}).pipe(Effect.asVoid),
 		),
 	});
+
+/** Resolve only the authenticated panel's active selection. No global clock fallback. */
+export function activeClockTarget(
+	envelope: ProfileEnvelope,
+	deviceId: string,
+	keyCode: string,
+): ClockTarget | undefined {
+	const selection = envelope.activeByDevice[deviceId];
+	if (!selection) return undefined;
+	return resolve(envelope, { ...selection, keyCode })?.target;
+}

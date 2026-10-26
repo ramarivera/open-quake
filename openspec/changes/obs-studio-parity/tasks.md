@@ -28,3 +28,9 @@
 - [x] 5.1 Merge current main while preserving OBS and per-profile clock/model behavior, explicitly invalidate and reload the editor catalog after reconnect, add a mounted regression for thread 4376364138, handle other unanswered bot feedback, and run all gates. Bead open-quake-lih.18.1.14.
 - [x] 5.2 Clear source choices immediately when changing scenes and cover a delayed catalog reload for thread 4376500025. Bead open-quake-lih.18.1.15.
 - [x] 5.3 Subscribe read-only editor previews to live OBS data without enabling input actions for thread 4376500032. Bead open-quake-lih.18.1.16.
+
+## 6. Native smoke regression after knob editor integration
+
+- [x] 6.1 Fix the native smoke's selected-key Save selector after the knob editor added an earlier primary button. Assert committed screenshot and volume settings rather than draft reads, reproduce failure before the fix, and run the full smoke plus all gates. Beads open-quake-4e1 and open-quake-c5w.16.1.
+
+First-parent bisect identified main merge `95f6a69` as the first bad revision; `4b2e537` passed the full OBS smoke. The knob editor introduced an earlier primary Save button, so the smoke clicked disabled Save knob. The draft read hid the missed commit. OBS correctly rejected the panel's uncommitted scene. The smoke now targets the selected key's group, checks committed settings, and waits for save/catalog readiness. The committed-scene assertion failed before the selector fix. Full hidden mock native smoke, 3126 tests with four existing skips, six package typechecks, Biome with no errors and 14 existing warnings, build, and strict OpenSpec validation passed. Logs and panel captures remain outside git under `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/media-smoke-fix/`.

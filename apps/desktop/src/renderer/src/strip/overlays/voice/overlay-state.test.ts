@@ -202,3 +202,19 @@ describe("strings", () => {
 		);
 	});
 });
+
+it("shows localized no-audio and unclear retry copy while preserving the empty terminal", () => {
+	for (const emptyReason of ["noAudio", "unclear"] as const) {
+		const state = run([
+			knob({ _tag: "recording", status: "listening" }),
+			knob({ _tag: "idle", outcome: "empty", emptyReason }),
+		]);
+		expect(state.visible).toBe(true);
+		const key =
+			emptyReason === "noAudio"
+				? "quakeBotIconView.sttErrorNoAudioCapture"
+				: "quakeBotIconView.sttErrorInvalidUserInput";
+		expect(line(state)).toBe(`${stripText("en", key)} (3S)`);
+		expect(line(state, "de")).toBe(`${stripText("de", key)} (3S)`);
+	}
+});

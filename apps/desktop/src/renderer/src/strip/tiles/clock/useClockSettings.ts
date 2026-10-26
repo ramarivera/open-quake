@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Either, Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	type ClockBridge,
@@ -12,6 +12,7 @@ import {
 	THEME_IDS,
 	type ThemeId,
 } from "../../../../../shared/clock-style";
+import { ProfileSnapshotReply } from "../../../../../shared/profile-snapshot-contracts";
 import type { ClockMediaSource } from "./backgroundLoader";
 import type { ClockThemeResult } from "./themePreview";
 
@@ -63,7 +64,7 @@ export interface ClockSettings {
 }
 
 export function useClockSettings(
-	bridge: ClockBridge | undefined = typeof window === "undefined"
+	bridge: ClockBridge | null | undefined = typeof window === "undefined"
 		? undefined
 		: window.quakeClock,
 	target?: ClockTarget,
@@ -73,47 +74,64 @@ export function useClockSettings(
 	const targetId = JSON.stringify(target);
 	const resolvedTarget = useRef<ClockTarget | undefined>(undefined);
 	const sequence = useRef(0);
+	const latestSnapshot = useRef<ClockSnapshot | undefined>(undefined);
 	const before = useRef(beforeWrite);
 	before.current = beforeWrite;
 	const active = useRef(targetId);
 	active.current = targetId;
 	const [settled, setSettled] = useState(false);
 	const mounted = useRef(true);
+	const pending = useRef(Promise.resolve());
 	const request = useCallback(
-		async (command: ClockCommand): Promise<ClockReply | undefined> => {
-			if (!bridge) return undefined;
-			const ticket = ++sequence.current;
-			if (
-				command._tag !== "read" &&
-				before.current &&
-				!(await before.current())
-			)
-				return undefined;
-			let reply: unknown;
-			try {
-				const commandTarget = targetId
-					? Schema.decodeUnknownSync(ClockTarget)(JSON.parse(targetId))
-					: command._tag !== "read"
-						? resolvedTarget.current
-						: undefined;
-				reply = await bridge.request({
-					...command,
-					...(commandTarget ? { target: commandTarget } : {}),
-				});
-			} catch {
-				return undefined;
-			}
-			if (!Schema.is(ClockReply)(reply)) return undefined;
-			if (
-				reply._tag === "success" &&
-				mounted.current &&
-				active.current === targetId &&
-				sequence.current === ticket
-			) {
-				resolvedTarget.current = reply.snapshot.target;
-				setSnapshot((current) => newest(current, reply.snapshot));
-			}
-			return reply;
+		(command: ClockCommand): Promise<ClockReply | undefined> => {
+			const run = async (): Promise<ClockReply | undefined> => {
+				if (!bridge || active.current !== targetId) return undefined;
+				const ticket = ++sequence.current;
+				if (
+					command._tag !== "read" &&
+					before.current &&
+					!(await before.current())
+				)
+					return undefined;
+				let reply: unknown;
+				try {
+					const commandTarget = targetId
+						? Schema.decodeUnknownSync(ClockTarget)(JSON.parse(targetId))
+						: command._tag !== "read"
+							? resolvedTarget.current
+							: undefined;
+					reply = await bridge.request({
+						...command,
+						...(command._tag !== "read" && latestSnapshot.current
+							? { expectedRevision: latestSnapshot.current.revision }
+							: {}),
+						...(commandTarget ? { target: commandTarget } : {}),
+					});
+				} catch {
+					return undefined;
+				}
+				if (!Schema.is(ClockReply)(reply)) return undefined;
+				if (
+					reply._tag === "success" &&
+					mounted.current &&
+					active.current === targetId &&
+					sequence.current === ticket
+				) {
+					resolvedTarget.current = reply.snapshot.target;
+					latestSnapshot.current = newest(
+						latestSnapshot.current,
+						reply.snapshot,
+					);
+					setSnapshot((current) => newest(current, reply.snapshot));
+				}
+				return reply;
+			};
+			const operation = pending.current.then(run, run);
+			pending.current = operation.then(
+				() => undefined,
+				() => undefined,
+			);
+			return operation;
 		},
 		[bridge, targetId],
 	);
@@ -121,6 +139,7 @@ export function useClockSettings(
 		mounted.current = true;
 		if (!bridge) return;
 		setSnapshot(undefined);
+		latestSnapshot.current = undefined;
 		setSettled(false);
 		resolvedTarget.current = targetId
 			? Schema.decodeUnknownSync(ClockTarget)(JSON.parse(targetId))
@@ -130,12 +149,41 @@ export function useClockSettings(
 				Schema.is(ClockSnapshot)(value) &&
 				JSON.stringify(value.target) ===
 					(targetId ?? JSON.stringify(resolvedTarget.current))
-			)
+			) {
+				latestSnapshot.current = newest(latestSnapshot.current, value);
 				setSnapshot((current) => newest(current, value));
+			}
 		});
-		const offProfiles = window.quakeProfiles?.onSnapshot(() => {
-			void request({ _tag: "read" });
+
+		const offProfiles = window.quakeProfiles?.onSnapshot((value) => {
+			const target = resolvedTarget.current;
+			const decoded = Schema.decodeUnknownEither(ProfileSnapshotReply)(value);
+			if (!target || Either.isLeft(decoded) || decoded.right._tag !== "ready")
+				return;
+			const profile = decoded.right.envelope.profiles.find(
+				(p) => p.id === target.profileId,
+			);
+			const key = profile?.pages
+				.find((p) => p.id === target.pageId)
+				?.keys.find((k) => k.keyCode === target.keyCode);
+			if (
+				!profile ||
+				!key ||
+				profile.revision <= (latestSnapshot.current?.revision ?? -1)
+			)
+				return;
+			if (
+				latestSnapshot.current &&
+				JSON.stringify(key.config.actions) ===
+					JSON.stringify(latestSnapshot.current.actions)
+			) {
+				latestSnapshot.current = {
+					...latestSnapshot.current,
+					revision: profile.revision,
+				};
+			} else void request({ _tag: "read" });
 		});
+
 		void request({ _tag: "read" }).finally(() => {
 			if (mounted.current && active.current === targetId) setSettled(true);
 		});

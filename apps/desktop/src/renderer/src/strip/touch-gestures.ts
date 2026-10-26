@@ -119,19 +119,120 @@ export function createGestureRecognizer(options: {
 }
 
 /** Crossing slop permanently forfeits a tap even when the finger returns. */
-export function createTapRecognizer(start: Point, time: number) {
+export function createTapRecognizer(start: Point, time: number, scale = 1) {
 	let cancelled = false;
 	return {
 		move(point: Point): boolean {
 			cancelled ||=
 				!Number.isFinite(point.x) ||
 				!Number.isFinite(point.y) ||
-				Math.hypot(point.x - start.x, point.y - start.y) > TAP_SLOP;
+				Math.hypot(point.x - start.x, point.y - start.y) > TAP_SLOP * scale;
 			return cancelled;
 		},
 		end(point: Point, now: number): boolean {
 			this.move(point);
 			return !cancelled && now >= time && now - time <= TAP_MS;
 		},
+	};
+}
+
+/** Text inputs retain native caret, selection and text-entry behavior. */
+export const isEditableTouchTarget = (target: EventTarget | null): boolean =>
+	target instanceof HTMLElement &&
+	(target.isContentEditable ||
+		target.closest("input, textarea, select") !== null);
+
+/** Shared child target lifecycle used by chat cards and the volume capsule. */
+export function mountTouchTarget(
+	element: HTMLElement,
+	options: {
+		readonly scale?: number;
+		readonly tap: () => void;
+		readonly disabled?: () => boolean;
+	},
+): () => void {
+	const scale = options.scale && options.scale > 0 ? options.scale : 1;
+	const original = {
+		minHeight: element.style.minHeight,
+		filter: element.style.filter,
+	};
+	element.style.minHeight = `${44 * scale}px`;
+	element.dataset.quakeTouchScale = String(scale);
+	let active = false;
+	let suppressUntil = 0;
+	const press = (pressed: boolean, tapped = false): void => {
+		active = pressed;
+		element.dataset.touchPressed = String(pressed);
+		element.style.filter = pressed ? "brightness(1.08)" : original.filter;
+		element.dispatchEvent(
+			new CustomEvent(pressed ? "quake-press-start" : "quake-press-end", {
+				detail: { tapped },
+			}),
+		);
+	};
+	const start = (event: Event): void => {
+		if (options.disabled?.()) return;
+		if (!(event instanceof CustomEvent)) return;
+		const detail: unknown = event.detail;
+		if (
+			typeof detail !== "object" ||
+			detail === null ||
+			!("phase" in detail) ||
+			detail.phase !== "start"
+		)
+			return;
+		press(true);
+	};
+	const end = (event: Event): void => {
+		if (!(event instanceof CustomEvent)) return;
+		const detail: unknown = event.detail;
+		const tapped =
+			active &&
+			!options.disabled?.() &&
+			typeof detail === "object" &&
+			detail !== null &&
+			"confirmedTap" in detail &&
+			detail.confirmedTap === true &&
+			!("cancelled" in detail && detail.cancelled === true);
+		press(false, tapped);
+		suppressUntil = performance.now() + 600;
+		if (tapped) options.tap();
+	};
+	const click = (event: MouseEvent): void => {
+		if (isEditableTouchTarget(event.target)) return;
+		if (options.disabled?.() || performance.now() < suppressUntil) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+		}
+	};
+	const keyboard = (event: KeyboardEvent): void => {
+		if (isEditableTouchTarget(event.target)) return;
+		if (
+			(event.key !== "Enter" && event.key !== " ") ||
+			event.repeat ||
+			options.disabled?.()
+		)
+			return;
+		event.preventDefault();
+		event.stopPropagation();
+		suppressUntil = performance.now() + 600;
+		options.tap();
+	};
+	element.addEventListener("quake-sub-touch-start", start);
+	element.addEventListener("quake-sub-touch-end", end);
+	element.addEventListener("click", click, true);
+	element.addEventListener("keydown", keyboard);
+	element.dispatchEvent(
+		new CustomEvent("quake-touch-rescan", { bubbles: true }),
+	);
+	return () => {
+		if (active) press(false);
+		element.style.minHeight = original.minHeight;
+		element.style.filter = original.filter;
+		delete element.dataset.quakeTouchScale;
+		element.removeEventListener("quake-sub-touch-start", start);
+		element.removeEventListener("quake-sub-touch-end", end);
+		element.removeEventListener("click", click, true);
+		element.removeEventListener("keydown", keyboard);
 	};
 }

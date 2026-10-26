@@ -50,3 +50,43 @@ Section 5 verification: main `639924d7f6ca1e79f9b72dc14905502d9ae3f277`; six fre
 - [x] 5.2 Serialize cancellation/deletion with capture transitions and delayed source loss; preserve intentional terminal state, avoid duplicate finalization, and cover both race orders, stale callbacks and shutdown progress. Assess fresh PR31 feedback on translation isolation, cancelled touch releases and capture-ready timestamps with regressions. Run six fresh gates with loose turbo environment, sequential meetings and combined native mocks including fractional FFmpeg recovery, and record attributed thread dispositions. Round bead `open-quake-zh8.14`; evidence `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings/review-round-2/`. Leave parent/physical/package acceptance open.
 
 Task 5.2 proof: 1310 uncached tests, six forced/fresh gates with loose Turbo environment, 37 strict OpenSpec items, both bundle modes, and sequential meetings/combined native mocks. Deterministic races preserve cancel/delete in both orders and recovery; ASR/summary stay outside the capture lock. Fractional FFmpeg recovery remains 250.125 ms measured / 250 ms submitted once. All 33 capture hashes, four inspected captures, IPC proof, logs and process census are in `meetings/review-round-2/` under the scratch evidence root above. Parent, physical and packaged acceptance remain open.
+
+## 6. Meeting history test burn-down
+
+Lane test-meeting-history, pinned origin/main 95f6a69 includes #79-#84. Task beads
+open-quake-lih.16.2, .3 and .4 remain open until lead merge.
+
+- [x] 6.1 Pin exact MeetAI defaults, theme, protected edit ownership and saved Mark/Translate consumers. AI-265, AI-318, MGMT-360, MGMT-365.
+- [x] 6.2 Exercise mounted history navigation, content, copy, request races, independent retry, responsive actions and durable templates/title. AI-275, AI-296, AI-299, AI-300, AI-303, AI-304, AI-305, AI-306, AI-307, AI-309, AI-316.
+- [ ] 6.3 Exercise mounted strip timer/cooldown, main-tab animation, bounded celebration, reduced motion, scaled Clear and live translation. AI-321, AI-322, AI-329, AI-332, AI-333, AI-334, MGMT-152.
+
+Initial pinned-main evidence: 18 mounted renderer tests, 20 device catalog/editor tests and
+47 meeting-service tests pass. Repository verification totals 3153 passing tests
+and 4 skipped, using the authorized direct desktop fallback with external-SSD
+TMPDIR after root Turbo stripped it. Typecheck passes for all 6 packages, Biome
+checks 1229 files with 14 existing warnings, build and both bundle modes pass,
+and strict OpenSpec passes 47 items. Hidden native mock smoke checks both motion
+owners, real Clear touch routing and 1440/980/520px inspector/header reachability;
+EN/DE screenshots and logs are in the lane scratch directory.
+
+Integration with main 5ca133a retains PR85 capture settings and PR90 media smoke
+fixes. Biome checks 1231 files, all 6 typechecks, build, both sequential bundle
+modes, 47 strict OpenSpec items and hidden native meetings assertions/cleanup
+pass. Integrated tests total 3204 passing and 4 skipped. The root loose-environment
+run had two profile-registration timeouts under host load; both cases passed
+unchanged in isolation and the full direct desktop single-worker rerun passed
+all 245 files with 1920 tests and 1 skipped. No deadline or assertion changed.
+
+Task 6.3 remains partially blocked for AI-334's requested saved alternate span:
+`profile-footprint.ts` forces this viewer to 5x2 and `key-geometry.ts` rejects
+resizing it. Native regression pins that rejection and Clear at the supported
+size; mounted consumer tests also exercise alternate box dimensions. Changing the
+approved fixed-span contract needs a separate decision. All other task 6.3 rows
+are implemented and tested. Physical device, microphone/system audio and paid
+providers remain unverified. No hardware or real capture was opened.
+
+## speech-capture burn-down lane
+
+- [x] Implement platform capture, deliberate microphone-only/cancel fallback and setup help with production consumer fixtures. Evidence: renderer capture platform/partial-acquisition tests, trusted host permission/fallback tests, and mounted setup missing/installed/refresh-error/cancel checks. Bead open-quake-c5w.16 stays open for lead merge.
+- [ ] Complete AI-283 driver installation and macOS multi-output configuration after separate host approval, then verify physical system audio on Windows/macOS/Linux. The lane only detects installed virtual inputs and provides manual setup help.
+- [ ] Reconcile the required media native smoke failure tracked by open-quake-c5w.16.1. Two hidden mock runs timed out on the OBS panel screenshot after configuration save. Capture-specific EN/DE UI and native typed-start-error checks passed. Logs and screenshots remain external under open-quake-parity/burndown/speech-capture.

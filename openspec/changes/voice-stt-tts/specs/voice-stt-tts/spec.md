@@ -16,7 +16,7 @@ The system SHALL expose STT and TTS through injected Effect services with indepe
 
 ### Requirement: Capture phase machine and bounded waits
 
-Capture SHALL expose idle, requesting_permission, requesting_session, connecting, configuring, starting_recorder, listening, stopping, processing, and completed/empty/failed/cancelled terminals, skipping inapplicable phases explicitly. Permission wait SHALL be at most 30s, session-acquisition/connect/configure/recorder-start each at most 10s, and stop-to-final at most 15s. Listening SHALL automatically stop and finalize at 60s under the same nonempty/empty rules as user stop. Setup/final-result timeout SHALL identify its phase through `VOICE.CAPTURE.PHASE_TIMEOUT` and release owned resources.
+Capture SHALL expose idle, requesting_permission, requesting_session, connecting, configuring, starting_recorder, listening, stopping, processing, and completed/empty/failed/cancelled terminals, skipping inapplicable phases explicitly. Permission wait SHALL be at most 30s, session-acquisition/connect/configure/recorder-start each at most 10s, and stop-to-final at most 15s. Generic listening SHALL automatically stop and finalize at 60s under the same nonempty/empty rules as user stop. Knob capture SHALL stop at 58s after recorder readiness, preserving the generic service ceiling of 60s. Evidence: KNOB-051. Setup/final-result timeout SHALL identify its phase through `VOICE.CAPTURE.PHASE_TIMEOUT` and release owned resources.
 
 #### Scenario: Configuration acknowledgement absent
 - **WHEN** a configured speech connection receives no readiness acknowledgement for 10s
@@ -126,3 +126,48 @@ The [official OpenAI TTS guide](https://developers.openai.com/api/docs/guides/te
 
 - **WHEN** the compatibility model reaches its documented shutdown date
 - **THEN** the profile reports unavailable and no request with a replacement Realtime model is sent to the Speech API
+
+
+### Requirement: Shared persistent microphone identity
+
+Evidence: AI-247, AI-281, KNOB-049, SETTINGS-019. Assistant and meeting capture SHALL use one saved microphone identity containing deviceId, label and groupId. Legacy strings and objects SHALL normalize to that identity; empty values mean system default. The picker SHALL enumerate audio inputs without opening a microphone, refresh on opening/device changes, and discard stale results. Recovery SHALL prefer exact ID, unique group, unique group plus label, then unique label only when no group is saved. Ambiguous or disconnected saved identities SHALL display an empty selection, preserve the saved value and fail exact acquisition without fallback. No saved choice SHALL prefer default then first input. At an isolated capture document boundary, the saved groupId SHALL be excluded because it is document-specific. The capture document SHALL enumerate its own inputs and translate a foreign saved device ID only through a unique nonempty label; missing or ambiguous matches SHALL fail exact acquisition without fallback.
+
+#### Scenario: Identity changes and duplicates
+- **WHEN** an input ID changes but its saved group uniquely matches, or group plus label uniquely matches
+- **THEN** both capture consumers acquire that recovered exact ID, and ambiguous recovery never chooses an arbitrary input
+
+#### Scenario: Capture worker has a different media-device salt
+- **WHEN** settings saves a physical input with document-specific device and group IDs and an isolated capture worker enumerates the same uniquely labeled input
+- **THEN** capture uses the worker-local exact device ID, while missing or duplicate labels never select another input
+
+#### Scenario: Stale enumeration and unplugged microphone
+- **WHEN** an older enumeration resolves after a newer result or a saved input disappears
+- **THEN** the picker ignores stale results and shows Select Microphone without overwriting the saved identity or selecting another microphone
+
+### Requirement: Explicit recorder format and controls
+
+Evidence: AI-110, AI-112. The speech recorder SHALL replace the generic recovered 8/16-bit and output-channel options with one supported output descriptor, mono 24kHz signed 16-bit little-endian PCM. Input SHALL support mono/stereo at 8000, 11025, 16000, 22050, 24000, 44100 and 48000Hz, plus browser rates up to 192000Hz, preserving resampling phase. Pause SHALL suppress incoming frames without ending ownership; resume SHALL continue sequence. Explicit in-memory export SHALL provide PCM, WAV and WAV Blob with a 60-second bound. Export SHALL be opt-in; normal speech SHALL not retain an archive or replay recordings. Stop/close SHALL release tracks/context and reset live level to zero.
+
+#### Scenario: Low-rate stereo and pause export
+- **WHEN** synthetic stereo input at each supported source rate is paused, resumed, stopped and explicitly exported
+- **THEN** output uses the fixed descriptor with correct sample count, sequence and WAV header, omits paused samples and preserves no recording after close
+
+### Requirement: Capture activity and level cadence
+
+Evidence: AI-252, AI-253, KNOB-050, KNOB-054. Production capture SHALL carry normalized peak and RMS. Peak above 0.15 SHALL enter speaking and exactly 15 quiet buffers SHALL clear activity, without silence auto-stop. Levels SHALL apply RMS times 3.5 clamped to zero through one, speaking when scaled RMS exceeds 0.05 or peak exceeds 0.15, and multiply silent levels by 0.35. Emission SHALL be no faster than 50ms speaking or 180ms silent, scoped to the active capture.
+
+#### Scenario: Quiet activity and stale capture
+- **WHEN** onset is followed by fourteen quiet buffers, then a fifteenth, or an older capture produces a late frame
+- **THEN** activity clears only at the fifteenth, recording continues, and the old frame cannot change the current meter
+
+### Requirement: Typed capture failure and private timing
+
+Evidence: AI-254, AI-255, KNOB-053, KNOB-055. Missing input SHALL report VOICE.CAPTURE.NO_DEVICE, permission denial SHALL retain PERMISSION_DENIED, and other start errors SHALL retain RECORDER_UNAVAILABLE with private original causes. All failures SHALL release partial acquisitions. Runtime SHALL emit one terminal timing record with bounded monotonic elapsed startup, ready latency, first-frame latency, recording duration, hasAudioFrame and stopBeforeReady, without audio, transcript, device identity or absolute timestamps.
+
+#### Scenario: Release before recorder readiness
+- **WHEN** capture stops before ready or fails for missing microphone
+- **THEN** it emits one timing record with zero recorded duration and no first-frame latency, identifies early stop separately from failure, and releases late resources
+
+#### Scenario: Knob duration boundary
+- **WHEN** a knob recorder reaches 57999ms then 58000ms after readiness
+- **THEN** it remains open before the boundary and stops once at 58000ms, finalizes nonempty audio once and closes all capture resources

@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { Context, Effect, Either, Layer, Option, Schema } from "effect";
+import { ProfileAction } from "../../../../../packages/device/src/profiles/profile-contracts";
 import {
 	type ClockMediaView,
 	type ClockSnapshot,
@@ -27,6 +28,7 @@ import {
 	type ClockAction,
 	type ClockKey,
 	type ClockMediaSlot,
+	clockWeatherSettings,
 	isClockKey,
 	type MediaKind,
 	MIN_VIDEO_MS,
@@ -36,7 +38,8 @@ import {
 	type ThemeId,
 	type ThemePatchReason,
 } from "../../shared/clock-style";
-
+import type { WeatherSettings } from "../../shared/weather-media-contracts";
+import { rendererClockActions } from "../profiles/clock-profile-projection";
 import { ClockProfiles } from "./clock-profiles";
 
 /**
@@ -84,6 +87,17 @@ export const defaultClockRecord: ClockRecord = {
 						},
 					},
 					{ type: "showSeconds", value: false },
+					{ type: "hourFormat", value: "24h" },
+					{
+						type: "weather",
+						value: {
+							enabled: true,
+							city: "",
+							unit: "celsius",
+							location: null,
+							ipLookup: false,
+						},
+					},
 				],
 			},
 		},
@@ -256,6 +270,7 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 		const videoProbe = yield* ClockVideoProbe;
 		const file = join(root, "clock-v1", "clock.json");
 		const lock = yield* Effect.makeSemaphore(1);
+		const commandLock = yield* Effect.makeSemaphore(1);
 		const candidates = new Map<
 			string,
 			{
@@ -335,6 +350,11 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 						? "12h"
 						: "24h",
 				revision: record.revision,
+				actions: Schema.decodeUnknownSync(Schema.Array(ProfileAction))(
+					rendererClockActions(actions),
+				),
+				weather: clockWeatherSettings(actions),
+				musicEnabled: style.musicEnabled,
 				keyCode: key?.keyCode ?? CLOCK_KEY_CODE,
 				mode: style.background.mode,
 				themeId: style.background.themeId,
@@ -437,6 +457,47 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 				),
 		);
 
+		const setMusic = Effect.fn("ClockStore.setMusic")(
+			(enabled: boolean, target?: ClockTarget) =>
+				mutate(
+					(keys) =>
+						updateAction(keys, "clockStyle", (value) => ({
+							...(isRecord(value) ? value : normalizeClockStyle(value)),
+							musicEnabled: enabled,
+							updatedAt: Date.now(),
+						})),
+					target,
+				),
+		);
+		const setWeather = Effect.fn("ClockStore.setWeather")(
+			(settings: WeatherSettings, target?: ClockTarget) =>
+				mutate(
+					(keys) =>
+						updateAction(keys, "weather", (value) => {
+							const old = isRecord(value) ? value : {};
+							const service = isRecord(old.service) ? old.service : {};
+							return {
+								...old,
+								enabled: settings.enabled,
+								city: settings.city.trim(),
+								location:
+									settings.location?.sourceCity === settings.city.trim()
+										? settings.location
+										: null,
+								unit: settings.unit,
+								ipLookup: settings.ipLookup,
+								service: { ...service, forecastUrl: settings.forecastUrl },
+								updatedAt: Date.now(),
+								weatherVersion:
+									(typeof old.weatherVersion === "number"
+										? old.weatherVersion
+										: 0) + 1,
+							};
+						}),
+					target,
+				),
+		);
+
 		const commitSlot = (
 			themeId: ThemeId,
 			slot: ClockMediaSlot | null,
@@ -535,7 +596,25 @@ export class ClockStore extends Effect.Service<ClockStore>()("ClockStore", {
 			);
 		});
 
+		const withRevision = <A, E>(
+			target: ClockTarget | undefined,
+			revision: number | undefined,
+			operation: Effect.Effect<A, E>,
+		) =>
+			commandLock.withPermits(1)(
+				Effect.gen(function* () {
+					if (
+						revision !== undefined &&
+						(yield* read(target)).revision !== revision
+					)
+						return yield* ClockConfigInvalid.fromCause(undefined);
+					return yield* operation;
+				}),
+			);
 		return {
+			withRevision,
+			setWeather,
+			setMusic,
 			read,
 			setHourFormat,
 			setTheme,
