@@ -32,6 +32,7 @@ import type {
 import { ProfileManager } from "../../../../../packages/device/src/profiles/profile-manager-service.js";
 import {
 	ProfileRepository,
+	ProfileSelectionCommit,
 	profileStorageLayer,
 } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
@@ -133,6 +134,14 @@ export function prepareProfiles(
 			ProfileRepository.DefaultWithoutDependencies.pipe(
 				Layer.provide(profileStorageLayer(storage)),
 				Layer.provide(ManagementProfileContractsLive),
+				Layer.provide(
+					Layer.succeed(ProfileSelectionCommit, {
+						changed: (serial) =>
+							resetOwned
+								? Effect.promise(() => resetOwned(serial))
+								: Effect.void,
+					}),
+				),
 			),
 		),
 		Layer.provide(
@@ -149,8 +158,6 @@ export function prepareProfiles(
 						push: (serial, profile, guard) =>
 							Effect.tryPromise({
 								try: async () => {
-									guard?.();
-									await resetOwned?.(serial);
 									guard?.();
 									await deliver?.(serial, profile);
 									guard?.();

@@ -185,3 +185,7 @@ passes with no remaining windows/workers. External outputs use the
 ## Cluster 18 composition
 
 The main application supplies one AudioOutput instance to speech and SoundboardService. KeyRuntime forwards only a committed key plus activation identity after its guards; local audio waits for release. The adapter decodes the recovered controls and supplies the profile revision to the existing conductor. The empty system-media preset stays with its current owner. No second decoder or soundboard playback service is introduced.
+
+### Selection commit ownership
+
+The shared ProfileRepository compares committed device selections after persistence and publication, under its transaction lock. An injected ProfileSelectionCommit callback invalidates that device's soundboard owner only when its profile or page changes. Direct ProfileService selections and manager/automatic transactions share this path. Fallible delivery, rejected writes and expired guards never reach the callback; redelivery and unchanged selections don't invalidate playback. The desktop callback doesn't reenter the repository. The recovered KNOB-086 lifecycle evidence and profile/page decision are cited in the Cluster 18 requirement.

@@ -182,7 +182,10 @@ Committed local playAudio and playAudioLegacy keys SHALL execute on a guarded re
 - **WHEN** a configured local key is pressed and released
 - **THEN** press opens no player and release decodes and executes the recovered operation and fade through the existing owner
 
-#### Scenario: Profile deactivation
+#### Scenario: Profile or page deactivation
 
-- **WHEN** a profile owning local sessions deactivates or its device disconnects
-- **THEN** its active and pending sessions stop without fading and another profile's playback remains intact
+- **WHEN** a different profile or page commits through key-library selection, KeyRuntime navigation, or automatic/manager switching, or its device disconnects
+- **THEN** that device's active and pending sessions stop without fading and other devices keep playing
+- **AND** a repeated selection, failed delivery/write, or invalidated transaction leaves current playback intact
+
+Selection cleanup SHALL run after durable publication under the same repository transaction lock, never in the fallible delivery port. This follows `KNOB-086`'s device/key/multi-action session ownership and the recovered lifecycle. Evidence: `~/dev/dark-encyclopedia/dk-suite-introspeccion/v0.4.95/app-resources/background.js:2`, `Dn` at character 988931 keys sessions by serial plus keyCode/multiActionIndex; `Wi` at characters 1032317..1033459 destroys non-timer players and calls `bn` to clear that device's sessions. Both profile switching `Yi` and page/folder switching `$i` call `Wi`, with `$i` at character 1043825 returning early for an unchanged page. Therefore DK-Suite stops soundboard audio on both profile and page changes; timer-player preservation is outside soundboard scope.

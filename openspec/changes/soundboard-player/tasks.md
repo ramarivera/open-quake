@@ -269,3 +269,15 @@ This lane does not close the broader voice acceptance gate. Task 3.1 / open-quak
 retains live desktop playback controls and status, and task 3.2 retains physical
 trigger/hearing acceptance. No audio was played aloud, and no real QUAKE or
 DK-Suite process was used.
+
+## PR79 review fixes
+
+- [x] 4.3 Centralize profile/page invalidation after a successful guarded repository commit; cover real key-library selection, KeyRuntime navigation, failed delivery/write and stale transactions with regressions. Evidence: KNOB-086; open-quake-lih.19.6.
+
+Review-fix verification: all six new cases fail against PR79 head `95a6844`
+and pass with these fixes. Full gates pass with 2,896 tests and four existing
+skips, six package typechecks, production build, both bundle modes, Biome
+1,158 files with zero errors and 14 existing warnings, and 46 strict OpenSpec
+items. External logs, including `regressions-final-before.log`, stay under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/wallpaper-soundboard/fix1/`.
+No renderer UI changes, real QUAKE access, DK-Suite execution or audible playback.
