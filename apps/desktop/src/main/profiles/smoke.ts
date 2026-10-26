@@ -20,8 +20,10 @@ import { MediaLive, registerMedia } from "../media";
 import { nativeForegroundApp } from "./foreground-app";
 import { registerProfiles } from "./index";
 import { loadInstalledProfileApps } from "./installed-apps";
+import { assertPropertyContrast } from "./smoke-contrast";
 import { reportSmokeFailure } from "./smoke-failure";
 
+if (process.platform === "darwin") app.setActivationPolicy("prohibited");
 registerClockScheme();
 
 async function smoke(): Promise<void> {
@@ -374,10 +376,12 @@ async function smoke(): Promise<void> {
 						fields.left >= 0 &&
 						fields.right <= width,
 				);
-				assert.notEqual(
+				const contrast = assertPropertyContrast(
 					fields.color,
 					fields.background,
-					"Property text must contrast with its field",
+				);
+				process.stdout.write(
+					`profiles smoke: ${locale} ${width}px property contrast ${contrast.toFixed(2)}:1\n`,
 				);
 				assert(fields.fontSize >= 12, "Property text must remain readable");
 				assert(
