@@ -85,3 +85,42 @@ An optional OpenClaw gateway adapter SHALL remain unavailable until handshake, a
 #### Scenario: Only gateway store keys are known
 - **WHEN** server URL/token names exist but no validated protocol fixtures are available
 - **THEN** the adapter remains unavailable and the UI does not claim gateway compatibility
+
+### Requirement: Bounded local administration capabilities
+Local administration SHALL use typed revision-checked commands for rename, confirmed template reset, portable pack export/import and diagnostics. Packs SHALL contain only validated agent Markdown and skills, without models, credentials, executable paths or process settings; import SHALL validate the entire bounded pack before a single atomic workspace commit. Diagnostics SHALL expose only bounded allowlisted counts/status/codes and explicit backup export capability. A user-exported workspace backup SHALL include all authored agents, skills and panel slot assignments in a validated versioned JSON format, at most 128 agents, 1024 skills and 2 MiB. It SHALL exclude model/provider settings, runtime configuration and credential-store values. It SHALL NOT claim automatic backup retention. Environment updates SHALL accept only declared managed settings and SHALL never change host environment or user-managed HTTP runtime configuration. Local service settings SHALL validate port 1 through 65535, log level, auto-start intent and an owned data directory; save SHALL require explicit restart intent before applying active process settings, and clear SHALL require confirmation and a stopped owned backend. External HTTP runtimes SHALL report unsupported process settings, clear, environment, logs and remote-runtime backup operations rather than invent endpoints. Sources: CENTER-047, CENTER-048, CENTER-104, MAIN-144. Vendor installer/account/catalog/market/edition operations are OUT-OF-SCOPE under GAP-MAP decision 9, audit/GAP-MAP.md:146.
+
+#### Scenario: Malformed portable pack
+- **WHEN** an import contains an escaping Markdown filename, duplicate skill, oversized content or an existing protected agent ID
+- **THEN** the operation is rejected before storage changes and no partial workspace appears
+
+#### Scenario: Unsupported external administration
+- **WHEN** a selected user-managed HTTP runtime receives a local process-settings request
+- **THEN** the request returns an explicit unsupported capability and sends no remote request
+
+#### Scenario: Invalid environment update
+- **WHEN** an update includes an undeclared variable or invalid setting
+- **THEN** persisted settings and runtime environment remain unchanged
+
+### Requirement: Local agent key editing and isolated context reset
+The key editor SHALL expose local Agent, Model with Default Agent and Default (Agent) fallbacks, Voice Input, Task Prompt when voice is disabled, and Reset Context for clawbot keys (MGMT-302). Gateway settings SHALL reuse the saved HTTP connection facade and native credential storage, with masked transient input and no credential-bearing URLs. Reset SHALL forget only the selected device/key's HTTP conversation contexts, cancelling that key's active turn, and SHALL report unsupported owners truthfully. Local workspace identities SHALL NOT become external runtime identities implicitly.
+
+#### Scenario: Save a typed-only key and reset its context
+- **WHEN** a user selects an agent and model, disables Voice Input, edits Task Prompt, and saves
+- **THEN** the saved profile retains the typed payload
+- **AND** Reset Context cancels and clears that key's runtime sessions without clearing another key's sessions
+
+### Requirement: Owned service state administration
+The owned runtime SHALL allow a port, log level, opt-in autostart and a private data directory selected as its root or a named child of its data folder (CENTER-047, CENTER-048, MAIN-144). Directory switches SHALL retain the prior state, reject escapes and symlinks, and require restart consent while running. Confirmed clear SHALL remove the selected runtime's config, channels, credentials and sessions only while stopped, preserving service preferences and local agent/model workspaces. Runtime and channel updates SHALL share one atomic config owner and preserve unrelated fields. Diagnostics SHALL include at most 64 allowlisted lifecycle records without raw process output or secrets (CENTER-104).
+
+#### Scenario: Concurrent channel configuration retains the selected port
+- **WHEN** runtime start and channel configuration write concurrently
+- **THEN** the private config retains the custom port and channel fields with loopback binding and file permissions 0600
+
+#### Scenario: Select and clear private runtime data
+- **WHEN** a stopped runtime selects a private child directory and the user confirms clear
+- **THEN** only that directory's runtime data is removed, preferences and other workspaces remain, and escaping or symbolic-link directories are rejected
+
+#### Scenario: Export authored workspaces without provider credentials
+- **WHEN** the user exports a workspace backup from Settings
+- **THEN** the result includes every local agent, skill and panel slot, validates against the bounded backup contract, and contains no provider model configuration or credential reference
+- **AND** no external runtime endpoint is contacted

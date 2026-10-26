@@ -14,6 +14,8 @@ export class AgentsRuntime extends Effect.Service<AgentsRuntime>()(
 		accessors: true,
 		scoped: Effect.gen(function* () {
 			const port = yield* AgentRuntimePort;
+			const dispose = port.dispose;
+			if (dispose) yield* Effect.addFinalizer(() => dispose.pipe(Effect.orDie));
 			let state: RuntimeState = { ...port.initial, available: port.available };
 			const listeners = new Set<(state: RuntimeState) => void>();
 			const busy = yield* Ref.make(false);
@@ -109,6 +111,11 @@ export class AgentsRuntime extends Effect.Service<AgentsRuntime>()(
 						}),
 					),
 			);
+			if (port.available && port.administration) {
+				const settings = yield* port.administration.settings();
+				if (settings.autoStart) yield* control("start").pipe(Effect.either);
+			}
+
 			return {
 				read,
 				subscribe: (listener: (state: RuntimeState) => void): (() => void) => {

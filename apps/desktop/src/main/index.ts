@@ -29,6 +29,9 @@ import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
 import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
 import { prepareAgents } from "./agents";
+import { createLocalChannelRuntime } from "./agents/channel-runtime";
+import { createLocalAgentState } from "./agents/local-state";
+import { createOwnedAgentRuntime } from "./agents/owned-runtime";
 import { createModelCredentials } from "./chat/credentials";
 import { prepareDirectChat } from "./chat/host";
 import { registerDirectChat } from "./chat/registration";
@@ -397,9 +400,20 @@ if (!app.requestSingleInstanceLock()) {
 							mediaActions,
 							speech.resetSoundKeys,
 						);
+						const localAgentState = createLocalAgentState(
+							join(app.getPath("userData"), "channel-runtime-v1"),
+						);
 						const agentsModule = prepareAgents({
 							diagnostics,
-							backend: httpModule.backend,
+							backend:
+								createOwnedAgentRuntime({
+									root: localAgentState.root,
+									storage: localAgentState,
+									command:
+										process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+											? undefined
+											: process.env.OPEN_QUAKE_OPENCLAW_COMMAND,
+								}) ?? httpModule.backend,
 							drafting: httpModule.drafting,
 							management: () => managementWin,
 							renderer: rendererURL,
@@ -422,6 +436,14 @@ if (!app.requestSingleInstanceLock()) {
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 						});
 						const integrationsModule = prepareIntegrations({
+							channelRuntime: createLocalChannelRuntime({
+								root: localAgentState.root,
+								storage: localAgentState,
+								command:
+									process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+										? undefined
+										: process.env.OPEN_QUAKE_OPENCLAW_COMMAND,
+							}),
 							diagnostics,
 							panel: () => panelWin,
 							management: () => managementWin,
