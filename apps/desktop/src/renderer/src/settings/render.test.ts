@@ -65,6 +65,7 @@ const keys = (value: unknown, prefix = ""): string[] =>
 describe("bundled settings copy", () => {
 	it("has the same keys in English and German", () => {
 		expect(keys(strings.de)).toEqual(keys(strings.en));
+		expect(keys(strings.en)).toContain(".setup.orientation.title");
 	});
 });
 
@@ -207,6 +208,23 @@ describe("setup review fixes", () => {
 		expect(en).toContain("doesn’t create profiles or change the active one");
 		expect(en).toMatch(/aria-describedby="[^"]*-note [^"]*-count"/);
 		expect(profiles(ready, "de")).toContain("ändert das aktive Profil nicht");
+	});
+
+	it("reads orientation copy through the settings feature translator", () => {
+		const html = render(
+			"de",
+			createElement(DisplayStep, {
+				t: (key) => `translated ${key}`,
+				choices,
+				setChoices: () => {},
+				devices: { state: "connected", serial: "QK-A", mock: true },
+				busy: false,
+				onCheckDevices: () => {},
+			}),
+		);
+		expect(html).toContain("translated setup.orientation.title");
+		expect(html).toContain("translated setup.orientation.portrait");
+		expect(html).toContain("translated setup.orientation.unknown");
 	});
 
 	it("can check again while a QUAKE is connected, so a swapped device appears", () => {

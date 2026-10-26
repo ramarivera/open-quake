@@ -5,6 +5,7 @@ import {
 	OrientationConfirmation,
 	observeOrientation,
 } from "../../renderer/src/settings/SetupWizard";
+import strings from "../../renderer/src/settings/strings.json";
 import type {
 	ConnectionDiagnostic,
 	DisplayOrientation,
@@ -41,7 +42,7 @@ describe("wizard orientation consumer", () => {
 			) =>
 				renderToStaticMarkup(
 					createElement(OrientationConfirmation, {
-						locale,
+						text: strings[locale].setup.orientation,
 						orientation,
 						platform,
 						openSettings: () => {},

@@ -34,6 +34,7 @@ import {
 	readProfiles,
 } from "./setup-owners";
 import type { SetupState, SetupStore } from "./stores";
+import type strings from "./strings.json";
 import "./settings.css";
 
 import type {
@@ -670,7 +671,6 @@ export function DisplayStep({
 	onCheckDevices: () => void;
 }): React.JSX.Element {
 	const id = useId();
-	const locale = useAppLocale().locale === "de" ? "de" : "en";
 	const serial =
 		choices.display?._tag === "quake"
 			? choices.display.deviceId
@@ -749,7 +749,22 @@ export function DisplayStep({
 			</div>
 			{connected ? (
 				<OrientationConfirmation
-					locale={locale}
+					text={{
+						title: t("setup.orientation.title"),
+						portrait: t("setup.orientation.portrait"),
+						landscape: t("setup.orientation.landscape"),
+						recommended: t("setup.orientation.recommended"),
+						success: t("setup.orientation.success"),
+						disconnected: t("setup.orientation.disconnected"),
+						connected: t("setup.orientation.connected"),
+						vertical: t("setup.orientation.vertical"),
+						horizontal: t("setup.orientation.horizontal"),
+						unknown: t("setup.orientation.unknown"),
+						open: t("setup.orientation.open"),
+						darwin: t("setup.orientation.darwin"),
+						win32: t("setup.orientation.win32"),
+						other: t("setup.orientation.other"),
+					}}
 					orientation={orientation}
 					platform={
 						typeof window === "undefined"
@@ -1100,58 +1115,17 @@ function useOrientation(
 	}, [serial]);
 	return value?.serialNumber === serial ? value : undefined;
 }
-const orientationCopy = {
-	en: {
-		title: "Display Orientation Confirmation",
-		portrait: "Portrait (not recommended)",
-		landscape: "Landscape (recommended)",
-		recommended: "Recommended",
-		success: "Congratulations! Your display settings are configured correctly.",
-		disconnected: "Device not connected",
-		connected: "Device connected",
-		vertical: "Orientation: portrait",
-		horizontal: "Orientation: landscape",
-		unknown: "Checking display orientation…",
-		open: "Open Display Settings",
-		darwin:
-			"Quake display is in standard orientation. In macOS Displays settings, set Quake screen Rotation to 270°.",
-		win32:
-			"Quake display is in portrait orientation. In Windows Display settings, set Quake screen Orientation to Landscape.",
-		other:
-			"Portrait orientation detected. Please set the Quake display to landscape in your PC display settings.",
-	},
-	de: {
-		title: "Anzeigeausrichtung bestätigen",
-		portrait: "Hochformat (nicht empfohlen)",
-		landscape: "Querformat (empfohlen)",
-		recommended: "Empfohlen",
-		success: "Glückwunsch! Ihre Anzeigeeinstellungen sind korrekt.",
-		disconnected: "Gerät nicht verbunden",
-		connected: "Gerät verbunden",
-		vertical: "Ausrichtung: Hochformat",
-		horizontal: "Ausrichtung: Querformat",
-		unknown: "Anzeigeausrichtung wird geprüft…",
-		open: "Anzeigeeinstellungen öffnen",
-		darwin:
-			"Das Quake-Display ist in Standardausrichtung. Stellen Sie in den macOS-Monitor-Einstellungen die Drehung des Quake-Bildschirms auf 270° ein.",
-		win32:
-			"Das Quake-Display ist im Hochformat. Stellen Sie in den Windows-Anzeigeeinstellungen die Ausrichtung des Quake-Bildschirms auf Querformat ein.",
-		other:
-			"Hochformat erkannt. Bitte stellen Sie das Quake-Display in den PC-Anzeigeeinstellungen auf Querformat.",
-	},
-};
 export function OrientationConfirmation({
-	locale,
+	text,
 	orientation,
 	platform,
 	openSettings,
 }: {
-	locale: "en" | "de";
+	text: Readonly<Record<keyof typeof strings.en.setup.orientation, string>>;
 	orientation: DisplayOrientation | undefined;
 	platform: string | undefined;
 	openSettings: () => void;
 }): React.JSX.Element {
-	const text = orientationCopy[locale];
 	const ready = orientation?.connected && !orientation.isVertical;
 	return (
 		<section className="setup-orientation" aria-label={text.title}>
