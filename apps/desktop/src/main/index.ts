@@ -512,6 +512,21 @@ if (!app.requestSingleInstanceLock()) {
 									if (owned) {
 										destroyPanel(owned.win);
 										stripWindows.delete(serial ?? "");
+										if (
+											panelWin === owned.win ||
+											panelWin.isDestroyed() ||
+											!activeSerial
+										) {
+											const remaining = [...stripWindows.entries()].find(
+												([id, entry]) =>
+													connectedSerials.has(id) && !entry.win.isDestroyed(),
+											);
+											if (remaining) {
+												activeSerial = remaining[0];
+												panelWin = remaining[1].win;
+												panelTarget = remaining[1].target;
+											}
+										}
 									} else if (!stripWindows.size) destroyPanel(panelWin);
 								},
 								displays: () => screen.getAllDisplays(),

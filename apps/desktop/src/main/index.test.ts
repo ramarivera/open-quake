@@ -1306,6 +1306,52 @@ describe("desktop main with the real device service and fake HID", () => {
 		}
 	});
 
+	it("reroutes shared panel consumers when the selected strip closes", async () => {
+		vi.useFakeTimers();
+		try {
+			const { two, first, second } = await startTwoStrips();
+			const removed = second;
+			const remaining = first;
+			const lostBus = two.second;
+			const liveBus = two.first;
+			await Effect.runPromise(lostBus.emit(report(3, 1, [1])));
+			const panel = vi.mocked(registerMonitor).mock.calls.at(-1)?.[2];
+			await vi.waitFor(() => expect(panel?.()).toBe(removed));
+			two.devices.splice(1, 1);
+			await vi.advanceTimersByTimeAsync(1000);
+			await vi.advanceTimersByTimeAsync(2500);
+			expect(removed.isDestroyed()).toBe(false);
+			await vi.advanceTimersByTimeAsync(2500);
+			await vi.waitFor(() => expect(removed.isDestroyed()).toBe(true));
+			expect(panel?.()).toBe(remaining);
+			expect(remaining.isDestroyed()).toBe(false);
+			expect(
+				vi.mocked(registerVoiceSurface).mock.calls.at(-1)?.[0].panel(),
+			).toBe(first);
+			expect(vi.mocked(registerKnob).mock.calls.at(-1)?.[2]?.deviceId?.()).toBe(
+				"A",
+			);
+			expect(
+				electron.BrowserWindow.getAllWindows().filter(
+					(w) => w.options.title === "open-quake panel",
+				),
+			).toEqual([remaining]);
+			remaining.webContents.send.mockClear();
+			await Effect.runPromise(liveBus.emit(report(3, 1, [0])));
+			await vi.waitFor(() =>
+				expect(remaining.webContents.send).toHaveBeenCalledWith("quake:event", {
+					source: "hid",
+					kind: "rotate",
+					direction: -1,
+				}),
+			);
+		} finally {
+			appEvent("before-quit");
+			await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalled());
+			vi.useRealTimers();
+		}
+	});
+
 	it("enrolls the real serial for the native connection lifetime and reconnects", async () => {
 		fake = await Effect.runPromise(
 			makeFakeHidTransport([

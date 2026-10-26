@@ -374,6 +374,11 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 								yield* Effect.sleep(2000);
 								if (!state.connected) {
 									edges.disposePanel?.(serial);
+									if (selected === serial)
+										selected =
+											[...sessions.entries()].find(
+												([, s]) => s.connected,
+											)?.[0] ?? serial;
 									state.closing = false;
 									sync();
 								}
