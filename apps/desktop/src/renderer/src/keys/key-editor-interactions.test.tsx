@@ -1865,6 +1865,56 @@ it("MGMT-124 bounds generated placement titles while retaining searchable full l
 		).toContain(names[0]);
 	});
 });
+it("MGMT-124 converts stored Windows modifiers for generated grid placement and sequence availability", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: ["meta+s", "right_meta+s"].map((chord, i) => ({
+						id: String(i),
+						name: `Save ${i}`,
+						app: "Editor",
+						chord,
+					})),
+				},
+			],
+		}),
+	});
+	const f = await fixture();
+	for (const [i, value] of ["super+s", "right_super+s"].entries()) {
+		await pointerMove(
+			f.host,
+			query(
+				f.host,
+				`[data-library-type="generated:g:${i}"]`,
+				HTMLButtonElement,
+			),
+			`1,${i + 2}`,
+		);
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(i + 1));
+		expect(
+			f
+				.stored()
+				.profiles[0].pages[0].keys.find((key) => key.keyCode === `1,${i + 2}`)
+				?.config.actions,
+		).toEqual([{ type: "key", value }]);
+	}
+	await click(button(f.host, "1,1"));
+	for (const i of [0, 1]) {
+		const entry = query(
+			f.host,
+			`[data-library-type="generated:g:${i}"]`,
+			HTMLButtonElement,
+		);
+		expect(entry.disabled).toBe(false);
+	}
+	expect(f.stored().profiles[0].revision).toBe(2);
+});
 it("MGMT-109 registry placement retains OBS default locks rather than empty-cell defaults", async () => {
 	const f = await gridFixture([]);
 	await libraryPlace(f.host, "obsStats", "1,1");

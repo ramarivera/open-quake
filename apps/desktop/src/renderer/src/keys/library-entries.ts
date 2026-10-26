@@ -25,6 +25,7 @@ import {
 import { effectiveSpan } from "../../../../../../packages/device/src/profiles/profile-footprint.js";
 import type { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import type { ShortcutLibrary } from "../../../../../../packages/edge/src/shortcuts/shortcut-contracts.js";
+import { executableChord } from "../../../../../../packages/edge/src/shortcuts/shortcut-invariants.js";
 import type { EmojiReply } from "../../../shared/emoji";
 import { keyArtwork } from "./key-artwork";
 
@@ -179,7 +180,7 @@ export function appGroups(
 							...empty.config,
 							...(row.config ?? {
 								type: "hotkey",
-								actions: [{ type: "key", value: row.chord }],
+								actions: [{ type: "key", value: executableChord(row.chord) }],
 							}),
 							icon: row.icon ?? "",
 							title: {
