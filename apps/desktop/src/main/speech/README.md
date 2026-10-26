@@ -69,6 +69,12 @@ startup have bounded waits. Release during preparation interrupts setup;
 late worker creation/grants are destroyed. Physical tracks stop on release,
 while the final aligned PCM tail drains before STT finish-task.
 
+Recorder startup owns its acquired worker until it returns a CaptureSession.
+If capture invocation fails or startup is interrupted, it aborts and awaits
+worker close before returning. A worker arriving after cancellation closes
+without starting capture. Failed Stop and later session close share one
+teardown promise, including asynchronous removal of the worker directory.
+
 Capture uses Chromium's supported ScriptProcessorNode with 1,024 input samples
 per callback and the actual AudioContext sample rate. The pure area resampler
 handles 24–192kHz input, preserves phase across blocks, mixes channels to mono,

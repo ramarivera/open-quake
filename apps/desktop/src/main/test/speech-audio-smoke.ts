@@ -8,6 +8,7 @@ import { PCM_24K } from "../../../../../packages/edge/src/ai/speech/speech-contr
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import {
 	createDesktopAudioOutput,
+	createElectronCaptureDriver,
 	openAudioWorker,
 } from "../speech/electron-audio";
 
@@ -27,6 +28,14 @@ app.disableHardwareAcceleration();
 // Closing each owned worker must not quit before the next acceptance stage.
 app.on("window-all-closed", () => {});
 let stage = "app readiness";
+// Electron otherwise opens a native error dialog, blocking a background test
+// and its deadline. These fixtures carry no provider or physical audio data.
+process.on("uncaughtException", (cause) => {
+	process.stderr.write(
+		`SPEECH_AUDIO_SMOKE_UNCAUGHT ${stage}\n${cause.stack}\n`,
+	);
+	app.exit(1);
+});
 const deadline = setTimeout(() => {
 	process.stderr.write(`SPEECH_AUDIO_SMOKE_TIMEOUT ${stage}\n`);
 	for (const window of BrowserWindow.getAllWindows()) window.destroy();
@@ -82,6 +91,50 @@ async function run() {
 		} finally {
 			await worker.close();
 		}
+		assert.equal(BrowserWindow.getAllWindows().length, 0);
+		assert.deepEqual(
+			(await readdir(directory)).filter((name) =>
+				name.startsWith("speech-worker-"),
+			),
+			[],
+		);
+		stage = "production recorder driver cleanup";
+		const recorder = await Effect.runPromise(
+			createElectronCaptureDriver().open("driver-capture"),
+		);
+		try {
+			let received = false;
+			for (let index = 0; index < 100 && !received; index++) {
+				const batch = await Effect.runPromise(recorder.pull);
+				received = batch.frames.some((frame) => frame.bytes.length === 960);
+				await delay(20);
+			}
+			assert(received, "Production driver must pull native synthetic PCM");
+			await Effect.runPromise(recorder.stop);
+		} finally {
+			await Effect.runPromise(recorder.close);
+		}
+		stage = "failed recorder startup awaits native worker cleanup";
+		const failure = await Effect.runPromise(
+			createElectronCaptureDriver(async () => {
+				// Exercise acquired-worker ownership independently of its signal
+				// listener, including asynchronous filesystem teardown.
+				const acquired = await openAudioWorker(new AbortController().signal);
+				return {
+					invoke: async () => {
+						throw new Error("synthetic startup refusal");
+					},
+					close: async () => {
+						await delay(25);
+						await acquired.close();
+					},
+				};
+			})
+				.open("failed-capture")
+				.pipe(Effect.either),
+		);
+		assert(Either.isLeft(failure));
+		assert.equal(failure.left.code, "VOICE.CAPTURE.RECORDER_UNAVAILABLE");
 		assert.equal(BrowserWindow.getAllWindows().length, 0);
 		assert.deepEqual(
 			(await readdir(directory)).filter((name) =>
@@ -183,6 +236,8 @@ async function run() {
 				framedPcm: true,
 				naturalDrain: true,
 				workerCleanup: true,
+				productionCaptureDriver: true,
+				failedRecorderStartupCleanup: true,
 				sharedOwnership: true,
 				capturePreemption: true,
 				staleSoundboardStopSafe: true,

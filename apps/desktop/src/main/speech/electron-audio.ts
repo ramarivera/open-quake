@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Either, Layer, Schema } from "effect";
+import { Effect, Either, Exit, Layer, Schema } from "effect";
 import { app, BrowserWindow, session, systemPreferences } from "electron";
 import { AiUnavailable } from "../../../../../packages/edge/src/ai/ai-errors";
 import { verifiedAudio } from "../../../../../packages/edge/src/ai/speech/speech-audio";
@@ -149,14 +149,26 @@ export function createElectronCaptureDriver(
 		open: (id) =>
 			Effect.gen(function* () {
 				const controller = new AbortController();
+				let acquired: AudioWorker | undefined;
+				let closing: Promise<void> | undefined;
+				const close = async (): Promise<void> => {
+					controller.abort();
+					// The factory may return after cancellation. Don't memoize an empty
+					// cleanup; its eventual worker still needs its own awaited close.
+					if (acquired) {
+						closing ??= acquired.close();
+						await closing;
+					}
+				};
 				const worker = yield* Effect.tryPromise({
 					try: async (signal) => {
 						signal.addEventListener("abort", () => controller.abort(), {
 							once: true,
 						});
 						const value = await open(controller.signal);
+						acquired = value;
 						if (controller.signal.aborted) {
-							await value.close();
+							await close();
 							throw new AiUnavailable();
 						}
 						await value.invoke("capture", [id]);
@@ -171,8 +183,11 @@ export function createElectronCaptureDriver(
 									cause,
 								),
 				}).pipe(
-					Effect.onInterrupt(() => Effect.sync(() => controller.abort())),
-					Effect.onError(() => Effect.sync(() => controller.abort())),
+					// Startup hasn't returned a CaptureSession yet, so captureFrames'
+					// acquisition finalizer can't close it. Own failed acquisition here.
+					Effect.onExit((exit) =>
+						Exit.isFailure(exit) ? Effect.promise(close) : Effect.void,
+					),
 				);
 				return {
 					pull: boundary(() => worker.invoke<unknown>("pull")).pipe(
@@ -199,18 +214,10 @@ export function createElectronCaptureDriver(
 					),
 					stop: boundary(() => worker.invoke("stop")).pipe(
 						Effect.timeout("2 seconds"),
-						Effect.orElse(() =>
-							Effect.promise(async () => {
-								controller.abort();
-								await worker.close();
-							}),
-						),
+						Effect.orElse(() => Effect.promise(close)),
 						Effect.asVoid,
 					),
-					close: Effect.promise(async () => {
-						controller.abort();
-						await worker.close();
-					}),
+					close: Effect.promise(close),
 				};
 			}),
 	};
