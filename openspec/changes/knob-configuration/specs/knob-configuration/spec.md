@@ -129,3 +129,9 @@ The knob editor SHALL assign Assistant with its complete default record and reco
 #### Scenario: Agent model retention
 - **WHEN** an agent is selected or an unavailable saved model is reopened
 - **THEN** the local agent/model catalog is offered, unknown saved IDs survive until changed, and Save persists the explicit choice
+### Requirement: Persisted DK Claw selectors
+The knob editor SHALL expose Agent and Model for a DK Claw route, including Default Agent resolving to main and Default (Agent) removing the model override (MGMT-306). Saving SHALL retain agentId and dkclawModel through the canonical knob command without claiming physical route acceptance.
+
+#### Scenario: Save a DK Claw agent and model
+- **WHEN** a user selects a DK Claw agent and model and saves the knob
+- **THEN** the profile retains both fields and reopening selects them

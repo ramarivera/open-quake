@@ -16,6 +16,7 @@ import {
 	screen,
 	shell,
 } from "electron";
+import { KeyRuntime } from "../../../../packages/device/src/actions/key-runtime-service";
 import { KnobDispatchFailed } from "../../../../packages/device/src/knob/knob-errors.js";
 import { assistantSettingsFromActions } from "../../../../packages/device/src/profiles/assistant-contracts";
 import { ProfileManager } from "../../../../packages/device/src/profiles/profile-manager-service.js";
@@ -26,19 +27,25 @@ import { AiConfigInvalid } from "../../../../packages/edge/src/ai/ai-errors";
 import { HomeAssistantService } from "../../../../packages/edge/src/home-assistant/ha-service";
 import { MaintenanceShutdownFailed } from "../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import type { LocaleSnapshot } from "../../../../packages/edge/src/settings/settings-contracts";
+import { GridVoice } from "../../../../packages/edge/src/voice/surface/grid-voice-service";
 import { VoiceKnobRejected } from "../../../../packages/edge/src/voice/surface/voice-surface-errors";
 import { QUAKE_EVENT_CHANNEL, QUAKE_STATUS_CHANNEL } from "../preload/quake";
 import { LIFECYCLE_STATUS } from "../shared/lifecycle-contracts";
 import { MANAGEMENT_ACTIVATE } from "../shared/management";
+import { isTransientStripPage } from "../shared/strip-selection";
 import type { VoiceSurfaceEvent } from "../shared/voice-surface";
 import { prepareAgentHttp } from "./agent-http";
 import { registerUnavailableAgentConnections } from "./agent-http/unavailable-registration";
 import { prepareAgents } from "./agents";
+import { createLocalChannelRuntime } from "./agents/channel-runtime";
+import { createLocalAgentState } from "./agents/local-state";
+import { createOwnedAgentRuntime } from "./agents/owned-runtime";
 import { createModelCredentials } from "./chat/credentials";
 import { prepareDirectChat } from "./chat/host";
 import { registerDirectChat } from "./chat/registration";
 import { createDirectChatVoice } from "./chat/voice";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
+import { registerDeviceReady } from "./device-ready";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
 import { createDesktopDiagnostics } from "./diagnostics";
 import { prepareDesktopModule } from "./diagnostics/module";
@@ -98,6 +105,7 @@ import { bindSettingsWindow } from "./settings/window-binding";
 import { createWizardOwners } from "./settings/wizard-owners";
 import { emptySpeechSettings, registerSpeechSettings } from "./speech";
 import { createSpeechVoiceBinding } from "./speech/composition";
+import { registerStripTransport } from "./strip-transport";
 import { createToneRecorder, prepareVoiceSurface, toneSinks } from "./voice";
 import { registerWeatherMedia, weatherMediaLive } from "./weather-media";
 import { HostVolume } from "./weather-media/host-volume";
@@ -489,9 +497,20 @@ if (!app.requestSingleInstanceLock()) {
 							speech.resetSoundKeys,
 							panelSerial,
 						);
+						const localAgentState = createLocalAgentState(
+							join(app.getPath("userData"), "channel-runtime-v1"),
+						);
 						const agentsModule = prepareAgents({
 							diagnostics,
-							backend: httpModule.backend,
+							backend:
+								createOwnedAgentRuntime({
+									root: localAgentState.root,
+									storage: localAgentState,
+									command:
+										process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+											? undefined
+											: process.env.OPEN_QUAKE_OPENCLAW_COMMAND,
+								}) ?? httpModule.backend,
 							drafting: httpModule.drafting,
 							management: () => managementWin,
 							renderer: rendererURL,
@@ -514,6 +533,14 @@ if (!app.requestSingleInstanceLock()) {
 							mock: process.env.OPEN_QUAKE_MOCK_DEVICE === "1",
 						});
 						const integrationsModule = prepareIntegrations({
+							channelRuntime: createLocalChannelRuntime({
+								root: localAgentState.root,
+								storage: localAgentState,
+								command:
+									process.env.OPEN_QUAKE_MOCK_DEVICE === "1"
+										? undefined
+										: process.env.OPEN_QUAKE_OPENCLAW_COMMAND,
+							}),
 							diagnostics,
 							panel: () => panelWin,
 							management: () => managementWin,
@@ -1351,6 +1378,98 @@ if (!app.requestSingleInstanceLock()) {
 							}
 						};
 						ipcMain.on(QUAKE_STATUS_CHANNEL, sendStatus);
+						const removeStripTransport = registerStripTransport({
+							serial: panelSerial,
+							hardware: (serial) =>
+								(mock ? bus : bus?.device?.(serial))?.hardware?.(),
+							owners: {
+								press: async (serial, keyCode, action) => {
+									if (action === 2 || action === 3) {
+										if (serial !== activeDeviceId())
+											throw new Error("Inactive knob device");
+										await knob.onDevice({
+											source: mock ? "mock" : "hid",
+											kind: "rotate",
+											direction: action === 2 ? -1 : 1,
+										});
+										return;
+									}
+									await profiles.runtime.runPromise(
+										KeyRuntime.activate(
+											serial,
+											keyCode,
+											action === 0 ? "down" : "up",
+										),
+									);
+								},
+								active: async (serial, id, version) => {
+									const envelope = await profiles.runtime.runPromise(
+										ProfileManager.read(),
+									);
+									if (
+										!envelope.profiles.some(
+											(profile) =>
+												profile.id === id && profile.revision === version,
+										)
+									)
+										throw new Error("Stale profile report");
+									const reported = envelope.profiles.find(
+										(profile) => profile.id === id,
+									);
+									if (
+										reported &&
+										isTransientStripPage(
+											reported,
+											envelope.activeByDevice[serial]?.pageId,
+										)
+									)
+										return;
+									if (envelope.activeByDevice[serial]?.profileId !== id)
+										await profiles.select(id, {
+											deviceId: serial,
+											isCurrent: () =>
+												(mock ? bus : bus?.device?.(serial))?.currentStatus()
+													?.state === "connected",
+										});
+								},
+								gaming: async (serial, enabled) => {
+									const hardware = (
+										mock ? bus : bus?.device?.(serial)
+									)?.hardware?.();
+									if (!hardware) throw new Error("Disconnected");
+									await runtime.runPromise(
+										hardware.setInputMode(enabled ? "device" : "host"),
+									);
+								},
+								chat: async (serial, message) => {
+									await application.runPromise(
+										message.data.action === "stop"
+											? GridVoice.reset(serial, "profileChanged")
+											: GridVoice.sendText({
+													serial,
+													keyCode: message.keyCode,
+													agentId: message.agentId ?? "default",
+													message: message.data.content,
+												}),
+									);
+								},
+								management: async (tab) => {
+									managementWin.webContents.send(
+										"management:activate",
+										tab ?? "profiles",
+									);
+									managementWin.show();
+								},
+							},
+						});
+						const removeDeviceReady = registerDeviceReady({
+							bus: (serial) => (mock ? bus : bus?.device?.(serial)),
+							rotation: (serial) =>
+								stripWindows.get(serial)?.target.display.rotation,
+							mock,
+							panelSerial,
+							management: () => managementWin.webContents,
+						});
 
 						let shutdown: Promise<void> | undefined;
 						const stopWriters = (closeWindows = false): Promise<void> => {
@@ -1368,6 +1487,8 @@ if (!app.requestSingleInstanceLock()) {
 							removeKnobLocale();
 							disposeHardware();
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
+							removeDeviceReady();
+							removeStripTransport();
 							shutdown = (async () => {
 								const failures: unknown[] = [];
 								// Keep dependency order, but never skip the remaining cleanup after a failure.

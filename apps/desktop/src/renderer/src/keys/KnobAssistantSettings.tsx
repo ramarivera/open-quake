@@ -5,8 +5,8 @@ import {
 	AssistantSettings,
 	defaultAssistantSettings,
 } from "../../../../../../packages/device/src/profiles/assistant-contracts";
-import { ownModelRows } from "../../../../../../packages/edge/src/agents/agents-invariants";
 import { Row } from "../ui/Form";
+import { AgentRouteFields } from "./AgentRouteFields";
 import { AssistantControls, useAssistantCatalog } from "./AssistantEditor";
 import { useAssistantText } from "./assistant-copy";
 
@@ -100,8 +100,6 @@ export function KnobAssistantSettings({
 	const model = String(
 		actions.find((a) => a.type === "dkclawModel")?.value ?? "",
 	);
-	const models =
-		ownModelRows(view?.models ?? {}, agent) ?? view?.models.default ?? [];
 	const selectAgent = (agentId: string, modelId: string) => {
 		if (slot.config.type !== "")
 			onChange({
@@ -111,7 +109,7 @@ export function KnobAssistantSettings({
 					actions: [
 						{ type: "voiceRoute", value: "dkclaw" },
 						{ type: "agentId", value: agentId },
-						{ type: "dkclawModel", value: modelId },
+						...(modelId ? [{ type: "dkclawModel", value: modelId }] : []),
 					],
 				},
 			});
@@ -144,42 +142,13 @@ export function KnobAssistantSettings({
 			</Row>
 			{route === "dkclaw" ? (
 				<>
-					<Row label="Agent:" htmlFor="knob-agent">
-						<select
-							id="knob-agent"
-							value={agent}
-							onChange={(e) => selectAgent(e.target.value, "")}
-						>
-							{!(view?.agents ?? []).some((a) => a.id === agent) && (
-								<option value={agent}>{agent} · unavailable</option>
-							)}
-							{(view?.agents ?? []).map((a) => (
-								<option key={a.id} value={a.id}>
-									{a.name}
-								</option>
-							))}
-						</select>
-					</Row>
-					<Row label="Model:" htmlFor="knob-agent-model">
-						<select
-							id="knob-agent-model"
-							value={model}
-							onChange={(e) => selectAgent(agent, e.target.value)}
-						>
-							<option value="">{t("Default (Agent)")}</option>
-							{model &&
-								!models.some((m) => `${m.provider}/${m.model}` === model) && (
-									<option value={model}>{model} · unavailable</option>
-								)}
-							{models
-								.filter((m) => m.model)
-								.map((m) => (
-									<option key={m.id} value={`${m.provider}/${m.model}`}>
-										{m.provider} / {m.model}
-									</option>
-								))}
-						</select>
-					</Row>
+					<AgentRouteFields
+						idPrefix="knob"
+						agent={agent}
+						model={model}
+						onAgent={(id) => selectAgent(id, "")}
+						onModel={(id) => selectAgent(agent, id)}
+					/>
 					<p role="status">
 						DK Claw knob capture is unavailable in this build. This assignment
 						is saved for an agent-capable route; select Direct chat for capture.

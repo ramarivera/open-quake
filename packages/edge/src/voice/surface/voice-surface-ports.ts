@@ -72,6 +72,10 @@ export interface TextRequest {
 export class GridVoiceRuntime extends Context.Tag("GridVoiceRuntime")<
 	GridVoiceRuntime,
 	{
+		readonly resetContext?: (
+			serial: string,
+			keyCode: string,
+		) => Effect.Effect<void, VoiceRuntimeUnavailable>;
 		readonly select: (
 			serial: string,
 			keyCode: string,

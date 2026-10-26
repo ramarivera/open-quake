@@ -196,6 +196,7 @@ export type GridVoiceInput = typeof GridVoiceInput.Type;
 /** Everything the strip may ask main to do (renderer → main), decoded at the IPC edge. */
 export const VoiceSurfaceRequest = Schema.Union(
 	Schema.TaggedStruct("Input", { input: GridVoiceInput }),
+	Schema.TaggedStruct("ResetContext", { keyCode: VoiceKeyCode }),
 	Schema.TaggedStruct("Reset", {
 		reason: VoiceResetReason,
 	}),

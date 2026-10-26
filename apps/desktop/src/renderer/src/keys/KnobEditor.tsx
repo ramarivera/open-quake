@@ -254,6 +254,7 @@ export function KnobEditor({
 								<option value="legacyAssistant">Legacy assistant</option>
 								<option value="dkclaw">DK Claw (OpenClaw)</option>
 								<option value="direct">Direct chat</option>
+								<option value="dkclaw">DK Claw (OpenClaw)</option>
 							</select>
 						</Row>
 						<KnobAssistantSettings

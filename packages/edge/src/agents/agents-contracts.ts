@@ -1,6 +1,10 @@
 import { Schema } from "effect";
 import { ProviderSettings } from "../ai/ai-contracts.js";
 import { GenerationControls } from "../ai/ai-workflow-contracts.js";
+import {
+	ManagedEnvironment,
+	ServiceSettings,
+} from "./service-settings-contracts.js";
 export const AgentId = Schema.String.pipe(
 	Schema.pattern(/^[a-z][a-z0-9-]*$/),
 	Schema.maxLength(48),
@@ -111,6 +115,43 @@ export const AgentView = Schema.Struct({
 export type AgentView = typeof AgentView.Type;
 const revision = Schema.Int.pipe(Schema.nonNegative());
 export const AgentCommand = Schema.Union(
+	Schema.Struct({
+		type: Schema.Literal("rename"),
+		id: AgentId,
+		name: Schema.NonEmptyTrimmedString.pipe(Schema.maxLength(200)),
+		revision,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("reset-templates"),
+		id: AgentId,
+		confirmed: Schema.Boolean,
+		revision,
+	}),
+	Schema.Struct({ type: Schema.Literal("export-pack"), id: AgentId }),
+	Schema.Struct({
+		type: Schema.Literal("import-pack"),
+		pack: Schema.String.pipe(Schema.maxLength(2097152)),
+		revision,
+	}),
+	Schema.Struct({ type: Schema.Literal("diagnostics") }),
+	Schema.Struct({ type: Schema.Literal("export-workspace-backup") }),
+	Schema.Struct({ type: Schema.Literal("service-settings") }),
+	Schema.Struct({
+		type: Schema.Literal("save-service-settings"),
+		settings: ServiceSettings,
+		restart: Schema.Boolean,
+		revision,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("clear-runtime-data"),
+		confirmed: Schema.Boolean,
+		revision,
+	}),
+	Schema.Struct({
+		type: Schema.Literal("update-environment"),
+		environment: ManagedEnvironment,
+		revision,
+	}),
 	Schema.Struct({ type: Schema.Literal("read") }),
 	Schema.Struct({
 		type: Schema.Literal("runtime"),

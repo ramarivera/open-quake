@@ -32,7 +32,7 @@ describe("protocol kernel consumed by the conductor", () => {
 							Effect.sync(() => received.push(event._tag)),
 						).pipe(Effect.either, Effect.forkScoped);
 						if (direction === "read") yield* fake.emit(report(3, 2, [1]));
-						else yield* TestClock.adjust(100);
+						else yield* TestClock.adjust(1000);
 						const result = yield* Fiber.join(consumer);
 						expect(Either.isLeft(result)).toBe(true);
 						if (Either.isLeft(result)) {

@@ -48,6 +48,7 @@ function ModelTable({
 		baseline.current = rows;
 		setDrafts((current) => reconcileModelDrafts(current, previous, rows));
 	}, [rows]);
+	const [saveResult, setSaveResult] = useState("");
 	const [secrets, setSecrets] = useState<Readonly<Record<string, string>>>({});
 	const [deleting, setDeleting] = useState<PublicModelRow>();
 	const update = (next: PublicModelRow, propagate = false): void =>
@@ -69,6 +70,7 @@ function ModelTable({
 		const submittedSecret = Object.hasOwn(secrets, row.id)
 			? (secrets[row.id] ?? "")
 			: "";
+		setSaveResult("");
 		const reply = await request({
 			type: "save-model",
 			scope,
@@ -76,6 +78,11 @@ function ModelTable({
 			secret: submittedSecret,
 			revision: view.revision,
 		});
+		setSaveResult(
+			reply._tag === "success"
+				? strings.administration.modelSaved
+				: reply.message,
+		);
 		if (reply._tag === "success") {
 			const saved = ownModelRows(reply.view.models, scope)?.find(
 				(entry) => entry.id === row.id,
@@ -102,6 +109,16 @@ function ModelTable({
 	};
 	return (
 		<>
+			{busy && <p role="status">{strings.administration.modelLoading}</p>}
+			{saveResult && <p role="status">{saveResult}</p>}
+			<button
+				type="button"
+				className="mc-button"
+				disabled={busy}
+				onClick={() => void request({ type: "read" })}
+			>
+				{strings.administration.modelReload}
+			</button>
 			<div className="aw-table-wrap">
 				<table className="mc-table aw-table">
 					<caption className="visually-hidden">
