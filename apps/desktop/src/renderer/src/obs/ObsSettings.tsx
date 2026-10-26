@@ -353,8 +353,9 @@ export function ObsSettings({
 							!catalog.scenes.some(
 								(scene) => scene.sceneUuid === sceneUuid,
 							) && (
-								<option value={sceneUuid}>
+								<option value={sceneUuid} disabled>
 									{field("sceneName") || sceneUuid}
+									{` (${text("unavailable")})`}
 								</option>
 							)}
 						{catalog.scenes.map((scene) => (

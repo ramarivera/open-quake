@@ -127,13 +127,13 @@ const fixture = (
 		};
 	});
 const expected: Readonly<Record<ObsId, readonly string[]>> = {
-	obsScene: ["SetCurrentProgramScene"],
-	obsPreviewScene: ["SetCurrentPreviewScene"],
+	obsScene: ["GetSceneList", "SetCurrentProgramScene"],
+	obsPreviewScene: ["GetSceneList", "SetCurrentPreviewScene"],
 	obsTransition: ["TriggerStudioModeTransition"],
 	obsStudioMode: ["GetStudioModeEnabled", "SetStudioModeEnabled"],
 	obsStream: ["ToggleStream"],
 	obsRecord: ["ToggleRecord"],
-	obsSource: ["GetSceneItemEnabled", "SetSceneItemEnabled"],
+	obsSource: ["GetSceneList", "GetSceneItemEnabled", "SetSceneItemEnabled"],
 	obsMute: ["ToggleInputMute"],
 	obsVolume: ["ToggleInputMute"],
 	obsCut: ["SetCurrentSceneTransition", "TriggerStudioModeTransition"],
@@ -148,7 +148,10 @@ const expected: Readonly<Record<ObsId, readonly string[]>> = {
 	obsFilter: ["SetSourceFilterEnabled"],
 	obsProfile: ["SetCurrentProfile"],
 	obsRecordSplit: ["SplitRecordFile"],
-	obsSceneTransitionOverride: ["SetSceneSceneTransitionOverride"],
+	obsSceneTransitionOverride: [
+		"GetSceneList",
+		"SetSceneSceneTransitionOverride",
+	],
 	obsStats: [],
 	obsScreenshot: [],
 };
@@ -166,9 +169,9 @@ describe("21 recovered commands through authenticated v5", () => {
 				yield* service.execute(command(id));
 				expect(server.calls.map((call) => call.type)).toEqual(expected[id]);
 				if (id === "obsScene")
-					expect(server.calls[0]?.data).toEqual({ sceneUuid: "scene-1" });
+					expect(server.calls[1]?.data).toEqual({ sceneUuid: "scene-1" });
 				if (id === "obsSource")
-					expect(server.calls[1]?.data).toEqual({
+					expect(server.calls[2]?.data).toEqual({
 						sceneUuid: "scene-1",
 						sceneItemId: 7,
 						sceneItemEnabled: false,
@@ -188,7 +191,7 @@ describe("21 recovered commands through authenticated v5", () => {
 				if (id === "obsProfile")
 					expect(server.calls[0]?.data).toEqual({ profileName: "Streaming" });
 				if (id === "obsSceneTransitionOverride")
-					expect(server.calls[0]?.data).toEqual({
+					expect(server.calls[1]?.data).toEqual({
 						sceneUuid: "scene-1",
 						transitionName: "Fade",
 						transitionDuration: 300,
@@ -591,5 +594,59 @@ it.scoped(
 					.filter((call) => call.type === "GetInputVolume")
 					.map((call) => call.data.inputUuid),
 			).toEqual(inputs.map((input) => input.inputUuid));
+		}),
+);
+
+it.scoped(
+	"a missing saved scene retains the available catalog without requesting its items",
+	() =>
+		Effect.gen(function* () {
+			const { service, server } = yield* fixture();
+			yield* service.connect();
+			const catalog = yield* service.catalog("deleted-scene");
+			expect(catalog.scenes).toEqual([
+				{ sceneUuid: "scene-1", sceneName: "Main" },
+			]);
+			expect(catalog.inputs.length).toBeGreaterThan(0);
+			expect(catalog.items).toEqual([]);
+			expect(
+				server.calls.some((call) => call.type === "GetSceneItemList"),
+			).toBe(false);
+		}),
+);
+
+for (const id of [
+	"obsScene",
+	"obsPreviewScene",
+	"obsSource",
+	"obsSceneTransitionOverride",
+] as const)
+	it.scoped(
+		`${id} refuses a missing scene before target requests or writes`,
+		() =>
+			Effect.gen(function* () {
+				const { service, server } = yield* fixture();
+				const result = yield* Effect.either(
+					service.execute(command(id, { sceneUuid: "deleted-scene" })),
+				);
+				expect(result._tag === "Left" && result.left.code).toBe(
+					"OBS.CONFIG.REJECTED",
+				);
+				expect(server.calls.map((call) => call.type)).toEqual(["GetSceneList"]);
+			}),
+	);
+
+it.scoped(
+	"a scene deleted between list and item lookup retains repair choices",
+	() =>
+		Effect.gen(function* () {
+			const { service, server } = yield* fixture();
+			yield* service.connect();
+			server.fail(["GetSceneItemList"]);
+			const catalog = yield* service.catalog("scene-1");
+			expect(catalog.scenes).toEqual([
+				{ sceneUuid: "scene-1", sceneName: "Main" },
+			]);
+			expect(catalog.items).toEqual([]);
 		}),
 );

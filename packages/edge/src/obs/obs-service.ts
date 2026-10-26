@@ -204,6 +204,19 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 					if (blocked) return yield* lastError ?? new ObsNetworkFailed();
 					if (manualDisconnect) return yield* new ObsNetworkFailed();
 					yield* connectUnlocked();
+					if ("sceneUuid" in command.settings && command.settings.sceneUuid) {
+						const sceneUuid = command.settings.sceneUuid;
+						const list = yield* request("GetSceneList");
+						const scenes = yield* Schema.decodeUnknown(
+							ObsCatalog.fields.scenes,
+						)(list.scenes).pipe(
+							Effect.catchTag("ParseError", (cause) =>
+								Effect.fail(new ObsConfigurationRejected(cause)),
+							),
+						);
+						if (!scenes.some((scene) => scene.sceneUuid === sceneUuid))
+							return yield* new ObsConfigurationRejected();
+					}
 					const guardedRequest: ObsRequest = (type, data) =>
 						beforeWrite && !type.startsWith("Get")
 							? Effect.tryPromise({
@@ -330,17 +343,30 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 						inputs = yield* request("GetInputList"),
 						transitions = yield* request("GetSceneTransitionList"),
 						special = yield* request("GetSpecialInputs");
-					const items = sceneUuid
-						? yield* request("GetSceneItemList", { sceneUuid })
-						: {};
 					const decoded = yield* Schema.decodeUnknown(ObsCatalog)({
 						scenes: scenes.scenes,
 						inputs: inputs.inputs,
 						transitions: transitions.transitions,
-						items: items.sceneItems ?? [],
+						items: [],
 					}).pipe(
 						Effect.catchTag("ParseError", () =>
 							Effect.fail(new ObsConfigurationRejected()),
+						),
+					);
+					const items =
+						sceneUuid &&
+						decoded.scenes.some((scene) => scene.sceneUuid === sceneUuid)
+							? yield* request("GetSceneItemList", { sceneUuid }).pipe(
+									Effect.catchTag("ObsRequestFailed", () =>
+										Effect.succeed({ sceneItems: [] }),
+									),
+								)
+							: { sceneItems: [] };
+					const sceneItems = yield* Schema.decodeUnknown(
+						ObsCatalog.fields.items,
+					)(items.sceneItems).pipe(
+						Effect.catchTag("ParseError", (cause) =>
+							Effect.fail(new ObsConfigurationRejected(cause)),
 						),
 					);
 					const names = Object.values(special).filter(
@@ -364,6 +390,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 					);
 					return {
 						...decoded,
+						items: sceneItems,
 						inputs: [
 							...audioInputs,
 							...names

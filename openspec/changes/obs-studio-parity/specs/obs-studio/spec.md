@@ -66,3 +66,10 @@ The system SHALL refresh visible OBS status, stats and screenshot tiles every 20
 - **AND** uncommitted sources are rejected before OBS IO
 - **AND** profile changes revoke polling and prevent publication of in-flight screenshots
 - **AND** management can preview unsaved targets and a panel retries after Save
+
+#### Scenario: Repair a missing saved scene
+- **WHEN** a saved scene target is absent from the current collection
+- **THEN** the catalog still returns available scenes and empty scene items
+- **AND** the saved scene remains visible as unavailable alongside replacement scenes
+- **AND** scene commands validate the current scene list and reject missing scenes before target requests or writes
+- **AND** deletion between scene listing and item lookup retains replacement choices

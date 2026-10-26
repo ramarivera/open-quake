@@ -121,3 +121,33 @@ it("keeps a saved non-selectable input visible for repair", () => {
 		render("obsVolume", { inputUuid: "saved", inputName: "Silent source" }),
 	).toContain('<option value="saved" selected="">Silent source');
 });
+
+for (const type of [
+	"obsScene",
+	"obsPreviewScene",
+	"obsSource",
+	"obsSceneTransitionOverride",
+	"obsScreenshot",
+]) {
+	it(
+		type +
+			" retains the saved missing scene as unavailable alongside replacements",
+		() => {
+			state.catalog = {
+				scenes: [{ sceneUuid: "scene-1", sceneName: "Main" }],
+				inputs: [],
+				transitions: [],
+				items: [],
+			};
+			const html = render(type, {
+				sceneUuid: "deleted-scene",
+				sceneName: "Old scene",
+				sourceName: "Old scene",
+			});
+			expect(html).toContain(
+				'<option value="deleted-scene" disabled="" selected="">Old scene (Unavailable)</option>',
+			);
+			expect(html).toContain('<option value="scene-1">Main</option>');
+		},
+	);
+}

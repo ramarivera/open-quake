@@ -19,6 +19,6 @@
 - [x] 4.1 Reconnect after explicit Auto-fetch, preserving startup/manual-disconnect policy; regression for thread 4375829071. Bead open-quake-lih.18.1.9.
 - [x] 4.2 Include recovered audio/media-capable input kinds in target editors; regressions for threads 4375829250 and 4375833109. Bead open-quake-lih.18.1.10.
 - [x] 4.3 Authorize panel screenshots against committed active keys, revoke stale leases and retry after Save; regressions for thread 4375829386. Bead open-quake-lih.18.1.11.
-- [ ] 4.4 Preserve stale scene targets as unavailable, retain replacement choices and reject missing-scene dispatch; regressions for thread 4375833113. Bead open-quake-lih.18.1.12.
+- [x] 4.4 Preserve stale scene targets as unavailable, retain replacement choices and reject missing-scene dispatch; regressions for thread 4375833113. Bead open-quake-lih.18.1.12.
 
 - [ ] 4.5 Honor OBS SessionInvalidated close code 4011 until explicit reconnect; regression for thread 4376190765. Bead open-quake-lih.18.1.13.

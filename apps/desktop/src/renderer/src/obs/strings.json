@@ -1,6 +1,7 @@
 {
 	"en": {
 		"config": {
+			"unavailable": "Unavailable",
 			"title": "OBS Connection",
 			"connectionStatus": "Connection",
 			"connected": "Connected",
@@ -94,6 +95,7 @@
 	},
 	"zh": {
 		"config": {
+			"unavailable": "不可用",
 			"title": "OBS 连接",
 			"connectionStatus": "连接状态",
 			"connected": "已连接",
@@ -187,6 +189,7 @@
 	},
 	"de": {
 		"config": {
+			"unavailable": "Nicht verfügbar",
 			"connectionStatus": "Connection",
 			"title": "OBS Connection",
 			"retry": "Retry",
@@ -280,6 +283,7 @@
 	},
 	"es": {
 		"config": {
+			"unavailable": "No disponible",
 			"connectionStatus": "Connection",
 			"title": "OBS Connection",
 			"retry": "Retry",
@@ -373,6 +377,7 @@
 	},
 	"fr": {
 		"config": {
+			"unavailable": "Indisponible",
 			"connectionStatus": "Connection",
 			"title": "OBS Connection",
 			"retry": "Retry",
@@ -466,6 +471,7 @@
 	},
 	"it": {
 		"config": {
+			"unavailable": "Non disponibile",
 			"connectionStatus": "Connection",
 			"title": "OBS Connection",
 			"retry": "Retry",
@@ -559,6 +565,7 @@
 	},
 	"ja": {
 		"config": {
+			"unavailable": "利用不可",
 			"connectionStatus": "Connection",
 			"title": "OBS Connection",
 			"retry": "Retry",
@@ -652,6 +659,7 @@
 	},
 	"ko": {
 		"config": {
+			"unavailable": "사용 불가",
 			"connectionStatus": "Connection",
 			"title": "OBS Connection",
 			"retry": "Retry",
