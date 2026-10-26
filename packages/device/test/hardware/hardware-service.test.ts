@@ -1,5 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Either, Fiber, Layer, Option, Ref, TestClock } from "effect";
+import {
+	HOTKEY_KEYS,
+	HOTKEY_MODIFIERS,
+	isHotkeyChord,
+} from "../../src/actions/action-contracts.js";
 import { QuakeDevice } from "../../src/device-service.js";
 import {
 	fakeHardwareReply,
@@ -365,6 +370,32 @@ describe("hardware controls over actual device connection with fake transport", 
 });
 
 describe("hardware invariants", () => {
+	it("encodes every saved hotkey key and modifier without losing a token", () => {
+		const usages = new Set<number>();
+		for (const key of HOTKEY_KEYS) {
+			expect(isHotkeyChord(key)).toBe(true);
+			const encoded = encodeDeviceChord(key);
+			expect(Either.isRight(encoded), key).toBe(true);
+			if (Either.isLeft(encoded)) continue;
+			expect(encoded.right.modifiers).toBe(0);
+			expect(encoded.right.usage).toBeGreaterThan(0);
+			usages.add(encoded.right.usage);
+			for (const modifier of HOTKEY_MODIFIERS) {
+				const chord = `${modifier}+${key}`;
+				expect(isHotkeyChord(chord)).toBe(true);
+				const modified = encodeDeviceChord(chord);
+				expect(Either.isRight(modified), chord).toBe(true);
+				if (Either.isLeft(modified)) continue;
+				expect(modified.right.usage).toBe(encoded.right.usage);
+				expect(modified.right.modifiers).toBeGreaterThan(0);
+				expect(Math.log2(modified.right.modifiers) % 1).toBe(0);
+			}
+		}
+		expect(usages.size).toBe(HOTKEY_KEYS.length);
+		expect(encodeDeviceChord("numlock")).toEqual(
+			Either.right({ modifiers: 0, usage: 83 }),
+		);
+	});
 	it("matches the entire slider domain and native brightness bounds", () => {
 		expect(sliderToVolume(0)).toBe(0);
 		expect(sliderToVolume(1)).toBe(32);
