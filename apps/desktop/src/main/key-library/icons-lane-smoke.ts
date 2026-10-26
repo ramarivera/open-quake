@@ -11,10 +11,12 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository.js";
 import { KeyReply, type KeyRequest } from "../../shared/key-library";
+import { MONITOR_ARTWORK } from "../../shared/monitor-contracts";
 import {
 	PROFILE_SNAPSHOT,
 	ProfileReplySchema,
 } from "../../shared/profile-manager";
+import { foregroundArtwork } from "../monitor/foreground-artwork";
 import { iconZip } from "../test/icon-pack-fixtures";
 import type { Harness } from "./smoke-editor";
 
@@ -443,6 +445,7 @@ export async function verifyIconsLane(
 			{ id: "game", keys: [make("gameMode", png)] },
 			{ id: "game-wide", keys: [make("gameMode", png, [4, 2])] },
 			{ id: "clock", keys: [make("dkDesktopClock", "")] },
+			{ id: "meeting", keys: [make("meetingMinutes", "")] },
 			{ id: "camera", keys: [make("cameraView", png)] },
 			{ id: "mdi", keys: [make("text", "@mdi/svg/alarm.svg")] },
 			{ id: "app-alias", keys: [make("text", "@/icon/application.svg")] },
@@ -614,14 +617,22 @@ export async function verifyIconsLane(
 		win,
 		"(()=>{const node=document.querySelector('.keys-preview .strip-slot[data-state=tile]');return [node.style.left,node.style.top,node.style.width,node.style.height]})()",
 	);
-	win.webContents.send("monitor:state", {
-		metrics: { sampledAt: 0, samples: [] },
-		foreground: {
-			state: "available",
-			collectedAt: 1,
-			window: { id: "fixture", path: app.extraData[0] },
-		},
-	});
+	const resolveForeground = foregroundArtwork(async () => ({
+		id: "applications",
+		name: "Apps",
+		icons: [app],
+	}));
+	win.webContents.send(
+		MONITOR_ARTWORK,
+		await resolveForeground({
+			metrics: { sampledAt: 0, samples: [] },
+			foreground: {
+				state: "available",
+				collectedAt: 1,
+				window: { id: "fixture", path: app.extraData[0] },
+			},
+		}),
+	);
 	await ready(
 		win,
 		`document.querySelector('.keys-preview .strip-tile-icon img')?.getAttribute('src')===${JSON.stringify(app.data)}`,
@@ -633,10 +644,34 @@ export async function verifyIconsLane(
 		),
 		slotBefore,
 	);
-	win.webContents.send("monitor:state", {
-		metrics: { sampledAt: 0, samples: [] },
-		foreground: { state: "permission-denied", collectedAt: 2 },
-	});
+	const catalogs = h.delays.requests.filter(
+		(request) => request.type === "application-icons",
+	).length;
+	for (let sample = 1; sample <= 10; sample++)
+		win.webContents.send("monitor:metrics", { sampledAt: sample, samples: [] });
+	await evalIn(
+		win,
+		"new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+	);
+	assert.equal(
+		h.delays.requests.filter((request) => request.type === "application-icons")
+			.length,
+		catalogs,
+	);
+	assert.equal(
+		await evalIn(
+			win,
+			"document.querySelector('.keys-preview .strip-tile-icon img').getAttribute('src')",
+		),
+		app.data,
+	);
+	win.webContents.send(
+		MONITOR_ARTWORK,
+		await resolveForeground({
+			metrics: { sampledAt: 0, samples: [] },
+			foreground: { state: "permission-denied", collectedAt: 2 },
+		}),
+	);
 	await ready(
 		win,
 		`document.querySelector('.keys-preview .strip-tile-icon img')?.getAttribute('src')===${JSON.stringify(png)}`,
@@ -665,6 +700,66 @@ export async function verifyIconsLane(
 		`document.querySelector('.key-selected-preview .oq-clock')?.dataset.theme===${JSON.stringify(theme)} && document.querySelector('button[aria-label="Previous clock theme"]')?.disabled===false`,
 	);
 	pass("selected clock arrows change and restore persisted theme");
+	const delayedClock = h.delays.pause("clock:setTheme", "after");
+	await click(win, 'button[aria-label="Next clock theme"]');
+	await delayedClock.entered;
+	await select(win, "#keys-page", "save");
+	await click(win, ".keys-cells button:first-child");
+	await input(win, "#key-title", "Retained draft");
+	delayedClock.release();
+	await new Promise((resolve) => setTimeout(resolve, 250));
+	assert.equal(
+		await evalIn(win, "document.querySelector('#keys-page').value"),
+		"save",
+	);
+	assert.equal(
+		await evalIn(win, "document.querySelector('#key-title').value"),
+		"Retained draft",
+	);
+	pass("late clock completion preserves the new editor selection and draft");
+	await select(win, "#keys-page", "meeting");
+	await click(win, ".keys-cells button:first-child");
+	await ready(win, "document.querySelector('.key-selected-preview button')");
+	assert.equal(
+		await evalIn(
+			win,
+			`(() => {
+ const tile=document.querySelector('.key-selected-preview [data-preview-width]');
+ const action=tile.querySelector('button');
+ for (const side of ['before','after']) {
+  const anchor=document.createElement('button'); anchor.dataset.previewTest=side;
+  if(side==='before')tile.before(anchor);else tile.after(anchor);
+ }
+ const before=document.querySelector('[data-preview-test=before]'); before.focus();
+ action.addEventListener('click',()=>{action.dataset.activations='1'});
+ action.focus();
+ return tile.inert && document.activeElement===before;
+ })()`,
+		),
+		true,
+	);
+	win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Tab" });
+	win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
+	await ready(
+		win,
+		"document.activeElement===document.querySelector('[data-preview-test=after]')",
+	);
+	win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+	win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+	assert.equal(
+		await evalIn(
+			win,
+			`(() => {
+ const action=document.querySelector('.key-selected-preview [inert] button');
+ const untouched=!action.dataset.activations;
+ document.querySelectorAll('[data-preview-test]').forEach(el=>el.remove());
+ return untouched;
+ })()`,
+		),
+		true,
+	);
+	pass("selected meeting preview rejects focus and Tab/Enter activation");
+
 	await select(win, "#keys-page", "save");
 	await click(win, ".keys-cells button:first-child");
 	await button(win, "Icon Library");

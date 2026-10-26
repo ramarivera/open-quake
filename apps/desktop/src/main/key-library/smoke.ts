@@ -263,7 +263,6 @@ async function smoke(): Promise<void> {
 			() => undefined,
 			() => panel,
 		);
-		delays.restore();
 		voice = registerVoiceSurface({
 			mock: true,
 			tones: createToneRecorder(),
@@ -297,6 +296,7 @@ async function smoke(): Promise<void> {
 			ManagedRuntime.make(ClockLive(directory)),
 			() => manager,
 		);
+		delays.restore();
 		const lifecycle = ManagedRuntime.make(
 			DeviceLifecycle.Default({
 				mock: true,

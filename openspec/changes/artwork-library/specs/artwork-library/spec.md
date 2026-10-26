@@ -76,6 +76,11 @@ Built-in resources SHALL remain immutable. Deleting an imported resource SHALL r
 - **WHEN** the user deletes an unreferenced imported template
 - **THEN** the catalog and managed file are removed and related views refresh
 
+#### Scenario: Application-prefixed deletion reference
+
+- **WHEN** saved or draft keys reference application:<hash>
+- **THEN** removing the referenced local icon or pack is rejected
+
 ### Requirement: Display-delivery evidence boundary
 
 The library SHALL distinguish a saved local artwork assignment from device-delivery status and SHALL report unverified or unsupported delivery when the active display adapter lacks a verified conversion/transfer contract.
@@ -192,6 +197,11 @@ For MGMT-252 the key editor SHALL show a selected tile card using the real tile 
 - **WHEN** a selected clock's next theme control is activated
 - **THEN** its real preview changes theme without activating a key or changing another key
 
+#### Scenario: Inert selected preview and stale clock completion
+
+- **WHEN** keyboard navigation reaches a selected preview or a clock write completes after another selection
+- **THEN** the preview cannot receive focus or activate a key, and stale completion cannot reopen the old selection
+
 ### Requirement: Profile thumbnail state presentation
 
 For MGMT-430 each profile row SHALL expose empty, ready, stale, updating, generating and failed states. A retained image SHALL dim while stale or updating, failure SHALL include a readable explanation, and per-row refresh SHALL disable throughout batch work. The preview frame SHALL be 96 by 24 px with an always-visible refresh action. Physical display correspondence remains unverified.
@@ -200,6 +210,11 @@ For MGMT-430 each profile row SHALL expose empty, ready, stale, updating, genera
 
 - **WHEN** a row refresh starts or fails
 - **THEN** existing pixels remain dimmed during updating, empty rows report generating, and failure displays the explanation while allowing retry after batch work stops
+
+#### Scenario: Thumbnail waits for owned artwork
+
+- **WHEN** a thumbnail includes an asynchronously resolved application icon
+- **THEN** capture waits for resolution and successful image decoding before caching the PNG
 
 ### Requirement: Artwork geometry across tile sizes
 
@@ -210,6 +225,11 @@ For WIDGETS-008 emoji artwork SHALL occupy floor(min(box) times 0.77) centered i
 - **WHEN** 1x1 emoji and 4x2 game tiles render in a scaled StripScreen
 - **THEN** the artwork fits those metrics and slot geometry stays identical before and after its source changes
 
+#### Scenario: Foreground artwork privacy and sample stability
+
+- **WHEN** monitoring publishes foreground app state or metric-only samples
+- **THEN** the panel receives resolved artwork without executable paths, and unchanged normalized foreground identity reuses artwork without requesting a catalog
+
 ### Requirement: Internal helper ownership remains explicit
 
 MGMT-413 SHALL remain an open obligation until merge/deletion, image downloads, port probing and timestamp formatting have consumer-level requirements and tests or an explicit approved exclusion. This artwork lane SHALL NOT introduce unconsumed copies of DK internal helpers or label them complete from unit tests alone.
@@ -218,23 +238,3 @@ MGMT-413 SHALL remain an open obligation until merge/deletion, image downloads, 
 
 - **WHEN** a recovered helper belongs to another subsystem and lacks a defined artwork use
 - **THEN** its obligation stays open with that missing owner or decision recorded
-
-#### Scenario: Foreground artwork privacy and sample stability
-
-- **WHEN** monitoring publishes foreground app state or metric-only samples
-- **THEN** the panel receives resolved artwork without executable paths, and unchanged normalized foreground identity reuses artwork without requesting a catalog
-
-#### Scenario: Inert selected preview and stale clock completion
-
-- **WHEN** keyboard navigation reaches a selected preview or a clock write completes after another selection
-- **THEN** the preview cannot receive focus or activate a key, and stale completion cannot reopen the old selection
-
-#### Scenario: Thumbnail waits for owned artwork
-
-- **WHEN** a thumbnail includes an asynchronously resolved application icon
-- **THEN** capture waits for resolution and successful image decoding before caching the PNG
-
-#### Scenario: Application-prefixed deletion reference
-
-- **WHEN** saved or draft keys reference application:<hash>
-- **THEN** removing the referenced local icon or pack is rejected
