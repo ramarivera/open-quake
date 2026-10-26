@@ -15,6 +15,7 @@ import {
 	createDesktopDiagnostics,
 	type DesktopDiagnostics,
 } from "../diagnostics";
+import { meetingAdmission } from "./admission";
 import { createToneRecorder, registerVoiceSurface } from "./index";
 
 const RENDERER = "file:///app/out/renderer/index.html";
@@ -656,6 +657,76 @@ it("AI-185: cancelled picker returns no paths and dispatches no turn", async () 
 			paths: [],
 		});
 		expect(sent()).toHaveLength(0);
+	} finally {
+		await registration.dispose();
+	}
+});
+
+it("KNOB-008/064 SCREEN-050: desktop meeting/translation admission reaches real IPC before capture and releases without reset", async () => {
+	let state = { records: [{ state: "recording" }], translating: false };
+	const tones = createToneRecorder();
+	const registration = registerVoiceSurface({
+		mock: true,
+		tones,
+		serial: () => "QK-1",
+		panel: () => undefined,
+		management: () => undefined,
+		renderer: RENDERER,
+		admission: meetingAdmission(async () => state),
+	});
+	try {
+		await Effect.runPromise(
+			registration.knobVoice({ action: "holdStart", generation: 1 }),
+		);
+		await vi.waitFor(() => expect(tones.played()).toHaveLength(1));
+		expect(
+			sent()
+				.filter(Either.isRight)
+				.map((value) => value.right)
+				.at(-1),
+		).toMatchObject({
+			_tag: "Toast",
+			messageKey: "meetingAssistantPrompt.meetingActive",
+		});
+		state = { records: [], translating: true };
+		await Effect.runPromise(
+			registration.knobVoice({ action: "holdStart", generation: 2 }),
+		);
+		await vi.waitFor(() => expect(tones.played()).toHaveLength(2));
+		expect(
+			sent()
+				.filter(Either.isRight)
+				.map((value) => value.right)
+				.at(-1),
+		).toMatchObject({
+			_tag: "Toast",
+			messageKey: "meetingAssistantPrompt.liveTranslateActive",
+		});
+		expect(tones.played().map((value) => value.tone)).toEqual(["busy", "busy"]);
+		state = { records: [], translating: false };
+		await Effect.runPromise(
+			registration.knobVoice({ action: "holdStart", generation: 3 }),
+		);
+		await vi.waitFor(() =>
+			expect(
+				sent()
+					.filter(Either.isRight)
+					.some(
+						(value) =>
+							value.right._tag === "Stage" &&
+							value.right.stage._tag === "recording",
+					),
+			).toBe(true),
+		);
+		expect(
+			sent()
+				.filter(Either.isRight)
+				.some(
+					(value) =>
+						value.right._tag === "Stage" &&
+						value.right.stage._tag === "recording",
+				),
+		).toBe(true);
 	} finally {
 		await registration.dispose();
 	}

@@ -306,7 +306,8 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				const localAudio =
 					type === "playAudio" ||
 					type === "playAudioLegacy" ||
-					type === "stopAudio";
+					type === "stopAudio" ||
+					type === "audioBot";
 				if (localAudio) {
 					if (kind === "press") {
 						audioPresses.set(control, { ...base, revision: profile.revision });
@@ -489,7 +490,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					port.executeOwned
 				) {
 					if (ownedControls.has(control)) return;
-					if (isObsId(type)) {
+					if (isObsId(type) || type === "audioBot") {
 						const validated = validateAction(
 							Option.getOrElse(key.childrenName, () => type),
 							input,

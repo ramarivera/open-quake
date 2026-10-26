@@ -33,6 +33,7 @@ import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
+import { AudioBotSettings } from "../strip/tiles/voiceKey/AudioBotSettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
@@ -910,6 +911,11 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						<AudioBotSettings
+							keyValue={key}
+							locale={locale}
+							onChange={(next) => void update(next)}
+						/>
 						<MediaKeySettings
 							keyValue={key}
 							locale={locale}

@@ -262,6 +262,15 @@ export function SpeechSettingsPanel(): React.JSX.Element | null {
 					</p>
 				) : null}
 			</Row>
+			<Row label="Host voice tones">
+				<input
+					aria-label="Host voice tones"
+					type="checkbox"
+					checked={draft.hostTones === true}
+					disabled={busy}
+					onChange={(e) => setDraft({ ...draft, hostTones: e.target.checked })}
+				/>
+			</Row>
 			<Row label="Speak answers">
 				<input
 					aria-label="Speak answers"

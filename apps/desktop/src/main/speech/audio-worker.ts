@@ -9,6 +9,8 @@ export function installAudioWorker(
 	Framer: typeof PcmFramer,
 	recover: typeof recoverMicrophone,
 ) {
+	let localActive = false;
+	let localStatus = { started: false, done: false, failed: false };
 	let context: AudioContext | undefined;
 	let tracks: MediaStream | undefined;
 	let processor: ScriptProcessorNode | undefined;
@@ -33,6 +35,11 @@ export function installAudioWorker(
 	let failed: false | "overflow" | "recorder" = false;
 	let framer: PcmFramer | undefined;
 	const stop = async () => {
+		if (localActive) {
+			localActive = false;
+			localStatus = { ...localStatus, failed: true };
+			speechSynthesis.cancel();
+		}
 		stopped = true;
 		const ownedTracks = tracks;
 		const ownedProcessor = processor;
@@ -187,6 +194,50 @@ export function installAudioWorker(
 				failed,
 			};
 			return batch;
+		},
+		speakLocal(
+			text: string,
+			settings: {
+				rate: number;
+				pitch: number;
+				volume: number;
+				voiceHint: string;
+			},
+		) {
+			const voices = speechSynthesis.getVoices();
+			const hint = settings.voiceHint.toLowerCase().trim();
+			const voice = hint
+				? voices.find((v) => v.name.toLowerCase().includes(hint))
+				: (voices.find((v) => v.lang.startsWith("zh")) ?? voices[0]);
+			if (!voice)
+				throw Object.assign(new Error("Local voice unavailable"), {
+					name: "VoiceUnavailable",
+				});
+			const epoch = generation;
+			const utterance = new SpeechSynthesisUtterance(text);
+			utterance.voice = voice;
+			utterance.rate = Math.max(0.5, Math.min(2, settings.rate));
+			utterance.pitch = Math.max(0, Math.min(2, settings.pitch));
+			utterance.volume = Math.max(0, Math.min(1, settings.volume));
+			localActive = true;
+			localStatus = { started: false, done: false, failed: false };
+			utterance.onstart = () => {
+				if (generation === epoch && localActive) localStatus.started = true;
+			};
+			utterance.onend = () => {
+				if (generation !== epoch || !localActive) return;
+				localStatus.done = true;
+				localActive = false;
+			};
+			utterance.onerror = () => {
+				if (generation !== epoch) return;
+				localStatus.failed = true;
+				localActive = false;
+			};
+			speechSynthesis.speak(utterance);
+		},
+		localState() {
+			return { ...localStatus };
 		},
 		async ready() {
 			context = new AudioContext({ sampleRate: 24000 });

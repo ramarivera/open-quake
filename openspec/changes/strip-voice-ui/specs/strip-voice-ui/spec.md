@@ -507,3 +507,31 @@ The real meeting pipeline SHALL publish MeetingStage events for recording 0, rec
 - **WHEN** fake capture and provider ports drive the production meeting pipeline through recording, merge, upload, ASR, transcript and summary
 - **THEN** the mounted display shows the correlated stage and status, with recording, processing, failure and success animation states
 - **AND** another meeting's late event, a canceled job's completion and a profile reset cannot overwrite the active display
+
+### Requirement: Shared voice admission and interruption
+
+For KNOB-007, KNOB-008, KNOB-064 and SCREEN-050, grid and knob voice SHALL check the process meeting/translation owner before selection and again before capture acquisition. Recording or processing meetings SHALL reject with `meetingAssistantPrompt.meetingActive`; live translation SHALL reject with `meetingAssistantPrompt.liveTranslateActive`. Rejection SHALL emit a busy tone and warning toast without closing the current flow. Knob short press SHALL disarm a pending grid reservation or cancel the current same-device capture/chat owner once. A stale knob generation SHALL NOT cancel a newer knob capture. Other devices SHALL remain untouched.
+
+#### Scenario: Meeting releases voice
+- **WHEN** a grid press and knob hold arrive while a meeting owns capture, then another hold arrives after release
+- **THEN** the first two attempts emit localized warnings with no selection or microphone acquisition, and the new hold starts capture
+
+#### Scenario: Interrupt grid reservation and chat
+- **WHEN** a short knob press arrives during a grid reservation or running chat
+- **THEN** the pending timer is disarmed or the resolved owner is cancelled once, and duplicate interrupts with no owner do nothing
+
+### Requirement: Explicit independent voice presentation
+
+SCREEN-112, SCREEN-113, SCREEN-118 and SCREEN-119 SHALL follow independent-device-design. The full-strip sheet SHALL use the device palette, a 96px state glyph and 48px/64px single-line transcript, with 72px bottom meter clearance. Grid capture SHALL show its transcript above the meter without covering the whole grid. Portrait rendering SHALL preserve the strip's logical coordinates. The meter SHALL clamp RMS to 0–1, smooth full-motion updates and show a static level under reduced motion. The Copilot presence ring SHALL expose status and microphone energy without decorative simulated audio. Full-motion activity SHALL stop on idle/unmount; reduced motion SHALL retain state without animation. Volume SHALL keep the existing 380×88 device capsule and inactive/activating/active/unavailable states, a bounded percentage, disabled unavailable/read-only controls and the shared 600ms gesture duplicate guard. These are accepted replacements for recovered cyan/magenta artwork, gradients and orb clouds, not exclusions of state, level or interaction behavior.
+
+#### Scenario: Both voice sources and reduced motion
+- **WHEN** knob or grid capture receives silent, low and high RMS followed by processing, including portrait and reduced-motion settings
+- **THEN** the correct sheet/meter appears, transcript overflow stays bounded, energy follows real levels, and inactive or unmounted indicators leave no animation work
+
+### Requirement: Toast fallback and type
+
+SCREEN-020 and SCREEN-120 toasts SHALL carry a bounded message key, optional fallback text and optional warning/error type. Missing type SHALL mean warning. A known localized key SHALL win; otherwise fallback text then the key SHALL render as escaped text. Toasts SHALL expire at exactly 3000ms without changing voice ownership. Independent pill colors SHALL distinguish warning/error while preserving recovered 24px text with 1.5 line height, 28px icon and wrapped long localized content.
+
+#### Scenario: Unknown warning
+- **WHEN** a toast has an unknown key and fallback text with no type
+- **THEN** the fallback renders with warning presentation for 2999ms and disappears at 3000ms without closing a newer capture
