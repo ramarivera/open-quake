@@ -4,11 +4,12 @@ import {
 	type DeviceStreamError,
 	type HardwareError,
 	type HardwareSession,
+	hidSerialFromAlias,
 	type QuakeConnection,
 	QuakeDevice,
 	QuakeDeviceNotFound,
 } from "@open-quake/device";
-import { Clock, Deferred, Effect, Exit, Scope, Stream } from "effect";
+import { Clock, Deferred, Effect, Exit, Schema, Scope, Stream } from "effect";
 import type {
 	DeviceStatusError,
 	DeviceStatusEvent,
@@ -21,6 +22,7 @@ export type DeviceBus = {
 	on(listener: (event: QuakeEvent, serial?: string) => void): () => void;
 	currentStatus(): DeviceStatusEvent | undefined;
 	serial?(): string | undefined;
+	matrix?(): { readonly row: 1 | 2; readonly col: 8 };
 	onLifecycleStatus?: (
 		listener: (event: DeviceStatusEvent, serial: string) => void,
 	) => () => void;
@@ -99,6 +101,29 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		});
 	const forward = (event: DeviceEvent): Effect.Effect<void> => {
 		switch (event._tag) {
+			case "Json": {
+				const value = event.value;
+				const decoded = Schema.decodeUnknownOption(
+					Schema.Struct({
+						type: Schema.Literal("reportConfig"),
+						keyMatrix: Schema.Struct({
+							row: Schema.Literal(1, 2),
+							col: Schema.Number,
+						}),
+					}),
+				)(value);
+				if (decoded._tag === "Some")
+					matrix = { row: decoded.value.keyMatrix.row, col: 8 };
+				return publish({ source: "hid", kind: "json", value: event.value });
+			}
+			case "Resource":
+				return publish({
+					source: "hid",
+					kind: "resource",
+					envelope: event.envelope,
+				});
+			case "Matrix":
+				return publish({ source: "hid", kind: "matrix", matrix: event.matrix });
 			case "HardwareReply":
 				return Effect.void;
 			case "KnobRotate":
@@ -133,9 +158,12 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 			// rather than the system, consumer or keyboard HID collections.
 			if (selection) {
 				const present = yield* device.discover();
-				const current = present.find(
-					(info) => info.serialNumber === selection.serial,
-				);
+				const current =
+					present.find((info) => info.serialNumber === selection.serial) ??
+					present.find(
+						(info) =>
+							info.serialNumber === hidSerialFromAlias(selection.serial),
+					);
 				if (!current) return yield* new QuakeDeviceNotFound();
 				selectedPath = current.path;
 			}
@@ -257,9 +285,12 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 			yield* wait(delay);
 		}),
 	).pipe(Effect.forkScoped);
+	const missingScans = new Map<string, number>();
+	let presenceDelay = 1000;
+	let matrix: { row: 1 | 2; col: 8 } = { row: 2, col: 8 };
 	if (!selection)
 		yield* Effect.forever(
-			Effect.sleep(1000).pipe(
+			Effect.suspend(() => Effect.sleep(presenceDelay)).pipe(
 				Effect.zipRight(
 					Effect.gen(function* () {
 						const scan = yield* device.discover().pipe(Effect.either);
@@ -268,9 +299,26 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 							return;
 						}
 						const discovered = scan.right;
-						const primarySerial =
-							discovered.find((info) => info.serialNumber === lastSerial)
-								?.serialNumber ?? discovered[0]?.serialNumber;
+						let anyMissing = false;
+						const primaryPath = connectionNow?.info.path;
+						if (primaryPath) {
+							if (discovered.some((info) => info.path === primaryPath))
+								missingScans.delete(primaryPath);
+							else {
+								anyMissing = true;
+								const count = (missingScans.get(primaryPath) ?? 0) + 1;
+								missingScans.set(primaryPath, count);
+								if (count >= 2) {
+									yield* connectionNow
+										?.disconnect()
+										.pipe(
+											Effect.catchTag("QuakeHidCloseFailed", reportError),
+										) ?? Effect.void;
+									missingScans.delete(primaryPath);
+								}
+							}
+						}
+						const primarySerial = lastSerial ?? discovered[0]?.serialNumber;
 						const promote = primarySerial
 							? secondary.get(primarySerial)
 							: undefined;
@@ -280,6 +328,11 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 						}
 						for (const [serial, entry] of secondary) {
 							if (!discovered.some((info) => info.serialNumber === serial)) {
+								anyMissing = true;
+								const count = (missingScans.get(serial) ?? 0) + 1;
+								missingScans.set(serial, count);
+								if (count < 2) continue;
+								missingScans.delete(serial);
 								publishLifecycle(
 									{
 										source: "hid",
@@ -291,8 +344,9 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 								);
 								secondary.delete(serial);
 								yield* Scope.close(entry.scope, Exit.void);
-							}
+							} else missingScans.delete(serial);
 						}
+						presenceDelay = anyMissing ? 2000 : 5000;
 						for (const info of discovered) {
 							const serial = info.serialNumber;
 							if (!serial || serial === primarySerial || secondary.has(serial))
@@ -329,6 +383,7 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		},
 		currentStatus: () => status,
 		serial: () => connectionNow?.info.serialNumber ?? lastSerial,
+		matrix: () => matrix,
 		onLifecycleStatus: (listener) => {
 			lifecycleListeners.add(listener);
 			if (status) listener(status, lastSerial ?? "desktop-preview");
@@ -342,7 +397,9 @@ export const startDeviceBus = Effect.fn("DesktopDeviceBus.start")(function* (
 		},
 		device: (serial) =>
 			secondary.get(serial)?.bus ??
-			(serial === lastSerial ? primary : undefined),
+			(serial === lastSerial ? primary : undefined) ??
+			secondary.get(hidSerialFromAlias(serial))?.bus ??
+			(hidSerialFromAlias(serial) === lastSerial ? primary : undefined),
 		hardware: () => hardware,
 		recover: resetBackoff,
 		setScreenPower: (on) =>

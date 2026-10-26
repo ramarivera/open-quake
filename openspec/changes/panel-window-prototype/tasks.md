@@ -34,3 +34,8 @@
 - 2.4 remains open. The parent owns Beads updates under the lane brief.
 - Renderer handoff for L3 or a later lane: import `QuakeEvent` and `OpenQuakeBridge` from `apps/desktop/src/preload/quake.ts`. The renderer's loose redeclaration is untouched.
 - OmniWM research: `/Users/ramarivera/dev/open-quake/.context/research/omniwm-quake-notes.md`. No host window-manager settings were changed.
+
+## Device burn-down lane 2026-10-26
+
+- [ ] Implement device lane requirements with fixture/TestClock/native mock coverage. Beads open-quake-lih.11.20-.22.
+- [ ] Run full gates after merging latest origin/main; hand PR to lead with hardware unverified.

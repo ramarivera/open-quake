@@ -212,3 +212,31 @@ The app SHALL start exactly one prevent-app-suspension blocker when the first de
 #### Scenario: Explicit mirroring disconnect
 - **WHEN** the user chooses Disconnect in a mirroring dialog instead of Switch or Later
 - **THEN** the existing graceful quit path tears down device, voice, window and suspension owners, while Later alone keeps them connected
+
+### Requirement: Debounced HID presence
+Audit rows MAIN-003 and MAIN-011. A connected control path SHALL be scanned at
+an initial 1000 ms discovery scan, then every 5000 ms while present and at 2000 ms after a missing scan. Two consecutive
+successful missing scans SHALL disconnect its session. Failed enumeration SHALL
+preserve presence and diagnostics. Every matching serial SHALL own its handle,
+read stream and timers; removal of all serials SHALL close each exactly once.
+A brief absence followed by reappearance SHALL preserve the connection.
+
+#### Scenario: Two missing scans
+- **WHEN** a connected path is present at the 1000 ms startup scan, then absent at 6000 ms and remains absent at 8000 ms
+- **THEN** its handle closes once at 8000 ms and no further keepalive is sent
+
+### Requirement: Screen-ready hardware identity
+Audit rows MAIN-018, SCREEN-009, SETTINGS-075, SETTINGS-077 and SETTINGS-090.
+Each trusted strip ready request SHALL synchronize its own serial's version,
+mic and luminance in sequence, bound version synchronization to ten 300 ms
+attempts, and return one coherent serial/session/version/rotation/matrix snapshot.
+Version absence and unbound display rotation SHALL remain unknown. Replaced sessions SHALL suppress stale
+replies. The strip and selected-device wizard SHALL use this bridge without
+silently choosing another serial. Touch state SHALL reset with each connection.
+Cached buzzer/LED/volume preferences SHALL remain serial-specific. Mic and
+luminance SHALL use confirmed device values rather than overwrite device state
+with stale host values. The SDK handle SHALL connect immediately, with its first keepalive at 1000 ms. Display pairing SHALL start immediately on status connection, with the existing one-second initial mode check and 2500 ms wake recovery. The recovered redundant immediate/+2500 ms connect checks SHALL use this existing lifecycle owner instead of creating a second polling loop; the ready handshake SHALL not repeat display blanking.
+
+#### Scenario: Reload and replaced device
+- **WHEN** a strip reloads late or a version arrives after its session was replaced
+- **THEN** a ready request returns the current matching serial only and ignores the obsolete reply

@@ -155,6 +155,23 @@ describe("touch production components", () => {
 					};
 				},
 			};
+			vi.stubGlobal("quakeDeviceReady", {
+				read: async () => ({
+					_tag: "ready",
+					snapshot: {
+						serialNumber: serial,
+						connected: true,
+						deviceModel: "QUAKE_HID",
+						connectionType: "mock",
+						session: `session-${serial}`,
+						rotation: 0,
+						keyMatrix: { row: 2, col: 8 },
+					},
+				}),
+			});
+			vi.stubGlobal("quakeStripTransport", {
+				send: async () => ({ ok: true }),
+			});
 			window.quakeProfiles = {
 				read: async () => ({
 					_tag: "ready",
@@ -213,6 +230,53 @@ describe("touch production components", () => {
 						deviceId: serial,
 						profileId: `profile-${serial}`,
 						kind: "down",
+					}),
+				]);
+				await act(async () => {
+					for (const listener of listeners)
+						listener({
+							source: "mock",
+							kind: "resource",
+							envelope: {
+								opCode: 2,
+								metadata: [1, 1, 1, 0, 0],
+								sequence: 0,
+								payload: [255, 216, 255, 217],
+							},
+						});
+				});
+				const image = document.querySelector(
+					'[data-key-code="1,1"] img[src="data:image/jpeg;base64,/9j/2Q=="]',
+				);
+				expect(image).not.toBeNull();
+				await act(async () => {
+					for (const listener of listeners)
+						listener({
+							source: "mock",
+							kind: "matrix",
+							matrix: {
+								reserved: [0, 0, 0, 0],
+								states: [1, ...Array.from({ length: 14 }, () => 0)],
+								tail: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+							},
+						});
+				});
+				await flush();
+				expect(
+					request.mock.calls
+						.filter(([command]) => command.type === "activate")
+						.slice(-2)
+						.map(([command]) => command),
+				).toEqual([
+					expect.objectContaining({
+						deviceId: serial,
+						profileId: `profile-${serial}`,
+						kind: "down",
+					}),
+					expect.objectContaining({
+						deviceId: serial,
+						profileId: `profile-${serial}`,
+						kind: "up",
 					}),
 				]);
 			} finally {

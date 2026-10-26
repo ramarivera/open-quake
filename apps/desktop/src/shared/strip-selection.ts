@@ -35,3 +35,24 @@ export function selectStripPage(
 	const page = profile?.pages.find((entry) => entry.id === selection?.pageId);
 	return profile && page ? { profile, page } : fallback;
 }
+
+/** The first screen-ready menu selects Colorful Screen without changing preview defaults. */
+export function initialStripProfile(envelope: ProfileEnvelope): Profile {
+	const hidden = Option.isSome(envelope.manager)
+		? envelope.manager.value.hidden
+		: [];
+	const visible = envelope.profiles.filter(
+		(profile) => !hidden.includes(profile.id),
+	);
+	return (
+		visible.find(
+			(profile) =>
+				profile.id === "1-4" ||
+				profile.pages.some((page) =>
+					page.keys.some((key) => key.config.type === "colorfulScreen"),
+				),
+		) ??
+		visible[0] ??
+		envelope.profiles[0]
+	);
+}
