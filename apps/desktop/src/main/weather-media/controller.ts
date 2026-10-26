@@ -7,6 +7,7 @@ import {
 	type WeatherMediaSnapshot,
 	type WeatherSettings,
 } from "../../shared/weather-media-contracts";
+import { LocalPlayerPort, noLocalPlayer } from "./local-player";
 import { WeatherSettingsRepository } from "./settings-repository";
 import { SystemMediaService } from "./system-media";
 import { WeatherService } from "./weather-service";
@@ -15,9 +16,14 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 	"WeatherMediaController",
 	{
 		accessors: true,
-		dependencies: [WeatherService.Default, SystemMediaService.Default],
+		dependencies: [
+			WeatherService.Default,
+			SystemMediaService.Default,
+			noLocalPlayer,
+		],
 		effect: Effect.gen(function* () {
 			const repository = yield* WeatherSettingsRepository;
+			const local = yield* LocalPlayerPort;
 			const weather = yield* WeatherService;
 			const media = yield* SystemMediaService;
 			const lock = yield* Effect.makeSemaphore(1);
@@ -37,7 +43,7 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 					revision,
 					refreshRevision,
 					settings,
-					media: yield* media.read(),
+					media: yield* media.read(settings.mediaTarget ?? null),
 				};
 			});
 			const configure = Effect.fn("WeatherMediaController.configure")(
@@ -77,6 +83,18 @@ export class WeatherMediaController extends Effect.Service<WeatherMediaControlle
 			const request = Effect.fn("WeatherMediaController.request")(
 				(command: WeatherMediaCommand): Effect.Effect<WeatherMediaReply> => {
 					switch (command._tag) {
+						case "localPlayer":
+							return local
+								.read(command.target)
+								.pipe(
+									Effect.map((snapshot) => ({ _tag: "localPlayer", snapshot })),
+								);
+						case "launch":
+							return media
+								.launch(command.id)
+								.pipe(
+									Effect.map((accepted) => ({ _tag: "launched", accepted })),
+								);
 						case "read":
 							return read().pipe(
 								Effect.map((snapshot) => ({ _tag: "snapshot", snapshot })),

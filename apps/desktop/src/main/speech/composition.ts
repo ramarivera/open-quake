@@ -129,6 +129,18 @@ export function createSpeechVoiceBinding(options: {
 						signal,
 					})
 				: Promise.resolve(false),
+		readSoundKey: (key: ProfileKey, activation: KeyActivation) =>
+			speech
+				? options.run(speech.soundboardKeys.read(key, activation))
+				: Promise.resolve({
+						revision: 0,
+						state: "unconfigured" as const,
+						title: "",
+						trackIndex: 0,
+						total: 0,
+						positionMs: 0,
+						errorCode: null,
+					}),
 		resetSoundKeys: (deviceId?: string): Promise<void> =>
 			speech
 				? Effect.runPromise(speech.soundboardKeys.reset(deviceId))

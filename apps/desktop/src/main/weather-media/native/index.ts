@@ -3,9 +3,14 @@ import type { MediaFailure } from "../../../shared/weather-media-contracts";
 import type { NativeMediaAction, NativeMediaState } from "../system-media";
 import { SystemMediaAdapter, systemMediaStub } from "../system-media";
 import type { SystemMediaError } from "./errors";
+import { launchMediaPlayer } from "./launchers";
 import { makeMacMedia } from "./macos";
-import type { CoverDecoder, NativeMediaReading } from "./metadata";
-import type { MediaProcess } from "./process";
+import type {
+	CoverDecoder,
+	NativeMediaReading,
+	NativeMediaResult,
+} from "./metadata";
+import { type MediaProcess, mediaProcess } from "./process";
 import { makeWindowsMedia } from "./windows";
 
 export function nativeSystemMedia(options: {
@@ -18,7 +23,9 @@ export function nativeSystemMedia(options: {
 	if (!options.enabled || !["darwin", "win32"].includes(options.platform))
 		return systemMediaStub(options.platform);
 	const native: {
-		read: () => Effect.Effect<NativeMediaReading | null, SystemMediaError>;
+		read: (
+			target?: string | null,
+		) => Effect.Effect<NativeMediaResult | null, SystemMediaError>;
 		control: (
 			action: NativeMediaAction,
 			reading: NativeMediaReading,
@@ -55,11 +62,25 @@ export function nativeSystemMedia(options: {
 		return "TRANSPORT_ERROR";
 	};
 	return Layer.succeed(SystemMediaAdapter, {
-		read: Effect.fn("SystemMedia.nativeRead")(function* () {
-			return yield* native.read().pipe(
+		launch: (id) =>
+			launchMediaPlayer(options.platform, options.run ?? mediaProcess, id),
+		read: Effect.fn("SystemMedia.nativeRead")(function* (
+			target?: string | null,
+		) {
+			return yield* native.read(target).pipe(
 				Effect.map((value): NativeMediaState => {
-					reading = value;
-					return { session: value?.session ?? null, error: null };
+					reading = value?.session
+						? { ...value, session: value.session }
+						: null;
+					return {
+						session: value?.session ?? null,
+						error: null,
+						sessions:
+							value?.sessions ?? (value?.session ? [value.session] : []),
+						lyrics: value?.lyrics
+							? { _tag: "available", text: value.lyrics }
+							: { _tag: "unavailable" },
+					};
 				}),
 				Effect.catchTags({
 					MediaHelperUnavailable: (error) =>

@@ -1,5 +1,8 @@
 import { Effect, Schema } from "effect";
-import { MediaSession } from "../../../shared/weather-media-contracts";
+import {
+	MediaSession,
+	MediaSource,
+} from "../../../shared/weather-media-contracts";
 import type { NativeMediaAction } from "../system-media";
 import {
 	MediaHelperUnavailable,
@@ -44,8 +47,11 @@ catch {
  if ($cause.HResult -eq -2147023836) { '{"error":"SMTC_UNAVAILABLE"}'; exit 0 }
  throw
 }
+$sessions=@($manager.GetSessions())
 $session=$manager.GetCurrentSession()
-if ($null -eq $session) { '{"session":null,"commands":[],"source":""}'; exit 0 }
+if ($env:OPEN_QUAKE_MEDIA_TARGET) { $session=$sessions | Where-Object { [string]$_.SourceAppUserModelId -ceq $env:OPEN_QUAKE_MEDIA_TARGET } | Select-Object -First 1 }
+$listed=@($sessions | ForEach-Object { $app=[string]$_.SourceAppUserModelId; @{id=$app;appId=$app;appName=$app.Substring(0,[Math]::Min(200,$app.Length));playing=([string]$_.GetPlaybackInfo().PlaybackStatus -eq 'Playing')} })
+if ($null -eq $session) { @{session=$null;commands=@();source="";sessions=$listed} | ConvertTo-Json -Compress -Depth 5; exit 0 }
 $source=[string]$session.SourceAppUserModelId
 $info=$session.GetPlaybackInfo()
 $controls=$info.Controls
@@ -118,9 +124,12 @@ $playing=([string]$info.PlaybackStatus -eq 'Playing')
 $position=(CurrentPositionTicks $timeline $info)/10000
 $duration=[Math]::Max(0,$timeline.EndTime.TotalMilliseconds)
 $position=[Math]::Max(0,[Math]::Min($duration,$position))
-@{session=@{id=$source;appId=$source;appName=$source.Substring(0,[Math]::Min(200,$source.Length));title=[string]$properties.Title;artist=[string]$properties.Artist;coverUrl=$null;playing=$playing;durationMs=$duration;positionMs=$position;canPlay=[bool]$controls.IsPlayEnabled;canPause=[bool]$controls.IsPauseEnabled;canPrevious=[bool]$controls.IsPreviousEnabled;canNext=[bool]$controls.IsNextEnabled};commands=@($commands);source=$source;artwork=$artwork;artworkMime=$artworkMime} | ConvertTo-Json -Compress -Depth 5
+@{sessions=$listed;session=@{id=$source;appId=$source;appName=$source.Substring(0,[Math]::Min(200,$source.Length));title=[string]$properties.Title;artist=[string]$properties.Artist;coverUrl=$null;playing=$playing;durationMs=$duration;positionMs=$position;canPlay=[bool]$controls.IsPlayEnabled;canPause=[bool]$controls.IsPauseEnabled;canPrevious=[bool]$controls.IsPreviousEnabled;canNext=[bool]$controls.IsNextEnabled};commands=@($commands);source=$source;artwork=$artwork;artworkMime=$artworkMime} | ConvertTo-Json -Compress -Depth 5
 `;
 const Reading = Schema.Struct({
+	sessions: Schema.optional(
+		Schema.Array(MediaSource).pipe(Schema.maxItems(128)),
+	),
 	session: Schema.NullOr(MediaSession),
 	commands: Schema.Array(Schema.Int).pipe(Schema.maxItems(256)),
 	source: Schema.String.pipe(Schema.maxLength(300)),
@@ -135,7 +144,10 @@ export const makeWindowsMedia = (
 	run: MediaProcess = mediaProcess,
 	cover: CoverDecoder = () => null,
 ) => {
-	const call = (request?: { source: string; action: NativeMediaAction }) =>
+	const call = (
+		request?: { source: string; action: NativeMediaAction },
+		target?: string | null,
+	) =>
 		run(
 			"powershell.exe",
 			[
@@ -145,7 +157,15 @@ export const makeWindowsMedia = (
 				"-EncodedCommand",
 				Buffer.from(windowsMediaScript, "utf16le").toString("base64"),
 			],
-			request ? { OPEN_QUAKE_MEDIA_REQUEST: JSON.stringify(request) } : {},
+			{
+				...(request
+					? {
+							OPEN_QUAKE_MEDIA_REQUEST: JSON.stringify(request),
+							OPEN_QUAKE_MEDIA_TARGET: request.source,
+						}
+					: {}),
+				...(target ? { OPEN_QUAKE_MEDIA_TARGET: target } : {}),
+			},
 		);
 	const decode = (text: string) =>
 		Effect.try({
@@ -176,8 +196,10 @@ export const makeWindowsMedia = (
 					: MediaResponseInvalid.fromCause(cause),
 		});
 	return {
-		read: Effect.fn("SystemMedia.windowsRead")(function* () {
-			const raw = yield* call().pipe(Effect.flatMap(decode));
+		read: Effect.fn("SystemMedia.windowsRead")(function* (
+			target?: string | null,
+		) {
+			const raw = yield* call(undefined, target).pipe(Effect.flatMap(decode));
 			return yield* Effect.try({
 				try: () => {
 					const value = Schema.decodeUnknownSync(Reading)(raw);
@@ -191,9 +213,15 @@ export const makeWindowsMedia = (
 											: null,
 								},
 								source: value.source,
+								sessions: value.sessions ?? [value.session],
 								commands: new Set(value.commands),
 							}
-						: null;
+						: {
+								session: null,
+								source: "",
+								commands: new Set<number>(),
+								sessions: value.sessions ?? [],
+							};
 				},
 				catch: MediaResponseInvalid.fromCause,
 			});

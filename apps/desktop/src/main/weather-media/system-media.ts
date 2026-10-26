@@ -22,7 +22,10 @@ export type NativeMediaAction =
 export class SystemMediaAdapter extends Context.Tag("SystemMediaAdapter")<
 	SystemMediaAdapter,
 	{
-		readonly read: () => Effect.Effect<NativeMediaState>;
+		readonly read: (target?: string | null) => Effect.Effect<NativeMediaState>;
+		readonly launch?: (
+			id: "apple" | "spotify" | "qq" | "netease",
+		) => Effect.Effect<boolean>;
 		readonly control: (action: NativeMediaAction) => Effect.Effect<boolean>;
 	}
 >() {}
@@ -50,14 +53,34 @@ export class SystemMediaService extends Effect.Service<SystemMediaService>()(
 		effect: Effect.gen(function* () {
 			const adapter = yield* SystemMediaAdapter;
 			const lock = yield* Effect.makeSemaphore(1);
+			let target: string | null = null;
 			let snapshot: MediaSnapshot = { revision: 0, session: null, error: null };
 			const update = Effect.fn("SystemMediaService.update")(function* () {
-				const state = yield* adapter.read();
-				snapshot = { ...state, revision: snapshot.revision + 1 };
+				const state = yield* adapter.read(target);
+				const sessions =
+					state.sessions ?? (state.session ? [state.session] : []);
+				const session =
+					target && state.session?.id !== target ? null : state.session;
+				snapshot = {
+					...state,
+					session,
+					sessions,
+					target,
+					lyrics: state.lyrics ?? { _tag: "unavailable" },
+					error:
+						target && !session && !state.error ? "SESSION_LOST" : state.error,
+					revision: snapshot.revision + 1,
+				};
 				return snapshot;
 			});
 			const read = Effect.fn("SystemMediaService.read")(
-				(): Effect.Effect<MediaSnapshot> => lock.withPermits(1)(update()),
+				(selected?: string | null): Effect.Effect<MediaSnapshot> =>
+					lock.withPermits(1)(
+						Effect.suspend(() => {
+							if (selected !== undefined) target = selected;
+							return update();
+						}),
+					),
 			);
 			const control = Effect.fn("SystemMediaService.control")(
 				(
@@ -85,9 +108,16 @@ export class SystemMediaService extends Effect.Service<SystemMediaService>()(
 					command: MediaCommand,
 				): Effect.Effect<{ accepted: boolean; media: MediaSnapshot }> => {
 					if (command === "audio_play") return control("toggle");
+					if (
+						command === "audio_mute" ||
+						command === "audio_vol_down" ||
+						command === "audio_vol_up"
+					)
+						return Effect.map(read(), (media) => ({ accepted: false, media }));
 					if (command === "audio_prev") return control("previous");
 					if (command === "audio_next") return control("next");
 					const action = {
+						audio_pause: "pause",
 						audio_stop: "stop",
 						audio_rewind: "rewind",
 						audio_forward: "forward",
@@ -98,7 +128,9 @@ export class SystemMediaService extends Effect.Service<SystemMediaService>()(
 						Effect.gen(function* () {
 							const current = yield* update();
 							const accepted =
-								current.session && !current.error
+								current.session &&
+								!current.error &&
+								(command !== "audio_pause" || current.session.canPause)
 									? yield* adapter.control(action[command])
 									: false;
 							return { accepted, media: yield* update() };
@@ -106,7 +138,11 @@ export class SystemMediaService extends Effect.Service<SystemMediaService>()(
 					);
 				},
 			);
-			return { read, control, send };
+			const launch = Effect.fn("SystemMediaService.launch")(
+				(id: "apple" | "spotify" | "qq" | "netease") =>
+					adapter.launch?.(id) ?? Effect.succeed(false),
+			);
+			return { read, control, send, launch };
 		}),
 	},
 ) {}

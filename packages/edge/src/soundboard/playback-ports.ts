@@ -8,6 +8,9 @@ export interface SoundPlayer {
 	readonly play: Effect.Effect<void, SoundboardDecodeFailed>;
 	readonly pause: Effect.Effect<void, SoundboardDecodeFailed>;
 	readonly position: Effect.Effect<number, SoundboardDecodeFailed>;
+	readonly seek?: (
+		positionMs: number,
+	) => Effect.Effect<void, SoundboardDecodeFailed>;
 	readonly gain: (gain: number) => Effect.Effect<void, SoundboardDecodeFailed>;
 	/** Completes once at natural end, never because the owner stopped the track. */
 	readonly ended: Effect.Effect<void, SoundboardDecodeFailed>;
