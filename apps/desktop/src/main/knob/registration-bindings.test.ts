@@ -52,14 +52,14 @@ describe("knob registration binding lifecycle", () => {
 						supportKnob: true,
 					},
 				};
-				let saved: ProfileEnvelope = {
+				let saved = Schema.validateSync(ProfileEnvelope)({
 					...base,
 					profiles: base.profiles.map((p) =>
 						p.id === active.id
 							? { ...active, pages: [{ ...active.pages[0], keys: [control] }] }
 							: p,
 					),
-				};
+				});
 				const write = vi.fn(async () => {});
 				const adapters = desktopKnobAdapters(
 					"/unused",
