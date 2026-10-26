@@ -40,6 +40,12 @@ export const openaiMeeting = (
 								void,
 								import("../ai-errors.js").AiError
 							>();
+							const flushReady = yield* Deferred.make<
+								void,
+								import("../ai-errors.js").AiError
+							>();
+							let flushing = false;
+							const flushId = crypto.randomUUID();
 							const items = new Map<
 								string,
 								{
@@ -66,7 +72,9 @@ export const openaiMeeting = (
 										typeof event.error === "object" &&
 										event.error !== null &&
 										"code" in event.error &&
-										event.error.code === "input_audio_buffer_commit_empty"
+										event.error.code === "input_audio_buffer_commit_empty" &&
+										"event_id" in event.error &&
+										event.error.event_id === flushId
 									) {
 										committed = true;
 										if (complete())
@@ -83,7 +91,10 @@ export const openaiMeeting = (
 										event.type === "session.updated" ||
 										event.type === "transcription_session.updated"
 									)
-										yield* Deferred.succeed(ready, undefined);
+										yield* Deferred.succeed(
+											flushing ? flushReady : ready,
+											undefined,
+										);
 									if (
 										event.type === "input_audio_buffer.speech_started" &&
 										typeof event.audio_start_ms === "number"
@@ -142,9 +153,9 @@ export const openaiMeeting = (
 								}
 							}).pipe(
 								Effect.tapError((e) =>
-									Deferred.fail(ready, e).pipe(
-										Effect.zipRight(Deferred.fail(finished, e)),
-									),
+									Deferred.fail(flushReady, e)
+										.pipe(Effect.zipRight(Deferred.fail(ready, e)))
+										.pipe(Effect.zipRight(Deferred.fail(finished, e))),
 								),
 								Effect.forkScoped,
 							);
@@ -206,8 +217,27 @@ export const openaiMeeting = (
 								}),
 							);
 							if (!sentMs) return yield* meetingError("NoValidSpeech");
+							// Drain automatic VAD commits before requesting the final manual flush.
+							// session.updated is ordered after prior audio and its VAD events.
+							flushing = true;
+							yield* sendEvent(socket, {
+								type: "session.update",
+								session: {
+									type: "realtime",
+									audio: { input: { turn_detection: null } },
+								},
+							});
+							yield* Deferred.await(flushReady).pipe(
+								Effect.timeoutFail({
+									duration: 10000,
+									onTimeout: () => meetingError("Timeout"),
+								}),
+							);
 							eof = true;
-							yield* sendEvent(socket, { type: "input_audio_buffer.commit" });
+							yield* sendEvent(socket, {
+								type: "input_audio_buffer.commit",
+								event_id: flushId,
+							});
 							yield* Deferred.await(finished).pipe(
 								Effect.timeoutFail({
 									duration: 10000,

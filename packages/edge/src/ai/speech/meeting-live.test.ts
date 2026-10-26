@@ -394,6 +394,7 @@ describe("file and live realtime ownership", () => {
 				expect(sockets[0]?.events.map((e) => e.type)).toEqual([
 					"session.update",
 					"input_audio_buffer.append",
+					"session.update",
 					"input_audio_buffer.commit",
 				]);
 			}),
@@ -808,5 +809,88 @@ for (const host of [
 			expect(f.requests).toEqual([]);
 			expect(f.released()).toBe(0);
 		}),
+	);
+}
+
+for (const empty of [false, true]) {
+	it.scoped(
+		`waits for the explicit EOF flush after a late VAD turn, empty=${empty}`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				const s = yield* fakeSocket();
+				let updates = 0;
+				let flushId: unknown;
+				let barrier = false;
+				const automatic = Queue.offerAll(s.queue, [
+					{ type: "input_audio_buffer.committed", item_id: "vad" },
+					{
+						type: "conversation.item.input_audio_transcription.completed",
+						item_id: "vad",
+						transcript: "earlier turn",
+					},
+				]);
+				const transport: typeof SpeechWebSocket.Service = {
+					connect: () =>
+						Effect.succeed({
+							...s.socket,
+							send: (raw) =>
+								Effect.gen(function* () {
+									const event = object(JSON.parse(String(raw)));
+									if (event.type === "session.update") {
+										if (++updates > 1) {
+											yield* automatic;
+											barrier = true;
+										}
+										yield* Queue.offer(s.queue, { type: "session.updated" });
+									} else if (event.type === "input_audio_buffer.commit") {
+										flushId = event.event_id;
+										if (!barrier) yield* automatic;
+									}
+								}),
+						}),
+				};
+				const adapter = yield* makeLiveMeetingAdapter({
+					...f,
+					socket: transport,
+				});
+				const request = {
+					...f.request,
+					config: {
+						...f.request.config,
+						asrProvider: "openai" as const,
+						asrModel: "gpt-realtime-mini",
+					},
+				};
+				const job = yield* adapter.submit(request).pipe(Effect.fork);
+				yield* TestClock.adjust(700);
+				expect(Option.isNone(yield* Fiber.poll(job))).toBe(true);
+				expect(f.states.has("meeting")).toBe(false);
+				if (empty)
+					yield* Queue.offer(s.queue, {
+						type: "error",
+						error: {
+							code: "input_audio_buffer_commit_empty",
+							event_id: flushId,
+						},
+					});
+				else
+					yield* Queue.offerAll(s.queue, [
+						{
+							type: "input_audio_buffer.committed",
+							item_id: "tail",
+							previous_item_id: "vad",
+						},
+						{
+							type: "conversation.item.input_audio_transcription.completed",
+							item_id: "tail",
+							transcript: "final tail",
+						},
+					]);
+				yield* Fiber.join(job);
+				expect(f.states.get("meeting")?.segments?.map((s) => s.text)).toEqual(
+					empty ? ["earlier turn"] : ["earlier turn", "final tail"],
+				);
+			}),
 	);
 }
