@@ -339,3 +339,85 @@
 		animation: clawbot-enter 0.16s ease-out both;
 	}
 }
+
+/* AI-155, QBV think/wave timings and seven-bar staggering. */
+.clawbot-think-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: linear-gradient(180deg, #e8f8ff, #7ec8ff);
+	box-shadow: 0 0 6px rgba(120, 200, 255, 0.85);
+	animation: clawbot-think 1.05s ease-in-out infinite;
+}
+.clawbot-think-dot:nth-child(2) {
+	animation-delay: 0.18s;
+}
+.clawbot-think-dot:nth-child(3) {
+	animation-delay: 0.36s;
+}
+@keyframes clawbot-think {
+	0%,
+	100% {
+		transform: translateY(0);
+		opacity: 0.55;
+	}
+	50% {
+		transform: translateY(-5px);
+		opacity: 1;
+	}
+}
+.clawbot-wave-bar {
+	width: 5px;
+	height: 32%;
+	border-radius: 3px;
+	background: linear-gradient(180deg, #b8e8ff 0%, #4a9fff 55%, #2a6fd6 100%);
+	box-shadow: 0 0 8px rgba(100, 180, 255, 0.6);
+	animation: clawbot-wave 0.55s ease-in-out infinite alternate;
+}
+.clawbot-wave-bar:nth-child(1) {
+	animation-duration: 0.42s;
+}
+.clawbot-wave-bar:nth-child(2) {
+	animation-delay: 0.08s;
+	animation-duration: 0.5s;
+}
+.clawbot-wave-bar:nth-child(3) {
+	animation-delay: 0.04s;
+	animation-duration: 0.38s;
+}
+.clawbot-wave-bar:nth-child(4) {
+	animation-delay: 0.12s;
+	animation-duration: 0.48s;
+}
+.clawbot-wave-bar:nth-child(5) {
+	animation-delay: 0.06s;
+	animation-duration: 0.44s;
+}
+.clawbot-wave-bar:nth-child(6) {
+	animation-delay: 0.1s;
+	animation-duration: 0.52s;
+}
+.clawbot-wave-bar:nth-child(7) {
+	animation-delay: 0.02s;
+	animation-duration: 0.4s;
+}
+@keyframes clawbot-wave {
+	0% {
+		height: 22%;
+		opacity: 0.65;
+	}
+	100% {
+		height: 67%;
+		opacity: 1;
+	}
+}
+[data-motion="reduce"] .clawbot-think-dot,
+[data-motion="reduce"] .clawbot-wave-bar {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.clawbot-think-dot,
+	.clawbot-wave-bar {
+		animation: none;
+	}
+}

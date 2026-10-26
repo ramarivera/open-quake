@@ -18,7 +18,11 @@ import {
 	COOLDOWN_MS,
 	duration,
 } from "./meeting-invariants.js";
-import { MeetingCapture } from "./meeting-ports.js";
+import {
+	MeetingCapture,
+	type MeetingOrigin,
+	MeetingProgress,
+} from "./meeting-ports.js";
 import { MeetingProvider } from "./meeting-provider.js";
 import { MeetingRepository } from "./meeting-repository.js";
 
@@ -31,6 +35,34 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			const repo = yield* MeetingRepository;
 			const provider = yield* MeetingProvider;
 			const capture = yield* MeetingCapture;
+			const progress = yield* Effect.serviceOption(MeetingProgress);
+			const stages = new Map<
+				MeetingId,
+				{ stage: number; origin?: MeetingOrigin | undefined }
+			>();
+			// Retain bounded ownership across retries after a terminal stage.
+			const origins = new Map<MeetingId, MeetingOrigin>();
+			const stage = (
+				meetingId: MeetingId,
+				value: number,
+				status: number,
+			): Effect.Effect<void> =>
+				Effect.gen(function* () {
+					const current = stages.get(meetingId);
+					if (!current) return;
+					current.stage = value;
+					if (Option.isSome(progress))
+						yield* progress.value.publish({
+							meetingId,
+							stage: value,
+							status,
+							origin: current.origin,
+						});
+					if (status === 0 || (value === 5 && status === 2))
+						stages.delete(meetingId);
+				});
+			const endStage = (id: MeetingId) =>
+				stage(id, stages.get(id)?.stage ?? 0, 0);
 			const config = yield* Ref.make(defaultMeetingConfig);
 			const ephemeral = yield* Ref.make<
 				Omit<MeetingSnapshot, "records" | "revision" | "config" | "mic">
@@ -113,6 +145,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			);
 			const start = Effect.fn("MeetingService.start")(function* (
 				parent: MeetingRecord | undefined,
+				origin?: MeetingOrigin,
 			): Effect.fn.Return<void, MeetingError> {
 				const currentConfig = parent?.config ?? (yield* Ref.get(config));
 				const id = MeetingId.make(crypto.randomUUID());
@@ -140,6 +173,15 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				yield* repo
 					.update((records) => [record, ...records])
 					.pipe(Effect.onError(() => capture.cancel(id)));
+				if (origin) {
+					origins.set(id, origin);
+					while (origins.size > 128) {
+						const oldest = origins.keys().next().value;
+						if (oldest !== undefined) origins.delete(oldest);
+					}
+				}
+				stages.set(id, { stage: 0, origin });
+				yield* stage(id, 0, 1);
 				yield* Ref.update(
 					ephemeral,
 					(
@@ -168,6 +210,8 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				const failures = new Map<MeetingId, MeetingError>();
 				// Drain every recorder before storage or ffmpeg can delay releasing sources.
 				for (const item of affected) {
+					yield* stage(item.id, 0, 2);
+					yield* stage(item.id, 1, 1);
 					const result = yield* Effect.either(capture.drain(item.id));
 					if (result._tag === "Left") failures.set(item.id, result.left);
 				}
@@ -196,6 +240,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						if (result._tag === "Left") failures.set(item.id, result.left);
 					}
 					const error = failures.get(item.id);
+					yield* stage(item.id, 1, error ? 0 : 2);
 					yield* patch(item.id, (r) => ({
 						...r,
 						state: error ? "failed" : "recorded",
@@ -208,7 +253,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				if (error) return yield* error;
 			});
 			const action = Effect.fn("MeetingService.action")(
-				(type: MeetingAction): Effect.Effect<MeetingSnapshot, MeetingError> =>
+				(
+					type: MeetingAction,
+					origin?: MeetingOrigin,
+				): Effect.Effect<MeetingSnapshot, MeetingError> =>
 					Effect.gen(function* () {
 						const claimed = yield* Ref.modify(activeActions, (actions) =>
 							actions.has(type)
@@ -271,11 +319,11 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									switch (type) {
 										case "meetingMinutes":
 											if (main) yield* stop(main);
-											else yield* start(undefined);
+											else yield* start(undefined, origin);
 											break;
 										case "tempMeetingMinutes":
 											if (side) yield* stop(side);
-											else yield* start(main);
+											else yield* start(main, origin);
 											break;
 										case "meetingRecordMark":
 											if (main)
@@ -361,9 +409,12 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 							summary: "processing",
 							errorCode: Option.none(),
 						}));
+						if (!stages.has(id))
+							stages.set(id, { stage: 5, origin: origins.get(id) });
 						return current;
 					}),
 				);
+				yield* stage(id, 5, 1);
 				const minutes = yield* provider.summarize(
 					record.config,
 					record.transcript,
@@ -385,17 +436,22 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					summary: "complete",
 					errorCode: Option.none(),
 				}));
+				yield* stage(id, 5, 2);
 			});
 			const failed = (id: MeetingId, error: MeetingError) =>
-				patchWork(id, (r) => ({
-					...r,
-					state: "failed",
-					errorCode: Option.some(error.code),
-					audio: r.audio === "processing" ? "failed" : r.audio,
-					transcription:
-						r.transcription === "processing" ? "failed" : r.transcription,
-					summary: r.summary === "processing" ? "failed" : r.summary,
-				}));
+				endStage(id).pipe(
+					Effect.zipRight(
+						patchWork(id, (r) => ({
+							...r,
+							state: "failed",
+							errorCode: Option.some(error.code),
+							audio: r.audio === "processing" ? "failed" : r.audio,
+							transcription:
+								r.transcription === "processing" ? "failed" : r.transcription,
+							summary: r.summary === "processing" ? "failed" : r.summary,
+						})),
+					),
+				);
 			const suspendCapture = Effect.fn("MeetingService.suspend")(
 				function* (): Effect.fn.Return<void, MeetingError> {
 					const now = yield* Clock.currentTimeMillis;
@@ -406,8 +462,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						(a, b) =>
 							Number(Option.isNone(a.parentId)) -
 							Number(Option.isNone(b.parentId)),
-					))
+					)) {
 						yield* capture.cancel(record.id);
+						yield* endStage(record.id);
+					}
 					yield* repo
 						.update((records) =>
 							records.map((r) =>
@@ -457,8 +515,12 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									)
 										return yield* meetingError("Invalid");
 									if (record.audio !== "complete") {
+										if (!stages.has(id))
+											stages.set(id, { stage: 1, origin: origins.get(id) });
+										yield* stage(id, 1, 1);
 										yield* capture.stop(id);
 										yield* patchWork(id, (r) => ({ ...r, audio: "complete" }));
+										yield* stage(id, 1, 2);
 									}
 									if (Option.isNone(record.endedAt)) {
 										const elapsed = yield* capture.duration(id);
@@ -478,6 +540,8 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 											errorCode: Option.none(),
 										}));
 									}
+									if (!stages.has(id))
+										stages.set(id, { stage: 1, origin: origins.get(id) });
 									return record;
 								}),
 							);
@@ -486,27 +550,34 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 									record.config,
 									id,
 									duration(record, yield* Clock.currentTimeMillis),
+									(value, status) => stage(id, value, status),
 								);
+								yield* stage(id, 4, 1);
 								yield* patchWork(id, (r) => ({
 									...r,
 									transcript,
 									transcription: "complete",
 								}));
+								yield* stage(id, 4, 2);
 							}
 							yield* generate(id, record.template);
 						}).pipe(
 							Effect.tapError((error) => failed(id, error)),
 							Effect.onInterrupt(() =>
-								patchWork(id, (r) => ({
-									...r,
-									state: "interrupted",
-									transcription:
-										r.transcription === "processing"
-											? "interrupted"
-											: r.transcription,
-									summary:
-										r.summary === "processing" ? "interrupted" : r.summary,
-								})).pipe(Effect.ignore),
+								endStage(id).pipe(
+									Effect.zipRight(
+										patchWork(id, (r) => ({
+											...r,
+											state: "interrupted",
+											transcription:
+												r.transcription === "processing"
+													? "interrupted"
+													: r.transcription,
+											summary:
+												r.summary === "processing" ? "interrupted" : r.summary,
+										})).pipe(Effect.ignore),
+									),
+								),
 							),
 						),
 				),
@@ -564,6 +635,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					);
 					for (const record of children) {
 						yield* capture.cancel(record.id);
+						yield* endStage(record.id);
 						yield* patch(record.id, (r) => ({
 							...r,
 							state: "cancelled",
@@ -597,7 +669,10 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					const records = (yield* repo.list()).filter(
 						(r) => r.id === id || Option.contains(r.parentId, id),
 					);
-					for (const record of records) yield* capture.cancel(record.id);
+					for (const record of records) {
+						yield* capture.cancel(record.id);
+						yield* endStage(record.id);
+					}
 					if (
 						records.some(
 							(record) =>
@@ -632,6 +707,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					)
 						return;
 					if (record.state === "recording") yield* stop(record);
+					yield* endStage(id);
 					yield* patch(id, (r) => ({
 						...r,
 						state: "failed",

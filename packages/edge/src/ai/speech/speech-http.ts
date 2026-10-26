@@ -28,6 +28,7 @@ async function readAudio(
 	response: Response,
 	format: "wav" | "pcm",
 	signal: AbortSignal,
+	onAudio: () => void,
 ): Promise<Uint8Array> {
 	if (!response.body) throw new AiProtocolInvalid();
 	const reader = response.body.getReader();
@@ -58,6 +59,7 @@ async function readAudio(
 			bytes += decoded.length;
 			if (bytes > MAX_AUDIO_BYTES) throw new SpeechFormatUnsupported();
 			chunks.push(decoded);
+			if (decoded.length) onAudio();
 		}
 		const reason = frame.output.finish_reason;
 		if (reason !== undefined && reason !== null && reason !== "null") {
@@ -89,6 +91,7 @@ async function readAudio(
 				bytes += chunk.value.length;
 				if (bytes > MAX_AUDIO_BYTES) throw new SpeechFormatUnsupported();
 				chunks.push(chunk.value);
+				if (chunk.value.length) onAudio();
 			} else consume(decoder.decode(chunk.value, { stream: true }));
 		}
 		if (format === "pcm") {
@@ -115,6 +118,7 @@ export function synthesizeHttp(
 	profile: TtsProfile,
 	text: string,
 	key: Redacted.Redacted<string>,
+	onAudio: () => void = () => {},
 ): Effect.Effect<GeneratedAudio, SynthesisError> {
 	return Effect.tryPromise({
 		try: async (signal) => {
@@ -165,7 +169,7 @@ export function synthesizeHttp(
 				await response.body?.cancel();
 				throw new SpeechFormatUnsupported();
 			}
-			const bytes = await readAudio(response, profile.format, signal);
+			const bytes = await readAudio(response, profile.format, signal, onAudio);
 			const audio = verifiedAudio(bytes, profile.format);
 			if (Either.isLeft(audio)) throw audio.left;
 			return audio.right;

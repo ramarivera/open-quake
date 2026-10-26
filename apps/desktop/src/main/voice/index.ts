@@ -88,7 +88,10 @@ export interface VoiceSurfaceOptions {
 	readonly mock: boolean;
 	/** Explicit speech controller. Chat configuration alone never enables speech. */
 	readonly speech?: {
-		readonly readAloud: (text: string) => Promise<VoiceSurfaceReply>;
+		readonly readAloud: (
+			text: string,
+			owner: { readonly serial: string; readonly keyCode: string },
+		) => Promise<VoiceSurfaceReply>;
 		readonly onEvent: (event: VoiceSurfaceEvent) => void;
 	};
 	readonly tones: VoiceToneSink;
@@ -299,7 +302,10 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 						const text = answer?.text;
 						if (!options.speech || !text?.trim())
 							return rejected("VOICE.TTS.UNAVAILABLE");
-						return options.speech.readAloud(text);
+						return options.speech.readAloud(text, {
+							serial: options.serial(),
+							keyCode: request.keyCode,
+						});
 					}
 				}
 			};

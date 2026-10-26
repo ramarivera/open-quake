@@ -118,7 +118,12 @@ export type MeetingAction = typeof MeetingAction.Type;
 export const MeetingCommand = Schema.Union(
 	Schema.TaggedStruct("read", {}),
 	Schema.TaggedStruct("configure", { config: MeetingConfig }),
-	Schema.TaggedStruct("action", { action: MeetingAction }),
+	Schema.TaggedStruct("action", {
+		action: MeetingAction,
+		keyCode: Schema.optional(
+			Schema.String.pipe(Schema.pattern(/^\d{1,2},\d{1,2}$/)),
+		),
+	}),
 	Schema.TaggedStruct("cancel", { id: MeetingId }),
 	Schema.TaggedStruct("retry", { id: MeetingId }),
 	Schema.TaggedStruct("regenerate", { id: MeetingId, template: TemplateId }),

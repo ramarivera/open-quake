@@ -12,7 +12,10 @@ import { MeetingGlyph } from "./MeetingGlyph";
 import { TouchButton } from "./TouchButton";
 import "./meeting.css";
 
-export function MeetingDisplay({ tile }: StripTileProps): React.JSX.Element {
+export function MeetingDisplay({
+	tile,
+	context,
+}: StripTileProps): React.JSX.Element {
 	const { snapshot, error } = useMeetings();
 	const now = useMeetingNow();
 	const tab = snapshot?.tab ?? "main";
@@ -27,6 +30,9 @@ export function MeetingDisplay({ tile }: StripTileProps): React.JSX.Element {
 	const main = snapshot?.records.find((r) => Option.isNone(r.parentId));
 	const temp = snapshot?.records.find((r) => Option.isSome(r.parentId));
 	const record = tab === "main" ? main : temp;
+	const progress = record
+		? context.voice.view.meetingStages.get(record.id)
+		: undefined;
 	const text =
 		tab === "live"
 			? (snapshot?.translations.map((p) => p.text).join("\n") ?? "")
@@ -123,6 +129,9 @@ export function MeetingDisplay({ tile }: StripTileProps): React.JSX.Element {
 			aria-label="Meet AI"
 			style={{ borderRadius: tile.tileRadius }}
 			data-translating={snapshot?.translating}
+			data-meeting-id={progress?.meetingId}
+			data-meeting-stage={progress?.stage}
+			data-meeting-status={progress?.status}
 		>
 			<div
 				className="meeting-display-stage"
@@ -227,7 +236,8 @@ export function MeetingDisplay({ tile }: StripTileProps): React.JSX.Element {
 							</div>
 						)
 					) : record &&
-						(record.state === "processing" ||
+						((progress && record.state !== "completed") ||
+							record.state === "processing" ||
 							record.state === "failed" ||
 							record.state === "interrupted" ||
 							(record.state === "completed" &&
@@ -235,7 +245,7 @@ export function MeetingDisplay({ tile }: StripTileProps): React.JSX.Element {
 								now - record.provenance.value.generatedAt < 5000 &&
 								new URLSearchParams(window.location.search).get("surface") ===
 									"panel")) ? (
-						<MeetingAnimation record={record} />
+						<MeetingAnimation record={record} progress={progress} />
 					) : text ? (
 						<>
 							<div className="meeting-document-toggle">
@@ -255,7 +265,7 @@ export function MeetingDisplay({ tile }: StripTileProps): React.JSX.Element {
 							<pre className="meeting-safe-text">{text}</pre>
 						</>
 					) : (
-						<MeetingAnimation record={record} />
+						<MeetingAnimation record={record} progress={progress} />
 					)}
 				</div>
 				<div

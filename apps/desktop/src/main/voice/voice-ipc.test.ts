@@ -346,7 +346,10 @@ it("routes Read Aloud through the selected speech consumer using accumulated rea
 			),
 		);
 		expect(reply).toEqual({ _tag: "ok" });
-		expect(readAloud).toHaveBeenCalledExactlyOnceWith("Readable answer.");
+		expect(readAloud).toHaveBeenCalledExactlyOnceWith("Readable answer.", {
+			serial: "QK-1",
+			keyCode: "1,5",
+		});
 		expect(observe).toHaveBeenCalledTimes(3);
 		await registration.publish({
 			_tag: "Chunk",

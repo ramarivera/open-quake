@@ -49,9 +49,11 @@ export class PcmFramer {
 		const bytes = new Uint8Array(this.frame.length * 2);
 		const view = new DataView(bytes.buffer);
 		let energy = 0;
+		let peak = 0;
 		for (let index = 0; index < this.frame.length; index++) {
 			const sample = this.frame[index] ?? 0;
 			energy += sample * sample;
+			peak = Math.max(peak, Math.abs(sample));
 			view.setInt16(
 				index * 2,
 				Math.round(sample * (sample < 0 ? 32768 : 32767)),
@@ -60,7 +62,13 @@ export class PcmFramer {
 		}
 		const rms = Math.min(1, Math.sqrt(energy / this.frame.length));
 		this.frame = [];
-		return { captureId: this.captureId, seq: this.sequence++, bytes, rms };
+		return {
+			captureId: this.captureId,
+			seq: this.sequence++,
+			bytes,
+			rms,
+			peak,
+		};
 	}
 }
 export interface PcmFrame {
@@ -68,4 +76,5 @@ export interface PcmFrame {
 	readonly seq: number;
 	readonly bytes: Uint8Array;
 	readonly rms: number;
+	readonly peak: number;
 }

@@ -1,12 +1,15 @@
 import { Option } from "effect";
 import { useEffect, useState } from "react";
 import type { MeetingRecord } from "../../../../../shared/meeting-bridge";
+import type { VoiceSurfaceEvent } from "../../../../../shared/voice-surface";
 import { MeetingGlyph } from "./MeetingGlyph";
 
 export function MeetingAnimation({
 	record,
+	progress,
 }: {
 	record: MeetingRecord | undefined;
+	progress?: Extract<VoiceSurfaceEvent, { _tag: "MeetingStage" }> | undefined;
 }): React.JSX.Element {
 	const [celebrate, setCelebrate] = useState(false);
 	const panel =
@@ -29,8 +32,19 @@ export function MeetingAnimation({
 		);
 		return () => clearTimeout(timer);
 	}, [completedAt, panel]);
-	const state =
-		record?.state === "recording"
+	const state = progress
+		? progress.status === 0
+			? record?.state === "cancelled"
+				? "idle"
+				: "failure"
+			: progress.stage === 0
+				? progress.status === 1
+					? "recording"
+					: "processing"
+				: progress.stage === 5 && progress.status === 2
+					? "success"
+					: "processing"
+		: record?.state === "recording"
 			? "recording"
 			: record?.state === "processing"
 				? "processing"
@@ -40,15 +54,28 @@ export function MeetingAnimation({
 						? "success"
 						: "idle";
 	const label =
-		state === "recording"
-			? "Start Recording"
-			: state === "processing"
-				? "Parsing completed, generating minutes"
-				: state === "failure"
-					? "Processing failed"
-					: state === "success"
-						? "Minutes generation completed"
-						: "Main meeting is off";
+		progress && progress.status !== 0
+			? progress.stage === 0
+				? "Start Recording"
+				: progress.stage === 1 ||
+						(progress.stage === 2 && progress.status === 1)
+					? "Recording ended, uploading"
+					: progress.stage === 2
+						? "Upload completed, ready to parse"
+						: progress.stage === 3
+							? "Parsing"
+							: progress.stage === 5 && progress.status === 2
+								? "Minutes generation completed"
+								: "Parsing completed, generating minutes"
+			: state === "recording"
+				? "Start Recording"
+				: state === "processing"
+					? "Parsing completed, generating minutes"
+					: state === "failure"
+						? "Processing failed"
+						: state === "success"
+							? "Minutes generation completed"
+							: "Main meeting is off";
 	return (
 		<div
 			className="meeting-animation"

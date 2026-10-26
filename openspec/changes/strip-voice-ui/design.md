@@ -660,3 +660,23 @@ ClawBot input selection retains the key's optional configured assistant ID.
 The synthetic default used for conversation display stays at that display
 boundary. Missing, empty and whitespace-only IDs therefore reach the AI-184
 missing-assistant warning, preserve the draft and issue no SendText.
+
+
+## Parity follow-through, 2026-10-26
+
+The lead adopts AI-183's 100 ms blur recovery, limited to the active panel
+chat input. Ownership is the selected assistant plus the mounted profile;
+the FunctionWheel suspends ownership. Cleanup invalidates outstanding focus
+promises as well as timers. No visible native focus is needed for smoke.
+
+Read-aloud adds a serial/key/session-correlated event, leaving capture stages
+independent. The speech service exposes phase notification and the output
+adapter exposes context state/resume. Effect Clock owns watchdog deadlines.
+The meeting pipeline publishes through a small optional stage port composed
+at desktop main. MeetingStage accepts the existing numeric mock identity and
+the production MeetingId UUID without lossy conversion. Upload/ASR feedback
+comes from the actual submit/poll boundary, not a snapshot guess.
+
+Sources re-read: AIAudioHandler.vue:247–273,436–468; recorder.js:379–397;
+QuakeBotInputIconView.vue:598–653; QuakeBotIconView.vue:11–60,1285–1350;
+audioBotTtsWatchdog.js:17–58; AudioIconView.vue:580–650; background.js@1085964.

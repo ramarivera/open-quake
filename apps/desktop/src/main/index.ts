@@ -443,6 +443,8 @@ if (!app.requestSingleInstanceLock()) {
 							userData: app.getPath("userData"),
 							hardware: () => bus?.hardware?.(),
 							mock,
+							serial: activeDeviceId,
+							publishVoice: (event) => publishVoice(event),
 						});
 						const lifecycleModule = prepareDesktopModule(
 							DeviceLifecycle.Default({

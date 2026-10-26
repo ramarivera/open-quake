@@ -82,7 +82,11 @@ export function MeetingKey({
 			aria-pressed={!!active}
 			aria-disabled={remaining > 0}
 			onClick={() => {
-				void meetingRequest({ _tag: "action", action: action.right });
+				void meetingRequest({
+					_tag: "action",
+					action: action.right,
+					keyCode: tile.keyCode,
+				});
 			}}
 		>
 			<span className="meeting-key-title">{title}</span>

@@ -42,7 +42,9 @@ handles:
 - `CopyText`
 - `PickFiles` ("Choose file(s) to attach")
 - `FocusPanel` (focuses the strip window after 80 ms)
-- `ReadAloud`: rejected, because voice-stt-tts owns TTS
+- `ReadAloud`: routes the cached answer to the configured speech controller,
+  toggling its serial/key owner. `ReadAloudState` reports thinking, speaking
+  and idle independently of capture.
 - `Hello`: answers with the agent status
 
 ## Native smoke
@@ -60,3 +62,25 @@ OPEN_QUAKE_MOCK_DEVICE=1 env -u ELECTRON_RUN_AS_NODE pnpm --filter @open-quake/d
 Never run it while DK-Suite or another open-quake instance holds the QUAKE.
 Real buzzer output, real mic levels and rendering on the physical strip
 remain unverified.
+
+## Capture, focus, read-aloud and meeting parity smoke
+
+The parity smoke mounts the built strip in a hidden window. It checks the
+100 ms blur timer and ownership cleanup, read-aloud toggle/FX through real
+speech IPC, and stages 0–5 from the real meeting pipeline. Capture, synthesis,
+output and meeting adapters are fake. Native FocusPanel is intercepted so
+this test never activates a window or uses the microphone or speakers.
+It saves meter, pill and meeting screenshots plus `parity-evidence.json`.
+
+After `pnpm build`, use an absolute scratch directory for `TMPDIR` and the
+final argument:
+
+```sh
+pnpm --filter @open-quake/desktop exec electron-vite build --config src/main/voice/parity-smoke.config.ts
+TMPDIR=/absolute/scratch env -u ELECTRON_RUN_AS_NODE OPEN_QUAKE_MOCK_DEVICE=1 pnpm --filter @open-quake/desktop exec electron out/voice-parity-smoke/parity-smoke.js /absolute/scratch
+```
+
+Effect TestClock regressions live in `main/speech/runtime-levels.test.ts`,
+`main/speech/read-aloud.test.ts` and edge's `ai/speech/speech-watchdog.test.ts`.
+They check exact emission, VAD and watchdog boundaries independently of native
+renderer scheduling. Live providers and physical device behavior remain open.

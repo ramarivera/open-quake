@@ -101,9 +101,12 @@ export function createSpeechVoiceBinding(options: {
 			if (speech)
 				void options.run(speech.observe(event)).catch(() => undefined);
 		},
-		readAloud: async (text: string): Promise<VoiceSurfaceReply> => {
+		readAloud: async (
+			text: string,
+			owner?: { readonly serial: string; readonly keyCode: string },
+		): Promise<VoiceSurfaceReply> => {
 			if (!speech) return { _tag: "rejected", code: "VOICE.TTS.UNAVAILABLE" };
-			const outcome = await options.run(speech.readAloud(text));
+			const outcome = await options.run(speech.readAloud(text, owner));
 			return outcome._tag === "completed"
 				? { _tag: "ok" }
 				: {

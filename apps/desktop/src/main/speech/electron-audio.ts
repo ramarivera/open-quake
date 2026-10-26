@@ -126,6 +126,7 @@ const Batch = Schema.Struct({
 			seq: Schema.Int,
 			bytes: Schema.Array(Schema.Int.pipe(Schema.between(0, 255))),
 			rms: Schema.Number,
+			peak: Schema.Number,
 		}),
 	),
 	done: Schema.Boolean,
@@ -278,6 +279,12 @@ export function createDesktopAudioOutput(
 			});
 			const lease = {
 				ready: ready().pipe(Effect.onError(() => reservation.release)),
+				contextState: boundary(() =>
+					worker ? worker.invoke<string>("state") : Promise.resolve("closed"),
+				),
+				resume: boundary(() =>
+					worker ? worker.invoke<void>("resume") : Promise.resolve(),
+				),
 				play: (audio: GeneratedAudio) =>
 					Effect.gen(function* () {
 						const verified = verifiedAudio(audio.bytes, audio.format);
