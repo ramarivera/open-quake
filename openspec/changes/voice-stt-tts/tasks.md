@@ -113,3 +113,20 @@ interruption regressions fail on the previous adapter; voice-only shutdown
 failed before its ownership fix. Tests assert cancelled durable history and
 stopped output. No live provider, physical microphone, audible output or device
 acceptance is claimed.
+
+## speech-capture burn-down lane
+
+- [x] Implement the shared identity, recorder format/control, runtime timing/error and knob duration requirements above with production consumer fixtures. Evidence: shared microphone/settings/worker tests, supported PCM input-rate and stereo fixtures, recorder lifetime/native rejection boundary tests, runtime TestClock level/deadline/terminal metrics fixtures, and mounted EN/DE picker checks. Beads open-quake-c5w.14 and open-quake-c5w.15 stay open for lead merge.
+- [ ] Complete physical microphone, OS permission/unplug/reconnect, provider and device acceptance under the lead's authorization. No physical recording or playback was performed by the speech-capture lane.
+
+## PR85 review corrections
+
+- [x] Resolve saved microphones against capture-local identities, excluding foreign document group IDs and retaining exact or unambiguous label selection. Regression drives the production Electron worker bridge with distinct settings/worker salts. Tracked in open-quake-c5w.17; physical acceptance remains on the checklist above.
+
+- [x] Stop recording duration at capture-stream release, including automatic 60-second capture, delayed final results and provider timeout. Two TestClock regressions drive the production STT consumer; startup timing still includes final processing. Tracked in open-quake-c5w.17.
+
+- [x] Propagate the effective microphone-only retry configuration into meeting history without changing the configured system-audio preference. Port and MeetingService persistence regressions fail before the fix. Tracked in open-quake-c5w.17; meeting-minutes owns the source-fallback scenario.
+
+- [x] Bound opt-in archives to the first 60 seconds without failing Stop/export, and close the audio context in a finalizer when graph teardown rejects. Serialized-worker regressions cover partial-frame/full-frame overflow and failing disconnect; all fail before the fix. Tracked in open-quake-c5w.17.
+
+- [x] Count validated final-tail PCM after release for the current owner before suppressing level/activity events. A short-press production STT/runtime regression fails before the fix and verifies unclear rather than noAudio, first-frame metrics, transmitted PCM and no post-release recording activity. Tracked in open-quake-c5w.17.

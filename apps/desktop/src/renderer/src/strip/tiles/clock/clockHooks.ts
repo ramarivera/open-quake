@@ -54,16 +54,21 @@ export function startClockTicker({
 }
 
 /** Host helper: the `now` prop for a visible `ClockTile`. */
-export function useClockNow(seconds: boolean, initial?: Date): Date {
+export function useClockNow(
+	seconds: boolean,
+	initial?: Date,
+	live = true,
+): Date {
 	const [now, setNow] = useState(() => initial ?? new Date());
 	useEffect(() => {
+		if (!live) return;
 		setNow(new Date());
 		return startClockTicker({
 			seconds,
 			onTick: setNow,
 			visibility: document,
 		});
-	}, [seconds]);
+	}, [seconds, live]);
 	return now;
 }
 

@@ -35,7 +35,7 @@ class AudioStream extends EventTarget implements MediaStream {
 	}
 	getTracks = () => [this.track];
 	getAudioTracks = () => [this.track];
-	getVideoTracks = () => [];
+	getVideoTracks = (): MediaStreamTrack[] => [];
 	getTrackById = () => this.track;
 	clone = () => new AudioStream();
 	addTrack = () => {};
@@ -260,4 +260,156 @@ describe("real meeting recorder consumer with fake media devices", () => {
 			f.capture.dispose();
 		}
 	});
+});
+
+for (const platform of ["darwin", "linux"] as const) {
+	it(`${platform} acquires exact named loopback with all processing disabled`, async () => {
+		const f = setup();
+		const system = new AudioStream();
+		const input: MediaDeviceInfo = {
+			deviceId: "loopback",
+			groupId: "virtual",
+			kind: "audioinput",
+			label: platform === "darwin" ? "BlackHole 2ch" : "Monitor of output",
+			toJSON: () => ({}),
+		};
+		const media = { ...f.media, enumerateDevices: async () => [input] };
+		media.getUserMedia
+			.mockResolvedValueOnce(f.stream)
+			.mockResolvedValueOnce(system);
+		const capture = createMeetingCapture(f.bridge, media);
+		await capture.handle(
+			request("start", "platform", { systemAudio: true, platform }),
+		);
+		expect(media.getUserMedia).toHaveBeenLastCalledWith({
+			audio: {
+				deviceId: { exact: "loopback" },
+				echoCancellation: false,
+				noiseSuppression: false,
+				autoGainControl: false,
+			},
+			video: false,
+		});
+		expect(media.getDisplayMedia).not.toHaveBeenCalled();
+		await capture.handle(request("cancel", "platform"));
+		expect(f.stream.track.stop).toHaveBeenCalledOnce();
+		expect(system.track.stop).toHaveBeenCalledOnce();
+		capture.dispose();
+		f.capture.dispose();
+	});
+	it(`${platform} missing named source or permission never falls back and releases the mic`, async () => {
+		for (const missing of [true, false]) {
+			const f = setup();
+			const media = {
+				...f.media,
+				enumerateDevices: async () =>
+					missing
+						? []
+						: [
+								{
+									deviceId: "loopback",
+									kind: "audioinput",
+									label: "BlackHole",
+									groupId: "",
+									toJSON: () => ({}),
+								} satisfies MediaDeviceInfo,
+							],
+			};
+			if (!missing)
+				media.getUserMedia
+					.mockResolvedValueOnce(f.stream)
+					.mockRejectedValueOnce(
+						new DOMException("private", "NotAllowedError"),
+					);
+			const capture = createMeetingCapture(f.bridge, media);
+			await capture.handle(
+				request("start", "absent", { systemAudio: true, platform }),
+			);
+			expect(f.stream.track.stop).toHaveBeenCalledOnce();
+			expect(Recorder.all).toHaveLength(0);
+			expect(f.bridge.captureReply).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					success: false,
+					reason: "systemUnavailable",
+				}),
+			);
+			expect(media.getDisplayMedia).not.toHaveBeenCalled();
+			expect(media.getUserMedia).toHaveBeenCalledTimes(missing ? 1 : 2);
+			capture.dispose();
+			f.capture.dispose();
+		}
+	});
+}
+it("Windows loopback stops/removes video, fails empty audio, and cleans late cancelled acquisition", async () => {
+	const f = setup();
+	const video = new Track();
+	const stream = new AudioStream();
+	vi.spyOn(stream, "getVideoTracks").mockReturnValue([video]);
+	f.media.getDisplayMedia.mockResolvedValueOnce(stream);
+	await f.capture.handle(
+		request("start", "win", { systemAudio: true, platform: "win32" }),
+	);
+	expect(f.media.getDisplayMedia).toHaveBeenCalledWith({
+		audio: true,
+		video: true,
+	});
+	expect(video.stop).toHaveBeenCalledOnce();
+	await f.capture.handle(request("cancel", "win"));
+	f.capture.dispose();
+	const empty = setup();
+	vi.spyOn(empty.system, "getAudioTracks").mockReturnValue([]);
+	await empty.capture.handle(
+		request("start", "empty", { systemAudio: true, platform: "win32" }),
+	);
+	expect(empty.stream.track.stop).toHaveBeenCalledOnce();
+	expect(empty.system.track.stop).toHaveBeenCalledOnce();
+	expect(empty.bridge.captureReply).toHaveBeenLastCalledWith(
+		expect.objectContaining({ success: false, reason: "systemUnavailable" }),
+	);
+	empty.capture.dispose();
+	const late = setup();
+	let resolve: ((stream: AudioStream) => void) | undefined;
+	late.media.getDisplayMedia.mockImplementationOnce(
+		() =>
+			new Promise((done) => {
+				resolve = done;
+			}),
+	);
+	const starting = late.capture.handle(
+		request("start", "late", { systemAudio: true, platform: "win32" }),
+	);
+	await Promise.resolve();
+	await late.capture.handle(request("cancel", "late"));
+	resolve?.(late.system);
+	await starting;
+	expect(late.stream.track.stop).toHaveBeenCalledOnce();
+	expect(late.system.track.stop).toHaveBeenCalledOnce();
+	expect(Recorder.all).toHaveLength(0);
+	late.capture.dispose();
+});
+it("meetings use the shared recovered identity instead of the old per-meeting setting", async () => {
+	const f = setup();
+	const capture = createMeetingCapture(f.bridge, {
+		...f.media,
+		enumerateDevices: async () => [
+			{
+				deviceId: "shared-new",
+				groupId: "shared",
+				label: "Desk",
+				kind: "audioinput",
+				toJSON: () => ({}),
+			},
+		],
+	});
+	await capture.handle(
+		request("start", "shared", {
+			microphone: { deviceId: "shared-old", groupId: "shared", label: "Desk" },
+		}),
+	);
+	expect(f.media.getUserMedia).toHaveBeenCalledWith({
+		audio: { deviceId: { exact: "shared-new" } },
+		video: false,
+	});
+	capture.dispose();
+	f.capture.dispose();
 });

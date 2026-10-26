@@ -1,9 +1,10 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
 	ClockCommand,
 	ClockTarget,
 } from "../../../../../shared/clock-contracts";
 import { THEME_IDS } from "../../../../../shared/clock-style";
+import type { WeatherSettings } from "../../../../../shared/weather-media-contracts";
 import {
 	Callout,
 	Group,
@@ -13,18 +14,18 @@ import {
 } from "../../../ui/Form";
 import { selectStripPage } from "../../selection";
 import { useStripProfiles } from "../../useStripProfiles";
-import { themeArtUrl } from "./art";
 import { ClockTile } from "./ClockTile";
 import { useClockNow } from "./clockHooks";
 import { CLOCK_STRINGS, normalizeClockLocale } from "./clockStrings";
 import { probeVideoDuration } from "./probeVideo";
+import { ThemeThumbnail } from "./ThemeThumbnail";
 import { mediaOf, themeOf, useClockSettings } from "./useClockSettings";
 import "./clockSettings.css";
 import {
 	ClockMusicSlot,
 	ClockWeatherSlot,
 } from "../../../weather-media/ClockCards";
-import { useWeatherMedia } from "../../../weather-media/hooks";
+import { ClockEnrichmentSettings } from "../../../weather-media/WeatherMediaSettings";
 
 function usePreviewWidth(
 	ref: React.RefObject<HTMLElement | null>,
@@ -74,8 +75,12 @@ export function ClockSettings({
 	target,
 	onSaved,
 	beforeWrite,
+	draftHourFormat,
+	onHourFormat,
 }: {
 	target?: ClockTarget | undefined;
+	draftHourFormat?: "12h" | "24h" | undefined;
+	onHourFormat?: ((value: "12h" | "24h") => void) | undefined;
 	onSaved?: (() => void) | undefined;
 	beforeWrite?: (() => Promise<boolean>) | undefined;
 }): React.JSX.Element {
@@ -85,12 +90,23 @@ export function ClockSettings({
 		request,
 		selectTheme: saveTheme,
 	} = useClockSettings(undefined, target, beforeWrite);
+	// Replies become the next patch's base before React renders. A quick unit
+	// change must retain the city saved just before it on this same key.
+	const enrichment = useMemo<{
+		request: typeof request;
+		tail: Promise<void>;
+		settings: WeatherSettings | undefined;
+	}>(
+		() => ({ request, tail: Promise.resolve(), settings: undefined }),
+		[request],
+	);
+	if (snapshot?.weather) enrichment.settings = snapshot.weather;
 	const selectTheme: typeof saveTheme = async (themeId) => {
 		const result = await saveTheme(themeId);
 		if (result.ok) onSaved?.();
 		return result;
 	};
-	const enrichment = useWeatherMedia();
+
 	const ids = useId();
 	const strings =
 		CLOCK_STRINGS[
@@ -170,46 +186,42 @@ export function ClockSettings({
 							heightPx={width / 4}
 							now={now}
 							theme={themeOf(snapshot)}
-							hourFormat={snapshot.hourFormat ?? "24h"}
+							hourFormat={draftHourFormat ?? snapshot.hourFormat ?? "24h"}
 							showSeconds={snapshot.showSeconds}
 							media={mediaOf(snapshot)}
 							onThemeSelect={selectTheme}
 							weather={
-								enrichment.snapshot?.settings.enabled ? (
-									<ClockWeatherSlot />
+								snapshot.weather?.enabled ? (
+									<ClockWeatherSlot
+										settings={snapshot.weather}
+										instanceId={JSON.stringify(target)}
+										side="edit"
+									/>
 								) : undefined
 							}
 							nowPlaying={
-								enrichment.snapshot?.settings.musicEnabled ? (
-									<ClockMusicSlot />
-								) : undefined
+								snapshot.musicEnabled ? <ClockMusicSlot enabled /> : undefined
 							}
 						/>
 					) : null}
 				</div>
+			</Group>
+			<Group title={strings.settings.formatCard}>
 				<Row label={strings.settings.formatCard} labelId={`${ids}-format`}>
 					<Segmented
 						name={`${ids}-format`}
 						labelledBy={`${ids}-format`}
-						value={snapshot?.hourFormat ?? "24h"}
+						value={draftHourFormat ?? snapshot?.hourFormat ?? "24h"}
 						options={[
 							{ value: "24h", label: strings.settings.hourFormat24h },
 							{ value: "12h", label: strings.settings.hourFormat12h },
 						]}
 						disabled={disabled}
 						onChange={(hourFormat) =>
-							void run({ _tag: "setHourFormat", hourFormat })
+							onHourFormat
+								? onHourFormat(hourFormat)
+								: void run({ _tag: "setHourFormat", hourFormat })
 						}
-					/>
-				</Row>
-				<Row label={strings.settings.themeSection} labelId={`${ids}-mode`}>
-					<Segmented
-						name={`${ids}-mode`}
-						labelledBy={`${ids}-mode`}
-						value={snapshot?.mode ?? "theme"}
-						options={modeOptions}
-						disabled={disabled}
-						onChange={(mode) => void run({ _tag: "setMode", mode })}
 					/>
 				</Row>
 				<Row
@@ -231,10 +243,23 @@ export function ClockSettings({
 			</Group>
 
 			<Group
-				title="Themes"
+				title={strings.settings.themeSection}
 				description="Built-in art, or your own image or video (at least 2 seconds) per theme."
 			>
-				<ul className="clock-theme-cards">
+				<Row label={strings.settings.themeSection} labelId={`${ids}-mode`}>
+					<Segmented
+						name={`${ids}-mode`}
+						labelledBy={`${ids}-mode`}
+						value={snapshot?.mode ?? "theme"}
+						options={modeOptions}
+						disabled={disabled}
+						onChange={(mode) => void run({ _tag: "setMode", mode })}
+					/>
+				</Row>
+				<ul
+					className="clock-theme-cards"
+					aria-label={strings.settings.themeSection}
+				>
 					{THEME_IDS.map((id) => {
 						const media = snapshot?.media[id];
 						const selected = active === id;
@@ -245,26 +270,29 @@ export function ClockSettings({
 								data-theme={id}
 								data-selected={selected}
 							>
-								<button
-									type="button"
-									className="clock-theme-thumb"
-									aria-pressed={selected}
-									disabled={disabled}
-									onClick={() =>
-										void run({
-											_tag: "setTheme",
-											keyCode: snapshot?.keyCode ?? "1,1",
-											themeId: id,
-										})
-									}
-								>
-									{media?.available && media.kind === "image" ? (
-										<img src={media.url} alt="" />
-									) : media?.available && media.kind === "video" ? (
-										<video src={media.url} muted preload="metadata" />
-									) : (
-										<img src={themeArtUrl(id)} alt="" />
-									)}
+								<label className="clock-theme-thumb" data-disabled={disabled}>
+									<input
+										className="clock-theme-radio"
+										type="radio"
+										name={`${ids}-theme`}
+										checked={selected}
+										aria-label={strings.themes[id]}
+										disabled={disabled}
+										onKeyDown={(event) => {
+											if (event.key === "Enter") {
+												event.preventDefault();
+												event.currentTarget.click();
+											}
+										}}
+										onChange={() =>
+											void run({
+												_tag: "setTheme",
+												keyCode: snapshot?.keyCode ?? "1,1",
+												themeId: id,
+											})
+										}
+									/>
+									<ThemeThumbnail themeId={id} media={media} />
 									{media ? (
 										<span className="clock-theme-badge">
 											✦ {strings.settings.themeOverrideBadge}
@@ -278,7 +306,7 @@ export function ClockSettings({
 											!
 										</span>
 									) : null}
-								</button>
+								</label>
 								<span className="clock-theme-name">
 									{strings.themes[id]}
 									{selected ? (
@@ -322,6 +350,35 @@ export function ClockSettings({
 					})}
 				</ul>
 			</Group>
+			{snapshot?.weather ? (
+				<ClockEnrichmentSettings
+					key={JSON.stringify(target)}
+					initial={snapshot.weather}
+					onSave={async (patch) => {
+						const pending = enrichment.tail.then(async () => {
+							const settings = enrichment.settings;
+							if (!settings) return false;
+							const reply = await request(
+								patch.musicEnabled !== undefined
+									? { _tag: "setMusic", enabled: patch.musicEnabled }
+									: { _tag: "setWeather", settings: { ...settings, ...patch } },
+							);
+							if (reply?._tag !== "success") return false;
+							enrichment.settings = reply.snapshot.weather;
+							onSaved?.();
+							await window.quakeWeatherMedia?.request({
+								_tag: "configChanged",
+							});
+							return true;
+						});
+						enrichment.tail = pending.then(
+							() => undefined,
+							() => undefined,
+						);
+						return pending;
+					}}
+				/>
+			) : null}
 		</div>
 	);
 }

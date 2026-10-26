@@ -8,7 +8,7 @@ export class PcmFramer {
 		readonly captureId: string,
 		readonly inputRate: number,
 	) {
-		if (!Number.isFinite(inputRate) || inputRate < 24000 || inputRate > 192000)
+		if (!Number.isFinite(inputRate) || inputRate < 8000 || inputRate > 192000)
 			throw new RangeError("Unsupported capture rate");
 	}
 	push(channels: readonly Float32Array[]): readonly PcmFrame[] {

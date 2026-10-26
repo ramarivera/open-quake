@@ -10,7 +10,7 @@ The icon picker and template panel expose local artwork selection and imports. A
 - Support key artwork selection and template imports through one library owner.
 - Keep generated emoji packaging and physical 0xA2 transfer behind their owning contracts.
 
-This lane adds planning artifacts only. The requirements describe proposed future behavior; all implementation tasks remain open.
+The icons burn-down lane implements picker search, selection, safe picture decoding, resource lifetime, selected previews, thumbnail state presentation and emoji/game artwork. Template imports and unresolved internal helper ownership remain separate obligations. Physical display acceptance remains unverified.
 
 ## Capabilities
 

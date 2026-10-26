@@ -13,15 +13,25 @@ import {
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import type { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
+import type { MicrophoneIdentity } from "../../shared/speech";
 import { audioWorkerSource } from "./audio-worker";
 import type { CaptureDriver } from "./capture";
 import { DesktopSpeechError } from "./errors";
 import { desktopWebSocket } from "./websocket";
 
 export interface AudioWorker {
-	readonly invoke: <A>(method: string, args?: readonly unknown[]) => Promise<A>;
+	readonly invoke: (
+		method: string,
+		args?: readonly unknown[],
+	) => Promise<unknown>;
 	readonly close: () => Promise<void>;
 }
+const WorkerReply = Schema.Union(
+	Schema.TaggedStruct("success", { value: Schema.Unknown }),
+	Schema.TaggedStruct("failure", {
+		cause: Schema.Struct({ name: Schema.String.pipe(Schema.maxLength(64)) }),
+	}),
+);
 /** No window exists until a user starts capture/playback. The worker never shows or focuses. */
 export async function openAudioWorker(
 	signal: AbortSignal,
@@ -97,16 +107,23 @@ export async function openAudioWorker(
 		await window.webContents.executeJavaScript(audioWorkerSource());
 		if (closed) throw new AiUnavailable();
 		return {
-			invoke: (method, args = []) => {
+			invoke: async (method, args = []) => {
 				if (
 					closed ||
 					!window ||
-					!/^(capture|pull|ready|play|stop|state|resume)$/.test(method)
+					!/^(capture|pull|ready|play|stop|state|resume|pause|resumeCapture|export|level|close)$/.test(
+						method,
+					)
 				)
 					return Promise.reject(new AiUnavailable());
-				return window.webContents.executeJavaScript(
-					`globalThis.__quakeSpeech.${method}(...${JSON.stringify(args)})`,
+				// Native DOMException rejections lose their properties in Electron.
+				// Project the reason inside the worker before crossing that boundary.
+				const result: unknown = await window.webContents.executeJavaScript(
+					`Promise.resolve().then(() => globalThis.__quakeSpeech.${method}(...${JSON.stringify(args)})).then(value => ({_tag:"success", value}), cause => ({_tag:"failure", cause:{name:["NotAllowedError","NotFoundError","OverconstrainedError","NotReadableError","SecurityError","AbortError"].includes(cause?.name) ? cause.name : "Error"}}))`,
 				);
+				const reply = Schema.decodeUnknownSync(WorkerReply)(result);
+				if (reply._tag === "failure") throw reply.cause;
+				return reply.value;
 			},
 			close,
 		};
@@ -139,6 +156,9 @@ const boundary = <A>(run: () => Promise<A>) =>
 	Effect.tryPromise({ try: run, catch: (cause) => new AiUnavailable(cause) });
 export function createElectronCaptureDriver(
 	open = openAudioWorker,
+	microphone: () => Effect.Effect<MicrophoneIdentity | undefined> = () =>
+		Effect.succeed(undefined),
+	exportRecording = false,
 ): CaptureDriver {
 	return {
 		permission: boundary(
@@ -149,6 +169,7 @@ export function createElectronCaptureDriver(
 		),
 		open: (id) =>
 			Effect.gen(function* () {
+				const selected = yield* microphone();
 				const controller = new AbortController();
 				let acquired: AudioWorker | undefined;
 				let opening: Promise<AudioWorker> | undefined;
@@ -176,17 +197,24 @@ export function createElectronCaptureDriver(
 						if (controller.signal.aborted) {
 							throw new AiUnavailable();
 						}
-						await value.invoke("capture", [id]);
+						await value.invoke("capture", [id, selected, exportRecording]);
 						return value;
 					},
-					catch: (cause) =>
-						cause instanceof Error && cause.name === "NotAllowedError"
+					catch: (cause) => {
+						const name =
+							cause && typeof cause === "object" && "name" in cause
+								? cause.name
+								: undefined;
+						return name === "NotAllowedError"
 							? new DesktopSpeechError("PermissionDenied", "permission", cause)
-							: new DesktopSpeechError(
-									"RecorderUnavailable",
-									"recorder",
-									cause,
-								),
+							: name === "NotFoundError" || name === "OverconstrainedError"
+								? new DesktopSpeechError("NoDevice", "recorder", cause)
+								: new DesktopSpeechError(
+										"RecorderUnavailable",
+										"recorder",
+										cause,
+									);
+					},
 				}).pipe(
 					// Startup hasn't returned a CaptureSession yet, so captureFrames'
 					// acquisition finalizer can't close it. Own failed acquisition here.
@@ -209,7 +237,23 @@ export function createElectronCaptureDriver(
 					),
 				);
 				return {
-					pull: boundary(() => worker.invoke<unknown>("pull")).pipe(
+					pause: boundary(() => worker.invoke("pause")).pipe(Effect.asVoid),
+					resume: boundary(() => worker.invoke("resumeCapture")).pipe(
+						Effect.asVoid,
+					),
+					export: (format) =>
+						boundary(() => worker.invoke("export", [format])).pipe(
+							Effect.flatMap(
+								Schema.decodeUnknown(
+									Schema.Array(Schema.Int.pipe(Schema.between(0, 255))).pipe(
+										Schema.maxItems(24000 * 2 * 60 + 44),
+									),
+								),
+							),
+							Effect.map((bytes) => Uint8Array.from(bytes)),
+							Effect.mapError((cause) => new AiUnavailable(cause)),
+						),
+					pull: boundary(() => worker.invoke("pull")).pipe(
 						Effect.flatMap(Schema.decodeUnknown(Batch)),
 						Effect.mapError((cause) => new AiUnavailable(cause)),
 						Effect.flatMap((batch) =>
@@ -280,11 +324,14 @@ export function createDesktopAudioOutput(
 			const lease = {
 				ready: ready().pipe(Effect.onError(() => reservation.release)),
 				contextState: boundary(() =>
-					worker ? worker.invoke<string>("state") : Promise.resolve("closed"),
+					worker ? worker.invoke("state") : Promise.resolve("closed"),
+				).pipe(
+					Effect.flatMap(Schema.decodeUnknown(Schema.String)),
+					Effect.mapError((cause) => new AiUnavailable(cause)),
 				),
 				resume: boundary(() =>
-					worker ? worker.invoke<void>("resume") : Promise.resolve(),
-				),
+					worker ? worker.invoke("resume") : Promise.resolve(),
+				).pipe(Effect.asVoid),
 				play: (audio: GeneratedAudio) =>
 					Effect.gen(function* () {
 						const verified = verifiedAudio(audio.bytes, audio.format);

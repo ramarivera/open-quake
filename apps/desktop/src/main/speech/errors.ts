@@ -2,6 +2,11 @@ import { Schema } from "effect";
 import { toSafeDiagnosticCause } from "../../../../../packages/edge/src/ai/ai-errors";
 
 export const DesktopSpeechErrors = {
+	NoDevice: {
+		code: "VOICE.CAPTURE.NO_DEVICE",
+		category: "dependency",
+		message: "The selected microphone is unavailable",
+	},
 	RecorderUnavailable: {
 		code: "VOICE.CAPTURE.RECORDER_UNAVAILABLE",
 		category: "dependency",
@@ -30,6 +35,7 @@ export const DesktopSpeechErrors = {
 } as const;
 const entry = DesktopSpeechErrors;
 const codes = [
+	entry.NoDevice.code,
 	entry.RecorderUnavailable.code,
 	entry.PermissionDenied.code,
 	entry.BufferOverflow.code,
