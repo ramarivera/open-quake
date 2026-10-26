@@ -110,12 +110,16 @@ export class MonitorStore extends Effect.Service<MonitorStore>()(
 										return yield* Effect.fail(new MonitorConfigInvalid());
 								}
 								const next = { revision: revision + 1, settings };
-								yield* Effect.tryPromise({
-									try: () => storage.save(next),
-									catch: (cause) => new MonitorPersistenceFailed(cause),
-								});
-								record = next;
-								recovered = false;
+								yield* Effect.uninterruptible(
+									Effect.gen(function* () {
+										yield* Effect.tryPromise({
+											try: () => storage.save(next),
+											catch: (cause) => new MonitorPersistenceFailed(cause),
+										});
+										record = next;
+										recovered = false;
+									}),
+								);
 								return yield* read();
 							}),
 						);

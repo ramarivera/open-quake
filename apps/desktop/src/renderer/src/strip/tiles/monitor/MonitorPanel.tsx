@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { effectiveMonitoring } from "../../../../../../../../packages/edge/src/monitor/monitor-config";
 import type {
 	MetricSample,
+	ModuleId,
 	MonitorSnapshot,
 } from "../../../../../../../../packages/edge/src/monitor/monitor-contracts";
 import type {
@@ -28,6 +30,8 @@ import "./monitor.css";
 const palette = stripPaletteProperties();
 
 const PanelStyle = createContext<StyleId>("glass");
+/** Metrics being collected now; any other module reads "Off", not unavailable. */
+const PanelMetrics = createContext<readonly ModuleId[] | undefined>(undefined);
 
 type Children = { children: React.ReactNode; className?: string };
 const Card = ({ children, className = "" }: Children): React.JSX.Element => (
@@ -65,6 +69,9 @@ function Status({
 }: {
 	sample: MetricSample;
 }): React.JSX.Element | null {
+	const collected = useContext(PanelMetrics);
+	if (collected && !collected.includes(sample.id))
+		return <span className="monitor-state">{settingsLabels.panelOff}</span>;
 	return sample.state === "available" ? null : (
 		<span
 			className="monitor-state"
@@ -686,7 +693,9 @@ function PanelWithMedia({
 			) : null}
 			<div className="monitor-scrim" />
 			<PanelStyle.Provider value={settings.styleId}>
-				<Canvas settings={settings} snapshot={snapshot} />
+				<PanelMetrics.Provider value={effectiveMonitoring(settings).metrics}>
+					<Canvas settings={settings} snapshot={snapshot} />
+				</PanelMetrics.Provider>
 			</PanelStyle.Provider>
 			{invalid ? (
 				<div className="monitor-background-error" role="status">

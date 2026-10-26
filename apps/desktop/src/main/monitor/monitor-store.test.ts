@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Either } from "effect";
+import { Effect, Either, Fiber } from "effect";
 import {
 	defaults,
 	type MediaSlot,
@@ -18,6 +18,72 @@ const storage = (overrides: Partial<MonitorStorage> = {}): MonitorStorage => ({
 	...overrides,
 });
 describe("monitor settings", () => {
+	it.effect(
+		"migrates existing saved records without losing panel preferences or enabling app tracking",
+		() =>
+			Effect.gen(function* () {
+				const store = yield* MonitorStore;
+				const view = yield* store.read();
+				expect(view.recovered).toBe(false);
+				expect(view.revision).toBe(9);
+				expect(view.settings.styleId).toBe("cyber");
+				expect(view.settings.appMonitor).toEqual({ enabled: false });
+				expect(view.settings.override).toEqual({
+					active: false,
+					hz: 1,
+					metrics: ["cpu"],
+				});
+				expect(view.settings.metrics).toContain("bluetooth");
+			}).pipe(
+				Effect.provide(
+					MonitorStore.Default(
+						storage({
+							load: async () => ({
+								revision: 9,
+								settings: {
+									styleId: "cyber",
+									background: "none",
+									media: {},
+									temperatureUnit: "fahrenheit",
+									enabled: true,
+									hz: 2,
+								},
+							}),
+						}),
+					),
+				),
+			),
+	);
+	it.scoped(
+		"settles an accepted atomic save before publishing state when its caller is interrupted",
+		() =>
+			Effect.gen(function* () {
+				let finish: (() => void) | undefined;
+				const layer = MonitorStore.Default(
+					storage({
+						save: async () =>
+							new Promise<void>((resolve) => {
+								finish = resolve;
+							}),
+					}),
+				);
+				yield* Effect.gen(function* () {
+					const store = yield* MonitorStore;
+					const saving = yield* store
+						.save(0, { ...defaults(), hz: 2 })
+						.pipe(Effect.forkScoped);
+					yield* Effect.yieldNow();
+					expect(finish).toBeTypeOf("function");
+					const interrupt = yield* Fiber.interrupt(saving).pipe(
+						Effect.forkScoped,
+					);
+					expect((yield* store.configuration()).revision).toBe(0);
+					finish?.();
+					yield* Fiber.join(interrupt);
+					expect((yield* store.configuration()).settings.hz).toBe(2);
+				}).pipe(Effect.provide(layer));
+			}),
+	);
 	it.effect(
 		"loads only the active or explicitly previewed style, preserving all saved slots",
 		() => {

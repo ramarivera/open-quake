@@ -1,10 +1,13 @@
-import { Clock, Context, Effect, Ref, Schedule, Stream } from "effect";
+import { Clock, Context, Effect, Ref, Schedule, Schema, Stream } from "effect";
+import { MetricSelection } from "./monitor-config.js";
 import {
 	type MetricSample,
 	MODULES,
 	type ModuleId,
 	type MonitorSnapshot,
+	SampleRate,
 } from "./monitor-contracts.js";
+import { MonitorConfigInvalid } from "./monitor-errors.js";
 
 export interface MetricCollector {
 	readonly collect: (
@@ -29,7 +32,16 @@ export class MonitorService extends Effect.Service<MonitorService>()(
 			return {
 				watch: Effect.fn("MonitorService.watch")(function* (
 					hz: number,
-				): Effect.fn.Return<Stream.Stream<MonitorSnapshot>> {
+					metrics: readonly ModuleId[] = MODULES,
+				): Effect.fn.Return<
+					Stream.Stream<MonitorSnapshot>,
+					MonitorConfigInvalid
+				> {
+					if (
+						!Schema.is(SampleRate)(hz) ||
+						!Schema.is(MetricSelection)(metrics)
+					)
+						return yield* new MonitorConfigInvalid();
 					const interval = 1000 / hz;
 					const state = yield* Ref.make(new Map<ModuleId, CollectionState>());
 					const worker = (id: ModuleId) =>
@@ -51,7 +63,7 @@ export class MonitorService extends Effect.Service<MonitorService>()(
 						);
 					return Stream.unwrapScoped(
 						Effect.gen(function* () {
-							for (const id of MODULES) yield* Effect.forkScoped(worker(id));
+							for (const id of metrics) yield* Effect.forkScoped(worker(id));
 							return Stream.repeatEffect(
 								Effect.gen(function* () {
 									const now = yield* Clock.currentTimeMillis;
