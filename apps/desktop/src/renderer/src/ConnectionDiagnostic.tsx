@@ -43,7 +43,9 @@ export function DiagnosticView({
 }: {
 	status: ConnectionDiagnostic | undefined;
 	notice: string;
-	run: (action: Exclude<LifecycleCommand["action"], "wizard">) => void;
+	run: (
+		action: Exclude<LifecycleCommand["action"], "wizard" | "restart">,
+	) => void;
 	displaySettingsAvailable?: boolean;
 	layoutRepairAvailable?: boolean;
 }): React.JSX.Element {
@@ -141,6 +143,16 @@ export function DiagnosticView({
 				})}
 			</div>
 			<div className="connection-actions">
+				{status?.alert?.alertType === "multi-screen" && (
+					<button
+						type="button"
+						data-action="bind-all"
+						disabled={checking}
+						onClick={() => run("bind-all")}
+					>
+						Bind Quake screens
+					</button>
+				)}
 				<button
 					type="button"
 					disabled={checking}
@@ -205,7 +217,7 @@ export function ConnectionCheck({
 	}, [notice]);
 	const run = useCallback(
 		async (
-			action: Exclude<LifecycleCommand["action"], "wizard">,
+			action: Exclude<LifecycleCommand["action"], "wizard" | "restart">,
 		): Promise<void> => {
 			if (action === "redetect" && pending.current) return;
 			if (action === "redetect") pending.current = true;

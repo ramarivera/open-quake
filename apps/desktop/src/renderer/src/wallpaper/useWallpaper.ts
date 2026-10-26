@@ -103,5 +103,23 @@ export function useWallpaper() {
 			unsubscribe();
 		};
 	}, [request, serial]);
+	useEffect(() => {
+		if (new URLSearchParams(window.location.search).get("surface") !== "panel")
+			return;
+		const nodes = [
+			document.documentElement,
+			document.body,
+			document.getElementById("root"),
+		].filter((node) => node !== null);
+		const previous = nodes.map((node) => node.style.backgroundColor);
+		for (const node of nodes)
+			node.style.backgroundColor = snapshot?.saved.settings.isTransparent
+				? "transparent"
+				: "#000000";
+		return () =>
+			nodes.forEach((node, index) => {
+				node.style.backgroundColor = previous[index] ?? "";
+			});
+	}, [snapshot?.saved.settings.isTransparent]);
 	return { snapshot, notice, busy, request };
 }

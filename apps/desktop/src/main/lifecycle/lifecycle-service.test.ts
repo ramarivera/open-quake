@@ -572,3 +572,51 @@ it.scoped(
 			}
 		}),
 );
+
+it.scoped(
+	"MAIN-149 coalesces same-serial restarts and queues all active serials without recovering a HID handle",
+	() =>
+		Effect.gen(function* () {
+			const disposed: string[] = [];
+			yield* Effect.gen(function* () {
+				const service = yield* DeviceLifecycle;
+				for (const serial of ["A", "B"])
+					yield* service.onStatus(
+						{ source: "mock", kind: "status", state: "connected" },
+						serial,
+					);
+				expect(yield* service.rebind("missing")).toBe(false);
+				expect(yield* service.rebind("A")).toBe(true);
+				expect(yield* service.rebind("A")).toBe(true);
+				yield* TestClock.adjust(1);
+				expect(disposed).toEqual(["A"]);
+				expect(yield* service.rebind()).toBe(true);
+				yield* TestClock.adjust(1);
+				expect(disposed).toEqual(["A", "A", "B"]);
+			}).pipe(
+				Effect.provide(
+					DeviceLifecycle.Default({
+						development: false,
+						mock: true,
+						displays: () => [primary, strip],
+						watch: () => () => {},
+						bus: () => undefined,
+						notify: () => {},
+						panel: () => {},
+						disposePanel: (serial) => {
+							if (serial) disposed.push(serial);
+						},
+						prompts: {
+							platform: "darwin",
+							mock: true,
+							displays: () => [primary, strip],
+							primaryId: () => 1,
+							prompt: () => Effect.die("must not prompt"),
+							openSettings: () => Effect.void,
+							native: () => Effect.die("must not access hardware"),
+						},
+					}),
+				),
+			);
+		}),
+);

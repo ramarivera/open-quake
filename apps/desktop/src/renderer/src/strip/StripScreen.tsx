@@ -375,7 +375,13 @@ export function StripScreen({
 			data-dashed={showEmptyGridDashedBorder}
 			data-profiles={profiles._tag}
 			data-wheel-open={voice.wheelOpen || undefined}
-			style={{ ...palette, ...STRIP_CANVAS }}
+			style={{
+				...palette,
+				...STRIP_CANVAS,
+				...(vivid && wallpaper?.saved.settings.isTransparent
+					? { background: "transparent" }
+					: {}),
+			}}
 		>
 			{vivid && wallpaper?.asset._tag === "ready" ? (
 				<div className="strip-wallpaper">

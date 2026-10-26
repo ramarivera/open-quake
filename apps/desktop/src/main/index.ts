@@ -95,6 +95,7 @@ import { registerManagementNavigation } from "./management/external-navigation";
 import { createPrivacyVisibility } from "./management/privacy-visibility";
 import { prepareDesktopStartup } from "./management/startup";
 import { MediaLive, registerMedia } from "./media";
+import { applyWallpaperBackground } from "./media/native-background";
 import { prepareMeetings } from "./meetings";
 import { prepareMonitor } from "./monitor";
 import { activeMonitorKey } from "./monitor/panel-media";
@@ -628,6 +629,19 @@ if (!app.requestSingleInstanceLock()) {
 									() => panelWin,
 									speech.acquireWallpaperSound,
 									panelSerial,
+									(snapshot) => {
+										const owned = stripWindows.get(snapshot.saved.serial);
+										if (owned)
+											applyWallpaperBackground(
+												owned.win,
+												snapshot.saved.settings.isTransparent,
+											);
+										else if (snapshot.saved.serial === activeDeviceId())
+											applyWallpaperBackground(
+												panelWin,
+												snapshot.saved.settings.isTransparent,
+											);
+									},
 								),
 							diagnostics,
 						);

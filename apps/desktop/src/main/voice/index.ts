@@ -337,6 +337,8 @@ export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 						};
 					}
 					case "FocusPanel": {
+						const management = options.management();
+						if (management && !management.isDestroyed()) management.focus();
 						// Main focuses the strip window 80 ms later (QBI:598-653).
 						const panel = options.panel();
 						if (!panel || panel.isDestroyed())

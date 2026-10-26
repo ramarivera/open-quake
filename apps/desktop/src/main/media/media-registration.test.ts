@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Layer, ManagedRuntime, Option } from "effect";
+import { Effect, Layer, ManagedRuntime, Option, Schema } from "effect";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
@@ -12,6 +12,7 @@ import {
 	WALLPAPER_CLOCK,
 	WALLPAPER_REQUEST,
 	WALLPAPER_SNAPSHOT,
+	WallpaperReply,
 } from "../../shared/wallpaper-contracts";
 import { MediaLive, registerMedia } from "./index";
 import type { DecodedMedia } from "./media-decoder";
@@ -29,7 +30,10 @@ vi.mock("electron", async () => {
 });
 
 class TestWindow extends EventEmitter {
+	readonly mediaEvents = new EventEmitter();
 	readonly webContents = {
+		on: this.mediaEvents.on.bind(this.mediaEvents),
+		removeListener: this.mediaEvents.removeListener.bind(this.mediaEvents),
 		mainFrame: {},
 		getURL: () => "file:///app/index.html?surface=management",
 		isDestroyed: () => false,
@@ -104,6 +108,20 @@ describe("explicit media registration", () => {
 					_tag: "success",
 					snapshot: { saved: { serial } },
 				});
+			const sent = () =>
+				a.webContents.send.mock.calls.filter(
+					([channel]) => channel === WALLPAPER_SNAPSHOT,
+				);
+			const countBytes = () =>
+				(JSON.stringify(sent()).match(/dataUrl/g) ?? []).length;
+			expect(countBytes()).toBe(1);
+			await invoke(a, { _tag: "read" });
+			expect(countBytes()).toBe(1);
+			expect(JSON.stringify(sent().at(-1))).toContain('"cached"');
+			a.mediaEvents.emit("did-start-loading");
+			await invoke(a, { _tag: "read" });
+			expect(countBytes()).toBe(2);
+
 			await invoke(management, { _tag: "select", serial: "A" });
 			expect(await invoke(b, { _tag: "read" })).toMatchObject({
 				snapshot: { saved: { serial: "B" } },
@@ -111,6 +129,26 @@ describe("explicit media registration", () => {
 			await invoke(management, { _tag: "select", serial: "B" });
 			expect(await invoke(a, { _tag: "read" })).toMatchObject({
 				snapshot: { saved: { serial: "A" } },
+			});
+			const selected = Schema.decodeUnknownSync(WallpaperReply)(
+				await invoke(management, { _tag: "read" }),
+			);
+			if (selected._tag !== "success")
+				throw new Error("Missing selected snapshot");
+			const failed = {
+				_tag: "failed",
+				serial: "B",
+				revision: selected.snapshot.saved.revision,
+				playbackId: selected.snapshot.playbackId,
+				index: selected.snapshot.activeIndex,
+			};
+			expect(await invoke(a, failed)).toMatchObject({ _tag: "failure" });
+			expect(await invoke(management, failed)).toMatchObject({
+				_tag: "success",
+				snapshot: { activeIndex: 1 },
+			});
+			expect(await invoke(management, failed)).toMatchObject({
+				_tag: "failure",
 			});
 			await invoke(management, {
 				_tag: "configure",
@@ -204,6 +242,7 @@ describe("explicit media registration", () => {
 						save: () => Effect.die("unused"),
 						restore: () => Effect.die("unused"),
 						importLocal: () => Effect.die("unused"),
+						discard: () => Effect.void,
 					}),
 				),
 			);
