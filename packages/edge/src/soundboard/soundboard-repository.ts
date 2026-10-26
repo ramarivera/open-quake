@@ -33,12 +33,17 @@ export class SoundboardRepository extends Effect.Service<SoundboardRepository>()
 				put: Effect.fn("SoundboardRepository.put")(
 					(session: SoundSession): Effect.Effect<void> =>
 						Ref.update(records, (current) => {
-							const next = [
-								...current.filter(
-									(record) => record.playbackId !== session.playbackId,
-								),
-								copySoundSession(session),
-							];
+							// Replacing an observation must not change playback selection order.
+							const replacement = copySoundSession(session);
+							const next = current.some(
+								(record) => record.playbackId === session.playbackId,
+							)
+								? current.map((record) =>
+										record.playbackId === session.playbackId
+											? replacement
+											: record,
+									)
+								: [...current, replacement];
 							const active = next.filter(
 								(record) =>
 									record.state !== "stopped" && record.state !== "failed",

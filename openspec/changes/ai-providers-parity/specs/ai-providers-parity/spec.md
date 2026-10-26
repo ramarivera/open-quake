@@ -122,8 +122,8 @@ The catalog SHALL preserve all twelve legacy engine dispositions and every retai
 
 #### Scenario: Inactive model rows cannot provide a direct voice route
 - **WHEN** a saved row has role none
-- **THEN** the provider listing and knob pinning both report no usable direct route using the shared role readiness rule
-- **AND** default and fallback rows remain eligible
+- **THEN** the provider listing, knob readiness/pinning and per-key assistant submit all report no usable direct route using the shared role readiness rule
+- **AND** default and fallback rows remain eligible; named role-none rows stay visible as unavailable selections and cannot use retained credentials
 
 ### Requirement: Explicit specialized provider settings
 
@@ -196,6 +196,86 @@ Opt-in file operations SHALL use only the profile pinned by the requesting windo
 - **WHEN** multibyte text fits both limits, including the exact byte boundary
 - **THEN** an upload and content retrieval round trip preserves it
 
+### Requirement: Persisted assistant controls
+
+Assistant keys SHALL expose typed settings and save/reopen without raw credentials. Defaults SHALL be voice input on, wake window off, history count zero, context timeout 5 seconds, role zero, temperature 1, topP .7, router on, and explicit search and HA off. Router selection SHALL force voice on and wake window off. Roles SHALL use the retained catalog or custom role -1 with at most 3000 characters. Personality SHALL span 0..1 and Reply Quality 0..2 in .05 steps; timeout SHALL span 5..30 in steps of 5; history SHALL span 0..50. Provider-unsupported controls SHALL explain their restriction. HA selection SHALL intersect the assistant entity IDs with the host allowlist before dispatch (AI-009, AI-041, AI-053, AI-054, AI-055, AI-056, AI-057, AI-058, AI-059, AI-060, MGMT-285).
+
+#### Scenario: Save and reopen key controls
+- **WHEN** a user selects a retained role or a custom prompt and changes bounded controls
+- **THEN** Save and reopen retain the settings, excluded role IDs and invalid combinations fail validation, and credentials never enter the key
+- **AND** router/plain-chat selection changes subsequent dispatch; unsupported routes report unavailable instead of executing another route
+
+#### Scenario: Context expiration and history
+- **WHEN** a subsequent assistant turn follows the selected 5..30 second idle timeout
+- **THEN** earlier context is excluded, and before expiry only the selected number of completed exchanges is eligible
+- **AND** already accepted turns keep their selection and profile snapshot
+
+#### Scenario: Wake the conversation window without voice capture
+- **WHEN** a saved assistant key has Wake Chat Window enabled and is pressed
+- **THEN** the host restores and focuses the existing management conversation window, including when Voice Input is disabled
+- **AND** selection alone sends no model request; keys with wake disabled and external-agent keys do not trigger assistant window activation (AI-060)
+
+### Requirement: Local assistant provider selection
+
+General Settings SHALL expose AI Model Provider using saved local rows in QWen, Kimi, DeepSeek, OpenAI order. Loading, empty, failed and fewer-than-two choices SHALL be visible; a single option SHALL be disabled. An explicit choice SHALL persist through the Models default role and apply to subsequent chat turns. Per-key settings SHALL display the resolved provider read-only and link General Settings. Direct choices SHALL share the provider catalog and retain custom model IDs (AI-003, AI-019, AI-042, AI-062, SETTINGS-008).
+
+#### Scenario: Local catalog and explicit choice
+- **WHEN** providers load or a user chooses another saved provider
+- **THEN** the fixed engine order is retained, unconfigured choices explain why, the saved default changes, and reopening uses it without cloud/account calls
+
+#### Scenario: Saved assistant follows a changed General provider
+- **WHEN** an assistant follows General Settings default and the provider changes from Qwen to DeepSeek
+- **THEN** subsequent turns and the reopened editor clear unsupported Thinking and Web Search controls and discard known cross-provider model overrides before using the current default model
+- **AND** compatible controls, custom model IDs, explicitly selected rows and unrelated assistant preferences remain intact (AI-005, AI-041, AI-048, AI-062)
+
+### Requirement: Named assistant models
+
+Models SHALL support Add, Rename, Copy and confirmed Delete. Names SHALL contain 1..30 trimmed characters. Copies SHALL own a fresh ID and independent settings with no credential or pending secret. Built-in rows SHALL disallow rename/delete. Deleting the default SHALL select a remaining row through existing default-role normalization; deleting the last global row SHALL fail (AI-043).
+
+#### Scenario: Isolated copy and delete fallback
+- **WHEN** a named model is copied, renamed and saved
+- **THEN** editing the copy leaves its source unchanged and the copy has no credentials until explicitly saved
+- **AND** editing or saving either named row's endpoint preserves the other row's endpoint and credentials; legacy unnamed provider siblings retain their existing URL propagation
+- **WHEN** its default is deleted with confirmation
+- **THEN** a remaining configured model becomes default and built-in protections remain enforced
+
+### Requirement: Reachable protected provider configuration
+
+Assistant settings SHALL link the existing Models and Speech settings consumers for Azure voice/key/region, Spark app ID/key/secret, custom model URL/name, HuoShan Inference/Agent and Coze bot configuration. Those consumers SHALL keep keys in the host protected credential store and expose readiness without secret values. The assistant editor SHALL expose roles, bounded sampling, timeout and HA configuration through the same production path (SETTINGS-102).
+
+#### Scenario: Configure a retained provider
+- **WHEN** a user follows assistant provider or speech configuration
+- **THEN** the existing protected settings editor is reachable and subsequent assistant turns use the saved model configuration without copying secrets into keys
+
+#### Scenario: Equipment dispatch requires accepted turn ownership
+- **WHEN** an Auto assistant request is busy, duplicates a saved turn ID or fails chat admission
+- **THEN** no classification or Home Assistant executor runs
+- **AND** accepted routing and equipment work run inside the turn worker, with terminal failure/cancellation recorded and no automatic action replay (AI-058)
+
+#### Scenario: Pending Auto request loses its device or profile
+- **WHEN** disconnect, profile change or cancellation retires an accepted assistant session during classification or action generation
+- **THEN** the turn worker interrupts provider I/O and cannot execute Home Assistant actions later
+- **AND** equipment dispatch rechecks the owning session/profile identity after generation immediately before execution (AI-058)
+
+#### Scenario: Cancel or supersede equipment work queued in the production integration owner
+- **WHEN** an accepted assistant action waits behind another Home Assistant integration operation and its turn is cancelled or its owning identity is superseded
+- **THEN** interruption crosses the production runtime bridge and the integration owner rechecks the owning identity after acquiring its lock and loading the allowlist, immediately before the equipment call
+- **AND** releasing the earlier integration operation produces zero equipment calls for the retired turn (AI-058)
+
+#### Scenario: Concurrent chat cannot replace accepted routing metadata
+- **WHEN** another session submits plain chat for the same model while an accepted Auto turn awaits classification
+- **THEN** classification and Home Assistant action generation retain that turn's pinned provider profile and routing model
+- **AND** mutable shared repository entries cannot change the accepted routing selection (AI-058)
+
+#### Scenario: Typed input with default router enabled
+- **WHEN** a default assistant key submits typed text with Use Dekie Agent enabled
+- **THEN** text reaches Auto classification and its supported chat/HA route; voice-input settings restrict microphone transcripts independently (AI-053, AI-060)
+
+#### Scenario: Saved custom knob and General default agree with execution
+- **WHEN** a direct knob explicitly saves a bounded custom model ID outside the built-in catalog
+- **THEN** readiness and runtime pinning both accept it using the selected eligible credentialed row, without requiring duplicate assistant settings
+- **WHEN** its model selection changes to General Settings default
+- **THEN** directProvider and directModel resolve the new default before saving, never the previous row (AI-005, AI-048, AI-062)
 
 ### Requirement: Existing facade owns production meeting transports
 

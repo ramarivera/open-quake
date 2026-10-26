@@ -33,7 +33,11 @@ describe("connection diagnostic page", () => {
 		expect(render({ ...status, checking: true })).toContain("Checking");
 		const html = render({ ...status, usb: "pass", hdmi: "pass", mock: true });
 		expect(html).toContain("simulated USB");
-		expect(html).toContain("Detection complete, both connections are normal");
+		expect(html.match(/data-pass="true"/g)).toHaveLength(2);
+		expect(html).toContain('role="status" aria-live="polite"></p>');
+		expect(html).not.toContain(
+			"Detection complete, both connections are normal",
+		);
 	});
 	it("explains a failed layout repair and its automatic prompt cooldown", () => {
 		const html = render({

@@ -295,7 +295,11 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 						}).pipe(lock.withPermits(1)),
 				),
 				execute: Effect.fn("HomeAssistantService.execute")(
-					(key: HaKey, fromAi = false): Effect.Effect<void, IntegrationError> =>
+					(
+						key: HaKey,
+						fromAi = false,
+						isCurrent: () => boolean = () => true,
+					): Effect.Effect<void, IntegrationError> =>
 						Effect.gen(function* () {
 							const active = connection;
 							if (!active || state !== "Connected")
@@ -320,15 +324,22 @@ export class HomeAssistantService extends Effect.Service<HomeAssistantService>()
 								...key.service_data,
 								entity_id: key.entity_id,
 							};
-							yield* Effect.tryPromise({
-								try: () =>
-									active.execute(
-										key.entity_id.split(".")[0] ?? "",
-										key.service,
-										data,
-									),
-								catch: haBoundaryError,
-							}).pipe(Effect.tapError(recordFailure));
+							yield* Effect.suspend(() => {
+								// Recheck after the semaphore and allowlist wait, at dispatch.
+								if (!isCurrent())
+									return Effect.fail(
+										new InputRejected(undefined, "Assistant turn"),
+									);
+								return Effect.tryPromise({
+									try: () =>
+										active.execute(
+											key.entity_id.split(".")[0] ?? "",
+											key.service,
+											data,
+										),
+									catch: haBoundaryError,
+								}).pipe(Effect.tapError(recordFailure));
+							});
 						}).pipe(lock.withPermits(1)),
 				),
 				setVisible: Effect.fn("HomeAssistantService.setVisible")(

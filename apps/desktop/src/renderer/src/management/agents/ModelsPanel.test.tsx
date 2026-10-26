@@ -127,3 +127,71 @@ it.each(["volc", "coze"])(
 		}
 	},
 );
+
+it("AI-043 copies named model metadata without secret input and protects built-in rows", async () => {
+	const f = await fixture("qwen", {
+		name: "Personal assistant",
+		builtIn: true,
+	});
+	const source = query(
+		f.host,
+		'[aria-label="Name default 1"]',
+		HTMLInputElement,
+	);
+	expect(source.disabled).toBe(true);
+	const secret = query(f.host, 'input[type="password"]', HTMLInputElement);
+	await input(secret, "unsaved-secret");
+	await click(button(f.host, "Copy"));
+	const copy = query(f.host, '[aria-label="Name default 2"]', HTMLInputElement);
+	expect(copy.value).toBe("Personal assistant copy");
+	expect(copy.disabled).toBe(false);
+	expect(
+		query(
+			f.host,
+			'input[type="password"][aria-label$="default 2"]',
+			HTMLInputElement,
+		).value,
+	).toBe("");
+	await input(copy, "Independent name");
+	expect(source.value).toBe("Personal assistant");
+	expect(copy.maxLength).toBe(30);
+});
+
+it("AI-043 locks built-in names and deletion while allowing an isolated copy", async () => {
+	const f = await fixture("openai", {
+		builtIn: true,
+		name: "Built-in",
+		model: "gpt-4o",
+	});
+	expect(
+		query(f.host, '[aria-label="Name default 1"]', HTMLInputElement).disabled,
+	).toBe(true);
+	expect(button(f.host, agentsStrings.clawAIConfig.delete).disabled).toBe(true);
+	await click(button(f.host, "Copy"));
+	expect(
+		query(f.host, '[aria-label="Name default 2"]', HTMLInputElement).disabled,
+	).toBe(false);
+});
+
+it("AI-043 keeps source and copy endpoints independent while editing and saving", async () => {
+	const f = await fixture("openai", { name: "Source", settings: undefined });
+	const endpoint = (index: number) =>
+		query(
+			f.host,
+			`[aria-label="${agentsStrings.clawAIConfig.baseUrlCol} default ${index}"]`,
+			HTMLInputElement,
+		);
+	await click(button(f.host, "Copy"));
+	await input(endpoint(2), "https://copy.invalid/v1");
+	expect(endpoint(1).value).toBe("https://selected.invalid/v1");
+	const copy = endpoint(2).closest("tr");
+	if (!copy) throw new Error("Missing copied model row");
+	await click(button(copy, agentsStrings.clawAIConfig.saveRow));
+	const command = f.calls.at(-1);
+	if (command?.type !== "save-model") throw new Error("Expected save-model");
+	expect(command.row.baseUrl).toBe("https://copy.invalid/v1");
+	expect(command.secret).toBe("");
+	expect(endpoint(1).value).toBe("https://selected.invalid/v1");
+	await input(endpoint(1), "https://source.invalid/v1");
+	expect(endpoint(2).value).toBe("https://copy.invalid/v1");
+});

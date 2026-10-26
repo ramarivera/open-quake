@@ -277,7 +277,7 @@ describe("touch production components", () => {
 					'[data-key-code="1,1"] img[src^="data:image/jpeg;base64,"]',
 				);
 				expect(image).not.toBeNull();
-				// End the preceding touch contact before exercising legacy press-only matrix input.
+				// End the preceding touch contact before exercising legacy matrix state input.
 				await act(async () => {
 					for (const listener of listeners)
 						listener({
@@ -319,7 +319,14 @@ describe("touch production components", () => {
 						keyCode: "1,1",
 						kind: "down",
 					}),
+					expect.objectContaining({
+						deviceId: serial,
+						profileId: `profile-${serial}`,
+						keyCode: "1,1",
+						kind: "up",
+					}),
 				]);
+				await matrix(0);
 				await act(async () => {
 					for (const listener of listeners)
 						listener({
@@ -336,6 +343,8 @@ describe("touch production components", () => {
 				});
 				await matrix(1);
 				await matrix(1);
+				expect(emojiPress).not.toHaveBeenCalled();
+				await matrix(-1);
 				expect(emojiPress).toHaveBeenCalledExactlyOnceWith({
 					profileId: `profile-${serial}`,
 					pageId: "page",
@@ -1231,5 +1240,88 @@ describe("touch production components", () => {
 			expect(drag.defaultPrevented).toBe(true);
 			expect(tile.textContent).not.toBeNull();
 		},
+	);
+});
+
+it("renders mute alternate title and artwork from external host observations", async () => {
+	const { node, root } = host();
+	const base = fixtureProfile();
+	const profile: Profile = {
+		...base,
+		pages: [
+			{
+				...base.pages[0],
+				keys: base.pages[0].keys.map((key) => ({
+					...key,
+					config: {
+						...key.config,
+						type: "mute",
+						title: { ...key.config.title, text: "Sound on" },
+						icon: "mdi:volume-high",
+						alterTitle: Option.some({ ...key.config.title, text: "Sound off" }),
+						alterIcon: Option.some("mdi:volume-off"),
+					},
+				})),
+			},
+		],
+	};
+	let receive = (_state: KeyRuntimeState) => {};
+	const layout = vi.fn();
+	window.quakeKeyLibrary = {
+		request: vi.fn(async () => ({ _tag: "success" as const })),
+		onPreview: () => () => {},
+		onRuntime: (listener) => {
+			receive = listener;
+			return () => {};
+		},
+	};
+	await act(async () =>
+		root.render(
+			<StripScreen
+				profiles={{
+					_tag: "ready",
+					envelope: {
+						...createInitialProfileEnvelope(),
+						profiles: [profile],
+					},
+				}}
+				voice={previewVoiceContext}
+				titles="provided"
+				showEmptyGridDashedBorder={false}
+				onLayout={layout}
+			/>,
+		),
+	);
+	const normal =
+		node.querySelector(".generic-tile")?.innerHTML ?? node.innerHTML;
+	expect(node.textContent).toContain("Sound on");
+	await act(async () =>
+		receive({
+			deviceId: "desktop-preview",
+			profileId: profile.id,
+			pageId: "page",
+			keyCode: "1,1",
+			alternate: 1,
+		}),
+	);
+	expect(node.textContent).toContain("Sound off");
+	expect(node.innerHTML).not.toEqual(normal);
+	expect(layout.mock.lastCall?.[0]?.tiles[0]?.key.config.icon).toBe(
+		"mdi:volume-off",
+	);
+	const muted = node.innerHTML;
+	await act(async () =>
+		receive({
+			deviceId: "desktop-preview",
+			profileId: profile.id,
+			pageId: "page",
+			keyCode: "1,1",
+			alternate: 0,
+		}),
+	);
+	expect(node.textContent).toContain("Sound on");
+	expect(node.innerHTML).not.toEqual(muted);
+	expect(layout.mock.lastCall?.[0]?.tiles[0]?.key.config.icon).toBe(
+		"mdi:volume-high",
 	);
 });

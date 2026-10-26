@@ -26,6 +26,7 @@ async function fixture(autoStart = false) {
 	const storage = createLocalAgentState(root);
 	const starts: ServiceSettings[] = [];
 	let stopped = 0;
+	let stopFailure = false;
 	let ready = true;
 	let probing: () => void = () => {};
 	const healthStarted = new Promise<void>((resolve) => {
@@ -58,6 +59,7 @@ async function fixture(autoStart = false) {
 					exited,
 					stop: async () => {
 						stopped++;
+						if (stopFailure) throw new Error("fake tree cleanup failed");
 						exit();
 						stopping();
 					},
@@ -90,6 +92,9 @@ async function fixture(autoStart = false) {
 		processStopped,
 		runtimeReady,
 		stopped: () => stopped,
+		stopFailure: (fail: boolean) => {
+			stopFailure = fail;
+		},
 		exit: () => exit(),
 		offline: () => {
 			ready = false;
@@ -299,3 +304,20 @@ it.each(["malformed", "outside directory"])(
 		}
 	},
 );
+
+it("CENTER-047 retains the owned runtime after failed cleanup so Stop can retry", async () => {
+	const f = await fixture();
+	try {
+		await f.runtime.runPromise(AgentsRuntime.control("start"));
+		f.stopFailure(true);
+		expect(
+			await Effect.runPromise(f.backend.stop.pipe(Effect.either)),
+		).toMatchObject({ _tag: "Left", left: { code: "AGENT.RUNTIME.FAILED" } });
+		f.stopFailure(false);
+		await Effect.runPromise(f.backend.stop);
+		expect(f.stopped()).toBe(2);
+		expect(f.starts).toHaveLength(1);
+	} finally {
+		await f.close();
+	}
+});

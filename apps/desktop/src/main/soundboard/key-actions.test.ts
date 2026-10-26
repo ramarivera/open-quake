@@ -353,3 +353,129 @@ for (const terminal of ["stop", "preempt", "reset"] as const) {
 			}),
 	);
 }
+
+it.scoped(
+	"card Stop only stops its committed owner, including when already idle",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* rig();
+			const keys = soundboardKeyActions(f.service);
+			const other = { ...activation, deviceId: "other" };
+			yield* keys.execute(key(0), activation);
+			yield* keys.execute(key(0), other);
+			const stop = key(4);
+			const cardStop = {
+				...stop,
+				config: {
+					...stop.config,
+					actions: [
+						...stop.config.actions,
+						{ type: "playerIntent", value: "stop" },
+					],
+				},
+			};
+			for (let i = 0; i < 2; i++) {
+				yield* keys.execute(cardStop, activation);
+				expect((yield* keys.read(key(0), activation)).state).toBe("stopped");
+				expect((yield* keys.read(key(0), other)).state).toBe("playing");
+			}
+			expect(f.tracks[1]?.closed).toBe(0);
+		}),
+);
+
+it.scoped(
+	"position sampling preserves the newest additive playback selection while paused",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* rig();
+			const keys = soundboardKeyActions(f.service);
+			yield* keys.execute(key(1), activation);
+			yield* keys.execute(key(1), activation);
+			const before = yield* keys.snapshot();
+			const latest = before.at(-1);
+			if (!latest) throw new Error("missing session");
+			const original = key(1);
+			const toggle = {
+				...original,
+				config: {
+					...original.config,
+					actions: [
+						...original.config.actions,
+						{ type: "playerIntent", value: "toggle" },
+					],
+				},
+			};
+			yield* keys.execute(toggle, activation);
+			for (let i = 0; i < 2; i++) {
+				expect((yield* keys.read(original, activation)).state).toBe("paused");
+				expect((yield* keys.snapshot()).map((s) => s.playbackId)).toEqual(
+					before.map((s) => s.playbackId),
+				);
+			}
+			yield* keys.execute(toggle, activation);
+			expect(
+				(yield* keys.snapshot()).find((s) => s.playbackId === latest.playbackId)
+					?.state,
+			).toBe("playing");
+			expect(f.tracks[0]?.plays).toBe(1);
+			expect(f.tracks[1]?.plays).toBe(2);
+		}),
+);
+
+for (const intent of ["stop", "toggle", "previous", "next"] as const) {
+	it.scoped(
+		`ignores stale playlist sessions for ${intent} and never persists them under a new playlist`,
+		() =>
+			Effect.gen(function* () {
+				let stored: unknown = {};
+				const store = {
+					read: async () => stored,
+					write: async (next: unknown) => {
+						stored = next;
+					},
+				};
+				const f = yield* rig();
+				const keys = soundboardKeyActions(f.service, store);
+				yield* keys.execute(key(0), activation);
+				yield* keys.execute(key(6), activation);
+				const old = (yield* keys.snapshot()).at(-1);
+				if (!old) throw new Error("missing session");
+				const oldTrack = f.tracks.at(-1);
+				const before = JSON.stringify(stored);
+				const original = key(0);
+				const changed = {
+					...original,
+					config: {
+						...original.config,
+						actions: [
+							...original.config.actions.map((a) =>
+								a.type === "sound"
+									? { ...a, value: JSON.stringify(["/private/music/new.mp3"]) }
+									: a,
+							),
+							{ type: "playerIntent", value: intent },
+						],
+					},
+				};
+				expect(
+					yield* keys
+						.execute(changed, { ...activation, revision: 2 })
+						.pipe(Effect.either),
+				).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.AUDIO.CONFIG_INVALID" },
+				});
+				expect(oldTrack?.pauses).toBe(0);
+				expect(oldTrack?.plays).toBe(1);
+				expect(JSON.stringify(stored)).toBe(before);
+				expect(
+					(yield* keys.snapshot()).find((s) => s.playbackId === old.playbackId)
+						?.state,
+				).toBe("playing");
+				expect(
+					(yield* keys.read(changed, { ...activation, revision: 2 }))
+						.trackIndex,
+				).toBe(0);
+			}),
+	);
+}

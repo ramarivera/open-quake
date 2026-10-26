@@ -1,4 +1,5 @@
 import { Effect, Option, ParseResult, Predicate, Schema } from "effect";
+import { AssistantSettings } from "./assistant-contracts.js";
 import { QUAKE_LOGICAL_GRID } from "./profile-grid.js";
 import {
 	isEmptyCell,
@@ -108,6 +109,7 @@ export const ProfileAction = Schema.Struct({
 	value: ProfileJson,
 });
 const KeyConfigFields = Schema.Struct({
+	assistantSettings: Schema.optional(AssistantSettings),
 	temperatureUnit: Schema.optionalWith(
 		Schema.Literal("celsius", "fahrenheit"),
 		{ exact: true },

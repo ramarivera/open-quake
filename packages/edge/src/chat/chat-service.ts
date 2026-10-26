@@ -372,6 +372,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 				turn: ActiveTurn,
 				profile: ProviderProfile,
 				request: InferenceRequest,
+				beforeInference: Effect.Effect<void, AiError>,
 			): Effect.Effect<void> =>
 				Effect.uninterruptibleMask((restore) =>
 					Effect.gen(function* () {
@@ -399,6 +400,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 								sessionId: turn.selection.sessionId,
 								turnId: turn.selection.turnId,
 							});
+							yield* beforeInference;
 							const generation = yield* inference.open(profile, request);
 							turn.generation = Option.some(generation);
 							let completed = false;
@@ -476,6 +478,7 @@ export class ChatService extends Effect.Service<ChatService>()(
 				(
 					owner: string,
 					unknownInput: unknown,
+					beforeInference: Effect.Effect<void, AiError> = Effect.void,
 				): Effect.Effect<ChatTurn, ChatError | AiError> =>
 					lock.withPermits(1)(
 						Effect.gen(function* () {
@@ -528,7 +531,12 @@ export class ChatService extends Effect.Service<ChatService>()(
 										updatedAt: now,
 										turns: [],
 									};
-							if (now - history.updatedAt >= idleMs)
+							if (
+								now - history.updatedAt >=
+								(input.contextTimeoutSeconds === undefined
+									? idleMs
+									: input.contextTimeoutSeconds * 1000)
+							)
 								history = {
 									...history,
 									contextEpoch: history.contextEpoch + 1,
@@ -550,6 +558,13 @@ export class ChatService extends Effect.Service<ChatService>()(
 										(turn) =>
 											turn.contextEpoch === history.contextEpoch &&
 											turn.status === "completed",
+									)
+									.slice(
+										input.historyCount === undefined
+											? 0
+											: input.historyCount === 0
+												? history.turns.length
+												: -input.historyCount,
 									)
 									.map((turn) => ({
 										input: turn.input,
@@ -674,7 +689,9 @@ export class ChatService extends Effect.Service<ChatService>()(
 							active.set(id, turn);
 							const subscription = yield* attach(turn);
 							yield* Effect.forkIn(
-								run(turn, profile, request).pipe(Effect.interruptible),
+								run(turn, profile, request, beforeInference).pipe(
+									Effect.interruptible,
+								),
 								scope,
 							);
 							return { ...subscription, selection };

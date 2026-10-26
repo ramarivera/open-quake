@@ -41,6 +41,7 @@ import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { MediaKeySettings } from "../weather-media/MediaKeySettings";
 import { AgentKeyFields } from "./AgentKeyFields";
+import { AssistantEditor } from "./AssistantEditor";
 import { editableFocus } from "./editor-input";
 import { GridEditor, type Selection } from "./GridEditor";
 import { NativeIconPicker } from "./IconPicker";
@@ -55,7 +56,11 @@ import { SelectedKeyPreview } from "./SelectedKeyPreview";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
-export function KeyEditor(): React.JSX.Element {
+export function KeyEditor({
+	onOpenLibrary = () => {},
+}: {
+	readonly onOpenLibrary?: (page: "shortcuts" | "emoji") => void;
+} = {}): React.JSX.Element {
 	const wallpaperController = useWallpaper();
 	const { snapshot: wallpaper } = wallpaperController;
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
@@ -670,6 +675,7 @@ export function KeyEditor(): React.JSX.Element {
 					keyEditOpen={selection !== undefined || saving}
 				/>
 				<GridEditor
+					onActivate={onOpenLibrary}
 					profile={profile}
 					page={page}
 					saving={saving}
@@ -897,6 +903,14 @@ export function KeyEditor(): React.JSX.Element {
 								key={key.config.type}
 								keyValue={key}
 								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
+						{["assistant", "aiChat"].includes(key.config.type) && (
+							<AssistantEditor
+								key={selection?.target.token}
+								keyValue={key}
+								disabled={saving}
 								onChange={(next) => void update(next)}
 							/>
 						)}

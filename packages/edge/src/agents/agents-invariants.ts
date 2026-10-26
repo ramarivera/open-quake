@@ -171,13 +171,15 @@ export const ownModelRows = <Row>(
 ): readonly Row[] | undefined =>
 	Object.hasOwn(models, scope) ? models[scope] : undefined;
 
-/** Endpoint propagation is limited to rows using the same provider protocol. */
+/** Legacy provider siblings share endpoints; named configurations own theirs. */
 export function sharesModelEndpoint(
-	left: Pick<ModelRow, "provider" | "settings">,
-	right: Pick<ModelRow, "provider" | "settings">,
+	left: Pick<ModelRow, "provider" | "settings" | "name">,
+	right: Pick<ModelRow, "provider" | "settings" | "name">,
 ): boolean {
 	const provider = canonicalProvider(left.provider);
 	return (
+		left.name === undefined &&
+		right.name === undefined &&
 		provider === canonicalProvider(right.provider) &&
 		(provider !== "qwen" ||
 			Boolean(left.settings?.mediaKind) === Boolean(right.settings?.mediaKind))

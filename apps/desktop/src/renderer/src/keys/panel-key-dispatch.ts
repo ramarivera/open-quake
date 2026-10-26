@@ -10,6 +10,7 @@ export interface PanelKeyTarget {
 export function createPanelKeyDispatcher(
 	target: () => PanelKeyTarget | undefined,
 	request: KeyLibraryBridge["request"],
+	queueBy: "key" | "device" = "key",
 ) {
 	const queues = new Map<string, Promise<void>>();
 	let generation = 0;
@@ -24,7 +25,9 @@ export function createPanelKeyDispatcher(
 		tap: NonNullable<typeof pending>,
 		kind: "down" | "up" | "cancel",
 	) => {
-		const identity = JSON.stringify([tap.deviceId, tap.keyCode]);
+		const identity = JSON.stringify(
+			queueBy === "device" ? [tap.deviceId] : [tap.deviceId, tap.keyCode],
+		);
 		const queue = (queues.get(identity) ?? Promise.resolve())
 			.then(async () => {
 				if (kind === "down") {

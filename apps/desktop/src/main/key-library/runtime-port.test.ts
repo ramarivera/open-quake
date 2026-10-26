@@ -621,3 +621,38 @@ it.each(["mute", "vol"])(
 		expect(off).toHaveBeenCalledTimes(1);
 	},
 );
+
+it.each(["up", "cancel", "reset"] as const)(
+	"executes media hotkeys on down and never dispatches new commands during %s cleanup",
+	async (terminal) => {
+		const send = vi.fn(async () => ({ accepted: true }));
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const key = {
+			...empty,
+			childrenName: "hotkey",
+			config: {
+				...empty.config,
+				type: "hotkey",
+				display: true,
+				actions: [{ type: "key", value: "audio_play" }],
+			},
+		};
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const runtime = yield* KeyRuntime;
+					yield* runtime.activate("device", "1,1", "down");
+					expect(send).toHaveBeenCalledTimes(1);
+					if (terminal === "reset") yield* runtime.reset("device");
+					else yield* runtime.activate("device", "1,1", terminal);
+					yield* runtime.activate("device", "1,1", "up");
+					expect(send).toHaveBeenCalledTimes(1);
+				}).pipe(
+					Effect.provide(
+						layer(false, undefined, systemMediaKeyActions(send), key),
+					),
+				),
+			),
+		);
+	},
+);

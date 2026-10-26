@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { inflateSync } from "node:zlib";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { expect, it, vi } from "vitest";
 import type { ChannelId } from "../../../../../packages/edge/src/channels/channel-contracts";
@@ -8,6 +9,7 @@ import {
 	ChannelPorts,
 	ChannelService,
 } from "../../../../../packages/edge/src/channels/channel-service";
+import recordedQr from "./__fixtures__/whatsapp-terminal-qr.json";
 import type { ChannelCommand } from "./channel-command";
 import { createLocalChannelRuntime } from "./channel-runtime";
 
@@ -287,6 +289,48 @@ it("CENTER-079 pending approval dispatches once and rejects unknown or consumed 
 		await expect(f.adapter.approve("discord", "ABC123")).rejects.toMatchObject({
 			code: "INTEGRATION.INPUT.REJECTED",
 		});
+	} finally {
+		await f.close();
+	}
+});
+
+it("CENTER-078 recorded OpenClaw compact QR reaches the session as a lossless PNG", async () => {
+	const f = await fixture();
+	try {
+		const qr = await f.runtime.runPromise(ChannelService.startQr("whatsapp"));
+		const lines = recordedQr.output.split("\n");
+		for (const line of lines.slice(0, -2)) f.qr()?.onLine?.(line);
+		expect(
+			(await f.runtime.runPromise(ChannelService.readQr(qr.id))).image,
+		).toBe("");
+		for (const line of lines.slice(-2)) f.qr()?.onLine?.(line);
+		const session = await f.runtime.runPromise(ChannelService.readQr(qr.id));
+		expect(session.state).toBe("ready");
+		expect(session.image).toMatch(/^data:image\/png;base64,/);
+		expect(session.lines.join("\n")).not.toContain("█");
+		const png = Buffer.from(session.image.split(",")[1] ?? "", "base64");
+		expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+		const size = recordedQr.modules.length;
+		const width = png.readUInt32BE(16);
+		expect(width).toBe(size + 8);
+		expect(png.readUInt32BE(20)).toBe(width);
+		const pixels = inflateSync(png.subarray(41, 41 + png.readUInt32BE(33)));
+		for (let y = 0; y < width; y++) {
+			expect(pixels[y * (width + 1)]).toBe(0);
+			for (let x = 0; x < width; x++) {
+				const dark = recordedQr.modules[y - 4]?.[x - 4] === "1";
+				expect(pixels[y * (width + 1) + x + 1], `module ${x},${y}`).toBe(
+					dark ? 0 : 255,
+				);
+			}
+		}
+		await f.runtime.runPromise(ChannelService.cancelQr(qr.id));
+		for (const line of lines) f.qr()?.onLine?.(line);
+		expect(
+			await f.runtime.runPromise(
+				ChannelService.readQr(qr.id).pipe(Effect.either),
+			),
+		).toMatchObject({ _tag: "Left" });
 	} finally {
 		await f.close();
 	}
