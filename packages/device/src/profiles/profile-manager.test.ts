@@ -34,7 +34,7 @@ import {
 	ProfileSwitchingPort,
 } from "./profile-switching-service.js";
 
-const seed = () => {
+const seed = (): ReturnType<typeof installProfileCatalog> => {
 	const initial = createInitialProfileEnvelope();
 	const installed = installProfileCatalog(initial, "win32");
 	// Manager rules use actual identities/labels, without dispatching preset keys.
@@ -47,7 +47,7 @@ const seed = () => {
 				...profile,
 				pages: initial.profiles[0].pages,
 			})),
-		] satisfies typeof installed.profiles,
+		],
 	};
 };
 const makeLayer = (
