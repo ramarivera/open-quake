@@ -183,3 +183,23 @@
 	color: var(--strip-danger);
 	font-weight: 600;
 }
+
+.copilot-presence[data-phase="listening"] {
+	outline: calc(2px + var(--copilot-energy) * 12px) solid var(--strip-accent);
+	outline-offset: calc(2px + var(--copilot-energy) * 8px);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.copilot-presence[data-motion="full"][data-phase="listening"] {
+		transition:
+			outline-width 80ms linear,
+			outline-offset 80ms linear;
+	}
+	.copilot-presence[data-motion="full"][data-phase="processing"] {
+		animation: copilot-working 1.5s ease-in-out infinite;
+	}
+}
+@keyframes copilot-working {
+	50% {
+		opacity: 0.55;
+	}
+}

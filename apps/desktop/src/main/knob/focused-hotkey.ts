@@ -1,6 +1,10 @@
 import type { HardwareSession } from "@open-quake/device";
 import { Effect, Either, Schema } from "effect";
-import { HotkeyConfig } from "../../../../../packages/device/src/actions/action-contracts.js";
+import type { MediaActionAdapter } from "../../../../../packages/device/src/actions/action-adapters.js";
+import {
+	HotkeyConfig,
+	MediaCommand,
+} from "../../../../../packages/device/src/actions/action-contracts.js";
 import { hardwareKeyboardAdapter } from "../../../../../packages/device/src/hardware/hardware-keyboard.js";
 import {
 	InvalidKnobConfig,
@@ -16,6 +20,7 @@ import { committedFocusedKey, type FocusedKeyBindings } from "./focused-key";
 export const focusedHotkey = (
 	bindings: FocusedKeyBindings & {
 		readonly hardware: () => HardwareSession | undefined;
+		readonly media?: MediaActionAdapter | undefined;
 	},
 ): KnobModelPort["focusedTurn"] => {
 	const resolve = committedFocusedKey(bindings);
@@ -41,8 +46,18 @@ export const focusedHotkey = (
 				return yield* KnobSessionStale.fromCause();
 			if (!hardware.available)
 				return yield* KnobCapabilityUnavailable.fromCause();
+			const chord = config.right.actions[delta === -1 ? 0 : 1].value;
+			if (Schema.is(MediaCommand)(chord)) {
+				const media = bindings.media;
+				if (!media?.supportedCommands.has(chord))
+					return yield* KnobCapabilityUnavailable.fromCause();
+				yield* media
+					.sendMedia(chord)
+					.pipe(Effect.mapError(KnobDispatchFailed.fromCause));
+				return;
+			}
 			yield* hardwareKeyboardAdapter(session)
-				.pressChord(config.right.actions[delta === -1 ? 0 : 1].value)
+				.pressChord(chord)
 				.pipe(
 					Effect.matchEffect({
 						onFailure: (cause) =>

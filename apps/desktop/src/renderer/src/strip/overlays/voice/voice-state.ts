@@ -2,7 +2,6 @@ import { Option } from "effect";
 import {
 	isKnobVoiceKey,
 	type KeyAlertKind,
-	type ToastKey,
 	tileStatusFor,
 	type VoiceSurfaceEvent,
 } from "../../../../../shared/voice-surface";
@@ -52,7 +51,9 @@ export interface KeyInfo {
 }
 export interface StripToast {
 	readonly id: number;
-	readonly key: ToastKey | "clipboard.copySuccess" | "clipboard.copyFailed";
+	readonly key: string;
+	readonly fallback?: string | undefined;
+	readonly type?: "warning" | "error";
 	readonly name: Option.Option<string>;
 	readonly at: number;
 }
@@ -276,6 +277,8 @@ function routeEvent(
 					{
 						id: view.nextToast,
 						key: event.messageKey,
+						fallback: event.fallback,
+						type: event.type ?? "warning",
 						name: Option.fromNullable(event.name),
 						at: now,
 					},

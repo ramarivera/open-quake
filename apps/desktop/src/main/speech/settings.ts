@@ -103,6 +103,7 @@ export const createSpeechSettings = Effect.fn("DesktopSpeech.settings")(
 			},
 		);
 		return {
+			hostTones: () => Effect.sync(() => state.settings.hostTones === true),
 			microphone: () =>
 				Effect.sync(() => normalizeMicrophone(state.settings.defaultMic)),
 			profiles: Effect.fn("DesktopSpeech.profiles")(

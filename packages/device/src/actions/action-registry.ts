@@ -80,6 +80,18 @@ const media = <const I extends string, const Command extends C.MediaCommand>(
 
 /** The editor, validator and conductor consume these same declarations. */
 export const ACTION_REGISTRY = [
+	define("audioBot", C.AudioBotConfig, {
+		submenu: "decoKeeAI",
+		requiredAdapter: "speech.runtime",
+		binding: "delegate",
+		defaults: {
+			actions: [
+				{ type: "agentId", value: "default" },
+				{ type: "ttsEngine", value: "qwen" },
+				{ type: "modeltype", value: "qwen-audio-3.1-tts-flash" },
+			],
+		},
+	}),
 	...OBS_IDS.map((id) =>
 		define(id, obsKeyConfig(id), {
 			submenu: "obsStudio",

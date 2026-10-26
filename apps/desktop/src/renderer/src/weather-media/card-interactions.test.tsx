@@ -33,7 +33,7 @@ const fake = vi.hoisted(() => ({
 	},
 }));
 vi.mock("./hooks", () => ({
-	rendererWeatherLocale: () => "en",
+	useWeatherLocale: () => "en",
 	useWeatherMedia: () => fake,
 }));
 const cleanups: (() => Promise<void>)[] = [];
@@ -427,4 +427,68 @@ it("WIDGETS-113 ignores an old local-player snapshot after the active key target
 	);
 	expect(view.host.textContent).toContain("Current key");
 	expect(view.host.textContent).not.toContain("Stale key");
+});
+
+it("keeps a delayed local read alive across equivalent one-second strip targets", async () => {
+	vi.useFakeTimers();
+	const { LocalPlayerCard } = await import("./LocalPlayerCard");
+	let finish = (_value: unknown) => {};
+	fake.client.request.mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+	);
+	const empty = createEmptyProfileKey("1,1");
+	const key = {
+		...empty,
+		config: {
+			...empty.config,
+			display: true,
+			type: "playAudio",
+			size: [5, 2] as const,
+		},
+	};
+	const tile = stripLayout(
+		{ id: "p", name: "P", compatibility: Option.none() },
+		{ keys: [key] },
+	).tiles[0];
+	if (!tile) throw new Error("missing tile");
+	const render = (revision = 1) => (
+		<LocalPlayerCard
+			tile={tile}
+			context={{
+				now: new Date(),
+				hourFormat: "24h",
+				voice: previewVoiceContext,
+				keyTarget: { deviceId: "d", profileId: "p", pageId: "one", revision },
+			}}
+		/>
+	);
+	const view = await mounted(render());
+	for (let i = 0; i < 3; i++) {
+		await act(async () => vi.advanceTimersByTime(1000));
+		await view.render(render());
+	}
+	expect(fake.client.request).toHaveBeenCalledTimes(1);
+	await act(async () =>
+		finish({
+			_tag: "localPlayer",
+			snapshot: {
+				revision: 1,
+				state: "playing",
+				title: "Slow track",
+				trackIndex: 0,
+				total: 1,
+				positionMs: 0,
+				errorCode: null,
+			},
+		}),
+	);
+	expect(view.host.textContent).toContain("Slow track");
+	await view.render(render());
+	expect(view.host.textContent).toContain("Slow track");
+	await view.render(render(2));
+	expect(view.host.textContent).toContain("Not configured");
+	expect(fake.client.request).toHaveBeenCalledTimes(2);
 });

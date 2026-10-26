@@ -293,3 +293,92 @@ it.each(["en", "zh", "de", "es", "fr", "it", "ja", "ko"] as const)(
 		);
 	},
 );
+
+it("SCREEN-020 SCREEN-120: unknown fallback is escaped, defaults to warning, expires at 3000ms and leaves a newer capture running", async () => {
+	vi.useFakeTimers();
+	await open(<Consumers overlay />);
+	await send({
+		_tag: "Toast",
+		serial: "QK",
+		messageKey: "unknown.translation",
+		fallback: "<strong>Long warning</strong>",
+	});
+	expect(element(".voice-toast", HTMLElement).dataset.type).toBe("warning");
+	expect(element(".voice-toast-text", HTMLElement).textContent).toBe(
+		"<strong>Long warning</strong>",
+	);
+	expect(document.querySelector(".voice-toast strong")).toBeNull();
+	await send(stage("0,1", { _tag: "recording", status: "listening" }));
+	await advance(2999);
+	expect(document.querySelector(".voice-toast")).not.toBeNull();
+	await advance(1);
+	expect(document.querySelector(".voice-toast")).toBeNull();
+	expect(element(".voice-backdrop", HTMLElement).dataset.phase).toBe(
+		"listening",
+	);
+	await send({
+		_tag: "Toast",
+		serial: "QK",
+		messageKey: "aiAudio.prevTurnBusy",
+		fallback: "wrong",
+		type: "error",
+	});
+	expect(element(".voice-toast", HTMLElement).getAttribute("role")).toBe(
+		"alert",
+	);
+	expect(element(".voice-toast-text", HTMLElement).textContent).toBe(
+		stripText("en", "aiAudio.prevTurnBusy"),
+	);
+});
+
+it.each(["full", "reduce"] as const)(
+	"SCREEN-112 SCREEN-113 SCREEN-119: %s real silent/low/high energy and processing stay bounded for knob and grid",
+	async (motion) => {
+		const screen = await open(<Consumers overlay motion={motion} />);
+		for (const keyCode of ["0,1", "1,5"]) {
+			await send(
+				stage(keyCode, {
+					_tag: "recording",
+					status: "listening",
+					transcript: "long ".repeat(800),
+				}),
+			);
+			for (const rms of [0, 0.1, 0.9]) {
+				await send({
+					_tag: "Level",
+					serial: "QK",
+					keyCode,
+					captureId: "capture",
+					rms,
+					speaking: rms > 0,
+				});
+				const ring = element(".copilot-presence", HTMLElement);
+				expect(ring.dataset.energy).toBe(String(rms));
+				expect(ring.dataset.phase).toBe("listening");
+				expect(ring.dataset.motion).toBe(motion);
+				expect(element(".voice-canvas", HTMLCanvasElement).style.width).toBe(
+					"1920px",
+				);
+				expect(element(".voice-canvas", HTMLCanvasElement).style.height).toBe(
+					"72px",
+				);
+			}
+			expect(document.querySelectorAll(".voice-backdrop")).toHaveLength(
+				keyCode === "0,1" ? 1 : 0,
+			);
+			expect(
+				element(".voice-marquee-line", HTMLElement).textContent?.length,
+			).toBeGreaterThan(1000);
+			await send(stage(keyCode, { _tag: "processing" }));
+			expect(element(".copilot-presence", HTMLElement).dataset.energy).toBe(
+				"0",
+			);
+			expect(document.querySelector(".voice-canvas")).toBeNull();
+			await send(stage(keyCode, { _tag: "idle", outcome: "cancelled" }));
+		}
+		await screen.render(<Consumers overlay motion="reduce" />);
+		expect(element(".copilot-presence", HTMLElement).dataset.phase).toBe(
+			"idle",
+		);
+	},
+);

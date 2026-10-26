@@ -16,6 +16,10 @@ import {
 } from "../../../../../../packages/device/src/actions/key-runtime-service";
 import { actionProfileFunctionContracts } from "../../../../../../packages/device/src/actions/profile-function-contracts";
 import { saveProfileKnob } from "../../../../../../packages/device/src/knob/knob-profile";
+import {
+	AppLibrarySnapshot,
+	defaultAppLibrary,
+} from "../../../../../../packages/device/src/profiles/app-library";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -28,6 +32,7 @@ import {
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts";
 import { profileFunctionContractsLayer } from "../../../../../../packages/device/src/profiles/profile-function-contracts";
+import { inspectProfileText } from "../../../../../../packages/device/src/profiles/profile-import";
 import {
 	ProfileRepository,
 	profileStorageLayer,
@@ -46,6 +51,7 @@ import type {
 	KeyRequest,
 } from "../../../shared/key-library";
 import type { MeetingsBridge } from "../../../shared/meeting-bridge";
+import { readerSettings } from "../../../shared/reader-settings";
 import { selectStripPage } from "../../../shared/strip-selection";
 import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { button, click, input, mount, query, settle } from "../../test/dom";
@@ -58,7 +64,6 @@ import {
 } from "../strip/overlays/voice/voice-context";
 import { StripScreen } from "../strip/StripScreen";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
-
 import { KeyEditor } from "./KeyEditor";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -72,7 +77,9 @@ async function fixture({
 	agentKey = false,
 	knobKey = false,
 	configure,
+	appGroups = defaultAppLibrary(),
 }: {
+	appGroups?: AppLibrarySnapshot["groups"];
 	locked?: boolean;
 	agentKey?: boolean;
 	knobKey?: boolean;
@@ -226,6 +233,31 @@ async function fixture({
 		const operation = Effect.gen(function* () {
 			const editing = yield* KeyEditing;
 			switch (command.type) {
+				case "app-library.read":
+					return {
+						_tag: "success",
+						appLibrary: Schema.encodeSync(AppLibrarySnapshot)({
+							version: 1,
+							revision: 1,
+							groups: appGroups,
+						}),
+					} as const;
+				case "inspect-import":
+					return {
+						_tag: "success",
+						importReport: inspectProfileText(command.source),
+					} as const;
+				case "import-profile": {
+					const envelope = yield* ProfileService.importProfile(
+						command.source,
+						"imported",
+					);
+					return {
+						_tag: "success",
+						envelope: encodeProfileEnvelope(envelope),
+						importedProfileId: "imported",
+					} as const;
+				}
 				case "select":
 					yield* ProfileService.selectProfile({
 						deviceId: command.deviceId,
@@ -701,6 +733,7 @@ for (const [profileId, type] of [
 			expect(request).toHaveBeenCalledWith({
 				_tag: "ReadAloud",
 				keyCode: tile.keyCode,
+				settings: readerSettings(tile.key.config.actions),
 			});
 		if (type === "liveAudioTranslateDisplay")
 			expect(meeting).toHaveBeenCalledWith({ _tag: "tab", tab: "live" });
@@ -1606,6 +1639,283 @@ it("MGMT-077 enters emoji folders, returns to the originating page and wraps edi
 	).toHaveLength(0);
 });
 
+it("remaps imported folder, emoji and page links before mounted editor navigation with colliding source IDs", async () => {
+	const f = await gridFixture([]);
+	const existing = structuredClone(f.stored().profiles);
+	const source = {
+		id: "p",
+		name: "Imported folders",
+		revision: 7,
+		pages: [
+			{
+				id: "one",
+				keys: [
+					gridKey("1,1", "createFolder", {
+						actions: [{ type: "folder", value: "subfolder" }],
+					}),
+					gridKey("1,2", "emojiFolder", {
+						actions: [{ type: "emojiFolderId", value: "emoji-page" }],
+					}),
+					gridKey("1,3", "createFolder", {
+						actions: [{ type: "page", value: "emoji-page" }],
+					}),
+					gridKey("1,4", "goToPage", { actions: [{ type: "page", value: 2 }] }),
+				],
+			},
+			{
+				id: "subfolder",
+				keys: [
+					gridKey("1,1", "back", {
+						actions: [{ type: "parentFolder", value: "one" }],
+					}),
+				],
+			},
+			{
+				id: "emoji-page",
+				keys: [
+					gridKey("1,1", "emojiBack", {
+						actions: [{ type: "parentFolder", value: "one" }],
+					}),
+				],
+			},
+		],
+	};
+	await input(
+		query(f.host, "#keys-import-json", HTMLTextAreaElement),
+		JSON.stringify(source),
+	);
+	await click(button(f.host, "Inspect import"));
+	await settle(() =>
+		expect(
+			query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+		).toBe(false),
+	);
+	await click(button(f.host, "Import as new profile"));
+	await settle(() =>
+		expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+			"imported",
+		),
+	);
+	const imported = f.stored().profiles.find((p) => p.id === "imported");
+	expect(imported?.pages.map((p) => p.id)).toEqual([
+		"imported-page-1",
+		"imported-page-2",
+		"imported-page-3",
+	]);
+	expect(
+		imported?.pages[0].keys.map((k) => k.config.actions?.[0]?.value),
+	).toEqual(["imported-page-2", "imported-page-3", "imported-page-3", 2]);
+	expect(
+		imported?.pages.slice(1).map((p) => p.keys[0]?.config.actions?.[0]?.value),
+	).toEqual(["imported-page-1", "imported-page-1"]);
+	for (const [code, destination] of [
+		["1,1", "imported-page-2"],
+		["1,2", "imported-page-3"],
+		["1,3", "imported-page-3"],
+	] as const) {
+		await act(async () =>
+			button(f.host, code).dispatchEvent(
+				new MouseEvent("dblclick", { bubbles: true }),
+			),
+		);
+		await settle(() =>
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				destination,
+			),
+		);
+		await act(async () =>
+			button(f.host, "1,1").dispatchEvent(
+				new MouseEvent("dblclick", { bubbles: true }),
+			),
+		);
+		await settle(() =>
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				"imported-page-1",
+			),
+		);
+	}
+	expect(f.stored().profiles.slice(0, existing.length)).toEqual(existing);
+	expect(imported?.compatibility?.source).toEqual(source);
+	expect(
+		f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+	).toHaveLength(0);
+});
+
+for (const selfCycle of [false, true])
+	it(`quarantines imported ${selfCycle ? "self" : "two-folder"} cycles before editor navigation`, async () => {
+		const f = await gridFixture([]);
+		const source = {
+			id: "source",
+			name: "Cyclic folders",
+			revision: 0,
+			pages: [
+				{
+					id: "a",
+					keys: [
+						gridKey("1,1", "createFolder", {
+							actions: [{ type: "folder", value: selfCycle ? "a" : "b" }],
+						}),
+					],
+				},
+				...(selfCycle
+					? []
+					: [
+							{
+								id: "b",
+								keys: [
+									gridKey("1,1", "emojiFolder", {
+										actions: [{ type: "emojiFolderId", value: "a" }],
+									}),
+								],
+							},
+						]),
+			],
+		};
+		const text = JSON.stringify(source);
+		const report = inspectProfileText(text);
+		expect(report.profile).toBeDefined();
+		expect(
+			report.diagnostics.filter((d) => d.code === "invalid-action"),
+		).toEqual(
+			source.pages.map((_, i) => ({
+				code: "invalid-action",
+				path: `pages.${i}.keys.0.config.actions.0.value`,
+				blocking: false,
+			})),
+		);
+		await input(query(f.host, "#keys-import-json", HTMLTextAreaElement), text);
+		await click(button(f.host, "Inspect import"));
+		await settle(() =>
+			expect(
+				query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+			).toBe(false),
+		);
+		await click(button(f.host, "Import as new profile"));
+		await settle(() =>
+			expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+				"imported",
+			),
+		);
+		const imported = f.stored().profiles.find((p) => p.id === "imported");
+		expect(imported?.compatibility?.source).toEqual(source);
+		for (const [i, page] of source.pages.entries()) {
+			expect(imported?.pages[i]?.keys[0]?.config.actions?.[0]?.value).toBe("");
+			expect(imported?.pages[i]?.keys[0]?.compatibility).toMatchObject({
+				unsupported: true,
+				source: page.keys[0],
+			});
+			await input(
+				query(f.host, "#keys-page", HTMLSelectElement),
+				`imported-page-${i + 1}`,
+			);
+			await settle(() =>
+				expect(f.stored().activeByDevice["desktop-preview"]?.pageId).toBe(
+					`imported-page-${i + 1}`,
+				),
+			);
+			const selections = f.calls.filter((c) => c.type === "select").length;
+			await act(async () =>
+				button(f.host, "1,1").dispatchEvent(
+					new MouseEvent("dblclick", { bubbles: true }),
+				),
+			);
+			expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+				`imported-page-${i + 1}`,
+			);
+			expect(f.calls.filter((c) => c.type === "select")).toHaveLength(
+				selections,
+			);
+		}
+		expect(
+			f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+		).toHaveLength(0);
+	});
+
+it("does not follow a quarantined folder even when its destination is valid", async () => {
+	const key = {
+		...gridKey("1,1", "createFolder", {
+			actions: [{ type: "folder", value: "child" }],
+		}),
+		compatibility: { unsupported: true },
+	};
+	const f = await gridFixture([key], [{ id: "child", keys: [] }]);
+	const selections = f.calls.filter((c) => c.type === "select").length;
+	await act(async () =>
+		button(f.host, "1,1").dispatchEvent(
+			new MouseEvent("dblclick", { bubbles: true }),
+		),
+	);
+	expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe("one");
+	expect(f.calls.filter((c) => c.type === "select")).toHaveLength(selections);
+});
+
+it("diagnoses unresolved imported navigation without binding it to existing or newly allocated pages", async () => {
+	const f = await gridFixture([]);
+	const keys = [
+		gridKey("1,1", "createFolder", {
+			actions: [{ type: "folder", value: "imported-page-2" }],
+		}),
+		gridKey("1,2", "emojiFolder", {
+			actions: [{ type: "emojiFolderId", value: "subfolder" }],
+		}),
+		gridKey("1,3", "back", {
+			actions: [{ type: "parentFolder", value: "imported-page-1" }],
+		}),
+		gridKey("1,4", "emojiBack", {
+			actions: [{ type: "page", value: "missing" }],
+		}),
+	];
+	const source = JSON.stringify({
+		id: "source",
+		name: "Broken links",
+		revision: 0,
+		pages: [
+			{ id: "root", keys },
+			{ id: "child", keys: [] },
+		],
+	});
+	const report = inspectProfileText(source);
+	expect(
+		report.diagnostics
+			.filter((d) => d.code === "invalid-action")
+			.map((d) => d.path),
+	).toEqual(keys.map((_, i) => `pages.0.keys.${i}.config.actions.0.value`));
+	await input(query(f.host, "#keys-import-json", HTMLTextAreaElement), source);
+	await click(button(f.host, "Inspect import"));
+	await settle(() =>
+		expect(
+			query(f.host, "#keys-confirm-import", HTMLButtonElement).disabled,
+		).toBe(false),
+	);
+	await click(button(f.host, "Import as new profile"));
+	await settle(() =>
+		expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+			"imported",
+		),
+	);
+	const imported = f.stored().profiles.find((p) => p.id === "imported");
+	const selections = f.calls.filter((c) => c.type === "select").length;
+	for (const [i, key] of keys.entries()) {
+		expect(imported?.pages[0].keys[i]?.config.actions?.[0]?.value).toBe("");
+		expect(imported?.pages[0].keys[i]?.compatibility).toMatchObject({
+			unsupported: true,
+			source: key,
+		});
+		await act(async () =>
+			button(f.host, key.keyCode).dispatchEvent(
+				new MouseEvent("dblclick", { bubbles: true }),
+			),
+		);
+		expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+			"imported-page-1",
+		);
+	}
+	expect(f.calls.filter((c) => c.type === "select")).toHaveLength(selections);
+	expect(
+		f.calls.filter((c) => c.type === "activate" || c.type === "save"),
+	).toHaveLength(0);
+});
+
 it("MGMT-081 coalesces library search at 500ms and cancels pending work on unmount", async () => {
 	const f = await gridFixture([]);
 	vi.useFakeTimers();
@@ -1774,6 +2084,220 @@ it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved
 	expect(f.host.querySelector("#key-title")).toBeNull();
 });
 
+it("MGMT-386/387/388 places reusable presets through validated profile publication without consuming the library", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "apps:Discord:2", "1,2");
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,2")
+				?.config.actions,
+		).toEqual([{ type: "key", value: "control+alt+leftbracket" }]),
+	);
+	await click(
+		query(
+			f.host,
+			".keys-cells button[data-drop-code='1,2']",
+			HTMLButtonElement,
+		),
+	);
+	// Clicking the selected key clears selection, restoring the ordinary library.
+	await libraryPlace(f.host, "apps:Premiere Pro:4", "2,5");
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "2,5")
+				?.config.actions,
+		).toEqual([
+			{ type: "key", value: "alt+left" },
+			{ type: "key", value: "alt+right" },
+		]),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "2,5")
+			?.config.supportKnob,
+	).toBe(true);
+	expect(
+		f.host.querySelector('[data-library-type="apps:Premiere Pro:3"]'),
+	).not.toBeNull();
+	expect(defaultAppLibrary()[1]?.children[4]?.keyCode).toBe("1,4");
+});
+it("MGMT-109/124 generated placement confirms replacements and refuses locked return cells", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: [{ id: "r", name: "Save", app: "Editor", chord: "control+s" }],
+				},
+			],
+		}),
+	});
+	const f = await gridFixture([
+		gridKey("1,1"),
+		gridKey("1,2", "back"),
+		gridKey("1,3", "hotkey", { basicEditableItems: { allowDrag: false } }),
+	]);
+	await pointerMove(
+		f.host,
+		query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+		"1,1",
+	);
+	await settle(() =>
+		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
+	);
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.actions).toEqual([
+		{ type: "key", value: "a" },
+	]);
+	await click(button(f.host, "Cancel"));
+	expect(f.stored().profiles[0].revision).toBe(0);
+	for (const code of ["1,2", "1,3"]) {
+		await pointerMove(
+			f.host,
+			query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+			code,
+		);
+		expect(f.stored().profiles[0].revision).toBe(0);
+	}
+	await pointerMove(
+		f.host,
+		query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+		"1,1",
+	);
+	await settle(() =>
+		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
+	);
+	await click(button(f.host, "Confirm Replace"));
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,1")
+				?.config.actions,
+		).toEqual([{ type: "key", value: "control+s" }]),
+	);
+});
+it("MGMT-124 bounds generated placement titles while retaining searchable full library names", async () => {
+	const names = [
+		"Toggle Full Screen Mode",
+		"一二三四五六七八九十十一",
+		"123456789012345678😀tail",
+	];
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: names.map((name, i) => ({
+						id: String(i),
+						name,
+						app: "Editor",
+						chord: "control+s",
+					})),
+				},
+			],
+		}),
+	});
+	const f = await gridFixture([]);
+	const expected = [
+		"Toggle Full Screen M",
+		"一二三四五六七八九十",
+		"123456789012345678😀",
+	];
+	for (const [i, name] of names.entries()) {
+		const selector = `[data-library-type="generated:g:${i}"]`;
+		expect(query(f.host, selector, HTMLButtonElement).textContent).toContain(
+			name,
+		);
+		await pointerMove(
+			f.host,
+			query(f.host, selector, HTMLButtonElement),
+			`1,${i + 1}`,
+		);
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(i + 1));
+		expect(
+			f
+				.stored()
+				.profiles[0].pages[0].keys.find((key) => key.keyCode === `1,${i + 1}`)
+				?.config.title.text,
+		).toBe(expected[i]);
+	}
+	await input(query(f.host, "#keys-library-search", HTMLInputElement), "Mode");
+	await settle(() => {
+		expect(
+			f.host.querySelector('[data-library-type="generated:g:1"]'),
+		).toBeNull();
+		expect(
+			f.host.querySelector('[data-library-type="generated:g:0"]')?.textContent,
+		).toContain(names[0]);
+	});
+});
+it("MGMT-124 converts stored Windows modifiers for generated grid placement and sequence availability", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: ["meta+s", "right_meta+s"].map((chord, i) => ({
+						id: String(i),
+						name: `Save ${i}`,
+						app: "Editor",
+						chord,
+					})),
+				},
+			],
+		}),
+	});
+	const f = await fixture();
+	for (const [i, value] of ["super+s", "right_super+s"].entries()) {
+		await pointerMove(
+			f.host,
+			query(
+				f.host,
+				`[data-library-type="generated:g:${i}"]`,
+				HTMLButtonElement,
+			),
+			`1,${i + 2}`,
+		);
+		await settle(() => expect(f.stored().profiles[0].revision).toBe(i + 1));
+		expect(
+			f
+				.stored()
+				.profiles[0].pages[0].keys.find((key) => key.keyCode === `1,${i + 2}`)
+				?.config.actions,
+		).toEqual([{ type: "key", value }]);
+	}
+	await click(button(f.host, "1,1"));
+	for (const i of [0, 1]) {
+		const entry = query(
+			f.host,
+			`[data-library-type="generated:g:${i}"]`,
+			HTMLButtonElement,
+		);
+		expect(entry.disabled).toBe(false);
+	}
+	expect(f.stored().profiles[0].revision).toBe(2);
+});
+it("MGMT-109 registry placement retains OBS default locks rather than empty-cell defaults", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "obsStats", "1,1");
+	await settle(() =>
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.size).toEqual([
+			2, 1,
+		]),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.basicEditableItems,
+	).toMatchObject({ title: false, grid: false, icon: false });
+});
 it("MGMT-302/306 keeps knob and key agent route IDs and labels distinct", async () => {
 	const f = await fixture({ agentKey: true });
 	await input(query(f.host, "#knob-function", HTMLSelectElement), "assistant");
@@ -1797,4 +2321,80 @@ it("MGMT-302/306 keeps knob and key agent route IDs and labels distinct", async 
 	await input(knob, "writer");
 	await input(key, "main");
 	expect(knob.value).toBe("writer");
+});
+
+it("MGMT-127 blocks the 101st library operation with feedback and preserves a saveable sequence", async () => {
+	const f = await gridFixture([
+		gridKey("1,1", "multiActions", {
+			subActions: Array.from({ length: 99 }, (_, i) => ({
+				config: { type: "delay", actions: [{ type: "time", value: i }] },
+			})),
+		}),
+	]);
+	await f.select();
+	const delay = () =>
+		query(f.host, '[data-library-type="delay"]', HTMLButtonElement);
+	await click(delay());
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(100);
+	await click(delay());
+	expect(f.host.querySelectorAll(".key-sequence-step")).toHaveLength(100);
+	expect(f.host.textContent).toContain(
+		"Max configurations reached, please delete first.",
+	);
+	expect(f.stored().profiles[0].revision).toBe(0);
+	await click(button(f.host, "Save"));
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.subActions,
+	).toHaveLength(100);
+	expect(f.writes()).toBe(1);
+});
+
+it("MGMT-121 keeps an unmarked renamed preset on the saved grid and localized editor after placement", async () => {
+	const groups = defaultAppLibrary();
+	const renamed = groups.map((group, i) =>
+		i
+			? group
+			: {
+					...group,
+					children: group.children.map((key, j) =>
+						j
+							? key
+							: {
+									...key,
+									config: {
+										...key.config,
+										title: { ...key.config.title, text: "My mute" },
+									},
+								},
+					),
+				},
+	);
+	const f = await fixture({
+		appGroups: renamed,
+		configure: (value) => ({
+			...value,
+			profiles: [
+				{ ...value.profiles[0], pages: [{ id: "one", keys: [] }] },
+				...value.profiles.slice(1),
+			],
+		}),
+	});
+	await libraryPlace(f.host, "apps:Discord:0", "1,2");
+	await settle(() => expect(f.stored().profiles[0].revision).toBe(1));
+	const key = f
+		.stored()
+		.profiles[0].pages[0].keys.find((key) => key.keyCode === "1,2");
+	expect(key?.config.title.text).toBe("My mute");
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe("My mute");
+	expect(
+		f.host.querySelector('[data-key-code="1,2"] .strip-tile-title')
+			?.textContent,
+	).toBe("My mute");
+	await input(query(f.host, "#keys-language", HTMLSelectElement), "de");
+	expect(query(f.host, "#key-title", HTMLInputElement).value).toBe("My mute");
+	expect(
+		f.host.querySelector('[data-key-code="1,2"] .strip-tile-title')
+			?.textContent,
+	).toBe("My mute");
 });

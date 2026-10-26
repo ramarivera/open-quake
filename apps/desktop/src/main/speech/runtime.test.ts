@@ -402,6 +402,9 @@ describe("production voice consumer", () => {
 						yield* Queue.take(played);
 						expect(httpTexts).toEqual(["First.", " Second"]);
 						yield* Queue.offer(drained, undefined);
+						yield* Queue.take(played);
+						expect(httpTexts).toEqual(["First.", " Second", "Fertig"]);
+						yield* Queue.offer(drained, undefined);
 						yield* tick;
 						const reader = yield* controller
 							.readAloud("Read this")
@@ -410,7 +413,12 @@ describe("production voice consumer", () => {
 						expect(Option.isNone(yield* Fiber.poll(reader))).toBe(true);
 						yield* Queue.offer(drained, undefined);
 						expect(yield* Fiber.join(reader)).toEqual({ _tag: "completed" });
-						expect(httpTexts).toEqual(["First.", " Second", "Read this"]);
+						expect(httpTexts).toEqual([
+							"First.",
+							" Second",
+							"Fertig",
+							"Read this",
+						]);
 						expect(reports).toEqual([]);
 					}).pipe(Effect.provide(layer));
 				}),

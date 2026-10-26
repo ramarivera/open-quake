@@ -42,11 +42,13 @@ export function systemMediaKeyActions(
 export function isSystemPlayerKey(
 	key: import("../../../../../packages/device/src/profiles/profile-contracts").ProfileKey,
 ): boolean {
-	if (key.config.type !== "playAudio") return false;
+	if (key.config.type !== "playAudio" && key.config.type !== "playAudioLegacy")
+		return false;
 	const source = key.config.actions.find(
 		(a) => a.type === "musicSource",
 	)?.value;
 	if (source) return source === "system";
+	if (key.config.type === "playAudioLegacy") return false;
 	const sounds = key.config.actions.filter((a) => a.type === "sound");
 	const actions = key.config.actions.filter((a) => a.type === "audioAction");
 	return (

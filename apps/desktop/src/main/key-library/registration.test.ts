@@ -1673,3 +1673,50 @@ it.each([
 		}
 	},
 );
+
+it("returns actionable app-library size feedback through the authorized save consumer", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "library-ipc-limit-"));
+	directories.push(directory);
+	electron.app.getPath.mockReturnValue(directory);
+	const f = fixture();
+	try {
+		const before = await f.request(f.manager, { type: "app-library.read" });
+		if (before._tag !== "success" || !before.appLibrary)
+			throw new Error("Library read failed");
+		const groups = before.appLibrary.groups.map((group, i) =>
+			i
+				? group
+				: {
+						...group,
+						children: group.children.map((key, j) =>
+							j
+								? key
+								: {
+										...key,
+										config: {
+											...key.config,
+											icon: "x".repeat(8 * 1024 * 1024),
+										},
+									},
+						),
+					},
+		);
+		expect(
+			await f.request(f.manager, {
+				type: "app-library.save",
+				revision: before.appLibrary.revision,
+				groups,
+			}),
+		).toEqual({
+			_tag: "rejected",
+			reason:
+				"The app library exceeds 8 MiB. Remove some presets or artwork and try again.",
+		});
+		expect(await f.request(f.manager, { type: "app-library.read" })).toEqual(
+			before,
+		);
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});

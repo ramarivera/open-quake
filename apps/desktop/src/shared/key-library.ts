@@ -1,6 +1,10 @@
 import { Schema } from "effect";
 import { KnobResource } from "../../../../packages/device/src/knob/knob-contracts.js";
 import {
+	AppLibraryGroups,
+	AppLibrarySnapshot,
+} from "../../../../packages/device/src/profiles/app-library.js";
+import {
 	ProfileEnvelope,
 	ProfileKey,
 } from "../../../../packages/device/src/profiles/profile-contracts.js";
@@ -9,7 +13,8 @@ import { ProfileLocale } from "../../../../packages/device/src/profiles/profile-
 
 export const KEY_REQUEST = "keys:request",
 	KEY_PREVIEW = "keys:preview",
-	KEY_RUNTIME = "keys:runtime";
+	KEY_RUNTIME = "keys:runtime",
+	KEY_LIBRARY_CHANGED = "keys:library-changed";
 export const KeyTarget = Schema.Struct({
 	token: Schema.String.pipe(Schema.minLength(1)),
 	profileId: Schema.String,
@@ -18,6 +23,12 @@ export const KeyTarget = Schema.Struct({
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 });
 export const KeyRequest = Schema.Union(
+	Schema.Struct({ type: Schema.Literal("app-library.read") }),
+	Schema.Struct({
+		type: Schema.Literal("app-library.save"),
+		revision: Schema.Int.pipe(Schema.nonNegative()),
+		groups: Schema.encodedSchema(AppLibraryGroups),
+	}),
 	Schema.Struct({
 		type: Schema.Literal("save-knob"),
 		profileId: Schema.NonEmptyString,
@@ -146,6 +157,7 @@ export const KeyReply = Schema.Union(
 	Schema.Struct({
 		_tag: Schema.Literal("success"),
 		envelope: Schema.optional(Schema.encodedSchema(ProfileEnvelope)),
+		appLibrary: Schema.optional(Schema.encodedSchema(AppLibrarySnapshot)),
 		importReport: Schema.optional(ProfileImportReport),
 		importedProfileId: Schema.optional(Schema.String),
 		packs: Schema.optional(Schema.Array(LibraryPack)),
@@ -166,6 +178,7 @@ export const KeyPreview = Schema.Struct({
 });
 export type KeyPreview = typeof KeyPreview.Type;
 export interface KeyLibraryBridge {
+	onLibraryChange?: (callback: () => void) => () => void;
 	request: (request: KeyRequest) => Promise<KeyReply>;
 	onPreview: (callback: (preview: KeyPreview) => void) => () => void;
 	onRuntime: (callback: (state: KeyRuntimeState) => void) => () => void;

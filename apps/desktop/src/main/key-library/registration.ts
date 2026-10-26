@@ -6,13 +6,18 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage } from "electron";
 import type { ActionError } from "../../../../../packages/device/src/actions/action-errors.js";
 import { KeyRuntime } from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import { saveProfileKnob } from "../../../../../packages/device/src/knob/knob-profile.js";
+import { AppLibrarySnapshot } from "../../../../../packages/device/src/profiles/app-library.js";
 import { iconInUse } from "../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
-import type { ProfileRepositoryError } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import type {
+	AppLibrarySizeLimitExceeded,
+	ProfileRepositoryError,
+} from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { inspectProfileText } from "../../../../../packages/device/src/profiles/profile-import.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
+	KEY_LIBRARY_CHANGED,
 	KEY_PREVIEW,
 	KEY_REQUEST,
 	type KeyReply,
@@ -25,6 +30,7 @@ import {
 	restoreClockMediaReferences,
 } from "../profiles/clock-profile-projection";
 import { isAppRenderer } from "../profiles/profile-ipc";
+import { appLibraryStore } from "./app-library-store";
 import { applicationIconLibrary } from "./application-icons";
 import { renderFontIcons } from "./font-renderer";
 import { IconImportFailed, type IconStorageFailed } from "./icon-errors";
@@ -73,6 +79,9 @@ export function registerKeyLibrary<R>(
 	panelSerial?: (sender: Electron.WebContents) => string | undefined,
 ) {
 	const store = iconStore(join(app.getPath("userData"), "key-library-v1.json"));
+	const appLibrary = appLibraryStore(
+		join(app.getPath("userData"), "app-library-v1.json"),
+	);
 	const picker = createIconPicker(management, renderer);
 	const applicationIcons = applicationIconLibrary();
 	const lock = runtime.runSync(Effect.makeSemaphore(1));
@@ -336,12 +345,33 @@ export function registerKeyLibrary<R>(
 					| KeyReply
 					| { readonly completion: Effect.Effect<KeyReply, ActionError> },
 					| ProfileRepositoryError
+					| AppLibrarySizeLimitExceeded
 					| ActionError
 					| IconImportFailed
 					| IconStorageFailed,
 					ProfileService | KeyEditing | KeyRuntime
 				> {
 					switch (command.type) {
+						case "app-library.read":
+							return {
+								_tag: "success",
+								appLibrary: Schema.encodeSync(AppLibrarySnapshot)(
+									yield* appLibrary.read(),
+								),
+							};
+						case "app-library.save": {
+							const snapshot = yield* appLibrary.save(
+								command.revision,
+								command.groups,
+							);
+							for (const win of BrowserWindow.getAllWindows())
+								if (!win.isDestroyed() && !win.webContents.isDestroyed())
+									win.webContents.send(KEY_LIBRARY_CHANGED);
+							return {
+								_tag: "success",
+								appLibrary: Schema.encodeSync(AppLibrarySnapshot)(snapshot),
+							};
+						}
 						case "read":
 							return {
 								_tag: "success",
@@ -559,12 +589,14 @@ export function registerKeyLibrary<R>(
 							onFailure: (cause): KeyReply => ({
 								_tag: "rejected",
 								reason:
-									typeof cause === "object" &&
-									cause !== null &&
-									"code" in cause &&
-									typeof cause.code === "string"
-										? cause.code
-										: "Invalid icon pack",
+									cause._tag === "AppLibrarySizeLimitExceeded"
+										? cause.message
+										: typeof cause === "object" &&
+												cause !== null &&
+												"code" in cause &&
+												typeof cause.code === "string"
+											? cause.code
+											: "Invalid icon pack",
 							}),
 						}),
 					),

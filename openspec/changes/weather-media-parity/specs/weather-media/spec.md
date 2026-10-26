@@ -228,3 +228,68 @@ The music settings SHALL default to System and SHALL provide Local and System so
 
 - **WHEN** the user chooses Local, closes settings and opens them again
 - **THEN** Local remains selected, and choosing System restores the shared system session
+
+### Requirement: Scoped local transport follow-ups
+
+The local player SHALL keep card controls scoped to the committed playback owner. Card Stop SHALL NOT invoke the global STOP_ALL operation, including when the card is idle. Covers KNOB-092, WIDGETS-111 and PR103 comment 4379453311, bead open-quake-lih.7.5.
+
+#### Scenario: Stop with another key playing
+
+- **WHEN** two local keys play and one card receives Stop twice
+- **THEN** only its session stops and the other key keeps playing
+
+#### Scenario: Explicit legacy system source
+
+- **WHEN** a playAudioLegacy key explicitly selects System Media
+- **THEN** physical activation routes to the shared media owner, while local and implicit legacy keys retain local ownership
+- **AND** unrelated key types cannot claim system-player ownership, covering PR103 comment 4379453327 and bead open-quake-lih.7.5
+
+#### Scenario: Equivalent local polling targets
+
+- **WHEN** one-second strip updates reconstruct an equivalent target while a local read is pending
+- **THEN** the read remains valid without restarting polling or clearing the card
+- **AND** an actual committed target revision change resets the card, covering PR103 comment 4379453339 and bead open-quake-lih.7.5
+
+### Requirement: Observed mute artwork
+
+The strip SHALL apply a mute key's alternate icon and title when the shared host-volume observation reports muted, and restore its primary artwork on unmute. Covers MAIN-073, MGMT-168, PR103 comment 4379453347 and bead open-quake-lih.7.5.
+
+#### Scenario: External mute observation reaches the mounted strip
+
+- **WHEN** external host mute observations change from unmuted to muted and back
+- **THEN** the mounted tile changes to alternate title and icon and restores the primary artwork
+
+### Requirement: Media hotkey activation owns dispatch
+
+A held hotkey containing a media command SHALL dispatch once on activation and SHALL return cleanup that only releases ownership. Up, cancellation and runtime reset SHALL NOT dispatch a new media command. Covers MGMT-226, MGMT-290, PR103 comment 4379737934 and bead open-quake-lih.7.5.
+
+#### Scenario: Media hotkey cleanup
+
+- **WHEN** a media hotkey is pressed and then released, canceled or reset
+- **THEN** the media adapter receives exactly one command on press and no command from cleanup
+
+#### Scenario: Additive playback selection survives sampling
+
+- **WHEN** a key has two additive sessions and its newest session is paused while the older session keeps playing
+- **THEN** position sampling preserves session selection order, the card stays paused and Toggle resumes the newest session
+- **AND** the older session receives no pause or resume, covering PR103 comment 4379737951 and bead open-quake-lih.7.5
+
+#### Scenario: Stale playlist controls cannot corrupt resume state
+
+- **WHEN** a shorter playlist is committed while an old-revision session is still active
+- **THEN** card Stop, Toggle, Previous and Next reject the stale session before controlling it or saving its position under the new playlist fingerprint
+- **AND** the new playlist still reads track zero, covering PR103 comment 4379836847 and bead open-quake-lih.7.5
+
+### Requirement: Reactive player locale
+
+Mounted weather and media consumers SHALL read the application locale context, with supported-language normalization, rather than the passive document language mirror. A saved locale switch SHALL update local-player status, system-player labels and weather copy without waiting for polling or remounting. Independent profile-thumbnail capture SHALL honor its explicit initial locale without reading the main locale bridge. Covers WIDGETS-111, WIDGETS-114, WIDGETS-117, PR105 comment 4379841253 and bead open-quake-def.25.
+
+#### Scenario: Mounted language switch
+
+- **WHEN** the saved language changes from English to German while system, local and weather cards remain mounted
+- **THEN** their copy changes in the same locale update, without another media read or replacing their controls
+
+#### Scenario: Independent capture locale
+
+- **WHEN** a profile-thumbnail capture starts with an explicit German context while the document mirror still says English
+- **THEN** the first player render uses German and the capture keeps its independent locale
