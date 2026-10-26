@@ -1,6 +1,5 @@
 import {
 	type ChildProcess,
-	execFile,
 	type SpawnOptions,
 	spawn,
 } from "node:child_process";
@@ -17,6 +16,34 @@ import type { ServiceSettings } from "../../../../../packages/edge/src/agents/se
 import { channelCommandRunner } from "./channel-command";
 import { agentCommandInvocation } from "./command-invocation";
 import { createLocalAgentState, type LocalAgentState } from "./local-state";
+import {
+	terminateWindowsTree,
+	windowsProcessIdentity,
+	windowsTreeExists,
+} from "./windows-process";
+
+function bounded<A>(work: Promise<A>): Promise<A> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(() => reject(new AgentRuntimeFailed()), 1100);
+		work.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(cause: unknown) => {
+				clearTimeout(timer);
+				reject(cause);
+			},
+		);
+	});
+}
+function identityFailed(): AgentRuntimeFailed {
+	return new AgentRuntimeFailed(
+		Object.assign(new Error("Owned process identity could not be verified"), {
+			code: "EPERM",
+		}),
+	);
+}
 export interface OwnedRuntimeProcess {
 	readonly stop: () => Promise<void>;
 	readonly exited: Promise<void>;
@@ -45,49 +72,18 @@ export function ownedRuntimeProcessDriver(
 			args: readonly string[],
 		) => Promise<void>;
 		readonly treeExists?: (pid: number) => Promise<boolean>;
+		readonly processIdentity?: (pid: number) => Promise<string | undefined>;
 	} = {},
 ): OwnedRuntimeDriver {
 	const platform = options.platform ?? process.platform;
 	const spawnProcess = options.spawn ?? spawn;
-	const runCommand =
-		options.runCommand ??
-		((command, args) =>
-			new Promise<void>((resolve, reject) => {
-				execFile(
-					command,
-					args,
-					{ timeout: 1000, windowsHide: true, shell: false },
-					(error) => (error ? reject(error) : resolve()),
-				);
-			}));
-	const treeExists =
-		options.treeExists ??
-		((pid: number) =>
-			new Promise<boolean>((resolve, reject) => {
-				// ParentProcessId remains queryable after a parent exits. Walk the
-				// complete snapshot so an absent cmd.exe cannot hide descendants.
-				const script = `
-$ErrorActionPreference = 'Stop'
-$processes = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId)
-$owned = @(${pid})
-do {
-  $next = @($processes | Where-Object { $owned -contains $_.ParentProcessId -and $owned -notcontains $_.ProcessId } | ForEach-Object { $_.ProcessId })
-  $owned += $next
-} while ($next.Count -gt 0)
-(@($processes | Where-Object { $owned -contains $_.ProcessId }).Count -gt 0) | ConvertTo-Json -Compress
-`;
-				execFile(
-					"powershell.exe",
-					["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
-					{ timeout: 1000, windowsHide: true, shell: false },
-					(error, stdout) => {
-						if (error) reject(error);
-						// Only an exact, successful false confirms absence. Unexpected
-						// output fails closed and leaves the cleanup target retryable.
-						else resolve(stdout.trim() !== "false");
-					},
-				);
-			}));
+	const runCommand = options.runCommand;
+	const terminateTree = (pid: number, identity: string) =>
+		runCommand
+			? runCommand("taskkill.exe", ["/PID", String(pid), "/T", "/F"])
+			: terminateWindowsTree(pid, identity);
+	const treeExists = options.treeExists ?? windowsTreeExists;
+	const processIdentity = options.processIdentity ?? windowsProcessIdentity;
 	return {
 		start: async (settings) => {
 			const root = settings.dataDirectory;
@@ -127,6 +123,24 @@ do {
 					resolve();
 				});
 			});
+			let identity: string | undefined;
+			if (platform === "win32" && cleanup.pid) {
+				try {
+					const observed = await bounded(processIdentity(cleanup.pid));
+					// kill(0) uses the spawned ChildProcess's native handle, not a
+					// PID lookup. Only accept the sample while that object is alive.
+					if (
+						!processorExited &&
+						child.exitCode === null &&
+						child.signalCode === null &&
+						child.kill(0)
+					)
+						identity = observed;
+				} catch {
+					// Keep the cleanup target, but never grant kill authority on an
+					// unverified identity. Stop returns the catalogued failure below.
+				}
+			}
 			return {
 				exited,
 				stop: async () => {
@@ -151,35 +165,39 @@ do {
 						// cmd.exe can exit before its gateway. Await taskkill itself as
 						// well as the owned child; never fall back to killing only cmd.exe.
 						for (let attempt = 0; attempt < 2; attempt++) {
+							let active = true;
 							try {
-								const treeCommand = runCommand("taskkill.exe", [
-									"/PID",
-									String(pid),
-									"/T",
-									"/F",
-								]).catch(async (cause: unknown) => {
-									if (!processorExited || (await treeExists(pid))) throw cause;
-								});
-								let timer: ReturnType<typeof setTimeout> | undefined;
-								try {
-									await Promise.race([
-										treeCommand,
-										new Promise<never>((_, reject) => {
-											timer = setTimeout(
-												() => reject(new AgentRuntimeFailed()),
-												1100,
-											);
-										}),
-									]);
-								} finally {
-									clearTimeout(timer);
-								}
+								await bounded(
+									(async () => {
+										if (!identity) throw identityFailed();
+										const observed = await processIdentity(pid);
+										if (
+											observed === undefined &&
+											processorExited &&
+											!(await treeExists(pid))
+										)
+											return;
+										if (!active || observed !== identity)
+											throw identityFailed();
+										try {
+											await terminateTree(pid, identity);
+										} catch (cause) {
+											if (!processorExited || (await treeExists(pid)))
+												throw cause;
+										}
+									})(),
+								);
 								if (await waitForExit(500)) {
 									cleanup.treeStopped = true;
 									return;
 								}
 							} catch (cause) {
-								if (attempt === 1) throw new AgentRuntimeFailed(cause);
+								if (attempt === 1)
+									throw cause instanceof AgentRuntimeFailed
+										? cause
+										: new AgentRuntimeFailed(cause);
+							} finally {
+								active = false;
 							}
 						}
 					} else {
@@ -355,7 +373,9 @@ export function createOwnedAgentRuntime(options: {
 				return work;
 			},
 			catch: (cause) =>
-				cause instanceof AgentInvalid || cause instanceof AgentStorageFailed
+				cause instanceof AgentInvalid ||
+				cause instanceof AgentStorageFailed ||
+				cause instanceof AgentRuntimeFailed
 					? cause
 					: new AgentRuntimeFailed(cause),
 		});

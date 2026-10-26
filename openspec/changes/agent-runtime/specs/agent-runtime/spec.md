@@ -194,6 +194,14 @@ The owned runtime SHALL stop the entire Windows process tree, including the gate
 - **AND** surviving descendants, failed probes and unexpected probe output keep cleanup retryable
 - **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381535855, bead open-quake-lih.17.24.1
 
+#### Scenario: A retained Windows PID is reused
+- **WHEN** the owned command processor exits and another process reuses its PID before cleanup
+- **THEN** the driver compares the current creation identity with the identity sampled while the spawned process handle was alive
+- **AND** a mismatch, unavailable identity or failed identity query returns the typed scrubbed runtime failure without dispatching termination
+- **AND** matching identity permits tree termination only while the native Windows termination helper holds and rechecks that process object
+- **AND** identity results arriving after the bounded stop attempt cannot dispatch a late termination
+- **AND** this covers CENTER-047, MAIN-144, PR122 safety finding 4381625938, bead open-quake-lih.17.24.1
+
 ### Requirement: Imported agent key voice default
 The clawbot key editor SHALL derive Voice Input and Task Prompt visibility from the runtime hold-to-talk predicate. An absent voiceInput action SHALL display voice disabled and Task Prompt editable. Sources: MGMT-302; open-quake-lih.17.24, PR108 finding 4380901936; DK-Suite v0.4.95 recovered_sources/src/plugins/KeyConfiguration.js:239-240 defaults voiceInput to false, and src/views/Components/QuakeShortCutView.vue:1758-1767 requires a truthy voiceInput action.
 

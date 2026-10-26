@@ -65,3 +65,4 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 - [x] R.5 Verify pinned QR renderer and raw-payload availability; test all 40 versions with ANSI/plain, LF/CRLF and refresh framing. CENTER-078, 4381279720; same bead, owning integration-channels spec.
 - [x] R.6 Release cleanup on confirmed Windows creation failure with no PID, and prove recovery with fake spawning. CENTER-047, MAIN-144, mid-round finding 4381510116; same bead.
 - [x] R.7 Confirm an already-absent Windows tree without confusing absent shim with surviving descendants; keep failed probes retryable. CENTER-047, MAIN-144, mid-round finding 4381535855; same bead.
+- [x] R.8 Verify Windows creation identity before every tree kill, hold the verified native handle through termination, and reject reused/unknown/late identities without killing. CENTER-047, MAIN-144, safety finding 4381625938; same bead.

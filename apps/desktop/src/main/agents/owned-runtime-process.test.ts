@@ -13,8 +13,8 @@ async function fixture(platform: NodeJS.Platform) {
 		Object.defineProperty(child, "exitCode", { value: 0, configurable: true });
 		child.emit("close", 0, null);
 	};
-	const kill = vi.spyOn(child, "kill").mockImplementation(() => {
-		close();
+	const kill = vi.spyOn(child, "kill").mockImplementation((signal) => {
+		if (signal !== 0) close();
 		return true;
 	});
 	const spawn = vi.fn(
@@ -31,10 +31,13 @@ async function fixture(platform: NodeJS.Platform) {
 	const command =
 		platform === "win32" ? win32.join(root, "openclaw.cmd") : "/opt/openclaw";
 	const treeExists = vi.fn(async (_pid: number) => true);
+	const processIdentity = vi.fn(
+		async (_pid: number): Promise<string | undefined> => "638970000000000000",
+	);
 	const driver = ownedRuntimeProcessDriver(
 		command,
 		createLocalAgentState(root),
-		{ platform, spawn, runCommand, treeExists },
+		{ platform, spawn, runCommand, treeExists, processIdentity },
 	);
 	const owned = await driver.start({
 		port: 18789,
@@ -42,7 +45,16 @@ async function fixture(platform: NodeJS.Platform) {
 		autoStart: false,
 		dataDirectory: root,
 	});
-	return { child, close, kill, spawn, runCommand, treeExists, owned };
+	return {
+		child,
+		close,
+		kill,
+		spawn,
+		runCommand,
+		treeExists,
+		processIdentity,
+		owned,
+	};
 }
 
 it("CENTER-047 Windows shim stop waits for tree termination even when cmd.exe closes first", async () => {
@@ -59,7 +71,7 @@ it("CENTER-047 Windows shim stop waits for tree termination even when cmd.exe cl
 	const stop = f.owned.stop().then(() => {
 		stopped = true;
 	});
-	await Promise.resolve();
+	await vi.waitFor(() => expect(f.runCommand).toHaveBeenCalled());
 	expect(f.runCommand).toHaveBeenCalledWith("taskkill.exe", [
 		"/PID",
 		"4321",
@@ -69,7 +81,7 @@ it("CENTER-047 Windows shim stop waits for tree termination even when cmd.exe cl
 	expect(stopped).toBe(false);
 	finish();
 	await stop;
-	expect(f.kill).not.toHaveBeenCalled();
+	expect(f.kill.mock.calls.filter(([signal]) => signal !== 0)).toHaveLength(0);
 });
 
 it("CENTER-047 retries a failed Windows tree terminator without killing cmd.exe alone", async () => {
@@ -77,7 +89,7 @@ it("CENTER-047 retries a failed Windows tree terminator without killing cmd.exe 
 	f.runCommand.mockRejectedValueOnce(new Error("fake command timeout"));
 	await f.owned.stop();
 	expect(f.runCommand).toHaveBeenCalledTimes(2);
-	expect(f.kill).not.toHaveBeenCalled();
+	expect(f.kill.mock.calls.filter(([signal]) => signal !== 0)).toHaveLength(0);
 });
 
 it("CENTER-047 Windows stop fails within a bound if tree exit never arrives", async () => {
@@ -90,7 +102,7 @@ it("CENTER-047 Windows stop fails within a bound if tree exit never arrives", as
 	await vi.runAllTimersAsync();
 	await stop;
 	expect(f.runCommand).toHaveBeenCalledTimes(2);
-	expect(f.kill).not.toHaveBeenCalled();
+	expect(f.kill.mock.calls.filter(([signal]) => signal !== 0)).toHaveLength(0);
 });
 
 it("CENTER-047 POSIX stop retains SIGTERM and escalates an unresponsive child to SIGKILL", async () => {
@@ -119,7 +131,7 @@ it("CENTER-047 bounds an unresponsive Windows command runner and reports failure
 	await vi.runAllTimersAsync();
 	await stop;
 	expect(f.runCommand).toHaveBeenCalledTimes(2);
-	expect(f.kill).not.toHaveBeenCalled();
+	expect(f.kill.mock.calls.filter(([signal]) => signal !== 0)).toHaveLength(0);
 });
 
 it("CENTER-047 retries failed tree cleanup after the command processor has already closed", async () => {
@@ -134,5 +146,26 @@ it("CENTER-047 retries failed tree cleanup after the command processor has alrea
 	f.runCommand.mockImplementation(async () => {});
 	await f.owned.stop();
 	expect(f.runCommand).toHaveBeenCalledTimes(3);
-	expect(f.kill).not.toHaveBeenCalled();
+	expect(f.kill.mock.calls.filter(([signal]) => signal !== 0)).toHaveLength(0);
+});
+
+it("4381625938 identity results arriving after the stop deadline cannot dispatch late kills", async () => {
+	const f = await fixture("win32");
+	const queries: ((identity: string) => void)[] = [];
+	f.processIdentity.mockImplementation(
+		() =>
+			new Promise<string>((resolve) => {
+				queries.push(resolve);
+			}),
+	);
+	vi.useFakeTimers();
+	const stopped = expect(f.owned.stop()).rejects.toMatchObject({
+		code: "AGENT.RUNTIME.FAILED",
+	});
+	await vi.advanceTimersByTimeAsync(2200);
+	await stopped;
+	for (const resolve of queries) resolve("638970000000000000");
+	await vi.runAllTimersAsync();
+	expect(f.runCommand).not.toHaveBeenCalled();
+	expect(queries).toHaveLength(2);
 });

@@ -37,6 +37,7 @@ function fixture(failFirstSpawn = false) {
 	const spawn = vi.fn(
 		(_command: string, _args: readonly string[], _options: SpawnOptions) => {
 			const child = new ChildProcess();
+			vi.spyOn(child, "kill").mockReturnValue(true);
 			if (failFirstSpawn && children.length === 0)
 				queueMicrotask(() =>
 					child.emit(
@@ -54,11 +55,15 @@ function fixture(failFirstSpawn = false) {
 		close(),
 	);
 	const treeExists = vi.fn(async (_pid: number) => true);
+	const processIdentity = vi.fn(
+		async (_pid: number): Promise<string | undefined> => "638970000000000000",
+	);
 	const driver = ownedRuntimeProcessDriver("C:\\fake\\openclaw.cmd", storage, {
 		platform: "win32",
 		spawn,
 		runCommand,
 		treeExists,
+		processIdentity,
 	});
 	const health = vi.fn(async (_signal: AbortSignal) => true);
 	const backend = createOwnedAgentRuntime({
@@ -70,6 +75,7 @@ function fixture(failFirstSpawn = false) {
 	return {
 		backend,
 		admin: backend.administration,
+		processIdentity,
 		treeExists,
 		spawn,
 		runCommand,
@@ -256,5 +262,67 @@ for (const failure of ["descendant remains", "probe failed"]) {
 			yield* f.backend.stop;
 			expect(f.treeExists.mock.calls[2]).toEqual([4321]);
 		}),
+	);
+}
+
+it.effect(
+	"4381625938 a reused Windows PID never receives a tree termination command",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			yield* f.backend.start;
+			f.close();
+			f.processIdentity.mockResolvedValue("638970000000000001");
+			const result = yield* f.backend.stop.pipe(Effect.either);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: {
+					code: "AGENT.RUNTIME.FAILED",
+					diagnosticCause: { sourceCode: "EPERM" },
+				},
+			});
+			expect(f.runCommand).not.toHaveBeenCalled();
+			expect(JSON.stringify(result)).not.toContain("638970000000000001");
+		}),
+);
+
+it.effect(
+	"4381625938 the same verified Windows process can be terminated",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			yield* f.backend.start;
+			yield* f.backend.stop;
+			expect(f.processIdentity).toHaveBeenCalledTimes(2);
+			expect(f.runCommand).toHaveBeenCalledExactlyOnceWith("taskkill.exe", [
+				"/PID",
+				"4321",
+				"/T",
+				"/F",
+			]);
+		}),
+);
+
+for (const identity of ["missing", "failed query"]) {
+	it.effect(
+		`4381625938 ${identity} identity fails without killing and scrubs diagnostics`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				yield* f.backend.start;
+				if (identity === "missing")
+					f.processIdentity.mockResolvedValue(undefined);
+				else
+					f.processIdentity.mockRejectedValue(
+						new Error("token=private-process-query"),
+					);
+				const result = yield* f.backend.stop.pipe(Effect.either);
+				expect(result).toMatchObject({
+					_tag: "Left",
+					left: { code: "AGENT.RUNTIME.FAILED" },
+				});
+				expect(f.runCommand).not.toHaveBeenCalled();
+				expect(JSON.stringify(result)).not.toContain("private-process-query");
+			}),
 	);
 }
