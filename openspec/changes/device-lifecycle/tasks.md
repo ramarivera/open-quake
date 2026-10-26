@@ -91,3 +91,13 @@ Bead `open-quake-lih.11.24` stays in progress until the lead accepts the PR.
 - [ ] 11.3 Run typecheck, zero-error Biome, root two-worker tests, strict OpenSpec, build, both bundle modes, hidden mock and media smokes. Open a PR to main, record its link in the bead, remove generated build output and retain the worktree.
 
 Follow-up verification: 35 focused tests passed, including mounted matrix/runtime contacts, legacy preference migration, concurrent-save protection, corruption retention and write ordering. Typecheck 6/6, Biome 1419 files with zero errors, strict OpenSpec 47/47, build, both mocked bundle modes, hidden conversation smoke 126 scenarios and media smoke with 26 screenshots passed. Full root two-worker testing remains incomplete because unchanged main/profile tests hit hook/test deadlines under host load; isolated selection-lifecycle passes 7/7. The final exact root attempt passed 4,154 tests with three timeouts in the unchanged selection-lifecycle file and four existing skips. Exact attempts and PR handoff are recorded in bead open-quake-lih.11.24 and SSD scratch burndown/fix-device-followups. No hardware, microphone, paid provider or audible playback was used.
+
+
+## 12. PR #120 review fixes
+
+Bead `open-quake-lih.11.24` remains in progress for lead acceptance.
+
+- [x] 12.1 Serialize matrix replacement edges per device across delayed down acknowledgements. Mounted StripPanel plus production KeyRuntime/TestClock regression fails before the fix. Finding 4381194049; MAIN-008/028, SCREEN-144; owning contract in two-layer-sdk.
+- [ ] 12.2 Isolate unrelated unreadable legacy preference candidates while preserving canonical-file failures. Finding 4381207876; MAIN-018, SETTINGS-075.
+- [ ] 12.3 Emit matrix tile taps through the native knob-focus path and prove mounted knob focus follows matrix contacts. Finding 4381208066; MAIN-008/028, SCREEN-144.
+- [ ] 12.4 Run full review gates, commit/push/reply per finding, inspect unanswered threads, and remove this round's output/worktree without touching the original lane.

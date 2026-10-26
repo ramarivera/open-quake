@@ -186,6 +186,8 @@ function ActiveStripPanel(): React.JSX.Element {
 		const dispatch = createPanelKeyDispatcher(
 			() => target.current,
 			(request) => window.quakeKeyLibrary.request(request),
+			// A matrix replacement releases the previous key before acquiring the next.
+			"device",
 		);
 
 		const timers = new Set<ReturnType<typeof setTimeout>>();

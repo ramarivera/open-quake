@@ -157,6 +157,12 @@ handling, without changing the wire protocol.
 - **THEN** one down holds the hotkey until the change, up releases it, and the next cell gets down and successful up
 - **AND** disconnect cancels any remaining contact
 
+#### Scenario: Replacement arrives during an in-flight down
+- **WHEN** the mounted panel receives matrix A followed by B while A's down acknowledgement is delayed
+- **THEN** the device's requests complete in A-down, A-up, B-down order, including across different key codes
+- **AND** repeated frames do not add contacts and disconnect cancels queued contacts while releasing the started contact
+- **AND** a mounted production dispatcher and KeyRuntime regression uses TestClock to prove B waits for A, covering PR #120 finding 4381194049 and MAIN-008/028, SCREEN-144
+
 #### Scenario: Legacy matrix emoji
 - **WHEN** repeated matrix reports select an emoji tile, followed by an empty matrix
 - **THEN** its owning emoji handler receives exactly one successful release for the captured profile and page

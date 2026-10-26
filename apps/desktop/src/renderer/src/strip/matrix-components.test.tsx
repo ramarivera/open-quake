@@ -1,5 +1,12 @@
 // @vitest-environment happy-dom
-import { Effect, Layer, ManagedRuntime, Option } from "effect";
+import {
+	Effect,
+	Layer,
+	ManagedRuntime,
+	Option,
+	TestClock,
+	TestContext,
+} from "effect";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -36,7 +43,7 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
-async function mountedMatrix() {
+async function mountedMatrix(options: { delayFirstDown?: boolean } = {}) {
 	const base = builtinProfiles("darwin")[0];
 	const original = base?.pages[0].keys[0];
 	if (!base || !original) throw new Error("Missing builtin key fixture");
@@ -96,7 +103,7 @@ async function mountedMatrix() {
 					alarm: () => Effect.void,
 				}),
 			),
-		),
+		).pipe(Layer.provideMerge(TestContext.TestContext)),
 	);
 	disposals.push(() => runtime.dispose());
 	const pending = new Set<Promise<unknown>>();
@@ -108,7 +115,16 @@ async function mountedMatrix() {
 					command.keyCode,
 					command.kind,
 					command,
-				).pipe(Effect.either),
+				).pipe(
+					Effect.tap(() =>
+						options.delayFirstDown &&
+						command.keyCode === "1,2" &&
+						command.kind === "down"
+							? Effect.sleep(100)
+							: Effect.void,
+					),
+					Effect.either,
+				),
 			);
 			pending.add(work);
 			try {
@@ -154,31 +170,35 @@ async function mountedMatrix() {
 	});
 	await act(async () => root.render(<StripPanel />));
 	expect(node.querySelector('[data-key-code="1,1"]')).not.toBeNull();
-	const emit = async (event: QuakeEvent) => {
+	const emit = async (event: QuakeEvent, settle = true) => {
 		await act(async () => {
 			for (const listener of listeners) listener(event);
 			// Drain the dispatcher's chained requests and the real Effect runtime.
 			for (let i = 0; i < 10; i++) {
 				await Promise.resolve();
-				await Promise.all(pending);
+				if (settle) await Promise.all(pending);
 			}
 		});
 	};
 	return {
+		clock: (ms: number) => runtime.runPromise(TestClock.adjust(ms)),
 		effects,
 		request,
 		emojiPress,
 		node,
-		matrix: (index: number) =>
-			emit({
-				source: "mock",
-				kind: "matrix",
-				matrix: {
-					reserved: [0, 0, 0, 0],
-					states: Array.from({ length: 15 }, (_, i) => (i === index ? 1 : 0)),
-					tail: [],
+		matrix: (index: number, settle = true) =>
+			emit(
+				{
+					source: "mock",
+					kind: "matrix",
+					matrix: {
+						reserved: [0, 0, 0, 0],
+						states: Array.from({ length: 15 }, (_, i) => (i === index ? 1 : 0)),
+						tail: [],
+					},
 				},
-			}),
+				settle,
+			),
 		disconnect: () =>
 			emit({
 				source: "mock",
@@ -242,4 +262,23 @@ it("matrix emoji uses the full strip handler exactly once on successful release"
 		keyCode: "1,3",
 		keyAction: 1,
 	});
+});
+
+it("matrix replacement waits for a delayed down acknowledgement before releasing A and pressing B", async () => {
+	const f = await mountedMatrix({ delayFirstDown: true });
+	const edges = () =>
+		f.request.mock.calls.flatMap(([c]) =>
+			c.type === "activate" ? [`${c.keyCode}:${c.kind}`] : [],
+		);
+	await f.matrix(1, false);
+	await f.clock(0);
+	expect(f.effects).toEqual(["hold"]);
+	await f.matrix(0, false);
+	await f.clock(99);
+	expect(edges()).toEqual(["1,2:down"]);
+	expect(f.effects).toEqual(["hold"]);
+	await f.clock(1);
+	await f.matrix(-1);
+	expect(edges()).toEqual(["1,2:down", "1,2:up", "1,1:down", "1,1:up"]);
+	expect(f.effects).toEqual(["hold", "release", "text"]);
 });
