@@ -310,16 +310,40 @@ export function registerProfiles(
 				Effect.retry(Schedule.spaced(2000)),
 			);
 			const repository = yield* ProfileRepository;
+			const prune = Effect.fn("ProfileDesktop.pruneThumbnails")(() =>
+				thumbnailLock
+					.withPermits(1)(
+						repository.transact((envelope) =>
+							Effect.tryPromise({
+								try: () => thumbnails.prune(envelope.profiles),
+								catch: (cause) =>
+									cause instanceof ProfileThumbnailFailed
+										? cause
+										: ProfileThumbnailFailed.fromCause(cause),
+							}).pipe(Effect.as(envelope)),
+						),
+					)
+					.pipe(
+						Effect.catchTag("ProfileThumbnailFailed", (error) =>
+							Effect.logWarning("profiles.thumbnail.cleanup.failed", error),
+						),
+					),
+			);
 			yield* Stream.runForEach(repository.snapshots, () =>
-				service.publish().pipe(
-					Effect.matchEffect({
-						onSuccess: () => Effect.void,
-						onFailure: (error) =>
-							Effect.logWarning("Publishing profiles manager snapshot failed", {
-								code: error.code,
-							}),
-					}),
-				),
+				prune()
+					.pipe(Effect.zipRight(service.publish()))
+					.pipe(
+						Effect.matchEffect({
+							onSuccess: () => Effect.void,
+							onFailure: (error) =>
+								Effect.logWarning(
+									"Publishing profiles manager snapshot failed",
+									{
+										code: error.code,
+									},
+								),
+						}),
+					),
 			);
 		}),
 	);
