@@ -216,6 +216,16 @@ For SCREEN-105 and WIDGETS-130, the controller and shared canvas SHALL preload t
 - **WHEN** two five-second items play
 - **THEN** B preloads at 4000 ms, becomes active at 4200 ms when ready, A releases at 5000 ms, and only B may sound during the fade
 
+#### Scenario: Failures leave one playable video
+
+- **WHEN** SCREEN-105 and WIDGETS-130 media errors leave one playable video in a multi-item saved playlist
+- **THEN** its retained element loops at native duration and the controller stops redundant preload and transition work until the playlist changes
+
+#### Scenario: Preload promotion avoids repeated media bytes
+
+- **WHEN** SCREEN-105 and WIDGETS-130 preload the next item and then promote it to active in an already subscribed window
+- **THEN** each asset transfers as full bytes once and later snapshots use content references; a new or reloaded window receives complete media, with only the current and next asset retained per window
+
 ### Requirement: Vivid editor delegation
 
 For MGMT-098 and MGMT-286, vivid profiles SHALL hide the key grid, expose the localized configure-vivid affordance, reject replacement of the colorfulScreen tile and host the selected serial's wallpaper editor. Wallpaper edits SHALL have their own explicit Save and Cancel, independent of key Save. Reset SHALL use the same confirmed factory command.
@@ -224,6 +234,11 @@ For MGMT-098 and MGMT-286, vivid profiles SHALL hide the key grid, expose the lo
 
 - **WHEN** an editor opens for A, changes transparency and cancels or changes device before Save
 - **THEN** neither A nor the newly selected device changes, and key Save cannot commit the abandoned wallpaper draft
+
+#### Scenario: Discard staged local picks
+
+- **WHEN** a WIDGETS-128 or MGMT-286 editor picks local media and then cancels, unmounts or changes serial before Save
+- **THEN** its draft identity releases unreferenced files under the repository lock, including late picker responses, while current and backup revisions and other active drafts keep their assets
 
 ### Requirement: Explicit focus and serial rebind
 
@@ -234,6 +249,11 @@ For MAIN-148 and MAIN-149, explicit user commands SHALL focus management before 
 - **WHEN** A and B are connected and concurrent restart commands target A
 - **THEN** one queued restart recreates A's panel through the existing lifecycle owner, B's panel remains and no additional HID handle opens
 
+#### Scenario: User starts multi-screen binding
+
+- **WHEN** MAIN-149 reports a multi-screen alert on the connection page
+- **THEN** a visible Bind Quake screens action submits bind-all to the existing lifecycle queue, without opening another HID owner
+
 ### Requirement: Independent clock theme media
 
 For SCREEN-123, the desktop-clock contract SHALL retain five independent app-owned theme scenes instead of vendor JPGs, migrate legacy per-theme image/video slots and music, and apply strip cycling as a theme-only write. Unsupported or unavailable custom media SHALL fall back to that theme's owned art without deleting the saved slot.
@@ -242,23 +262,3 @@ For SCREEN-123, the desktop-clock contract SHALL retain five independent app-own
 
 - **WHEN** legacy background slots and music migrate, then season, cyber, anime, tactical and aurora are selected in turn
 - **THEN** the renderer uses each retained custom slot or its theme fallback, music remains saved and cycling changes only theme identity and mode
-
-#### Scenario: Failures leave one playable video
-
-- **WHEN** SCREEN-105 and WIDGETS-130 media errors leave one playable video in a multi-item saved playlist
-- **THEN** its retained element loops at native duration and the controller stops redundant preload and transition work until the playlist changes
-
-#### Scenario: Discard staged local picks
-
-- **WHEN** a WIDGETS-128 or MGMT-286 editor picks local media and then cancels, unmounts or changes serial before Save
-- **THEN** its draft identity releases unreferenced files under the repository lock, including late picker responses, while current and backup revisions and other active drafts keep their assets
-
-#### Scenario: User starts multi-screen binding
-
-- **WHEN** MAIN-149 reports a multi-screen alert on the connection page
-- **THEN** a visible Bind Quake screens action submits bind-all to the existing lifecycle queue, without opening another HID owner
-
-#### Scenario: Preload promotion avoids repeated media bytes
-
-- **WHEN** SCREEN-105 and WIDGETS-130 preload the next item and then promote it to active in an already subscribed window
-- **THEN** each asset transfers as full bytes once and later snapshots use content references; a new or reloaded window receives complete media, with only the current and next asset retained per window
