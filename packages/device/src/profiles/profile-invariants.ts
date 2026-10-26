@@ -79,8 +79,7 @@ export function profileOverflow(input: unknown): readonly {
 		let invalid =
 			page.keys.filter(
 				(key) =>
-					key !== null &&
-					(!Predicate.isRecord(key) || key.keyCode !== "0,1"),
+					key !== null && (!Predicate.isRecord(key) || key.keyCode !== "0,1"),
 			).length > 16;
 		let itemNumber = 0;
 		const items = page.keys.flatMap((key) => {
