@@ -112,8 +112,25 @@ export class AgentsRuntime extends Effect.Service<AgentsRuntime>()(
 					),
 			);
 			if (port.available && port.administration) {
-				const settings = yield* port.administration.settings();
-				if (settings.autoStart) yield* control("start").pipe(Effect.either);
+				const settings = yield* port.administration
+					.settings()
+					.pipe(Effect.either);
+				if (settings._tag === "Left") {
+					const error = settings.left;
+					yield* publish({
+						...state,
+						status: "stopped",
+						code: error.code,
+						operation: "none",
+					});
+					yield* Effect.logWarning({
+						_tag: error._tag,
+						code: error.code,
+						diagnosticCause: error.diagnosticCause,
+					});
+				} else if (settings.right.autoStart) {
+					yield* control("start").pipe(Effect.either, Effect.forkScoped);
+				}
 			}
 
 			return {

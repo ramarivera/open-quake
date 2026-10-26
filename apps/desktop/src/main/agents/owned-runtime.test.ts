@@ -143,9 +143,11 @@ it("CENTER-047/048 owns start, consented restart, selected private directory and
 it("CENTER-047/104/MAIN-144 persists opt-in autostart, reports unexpected exit, rejects arbitrary environment and keeps redacted bounded logs", async () => {
 	const f = await fixture(true);
 	try {
-		expect((await f.runtime.runPromise(AgentsRuntime.read())).status).toBe(
-			"ready",
-		);
+		await expect
+			.poll(
+				async () => (await f.runtime.runPromise(AgentsRuntime.read())).status,
+			)
+			.toBe("ready");
 		expect(f.starts).toHaveLength(1);
 		f.exit();
 		await Promise.resolve();
@@ -233,3 +235,47 @@ it("CENTER-074 runtime and channel writes share one config owner and retain cust
 		await f.close();
 	}
 });
+
+it.each(["malformed", "outside directory"])(
+	"CENTER-047 keeps management available after %s persisted settings",
+	async (kind) => {
+		const f = await fixture();
+		try {
+			await mkdir(f.root, { recursive: true });
+			await writeFile(
+				join(f.root, "service-settings.json"),
+				kind === "malformed"
+					? "{token=private-settings"
+					: JSON.stringify({
+							port: 18789,
+							logLevel: "info",
+							autoStart: true,
+							dataDirectory: join(f.root, "..", "outside"),
+						}),
+			);
+			const failure = await Effect.runPromise(
+				f.admin.settings().pipe(Effect.either),
+			);
+			expect(failure).toMatchObject({
+				_tag: "Left",
+				left: { _tag: "AgentStorageFailed", code: "AGENT.STORAGE.FAILED" },
+			});
+			expect(JSON.stringify(failure)).not.toContain("private-settings");
+			expect(await f.runtime.runPromise(AgentsRuntime.read())).toMatchObject({
+				status: "stopped",
+				code: "AGENT.STORAGE.FAILED",
+			});
+			expect(f.starts).toHaveLength(0);
+			await f.storage.saveSettings({
+				port: 18789,
+				logLevel: "info",
+				autoStart: false,
+				dataDirectory: f.root,
+			});
+			await f.runtime.runPromise(AgentsRuntime.control("start"));
+			expect(f.starts).toHaveLength(1);
+		} finally {
+			await f.close();
+		}
+	},
+);

@@ -133,3 +133,13 @@ The owned runtime SHALL allow a port, log level, opt-in autostart and a private 
 - **WHEN** the user exports a workspace backup from Settings
 - **THEN** the result includes every local agent, skill and panel slot, validates against the bounded backup contract, and contains no provider model configuration or credential reference
 - **AND** no external runtime endpoint is contacted
+
+#### Scenario: Invalid persisted runtime settings do not disable agent management
+- **WHEN** persisted settings cannot be decoded or select an invalid data directory
+- **THEN** runtime construction succeeds in the stopped state with the typed settings error code and a scrubbed diagnostic
+- **AND** agent management remains available and no automatic start is attempted
+
+#### Scenario: Autostart does not delay service construction
+- **WHEN** valid settings opt into autostart and the backend is slow to start
+- **THEN** management becomes available while start runs in the service scope with the existing deadline
+- **AND** closing the service scope cancels the pending start
