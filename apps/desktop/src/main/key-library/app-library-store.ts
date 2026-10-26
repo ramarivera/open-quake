@@ -3,11 +3,13 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { Effect, Schema } from "effect";
 import {
+	APP_LIBRARY_MAX_BYTES,
 	AppLibraryGroups,
 	AppLibrarySnapshot,
 	mergeMissingDefaultAppMenu,
 } from "../../../../../packages/device/src/profiles/app-library.js";
 import {
+	AppLibrarySizeLimitExceeded,
 	ProfileReadFailed,
 	ProfileRevisionConflict,
 	ProfileWriteFailed,
@@ -17,34 +19,42 @@ import {
 export function appLibraryStore(path: string) {
 	let cached: AppLibrarySnapshot | undefined;
 	const write = (value: AppLibrarySnapshot) =>
-		Effect.tryPromise({
-			try: async () => {
-				await mkdir(dirname(path), { recursive: true });
-				const temp = `${path}.${randomUUID()}.tmp`;
-				try {
-					await writeFile(
-						temp,
-						JSON.stringify(Schema.encodeSync(AppLibrarySnapshot)(value)),
-						{ mode: 0o600, flag: "wx" },
-					);
-					await rename(temp, path);
-					cached = value;
-				} finally {
-					await rm(temp, { force: true });
-				}
-			},
-			catch: (cause) => ProfileWriteFailed.fromCause(cause),
+		Effect.gen(function* () {
+			const encoded = yield* Effect.try({
+				try: () => JSON.stringify(Schema.encodeSync(AppLibrarySnapshot)(value)),
+				catch: (cause) => ProfileWriteFailed.fromCause(cause),
+			});
+			if (Buffer.byteLength(encoded, "utf8") > APP_LIBRARY_MAX_BYTES)
+				return yield* Effect.fail(
+					AppLibrarySizeLimitExceeded.fromCause({
+						operation: "app-library.write",
+					}),
+				);
+			yield* Effect.tryPromise({
+				try: async () => {
+					await mkdir(dirname(path), { recursive: true });
+					const temp = `${path}.${randomUUID()}.tmp`;
+					try {
+						await writeFile(temp, encoded, { mode: 0o600, flag: "wx" });
+						await rename(temp, path);
+						cached = value;
+					} finally {
+						await rm(temp, { force: true });
+					}
+				},
+				catch: (cause) => ProfileWriteFailed.fromCause(cause),
+			});
 		});
 	const read = Effect.fn("AppLibrary.read")(function* () {
 		if (cached) return cached;
 		const value = yield* Effect.tryPromise({
 			try: async () => {
 				try {
-					const bytes = await readFile(path, "utf8");
-					if (bytes.length > 8 * 1024 * 1024)
+					const bytes = await readFile(path);
+					if (bytes.byteLength > APP_LIBRARY_MAX_BYTES)
 						throw new Error("App library exceeds size limit");
 					return Schema.decodeUnknownSync(AppLibrarySnapshot)(
-						JSON.parse(bytes),
+						JSON.parse(bytes.toString("utf8")),
 					);
 				} catch (cause) {
 					if (

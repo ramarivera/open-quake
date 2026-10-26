@@ -98,3 +98,9 @@ Lane evidence: 45 mounted editor regressions in `key-editor-interactions.test.ts
 - [x] 12.3 Share recovered sequence allowlist and plugin SupportedInMultiActions filtering with the function library while retaining runtime validation. Row MGMT-127. Bead open-quake-lih.10.18.
 
 Lane verification: exact root turbo command passes 4131 tests with four existing skips, including 50 key-editor interactions with the 47 inherited regressions intact. Types pass all six tasks; Biome has zero errors and 16 existing warnings plus one info; build and both bundle smoke modes pass; strict OpenSpec validation passes all 47 items. Hidden native app-library acceptance passes saved preset placement and translated search with six EN/DE wide/narrow captures. Beads remain open for lead acceptance. Assigned software rows have spec/code/test coverage; Game Mode/plugin execution and hardware remain outside this lane.
+
+## 13. PR117 review fixes
+
+- [x] 13.1 Enforce one UTF-8 snapshot size limit on read, save and migration, preserve existing storage on rejection and return typed user-visible feedback. Comments 4380858790 and 4380870003. Bead open-quake-lih.10.19.
+- [ ] 13.2 Block grouped-library sequence additions at capacity with mounted feedback and saveability regression coverage. Comment 4380859220. Bead open-quake-lih.10.19.
+- [ ] 13.3 Recover unmarked renamed preset titles against localized defaults and preserve them through placement. Comment 4380869996. Bead open-quake-lih.10.19.

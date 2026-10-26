@@ -291,3 +291,15 @@ The sequence library SHALL use the same translated search and groups and SHALL d
 #### Scenario: Retained legacy plugin metadata
 - **WHEN** saved AI library JSON contains malformed placeholders beside a valid user group or a retained pluginAction manifest
 - **THEN** valid groups survive independently, explicit SupportedInMultiActions false excludes the plugin entry, and allowed unsupported plugin actions remain disabled
+
+### Requirement: Bounded app-library persistence
+The ConfigLibrary snapshot SHALL use the same 8 MiB UTF-8 byte limit for reads, saves and default-group migration. The writer SHALL measure the complete encoded snapshot before creating directories or replacing storage, reject oversized data with a typed user-facing error and preserve the prior file, cached revision and groups. This is an open-quake resource bound, not a recovered DK-Suite limit. Selected artwork SHALL remain portable inline data as required by the native icon picker contract. Sources: MGMT-386, MGMT-391, PR117 comments 4380858790 and 4380870003.
+
+#### Scenario: Size boundary and restart
+- **WHEN** a complete encoded snapshot occupies exactly 8 MiB, including multibyte strings
+- **THEN** saving and restarting SHALL retain all groups
+- **AND** one extra byte SHALL produce actionable feedback without changing the existing file or cached revision
+
+#### Scenario: Default migration exceeds capacity
+- **WHEN** appending missing default groups would exceed the same limit
+- **THEN** reading SHALL reject the migration without replacing the existing file

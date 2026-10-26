@@ -3,6 +3,9 @@ import { keyText } from "./key-editing-invariants.js";
 import { createEmptyProfileKey, ProfileKey } from "./profile-contracts.js";
 import type { ProfileLocale } from "./profile-manager-contracts.js";
 
+/** Local resource bound, not a DK-Suite interoperability limit. Includes inline artwork. */
+export const APP_LIBRARY_MAX_BYTES = 8 * 1024 * 1024;
+
 export const AppLibraryGroup = Schema.Struct({
 	subMenu: Schema.NonEmptyString.pipe(Schema.maxLength(200)),
 	children: Schema.Array(ProfileKey).pipe(Schema.maxItems(512)),

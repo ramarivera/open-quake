@@ -10,7 +10,10 @@ import { AppLibrarySnapshot } from "../../../../../packages/device/src/profiles/
 import { iconInUse } from "../../../../../packages/device/src/profiles/key-editing-invariants.js";
 import { KeyEditing } from "../../../../../packages/device/src/profiles/key-editing-service.js";
 import { ProfileEnvelope } from "../../../../../packages/device/src/profiles/profile-contracts.js";
-import type { ProfileRepositoryError } from "../../../../../packages/device/src/profiles/profile-errors.js";
+import type {
+	AppLibrarySizeLimitExceeded,
+	ProfileRepositoryError,
+} from "../../../../../packages/device/src/profiles/profile-errors.js";
 import { inspectProfileText } from "../../../../../packages/device/src/profiles/profile-import.js";
 import { ProfileService } from "../../../../../packages/device/src/profiles/profile-service.js";
 import {
@@ -342,6 +345,7 @@ export function registerKeyLibrary<R>(
 					| KeyReply
 					| { readonly completion: Effect.Effect<KeyReply, ActionError> },
 					| ProfileRepositoryError
+					| AppLibrarySizeLimitExceeded
 					| ActionError
 					| IconImportFailed
 					| IconStorageFailed,
@@ -585,12 +589,14 @@ export function registerKeyLibrary<R>(
 							onFailure: (cause): KeyReply => ({
 								_tag: "rejected",
 								reason:
-									typeof cause === "object" &&
-									cause !== null &&
-									"code" in cause &&
-									typeof cause.code === "string"
-										? cause.code
-										: "Invalid icon pack",
+									cause._tag === "AppLibrarySizeLimitExceeded"
+										? cause.message
+										: typeof cause === "object" &&
+												cause !== null &&
+												"code" in cause &&
+												typeof cause.code === "string"
+											? cause.code
+											: "Invalid icon pack",
 							}),
 						}),
 					),
