@@ -1,4 +1,6 @@
+import { createContext, useContext } from "react";
 import { OBS_IDS } from "../../../../../../packages/device/src/actions/obs-contracts";
+import { effectiveMonitoring } from "../../../../../../packages/edge/src/monitor/monitor-config";
 import type { ClockTarget } from "../../../shared/clock-contracts";
 import {
 	activeThemeOf,
@@ -36,7 +38,17 @@ import { MeetingDisplay } from "./tiles/meeting/MeetingDisplay";
 import { MeetingKey } from "./tiles/meeting/MeetingKey";
 import { MonitorPanel } from "./tiles/monitor/MonitorPanel";
 import { useMonitor } from "./tiles/monitor/useMonitor";
-import { previewSnapshot } from "./tiles/monitor/view-model";
+import {
+	bare,
+	diskView,
+	memoryPercent,
+	percent,
+	previewSnapshot,
+	rate,
+	sampleOf,
+	size,
+	temperature,
+} from "./tiles/monitor/view-model";
 import { SoundboardUnavailableTile } from "./tiles/soundboard/SoundboardUnavailableTile";
 import { soundboardOwned } from "./tiles/soundboard/soundboard-state";
 import { VoiceKeyTile } from "./tiles/voiceKey/VoiceKeyTile";
@@ -230,9 +242,140 @@ function MonitorSlot({ tile }: StripTileProps): React.JSX.Element {
 	);
 }
 
+const monitorTypes = {
+	cpuInfo: "cpu",
+	gpuInfo: "gpu",
+	memInfo: "memory",
+	diskInfo: "disk",
+	powerInfo: "power",
+	networkInfo: "network",
+	bluetoothInfo: "bluetooth",
+	processInfo: "process",
+} as const;
+
+const MetricContext = createContext<ReturnType<typeof useMonitor> | undefined>(
+	undefined,
+);
+function MetricProvider({
+	live,
+	children,
+}: {
+	live: boolean;
+	children: React.ReactNode;
+}): React.JSX.Element {
+	const monitor = useMonitor(live);
+	return (
+		<MetricContext.Provider value={monitor}>{children}</MetricContext.Provider>
+	);
+}
+/** One watch lease per grid, so removing one cell does not stop its neighbours. */
+export function StripTileHost({
+	layout,
+	live,
+	children,
+}: {
+	layout: { tiles: readonly StripTile[] };
+	live: boolean;
+	children: React.ReactNode;
+}): React.ReactNode {
+	return layout.tiles.some((tile) => Object.hasOwn(monitorTypes, tile.type)) ? (
+		<MetricProvider live={live}>{children}</MetricProvider>
+	) : (
+		children
+	);
+}
+
+/** Individual cells use the same decoded provider and availability as the full panel. */
+function MetricSlot({ tile, context }: StripTileProps): React.JSX.Element {
+	const live =
+		context.interactive !== false && context.voice.surface === "panel";
+	const monitor = useContext(MetricContext);
+	const module =
+		Object.entries(monitorTypes).find(([type]) => type === tile.type)?.[1] ??
+		"cpu";
+	const sample = sampleOf(
+		live
+			? (monitor?.snapshot ?? { sampledAt: 0, samples: [] })
+			: previewSnapshot(),
+		module,
+	);
+	const values = sample.state === "available" ? sample.values : {};
+	const unit = monitor?.settings.temperatureUnit ?? "celsius";
+	const readings = (): Readonly<Record<string, string>> => {
+		switch (module) {
+			case "cpu":
+			case "gpu":
+				return {
+					load: percent(values.load),
+					temperature: `${temperature(values.temperature, unit)} ${unit === "fahrenheit" ? "°F" : "°C"}`,
+					model: values.model ?? "",
+				};
+			case "memory":
+				return {
+					used: percent(memoryPercent(values)),
+					capacity: `${size(values.used)} / ${size(values.total)}`,
+				};
+			case "disk":
+				return {
+					drives: diskView({ ...sample, values })
+						.rows.map((d) => `${d.name} ${d.summary}`)
+						.join(" · "),
+				};
+			case "power":
+				return {
+					percent:
+						values.hasBattery === false ? "AC power" : percent(values.percent),
+					state: values.batteryState ?? "",
+				};
+			case "network":
+				return {
+					interface: values.iface ?? "--",
+					up: `↑ ${rate(values.up)} MB/s`,
+					down: `↓ ${rate(values.down)} MB/s`,
+				};
+			case "process":
+				return {
+					all: `${bare(values.all)} processes`,
+					running: `${bare(values.running)} running`,
+					blocked: `${bare(values.blocked)} blocked`,
+					sleeping: `${bare(values.sleeping)} sleeping`,
+				};
+			case "bluetooth":
+				return {};
+		}
+	};
+	const rows = Object.entries(readings()).filter(([, value]) => value !== "");
+	const off =
+		monitor !== undefined &&
+		!effectiveMonitoring(monitor.settings).metrics.includes(module);
+	return (
+		<div
+			className="strip-metric"
+			data-module={module}
+			data-state={off ? "off" : sample.state}
+		>
+			<p className="strip-metric-title">
+				{tile.key.config.title.text || module}
+				{!live ? <span className="strip-metric-status"> · Preview</span> : null}
+			</p>
+			{off || sample.state !== "available" ? (
+				<p role="status">{off ? "Off" : `Unavailable · ${sample.state}`}</p>
+			) : rows.length ? (
+				rows.map(([id, value]) => <p key={id}>{value}</p>)
+			) : (
+				<p>No data</p>
+			)}
+		</div>
+	);
+}
+
 /** Per-type renderers. Unregistered types draw DK's generic icon-and-title tile. */
 export const stripTileRegistry: ReadonlyMap<string, StripTileComponent> =
 	new Map<string, StripTileComponent>([
+		...Object.keys(monitorTypes).map((id): [string, StripTileComponent] => [
+			id,
+			MetricSlot,
+		]),
 		...OBS_IDS.map((id): [string, StripTileComponent] => [id, ObsTile]),
 		["dkDesktopClock", ClockSlot],
 		["playAudio", PlayerSlot],

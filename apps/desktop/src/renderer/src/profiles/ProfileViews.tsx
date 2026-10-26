@@ -20,6 +20,7 @@ import type {
 	ProfileView,
 } from "../../../shared/profile-manager";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
+import { useStripSettings } from "../strip/stripSettings";
 import { selectedManagerProfile, subscribeManagerView } from "./manager-view";
 import "./profiles.css";
 
@@ -30,6 +31,7 @@ export function ProfilePreview({
 }: {
 	profile: Profile;
 }): React.JSX.Element {
+	const { settings } = useStripSettings();
 	return (
 		<div
 			className="profile-preview"
@@ -50,7 +52,7 @@ export function ProfilePreview({
 							manager: Option.none(),
 						},
 					}}
-					showEmptyGridDashedBorder={false}
+					showEmptyGridDashedBorder={settings.showEmptyGridDashedBorder}
 				/>
 			</StripViewport>
 		</div>

@@ -1275,6 +1275,33 @@ async function smoke(): Promise<void> {
 			vivid: theme === undefined ? "true" : "false",
 			clock: name === "clock",
 		});
+		if (theme !== undefined) {
+			const stripStyles: unknown = await panel.webContents.executeJavaScript(
+				`(() => {
+					const screen = document.querySelector('.strip-screen');
+					const grid = screen.querySelector('.strip-grid');
+					const empty = grid.querySelector('[data-state="empty"]');
+					return {
+						isolation: getComputedStyle(screen).isolation,
+						gridLayer: getComputedStyle(grid).zIndex,
+						logicalSize: [screen.style.width, screen.style.height],
+						emptyBorder: empty ? getComputedStyle(empty).borderTopWidth : null,
+						bodyCount: grid.querySelectorAll('[data-state="tile"]').length,
+						flat: [...grid.querySelectorAll('[data-state="tile"]')].every(slot => getComputedStyle(slot).backgroundColor === 'rgb(21, 23, 26)')
+					};
+				})()`,
+			);
+			assert.deepEqual(stripStyles, {
+				isolation: "isolate",
+				gridLayer: "10",
+				logicalSize: ["1920px", "480px"],
+				emptyBorder: name === "quick" || name === "spans" ? "2px" : null,
+				bodyCount: profile.pages[0].keys.filter(
+					(key) => key.config.display && key.config.type !== "",
+				).length,
+				flat: true,
+			});
+		}
 		if (name === "vivid" && process.env.OPEN_QUAKE_SMOKE_VIDEO) {
 			selectedPath = process.env.OPEN_QUAKE_SMOKE_VIDEO;
 			const imported = await request(management, {

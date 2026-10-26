@@ -12,6 +12,7 @@ import {
 	type StripLayout,
 	type StripTile,
 	stripLayout,
+	stripViewportScale,
 } from "./geometry";
 import {
 	previewVoiceContext,
@@ -19,7 +20,7 @@ import {
 } from "./overlays/voice/voice-context";
 import { deviceRadius, stripPaletteProperties } from "./palette";
 import { selectStripPage } from "./selection";
-import { stripTileFor } from "./tileRegistry";
+import { StripTileHost, stripTileFor } from "./tileRegistry";
 import type { StripProfiles } from "./useStripProfiles";
 import "./strip.css";
 
@@ -105,7 +106,7 @@ function StripGrid({
 				<div
 					key={cell.keyCode}
 					className="strip-slot"
-					data-key-code={cell.keyCode}
+					data-key-code={cell.placeholder.keyCode}
 					data-state={cell.state}
 					style={{
 						left: cell.rect.x,
@@ -230,6 +231,14 @@ export function StripScreen({
 	children?: React.ReactNode;
 }): React.JSX.Element {
 	const runtimeStates = useKeyRuntime();
+	const [feedbackKey, setFeedbackKey] = useState(pressedKeyCode);
+	useEffect(() => {
+		setFeedbackKey(pressedKeyCode);
+		if (pressedKeyCode === undefined) return;
+		// Bound the visual pulse independently of the input's held/action lifetime.
+		const timer = setTimeout(() => setFeedbackKey(undefined), 200);
+		return () => clearTimeout(timer);
+	}, [pressedKeyCode]);
 	const serial = previewSerial ?? wallpaper?.saved.serial;
 	const screen = useRef<HTMLDivElement>(null);
 	const [locale, setLocale] = useState(() =>
@@ -357,6 +366,7 @@ export function StripScreen({
 			inert={!interactive}
 			aria-hidden={!interactive || undefined}
 			className="strip-screen"
+			data-surface={interactive ? "panel" : "preview"}
 			data-vivid={vivid}
 			data-dashed={showEmptyGridDashedBorder}
 			data-profiles={profiles._tag}
@@ -368,26 +378,33 @@ export function StripScreen({
 				</div>
 			) : null}
 			{!vivid && layout ? (
-				<StripGrid
+				<StripTileHost
 					layout={layout}
-					pressedKeyCode={pressedKeyCode}
-					now={now}
-					hourFormat={hourFormat}
-					voice={voice}
-					tileOverlay={tileOverlay}
-					interactive={interactive}
-					runtime={runtime}
-					clockSelection={
-						selection
-							? {
-									profileId: selection.profile.id,
-									pageId: selection.page.id,
-									revision: selection.profile.revision,
-									deviceId: serial ?? "desktop-preview",
-								}
-							: undefined
-					}
-				/>
+					live={interactive && voice.surface === "panel"}
+				>
+					<StripGrid
+						layout={layout}
+						pressedKeyCode={
+							feedbackKey === pressedKeyCode ? feedbackKey : undefined
+						}
+						now={now}
+						hourFormat={hourFormat}
+						voice={voice}
+						tileOverlay={tileOverlay}
+						interactive={interactive}
+						runtime={runtime}
+						clockSelection={
+							selection
+								? {
+										profileId: selection.profile.id,
+										pageId: selection.page.id,
+										revision: selection.profile.revision,
+										deviceId: serial ?? "desktop-preview",
+									}
+								: undefined
+						}
+					/>
+				</StripTileHost>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (
 				<div className="strip-status" role="status">
@@ -423,10 +440,7 @@ export function StripViewport({
 		const update = (): void => {
 			// Layout size, not the bounding box: the panel window may rotate #root.
 			const { clientWidth: width, clientHeight: height } = element;
-			if (width > 0 && height > 0)
-				setScale(
-					Math.min(width / STRIP_CANVAS.width, height / STRIP_CANVAS.height),
-				);
+			setScale(stripViewportScale(width, height));
 		};
 		update();
 		const observer = new ResizeObserver(update);

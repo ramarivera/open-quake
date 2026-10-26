@@ -17,6 +17,11 @@
 }
 .strip-screen {
 	position: relative;
+	isolation: isolate;
+	--strip-layer-wallpaper: 0;
+	--strip-layer-grid: 10;
+	--strip-layer-controls: 30;
+	--strip-layer-voice: 40;
 	overflow: hidden;
 	background: var(--strip-canvas);
 	color: var(--strip-text);
@@ -28,6 +33,7 @@
 .strip-wallpaper {
 	position: absolute;
 	inset: 0;
+	z-index: var(--strip-layer-wallpaper);
 }
 .strip-wallpaper .wallpaper-canvas,
 .strip-wallpaper .wallpaper-neutral {
@@ -37,7 +43,7 @@
 .strip-grid {
 	position: absolute;
 	inset: 0;
-	z-index: 10;
+	z-index: var(--strip-layer-grid);
 	background: var(--strip-canvas);
 }
 
@@ -45,13 +51,15 @@
 .strip-slot {
 	position: absolute;
 	box-sizing: border-box;
+	transform: none;
+	transition: none;
 }
 .strip-slot[data-state="tile"] {
 	background-color: var(--strip-surface);
 	box-shadow: inset 0 0 0 1px var(--strip-hairline);
 }
 .strip-slot[data-state="empty"] {
-	border: 1.5px dashed var(--strip-line);
+	border: 2px dashed var(--strip-line);
 }
 .strip-screen[data-dashed="false"] .strip-slot[data-state="empty"] {
 	border: none;
@@ -72,6 +80,11 @@
 	:root[data-motion="full"]
 		.strip-slot[data-pressed="true"][data-press-scale="true"] {
 		transform: scale(0.96);
+	}
+	:root[data-motion="full"]
+		.strip-screen[data-surface="preview"]
+		.strip-slot[data-pressed="true"][data-press-scale="true"] {
+		transform: scale(0.98);
 	}
 }
 
@@ -105,6 +118,7 @@
 	line-height: 1.2;
 	letter-spacing: -0.005em;
 	white-space: nowrap;
+	text-overflow: ellipsis;
 	text-align: center;
 }
 
@@ -150,7 +164,7 @@
 	background: #2b1915;
 	box-shadow: inset 0 0 0 1.5px var(--strip-danger);
 	color: var(--strip-danger);
-	font-size: 22px;
+	font-size: 18px;
 }
 .strip-key-progress {
 	position: absolute;
@@ -202,10 +216,16 @@
 .strip-overlay {
 	position: absolute;
 	inset: 0;
-	z-index: 30;
+	z-index: var(--strip-layer-controls);
 	width: 100%;
 	height: 100%;
 	pointer-events: none;
+}
+
+/* Explicitly ordered above the SVG selector stack. Kept here so all strip
+ * consumers share the stack even when no voice widget imports voice.css. */
+.strip-screen > .voice-layer {
+	z-index: var(--strip-layer-voice);
 }
 
 /* No scrolling or selection on the device window; it sizes to #root. */
@@ -219,4 +239,33 @@
 
 .strip-slot[data-invalid="true"] {
 	box-shadow: inset 0 0 0 3px var(--strip-danger);
+}
+
+/* Compact flat metric cells; a missing reading stays an explicit state. */
+.strip-metric {
+	position: absolute;
+	inset: 0;
+	box-sizing: border-box;
+	padding: 16px;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 4px;
+	color: var(--strip-text);
+	font-size: 22px;
+	line-height: 1.2;
+}
+.strip-metric p {
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.strip-metric .strip-metric-title {
+	color: var(--strip-muted);
+}
+.strip-metric-status {
+	color: var(--strip-muted);
+	font-size: 18px;
 }

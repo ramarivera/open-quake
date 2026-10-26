@@ -31,6 +31,7 @@ import { selectStripPage } from "../../../shared/strip-selection";
 import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
+import { useStripSettings } from "../strip/stripSettings";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 import { Group, PageHeader, Row } from "../ui/Form";
@@ -57,6 +58,7 @@ type Selection = {
 };
 export function KeyEditor(): React.JSX.Element {
 	const { snapshot: wallpaper } = useWallpaper();
+	const { settings: stripSettings } = useStripSettings();
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
 	const [mirrorPressed, setMirrorPressed] = useState<string>();
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
@@ -70,6 +72,9 @@ export function KeyEditor(): React.JSX.Element {
 		[saving, setSaving] = useState(false),
 		[overlaps, setOverlaps] = useState<readonly string[]>([]);
 	const savePending = useRef(false);
+	useEffect(() => {
+		if (saving) setMirrorPressed(undefined);
+	}, [saving]);
 	const epoch = useRef(0);
 	const current = useRef<Selection | undefined>(undefined),
 		host = useRef<HTMLElement>(null);
@@ -631,7 +636,12 @@ export function KeyEditor(): React.JSX.Element {
 				<fieldset
 					className="keys-preview"
 					onPointerDownCapture={(event) => {
-						const rect = event.currentTarget.getBoundingClientRect();
+						if (saving) return;
+						const rect =
+							event.currentTarget
+								.querySelector(".strip-screen")
+								?.getBoundingClientRect() ??
+							event.currentTarget.getBoundingClientRect();
 						const tile = tileAt(
 							{
 								x: ((event.clientX - rect.left) * 1920) / rect.width,
@@ -661,7 +671,12 @@ export function KeyEditor(): React.JSX.Element {
 						// Capture before nested controls, including programmatic clicks.
 						event.preventDefault();
 						event.stopPropagation();
-						const frame = event.currentTarget.getBoundingClientRect();
+						if (saving) return;
+						const frame =
+							event.currentTarget
+								.querySelector(".strip-screen")
+								?.getBoundingClientRect() ??
+							event.currentTarget.getBoundingClientRect();
 						const point = {
 							x: ((event.clientX - frame.left) * 1920) / frame.width,
 							y: ((event.clientY - frame.top) * 480) / frame.height,
@@ -688,7 +703,9 @@ export function KeyEditor(): React.JSX.Element {
 							previewSerial="editor-preview"
 							wallpaper={wallpaper}
 							profiles={{ _tag: "ready", envelope: previewEnvelope }}
-							showEmptyGridDashedBorder
+							showEmptyGridDashedBorder={
+								stripSettings.showEmptyGridDashedBorder
+							}
 						/>
 					</StripViewport>
 				</fieldset>

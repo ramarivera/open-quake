@@ -278,3 +278,68 @@ AI Chat, DKClaw and live translation panels SHALL suppress host-cell touch effec
 #### Scenario: Child interaction without host feedback
 - **WHEN** a touch begins and ends on a nested AI panel control
 - **THEN** the child receives its event, the host receives no key activation and has no pressed state, and the AI Chat copy control dispatches its saved text
+
+### Requirement: Logical viewport updates and mirror fitting
+
+The panel and management mirror SHALL fit the same fixed 1920 by 480 logical canvas uniformly, using the smaller positive host width/1920 and height/480 ratios. Nonfinite or nonpositive host dimensions SHALL use a safe scale of one until measurable. Display placement, load, rebind, DPI changes and macOS cover reinforcement SHALL retain that canvas; physical display dimensions SHALL NOT become logical artwork dimensions. Portrait framebuffers SHALL rotate the whole canvas, including wallpaper, grid, SVG and HTML overlays, as one unit. Management mirrors SHALL fit their available host rather than separately floor theme cells into the recovered 948 by 237 frame. Covers MAIN-052, SCREEN-006, SCREEN-126, SCREEN-134.
+
+#### Scenario: Resize, DPI and portrait updates
+
+- **WHEN** the panel is loaded, rebound, scaled at mixed DPI, or rotated into a portrait framebuffer and its mirror is resized
+- **THEN** wallpaper, slots, overlays and touch targets share the same 1920 by 480 coordinate system, the same uniform scale, and the inward span anchors remain aligned
+- **AND** invalid reference dimensions cannot create an infinite, negative or NaN transform
+
+### Requirement: Normalized runtime empty cells
+
+An absent or empty runtime cell SHALL have keyCode, config type empty string, display true, size [1,1], icon empty string, title text empty string with display false, and empty eventInfo. This runtime record SHALL be constructed independently of new-editor key defaults, whose title display remains true. Hidden configured keys SHALL remain inert hidden slots. Runtime normalization SHALL NOT mutate saved keys or retain title, artwork or visibility from a previous profile. Covers SCREEN-022.
+
+#### Scenario: Replace a profile with absent cells
+
+- **WHEN** a profile with titles and hidden keys is replaced by a page with absent cells
+- **THEN** all absent cells carry the exact runtime placeholder fields and paint empty slots without old titles or artwork
+
+### Requirement: Accepted flat theme and span rendering
+
+The recovered grid pitches, edge gaps, inward spans and system-info overflow SHALL remain authoritative. Independent-device-design SHALL govern plate colors, radii, title/icon metrics and feedback. All four themes and every supported span SHALL use the same code-native plate and image sizing, with no theme SVG variant selection, icon color extraction or fallback glow. Monitor-panel corners SHALL be square, including the slot. Enlarged slots SHALL keep local z-index 10, full-bleed slots 1. Knob focus SHALL retain the opaque plate under its accent outline rather than make the slot transparent. Covers SCREEN-023, SCREEN-029, SCREEN-033, SCREEN-126.
+
+#### Scenario: Theme, span and artwork replacements
+
+- **WHEN** common, meeting, system-info and monitor-panel tiles render at retained spans with missing, delayed or alternate artwork and long top or bottom titles
+- **THEN** the accepted flat plate, clipped image, bounded title and proportional radius remain present with no glow or stale artwork
+
+### Requirement: One explicit overlay stack
+
+The strip SHALL isolate one layer stack. Wallpaper SHALL be layer 0, grid 10, shared SVG controls 30, and voice HTML 40. Inside SVG controls, picker 50000, wheel 100000 and notices 100001 SHALL order within that parent only. The near-opaque voice backdrop and STT row SHALL cover picker and wheel. Inside voice HTML, backdrop 1, transcript sheet 3, mic meter 4 and toasts 30 SHALL preserve visibility. The accepted opaque wheel sheet replaces the vendor vignette. Covers SCREEN-003.
+
+#### Scenario: Combined overlay visibility
+
+- **WHEN** wallpaper, grid, picker, wheel, voice backdrop and transcript row are present together
+- **THEN** each has the specified stacking parent and the voice sheet and transcript paint above the wheel without a decorative vignette
+
+### Requirement: Live empty borders and bounded management feedback
+
+The saved empty-border preference SHALL drive panel, device preview and KeyEditor through the shared settings subscription, including live changes and restart. Empty slots SHALL have a two-logical-pixel dashed line border at full opacity with no hover animation; hidden and filled slots SHALL never acquire that border. Management press feedback SHALL use the accepted raised fill and accent ring with a 120 ms transition and 0.98 scale. Panel scale SHALL remain 0.96. Locked non-draggable, disabled and conversation/camera/printer tiles SHALL suppress whole-card feedback. playAudio SHALL not scale. OS or app reduced motion SHALL remove scale and transition but retain fill and ring. Passive clock hover SHALL not resize or transform its face. Covers MGMT-055, MGMT-058, MGMT-059, SCREEN-030, SCREEN-034, SETTINGS-013, WIDGETS-010.
+
+#### Scenario: Saved preference and feedback exclusions
+
+- **WHEN** the empty-border preference changes while panel and editor are mounted and eligible, locked, hidden, disabled and conversation keys receive down/up or press expiry
+- **THEN** both windows update empty borders immediately, only eligible keys show bounded feedback, and release or expiry clears it
+- **AND** hovering the desktop clock preserves its geometry with no transform flicker
+
+### Requirement: Full-grid replacement and compositor correctness
+
+Every accepted configuration SHALL paint its complete visible grid immediately, independent of artwork readiness. Theme/config replacements, delayed artwork and wheel open/close SHALL not omit cells or retain stale key bodies in either panel or management preview. React's complete layout rendering replaces the recovered progressive gate and repaint nudge; no arbitrary 0/2/4/8-cell gate or forced compositor workaround SHALL be required. Covers SCREEN-035, SCREEN-036.
+
+#### Scenario: Repeated sixteen-cell replacement
+
+- **WHEN** sixteen keys repeatedly change profile, theme and artwork while the wheel opens and closes
+- **THEN** all sixteen current keys remain painted in the panel and preview with their current titles and flat surfaces
+
+### Requirement: Specialized recovered widget dispatch
+
+The registry SHALL dispatch recovered monitor types to metric renderers consuming decoded monitor snapshots, and preserve existing clock, player, meeting, AI, emoji, home-assistant and OBS specializations. Unknown types SHALL retain the generic renderer. Missing camera/printer, AudioBot-session and reversible game-mode providers SHALL NOT be replaced with fabricated live readings or working controls. WIDGETS-001 remains incomplete until every recovered type has its actual specialized content and capability provider.
+
+#### Scenario: Decoded live monitor tile
+
+- **WHEN** a CPU, GPU, memory, disk, power, network, Bluetooth or process tile receives a valid metric snapshot
+- **THEN** its specialized body shows the relevant available fields and explicit unavailable state, rejects malformed updates, and retains passive preview behavior
