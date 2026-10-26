@@ -115,6 +115,11 @@ The catalog SHALL preserve all twelve legacy engine dispositions and every retai
 - **WHEN** assistant or direct consumers request models, including DeepSeek's four retained IDs
 - **THEN** both receive the same local options including their saved custom choice and truthful configured/unavailable state
 
+#### Scenario: Inactive model rows cannot provide a direct voice route
+- **WHEN** a saved row has role none
+- **THEN** the provider listing and knob pinning both report no usable direct route using the shared role readiness rule
+- **AND** default and fallback rows remain eligible
+
 ### Requirement: Explicit specialized provider settings
 
 Volc Ark SHALL select inference or agent entry method with explicit endpoint or bot ID and corresponding /api/v3 or /api/v3/bots URL. Coze SHALL select a bot ID and dedicated /v3/chat protocol. XFY SHALL use typed app ID, API key and secret resolved only in the host. Dedicated transports SHALL never silently fall back to OpenAI-compatible chat (AI-007, AI-034, AI-036, AI-051, AI-052).

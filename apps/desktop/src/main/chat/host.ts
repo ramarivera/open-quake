@@ -3,6 +3,7 @@ import { isIPv4 } from "node:net";
 import { Cause, Effect, Either, Exit, Layer, Schema } from "effect";
 import { net } from "electron";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
+import { resolveModelRows } from "../../../../../packages/edge/src/agents/agents-invariants";
 import { AiCompatibleAdapter } from "../../../../../packages/edge/src/ai/adapters/adapter";
 import {
 	AiFileAdapter,
@@ -291,6 +292,8 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								...listing,
 								id: row.id,
 								available: listing.available && ready,
+								directCapable:
+									listing.directCapable && resolveModelRows([row]).length === 1,
 							};
 						}),
 					);
@@ -331,7 +334,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 								(cause) => new VoiceKnobRejected("RouteIncomplete", cause),
 							),
 						);
-					const matches = rows.filter(
+					const matches = resolveModelRows(rows).filter(
 						(r) =>
 							r.id === providerId &&
 							modelOptions(r.provider, [r.model]).some(

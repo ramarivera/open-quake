@@ -5,10 +5,7 @@ import { Effect, Either, Redacted } from "effect";
 import { expect, it } from "vitest";
 import { emptyKnobResource } from "../../../../../packages/device/src/knob/knob-invariants";
 import type { ModelRow } from "../../../../../packages/edge/src/agents/agents-contracts";
-import {
-	initialAgentState,
-	resolveModels,
-} from "../../../../../packages/edge/src/agents/agents-invariants";
+import { initialAgentState } from "../../../../../packages/edge/src/agents/agents-invariants";
 import {
 	editKnobSlot,
 	knobVoiceReady,
@@ -35,7 +32,7 @@ it.each<ModelRow["role"]>(["none", "default", "fallback"])(
 				resolve: () => Effect.succeed(Redacted.make("synthetic")),
 				revoked: () => Effect.never,
 			},
-			models: () => Effect.succeed(resolveModels(state, "default")),
+			models: () => Effect.succeed(state.models.default),
 		});
 		try {
 			const knob = editKnobSlot(emptyKnobResource(), "center", {
@@ -55,6 +52,8 @@ it.each<ModelRow["role"]>(["none", "default", "fallback"])(
 			const ready = knobVoiceReady(knob, [
 				{ ...row, credentialAvailable: true },
 			]);
+			const listing = await host.runtime.runPromise(host.providers());
+			expect(listing[0]?.directCapable).toBe(ready);
 			expect(ready).toBe(Either.isRight(pinned));
 			expect(ready).toBe(role !== "none");
 		} finally {
