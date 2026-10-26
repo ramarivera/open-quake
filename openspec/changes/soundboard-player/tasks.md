@@ -177,3 +177,12 @@ so a newer pause or volume command survives instead of losing its player. All
 pass. The fresh hidden muted native MP3 smoke passes playback controls, natural
 end, two-key preemption, stale-stop isolation and cleanup with zero windows or
 workers. This remains source acceptance with the release boundary unchanged.
+
+PR55 was normally restacked against reviewed main on 2026-10-26. Diagnostic
+allowlists retain both native-media and importer names; the final diff contains
+only the importer scope. All 53 importer tests, 16 filesystem/diagnostics tests,
+both typechecks, scoped Biome and strict OpenSpec pass. This disposable worktree
+initially lacked generated Husky shims; installing frozen dependencies restored
+them, and the first merge's commit-message/post-commit consumers were checked
+explicitly before the normal final merge and push gates. Reviewed delivery is
+still pending; no playback is enabled by this restack.

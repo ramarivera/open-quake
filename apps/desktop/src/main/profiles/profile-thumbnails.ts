@@ -13,24 +13,32 @@ const maximumBytes = 1_000_000;
 export function createProfileThumbnailStore(root: string) {
 	const path = (profile: Profile, locale: ProfileLocale) =>
 		join(root, "thumbnails", `${profileThumbnailKey(profile, locale)}.png`);
-	const decode = (bytes: Buffer): string => {
+	const decode = (bytes: Buffer): Option.Option<string> => {
+		// Bound decompression before nativeImage allocates a bitmap from untrusted cache bytes.
 		if (
 			bytes.length > maximumBytes ||
+			bytes.length < 33 ||
 			!bytes
 				.subarray(0, 8)
-				.equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+				.equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+			bytes.readUInt32BE(8) !== 13 ||
+			bytes.toString("ascii", 12, 16) !== "IHDR"
 		)
-			throw new RangeError("Invalid profile thumbnail");
-		const image = nativeImage.createFromBuffer(bytes);
-		const { width, height } = image.getSize();
-		if (
-			image.isEmpty() ||
-			width <= 0 ||
-			height <= 0 ||
-			width * height > 64_000_000
-		)
-			throw new RangeError("Invalid profile thumbnail");
-		return `data:image/png;base64,${bytes.toString("base64")}`;
+			return Option.none();
+		const width = bytes.readUInt32BE(16);
+		const height = bytes.readUInt32BE(20);
+		if (width === 0 || height === 0 || width * height > 4_000_000)
+			return Option.none();
+		try {
+			const image = nativeImage.createFromBuffer(bytes);
+			const size = image.getSize();
+			if (image.isEmpty() || size.width !== width || size.height !== height)
+				return Option.none();
+			return Option.some(`data:image/png;base64,${bytes.toString("base64")}`);
+		} catch {
+			// Only native decoding is recoverable here. Filesystem errors stay typed below.
+			return Option.none();
+		}
 	};
 	return {
 		read: async (
@@ -40,8 +48,7 @@ export function createProfileThumbnailStore(root: string) {
 			try {
 				const file = await open(path(profile, locale), "r");
 				try {
-					if ((await file.stat()).size > maximumBytes)
-						throw new RangeError("Profile thumbnail too large");
+					if ((await file.stat()).size > maximumBytes) return Option.none();
 					const bytes = Buffer.alloc(maximumBytes + 1);
 					let length = 0;
 					while (length < bytes.length) {
@@ -53,7 +60,7 @@ export function createProfileThumbnailStore(root: string) {
 						if (result.bytesRead === 0) break;
 						length += result.bytesRead;
 					}
-					return Option.some(decode(bytes.subarray(0, length)));
+					return decode(bytes.subarray(0, length));
 				} finally {
 					await file.close();
 				}
@@ -75,7 +82,10 @@ export function createProfileThumbnailStore(root: string) {
 			const temporary = `${path(profile, locale)}.${randomUUID()}.pending`;
 			let failed = false;
 			try {
-				const data = decode(bytes);
+				const decoded = decode(bytes);
+				if (Option.isNone(decoded))
+					throw new RangeError("Invalid profile thumbnail");
+				const data = decoded.value;
 				await mkdir(join(root, "thumbnails"), { recursive: true });
 				await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
 				await rename(temporary, path(profile, locale));
