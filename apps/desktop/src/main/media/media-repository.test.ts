@@ -228,6 +228,58 @@ describe("desktop media repository and actual disk adapter", () => {
 		);
 	});
 
+	it("keeps revision, backup and playback identity unchanged for a no-op reorder", async () => {
+		await Effect.runPromise(
+			Effect.gen(function* () {
+				const repo = yield* MediaRepository;
+				yield* repo.importLocal("A", 0, imagePath);
+				const controller = yield* makeMediaController({
+					chooseImage: Effect.succeed(Option.none()),
+					publish: () => Effect.void,
+					publishClock: () => Effect.void,
+				});
+				const before = yield* controller.request({
+					_tag: "select",
+					serial: "A",
+				});
+				const backup = yield* Effect.promise(() =>
+					fs.readFile(
+						settingsFile("A").replace(".json", ".backup.json"),
+						"utf8",
+					),
+				);
+				const after = yield* controller.request({
+					_tag: "reorder",
+					serial: "A",
+					revision: 1,
+					from: 0,
+					to: 0,
+				});
+				expect(after.saved).toEqual(before.saved);
+				expect(after.playbackId).toBe(before.playbackId);
+				expect(
+					yield* Effect.promise(() =>
+						fs.readFile(
+							settingsFile("A").replace(".json", ".backup.json"),
+							"utf8",
+						),
+					),
+				).toBe(backup);
+				expect(
+					(yield* controller
+						.request({
+							_tag: "reorder",
+							serial: "A",
+							revision: 0,
+							from: 0,
+							to: 0,
+						})
+						.pipe(Effect.either))._tag,
+				).toBe("Left");
+			}).pipe(Effect.provide(layer)),
+		);
+	});
+
 	it("accepts decoded PNG/JPEG and normalizes selected legacy file URLs", async () => {
 		await Effect.runPromise(
 			Effect.gen(function* () {

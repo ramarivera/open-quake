@@ -184,44 +184,46 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 							const { saved } = yield* repository.load(serial);
 							const list = saved.settings.displayMediaList;
 							if (
+								saved.revision !== command.revision ||
 								(command._tag === "reorder" &&
 									(command.from >= list.length || command.to >= list.length)) ||
 								(command._tag === "remove" && command.index >= list.length)
 							)
 								return yield* new InvalidWallpaper(undefined);
-							yield* repository.save(
-								serial,
-								command.revision,
-								command._tag === "clear"
-									? { ...saved.settings, displayMediaList: [] }
-									: command._tag === "sound"
-										? { ...saved.settings, enableSound: command.enableSound }
-										: command._tag === "reorder"
-											? {
-													...saved.settings,
-													displayMediaList: reorderWallpaper(
-														list,
-														command.from,
-														command.to,
-													),
-												}
-											: command._tag === "remove"
+							if (command._tag !== "reorder" || command.from !== command.to)
+								yield* repository.save(
+									serial,
+									command.revision,
+									command._tag === "clear"
+										? { ...saved.settings, displayMediaList: [] }
+										: command._tag === "sound"
+											? { ...saved.settings, enableSound: command.enableSound }
+											: command._tag === "reorder"
 												? {
 														...saved.settings,
-														displayMediaList: list.filter(
-															(_, index) => index !== command.index,
+														displayMediaList: reorderWallpaper(
+															list,
+															command.from,
+															command.to,
 														),
 													}
-												: { ...saved.settings, bgFillMode: command.fillMode },
-								command._tag === "configure"
-									? {
-											...defaultClockTile,
-											actions: [
-												{ type: "hourFormat", value: command.hourFormat },
-											],
-										}
-									: saved.clock,
-							);
+												: command._tag === "remove"
+													? {
+															...saved.settings,
+															displayMediaList: list.filter(
+																(_, index) => index !== command.index,
+															),
+														}
+													: { ...saved.settings, bgFillMode: command.fillMode },
+									command._tag === "configure"
+										? {
+												...defaultClockTile,
+												actions: [
+													{ type: "hourFormat", value: command.hourFormat },
+												],
+											}
+										: saved.clock,
+								);
 						}
 						const next = yield* semaphore.withPermits(1)(
 							Effect.gen(function* () {

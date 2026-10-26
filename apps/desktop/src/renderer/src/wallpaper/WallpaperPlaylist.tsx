@@ -33,7 +33,11 @@ export function WallpaperPlaylist({
 					}}
 					onDrop={(event) => {
 						event.preventDefault();
-						if (!disabled && dragging.current !== undefined)
+						if (
+							!disabled &&
+							dragging.current !== undefined &&
+							dragging.current !== index
+						)
 							move(dragging.current, index);
 						dragging.current = undefined;
 					}}

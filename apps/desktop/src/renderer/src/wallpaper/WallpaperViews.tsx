@@ -182,7 +182,7 @@ export function WallpaperSettings({
 					items={saved?.settings.displayMediaList ?? []}
 					disabled={disabled}
 					move={(from, to) => {
-						if (selection)
+						if (selection && from !== to)
 							void request({ _tag: "reorder", ...selection, from, to });
 					}}
 					remove={(index) => {
