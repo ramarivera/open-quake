@@ -53,6 +53,19 @@ export interface EmojiControllerPort {
 		persistLink: (profileId: string) => Promise<void>,
 	) => Promise<string>;
 }
+// Profile adapters cross an Effect runtime/Promise boundary. Keep catalog
+// validation identity while retaining unexpected failures as private causes.
+const profileFailure = (cause: unknown): EmojiInvalid | EmojiLibraryFailed => {
+	const error = Runtime.isFiberFailure(cause)
+		? Option.getOrElse(
+				Cause.failureOption(cause[Runtime.FiberFailureCauseId]),
+				() => cause,
+			)
+		: cause;
+	return error instanceof EmojiInvalid || error instanceof EmojiLibraryFailed
+		? error
+		: new EmojiLibraryFailed(cause);
+};
 export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 	function* (port: EmojiControllerPort) {
 		const imageDecoder = yield* ImageDecoder;
@@ -188,14 +201,15 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 						)?.profileId;
 						const run = Runtime.runPromise(yield* Effect.runtime<never>());
 						if (linked)
-							yield* io(
-								() =>
+							yield* Effect.tryPromise({
+								try: () =>
 									port.renameLinked?.(
 										linked,
 										command.name.trim() || "Unnamed Pack",
 										() => run(library.command(command)).then(() => {}),
 									) ?? Promise.resolve(),
-							);
+								catch: profileFailure,
+							});
 						else yield* library.command(command);
 					} else yield* library.command(input.command);
 					return yield* request({ type: "read" });
@@ -465,17 +479,7 @@ export const makeEmojiController = Effect.fn("EmojiDesktop.controller")(
 									),
 								).then(() => undefined),
 							),
-						catch: (cause) => {
-							const error = Runtime.isFiberFailure(cause)
-								? Option.getOrElse(
-										Cause.failureOption(cause[Runtime.FiberFailureCauseId]),
-										() => cause,
-									)
-								: cause;
-							return error instanceof EmojiInvalid
-								? error
-								: new EmojiLibraryFailed(cause);
-						},
+						catch: profileFailure,
 					});
 					return yield* snapshot("Added to Quake main settings screen");
 				}

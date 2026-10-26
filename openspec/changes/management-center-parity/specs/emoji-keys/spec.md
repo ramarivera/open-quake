@@ -121,7 +121,7 @@ Collection SHALL retain every static asset, package/draft item and saved-profile
 - **THEN** the pinned item and hash survive, and a later collection after deleting that profile reclaims them
 
 ### Requirement: Linked package title updates
-Renaming an emoji package SHALL rename its linked profile and publish a profile refresh only after the emoji library save succeeds. It SHALL roll back the profile update if the emoji library save fails. Duplicate profile names or invalid profile names SHALL reject before either store changes. Saving an emoji-folder tile title SHALL also rename its referenced package and publish the title-sync change only after both writes succeed. Source: MGMT-101.
+Renaming an emoji package SHALL rename its linked profile and publish a profile refresh only after the emoji library save succeeds. It SHALL roll back the profile update if the emoji library save fails. Duplicate profile names or invalid profile names SHALL reject before either store changes, preserving the catalog validation code `QUAKE.EMOJI.INVALID` and its actionable reason across the profile runtime boundary. Unexpected storage failures SHALL retain their private original cause under `QUAKE.EMOJI.LIBRARY_FAILED`. Saving an emoji-folder tile title SHALL also rename its referenced package and publish the title-sync change only after both writes succeed. Source: MGMT-101.
 
 #### Scenario: Linked rename save failure
 - **WHEN** the linked profile rename succeeds but the emoji library save fails

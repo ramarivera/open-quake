@@ -37,6 +37,7 @@ import {
 } from "./controller";
 import { emojiFiles } from "./files";
 import { placeEmojiPackage } from "./profile-placement";
+import { renameLinkedEmojiProfile } from "./profile-rename";
 
 vi.mock("electron", () => ({
 	dialog: { showOpenDialog: vi.fn() },
@@ -62,6 +63,7 @@ const gif = (delay = 120, red = 255) =>
 async function setup(
 	generation?: EmojiGenerationPort,
 	place?: EmojiControllerPort["place"],
+	renameLinked?: EmojiControllerPort["renameLinked"],
 ) {
 	const root = await mkdtemp(join(tmpdir(), "oq-emoji-controller-"));
 	const files = emojiFiles(root);
@@ -93,6 +95,7 @@ async function setup(
 					return "profile";
 				}),
 			...(generation ? { generation } : {}),
+			...(renameLinked ? { renameLinked } : {}),
 		}),
 	);
 	return {
@@ -844,5 +847,98 @@ it("CENTER-088 retains placed hashes after package deletion and collects after t
 	} finally {
 		await runtime.dispose();
 		await rm(root, { recursive: true, force: true });
+	}
+});
+
+it("preserves linked-name validation errors while retaining unexpected storage failures", async () => {
+	const initial = createInitialProfileEnvelope();
+	const template = initial.profiles[0];
+	if (!template) throw Error("Missing initial profile");
+	let disk = encodeProfileEnvelope({
+		...initial,
+		profiles: [
+			...initial.profiles,
+			{ ...template, id: "linked", name: "Pack" },
+			{ ...template, id: "other", name: "Other" },
+		],
+	});
+	let failWrite = false;
+	const writes = vi.fn(async (next: typeof disk) => {
+		if (failWrite) throw Error("secret-storage-token");
+		disk = next;
+	});
+	const profiles = ManagedRuntime.make(
+		ProfileRepository.Default.pipe(
+			Layer.provide(
+				profileStorageLayer({ read: async () => disk, write: writes }),
+			),
+		),
+	);
+	const refresh = vi.fn(async () => {});
+	const f = await setup(
+		undefined,
+		undefined,
+		renameLinkedEmojiProfile({ runtime: profiles, refresh }),
+	);
+	try {
+		await f.runtime.runPromise(
+			Effect.flatMap(EmojiRepository, (repository) =>
+				repository.transact((state) =>
+					Effect.succeed({
+						...state,
+						packages: [
+							{ id: "pack", name: "Pack", emojiIds: [], profileId: "linked" },
+						],
+					}),
+				),
+			),
+		);
+		const libraryBefore = await f.files.read();
+		const profilesBefore = disk;
+		for (const name of ["Other", "ElevenChars"]) {
+			const result = await f.runtime.runPromise(
+				Effect.either(
+					f.controller.request({
+						type: "command",
+						command: { type: "rename-package", id: "pack", name },
+					}),
+				),
+			);
+			expect(result).toMatchObject({
+				_tag: "Left",
+				left: {
+					_tag: "EmojiInvalid",
+					code: "QUAKE.EMOJI.INVALID",
+					reason: "Use a unique profile name of at most 10 weighted units.",
+				},
+			});
+			expect(await f.files.read()).toEqual(libraryBefore);
+			expect(disk).toEqual(profilesBefore);
+		}
+		expect(writes).not.toHaveBeenCalled();
+		expect(refresh).not.toHaveBeenCalled();
+		failWrite = true;
+		const failed = await f.runtime.runPromise(
+			Effect.either(
+				f.controller.request({
+					type: "command",
+					command: { type: "rename-package", id: "pack", name: "Valid" },
+				}),
+			),
+		);
+		expect(failed).toMatchObject({
+			_tag: "Left",
+			left: { _tag: "EmojiLibraryFailed", code: "QUAKE.EMOJI.LIBRARY_FAILED" },
+		});
+		if (failed._tag !== "Left" || failed.left._tag !== "EmojiLibraryFailed")
+			throw Error("Expected storage failure");
+		expect(failed.left.originalCause).toBeDefined();
+		expect(Object.keys(failed.left)).not.toContain("originalCause");
+		expect(JSON.stringify(failed.left)).not.toContain("secret-storage-token");
+		expect(await f.files.read()).toEqual(libraryBefore);
+		expect(disk).toEqual(profilesBefore);
+	} finally {
+		await f.close();
+		await profiles.dispose();
 	}
 });
