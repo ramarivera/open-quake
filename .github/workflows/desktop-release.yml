@@ -32,7 +32,7 @@ jobs:
         env:
           BUILD_TAG: ${{ github.event_name == 'push' && github.ref_name || format('v0.0.0-pr.{0}.{1}', github.event.number, github.run_number) }}
         run: node apps/desktop/scripts/release.mjs version "$BUILD_TAG"
-      - run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev libusb-1.0-0-dev ffmpeg
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm --filter @open-quake/desktop test:release
