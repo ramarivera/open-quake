@@ -26,10 +26,12 @@ import {
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
+import { ClockSnapshot } from "../../../shared/clock-contracts";
 import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
+import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { editableFocus } from "./editor-input";
@@ -118,6 +120,63 @@ export function KeyEditor(): React.JSX.Element {
 				});
 		};
 	}, [accept]);
+	useEffect(
+		() =>
+			window.quakeClock?.onSnapshot((input) => {
+				if (!Schema.is(ClockSnapshot)(input) || !input.target || !input.change)
+					return;
+				const target = input.target;
+				const old = current.current;
+				if (
+					!old ||
+					old.target.profileId !== target.profileId ||
+					input.revision <= old.target.revision
+				)
+					return;
+				const matches =
+					old.target.pageId === target.pageId &&
+					old.target.keyCode === target.keyCode;
+				const next = {
+					...old,
+					key: matches ? patchClockEditorKey(old.key, input) : old.key,
+					savedKey: matches
+						? patchClockEditorKey(old.savedKey, input)
+						: old.savedKey,
+					target: { ...old.target, revision: input.revision },
+				};
+				current.current = next;
+				setSelection(next);
+				setEnvelope((envelope) =>
+					!envelope
+						? envelope
+						: {
+								...envelope,
+								profiles: EffectArray.map(envelope.profiles, (p) =>
+									p.id !== target.profileId
+										? p
+										: {
+												...p,
+												revision: input.revision,
+												pages: EffectArray.map(p.pages, (page) =>
+													page.id !== target.pageId
+														? page
+														: {
+																...page,
+																keys: page.keys.map((key) =>
+																	key.keyCode !== target.keyCode
+																		? key
+																		: patchClockEditorKey(key, input),
+																),
+															},
+												),
+											},
+								),
+							},
+				);
+			}),
+		[],
+	);
+
 	const profile =
 		envelope?.profiles.find((p) => p.id === profileId) ?? envelope?.profiles[0];
 	const page =
@@ -876,19 +935,29 @@ export function KeyEditor(): React.JSX.Element {
 				)}
 				{key?.config.type === "dkDesktopClock" && (
 					<ClockSettings
-						beforeWrite={async () => {
-							const old = current.current;
-							if (!old || savePending.current) return false;
-							if (
-								JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
-								JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
-							)
-								return true;
-							await save();
-							return old !== current.current;
-						}}
-						onSaved={() => {
-							if (selection) void choose(selection.key.keyCode);
+						draftHourFormat={
+							key.config.actions.find((a) => a.type === "hourFormat")?.value ===
+							"12h"
+								? "12h"
+								: "24h"
+						}
+						onHourFormat={(hourFormat) => {
+							const active = current.current;
+							if (!active) return;
+							const actions = active.key.config.actions;
+							void update({
+								...active.key,
+								config: {
+									...active.key.config,
+									actions: actions.some((a) => a.type === "hourFormat")
+										? actions.map((a) =>
+												a.type === "hourFormat"
+													? { ...a, value: hourFormat }
+													: a,
+											)
+										: [...actions, { type: "hourFormat", value: hourFormat }],
+								},
+							});
 						}}
 						target={
 							selection

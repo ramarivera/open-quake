@@ -67,7 +67,7 @@ type ThemeId = "season" | "cyber" | "anime" | "tactical" | "aurora";
 type ClockStyle = {
   background: { mode: "none" | "theme"; themeId: ThemeId;
                 themes: Partial<Record<ThemeId, { kind: "image" | "video"; path: string }>> };
-  musicEnabled: boolean;            // kept for DK import parity; the card is lih.7
+  musicEnabled: boolean;            // per-key switch; shared media owner is lih.7
 };
 type ClockTileProps = {
   widthPx: number; heightPx: number; now: Date; theme: string; // ThemeId | "none"
@@ -109,3 +109,12 @@ Migration and legacy archive import share primary/backup validation. Invalid wal
 Screen controls resolve the same serial-scoped page as StripScreen and omit the clock editor if that page has no clock. Broadcast listeners compare explicit or initially resolved targets, including targetless compatibility messages. The key editor tracks its last saved key and avoids saving an unchanged draft before a clock update.
 
 Every renderer profile delivery projects clock media paths to opaque references. Main restores those references from the corresponding saved key before previewing an editor draft, preserving media on save. The clock service retains its basename and opaque media URL projection.
+
+
+## Clock burn-down, 2026-10-26
+
+Build on PR #82's canonical profile repository and migration and PR #84's key editor. Clock snapshots include opaque action projections, selected-key weather/music values, revision, authenticated source and changed field. Main resolves omitted panel targets only within the panel's selected device/page. Serialized clock requests check expected revisions, and the repository transaction still rejects a concurrent profile write.
+
+The editor patches only the committed field into both saved and draft keys. Other clock keys advance the profile revision without replacing the open draft. Hour format uses the existing profile preview/save/revert path; theme, seconds, weather and music persist immediately. The clock action validator accepts enriched actions while retaining exactly one valid hour format and unique action types.
+
+Passive hosts freeze their initial time, force 24h and render static placeholders without bridge calls. Live edit and panel hosts retain boundary/resume scheduling. Video thumbnails use a separate muted decoder with a four-second deadline, seek to min(0.1, duration/2), then export a decoded 960×240 JPEG at quality 0.72. Authenticated clock-media responses permit anonymous canvas reads while retaining the browser-owned initiator gate.

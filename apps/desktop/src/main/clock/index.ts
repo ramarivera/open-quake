@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import {
 	BrowserWindow,
 	dialog,
@@ -14,7 +14,10 @@ import {
 	CLOCK_MEDIA_SCHEME,
 	CLOCK_REQUEST,
 	CLOCK_SNAPSHOT,
+	ClockCommand,
 	type ClockReply,
+	ClockSnapshot,
+	type ClockTarget,
 } from "../../shared/clock-contracts";
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from "../../shared/clock-style";
 import type { DesktopRuntime } from "../diagnostics/module";
@@ -49,6 +52,7 @@ export function registerClockScheme(): void {
 			privileges: {
 				standard: true,
 				secure: true,
+				corsEnabled: true,
 				stream: true,
 				supportFetchAPI: true,
 			},
@@ -94,6 +98,10 @@ export function registerClock(
 	managementWindow: () => BrowserWindow | undefined,
 	renderer = process.env.ELECTRON_RENDERER_URL ??
 		pathToFileURL(join(import.meta.dirname, "../renderer/index.html")).href,
+	authority?: {
+		readonly panel: () => BrowserWindow | undefined;
+		readonly target: (keyCode: string) => Promise<ClockTarget | undefined>;
+	},
 ): { dispose: () => Promise<void> } {
 	ipcMain.handle(
 		CLOCK_REQUEST,
@@ -109,9 +117,39 @@ export function registerClock(
 					code: "QUAKE.CLOCK.CONFIG_INVALID",
 					message: "Clock request was rejected",
 				};
+			let command = input;
+			if (authority && !isManagement) {
+				if (
+					event.sender !== authority.panel()?.webContents ||
+					!Schema.is(ClockCommand)(input)
+				)
+					return {
+						_tag: "failure",
+						code: "QUAKE.CLOCK.CONFIG_INVALID",
+						message: "Clock request was rejected",
+						reason: "no-target",
+					};
+				const target = await authority.target(
+					input._tag === "setTheme"
+						? input.keyCode
+						: (input.target?.keyCode ?? "1,1"),
+				);
+				if (
+					!target ||
+					(input.target &&
+						JSON.stringify(input.target) !== JSON.stringify(target))
+				)
+					return {
+						_tag: "failure",
+						code: "QUAKE.CLOCK.CONFIG_INVALID",
+						message: "Clock target is unavailable",
+						reason: "no-target",
+					};
+				command = { ...input, target };
+			}
 			const reply = await runtime.runPromise(
 				handleClockCommand(
-					input,
+					command,
 					chooseFile(BrowserWindow.fromWebContents(event.sender) ?? undefined),
 				),
 			);
@@ -119,7 +157,14 @@ export function registerClock(
 				typeof input === "object" && input !== null && "_tag" in input
 					? input._tag
 					: "";
-			if (reply._tag === "success" && tag !== "read") broadcast(reply.snapshot);
+			if (reply._tag === "success" && tag !== "read") {
+				const snapshot = {
+					...reply.snapshot,
+					change: tag,
+					source: isManagement ? "pc-grid" : "device-screen",
+				};
+				if (Schema.is(ClockSnapshot)(snapshot)) broadcast(snapshot);
+			}
 			return reply;
 		},
 	);
@@ -154,9 +199,14 @@ export function registerClock(
 			),
 		);
 		if (Option.isNone(path)) return new Response(null, { status: 404 });
-		return net.fetch(pathToFileURL(path.value).href, {
+		const response = await net.fetch(pathToFileURL(path.value).href, {
 			headers: request.headers,
 		});
+		// The authenticated app document captures decoded media into a canvas.
+		// Keep the existing browser-owned initiator gate above, including probes.
+		const headers = new Headers(response.headers);
+		headers.set("Access-Control-Allow-Origin", "*");
+		return new Response(response.body, { status: response.status, headers });
 	});
 	return {
 		dispose: async () => {

@@ -131,6 +131,14 @@ function execute(
 			return store
 				.setHourFormat(command.hourFormat, command.target)
 				.pipe(Effect.map(success));
+		case "setWeather":
+			return store
+				.setWeather(command.settings, command.target)
+				.pipe(Effect.map(success));
+		case "setMusic":
+			return store
+				.setMusic(command.enabled, command.target)
+				.pipe(Effect.map(success));
 		case "setSeconds":
 			return store
 				.setSeconds(command.showSeconds, command.target)
@@ -181,12 +189,19 @@ export const handleClockCommand = Effect.fn("Clock.handleCommand")(function* (
 	const decoded = Schema.decodeUnknownEither(ClockCommandSchema)(input);
 	if (Either.isLeft(decoded))
 		return failure(ClockConfigInvalid.fromCause(decoded.left));
-	return yield* execute(store, decoded.right, chooseFile).pipe(
-		Effect.catchTags({
-			ClockConfigInvalid: (error) => Effect.succeed(failure(error)),
-			ClockPersistenceFailed: (error) => Effect.succeed(failure(error)),
-			ClockMediaUnusable: (error) => Effect.succeed(failure(error)),
-			ClockMediaTooShort: (error) => Effect.succeed(failure(error)),
-		}),
-	);
+	const command = decoded.right;
+	return yield* store
+		.withRevision(
+			command.target,
+			command._tag === "read" ? undefined : command.expectedRevision,
+			execute(store, command, chooseFile),
+		)
+		.pipe(
+			Effect.catchTags({
+				ClockConfigInvalid: (error) => Effect.succeed(failure(error)),
+				ClockPersistenceFailed: (error) => Effect.succeed(failure(error)),
+				ClockMediaUnusable: (error) => Effect.succeed(failure(error)),
+				ClockMediaTooShort: (error) => Effect.succeed(failure(error)),
+			}),
+		);
 });

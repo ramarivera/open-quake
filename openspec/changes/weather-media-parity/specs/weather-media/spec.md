@@ -150,3 +150,18 @@ The DK-Player SHALL expose a 380×88 overlay insertion point at 1471,355 and rea
 
 - **WHEN** shared application shutdown begins during an admitted settings write, media command or polling read
 - **THEN** weather/media rejects new requests, drains admitted work without late broadcasts, and disposes its runtime exactly once alongside the maintenance, monitor, voice, profile and clock owners
+
+
+### Requirement: Profile clock enrichment and cache operations
+
+Weather and music controls SHALL save only the selected clock key's weather action and clockStyle.musicEnabled. City verification SHALL retain the 600 ms debounce, 12 second timeout, localized checking/matched/not-found/network/timeout states and invalid URL rejection through editor save. Weather saves SHALL preserve unrelated action fields, stamp updatedAt and increment weatherVersion. Missing weather fields SHALL backfill with empty manual city, Celsius and IP consent off. WeatherMediaController SHALL expose typed cache read/clear operations and per-instance/side weather fetch using explicit decoded settings, without mutating global settings. Configuration refresh SHALL fan out to every mounted live card while preserving each card's own configuration; passive cards SHALL not subscribe. Covers MAIN-142, MGMT-278, MGMT-279, WIDGETS-056.
+
+#### Scenario: Independent weather caches
+
+- **WHEN** two clock instances fetch different cities or sides and one clears its cache
+- **THEN** a cache read performs no HTTP, the other instance retains its cached data, units convert once, and clear forces a new fetch only for the chosen instance
+
+#### Scenario: Selected-key weather and music save
+
+- **WHEN** clock A changes city, units, forecast URL and music switch
+- **THEN** its valid actions survive restart, clock B remains unchanged, invalid URLs/timeouts show the expected status, and mounted live cards refresh using their own current settings

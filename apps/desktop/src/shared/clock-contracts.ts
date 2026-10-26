@@ -1,5 +1,7 @@
 import { Schema } from "effect";
+import { ProfileAction } from "../../../../packages/device/src/profiles/profile-contracts";
 import { THEME_IDS, THEME_PATCH_REASONS } from "./clock-style";
+import { WeatherSettings } from "./weather-media-contracts";
 
 export const CLOCK_REQUEST = "clock:request";
 export const CLOCK_SNAPSHOT = "clock:snapshot";
@@ -29,6 +31,9 @@ export const ClockTarget = Schema.Struct({
 export type ClockTarget = typeof ClockTarget.Type;
 const targetField = {
 	target: Schema.optionalWith(ClockTarget, { exact: true }),
+	expectedRevision: Schema.optionalWith(Schema.Int.pipe(Schema.nonNegative()), {
+		exact: true,
+	}),
 };
 
 export const ClockSnapshot = Schema.Struct({
@@ -37,6 +42,26 @@ export const ClockSnapshot = Schema.Struct({
 		exact: true,
 	}),
 	revision: Schema.Int.pipe(Schema.nonNegative()),
+	actions: Schema.optionalWith(Schema.Array(ProfileAction), { exact: true }),
+	change: Schema.optionalWith(
+		Schema.Literal(
+			"setTheme",
+			"setMode",
+			"setHourFormat",
+			"setWeather",
+			"setMusic",
+			"setSeconds",
+			"chooseMedia",
+			"commitMedia",
+			"restoreMedia",
+		),
+		{ exact: true },
+	),
+	source: Schema.optionalWith(Schema.Literal("pc-grid", "device-screen"), {
+		exact: true,
+	}),
+	weather: Schema.optionalWith(WeatherSettings, { exact: true }),
+	musicEnabled: Schema.optionalWith(Schema.Boolean, { exact: true }),
 	keyCode: Schema.String,
 	mode: Schema.Literal("none", "theme"),
 	themeId: ThemeIdSchema,
@@ -69,6 +94,11 @@ export const ClockCommand = Schema.Union(
 		...targetField,
 		hourFormat: Schema.Literal("12h", "24h"),
 	}),
+	Schema.TaggedStruct("setWeather", {
+		...targetField,
+		settings: WeatherSettings,
+	}),
+	Schema.TaggedStruct("setMusic", { ...targetField, enabled: Schema.Boolean }),
 	Schema.TaggedStruct("setSeconds", {
 		...targetField,
 		showSeconds: Schema.Boolean,

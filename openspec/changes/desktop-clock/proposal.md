@@ -13,7 +13,7 @@ The panel clock open-quake ships today is a large SVG text clock with seconds. R
 - Add a "Desktop clock" settings section to management (theme cards, Theme/None, seconds, change/restore background) and a live preview that ticks. DK-Suite freezes its PC preview at mount (WIDGETS-029).
 - The strip draws a `dkDesktopClock` key (the DK-Desktop-Clock profile) as this clock, full-strip, through the strip tile registry.
 - Seconds become an optional setting, off by default, so the default matches DK-Suite's minutes-only look (approved decision 6, 2026-10-23).
-- Weather and now-playing cards are owned by `open-quake-lih.7`. This change defines only their typed slot props and renders nothing when they are absent.
+- Weather fetching and system media remain owned by `open-quake-lih.7`. Each clock key now owns its weather action and music switch; the clock editor saves those preferences through the canonical profile repository. Passive previews render static cards without subscriptions.
 
 ## Capabilities
 
