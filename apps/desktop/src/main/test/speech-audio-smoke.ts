@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { Effect, Either } from "effect";
+import { Effect, Either, Fiber } from "effect";
 import { app, BrowserWindow } from "electron";
 import { PCM_24K } from "../../../../../packages/edge/src/ai/speech/speech-contracts";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
@@ -142,6 +142,55 @@ async function run() {
 			),
 			[],
 		);
+		stage = "late recorder acquisition joins native teardown";
+		let finishOpening = () => {};
+		const opening = new Promise<void>((resolve) => {
+			finishOpening = resolve;
+		});
+		let entered = () => {};
+		const started = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		let invoked = false;
+		let closed = false;
+		const pendingRecorder = Effect.runFork(
+			createElectronCaptureDriver(async () => {
+				const acquired = await openAudioWorker(new AbortController().signal);
+				entered();
+				await opening;
+				return {
+					invoke: async <A>() => {
+						invoked = true;
+						return undefined as A;
+					},
+					close: async () => {
+						await delay(25);
+						await acquired.close();
+						closed = true;
+					},
+				};
+			}).open("late-capture"),
+		);
+		await started;
+		let interrupted = false;
+		const stopping = Effect.runPromise(Fiber.interrupt(pendingRecorder)).then(
+			() => {
+				interrupted = true;
+			},
+		);
+		await delay(25);
+		assert.equal(interrupted, false);
+		finishOpening();
+		await stopping;
+		assert.equal(invoked, false);
+		assert.equal(closed, true);
+		assert.equal(BrowserWindow.getAllWindows().length, 0);
+		assert.deepEqual(
+			(await readdir(directory)).filter((name) =>
+				name.startsWith("speech-worker-"),
+			),
+			[],
+		);
 		stage = "output acquisition";
 		const ownership = await Effect.runPromise(makeAudioOutput);
 		let stopped = 0;
@@ -238,6 +287,7 @@ async function run() {
 				workerCleanup: true,
 				productionCaptureDriver: true,
 				failedRecorderStartupCleanup: true,
+				lateRecorderInterruptionJoined: true,
 				sharedOwnership: true,
 				capturePreemption: true,
 				staleSoundboardStopSafe: true,

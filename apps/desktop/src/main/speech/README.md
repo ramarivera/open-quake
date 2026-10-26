@@ -74,6 +74,9 @@ If capture invocation fails or startup is interrupted, it aborts and awaits
 worker close before returning. A worker arriving after cancellation closes
 without starting capture. Failed Stop and later session close share one
 teardown promise, including asynchronous removal of the worker directory.
+Cancellation joins a pending worker factory and its teardown before returning.
+If failed-start cleanup rejects, a catalog warning retains the scrubbed cleanup
+cause while the original typed microphone failure still reaches the controller.
 
 Capture uses Chromium's supported ScriptProcessorNode with 1,024 input samples
 per callback and the actual AudioContext sample rate. The pure area resampler

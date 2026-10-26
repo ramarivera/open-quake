@@ -150,11 +150,13 @@ export function createElectronCaptureDriver(
 			Effect.gen(function* () {
 				const controller = new AbortController();
 				let acquired: AudioWorker | undefined;
+				let opening: Promise<AudioWorker> | undefined;
 				let closing: Promise<void> | undefined;
 				const close = async (): Promise<void> => {
 					controller.abort();
-					// The factory may return after cancellation. Don't memoize an empty
-					// cleanup; its eventual worker still needs its own awaited close.
+					// Interruption must join the factory as well as its eventual worker.
+					// Acquisition failure is reported by startup, not by teardown.
+					await opening?.catch(() => undefined);
 					if (acquired) {
 						closing ??= acquired.close();
 						await closing;
@@ -165,10 +167,12 @@ export function createElectronCaptureDriver(
 						signal.addEventListener("abort", () => controller.abort(), {
 							once: true,
 						});
-						const value = await open(controller.signal);
-						acquired = value;
+						opening = open(controller.signal).then((value) => {
+							acquired = value;
+							return value;
+						});
+						const value = await opening;
 						if (controller.signal.aborted) {
-							await close();
 							throw new AiUnavailable();
 						}
 						await value.invoke("capture", [id]);
@@ -186,7 +190,21 @@ export function createElectronCaptureDriver(
 					// Startup hasn't returned a CaptureSession yet, so captureFrames'
 					// acquisition finalizer can't close it. Own failed acquisition here.
 					Effect.onExit((exit) =>
-						Exit.isFailure(exit) ? Effect.promise(close) : Effect.void,
+						Exit.isFailure(exit)
+							? Effect.tryPromise({
+									try: close,
+									catch: (cause) =>
+										new DesktopSpeechError(
+											"RecorderUnavailable",
+											"recorder",
+											cause,
+										),
+								}).pipe(
+									Effect.catchTag("DesktopSpeechError", (error) =>
+										Effect.logWarning(error),
+									),
+								)
+							: Effect.void,
 					),
 				);
 				return {

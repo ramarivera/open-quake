@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Option } from "effect";
+import { Deferred, Effect, Fiber, Logger, Option } from "effect";
 import { vi } from "vitest";
 import {
 	type AudioWorker,
@@ -67,6 +67,52 @@ describe("production recorder startup lifetime", () => {
 				}),
 		);
 	}
+	for (const name of ["NotAllowedError", "NotReadableError"]) {
+		it.effect(`retains ${name} when awaited worker cleanup rejects`, () =>
+			Effect.gen(function* () {
+				const cause = Object.assign(new Error("private recorder failure"), {
+					name,
+				});
+				const cleanup = Object.assign(new Error("private path and key"), {
+					code: "EACCES",
+				});
+				const messages: unknown[] = [];
+				const logger = Logger.make(({ message }) => messages.push(message));
+				let closed = 0;
+				const worker: AudioWorker = {
+					invoke: async () => {
+						throw cause;
+					},
+					close: async () => {
+						closed++;
+						throw cleanup;
+					},
+				};
+				const result = yield* createElectronCaptureDriver(async () => worker)
+					.open("capture")
+					.pipe(
+						Effect.either,
+						Effect.provide(Logger.replace(Logger.defaultLogger, logger)),
+					);
+				expect(result).toMatchObject({
+					_tag: "Left",
+					left: {
+						code:
+							name === "NotAllowedError"
+								? "VOICE.CAPTURE.PERMISSION_DENIED"
+								: "VOICE.CAPTURE.RECORDER_UNAVAILABLE",
+					},
+				});
+				if (result._tag === "Left")
+					expect(result.left.originalCause).toBe(cause);
+				expect(closed).toBe(1);
+				const serialized = JSON.stringify(messages);
+				expect(serialized).toContain("EACCES");
+				expect(serialized).toContain("VOICE.CAPTURE.RECORDER_UNAVAILABLE");
+				expect(serialized).not.toMatch(/private|path and key/);
+			}),
+		);
+	}
 	it.effect(
 		"interruption waits for an acquired worker even while capture invocation is pending",
 		() =>
@@ -103,12 +149,13 @@ describe("production recorder startup lifetime", () => {
 			}),
 	);
 	it.effect(
-		"a late worker closes without ever starting capture after cancellation",
+		"interruption awaits a late worker and its teardown without starting capture",
 		() =>
 			Effect.gen(function* () {
 				const entered = yield* Deferred.make<void>();
 				const opening = gate();
 				const closed = yield* Deferred.make<void>();
+				const drain = gate();
 				let invoked = 0;
 				const worker: AudioWorker = {
 					invoke: async <A>() => {
@@ -117,6 +164,7 @@ describe("production recorder startup lifetime", () => {
 					},
 					close: async () => {
 						await Effect.runPromise(Deferred.succeed(closed, undefined));
+						await drain.promise;
 					},
 				};
 				const fiber = yield* createElectronCaptureDriver(async () => {
@@ -127,10 +175,15 @@ describe("production recorder startup lifetime", () => {
 					.open("capture")
 					.pipe(Effect.fork);
 				yield* Deferred.await(entered);
-				yield* Fiber.interrupt(fiber);
+				const stopping = yield* Fiber.interrupt(fiber).pipe(Effect.fork);
+				yield* Effect.yieldNow().pipe(Effect.repeatN(20));
+				expect(Option.isNone(yield* Fiber.poll(stopping))).toBe(true);
 				opening.resolve();
 				yield* Deferred.await(closed);
+				expect(Option.isNone(yield* Fiber.poll(stopping))).toBe(true);
 				expect(invoked).toBe(0);
+				drain.resolve();
+				yield* Fiber.join(stopping);
 			}),
 	);
 	it.effect("failed stop and concurrent close share one awaited teardown", () =>
@@ -163,5 +216,29 @@ describe("production recorder startup lifetime", () => {
 			yield* capture.close;
 			expect(closed).toBe(1);
 		}),
+	);
+	it.effect(
+		"interruption joins a factory that rejects after cancellation",
+		() =>
+			Effect.gen(function* () {
+				const entered = yield* Deferred.make<void>();
+				const opening = gate();
+				let signal: AbortSignal | undefined;
+				const fiber = yield* createElectronCaptureDriver(async (value) => {
+					signal = value;
+					await Effect.runPromise(Deferred.succeed(entered, undefined));
+					await opening.promise;
+					throw new Error("private factory failure");
+				})
+					.open("capture")
+					.pipe(Effect.fork);
+				yield* Deferred.await(entered);
+				const stopping = yield* Fiber.interrupt(fiber).pipe(Effect.fork);
+				yield* Effect.yieldNow().pipe(Effect.repeatN(20));
+				expect(signal?.aborted).toBe(true);
+				expect(Option.isNone(yield* Fiber.poll(stopping))).toBe(true);
+				opening.resolve();
+				yield* Fiber.join(stopping);
+			}),
 	);
 });

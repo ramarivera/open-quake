@@ -46,6 +46,18 @@ owned process was terminated. Its cause wasn't established. The test entry now
 exits unsuccessfully on uncaught errors instead of opening that dialog. The
 subsequent native run passed. Reviewed delivery remains tracked in Beads.
 
+PR69 review hardening adds two cleanup-rejection cases and strengthens late
+acquisition cancellation. All three fail on the previous revision. Cancellation
+now awaits both the pending factory and its worker teardown; a rejecting factory
+also settles before cancellation returns. Startup cleanup rejection emits a
+scrubbed catalog warning without masking the original typed recorder error.
+The eight lifetime cases and 80 focused speech/chat tests pass. The updated
+native smoke joins delayed acquisition and actual worker cleanup without invoking
+capture, and finishes with no workers or worker directories left. It continues
+to use synthetic input and muted output only. The combined desktop suite passes
+1,626 tests with one existing native skip; typecheck, production build, both
+bundle smoke modes, scoped Biome and strict validation pass.
+
 
 Cluster 14 implementation evidence for 2.6: packages/edge/src/ai/speech/
 speech-service.test.ts drives AiProviderService.createSpeech to fake HTTP and
