@@ -21,6 +21,7 @@ function fixture(
 	} = {},
 ) {
 	const events: FirmwareSnapshot[] = [];
+	const saved: FirmwareSnapshot[] = [];
 	const versions: string[] = [];
 	let report: (bytes: number) => void = () => {};
 	const layer = Layer.effect(
@@ -64,13 +65,17 @@ function fixture(
 						if (options.partial) return yield* new FirmwareWriteFailed();
 					}),
 				load: () => Effect.succeed(options.loaded),
-				save: () => Effect.void,
+				save: (snapshot) =>
+					Effect.sync(() => {
+						saved.push(snapshot);
+					}),
 			} satisfies typeof FirmwarePort.Service;
 		}),
 	);
 	return {
 		layer: FirmwareUpdates.Default.pipe(Layer.provide(layer)),
 		events,
+		saved,
 		versions,
 		report: (bytes: number) => report(bytes),
 	};
@@ -184,3 +189,42 @@ for (const timing of [
 		},
 	);
 }
+
+it.scoped(
+	"persists intermediate copy progress at most once per interval and restores those bytes after restart",
+	() => {
+		const f = fixture();
+		return Effect.gen(function* () {
+			const s = yield* FirmwareUpdates;
+			yield* s.start();
+			yield* TestClock.adjust(1);
+			yield* s.write("chosen-volume");
+			yield* TestClock.adjust(1);
+			const initial = f.saved.length;
+			for (let copied = 1; copied <= 9000; copied++) f.report(copied);
+			yield* TestClock.adjust(199);
+			expect(f.saved).toHaveLength(initial);
+			yield* TestClock.adjust(1);
+			expect(f.saved).toHaveLength(initial + 1);
+			expect(f.saved.at(-1)).toMatchObject({ state: "copying", copied: 9000 });
+			yield* TestClock.adjust(1000);
+			expect(f.saved).toHaveLength(initial + 1);
+			f.report(9500);
+			yield* TestClock.adjust(200);
+			expect(f.saved).toHaveLength(initial + 2);
+			const loaded = f.saved.at(-1);
+			expect(loaded).toBeDefined();
+			yield* s.shutdown();
+			const restarted = fixture({ loaded });
+			const restored = yield* Effect.gen(function* () {
+				const next = yield* FirmwareUpdates;
+				return yield* next.snapshot();
+			}).pipe(Effect.provide(restarted.layer));
+			expect(restored).toMatchObject({
+				state: "needs_recovery",
+				copied: 9500,
+				reason: "interrupted",
+			});
+		}).pipe(Effect.provide(f.layer));
+	},
+);

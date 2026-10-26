@@ -233,23 +233,37 @@ export class FirmwareUpdates extends Effect.Service<FirmwareUpdates>()(
 							yield* run(
 								Effect.gen(function* () {
 									yield* Effect.sleep(timing.settle);
-									// Adapter revalidates the mount and the original bytes, not renderer metadata.
-									yield* port.copy(image, volume, (copied) => {
-										if (
-											!Number.isSafeInteger(copied) ||
-											copied < state.copied ||
-											copied > image.bytes
-										)
-											return;
-										state = { ...state, copied };
-										if (
-											clock.unsafeCurrentTimeMillis() - publishedAt >=
-												timing.progressInterval ||
-											copied - publishedBytes >=
-												image.bytes * timing.progressDelta
-										)
-											publish(state);
+									// Periodically persist the latest byte count independently of UI deltas.
+									// Racing with copy joins the writer before terminal state saves.
+									let persistedBytes = state.copied;
+									const persistProgress = Effect.gen(function* () {
+										while (true) {
+											yield* Effect.sleep(timing.progressInterval);
+											if (state.copied === persistedBytes) continue;
+											const snapshot = { ...state };
+											yield* port.save(snapshot);
+											persistedBytes = snapshot.copied;
+										}
 									});
+									// Adapter revalidates the mount and the original bytes, not renderer metadata.
+									yield* port
+										.copy(image, volume, (copied) => {
+											if (
+												!Number.isSafeInteger(copied) ||
+												copied < state.copied ||
+												copied > image.bytes
+											)
+												return;
+											state = { ...state, copied };
+											if (
+												clock.unsafeCurrentTimeMillis() - publishedAt >=
+													timing.progressInterval ||
+												copied - publishedBytes >=
+													image.bytes * timing.progressDelta
+											)
+												publish(state);
+										})
+										.pipe(Effect.raceFirst(persistProgress));
 									yield* set({
 										state: "written_unverified",
 										copied: image.bytes,
