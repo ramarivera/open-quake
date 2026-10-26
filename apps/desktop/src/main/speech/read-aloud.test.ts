@@ -36,6 +36,8 @@ const tick = Effect.yieldNow().pipe(Effect.repeatN(10));
 const fixture = Effect.fn("ReadAloudTest.fixture")(function* (
 	mode: "ready" | "play" | "noAudio" | "stream",
 	suspended = false,
+	prefixBytes = 100,
+	metadata = false,
 ) {
 	const ready = yield* Deferred.make<void>();
 	const play = yield* Queue.unbounded<void>();
@@ -49,11 +51,17 @@ const fixture = Effect.fn("ReadAloudTest.fixture")(function* (
 		resumes = 0,
 		aborted = 0;
 	let context = suspended ? "suspended" : "running";
-	const data = new Uint8Array(480044);
+	const data = new Uint8Array(480044 + (metadata ? 12 : 0));
 	data.set(wav().subarray(0, 44));
 	const header = new DataView(data.buffer);
 	header.setUint32(4, data.length - 8, true);
-	header.setUint32(40, data.length - 44, true);
+	if (metadata) {
+		data.set(new TextEncoder().encode("JUNK"), 36);
+		header.setUint32(40, 3, true);
+		data.set([1, 2, 3, 0], 44);
+		data.set(new TextEncoder().encode("data"), 48);
+	}
+	header.setUint32(metadata ? 52 : 40, 480000, true);
 	const layer = Layer.mergeAll(
 		VoiceSurface.Default.pipe(
 			Layer.provide(
@@ -99,9 +107,10 @@ const fixture = Effect.fn("ReadAloudTest.fixture")(function* (
 								return new Response(
 									new ReadableStream({
 										start: (stream) => {
-											stream.enqueue(data.slice(0, 100));
+											for (let i = 0; i < prefixBytes; i++)
+												stream.enqueue(data.slice(i, i + 1));
 											releaseAudio = () => {
-												stream.enqueue(data.slice(100));
+												stream.enqueue(data.slice(prefixBytes));
 												stream.close();
 											};
 											Effect.runSync(Deferred.succeed(received, undefined));
@@ -336,27 +345,72 @@ it.effect(
 		),
 );
 
-it.effect(
-	"audio received before 12 seconds cancels the no-audio watchdog while the response continues",
-	() =>
-		Effect.scoped(
-			Effect.gen(function* () {
-				const f = yield* fixture("stream");
-				yield* Effect.gen(function* () {
-					const c = yield* controller();
-					const first = yield* c
-						.readAloud("Streaming", owner)
-						.pipe(Effect.fork);
-					yield* Deferred.await(f.received);
-					yield* tick;
-					yield* TestClock.adjust(13000);
-					expect(Option.isNone(yield* Fiber.poll(first))).toBe(true);
-					f.releaseAudio();
-					yield* Queue.take(f.play);
-					expect(f.view().readAloud.get(owner.keyCode)?.phase).toBe("speaking");
-					yield* c.reset();
-					expect(yield* Fiber.join(first)).toEqual({ _tag: "cancelled" });
-				}).pipe(Effect.provide(f.layer));
-			}),
-		),
-);
+for (const metadata of [false, true]) {
+	it.effect(
+		`WAV header without PCM times out at 12 seconds and clears the read-aloud pill, metadata ${metadata}`,
+		() =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const f = yield* fixture(
+						"stream",
+						false,
+						metadata ? 56 : 44,
+						metadata,
+					);
+					yield* Effect.gen(function* () {
+						const c = yield* controller();
+						const first = yield* c
+							.readAloud("Header only", owner)
+							.pipe(Effect.fork);
+						yield* Deferred.await(f.received);
+						yield* tick;
+						yield* TestClock.adjust(11999);
+						expect(Option.isNone(yield* Fiber.poll(first))).toBe(true);
+						yield* TestClock.adjust(1);
+						yield* tick;
+						expect(Option.isSome(yield* Fiber.poll(first))).toBe(true);
+						expect(yield* Fiber.join(first)).toMatchObject({
+							_tag: "textOnly",
+							error: { phase: "synthesis" },
+						});
+						expect(f.counts()).toMatchObject({ requests: 1, stopped: 0 });
+						expect(f.view().readAloud.get(owner.keyCode)?.phase).toBe("idle");
+					}).pipe(Effect.provide(f.layer));
+				}),
+			),
+	);
+}
+
+for (const metadata of [false, true]) {
+	it.effect(
+		`audio received before 12 seconds cancels the no-audio watchdog while the response continues, metadata ${metadata}`,
+		() =>
+			Effect.scoped(
+				Effect.gen(function* () {
+					const f = yield* fixture(
+						"stream",
+						false,
+						metadata ? 58 : 46,
+						metadata,
+					);
+					yield* Effect.gen(function* () {
+						const c = yield* controller();
+						const first = yield* c
+							.readAloud("Streaming", owner)
+							.pipe(Effect.fork);
+						yield* Deferred.await(f.received);
+						yield* tick;
+						yield* TestClock.adjust(13000);
+						expect(Option.isNone(yield* Fiber.poll(first))).toBe(true);
+						f.releaseAudio();
+						yield* Queue.take(f.play);
+						expect(f.view().readAloud.get(owner.keyCode)?.phase).toBe(
+							"speaking",
+						);
+						yield* c.reset();
+						expect(yield* Fiber.join(first)).toEqual({ _tag: "cancelled" });
+					}).pipe(Effect.provide(f.layer));
+				}),
+			),
+	);
+}

@@ -156,7 +156,7 @@ and the Auto router `open-quake-lih.15` remain unverified and out of scope.
 
 - [x] 8.1 Allow only the additional `state` and `resume` worker methods and prove suspended playback recovery through the production bridge. Reviews 4375970560 and 4376016278, AI-156, bead `open-quake-lih.5.1.18`.
 - [x] 8.2 Render stopped manual recordings as recorded/idle after stage 1 completes. Review 4375970758, AI-267, bead `open-quake-lih.5.1.19`.
-- [ ] 8.3 Count WAV sample payload rather than metadata for the 12 s no-audio deadline. Review 4375970956, AI-156, bead `open-quake-lih.5.1.20`.
+- [x] 8.3 Count WAV sample payload rather than metadata for the 12 s no-audio deadline. Review 4375970956, AI-156, bead `open-quake-lih.5.1.20`.
 - [ ] 8.4 Include current meeting stage/status in snapshots for late strip mounts. Review 4375971137, AI-267, bead `open-quake-lih.5.1.21`.
 - [ ] 8.5 Stop active read-aloud before validating a newer streaming answer. Review 4376016267, AI-155, bead `open-quake-lih.5.1.22`.
 
@@ -176,3 +176,10 @@ failed before the fix because the mounted display markup showed processing and
 uploading after stage 1/status 2. The recording now renders idle while retaining
 its recorded state. The regression and desktop typecheck pass. Current fix-round
 logs use `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice-2/fix1d/`.
+
+8.3 regression `WAV header without PCM times out at 12 seconds and clears the
+read-aloud pill` failed before the fix, still pending at 12 seconds. Incremental
+RIFF chunk parsing now waits for a full PCM sample, skipping metadata and padding.
+Eleven read-aloud consumer tests cover ordinary/extended headers fragmented into
+single bytes and samples arriving later. The speech protocol/service tests and
+all six package typechecks also pass. Logs: `strip-voice-2/fix1d/0956-*`.
