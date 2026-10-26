@@ -640,7 +640,36 @@ async function smoke(): Promise<void> {
 		);
 	await lifecycleRuntime.runPromise(lifecycle.topology());
 	// Built-in-like profiles on the panel, swapped through the read-only channel.
-	const obsServer = await fakeObsServer();
+	const obsServer = await fakeObsServer({
+		silentInputs: ["image-1"],
+		inputs: [
+			{
+				inputUuid: "media-1",
+				inputName: "Media clips",
+				inputKind: "ffmpeg_source",
+			},
+			{
+				inputUuid: "vlc-1",
+				inputName: "VLC playlist",
+				inputKind: "vlc_source",
+			},
+			{
+				inputUuid: "capture-1",
+				inputName: "Windows microphone",
+				inputKind: "wasapi_input_capture",
+			},
+			{
+				inputUuid: "plugin-1",
+				inputName: "Plugin audio",
+				inputKind: "custom_source",
+			},
+			{
+				inputUuid: "image-1",
+				inputName: "Still image",
+				inputKind: "image_source",
+			},
+		],
+	});
 	const jpeg = nativeImage
 		.createFromBitmap(Buffer.alloc(128 * 128 * 4, 180), {
 			width: 128,
@@ -700,7 +729,10 @@ async function smoke(): Promise<void> {
 						keys: [
 							obsKey("obsStream", "1,1", { mode: "toggle" }),
 							obsKey("obsStats", "1,2", {}),
-							obsKey("obsScreenshot", "1,4", { sourceName: "Main" }),
+							obsKey("obsScreenshot", "1,4", {
+								sourceName: "Main",
+								sceneUuid: "deleted-scene",
+							}),
 						],
 					},
 				],
@@ -765,6 +797,13 @@ async function smoke(): Promise<void> {
 		management,
 		"document.querySelector('#obs-scene option[value=\"scene-1\"]') !== null",
 	);
+	assert.equal(
+		await management.webContents.executeJavaScript(
+			`document.querySelector('#obs-scene option[value="deleted-scene"]').disabled`,
+		),
+		true,
+		"Missing saved scene must remain as an unavailable option alongside replacements",
+	);
 	await management.webContents.executeJavaScript(`(() => {
 		const select = document.querySelector('#obs-scene');
 		select.value = 'scene-1'; select.dispatchEvent(new Event('change', {bubbles:true}));
@@ -808,6 +847,32 @@ async function smoke(): Promise<void> {
 		management,
 		"document.querySelector('#obs-input option[value=\"Desktop Audio\"]') !== null",
 	);
+	for (const type of ["obsMute", "obsVolume", "obsAudioMonitor", "obsMedia"]) {
+		await management.webContents.executeJavaScript(`(() => {
+			const select = document.querySelector('#key-function'); select.value = ${JSON.stringify(type)};
+			select.dispatchEvent(new Event('change', {bubbles:true}));
+		})()`);
+		await settle(100);
+		const values = await management.webContents.executeJavaScript(
+			`Array.from(document.querySelector('#obs-input').options, option => option.value)`,
+		);
+		for (const id of type === "obsMedia"
+			? ["media-1", "vlc-1"]
+			: ["media-1", "vlc-1", "capture-1", "plugin-1", "Desktop Audio"])
+			assert(
+				values.includes(id),
+				`${type} must list ${id}, got ${JSON.stringify(values)}`,
+			);
+		assert(
+			!values.includes("image-1"),
+			"Silent images must not appear in audio controls",
+		);
+	}
+	await management.webContents.executeJavaScript(`(() => {
+		const select = document.querySelector('#key-function'); select.value = 'obsVolume';
+		select.dispatchEvent(new Event('change', {bubbles:true}));
+	})()`);
+	await settle(100);
 	await management.webContents.executeJavaScript(`(() => {
 		const select = document.querySelector('#obs-input'); select.value = 'Desktop Audio';
 		select.dispatchEvent(new Event('change', {bubbles:true}));
@@ -840,6 +905,15 @@ async function smoke(): Promise<void> {
 			message: "OBS request was rejected",
 		},
 		"Panel cannot mutate OBS credentials or connection settings",
+	);
+	assert.equal(
+		(
+			await panel.webContents.executeJavaScript(
+				`window.quakeObs.request({type:'visible', lease:'forged', tiles:[{id:'1,4',command:{type:'obsScreenshot',settings:{sourceName:'Private'}}}]})`,
+			)
+		).type,
+		"error",
+		"Panel cannot request an uncommitted screenshot source",
 	);
 	if (artifacts)
 		await writeFile(
