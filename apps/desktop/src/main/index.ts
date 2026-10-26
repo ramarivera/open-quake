@@ -585,6 +585,7 @@ if (!app.requestSingleInstanceLock()) {
 							() => panelWin,
 							() => [panelWin, managementWin],
 							{
+								media: mediaActions,
 								readVolume: Effect.tryPromise({
 									try: (signal) =>
 										weatherModule.runtime.runPromise(HostVolume.read, {

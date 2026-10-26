@@ -80,3 +80,28 @@ it("KNOB-096 WIDGETS-111 committed local reads reject stale/other device identit
 	};
 	expect(isSystemPlayerKey(system)).toBe(true);
 });
+
+it("routes explicitly system-owned legacy players while retaining local legacy ownership", () => {
+	const empty = createEmptyProfileKey("1,1");
+	const legacy = (source?: string) => ({
+		...empty,
+		config: {
+			...empty.config,
+			type: "playAudioLegacy",
+			actions: [
+				{ type: "sound", value: "" },
+				{ type: "audioAction", value: 0 },
+				...(source ? [{ type: "musicSource", value: source }] : []),
+			],
+		},
+	});
+	expect(isSystemPlayerKey(legacy("system"))).toBe(true);
+	expect(isSystemPlayerKey(legacy("local"))).toBe(false);
+	expect(isSystemPlayerKey(legacy())).toBe(false);
+	expect(
+		isSystemPlayerKey({
+			...legacy("system"),
+			config: { ...legacy("system").config, type: "open" },
+		}),
+	).toBe(false);
+});
