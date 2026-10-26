@@ -101,3 +101,62 @@ describe("real encoded settings RPC and preload", () => {
 		).toBeUndefined();
 	});
 });
+
+it("rejects locale reads with a plain catalog error and no private cause", async () => {
+	const bridge = createAppLocaleBridge({
+		invoke: async (_channel, input) => {
+			const request = input as { id: string };
+			return {
+				_tag: "Exit",
+				requestId: request.id,
+				exit: {
+					_tag: "Failure",
+					cause: {
+						_tag: "Fail",
+						error: {
+							_tag: "SettingsReadFailed",
+							code: "QUAKE.SETTINGS.READ_FAILED",
+							category: "dependency",
+							message: "The settings could not be read",
+							diagnosticCause: { name: "Error", truncated: true },
+						},
+					},
+				},
+			};
+		},
+		on: () => {},
+		removeListener: () => {},
+	});
+	try {
+		const failure: unknown = await bridge
+			.read()
+			.catch((error: unknown) => error);
+		expect(failure).toStrictEqual({
+			_tag: "SettingsReadFailed",
+			code: "QUAKE.SETTINGS.READ_FAILED",
+			message: "The settings could not be read",
+		});
+		expect(failure).not.toBeInstanceOf(Error);
+		expect(Object.getPrototypeOf(failure)).toBe(Object.prototype);
+	} finally {
+		await bridge.dispose();
+	}
+});
+it("projects locale transport failures without private details", async () => {
+	const bridge = createAppLocaleBridge({
+		invoke: async () => {
+			throw new Error("private transport token");
+		},
+		on: () => {},
+		removeListener: () => {},
+	});
+	try {
+		expect(await bridge.read().catch((error: unknown) => error)).toStrictEqual({
+			_tag: "SettingsTransportUnavailable",
+			code: "QUAKE.SETTINGS.UNAVAILABLE",
+			message: "Settings transport unavailable",
+		});
+	} finally {
+		await bridge.dispose();
+	}
+});
