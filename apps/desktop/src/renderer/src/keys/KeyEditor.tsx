@@ -53,7 +53,11 @@ import { SelectedKeyPreview } from "./SelectedKeyPreview";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
-export function KeyEditor(): React.JSX.Element {
+export function KeyEditor({
+	onOpenLibrary = () => {},
+}: {
+	readonly onOpenLibrary?: (page: "shortcuts" | "emoji") => void;
+} = {}): React.JSX.Element {
 	const wallpaperController = useWallpaper();
 	const { snapshot: wallpaper } = wallpaperController;
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
@@ -668,6 +672,7 @@ export function KeyEditor(): React.JSX.Element {
 					keyEditOpen={selection !== undefined || saving}
 				/>
 				<GridEditor
+					onActivate={onOpenLibrary}
 					profile={profile}
 					page={page}
 					serial={serial}

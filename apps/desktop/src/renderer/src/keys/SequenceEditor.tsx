@@ -1,8 +1,10 @@
 import { Option, Schema } from "effect";
+import { SequenceLeaf } from "../../../../../../packages/device/src/actions/action-contracts";
 import {
 	ACTION_REGISTRY,
 	createActionDraft,
 } from "../../../../../../packages/device/src/actions/action-registry";
+import { SEQUENCE_LIBRARY } from "../../../../../../packages/device/src/actions/sequence-library";
 import {
 	ProfileJsonObject,
 	type ProfileKey,
@@ -145,24 +147,27 @@ export function SequenceEditor({
 									});
 								}}
 							>
-								{[
-									"hotkey",
-									"website",
-									"text",
-									"open",
-									"delay",
-									"mute",
-									"playPause",
-									"stopPlay",
-									"skipBackward",
-									"skipForward",
-									"fastBackward",
-									"fastForward",
-									"repeatPlay",
-									"randomPlay",
-								].map((type) => (
-									<option key={type}>{type}</option>
-								))}
+								{SEQUENCE_LIBRARY.flatMap((group) => [...group.ids]).map(
+									(type) => {
+										const entry = ACTION_REGISTRY.find(
+											(entry) => entry.id === type,
+										);
+										const supported =
+											type === "delay" ||
+											(!!entry &&
+												(Schema.is(Schema.encodedSchema(SequenceLeaf))(
+													entry.defaultConfig,
+												) ||
+													["website", "hotkey", "text", "open"].includes(
+														type,
+													)));
+										return (
+											<option key={type} disabled={!supported}>
+												{type}
+											</option>
+										);
+									},
+								)}
 							</select>
 						</label>
 						<label>

@@ -85,3 +85,10 @@
 - [x] Implement grid-editor placement, movement, selection, navigation, sizing, hints and scheduling with mounted consumer tests. Beads open-quake-lih.10.7/.8/.9.
 
 Lane evidence: 45 mounted editor regressions in `key-editor-interactions.test.tsx`, four canonical placement/overflow regressions in `profile-grid-placement.test.ts`, and the hidden mock native `smoke-geometry.ts` scenarios cover the new rows. Native checks include English/German replacement, 680px multi-action and knob layouts, folder entry and Space activation of vivid configuration. The full media smoke passes after scrolling the new editor layout into view before its visibility-gated OBS assertion. No hardware, microphone or audible audio was used. Gate totals and all 25 spec/code/test mappings accompany the lane PR.
+
+
+## 12. app-library burn-down
+
+- [ ] 12.1 Persist app preset groups, idempotent defaults, locks, default-only localization and app icon scoring. Rows MGMT-110, MGMT-122, MGMT-123, MGMT-386, MGMT-387, MGMT-388, MGMT-391. Bead open-quake-lih.10.16.
+- [ ] 12.2 Mount grouped translated search, app/generated/emoji composition, management activation and shared validated placement; verify English/German native mock screenshots and existing grid regressions. Rows MGMT-047, MGMT-107, MGMT-109, MGMT-115, MGMT-117, MGMT-119, MGMT-121, MGMT-124, MGMT-125. Bead open-quake-lih.10.17.
+- [ ] 12.3 Share recovered sequence allowlist and plugin SupportedInMultiActions filtering with the function library while retaining runtime validation. Row MGMT-127. Bead open-quake-lih.10.18.

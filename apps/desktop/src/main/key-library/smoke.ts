@@ -27,6 +27,7 @@ import { iconZip } from "../test/icon-pack-fixtures";
 import { smokeFont } from "../test/smoke-font";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { playKeyAlarm } from "./alarm";
+import { verifyAppLibrary } from "./app-library-smoke";
 import { resetKeysOnLinkLoss } from "./device-status";
 import { verifyIconsLane } from "./icons-lane-smoke";
 import {
@@ -43,7 +44,7 @@ registerClockScheme();
 app.on("window-all-closed", () => {});
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
 if (
-	["icons-lane", "geometry-pages-import"].includes(
+	["icons-lane", "geometry-pages-import", "app-library"].includes(
 		process.env.OPEN_QUAKE_KEY_REVIEW_PROBE ?? "",
 	)
 ) {
@@ -420,6 +421,10 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "app-library") {
+			await verifyAppLibrary(harness);
+			return;
+		}
 		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "icons-lane") {
 			await verifyIconsLane(harness, directory, (path) => {
 				selectedPath = path;

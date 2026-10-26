@@ -1,10 +1,6 @@
 import { Option, Schema } from "effect";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import {
-	ACTION_REGISTRY,
-	createActionDraft,
-} from "../../../../../../packages/device/src/actions/action-registry.js";
-import {
 	type KeyTarget,
 	keyEditable,
 	keyText,
@@ -15,9 +11,9 @@ import {
 	type KeyGeometry,
 } from "../../../../../../packages/device/src/profiles/key-geometry.js";
 import {
-	createEmptyProfileKey,
 	type Profile,
 	ProfileEnvelope,
+	ProfileJsonObject,
 	ProfileKey,
 	type ProfilePage,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
@@ -30,7 +26,9 @@ import {
 	type WallpaperController,
 	WallpaperSettings,
 } from "../wallpaper/WallpaperViews";
+import { FunctionLibrary } from "./FunctionLibrary";
 import { keyArtwork } from "./key-artwork";
+import { functionLibraryKey, type LibraryEntry } from "./library-entries";
 export type Selection = {
 	readonly target: KeyTarget;
 	readonly key: ProfileKey;
@@ -45,58 +43,6 @@ type GridDrag = {
 	readonly pageId: string;
 	readonly revision: number;
 };
-const libraryTypes = [
-	...ACTION_REGISTRY.map((entry) => entry.id),
-	"createFolder",
-	"brightness",
-	"pageNo",
-	"playAudio",
-];
-function libraryKey(
-	type: string,
-	code: string,
-	pageNumber: number,
-): ProfileKey {
-	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey(code));
-	const registered = ACTION_REGISTRY.find((entry) => entry.id === type);
-	const fallback = keyArtwork(
-		type === "brightness"
-			? "0-1"
-			: `library:${type}:${type === "pageNo" ? pageNumber : 1}`,
-		type,
-	);
-	const icon =
-		type === "pageNo"
-			? `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="32" y="46" text-anchor="middle" font-family="sans-serif" font-size="44" fill="white">${pageNumber}</text></svg>`)}`
-			: fallback;
-	return Schema.decodeUnknownSync(ProfileKey)({
-		...empty,
-		childrenName: type,
-		config: {
-			...empty.config,
-			...(registered
-				? createActionDraft(registered.id)
-				: {
-						type,
-						actions:
-							type === "createFolder"
-								? [{ type: "folder", value: `folder:${crypto.randomUUID()}` }]
-								: [],
-					}),
-			title: { ...empty.config.title, text: keyText(type, "en") },
-			icon,
-			...(type === "hotkeySwitch" ? { alterIcon: icon } : {}),
-			size: effectiveSpan(type, [1, 1]),
-			supportTouchEffect: registered?.supportTouchEffect ?? false,
-			compatibility: {
-				defaultIcon: icon,
-				...(type === "hotkeySwitch" ? { defaultAlterIcon: icon } : {}),
-				pendingConfiguration: true,
-				...(type === "pageNo" ? { pageNumber } : {}),
-			},
-		},
-	});
-}
 export function GridEditor({
 	profile,
 	page,
@@ -115,7 +61,9 @@ export function GridEditor({
 	selectPage,
 	setSelection,
 	setStatus,
+	onActivate,
 }: {
+	readonly onActivate: (page: "shortcuts" | "emoji") => void;
 	readonly profile: Profile;
 	readonly page: ProfilePage;
 	readonly serial: string;
@@ -149,28 +97,26 @@ export function GridEditor({
 		code: string;
 		names: readonly string[];
 	}>();
-	const [search, setSearch] = useState("");
-	const [searchTerm, setSearchTerm] = useState("");
 	const [vividSettings, setVividSettings] = useState(false);
 	const pointer = useRef<
 		{ x: number; y: number; start: () => void; active: boolean } | undefined
 	>(undefined);
 	const suppressClick = useRef(false);
 	const returnPages = useRef(new Map<string, string[]>());
-	useEffect(() => {
-		const timer = setTimeout(() => setSearchTerm(search), 500);
-		return () => clearTimeout(timer);
-	}, [search]);
 	const cancelDrag = (): void => {
 		drag.current = undefined;
 		setDragging(undefined);
 		setDropCode(undefined);
 	};
-	const beginDrag = (library: string | undefined, keyCode = "1,1"): void => {
+	const beginDrag = (
+		library: string | undefined,
+		keyCode = "1,1",
+		preset?: ProfileKey,
+	): void => {
 		if (!profile || !page || savePending.current || placementPending.current)
 			return;
 		const source = library
-			? libraryKey(library, keyCode, profile.pages.indexOf(page) + 1)
+			? (preset ?? functionLibraryKey(library, profile.pages.indexOf(page) + 1))
 			: current.current?.target.keyCode === keyCode
 				? current.current.savedKey
 				: page.keys.find((key) => key.keyCode === keyCode);
@@ -196,6 +142,47 @@ export function GridEditor({
 				: "Choose a target. Enter to place, Escape to cancel.",
 		);
 	};
+	const beginLibrary = (entry: LibraryEntry): void => {
+		if (entry.disabled) return;
+		if (current.current?.key.config.type === "multiActions") {
+			const old = current.current;
+			const next = {
+				...old,
+				key: {
+					...old.key,
+					config: {
+						...old.key.config,
+						subActions: Option.some([
+							...Option.getOrElse(old.key.config.subActions, () => []),
+							{
+								editorId: crypto.randomUUID(),
+								config: Schema.decodeUnknownSync(ProfileJsonObject)(
+									Schema.encodeSync(ProfileKey)(entry.key).config,
+								),
+							},
+						]),
+					},
+				},
+			};
+			current.current = next;
+			setSelection(next);
+			return;
+		}
+		const icon =
+			entry.key.config.icon ||
+			keyArtwork(`library:${entry.id}`, entry.key.config.type);
+		beginDrag(entry.id, "1,1", {
+			...entry.key,
+			config: {
+				...entry.key.config,
+				icon,
+				compatibility: Option.some({
+					...Option.getOrElse(entry.key.config.compatibility, () => ({})),
+					defaultIcon: icon,
+				}),
+			},
+		});
+	};
 	const dropDraft = (
 		source: GridDrag,
 		code: string,
@@ -209,7 +196,7 @@ export function GridEditor({
 		);
 		const size = effectiveSpan(source.key.config.type, source.key.config.size);
 		const target =
-			source.library === "playAudio"
+			source.library && source.key.config.type === "playAudio"
 				? "1,1"
 				: !source.library && size.some((n) => n > 1)
 					? (covering?.keyCode ?? code)
@@ -434,56 +421,35 @@ export function GridEditor({
 	);
 	return (
 		<>
-			<section
-				className="keys-library"
-				aria-label={locale === "de" ? "Aktionsbibliothek" : "Action library"}
-			>
-				<label htmlFor="keys-library-search">
-					{locale === "de" ? "Aktionen suchen" : "Search actions"}
-				</label>
-				<input
-					id="keys-library-search"
-					type="search"
-					value={search}
-					onChange={(event) => setSearch(event.target.value)}
-				/>
-				<div className="keys-library-items">
-					{libraryTypes
-						.filter((type) =>
-							`${type} ${keyText(type, locale)}`
-								.toLowerCase()
-								.includes(searchTerm.toLowerCase()),
-						)
-						.map((type) => (
-							<button
-								type="button"
-								key={type}
-								data-library-type={type}
-								onPointerDown={(event) => {
-									if (event.button === 0) {
-										suppressClick.current = false;
-										pointer.current = {
-											x: event.clientX,
-											y: event.clientY,
-											active: false,
-											start: () => beginDrag(type),
-										};
-									}
-								}}
-								onClick={(event) => {
-									if (suppressClick.current && event.detail > 0) {
-										suppressClick.current = false;
-										return;
-									}
-									beginDrag(type);
-								}}
-								aria-pressed={dragging?.library === type}
-							>
-								{keyText(type, locale)}
-							</button>
-						))}
-				</div>
-			</section>
+			<FunctionLibrary
+				locale={locale}
+				pageNumber={profile.pages.indexOf(page) + 1}
+				sequence={selection?.key.config.type === "multiActions"}
+				dragging={dragging?.library}
+				onActivate={onActivate}
+				onPointerDown={(event, entry) => {
+					if (
+						event.button === 0 &&
+						selection?.key.config.type !== "multiActions"
+					) {
+						suppressClick.current = false;
+						pointer.current = {
+							x: event.clientX,
+							y: event.clientY,
+							active: false,
+							start: () => beginLibrary(entry),
+						};
+					}
+				}}
+				onChoose={(event, entry) => {
+					if (suppressClick.current && event.detail > 0) {
+						suppressClick.current = false;
+						return;
+					}
+					if (entry.activation) onActivate(entry.activation);
+					else beginLibrary(entry);
+				}}
+			/>
 			<fieldset
 				className="keys-preview"
 				onPointerDownCapture={(event) => {

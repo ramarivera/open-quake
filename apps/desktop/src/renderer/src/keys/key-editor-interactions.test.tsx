@@ -14,6 +14,10 @@ import {
 	KeyRuntime,
 	KeyRuntimePort,
 } from "../../../../../../packages/device/src/actions/key-runtime-service";
+import {
+	AppLibrarySnapshot,
+	defaultAppLibrary,
+} from "../../../../../../packages/device/src/profiles/app-library";
 import { KeyEditing } from "../../../../../../packages/device/src/profiles/key-editing-service";
 import {
 	builtinProfiles,
@@ -54,7 +58,6 @@ import {
 } from "../strip/overlays/voice/voice-context";
 import { StripScreen } from "../strip/StripScreen";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
-
 import { KeyEditor } from "./KeyEditor";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -163,6 +166,15 @@ async function fixture(
 		const operation = Effect.gen(function* () {
 			const editing = yield* KeyEditing;
 			switch (command.type) {
+				case "app-library.read":
+					return {
+						_tag: "success",
+						appLibrary: Schema.encodeSync(AppLibrarySnapshot)({
+							version: 1,
+							revision: 1,
+							groups: defaultAppLibrary(),
+						}),
+					} as const;
 				case "select":
 					yield* ProfileService.selectProfile({
 						deviceId: command.deviceId,
@@ -1513,4 +1525,110 @@ it("MGMT-061 clock theme refresh keeps the mounted selection and reads the saved
 	);
 	await click(button(f.host, "1,1"));
 	expect(f.host.querySelector("#key-title")).toBeNull();
+});
+
+it("MGMT-386/387/388 places reusable presets through validated profile publication without consuming the library", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "apps:Discord:2", "1,2");
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,2")
+				?.config.actions,
+		).toEqual([{ type: "key", value: "control+alt+leftbracket" }]),
+	);
+	await click(
+		query(
+			f.host,
+			".keys-cells button[data-drop-code='1,2']",
+			HTMLButtonElement,
+		),
+	);
+	// Clicking the selected key clears selection, restoring the ordinary library.
+	await libraryPlace(f.host, "apps:Premiere Pro:4", "2,5");
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "2,5")
+				?.config.actions,
+		).toEqual([
+			{ type: "key", value: "alt+left" },
+			{ type: "key", value: "alt+right" },
+		]),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "2,5")
+			?.config.supportKnob,
+	).toBe(true);
+	expect(
+		f.host.querySelector('[data-library-type="apps:Premiere Pro:3"]'),
+	).not.toBeNull();
+	expect(defaultAppLibrary()[1]?.children[4]?.keyCode).toBe("1,4");
+});
+it("MGMT-109/124 generated placement confirms replacements and refuses locked return cells", async () => {
+	vi.stubGlobal("quakeIntegrations", {
+		request: async () => ({
+			type: "libraries",
+			libraries: [
+				{
+					id: "g",
+					name: "Generated",
+					app: "Editor",
+					createdAt: "now",
+					rows: [{ id: "r", name: "Save", app: "Editor", chord: "control+s" }],
+				},
+			],
+		}),
+	});
+	const f = await gridFixture([
+		gridKey("1,1"),
+		gridKey("1,2", "back"),
+		gridKey("1,3", "hotkey", { basicEditableItems: { allowDrag: false } }),
+	]);
+	await pointerMove(
+		f.host,
+		query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+		"1,1",
+	);
+	await settle(() =>
+		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
+	);
+	expect(f.stored().profiles[0].pages[0].keys[0]?.config.actions).toEqual([
+		{ type: "key", value: "a" },
+	]);
+	await click(button(f.host, "Cancel"));
+	expect(f.stored().profiles[0].revision).toBe(0);
+	for (const code of ["1,2", "1,3"]) {
+		await pointerMove(
+			f.host,
+			query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+			code,
+		);
+		expect(f.stored().profiles[0].revision).toBe(0);
+	}
+	await pointerMove(
+		f.host,
+		query(f.host, '[data-library-type="generated:g:r"]', HTMLButtonElement),
+		"1,1",
+	);
+	await settle(() =>
+		expect(f.host.querySelector('[role="alertdialog"]')).not.toBeNull(),
+	);
+	await click(button(f.host, "Confirm Replace"));
+	await settle(() =>
+		expect(
+			f.stored().profiles[0].pages[0].keys.find((key) => key.keyCode === "1,1")
+				?.config.actions,
+		).toEqual([{ type: "key", value: "control+s" }]),
+	);
+});
+it("MGMT-109 registry placement retains OBS default locks rather than empty-cell defaults", async () => {
+	const f = await gridFixture([]);
+	await libraryPlace(f.host, "obsStats", "1,1");
+	await settle(() =>
+		expect(f.stored().profiles[0].pages[0].keys[0]?.config.size).toEqual([
+			2, 1,
+		]),
+	);
+	expect(
+		f.stored().profiles[0].pages[0].keys[0]?.config.basicEditableItems,
+	).toMatchObject({ title: false, grid: false, icon: false });
 });

@@ -33,6 +33,7 @@ import {
 	type EmojiReply,
 	EmojiRequest,
 } from "../../shared/emoji";
+import { KEY_LIBRARY_CHANGED } from "../../shared/key-library";
 import { selectStripPage } from "../../shared/strip-selection";
 import type { DeviceBus } from "../deviceBus";
 import type { DesktopDiagnostics } from "../diagnostics";
@@ -284,6 +285,13 @@ export function prepareEmoji<R>(options: {
 								}),
 							),
 						);
+						if (
+							result._tag === "ready" &&
+							!["read", "asset", "installed-apps", "pick-app"].includes(
+								decoded.value.type,
+							)
+						)
+							options.management().webContents.send(KEY_LIBRARY_CHANGED);
 						return result;
 					}),
 			);

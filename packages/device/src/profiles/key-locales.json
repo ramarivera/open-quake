@@ -179,7 +179,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4-cell",
 		"shortcutGrid.expandConflict": "Expansion area already occupied by {name} shortcut. Cannot switch to {layout} layout. Please adjust adjacent shortcuts first.",
 		"shortcutGrid.expandConflictTitle": "Insufficient Space",
-		"shortcutGrid.switchLayoutSuccess": "Switched to {layout} layout"
+		"shortcutGrid.switchLayoutSuccess": "Switched to {layout} layout",
+		"searchPlaceholder": "Please enter content",
+		"shortcut": "Quick",
+		"multiMedia": "Multi Media",
+		"deviceControl": "Device Control",
+		"decoKeeAI": "DK-Quake",
+		"system": "System",
+		"navigation": "Navigation",
+		"delayed": "Delayed",
+		"aiPluginManager.emoji": "Emoji"
 	},
 	"zh": {
 		"editor.titleStyle": "标题样式",
@@ -361,7 +370,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4宫格",
 		"shortcutGrid.expandConflict": "欲扩展区域已存在{name}快捷键，空间不足，无法设置为{layout}布局。请先调整相邻键位后再尝试。",
 		"shortcutGrid.expandConflictTitle": "空间不足",
-		"shortcutGrid.switchLayoutSuccess": "已切换为{layout}布局"
+		"shortcutGrid.switchLayoutSuccess": "已切换为{layout}布局",
+		"searchPlaceholder": "请输入内容",
+		"shortcut": "快捷操作",
+		"multiMedia": "多媒体",
+		"deviceControl": "设备控制",
+		"decoKeeAI": "DK-Quake",
+		"system": "系统",
+		"navigation": "导航",
+		"delayed": "延时",
+		"aiPluginManager.emoji": "表情包"
 	},
 	"de": {
 		"editor.titleStyle": "Titelstil",
@@ -543,7 +561,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4-Zelle",
 		"shortcutGrid.expandConflict": "Erweiterungsbereich bereits durch {name}-Verknüpfung belegt. Kann nicht auf {layout} Layout umschalten. Bitte passen Sie zuerst angrenzende Verknüpfungen an.",
 		"shortcutGrid.expandConflictTitle": "Platzmangel",
-		"shortcutGrid.switchLayoutSuccess": "Auf {layout} Layout umgeschaltet"
+		"shortcutGrid.switchLayoutSuccess": "Auf {layout} Layout umgeschaltet",
+		"searchPlaceholder": "Bitte Inhalt eingeben",
+		"shortcut": "Schnell",
+		"multiMedia": "Multimedia",
+		"deviceControl": "Gerätesteuerung",
+		"decoKeeAI": "DK-Quake",
+		"system": "System",
+		"navigation": "Navigation",
+		"delayed": "Verzögert",
+		"aiPluginManager.emoji": "Emoji"
 	},
 	"es": {
 		"editor.titleStyle": "Estilo del título",
@@ -725,7 +752,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4 celdas",
 		"shortcutGrid.expandConflict": "El área de expansión ya está ocupada por un acceso directo {name}. No se puede cambiar al diseño {layout}. Ajuste primero los accesos directos adyacentes.",
 		"shortcutGrid.expandConflictTitle": "Espacio insuficiente",
-		"shortcutGrid.switchLayoutSuccess": "Cambiado al diseño {layout}"
+		"shortcutGrid.switchLayoutSuccess": "Cambiado al diseño {layout}",
+		"searchPlaceholder": "Por favor ingrese contenido",
+		"shortcut": "Rápido",
+		"multiMedia": "Multimedia",
+		"deviceControl": "Control de dispositivo",
+		"decoKeeAI": "DK-Quake",
+		"system": "Sistema",
+		"navigation": "Navegación",
+		"delayed": "Retrasado",
+		"aiPluginManager.emoji": "Emoji"
 	},
 	"fr": {
 		"editor.titleStyle": "Style du titre",
@@ -907,7 +943,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4 cellules",
 		"shortcutGrid.expandConflict": "La zone d'extension est déjà occupée par un raccourci {name}. Impossible de passer à la disposition {layout}. Veuillez d'abord ajuster les raccourcis adjacents.",
 		"shortcutGrid.expandConflictTitle": "Espace insuffisant",
-		"shortcutGrid.switchLayoutSuccess": "Passé à la disposition {layout}"
+		"shortcutGrid.switchLayoutSuccess": "Passé à la disposition {layout}",
+		"searchPlaceholder": "Veuillez entrer le contenu",
+		"shortcut": "Rapide",
+		"multiMedia": "Multimédia",
+		"deviceControl": "Contrôle de l'appareil",
+		"decoKeeAI": "DK-Quake",
+		"system": "Système",
+		"navigation": "Navigation",
+		"delayed": "Retardé",
+		"aiPluginManager.emoji": "Emoji"
 	},
 	"it": {
 		"editor.titleStyle": "Stile del titolo",
@@ -1089,7 +1134,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4 celle",
 		"shortcutGrid.expandConflict": "L'area di espansione è già occupata da un collegamento {name}. Impossibile passare al layout {layout}. Regolare prima i collegamenti adiacenti.",
 		"shortcutGrid.expandConflictTitle": "Spazio insufficiente",
-		"shortcutGrid.switchLayoutSuccess": "Passato al layout {layout}"
+		"shortcutGrid.switchLayoutSuccess": "Passato al layout {layout}",
+		"searchPlaceholder": "Inserisci contenuto",
+		"shortcut": "Rapido",
+		"multiMedia": "Multimedia",
+		"deviceControl": "Controllo dispositivo",
+		"decoKeeAI": "DK-Quake",
+		"system": "Sistema",
+		"navigation": "Navigazione",
+		"delayed": "Ritardato",
+		"aiPluginManager.emoji": "Emoji"
 	},
 	"ja": {
 		"editor.titleStyle": "タイトルのスタイル",
@@ -1271,7 +1325,16 @@
 		"shortcutGrid.sizeConflict.4cell": "4セル",
 		"shortcutGrid.expandConflict": "拡張エリアに既に{name}のショートカットが存在します。{layout}レイアウトに変更できません。隣接するショートカットを先に調整してください。",
 		"shortcutGrid.expandConflictTitle": "スペース不足",
-		"shortcutGrid.switchLayoutSuccess": "{layout}レイアウトに切り替えました"
+		"shortcutGrid.switchLayoutSuccess": "{layout}レイアウトに切り替えました",
+		"searchPlaceholder": "内容を入力してください",
+		"shortcut": "クイック",
+		"multiMedia": "マルチメディア",
+		"deviceControl": "デバイス制御",
+		"decoKeeAI": "DK-Quake",
+		"system": "システム",
+		"navigation": "ナビゲーション",
+		"delayed": "遅延",
+		"aiPluginManager.emoji": "絵文字"
 	},
 	"ko": {
 		"editor.titleStyle": "제목 스타일",
@@ -1453,6 +1516,15 @@
 		"shortcutGrid.sizeConflict.4cell": "4셀",
 		"shortcutGrid.expandConflict": "확장 영역에 이미 {name} 바로가기가 있습니다. {layout} 레이아웃으로 변경할 수 없습니다. 인접한 바로가기를 먼저 조정하세요.",
 		"shortcutGrid.expandConflictTitle": "공간 부족",
-		"shortcutGrid.switchLayoutSuccess": "{layout} 레이아웃으로 전환됨"
+		"shortcutGrid.switchLayoutSuccess": "{layout} 레이아웃으로 전환됨",
+		"searchPlaceholder": "내용을 입력하세요",
+		"shortcut": "빠른",
+		"multiMedia": "멀티미디어",
+		"deviceControl": "장치 제어",
+		"decoKeeAI": "DK-Quake",
+		"system": "시스템",
+		"navigation": "탐색",
+		"delayed": "지연됨",
+		"aiPluginManager.emoji": "이모지"
 	}
 }

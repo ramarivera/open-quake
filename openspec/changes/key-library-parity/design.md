@@ -30,3 +30,12 @@ Add optional title metadata without rewriting old profiles. Retain compatibility
 ## Live integration acceptance follow-up
 
 The shared key runtime offers an optional host-owned key execution port after committed selection, revision, visibility and compatibility checks. Desktop composition binds Home Assistant keys to the existing direct integration consumer. The integration retains entity/service validation and its credential store; AI allowlist policy remains specific to AI-originated calls. The mock-device port never invokes external integration actions.
+
+
+## app-library burn-down integration
+
+The grouped FunctionLibrary replaces GridEditor's flat button list. GridEditor's single gesture, revision, footprint, confirmation and save path stays canonical for function templates, app presets, generated shortcuts and emoji keys. Registry construction preserves config defaults before presentation fields. App snapshots use a versioned main-owned local file and the existing authorized key request semaphore. Shortcut and emoji mutation replies notify the management library; refresh generations reject obsolete replies. Legacy AI-plugin JSON is parsed as inert data and excludes the four recovered placeholders.
+
+Preset identity is the group plus child index, independent of its old grid anchor. This retains both Premiere entries at 1,4. Chords use the existing finite grammar: brackets/minus/equal get canonical names and modifiers use the project order. Default labels inject only into matching group/anchor/title fingerprints in memory. Imported gameMode locks reapply by childrenName without weakening stricter user permissions. Game Mode execution remains owned by the strip/game runtime lane; its preset preserves the unsupported marker until that runtime supports it. Unsupported sequence/plugin operations remain visible but disabled rather than bypassing the existing executable contract.
+
+The recovered MULTIACTIONS_SIDEBAR has 21 active entries including cmd. playAudio is block-commented; playAudioLegacy is active. No audio, microphone, shell, plugin or external-provider runtime is added by this catalog work. Shared-file changes are limited to routing management activation, notifications and the existing IPC contract; KeyEditor and keys.css keep their established editing/layout responsibilities.
