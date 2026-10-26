@@ -10,7 +10,7 @@ import { useAppLocale } from "../i18n";
 import { meetingFailure } from "./meeting-failure";
 
 interface MeetingView {
-	readonly errorCode?: string;
+	readonly errorCode?: string | undefined;
 	readonly snapshot: MeetingSnapshot | undefined;
 	readonly error: string;
 	readonly failureVersion: number;

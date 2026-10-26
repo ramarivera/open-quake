@@ -116,9 +116,11 @@ it.each(["pcm", "audio"] as const)(
 		const directory = await meetingDirectory(root, id);
 		try {
 			await writeFile(join(directory, "final_recording.mp3"), "fake audio");
-			const audio = await Effect.runPromise(
-				meetingResources(root, "fake-ffmpeg")[mode](id),
-			);
+			const acquire: Effect.Effect<
+				{ readonly release: Effect.Effect<void> },
+				unknown
+			> = meetingResources(root, "fake-ffmpeg")[mode](id);
+			const audio = await Effect.runPromise(acquire);
 			await Effect.runPromise(audio.release);
 			expect(await readdir(directory)).toEqual(["final_recording.mp3"]);
 		} finally {
@@ -141,9 +143,11 @@ it.each(["pcm", "audio"] as const)(
 			const entered = new Promise<void>((resolve) => {
 				converter.entered = resolve;
 			});
-			const fiber = Effect.runFork(
-				meetingResources(root, "fake-ffmpeg")[mode](id),
-			);
+			const acquire: Effect.Effect<
+				{ readonly release: Effect.Effect<void> },
+				unknown
+			> = meetingResources(root, "fake-ffmpeg")[mode](id);
+			const fiber = Effect.runFork(acquire);
 			await entered;
 			await Effect.runPromise(Fiber.interrupt(fiber));
 			expect(converter.aborted).toBe(true);

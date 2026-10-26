@@ -1348,7 +1348,8 @@ it.scoped(
 							: f.http.fetch(url, init),
 				},
 			});
-			yield* adapter.cleanup?.("meeting");
+			if (!adapter.cleanup) throw new Error("Missing cleanup operation");
+			yield* adapter.cleanup("meeting");
 			expect(
 				f.requests.filter((r) => r.init.method === "DELETE").map((r) => r.url),
 			).toEqual(["http://127.0.0.1:1234/api/v1/files/owned-file"]);
@@ -1485,7 +1486,8 @@ it.scoped(
 			});
 			yield* adapter.cancel("meeting");
 			expect(f.states.get("meeting")?.task).toBe("running");
-			yield* adapter.cleanup?.("meeting");
+			if (!adapter.cleanup) throw new Error("Missing cleanup operation");
+			yield* adapter.cleanup("meeting");
 			expect(f.states.get("meeting")?.remoteFiles).toEqual([]);
 			expect(f.states.get("meeting")?.task).toBeUndefined();
 		}),
