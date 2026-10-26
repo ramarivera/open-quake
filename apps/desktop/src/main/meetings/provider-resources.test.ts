@@ -2,10 +2,15 @@ import type { SpawnOptions } from "node:child_process";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Either, Stream } from "effect";
+import { Effect, Either, Fiber, Stream } from "effect";
 import { expect, it, vi } from "vitest";
 
-const converter = vi.hoisted(() => ({ failure: "corrupt", attempts: 0 }));
+const converter = vi.hoisted(() => ({
+	failure: "corrupt",
+	attempts: 0,
+	entered: () => {},
+	aborted: false,
+}));
 vi.mock("node:child_process", async () => {
 	const { EventEmitter } = await import("node:events");
 	return {
@@ -14,7 +19,22 @@ vi.mock("node:child_process", async () => {
 				const child = new EventEmitter();
 				converter.attempts++;
 				queueMicrotask(() => {
-					if (
+					if (converter.failure === "blocked") {
+						const output = args.at(-1);
+						if (!output) throw new Error("Missing output");
+						void writeFile(output, new Uint8Array([1, 2])).then(() =>
+							converter.entered(),
+						);
+						options.signal?.addEventListener(
+							"abort",
+							() => {
+								converter.aborted = true;
+								child.emit("error", new Error("aborted"));
+								child.emit("close", 1);
+							},
+							{ once: true },
+						);
+					} else if (
 						converter.failure === "slow" &&
 						options.timeout &&
 						options.timeout < 121000
@@ -100,6 +120,33 @@ it.each(["pcm", "audio"] as const)(
 				meetingResources(root, "fake-ffmpeg")[mode](id),
 			);
 			await Effect.runPromise(audio.release);
+			expect(await readdir(directory)).toEqual(["final_recording.mp3"]);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	},
+);
+
+it.each(["pcm", "audio"] as const)(
+	"cancels real resource %s conversion and removes partial output",
+	async (mode) => {
+		converter.failure = "blocked";
+		converter.attempts = 0;
+		converter.aborted = false;
+		const root = await mkdtemp(join(tmpdir(), "oq-conversion-abort-"));
+		const id = "00000000-0000-4000-8000-000000000111";
+		const directory = await meetingDirectory(root, id);
+		try {
+			await writeFile(join(directory, "final_recording.mp3"), "fake audio");
+			const entered = new Promise<void>((resolve) => {
+				converter.entered = resolve;
+			});
+			const fiber = Effect.runFork(
+				meetingResources(root, "fake-ffmpeg")[mode](id),
+			);
+			await entered;
+			await Effect.runPromise(Fiber.interrupt(fiber));
+			expect(converter.aborted).toBe(true);
 			expect(await readdir(directory)).toEqual(["final_recording.mp3"]);
 		} finally {
 			await rm(root, { recursive: true, force: true });

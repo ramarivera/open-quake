@@ -1583,3 +1583,56 @@ it("allows a size-appropriate slow recording upload beyond thirty seconds", asyn
 		vi.useRealTimers();
 	}
 });
+
+for (const provider of ["openai", "dashscope"] as const)
+	it.scoped(
+		`interrupts blocked ${provider} conversion and cleans partial resources`,
+		() =>
+			Effect.gen(function* () {
+				const f = fixture();
+				const s = yield* fakeSocket();
+				const entered = yield* Deferred.make<void>();
+				const unblock = yield* Deferred.make<void>();
+				let partial = false;
+				const blocked = Effect.sync(() => {
+					partial = true;
+				}).pipe(
+					Effect.zipRight(Deferred.succeed(entered, undefined)),
+					Effect.zipRight(Deferred.await(unblock)),
+					Effect.zipRight(Effect.fail(meetingError("CaptureFailed"))),
+					Effect.ensuring(
+						Effect.sync(() => {
+							partial = false;
+						}),
+					),
+				);
+				const adapter = yield* makeLiveMeetingAdapter({
+					...f,
+					socket: s.transport,
+					resources: {
+						...f.resources,
+						pcm: () => blocked,
+						audio: () => blocked,
+					},
+				});
+				const job = yield* adapter
+					.submit({
+						...f.request,
+						config: {
+							...f.request.config,
+							asrProvider: provider,
+							asrModel:
+								provider === "openai" ? "gpt-realtime-mini" : FILETRANS_MODEL,
+						},
+					})
+					.pipe(Effect.fork);
+				yield* Deferred.await(entered);
+				yield* Fiber.interruptFork(job);
+				yield* TestClock.adjust(101);
+				const result = yield* Fiber.poll(job);
+				yield* Deferred.succeed(unblock, undefined);
+				yield* Fiber.interrupt(job);
+				expect(Option.isSome(result)).toBe(true);
+				expect(partial).toBe(false);
+			}),
+	);

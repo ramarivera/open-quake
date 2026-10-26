@@ -87,7 +87,7 @@ export function dashscopeFiletrans(options: {
 			if (!key || key.includes("..") || key.length > 2048)
 				return yield* meetingError("TranscriptionFailed");
 			yield* Effect.acquireUseRelease(
-				resources.audio(ref),
+				resources.audio(ref).pipe(Effect.interruptible),
 				({ blob }) =>
 					Effect.gen(function* () {
 						const form = new FormData();

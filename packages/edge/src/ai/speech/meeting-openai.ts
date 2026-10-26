@@ -25,7 +25,7 @@ export const openaiMeeting = (
 	Effect.fn("OpenAIMeeting.transcribe")(function* (request: MeetingAsrRequest) {
 		const connection = yield* resolve(request.config);
 		return yield* Effect.acquireUseRelease(
-			resources.pcm(request.audioRef),
+			resources.pcm(request.audioRef).pipe(Effect.interruptible),
 			(audio) =>
 				withSocket(
 					transport,
