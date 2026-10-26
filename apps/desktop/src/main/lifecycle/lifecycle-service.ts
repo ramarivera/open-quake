@@ -108,9 +108,7 @@ export class DeviceLifecycle extends Effect.Service<DeviceLifecycle>()(
 					if (binding)
 						return edges
 							.displays()
-							.some((d) => d.id === binding.id && isPanelCandidate(d))
-							? binding
-							: undefined;
+							.find((d) => d.id === binding.id && isPanelCandidate(d));
 					return edges.mock && sessions.size <= 1
 						? findPanelDisplay(edges.displays())
 						: undefined;

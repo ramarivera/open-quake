@@ -35,6 +35,7 @@ function withHarness(
 		panels: {
 			serial: string | undefined;
 			id: number | undefined;
+			display: Display | undefined;
 			visible: boolean;
 		}[];
 		dispose: ReturnType<typeof vi.fn>;
@@ -51,6 +52,7 @@ function withHarness(
 		const panels: {
 			serial: string | undefined;
 			id: number | undefined;
+			display: Display | undefined;
 			visible: boolean;
 		}[] = [];
 		const notices: ConnectionDiagnostic[] = [];
@@ -83,7 +85,7 @@ function withHarness(
 				};
 			},
 			panel: (display, visible, _fallback, serial) =>
-				panels.push({ serial, id: display?.id, visible }),
+				panels.push({ serial, id: display?.id, display, visible }),
 			notify: (status) => notices.push(status),
 			disposePanel: dispose,
 			prompts: {
@@ -152,6 +154,52 @@ describe("stable recovery planner", () => {
 	});
 });
 describe("serial lifecycle consumer", () => {
+	it.scoped(
+		"uses live bounds and rotation when one strip moves while another is pairing",
+		() =>
+			withHarness(
+				(h) =>
+					Effect.gen(function* () {
+						yield* h.change([desktop, a]);
+						yield* h.service.onStatus(connected, "a");
+						yield* TestClock.adjust(1);
+						const unidentified = { ...b, label: "Unidentified strip" };
+						yield* h.change([desktop, a, unidentified]);
+						yield* h.service.onStatus(connected, "b");
+						yield* TestClock.adjust(1);
+						expect(h.service.status().checking).toBe(true);
+						const moved = {
+							...a,
+							rotation: 90,
+							size: { width: 480, height: 1920 },
+							bounds: { x: 4000, y: -100, width: 480, height: 1920 },
+						};
+						yield* h.change([desktop, moved], ["bounds", "rotation"]);
+						yield* TestClock.adjust(1);
+						yield* h.change([desktop, moved, unidentified]);
+						yield* TestClock.adjust(1);
+						expect(h.service.status().checking).toBe(false);
+						expect(h.service.status().orientations).toContainEqual(
+							expect.objectContaining({
+								serialNumber: "a",
+								rotation: 90,
+								isVertical: true,
+							}),
+						);
+						expect(
+							h.panels.filter((p) => p.serial === "a" && p.visible).at(-1)
+								?.display,
+						).toEqual(moved);
+					}),
+				{
+					busFor: () => ({
+						on: () => () => {},
+						currentStatus: () => undefined,
+						setScreenPower: () => Effect.succeed(true),
+					}),
+				},
+			),
+	);
 	it.scoped(
 		"MAIN-046 alerts every serial and sequentially binds only the strip powered by that serial",
 		() =>
@@ -329,7 +377,7 @@ describe("serial lifecycle consumer", () => {
 					expect(
 						h.service.status().orientations?.find((o) => o.serialNumber === "a")
 							?.isVertical,
-					).toBe(false);
+					).toBe(true);
 					yield* TestClock.adjust(1);
 					expect(h.service.status().orientations).toMatchObject([
 						{ serialNumber: "a", rotation: 90, isVertical: true },

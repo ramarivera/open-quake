@@ -165,7 +165,11 @@ Diagnostics SHALL project every display's physical bounds using its scale factor
 
 #### Scenario: Rotated strip with mixed DPI
 - **WHEN** a bound serial rotates on a desktop with mixed scale factors and negative display origins
-- **THEN** its orientation snapshot updates after the 1500 ms burst debounce, physical bounds retain their scaled negative origins, and another serial's orientation remains independent
+- **THEN** reads use its live orientation and physical bounds, recovery reassignment waits for the 1500 ms burst debounce, physical bounds retain their scaled negative origins, and another serial's orientation remains independent
+
+#### Scenario: Bound strip moves during another serial's pairing
+- **WHEN** a bound strip changes position or rotation while another serial is pairing
+- **THEN** the first strip's display lookup and the pairing finalizer use the live display metrics, while the saved binding remains separate for recovery
 
 #### Scenario: Wizard owns orientation remediation
 - **WHEN** setup is open with a connected portrait strip
