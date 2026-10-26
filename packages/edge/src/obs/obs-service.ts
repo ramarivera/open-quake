@@ -91,6 +91,8 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 		const connectUnlocked = Effect.fn("ObsService.connectUnlocked")(
 			function* (): Effect.fn.Return<ObsStatus, ObsError> {
 				if (connection?.connected()) return publicStatus();
+				const terminalError = connection?.terminalError();
+				if (terminalError) return yield* terminalError;
 				close();
 				config = yield* repository.read();
 				state = "connecting";
@@ -105,9 +107,14 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 				return publicStatus();
 			},
 		);
+		const observeTerminalClose = Effect.suspend(() => {
+			const error = connection?.terminalError();
+			return error ? failure(error) : Effect.void;
+		});
 		const connect = Effect.fn("ObsService.connect")(
 			(): Effect.Effect<ObsStatus, ObsError> =>
 				Effect.gen(function* () {
+					if (connection?.terminalError()) close();
 					manualDisconnect = false;
 					blocked = false;
 					started = true;
@@ -116,6 +123,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 		);
 		const status = Effect.fn("ObsService.status")(
 			function* (): Effect.fn.Return<ObsStatus, ObsError> {
+				yield* observeTerminalClose;
 				config = yield* repository.read();
 				return publicStatus();
 			},
@@ -179,7 +187,8 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 		const request: ObsRequest = (type, data) =>
 			Effect.suspend(() => {
 				const active = connection;
-				if (!active?.connected()) return Effect.fail(new ObsNetworkFailed());
+				if (!active?.connected())
+					return Effect.fail(active?.terminalError() ?? new ObsNetworkFailed());
 				return Effect.tryPromise({
 					try: (signal) => active.request(type, data, signal),
 					catch: obsBoundaryError,
@@ -201,6 +210,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 					);
 					if (command.type === "obsStats" || command.type === "obsScreenshot")
 						return;
+					yield* observeTerminalClose;
 					if (blocked) return yield* lastError ?? new ObsNetworkFailed();
 					if (manualDisconnect) return yield* new ObsNetworkFailed();
 					yield* connectUnlocked();
@@ -269,6 +279,7 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 		const poll = Effect.fn("ObsService.poll")(
 			(): Effect.Effect<void> =>
 				Effect.gen(function* () {
+					yield* observeTerminalClose;
 					if (!visible.size) return;
 					const now = yield* Clock.currentTimeMillis;
 					if (
@@ -311,7 +322,10 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 										connection.transitioning(),
 									).pipe(
 										Effect.catchAll((error) => {
-											if (error._tag === "ObsNetworkFailed")
+											if (
+												error._tag === "ObsNetworkFailed" ||
+												error._tag === "ObsSessionInvalidated"
+											)
 												return failure(error).pipe(
 													Effect.as(
 														unavailableObsTile(entry.id, entry.command.type),
@@ -443,11 +457,11 @@ export class ObsService extends Effect.Service<ObsService>()("obs/Service", {
 								!connection?.connected() &&
 								(yield* Clock.currentTimeMillis) >= nextRetry
 							) {
-								yield* Effect.suspend(() =>
-									blocked || manualDisconnect || connection?.connected()
-										? Effect.void
-										: connectUnlocked().pipe(Effect.asVoid),
-								).pipe(
+								yield* Effect.gen(function* () {
+									yield* observeTerminalClose;
+									if (!blocked && !manualDisconnect && !connection?.connected())
+										yield* connectUnlocked();
+								}).pipe(
 									Effect.tapError(failure),
 									Effect.ignore,
 									lock.withPermits(1),

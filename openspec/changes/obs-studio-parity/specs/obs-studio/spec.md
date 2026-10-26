@@ -73,3 +73,9 @@ The system SHALL refresh visible OBS status, stats and screenshot tiles every 20
 - **AND** the saved scene remains visible as unavailable alongside replacement scenes
 - **AND** scene commands validate the current scene list and reject missing scenes before target requests or writes
 - **AND** deletion between scene listing and item lookup retains replacement choices
+
+#### Scenario: OBS operator invalidates the session
+- **WHEN** OBS closes an identified connection with SessionInvalidated code 4011
+- **THEN** background retries, tile polls and key execution do not reconnect
+- **AND** pending requests fail with a scrubbed terminal session error
+- **AND** an explicit connection request can establish a new session

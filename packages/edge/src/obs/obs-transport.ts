@@ -7,6 +7,7 @@ import {
 	ObsNetworkFailed,
 	ObsRequestFailed,
 	ObsRpcUnsupported,
+	ObsSessionInvalidated,
 } from "./obs-errors.js";
 
 const record = Schema.Record({ key: Schema.String, value: Schema.Unknown });
@@ -40,6 +41,7 @@ export function openObsConnection(
 			finished = false,
 			closed = false,
 			transition = false;
+		let terminalError: ObsError | undefined;
 		const pending = new Map<
 			string,
 			{
@@ -52,7 +54,7 @@ export function openObsConnection(
 		const rejectPending = () => {
 			for (const item of pending.values()) {
 				item.cleanup();
-				item.reject(new ObsNetworkFailed());
+				item.reject(terminalError ?? new ObsNetworkFailed());
 			}
 			pending.clear();
 		};
@@ -80,11 +82,13 @@ export function openObsConnection(
 		}
 		ws.addEventListener("error", () => fail(new ObsNetworkFailed()));
 		ws.addEventListener("close", (event) => {
+			if (event.code === 4011) terminalError = new ObsSessionInvalidated();
 			if (!finished)
 				fail(
-					event.code === 4009
-						? new ObsAuthenticationFailed()
-						: new ObsNetworkFailed(),
+					terminalError ??
+						(event.code === 4009
+							? new ObsAuthenticationFailed()
+							: new ObsNetworkFailed()),
 				);
 			closed = true;
 			rejectPending();
@@ -144,12 +148,13 @@ export function openObsConnection(
 				signal.removeEventListener("abort", abort);
 				resolve({
 					connected: () => ready && !closed,
+					terminalError: () => terminalError,
 					transitioning: () => transition,
 					close,
 					request: (type, data = {}, requestSignal) =>
 						new Promise((ok, no) => {
 							if (closed || !ready || requestSignal?.aborted) {
-								no(new ObsNetworkFailed());
+								no(terminalError ?? new ObsNetworkFailed());
 								return;
 							}
 							const id = randomUUID();

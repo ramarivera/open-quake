@@ -27,6 +27,11 @@ export const ObsErrors = {
 		"OBS WebSocket v5 is required",
 		"manual",
 	),
+	ObsSessionInvalidated: entry(
+		"OBS.SESSION.INVALIDATED",
+		"OBS disconnected this session. Connect again to resume",
+		"manual",
+	),
 	ObsRequestFailed: entry("OBS.REQUEST.FAILED", "OBS request failed", "manual"),
 	ObsConfigurationRejected: entry(
 		"OBS.CONFIG.REJECTED",
@@ -101,6 +106,16 @@ export class ObsRequestFailed extends Schema.TaggedError<ObsRequestFailed>()(
 		retain(this, cause);
 	}
 }
+export class ObsSessionInvalidated extends Schema.TaggedError<ObsSessionInvalidated>()(
+	"ObsSessionInvalidated",
+	fields(ObsErrors.ObsSessionInvalidated),
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super(props(ObsErrors.ObsSessionInvalidated, cause));
+		retain(this, cause);
+	}
+}
 export class ObsConfigurationRejected extends Schema.TaggedError<ObsConfigurationRejected>()(
 	"ObsConfigurationRejected",
 	fields(ObsErrors.ObsConfigurationRejected),
@@ -125,6 +140,7 @@ export type ObsError =
 	| ObsNetworkFailed
 	| ObsAuthenticationFailed
 	| ObsRpcUnsupported
+	| ObsSessionInvalidated
 	| ObsRequestFailed
 	| ObsConfigurationRejected
 	| ObsStorageFailed;
@@ -132,6 +148,7 @@ export const obsBoundaryError = (cause: unknown): ObsError =>
 	cause instanceof ObsNetworkFailed ||
 	cause instanceof ObsAuthenticationFailed ||
 	cause instanceof ObsRpcUnsupported ||
+	cause instanceof ObsSessionInvalidated ||
 	cause instanceof ObsRequestFailed ||
 	cause instanceof ObsConfigurationRejected ||
 	cause instanceof ObsStorageFailed

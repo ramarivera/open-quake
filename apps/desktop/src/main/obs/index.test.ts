@@ -69,6 +69,7 @@ const fixture = () => {
 		},
 		open: async () => ({
 			connected: () => true,
+			terminalError: () => undefined,
 			transitioning: () => false,
 			request,
 			close: () => {},

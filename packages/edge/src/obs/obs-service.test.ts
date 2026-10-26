@@ -650,3 +650,75 @@ it.scoped(
 			expect(catalog.items).toEqual([]);
 		}),
 );
+
+for (const visible of [false, true]) {
+	it.scoped(
+		"OBS Kick suppresses reconnect and commands until explicit connect, visible=" +
+			visible,
+		() =>
+			Effect.gen(function* () {
+				const f = yield* fixture();
+				yield* f.service.connect();
+				if (visible)
+					yield* f.service.setVisible("panel", [
+						{ id: "1,1", command: command("obsStats") },
+					]);
+				yield* Effect.promise(() => f.server.kick());
+				yield* Effect.promise(
+					() => new Promise<void>((resolve) => setImmediate(resolve)),
+				);
+				yield* TestClock.adjust(10_000);
+				yield* f.service.poll();
+				expect(f.server.connections()).toBe(1);
+				expect(yield* f.service.status()).toMatchObject({
+					state: "failed",
+					code: "OBS.SESSION.INVALIDATED",
+				});
+				const result = yield* Effect.either(
+					f.service.execute(command("obsStream")),
+				);
+				expect(result._tag === "Left" && result.left.code).toBe(
+					"OBS.SESSION.INVALIDATED",
+				);
+				expect(
+					f.server.calls.filter((call) => call.type === "ToggleStream"),
+				).toHaveLength(0);
+				expect(JSON.stringify(yield* f.service.status())).not.toContain(
+					"private operator",
+				);
+				expect((yield* f.service.connect()).state).toBe("connected");
+				yield* f.service.execute(command("obsStream"));
+				expect(f.server.connections()).toBe(2);
+				expect(
+					f.server.calls.filter((call) => call.type === "ToggleStream"),
+				).toHaveLength(1);
+			}),
+	);
+}
+it.scoped(
+	"OBS Kick fails in-flight requests with the terminal error and keeps retries blocked",
+	() =>
+		Effect.gen(function* () {
+			const f = yield* fixture();
+			yield* f.service.connect();
+			f.server.hold(["GetInputVolume"]);
+			const running = yield* f.service
+				.execute(command("obsVolume"), 1)
+				.pipe(Effect.either, Effect.fork);
+			yield* Effect.promise(() =>
+				f.server.waitFor(() =>
+					f.server.calls.some((call) => call.type === "GetInputVolume"),
+				),
+			);
+			yield* Effect.promise(() => f.server.kick());
+			const result = yield* Fiber.join(running);
+			expect(result._tag === "Left" && result.left.code).toBe(
+				"OBS.SESSION.INVALIDATED",
+			);
+			yield* TestClock.adjust(10_000);
+			expect(f.server.connections()).toBe(1);
+			expect(
+				f.server.calls.some((call) => call.type === "SetInputVolume"),
+			).toBe(false);
+		}),
+);

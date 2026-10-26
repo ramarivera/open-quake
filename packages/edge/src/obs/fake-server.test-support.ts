@@ -212,6 +212,15 @@ export async function fakeObsServer(
 		hold: (types: string[]) => {
 			hold = new Set(types);
 		},
+		kick: async () => {
+			await Promise.all(
+				[...clients].map(async (socket) => {
+					const closed = once(socket, "close");
+					socket.close(4011, "do-not-leak private operator reason");
+					await closed;
+				}),
+			);
+		},
 		disconnect: () => {
 			for (const socket of clients) socket.terminate();
 		},

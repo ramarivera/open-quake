@@ -21,4 +21,4 @@
 - [x] 4.3 Authorize panel screenshots against committed active keys, revoke stale leases and retry after Save; regressions for thread 4375829386. Bead open-quake-lih.18.1.11.
 - [x] 4.4 Preserve stale scene targets as unavailable, retain replacement choices and reject missing-scene dispatch; regressions for thread 4375833113. Bead open-quake-lih.18.1.12.
 
-- [ ] 4.5 Honor OBS SessionInvalidated close code 4011 until explicit reconnect; regression for thread 4376190765. Bead open-quake-lih.18.1.13.
+- [x] 4.5 Honor OBS SessionInvalidated close code 4011 until explicit reconnect; regression for thread 4376190765. Bead open-quake-lih.18.1.13.

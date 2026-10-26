@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { ObsCommand } from "../../../device/src/actions/obs-contracts.js";
+import type { ObsError } from "./obs-errors.js";
 
 export const ObsHost = Schema.NonEmptyTrimmedString.pipe(
 	Schema.maxLength(253),
@@ -74,6 +75,7 @@ export const ObsTile = Schema.Struct({
 export type ObsTile = typeof ObsTile.Type;
 export interface ObsConnection {
 	readonly connected: () => boolean;
+	readonly terminalError: () => ObsError | undefined;
 	readonly transitioning: () => boolean;
 	readonly request: (
 		type: string,
