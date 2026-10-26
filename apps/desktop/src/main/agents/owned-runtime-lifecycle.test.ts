@@ -77,3 +77,29 @@ it.effect(
 			expect(f.runCommand).toHaveBeenCalledTimes(1);
 		}),
 );
+
+it.effect(
+	"4381279385 Stop retries failed tree cleanup even if the shim exits later",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			yield* f.backend.start;
+			f.runCommand
+				.mockRejectedValueOnce(new Error("fake failure"))
+				.mockRejectedValueOnce(new Error("fake failure"));
+			expect(yield* f.backend.stop.pipe(Effect.either)).toMatchObject({
+				_tag: "Left",
+				left: { code: "AGENT.RUNTIME.FAILED" },
+			});
+			f.close();
+			yield* Effect.promise(() => Promise.resolve());
+			yield* f.backend.stop;
+			expect(f.runCommand).toHaveBeenCalledTimes(3);
+			expect(f.runCommand.mock.calls[2]?.[1]).toEqual([
+				"/PID",
+				"4321",
+				"/T",
+				"/F",
+			]);
+		}),
+);

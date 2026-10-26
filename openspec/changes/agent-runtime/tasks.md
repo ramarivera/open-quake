@@ -59,3 +59,4 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 
 ## PR122 review fix round
 - [x] R.1 Separate cleanup ownership from live readiness and retain early-exited Windows trees. CENTER-047, MAIN-144, 4381279137; bead `open-quake-lih.17.24.1`.
+- [x] R.2 Prove late processor exit cannot erase failed tree-cleanup ownership. CENTER-047, MAIN-144, 4381279385; same bead.
