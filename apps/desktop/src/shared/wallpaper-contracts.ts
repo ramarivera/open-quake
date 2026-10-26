@@ -63,6 +63,7 @@ export const WallpaperSnapshot = Schema.Struct({
 		}),
 	),
 	playbackId: Schema.optional(Revision),
+	playbackStartedAt: Schema.optional(Schema.Number.pipe(Schema.finite())),
 	activeIndex: Schema.optional(Schema.Int.pipe(Schema.nonNegative())),
 	recovered: Schema.Boolean,
 	normalizedFileUrl: Schema.Boolean,

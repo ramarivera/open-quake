@@ -174,3 +174,8 @@ The shared media controller SHALL advance videos at their metadata duration in m
 
 - **WHEN** a two-item playlist contains two 2500 ms videos
 - **THEN** selection changes at 2500 ms and 5000 ms and continues every 2500 ms without rounding or drift
+
+#### Scenario: Late video mount
+
+- **WHEN** the panel enters vivid mode or a management preview mounts 50 seconds into a running 60-second video interval
+- **THEN** its video seeks to the controller's elapsed position after metadata loads and the existing playlist deadline stays unchanged

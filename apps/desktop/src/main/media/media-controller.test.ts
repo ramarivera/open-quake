@@ -51,14 +51,26 @@ it.scoped(
 				),
 			);
 			yield* controller.request({ _tag: "select", serial: "A" });
+			expect(yield* controller.request({ _tag: "read" })).toMatchObject({
+				playbackStartedAt: 0,
+			});
+			shown.pop();
 			const ticks = yield* Effect.forkScoped(controller.ticks);
 			yield* TestClock.adjust(2499);
 			expect(shown).toEqual([{ index: 0, at: 0 }]);
+			expect(yield* controller.request({ _tag: "read" })).toMatchObject({
+				playbackStartedAt: 0,
+			});
+			shown.pop();
 			yield* TestClock.adjust(1);
 			expect(shown).toEqual([
 				{ index: 0, at: 0 },
 				{ index: 1, at: 2500 },
 			]);
+			expect(yield* controller.request({ _tag: "read" })).toMatchObject({
+				playbackStartedAt: 2500,
+			});
+			shown.pop();
 			yield* TestClock.adjust(2499);
 			expect(shown).toHaveLength(2);
 			yield* TestClock.adjust(1);

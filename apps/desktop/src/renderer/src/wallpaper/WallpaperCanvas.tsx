@@ -23,8 +23,18 @@ export function WallpaperCanvas({
 			? asset.dataUrl
 			: undefined;
 	const playback = useMemo(
-		() => ({ url: videoUrl, id: snapshot?.playbackId }),
-		[videoUrl, snapshot?.playbackId],
+		() => ({
+			url: videoUrl,
+			id: snapshot?.playbackId,
+			startedAt: snapshot?.playbackStartedAt,
+			loop: snapshot?.saved.settings.displayMediaList.length === 1,
+		}),
+		[
+			videoUrl,
+			snapshot?.playbackId,
+			snapshot?.playbackStartedAt,
+			snapshot?.saved.settings.displayMediaList.length,
+		],
 	);
 	const playbackKey = JSON.stringify([
 		snapshot?.saved.serial,
@@ -34,8 +44,22 @@ export function WallpaperCanvas({
 	useEffect(() => {
 		const element = video.current;
 		if (!element || !playback.url) return;
-		void element.play().catch(() => undefined);
+		const start = () => {
+			if (playback.startedAt !== undefined) {
+				const elapsed = Math.max(0, (Date.now() - playback.startedAt) / 1000);
+				element.currentTime =
+					Number.isFinite(element.duration) && element.duration > 0
+						? playback.loop
+							? elapsed % element.duration
+							: Math.min(elapsed, element.duration)
+						: elapsed;
+			}
+			void element.play().catch(() => undefined);
+		};
+		if (element.readyState >= 1) start();
+		else element.addEventListener("loadedmetadata", start, { once: true });
 		return () => {
+			element.removeEventListener("loadedmetadata", start);
 			element.pause();
 			element.removeAttribute("src");
 			element.load();
@@ -83,7 +107,6 @@ export function WallpaperCanvas({
 							key={playbackKey}
 							ref={video}
 							src={videoUrl}
-							autoPlay
 							playsInline
 							muted={!sound || !snapshot?.saved.settings.enableSound}
 							loop={snapshot?.saved.settings.displayMediaList.length === 1}

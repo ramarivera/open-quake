@@ -110,3 +110,9 @@ with the real panel getter. It failed on 0089fdd because cleanup accessed destro
 web contents. Comparing BrowserWindow identity fixes shutdown while preserving
 hide revocation. The affected media and desktop lifecycle suites pass 77 tests;
 desktop types, build and both bundle scenarios pass afterward.
+
+## PR79 final cleanup
+
+- [x] 5.9 Publish the controller's item start time and seek late-mounted panel/preview videos after metadata loads; cover unchanged deadlines and singleton wrapping. Evidence: WIDGETS-130; open-quake-lih.19.9, review 4376428352.
+
+Final playback verification: controller timestamp and both late-mount regressions fail before the fix and pass afterward. The 56 focused media/wallpaper tests, desktop typecheck and production build pass. Hidden mock native smoke passes including late panel reload timing; screenshots and logs stay in the external lane scratch directory under wallpaper-soundboard/final. No hardware, DK-Suite or audible playback.

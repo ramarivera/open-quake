@@ -791,6 +791,27 @@ async function smoke(): Promise<void> {
 				advanced: true,
 				ready: true,
 			});
+			// A late panel mount must join the controller's existing playback position.
+			const running = await request(management, { _tag: "read" });
+			assert.notEqual(running.playbackStartedAt, undefined);
+			await panel.reload();
+			await settle(1200);
+			const timing: { position: number; duration: number } =
+				await panel.webContents.executeJavaScript(`(() => {
+        const video = document.querySelector('.wallpaper-canvas video');
+        return { position: video?.currentTime, duration: video?.duration };
+      })()`);
+			const stillRunning = await request(management, { _tag: "read" });
+			assert.equal(stillRunning.playbackStartedAt, running.playbackStartedAt);
+			assert.equal(stillRunning.playbackId, running.playbackId);
+			const expected =
+				((Date.now() - (running.playbackStartedAt ?? 0)) / 1000) %
+				timing.duration;
+			const drift = Math.abs(timing.position - expected);
+			assert(
+				Math.min(drift, timing.duration - drift) < 0.7,
+				`Late mount drift ${drift}s`,
+			);
 			assert.equal(panel.webContents.isAudioMuted(), true);
 			assert.equal(management.webContents.isAudioMuted(), true);
 			process.stdout.write(
