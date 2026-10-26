@@ -17,6 +17,7 @@ import {
 	nativeTheme,
 	shell,
 } from "electron";
+import { builtinProfiles } from "../../../../../packages/device/src/profiles/profile-catalog";
 import {
 	Profile,
 	ProfileEnvelope,
@@ -36,6 +37,7 @@ import { EMOJI_REQUEST, EmojiReply } from "../../shared/emoji";
 import { encodeGif } from "../../shared/gif";
 import { IntegrationReply } from "../../shared/integrations";
 import { MANAGEMENT_ACTIVATE, MANAGEMENT_THEME } from "../../shared/management";
+import { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { registerAgentHttp } from "../agent-http";
 import { registerAgents } from "../agents";
 import { createModelCredentials } from "../chat/credentials";
@@ -297,11 +299,16 @@ async function smoke() {
 		management: () => win,
 		renderer,
 	});
+	const shortcutDrafts: string[] = [];
 	const integrations = registerIntegrations({
 		panel: () => panel,
 		management: () => win,
 		rendererURL: renderer,
 		profileRuntime: profiles.runtime,
+		draftShortcuts: async (request) => {
+			shortcutDrafts.push(request);
+			return '{"ConfigTitle":"Synthetic","ConfigData":[]}';
+		},
 	});
 	const copiedFiles: string[] = [];
 	let generatedBytes = new Uint8Array();
@@ -1670,6 +1677,326 @@ async function smoke() {
 		win.setContentSize(1320, 960);
 		await settle();
 
+		const selectionBeforeSettings = (
+			await profiles.runtime.runPromise(ProfileService.loadProfiles())
+		).envelope.activeByDevice;
+		await js(
+			"document.querySelector('[data-nav-page=settings]').click();null;",
+		);
+		await waitFor("!!document.querySelector('.maintenance-settings')");
+		assert.deepEqual(
+			(await profiles.runtime.runPromise(ProfileService.loadProfiles()))
+				.envelope.activeByDevice,
+			selectionBeforeSettings,
+			"Settings navigation must preserve every device selection",
+		);
+		// test-host-shell: measure actual Chromium layout after viewport and page transitions.
+		await activate("shortcuts");
+		await waitFor(
+			"!document.querySelector('form button[type=submit]').disabled",
+		);
+		await js(`document.querySelector('input[maxlength="180"]').focus();null;`);
+		await win.webContents.debugger.attach("1.3");
+		try {
+			await win.webContents.debugger.sendCommand("Input.insertText", {
+				text: "Format document",
+			});
+			for (const type of ["keyDown", "char", "keyUp"])
+				await win.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
+					type,
+					key: "Enter",
+					code: "Enter",
+					windowsVirtualKeyCode: 13,
+					...(type === "char" ? { text: "\r" } : {}),
+				});
+		} finally {
+			win.webContents.debugger.detach();
+		}
+		await waitFor(
+			"Array.from(document.querySelectorAll('.content-inner [role=status]')).some(status=>status.textContent.includes('unsupported entries dropped'))",
+		).catch(async (error: unknown) => {
+			process.stderr.write(
+				JSON.stringify({
+					shortcutDrafts,
+					content: await js(
+						"document.querySelector('.content-inner').innerText",
+					),
+				}),
+			);
+			throw error;
+		});
+		assert.deepEqual(shortcutDrafts, ["Adobe Photoshop：Format document"]);
+		for (const width of [700, 1320]) {
+			win.setContentSize(width, 960);
+			await settle();
+			for (const page of ["emoji", "shortcuts", "meetings", "connection"]) {
+				await activate(page);
+				assert.equal(
+					await js(`(()=>{
+					const content=document.querySelector('.content');
+					const rect=content.getBoundingClientRect();
+					return rect.width>200 && rect.height>200 && rect.bottom<=innerHeight+1
+						&& content.scrollWidth<=content.clientWidth+1
+						&& document.documentElement.scrollWidth<=innerWidth+1
+						&& ['auto','scroll'].includes(getComputedStyle(content).overflowY);
+				})()`),
+					true,
+					`${page}/${width} must retain a bounded scrolling page`,
+				);
+				assert.equal(
+					await js(
+						`getComputedStyle(document.querySelector('.mc-titlebar')).getPropertyValue('-webkit-app-region')`,
+					),
+					"drag",
+				);
+				assert.equal(
+					await js(
+						`getComputedStyle(document.querySelector('.mc-menu-button')).getPropertyValue('-webkit-app-region')`,
+					),
+					"none",
+				);
+				if (page === "connection") {
+					for (const channel of ["usb", "hdmi"]) {
+						await js(
+							`document.querySelector('[aria-controls=connection-${channel}]').focus();null;`,
+						);
+						await win.webContents.debugger.attach("1.3");
+						try {
+							await win.webContents.debugger.sendCommand(
+								"Input.dispatchKeyEvent",
+								{
+									type: "keyDown",
+									key: "Enter",
+									code: "Enter",
+									windowsVirtualKeyCode: 13,
+								},
+							);
+							await win.webContents.debugger.sendCommand(
+								"Input.dispatchKeyEvent",
+								{
+									type: "char",
+									key: "Enter",
+									text: "\r",
+									unmodifiedText: "\r",
+									windowsVirtualKeyCode: 13,
+								},
+							);
+							await win.webContents.debugger.sendCommand(
+								"Input.dispatchKeyEvent",
+								{
+									type: "keyUp",
+									key: "Enter",
+									code: "Enter",
+									windowsVirtualKeyCode: 13,
+								},
+							);
+						} finally {
+							win.webContents.debugger.detach();
+						}
+						await waitFor(
+							`document.querySelector('[aria-controls=connection-${channel}]').getAttribute('aria-expanded') === 'true'`,
+						);
+						assert.equal(
+							await js(
+								`(()=>{const button=document.querySelector('[aria-controls=connection-${channel}]');return button.matches(':focus-visible') && getComputedStyle(button).boxShadow !== 'none' && !!document.getElementById('connection-${channel}');})()`,
+							),
+							true,
+						);
+					}
+				}
+				await capture(`host-shell-${width}-${page}`);
+			}
+		}
+		await win.webContents.debugger.attach("1.3");
+		try {
+			await win.webContents.debugger.sendCommand("Emulation.setEmulatedMedia", {
+				features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+			});
+			await waitFor(`matchMedia('(prefers-reduced-motion: reduce)').matches`);
+			await waitFor(`document.documentElement.dataset.motion === 'reduce'`);
+			assert.equal(
+				await js(
+					`getComputedStyle(document.querySelector('.connection-summary')).transitionDuration`,
+				),
+				"0s",
+			);
+		} finally {
+			win.webContents.debugger.detach();
+		}
+		for (const language of ["en", "de"]) {
+			await js(`window.quakeLocale.set(${JSON.stringify(language)})`);
+			await waitFor(
+				`document.documentElement.lang === ${JSON.stringify(language)}`,
+			);
+			await activate("agents");
+			await capture(`host-shell-${language}-agents`);
+			await activate("connection");
+			await capture(`host-shell-${language}-connection`);
+		}
+		await js(`window.quakeLocale.set('en')`);
+		await waitFor(`document.documentElement.lang === 'en'`);
+		assert.equal(
+			await js(
+				`getComputedStyle(document.documentElement).fontFamily.includes('sans-serif')`,
+			),
+			true,
+		);
+		assert.equal(
+			await js(
+				`getComputedStyle(document.querySelector('.mc-titlebar')).userSelect`,
+			),
+			"none",
+		);
+		assert.equal(
+			await js(
+				`getComputedStyle(document.querySelector('.content-inner')).userSelect`,
+			),
+			"auto",
+		);
+		// The actual auxiliary strip renders a streamed link, with global typography and keyboard focus.
+		const beforeAuxiliary = await profiles.runtime.runPromise(
+			ProfileService.loadProfiles(),
+		);
+		const claw = builtinProfiles("darwin").find(
+			(profile) => profile.id === "1-8",
+		);
+		assert(claw);
+		if (
+			!beforeAuxiliary.envelope.profiles.some(
+				(profile) => profile.id === claw.id,
+			)
+		) {
+			await profiles.runtime.runPromise(
+				Effect.flatMap(ProfileRepository, (repository) =>
+					repository.transact((envelope) =>
+						Effect.succeed({
+							...envelope,
+							profiles: [...envelope.profiles, claw],
+						}),
+					),
+				),
+			);
+		}
+		await profiles.runtime.runPromise(
+			ProfileService.selectProfile({
+				deviceId: "desktop-preview",
+				profileId: claw.id,
+				pageId: claw.pages[0].id,
+			}),
+		);
+		const panelWait = async (condition: string) => {
+			const deadline = Date.now() + 8000;
+			while (
+				!(await panel.webContents.executeJavaScript(`Boolean(${condition})`))
+			) {
+				assert(
+					Date.now() < deadline,
+					`Auxiliary state timed out: ${condition}`,
+				);
+				await settle(30);
+			}
+		};
+		await panelWait("!!document.querySelector('.clawbot-input')");
+		const sessionId = "00000000-0000-4000-8000-000000000071";
+		const turnId = "00000000-0000-4000-8000-000000000072";
+		for (const event of [
+			{ _tag: "KeyPress", action: "down" },
+			{
+				_tag: "TurnStarted",
+				sessionId,
+				turnId,
+				prompt: "Link style",
+				source: "typed",
+			},
+			{
+				_tag: "Chunk",
+				chunk: {
+					version: 1,
+					sessionId,
+					turnId,
+					seq: 0,
+					type: "answer",
+					textDelta: "https://example.invalid/docs",
+				},
+			},
+			{
+				_tag: "Chunk",
+				chunk: {
+					version: 1,
+					sessionId,
+					turnId,
+					seq: 1,
+					type: "end",
+					outcome: "completed",
+				},
+			},
+		])
+			await voice.publish(
+				Schema.decodeUnknownSync(VoiceSurfaceEvent)({
+					serial: "desktop-preview",
+					keyCode: "1,5",
+					...event,
+				}),
+			);
+		await panelWait("!!document.querySelector('.clawbot-chip')");
+		assert.equal(
+			await panel.webContents.executeJavaScript(
+				`getComputedStyle(document.documentElement).fontFamily.includes('sans-serif')`,
+			),
+			true,
+		);
+		assert.equal(
+			await panel.webContents.executeJavaScript(
+				`getComputedStyle(document.querySelector('.clawbot-input-box')).userSelect !== 'none'`,
+			),
+			true,
+		);
+		await panel.webContents.executeJavaScript(
+			"document.querySelector('.clawbot-chip').focus();null;",
+		);
+		// Establish keyboard modality in this hidden Chromium window before checking focus-visible.
+		await panel.webContents.debugger.attach("1.3");
+		try {
+			for (const type of ["keyDown", "keyUp"])
+				await panel.webContents.debugger.sendCommand("Input.dispatchKeyEvent", {
+					type,
+					key: "Shift",
+					code: "ShiftLeft",
+					windowsVirtualKeyCode: 16,
+				});
+		} finally {
+			panel.webContents.debugger.detach();
+		}
+		assert.deepEqual(
+			await panel.webContents.executeJavaScript(
+				`(()=>{const link=document.querySelector('.clawbot-chip');return {label:link.querySelector('.clawbot-chip-label').textContent,title:link.title,tabIndex:link.tabIndex,focused:document.activeElement===link,focusVisible:link.matches(':focus-visible'),outlineStyle:getComputedStyle(link).outlineStyle};})()`,
+			),
+			{
+				label: "example.invalid/docs",
+				title: "https://example.invalid/docs",
+				tabIndex: 0,
+				focused: true,
+				focusVisible: true,
+				outlineStyle: "solid",
+			},
+		);
+		await writeFile(
+			join(artifacts, "host-shell-auxiliary-link.png"),
+			(await panel.webContents.capturePage()).toPNG(),
+		);
+		const previousSelection =
+			beforeAuxiliary.envelope.activeByDevice["desktop-preview"];
+		if (previousSelection)
+			await profiles.runtime.runPromise(
+				ProfileService.selectProfile({
+					deviceId: "desktop-preview",
+					...previousSelection,
+				}),
+			);
+		process.stdout.write(
+			"test-host-shell layout PASS: 8 page/width cases, keyboard details/focus, reduced motion, EN/DE.\n",
+		);
+
 		const widthBefore = await js(
 			"document.querySelector('.sidebar').getBoundingClientRect().width",
 		);
@@ -1870,5 +2197,5 @@ void smoke()
 		if (server.listening)
 			await new Promise<void>((done) => server.close(() => done()));
 		await rm(directory, { recursive: true, force: true });
-		app.quit();
+		app.exit(Number(process.exitCode ?? 0));
 	});

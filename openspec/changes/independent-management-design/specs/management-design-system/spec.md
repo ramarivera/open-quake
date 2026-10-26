@@ -15,6 +15,12 @@ The management window SHALL use open-quake's own visual system instead of DK-Sui
 - **WHEN** the theme tests evaluate each built-in palette
 - **THEN** every listed pair meets its contrast minimum
 
+Audit regression coverage: MGMT-004, MGMT-012.
+
+#### Scenario: Shared typography and chrome
+- **WHEN** a management or auxiliary window renders at either supported viewport width
+- **THEN** the platform font fallback, editable text selection, link states and title strip drag exclusions remain usable
+
 ### Requirement: Semantic tokens and shared controls
 The renderer SHALL expose semantic `--oq-*` custom properties for surfaces, lines, text, accent, state, focus, radius, spacing and floating elevation, all derived from the theme contract. The legacy `--mc-*` colour names SHALL resolve to them. Shared controls SHALL provide secondary, primary, quiet and danger buttons; label-above fields; underline tabs that mark the selected tab with the accent; toned badges; and a single bordered in-flow container. An `.mc-panel` section SHALL render without its own border or background, so bordered containers do not nest. Shadows SHALL appear only on floating layers (popovers, menus, dialogs, drawers).
 
@@ -36,6 +42,12 @@ The sidebar SHALL list Overview, then the sections Device (Keys, Knob profiles, 
 #### Scenario: Deep link still selects the page
 - **WHEN** main sends the activation `openclaw-ai`
 - **THEN** the Agents row is current and the AI Config tab is selected
+
+Audit regression coverage: MGMT-013, MGMT-025, MGMT-048.
+
+#### Scenario: Navigate from device settings to the workbench
+- **WHEN** the user selects Agents from the visible management navigation
+- **THEN** the existing management window shows the Agents page and retains the shared title strip at narrow and wide widths
 
 ### Requirement: Narrow navigation drawer
 Below a 760 px window width, the sidebar SHALL collapse into a top bar holding the product name, the current page name and a button labelled "Menu". The button SHALL expose `aria-expanded` and `aria-controls`. Opening it SHALL show the full labelled navigation as a drawer. Choosing a page or pressing Escape SHALL close the drawer and return focus to the Menu button. The window SHALL NOT fall back to icon-only navigation at any width.

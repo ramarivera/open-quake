@@ -25,6 +25,12 @@ The system SHALL present first-run setup until a local completion record is dura
 - **WHEN** a user reopens setup after completion
 - **THEN** existing profiles/settings are loaded and no duplicate profiles are created
 
+Audit regression coverage: MGMT-026.
+
+#### Scenario: Late startup read preserves explicit preview
+- **WHEN** the user explicitly opens Screen before an unfinished setup read completes
+- **THEN** the explicit preview remains selected without requiring a connected device
+
 ### Requirement: Wizard prerequisite handling
 
 The wizard SHALL validate locale, display selection and at least one usable profile before completion, support an explicit desktop-preview choice when QUAKE is absent, and permit supported optional runtime steps to be skipped without blocking local use.
@@ -62,6 +68,12 @@ The system SHALL offer only translated locales, seed an initial suggestion once 
 
 - **WHEN** the user saves an available language
 - **THEN** management and panel labels update and restart retains the selection
+
+Audit regression coverage: MGMT-003.
+
+#### Scenario: Bootstrap and cross-window language race
+- **WHEN** a locale event arrives while the saved locale read is pending
+- **THEN** all subscribed windows show the newer revision, and a late older read cannot revert their language or mounted drafts
 
 ### Requirement: General preferences
 
@@ -160,6 +172,12 @@ Settings SHALL route wallpaper interval/fill/play controls, monitoring, artwork 
 
 - **WHEN** firmware support has not passed its verification gate
 - **THEN** settings show an unavailable update action and start no DFU operation
+
+Audit regression coverage: MGMT-020.
+
+#### Scenario: Visible settings navigation preserves the device
+- **WHEN** the user opens Settings from management
+- **THEN** general and maintenance settings render without changing the selected device
 
 ### Requirement: Compatible authenticated backups
 
