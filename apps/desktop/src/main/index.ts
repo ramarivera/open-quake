@@ -415,6 +415,7 @@ if (!app.requestSingleInstanceLock()) {
 						management: () => managementWin,
 						rendererURL,
 						profileRuntime: profiles.runtime,
+						draftShortcuts: directChat.draftShortcuts,
 					});
 					const emoji = registerEmoji({
 						diagnostics,
@@ -534,7 +535,7 @@ if (!app.requestSingleInstanceLock()) {
 						mock,
 					});
 					const source = mock
-						? startMockHardwareBus()
+						? startMockHardwareBus(process.env.OPEN_QUAKE_E2E_RUN !== "1")
 						: Effect.gen(function* () {
 								const controls = yield* HardwareControls;
 								return yield* startDeviceBus((connection) =>
