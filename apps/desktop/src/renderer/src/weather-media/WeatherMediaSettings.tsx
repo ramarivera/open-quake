@@ -11,13 +11,17 @@ import { rendererWeatherLocale, useWeatherMedia } from "./hooks";
 import { mediaErrorText } from "./PlayerCard";
 import "./weather-media.css";
 
-function SettingsFields({
+export function ClockEnrichmentSettings({
 	initial,
+	onSave,
 }: {
 	initial: WeatherSettings;
+	onSave?: ((patch: Partial<WeatherSettings>) => Promise<boolean>) | undefined;
 }): React.JSX.Element {
 	const { snapshot, client } = useWeatherMedia();
-	const settings = snapshot?.settings ?? initial;
+	const settings = onSave ? initial : (snapshot?.settings ?? initial);
+	const saveHandler = useRef(onSave);
+	saveHandler.current = onSave;
 	const locale = rendererWeatherLocale();
 	const strings = WEATHER_MEDIA_STRINGS[locale].settings;
 	const id = useId();
@@ -31,7 +35,9 @@ function SettingsFields({
 	const [failure, setFailure] = useState(false);
 	const verifier = useRef<CityVerifier | null>(null);
 	const save = (patch: Partial<WeatherSettings>): void => {
-		void client.configure(patch).then((ok) => setFailure(!ok));
+		void (
+			saveHandler.current ? saveHandler.current(patch) : client.configure(patch)
+		).then((ok) => setFailure(!ok));
 	};
 	useEffect(() => {
 		const current = new CityVerifier(
@@ -45,12 +51,10 @@ function SettingsFields({
 			},
 			setStatus,
 			(query, result) => {
-				void client
-					.configure({
-						city: query,
-						location: result?._tag === "matched" ? result.location : null,
-					})
-					.then((ok) => setFailure(!ok));
+				void (saveHandler.current ?? client.configure)({
+					city: query,
+					location: result?._tag === "matched" ? result.location : null,
+				}).then((ok) => setFailure(!ok));
 			},
 		);
 		verifier.current = current;
@@ -76,10 +80,7 @@ function SettingsFields({
 							: "";
 	return (
 		<div className="weather-settings">
-			<Group
-				title={strings.clockWeatherCard}
-				description="Weather and system media cards on your clock."
-			>
+			<Group title={strings.clockWeatherCard} description="">
 				{failure ? (
 					<Callout tone="warning">
 						Settings could not be saved. Please retry.
@@ -105,8 +106,7 @@ function SettingsFields({
 							onChange={(event) => {
 								const query = event.currentTarget.value;
 								setCity(query);
-								if (client.getSnapshot()?.settings.location)
-									save({ location: null });
+								if (settings.location) save({ location: null });
 								verifier.current?.update(query);
 							}}
 						/>
@@ -189,6 +189,8 @@ function SettingsFields({
 						</button>
 					</div>
 				</Row>
+			</Group>
+			<Group title={strings.clockMusicCard}>
 				<Row label={strings.clockMusicEnabled}>
 					<input
 						type="checkbox"
@@ -210,5 +212,7 @@ function SettingsFields({
 }
 export function WeatherMediaSettings(): React.JSX.Element | null {
 	const { snapshot } = useWeatherMedia();
-	return snapshot ? <SettingsFields initial={snapshot.settings} /> : null;
+	return snapshot ? (
+		<ClockEnrichmentSettings initial={snapshot.settings} />
+	) : null;
 }

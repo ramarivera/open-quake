@@ -7,10 +7,13 @@ import {
 } from "../../shared/clock-video-probe";
 
 const PROBE_DOCUMENT = `data:text/html,${encodeURIComponent('<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; media-src oq-clock-media:">')}`;
-const probes = new Set<number>();
+const probes = new Map<number, string>();
 
-export const isClockVideoProbe = (contents: WebContents): boolean =>
-	probes.has(contents.id) && contents.getURL() === PROBE_DOCUMENT;
+export const isClockVideoProbe = (
+	contents: WebContents,
+	url: string,
+): boolean =>
+	probes.get(contents.id) === url && contents.getURL() === PROBE_DOCUMENT;
 
 /** Decode in an isolated, main-owned document with no preload or app bridge. */
 export const probeClockVideo = (
@@ -27,7 +30,7 @@ export const probeClockVideo = (
 				},
 			});
 			const id = window.webContents.id;
-			probes.add(id);
+			probes.set(id, `oq-clock-media://candidate/${token}`);
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			try {
 				const decoded = await Promise.race([

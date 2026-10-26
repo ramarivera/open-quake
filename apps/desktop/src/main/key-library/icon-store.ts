@@ -65,10 +65,10 @@ export function iconStore(path: string) {
 	});
 	const addLocal = Effect.fn("IconRepository.addLocal")(function* (
 		icon: IconAsset,
-	): Effect.fn.Return<void, IconStorageFailed> {
+	): Effect.fn.Return<boolean, IconStorageFailed> {
 		const packs = yield* read();
 		const local = packs.find((p) => p.id === "local");
-		if (local?.icons.some((i) => i.id === icon.id)) return;
+		if (local?.icons.some((i) => i.id === icon.id)) return true;
 		yield* write([
 			...packs.filter((p) => p.id !== "local"),
 			{
@@ -77,6 +77,7 @@ export function iconStore(path: string) {
 				icons: [...(local?.icons ?? []), icon],
 			},
 		]);
+		return false;
 	});
 	return { read, write, add, addLocal };
 }

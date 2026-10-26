@@ -26,10 +26,13 @@ import {
 	ProfileKey,
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
+import { ClockSnapshot } from "../../../shared/clock-contracts";
+import { selectStripPage } from "../../../shared/strip-selection";
 import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
+import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
 import { editableFocus } from "./editor-input";
@@ -41,6 +44,7 @@ import { KeyTitleSettings } from "./KeyTitleSettings";
 import { KnobEditor } from "./KnobEditor";
 import { keyArtwork } from "./key-artwork";
 import { KEY_LOCALE_STORAGE, storedKeyLocale } from "./key-locale";
+import { SelectedKeyPreview } from "./SelectedKeyPreview";
 import { SequenceEditor, withSequenceIds } from "./SequenceEditor";
 import "./keys.css";
 
@@ -53,6 +57,7 @@ type Selection = {
 export function KeyEditor(): React.JSX.Element {
 	const { snapshot: wallpaper } = useWallpaper();
 	const serial = wallpaper?.saved.serial ?? "desktop-preview";
+	const [mirrorPressed, setMirrorPressed] = useState<string>();
 	const [envelope, setEnvelope] = useState<ProfileEnvelope>(),
 		[profileId, setProfileId] = useState(""),
 		[pageId, setPageId] = useState(""),
@@ -118,6 +123,98 @@ export function KeyEditor(): React.JSX.Element {
 				});
 		};
 	}, [accept]);
+	const publishedSelection = useRef<
+		| {
+				serial: string;
+				profileId: string;
+				pageId: string;
+		  }
+		| undefined
+	>(undefined);
+	useEffect(() => {
+		if (saving || !envelope) return;
+		const { profile, page } = selectStripPage(envelope, serial);
+		const previous = publishedSelection.current;
+		if (
+			previous?.serial === serial &&
+			previous.profileId === profile.id &&
+			previous.pageId === page.id
+		)
+			return;
+		publishedSelection.current = {
+			serial,
+			profileId: profile.id,
+			pageId: page.id,
+		};
+		const draft = current.current;
+		if (
+			draft &&
+			(previous?.serial !== serial ||
+				draft.target.profileId !== profile.id ||
+				draft.target.pageId !== page.id)
+		)
+			void revert();
+		setProfileId(profile.id);
+		setPageId(page.id);
+	}, [envelope, serial, saving, revert]);
+
+	useEffect(
+		() =>
+			window.quakeClock?.onSnapshot((input) => {
+				if (!Schema.is(ClockSnapshot)(input) || !input.target || !input.change)
+					return;
+				const target = input.target;
+				const old = current.current;
+				if (
+					!old ||
+					old.target.profileId !== target.profileId ||
+					input.revision <= old.target.revision
+				)
+					return;
+				const matches =
+					old.target.pageId === target.pageId &&
+					old.target.keyCode === target.keyCode;
+				const next = {
+					...old,
+					key: matches ? patchClockEditorKey(old.key, input) : old.key,
+					savedKey: matches
+						? patchClockEditorKey(old.savedKey, input)
+						: old.savedKey,
+					target: { ...old.target, revision: input.revision },
+				};
+				current.current = next;
+				setSelection(next);
+				setEnvelope((envelope) =>
+					!envelope
+						? envelope
+						: {
+								...envelope,
+								profiles: EffectArray.map(envelope.profiles, (p) =>
+									p.id !== target.profileId
+										? p
+										: {
+												...p,
+												revision: input.revision,
+												pages: EffectArray.map(p.pages, (page) =>
+													page.id !== target.pageId
+														? page
+														: {
+																...page,
+																keys: page.keys.map((key) =>
+																	key.keyCode !== target.keyCode
+																		? key
+																		: patchClockEditorKey(key, input),
+																),
+															},
+												),
+											},
+								),
+							},
+				);
+			}),
+		[],
+	);
+
 	const profile =
 		envelope?.profiles.find((p) => p.id === profileId) ?? envelope?.profiles[0];
 	const page =
@@ -410,6 +507,10 @@ export function KeyEditor(): React.JSX.Element {
 		},
 	};
 	const key = selection?.key;
+	const selectedTile = stripLayout(
+		previewProfile,
+		previewProfile.pages.find((p) => p.id === page.id) ?? page,
+	).tiles.find((tile) => tile.keyCode === key?.keyCode);
 	const changeActions = (index: number, value: string): void => {
 		if (!key) return;
 		void update({
@@ -524,6 +625,29 @@ export function KeyEditor(): React.JSX.Element {
 				/>
 				<fieldset
 					className="keys-preview"
+					onPointerDownCapture={(event) => {
+						const rect = event.currentTarget.getBoundingClientRect();
+						const tile = tileAt(
+							{
+								x: ((event.clientX - rect.left) * 1920) / rect.width,
+								y: ((event.clientY - rect.top) * 480) / rect.height,
+							},
+							stripLayout(profile, page),
+						);
+						const key = page.keys.find((key) => key.keyCode === tile?.keyCode);
+						const locked =
+							key &&
+							Option.isSome(key.config.basicEditableItems) &&
+							!key.config.basicEditableItems.value.allowDrag;
+						setMirrorPressed(locked ? undefined : tile?.keyCode);
+					}}
+					onPointerUpCapture={() => setMirrorPressed(undefined)}
+					onPointerCancelCapture={() => setMirrorPressed(undefined)}
+					onPointerLeave={() => setMirrorPressed(undefined)}
+					onDragStartCapture={(event) => {
+						event.preventDefault();
+						setMirrorPressed(undefined);
+					}}
 					onKeyDown={(event) => {
 						if (event.key === "Escape") void revert();
 					}}
@@ -554,6 +678,7 @@ export function KeyEditor(): React.JSX.Element {
 					<StripViewport>
 						<StripScreen
 							titles="provided"
+							pressedKeyCode={mirrorPressed}
 							interactive={false}
 							previewSerial="editor-preview"
 							wallpaper={wallpaper}
@@ -583,6 +708,31 @@ export function KeyEditor(): React.JSX.Element {
 							keyTitle(key, locale) || key.config.type || "Select Function"
 						}
 					>
+						{selectedTile && selection && (
+							<SelectedKeyPreview
+								tile={selectedTile}
+								target={{
+									profileId: profile.id,
+									pageId: page.id,
+									keyCode: key.keyCode,
+								}}
+								beforeWrite={async () => {
+									const old = current.current;
+									if (!old || savePending.current) return false;
+									if (
+										JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
+										JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
+									)
+										return true;
+									await save();
+									return old !== current.current;
+								}}
+								onSaved={() => choose(key.keyCode)}
+								isCurrent={() =>
+									current.current?.target.token === selection.target.token
+								}
+							/>
+						)}
 						{Option.isSome(key.compatibility) &&
 							key.compatibility.value.unsupported === true && (
 								<p role="status" className="key-unsupported">
@@ -876,19 +1026,29 @@ export function KeyEditor(): React.JSX.Element {
 				)}
 				{key?.config.type === "dkDesktopClock" && (
 					<ClockSettings
-						beforeWrite={async () => {
-							const old = current.current;
-							if (!old || savePending.current) return false;
-							if (
-								JSON.stringify(Schema.encodeSync(ProfileKey)(old.key)) ===
-								JSON.stringify(Schema.encodeSync(ProfileKey)(old.savedKey))
-							)
-								return true;
-							await save();
-							return old !== current.current;
-						}}
-						onSaved={() => {
-							if (selection) void choose(selection.key.keyCode);
+						draftHourFormat={
+							key.config.actions.find((a) => a.type === "hourFormat")?.value ===
+							"12h"
+								? "12h"
+								: "24h"
+						}
+						onHourFormat={(hourFormat) => {
+							const active = current.current;
+							if (!active) return;
+							const actions = active.key.config.actions;
+							void update({
+								...active.key,
+								config: {
+									...active.key.config,
+									actions: actions.some((a) => a.type === "hourFormat")
+										? actions.map((a) =>
+												a.type === "hourFormat"
+													? { ...a, value: hourFormat }
+													: a,
+											)
+										: [...actions, { type: "hourFormat", value: hourFormat }],
+								},
+							});
 						}}
 						target={
 							selection

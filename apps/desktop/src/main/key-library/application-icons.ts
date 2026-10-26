@@ -74,6 +74,7 @@ export function applicationIconLibrary(): () => Promise<LibraryPack> {
 									id: createHash("sha256").update(entry.path).digest("hex"),
 									name: entry.name,
 									tags: [entry.identifier],
+									extraData: [entry.path],
 									data,
 								};
 							} catch {

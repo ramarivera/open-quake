@@ -6,46 +6,69 @@ export interface PanelKeyTarget {
 	readonly pageId: string;
 	readonly revision: number;
 }
-/** A tap retains its original committed identity. Swipes and disconnects cancel it. */
+/** Contact edges retain the committed identity and release even after cancellation. */
 export function createPanelKeyDispatcher(
 	target: () => PanelKeyTarget | undefined,
 	request: KeyLibraryBridge["request"],
 ) {
-	// Preserve press/release order for each key without serializing unrelated taps.
 	const queues = new Map<string, Promise<void>>();
 	let generation = 0;
-	let pending: (PanelKeyTarget & { readonly keyCode: string }) | undefined;
+	let pending:
+		| (PanelKeyTarget & {
+				readonly keyCode: string;
+				readonly epoch: number;
+				started: boolean;
+		  })
+		| undefined;
+	const enqueue = (
+		tap: NonNullable<typeof pending>,
+		kind: "down" | "up" | "cancel",
+	) => {
+		const identity = JSON.stringify([tap.deviceId, tap.keyCode]);
+		const queue = (queues.get(identity) ?? Promise.resolve())
+			.then(async () => {
+				if (kind === "down") {
+					if (tap.epoch !== generation) return;
+					tap.started = true;
+				} else if (!tap.started) return;
+				const { epoch: _epoch, started: _started, ...activation } = tap;
+				await request({
+					...activation,
+					type: "activate",
+					kind: kind === "up" && tap.epoch !== generation ? "cancel" : kind,
+				});
+			})
+			.catch(() => {
+				/* Main owns action failure feedback, release remains queued. */
+			})
+			.finally(() => {
+				if (queues.get(identity) === queue) queues.delete(identity);
+			});
+		queues.set(identity, queue);
+	};
 	return {
 		key(event: StripKeyEvent): void {
 			if (event.keyAction === 0) {
+				if (pending) return;
 				const active = target();
-				pending = active ? { ...active, keyCode: event.keyCode } : undefined;
+				if (!active) return;
+				pending = {
+					...active,
+					keyCode: event.keyCode,
+					epoch: generation,
+					started: false,
+				};
+				enqueue(pending, "down");
 				return;
 			}
 			const tap = pending;
 			if (!tap || tap.keyCode !== event.keyCode) return;
 			pending = undefined;
-			const epoch = generation;
-			const identity = JSON.stringify([tap.deviceId, tap.keyCode]);
-			const queue = (queues.get(identity) ?? Promise.resolve())
-				.then(async () => {
-					if (epoch !== generation) return;
-					try {
-						await request({ ...tap, type: "activate", kind: "press" });
-					} finally {
-						await request({ ...tap, type: "activate", kind: "release" });
-					}
-				})
-				.catch(() => {
-					/* A destroyed renderer cannot display shutdown failures. */
-				})
-				.finally(() => {
-					if (queues.get(identity) === queue) queues.delete(identity);
-				});
-			queues.set(identity, queue);
+			enqueue(tap, event.voiceTouchEnd ? "up" : "cancel");
 		},
 		cancel(): void {
 			generation++;
+			if (pending) enqueue(pending, "cancel");
 			pending = undefined;
 		},
 	};

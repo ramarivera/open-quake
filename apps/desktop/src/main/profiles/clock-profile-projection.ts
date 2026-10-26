@@ -114,3 +114,11 @@ export function restoreClockMediaReferences(
 		),
 	);
 }
+
+export function rendererClockActions(
+	actions: readonly { readonly type: string; readonly value: unknown }[],
+) {
+	return Schema.decodeUnknownSync(ProfileJson)(
+		mapClockMedia(Schema.decodeUnknownSync(ProfileJson)(actions), reference),
+	);
+}

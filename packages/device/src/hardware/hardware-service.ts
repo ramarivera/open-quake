@@ -79,6 +79,9 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 					readonly send: (
 						command: HardwareCommand,
 					) => Effect.Effect<void, HardwareError>;
+					readonly holdChord: (
+						chord: string,
+					) => Effect.Effect<Effect.Effect<void, HardwareError>, HardwareError>;
 					readonly pressChord: (
 						chord: string,
 					) => Effect.Effect<void, HardwareError>;
@@ -237,6 +240,33 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 							Effect.asVoid,
 						),
 				);
+				const releaseKeyboard = (
+					command: Extract<HardwareCommand, { _tag: "Keyboard" }> & {
+						action: 0;
+					},
+				): Effect.Effect<void, HardwareError> =>
+					Effect.suspend(() => (poisoned ? rawWrite(command) : send(command)));
+				const holdChord = Effect.fn("HardwareControls.holdChord")(function* (
+					chord: string,
+				): Effect.fn.Return<Effect.Effect<void, HardwareError>, HardwareError> {
+					const key = encodeDeviceChord(chord);
+					if (Either.isLeft(key))
+						return yield* new HardwareUnavailable(key.left);
+					const release = releaseKeyboard({
+						_tag: "Keyboard",
+						action: 0,
+						...key.right,
+					});
+					yield* send({ _tag: "Keyboard", action: 1, ...key.right }).pipe(
+						Effect.onError(() =>
+							release.pipe(
+								Effect.catchAll((error) => Effect.logWarning(error)),
+							),
+						),
+					);
+					return release;
+				});
+
 				const silence = Effect.suspend(() =>
 					poisoned
 						? rawWrite({ _tag: "Buzzer", level: 0 })
@@ -503,6 +533,13 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 							),
 					),
 					send,
+					holdChord: (chord: string) =>
+						holdChord(chord).pipe(
+							Effect.map((release) =>
+								release.pipe(mutationLock.withPermits(1)),
+							),
+							mutationLock.withPermits(1),
+						),
 					pressChord: Effect.fn("HardwareControls.pressChord")(
 						(chord: string): Effect.Effect<void, HardwareError> =>
 							mutationLock.withPermits(1)(
@@ -512,7 +549,10 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 										return yield* new HardwareUnavailable(key.left);
 									let releaseError: Option.Option<HardwareError> =
 										Option.none();
-									const releaseCommand: HardwareCommand = {
+									const releaseCommand: Extract<
+										HardwareCommand,
+										{ _tag: "Keyboard" }
+									> & { action: 0 } = {
 										_tag: "Keyboard",
 										action: 0,
 										...key.right,
@@ -524,11 +564,7 @@ export class HardwareControls extends Effect.Service<HardwareControls>()(
 												Effect.zipRight(Effect.sleep(50)),
 											),
 										() =>
-											Effect.suspend(() =>
-												poisoned
-													? rawWrite(releaseCommand)
-													: send(releaseCommand),
-											).pipe(
+											releaseKeyboard(releaseCommand).pipe(
 												Effect.matchEffect({
 													onSuccess: () => Effect.void,
 													onFailure: (error) =>

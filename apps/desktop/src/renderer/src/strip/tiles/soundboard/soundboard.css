@@ -52,3 +52,29 @@
 	overflow: hidden;
 	clip-path: inset(50%);
 }
+.oq-soundboard-unavailable .oq-local-controls {
+	inset: auto 10px 12px;
+	width: auto;
+	height: auto;
+	gap: 8px;
+}
+.oq-soundboard-unavailable .oq-local-controls button {
+	width: 44px;
+	height: 44px;
+	padding: 12px;
+}
+
+.oq-soundboard-unavailable .oq-local-controls[data-full-bleed="true"] {
+	inset: 96px 64px auto auto;
+	width: 540px;
+	height: 216px;
+	gap: 24px;
+}
+.oq-soundboard-unavailable .oq-local-controls[data-full-bleed="true"] button {
+	width: 112px;
+	height: 112px;
+	padding: 36px;
+}
+.oq-soundboard-unavailable[data-state="configured"] .oq-player-info {
+	width: 720px;
+}

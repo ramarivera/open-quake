@@ -28,6 +28,7 @@ import { smokeFont } from "../test/smoke-font";
 import { createToneRecorder, registerVoiceSurface } from "../voice";
 import { playKeyAlarm } from "./alarm";
 import { resetKeysOnLinkLoss } from "./device-status";
+import { verifyIconsLane } from "./icons-lane-smoke";
 import {
 	interceptEditorRequests,
 	verifyEditorTransactions,
@@ -41,6 +42,11 @@ registerClockScheme();
 // Retain explicit failure status while the final owned window is disposed.
 app.on("window-all-closed", () => {});
 assert.equal(process.env.OPEN_QUAKE_MOCK_DEVICE, "1", "Mock mode required");
+if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "icons-lane") {
+	// Native renderer checks stay hidden and never activate the desktop.
+	if (process.platform === "darwin") app.setActivationPolicy("prohibited");
+	BrowserWindow.prototype.showInactive = () => {};
+}
 const scratchArg = process.argv[2];
 assert(scratchArg, "Provide an absolute scratch directory");
 const scratch = resolve(scratchArg);
@@ -257,7 +263,6 @@ async function smoke(): Promise<void> {
 			() => undefined,
 			() => panel,
 		);
-		delays.restore();
 		voice = registerVoiceSurface({
 			mock: true,
 			tones: createToneRecorder(),
@@ -291,6 +296,7 @@ async function smoke(): Promise<void> {
 			ManagedRuntime.make(ClockLive(directory)),
 			() => manager,
 		);
+		delays.restore();
 		const lifecycle = ManagedRuntime.make(
 			DeviceLifecycle.Default({
 				mock: true,
@@ -410,6 +416,12 @@ async function smoke(): Promise<void> {
 			select,
 			snapshot,
 		};
+		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "icons-lane") {
+			await verifyIconsLane(harness, directory, (path) => {
+				selectedPath = path;
+			});
+			return;
+		}
 		if (process.env.OPEN_QUAKE_KEY_REVIEW_PROBE === "geometry-pages-import") {
 			await verifyGeometryPagesImport(harness);
 			return;

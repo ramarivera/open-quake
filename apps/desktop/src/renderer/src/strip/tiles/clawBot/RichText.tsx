@@ -15,7 +15,7 @@ function LinkChip({
 	onOpen: (url: string) => void;
 }): React.JSX.Element {
 	const ref = useRef<HTMLButtonElement>(null);
-	useSubTouchTap(ref, () => onOpen(url));
+	useSubTouchTap(ref, () => onOpen(url), scale);
 	return (
 		<button
 			ref={ref}
