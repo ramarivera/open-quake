@@ -48,6 +48,13 @@ warnings and strict OpenSpec validation. The broader implementation run passed
 using external TMPDIR. Subsequent transport hardening, worker interruption and
 narrow CSS changes were checked by the focused runs and actual app smoke.
 
+After merging current main's reviewed native-media change, 82 focused desktop
+monitor/foreground/native-media/diagnostics tests pass, with one optional native
+test skipped. Desktop typecheck, production build and both default/mock bundle
+smokes pass. The merge preserved the monitoring diff without conflicts. This
+disposable worktree lacked generated Husky shims; `pnpm prepare` restored them,
+and the commit-message/post-commit hooks were checked before normal push gates.
+
 Local-only artifacts, never committed:
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-finish/monitoring-state/`.
 The final smoke output is under `final-smoke/`; tests/build logs are under
