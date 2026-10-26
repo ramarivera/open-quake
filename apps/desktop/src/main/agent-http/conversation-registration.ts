@@ -1,4 +1,4 @@
-import { Effect, Layer } from "effect";
+import { Layer } from "effect";
 import { ipcMain, type WebContents } from "electron";
 import {
 	type ConversationResolver,
@@ -104,11 +104,6 @@ export function prepareAgentConversations(
 					for (const off of windows.values()) off();
 					windows.clear();
 					await controller.dispose();
-					await runtime.runPromise(
-						Effect.flatMap(ConversationService, (service) =>
-							service.shutdown(),
-						),
-					);
 					await runtime.dispose();
 				},
 			};

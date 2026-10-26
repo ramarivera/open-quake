@@ -39,7 +39,7 @@ import type { DesktopDiagnostics } from "../diagnostics";
 import type { DesktopRuntime } from "../diagnostics/module";
 import { prepareDesktopModule } from "../diagnostics/module";
 import { ImageDecoder } from "../media/image-decoder";
-import { makeForegroundProbe } from "../profiles/foreground-app";
+import { makeScopedForegroundProbe } from "../profiles/foreground-app";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { copyGifFile } from "./clipboard";
 import { type EmojiGenerationPort, makeEmojiController } from "./controller";
@@ -79,46 +79,55 @@ export function prepareEmoji<R>(options: {
 			: process.platform === "win32"
 				? "win32"
 				: "linux");
-	const foreground = makeForegroundProbe(platform);
-	const adapters = Layer.succeed(EmojiPressAdapters, {
-		platform,
-		foreground: () =>
-			foreground().pipe(
-				Effect.map(
-					Option.map((app) => ({ name: "", path: app.path, identifier: "" })),
-				),
-				Effect.catchTag("ProfileForegroundFailed", (cause) =>
-					Effect.fail(new EmojiForegroundFailed(cause)),
-				),
-			),
-		copyGif: (hash) =>
-			Effect.tryPromise({
-				try: async () => {
-					const path = await files.clipboardPath(hash);
-					if (options.clipboard) await options.clipboard(path);
-					else if (!options.mock) await copyGifFile(platform, path);
+	const adapters = Layer.scoped(
+		EmojiPressAdapters,
+		Effect.gen(function* () {
+			const foreground = yield* makeScopedForegroundProbe(platform);
+			return {
+				platform,
+				foreground: () =>
+					foreground().pipe(
+						Effect.map(
+							Option.map((app) => ({
+								name: "",
+								path: app.path,
+								identifier: "",
+							})),
+						),
+						Effect.catchTag("ProfileForegroundFailed", (cause) =>
+							Effect.fail(new EmojiForegroundFailed(cause)),
+						),
+					),
+				copyGif: (hash) =>
+					Effect.tryPromise({
+						try: async () => {
+							const path = await files.clipboardPath(hash);
+							if (options.clipboard) await options.clipboard(path);
+							else if (!options.mock) await copyGifFile(platform, path);
+						},
+						catch: (cause) => new EmojiClipboardFailed(cause),
+					}),
+				keyboard: (chord) => {
+					const hardware = options.bus()?.hardware?.();
+					return hardware
+						? hardwareKeyboardAdapter(hardware)
+								.pressChord(chord)
+								.pipe(
+									Effect.catchTag("HostActionFailed", (cause) =>
+										Effect.fail(new EmojiKeyboardFailed(cause)),
+									),
+									Effect.catchTag("ActionApplicationMissing", (cause) =>
+										Effect.fail(new EmojiKeyboardFailed(cause)),
+									),
+									Effect.catchTag("ActionPermissionDenied", (cause) =>
+										Effect.fail(new EmojiKeyboardFailed(cause)),
+									),
+								)
+						: Effect.fail(new EmojiKeyboardFailed(undefined));
 				},
-				catch: (cause) => new EmojiClipboardFailed(cause),
-			}),
-		keyboard: (chord) => {
-			const hardware = options.bus()?.hardware?.();
-			return hardware
-				? hardwareKeyboardAdapter(hardware)
-						.pressChord(chord)
-						.pipe(
-							Effect.catchTag("HostActionFailed", (cause) =>
-								Effect.fail(new EmojiKeyboardFailed(cause)),
-							),
-							Effect.catchTag("ActionApplicationMissing", (cause) =>
-								Effect.fail(new EmojiKeyboardFailed(cause)),
-							),
-							Effect.catchTag("ActionPermissionDenied", (cause) =>
-								Effect.fail(new EmojiKeyboardFailed(cause)),
-							),
-						)
-				: Effect.fail(new EmojiKeyboardFailed(undefined));
-		},
-	});
+			} satisfies typeof EmojiPressAdapters.Service;
+		}),
+	);
 
 	const prepared = prepareDesktopModule(
 		Layer.mergeAll(
@@ -305,11 +314,7 @@ export function prepareEmoji<R>(options: {
 					ipcMain.removeHandler(EMOJI_PRESS);
 					shutdown = (async () => {
 						await Promise.allSettled([controller, ...pending]);
-						try {
-							await runtime.dispose();
-						} finally {
-							await foreground.dispose();
-						}
+						await runtime.dispose();
 					})();
 					return shutdown;
 				},

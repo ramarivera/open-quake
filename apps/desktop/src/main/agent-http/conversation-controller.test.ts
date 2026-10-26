@@ -508,6 +508,51 @@ it("actual registration stays offline and navigation aborts its provider before 
 		await registration.dispose();
 	}
 });
+it("keeps shared conversation consumers usable after registration teardown", async () => {
+	const { prepareAgentConversations } = await import(
+		"./conversation-registration"
+	);
+	const adapter = provider("hermes", () => Stream.make(done));
+	const prepared = prepareAgentConversations({
+		management: () => undefined,
+		renderer: "file:///synthetic/index.html",
+		resolve: () =>
+			Effect.succeed({
+				connection: {
+					id: "connection",
+					kind: "hermes",
+					name: "fixture",
+					baseURL: "http://localhost:1",
+				},
+				adapter,
+			}),
+	});
+	const application = ManagedRuntime.make(prepared.layer);
+	prepared.bind(application);
+	await application.runtime();
+	const registration = prepared.start();
+	try {
+		const service = await application.runPromise(ConversationService);
+		await registration.dispose();
+		const events = await application.runPromise(
+			Stream.runCollect(service.stream("voice", request)),
+		);
+		expect(Chunk.toReadonlyArray(events)).toContainEqual(
+			expect.objectContaining({ type: "end", outcome: "completed" }),
+		);
+		await application.dispose();
+		const after = await Effect.runPromise(
+			Stream.runCollect(
+				service.stream("voice", { ...request, requestId: "after-disposal" }),
+			).pipe(Effect.either),
+		);
+		expect(after._tag).toBe("Left");
+	} finally {
+		await registration.dispose();
+		await application.dispose();
+	}
+});
+
 describe("conversation IPC controller", () => {
 	it("authorizes main-frame management identity before parsing or provider dispatch", async () => {
 		let resolved = 0;

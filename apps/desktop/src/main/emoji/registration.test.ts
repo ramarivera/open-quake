@@ -23,13 +23,18 @@ import {
 } from "../../../../../packages/device/src/profiles/profile-switching-service";
 import { emptyEmojiStore } from "../../../../../packages/edge/src/emoji/emoji-contracts";
 import {
+	EmojiLibrary,
+	EmojiPress,
+} from "../../../../../packages/edge/src/emoji/emoji-service";
+import {
 	EMOJI_PRESS,
 	EMOJI_REQUEST,
 	type EmojiReply,
 } from "../../shared/emoji";
 import { tinyFixture } from "../../shared/gif/fixtures";
+import * as foreground from "../profiles/foreground-app";
 import { emojiFiles } from "./files";
-import { registerEmoji } from "./index";
+import { prepareEmoji } from "./index";
 
 vi.mock("electron", () => ({
 	app: {},
@@ -171,7 +176,7 @@ async function setup(
 	let captureEnabled = true;
 	let serial = "desktop-preview";
 	vi.mocked(ipcMain.handle).mockClear();
-	const registered = registerEmoji({
+	const prepared = prepareEmoji({
 		root,
 		management: () => management,
 		panel: () => panel,
@@ -193,6 +198,10 @@ async function setup(
 		selectionSerial: async () => serial,
 		clipboard,
 	});
+	const application = ManagedRuntime.make(prepared.layer);
+	prepared.bind(application);
+	await application.runtime();
+	const registered = prepared.start();
 	const requestHandler = vi
 		.mocked(ipcMain.handle)
 		.mock.calls.find(([name]) => name === EMOJI_REQUEST)?.[1];
@@ -210,6 +219,7 @@ async function setup(
 		hash,
 		privateHash,
 		registered,
+		application,
 		runtime,
 		management,
 		panel,
@@ -245,11 +255,51 @@ async function setup(
 		},
 		close: async () => {
 			await registered.dispose();
+			await application.dispose();
 			await runtime.dispose();
 			await rm(root, { force: true, recursive: true });
 		},
 	};
 }
+it("retains the scoped foreground adapter until application disposal", async () => {
+	const acquire = foreground.makeScopedForegroundProbe;
+	const native = vi.fn(async () => Option.none());
+	const acquisition = vi
+		.spyOn(foreground, "makeScopedForegroundProbe")
+		.mockImplementationOnce((platform) => acquire(platform, native));
+	const f = await setup();
+	try {
+		expect(acquisition).toHaveBeenCalledOnce();
+		expect(native).not.toHaveBeenCalled();
+		await f.application.runPromise(
+			EmojiLibrary.command({
+				type: "settings",
+				appMatch: true,
+				apps: [{ name: "Synthetic", path: "/synthetic.app", identifier: "" }],
+				globalMode: 0,
+			}),
+		);
+		const service = await f.application.runPromise(EmojiPress);
+		const press = service.press(
+			{ packageId: "fixture", emojiId: "e", hash: f.hash },
+			0,
+			1,
+		);
+		await f.registered.dispose();
+		expect(await f.application.runPromise(press)).toBe("ignored");
+		expect(native).toHaveBeenCalledOnce();
+		await f.application.dispose();
+		const after = await Effect.runPromise(press.pipe(Effect.either));
+		expect(after).toMatchObject({
+			_tag: "Left",
+			left: { code: "QUAKE.EMOJI.FOREGROUND_FAILED" },
+		});
+	} finally {
+		await f.close();
+		acquisition.mockRestore();
+	}
+});
+
 describe("production emoji IPC boundaries", () => {
 	it("denies unowned windows and panel library reads; projects only a visible committed asset", async () => {
 		const f = await setup();

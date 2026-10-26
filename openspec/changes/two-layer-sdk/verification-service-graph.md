@@ -91,3 +91,14 @@ before the wait, and acquisition failures retain the typed meeting error reply.
 Four regression assertions failed against the previous implementation. After the
 fix all 26 meeting desktop tests, desktop typecheck, scoped Biome and strict
 OpenSpec validation pass. No native audio or hardware acceptance was run here.
+
+PR72 shared-resource corrections, 2026-10-26: conversation registration teardown
+now cancels only its controller work. ConversationService owns its shutdown as
+a graph finalizer, so another consumer can still stream after registration
+teardown. Emoji's foreground probe is acquired by a scoped adapter layer and
+released only when that layer closes. A second consumer can use EmojiPress
+after registration teardown, while a retained service fails with the typed
+foreground error after application disposal. The probe test injects a synthetic
+native reader and performs no foreground inspection or OS input. Both focused
+suites passed, 18 tests; the two new regressions fail against the previous
+commit in a scratch checkout. Desktop typecheck passed.
