@@ -100,18 +100,19 @@ loopback RFC6455 server, real `AiSpeechService`, the production voice runtime an
 ReadAloud IPC consumer, explicit settings and the existing credential vault.
 They do not record, play audio, contact a provider, launch Electron, take focus,
 or touch a QUAKE. Physical audio routing, OS permission prompts, live provider
-segment finality/codec acceptance and Linux audio remain unverified. DashScope
+segment finality/codec acceptance and physical audio remain unverified. DashScope
 uses explicit workspace/region routes; OpenAI Speech API is the existing
 `gpt-4o-mini-tts` compatibility profile, disabled by the service on 2027-01-06.
 No custom inference URL, implicit provider fallback or Realtime substitution is
 supported by these first-release bindings.
 
 The production root uses `createSpeechVoiceBinding` to deliver finalized
-transcripts into the selected HTTP runtime and to feed its answer events into
-ordered speech. The original local text runtime remains the fallback. The
-binding never routes cancellation back into itself. `composition.test.ts`
-drives actual recognition, HTTP conversation service, answer events and natural
-output drain with synthetic adapters, including permission failure and fallback.
+transcripts into the selected HTTP runtime or direct ChatService and to feed
+answer events into ordered speech. With no external selection, the direct
+adapter is the fallback. The binding never routes cancellation back into itself.
+`composition.test.ts` drives actual recognition, both conversation services,
+answer events and natural output drain with synthetic adapters, including
+permission failure and fallback.
 
 Malformed or unreadable saved profiles leave speech disabled. Settings reports
 the configuration error and offers an explicit replacement flow. Nothing writes
@@ -158,3 +159,15 @@ creates one worker, speech/capture preemption, busy rejection, stale soundboard
 stop isolation, muted natural drain, and full native worker cleanup. These are
 ownership and native worker proofs. The soundboard conductor, MP3 decoding,
 player UI and physical/hearing acceptance remain separate unfinished tasks.
+
+Direct answers use the same speech controller through createDirectChatVoice.
+The direct-composition tests run the actual ChatService and installed Vercel
+adapter against fake SSE, then assert ordered TTS requests, serialized output
+drain, retained chat history on Stop, overflow and synthesis failure, safe
+failure diagnostics, and shutdown during pending inference/playback. The capture
+composition test also drives a finalized synthetic transcript through direct
+inference to output when the external runtime is deselected. The scoped direct
+consumer cancels its host turn before dropping ownership; the SDK adapter aborts
+IO before awaiting async-generator return. Live STT/TTS and physical audio remain
+unverified. Native Linux worker evidence is recorded in the OpenSpec tasks file;
+it proves worker execution with synthetic input and a private output sink.

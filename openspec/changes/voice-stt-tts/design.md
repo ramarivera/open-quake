@@ -103,3 +103,25 @@ Add explicit versioned STT/TTS profiles and enable mock capture before live Dash
 `AI-105` and `v0.4.95/recovered_sources/src/main/ai/Connector/OpenAIAdapter.js:571-745` establish `audio.speech.create`, model `gpt-4o-mini-tts`, voice `marin`, calm/medium-speed language instructions and WAV output. Provide a separate facade-owned TTS adapter with an explicit profile, model, voice, instructions and audio descriptor, using `POST https://api.openai.com/v1/audio/speech`. It reuses the same output lease, cancellation, deadlines, natural-drain completion and text-only failure policy as DashScope. It does not require the later OpenAI STT/Realtime adapter or a vendor proxy.
 
 The [official OpenAI text-to-speech guide](https://developers.openai.com/api/docs/guides/text-to-speech), accessed 2026-10-24, says `gpt-4o-mini-tts` is deprecated and shuts down on 2027-01-06. Record this as a compatibility profile, not a durable current default. After shutdown it must be unavailable. The documented successor uses a separate Realtime workflow and must not be substituted as a model ID on `/audio/speech`; a current Realtime synthesis adapter requires its own protocol/conformance work. Model lifecycle checks and explicit profile migration are release gates, not permission to silently change providers or transports.
+
+## Direct ChatService lifetime and acceptance
+
+The root already composes createDirectChatVoice inside createSpeechVoiceBinding.
+The direct adapter emits the same TurnStarted and answer/end Chunk events used
+by external conversations, so one existing speech controller owns answer
+segmentation and output for both routes. Finalized capture selects the direct
+route when no external connection is selected. Independent STT/TTS settings
+remain required; model settings never enable speech implicitly.
+
+A direct voice consumer interrupted by scope shutdown cancels its accepted
+ChatService turn before deleting active ownership. This matters because scoped
+child cleanup precedes the adapter's finalizer. The Vercel adapter aborts its
+request before forwarding async-iterator return, which otherwise waits behind
+an outstanding next and blocks shutdown before outer cleanup can abort IO.
+This changes cancellation ordering without retries or a provider fallback.
+
+Production composition tests use the installed SDK with fake fetch responses,
+synthetic finalized capture and a controlled output consumer. Exact timer and
+followUp semantics also pass through the real AiSpeechService in the existing
+ordered/runtime suite. No microphone, live speech endpoint or audible result is
+part of this acceptance.

@@ -48,6 +48,31 @@ function sdkFailure(cause: unknown): AiError {
 	);
 }
 
+/** Abort IO before async-generator return, which waits for an outstanding next(). */
+function fromAbortableAsyncIterable<A, E>(
+	source: AsyncIterable<A>,
+	onError: (cause: unknown) => E,
+	abort: () => void,
+): Stream.Stream<A, E> {
+	return Stream.fromAsyncIterable(
+		{
+			[Symbol.asyncIterator]() {
+				const iterator = source[Symbol.asyncIterator]();
+				return {
+					next: () => iterator.next(),
+					return: async () => {
+						abort();
+						return iterator.return
+							? iterator.return()
+							: { done: true, value: undefined };
+					},
+				};
+			},
+		},
+		onError,
+	);
+}
+
 /** Production SDK boundary. The injected fetch is also used by offline HTTP fixtures. */
 export function makeVercelCompatibleAdapter(
 	fetcher: typeof globalThis.fetch = globalThis.fetch,
@@ -96,7 +121,7 @@ export function makeVercelCompatibleAdapter(
 					fetch: (url, init) =>
 						fetcher(url, { ...init, redirect: "error", signal }),
 				});
-				const events = Stream.fromAsyncIterable(
+				const events = fromAbortableAsyncIterable(
 					(async function* (): AsyncGenerator<NormalizedEvent> {
 						let completed = false;
 						let outputText = "";
@@ -202,6 +227,7 @@ export function makeVercelCompatibleAdapter(
 						}
 					})(),
 					sdkFailure,
+					() => controller.abort(),
 				).pipe(Stream.ensuring(Effect.sync(() => controller.abort())));
 				return events;
 			},
