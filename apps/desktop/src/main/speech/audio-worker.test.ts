@@ -32,7 +32,11 @@ interface WorkerApi {
 }
 function worker(
 	grant?: Promise<unknown>,
-	options: { devices?: readonly MicrophoneIdentity[]; error?: string } = {},
+	options: {
+		devices?: readonly MicrophoneIdentity[];
+		error?: string;
+		disconnectError?: boolean;
+	} = {},
 ) {
 	const constraints: MediaStreamConstraints[] = [];
 	let stopped = 0,
@@ -54,7 +58,9 @@ function worker(
 		onended: (() => void) | null = null;
 		buffer: unknown;
 		connect() {}
-		disconnect() {}
+		disconnect() {
+			if (options.disconnectError) throw new Error("synthetic disconnect");
+		}
 		start() {}
 		stop() {}
 	}
@@ -263,4 +269,38 @@ it("pauses without ending, exports opt-in PCM/WAV/Blob after stop and forgets it
 	await regular.api.capture("normal");
 	await regular.api.stop();
 	expect(() => regular.api.export("pcm")).toThrow();
+});
+
+it.each([48, 1008])(
+	"exports a bounded archive and closes capture after 60 seconds plus %i input samples",
+	async (tailSamples) => {
+		const f = worker();
+		await f.api.capture("bounded", undefined, true);
+		const input = new Float32Array(960).fill(0.25);
+		for (let i = 0; i < 3000; i++) {
+			f.feed(input);
+			f.api.pull();
+		}
+		f.feed(new Float32Array(tailSamples).fill(0.5));
+		await expect(f.api.stop()).resolves.toBeUndefined();
+		expect(f.counts()).toEqual({ stopped: 1, closed: 1 });
+		expect(f.api.pull().failed).toBe(false);
+		const pcm = f.api.export("pcm");
+		expect(pcm).toHaveLength(24000 * 2 * 60);
+		expect(pcm.slice(-2)).toEqual([0, 32]);
+		const wav = Uint8Array.from(f.api.export("wav"));
+		expect(wav).toHaveLength(pcm.length + 44);
+		expect(new DataView(wav.buffer).getUint32(40, true)).toBe(pcm.length);
+		await f.api.close();
+		expect(f.counts()).toEqual({ stopped: 1, closed: 1 });
+	},
+);
+
+it("closes the audio context even when native graph teardown rejects", async () => {
+	const f = worker(undefined, { disconnectError: true });
+	await f.api.capture("cleanup", undefined, true);
+	await expect(f.api.stop()).rejects.toThrow("synthetic disconnect");
+	expect(f.counts()).toEqual({ stopped: 1, closed: 1 });
+	await f.api.close();
+	expect(f.counts()).toEqual({ stopped: 1, closed: 1 });
 });

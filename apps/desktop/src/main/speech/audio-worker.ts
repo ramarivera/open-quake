@@ -23,9 +23,9 @@ export function installAudioWorker(
 		for (const frame of batch) {
 			lastLevel = { rms: frame.rms, peak: frame.peak };
 			if (archive) {
-				if (archive.length + frame.bytes.length > 24000 * 2 * 60)
-					throw new RangeError("Recording export limit reached");
-				for (const byte of frame.bytes) archive.push(byte);
+				const remaining = 24000 * 2 * 60 - archive.length;
+				for (const byte of frame.bytes.subarray(0, remaining))
+					archive.push(byte);
 			}
 		}
 	};
@@ -34,25 +34,33 @@ export function installAudioWorker(
 	let framer: PcmFramer | undefined;
 	const stop = async () => {
 		stopped = true;
-		for (const track of tracks?.getTracks() ?? []) {
-			track.onended = null;
-			track.stop();
-		}
+		const ownedTracks = tracks;
+		const ownedProcessor = processor;
+		const ownedSource = source;
+		const ownedFramer = framer;
+		const ownedContext = context;
 		tracks = undefined;
-		processor?.disconnect();
-		if (processor) processor.onaudioprocess = null;
 		processor = undefined;
-		if (source instanceof AudioBufferSourceNode) {
-			source.onended = null;
-			source.stop();
-		}
-		source?.disconnect();
 		source = undefined;
-		if (framer && !failed) retain(framer.flush());
 		framer = undefined;
-		lastLevel = { rms: 0, peak: 0 };
-		await context?.close();
 		context = undefined;
+		try {
+			for (const track of ownedTracks?.getTracks() ?? []) {
+				track.onended = null;
+				track.stop();
+			}
+			if (ownedProcessor) ownedProcessor.onaudioprocess = null;
+			ownedProcessor?.disconnect();
+			if (ownedSource instanceof AudioBufferSourceNode) {
+				ownedSource.onended = null;
+				ownedSource.stop();
+			}
+			ownedSource?.disconnect();
+			if (ownedFramer && !failed) retain(ownedFramer.flush());
+		} finally {
+			lastLevel = { rms: 0, peak: 0 };
+			await ownedContext?.close();
+		}
 	};
 	const api = {
 		async capture(
