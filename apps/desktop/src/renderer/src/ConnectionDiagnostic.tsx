@@ -139,6 +139,16 @@ export function DiagnosticView({
 				})}
 			</div>
 			<div className="connection-actions">
+				{status?.alert?.alertType === "multi-screen" && (
+					<button
+						type="button"
+						data-action="bind-all"
+						disabled={checking}
+						onClick={() => run("bind-all")}
+					>
+						Bind Quake screens
+					</button>
+				)}
 				<button
 					type="button"
 					disabled={checking}

@@ -252,3 +252,8 @@ For SCREEN-123, the desktop-clock contract SHALL retain five independent app-own
 
 - **WHEN** a WIDGETS-128 or MGMT-286 editor picks local media and then cancels, unmounts or changes serial before Save
 - **THEN** its draft identity releases unreferenced files under the repository lock, including late picker responses, while current and backup revisions and other active drafts keep their assets
+
+#### Scenario: User starts multi-screen binding
+
+- **WHEN** MAIN-149 reports a multi-screen alert on the connection page
+- **THEN** a visible Bind Quake screens action submits bind-all to the existing lifecycle queue, without opening another HID owner
