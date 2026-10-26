@@ -8,6 +8,8 @@ import {
 	MonitorSnapshot,
 	SettingsView,
 } from "../../../../../shared/monitor-contracts";
+
+let liveUsers = 0;
 export function useMonitor(live = false) {
 	const [view, setView] = useState<SettingsView>();
 	const [snapshot, setSnapshot] = useState<MonitorSnapshot>(emptySnapshot);
@@ -31,7 +33,7 @@ export function useMonitor(live = false) {
 					update(value.view);
 			})
 			.catch(() => undefined);
-		if (live)
+		if (live && liveUsers++ === 0)
 			void bridge
 				.request({ _tag: "watch", active: true })
 				.catch(() => undefined);
@@ -39,7 +41,7 @@ export function useMonitor(live = false) {
 			active = false;
 			offSettings();
 			offMetrics();
-			if (live)
+			if (live && --liveUsers === 0)
 				void bridge
 					.request({ _tag: "watch", active: false })
 					.catch(() => undefined);

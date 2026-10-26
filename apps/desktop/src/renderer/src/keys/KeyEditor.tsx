@@ -32,8 +32,13 @@ import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout } from "../strip/geometry";
 import { ClockSettings } from "../strip/tiles/clock/ClockSettings";
 import { patchClockEditorKey } from "../strip/tiles/clock/editorPatch";
+import {
+	isMonitorKey,
+	MonitorKeySettings,
+} from "../strip/tiles/monitor/MonitorKeySettings";
 import { Group, PageHeader, Row } from "../ui/Form";
 import { useWallpaper } from "../wallpaper/useWallpaper";
+import { MediaKeySettings } from "../weather-media/MediaKeySettings";
 import { editableFocus } from "./editor-input";
 import { GridEditor, type Selection } from "./GridEditor";
 import { NativeIconPicker } from "./IconPicker";
@@ -740,7 +745,9 @@ export function KeyEditor(): React.JSX.Element {
 										config: {
 											...raw.config,
 											...createActionDraft(entry.id),
-											supportKnob: entry.id === "obsVolume",
+											supportKnob: ["obsVolume", "vol", "brightness"].includes(
+												entry.id,
+											),
 											supportTouchEffect: entry.supportTouchEffect,
 										},
 									});
@@ -868,6 +875,14 @@ export function KeyEditor(): React.JSX.Element {
 							</button>
 						</Row>
 
+						{isMonitorKey(key) && (
+							<MonitorKeySettings
+								key={selection?.target.token}
+								keyValue={key}
+								locale={locale}
+								onChange={(next) => void update(next)}
+							/>
+						)}
 						{isObsId(key.config.type) && (
 							<ObsSettings
 								key={key.config.type}
@@ -876,11 +891,19 @@ export function KeyEditor(): React.JSX.Element {
 								onChange={(next) => void update(next)}
 							/>
 						)}
+						<MediaKeySettings
+							keyValue={key}
+							locale={locale}
+							onChange={(next) => void update(next)}
+						/>
 						{key.config.actions
 							.filter(
-								() =>
+								(action) =>
+									action.type !== "musicSource" &&
+									key.config.type !== "media" &&
 									key.config.type !== "dkDesktopClock" &&
-									!isObsId(key.config.type),
+									!isObsId(key.config.type) &&
+									!isMonitorKey(key),
 							)
 							.map((action, index) => (
 								<Row

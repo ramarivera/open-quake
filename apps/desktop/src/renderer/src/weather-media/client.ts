@@ -74,6 +74,12 @@ export class WeatherMediaClient {
 		this.pending = operation;
 		return operation.then(() => accepted);
 	};
+	refresh = async (): Promise<boolean> => {
+		const reply = await this.request({ _tag: "read" });
+		if (reply?._tag !== "snapshot") return false;
+		this.accept(reply.snapshot);
+		return true;
+	};
 	control = async (intent: MediaIntent): Promise<boolean> => {
 		const reply = await this.request({ _tag: "media", intent });
 		if (reply?._tag === "control" && this.state)

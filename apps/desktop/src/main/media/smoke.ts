@@ -31,7 +31,7 @@ import { openObsConnection } from "../../../../../packages/edge/src/obs/obs-tran
 import { AGENTS_REQUEST, type AgentReply } from "../../shared/agents";
 import { KEY_RUNTIME } from "../../shared/key-library";
 import { PROFILES_SNAPSHOT } from "../../shared/profile-snapshot-contracts";
-import type { EncodedProfileEnvelope } from "../../shared/profiles";
+import type { EncodedProfileEnvelope, Profile } from "../../shared/profiles";
 import {
 	type WallpaperCommand,
 	WallpaperReply,
@@ -67,7 +67,8 @@ import { waitForVoice } from "../voice/smoke-wait";
 import { WeatherMediaController } from "../weather-media/controller";
 import { registerWeatherMedia } from "../weather-media/index";
 import { weatherSettingsLive } from "../weather-media/settings-repository";
-import { systemMediaStub } from "../weather-media/system-media";
+import { SystemMediaAdapter } from "../weather-media/system-media";
+import { mediaSession } from "../weather-media/test-fixtures";
 import { WeatherNetwork } from "../weather-media/weather-network";
 import { MediaLive, registerMedia } from "./index";
 
@@ -221,7 +222,15 @@ async function smoke(): Promise<void> {
 				Layer.provide(
 					Layer.mergeAll(
 						weatherSettingsLive(directory),
-						systemMediaStub(process.platform),
+						Layer.succeed(SystemMediaAdapter, {
+							read: () =>
+								Effect.succeed({
+									session: mediaSession,
+									sessions: [mediaSession],
+									error: null,
+								}),
+							control: () => Effect.succeed(false),
+						}),
 						Layer.succeed(WeatherNetwork, {
 							json: () =>
 								Effect.sync(() => {
@@ -1331,6 +1340,108 @@ async function smoke(): Promise<void> {
 				(await panel.webContents.capturePage()).toPNG(),
 			);
 	}
+
+	// media-native: real renderer/preload with injected media and no host control.
+	const playerBase = Schema.encodeSync(ProfileKey)(
+		createEmptyProfileKey("1,1"),
+	);
+	const playerProfile: typeof Profile.Encoded = {
+		id: "media-smoke",
+		name: "Media",
+		revision: 1,
+		pages: [
+			{
+				id: "one",
+				keys: [
+					{
+						...playerBase,
+						childrenName: "playAudio",
+						config: {
+							...playerBase.config,
+							type: "playAudio",
+							size: [5, 2],
+							actions: [
+								{ type: "sound", value: "" },
+								{ type: "audioAction", value: 0 },
+								{ type: "musicSource", value: "system" },
+							],
+						},
+					},
+				],
+			},
+		],
+	};
+	await profiles.dispose();
+	profiles = serveProfiles(stripFixtureEnvelope(playerProfile, "smoke-A"));
+	for (const language of ["en", "de"]) {
+		await panel.loadFile(resolve("out/renderer/index.html"), {
+			query: { surface: "panel" },
+		});
+		await panel.webContents.executeJavaScript(
+			`localStorage.setItem('open-quake-key-locale', '${language}')`,
+		);
+		await panel.reload();
+		await settle(600);
+		const player = await panel.webContents.executeJavaScript(
+			`(() => ({card:!!document.querySelector('[data-testid="dk-player"]'),source:document.querySelector('.oq-player-source')?.textContent,title:document.querySelector('.oq-player-title')?.textContent,clamp:getComputedStyle(document.querySelector('.oq-player-error') || document.body).webkitLineClamp}))()`,
+		);
+		assert.equal(player.card, true);
+		assert.equal(player.source, "Music");
+		if (artifacts)
+			await writeFile(
+				join(artifacts, `media-native-${language}.png`),
+				(await panel.webContents.capturePage()).toPNG(),
+			);
+	}
+	const localProfile = {
+		...playerProfile,
+		pages: playerProfile.pages.map((page) => ({
+			...page,
+			keys: page.keys.map((key) => ({
+				...key,
+				config: {
+					...key.config,
+					actions:
+						key.config.actions?.map((a) =>
+							a.type === "musicSource" ? { ...a, value: "local" } : a,
+						) ?? [],
+				},
+			})),
+		})),
+	};
+	await profiles.dispose();
+	profiles = serveProfiles(
+		stripFixtureEnvelope(
+			{
+				...localProfile,
+				pages: [localProfile.pages[0] ?? playerProfile.pages[0]],
+			},
+			"smoke-A",
+		),
+	);
+	for (const language of ["en", "de"]) {
+		await panel.webContents.executeJavaScript(
+			`localStorage.setItem('open-quake-key-locale','${language}')`,
+		);
+		await panel.reload();
+		await settle(600);
+		const status = await panel.webContents.executeJavaScript(
+			"document.querySelector('.oq-player-error')?.textContent",
+		);
+		assert.equal(
+			status,
+			language === "de" ? "Nicht konfiguriert" : "Not configured",
+		);
+		if (artifacts)
+			await writeFile(
+				join(artifacts, `media-native-local-${language}.png`),
+				(await panel.webContents.capturePage()).toPNG(),
+			);
+	}
+
+	process.stdout.write(
+		"media-native smoke PASS: production IPC/rendering, retained source label, EN/DE screenshots; no real media session or audio.\n",
+	);
 	await profiles.dispose();
 	profiles = serveProfiles(stripFixtureEnvelope(quickProfile, "smoke-A"));
 	await panel.loadFile(resolve("out/renderer/index.html"), {

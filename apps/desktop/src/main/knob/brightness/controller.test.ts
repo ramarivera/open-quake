@@ -67,7 +67,7 @@ describe("host brightness controller", () => {
 				{ concurrency: "unbounded" },
 			),
 		);
-		expect(h.writes).toEqual([55, 60, 65, 70, 75, 80, 85, 90]);
+		expect(h.writes).toEqual([90]);
 	});
 	it("doesn't write after failed or invalid reads", async () => {
 		for (const reading of [

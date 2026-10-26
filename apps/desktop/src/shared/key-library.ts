@@ -134,6 +134,8 @@ export const KeyRuntimeState = Schema.Struct({
 	profileId: Schema.String,
 	pageId: Schema.String,
 	keyCode: Schema.String,
+	volume: Schema.optional(Schema.Number.pipe(Schema.between(0, 100))),
+	muted: Schema.optional(Schema.Boolean),
 	alternate: Schema.optional(Schema.Literal(0, 1)),
 	countdown: Schema.optional(Schema.Number),
 	progress: Schema.optional(Schema.Number),

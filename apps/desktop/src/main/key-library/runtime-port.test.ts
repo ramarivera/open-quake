@@ -525,3 +525,83 @@ it.each([false, true])(
 		);
 	},
 );
+
+it.each(["mute", "vol"])(
+	"MAIN-073 MAIN-089 MGMT-168 MGMT-377 publishes external host state to committed %s artwork and disposes subscription",
+	async (type) => {
+		const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
+		const off = vi.fn();
+		let listener: (reading: { level: number; muted: boolean }) => void =
+			() => {};
+		const media: MediaActionAdapter = {
+			supportedCommands: new Set([
+				"audio_mute",
+				"audio_vol_down",
+				"audio_vol_up",
+			]),
+			sendMedia: () => Effect.void,
+			observe: (next) => {
+				listener = next;
+				return off;
+			},
+		};
+		const states: import("../../../../../packages/device/src/actions/key-runtime-service").KeyFeedback[] =
+			[];
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const ready = yield* Deferred.make<void>();
+					const target = {
+						...empty,
+						childrenName: type,
+						config: {
+							...empty.config,
+							type,
+							supportKnob: type === "vol",
+							actions:
+								type === "mute"
+									? [
+											{ type: "key", value: "audio_mute" },
+											{ type: "key", value: "audio_mute" },
+										]
+									: [
+											{ type: "key", value: "audio_vol_down" },
+											{ type: "key", value: "audio_vol_up" },
+										],
+						},
+					};
+					yield* Effect.gen(function* () {
+						yield* KeyRuntimePort;
+						listener({ level: 0, muted: true });
+						yield* Deferred.await(ready);
+					}).pipe(
+						Effect.provide(
+							layer(
+								false,
+								(state) =>
+									Effect.sync(() => {
+										states.push(state);
+									}).pipe(
+										Effect.zipRight(Deferred.succeed(ready, undefined)),
+										Effect.asVoid,
+									),
+								media,
+								target,
+							),
+						),
+					);
+				}),
+			),
+		);
+		expect(states).toContainEqual({
+			deviceId: "device",
+			profileId: "p",
+			pageId: "one",
+			keyCode: "1,1",
+			volume: 0,
+			muted: true,
+			...(type === "mute" ? { alternate: 1 } : {}),
+		});
+		expect(off).toHaveBeenCalledTimes(1);
+	},
+);

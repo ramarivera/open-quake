@@ -99,6 +99,10 @@ export const rig = (
 						return {
 							ready,
 							ended: Deferred.await(end),
+							seek: (positionMs: number) =>
+								Effect.sync(() => {
+									track.positionMs = positionMs;
+								}),
 							position: command("position").pipe(
 								Effect.zipRight(Effect.sync(() => track.positionMs)),
 							),
