@@ -1,7 +1,7 @@
 import { runInNewContext } from "node:vm";
 import { expect, it } from "@effect/vitest";
 import { Deferred, Effect, Fiber, TestClock } from "effect";
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
 import { makeAudioOutput } from "../../../../../packages/edge/src/audio/output-service";
 import type { ReaderSettings } from "../../shared/voice-surface";
 import { audioWorkerSource } from "./audio-worker";
@@ -32,9 +32,10 @@ class Utterance {
 	constructor(readonly text: string) {}
 }
 interface LocalApi {
-	speakLocal(text: string, settings: ReaderSettings): void;
+	speakLocal(text: string, settings: ReaderSettings): Promise<void>;
 	localState(): { started: boolean; done: boolean; failed: boolean };
 	stop(): Promise<void>;
+	close(): Promise<void>;
 }
 function fixture(
 	voices = [
@@ -44,11 +45,18 @@ function fixture(
 ) {
 	let utterance: Utterance | undefined;
 	let cancellations = 0;
+	const listeners = new Set<() => void>();
 	const context = {
+		setTimeout,
+		clearTimeout,
 		AudioBufferSourceNode: class {},
 		SpeechSynthesisUtterance: Utterance,
 		speechSynthesis: {
 			getVoices: () => voices,
+			addEventListener: (_event: string, listener: () => void) =>
+				listeners.add(listener),
+			removeEventListener: (_event: string, listener: () => void) =>
+				listeners.delete(listener),
 			speak: (u: Utterance) => {
 				utterance = u;
 			},
@@ -65,12 +73,65 @@ function fixture(
 		api,
 		utterance: () => utterance,
 		cancellations: () => cancellations,
+		listeners: () => listeners.size,
+		voicesChanged: (next: typeof voices) => {
+			voices = next;
+			for (const listener of listeners) listener();
+		},
 	};
 }
 
+afterEach(() => vi.useRealTimers());
+
+it("waits for delayed voiceschanged before selecting the saved local voice", async () => {
+	vi.useFakeTimers();
+	const f = fixture([]);
+	const pending = f.api.speakLocal("delayed", settings);
+	expect(f.utterance()).toBeUndefined();
+	f.voicesChanged([]);
+	await vi.advanceTimersByTimeAsync(999);
+	expect(f.utterance()).toBeUndefined();
+	f.voicesChanged([{ name: "Desk voice", lang: "en-US" }]);
+	await pending;
+	expect(f.utterance()).toMatchObject({
+		text: "delayed",
+		voice: { name: "Desk voice" },
+	});
+	expect(f.listeners()).toBe(0);
+	expect(vi.getTimerCount()).toBe(0);
+});
+
+it("bounds empty voice enumeration at 1000ms and removes its listener", async () => {
+	vi.useFakeTimers();
+	const f = fixture([]);
+	const pending = f.api.speakLocal("missing", settings);
+	const failure = expect(pending).rejects.toMatchObject({
+		name: "VoiceUnavailable",
+	});
+	await vi.advanceTimersByTimeAsync(1000);
+	await failure;
+	expect(f.utterance()).toBeUndefined();
+	expect(f.listeners()).toBe(0);
+	expect(vi.getTimerCount()).toBe(0);
+});
+
+for (const method of ["stop", "close"] as const)
+	it(`cancels voice enumeration on ${method} without late playback`, async () => {
+		vi.useFakeTimers();
+		const f = fixture([]);
+		const pending = f.api.speakLocal("cancelled", settings);
+		await f.api[method]();
+		await pending;
+		f.voicesChanged([{ name: "Desk voice", lang: "en-US" }]);
+		await vi.advanceTimersByTimeAsync(1000);
+		expect(f.utterance()).toBeUndefined();
+		expect(f.listeners()).toBe(0);
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 it("KNOB-073 MGMT-301: actual serialized local engine selects voice, clamps settings, waits for start/end and cancels", async () => {
 	const f = fixture();
-	f.api.speakLocal("synthetic", {
+	await f.api.speakLocal("synthetic", {
 		...settings,
 		rate: 99,
 		pitch: -5,
@@ -96,22 +157,19 @@ it("KNOB-073 MGMT-301: actual serialized local engine selects voice, clamps sett
 	});
 	f.utterance()?.onend();
 	expect(f.api.localState().done).toBe(true);
-	f.api.speakLocal("second", { ...settings, voiceHint: "" });
+	await f.api.speakLocal("second", { ...settings, voiceHint: "" });
 	expect(f.utterance()?.voice).toEqual({ name: "Chinese", lang: "zh-CN" });
 	await f.api.stop();
 	f.utterance()?.onend();
 	expect(f.cancellations()).toBe(1);
 	expect(f.api.localState().done).toBe(false);
 	expect(f.api.localState().failed).toBe(true);
-	expect(() => fixture([]).api.speakLocal("missing", settings)).toThrow(
-		"Local voice unavailable",
-	);
-	expect(() =>
+	await expect(
 		fixture().api.speakLocal("missing hint", {
 			...settings,
 			voiceHint: "missing",
 		}),
-	).toThrow("Local voice unavailable");
+	).rejects.toThrow("Local voice unavailable");
 });
 
 for (const mode of ["drain", "cancel", "timeout"] as const)
@@ -133,7 +191,7 @@ for (const mode of ["drain", "cancel", "timeout"] as const)
 						return {
 							invoke: async (method, args) => {
 								if (method === "speakLocal") {
-									f.api.speakLocal(String(args?.[0]), settings);
+									await f.api.speakLocal(String(args?.[0]), settings);
 									return;
 								}
 								if (method === "localState") {

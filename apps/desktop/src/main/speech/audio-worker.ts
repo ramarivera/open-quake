@@ -11,6 +11,7 @@ export function installAudioWorker(
 ) {
 	let localActive = false;
 	let localStatus = { started: false, done: false, failed: false };
+	let cancelVoiceWait: (() => void) | undefined;
 	let context: AudioContext | undefined;
 	let tracks: MediaStream | undefined;
 	let processor: ScriptProcessorNode | undefined;
@@ -35,6 +36,7 @@ export function installAudioWorker(
 	let failed: false | "overflow" | "recorder" = false;
 	let framer: PcmFramer | undefined;
 	const stop = async () => {
+		cancelVoiceWait?.();
 		if (localActive) {
 			localActive = false;
 			localStatus = { ...localStatus, failed: true };
@@ -195,7 +197,7 @@ export function installAudioWorker(
 			};
 			return batch;
 		},
-		speakLocal(
+		async speakLocal(
 			text: string,
 			settings: {
 				rate: number;
@@ -204,7 +206,32 @@ export function installAudioWorker(
 				voiceHint: string;
 			},
 		) {
-			const voices = speechSynthesis.getVoices();
+			cancelVoiceWait?.();
+			const epoch = ++generation;
+			localStatus = { started: false, done: false, failed: false };
+			let voices = speechSynthesis.getVoices();
+			if (!voices.length) {
+				voices = await new Promise<SpeechSynthesisVoice[]>((resolve) => {
+					const finish = (available: SpeechSynthesisVoice[]) => {
+						clearTimeout(timer);
+						speechSynthesis.removeEventListener("voiceschanged", changed);
+						cancelVoiceWait = undefined;
+						resolve(available);
+					};
+					const changed = () => {
+						const available = speechSynthesis.getVoices();
+						if (available.length) finish(available);
+					};
+					const timer = setTimeout(
+						() => finish(speechSynthesis.getVoices()),
+						1000,
+					);
+					cancelVoiceWait = () => finish([]);
+					speechSynthesis.addEventListener("voiceschanged", changed);
+					changed();
+				});
+			}
+			if (epoch !== generation) return;
 			const hint = settings.voiceHint.toLowerCase().trim();
 			const voice = hint
 				? voices.find((v) => v.name.toLowerCase().includes(hint))
@@ -213,7 +240,6 @@ export function installAudioWorker(
 				throw Object.assign(new Error("Local voice unavailable"), {
 					name: "VoiceUnavailable",
 				});
-			const epoch = generation;
 			const utterance = new SpeechSynthesisUtterance(text);
 			utterance.voice = voice;
 			utterance.rate = Math.max(0.5, Math.min(2, settings.rate));
