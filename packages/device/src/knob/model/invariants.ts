@@ -8,11 +8,19 @@ export const readyProfiles = (
 	profiles: readonly MenuProfile[],
 ): readonly MenuProfile[] =>
 	profiles.filter((p) => p.thumbnail._tag === "ready");
+/** Keep committed truth visible even while its thumbnail is unavailable. */
+export const pickerProfiles = (
+	profiles: readonly MenuProfile[],
+	activeProfileId: string,
+): readonly MenuProfile[] =>
+	profiles.filter(
+		(p) => p.thumbnail._tag === "ready" || p.id === activeProfileId,
+	);
 export const selectorProfiles = (
 	state: KnobModelSnapshot,
 ): readonly MenuProfile[] =>
 	state.selector.mode === "picker"
-		? readyProfiles(state.context.profiles)
+		? pickerProfiles(state.context.profiles, state.context.session.profileId)
 		: state.context.profiles;
 export const canFocus = (key: FocusKey): boolean =>
 	key.visible && key.supportKnob;

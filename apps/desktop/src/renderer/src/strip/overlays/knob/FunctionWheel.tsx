@@ -1,77 +1,119 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MenuProfile } from "../../../../../shared/knob-contracts";
 
-/** Row offsets of the five visible entries; the centre one is the choice. */
-const ROW_OFFSETS = [-176, -96, 0, 96, 176] as const;
+const ROW_OFFSETS = [-166.81, -88.37, 0, 88.37, 166.81] as const;
 
-/**
- * The ring selector as a right-edge list sheet: the chosen profile large
- * with an accent marker, two neighbours each side, a short nudge in the
- * knob's direction (knob-model "Strip selector presentation and touch",
- * drawn per independent-device-design).
- */
+/** Recovered geometry and deadlines, using the independent flat list drawing. */
 export function FunctionWheel({
 	entries,
 	index,
 	direction,
+	motion = "full",
 }: {
 	entries: readonly MenuProfile[];
 	index: number;
 	direction: -1 | 1;
+	motion?: "full" | "reduce";
 }): React.JSX.Element {
-	const offset = useRef(0);
 	const [nudge, setNudge] = useState(0);
+	const [indicator, setIndicator] = useState(false);
+	const [width, setWidth] = useState(480);
+	const labels = useRef<HTMLDivElement>(null);
 	const entryId = entries[index]?.id;
+	useLayoutEffect(() => {
+		const nodes =
+			labels.current?.querySelectorAll<HTMLElement>(".knob-wheel-label");
+		let widest = 0;
+		for (const slot of [1, 2, 3]) {
+			const node = nodes?.[slot];
+			if (
+				!node ||
+				!entries[(index + slot - 1 + entries.length) % entries.length]
+			)
+				continue;
+			// Measure text, not its clipped box. Cap before allocating the sheet.
+			const range = document.createRange();
+			range.selectNodeContents(node);
+			const measured = range.getBoundingClientRect().width;
+			widest = Math.max(
+				widest,
+				Math.min(600, measured) * (slot === 2 ? 1 : 0.7),
+			);
+		}
+		setWidth(widest > 240 ? Math.min(1920, widest + 400) : 480);
+	}, [entries, index]);
 	useEffect(() => {
-		if (!entryId) return;
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-		const from = direction * 40;
+		setNudge(0);
+		setIndicator(false);
+		if (
+			!entryId ||
+			motion === "reduce" ||
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches
+		)
+			return;
+		setIndicator(true);
+		const indicatorTimer = setTimeout(() => setIndicator(false), 300);
 		const started = performance.now();
+		const from = direction * 40;
 		let frame = 0;
 		const tick = (now: number) => {
 			const k = Math.min(1, (now - started) / 200);
 			const eased = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
-			offset.current = k === 1 ? 0 : from * (1 - eased);
-			setNudge(offset.current);
+			setNudge(k === 1 ? 0 : from * (1 - eased));
 			if (k < 1) frame = requestAnimationFrame(tick);
 		};
 		frame = requestAnimationFrame(tick);
-		return () => cancelAnimationFrame(frame);
-	}, [entryId, direction]);
+		return () => {
+			cancelAnimationFrame(frame);
+			clearTimeout(indicatorTimer);
+		};
+	}, [entryId, direction, motion]);
 	return (
-		<div
-			className="knob-wheel"
-			role="img"
-			data-testid="function-wheel"
-			aria-label="Profile wheel"
-		>
+		<>
+			<span role="status" aria-live="polite" className="visually-hidden">
+				{entries[index]?.name}
+			</span>
+			<div className="knob-wheel-backdrop" style={{ width }} />
 			<div
-				className="knob-wheel-list"
-				style={{ transform: `translateY(${nudge}px)` }}
+				className="knob-wheel"
+				role="img"
+				data-testid="function-wheel"
+				aria-label="Profile wheel"
 			>
-				{[-2, -1, 0, 1, 2].map((delta) => {
-					const entry =
-						entries[
-							(((index + delta) % entries.length) + entries.length) %
-								entries.length
-						];
-					return (
-						<div
-							key={delta}
-							className="knob-wheel-label"
-							data-slot={delta + 2}
-							style={{ top: 240 + (ROW_OFFSETS[delta + 2] ?? 0) }}
-						>
-							{entry?.name}
-						</div>
-					);
-				})}
+				<div
+					ref={labels}
+					className="knob-wheel-list"
+					style={{ transform: `translateY(${nudge}px)` }}
+				>
+					{[-2, -1, 0, 1, 2].map((delta) => {
+						const entry =
+							entries[
+								(((index + delta) % entries.length) + entries.length) %
+									entries.length
+							];
+						return (
+							<div
+								key={delta}
+								className="knob-wheel-label"
+								data-slot={delta + 2}
+								style={{
+									top: 235 + (ROW_OFFSETS[delta + 2] ?? 0),
+									width: Math.min(
+										600,
+										(width - 160) / (delta === 0 ? 1.404 : 1),
+									),
+								}}
+								title={entry?.name}
+							>
+								{entry?.name}
+							</div>
+						);
+					})}
+				</div>
+				{indicator ? (
+					<div className="knob-wheel-direction" data-direction={direction} />
+				) : null}
 			</div>
-			<div
-				key={`${index}-${direction}`}
-				className="knob-wheel-direction"
-				data-direction={direction}
-			/>
-		</div>
+		</>
 	);
 }
