@@ -134,3 +134,23 @@ acceptance is claimed.
 ## Conversation burn-down lane test-conversation
 
 - [x] AI-103 blank synthesis policy and AI-108 OpenAI/DashScope model derivation through save, switch and reload. Evidence: desktop `main/speech/factory.test.ts` and `main/speech/settings.test.ts`. Bead open-quake-cby.10 remains open for lead delivery.
+
+## 6. speech-adapters burn-down
+
+- [x] 6.1 Implement independent OpenAI STT, Azure STT/TTS, XFY STT/TTS and gated Qwen realtime synthesis with fake conformance fixtures. Rows AI-002/090/097/098/099/100/104/106/107/245, KNOB-072. Bead open-quake-c5w.20 remains open for lead merge.
+- [x] 6.2 Implement typed Azure catalog, secure independent settings, seeding disposition and reload-safe ownership with restart/replacement tests. Rows AI-044/045/046/047/109/246. Bead open-quake-c5w.21 remains open for lead merge.
+
+The provider conformance suite drives AiSpeechService with fake sockets and a
+fake Azure SDK, including early XFY finalization, inclusive revisions,
+resampling, every adapter's cancellation/deadline cleanup, Qwen control-event
+identities and stale response rejection. The production desktop factory tests
+drive active capture and Read Aloud through profile replacement, await physical
+port teardown and verify fresh engines and stale transcript exclusion. Public
+settings round-trip through restart independently of chat, retain Azure voice
+selection and keep keys and XFY credential bundles write-only. Mounted EN/DE
+settings checks use a hidden mock Electron window and synthetic enumeration.
+
+These checkboxes describe software implementation and synthetic acceptance.
+Live provider, physical microphone/speaker and QUAKE acceptance remain open.
+The required broad test and native-media gates are reported separately in the
+lane PR, including unresolved failures; they don't establish complete delivery.

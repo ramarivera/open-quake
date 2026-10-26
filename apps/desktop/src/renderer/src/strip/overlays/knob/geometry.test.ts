@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { clientToLogical } from "../../touch-geometry";
 import {
@@ -8,6 +10,7 @@ import {
 	sameTarget,
 	tileRect,
 } from "./geometry";
+import { KnobDial } from "./KnobDial";
 
 describe("recovered thumbnail picker geometry", () => {
 	it("retains the source's column table, 4:1 ratio, and paged 300 by 75 cards", () => {
@@ -95,4 +98,32 @@ describe("knob focus targets", () => {
 			focusTargetRect({ keyCode: "1,2", size: [1, 1] }, undefined),
 		).toEqual(tileRect("1,2", [1, 1]));
 	});
+});
+
+describe("KNOB-016: rendered focus indicator", () => {
+	it.each([
+		[220, 220, 0],
+		[460, 220, 90],
+		[1920, 480, -45],
+	])(
+		"fits %d × %d and rotates by %d degrees without a tick crown",
+		(width, height, angle) => {
+			const markup = renderToStaticMarkup(
+				createElement(KnobDial, { width, height, angle, accent: "#5fcab5" }),
+			);
+			expect(markup).toContain(`viewBox="0 0 ${width} ${height}"`);
+			expect(markup).toContain(
+				`<rect x="2" y="2" width="${width - 4}" height="${height - 4}" rx="26" fill="none" stroke="#5fcab5" stroke-width="2"`,
+			);
+			expect(markup).toContain(
+				`r="${Math.floor(Math.min(width, height) * 0.24)}"`,
+			);
+			expect(markup).toContain(
+				`transform="rotate(${angle} ${width / 2} ${height / 2})"`,
+			);
+			expect(markup.match(/<circle/g)).toHaveLength(1);
+			expect(markup.match(/<line /g)).toHaveLength(1);
+			expect(markup).not.toMatch(/<path|<image|<filter|<text/);
+		},
+	);
 });

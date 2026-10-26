@@ -20,10 +20,18 @@ const identity = {
 };
 export const TtsProfile = Schema.Struct({
 	...identity,
-	provider: Schema.Literal("openai", "dashscope"),
+	provider: Schema.Literal(
+		"openai",
+		"dashscope",
+		"azure",
+		"xfy",
+		"qwen-realtime",
+	),
 	baseUrl: Schema.String,
 	model: Schema.NonEmptyTrimmedString,
 	voice: Schema.NonEmptyTrimmedString,
+	region: Schema.optional(Schema.String),
+	realtimeEnabled: Schema.optional(Schema.Boolean),
 	language: Schema.String,
 	instructions: Schema.NonEmptyTrimmedString,
 	format: Schema.Literal("wav", "pcm"),
@@ -32,9 +40,11 @@ export const TtsProfile = Schema.Struct({
 export type TtsProfile = typeof TtsProfile.Type;
 export const SttProfile = Schema.Struct({
 	...identity,
-	provider: Schema.Literal("dashscope"),
+	provider: Schema.Literal("dashscope", "openai", "azure", "xfy"),
 	baseUrl: Schema.String,
-	model: Schema.Literal("qwen-audio-3.1-asr-flash-streaming"),
+	model: Schema.NonEmptyTrimmedString,
+	language: Schema.optional(Schema.String),
+	region: Schema.optional(Schema.String),
 	descriptor: AudioDescriptor,
 });
 export type SttProfile = typeof SttProfile.Type;

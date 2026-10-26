@@ -83,3 +83,39 @@ The facade SHALL normalize authentication, rate-limit, unavailable, malformed-st
 #### Scenario: Cancelled SDK keeps emitting
 - **WHEN** cancellation is acknowledged and the SDK produces another delta
 - **THEN** the facade drops the delta and does not expose credentials or provider error bodies in the cancellation result
+
+### Requirement: Offline preflight and visible terminal failures
+
+An injected connectivity port SHALL reject offline remote inference before credential resolution or provider I/O and allow reconnection without unsolicited external probes (AI-020). Completed generations SHALL require non-whitespace visible text; empty streams, empty completions and whitespace-only completions SHALL fail once and never persist a successful blank reply. Cancellation SHALL retain its cancelled outcome (AI-093). Diagnostics SHALL translate retained local legacy codes, including microphone, busy, timeout, parse and HTTP errors, excluding account and market codes (AI-079).
+
+#### Scenario: Offline and reconnected generation
+- **WHEN** connectivity is offline at preflight or cancellation precedes dispatch
+- **THEN** provider I/O does not occur and a stable visible error or cancellation is returned
+- **WHEN** connectivity returns
+- **THEN** the next generation can proceed through its selected provider
+
+#### Scenario: Empty completed answer
+- **WHEN** completion arrives without non-whitespace answer text
+- **THEN** the facade fails with AI.PROVIDER.PROTOCOL_INVALID and the chat consumer records one failed terminal instead of a successful blank answer
+
+#### Scenario: Retained local diagnostic import
+- **WHEN** a profile imports a numeric microphone, busy, parse, timeout or HTTP error
+- **THEN** compatibility metadata retains the numeric value and its safe local diagnostic code without executing the old error handler
+- **AND** account, market and credit codes do not acquire local error mappings
+
+### Requirement: Opt-in correlated provider file operations
+
+The facade SHALL own upload, list, retrieve metadata, retrieve content and delete operations for explicitly opted-in OpenAI/Qwen compatible profiles (AI-038, AI-244). Each operation SHALL carry a request ID, use only the selected credential and endpoint, reject unsafe file IDs and redirects, bound uploads and responses, and support cancellation without automatic retries. Renderer requests SHALL contain no credential or arbitrary destination. Upload purpose SHALL be assistants.
+
+#### Scenario: Concurrent file operations stay isolated
+- **WHEN** two opted-in file requests complete out of order
+- **THEN** each result retains its original request ID and profile without a global callback dispatcher
+- **AND** missing opt-in, malformed responses, denied HTTP, cancellation and credential revocation fail without leaking keys or initiating another provider request
+
+### Requirement: Explicit generated media transport
+An explicitly configured DashScope image or video profile SHALL register a capable media adapter and send only to its saved endpoint with its selected credential (AI-007). It SHALL use asynchronous task creation and bounded correlated polling, reject malformed tasks or unsafe result URLs, and cancel owned I/O. A media model name SHALL NOT create a sidecar or enable media on a text profile.
+
+#### Scenario: Explicit image and video generation
+- **WHEN** the user selects image or video generation on a saved Qwen profile with the API base and model
+- **THEN** the facade uses the corresponding image-synthesis or video-synthesis wire protocol and returns a generated asset link after the same task succeeds
+- **AND** cancellation stops polling and no other provider receives a request

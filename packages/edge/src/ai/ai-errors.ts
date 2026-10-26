@@ -17,6 +17,7 @@ const entry = <
 });
 /** AI-owned catalog until the repository has a shared error kernel. */
 export const AiErrors = {
+	Offline: entry("AI.PROVIDER.OFFLINE", "unavailable", "The device is offline"),
 	ConfigInvalid: entry(
 		"AI.PROVIDER.CONFIG_INVALID",
 		"validation",
@@ -229,7 +230,19 @@ export class AiCredentialStoreFailed extends Schema.TaggedError<AiCredentialStor
 	}
 }
 
+export class AiOffline extends Schema.TaggedError<AiOffline>()(
+	"AiOffline",
+	fields(AiErrors.Offline),
+) {
+	declare readonly originalCause: unknown;
+	constructor(cause: unknown = undefined) {
+		super(props(AiErrors.Offline, cause));
+		retain(this, cause);
+	}
+}
+
 export type AiError =
+	| AiOffline
 	| AiConfigInvalid
 	| AiAuthRequired
 	| AiAuthRevoked
@@ -253,4 +266,18 @@ export function translateProviderFailure(
 		default:
 			return new AiUnavailable(cause);
 	}
+}
+
+export function isAiError(cause: unknown): cause is AiError {
+	return (
+		cause instanceof AiOffline ||
+		cause instanceof AiConfigInvalid ||
+		cause instanceof AiAuthRequired ||
+		cause instanceof AiAuthRevoked ||
+		cause instanceof AiCapabilityUnsupported ||
+		cause instanceof AiRateLimited ||
+		cause instanceof AiUnavailable ||
+		cause instanceof AiProtocolInvalid ||
+		cause instanceof AiCredentialStoreFailed
+	);
 }

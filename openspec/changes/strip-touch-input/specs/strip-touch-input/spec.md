@@ -85,6 +85,16 @@ OPEN_QUAKE_MOCK_DEVICE=1 SHALL supply synthetic vendor frames through the parser
 - **THEN** synthetic touch events reach subscribers without loading native HID
 
 
+### Requirement: DOM sub-target observation lifetime
+
+The DOM registry SHALL observe each sub-target, its parent and its gadget for size and attribute changes, discover new children through subtree mutation, refresh bounds before routing, and dispatch non-bubbling events directly to the target. The event detail SHALL retain logical coordinates, phase, identity and effective-release status. Disposal SHALL remove observers and the native subscription and stop dispatching to detached elements. Evidence: SCREEN-061.
+
+#### Scenario: Target moves without a new layout
+
+- **WHEN** target, parent or gadget attributes or sizes change, or a child is added
+- **THEN** the next eligible touch uses the new bounds and new child, without bubbling to the grid
+- **AND** disposal disconnects observers and ignores subsequent native points
+
 ### Requirement: Scoped touch diagnostics
 The touch source SHALL emit a structured health record every 60000 ms through the application diagnostic owner. Records SHALL contain only the enumerated state, bounded nonnegative report/frame/bind/recovery counters and allowlisted catalog error codes. State changes SHALL emit previous/current enum states. Native paths, serials, error messages and causes SHALL never enter these records. Scope disposal SHALL stop both diagnostics and recovery. Source: MAIN-036.
 
