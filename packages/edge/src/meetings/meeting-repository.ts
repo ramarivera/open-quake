@@ -28,14 +28,18 @@ export class MeetingRepository extends Effect.Service<MeetingRepository>()(
 		accessors: true,
 		effect: (storage: MeetingStorage = volatile) =>
 			Effect.gen(function* () {
-				const data = yield* storage.load().pipe(
-					Effect.flatMap(Schema.decodeUnknown(MeetingStore)),
-					Effect.mapError((cause) => meetingError("StorageFailed", cause)),
-				);
-				const records = yield* Ref.make<readonly MeetingRecord[]>(
-					data.records.map(recoverRecord),
-				);
+				const records = yield* Ref.make<readonly MeetingRecord[]>([]);
 				const lock = yield* Effect.makeSemaphore(1);
+				let initialized = false;
+				const initialize = Effect.gen(function* () {
+					if (initialized) return;
+					const data = yield* storage.load().pipe(
+						Effect.flatMap(Schema.decodeUnknown(MeetingStore)),
+						Effect.mapError((cause) => meetingError("StorageFailed", cause)),
+					);
+					yield* Ref.set(records, data.records.map(recoverRecord));
+					initialized = true;
+				});
 				const commit = Effect.fn("MeetingRepository.commit")(
 					(next: readonly MeetingRecord[]): Effect.Effect<void, MeetingError> =>
 						Schema.encode(MeetingStore)({ version: 1, records: next }).pipe(
@@ -46,7 +50,11 @@ export class MeetingRepository extends Effect.Service<MeetingRepository>()(
 						),
 				);
 				return {
-					list: Effect.fn("MeetingRepository.list")(() => Ref.get(records)),
+					list: Effect.fn("MeetingRepository.list")(() =>
+						lock.withPermits(1)(
+							initialize.pipe(Effect.zipRight(Ref.get(records))),
+						),
+					),
 					update: Effect.fn("MeetingRepository.update")(
 						(
 							transform: (
@@ -54,15 +62,18 @@ export class MeetingRepository extends Effect.Service<MeetingRepository>()(
 							) => readonly MeetingRecord[],
 						): Effect.Effect<void, MeetingError> =>
 							lock.withPermits(1)(
-								Ref.get(records).pipe(
-									Effect.flatMap((current) => commit(transform(current))),
-								),
+								initialize
+									.pipe(Effect.zipRight(Ref.get(records)))
+									.pipe(
+										Effect.flatMap((current) => commit(transform(current))),
+									),
 							),
 					),
 					remove: Effect.fn("MeetingRepository.remove")(
 						(ids: readonly string[]) =>
 							lock.withPermits(1)(
 								Effect.gen(function* () {
+									yield* initialize;
 									const next = (yield* Ref.get(records)).filter(
 										(r) => !ids.includes(r.id),
 									);

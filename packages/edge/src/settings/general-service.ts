@@ -52,7 +52,7 @@ export class GeneralSettingsService extends Effect.Service<GeneralSettingsServic
 				);
 			return {
 				snapshot: Effect.fn("GeneralSettingsService.snapshot")(
-					(): Effect.Effect<GeneralSnapshot, SettingsInvalid> =>
+					(): Effect.Effect<GeneralSnapshot, SettingsBackendFailure> =>
 						repository.read().pipe(Effect.flatMap(view)),
 				),
 				loginStatus: Effect.fn("GeneralSettingsService.loginStatus")(

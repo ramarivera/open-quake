@@ -50,7 +50,7 @@ export class WizardService extends Effect.Service<WizardService>()(
 				);
 			return {
 				snapshot: Effect.fn("WizardService.snapshot")(
-					(): Effect.Effect<WizardSnapshot, SettingsInvalid> =>
+					(): Effect.Effect<WizardSnapshot, SettingsBackendFailure> =>
 						repository.read().pipe(Effect.flatMap(view)),
 				),
 				save: Effect.fn("WizardService.save")(

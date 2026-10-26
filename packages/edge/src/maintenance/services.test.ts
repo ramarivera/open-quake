@@ -1,5 +1,13 @@
 import { describe, expect, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Layer, Option, TestClock } from "effect";
+import {
+	Deferred,
+	Effect,
+	Fiber,
+	Layer,
+	ManagedRuntime,
+	Option,
+	TestClock,
+} from "effect";
 import { type FirmwareSnapshot, idleFirmware } from "./contracts.js";
 import {
 	FirmwarePort,
@@ -32,6 +40,7 @@ function firmwareFixture(
 		unknown?: boolean;
 		offline?: boolean;
 		failSave?: (state: FirmwareSnapshot) => boolean;
+		load?: () => Effect.Effect<unknown, FirmwarePersistenceFailed>;
 	} = {},
 ) {
 	const calls: string[] = [];
@@ -81,12 +90,14 @@ function firmwareFixture(
 						if (options.copyFails) return yield* new FirmwareWriteFailed();
 						progress(1024);
 					}),
-				load: () =>
-					Effect.succeed(
-						options.restart
-							? { ...idleFirmware, state: "copying", serial: "chosen" }
-							: undefined,
-					),
+				load:
+					options.load ??
+					(() =>
+						Effect.succeed(
+							options.restart
+								? { ...idleFirmware, state: "copying", serial: "chosen" }
+								: undefined,
+						)),
 				save: (state) =>
 					Effect.gen(function* () {
 						if (options.failSave?.(state))
@@ -100,6 +111,27 @@ function firmwareFixture(
 }
 const flush = TestClock.adjust(1);
 describe("firmware session", () => {
+	it.scoped(
+		"stops firmware workers before releasing shared-owner bookmarks",
+		() => {
+			const f = firmwareFixture();
+			return Effect.gen(function* () {
+				const service = yield* FirmwareUpdates;
+				yield* service.start({ serial: "chosen", session: "chosen-session" });
+				yield* flush;
+				expect((yield* service.snapshot()).state).toBe("ready_to_write");
+				yield* service.write("first");
+				yield* service.shutdown();
+				yield* TestClock.adjust(firmwareTiming.settle + firmwareTiming.verify);
+				expect(f.calls.filter((call) => call.startsWith("copy:"))).toEqual([]);
+				expect(yield* Effect.either(service.recover("chosen"))).toMatchObject({
+					_tag: "Left",
+					left: { code: "QUAKE.FIRMWARE.UNAVAILABLE" },
+				});
+			}).pipe(Effect.provide(f.layer));
+		},
+	);
+
 	for (const action of ["start", "recover", "write"] as const) {
 		it.scoped(
 			`retries ${action} after its initial save fails without a stranded worker state`,
@@ -577,4 +609,51 @@ describe("clear data", () => {
 		expect(error.code).toBe(MaintenanceErrors.FirmwareWriteFailed.code);
 		expect(JSON.stringify(error)).not.toMatch(/Volumes|token|secret/);
 	});
+});
+
+it("acquires firmware without reading and retries before cancel without losing interrupted recovery", async () => {
+	let broken = true;
+	let reads = 0;
+	const error = new FirmwarePersistenceFailed();
+	const f = firmwareFixture({
+		load: () =>
+			Effect.suspend(() => {
+				reads++;
+				return broken
+					? Effect.fail(error)
+					: Effect.succeed({
+							...idleFirmware,
+							state: "copying",
+							serial: "chosen",
+						});
+			}),
+	});
+	const runtime = ManagedRuntime.make(f.layer);
+	try {
+		await runtime.runtime();
+		expect(reads).toBe(0);
+		expect(
+			await runtime.runPromise(
+				Effect.flatMap(FirmwareUpdates, (s) => Effect.either(s.cancel())),
+			),
+		).toMatchObject({ _tag: "Left", left: error });
+		expect(f.records).toEqual([]);
+		broken = false;
+		const states = await Promise.all(
+			Array.from({ length: 8 }, () =>
+				runtime.runPromise(
+					Effect.flatMap(FirmwareUpdates, (s) => s.snapshot()),
+				),
+			),
+		);
+		expect(
+			states.every(
+				(s) => s.state === "needs_recovery" && s.reason === "interrupted",
+			),
+		).toBe(true);
+		expect(reads).toBe(2);
+		expect(f.records).toEqual([]);
+	} finally {
+		await runtime.dispose();
+	}
 });

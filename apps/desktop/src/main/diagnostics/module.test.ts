@@ -112,6 +112,56 @@ describe("prepared desktop service ownership", () => {
 		}
 	});
 
+	it("cancels and joins registration work without closing the shared owner", async () => {
+		const module = prepareDesktopModule(Layer.empty, (runtime) => runtime);
+		const application = makeDesktopRuntime(module.layer);
+		module.bind(application);
+		const view = module.start();
+		let finish = () => {};
+		const finalizer = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		const started = vi.fn();
+		const entered = vi.fn();
+		const released = vi.fn();
+		const operation = view.runPromiseExit(
+			Effect.sync(started).pipe(
+				Effect.zipRight(Effect.never),
+				Effect.ensuring(
+					Effect.sync(entered).pipe(
+						Effect.zipRight(Effect.promise(() => finalizer)),
+						Effect.tap(() => Effect.sync(released)),
+					),
+				),
+			),
+		);
+		try {
+			await vi.waitFor(() => expect(started).toHaveBeenCalledOnce());
+			let closed = false;
+			const closing = view.dispose().then(() => {
+				closed = true;
+			});
+			await vi.waitFor(() => expect(entered).toHaveBeenCalledOnce());
+			expect(closed).toBe(false);
+			finish();
+			await closing;
+			const exit = await operation;
+			expect(Exit.isFailure(exit) && Cause.isInterrupted(exit.cause)).toBe(
+				true,
+			);
+			expect(released).toHaveBeenCalledOnce();
+			expect(await application.runPromise(Effect.succeed(7))).toBe(7);
+			const late = await view.runPromiseExit(Effect.succeed(8));
+			expect(Exit.isFailure(late) && Cause.isInterrupted(late.cause)).toBe(
+				true,
+			);
+		} finally {
+			finish();
+			await view.dispose();
+			await application.dispose();
+		}
+	});
+
 	it("retains standalone ownership and rejects invalid preparation order", async () => {
 		const released = vi.fn();
 		const layer = Layer.scopedDiscard(

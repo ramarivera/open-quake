@@ -91,6 +91,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 	const { root, mock } = options;
 	const nativeExit = options.exit ?? ((code = 0) => app.exit(code));
 	let requestedExit: number | undefined;
+	let exitStarted = false;
 	// Complete the effect and its diagnostic span before the forced native exit.
 	const exit = (code = 0): void => {
 		requestedExit = code;
@@ -327,7 +328,8 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 		(runtime) => {
 			const ready = runtime.runPromise(
 				Effect.gen(function* () {
-					yield* FirmwareUpdates;
+					const firmware = yield* FirmwareUpdates;
+					yield* firmware.snapshot();
 					yield* AppUpdates;
 					yield* DataReset;
 				}),
@@ -348,7 +350,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 			const view = Effect.fn("DesktopMaintenance.view")(
 				function* (): Effect.fn.Return<
 					MaintenanceView,
-					never,
+					FirmwarePersistenceFailed,
 					FirmwareUpdates | AppUpdates
 				> {
 					const firmware = yield* FirmwareUpdates;
@@ -645,6 +647,7 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 					if (mutation && requestedExit !== undefined) {
 						const code = requestedExit;
 						requestedExit = undefined;
+						exitStarted = true;
 						ipcMain.removeHandler(MAINTENANCE_CHANNEL);
 						try {
 							await runtime.dispose();
@@ -686,6 +689,16 @@ export function prepareMaintenance(options: MaintenanceOptions) {
 						const failures: unknown[] = [];
 						try {
 							await ready;
+						} catch (cause) {
+							failures.push(cause);
+						}
+						try {
+							if (!exitStarted)
+								await runtime.runPromise(
+									Effect.flatMap(FirmwareUpdates, (service) =>
+										service.shutdown(),
+									),
+								);
 						} catch (cause) {
 							failures.push(cause);
 						}

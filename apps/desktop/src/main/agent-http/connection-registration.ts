@@ -89,23 +89,23 @@ export interface AgentConnectionsRegistration {
 	readonly repository: AgentConnections;
 	readonly dispose: () => Promise<void>;
 }
-/** Root awaits setup once, injects explicit runtime operations and owns shutdown. No initial network. */
-export async function registerAgentConnections(
+/** Acquisition belongs to the application graph; no IPC or network starts here. */
+export function acquireAgentConnections(
 	options: RegisterAgentConnectionsOptions,
-): Promise<AgentConnectionsRegistration> {
+) {
 	const root = options.root ?? join(app.getPath("userData"), "agent-http-v1");
-	const acquisition = createAgentConnections({
+	return createAgentConnections({
 		storage: options.storage ?? connectionFileStorage(root),
 		credentials:
 			options.credentials ?? connectionCredentials(join(root, "credentials")),
 	});
-	const repository = await Effect.runPromise(
-		options.diagnostics
-			? options.diagnostics
-					.instrument(acquisition, "agent.connection")
-					.pipe(Effect.provide(options.diagnostics.layer))
-			: acquisition,
-	);
+}
+
+/** Activate IPC against an acquired repository without owning its lifetime. */
+export function activateAgentConnections(
+	repository: AgentConnections,
+	options: RegisterAgentConnectionsOptions,
+): AgentConnectionsRegistration {
 	const controller = createAgentConnectionsController({
 		repository,
 		managementId: () => options.management()?.webContents.id,
@@ -162,10 +162,30 @@ export async function registerAgentConnections(
 			ipcMain.removeHandler(AGENT_CONNECTIONS_REQUEST);
 			off();
 			controller.dispose();
-			disposal = Promise.allSettled([...pending]).then(() => {
-				repository.dispose();
-			});
+			disposal = Promise.allSettled([...pending]).then(() => undefined);
 			return disposal;
+		},
+	};
+}
+
+/** Standalone compatibility wrapper owns and releases the acquired repository. */
+export async function registerAgentConnections(
+	options: RegisterAgentConnectionsOptions,
+): Promise<AgentConnectionsRegistration> {
+	const acquisition = acquireAgentConnections(options);
+	const repository = await Effect.runPromise(
+		options.diagnostics
+			? options.diagnostics
+					.instrument(acquisition, "agent.connection")
+					.pipe(Effect.provide(options.diagnostics.layer))
+			: acquisition,
+	);
+	const registration = activateAgentConnections(repository, options);
+	return {
+		repository,
+		dispose: async () => {
+			await registration.dispose();
+			repository.dispose();
 		},
 	};
 }
