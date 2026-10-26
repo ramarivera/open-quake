@@ -93,8 +93,18 @@ it("routes the real manual check/download/approval/install request path through 
 		await owner.request({ action: "install-update" });
 		expect(install).not.toHaveBeenCalled();
 		native.dialog.showMessageBox.mockResolvedValueOnce({ response: 1 });
+		expect(await owner.request({ action: "install-update" })).toMatchObject({
+			ok: true,
+			view: { update: { state: "idle", prompt: false } },
+		});
+		expect(install).toHaveBeenCalledOnce();
 		await owner.request({ action: "install-update" });
 		expect(install).toHaveBeenCalledOnce();
+		transport.mockResolvedValueOnce(new Response(envelope));
+		expect(await owner.request({ action: "check-update" })).toMatchObject({
+			ok: true,
+			view: { update: { state: "available" } },
+		});
 	} finally {
 		finish();
 		await owner.dispose();

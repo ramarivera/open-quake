@@ -172,6 +172,16 @@ export class AppUpdates extends Effect.Service<AppUpdates>()("AppUpdates", {
 					),
 					Effect.tapError(fail),
 				);
+				// A returning installer completed its handoff. The running app's version
+				// does not change until restart, so permit a fresh check without claiming it did.
+				release = Option.none();
+				state = {
+					state: "idle",
+					version: "",
+					progress: 0,
+					reason: "",
+					prompt: false,
+				};
 			}),
 		};
 	}),
