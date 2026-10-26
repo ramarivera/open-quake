@@ -527,6 +527,17 @@ if (!app.requestSingleInstanceLock()) {
 						const runtime = hardwareModule.runtime;
 						const mock = process.env.OPEN_QUAKE_MOCK_DEVICE === "1";
 						const meetingsModule = prepareMeetings({
+							provider: {
+								credentials: modelCredentials.ai,
+								models: () =>
+									Effect.tryPromise({
+										try: () =>
+											agentsModule.runtime.runPromise(
+												AgentsService.resolve("default"),
+											),
+										catch: (cause) => new AiConfigInvalid(cause),
+									}),
+							},
 							microphone: speech.settings.microphone,
 							diagnostics,
 							userData: app.getPath("userData"),

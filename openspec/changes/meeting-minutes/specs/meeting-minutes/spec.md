@@ -468,3 +468,50 @@ Evidence: AI-313, AI-314, SETTINGS-108. Edit Meeting Title SHALL open a 400 px m
 
 - **WHEN** a selected record is confirmed deleted
 - **THEN** selection moves below it or, when no survivor remains below, above it; failure keeps the dialog and original selection
+
+
+### Requirement: Direct meeting provider composition
+
+Evidence: AI-136, AI-137, AI-269, AI-270, AI-272, AI-327. Production registration SHALL compose AiMeetingAdapter with the existing saved model profiles, protected credential resolver and managed audio references. DashScope SHALL use matching qwen-audio-3.0-asr-flash-filetrans upload and submit models, private OSS form upload, mono channel zero with diarization, asynchronous task polling and cancellation, and at most three InternalError retries after 2, 4 and 6 seconds. OpenAI SHALL own a unique private PCM conversion per job, use gpt-realtime-mini with gpt-4o-transcribe input transcription and server VAD threshold 0.4, 800 ms prefix and 1000 ms silence, send at most 30720 bytes per 100 ms after 500 ms startup, preserve speech segment timing, await all correlated final results for up to 10 seconds after EOF and release PCM/socket on all exits. Translation SHALL use explicit source auto and selected target language with qwen3.5-livetranslate-flash-realtime, bounded state and 500 ms reconnect. Device toggles, source loss and meeting end SHALL stop the same adapter.
+
+#### Scenario: Saved profile drives a fake provider
+
+- **WHEN** the production meeting registration processes managed audio with saved Qwen or OpenAI credentials against a fake transport
+- **THEN** only that provider receives the normalized audio, model and channel plan, correlated speaker/time segments reach durable history, and cancellation closes owned resources without generating text
+
+#### Scenario: Translation disconnect and cancellation
+
+- **WHEN** translation disconnects during audio input or its owner stops
+- **THEN** reconnect waits 500 ms, at most eight 300 ms PCM blocks remain pending, late results from a prior session cannot enter the display, and stop releases the socket and queued audio
+
+### Requirement: Private recoverable meeting provider resources
+
+Evidence: AI-266, AI-273, AI-276, AI-278, AI-279. Upload location, expiry, task identity, provider/profile identity and cleanup state SHALL persist privately per meeting, outside renderer snapshots. Retry SHALL resume a valid task, reupload an expired or rejected upload only from existing managed audio, and retain completed transcript on generation retry. Distinct catalog codes SHALL identify missing audio, expired and deleted audio, missing transcript and no valid speech. Successful transcription SHALL save private UTF-8 compatibility and raw provider artifacts, ordered by numeric timestamps; deletion SHALL remove them with the meeting. Provider file operations SHALL affect only locally owned remote identities, retain failed cleanup for retry, and never delete an arbitrary account file.
+
+#### Scenario: Restart and expired resource
+
+- **WHEN** a host restarts with a pending task or an expired upload
+- **THEN** retry resumes the same task or replaces the expired upload, preserves the meeting identity, and missing local audio fails with a specific actionable code instead of an invented transcript
+
+#### Scenario: Empty recognition and cleanup failure
+
+- **WHEN** the provider returns no speech or a remote deletion fails
+- **THEN** no transcript is fabricated, no-valid-speech is distinct from transport failure, failed remote cleanup remains durable, and another meeting's files cannot be deleted
+
+### Requirement: Continuous encoded capture and deterministic mixing
+
+Evidence: AI-285, AI-286, AI-288, AI-294. Main and side records SHALL isolate mic_N.webm and system_N.webm under their own UUID directories, use audio/webm;codecs=opus and ten-second slices, and rotate hourly by starting replacement recorders before stopping old ones. Finalization SHALL concatenate numeric segment order, mix usable mic/system tracks at 48 kHz with longest duration and mono MP3 output, and use mic-only output for empty or unusable optional system tracks. Upload SHALL submit the mono artifact, reject failed conversion and clean private temporary files.
+
+#### Scenario: Hour rollover and optional silent file
+
+- **WHEN** an hour rolls over while both tracks record, or system audio is empty or unusable
+- **THEN** new recorders run before old stop, both old final writes drain, unequal tracks retain the longer duration, numeric segments 2 and 10 stay ordered, and upload receives mono bytes
+
+### Requirement: Rate-conformant bounded live result consumers
+
+Evidence: AI-292, AI-338, SCREEN-110. Translation capture SHALL resample actual input rates to mono 24 kHz signed little-endian PCM in exact 7200-sample blocks without playback. Every mounted live display SHALL receive incremental correlated results and selected target language, render speaker/finality, scroll to new content and show idle update speed after five seconds. Stored display text SHALL remain bounded to 200 paragraphs and 64000 characters with at most eight timeline marks. Profile/reset isolation SHALL clear old session content.
+
+#### Scenario: Two displays and rate conversion
+
+- **WHEN** fake 44100 Hz or 48000 Hz audio drives translation and two registered displays receive interim then final results
+- **THEN** each submitted block contains exactly 300 ms at 24 kHz, displays replace the same interim paragraph, show selected language and speaker, become idle after five seconds, and reset never restores previous profile text

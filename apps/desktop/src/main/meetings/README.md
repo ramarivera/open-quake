@@ -104,18 +104,19 @@ Credentials, upload policy and SDK types belong behind that port.
 The facade supplies DashScope's `qwen-audio-3.0-asr-flash-filetrans`, channel `[0]`,
 diarization, ten-second polling, 48-hour upload expiry and timeout
 `max(180000, durationMs * 1.5 + 120000)`. OpenAI file realtime uses
-`gpt-realtime-mini` and timeout `clamp(180000, durationMs * 0.5 + 180000, 1800000)`.
+a transcription-only `gpt-4o-transcribe` session and timeout `clamp(180000, durationMs * 0.5 + 180000, 1800000)`.
 Summary generation uses the existing text facade and requires the explicitly
 selected AI profile's model to match the minutes model. Language selection is
 independent of UI locale. ASR/summary failures never log transcript or credentials.
 
-Production does not yet supply a live meeting adapter. Missing translation fails
-before acquiring audio; offline recording/history are available. Non-mock
+Production binds the direct meeting adapter to the selected saved Qwen/OpenAI model and the existing protected credential vault. Qwen uses private OSS upload and asynchronous filetrans; OpenAI uses the existing transcription socket protocol with per-job private PCM. Live translation requires a saved Qwen profile and explicit target language. Missing configuration fails before capture. Non-mock
 configuration rejects fake ASR and deterministic summary models. Mock mode alone
 installs fake meeting providers and bypasses all audio capture. The configuration
 form accepts a provider-owned AI profile UUID/model; configuration applies to new
 sessions in the running app, while each saved record retains its configuration.
-Provider catalog/credential persistence remains owned by the provider lane.
+Provider catalog/credential persistence remains owned by the existing provider module. Provider task/upload references and expiry live only in private per-meeting `provider-state.json`, never renderer snapshots. Compatibility `MM_Transcription.txt` and raw `MM_Transcription.txtoriginal.json` artifacts remain private until meeting deletion. They are not logs or exports. Temporary normalized MP3 and per-job PCM are deleted on every exit. Only locally owned remote file identities can be listed/deleted; failed cleanup blocks local deletion for explicit retry. The protected remoteFiles command uploads only the selected saved transcript, and is never called automatically.
+
+Translation receives source auto and selected target language, sends 24 kHz mono PCM in exact 300 ms blocks, bounds pending pushes to eight, reconnects after 500 ms, and clears results when profile/language changes. The renderer worklet resamples actual device rates. Hourly recorders start replacements before draining their predecessors. Empty or undecodable optional system tracks use the microphone-only conversion.
 
 Mic state comes from the existing hardware session via meeting snapshots. Panel
 windows cannot use the management-only hardware channel. No optimistic local Mic

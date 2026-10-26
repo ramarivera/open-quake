@@ -1,0 +1,62 @@
+import { Effect } from "effect";
+import { meetingError } from "../../meetings/meeting-errors.js";
+import type { SpeechHttp } from "./speech-ports.js";
+
+export function providerUrl(value: string, base?: string): string {
+	const url = new URL(value, base);
+	if (
+		url.username ||
+		url.password ||
+		url.hash ||
+		(url.protocol !== "https:" &&
+			!(
+				url.protocol === "http:" &&
+				["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+			))
+	)
+		throw meetingError("Invalid");
+	return url.href;
+}
+export const meetingRequest = (
+	http: typeof SpeechHttp.Service,
+	url: string,
+	init: RequestInit = {},
+) =>
+	Effect.tryPromise({
+		try: (signal) =>
+			http.fetch(providerUrl(url), {
+				...init,
+				redirect: "error",
+				signal: AbortSignal.any([signal, AbortSignal.timeout(30000)]),
+			}),
+		catch: (cause) => meetingError("TranscriptionFailed", cause),
+	});
+export const responseJson = (response: Response) =>
+	Effect.tryPromise({
+		try: async () => {
+			if (!response.ok || !response.body)
+				throw meetingError("TranscriptionFailed");
+			const reader = response.body.getReader();
+			const chunks: Uint8Array[] = [];
+			let length = 0;
+			try {
+				while (true) {
+					const part = await reader.read();
+					if (part.done) break;
+					length += part.value.length;
+					if (length > 8_000_000) throw meetingError("TranscriptionFailed");
+					chunks.push(part.value);
+				}
+			} finally {
+				await reader.cancel();
+			}
+			const data = new Uint8Array(length);
+			let offset = 0;
+			for (const chunk of chunks) {
+				data.set(chunk, offset);
+				offset += chunk.length;
+			}
+			return JSON.parse(new TextDecoder().decode(data)) as unknown;
+		},
+		catch: (cause) => meetingError("TranscriptionFailed", cause),
+	});

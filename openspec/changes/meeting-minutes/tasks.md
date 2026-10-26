@@ -126,3 +126,20 @@ Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptanc
 - [x] Fix Codex 4378948029 by marking processing audio interrupted on job interruption. Two fake-backed service regressions fail before the fix and cover failed/interrupted audio, persisted restart state and retry without repeating completed ASR/summary.
 
 - [x] Repair the native smoke fixture after main integration: honor inherited post-touch click suppression and await the selected main-tab recording animation. The required native smoke failed before the fixture correction and passes after it, without changing production behavior or assertions.
+
+
+## 10. meeting-provider burn-down
+
+- [x] 10.1 AI-266,269,270,273,276,278,279,294: production saved-profile ASR composition, private resources/artifacts, expiry and owned remote cleanup. Bead open-quake-lih.16.9.
+- [x] 10.2 AI-272: per-job OpenAI realtime PCM, finality, timing and cleanup. Bead open-quake-lih.16.10.
+- [x] 10.3 AI-136,137,292,327,338,SCREEN-110: bounded live transport, resampling, reconnect, cancellation and display consumers. Bead open-quake-lih.16.11.
+- [x] 10.4 AI-285,286,288,294: encoded continuous rollover, optional-track fallback, numeric merge order and mono submission. Bead open-quake-lih.16.12.
+- [ ] 10.5 Run lane gates and desktop suite after current main merge, open PR. Leave beads open for lead merge; list physical/provider acceptance separately.
+
+Tasks 10.1-10.4 are implemented and tested to fake boundaries. Focused checks
+pass 76 edge and 82 desktop tests, including actual FFmpeg normalization and a
+loopback fake HTTP upload through saved-profile/vault composition. Initial root
+run passed 872 edge, 511 device, 63 protocol and 2395 desktop tests; the one
+CENTER-070 catalog expectation failure is fixed in current main and will be
+reconciled by task 10.5. Native audio/OS/device and paid-provider qualification
+remain open for all 18 lane rows. No live acceptance is claimed.
