@@ -14,9 +14,11 @@ import {
 	Context,
 	Effect,
 	Either,
+	Exit,
 	Fiber,
 	Layer,
 	ManagedRuntime,
+	Option,
 	Redacted,
 } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,6 +37,7 @@ import { VoiceSurface } from "../../../../../packages/edge/src/voice/surface/voi
 import { createAgentConnectionsController } from "../agent-http/connection-controller.js";
 import { createAgentConnections } from "../agent-http/connections.js";
 import { createDesktopDiagnostics, type DesktopDiagnostics } from "./index.js";
+import { prepareDesktopModule } from "./module.js";
 import { createDiagnosticStorage } from "./persistence.js";
 import { safeCause, safeError } from "./privacy.js";
 import { makeDesktopRuntime } from "./runtime.js";
@@ -521,6 +524,40 @@ describe("production Effect diagnostics", () => {
 });
 
 describe("process-owned runtime diagnostics", () => {
+	it("keeps module operation labels and shared finalizer diagnostics on the application sink", async () => {
+		const { directory, diagnostics } = await fixture();
+		const layer = Layer.scopedDiscard(
+			Effect.addFinalizer(() => Effect.logInfo("Application shutdown failed")),
+		);
+		const module = prepareDesktopModule(
+			layer,
+			(runtime) => runtime,
+			diagnostics,
+			"agent.request",
+		);
+		const application = makeDesktopRuntime(module.layer, diagnostics);
+		resources.push(application.dispose);
+		module.bind(application);
+		await application.runtime();
+		const view = module.start();
+		const failure = new RuntimeUnavailable();
+		const exit = await view.runPromiseExit(Effect.fail(failure));
+		expect(Exit.isFailure(exit) && Cause.failureOption(exit.cause)).toEqual(
+			Option.some(failure),
+		);
+		await view.dispose();
+		await application.dispose();
+		await diagnostics.flush();
+		const saved = await records(directory);
+		expect(
+			saved.filter((r) => r.type === "span" && r.span_name === "agent.request"),
+		).toHaveLength(1);
+		expect(
+			saved.some(
+				(r) => r.type === "log" && r.event === "Application shutdown failed",
+			),
+		).toBe(true);
+	});
 	it("observes acquisition, all interpreter boundaries and finalizers without changing Effect runtime ownership", async () => {
 		const { directory, diagnostics } = await fixture();
 		class Port extends Context.Tag("DiagnosticRuntimeFixture")<

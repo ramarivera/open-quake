@@ -1,10 +1,4 @@
-import {
-	Effect,
-	Array as EffectArray,
-	type ManagedRuntime,
-	Option,
-	Schema,
-} from "effect";
+import { Effect, Array as EffectArray, Option, Schema } from "effect";
 import {
 	Profile,
 	type ProfileEnvelope,
@@ -18,13 +12,11 @@ import {
 import { ProfileRepository } from "../../../../../packages/device/src/profiles/profile-repository";
 import type { EmojiStore } from "../../../../../packages/edge/src/emoji/emoji-contracts";
 import { EmojiInvalid } from "../../../../../packages/edge/src/emoji/emoji-errors";
+import type { DesktopRuntime } from "../diagnostics/module";
 
 export const placeEmojiPackage =
 	<R>(profiles: {
-		readonly runtime: ManagedRuntime.ManagedRuntime<
-			R | ProfileRepository,
-			never
-		>;
+		readonly runtime: DesktopRuntime<R | ProfileRepository, never>;
 		readonly select: (id: string) => Promise<unknown>;
 		readonly refresh?: () => Promise<void>;
 	}) =>

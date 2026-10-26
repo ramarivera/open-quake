@@ -23,6 +23,8 @@ const capture = vi.hoisted(() => ({
 	id: "",
 	written: vi.fn(),
 	stopped: vi.fn(),
+	created: vi.fn(),
+	disposed: vi.fn(),
 	lost: (_id: string) => {},
 	wait: (): Promise<void> => Promise.resolve(),
 }));
@@ -35,6 +37,7 @@ vi.mock("electron", () => ({
 }));
 vi.mock("./capture-port", () => ({
 	createCapturePort: (options: { onLost: (id: string) => void }) => {
+		capture.created();
 		capture.lost = options.onLost;
 		return {
 			port: {
@@ -72,12 +75,13 @@ vi.mock("./capture-port", () => ({
 						await capture.wait();
 					}),
 			},
-			dispose: () => {},
+			dispose: capture.disposed,
 		};
 	},
 }));
 
-import { registerMeetings } from "./index";
+import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { prepareMeetings, registerMeetings } from "./index";
 
 beforeEach(() => {
 	ipc.handlers.clear();
@@ -90,6 +94,36 @@ beforeEach(() => {
 	ipc.removeHandler.mockImplementation((name: string) => {
 		ipc.handlers.delete(name);
 	});
+});
+
+it("prepares without capture listeners and releases them once under shared ownership", async () => {
+	const root = await mkdtemp(join(tmpdir(), "oq-meetings-shared-"));
+	capture.created.mockClear();
+	capture.disposed.mockClear();
+	const calls = ipc.handle.mock.calls.length;
+	const module = prepareMeetings({
+		userData: root,
+		mock: true,
+		hardware: () => undefined,
+	});
+	expect(capture.created).not.toHaveBeenCalled();
+	expect(ipc.handle.mock.calls).toHaveLength(calls);
+	const application = makeDesktopRuntime(module.layer);
+	module.bind(application);
+	try {
+		await application.runtime();
+		expect(capture.created).toHaveBeenCalledOnce();
+		const meetings = module.start();
+		await meetings.ready;
+		await meetings.dispose();
+		expect(capture.disposed).toHaveBeenCalledOnce();
+		expect(await application.runPromise(Effect.succeed("alive"))).toBe("alive");
+		await application.dispose();
+		expect(capture.disposed).toHaveBeenCalledOnce();
+	} finally {
+		await application.dispose();
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 it("keeps audio IPC registered until shutdown has drained the last dataavailable write", async () => {

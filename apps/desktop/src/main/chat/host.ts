@@ -33,7 +33,7 @@ import {
 } from "../../../../../packages/edge/src/chat/chat-rpc";
 import { ChatService } from "../../../../../packages/edge/src/chat/chat-service";
 import type { DesktopDiagnostics } from "../diagnostics";
-import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { prepareDesktopModule } from "../diagnostics/module";
 
 const OWNER = "desktop-user";
 /** Endpoint changes create a different profile. A turn never reads mutable renderer settings. */
@@ -99,7 +99,7 @@ export interface DirectChatOptions {
 }
 export const rpcFailure = (error: ChatError | AiError): ChatRpcFailure =>
 	new ChatRpcFailure({ code: error.code, message: error.message });
-export function createDirectChat(options: DirectChatOptions) {
+export function prepareDirectChat(options: DirectChatOptions) {
 	const profiles = AiRepository.Default;
 	const inference = ChatInferenceLive.pipe(
 		Layer.provide(
@@ -119,81 +119,91 @@ export function createDirectChat(options: DirectChatOptions) {
 			Layer.provide(fileChatStorageLayer(options.directory)),
 		),
 	);
-	const runtime = makeDesktopRuntime(
+
+	const prepared = prepareDesktopModule(
 		ChatService.DefaultWithoutDependencies.pipe(
 			Layer.provideMerge(dependencies),
 		),
+		(runtime) => {
+			const selectionLock = Effect.runSync(Effect.makeSemaphore(1));
+			const submit = Effect.fn("DesktopChat.submit")(
+				(input: ChatInput, scope = "main") =>
+					selectionLock.withPermits(1)(
+						Effect.gen(function* () {
+							const rows = yield* options.models(scope);
+							const row = rows.find((r) => r.role === "default");
+							if (!row?.model.trim()) return yield* new AiConfigInvalid();
+							if (!row.credentialRef) return yield* new AiAuthRequired();
+							const profile = yield* Effect.try({
+								try: () => profileFromModel(row),
+								catch: (cause) => new AiConfigInvalid(cause),
+							});
+							yield* AiRepository.put(profile);
+							return yield* ChatService.submit(OWNER, {
+								...input,
+								profileId: profile.id,
+								modelId: profile.modelId,
+								authGeneration: profile.authGeneration,
+								mode: "normal",
+								contextWindowTokens: 8192,
+								// The model setting is an upper bound. Until context metadata is
+								// available, reserve at most 1024 inside the conservative 8192 window.
+								outputReserveTokens: Math.min(row.maxTokens, 1024),
+							});
+						}),
+					),
+			);
+			const publicHistory = (
+				history: { readonly owner: string } & PublicChatHistory,
+			): PublicChatHistory => {
+				const { owner: _owner, ...value } = history;
+				return value;
+			};
+			return {
+				runtime,
+				submit,
+				subscribe: Effect.fn("DesktopChat.subscribe")(
+					(sessionId: SessionId, turnId: TurnId) =>
+						ChatService.subscribe(OWNER, sessionId, turnId),
+				),
+				snapshot: Effect.fn("DesktopChat.snapshot")(
+					(sessionId: SessionId, turnId: TurnId) =>
+						ChatService.snapshot(OWNER, sessionId, turnId),
+				),
+				cancel: Effect.fn("DesktopChat.cancel")(
+					(sessionId: SessionId, turnId: TurnId) =>
+						ChatService.cancel(OWNER, sessionId, turnId),
+				),
+				close: Effect.fn("DesktopChat.close")((sessionId: SessionId) =>
+					ChatService.close(OWNER, sessionId),
+				),
+				clear: Effect.fn("DesktopChat.clear")((sessionId: SessionId) =>
+					ChatService.clear(OWNER, sessionId),
+				),
+				rename: Effect.fn("DesktopChat.rename")(
+					(sessionId: SessionId, title: string) =>
+						ChatService.rename(OWNER, sessionId, title),
+				),
+				history: Effect.fn("DesktopChat.history")((sessionId: SessionId) =>
+					ChatService.history(OWNER, sessionId).pipe(Effect.map(publicHistory)),
+				),
+				list: Effect.fn("DesktopChat.list")(() =>
+					ChatService.list(OWNER).pipe(
+						Effect.map((items) => items.map(publicHistory)),
+					),
+				),
+				dispose: () => runtime.dispose(),
+			};
+		},
 		options.diagnostics,
 		"chat.request",
 	);
-	const selectionLock = Effect.runSync(Effect.makeSemaphore(1));
-	const submit = Effect.fn("DesktopChat.submit")(
-		(input: ChatInput, scope = "main") =>
-			selectionLock.withPermits(1)(
-				Effect.gen(function* () {
-					const rows = yield* options.models(scope);
-					const row = rows.find((r) => r.role === "default");
-					if (!row?.model.trim()) return yield* new AiConfigInvalid();
-					if (!row.credentialRef) return yield* new AiAuthRequired();
-					const profile = yield* Effect.try({
-						try: () => profileFromModel(row),
-						catch: (cause) => new AiConfigInvalid(cause),
-					});
-					yield* AiRepository.put(profile);
-					return yield* ChatService.submit(OWNER, {
-						...input,
-						profileId: profile.id,
-						modelId: profile.modelId,
-						authGeneration: profile.authGeneration,
-						mode: "normal",
-						contextWindowTokens: 8192,
-						// The model setting is an upper bound. Until context metadata is
-						// available, reserve at most 1024 inside the conservative 8192 window.
-						outputReserveTokens: Math.min(row.maxTokens, 1024),
-					});
-				}),
-			),
-	);
-	const publicHistory = (
-		history: { readonly owner: string } & PublicChatHistory,
-	): PublicChatHistory => {
-		const { owner: _owner, ...value } = history;
-		return value;
-	};
-	return {
-		runtime,
-		submit,
-		subscribe: Effect.fn("DesktopChat.subscribe")(
-			(sessionId: SessionId, turnId: TurnId) =>
-				ChatService.subscribe(OWNER, sessionId, turnId),
-		),
-		snapshot: Effect.fn("DesktopChat.snapshot")(
-			(sessionId: SessionId, turnId: TurnId) =>
-				ChatService.snapshot(OWNER, sessionId, turnId),
-		),
-		cancel: Effect.fn("DesktopChat.cancel")(
-			(sessionId: SessionId, turnId: TurnId) =>
-				ChatService.cancel(OWNER, sessionId, turnId),
-		),
-		close: Effect.fn("DesktopChat.close")((sessionId: SessionId) =>
-			ChatService.close(OWNER, sessionId),
-		),
-		clear: Effect.fn("DesktopChat.clear")((sessionId: SessionId) =>
-			ChatService.clear(OWNER, sessionId),
-		),
-		rename: Effect.fn("DesktopChat.rename")(
-			(sessionId: SessionId, title: string) =>
-				ChatService.rename(OWNER, sessionId, title),
-		),
-		history: Effect.fn("DesktopChat.history")((sessionId: SessionId) =>
-			ChatService.history(OWNER, sessionId).pipe(Effect.map(publicHistory)),
-		),
-		list: Effect.fn("DesktopChat.list")(() =>
-			ChatService.list(OWNER).pipe(
-				Effect.map((items) => items.map(publicHistory)),
-			),
-		),
-		dispose: () => runtime.dispose(),
-	};
+	return prepared;
+}
+
+export function createDirectChat(
+	...args: Parameters<typeof prepareDirectChat>
+) {
+	return prepareDirectChat(...args).standalone();
 }
 export type DirectChat = ReturnType<typeof createDirectChat>;

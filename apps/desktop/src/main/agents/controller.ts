@@ -1,6 +1,7 @@
-import { Effect, type ManagedRuntime } from "effect";
+import { Effect } from "effect";
 import { AgentsService } from "../../../../../packages/edge/src/agents/agents-service.js";
 import type { AgentReply } from "../../shared/agents";
+import type { DesktopRuntime } from "../diagnostics/module";
 export interface AgentsAuthority {
 	readonly senderId: number;
 	readonly frameURL: string;
@@ -30,7 +31,7 @@ export function agentRequestAllowed(
 /** The production IPC consumer is exported so tests use the same authorization and command path. */
 export const createAgentsHandler =
 	(
-		runtime: ManagedRuntime.ManagedRuntime<AgentsService, never>,
+		runtime: DesktopRuntime<AgentsService, never>,
 		managementId: () => number | undefined,
 		renderer: string,
 	) =>

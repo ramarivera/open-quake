@@ -31,7 +31,7 @@ import {
 	type VoiceTone,
 } from "../../shared/voice-surface";
 import type { DesktopDiagnostics } from "../diagnostics";
-import { makeDesktopRuntime } from "../diagnostics/runtime";
+import { prepareDesktopModule } from "../diagnostics/module";
 import { isAppRenderer } from "../profiles/profile-ipc";
 
 /**
@@ -116,7 +116,8 @@ export const voiceSurfaceLayer = (
 						Layer.provide(
 							Layer.mergeAll(
 								Layer.succeed(VoiceSurfacePublisher, {
-									publish: (event) => Effect.sync(() => publish(event)),
+									publish: (event: VoiceSurfaceEvent) =>
+										Effect.sync(() => publish(event)),
 								}),
 								Layer.succeed(VoiceTonePort, {
 									play: (serial, tone) =>
@@ -150,17 +151,7 @@ export interface KnobVoiceRequest {
 	readonly generation: number;
 }
 
-export function registerVoiceSurface(options: VoiceSurfaceOptions): {
-	readonly ready: Promise<void>;
-	readonly publish: (event: VoiceSurfaceEvent) => Promise<void>;
-	/** The knob model's `voice` binding: knob holds drive the overlay. */
-	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
-	/** Called before forwarding device status to renderers. */
-	readonly onDevice: (event: QuakeEvent) => Promise<void>;
-	/** Main-process connection changes clear the same owner as profile changes. */
-	readonly reset: () => Promise<void>;
-	readonly dispose: () => Promise<void>;
-} {
+export function prepareVoiceSurface(options: VoiceSurfaceOptions) {
 	const renderer =
 		options.renderer ??
 		process.env.ELECTRON_RENDERER_URL ??
@@ -201,148 +192,168 @@ export function registerVoiceSurface(options: VoiceSurfaceOptions): {
 		broadcast(event);
 		options.speech?.onEvent(event);
 	};
-	const runtime = makeDesktopRuntime(
+
+	const prepared = prepareDesktopModule(
 		voiceSurfaceLayer(options, publish),
+		(runtime) => {
+			const run = <A>(
+				effect: Effect.Effect<A, never, GridVoice | VoiceSurface>,
+			): Promise<A> => runtime.runPromise(effect);
+			let disconnected = false;
+			let linkGeneration = 0;
+
+			const handle = async (
+				event: IpcMainInvokeEvent,
+				raw: unknown,
+			): Promise<VoiceSurfaceReply> => {
+				if (
+					!BrowserWindow.fromWebContents(event.sender) ||
+					event.senderFrame !== event.sender.mainFrame ||
+					!isAppRenderer(event.sender.getURL(), renderer)
+				)
+					return rejected("VOICE.SURFACE.REQUEST_INVALID");
+				const decoded = decodeRequest(raw);
+				if (decoded._tag === "Left")
+					return rejected("VOICE.SURFACE.REQUEST_INVALID");
+				const request = decoded.right;
+				const serial = options.serial();
+				switch (request._tag) {
+					case "Hello": {
+						const status = await run(VoiceSurface.agentStatus());
+						if (!event.sender.isDestroyed())
+							event.sender.send(VOICE_SURFACE_CHANNEL, encodeEvent(status));
+						return ok;
+					}
+					case "Input": {
+						const generation = linkGeneration;
+						return run(
+							Effect.suspend(() =>
+								disconnected || generation !== linkGeneration
+									? Effect.succeed(
+											rejected("VOICE.SURFACE.DEVICE_DISCONNECTED"),
+										)
+									: GridVoice.input(serial, request.input).pipe(Effect.as(ok)),
+							),
+						);
+					}
+					case "Reset":
+						await run(GridVoice.reset(serial, request.reason));
+						return ok;
+					case "SendText":
+						return run(
+							GridVoice.sendText({
+								serial,
+								keyCode: request.keyCode,
+								agentId: request.agentId,
+								message: request.message,
+							}).pipe(
+								(effect) =>
+									options.diagnostics?.instrument(effect, "voice.request") ??
+									effect,
+								Effect.as(ok),
+								Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
+									Effect.succeed(rejected(error.code)),
+								),
+							),
+						);
+					case "OpenLink":
+						return Option.match(safeHttpUrl(request.url), {
+							onNone: () => rejected("VOICE.SURFACE.LINK_REJECTED"),
+							onSome: async (url) => {
+								await shell.openExternal(url);
+								return ok;
+							},
+						});
+					case "CopyText":
+						clipboard.writeText(request.text.trim());
+						return ok;
+					case "PickFiles": {
+						// DK focuses the main window for the dialog (QBI:557-595).
+						const parent = options.management();
+						parent?.focus();
+						const dialogOptions: Electron.OpenDialogOptions = {
+							title: "Choose file(s) to attach",
+							properties: ["openFile", "multiSelections"],
+							filters: [{ name: "All Files", extensions: ["*"] }],
+						};
+						const result = parent
+							? await dialog.showOpenDialog(parent, dialogOptions)
+							: await dialog.showOpenDialog(dialogOptions);
+						return {
+							_tag: "files",
+							paths: result.canceled ? [] : result.filePaths,
+						};
+					}
+					case "FocusPanel": {
+						// Main focuses the strip window 80 ms later (QBI:598-653).
+						const panel = options.panel();
+						if (!panel || panel.isDestroyed())
+							return rejected("VOICE.SURFACE.PANEL_UNAVAILABLE");
+						await new Promise<void>((done) => setTimeout(done, 80));
+						if (!panel.isDestroyed()) panel.focus();
+						return ok;
+					}
+					case "ReadAloud": {
+						const answer = answers.get(answerKey(serial, request.keyCode));
+						if (answer?.overflow) return rejected("VOICE.TTS.QUEUE_FULL");
+						const text = answer?.text;
+						if (!options.speech || !text?.trim())
+							return rejected("VOICE.TTS.UNAVAILABLE");
+						return options.speech.readAloud(text);
+					}
+				}
+			};
+			ipcMain.handle(
+				VOICE_REQUEST_CHANNEL,
+				async (event, raw): Promise<unknown> =>
+					encodeReply(await handle(event, raw)),
+			);
+			let shutdown: Promise<void> | undefined;
+			return {
+				ready: run(Effect.void),
+				publish: (event: VoiceSurfaceEvent) => run(VoiceSurface.publish(event)),
+				reset: () => run(GridVoice.reset(options.serial(), "profileChanged")),
+				onDevice: (event: QuakeEvent) => {
+					if (event.kind !== "status") return Promise.resolve();
+					disconnected = event.state !== "connected";
+					if (!disconnected) return Promise.resolve();
+					linkGeneration++;
+					return run(GridVoice.reset(options.serial(), "disconnected"));
+				},
+				knobVoice: ({ action, generation }: KnobVoiceRequest) =>
+					Effect.promise(() =>
+						run(
+							Effect.suspend(() =>
+								disconnected && action === "holdStart"
+									? Effect.void
+									: GridVoice.knob(options.serial(), action, generation),
+							),
+						),
+					),
+				dispose: () => {
+					if (shutdown) return shutdown;
+					ipcMain.removeHandler(VOICE_REQUEST_CHANNEL);
+					shutdown = runtime.dispose();
+					return shutdown;
+				},
+			};
+		},
 		options.diagnostics,
 		"voice.request",
 	);
-	const run = <A>(
-		effect: Effect.Effect<A, never, GridVoice | VoiceSurface>,
-	): Promise<A> => runtime.runPromise(effect);
-	let disconnected = false;
-	let linkGeneration = 0;
+	return prepared;
+}
 
-	const handle = async (
-		event: IpcMainInvokeEvent,
-		raw: unknown,
-	): Promise<VoiceSurfaceReply> => {
-		if (
-			!BrowserWindow.fromWebContents(event.sender) ||
-			event.senderFrame !== event.sender.mainFrame ||
-			!isAppRenderer(event.sender.getURL(), renderer)
-		)
-			return rejected("VOICE.SURFACE.REQUEST_INVALID");
-		const decoded = decodeRequest(raw);
-		if (decoded._tag === "Left")
-			return rejected("VOICE.SURFACE.REQUEST_INVALID");
-		const request = decoded.right;
-		const serial = options.serial();
-		switch (request._tag) {
-			case "Hello": {
-				const status = await run(VoiceSurface.agentStatus());
-				if (!event.sender.isDestroyed())
-					event.sender.send(VOICE_SURFACE_CHANNEL, encodeEvent(status));
-				return ok;
-			}
-			case "Input": {
-				const generation = linkGeneration;
-				return run(
-					Effect.suspend(() =>
-						disconnected || generation !== linkGeneration
-							? Effect.succeed(rejected("VOICE.SURFACE.DEVICE_DISCONNECTED"))
-							: GridVoice.input(serial, request.input).pipe(Effect.as(ok)),
-					),
-				);
-			}
-			case "Reset":
-				await run(GridVoice.reset(serial, request.reason));
-				return ok;
-			case "SendText":
-				return run(
-					GridVoice.sendText({
-						serial,
-						keyCode: request.keyCode,
-						agentId: request.agentId,
-						message: request.message,
-					}).pipe(
-						(effect) =>
-							options.diagnostics?.instrument(effect, "voice.request") ??
-							effect,
-						Effect.as(ok),
-						Effect.catchTag("VoiceRuntimeUnavailable", (error) =>
-							Effect.succeed(rejected(error.code)),
-						),
-					),
-				);
-			case "OpenLink":
-				return Option.match(safeHttpUrl(request.url), {
-					onNone: () => rejected("VOICE.SURFACE.LINK_REJECTED"),
-					onSome: async (url) => {
-						await shell.openExternal(url);
-						return ok;
-					},
-				});
-			case "CopyText":
-				clipboard.writeText(request.text.trim());
-				return ok;
-			case "PickFiles": {
-				// DK focuses the main window for the dialog (QBI:557-595).
-				const parent = options.management();
-				parent?.focus();
-				const dialogOptions: Electron.OpenDialogOptions = {
-					title: "Choose file(s) to attach",
-					properties: ["openFile", "multiSelections"],
-					filters: [{ name: "All Files", extensions: ["*"] }],
-				};
-				const result = parent
-					? await dialog.showOpenDialog(parent, dialogOptions)
-					: await dialog.showOpenDialog(dialogOptions);
-				return {
-					_tag: "files",
-					paths: result.canceled ? [] : result.filePaths,
-				};
-			}
-			case "FocusPanel": {
-				// Main focuses the strip window 80 ms later (QBI:598-653).
-				const panel = options.panel();
-				if (!panel || panel.isDestroyed())
-					return rejected("VOICE.SURFACE.PANEL_UNAVAILABLE");
-				await new Promise<void>((done) => setTimeout(done, 80));
-				if (!panel.isDestroyed()) panel.focus();
-				return ok;
-			}
-			case "ReadAloud": {
-				const answer = answers.get(answerKey(serial, request.keyCode));
-				if (answer?.overflow) return rejected("VOICE.TTS.QUEUE_FULL");
-				const text = answer?.text;
-				if (!options.speech || !text?.trim())
-					return rejected("VOICE.TTS.UNAVAILABLE");
-				return options.speech.readAloud(text);
-			}
-		}
-	};
-	ipcMain.handle(
-		VOICE_REQUEST_CHANNEL,
-		async (event, raw): Promise<unknown> =>
-			encodeReply(await handle(event, raw)),
-	);
-	let shutdown: Promise<void> | undefined;
-	return {
-		ready: run(Effect.void),
-		publish: (event) => run(VoiceSurface.publish(event)),
-		reset: () => run(GridVoice.reset(options.serial(), "profileChanged")),
-		onDevice: (event) => {
-			if (event.kind !== "status") return Promise.resolve();
-			disconnected = event.state !== "connected";
-			if (!disconnected) return Promise.resolve();
-			linkGeneration++;
-			return run(GridVoice.reset(options.serial(), "disconnected"));
-		},
-		knobVoice: ({ action, generation }) =>
-			Effect.promise(() =>
-				run(
-					Effect.suspend(() =>
-						disconnected && action === "holdStart"
-							? Effect.void
-							: GridVoice.knob(options.serial(), action, generation),
-					),
-				),
-			),
-		dispose: () => {
-			if (shutdown) return shutdown;
-			ipcMain.removeHandler(VOICE_REQUEST_CHANNEL);
-			shutdown = runtime.dispose();
-			return shutdown;
-		},
-	};
+export function registerVoiceSurface(options: VoiceSurfaceOptions): {
+	readonly ready: Promise<void>;
+	readonly publish: (event: VoiceSurfaceEvent) => Promise<void>;
+	/** The knob model's `voice` binding: knob holds drive the overlay. */
+	readonly knobVoice: (input: KnobVoiceRequest) => Effect.Effect<void>;
+	/** Called before forwarding device status to renderers. */
+	readonly onDevice: (event: QuakeEvent) => Promise<void>;
+	/** Main-process connection changes clear the same owner as profile changes. */
+	readonly reset: () => Promise<void>;
+	readonly dispose: () => Promise<void>;
+} {
+	return prepareVoiceSurface(options).standalone();
 }
