@@ -426,6 +426,11 @@ Evidence: AI-311, AI-312, SETTINGS-106. Audio, transcript and summary tasks SHAL
 - **WHEN** the user retries only failed summary generation
 - **THEN** completed audio/transcript remain readable, no microphone or transcription restarts, and a failed summary retains the prior saved summary and applied template
 
+#### Scenario: Background job fails before its first processing save
+
+- **WHEN** retry or regeneration is acknowledged but the first processing save fails and an asynchronous failure arrives before or after acknowledgement
+- **THEN** pending feedback ends, failure is shown and retry/template controls are enabled even without a new processing attempt or changed artifacts; a prior identical failure or stale snapshot cannot finish a fresh request
+
 #### Scenario: Transcription retry replaces the source of completed minutes
 
 - **WHEN** failed transcription is retried on a meeting with completed minutes

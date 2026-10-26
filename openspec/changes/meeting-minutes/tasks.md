@@ -118,5 +118,7 @@ Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptanc
 
 - [x] Fix Devin 4378930331 by invalidating minutes atomically with replacement transcription and regenerating from the new text. Regression tests in `meeting-service.test.ts` fail before the fix for both successful and failed regeneration, including summary-only recovery.
 - [x] Fix Devin 4378930536 with segment-level highlighting and selectable bookmarks when aligned tokens omit words. Three mounted regressions for leading/middle/trailing omissions fail before the fix; punctuation and exact saved text remain intact.
-- [ ] Reply to Devin 4378930892 with unit/consumer provider-settings coverage and the separate live hardware/provider checklist.
+- [x] Reply to Devin 4378930892 with unit/consumer provider-settings coverage and the separate live hardware/provider checklist.
 - [ ] Handle valid incoming Codex/Copilot findings, run full gates and hidden mock native smoke, then list unanswered GraphQL threads without resolving them.
+
+- [x] Fix Codex 4378948017 by observing asynchronous failure events independently of saved processing state. Four mounted retry/regeneration cases fail before the fix and cover failure on both sides of acknowledgement and a repeated identical error.

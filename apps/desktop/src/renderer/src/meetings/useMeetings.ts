@@ -9,8 +9,9 @@ import {
 interface MeetingView {
 	readonly snapshot: MeetingSnapshot | undefined;
 	readonly error: string;
+	readonly failureVersion: number;
 }
-let view: MeetingView = { snapshot: undefined, error: "" };
+let view: MeetingView = { snapshot: undefined, error: "", failureVersion: 0 };
 const listeners = new Set<() => void>();
 let stop: (() => void) | undefined;
 function accept(value: unknown): void {
@@ -23,10 +24,18 @@ function accept(value: unknown): void {
 	)
 		return;
 	view = Either.isLeft(decoded)
-		? { ...view, error: "Meeting response was invalid" }
+		? {
+				...view,
+				error: "Meeting response was invalid",
+				failureVersion: view.failureVersion + 1,
+			}
 		: decoded.right._tag === "failure"
-			? { ...view, error: decoded.right.message }
-			: { snapshot: decoded.right.snapshot, error: "" };
+			? {
+					...view,
+					error: decoded.right.message,
+					failureVersion: view.failureVersion + 1,
+				}
+			: { ...view, snapshot: decoded.right.snapshot, error: "" };
 	for (const listener of listeners) listener();
 }
 export async function meetingRequest(
@@ -66,7 +75,7 @@ function subscribe(listener: () => void): () => void {
 		if (!listeners.size) {
 			stop?.();
 			stop = undefined;
-			view = { snapshot: undefined, error: "" };
+			view = { snapshot: undefined, error: "", failureVersion: 0 };
 		}
 	};
 }

@@ -586,3 +586,67 @@ for (const [omission, words, startMs, endMs] of [
 		).toBe(text);
 	});
 }
+
+for (const operation of ["regenerate", "retry"] as const) {
+	for (const beforeAck of [false, true]) {
+		it(`AI-312 releases pending ${operation} on async storage failure before processing, beforeAck=${beforeAck}`, async () => {
+			const record = meetingRecord(
+				1,
+				operation === "retry"
+					? {
+							state: "failed",
+							summary: "failed",
+							errorCode: Option.some(fail.code),
+						}
+					: {},
+			);
+			await mount([record]);
+			// A prior identical failure must not terminate the next request.
+			await dom.emit(fail);
+			let acknowledge: (value: unknown) => void = () => {};
+			dom.request.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						acknowledge = resolve;
+					}),
+			);
+			const button =
+				operation === "regenerate"
+					? ".meeting-inspector > button:last-child"
+					: '.meeting-task[data-state="failed"] button';
+			await click(button);
+			if (beforeAck) await dom.emit(fail);
+			await act(async () => {
+				acknowledge(dom.ready());
+			});
+			if (!beforeAck) {
+				expect(element(".meeting-inspector").getAttribute("aria-busy")).toBe(
+					"true",
+				);
+				await dom.emit(fail);
+			}
+			// Successful failure persistence can publish the original attempt and minutes.
+			await dom.push({
+				records: [
+					{ ...record, state: "failed", errorCode: Option.some(fail.code) },
+				],
+			});
+			expect(element(".meeting-inspector").getAttribute("aria-busy")).toBe(
+				"false",
+			);
+			expect(element(".meeting-task-feedback").textContent).toBe(
+				operation === "regenerate"
+					? "Failed to regenerate summary"
+					: "Meeting task failed",
+			);
+			expect(element<HTMLButtonElement>(button).disabled).toBe(false);
+			expect(
+				element<HTMLFieldSetElement>(".meeting-template-picker").disabled,
+			).toBe(false);
+			await click(button);
+			expect(element(".meeting-inspector").getAttribute("aria-busy")).toBe(
+				"true",
+			);
+		});
+	}
+}

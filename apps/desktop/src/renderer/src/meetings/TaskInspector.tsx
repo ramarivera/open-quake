@@ -5,7 +5,7 @@ import {
 	summaryTemplates,
 	type TaskState,
 } from "../../../shared/meeting-bridge";
-import { meetingRequest } from "./useMeetings";
+import { meetingRequest, useMeetings } from "./useMeetings";
 
 const taskLabels: Record<TaskState, string> = {
 	pending: "Pending",
@@ -19,6 +19,7 @@ interface Pending {
 	readonly record: MeetingRecord;
 	readonly acknowledged: boolean;
 	readonly observed: boolean;
+	readonly failureVersion: number;
 }
 export function TaskInspector({
 	record,
@@ -27,13 +28,15 @@ export function TaskInspector({
 	record: MeetingRecord;
 	onTab: (tab: "summary" | "transcript") => void;
 }): React.JSX.Element {
+	const { failureVersion } = useMeetings();
 	const [pending, setPending] = useState<Pending>();
 	const [message, setMessage] = useState("");
 	const [choosing, setChoosing] = useState(false);
 	const busy = useRef(false);
 	useEffect(() => {
 		if (!pending) return;
-		if (record.state === "processing") {
+		const failed = failureVersion > pending.failureVersion;
+		if (!failed && record.state === "processing") {
 			if (!pending.observed) setPending({ ...pending, observed: true });
 			return;
 		}
@@ -48,8 +51,8 @@ export function TaskInspector({
 				record.appliedTemplate,
 				pending.record.appliedTemplate,
 			);
-		if (!pending.observed && !changed) return;
-		if (record.state === "failed" || record.state === "interrupted")
+		if (!failed && !pending.observed && !changed) return;
+		if (failed || record.state === "failed" || record.state === "interrupted")
 			setMessage(
 				pending.regenerate
 					? "Failed to regenerate summary"
@@ -62,7 +65,7 @@ export function TaskInspector({
 		else return;
 		busy.current = false;
 		setPending(undefined);
-	}, [record, pending]);
+	}, [record, pending, failureVersion]);
 	const run = async (regenerate: boolean) => {
 		if (busy.current) return;
 		busy.current = true;
@@ -74,7 +77,13 @@ export function TaskInspector({
 				? `Regenerating with ${template?.name}.`
 				: "Processing, please wait...",
 		);
-		setPending({ regenerate, record, acknowledged: false, observed: false });
+		setPending({
+			regenerate,
+			record,
+			acknowledged: false,
+			observed: false,
+			failureVersion,
+		});
 		const ok = await meetingRequest(
 			regenerate
 				? { _tag: "regenerate", id: record.id, template: record.template }
