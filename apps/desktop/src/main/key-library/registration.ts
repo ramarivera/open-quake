@@ -475,8 +475,12 @@ export function registerKeyLibrary<R>(
 									reason: "Only local icons can be deleted individually.",
 								};
 							const refs = new Set(
-								selected?.flatMap((i) => [i.data, i.id, `resource:${i.id}`]) ??
-									[],
+								selected?.flatMap((i) => [
+									i.data,
+									i.id,
+									`resource:${i.id}`,
+									`application:${i.id}`,
+								]) ?? [],
 							);
 							const pending = yield* KeyEditing.pending;
 							const saved = yield* ProfileService.loadProfiles();

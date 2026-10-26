@@ -1574,3 +1574,69 @@ it("never sends installed application paths to the panel catalog consumer", asyn
 		await f.runtime.dispose();
 	}
 });
+
+it.each([
+	{ pack: false, saved: false },
+	{ pack: false, saved: true },
+	{ pack: true, saved: false },
+	{ pack: true, saved: true },
+])(
+	"protects application-prefixed artwork from deletion: %j",
+	async ({ pack, saved }) => {
+		const files = await importFixture(),
+			f = fixture();
+		try {
+			electron.dialog.showOpenDialog.mockResolvedValue({
+				canceled: false,
+				filePaths: [pack ? files.packPath : files.localPath],
+			});
+			const imported = await f.request(f.openPicker(), {
+				type: pack ? "import-pack" : "import-icon",
+			});
+			if (imported._tag !== "success") throw new Error("Import failed");
+			const library = imported.packs?.find((p) =>
+					pack ? p.id !== "local" : p.id === "local",
+				),
+				icon = library?.icons[0];
+			if (!library || !icon) throw new Error("Missing artwork");
+			const target = {
+				token: "application-reference",
+				profileId: "p",
+				pageId: "one",
+				keyCode: "1,1",
+				revision: 0,
+			};
+			const key = {
+				...f.key,
+				config: { ...f.key.config, icon: `application:${icon.id}` },
+			};
+			expect(
+				await f.request(f.manager, { type: "preview", target, key }),
+			).toMatchObject({ _tag: "success" });
+			if (saved)
+				expect(
+					await f.request(f.manager, { type: "save", token: target.token }),
+				).toMatchObject({ _tag: "success" });
+			expect(
+				await f.request(f.openPicker(), {
+					type: pack ? "remove-pack" : "remove-icon",
+					id: pack ? library.id : icon.id,
+				}),
+			).toMatchObject({
+				_tag: "rejected",
+				reason: "This icon is currently in use and cannot be deleted.",
+			});
+			expect(await f.request(f.manager, { type: "icons" })).toMatchObject({
+				packs: [
+					expect.objectContaining({
+						id: library.id,
+						icons: expect.arrayContaining([icon]),
+					}),
+				],
+			});
+		} finally {
+			await f.registration.dispose();
+			await f.runtime.dispose();
+		}
+	},
+);
