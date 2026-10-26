@@ -417,3 +417,61 @@ it("preserves imported source identity independently for reset states without de
 		Option.getOrThrow(alternate.config.compatibility).alternateIconSource,
 	).toBe("alternate-default");
 });
+
+// AI-318: go through the editor owner with the decoded shipped profile.
+it.effect(
+	"AI-318 enforces every MeetAI action-key lock through preview/remove",
+	() => {
+		const envelope = {
+			...seed(),
+			profiles: [seed().profiles[0], ...builtinProfiles("darwin")],
+		} satisfies typeof ProfileEnvelope.Type;
+		const f = setup(false, envelope);
+		return Effect.gen(function* () {
+			const editor = yield* KeyEditing;
+			const profile = yield* ProfileService.getProfile("1-1");
+			for (const source of profile.pages[0].keys.filter(
+				(k) => k.config.type && k.config.type !== "liveAudioTranslateDisplay",
+			)) {
+				const t = {
+					token: source.keyCode,
+					profileId: profile.id,
+					pageId: profile.pages[0].id,
+					keyCode: source.keyCode,
+					revision: profile.revision,
+				};
+				const encoded = Schema.encodeSync(ProfileKey)(source);
+				for (const config of [
+					{
+						...encoded.config,
+						title: { ...encoded.config.title, text: "Changed" },
+					},
+					{ ...encoded.config, icon: "changed-icon" },
+					{ ...encoded.config, type: "hotkey" },
+				]) {
+					const result = yield* Effect.either(
+						editor.preview(t, { ...encoded, config }),
+					);
+					expect(result._tag === "Left" && result.left._tag).toBe(
+						"ProfileValidationFailed",
+					);
+				}
+				expect(
+					yield* editor.preview(t, {
+						...encoded,
+						config: { ...encoded.config, size: [2, 1] },
+					}),
+				).toEqual({ _tag: "rejected" });
+				expect(
+					yield* editor.preview(t, encoded, { destination: "1,2" }),
+				).toEqual({ _tag: "rejected" });
+				const removed = yield* Effect.either(editor.remove(t));
+				expect(removed._tag === "Left" && removed.left._tag).toBe(
+					"ProfileValidationFailed",
+				);
+			}
+			expect(f.writes()).toBe(0);
+			expect(yield* ProfileService.getProfile("1-1")).toEqual(profile);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
