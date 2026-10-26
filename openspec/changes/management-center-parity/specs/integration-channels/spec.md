@@ -52,3 +52,11 @@ Channels configured with DM pairing (Feishu's `dmPolicy: 'pairing'` and QR chann
 #### Scenario: Double click
 - **WHEN** the user clicks Approve twice quickly
 - **THEN** only one approval is sent
+
+### Requirement: WhatsApp terminal QR display
+WhatsApp setup SHALL consume the compact terminal output emitted by pinned OpenClaw 3cd1240aa7750a40a23028abbaf582b94d641868, extensions/whatsapp/src/login.ts and src/media/qr-terminal.ts. It SHALL decode ANSI-wrapped half-block modules into a PNG with a four-module quiet zone, render it in the setup drawer, replace refreshed codes, and ignore incomplete or malformed blocks. It SHALL NOT require a real account or expose the QR as a log. Sources: CENTER-078; open-quake-lih.17.24, PR108 finding 4380901925.
+
+#### Scenario: Recorded compact login output
+- **WHEN** the selected runtime prints the recorded compact WhatsApp QR output
+- **THEN** the session becomes ready with a PNG preserving every QR module and the drawer displays it
+- **AND** readiness alone never confirms authentication, while cancellation rejects later output

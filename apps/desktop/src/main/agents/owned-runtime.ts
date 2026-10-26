@@ -1,4 +1,9 @@
-import { spawn } from "node:child_process";
+import {
+	type ChildProcess,
+	execFile,
+	type SpawnOptions,
+	spawn,
+} from "node:child_process";
 import { isAbsolute } from "node:path";
 import { Effect, Schema } from "effect";
 import type { RuntimeState } from "../../../../../packages/edge/src/agents/agents-contracts";
@@ -22,23 +27,55 @@ export interface OwnedRuntimeDriver {
 	) => Promise<OwnedRuntimeProcess>;
 	readonly health: (signal: AbortSignal) => Promise<boolean>;
 }
-function processDriver(
+export function ownedRuntimeProcessDriver(
 	command: string,
 	storage: LocalAgentState,
+	options: {
+		readonly platform?: NodeJS.Platform;
+		readonly spawn?: (
+			command: string,
+			args: readonly string[],
+			options: SpawnOptions,
+		) => Pick<
+			ChildProcess,
+			"once" | "kill" | "pid" | "exitCode" | "signalCode"
+		>;
+		readonly runCommand?: (
+			command: string,
+			args: readonly string[],
+		) => Promise<void>;
+	} = {},
 ): OwnedRuntimeDriver {
+	const platform = options.platform ?? process.platform;
+	const spawnProcess = options.spawn ?? spawn;
+	const runCommand =
+		options.runCommand ??
+		((command, args) =>
+			new Promise<void>((resolve, reject) => {
+				execFile(
+					command,
+					args,
+					{ timeout: 1000, windowsHide: true, shell: false },
+					(error) => (error ? reject(error) : resolve()),
+				);
+			}));
 	return {
 		start: async (settings) => {
 			const root = settings.dataDirectory;
-			const [executable, args, spawnOptions] = agentCommandInvocation(command, [
-				"gateway",
-				"run",
-				"--allow-unconfigured",
-				"--bind",
-				"loopback",
-				"--port",
-				String(settings.port),
-			]);
-			const child = spawn(executable, args, {
+			const [executable, args, spawnOptions] = agentCommandInvocation(
+				command,
+				[
+					"gateway",
+					"run",
+					"--allow-unconfigured",
+					"--bind",
+					"loopback",
+					"--port",
+					String(settings.port),
+				],
+				platform,
+			);
+			const child = spawnProcess(executable, args, {
 				...spawnOptions,
 				stdio: "ignore",
 				env: {
@@ -48,6 +85,8 @@ function processDriver(
 					OPENCLAW_LOG_LEVEL: settings.logLevel,
 				},
 			});
+			let treeStopAttempted = false;
+			let treeStopped = false;
 			const exited = new Promise<void>((resolve) => {
 				child.once("error", () => resolve());
 				child.once("close", () => resolve());
@@ -55,14 +94,61 @@ function processDriver(
 			return {
 				exited,
 				stop: async () => {
-					if (child.exitCode !== null || child.signalCode !== null) return;
-					child.kill("SIGTERM");
-					const kill = setTimeout(() => child.kill("SIGKILL"), 2000);
-					try {
-						await exited;
-					} finally {
-						clearTimeout(kill);
+					if (
+						(child.exitCode !== null || child.signalCode !== null) &&
+						(platform !== "win32" || !treeStopAttempted || treeStopped)
+					)
+						return;
+					const waitForExit = (timeoutMs: number) =>
+						new Promise<boolean>((resolve) => {
+							const timer = setTimeout(() => resolve(false), timeoutMs);
+							void exited.then(() => {
+								clearTimeout(timer);
+								resolve(true);
+							});
+						});
+					if (platform === "win32") {
+						if (!child.pid) throw new AgentRuntimeFailed();
+						treeStopAttempted = true;
+						// cmd.exe can exit before its gateway. Await taskkill itself as
+						// well as the owned child; never fall back to killing only cmd.exe.
+						for (let attempt = 0; attempt < 2; attempt++) {
+							try {
+								const treeCommand = runCommand("taskkill.exe", [
+									"/PID",
+									String(child.pid),
+									"/T",
+									"/F",
+								]);
+								let timer: ReturnType<typeof setTimeout> | undefined;
+								try {
+									await Promise.race([
+										treeCommand,
+										new Promise<never>((_, reject) => {
+											timer = setTimeout(
+												() => reject(new AgentRuntimeFailed()),
+												1100,
+											);
+										}),
+									]);
+								} finally {
+									clearTimeout(timer);
+								}
+								if (await waitForExit(500)) {
+									treeStopped = true;
+									return;
+								}
+							} catch (cause) {
+								if (attempt === 1) throw new AgentRuntimeFailed(cause);
+							}
+						}
+					} else {
+						child.kill("SIGTERM");
+						if (await waitForExit(2000)) return;
+						child.kill("SIGKILL");
+						if (await waitForExit(500)) return;
 					}
+					throw new AgentRuntimeFailed();
 				},
 			};
 		},
@@ -93,7 +179,7 @@ export function createOwnedAgentRuntime(options: {
 		return;
 	const storage = options.storage ?? createLocalAgentState(options.root);
 	const driver =
-		options.driver ?? processDriver(options.command ?? "", storage);
+		options.driver ?? ownedRuntimeProcessDriver(options.command ?? "", storage);
 	const listeners = new Set<(state: RuntimeState) => void>();
 	let state: RuntimeState = {
 		available: true,
@@ -131,7 +217,14 @@ export function createOwnedAgentRuntime(options: {
 	const stop = async () => {
 		const owned = process;
 		process = undefined;
-		if (owned) await owned.stop();
+		if (owned) {
+			try {
+				await owned.stop();
+			} catch (cause) {
+				process = owned;
+				throw cause;
+			}
+		}
 		publish({
 			available: true,
 			status: "stopped",

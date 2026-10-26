@@ -148,3 +148,19 @@ The owned runtime SHALL allow a port, log level, opt-in autostart and a private 
 - **WHEN** the explicitly selected executable is a Windows `.cmd` or `.bat` shim
 - **THEN** gateway and channel invocations use the same quoted `cmd.exe /d /s /v:off /c` adapter with verbatim arguments
 - **AND** command expansion, embedded quotes and line breaks are rejected before spawning, while native executables keep direct argument dispatch
+
+### Requirement: Owned Windows runtime tree termination
+The owned runtime SHALL stop the entire Windows process tree, including the gateway launched by an npm command shim. It SHALL await a bounded tree-termination command and process exit, retry forced termination once on failure, and report failure if cleanup cannot be confirmed. POSIX SHALL retain SIGTERM followed by bounded SIGKILL escalation. Sources: CENTER-047, MAIN-144; open-quake-lih.17.24, PR108 finding 4380901915.
+
+#### Scenario: Command processor exits before its gateway
+- **WHEN** a Windows shim gateway is stopped and cmd.exe closes before tree termination completes
+- **THEN** Stop waits for the tree command to finish and never kills only cmd.exe
+- **AND** failed termination remains an error, with an owned handle available for retry
+
+### Requirement: Imported agent key voice default
+The clawbot key editor SHALL derive Voice Input and Task Prompt visibility from the runtime hold-to-talk predicate. An absent voiceInput action SHALL display voice disabled and Task Prompt editable. Sources: MGMT-302; open-quake-lih.17.24, PR108 finding 4380901936; DK-Suite v0.4.95 recovered_sources/src/plugins/KeyConfiguration.js:239-240 defaults voiceInput to false, and src/views/Components/QuakeShortCutView.vue:1758-1767 requires a truthy voiceInput action.
+
+#### Scenario: Imported key omits voiceInput
+- **WHEN** a clawbot key without voiceInput opens in the mounted editor and its task is saved
+- **THEN** Voice Input is unchecked, Task Prompt is visible, and saving preserves typed-only behavior without adding voiceInput
+- **AND** explicitly enabling Voice Input hides Task Prompt and saves true

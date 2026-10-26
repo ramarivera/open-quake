@@ -50,3 +50,9 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 - [x] A.2 Add revision-checked rename/template reset, portable pack round-trip, bounded authored-workspace backup export, redacted diagnostics and managed log-level environment updates. Sources CENTER-050/104, MAIN-144. Same bead; service and real controller/storage tests in `administration.test.ts`, mounted settings/wizard tests in `administration-interactions.test.tsx`.
 - [x] A.3 Add local agent/model/voice/task editing and key-scoped HTTP context reset using existing credentials and conversation owners. Source MGMT-302. Bead `open-quake-lih.17.12`; mounted `key-editor-interactions.test.tsx` and `agent-http/voice-adapter.test.ts` verify persistence and cross-key isolation.
 - [ ] A.4 Lead acceptance: launch a selected installed OpenClaw executable and verify its supported plugin versions, readiness/restart, real messaging authentication and physical key behavior. No live external service was used. This lane does not complete the in-process tool-loop tasks above.
+
+## PR108 post-round follow-ups
+
+- [x] F.1 Stop Windows shim gateway trees with bounded injectable termination and fake Windows/POSIX regressions. CENTER-047, MAIN-144, finding 4380901915. Bead `open-quake-lih.17.24`.
+- [x] F.2 Decode pinned recorded WhatsApp terminal QR output into the existing PNG drawer path, with consumer regression coverage and UTF-8-safe stdout chunk framing. CENTER-078, finding 4380901925. Same bead; owning channel spec is management-center-parity/specs/integration-channels.
+- [x] F.3 Match runtime voiceInput defaults in mounted key editing and persistence. MGMT-302, finding 4380901936. Same bead.

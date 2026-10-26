@@ -196,6 +196,7 @@ export function ChannelSetupDrawer({
 							{qr?.image ? (
 								<img
 									src={qr.image}
+									style={{ imageRendering: "pixelated" }}
 									width={220}
 									height={220}
 									alt={`${descriptor.name} login QR code`}

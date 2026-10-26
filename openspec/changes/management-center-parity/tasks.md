@@ -98,3 +98,7 @@ Account, cloud catalog, Agent Market, OpenClaw installer and editions remain OUT
 - [x] 9.8 Address PR94 finding 4378586520 by resolving generated mdi names through the canonical bundled artwork pipeline. Synced-profile-to-artwork regression fails before and passes after; unknown/malformed names stay inert. Bead `open-quake-lih.17.7`.
 - [x] 9.9 Address PR94 finding 4378586742 by preserving catalog validation identity at the linked rename Promise boundary. Actual profile transaction/controller regression proves duplicate and overlong names leave both stores untouched, while unexpected storage failures keep their private cause. Bead `open-quake-lih.17.7`.
 - [x] 9.10 Address new Codex finding 4378613145 by treating deleted linked profiles as independent packages. A real profile manager deletion/rename regression fails before and passes after without profile writes, recreation or refresh; library failures propagate. Bead `open-quake-lih.17.7`.
+
+## PR108 post-round follow-ups
+
+- [x] F.1 Render pinned recorded WhatsApp terminal QR output through the session and setup drawer, preserving split UTF-8 glyphs. CENTER-078, PR108 finding 4380901925; bead `open-quake-lih.17.24`. Agent-runtime tasks F.1-F.3 track the owned process and imported voice-default fixes in the same effort.
