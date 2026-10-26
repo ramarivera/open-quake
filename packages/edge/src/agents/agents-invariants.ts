@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { providerSamplingValid } from "../ai/ai-sampling.js";
+import { canonicalProvider } from "../ai/provider-catalog.js";
 import { type Agent, AgentState, type ModelRow } from "./agents-contracts.js";
 export const sanitizeAgentId = (value: string): string =>
 	value
@@ -169,3 +170,16 @@ export const ownModelRows = <Row>(
 	scope: string,
 ): readonly Row[] | undefined =>
 	Object.hasOwn(models, scope) ? models[scope] : undefined;
+
+/** Endpoint propagation is limited to rows using the same provider protocol. */
+export function sharesModelEndpoint(
+	left: Pick<ModelRow, "provider" | "settings">,
+	right: Pick<ModelRow, "provider" | "settings">,
+): boolean {
+	const provider = canonicalProvider(left.provider);
+	return (
+		provider === canonicalProvider(right.provider) &&
+		(provider !== "qwen" ||
+			Boolean(left.settings?.mediaKind) === Boolean(right.settings?.mediaKind))
+	);
+}

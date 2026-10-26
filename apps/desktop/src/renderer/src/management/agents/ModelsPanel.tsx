@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ownModelRows } from "../../../../../../../packages/edge/src/agents/agents-invariants";
+import {
+	ownModelRows,
+	sharesModelEndpoint,
+} from "../../../../../../../packages/edge/src/agents/agents-invariants";
 import { providerDefaults } from "../../../../../../../packages/edge/src/agents/provider-defaults";
 import { providerSamplingValid } from "../../../../../../../packages/edge/src/ai/ai-sampling";
 import {
@@ -49,7 +52,7 @@ function ModelTable({
 			current.map((r) =>
 				r.id === next.id
 					? next
-					: propagate && r.provider === next.provider
+					: propagate && sharesModelEndpoint(r, next)
 						? { ...r, baseUrl: next.baseUrl }
 						: r,
 			),

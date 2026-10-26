@@ -134,6 +134,11 @@ Volc Ark SHALL select inference or agent entry method with explicit endpoint or 
 - **THEN** only its selected endpoint and credential are used and fixtures assert its exact request and stream framing
 - **AND** Spark uses generalv3.5, generalv3 or 4.0Ultra with HMAC SHA256 signing and a 60 second deadline, closes on failure or cancellation and rejects tools
 
+#### Scenario: Qwen chat and media endpoints coexist
+- **WHEN** a scope saves Qwen chat and media rows or changes either endpoint
+- **THEN** endpoint propagation and credential invalidation affect only rows using the same protocol
+- **AND** the other protocol's endpoint and credential remain unchanged
+
 #### Scenario: Qwen generation type selects the matching model
 - **WHEN** a saved Qwen chat row switches to image or video generation
 - **THEN** its model changes to wanx2.1-t2i-turbo or wan2.2-t2v-plus and its endpoint changes to the media API
