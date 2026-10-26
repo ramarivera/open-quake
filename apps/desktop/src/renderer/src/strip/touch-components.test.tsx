@@ -603,6 +603,59 @@ describe("touch production components", () => {
 		});
 		expect(request).toHaveBeenCalledWith({ _tag: "FocusPanel" });
 	});
+	it("ClawBot pointer taps and drags preserve native caret and selection defaults", async () => {
+		const { root, node } = host();
+		const base = fixtureProfile();
+		const layout = stripLayout(base, base.pages[0]);
+		const tile = layout.tiles[0];
+		if (!tile) throw new Error("Missing input tile");
+		const request = vi.fn(async () => ({ _tag: "ok" as const }));
+		await act(async () =>
+			root.render(
+				<div className="strip-slot" data-state="tile" data-key-code="1,1">
+					<ClawBotInputTile
+						tile={tile}
+						context={{
+							now: undefined,
+							hourFormat: "24h",
+							voice: { ...previewVoiceContext, surface: "panel", request },
+						}}
+					/>
+				</div>,
+			),
+		);
+		const textarea = node.querySelector("textarea");
+		if (!textarea) throw new Error("Missing textarea");
+		vi.spyOn(textarea, "getBoundingClientRect").mockReturnValue(
+			new DOMRect(30, 30, 180, 180),
+		);
+		input(node, layout);
+		const pointer = async (type: string, x = 100) => {
+			const event = new PointerEvent(type, {
+				pointerId: 1,
+				button: 0,
+				clientX: x,
+				clientY: 100,
+				bubbles: true,
+				cancelable: true,
+			});
+			await act(async () => {
+				textarea.dispatchEvent(event);
+			});
+			expect(event.defaultPrevented).toBe(false);
+		};
+		await pointer("pointerdown");
+		await pointer("pointerup");
+		const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+		textarea.dispatchEvent(click);
+		expect(click.defaultPrevented).toBe(false);
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(request).toHaveBeenLastCalledWith({ _tag: "FocusPanel" });
+		await pointer("pointerdown");
+		await pointer("pointermove", 150);
+		await pointer("pointerup", 150);
+		expect(request).toHaveBeenCalledTimes(1);
+	});
 	it("Copilot binds conditional copy buttons across appearance, repaint and recreation", async () => {
 		const { root, node } = host();
 		const base = fixtureProfile();

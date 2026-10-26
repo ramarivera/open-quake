@@ -136,6 +136,12 @@ export function createTapRecognizer(start: Point, time: number, scale = 1) {
 	};
 }
 
+/** Text inputs retain native caret, selection and text-entry behavior. */
+export const isEditableTouchTarget = (target: EventTarget | null): boolean =>
+	target instanceof HTMLElement &&
+	(target.isContentEditable ||
+		target.closest("input, textarea, select") !== null);
+
 /** Shared child target lifecycle used by chat cards and the volume capsule. */
 export function mountTouchTarget(
 	element: HTMLElement,
@@ -193,18 +199,14 @@ export function mountTouchTarget(
 		if (tapped) options.tap();
 	};
 	const click = (event: MouseEvent): void => {
+		if (isEditableTouchTarget(event.target)) return;
 		if (options.disabled?.() || performance.now() < suppressUntil) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
 		}
 	};
 	const keyboard = (event: KeyboardEvent): void => {
-		const target = event.target;
-		if (
-			target instanceof HTMLElement &&
-			(target.isContentEditable || target.closest("input, textarea, select"))
-		)
-			return;
+		if (isEditableTouchTarget(event.target)) return;
 		if (
 			(event.key !== "Enter" && event.key !== " ") ||
 			event.repeat ||

@@ -12,6 +12,7 @@ import {
 } from "./touch-controller";
 import type { Rect } from "./touch-geometry";
 import { clientToLogical, contains } from "./touch-geometry";
+import { isEditableTouchTarget } from "./touch-gestures";
 
 /** Grid owns tile hits; DOM observation supplies only in-tile sub-targets. */
 export function mountStripTouch(
@@ -237,6 +238,7 @@ export function mountStripTouch(
 	let nativeUntil = 0;
 	let clickUntil = 0;
 	let domActive = false;
+	let domEditable = false;
 	let pointerId: number | undefined;
 	let touchIdentifier: number | undefined;
 	let ignoreContact = false;
@@ -311,10 +313,13 @@ export function mountStripTouch(
 			);
 			if (!target) return;
 			domActive = true;
+			domEditable = isEditableTouchTarget(event.target);
 			pointerId = event.pointerId;
 		} else if (!domActive || event.pointerId !== pointerId) return;
-		event.preventDefault();
-		event.stopPropagation();
+		if (!domEditable) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
 		clickUntil = performance.now() + 600;
 		if (event.type === "pointercancel") reset();
 		else
@@ -357,10 +362,13 @@ export function mountStripTouch(
 			)
 				return;
 			domActive = true;
+			domEditable = isEditableTouchTarget(event.target);
 			touchIdentifier = point.identifier;
 		} else if (!domActive) return;
-		event.preventDefault();
-		event.stopPropagation();
+		if (!domEditable) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
 		clickUntil = performance.now() + 600;
 		if (event.type === "touchcancel") reset();
 		else
@@ -371,6 +379,7 @@ export function mountStripTouch(
 		}
 	};
 	const click = (event: MouseEvent): void => {
+		if (isEditableTouchTarget(event.target)) return;
 		if (event.type === "dblclick" || performance.now() < clickUntil) {
 			event.preventDefault();
 			event.stopImmediatePropagation();
