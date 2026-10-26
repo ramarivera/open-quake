@@ -155,7 +155,7 @@ and the Auto router `open-quake-lih.15` remain unverified and out of scope.
 ## 8. PR #83 fix round
 
 - [x] 8.1 Allow only the additional `state` and `resume` worker methods and prove suspended playback recovery through the production bridge. Reviews 4375970560 and 4376016278, AI-156, bead `open-quake-lih.5.1.18`.
-- [ ] 8.2 Render stopped manual recordings as recorded/idle after stage 1 completes. Review 4375970758, AI-267, bead `open-quake-lih.5.1.19`.
+- [x] 8.2 Render stopped manual recordings as recorded/idle after stage 1 completes. Review 4375970758, AI-267, bead `open-quake-lih.5.1.19`.
 - [ ] 8.3 Count WAV sample payload rather than metadata for the 12 s no-audio deadline. Review 4375970956, AI-156, bead `open-quake-lih.5.1.20`.
 - [ ] 8.4 Include current meeting stage/status in snapshots for late strip mounts. Review 4375971137, AI-267, bead `open-quake-lih.5.1.21`.
 - [ ] 8.5 Stop active read-aloud before validating a newer streaming answer. Review 4376016267, AI-155, bead `open-quake-lih.5.1.22`.
@@ -170,3 +170,9 @@ Evidence is stored under
 failed before the fix with context state `suspended` instead of `running`. It uses
 production `openAudioWorker`, desktop output, serialized worker and watchdog,
 with a synthetic WebAudio implementation. No physical audio device is opened.
+
+8.2 regression `shows recorded idle after a manual recording finishes merging`
+failed before the fix because the mounted display markup showed processing and
+uploading after stage 1/status 2. The recording now renders idle while retaining
+its recorded state. The regression and desktop typecheck pass. Current fix-round
+logs use `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/strip-voice-2/fix1d/`.

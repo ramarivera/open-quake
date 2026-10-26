@@ -6,11 +6,17 @@ import { MeetingGlyph } from "./MeetingGlyph";
 
 export function MeetingAnimation({
 	record,
-	progress,
+	progress: latestProgress,
 }: {
 	record: MeetingRecord | undefined;
 	progress?: Extract<VoiceSurfaceEvent, { _tag: "MeetingStage" }> | undefined;
 }): React.JSX.Element {
+	const progress =
+		record?.state === "recorded" &&
+		latestProgress?.stage === 1 &&
+		latestProgress.status === 2
+			? undefined
+			: latestProgress;
 	const [celebrate, setCelebrate] = useState(false);
 	const panel =
 		new URLSearchParams(
