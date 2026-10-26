@@ -199,6 +199,12 @@ export function mountTouchTarget(
 		}
 	};
 	const keyboard = (event: KeyboardEvent): void => {
+		const target = event.target;
+		if (
+			target instanceof HTMLElement &&
+			(target.isContentEditable || target.closest("input, textarea, select"))
+		)
+			return;
 		if (
 			(event.key !== "Enter" && event.key !== " ") ||
 			event.repeat ||

@@ -40,7 +40,7 @@ Tracked by open-quake-lih.29.1. Leave the parent burn-down tasks open for the le
 - [x] 6.4 Verify local-player body fallback and exclusive child buttons. Devin 4377895969, KNOB-089. The mounted consumer test passes before any routing change: unmatched hits retain supportTouchEffect and already emit tile down/up. Retain regression coverage; decline the reported behavior bug with source/test evidence.
 - [ ] 6.5 Reply to the known SCREEN-060 camera-gateway blocker, run all six gates, audit unanswered review threads including new Codex findings, and remove generated build output. Do not resolve threads or merge.
 
-- [ ] 6.6 Preserve text-entry Space/Enter on textarea touch targets. Codex 4378002610.
+- [x] 6.6 Preserve text-entry Space/Enter on textarea touch targets. Codex 4378002610.
 - [ ] 6.7 Bind conditional copy buttons when they mount. Codex 4378002633.
 - [ ] 6.8 Run release cleanup after failed synchronous press activation. Codex 4378002639.
 - [ ] 6.9 Start disk gestures from native scroll position. Codex 4378002645.

@@ -26,6 +26,7 @@ import { VolumeCapsule } from "./overlays/knob/VolumeCapsule";
 import { previewVoiceContext } from "./overlays/voice/voice-context";
 import { StripPanel } from "./StripPanel";
 import { StripScreen } from "./StripScreen";
+import { ClawBotInputTile } from "./tiles/clawBotInput/ClawBotInputTile";
 import { SoundboardUnavailableTile } from "./tiles/soundboard/SoundboardUnavailableTile";
 import type { StripKeyEvent } from "./touch-controller";
 
@@ -549,6 +550,51 @@ describe("touch production components", () => {
 			expect(request).toHaveBeenCalledTimes(4);
 		},
 	);
+	it("ClawBot text-entry touch targets preserve Space and Enter without losing touch focus", async () => {
+		const { root, node } = host();
+		const base = fixtureProfile();
+		const layout = stripLayout(base, base.pages[0]);
+		const tile = layout.tiles[0];
+		if (!tile) throw new Error("Missing input tile");
+		const request = vi.fn(async () => ({ _tag: "ok" as const }));
+		await act(async () =>
+			root.render(
+				<ClawBotInputTile
+					tile={tile}
+					context={{
+						now: undefined,
+						hourFormat: "24h",
+						voice: { ...previewVoiceContext, surface: "panel", request },
+					}}
+				/>,
+			),
+		);
+		const textarea = node.querySelector("textarea");
+		if (!textarea) throw new Error("Missing textarea");
+		for (const key of [" ", "Enter"]) {
+			const event = new KeyboardEvent("keydown", {
+				key,
+				bubbles: true,
+				cancelable: true,
+			});
+			textarea.dispatchEvent(event);
+			expect(event.defaultPrevented).toBe(false);
+		}
+		expect(request).not.toHaveBeenCalled();
+		await act(async () => {
+			textarea.dispatchEvent(
+				new CustomEvent("quake-sub-touch-start", {
+					detail: { phase: "start" },
+				}),
+			);
+			textarea.dispatchEvent(
+				new CustomEvent("quake-sub-touch-end", {
+					detail: { confirmedTap: true },
+				}),
+			);
+		});
+		expect(request).toHaveBeenCalledWith({ _tag: "FocusPanel" });
+	});
 	it("SCREEN-010 cancels held keys after same-page content replacement but preserves runtime repaint ownership", async () => {
 		const { node, root } = host();
 		const base = fixtureProfile();
