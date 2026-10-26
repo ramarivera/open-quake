@@ -12,9 +12,14 @@ export function subscribeWallpaper(
 	bridge: WallpaperBridge,
 	update: (snapshot: WallpaperSnapshot) => void,
 	tick: (clock: ClockSnapshot) => void,
+	serial?: string,
 ): () => void {
 	const offSnapshot = bridge.onSnapshot((input) => {
-		if (Schema.is(WallpaperSnapshot)(input)) update(input);
+		if (
+			Schema.is(WallpaperSnapshot)(input) &&
+			(serial === undefined || input.saved.serial === serial)
+		)
+			update(input);
 	});
 	const offClock = bridge.onClock((input) => {
 		if (Schema.is(ClockSnapshot)(input)) tick(input);
@@ -26,6 +31,8 @@ export function subscribeWallpaper(
 }
 
 export function useWallpaper() {
+	const serial =
+		new URLSearchParams(window.location.search).get("serial") ?? undefined;
 	const [snapshot, setSnapshot] = useState<WallpaperSnapshot>();
 	const [notice, setNotice] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -49,6 +56,8 @@ export function useWallpaper() {
 					setNotice(reply.message);
 					return;
 				}
+				if (serial !== undefined && reply.snapshot.saved.serial !== serial)
+					return;
 				setSnapshot((current) =>
 					current &&
 					current.clock.epochMillis > reply.snapshot.clock.epochMillis
@@ -65,7 +74,7 @@ export function useWallpaper() {
 				if (mounted.current) setBusy(false);
 			}
 		},
-		[],
+		[serial],
 	);
 	useEffect(() => {
 		mounted.current = true;
@@ -86,12 +95,13 @@ export function useWallpaper() {
 				),
 			(clock) =>
 				setSnapshot((current) => (current ? { ...current, clock } : current)),
+			serial,
 		);
 		void request({ _tag: "read" });
 		return () => {
 			mounted.current = false;
 			unsubscribe();
 		};
-	}, [request]);
+	}, [request, serial]);
 	return { snapshot, notice, busy, request };
 }

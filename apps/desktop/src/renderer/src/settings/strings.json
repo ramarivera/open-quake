@@ -121,6 +121,22 @@
 			"resume": {
 				"label": "Resume setup",
 				"meta": "Step {current} of {total}"
+			},
+			"orientation": {
+				"title": "Display Orientation Confirmation",
+				"portrait": "Portrait (not recommended)",
+				"landscape": "Landscape (recommended)",
+				"recommended": "Recommended",
+				"success": "Congratulations! Your display settings are configured correctly.",
+				"disconnected": "Device not connected",
+				"connected": "Device connected",
+				"vertical": "Orientation: portrait",
+				"horizontal": "Orientation: landscape",
+				"unknown": "Checking display orientation…",
+				"open": "Open Display Settings",
+				"darwin": "Quake display is in standard orientation. In macOS Displays settings, set Quake screen Rotation to 270°.",
+				"win32": "Quake display is in portrait orientation. In Windows Display settings, set Quake screen Orientation to Landscape.",
+				"other": "Portrait orientation detected. Please set the Quake display to landscape in your PC display settings."
 			}
 		},
 		"general": {
@@ -408,6 +424,22 @@
 			"resume": {
 				"label": "Einrichtung fortsetzen",
 				"meta": "Schritt {current} von {total}"
+			},
+			"orientation": {
+				"title": "Anzeigeausrichtung bestätigen",
+				"portrait": "Hochformat (nicht empfohlen)",
+				"landscape": "Querformat (empfohlen)",
+				"recommended": "Empfohlen",
+				"success": "Glückwunsch! Ihre Anzeigeeinstellungen sind korrekt.",
+				"disconnected": "Gerät nicht verbunden",
+				"connected": "Gerät verbunden",
+				"vertical": "Ausrichtung: Hochformat",
+				"horizontal": "Ausrichtung: Querformat",
+				"unknown": "Anzeigeausrichtung wird geprüft…",
+				"open": "Anzeigeeinstellungen öffnen",
+				"darwin": "Das Quake-Display ist in Standardausrichtung. Stellen Sie in den macOS-Monitor-Einstellungen die Drehung des Quake-Bildschirms auf 270° ein.",
+				"win32": "Das Quake-Display ist im Hochformat. Stellen Sie in den Windows-Anzeigeeinstellungen die Ausrichtung des Quake-Bildschirms auf Querformat ein.",
+				"other": "Hochformat erkannt. Bitte stellen Sie das Quake-Display in den PC-Anzeigeeinstellungen auf Querformat."
 			}
 		},
 		"general": {

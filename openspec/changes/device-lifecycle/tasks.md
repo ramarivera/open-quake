@@ -41,3 +41,36 @@
 - [x] Bind an exact-label, exact-size sole DK-QUAKE display while preserving blanking identification for ambiguous candidates. Release discovery reservations when disconnect cancels a never-started fiber. Prove live EDID-retaining startup, settled resume/reopen and strict ambiguity regressions. Shared bead `open-quake-lih.10.2.21`; key-library-parity task8.2 tracks profile enrollment in the same fix. Evidence: `../key-library-parity/verification-quiet-startup.md`; source `451f108`.
 
 - [x] Repair the CoreGraphics JXA binding crash exposed by consented live arrangement, and verify the actual helper on macOS plus the single-owner panel after movement. Shared bead `open-quake-lih.10.2.20.1`; key-library-parity task8.7. Evidence: `../key-library-parity/verification-quiet-keyboard-display.md`.
+
+## 8. Lifecycle burn-down lane
+
+- [x] 8.1 Implement scoped native strip windows, 3s/5s disposal and app suspension lease. Bead open-quake-lih.11.3. Rows MAIN-012,048,049,050,061; SCREEN-146; SETTINGS-079,084.
+- [x] 8.2 Implement serial-safe recovery, ambiguity, scaled layout, debounced orientation and wake generations. Bead open-quake-lih.11.4. Rows MAIN-046,047,053,054,060; SCREEN-147; SETTINGS-085.
+- [x] 8.3 Implement consented Windows probe/extend, arrangement persistence and wizard orientation ownership. Bead open-quake-lih.11.5. Rows MAIN-043,044,057,058,059; SETTINGS-058,087.
+
+## 9. PR #86 single bot-review fix round
+
+- [x] 9.1 Fix Linux panel type regression and assert each platform. Bead `open-quake-lih.11.6`. Hosted run 40332287050.
+- [x] 9.2 Forward secondary strip input to its serial panel. Bead `open-quake-lih.11.7`. Devin 4377860557.
+- [x] 9.3 Attach secondary hardware sessions and enroll serial profiles. Bead `open-quake-lih.11.8`. Devin 4377860703.
+- [x] 9.4 Select a surviving strip when the selected panel closes. Bead `open-quake-lih.11.9`. Devin 4377860894.
+- [x] 9.5 Reject recycled display identities on grace reconnect. Bead `open-quake-lih.11.10`. Devin 4377861513.
+- [x] 9.6 Drain connections pending after the pairing loop. Bead `open-quake-lih.11.11`. Devin 4377861167.
+- [x] 9.7 Allowlist new lifecycle diagnostics spans. Bead `open-quake-lih.11.12`. Copilot 4377915651/4377915718/4377915765/4377915820.
+- [x] 9.8 Move orientation confirmation copy into settings translations. Bead `open-quake-lih.11.13`. Copilot 4377915877.
+- [x] 9.9 Run full gates and reconcile all unanswered review threads. Bead `open-quake-lih.11.14`. Devin info 4377861742; final Codex scan; no resolving or merging. Evidence: verification.md, PR #86 single bot-review fix round.
+
+- [x] 9.10 Preserve another serial discovery when one device disconnects. Bead `open-quake-lih.11.15`. Codex4378016504.
+- [x] 9.11 Dispose preview ownership when real hardware connects. Bead `open-quake-lih.11.16`. Codex4378016521.
+- [x] 9.12 Clear recovered Windows probe failures on redetect. Bead `open-quake-lih.11.17`. Codex4378016538.
+
+## 10. PR #86 final implementation round
+
+Bead `open-quake-lih.11.18` owns this final-round scope.
+
+- [x] 10.1 Merge current main, preserving touch, meeting, icon and clock changes. Merge `abedad5`.
+- [x] 10.2 Fix the suspected shutdown deadlock without weakening the smoke. Cancel knob registration work before the bus joins its input queue. The deterministic main-entrypoint test failed before this ordering change.
+- [x] 10.3 Bind each renderer's state, profile and activation to its owning serial. Codex4378546825. Two-panel media regression failed before; mounted serial A/B and IPC ownership tests pass.
+- [x] 10.4 Use live bound-display position and rotation during concurrent pairing. Codex4378546838. The concurrent-pairing regression failed before and passes with live lookup; 28 lifecycle tests pass.
+- [x] 10.5 Refresh secondary HID paths by serial after re-enumeration. Codex4378546848. Two-strip regression fails on the old path selection and passes after serial lookup, including repeated path changes, recovery and input isolation. 14 HID tests pass.
+- [x] 10.6 Run full gates and native media smoke, push and reply per fix, remove build output. Leave threads unresolved and PR unmerged.
