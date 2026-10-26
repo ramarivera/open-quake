@@ -140,7 +140,7 @@ export function AssistantControls({
 					id={`${id}-engine`}
 					value={canonicalProvider(row?.provider ?? "")}
 					onChange={(e) => {
-						const selected = rows.find(
+						const selected = eligible.find(
 							(r) => canonicalProvider(r.provider) === e.target.value,
 						);
 						if (selected)
@@ -168,11 +168,11 @@ export function AssistantControls({
 							key={e.id}
 							value={e.id}
 							disabled={
-								!rows.some((r) => canonicalProvider(r.provider) === e.id)
+								!eligible.some((r) => canonicalProvider(r.provider) === e.id)
 							}
 						>
 							{e.label}
-							{rows.some((r) => canonicalProvider(r.provider) === e.id)
+							{eligible.some((r) => canonicalProvider(r.provider) === e.id)
 								? ""
 								: " · not configured"}
 						</option>

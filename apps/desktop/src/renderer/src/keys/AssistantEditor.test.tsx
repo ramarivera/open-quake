@@ -506,6 +506,36 @@ it("inactive named rows stay visible but cannot be selected for assistant dispat
 	expect(option?.textContent).toContain("unavailable");
 });
 
+it("provider selection skips inactive rows and disables providers without an eligible row", async () => {
+	const source = rows[0];
+	if (!source) throw new Error("missing model fixture");
+	let saved = defaultAssistantSettings();
+	const catalog: readonly PublicModelRow[] = [
+		{ ...source, id: "inactive-first", role: "none" },
+		{ ...source, id: "active-copy", role: "default" },
+		{ ...source, id: "inactive-qwen", provider: "qwen", role: "none" },
+	];
+	const f = await mount(
+		<AssistantControls
+			value={saved}
+			rows={catalog}
+			onChange={(next) => {
+				saved = next;
+			}}
+		/>,
+	);
+	closes.push(f.close);
+	const engine = query(f.host, 'select[id$="-engine"]', HTMLSelectElement);
+	await input(engine, "openai");
+	expect(saved.modelRowId).toBe("active-copy");
+	expect(
+		Array.from(engine.options).find((option) => option.value === "qwen")
+			?.disabled,
+	).toBe(true);
+	await input(engine, "qwen");
+	expect(saved.modelRowId).toBe("active-copy");
+});
+
 it("General Settings default resolves new row before writing direct knob actions", async () => {
 	bridge();
 	let saved: KnobSlot = {
