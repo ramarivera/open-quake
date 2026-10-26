@@ -25,12 +25,15 @@ import {
 	profileStorageLayer,
 } from "../../../../../../packages/device/src/profiles/profile-repository";
 import { ProfileService } from "../../../../../../packages/device/src/profiles/profile-service";
+import { defaultClockTile, defaultWallpaper } from "../../../shared/display";
 import type {
 	KeyPreview,
 	KeyReply,
 	KeyRequest,
 } from "../../../shared/key-library";
 import type { MeetingsBridge } from "../../../shared/meeting-bridge";
+import { selectStripPage } from "../../../shared/strip-selection";
+import type { WallpaperSnapshot } from "../../../shared/wallpaper-contracts";
 import { button, click, input, mount, query, settle } from "../../test/dom";
 import { stripLayout, tileAt } from "../strip/geometry";
 import {
@@ -192,6 +195,34 @@ async function fixture(locked = false) {
 		},
 		onRuntime: () => () => {},
 	};
+	let publishWallpaper: ((snapshot: unknown) => void) | undefined;
+	const wallpaper = (serial: string): WallpaperSnapshot => ({
+		saved: {
+			version: 1,
+			serial,
+			revision: 0,
+			settings: defaultWallpaper,
+			clock: defaultClockTile,
+		},
+		asset: { _tag: "empty" },
+		clock: { epochMillis: 0, hour: 0, minute: 0, second: 0 },
+		recovered: false,
+		normalizedFileUrl: false,
+		deviceDelivery: "unverified",
+	});
+	vi.stubGlobal("quakeWallpaper", {
+		request: async () => ({
+			_tag: "success",
+			snapshot: wallpaper("desktop-preview"),
+		}),
+		onSnapshot: (callback: (snapshot: unknown) => void) => {
+			publishWallpaper = callback;
+			return () => {
+				publishWallpaper = undefined;
+			};
+		},
+		onClock: () => () => {},
+	});
 	const mounted = await mount(<KeyEditor />);
 	cleanups.push(mounted.close);
 	await settle(() =>
@@ -207,6 +238,9 @@ async function fixture(locked = false) {
 		...mounted,
 		runtime,
 		calls,
+		device: async (serial: string) => {
+			await act(async () => publishWallpaper?.(wallpaper(serial)));
+		},
 		select,
 		stored: () => stored,
 		fail: (next: boolean) => {
@@ -368,6 +402,46 @@ it("MGMT-096 follows selected-device publications to a subfolder and discards th
 	expect(f.stored().profiles[0].pages[0].keys[0]?.config.title.text).toBe(
 		"Sequence",
 	);
+});
+
+it("MGMT-096 follows the strip fallback when a new device has no saved selection", async () => {
+	const f = await fixture();
+	await f.runtime.runPromise(
+		ProfileService.selectProfile({
+			deviceId: "desktop-preview",
+			profileId: "other",
+			pageId: "subfolder",
+		}),
+	);
+	await f.publish(f.stored());
+	expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe("other");
+	await f.device("new-device");
+	const expected = selectStripPage(
+		Schema.decodeUnknownSync(ProfileEnvelope)(f.stored()),
+		"new-device",
+	);
+	expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe(
+		expected.profile.id,
+	);
+	expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+		expected.page.id,
+	);
+	await f.select();
+	await input(
+		query(f.host, "#key-title", HTMLInputElement),
+		"Unsaved device draft",
+	);
+	await f.device("another-new-device");
+	expect(f.host.querySelector("#key-title")).toBeNull();
+	expect(f.calls.filter((c) => c.type === "revert")).toHaveLength(1);
+	await f.device("desktop-preview");
+	expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe("other");
+	expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe(
+		"subfolder",
+	);
+	await f.publish({ ...f.stored(), activeByDevice: {} });
+	expect(query(f.host, "#keys-profile", HTMLSelectElement).value).toBe("p");
+	expect(query(f.host, "#keys-page", HTMLSelectElement).value).toBe("one");
 });
 
 for (const [profileId, type] of [

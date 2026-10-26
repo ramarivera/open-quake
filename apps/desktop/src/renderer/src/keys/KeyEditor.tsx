@@ -27,6 +27,7 @@ import {
 } from "../../../../../../packages/device/src/profiles/profile-contracts.js";
 import { ProfileLocale } from "../../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { ClockSnapshot } from "../../../shared/clock-contracts";
+import { selectStripPage } from "../../../shared/strip-selection";
 import { ObsSettings } from "../obs/ObsSettings";
 import { stripLayout, tileAt } from "../strip/geometry";
 import { StripScreen, StripViewport } from "../strip/StripScreen";
@@ -121,25 +122,41 @@ export function KeyEditor(): React.JSX.Element {
 				});
 		};
 	}, [accept]);
-	const publishedSelection = useRef("");
+	const publishedSelection = useRef<
+		| {
+				serial: string;
+				profileId: string;
+				pageId: string;
+		  }
+		| undefined
+	>(undefined);
 	useEffect(() => {
-		if (saving) return;
-		const selected = envelope?.activeByDevice[serial];
-		const identity = selected
-			? `${serial}:${selected.profileId}:${selected.pageId}`
-			: "";
-		if (!selected || identity === publishedSelection.current) return;
-		publishedSelection.current = identity;
+		if (saving || !envelope) return;
+		const { profile, page } = selectStripPage(envelope, serial);
+		const previous = publishedSelection.current;
+		if (
+			previous?.serial === serial &&
+			previous.profileId === profile.id &&
+			previous.pageId === page.id
+		)
+			return;
+		publishedSelection.current = {
+			serial,
+			profileId: profile.id,
+			pageId: page.id,
+		};
 		const draft = current.current;
 		if (
 			draft &&
-			(draft.target.profileId !== selected.profileId ||
-				draft.target.pageId !== selected.pageId)
+			(previous?.serial !== serial ||
+				draft.target.profileId !== profile.id ||
+				draft.target.pageId !== page.id)
 		)
 			void revert();
-		setProfileId(selected.profileId);
-		setPageId(selected.pageId);
+		setProfileId(profile.id);
+		setPageId(page.id);
 	}, [envelope, serial, saving, revert]);
+
 	useEffect(
 		() =>
 			window.quakeClock?.onSnapshot((input) => {
