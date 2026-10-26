@@ -8,7 +8,8 @@
 .monitor-settings-preview {
 	margin-bottom: var(--oq-space-4, 16px);
 }
-.monitor-style-options button {
+.monitor-style-options button,
+.monitor-metric-options button {
 	border: 0;
 	border-radius: var(--oq-radius-md, 8px);
 	background: var(--oq-surface, var(--quake-surface));
@@ -19,15 +20,18 @@
 	font-weight: 550;
 	cursor: pointer;
 }
-.monitor-style-options button[aria-pressed="true"] {
+.monitor-style-options button[aria-pressed="true"],
+.monitor-metric-options button[aria-pressed="true"] {
 	box-shadow: inset 0 0 0 2px var(--oq-accent, var(--quake-accent));
 	background: var(--oq-accent-soft, var(--quake-surface));
 }
-.monitor-style-options button:focus-visible {
+.monitor-style-options button:focus-visible,
+.monitor-metric-options button:focus-visible {
 	outline: 2px solid var(--oq-accent, var(--quake-accent));
 	outline-offset: 2px;
 }
-.monitor-style-options button:disabled {
+.monitor-style-options button:disabled,
+.monitor-metric-options button:disabled {
 	opacity: 0.5;
 	cursor: default;
 }
@@ -39,6 +43,12 @@
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
 	gap: 12px;
+}
+/* Five tiles need ~470px to fit "Cyberpunk"; narrower columns reflow 3 + 2. */
+@container (max-width: 680px) {
+	.monitor-style-options {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
 }
 .monitor-style-options button {
 	display: flex;
@@ -78,17 +88,45 @@
 	display: flex;
 	gap: var(--oq-space-2, 8px);
 }
+/* Both buttons on one line are ~378px; let them stack when the row is narrower. */
+.monitor-media-actions {
+	flex-wrap: wrap;
+}
 .monitor-media-name,
-.monitor-media-error {
+.monitor-media-error,
+.monitor-field-error {
 	margin: 0;
 	font-size: var(--mc-font-meta, 12.5px);
 	color: var(--oq-text-muted, var(--quake-muted));
 }
-.monitor-media-error {
+.monitor-media-error,
+.monitor-field-error {
 	color: var(--oq-danger, var(--quake-warning));
 }
 .monitor-hz {
 	width: 96px;
+}
+/* Multi-select metrics reuse the style-option chrome; text only, wraps 4 + 4. */
+.monitor-metric-options,
+.monitor-live-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	max-width: 400px;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.monitor-metric-options {
+	gap: var(--oq-space-2, 8px);
+}
+.monitor-metric-options button {
+	min-height: 30px;
+	padding: 0 12px;
+}
+.monitor-live-metrics {
+	gap: 6px;
 }
 .monitor-footer {
 	display: flex;

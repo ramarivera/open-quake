@@ -8,6 +8,7 @@ export const MODULES = [
 	"disk",
 	"network",
 	"power",
+	"bluetooth",
 ] as const;
 export const ModuleId = Schema.Literal(...MODULES);
 export type ModuleId = typeof ModuleId.Type;
