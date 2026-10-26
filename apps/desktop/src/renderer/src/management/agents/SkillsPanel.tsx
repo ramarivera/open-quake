@@ -257,9 +257,9 @@ export function SkillsPanel({
 				</label>
 				{scope === "agent" && (
 					<label className="mc-field">
-						Agent
+						{strings.administration.agent}
 						<select
-							aria-label="Skill agent"
+							aria-label={strings.administration.agent}
 							value={effectiveAgent}
 							onChange={(e) => setSelectedAgent(e.target.value)}
 						>

@@ -8,6 +8,7 @@ import {
 	type AgentsBridge,
 	type AgentView,
 } from "../../../../shared/agents";
+import { AppLocaleProvider } from "../../i18n";
 import { button, click, element, input, mount } from "../dom-test";
 import { AdministrationPanel } from "./AdministrationPanel";
 import { AgentsPage } from "./AgentsPage";
@@ -444,9 +445,9 @@ it("CENTER-052 skill agent scope follows additions and deletions in the roster",
 	);
 	expect(document.querySelectorAll(".aw-skill-list li")).toHaveLength(0);
 	await act(async () => publish(view));
-	expect(
-		element<HTMLSelectElement>('select[aria-label="Skill agent"]').value,
-	).toBe("writer");
+	expect(element<HTMLSelectElement>('select[aria-label="Agent"]').value).toBe(
+		"writer",
+	);
 	expect(element(".aw-skill-list").textContent).toContain("Draft");
 	const reviewer = Schema.decodeUnknownSync(AgentId)("reviewer");
 	await act(async () =>
@@ -467,14 +468,42 @@ it("CENTER-052 skill agent scope follows additions and deletions in the roster",
 			],
 		}),
 	);
-	expect(
-		element<HTMLSelectElement>('select[aria-label="Skill agent"]').value,
-	).toBe("reviewer");
+	expect(element<HTMLSelectElement>('select[aria-label="Agent"]').value).toBe(
+		"reviewer",
+	);
 	expect(element(".aw-skill-list").textContent).toContain("Review");
 	expect(element(".aw-skill-list").textContent).not.toContain("Draft");
 	await act(async () => publish({ ...view, agents: [view.agents[0]] }));
-	expect(
-		element<HTMLSelectElement>('select[aria-label="Skill agent"]').value,
-	).toBe("");
+	expect(element<HTMLSelectElement>('select[aria-label="Agent"]').value).toBe(
+		"",
+	);
 	expect(document.querySelectorAll(".aw-skill-list li")).toHaveLength(0);
 });
+
+it.each(["en", "de"] as const)(
+	"CENTER-052 localizes the skill selector label and accessible name in %s",
+	async (locale) => {
+		const request = vi.fn<AgentRequest>(async () => ({
+			_tag: "success",
+			view,
+			draft: "",
+		}));
+		await mount(
+			<AppLocaleProvider initialLocale={locale} bridge={null}>
+				<SkillsPanel view={view} request={request} busy={false} />
+			</AppLocaleProvider>,
+			false,
+		);
+		const scope = locale === "de" ? "Skill-Bereich" : "Skill scope";
+		await input(
+			element<HTMLSelectElement>(`select[aria-label="${scope}"]`),
+			"agent",
+		);
+		const selector = element<HTMLSelectElement>('select[aria-label="Agent"]');
+		expect(selector.labels?.[0]?.textContent?.trim().startsWith("Agent")).toBe(
+			true,
+		);
+		expect(selector.value).toBe("writer");
+		expect(document.querySelector('[aria-label="Skill agent"]')).toBeNull();
+	},
+);
