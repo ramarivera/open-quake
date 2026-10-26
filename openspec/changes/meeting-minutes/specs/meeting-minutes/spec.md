@@ -472,7 +472,7 @@ Evidence: AI-313, AI-314, SETTINGS-108. Edit Meeting Title SHALL open a 400 px m
 
 ### Requirement: Direct meeting provider composition
 
-Evidence: AI-136, AI-137, AI-269, AI-270, AI-272, AI-327. Production registration SHALL compose AiMeetingAdapter with the existing saved model profiles, protected credential resolver and managed audio references. DashScope SHALL use matching qwen-audio-3.0-asr-flash-filetrans upload and submit models, private OSS form upload, mono channel zero with diarization, asynchronous task polling and cancellation, and at most three InternalError retries after 2, 4 and 6 seconds. OpenAI SHALL own a unique private PCM conversion per job, use gpt-realtime-mini with gpt-4o-transcribe input transcription and server VAD threshold 0.4, 800 ms prefix and 1000 ms silence, send at most 30720 bytes per 100 ms after 500 ms startup, preserve speech segment timing, await all correlated final results for up to 10 seconds after EOF and release PCM/socket on all exits. Translation SHALL use explicit source auto and selected target language with qwen3.5-livetranslate-flash-realtime, bounded state and 500 ms reconnect. Device toggles, source loss and meeting end SHALL stop the same adapter.
+Evidence: AI-136, AI-137, AI-269, AI-270, AI-272, AI-327. Production registration SHALL compose AiMeetingAdapter with the existing saved model profiles, protected credential resolver and managed audio references. DashScope SHALL use matching qwen-audio-3.0-asr-flash-filetrans upload and submit models, private OSS form upload, mono channel zero with diarization, asynchronous task polling and cancellation, and at most three InternalError retries after 2, 4 and 6 seconds. OpenAI SHALL own a unique private PCM conversion per job, use gpt-realtime-mini with gpt-4o-transcribe input transcription and server VAD threshold 0.4, 800 ms prefix and 1000 ms silence, send frames of at most 30720 bytes after 500 ms startup, cap frame delays at 100 ms and budget long-file pacing within the transcription deadline, preserve speech segment timing, await all correlated final results for up to 10 seconds after EOF and release PCM/socket on all exits. Translation SHALL use explicit source auto and selected target language with qwen3.5-livetranslate-flash-realtime, bounded state and 500 ms reconnect. Device toggles, source loss and meeting end SHALL stop the same adapter.
 
 #### Scenario: Saved profile drives a fake provider
 
@@ -515,3 +515,23 @@ Evidence: AI-292, AI-338, SCREEN-110. Translation capture SHALL resample actual 
 
 - **WHEN** fake 44100 Hz or 48000 Hz audio drives translation and two registered displays receive interim then final results
 - **THEN** each submitted block contains exactly 300 ms at 24 kHz, displays replace the same interim paragraph, show selected language and speaker, become idle after five seconds, and reset never restores previous profile text
+
+
+### Requirement: Reviewed provider boundary safety
+
+Evidence: AI-269, AI-270, AI-272, AI-278, AI-288, AI-292. Meeting provider IPC, resource URLs, finality, retries and ownership handoffs SHALL preserve the review-fix scenarios below without real-provider calls in automated tests.
+
+#### Scenario: Review fixes preserve provider security and completed retry semantics
+
+- **WHEN** AI-269 or AI-270 returns an untrusted upload or transcript location, or a renderer requests AI-278 file management
+- **THEN** remote file IPC requires the management window main frame, upload policies are restricted to documented DashScope temporary OSS buckets, and transcript downloads reject private, loopback, link-local, metadata and arbitrary DNS destinations; a deliberately configured loopback provider is confined to its exact configured origin
+
+#### Scenario: Review fixes preserve complete speech and owned resources
+
+- **WHEN** AI-272 reaches EOF with an automatic VAD turn still pending, a long file is submitted, or a completed AI-269 transcription is explicitly retried
+- **THEN** finality waits for the ordered VAD-disable acknowledgement and explicit flush, pacing leaves time within the ASR deadline, completed results are replaced in both providers, and pending DashScope tasks still recover after restart
+
+#### Scenario: Review fixes prevent silent recording loss and remote leaks
+
+- **WHEN** AI-288 system validation times out, conversion fails permanently, AI-278 ownership persistence fails after upload, or AI-292 translation reconnects
+- **THEN** validation decodes at most a one-second sample and a timeout fails finalization instead of dropping the system track, conversion retries only transient host errors, failed ownership persistence triggers remote deletion with interruption deferred during the handoff, and reconnect clears undelivered old-session text

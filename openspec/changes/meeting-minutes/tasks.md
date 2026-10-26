@@ -152,3 +152,28 @@ AI-269, AI-270, AI-272 and AI-278 remains unverified. No real microphone/system
 capture, HID or DK-Suite was opened. Beads stay open for lead merge. Evidence,
 row mappings, logs and screenshots are external under
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/`.
+
+
+## 11. PR #109 single bot-review fix round
+
+Execution: open-quake-lih.16.9 through .12, left open for lead-owned merge and physical acceptance.
+
+- [x] 11.1 Merge current main and install FFmpeg in Linux validation so the three real-codec/fake-provider integration tests run rather than skip.
+- [x] 11.2 Enforce management-window file IPC ownership, public provider transcript destinations and documented DashScope temporary upload buckets. Regressions reject unauthorized frames and 18 malicious URL/policy cases before transport.
+- [x] 11.3 Fix late-VAD EOF finality, completed ASR replacement in both providers, long-file pacing, remote transcript rollback/interruption safety, reconnect isolation, optional system validation timeouts and transient-only conversion retries. Every code fix has a fail-before regression; both duplicate system-audio findings receive replies.
+- [x] 11.4 Reconcile root loose-environment tests, six package typechecks, Biome, build, both bundle modes, strict OpenSpec and the hidden meetings mock smoke; inspect final unanswered GraphQL threads. Do not resolve threads or merge. Evidence stays under external SSD meeting-provider/fix1.
+
+
+Round 11 evidence: main `246c0b576de4a634e3fbfcfccc370d4c9e5578b3` merged in
+`f7732fa1`; all ten accepted code findings pushed and all 11 original review
+threads answered separately with commit/model attribution. Root exact requested
+loose-environment command passes 4,097 tests with four existing skips across
+417 passing files and two skipped files. Six package typechecks, Biome 1,403
+files with 14 existing warnings and one info, build, both bundle modes, 11 release
+script tests and 47 strict OpenSpec items pass. Hidden muted meetings smoke
+passes, exits and leaves 28 captures; Chromium cache/process-policy diagnostics
+remain in its log. Final GraphQL inventory has zero unanswered threads, all 11
+left unresolved. Hosted checks remain owned by the lead; no fresh bot round,
+thread resolution or merge was requested. No physical or paid-provider
+qualification is implied. External logs and captures remain under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/fix1/`.

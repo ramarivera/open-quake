@@ -284,3 +284,37 @@ AI-327, AI-338 and SCREEN-110; paid-provider qualification remains unverified fo
 AI-136, AI-137, AI-269, AI-270, AI-272 and AI-278. No microphone, system capture,
 physical device or paid request is part of this evidence. Beads
 open-quake-lih.16.9 through .12 stay open for lead merge.
+
+
+## PR #109 provider review fixes
+
+Credential-backed remote file IPC requires the management window main frame.
+Task-supplied transcript URLs stay on HTTPS Alibaba OSS; upload policies also
+require the documented `dashscope-file-*` temporary bucket namespace. An
+explicitly configured HTTP loopback provider can use only its own exact origin.
+Redirects remain disabled. These restrictions apply before audio acquisition or
+HTTP transport.
+
+OpenAI file EOF disables server VAD, waits for the ordered session update and
+then commits the remaining audio. Completion waits for every committed item;
+empty-flush errors must identify our explicit commit. Frame delays remain capped
+at 100 ms but scale down for long files to reserve server processing time within
+the existing deadline. A new transcription attempt replaces completed speech in
+both providers, while pending DashScope task IDs still recover after restart.
+
+System-track validation decodes a one-second sample. Timeout or host failure
+fails finalization instead of silently removing remote participants. Only
+transient OS contention retries conversion. An accepted transcript upload is
+deleted if its ownership save fails, and interruption waits for the handoff.
+Translation disconnect clears undelivered text before reconnecting.
+
+The single fix round has fail-before regressions for every code change. The root
+suite passes 4,097 tests with four existing skips, including 2,604 desktop and
+916 edge tests. Six package typechecks, Biome 1,403 files, build, both bundle
+modes, 11 release-script tests and 47 strict OpenSpec items pass. Hidden muted
+meetings smoke passes and exits with 28 captures. Its Chromium cache and
+process-policy diagnostics remain visible in the external log. All 11 original
+threads are answered and remain unresolved. Hosted CI/current-head review,
+physical audio and paid-provider qualification remain lead-owned.
+
+Evidence: `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-provider/fix1/`.
