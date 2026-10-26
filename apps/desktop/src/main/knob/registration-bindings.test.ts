@@ -1,5 +1,6 @@
 import { Deferred, Effect, Option, Schema } from "effect";
 import { describe, expect, it, vi } from "vitest";
+import { selectorProfiles } from "../../../../../packages/device/src/knob/model/invariants.js";
 import { KnobModel } from "../../../../../packages/device/src/knob/model/service.js";
 import {
 	createEmptyProfileKey,
@@ -30,7 +31,7 @@ describe("knob registration binding lifecycle", () => {
 				const key = createEmptyProfileKey("1,1");
 				const base = Schema.decodeUnknownSync(ProfileEnvelope)({
 					schemaVersion: 1,
-					profiles: ["active", "inactive", "third"].map((id) => ({
+					profiles: ["cold", "active", "inactive", "third"].map((id) => ({
 						id,
 						name: id,
 						revision: 0,
@@ -40,7 +41,8 @@ describe("knob registration binding lifecycle", () => {
 						"desktop-preview": { profileId: "active", pageId: "active-page" },
 					},
 				});
-				const active = base.profiles[0];
+				const active = base.profiles[1];
+				if (!active) throw new Error("Missing active profile");
 				const control = {
 					...key,
 					childrenName: Option.some("control"),
@@ -52,10 +54,11 @@ describe("knob registration binding lifecycle", () => {
 				};
 				let saved: ProfileEnvelope = {
 					...base,
-					profiles: [
-						{ ...active, pages: [{ ...active.pages[0], keys: [control] }] },
-						...base.profiles.slice(1),
-					],
+					profiles: base.profiles.map((p) =>
+						p.id === active.id
+							? { ...active, pages: [{ ...active.pages[0], keys: [control] }] }
+							: p,
+					),
 				};
 				const write = vi.fn(async () => {});
 				const adapters = desktopKnobAdapters(
@@ -87,10 +90,13 @@ describe("knob registration binding lifecycle", () => {
 							...context,
 							profiles: context.profiles.map((p) => ({
 								...p,
-								thumbnail: {
-									_tag: "ready",
-									dataUrl: "data:image/png;base64,YWJj",
-								},
+								thumbnail:
+									p.id === "cold"
+										? { _tag: "missing" }
+										: {
+												_tag: "ready",
+												dataUrl: "data:image/png;base64,YWJj",
+											},
 							})),
 						}),
 					);
@@ -140,10 +146,12 @@ describe("knob registration binding lifecycle", () => {
 					expect(after.context.session.profileId).toBe("active");
 					expect(
 						after.context.profiles.find((p) => p.id === "active")?.thumbnail,
-					).toEqual(before.context.profiles[0]?.thumbnail);
+					).toEqual(
+						before.context.profiles.find((p) => p.id === "active")?.thumbnail,
+					);
 					if (mode === "picker") {
 						expect(after.selector.mode).toBe("picker");
-						expect(after.context.profiles[after.selector.index]?.id).toBe(
+						expect(selectorProfiles(after)[after.selector.index]?.id).toBe(
 							"active",
 						);
 					} else if (mode === "focus")
