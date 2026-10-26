@@ -39,6 +39,41 @@ const record = (input: unknown) => {
 	return decoded._tag === "Right" ? decoded.right : undefined;
 };
 
+const isPageReference = (type: string, value: unknown): boolean =>
+	["folder", "emojiFolderId", "parentFolder"].includes(type) ||
+	(type === "page" && typeof value === "string");
+
+/** Allocate every destination before rewriting links, including forward references. */
+export function remapImportedProfile(
+	profile: typeof Profile.Encoded,
+	id: string,
+) {
+	const ids = new Map(
+		profile.pages.map((page, i) => [page.id, `${id}-page-${i + 1}`]),
+	);
+	return {
+		...profile,
+		id,
+		revision: 0,
+		pages: profile.pages.map((page, i) => ({
+			...page,
+			id: `${id}-page-${i + 1}`,
+			keys: page.keys.map((key) => ({
+				...key,
+				config: {
+					...key.config,
+					actions: (key.config.actions ?? []).map((action) =>
+						isPageReference(action.type, action.value) &&
+						typeof action.value === "string"
+							? { ...action, value: ids.get(action.value) ?? "" }
+							: action,
+					),
+				},
+			})),
+		})),
+	};
+}
+
 /** No evaluation, host IO or action execution. Original JSON stays inert. */
 export function inspectProfileImport(
 	input: unknown,
@@ -114,6 +149,22 @@ export function inspectProfileImport(
 		if (config.type === "" && source.childrenName === "")
 			report("legacy-sentinel", `${path}.childrenName`);
 		let unsupported = record(source.compatibility)?.unsupported === true;
+		if (Array.isArray(next.actions))
+			next.actions = next.actions.map((action, index) => {
+				const a = record(action);
+				if (
+					!a ||
+					typeof a.type !== "string" ||
+					!isPageReference(a.type, a.value)
+				)
+					return action;
+				if (typeof a.value === "string" && pageIds.has(a.value)) return action;
+				report("invalid-action", `${path}.config.actions.${index}.value`);
+				unsupported = true;
+				// Keep the complete original in compatibility.source. Empty destinations
+				// cannot accidentally bind to a page allocated later during import.
+				return { ...a, value: "" };
+			});
 		if (typeof config.type === "string" && config.type !== "") {
 			if (!contracts.has(config.type)) {
 				report("unknown-function", `${path}.config.type`);
@@ -167,6 +218,12 @@ export function inspectProfileImport(
 		report("invalid-field", "pages", true);
 		return { diagnostics };
 	}
+	const pageIds = new Set(
+		rawPages.flatMap((page) => {
+			const id = record(page)?.id;
+			return typeof id === "string" ? [id] : [];
+		}),
+	);
 	let knob = source?.knob;
 	const pages = rawPages.map((value, index) => {
 		const page = record(value);

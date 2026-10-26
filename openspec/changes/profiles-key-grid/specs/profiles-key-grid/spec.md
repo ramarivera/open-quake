@@ -196,6 +196,14 @@ The Keys editor SHALL inspect a user-selected JSON profile or legacy flat key ar
 - **THEN** the editor shows each normalization and unsupported status before import
 - **AND** explicit import preserves the raw source and knob record while dispatch excludes the camera key
 
+#### Scenario: Imported folder links survive new page identities
+- **WHEN** a profile is imported with folder, emoji-folder, Back or string-valued page references whose source IDs collide with existing pages
+- **THEN** import allocates all new page IDs before remapping `folder`, `emojiFolderId`, `parentFolder` and string-valued `page` actions through the source profile's ID map
+- **AND** editor navigation enters and returns through the imported pages, numeric page actions retain their page numbers, and existing profiles remain unchanged
+- **AND** a reference missing from the source profile receives an `invalid-action` diagnostic, an empty inactive destination and unsupported compatibility status with its original JSON preserved, even if its old value matches a newly allocated page ID
+
+This scenario covers `open-quake-lih.10.14`, PR107 review 4380208827 and MGMT-077/090. DK-Suite 0.4.95 `app-resources/background.js`, `ResourcesManager.importResources`, at character offsets 6376700 to 6380150 first builds its resource ID map and then rewrites `emojiFolderId` references in imported configurations. Open-quake applies the same ordering to canonical folder/page links and keeps unresolved references inactive under the folder-navigation policy.
+
 #### Scenario: Diagnose a registered function rejected by dispatch
 - **WHEN** an imported hotkey has valid actions but a different `childrenName`, or another field rejected by its dispatch function contract
 - **THEN** inspection uses that same contract to report the rejected field and quarantine the key before confirmation
