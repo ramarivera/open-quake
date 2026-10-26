@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import {
-	chmod,
 	link,
 	mkdtemp,
 	readdir,
@@ -19,9 +18,18 @@ import { Effect, Either, ManagedRuntime, Option } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { hardwarePreferencesLive } from "./preferences";
 
+const readFailures = vi.hoisted(() => new Map<string, Error>());
+
 vi.mock("node:fs/promises", async (importOriginal) => {
 	const fs = await importOriginal<typeof import("node:fs/promises")>();
-	return { ...fs, link: vi.fn(fs.link) };
+	return {
+		...fs,
+		link: vi.fn(fs.link),
+		readFile: (...args: Parameters<typeof fs.readFile>) => {
+			const error = readFailures.get(String(args[0]));
+			return error ? Promise.reject(error) : fs.readFile(...args);
+		},
+	};
 });
 
 const filename = (root: string, serial: string) =>
@@ -99,7 +107,10 @@ describe("serial preferences disk adapter", () => {
 			await f.runtime.runPromise(
 				f.store.write("EF:01", defaultHardwarePreferences),
 			);
-			await chmod(filename(f.root, "EF:01"), 0);
+			readFailures.set(
+				filename(f.root, "EF:01"),
+				Object.assign(new Error("read denied"), { code: "EACCES" }),
+			);
 			await writeFile(filename(f.root, "OTHER"), "corrupt unrelated JSON");
 			expect(await f.runtime.runPromise(f.store.read("NEW"))).toEqual(
 				Option.none(),
@@ -120,7 +131,7 @@ describe("serial preferences disk adapter", () => {
 				expect(JSON.stringify(ownFailure.left)).not.toContain(f.root);
 			}
 		} finally {
-			await chmod(filename(f.root, "EF:01"), 0o600);
+			readFailures.clear();
 			await f.close();
 		}
 	});
