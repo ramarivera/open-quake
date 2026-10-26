@@ -45,7 +45,12 @@ uninterruptible disk/ref commit. Shutdown persists finite end times; older
 interrupted records recover their duration from finalized audio before ASR.
 
 A generated summary, applied template and provider/model/language provenance are
-saved together. Failed regeneration preserves the previous summary. This fixes
+saved together. Failed regeneration preserves the previous summary when its
+transcript is unchanged. A transcription retry clears minutes, applied template
+and provenance when saving its replacement transcript, then generates from the new
+text. If that generation fails, Retry reuses the saved transcript. Interrupted
+audio conversion remains retryable after restart. Background job failures release
+the inspector controls even if the initial processing save never succeeded. This fixes
 DK-Suite's unsaved regeneration (`AI-277`). Generated text is escaped instead of
 injected HTML (`AI-308/340`). Summary export is UTF-8 `.md`; transcript export is
 UTF-8 `.txt` (`AI-315`). Export cancellation leaves history unchanged.
@@ -225,3 +230,25 @@ logged four Chromium temporary-cache errors; assertions passed, combined smoke
 logged no errors/warnings, and owned Electron/process groups were gone. Evidence:
 `/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/meetings/review-round-2/`.
 No physical, live-provider or packaged acceptance is closed by this round.
+
+
+PR #98 single review fix round covers Devin 4378930331/4378930536 and Codex
+4378948017/4378948029, each committed, pushed and answered separately. All four
+findings have fail-before consumer regressions. Provider settings remain covered
+by unit/consumer tests, with live acceptance under `open-quake-lih.16.1`.
+
+The required root loose-environment test run passed 3,389 tests with four existing
+skips, using two workers and SSD TMPDIR. Counts: protocol 63, device 508, edge 746
+with three skips, desktop 2,072 with one skip. All six package typechecks, Biome
+1,258 files with 14 existing warnings, production build, both bundle modes and
+47 strict OpenSpec items pass. Hidden muted meetings and combined media native
+smokes pass and exit, with 28 and 22 captures. The meetings fixture now honors
+the strip's 600 ms post-touch click suppression before selecting a tab and waits
+for the selected animation. The unchanged fixture failed before that correction.
+Chromium cache/process-policy messages and combined-fixture missing-handler
+messages remain in the logs; no console-clean claim is made. No microphone,
+physical QUAKE, OS capture or paid-provider acceptance is closed.
+
+Logs and captures remain external under
+`/Volumes/ExtSSD/SCRATCHPADS_FOR_AGENTS/open-quake-parity/burndown/meeting-ui/fix1/`.
+Review threads stay unresolved and merge/hosted-check ownership stays with the lead.

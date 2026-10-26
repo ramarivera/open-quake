@@ -119,8 +119,10 @@ Execution: open-quake-lih.16.5, .6 and .7, with parent-owned merge and acceptanc
 - [x] Fix Devin 4378930331 by invalidating minutes atomically with replacement transcription and regenerating from the new text. Regression tests in `meeting-service.test.ts` fail before the fix for both successful and failed regeneration, including summary-only recovery.
 - [x] Fix Devin 4378930536 with segment-level highlighting and selectable bookmarks when aligned tokens omit words. Three mounted regressions for leading/middle/trailing omissions fail before the fix; punctuation and exact saved text remain intact.
 - [x] Reply to Devin 4378930892 with unit/consumer provider-settings coverage and the separate live hardware/provider checklist.
-- [ ] Handle valid incoming Codex/Copilot findings, run full gates and hidden mock native smoke, then list unanswered GraphQL threads without resolving them.
+- [x] Handle valid incoming Codex/Copilot findings, run full gates and hidden mock native smoke, then list unanswered GraphQL threads without resolving them. Proof and gate counts: `apps/desktop/src/main/meetings/README.md`; four fixes have fail-before consumer regressions. All five threads answered, left unresolved; no merge.
 
 - [x] Fix Codex 4378948017 by observing asynchronous failure events independently of saved processing state. Four mounted retry/regeneration cases fail before the fix and cover failure on both sides of acknowledgement and a repeated identical error.
 
 - [x] Fix Codex 4378948029 by marking processing audio interrupted on job interruption. Two fake-backed service regressions fail before the fix and cover failed/interrupted audio, persisted restart state and retry without repeating completed ASR/summary.
+
+- [x] Repair the native smoke fixture after main integration: honor inherited post-touch click suppression and await the selected main-tab recording animation. The required native smoke failed before the fixture correction and passes after it, without changing production behavior or assertions.

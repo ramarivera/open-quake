@@ -117,7 +117,11 @@ async function smoke(): Promise<void> {
 			`new Promise((resolve,reject)=>{const deadline=Date.now()+12000;const check=()=>{if(${predicate})resolve(true);else if(Date.now()>deadline)reject(new Error('Meeting UI timeout: '+${JSON.stringify(predicate)}));else setTimeout(check,20)};check()})`,
 		);
 	};
+	let lastNativeTouch = 0;
 	const click = async (win: BrowserWindow, selector: string) => {
+		// The strip suppresses synthetic follow-up clicks for 600ms after native touch.
+		const quiet = 650 - (Date.now() - lastNativeTouch);
+		if (quiet > 0) await new Promise((resolve) => setTimeout(resolve, quiet));
 		await win.webContents.executeJavaScript(
 			`document.querySelector(${JSON.stringify(selector)}).click(); null;`,
 		);
@@ -452,6 +456,7 @@ async function smoke(): Promise<void> {
 					kind: "touch",
 					points: [{ x: decoded.x, y: decoded.y, action: state }],
 				});
+			lastNativeTouch = Date.now();
 			if (cancelled)
 				panel.webContents.send("quake:event", {
 					source: "mock",
@@ -506,6 +511,10 @@ async function smoke(): Promise<void> {
 			2,
 		);
 		await click(panel, '[aria-label="Main minutes"]');
+		await wait(
+			panel,
+			"document.querySelector('[aria-label=\"Main minutes\"]').getAttribute('aria-pressed')==='true' && document.querySelector('.meeting-animation[data-animation=recording] .meeting-orbit i')",
+		);
 		await reducedMotion(panel, [
 			".meeting-animation[data-animation=recording] .meeting-orbit i",
 			".meeting-start[data-active=true] .meeting-key-glyph",
