@@ -246,9 +246,13 @@ export function prepareDirectChat(options: DirectChatOptions) {
 					scope = "main",
 					pinned?: PinnedDirectModel,
 					assistant?: AssistantSettings,
+					isCurrent: () => boolean = () => true,
 				) =>
 					selectionLock.withPermits(1)(
 						Effect.gen(function* () {
+							const assertCurrent = Effect.suspend(() =>
+								isCurrent() ? Effect.void : Effect.fail(new AiUnavailable()),
+							);
 							const settings = assistant
 								? yield* Schema.decodeUnknown(AssistantSettings, {
 										onExcessProperty: "error",
@@ -413,6 +417,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 																	settings,
 																	profile.id,
 																	input.text,
+																	assertCurrent,
 																).pipe(
 																	Effect.provideService(
 																		AiProviderService,
@@ -427,7 +432,7 @@ export function prepareDirectChat(options: DirectChatOptions) {
 											),
 										),
 									)
-									.pipe(Effect.asVoid),
+									.pipe(Effect.asVoid, Effect.zipLeft(assertCurrent)),
 							);
 						}),
 					),

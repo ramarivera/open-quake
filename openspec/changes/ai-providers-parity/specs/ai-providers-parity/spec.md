@@ -240,3 +240,8 @@ Assistant settings SHALL link the existing Models and Speech settings consumers 
 - **WHEN** an Auto assistant request is busy, duplicates a saved turn ID or fails chat admission
 - **THEN** no classification or Home Assistant executor runs
 - **AND** accepted routing and equipment work run inside the turn worker, with terminal failure/cancellation recorded and no automatic action replay (AI-058)
+
+#### Scenario: Pending Auto request loses its device or profile
+- **WHEN** disconnect, profile change or cancellation retires an accepted assistant session during classification or action generation
+- **THEN** the turn worker interrupts provider I/O and cannot execute Home Assistant actions later
+- **AND** equipment dispatch rechecks the owning session/profile identity after generation immediately before execution (AI-058)

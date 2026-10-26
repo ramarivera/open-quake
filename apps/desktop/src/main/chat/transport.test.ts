@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	Deferred,
 	Effect,
 	Exit,
 	Fiber,
@@ -13,6 +14,8 @@ import {
 	Schema,
 	Scope,
 	Stream,
+	TestClock,
+	TestContext,
 } from "effect";
 import { describe, expect, it, vi } from "vitest";
 import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
@@ -136,6 +139,10 @@ async function fixture(
 	provider = "generic",
 	initialModel = "fixture-model",
 	homeAssistant?: AssistantHaPort,
+	extra: Pick<
+		Parameters<typeof createDirectChat>[0],
+		"fetch" | "keySettings"
+	> = {},
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
 	const endpoint = fixtureServer();
@@ -169,6 +176,7 @@ async function fixture(
 	let maxTokens = 512;
 	let baseUrl = `http://127.0.0.1:${address.port}/v1`;
 	const host = createDirectChat({
+		...extra,
 		directory,
 		...(homeAssistant ? { homeAssistant } : {}),
 		credentials: creds.ai,
@@ -1395,6 +1403,196 @@ it.each(["busy", "duplicate"] as const)(
 				await f.host.runtime.runPromise(f.host.cancel(sid, tid));
 		} finally {
 			await f.close();
+		}
+	},
+);
+
+it("rechecks session/profile identity after pending HA generation with TestClock", async () => {
+	const clock = ManagedRuntime.make(TestContext.TestContext);
+	const testClock = await clock.runPromise(TestClock.testClock());
+	const entered = await clock.runPromise(Deferred.make<void>());
+	const executed: string[] = [];
+	let current = true;
+	let reads = 0;
+	const f = await fixture({}, "generic", "fixture-model", {
+		snapshot: () =>
+			Effect.gen(function* () {
+				if (++reads === 1) {
+					yield* Deferred.succeed(entered, undefined);
+					yield* Effect.sleep("5 seconds");
+				}
+				return {
+					origin: "http://fake.invalid",
+					tokenMask: "",
+					state: "Connected" as const,
+					reason: "",
+					certificate: null,
+					trusted: [],
+					entities: [
+						{
+							entity_id: "light.allowed",
+							name: "Fake",
+							state: "off",
+							area: "",
+							attributes: {},
+						},
+					],
+					services: [
+						{ domain: "light", service: "toggle", name: "Toggle", fields: [] },
+					],
+					allowlist: ["light.allowed"],
+				};
+			}).pipe(Effect.withClock(testClock)),
+		execute: (key) =>
+			Effect.sync(() => {
+				executed.push(key.entity_id);
+			}),
+	});
+	try {
+		const turn = await f.host.runtime.runPromise(
+			f.host.submit(
+				{ sessionId: sessionId(), turnId: turnId(), text: "operate HA" },
+				"main",
+				undefined,
+				{
+					...defaultAssistantSettings(),
+					homeAssistantControl: true,
+					entityIds: ["light.allowed"],
+				},
+				() => current,
+			),
+		);
+		await clock.runPromise(Deferred.await(entered));
+		current = false;
+		await clock.runPromise(TestClock.adjust("10 seconds"));
+		const chunks = await f.host.runtime.runPromise(
+			Stream.runCollect(turn.events),
+		);
+		expect(executed).toEqual([]);
+		expect(Array.from(chunks).at(-1)).toMatchObject({
+			type: "end",
+			outcome: "failed",
+		});
+	} finally {
+		await f.close();
+		await clock.dispose();
+	}
+});
+
+it.each(["classification", "action"] as const)(
+	"disconnect/profile reset interrupts pending %s before equipment execution",
+	async (phase) => {
+		const clock = ManagedRuntime.make(TestContext.TestContext);
+		const entered = await clock.runPromise(Deferred.make<void>());
+		let interrupted = false;
+		const executed: string[] = [];
+		const f = await fixture(
+			{},
+			"generic",
+			"fixture-model",
+			{
+				snapshot: () =>
+					Effect.succeed({
+						origin: "http://fake.invalid",
+						tokenMask: "",
+						state: "Connected",
+						reason: "",
+						certificate: null,
+						trusted: [],
+						entities: [
+							{
+								entity_id: "light.allowed",
+								name: "Fake",
+								state: "off",
+								area: "",
+								attributes: {},
+							},
+						],
+						services: [
+							{
+								domain: "light",
+								service: "toggle",
+								name: "Toggle",
+								fields: [],
+							},
+						],
+						allowlist: ["light.allowed"],
+					}),
+				execute: (key) =>
+					Effect.sync(() => {
+						executed.push(key.entity_id);
+					}),
+			},
+			{
+				fetch: async (input, init) => {
+					const request = new Request(input, init);
+					const body = await request.clone().text();
+					if (
+						body.includes(
+							phase === "classification"
+								? "userRequestAction"
+								: "Choose one Home Assistant action",
+						)
+					)
+						await clock.runPromise(
+							Deferred.succeed(entered, undefined).pipe(
+								Effect.zipRight(Effect.sleep("5 seconds")),
+								Effect.onInterrupt(() =>
+									Effect.sync(() => {
+										interrupted = true;
+									}),
+								),
+							),
+							{ signal: request.signal },
+						);
+					return fetch(request);
+				},
+			},
+		);
+		const events: VoiceSurfaceEvent[] = [];
+		const v = voiceFixture(f.host, (event) =>
+			Effect.sync(() => {
+				events.push(event);
+			}),
+		);
+		try {
+			const runtime = await v.voice.runPromise(GridVoiceRuntime);
+			const pinned = await f.host.runtime.runPromise(
+				f.host.pinKnobModel("configured", "fixture-model"),
+			);
+			await v.voice.runPromise(
+				v.send({
+					serial: "fixture",
+					keyCode: "0,1",
+					agentId: "main",
+					message: "operate HA",
+					directModel: pinned,
+					knob: {
+						profileId: "profile",
+						revision: 1,
+						route: "direct",
+						providerId: "configured",
+						modelId: "fixture-model",
+						assistantSettings: {
+							...defaultAssistantSettings(),
+							homeAssistantControl: true,
+							entityIds: ["light.allowed"],
+						},
+					},
+				}),
+			);
+			await clock.runPromise(Deferred.await(entered));
+			await v.voice.runPromise(runtime.cancelFlow("fixture", "0,1"));
+			await clock.runPromise(TestClock.adjust("10 seconds"));
+			expect(interrupted).toBe(true);
+			expect(executed).toEqual([]);
+			expect(
+				events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+			).toMatchObject([{ chunk: { outcome: "cancelled" } }]);
+		} finally {
+			await v.voice.dispose();
+			await f.close();
+			await clock.dispose();
 		}
 	},
 );

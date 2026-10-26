@@ -34,6 +34,17 @@ export const createDirectChatVoice = (
 				keyCode: string;
 			}
 		>();
+		// A reset invalidates ownership immediately, before waiting on the acceptance lock.
+		const identities = new Map<
+			string,
+			{ readonly keyCode: string; readonly token: symbol }
+		>();
+		const invalidate = (serial: string, keyCode?: string) =>
+			Effect.sync(() => {
+				const identity = identities.get(serial);
+				if (identity && (keyCode === undefined || identity.keyCode === keyCode))
+					identities.delete(serial);
+			});
 		const cancelTurn = (sessionId: SessionId, turnId: TurnId) =>
 			Effect.promise(() =>
 				host.runtime.runPromise(
@@ -42,6 +53,7 @@ export const createDirectChatVoice = (
 			);
 		const stop = (serial: string, keyCode?: string) =>
 			Effect.gen(function* () {
+				yield* invalidate(serial, keyCode);
 				const turn = active.get(serial);
 				if (!turn || (keyCode !== undefined && turn.keyCode !== keyCode))
 					return;
@@ -101,18 +113,24 @@ export const createDirectChatVoice = (
 								(source === "typed" && settings.useAgent))
 						)
 							return yield* new VoiceRuntimeUnavailable();
+						const token = Symbol("assistant-session");
+						identities.set(request.serial, { keyCode: request.keyCode, token });
 						const accepted = yield* Effect.tryPromise({
-							try: () =>
+							try: (signal) =>
 								host.runtime.runPromise(
 									host.submit(
 										{ sessionId, turnId, text: request.message },
 										request.agentId,
 										request.directModel,
 										settings,
+										() => identities.get(request.serial)?.token === token,
 									),
+									{ signal },
 								),
 							catch: (cause) => new VoiceRuntimeUnavailable(cause),
-						});
+						}).pipe(
+							Effect.onError(() => invalidate(request.serial, request.keyCode)),
+						);
 						const captureId = `direct/${turnId}`;
 						yield* surface.publish({
 							_tag: "TurnStarted",
@@ -212,7 +230,9 @@ export const createDirectChatVoice = (
 		return {
 			sendTranscript: (request: TextRequest) => send(request, "voice"),
 			cancelText: (serial: string, keyCode: string) =>
-				lock.withPermits(1)(stop(serial, keyCode)),
+				invalidate(serial, keyCode).pipe(
+					Effect.zipRight(lock.withPermits(1)(stop(serial, keyCode))),
+				),
 			runtime: GridVoiceRuntime.of({
 				...fallback,
 				resetContext: (serial, keyCode) =>
@@ -233,15 +253,22 @@ export const createDirectChatVoice = (
 					),
 				sendText: (request) => send(request, "typed"),
 				select: (serial, keyCode, type, agentId) =>
-					lock.withPermits(1)(
-						stop(serial).pipe(
-							Effect.zipRight(fallback.select(serial, keyCode, type, agentId)),
+					invalidate(serial).pipe(
+						Effect.zipRight(
+							lock.withPermits(1)(
+								stop(serial).pipe(
+									Effect.zipRight(
+										fallback.select(serial, keyCode, type, agentId),
+									),
+								),
+							),
 						),
 					),
 				cancelFlow: (serial, keyCode) =>
-					lock
-						.withPermits(1)(stop(serial, keyCode))
-						.pipe(Effect.zipRight(fallback.cancelFlow(serial, keyCode))),
+					invalidate(serial, keyCode).pipe(
+						Effect.zipRight(lock.withPermits(1)(stop(serial, keyCode))),
+						Effect.zipRight(fallback.cancelFlow(serial, keyCode)),
+					),
 			}),
 		};
 	});

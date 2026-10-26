@@ -29,6 +29,7 @@ export const executeAssistantHa = Effect.fn("DesktopAssistant.homeAssistant")(
 		settings: AssistantSettings,
 		profileId: ProfileId,
 		text: string,
+		assertCurrent: Effect.Effect<void, AiError> = Effect.void,
 	) {
 		if (!port || !settings.homeAssistantControl || !settings.useAgent)
 			return yield* new AiUnavailable();
@@ -100,6 +101,7 @@ export const executeAssistantHa = Effect.fn("DesktopAssistant.homeAssistant")(
 			try: () => validateHaAction(key, current.entities, current.services),
 			catch: (cause) => new AiConfigInvalid(cause),
 		});
+		yield* assertCurrent;
 		yield* port.execute(key);
 	},
 );
