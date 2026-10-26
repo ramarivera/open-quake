@@ -83,6 +83,7 @@ export const WallpaperSnapshot = Schema.Struct({
 			asset: WallpaperAsset,
 		}),
 	),
+	loop: Schema.optional(Schema.Boolean),
 	playbackId: Schema.optional(Revision),
 	playbackStartedAt: Schema.optional(Schema.Number.pipe(Schema.finite())),
 	activeIndex: Schema.optional(Schema.Int.pipe(Schema.nonNegative())),

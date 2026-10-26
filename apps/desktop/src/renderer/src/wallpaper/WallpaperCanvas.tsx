@@ -21,7 +21,9 @@ function MediaLayer({
 	const active = layer.state === "active";
 	const url = asset._tag === "ready" ? asset.dataUrl : undefined;
 	const startedAt = layer.snapshot.playbackStartedAt;
-	const loop = layer.snapshot.saved.settings.displayMediaList.length === 1;
+	const loop =
+		layer.snapshot.loop ??
+		layer.snapshot.saved.settings.displayMediaList.length === 1;
 	useEffect(() => {
 		const element = video.current;
 		if (!element) return;

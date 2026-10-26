@@ -242,3 +242,8 @@ For SCREEN-123, the desktop-clock contract SHALL retain five independent app-own
 
 - **WHEN** legacy background slots and music migrate, then season, cyber, anime, tactical and aurora are selected in turn
 - **THEN** the renderer uses each retained custom slot or its theme fallback, music remains saved and cycling changes only theme identity and mode
+
+#### Scenario: Failures leave one playable video
+
+- **WHEN** SCREEN-105 and WIDGETS-130 media errors leave one playable video in a multi-item saved playlist
+- **THEN** its retained element loops at native duration and the controller stops redundant preload and transition work until the playlist changes

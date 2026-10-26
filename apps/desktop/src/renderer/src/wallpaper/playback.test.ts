@@ -111,3 +111,29 @@ it("SCREEN-007 WIDGETS-131 unmounts media and neutral fill when transparency cha
 	await mounted.close();
 	delete window.quakeWallpaper;
 });
+
+it("SCREEN-105 enables native looping on the retained sole-playable video", async () => {
+	vi.spyOn(Date, "now").mockReturnValue(7000);
+	vi.spyOn(HTMLMediaElement.prototype, "duration", "get").mockReturnValue(5);
+	vi.spyOn(HTMLMediaElement.prototype, "readyState", "get").mockReturnValue(4);
+	const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+	vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+	vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+	const mounted = await mount(createElement(WallpaperCanvas, { snapshot }));
+	try {
+		const video = mounted.host.querySelector("video");
+		expect(video?.loop).toBe(false);
+		const starts = play.mock.calls.length;
+		await mounted.render(
+			createElement(WallpaperCanvas, {
+				snapshot: { ...snapshot, ...{ loop: true } },
+			}),
+		);
+		expect(mounted.host.querySelector("video")).toBe(video);
+		expect(video?.loop).toBe(true);
+		expect(video?.currentTime).toBe(2);
+		expect(play).toHaveBeenCalledTimes(starts + 1);
+	} finally {
+		await mounted.close();
+	}
+});

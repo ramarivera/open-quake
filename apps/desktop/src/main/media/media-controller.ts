@@ -127,6 +127,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 							activeIndex,
 							playbackId,
 							playbackStartedAt,
+							loop: saved.settings.displayMediaList.length - failed.size === 1,
 							recovered,
 							normalizedFileUrl,
 							deviceDelivery: "unverified",
@@ -190,7 +191,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 												),
 											)
 									: undefined;
-							const next: WallpaperSnapshot = {
+							let next: WallpaperSnapshot = {
 								...base,
 								asset,
 								...(base.preload && preload
@@ -247,6 +248,12 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 											yield* Queue.offer(playlistChanged, undefined);
 										}
 									}
+									next = {
+										...next,
+										loop:
+											saved.settings.displayMediaList.length - failed.size ===
+											1,
+									};
 									yield* edge.publish(next);
 									return true;
 								}),
@@ -479,7 +486,7 @@ export const makeMediaController = Effect.fn("MediaController.make")(
 						if (
 							saved.settings.isTransparent ||
 							failed.size >= list.length ||
-							list.length <= 1
+							list.length - failed.size <= 1
 						)
 							return {
 								wait: Option.none<number>(),

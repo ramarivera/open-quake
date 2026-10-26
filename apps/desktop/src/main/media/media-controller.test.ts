@@ -265,3 +265,24 @@ it.scoped(
 			yield* Fiber.interrupt(fiber);
 		}),
 );
+
+it.scoped(
+	"SCREEN-105 loops the sole surviving video and stops transition work",
+	() =>
+		Effect.gen(function* () {
+			const f = playlistFixture([0, 1]);
+			const controller = yield* f.make;
+			const selected = yield* controller.request({
+				_tag: "select",
+				serial: "A",
+			});
+			expect(selected).toMatchObject({ activeIndex: 2, loop: true });
+			const fiber = yield* Effect.forkScoped(controller.ticks);
+			const reads = f.resolved.length;
+			const publications = f.shown.length;
+			yield* TestClock.adjust(60000);
+			expect(f.resolved).toHaveLength(reads);
+			expect(f.shown).toHaveLength(publications);
+			yield* Fiber.interrupt(fiber);
+		}),
+);
