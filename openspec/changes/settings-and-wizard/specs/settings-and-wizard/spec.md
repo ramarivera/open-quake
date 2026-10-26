@@ -370,7 +370,10 @@ The six AI role titles SHALL resolve explicit user edits first, then multilingua
 The app SHALL provide the setup lane recovery paths for MGMT-029, MGMT-030,
 MGMT-037, MGMT-038, MGMT-039, SETTINGS-068, SETTINGS-069 and SETTINGS-070.
 Connection detection SHALL use the lifecycle owner's bounded discovery and
-single-flight redetect instead of adding renderer delays. During a request,
+single-flight redetect instead of adding renderer delays. The existing independent
+pairing policy uses a 30,000 ms deadline for observing display disappearance and
+return, restores screen power on timeout and releases its watcher. This replaces
+the vendor's renderer-side delay/poll loop. During a request,
 Re-detect SHALL be disabled and both channels SHALL announce Checking.
 User-triggered notices SHALL last 2600 ms; persistent channel results SHALL
 remain after the notice expires. Mounting and background snapshots SHALL be
@@ -380,6 +383,11 @@ silent. A failed request SHALL leave the last results readable and retryable.
 - **WHEN** a user clicks Re-detect and IPC succeeds, fails or rejects
 - **THEN** only one request runs, Checking appears until settlement, and the
   outcome notice expires after 2600 ms without deleting the diagnostic result
+
+#### Scenario: Display pairing deadline
+- **WHEN** display pairing cannot observe one unambiguous target
+- **THEN** it stays pending through 29,999 ms, times out at 30,000 ms, restores
+  screen power and releases observation without publishing a guessed display
 
 #### Scenario: Installation help from entrance, setup and connection
 - **WHEN** the user opens Installation Guide from setup, the entrance or Connection
