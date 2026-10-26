@@ -151,3 +151,16 @@ cleanup after its slot has been removed. Both operations finish successfully
 once native teardown settles, without falsely poisoning the output owner. All
 91 focused soundboard/audio tests pass, including the original native-defect
 and bounded-stalled-teardown cases. Release playback remains disabled.
+
+PR58 native-worker cleanup review: the late-acquisition regression now waits
+for an explicit callback checkpoint before interrupting. Temporary HTML-file
+deletion uses three bounded retries after the audio window is destroyed. A
+residual deletion failure emits an allowlisted warning through the owning
+runtime with the existing scrubbed catalog error, without poisoning shared
+audio ownership or replacing an acquisition failure. The deletion regression
+failed before the fix; 25 desktop player/diagnostics tests and 91 shared-output
+tests, desktop typecheck, scoped Biome and strict validation pass. A fresh
+hidden, muted Electron MP3 run proves native playback/pause/end, two-key capture
+preemption, corrupt-file rejection and zero remaining windows/workers. External
+evidence is under `soundboard-controls/review-r2/cleanup-native` in project
+scratch. Real window-destruction failures still fail closed.
