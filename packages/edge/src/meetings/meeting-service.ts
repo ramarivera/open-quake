@@ -89,6 +89,15 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			const revision = yield* Ref.make(0);
 			const changes = yield* PubSub.unbounded<MeetingSnapshot>();
 			const lock = yield* Effect.makeSemaphore(1);
+			const remoteLock = yield* Effect.makeSemaphore(1);
+			const remoteBusy = new Set<MeetingId>();
+			const boundedRemote = <A>(work: Effect.Effect<A, MeetingError>) =>
+				work.pipe(
+					Effect.timeoutFail({
+						duration: "30 seconds",
+						onTimeout: () => meetingError("Timeout"),
+					}),
+				);
 			const activeActions = yield* Ref.make<ReadonlySet<MeetingAction>>(
 				new Set(),
 			);
@@ -130,7 +139,9 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				transform: (record: MeetingRecord) => MeetingRecord,
 			) =>
 				patch(id, (record) =>
-					record.state === "cancelled" || record.state === "recording"
+					remoteBusy.has(id) ||
+					record.state === "cancelled" ||
+					record.state === "recording"
 						? record
 						: transform(record),
 				);
@@ -138,7 +149,8 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 				id: MeetingId,
 			): Effect.fn.Return<MeetingRecord, MeetingError> {
 				const record = (yield* repo.list()).find((r) => r.id === id);
-				if (!record) return yield* meetingError("Invalid");
+				if (!record || remoteBusy.has(id))
+					return yield* meetingError("Invalid");
 				return record;
 			});
 			const notice = (text: string) =>
@@ -518,27 +530,48 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 			);
 			return {
 				snapshot,
-				files: Effect.fn("MeetingService.files")(function* (
-					id: MeetingId,
-					operation: "list" | "upload" | "delete",
-					fileId?: string,
-				) {
-					const record = yield* find(id);
-					if (record.state === "processing" || record.state === "recording")
-						return yield* meetingError("Invalid");
-					if (
-						operation === "upload" &&
-						!record.transcript.some((s) => s.text.trim())
-					)
-						return yield* meetingError("TranscriptMissing");
-					return yield* provider.files(
-						id,
-						operation,
-						operation === "upload"
-							? transcriptText(record.transcript)
-							: (fileId ?? ""),
-					);
-				}, lock.withPermits(1)),
+				files: Effect.fn("MeetingService.files")(
+					(
+						id: MeetingId,
+						operation: "list" | "upload" | "delete",
+						fileId?: string,
+					) =>
+						remoteLock.withPermits(1)(
+							Effect.acquireUseRelease(
+								lock.withPermits(1)(
+									Effect.gen(function* () {
+										const record = yield* find(id);
+										if (
+											record.state === "processing" ||
+											record.state === "recording"
+										)
+											return yield* meetingError("Invalid");
+										if (
+											operation === "upload" &&
+											!record.transcript.some((s) => s.text.trim())
+										)
+											return yield* meetingError("TranscriptMissing");
+										remoteBusy.add(id);
+										return record;
+									}),
+								),
+								(record) =>
+									boundedRemote(
+										provider.files(
+											id,
+											operation,
+											operation === "upload"
+												? transcriptText(record.transcript)
+												: (fileId ?? ""),
+										),
+									),
+								() =>
+									Effect.sync(() => {
+										remoteBusy.delete(id);
+									}),
+							),
+						),
+				),
 				subscribe: Effect.fn("MeetingService.subscribe")(() =>
 					Effect.succeed(Stream.fromPubSub(changes)),
 				),
@@ -764,27 +797,66 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 						yield* stopTranslation();
 					yield* publish();
 				}, lock.withPermits(1)),
-				delete: Effect.fn("MeetingService.delete")(function* (
-					id: MeetingId,
-				): Effect.fn.Return<void, MeetingError> {
-					const records = (yield* repo.list()).filter(
-						(r) => r.id === id || Option.contains(r.parentId, id),
-					);
-					for (const record of records) {
-						yield* capture.cancel(record.id);
-						yield* endStage(record.id);
-					}
-					if (
-						records.some(
-							(record) =>
-								record.state === "recording" && Option.isNone(record.parentId),
-						)
-					)
-						yield* stopTranslation();
-					for (const record of records) yield* provider.cleanup(record.id);
-					yield* repo.remove(records.map((r) => r.id));
-					yield* publish();
-				}, lock.withPermits(1)),
+				delete: Effect.fn("MeetingService.delete")((id: MeetingId) =>
+					remoteLock.withPermits(1)(
+						Effect.acquireUseRelease(
+							lock.withPermits(1)(
+								Effect.gen(function* () {
+									const records = (yield* repo.list()).filter(
+										(r) => r.id === id || Option.contains(r.parentId, id),
+									);
+									for (const record of records) {
+										yield* capture.cancel(record.id);
+										yield* endStage(record.id);
+									}
+									if (
+										records.some(
+											(r) =>
+												r.state === "recording" && Option.isNone(r.parentId),
+										)
+									)
+										yield* stopTranslation();
+									// Preserve cancellation intent while the remote phase releases the lock.
+									const now = yield* Clock.currentTimeMillis;
+									yield* repo.update((current) =>
+										current.map((r) =>
+											records.some((item) => item.id === r.id) &&
+											r.state === "recording"
+												? {
+														...r,
+														state: "cancelled",
+														endedAt: Option.some(now),
+													}
+												: r,
+										),
+									);
+									for (const record of records) remoteBusy.add(record.id);
+									return records;
+								}),
+							),
+							(records) =>
+								boundedRemote(
+									Effect.forEach(
+										records,
+										(record) => provider.cleanup(record.id),
+										{ discard: true },
+									),
+								).pipe(
+									Effect.zipRight(
+										lock.withPermits(1)(
+											repo
+												.remove(records.map((r) => r.id))
+												.pipe(Effect.zipRight(publish())),
+										),
+									),
+								),
+							(records) =>
+								Effect.sync(() => {
+									for (const record of records) remoteBusy.delete(record.id);
+								}),
+						),
+					),
+				),
 				translationLost: Effect.fn("MeetingService.translationLost")(() =>
 					stopTranslation().pipe(
 						Effect.zipRight(
@@ -802,6 +874,7 @@ export class MeetingService extends Effect.Service<MeetingService>()(
 					);
 					// Queued callbacks may outlive explicit cancellation/deletion or processing.
 					if (
+						remoteBusy.has(id) ||
 						!record ||
 						record.state === "cancelled" ||
 						record.state === "completed" ||

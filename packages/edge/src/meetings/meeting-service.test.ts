@@ -1678,3 +1678,75 @@ it.effect(
 		}).pipe(Effect.provide(f.layer));
 	},
 );
+
+for (const operation of ["cleanup", "list", "upload", "delete"] as const) {
+	it.scoped(
+		`remote ${operation} releases the capture lock and retains failed cleanup`,
+		() =>
+			Effect.gen(function* () {
+				const f = setup();
+				const entered = yield* Deferred.make<void>();
+				const release = yield* Deferred.make<void>();
+				const blocked = Deferred.succeed(entered, undefined).pipe(
+					Effect.zipRight(Deferred.await(release)),
+				);
+				const adapter: MeetingAdapter = {
+					...f.adapter,
+					cleanup: () =>
+						blocked.pipe(
+							Effect.zipRight(Effect.fail(meetingError("Unavailable"))),
+						),
+					files: {
+						list: () => blocked.pipe(Effect.as([])),
+						upload: () => blocked.pipe(Effect.as("owned")),
+						remove: () => blocked,
+					},
+				};
+				// Override the captured adapter object used by this fixture's layer.
+				Object.assign(f.adapter, adapter);
+				yield* Effect.gen(function* () {
+					yield* MeetingService.configure(
+						{ ...defaultMeetingConfig, autoGenerate: false },
+						true,
+					);
+					const record = (yield* MeetingService.action("meetingMinutes"))
+						.records[0];
+					if (!record) throw new Error("Missing meeting");
+					yield* TestClock.adjust(5001);
+					yield* MeetingService.action("meetingMinutes");
+					yield* MeetingService.rename(record.id, "Preserved local record");
+					// Upload requires saved transcript; use a normal fake transcription first.
+					if (operation === "upload")
+						yield* MeetingRepository.update((records) =>
+							records.map((r) =>
+								r.id === record.id
+									? { ...r, transcript: segments, transcription: "complete" }
+									: r,
+							),
+						);
+					const remote = yield* (
+						operation === "cleanup"
+							? MeetingService.delete(record.id)
+							: MeetingService.files(record.id, operation, "owned")
+					).pipe(Effect.either, Effect.fork);
+					yield* Deferred.await(entered);
+					const control = yield* MeetingService.action("mic").pipe(
+						Effect.timeoutOption(100),
+						Effect.fork,
+					);
+					yield* TestClock.adjust(101);
+					expect(Option.isSome(yield* Fiber.join(control))).toBe(true);
+					yield* Deferred.succeed(release, undefined);
+					const result = yield* Fiber.join(remote);
+					if (operation === "cleanup") {
+						expect(Either.isLeft(result)).toBe(true);
+						expect(
+							(yield* MeetingService.snapshot()).records.some(
+								(r) => r.id === record.id,
+							),
+						).toBe(true);
+					}
+				}).pipe(Effect.provide(f.layer));
+			}),
+	);
+}
