@@ -21,7 +21,7 @@ export function ToolCard({
 	const toggle = (): void => {
 		if (Option.isSome(preview)) setOpen((value) => !value);
 	};
-	useSubTouchTap(ref, toggle);
+	useSubTouchTap(ref, toggle, scale);
 	const phase =
 		tool.phase === "start"
 			? "quakeBotIconView.toolRunning"

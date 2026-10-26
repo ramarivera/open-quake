@@ -52,6 +52,11 @@ export class KeyRuntimePort extends Context.Tag(
 			activation: KeyActivation,
 		) => Effect.Effect<boolean, ActionError>;
 		readonly resetOwned?: (deviceId?: string) => Effect.Effect<void>;
+		/** Acquires a held chord and returns release bound to that keyboard session. */
+		readonly holdHotkey?: (
+			key: ProfileKey,
+			activation: KeyActivation,
+		) => Effect.Effect<Effect.Effect<void, ActionError>, ActionError>;
 		readonly publish: (state: KeyFeedback) => Effect.Effect<void>;
 		readonly select: (
 			deviceId: string,
@@ -89,11 +94,20 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					state.keyCode,
 				]);
 			const audioPresses = new Map<string, KeyActivation>();
+			const contacts = new Map<
+				string,
+				{
+					key: ProfileKey;
+					activation: KeyActivation;
+					release?: Effect.Effect<void, ActionError>;
+				}
+			>();
 			const held = new Set<string>(),
 				alternates = new Map<string, 0 | 1>(),
 				running = new Map<string, Fiber.RuntimeFiber<void, never>>();
 			const lock = yield* Effect.makeSemaphore(1);
 			const owned = new Map<Fiber.RuntimeFiber<void, ActionError>, string>();
+			const ownedControls = new Set<string>();
 			const current = (env: ProfileEnvelope, deviceId: string) => {
 				const selection = env.activeByDevice[deviceId];
 				const hidden = Option.isSome(env.manager)
@@ -187,7 +201,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 			const activate = Effect.fn("KeyRuntime.activate")(function* (
 				deviceId: string,
 				keyCode: string,
-				kind: "press" | "release",
+				kind: "press" | "release" | "down" | "up" | "cancel",
 				expected?: {
 					readonly profileId: string;
 					readonly pageId: string;
@@ -198,9 +212,40 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				ActionError
 			> {
 				const control = JSON.stringify([deviceId, keyCode]);
+				if (kind === "up" || kind === "cancel") {
+					const contact = contacts.get(control);
+					if (!contact) return;
+					if (contact.release) {
+						yield* contact.release;
+						contacts.delete(control);
+						return;
+					}
+					contacts.delete(control);
+					if (
+						kind === "cancel" ||
+						["vol", "luminance", "brightness", "directionalHotkey"].includes(
+							contact.key.config.type,
+						)
+					)
+						return;
+					const work = yield* activate(
+						deviceId,
+						keyCode,
+						"press",
+						contact.activation,
+					);
+					const releaseWork = yield* activate(
+						deviceId,
+						keyCode,
+						"release",
+						contact.activation,
+					);
+					return releaseWork ?? work;
+				}
+				if (kind === "down" && contacts.has(control)) return;
 				if (kind === "release") {
 					if (!held.delete(control)) return;
-				} else {
+				} else if (kind === "press") {
 					if (held.has(control)) return;
 					held.add(control);
 				}
@@ -217,6 +262,23 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					(k) => k.keyCode === keyCode && k.config.display,
 				);
 				if (!key || isUnsupportedProfileKey(key)) return;
+				if (kind === "down") {
+					const activation = {
+						deviceId,
+						profileId: profile.id,
+						pageId: page.id,
+						revision: profile.revision,
+					};
+					if (key.config.type === "hotkey") {
+						if (!port.holdHotkey)
+							return yield* Effect.fail(
+								new KeyFunctionUnavailable("adapter-missing"),
+							);
+						const release = yield* port.holdHotkey(key, activation);
+						contacts.set(control, { key, activation, release });
+					} else contacts.set(control, { key, activation });
+					return;
+				}
 				const identity = JSON.stringify([
 					deviceId,
 					profile.id,
@@ -416,6 +478,7 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					(type === "homeAssistant" || localAudio || isObsId(type)) &&
 					port.executeOwned
 				) {
+					if (ownedControls.has(control)) return;
 					if (isObsId(type)) {
 						const validated = validateAction(
 							Option.getOrElse(key.childrenName, () => type),
@@ -438,11 +501,17 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 									? Effect.void
 									: Effect.fail(new KeyFunctionUnavailable("owning-runtime")),
 							),
-							Effect.ensuring(Effect.sync(() => owned.delete(fiber))),
+							Effect.ensuring(
+								Effect.sync(() => {
+									owned.delete(fiber);
+									ownedControls.delete(control);
+								}),
+							),
 						),
 						scope,
 					);
 					owned.set(fiber, deviceId);
+					ownedControls.add(control);
 					return Fiber.join(fiber);
 				}
 				const action = validateAction(
@@ -452,9 +521,82 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 				if (action._tag === "Left") return yield* Effect.fail(action.left);
 				yield* port.execute(action.right);
 			});
+			const preparePlayerControl = Effect.fn("KeyRuntime.preparePlayerControl")(
+				function* (
+					activation: KeyActivation & { readonly keyCode: string },
+					intent: "previous" | "toggle" | "next" | "stop",
+				): Effect.fn.Return<Effect.Effect<void, ActionError>, ActionError> {
+					const { profile, page } = current(
+						yield* port.read,
+						activation.deviceId,
+					);
+					if (
+						profile.id !== activation.profileId ||
+						page.id !== activation.pageId ||
+						profile.revision !== activation.revision
+					)
+						return Effect.void;
+					const key = page.keys.find(
+						(key) => key.keyCode === activation.keyCode && key.config.display,
+					);
+					if (
+						!key ||
+						isUnsupportedProfileKey(key) ||
+						!["playAudio", "playAudioLegacy"].includes(key.config.type) ||
+						!key.config.actions.some(
+							(action) =>
+								action.type === "sound" &&
+								typeof action.value === "string" &&
+								action.value.length > 0,
+						) ||
+						!port.executeOwned
+					)
+						return yield* new KeyFunctionUnavailable("owning-runtime");
+					const operation = { previous: 5, toggle: 0, next: 6, stop: 4 }[
+						intent
+					];
+					const controlled = {
+						...key,
+						config: {
+							...key.config,
+							actions: [
+								...key.config.actions.filter(
+									(action) => action.type !== "audioAction",
+								),
+								{ type: "audioAction", value: operation },
+							],
+						},
+					};
+					const execute = port.executeOwned;
+					let fiber: Fiber.RuntimeFiber<void, ActionError>;
+					fiber = yield* Effect.forkIn(
+						Effect.yieldNow().pipe(
+							Effect.zipRight(execute(controlled, activation)),
+							Effect.flatMap((handled) =>
+								handled
+									? Effect.void
+									: Effect.fail(new KeyFunctionUnavailable("owning-runtime")),
+							),
+							Effect.ensuring(Effect.sync(() => owned.delete(fiber))),
+						),
+						scope,
+					);
+					owned.set(fiber, activation.deviceId);
+					return Fiber.join(fiber);
+				},
+			);
+
 			const reset = Effect.fn("KeyRuntime.reset")(function* (
 				deviceId?: string,
 			): Effect.fn.Return<void> {
+				for (const [id, contact] of contacts) {
+					if (deviceId && contact.activation.deviceId !== deviceId) continue;
+					contacts.delete(id);
+					if (contact.release)
+						yield* contact.release.pipe(
+							Effect.catchAll((error) => Effect.logWarning(error)),
+						);
+				}
 				for (const [id, press] of audioPresses)
 					if (!deviceId || press.deviceId === deviceId) audioPresses.delete(id);
 				for (const [fiber, owner] of owned)
@@ -489,9 +631,13 @@ export class KeyRuntime extends Effect.Service<KeyRuntime>()(
 					lock.withPermits(1),
 					Effect.map((work) => work ?? Effect.void),
 				);
+			yield* Effect.addFinalizer(() => reset());
 			return {
 				/** Reserve guarded input; await its completion after caller locks release. */
 				prepareActivation,
+				preparePlayerControl: (
+					...args: Parameters<typeof preparePlayerControl>
+				) => preparePlayerControl(...args).pipe(lock.withPermits(1)),
 				activate: (...args: Parameters<typeof activate>) =>
 					prepareActivation(...args).pipe(Effect.flatten),
 				navigate: (...args: Parameters<typeof navigate>) =>

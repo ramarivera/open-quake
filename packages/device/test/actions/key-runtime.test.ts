@@ -21,7 +21,12 @@ import {
 	ProfileKey,
 } from "../../src/profiles/profile-contracts.js";
 
-function fixture(config: unknown, unsupported = false, delay = 0) {
+function fixture(
+	config: unknown,
+	unsupported = false,
+	delay = 0,
+	overrides: Partial<KeyRuntimePort["Type"]> = {},
+) {
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
 	const rawConfig = Schema.decodeUnknownSync(ProfileJsonObject)(config);
 	const key = Schema.decodeUnknownSync(ProfileKey)({
@@ -84,6 +89,7 @@ function fixture(config: unknown, unsupported = false, delay = 0) {
 							},
 						};
 					}),
+				...overrides,
 			}),
 		),
 	);
@@ -437,4 +443,98 @@ it.effect(
 			expect(f.feedback.at(-1)?.progress).toBe(0);
 		}).pipe(Effect.provide(f.layer));
 	},
+);
+
+it.effect(
+	"MAIN-065 held contact executes ordinary actions only on successful up, ignores directional keys",
+	() => {
+		const f = fixture({ type: "nextPage", actions: [] });
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			expect(f.selection()?.pageId).toBe("one");
+			yield* runtime.activate("device", "1,1", "cancel");
+			expect(f.selection()?.pageId).toBe("one");
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.selection()?.pageId).toBe("two");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.selection()?.pageId).toBe("two");
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MAIN-065 hotkey down precedes lift and cancellation releases the original owner after profile change",
+	() => {
+		const edges: string[] = [];
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "hotkey", value: "control+a" }] },
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.sync(() => {
+						edges.push("down");
+						return Effect.sync(() => {
+							edges.push("up");
+						});
+					}),
+			},
+		);
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "down");
+			expect(edges).toEqual(["down"]);
+			f.switch();
+			yield* runtime.activate("device", "1,1", "cancel");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(edges).toEqual(["down", "up"]);
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect(
+	"MAIN-065 directional contact edges never execute a normal action",
+	() => {
+		const f = fixture({ type: "vol", actions: [] });
+		return Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			yield* runtime.activate("device", "1,1", "up");
+			expect(f.calls).toEqual([]);
+		}).pipe(Effect.provide(f.layer));
+	},
+);
+
+it.effect("held release failure retains its owner for reset cleanup", () =>
+	Effect.gen(function* () {
+		let releases = 0;
+		const f = fixture(
+			{ type: "hotkey", actions: [{ type: "key", value: "a" }] },
+			false,
+			0,
+			{
+				holdHotkey: () =>
+					Effect.succeed(
+						Effect.suspend(() =>
+							++releases === 1
+								? Effect.fail(new HostActionFailed("release-failed"))
+								: Effect.void,
+						),
+					),
+			},
+		);
+		yield* Effect.gen(function* () {
+			const runtime = yield* KeyRuntime;
+			yield* runtime.activate("device", "1,1", "down");
+			expect(
+				(yield* Effect.either(runtime.activate("device", "1,1", "up")))._tag,
+			).toBe("Left");
+			yield* runtime.reset("device");
+			expect(releases).toBe(2);
+		}).pipe(Effect.provide(f.layer));
+	}),
 );

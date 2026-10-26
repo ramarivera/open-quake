@@ -1,5 +1,7 @@
-import { useEffect } from "react";
+import { Schema } from "effect";
+import { useEffect, useRef } from "react";
 import { selectorProfiles } from "../../../../../shared/knob-contracts";
+import { VoiceSurfaceEvent } from "../../../../../shared/voice-surface";
 import { stripLayout } from "../../geometry";
 import { useStripProfiles } from "../../useStripProfiles";
 import { FunctionWheel } from "./FunctionWheel";
@@ -14,22 +16,65 @@ import "./knob.css";
 export function KnobPanelLayer(): React.JSX.Element | null {
 	const { snapshot, notice, request } = useKnob();
 	const profiles = useStripProfiles();
+	const capture = useRef<
+		| {
+				captureId: string;
+				sessionId: string;
+				keyCode: string;
+				generation: number;
+		  }
+		| undefined
+	>(undefined);
 	useEffect(() => {
-		if (snapshot?.focus._tag !== "tile" || snapshot.selector.mode !== "closed")
-			return;
+		if (!snapshot) return;
 		const sessionId = snapshot.context.session.sessionId;
-		const tap = (event: PointerEvent) => {
+		const root = document.getElementById("root");
+		const tap = (event: Event): void => {
+			if (!(event instanceof CustomEvent)) return;
+			const detail: unknown = event.detail;
 			if (
-				!(event.target instanceof Element) ||
-				event.target.closest(".knob-tile-target")
+				typeof detail !== "object" ||
+				detail === null ||
+				!("keyCode" in detail) ||
+				typeof detail.keyCode !== "string"
 			)
 				return;
-			const keyCode =
-				event.target.closest<HTMLElement>(".strip-slot")?.dataset.keyCode;
-			if (keyCode) void request({ _tag: "TapTile", sessionId, keyCode });
+			void request({
+				_tag: "TapTile",
+				sessionId,
+				keyCode: detail.keyCode,
+			});
 		};
-		window.addEventListener("pointerdown", tap);
-		return () => window.removeEventListener("pointerdown", tap);
+		root?.addEventListener("quake-strip-tile-tap", tap);
+		const off = window.quakeVoice?.onEvent((value) => {
+			if (
+				!Schema.is(VoiceSurfaceEvent)(value) ||
+				value._tag !== "Stage" ||
+				value.serial !== snapshot.context.session.deviceId
+			)
+				return;
+			if (value.stage._tag !== "idle") {
+				if (capture.current?.captureId === value.captureId) return;
+				capture.current =
+					snapshot.focus._tag === "tile" &&
+					snapshot.focus.generation !== undefined
+						? {
+								captureId: value.captureId,
+								sessionId,
+								keyCode: snapshot.focus.keyCode,
+								generation: snapshot.focus.generation,
+							}
+						: undefined;
+			} else if (capture.current?.captureId === value.captureId) {
+				const { captureId: _captureId, ...identity } = capture.current;
+				capture.current = undefined;
+				void request({ _tag: "RestoreFocus", ...identity });
+			}
+		});
+		return () => {
+			root?.removeEventListener("quake-strip-tile-tap", tap);
+			off?.();
+		};
 	}, [snapshot, request]);
 	if (!snapshot) return null;
 	const { context, selector, focus, volume } = snapshot;

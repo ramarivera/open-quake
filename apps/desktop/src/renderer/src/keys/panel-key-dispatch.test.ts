@@ -21,11 +21,11 @@ it("dispatches a completed tap with the original serial and snapshot, then relea
 	d.key({ keyCode: "1,1", keyAction: 0 });
 	expect(calls).toEqual([]);
 	target = { ...active, revision: 4 };
-	d.key({ keyCode: "1,1", keyAction: 1 });
+	d.key({ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true });
 	await new Promise((resolve) => setTimeout(resolve, 0));
 	expect(calls).toEqual([
-		{ ...active, type: "activate", keyCode: "1,1", kind: "press" },
-		{ ...active, type: "activate", keyCode: "1,1", kind: "release" },
+		{ ...active, type: "activate", keyCode: "1,1", kind: "down" },
+		{ ...active, type: "activate", keyCode: "1,1", kind: "up" },
 	]);
 });
 it("cancels a swipe, disconnect, overlay or disposed contact without host activation", () => {
@@ -39,7 +39,7 @@ it("cancels a swipe, disconnect, overlay or disposed contact without host activa
 	);
 	d.key({ keyCode: "1,1", keyAction: 0 });
 	d.cancel();
-	d.key({ keyCode: "1,1", keyAction: 1 });
+	d.key({ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true });
 	expect(calls).toEqual([]);
 });
 
@@ -64,20 +64,13 @@ it("queues full tap pairs through slow and failed activations", async () => {
 	);
 	for (let i = 0; i < 3; i++) {
 		d.key({ keyCode: "1,1", keyAction: 0 });
-		d.key({ keyCode: "1,1", keyAction: 1 });
+		d.key({ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true });
 	}
 	await new Promise((resolve) => setTimeout(resolve, 0));
-	expect(calls).toEqual(["press"]);
+	expect(calls).toEqual(["down"]);
 	finish?.();
 	await new Promise((resolve) => setTimeout(resolve, 0));
-	expect(calls).toEqual([
-		"press",
-		"release",
-		"press",
-		"release",
-		"press",
-		"release",
-	]);
+	expect(calls).toEqual(["down", "up", "down", "up", "down", "up"]);
 });
 
 it("lets other keys complete while preserving order for a stalled key", async () => {
@@ -91,7 +84,7 @@ it("lets other keys complete while preserving order for a stalled key", async ()
 		async (command) => {
 			if (command.type === "activate") {
 				calls.push(`${command.keyCode}:${command.kind}`);
-				if (command.keyCode === "1,1" && command.kind === "press") await slow;
+				if (command.keyCode === "1,1" && command.kind === "down") await slow;
 			}
 			return { _tag: "success" };
 		},
@@ -99,19 +92,19 @@ it("lets other keys complete while preserving order for a stalled key", async ()
 	try {
 		for (const keyCode of ["1,1", "1,1", "1,2", "1,3"]) {
 			d.key({ keyCode, keyAction: 0 });
-			d.key({ keyCode, keyAction: 1 });
+			d.key({ keyCode, keyAction: 1, voiceTouchEnd: true });
 		}
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(calls).toEqual([
-			"1,1:press",
-			"1,2:press",
-			"1,3:press",
-			"1,2:release",
-			"1,3:release",
+			"1,1:down",
+			"1,2:down",
+			"1,3:down",
+			"1,2:up",
+			"1,3:up",
 		]);
 		finish();
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		expect(calls.slice(5)).toEqual(["1,1:release", "1,1:press", "1,1:release"]);
+		expect(calls.slice(5)).toEqual(["1,1:up", "1,1:down", "1,1:up"]);
 	} finally {
 		d.cancel();
 		finish();
@@ -136,11 +129,11 @@ it("cancels queued taps on disconnect while still releasing the in-flight press"
 	);
 	for (let i = 0; i < 2; i++) {
 		d.key({ keyCode: "1,1", keyAction: 0 });
-		d.key({ keyCode: "1,1", keyAction: 1 });
+		d.key({ keyCode: "1,1", keyAction: 1, voiceTouchEnd: true });
 	}
 	await Promise.resolve();
 	d.cancel();
 	finish?.();
 	await new Promise((resolve) => setTimeout(resolve, 0));
-	expect(calls).toEqual(["press", "release"]);
+	expect(calls).toEqual(["down", "cancel"]);
 });

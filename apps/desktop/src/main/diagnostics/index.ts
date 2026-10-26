@@ -23,6 +23,7 @@ import {
 	safeError,
 	safeLogEvent,
 	safeSpanName,
+	safeTouchLog,
 } from "./privacy.js";
 
 export type {
@@ -120,6 +121,7 @@ export function createDesktopDiagnostics(
 					type: "log",
 					level: logLevel.label,
 					event: safeLogEvent(messages),
+					...safeTouchLog(messages),
 					...correlation(span, FiberRefs.getOrDefault(context, requestId)),
 					...(errors.length ? { errors } : {}),
 					...(!Cause.isEmpty(cause) ? { cause: safeCause(cause) } : {}),

@@ -72,7 +72,7 @@ IconRepository.add IconRepository.addLocal IconRepository.read IconRepository.wr
 ImageDecoder.decode Integrations.dispatch Integrations.request KeyEditing.commit KeyEditing.discard
 KeyEditing.locate KeyEditing.preview KeyEditing.read KeyEditing.remove KeyEditing.revert
 KeyEditing.save KeyRuntime.activate KeyRuntime.feedback KeyRuntime.navigate KeyRuntime.refresh
-KeyRuntime.reset KnobModel.configure KnobModel.dispatch KnobModel.snapshot KnobModel.synchronize
+KeyRuntime.reset KeyRuntime.preparePlayerControl KnobModel.configure KnobModel.dispatch KnobModel.snapshot KnobModel.synchronize
 KnobService.dispatch KnobService.execute KnobService.handle KnobService.readSnapshot
 LightingDevice.checkBinding LightingDevice.exchange LightingDevice.open LightingDevice.read
 LightingDevice.resolve LightingService.deselect LightingService.flush LightingService.save
@@ -188,6 +188,8 @@ output-service.ts output-errors.ts soundboard-import.ts soundboard-invariants.ts
 );
 
 export const knownLogEvents = new Set([
+	"touch.health",
+	"touch.state",
 	"soundboard.worker.cleanup.failed",
 	"soundboard.file.inspection.failed",
 	"soundboard.player.failed",

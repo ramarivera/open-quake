@@ -5,6 +5,7 @@ import {
 	normalizeClockStyle,
 } from "../../../shared/clock-style";
 import type { HourFormat } from "../../../shared/display";
+import type { PanelKeyTarget } from "../keys/panel-key-dispatch";
 import { EmojiTile } from "../management/emoji/EmojiTile";
 import { ObsTile } from "../obs/ObsTile";
 import {
@@ -48,6 +49,7 @@ export interface StripTileContext {
 	/** Legacy context retained for other tile consumers. Clocks read their key. */
 	readonly hourFormat: HourFormat;
 	readonly clockTarget?: ClockTarget | undefined;
+	readonly keyTarget?: PanelKeyTarget | undefined;
 	/** Voice and chat state for the AI tiles (strip-voice-ui). */
 	readonly voice: StripVoiceContext;
 	/** Defaults to live for existing tile consumers outside selection previews. */

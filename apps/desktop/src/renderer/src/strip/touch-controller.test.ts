@@ -1,9 +1,13 @@
-import { FastCheck } from "effect";
+// @vitest-environment happy-dom
+import { FastCheck, Option } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { builtinProfiles } from "../../../../../../packages/device/src/profiles/profile-catalog";
 import { meetingTouchAction } from "../meetings/touch-action";
 import { stripLayout, tileAt } from "./geometry";
-import { createSubTouchRegistry } from "./sub-touch-registry";
+import {
+	createRegistrationSupervisor,
+	createSubTouchRegistry,
+} from "./sub-touch-registry";
 import {
 	createStripTouchController,
 	type StripKeyEvent,
@@ -444,3 +448,491 @@ it.each(["playAudio", "playAudioLegacy"])(
 		}
 	},
 );
+
+import {
+	createTouchTracker,
+	parseTouchReport,
+} from "../../../../../../packages/device/src/touch/touch-invariants";
+import type { QuakeEvent } from "../../../preload/quake";
+import { createPanelKeyDispatcher } from "../keys/panel-key-dispatch";
+import { mountMessageScroll } from "./message-scroll";
+import { mountStripTouch } from "./mount-strip-touch";
+import { mountDiskScroll } from "./tiles/monitor/disk-scroll";
+import { mountTouchTarget } from "./touch-gestures";
+
+const bounds = (
+	element: Element,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+): void => {
+	vi.spyOn(element, "getBoundingClientRect").mockImplementation(
+		() => new DOMRect(x, y, width, height),
+	);
+};
+function mounted(type = "hotkey") {
+	const profile = builtinProfiles("darwin")[0];
+	if (!profile) throw new Error("Missing profile");
+	const original = profile.pages[0]?.keys[0];
+	if (!original) throw new Error("Missing key");
+	const key = {
+		...original,
+		keyCode: "1,1",
+		config: {
+			...original.config,
+			type,
+			display: true,
+			supportTouchEffect: true,
+		},
+	};
+	let layout = stripLayout(profile, { keys: [key] });
+	const root = document.createElement("main");
+	root.id = "root";
+	root.innerHTML =
+		'<div class="strip-slot" data-state="tile" data-key-code="1,1"></div>';
+	document.body.append(root);
+	bounds(root, 0, 0, 1920, 480);
+	const tile = root.querySelector<HTMLElement>(".strip-slot");
+	if (!tile) throw new Error("Missing tile");
+	bounds(tile, 10, 10, 220, 220);
+	let callback: ((event: QuakeEvent) => void) | undefined;
+	const off = vi.fn();
+	const keys: StripKeyEvent[] = [];
+	const cancel = vi.fn();
+	const dispose = mountStripTouch(
+		root,
+		{
+			version: "test",
+			onQuakeEvent: (listener) => {
+				callback = listener;
+				return off;
+			},
+		},
+		0,
+		() => layout,
+		(event) => keys.push(event),
+		vi.fn(),
+		cancel,
+	);
+	const tracker = createTouchTracker();
+	const raw = (x?: number, y?: number) => {
+		// Independent vendor bytes, deliberately not the production fixture encoder.
+		const bytes =
+			x === undefined || y === undefined
+				? Uint8Array.from([0xa3, 91, 3, 0x1a, 0])
+				: Uint8Array.from([
+						0xa3,
+						91,
+						3,
+						0x1a,
+						1,
+						1,
+						(480 - y) & 255,
+						(480 - y) >> 8,
+						x & 255,
+						x >> 8,
+					]);
+		const decoded = parseTouchReport(bytes);
+		if (Option.isNone(decoded)) throw new Error("Malformed test frame");
+		callback?.({
+			source: "hid",
+			kind: "touch",
+			points: tracker.frame(decoded.value),
+		});
+	};
+	return {
+		root,
+		tile,
+		keys,
+		off,
+		cancel,
+		dispose,
+		raw,
+		emit: (event: QuakeEvent) => callback?.(event),
+		replace: (next: typeof layout) => {
+			layout = next;
+			root.dispatchEvent(new Event("quake-strip-reset"));
+		},
+		layout,
+	};
+}
+
+describe("mounted production touch lane", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+			setTimeout(() => callback(performance.now()), 16),
+		);
+		vi.stubGlobal("cancelAnimationFrame", (id: number) => clearTimeout(id));
+		vi.stubGlobal("matchMedia", () => ({ matches: false }));
+	});
+	afterEach(() => {
+		window.dispatchEvent(new Event("pagehide"));
+		document.body.replaceChildren();
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
+	it("SCREEN-057 MAIN-065 sends committed down before lift, ignores moves and releases once at 10ms", async () => {
+		const f = mounted();
+		const calls: string[] = [];
+		const dispatcher = createPanelKeyDispatcher(
+			() => ({ deviceId: "d", profileId: "p", pageId: "one", revision: 0 }),
+			async (request) => {
+				if (request.type === "activate") calls.push(request.kind);
+				return { _tag: "success" };
+			},
+		);
+		f.root.addEventListener("quake-strip-key", (event) => {
+			if (event instanceof CustomEvent) dispatcher.key(event.detail);
+		});
+		f.raw(100, 100);
+		await Promise.resolve();
+		expect(calls).toEqual(["down"]);
+		f.raw(150, 100);
+		f.raw(220, 100);
+		f.emit({
+			source: "hid",
+			kind: "touch",
+			points: [{ x: 1900, y: 0, action: 0 }],
+		});
+		await vi.advanceTimersByTimeAsync(9);
+		expect(calls).toEqual(["down"]);
+		await vi.advanceTimersByTimeAsync(1);
+		expect(calls).toEqual(["down", "up"]);
+		f.raw();
+		await vi.advanceTimersByTimeAsync(100);
+		expect(calls).toEqual(["down", "up"]);
+		f.dispose();
+	});
+	it.each(["hotkey", "aiChatView", "cameraView"])(
+		"SCREEN-060 shared pointer fallback for %s uses 100ms and suppresses physical duplicates",
+		async (type) => {
+			const f = mounted(type);
+			f.tile.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					clientX: 100,
+					clientY: 100,
+					button: 0,
+				}),
+			);
+			expect(f.keys).toHaveLength(1);
+			window.dispatchEvent(
+				new PointerEvent("pointerup", { clientX: 100, clientY: 100 }),
+			);
+			vi.advanceTimersByTime(99);
+			expect(f.keys).toHaveLength(1);
+			vi.advanceTimersByTime(1);
+			expect(f.keys).toHaveLength(2);
+			f.raw(100, 100);
+			f.raw();
+			vi.advanceTimersByTime(10);
+			const count = f.keys.length;
+			f.tile.dispatchEvent(
+				new PointerEvent("pointerdown", {
+					bubbles: true,
+					clientX: 100,
+					clientY: 100,
+				}),
+			);
+			window.dispatchEvent(
+				new PointerEvent("pointerup", { clientX: 100, clientY: 100 }),
+			);
+			vi.advanceTimersByTime(100);
+			expect(f.keys).toHaveLength(count);
+			f.dispose();
+		},
+	);
+	it("KNOB-014 SCREEN-069 SCREEN-070 focuses only effective taps and never navigates or duplicates doubleclick", () => {
+		const f = mounted();
+		const taps = vi.fn();
+		f.root.addEventListener("quake-strip-tile-tap", taps);
+		f.raw(100, 100);
+		f.raw();
+		vi.advanceTimersByTime(10);
+		expect(taps).toHaveBeenCalledOnce();
+		f.raw(100, 100);
+		f.raw(150, 100);
+		f.raw();
+		vi.advanceTimersByTime(10);
+		expect(taps).toHaveBeenCalledOnce();
+		const click = new MouseEvent("dblclick", {
+			bubbles: true,
+			cancelable: true,
+		});
+		f.tile.dispatchEvent(click);
+		expect(click.defaultPrevented).toBe(true);
+		expect(f.keys).toHaveLength(4);
+		f.dispose();
+	});
+	it("SCREEN-010 resets old profile gestures and disposes pending lift, observers and bridge exactly once", () => {
+		const f = mounted();
+		f.raw(100, 100);
+		f.raw();
+		f.replace(f.layout);
+		vi.advanceTimersByTime(100);
+		expect(f.keys.at(-1)).toEqual({ keyCode: "1,1", keyAction: 1 });
+		window.dispatchEvent(new Event("pagehide"));
+		f.dispose();
+		const count = f.keys.length;
+		f.raw(100, 100);
+		vi.advanceTimersByTime(10000);
+		expect(f.keys).toHaveLength(count);
+		expect(f.off).toHaveBeenCalledOnce();
+	});
+	it("profile reset preserves a fresh next contact and a replaced same-id child cannot receive an old release", () => {
+		const f = mounted("aiChatView"),
+			button = document.createElement("button");
+		button.dataset.quakeSubTouch = "card";
+		f.tile.append(button);
+		bounds(button, 50, 50, 100, 60);
+		const old = vi.fn(),
+			next = vi.fn();
+		const off = mountTouchTarget(button, { tap: old });
+		f.raw(80, 80);
+		const replacement = button.cloneNode(true);
+		button.replaceWith(replacement);
+		if (!(replacement instanceof HTMLElement))
+			throw new Error("Missing replacement");
+		bounds(replacement, 50, 50, 100, 60);
+		const offNext = mountTouchTarget(replacement, { tap: next });
+		f.raw();
+		expect(next).not.toHaveBeenCalled();
+		expect(old).not.toHaveBeenCalled();
+		f.replace(f.layout);
+		vi.advanceTimersByTime(500);
+		f.raw(80, 80);
+		f.raw();
+		expect(next).toHaveBeenCalledOnce();
+		off();
+		offNext();
+		f.dispose();
+	});
+	it("SCREEN-060 touch fallback cancels special and ordinary contacts and ignores disabled targets", () => {
+		for (const type of ["hotkey", "aiChatView", "cameraView"]) {
+			const f = mounted(type);
+			const send = (name: string) => {
+				const event = new Event(name, { bubbles: true, cancelable: true });
+				Object.defineProperty(event, "changedTouches", {
+					value: [{ clientX: 100, clientY: 100 }],
+				});
+				f.tile.dispatchEvent(event);
+			};
+			send("touchstart");
+			expect(f.keys.at(-1)?.keyAction).toBe(0);
+			send("touchcancel");
+			vi.advanceTimersByTime(100);
+			expect(f.keys.at(-1)).toEqual({ keyCode: "1,1", keyAction: 1 });
+			f.tile.setAttribute("inert", "");
+			const before = f.keys.length;
+			send("touchstart");
+			send("touchend");
+			vi.advanceTimersByTime(100);
+			expect(f.keys).toHaveLength(before);
+			f.dispose();
+			f.root.remove();
+		}
+	});
+
+	it("KNOB-075 KNOB-080 KNOB-089 late volume control owns native input and suppresses synthetic click", () => {
+		const f = mounted();
+		const button = document.createElement("button");
+		button.dataset.quakeOverlayTouch = "true";
+		button.dataset.quakeSubTouch = "volumeOsd";
+		f.root.append(button);
+		bounds(button, 50, 50, 120, 60);
+		const toggle = vi.fn();
+		const off = mountTouchTarget(button, { tap: toggle });
+		button.addEventListener("click", toggle);
+		f.raw(100, 80);
+		expect(button.dataset.touchPressed).toBe("true");
+		expect(toggle).not.toHaveBeenCalled();
+		f.raw();
+		button.click();
+		expect(toggle).toHaveBeenCalledOnce();
+		expect(f.keys).toEqual([]);
+		f.raw(100, 80);
+		f.raw(160, 80);
+		f.raw();
+		expect(toggle).toHaveBeenCalledOnce();
+		button.dispatchEvent(
+			new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+		);
+		button.dispatchEvent(
+			new KeyboardEvent("keydown", { key: " ", bubbles: true }),
+		);
+		expect(toggle).toHaveBeenCalledTimes(3);
+		off();
+		f.dispose();
+	});
+	it("SCREEN-065 scaled targets retain pressed feedback, cutoff, and slop through native routing", () => {
+		const f = mounted("aiChatView");
+		const button = document.createElement("button");
+		button.dataset.quakeSubTouch = "card";
+		f.tile.append(button);
+		bounds(button, 50, 50, 20, 20);
+		const tap = vi.fn();
+		const off = mountTouchTarget(button, { scale: 2, tap });
+		expect(button.style.minHeight).toBe("88px");
+		f.raw(60, 60);
+		expect(button.style.filter).toBe("brightness(1.08)");
+		f.raw(90, 60);
+		f.raw();
+		expect(tap).toHaveBeenCalledOnce();
+		f.raw(60, 60);
+		vi.advanceTimersByTime(501);
+		f.raw();
+		expect(tap).toHaveBeenCalledOnce();
+		f.raw(60, 60);
+		f.raw(94, 60);
+		f.raw(60, 60);
+		f.raw();
+		expect(tap).toHaveBeenCalledOnce();
+		expect(button.dataset.touchPressed).toBe("false");
+		off();
+		f.dispose();
+	});
+	it("SCREEN-066 retries five times at 2s, globally scans three times at least 3s apart and cancels", () => {
+		const attempts: number[] = [],
+			scans: number[] = [],
+			states: string[] = [];
+		const registration = createRegistrationSupervisor({
+			now: () => performance.now(),
+			schedule: (run, delay) => {
+				const timer = setTimeout(run, delay);
+				return () => clearTimeout(timer);
+			},
+			request: () => {
+				attempts.push(performance.now());
+				return false;
+			},
+			globalRescan: () => {
+				scans.push(performance.now());
+				return false;
+			},
+			change: (state) => states.push(state),
+		});
+		expect(registration.snapshot().state).toBe("idle");
+		registration.request();
+		vi.advanceTimersByTime(10000);
+		expect(attempts).toHaveLength(5);
+		expect(scans).toHaveLength(3);
+		expect(
+			attempts.slice(1).every((time, i) => time - (attempts[i] ?? 0) >= 2000),
+		).toBe(true);
+		expect(
+			scans.slice(1).every((time, i) => time - (scans[i] ?? 0) >= 3000),
+		).toBe(true);
+		expect(states).toContain("requesting");
+		expect(registration.snapshot().state).toBe("failed");
+		registration.noteDispatch();
+		expect(registration.snapshot().state).toBe("registered");
+		registration.dispose();
+		vi.advanceTimersByTime(10000);
+		expect(attempts).toHaveLength(5);
+	});
+	it.each([false, true])(
+		"WIDGETS-078 SCREEN-067 native disk drag flings unless reduced=%s and paints bounded elastic return",
+		(reduce) => {
+			vi.stubGlobal("matchMedia", () => ({ matches: reduce }));
+			const f = mounted("systemMonitorPanel");
+			const scroller = document.createElement("section");
+			scroller.innerHTML = "<div>Disk rows</div>";
+			scroller.dataset.quakeSubTouch = "smDiskList";
+			scroller.dataset.supportQuakeMove = "true";
+			f.tile.append(scroller);
+			bounds(scroller, 0, 0, 500, 480);
+			Object.defineProperties(scroller, {
+				scrollHeight: { value: 1200 },
+				clientHeight: { value: 200 },
+			});
+			const off = mountDiskScroll(scroller);
+			f.raw(100, 200);
+			vi.advanceTimersByTime(20);
+			f.raw(100, 150);
+			vi.advanceTimersByTime(20);
+			f.raw(100, 100);
+			f.raw();
+			const lifted = scroller.scrollTop;
+			vi.advanceTimersByTime(100);
+			expect(scroller.scrollTop > lifted).toBe(!reduce);
+			expect(f.keys).toEqual([]);
+			vi.advanceTimersByTime(700);
+			const stopped = scroller.scrollTop;
+			vi.advanceTimersByTime(200);
+			expect(scroller.scrollTop).toBe(stopped);
+			scroller.scrollTop = 0;
+			off();
+			const next = mountDiskScroll(scroller);
+			f.raw(100, 100);
+			vi.advanceTimersByTime(20);
+			f.raw(100, 180);
+			expect(scroller.firstElementChild?.getAttribute("style")).toContain(
+				"translateY(32px)",
+			);
+			f.raw();
+			vi.advanceTimersByTime(208);
+			expect(scroller.firstElementChild?.getAttribute("style")).toContain(
+				"translateY(0px)",
+			);
+			next();
+			f.dispose();
+		},
+	);
+	it.each([false, true])(
+		"AI-163 chat drag completion refreshes a moved child after fling or reduced=%s",
+		(reduce) => {
+			const f = mounted("aiChatView");
+			const scroller = document.createElement("div"),
+				button = document.createElement("button");
+			scroller.dataset.quakeSubTouch = "quakeBotIconViewMessages";
+			scroller.dataset.supportQuakeMove = "true";
+			button.dataset.quakeSubTouch = "child";
+			scroller.append(button);
+			f.tile.append(scroller);
+			bounds(scroller, 0, 0, 500, 480);
+			Object.defineProperties(scroller, {
+				scrollHeight: { value: 1200 },
+				clientHeight: { value: 200 },
+			});
+			vi.spyOn(button, "getBoundingClientRect").mockImplementation(
+				() =>
+					new DOMRect(50, (reduce ? 260 : 860) - scroller.scrollTop, 100, 44),
+			);
+			const tap = vi.fn(),
+				offTap = mountTouchTarget(button, { tap }),
+				off = mountMessageScroll(scroller, () => reduce);
+			const refreshed = vi.fn();
+			scroller.addEventListener("quake-touch-rescan", refreshed);
+			f.raw(200, 200);
+			vi.advanceTimersByTime(25);
+			f.raw(200, 150);
+			vi.advanceTimersByTime(25);
+			f.raw(200, 100);
+			f.raw();
+			const lifted = scroller.scrollTop;
+			vi.advanceTimersByTime(1200);
+			expect(scroller.scrollTop > lifted).toBe(!reduce);
+			expect(refreshed).toHaveBeenCalledOnce();
+			const moved = button.getBoundingClientRect();
+			expect(moved.y).toBeGreaterThan(0);
+			expect(moved.bottom).toBeLessThan(480);
+			f.raw(75, moved.y + 20);
+			f.raw();
+			expect(tap).toHaveBeenCalledOnce();
+			expect(f.keys).toEqual([]);
+			f.raw(200, 200);
+			vi.advanceTimersByTime(25);
+			f.raw(200, 150);
+			f.emit({ source: "hid", kind: "status", state: "disconnected" });
+			const cancelled = scroller.scrollTop;
+			vi.advanceTimersByTime(1200);
+			expect(scroller.scrollTop).toBe(cancelled);
+			expect(tap).toHaveBeenCalledOnce();
+			off();
+			offTap();
+			f.dispose();
+		},
+	);
+});

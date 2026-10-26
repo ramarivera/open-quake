@@ -22,3 +22,10 @@
 - [x] 4.3 Invalidate registry membership on child mutations and discover new clickables inside existing scrollers without losing local rescan throttling. Sources: SCREEN-061–063.
 - [x] 4.4 Preserve the original velocity sample timestamp and regress a 30 px move over 100 ms released at 100/101 ms. Source: SCREEN-066.
 - [x] 4.5 Run all six gates and native mock smoke, record evidence, close the review beads, commit/push and reply to/resolve the three fixed threads. No hardware or merge.
+
+## 5. Touch burn-down lane, 2026-10-26
+
+- [x] 5.1 Deliver held input edges and scoped scrubbed diagnostics. MAIN-036, MAIN-065, SCREEN-057. Bead open-quake-lih.28.
+- [ ] 5.2 Deliver mounted physical/DOM routing, focus/restore, volume, registration and window/mirror lifetime. KNOB-014, KNOB-015, KNOB-075, KNOB-080, KNOB-089, SCREEN-010, SCREEN-060, SCREEN-065, SCREEN-066, SCREEN-069, SCREEN-070, SCREEN-141. Bead open-quake-lih.29. Implemented except SCREEN-060 camera stream toggle, which awaits the verified camera gateway/renderer consumer in camera-and-printer-views. Shared camera-shaped input routing is tested but does not close that clause.
+- [x] 5.3 Deliver chat/disk fling, elastic return and moved child bounds. AI-163, SCREEN-067, WIDGETS-078. Bead open-quake-lih.30.
+- [ ] 5.4 Run the six gates and hidden mock smoke, capture EN/DE screenshots, push parity/touch and open a PR. Leave beads open for lead reconciliation after merge.
