@@ -30,10 +30,11 @@ async function fixture(platform: NodeJS.Platform) {
 			: "/private-agent";
 	const command =
 		platform === "win32" ? win32.join(root, "openclaw.cmd") : "/opt/openclaw";
+	const treeExists = vi.fn(async (_pid: number) => true);
 	const driver = ownedRuntimeProcessDriver(
 		command,
 		createLocalAgentState(root),
-		{ platform, spawn, runCommand },
+		{ platform, spawn, runCommand, treeExists },
 	);
 	const owned = await driver.start({
 		port: 18789,
@@ -41,7 +42,7 @@ async function fixture(platform: NodeJS.Platform) {
 		autoStart: false,
 		dataDirectory: root,
 	});
-	return { child, close, kill, spawn, runCommand, owned };
+	return { child, close, kill, spawn, runCommand, treeExists, owned };
 }
 
 it("CENTER-047 Windows shim stop waits for tree termination even when cmd.exe closes first", async () => {

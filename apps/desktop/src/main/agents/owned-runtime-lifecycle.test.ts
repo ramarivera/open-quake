@@ -53,10 +53,12 @@ function fixture(failFirstSpawn = false) {
 	const runCommand = vi.fn(async (_command: string, _args: readonly string[]) =>
 		close(),
 	);
+	const treeExists = vi.fn(async (_pid: number) => true);
 	const driver = ownedRuntimeProcessDriver("C:\\fake\\openclaw.cmd", storage, {
 		platform: "win32",
 		spawn,
 		runCommand,
+		treeExists,
 	});
 	const health = vi.fn(async (_signal: AbortSignal) => true);
 	const backend = createOwnedAgentRuntime({
@@ -68,6 +70,7 @@ function fixture(failFirstSpawn = false) {
 	return {
 		backend,
 		admin: backend.administration,
+		treeExists,
 		spawn,
 		runCommand,
 		health,
@@ -214,3 +217,44 @@ it.effect(
 			]);
 		}),
 );
+
+it.effect(
+	"4381535855 a confirmed absent Windows tree releases cleanup for a new Start",
+	() =>
+		Effect.gen(function* () {
+			const f = fixture();
+			yield* f.backend.start;
+			f.close();
+			f.runCommand.mockRejectedValue(new Error("fake taskkill PID not found"));
+			f.treeExists.mockResolvedValue(false);
+			yield* f.backend.stop;
+			expect(f.treeExists).toHaveBeenCalledExactlyOnceWith(4321);
+			yield* f.backend.stop;
+			expect(f.runCommand).toHaveBeenCalledTimes(1);
+			yield* f.backend.start;
+			expect(f.spawn).toHaveBeenCalledTimes(2);
+			f.runCommand.mockImplementation(async () => f.close());
+			yield* f.backend.stop;
+		}),
+);
+
+for (const failure of ["descendant remains", "probe failed"]) {
+	it.effect(`4381535855 cleanup remains retryable when ${failure}`, () =>
+		Effect.gen(function* () {
+			const f = fixture();
+			yield* f.backend.start;
+			f.close();
+			f.runCommand.mockRejectedValue(new Error("fake taskkill PID not found"));
+			if (failure === "probe failed")
+				f.treeExists.mockRejectedValue(new Error("fake probe denied"));
+			expect(yield* f.backend.stop.pipe(Effect.either)).toMatchObject({
+				_tag: "Left",
+				left: { code: "AGENT.RUNTIME.FAILED" },
+			});
+			expect(f.treeExists).toHaveBeenCalledTimes(2);
+			f.treeExists.mockResolvedValue(false);
+			yield* f.backend.stop;
+			expect(f.treeExists.mock.calls[2]).toEqual([4321]);
+		}),
+	);
+}

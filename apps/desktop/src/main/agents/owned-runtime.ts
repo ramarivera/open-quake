@@ -44,6 +44,7 @@ export function ownedRuntimeProcessDriver(
 			command: string,
 			args: readonly string[],
 		) => Promise<void>;
+		readonly treeExists?: (pid: number) => Promise<boolean>;
 	} = {},
 ): OwnedRuntimeDriver {
 	const platform = options.platform ?? process.platform;
@@ -57,6 +58,34 @@ export function ownedRuntimeProcessDriver(
 					args,
 					{ timeout: 1000, windowsHide: true, shell: false },
 					(error) => (error ? reject(error) : resolve()),
+				);
+			}));
+	const treeExists =
+		options.treeExists ??
+		((pid: number) =>
+			new Promise<boolean>((resolve, reject) => {
+				// ParentProcessId remains queryable after a parent exits. Walk the
+				// complete snapshot so an absent cmd.exe cannot hide descendants.
+				const script = `
+$ErrorActionPreference = 'Stop'
+$processes = @(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId)
+$owned = @(${pid})
+do {
+  $next = @($processes | Where-Object { $owned -contains $_.ParentProcessId -and $owned -notcontains $_.ProcessId } | ForEach-Object { $_.ProcessId })
+  $owned += $next
+} while ($next.Count -gt 0)
+(@($processes | Where-Object { $owned -contains $_.ProcessId }).Count -gt 0) | ConvertTo-Json -Compress
+`;
+				execFile(
+					"powershell.exe",
+					["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+					{ timeout: 1000, windowsHide: true, shell: false },
+					(error, stdout) => {
+						if (error) reject(error);
+						// Only an exact, successful false confirms absence. Unexpected
+						// output fails closed and leaves the cleanup target retryable.
+						else resolve(stdout.trim() !== "false");
+					},
 				);
 			}));
 	return {
@@ -87,12 +116,16 @@ export function ownedRuntimeProcessDriver(
 			});
 			const cleanup = { pid: child.pid, treeStopped: false };
 			let spawnFailed = false;
+			let processorExited = false;
 			const exited = new Promise<void>((resolve) => {
 				child.once("error", () => {
 					spawnFailed = cleanup.pid === undefined;
 					resolve();
 				});
-				child.once("close", () => resolve());
+				child.once("close", () => {
+					processorExited = true;
+					resolve();
+				});
 			});
 			return {
 				exited,
@@ -113,17 +146,20 @@ export function ownedRuntimeProcessDriver(
 							});
 						});
 					if (platform === "win32") {
-						if (!cleanup.pid) throw new AgentRuntimeFailed();
+						const pid = cleanup.pid;
+						if (!pid) throw new AgentRuntimeFailed();
 						// cmd.exe can exit before its gateway. Await taskkill itself as
 						// well as the owned child; never fall back to killing only cmd.exe.
 						for (let attempt = 0; attempt < 2; attempt++) {
 							try {
 								const treeCommand = runCommand("taskkill.exe", [
 									"/PID",
-									String(cleanup.pid),
+									String(pid),
 									"/T",
 									"/F",
-								]);
+								]).catch(async (cause: unknown) => {
+									if (!processorExited || (await treeExists(pid))) throw cause;
+								});
 								let timer: ReturnType<typeof setTimeout> | undefined;
 								try {
 									await Promise.race([
