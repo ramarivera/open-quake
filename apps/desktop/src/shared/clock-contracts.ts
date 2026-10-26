@@ -15,13 +15,27 @@ export const ClockMediaView = Schema.Struct({
 	/** File name only, for "▶ name" labels. */
 	name: Schema.String,
 	url: Schema.String.pipe(
-		Schema.pattern(/^oq-clock-media:\/\/theme\/[a-z]+\?r=\d+$/),
+		Schema.pattern(/^oq-clock-media:\/\/theme\/[a-z]+\?r=\d+(?:&t=[^#]+)?$/),
 	),
 	available: Schema.Boolean,
 });
 export type ClockMediaView = typeof ClockMediaView.Type;
 
+export const ClockTarget = Schema.Struct({
+	profileId: Schema.NonEmptyString,
+	pageId: Schema.NonEmptyString,
+	keyCode: Schema.String.pipe(Schema.pattern(/^\d+,\d+$/)),
+});
+export type ClockTarget = typeof ClockTarget.Type;
+const targetField = {
+	target: Schema.optionalWith(ClockTarget, { exact: true }),
+};
+
 export const ClockSnapshot = Schema.Struct({
+	...targetField,
+	hourFormat: Schema.optionalWith(Schema.Literal("12h", "24h"), {
+		exact: true,
+	}),
 	revision: Schema.Int.pipe(Schema.nonNegative()),
 	keyCode: Schema.String,
 	mode: Schema.Literal("none", "theme"),
@@ -40,20 +54,38 @@ export const ClockSnapshot = Schema.Struct({
 export type ClockSnapshot = typeof ClockSnapshot.Type;
 
 export const ClockCommand = Schema.Union(
-	Schema.TaggedStruct("read", {}),
+	Schema.TaggedStruct("read", { ...targetField }),
 	// DK-Suite `clock-style:set-theme {keyCode, themeId}`; validated by the patch.
 	Schema.TaggedStruct("setTheme", {
+		...targetField,
 		keyCode: Schema.String,
 		themeId: Schema.String,
 	}),
-	Schema.TaggedStruct("setMode", { mode: Schema.Literal("none", "theme") }),
-	Schema.TaggedStruct("setSeconds", { showSeconds: Schema.Boolean }),
-	Schema.TaggedStruct("chooseMedia", { themeId: ThemeIdSchema }),
+	Schema.TaggedStruct("setMode", {
+		...targetField,
+		mode: Schema.Literal("none", "theme"),
+	}),
+	Schema.TaggedStruct("setHourFormat", {
+		...targetField,
+		hourFormat: Schema.Literal("12h", "24h"),
+	}),
+	Schema.TaggedStruct("setSeconds", {
+		...targetField,
+		showSeconds: Schema.Boolean,
+	}),
+	Schema.TaggedStruct("chooseMedia", {
+		...targetField,
+		themeId: ThemeIdSchema,
+	}),
 	Schema.TaggedStruct("commitMedia", {
+		...targetField,
 		token: Schema.String,
 		durationMs: Schema.Finite,
 	}),
-	Schema.TaggedStruct("restoreMedia", { themeId: ThemeIdSchema }),
+	Schema.TaggedStruct("restoreMedia", {
+		...targetField,
+		themeId: ThemeIdSchema,
+	}),
 );
 export type ClockCommand = typeof ClockCommand.Type;
 /** The strip may read and switch themes; everything else is management-only. */

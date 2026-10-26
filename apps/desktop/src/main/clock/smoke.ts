@@ -411,7 +411,7 @@ async function smoke(): Promise<void> {
 		);
 		await evaluate(
 			management,
-			`(async () => { const r = await window.quakeWallpaper.request({ _tag: 'read' }); const s = r.snapshot.saved; return window.quakeWallpaper.request({ _tag: 'configure', serial: s.serial, revision: s.revision, fillMode: s.settings.bgFillMode, hourFormat: '12h' }); })()`,
+			`window.quakeClock.request({ _tag: 'setHourFormat', hourFormat: '12h' })`,
 		);
 		await request(management, { _tag: "setSeconds", showSeconds: true });
 		await request(panel, {

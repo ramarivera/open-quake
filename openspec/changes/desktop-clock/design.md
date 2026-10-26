@@ -38,9 +38,9 @@ Non-goals: weather and now-playing cards (`open-quake-lih.7`); the grid itself (
    - aurora: green and violet aurora over dark mountains.
    DK's files are cited by path only. A user who wants DK's pictures can pick them as the theme's custom image.
 
-3. **Persistence keeps DK's cell shape.** Main stores `<userData>/clock-v1/clock.json` = `{ version: 1, revision, keys: [{ keyCode, config: { type: "dkDesktopClock", actions } }] }`. The actions are DK's `clockStyle` value plus the open-quake `showSeconds` extension. The device ◀/▶ path calls DK's `buildClockThemePatch` semantics: only `themeId` changes and `mode` becomes `theme`; other actions and slots stay byte-identical; a missing `clockStyle` action is appended with defaults. The whole array is written atomically (temp file + rename) and `revision` is bumped only when something changed. When profiles are wired to the panel, the profile owner can move these actions into the profile key verbatim. The hour format stays in the wallpaper store that owns it today.
+3. **The profile repository owns clock configuration.** Each profile/page/key carries `hourFormat`, `clockStyle` and `showSeconds` actions. Clock IPC carries an explicit target, and writes use the repository transaction with a profile revision check. The first load migrates the legacy clock record and wallpaper formats before publication, retaining both originals. Custom profile values win; missing or built-in-default actions inherit legacy values. Profile-selected serials are ordered lexically, then desktop-preview and remaining saved serials in lexical order. The same atomic envelope records `clockConfigVersion: 1`, so repeat loads and newly created profiles never reimport old settings. A failed write leaves migration retryable.
 
-4. **Custom media never exposes paths.** The slot stores `{ kind, path }` as DK does, but only main reads `path`. The renderer receives `{ kind, name, available }` and a URL `oq-clock-media://theme/<themeId>?r=<revision>`. The protocol handler resolves the theme's persisted slot, rejects anything else with 404, and streams the file through `net.fetch` with the request's `Range` header so video seeking works. This replaces DK's `dkbg://bg/media.<ext>?p=<abs path>` plus allow-list (WIDGETS-034).
+4. **Custom media never exposes paths.** The slot stores `{ kind, path }` as DK does, but only main reads `path`. The renderer receives `{ kind, name, available }` and a URL `oq-clock-media://theme/<themeId>?r=<revision>&t=<encoded profile/page/key>`. The protocol handler resolves the theme's persisted slot, rejects anything else with 404, and streams the file through `net.fetch` with the request's `Range` header so video seeking works. This replaces DK's `dkbg://bg/media.<ext>?p=<abs path>` plus allow-list (WIDGETS-034).
 
 5. **Media selection mirrors DK's validation.** Management asks main to choose a file for a theme. Main shows the dialog filtered to `jpg jpeg png gif webp bmp mp4 webm mov mkv`, checks that the file exists and its extension maps to a kind, and stages it as a pending candidate. Images commit at once. For videos, management probes duration through the candidate URL (6 s timeout) and commits only when the video is at least 2 s long. Otherwise it shows "Video duration too short, should be longer than 2 seconds." Cancel writes nothing (WIDGETS-059).
 
@@ -85,7 +85,7 @@ type ClockTileProps = {
 
 - `backdrop-filter` over a full-strip image costs GPU time. DK ships the same 26 px blur. Only the flipping card animates, and only for 760 ms a minute.
 - Procedural art will not match DK's painterly AI images stroke for stroke. Composition, palette and mood follow DK's notes; users can still choose any image.
-- Strip tiles normally read everything from the host context. The clock reads its own store, because profile keys do not carry `clockStyle` yet, and runs its own boundary-aligned ticker, seeded from the host clock, so the flip lands on the minute rather than up to a second late on main's one-second stream.
+- Strip tiles normally read everything from the host context. The clock reads the selected profile key and runs its own boundary-aligned ticker, seeded from the host clock, so the flip lands on the minute rather than up to a second late on main's one-second stream.
 
 ## Verification
 
@@ -101,3 +101,11 @@ Settings decode with excess-property preservation at every level before a narrow
 The clock protocol uses Electron webRequest's browser-owned requesting frame identity to authorize subresources from the exact app document. Top-level protocol navigation and media from unrelated documents are denied. Video commits ignore management's duration hint and use an isolated hidden main-owned decoder window without a preload or app bridge, with a six-second timeout. The shared video probe handles WebM without a finite metadata duration by seeking to the end. Native checks cover valid media access followed by denial after navigation and rejection of a forged duration for a real short WebM.
 
 Theme cycling from None intentionally matches `recovered_sources/src/views/Components/dkDesktopClock.vue:329-333`: season is the base, so next chooses cyber and previous chooses aurora. The review suggestion to select season on next was declined against that source.
+
+## PR #82 review fixes
+
+Migration and legacy archive import share primary/backup validation. Invalid wallpaper primaries recover from valid backups; unusable legacy files retain their original bytes and record a scrubbed catalog diagnostic while profiles migrate with defaults. Only a failed profile write leaves migration incomplete. Archive import migrates the imported envelope before deduplication and leaves existing destination clocks alone. Once profiles own clock settings, backup collection skips the abandoned clock directory and archives only the slots referenced by canonical keys.
+
+Screen controls resolve the same serial-scoped page as StripScreen and omit the clock editor if that page has no clock. Broadcast listeners compare explicit or initially resolved targets, including targetless compatibility messages. The key editor tracks its last saved key and avoids saving an unchanged draft before a clock update.
+
+Every renderer profile delivery projects clock media paths to opaque references. Main restores those references from the corresponding saved key before previewing an editor draft, preserving media on save. The clock service retains its basename and opaque media URL projection.

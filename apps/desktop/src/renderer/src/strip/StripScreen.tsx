@@ -80,7 +80,11 @@ function StripGrid({
 	tileOverlay,
 	interactive,
 	runtime,
+	clockSelection,
 }: {
+	clockSelection?:
+		| { readonly profileId: string; readonly pageId: string }
+		| undefined;
 	runtime: (keyCode: string) => KeyRuntimeState | undefined;
 	layout: StripLayout;
 	pressedKeyCode: string | undefined;
@@ -137,7 +141,15 @@ function StripGrid({
 					>
 						<Tile
 							tile={tile}
-							context={{ now, hourFormat, voice, interactive }}
+							context={{
+								now,
+								hourFormat,
+								voice,
+								interactive,
+								clockTarget: clockSelection
+									? { ...clockSelection, keyCode: tile.keyCode }
+									: undefined,
+							}}
 						/>
 						<KeyState state={runtime(tile.keyCode)} />
 						{tileOverlay?.(tile)}
@@ -353,6 +365,11 @@ export function StripScreen({
 					tileOverlay={tileOverlay}
 					interactive={interactive}
 					runtime={runtime}
+					clockSelection={
+						selection
+							? { profileId: selection.profile.id, pageId: selection.page.id }
+							: undefined
+					}
 				/>
 			) : null}
 			{profiles._tag === "failure" && view === "active" ? (

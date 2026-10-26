@@ -7,11 +7,12 @@ import type { Profile } from "../../../../../packages/device/src/profiles/profil
 import { ProfileThumbnailFailed } from "../../../../../packages/device/src/profiles/profile-errors.js";
 import type { ProfileLocale } from "../../../../../packages/device/src/profiles/profile-manager-contracts.js";
 import { profileThumbnailKey } from "./profile-thumbnail-key";
-import { pruneProfileThumbnails } from "./profile-thumbnail-retention";
+import { createProfileThumbnailPruner } from "./profile-thumbnail-retention";
 
 const maximumBytes = 1_000_000;
 /** One content/locale cache for manager capture and knob reads. Filenames are opaque hashes. */
 export function createProfileThumbnailStore(root: string) {
+	const prune = createProfileThumbnailPruner(join(root, "thumbnails"));
 	let tail: Promise<void> = Promise.resolve();
 	const serialize = <A>(operation: () => Promise<A>): Promise<A> => {
 		const next = tail.then(operation);
@@ -52,9 +53,7 @@ export function createProfileThumbnailStore(root: string) {
 	};
 	return {
 		prune: (profiles: readonly Profile[]): Promise<void> =>
-			serialize(() =>
-				pruneProfileThumbnails(join(root, "thumbnails"), profiles),
-			),
+			serialize(() => prune(profiles)),
 		read: async (
 			profile: Profile,
 			locale: ProfileLocale,

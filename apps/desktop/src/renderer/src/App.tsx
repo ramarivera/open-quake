@@ -26,7 +26,7 @@ import { OverviewPage } from "./management/OverviewPage";
 import { CaptureHost } from "./meetings/CaptureHost";
 import { MeetingHistory } from "./meetings/MeetingHistory";
 import { StripPanel } from "./strip/StripPanel";
-import { ClockSettings } from "./strip/tiles/clock/ClockSettings";
+import { ScreenClockSettings } from "./strip/tiles/clock/ClockSettings";
 import { MonitorSettings } from "./strip/tiles/monitor/MonitorSettings";
 import { ThemeSettings } from "./theme/ThemeSettings";
 import {
@@ -217,11 +217,7 @@ function ManagementSurface({
 				) : page === "screen" ? (
 					<>
 						<WallpaperSettings wallpaper={wallpaper} />
-						<ClockSettings
-							hourFormat={
-								wallpaper.snapshot?.saved.clock.actions[0].value ?? "24h"
-							}
-						/>
+						<ScreenClockSettings serial={wallpaper.snapshot?.saved.serial} />
 						<WeatherMediaSettings />
 						<MonitorSettings />
 					</>

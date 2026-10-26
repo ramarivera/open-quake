@@ -55,3 +55,8 @@ previous source. Production registration tests await actual deletion/publication
 events instead of a one-second polling window; their assertions and suite timeout
 remain intact. Linux and macOS profile/knob/diagnostic suites, the native
 cache-to-knob decoder check and desktop typecheck pass after the correction.
+
+
+### Repeated thumbnail sweep work
+
+The thumbnail store owns a content comparison cache for the last saved catalog. On an owned PNG sweep, serialize each original profile once to detect changes, reuse its eight translated filenames only when its full content matches, and replace the cache with the current catalog. Detached repository snapshots and unchanged selection metadata therefore avoid translation and schema encoding. Same-id, same-revision content edits still invalidate filenames. Continue inspecting the directory on every sweep so external orphan files and old pending files are collected. The cache remains per store, in memory, and is never logged or persisted. Cleanup still shares the capture and repository serialization boundaries.
