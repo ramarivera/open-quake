@@ -22,6 +22,7 @@ import {
 } from "./contracts.js";
 import {
 	canFocus,
+	pickerProfiles,
 	readyProfiles,
 	selectorProfiles,
 	volumeStep,
@@ -417,7 +418,10 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						state.selector.mode === "picker" ||
 						readyProfiles(state.context.profiles).length > 0;
 					const entries = picker
-						? readyProfiles(state.context.profiles)
+						? pickerProfiles(
+								state.context.profiles,
+								state.context.session.profileId,
+							)
 						: state.context.profiles;
 					if (!entries.length) return;
 					const base =
@@ -518,7 +522,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 							return;
 						case "Page": {
 							if (state.selector.mode !== "picker") return;
-							const count = readyProfiles(state.context.profiles).length;
+							const count = selectorProfiles(state).length;
 							const page = Math.max(
 								0,
 								Math.min(
@@ -541,9 +545,7 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 						case "Select":
 							if (
 								state.selector.mode === "picker" &&
-								readyProfiles(state.context.profiles).some(
-									(p) => p.id === event.profileId,
-								)
+								selectorProfiles(state).some((p) => p.id === event.profileId)
 							)
 								yield* commit(event.profileId);
 							return;
@@ -731,7 +733,10 @@ export class KnobModel extends Effect.Service<KnobModel>()(
 													previous.selector.mode === "picker" &&
 													readyProfiles(merged.profiles).length > 0;
 												const entries = picker
-													? readyProfiles(merged.profiles)
+													? pickerProfiles(
+															merged.profiles,
+															merged.session.profileId,
+														)
 													: merged.profiles;
 												const index = Math.max(
 													0,

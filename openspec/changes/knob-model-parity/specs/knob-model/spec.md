@@ -90,7 +90,7 @@ Focused screen luminance SHALL use the hardware session's typed Luminance comman
 
 ### Requirement: Source-aware wheel visibility and menu reconciliation
 
-SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative committed context containing the ordered menu and active profile. Boot synchronization SHALL remain closed. A real external profile ID change SHALL show ring feedback at its new index for 1200 ms without selecting again. An own-commit publication SHALL NOT reopen or extend feedback. Added, edited or deleted entries SHALL retain the active ID when present; deletion of the active ID SHALL use the repository's first visible profile. An open selector SHALL rescan to the committed active ID and restart its settle deadline on a catalog edit, without opening a closed selector. Ready thumbnails with matching content keys SHALL survive unrelated edits. Active page/content changes SHALL clear focus and disarm volume; inactive-only edits SHALL preserve them. A committed snapshot received before the initial read SHALL take precedence over that late read. Canonical model revisions and 16 ms renderer coalescing SHALL replace repeated nextTick/150 ms index resynchronization.
+SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative committed context containing the ordered menu and active profile. Boot synchronization SHALL remain closed. A real external profile ID change SHALL show ring feedback at its new index for 1200 ms without selecting again. An own-commit publication SHALL NOT reopen or extend feedback. Added, edited or deleted entries SHALL retain the active ID when present; deletion of the active ID SHALL use the repository's first visible profile. An open selector SHALL rescan to the committed active ID and restart its settle deadline on a catalog edit, without opening a closed selector. The committed active profile SHALL remain a picker entry with a placeholder when its thumbnail is missing. Catalog edits SHALL NOT invoke persistence for a different profile. Ready thumbnails with matching content keys SHALL survive unrelated edits. Active page/content changes SHALL clear focus and disarm volume; inactive-only edits SHALL preserve them. A committed snapshot received before the initial read SHALL take precedence over that late read. Canonical model revisions and 16 ms renderer coalescing SHALL replace repeated nextTick/150 ms index resynchronization.
 
 #### Scenario: External change versus boot and own commit
 
@@ -101,6 +101,11 @@ SCREEN-078, SCREEN-090, SCREEN-100 and SCREEN-106 SHALL use one authoritative co
 
 - **WHEN** a profile is added, renamed, reordered or deleted while the picker or ring is open
 - **THEN** the menu order and active ID come from the same context, focus rescans to that ID and page, the new settle deadline selects no stale entry, and a closed selector remains closed
+
+#### Scenario: Missing active thumbnail during a catalog edit
+
+- **WHEN** the active thumbnail is missing or invalidated while another ready profile is highlighted, then a catalog edit publishes
+- **THEN** the picker rescans to the active profile's placeholder, expiry retains the committed profile without persistence, and a subsequent deliberate detent can select another ready profile
 
 #### Scenario: Coalesced multi-page movement
 

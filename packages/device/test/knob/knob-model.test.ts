@@ -9,7 +9,11 @@ import type {
 	KnobVoiceInput,
 	VolumeReading,
 } from "../../src/knob/model/contracts.js";
-import { volumeStep, wrapIndex } from "../../src/knob/model/invariants.js";
+import {
+	selectorProfiles,
+	volumeStep,
+	wrapIndex,
+} from "../../src/knob/model/invariants.js";
 import {
 	type KnobModelPort,
 	KnobModelPorts,
@@ -531,6 +535,78 @@ it.effect(
 );
 
 describe("wheel-selector committed state and menu mutations", () => {
+	it.effect(
+		"catalog edits keep the active placeholder selected and never commit a different ready profile",
+		() => {
+			const base = modelContext();
+			const context: KnobModelContext = {
+				...base,
+				profiles: base.profiles.map((profile) => ({
+					...profile,
+					thumbnail:
+						profile.id === "p0" ? { _tag: "missing" } : profile.thumbnail,
+				})),
+			};
+			const h = harness(context);
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(context);
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* send({ _tag: "Rotate", delta: 1 });
+				const changed = {
+					...context,
+					profiles: context.profiles.map((profile) => ({
+						...profile,
+						name: profile.id === "p1" ? "Edited ready profile" : profile.name,
+					})),
+				};
+				yield* KnobModel.synchronize(changed);
+				const snapshot = yield* KnobModel.snapshot();
+				expect(snapshot.selector.mode).toBe("picker");
+				expect(
+					selectorProfiles(snapshot)[snapshot.selector.index],
+				).toMatchObject({
+					id: "p0",
+					thumbnail: { _tag: "missing" },
+				});
+				yield* TestClock.adjust(5000);
+				expect(h.selections).toEqual([]);
+				expect((yield* KnobModel.snapshot()).context.session.profileId).toBe(
+					"p0",
+				);
+				// A subsequent deliberate detent can still commit a ready profile.
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* TestClock.adjust(5000);
+				expect(h.selections).toEqual(["p1"]);
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+	it.effect(
+		"an active thumbnail invalidated during selection cannot replace the committed profile",
+		() => {
+			const context = modelContext();
+			const h = harness(context);
+			return Effect.gen(function* () {
+				yield* KnobModel.configure(context);
+				yield* send({ _tag: "Rotate", delta: 1 });
+				yield* KnobModel.synchronize({
+					...context,
+					profiles: context.profiles.map((profile) => ({
+						...profile,
+						thumbnailKey:
+							profile.id === "p0" ? "edited-active" : profile.thumbnailKey,
+						thumbnail:
+							profile.id === "p0" ? { _tag: "missing" } : profile.thumbnail,
+					})),
+				});
+				yield* TestClock.adjust(5000);
+				expect(h.selections).toEqual([]);
+				const state = yield* KnobModel.snapshot();
+				expect(state.context.session.profileId).toBe("p0");
+				expect(state.selector.mode).toBe("closed");
+			}).pipe(Effect.provide(h.layer));
+		},
+	);
+
 	it.effect(
 		"SCREEN-078: boot stays closed, external feedback expires at 1200ms and unchanged publication cannot extend it",
 		() => {

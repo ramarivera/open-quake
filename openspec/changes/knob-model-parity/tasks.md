@@ -86,3 +86,9 @@ The first probe attempted Rotate IPC, correctly denied by the existing renderer 
 - [x] 8.1 Deliver SCREEN-078/079/090/100/106 committed timing, transition and menu reconciliation with domain and renderer tests. Bead open-quake-lih.4.3.
 - [x] 8.2 Deliver SCREEN-075/076/077/080/081/084 recovered dimensions with independent flat rendering, motion, clipping and compositor tests. Bead open-quake-lih.4.4.
 - [x] 8.3 Deliver SCREEN-087/088/089/094 localized picker states, exact shared paging bounds and incomplete-page centering tests. Bead open-quake-lih.4.5.
+
+## 9. PR #106 single review fix round
+
+- [x] 9.1 Keep the committed active profile in picker entries with a missing-thumbnail placeholder; prove catalog edits never persist a different profile. Finding 4379652095, bead open-quake-lih.4.3.1. Two domain regressions fail before the fix.
+- [ ] 9.2 Route production registration catalog refreshes through reconciliation and verify add/edit/reorder/delete with the real registration. Finding 4379654632, same bead.
+- [ ] 9.3 Run full lane gates and hidden mock smoke, reconcile unanswered review threads once, push and reply to each finding without resolving threads. No hardware acceptance.
