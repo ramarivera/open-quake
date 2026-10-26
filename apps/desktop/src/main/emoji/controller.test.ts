@@ -775,6 +775,7 @@ it("CENTER-088 retains placed hashes after package deletion and collects after t
 	const root = await mkdtemp(join(tmpdir(), "oq-emoji-collect-"));
 	const files = emojiFiles(root);
 	const hash = await files.put(gif());
+	const published = await files.clipboardPath(hash);
 	await files.write({
 		...emptyEmojiStore,
 		items: [
@@ -835,6 +836,11 @@ it("CENTER-088 retains placed hashes after package deletion and collects after t
 		await runtime.runPromise(controller.request({ type: "read" }));
 		expect((await files.read())?.items).toEqual([]);
 		await expect(files.get(hash)).rejects.toMatchObject({ code: "ENOENT" });
+		// The native clipboard still advertises this path after its last library
+		// reference disappears. Reopening the library must not break paste.
+		expect(await readFile(published)).toEqual(Buffer.from(gif()));
+		await emojiFiles(root).collect([]);
+		expect(await readFile(published)).toEqual(Buffer.from(gif()));
 	} finally {
 		await runtime.dispose();
 		await rm(root, { recursive: true, force: true });

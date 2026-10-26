@@ -166,7 +166,10 @@ export function emojiFiles(root: string) {
 			await rm(checkpoint, { force: true }).catch(() => {});
 		}
 
-		for (const directory of ["assets", "clipboard"]) {
+		// Clipboard publications outlive library/profile references and app restarts.
+		// Defer their collection until native clipboard ownership can be observed.
+		// Source assets remain independently reclaimable.
+		for (const directory of ["assets"]) {
 			const names = await readdir(join(root, directory)).catch(
 				(cause: unknown) => {
 					if (absent(cause)) return [];

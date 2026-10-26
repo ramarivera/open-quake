@@ -114,7 +114,7 @@ Every draft and packaged emoji SHALL open the same caption editor with a name fi
 - **THEN** reload retains those edits and creating a package preserves the draft and its selection
 
 ### Requirement: Reference-aware reclamation
-Collection SHALL retain every static asset, package/draft item and saved-profile emoji id/hash, including old renderings pinned by profiles. It SHALL delete unreferenced item metadata and asset files only after the last package, draft or profile reference disappears. Collection failure SHALL preserve committed library state and report a retryable notice. Source: CENTER-088.
+Collection SHALL retain every static asset, package/draft item and saved-profile emoji id/hash, including old renderings pinned by profiles. It SHALL delete unreferenced item metadata and asset files only after the last package, draft or profile reference disappears. Published clipboard GIF files SHALL remain outside normal asset collection because the system clipboard can still refer to them after library references disappear or the app restarts. Their collection SHALL be deferred until native clipboard ownership can be observed. Collection failure SHALL preserve committed library state and report a retryable notice. Source: CENTER-088.
 
 #### Scenario: Last placed reference disappears
 - **WHEN** a package is deleted while a saved profile pins one of its GIFs
@@ -145,3 +145,7 @@ Emoji tiles SHALL use app-owned flat artwork sizing: a contained square at 80 pe
 #### Scenario: Untrusted provider media URL
 - **WHEN** a provider returns an internal URL, an approved hostname resolving to private addresses, or a redirect to internal metadata
 - **THEN** the adapter rejects it before contacting the internal destination or decoding any video
+
+#### Scenario: Clipboard still references a removed emoji
+- **WHEN** a copied emoji loses its last library/profile reference and the library reopens
+- **THEN** its source assets are collected but the published clipboard GIF remains readable, including after reopening the file store
