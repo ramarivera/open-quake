@@ -88,3 +88,5 @@ beads remain open for lead integration.
 - [x] Include saved empty borders in manager and knob thumbnail identity, pin captures to that preference, and regenerate existing manager thumbnails. Failing-first controller/storage regressions, knob handoff and mounted capture tests cover Devin 4380317254.
 
 - [x] Remove unused config/eventInfo from runtime placeholders. SCREEN-022 now specifies the renderer's coordinate-only record. Existing hidden-slot, profile replacement and independent editor-default coverage remains; the added no-unused-payload regression fails before the fix. Devin 4380317447.
+
+- [x] Isolate style-regeneration capture failures and retain same-value retries for failed profiles. Failing-first two-profile regression covers Codex 4380623860.

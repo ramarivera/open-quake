@@ -73,6 +73,7 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 		let locale: ProfileLocale = "en";
 		let showEmptyGridDashedBorder = true;
 		const thumbnailStyleLock = yield* Effect.makeSemaphore(1);
+		const pendingStyleCaptures = new Set<string>();
 		const thumbnails = new Map<string, string>();
 		const native = <A>(
 			operation: () => Promise<A>,
@@ -203,14 +204,23 @@ export const makeProfileController = Effect.fn("ProfileDesktop.controller")(
 			switch (input.type) {
 				case "thumbnail-style":
 					return yield* Effect.gen(function* () {
-						if (showEmptyGridDashedBorder === input.showEmptyGridDashedBorder)
-							return { _tag: "success", view: yield* view() } as const;
-						const previous = yield* view();
-						showEmptyGridDashedBorder = input.showEmptyGridDashedBorder;
-						yield* Effect.sync(() => port.localeChanged?.(locale));
-						yield* publish();
-						for (const [id, data] of Object.entries(previous.thumbnails))
-							if (data) yield* capture(id, locale);
+						if (showEmptyGridDashedBorder !== input.showEmptyGridDashedBorder) {
+							const previous = yield* view();
+							showEmptyGridDashedBorder = input.showEmptyGridDashedBorder;
+							for (const [id, data] of Object.entries(previous.thumbnails))
+								if (data) pendingStyleCaptures.add(id);
+							yield* Effect.sync(() => port.localeChanged?.(locale));
+							yield* publish();
+						}
+						for (const id of [...pendingStyleCaptures]) {
+							const result = yield* capture(id, locale).pipe(Effect.either);
+							if (result._tag === "Right") pendingStyleCaptures.delete(id);
+							else
+								yield* Effect.logWarning(
+									"profiles.thumbnail.style.failed",
+									result.left,
+								);
+						}
 						return { _tag: "success", view: yield* publish() } as const;
 					}).pipe(thumbnailStyleLock.withPermits(1));
 				case "read":
