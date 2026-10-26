@@ -401,63 +401,85 @@ it.each([true, false])(
 	},
 );
 
-it("MAIN-065 SCREEN-057 writes held HID edges and releases the original keyboard session", async () => {
-	await Effect.runPromise(
-		Effect.scoped(
-			Effect.gen(function* () {
-				const fake = yield* makeFakeHardwareTransport({ serial: "device" });
-				const device = yield* QuakeDevice.pipe(
-					Effect.provide(
-						QuakeDevice.DefaultWithoutDependencies.pipe(
-							Layer.provide(fake.layer),
+it.each([false, true])(
+	"MAIN-065 SCREEN-057 held HID edges release the original keyboard owner, lostAck=%s",
+	async (lostAck) => {
+		await Effect.runPromise(
+			Effect.scoped(
+				Effect.gen(function* () {
+					const fake = yield* makeFakeHardwareTransport({
+						serial: "device",
+						...(lostAck ? { onCommand: () => [] } : {}),
+					});
+					const device = yield* QuakeDevice.pipe(
+						Effect.provide(
+							QuakeDevice.DefaultWithoutDependencies.pipe(
+								Layer.provide(fake.layer),
+							),
 						),
-					),
-				);
-				const controls = yield* HardwareControls.pipe(
-					Effect.provide(HardwareControls.Default),
-				);
-				const session = yield* controls.create(yield* device.connect(), {
-					serial: "device",
-					session: "touch-1",
-				});
-				let active: HardwareSession | undefined = session;
-				const empty = Schema.encodeSync(ProfileKey)(
-					createEmptyProfileKey("1,1"),
-				);
-				const key = {
-					...empty,
-					childrenName: "hotkey",
-					config: {
-						...empty.config,
-						type: "hotkey",
-						display: true,
-						actions: [{ type: "key", value: "control+a" }],
-					},
-				};
-				yield* Effect.gen(function* () {
-					const runtime = yield* KeyRuntime;
-					yield* runtime.activate("device", "1,1", "down");
-					expect(
-						(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
-					).toEqual([[1, 16, 1, 1, 4]]);
-					active = undefined;
-					yield* runtime.activate("device", "1,1", "cancel");
-					yield* runtime.activate("device", "1,1", "up");
-					expect(
-						(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
-					).toEqual([
-						[1, 16, 1, 1, 4],
-						[1, 16, 0, 1, 4],
-					]);
-				}).pipe(
-					Effect.provide(
-						layer(false, undefined, undefined, key, undefined, () => active),
-					),
-				);
-			}),
-		),
-	);
-});
+					);
+					const controls = yield* HardwareControls.pipe(
+						Effect.provide(HardwareControls.Default),
+					);
+					const session = yield* controls.create(yield* device.connect(), {
+						serial: "device",
+						session: "touch-1",
+					});
+					let active: HardwareSession | undefined = session;
+					const empty = Schema.encodeSync(ProfileKey)(
+						createEmptyProfileKey("1,1"),
+					);
+					const key = {
+						...empty,
+						childrenName: "hotkey",
+						config: {
+							...empty.config,
+							type: "hotkey",
+							display: true,
+							actions: [{ type: "key", value: "control+a" }],
+						},
+					};
+					yield* Effect.gen(function* () {
+						const runtime = yield* KeyRuntime;
+						if (lostAck) {
+							const result = yield* Effect.either(
+								runtime.activate("device", "1,1", "down"),
+							);
+							expect(result._tag).toBe("Left");
+							if (result._tag === "Left")
+								expect(result.left.code).toBe("QUAKE.ACTION.HOST_FAILED");
+							expect(
+								(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+							).toEqual([
+								[1, 16, 1, 1, 4],
+								[1, 16, 0, 1, 4],
+							]);
+							expect((yield* session.snapshot()).available).toBe(false);
+							return;
+						}
+						yield* runtime.activate("device", "1,1", "down");
+						expect(
+							(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+						).toEqual([[1, 16, 1, 1, 4]]);
+						active = undefined;
+						yield* runtime.activate("device", "1,1", "cancel");
+						yield* runtime.activate("device", "1,1", "up");
+						expect(
+							(yield* fake.writes).map((bytes) => [...bytes.slice(3, 8)]),
+						).toEqual([
+							[1, 16, 1, 1, 4],
+							[1, 16, 0, 1, 4],
+						]);
+					}).pipe(
+						Effect.provide(
+							layer(false, undefined, undefined, key, undefined, () => active),
+						),
+					);
+				}),
+			),
+		);
+	},
+);
 
 it.each([false, true])(
 	"local player controls enforce committed quarantine=%s",

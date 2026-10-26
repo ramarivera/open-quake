@@ -180,6 +180,7 @@ export const desktopKeyRuntimePort = (
 						const encoded = encodeDeviceChord(chord);
 						if (encoded._tag === "Left")
 							return yield* Effect.fail(new HostActionFailed(encoded.left));
+
 						if (mock) return Effect.void;
 						const session = hardware();
 						if (!session)
@@ -193,16 +194,12 @@ export const desktopKeyRuntimePort = (
 							return yield* Effect.fail(
 								new HostActionFailed("held-host-keyboard-unavailable"),
 							);
-						const release = session
-							.send({ _tag: "Keyboard", action: 0, ...encoded.right })
+						const release = yield* session
+							.holdChord(chord)
 							.pipe(Effect.mapError((cause) => new HostActionFailed(cause)));
-						yield* session
-							.send({ _tag: "Keyboard", action: 1, ...encoded.right })
-							.pipe(
-								Effect.mapError((cause) => new HostActionFailed(cause)),
-								Effect.onError(() => release.pipe(Effect.ignore)),
-							);
-						return release;
+						return release.pipe(
+							Effect.mapError((cause) => new HostActionFailed(cause)),
+						);
 					}),
 				executeOwned: (key, activation) =>
 					mock || !executeOwned
