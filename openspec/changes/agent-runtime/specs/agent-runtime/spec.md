@@ -143,3 +143,8 @@ The owned runtime SHALL allow a port, log level, opt-in autostart and a private 
 - **WHEN** valid settings opt into autostart and the backend is slow to start
 - **THEN** management becomes available while start runs in the service scope with the existing deadline
 - **AND** closing the service scope cancels the pending start
+
+#### Scenario: Owned runtime uses a Windows command shim
+- **WHEN** the explicitly selected executable is a Windows `.cmd` or `.bat` shim
+- **THEN** gateway and channel invocations use the same quoted `cmd.exe /d /s /v:off /c` adapter with verbatim arguments
+- **AND** command expansion, embedded quotes and line breaks are rejected before spawning, while native executables keep direct argument dispatch

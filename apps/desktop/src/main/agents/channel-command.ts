@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { isAbsolute } from "node:path";
 import { RuntimeUnavailable } from "../../../../../packages/edge/src/channels/integration-errors";
+import { agentCommandInvocation } from "./command-invocation";
 export interface ChannelCommand {
 	readonly args: readonly string[];
 	readonly signal?: AbortSignal;
@@ -8,7 +9,7 @@ export interface ChannelCommand {
 	readonly onLine?: (line: string) => void;
 }
 export type ChannelCommandRunner = (command: ChannelCommand) => Promise<string>;
-/** Private state, fixed argv, no shell and no credential arguments. Never reads the user's default OpenClaw state. */
+/** Private state, fixed argv, no credential arguments. Windows batch shims use a quoted command processor. Never reads the user's default OpenClaw state. */
 export function channelCommandRunner(
 	executable: string,
 	root: string,
@@ -19,9 +20,12 @@ export function channelCommandRunner(
 				reject(new RuntimeUnavailable());
 				return;
 			}
-			const child = spawn(executable, [...args], {
-				shell: false,
-				windowsHide: true,
+			const [command, argv, spawnOptions] = agentCommandInvocation(
+				executable,
+				args,
+			);
+			const child = spawn(command, argv, {
+				...spawnOptions,
 				stdio: ["ignore", "pipe", "ignore"],
 				env: {
 					...process.env,

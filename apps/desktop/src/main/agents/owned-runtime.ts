@@ -10,6 +10,7 @@ import {
 import type { AgentRuntimeAdapter } from "../../../../../packages/edge/src/agents/agents-ports";
 import type { ServiceSettings } from "../../../../../packages/edge/src/agents/service-settings-contracts";
 import { channelCommandRunner } from "./channel-command";
+import { agentCommandInvocation } from "./command-invocation";
 import { createLocalAgentState, type LocalAgentState } from "./local-state";
 export interface OwnedRuntimeProcess {
 	readonly stop: () => Promise<void>;
@@ -28,29 +29,25 @@ function processDriver(
 	return {
 		start: async (settings) => {
 			const root = settings.dataDirectory;
-			const child = spawn(
-				command,
-				[
-					"gateway",
-					"run",
-					"--allow-unconfigured",
-					"--bind",
-					"loopback",
-					"--port",
-					String(settings.port),
-				],
-				{
-					shell: false,
-					windowsHide: true,
-					stdio: "ignore",
-					env: {
-						...process.env,
-						OPENCLAW_STATE_DIR: root,
-						OPENCLAW_CONFIG_PATH: `${root}/openclaw.json`,
-						OPENCLAW_LOG_LEVEL: settings.logLevel,
-					},
+			const [executable, args, spawnOptions] = agentCommandInvocation(command, [
+				"gateway",
+				"run",
+				"--allow-unconfigured",
+				"--bind",
+				"loopback",
+				"--port",
+				String(settings.port),
+			]);
+			const child = spawn(executable, args, {
+				...spawnOptions,
+				stdio: "ignore",
+				env: {
+					...process.env,
+					OPENCLAW_STATE_DIR: root,
+					OPENCLAW_CONFIG_PATH: `${root}/openclaw.json`,
+					OPENCLAW_LOG_LEVEL: settings.logLevel,
 				},
-			);
+			});
 			const exited = new Promise<void>((resolve) => {
 				child.once("error", () => resolve());
 				child.once("close", () => resolve());
