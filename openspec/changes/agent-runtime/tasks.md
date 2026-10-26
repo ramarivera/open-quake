@@ -56,3 +56,6 @@ Reviewed delivery is tracked separately in `open-quake-9h3.7.1`.
 - [x] F.1 Stop Windows shim gateway trees with bounded injectable termination and fake Windows/POSIX regressions. CENTER-047, MAIN-144, finding 4380901915. Bead `open-quake-lih.17.24`.
 - [x] F.2 Decode pinned recorded WhatsApp terminal QR output into the existing PNG drawer path, with consumer regression coverage and UTF-8-safe stdout chunk framing. CENTER-078, finding 4380901925. Same bead; owning channel spec is management-center-parity/specs/integration-channels.
 - [x] F.3 Match runtime voiceInput defaults in mounted key editing and persistence. MGMT-302, finding 4380901936. Same bead.
+
+## PR122 review fix round
+- [x] R.1 Separate cleanup ownership from live readiness and retain early-exited Windows trees. CENTER-047, MAIN-144, 4381279137; bead `open-quake-lih.17.24.1`.

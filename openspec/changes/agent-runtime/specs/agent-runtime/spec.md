@@ -157,6 +157,12 @@ The owned runtime SHALL stop the entire Windows process tree, including the gate
 - **THEN** Stop waits for the tree command to finish and never kills only cmd.exe
 - **AND** failed termination remains an error, with an owned handle available for retry
 
+#### Scenario: Retain cleanup after the Windows shim exits before Stop
+- **WHEN** the owned Windows command processor exits before its gateway and the user selects Stop
+- **THEN** the adapter retains the cleanup target independently of readiness and invokes bounded tree termination against its retained PID
+- **AND** only successful cleanup releases ownership; repeated Stop does not kill the same target again
+- **AND** this covers CENTER-047, MAIN-144, PR122 finding 4381279137, bead open-quake-lih.17.24.1
+
 ### Requirement: Imported agent key voice default
 The clawbot key editor SHALL derive Voice Input and Task Prompt visibility from the runtime hold-to-talk predicate. An absent voiceInput action SHALL display voice disabled and Task Prompt editable. Sources: MGMT-302; open-quake-lih.17.24, PR108 finding 4380901936; DK-Suite v0.4.95 recovered_sources/src/plugins/KeyConfiguration.js:239-240 defaults voiceInput to false, and src/views/Components/QuakeShortCutView.vue:1758-1767 requires a truthy voiceInput action.
 

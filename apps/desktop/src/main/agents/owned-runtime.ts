@@ -5,7 +5,7 @@ import {
 	spawn,
 } from "node:child_process";
 import { isAbsolute } from "node:path";
-import { Effect, Schema } from "effect";
+import { Effect, Ref, Schema } from "effect";
 import type { RuntimeState } from "../../../../../packages/edge/src/agents/agents-contracts";
 import {
 	AgentInvalid,
@@ -85,8 +85,7 @@ export function ownedRuntimeProcessDriver(
 					OPENCLAW_LOG_LEVEL: settings.logLevel,
 				},
 			});
-			let treeStopAttempted = false;
-			let treeStopped = false;
+			const cleanup = { pid: child.pid, treeStopped: false };
 			const exited = new Promise<void>((resolve) => {
 				child.once("error", () => resolve());
 				child.once("close", () => resolve());
@@ -96,7 +95,7 @@ export function ownedRuntimeProcessDriver(
 				stop: async () => {
 					if (
 						(child.exitCode !== null || child.signalCode !== null) &&
-						(platform !== "win32" || !treeStopAttempted || treeStopped)
+						(platform !== "win32" || cleanup.treeStopped)
 					)
 						return;
 					const waitForExit = (timeoutMs: number) =>
@@ -108,15 +107,14 @@ export function ownedRuntimeProcessDriver(
 							});
 						});
 					if (platform === "win32") {
-						if (!child.pid) throw new AgentRuntimeFailed();
-						treeStopAttempted = true;
+						if (!cleanup.pid) throw new AgentRuntimeFailed();
 						// cmd.exe can exit before its gateway. Await taskkill itself as
 						// well as the owned child; never fall back to killing only cmd.exe.
 						for (let attempt = 0; attempt < 2; attempt++) {
 							try {
 								const treeCommand = runCommand("taskkill.exe", [
 									"/PID",
-									String(child.pid),
+									String(cleanup.pid),
 									"/T",
 									"/F",
 								]);
@@ -135,7 +133,7 @@ export function ownedRuntimeProcessDriver(
 									clearTimeout(timer);
 								}
 								if (await waitForExit(500)) {
-									treeStopped = true;
+									cleanup.treeStopped = true;
 									return;
 								}
 							} catch (cause) {
@@ -187,7 +185,19 @@ export function createOwnedAgentRuntime(options: {
 		code: "",
 		operation: "none",
 	};
-	let process: OwnedRuntimeProcess | undefined;
+	// The child is a readiness candidate only in starting/ready. Its cleanup
+	// target survives exit, failed Stop and failed startup until stop confirms it.
+	type Lifecycle =
+		| { readonly phase: "stopped" }
+		| {
+				readonly phase: "starting" | "ready" | "cleanup";
+				readonly target: OwnedRuntimeProcess;
+		  };
+	const lifecycle = Ref.unsafeMake<Lifecycle>({ phase: "stopped" });
+	// Promise and Node callbacks are the boundary of this Effect adapter.
+	const current = () => Effect.runSync(Ref.get(lifecycle));
+	const transition = (next: Lifecycle) =>
+		Effect.runSync(Ref.set(lifecycle, next));
 	const publish = (next: RuntimeState) => {
 		state = next;
 		journal.push({
@@ -214,17 +224,15 @@ export function createOwnedAgentRuntime(options: {
 				port: settings.port,
 			},
 		}));
+	const cleanup = async () => {
+		const owned = current();
+		if (owned.phase === "stopped") return;
+		transition({ phase: "cleanup", target: owned.target });
+		await owned.target.stop();
+		transition({ phase: "stopped" });
+	};
 	const stop = async () => {
-		const owned = process;
-		process = undefined;
-		if (owned) {
-			try {
-				await owned.stop();
-			} catch (cause) {
-				process = owned;
-				throw cause;
-			}
-		}
+		await cleanup();
 		publish({
 			available: true,
 			status: "stopped",
@@ -233,16 +241,23 @@ export function createOwnedAgentRuntime(options: {
 		});
 	};
 	const start = async (signal: AbortSignal) => {
-		if (process) return;
+		if (current().phase === "ready") return;
+		await cleanup();
+		if (signal.aborted) throw new AgentRuntimeFailed();
 		const settings = await read();
 		await config(settings);
 		const owned = await driver.start(settings);
-		process = owned;
+		transition({ phase: "starting", target: owned });
 		let exited = false;
 		void owned.exited.then(() => {
 			exited = true;
-			if (process === owned) {
-				process = undefined;
+			const active = current();
+			if (
+				active.phase !== "stopped" &&
+				active.target === owned &&
+				active.phase !== "cleanup"
+			) {
+				transition({ phase: "cleanup", target: owned });
 				publish({
 					available: true,
 					status: "error",
@@ -260,6 +275,7 @@ export function createOwnedAgentRuntime(options: {
 					if (signal.aborted) break;
 				}
 				if (healthy && !exited && !signal.aborted) {
+					transition({ phase: "ready", target: owned });
 					publish({
 						available: true,
 						status: "ready",
@@ -281,8 +297,7 @@ export function createOwnedAgentRuntime(options: {
 			}
 			throw new AgentRuntimeFailed();
 		} catch (cause) {
-			if (process === owned) process = undefined;
-			await owned.stop();
+			await cleanup();
 			throw cause;
 		}
 	};
@@ -323,9 +338,10 @@ export function createOwnedAgentRuntime(options: {
 			logs: () => Effect.sync(() => [...journal]),
 			save: (settings, restart) =>
 				external(async (signal) => {
-					if (process && !restart) throw new AgentInvalid();
+					if (current().phase !== "stopped" && !restart)
+						throw new AgentInvalid();
 					await storage.saveSettings(settings);
-					if (process) {
+					if (current().phase !== "stopped") {
 						await stop();
 						await start(signal);
 					}
@@ -336,7 +352,7 @@ export function createOwnedAgentRuntime(options: {
 					}),
 				),
 			clear: external(async () => {
-				if (process) throw new AgentInvalid();
+				if (current().phase !== "stopped") throw new AgentInvalid();
 				await storage.clear();
 			}),
 			environment: (settings) =>
