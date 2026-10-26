@@ -86,3 +86,5 @@ beads remain open for lead integration.
 
 - [x] Merge main grid-editor while preserving both branches' interactions and all tests. Bead open-quake-lih.10.11.1.
 - [x] Include saved empty borders in manager and knob thumbnail identity, pin captures to that preference, and regenerate existing manager thumbnails. Failing-first controller/storage regressions, knob handoff and mounted capture tests cover Devin 4380317254.
+
+- [x] Remove unused config/eventInfo from runtime placeholders. SCREEN-022 now specifies the renderer's coordinate-only record. Existing hidden-slot, profile replacement and independent editor-default coverage remains; the added no-unused-payload regression fails before the fix. Devin 4380317447.

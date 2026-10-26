@@ -395,18 +395,15 @@ describe("theme resolution", () => {
 });
 
 describe("strip burn-down geometry", () => {
+	it("SCREEN-022 runtime cell records carry no unused configuration or event payload", () => {
+		for (const cell of layoutOf([]).cells) {
+			expect(cell.placeholder).not.toHaveProperty("config");
+			expect(cell.placeholder).not.toHaveProperty("eventInfo");
+			expect(cell.placeholder.keyCode).toBe(cell.keyCode);
+		}
+	});
 	it("SCREEN-022 builds runtime placeholders without changing new-editor defaults or leaking old state", () => {
-		expect(runtimePlaceholder("2,8")).toEqual({
-			keyCode: "2,8",
-			config: {
-				type: "",
-				display: true,
-				size: [1, 1],
-				icon: "",
-				title: { text: "", display: false },
-			},
-			eventInfo: {},
-		});
+		expect(runtimePlaceholder("2,8")).toEqual({ keyCode: "2,8" });
 		const empty = createEmptyProfileKey("2,8");
 		expect(empty.config.title.display).toBe(true);
 		const first = layoutOf([

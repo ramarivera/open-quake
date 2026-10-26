@@ -292,12 +292,12 @@ The panel and management mirror SHALL fit the same fixed 1920 by 480 logical can
 
 ### Requirement: Normalized runtime empty cells
 
-An absent or empty runtime cell SHALL have keyCode, config type empty string, display true, size [1,1], icon empty string, title text empty string with display false, and empty eventInfo. This runtime record SHALL be constructed independently of new-editor key defaults, whose title display remains true. Hidden configured keys SHALL remain inert hidden slots. Runtime normalization SHALL NOT mutate saved keys or retain title, artwork or visibility from a previous profile. Covers SCREEN-022.
+An absent or empty runtime cell SHALL carry only its keyCode in its placeholder record. Layout SHALL own its rectangle and empty or hidden state; the renderer SHALL NOT allocate unused key configuration or event payloads for empty slots. Runtime placeholders SHALL remain independent of new-editor key defaults, whose title display remains true. Hidden configured keys SHALL remain inert hidden slots. Runtime normalization SHALL NOT mutate saved keys or retain title, artwork or visibility from a previous profile. Covers SCREEN-022.
 
 #### Scenario: Replace a profile with absent cells
 
 - **WHEN** a profile with titles and hidden keys is replaced by a page with absent cells
-- **THEN** all absent cells carry the exact runtime placeholder fields and paint empty slots without old titles or artwork
+- **THEN** all absent cells carry coordinate-only placeholders and paint empty slots without old titles or artwork
 
 ### Requirement: Accepted flat theme and span rendering
 

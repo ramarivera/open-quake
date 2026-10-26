@@ -62,18 +62,8 @@ export function stripViewportScale(width: number, height: number): number {
 		: 1;
 }
 
-/** Runtime empties deliberately differ from createEmptyProfileKey's editor defaults. */
-export const runtimePlaceholder = (keyCode: string) => ({
-	keyCode,
-	config: {
-		type: "",
-		display: true,
-		size: [1, 1] as const,
-		icon: "",
-		title: { text: "", display: false },
-	},
-	eventInfo: {},
-});
+/** Runtime empty slots carry coordinates only, independently of editor key defaults. */
+export const runtimePlaceholder = (keyCode: string) => ({ keyCode });
 /** DK's default tile accent, rgb(116,128,239) = #7480EF. */
 export const DEFAULT_ACCENT: Rgb = { r: 116, g: 128, b: 239 };
 
