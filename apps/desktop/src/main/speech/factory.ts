@@ -40,6 +40,8 @@ export interface DesktopSpeechOptions
 		| "diagnostics"
 		| "speechError"
 		| "pinDirectModel"
+		| "prepareAssistant"
+		| "pinAgentRoute"
 	> {
 	readonly storage: JsonStore;
 	readonly localResume?: JsonStore;

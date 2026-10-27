@@ -16,10 +16,19 @@ import {
 	VoiceRuntimeUnavailable,
 	VoiceSurface,
 } from "../../../../../packages/edge/src/voice/surface/index.js";
-import type { TextRequest } from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
+import type {
+	PinnedAgentRoute,
+	TextRequest,
+} from "../../../../../packages/edge/src/voice/surface/voice-surface-ports.js";
 import type { AgentConnectionSelection } from "../../shared/agent-connections";
 
 export interface AgentHttpVoiceOptions {
+	readonly validateAssistantRoute?: (
+		route: PinnedAgentRoute,
+	) => Effect.Effect<boolean>;
+	readonly validateAgentRoute?: (
+		route: PinnedAgentRoute,
+	) => Effect.Effect<boolean>;
 	readonly selected: () => Effect.Effect<
 		AgentConnectionSelection | undefined,
 		RuntimeError
@@ -82,22 +91,46 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 
 	const send = (request: TextRequest, source: "typed" | "voice") =>
 		Effect.gen(function* () {
-			// A committed direct knob route never follows the mutable external selection.
-			if (request.knob)
+			// Prepared direct captures and committed knob routes keep their destination.
+			if (
+				request.knob?.route === "direct" ||
+				(!request.knob && request.assistantSettings && request.directModel)
+			)
 				return yield* fallbackTranscript
 					? fallbackTranscript(request)
 					: fallback.sendText(request);
-			const selected = yield* options
-				.selected()
-				.pipe(
-					Effect.catchAll((cause) =>
-						Effect.fail(new VoiceRuntimeUnavailable(cause)),
-					),
-				);
+			if (
+				request.knob?.route === "dkclaw" &&
+				(!request.agentRoute ||
+					!(yield* options.validateAgentRoute?.(request.agentRoute) ??
+						Effect.succeed(false)))
+			)
+				return yield* new VoiceRuntimeUnavailable();
+			const selected =
+				request.agentRoute ??
+				(yield* options
+					.selected()
+					.pipe(
+						Effect.catchAll((cause) =>
+							Effect.fail(new VoiceRuntimeUnavailable(cause)),
+						),
+					));
 			const selectedGeneration = options.generation();
 			return yield* lock.withPermits(1)(
 				Effect.gen(function* () {
-					if (closed || selectedGeneration !== options.generation())
+					if (
+						closed ||
+						selectedGeneration !== options.generation() ||
+						(request.agentRoute &&
+							request.agentRoute.generation !== options.generation())
+					)
+						return yield* new VoiceRuntimeUnavailable();
+					if (
+						!request.knob &&
+						request.agentRoute &&
+						!(yield* options.validateAssistantRoute?.(request.agentRoute) ??
+							Effect.succeed(false))
+					)
 						return yield* new VoiceRuntimeUnavailable();
 					// Agent.id on a QUAKE key belongs to the local workspace. Only the
 					// explicitly selected external ID may enter an HTTP request.
@@ -106,6 +139,8 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 							? fallbackTranscript(request)
 							: fallback.sendText(request);
 					yield* stop(request.serial);
+					if (selectedGeneration !== options.generation())
+						return yield* new VoiceRuntimeUnavailable();
 					const requestId = randomUUID();
 					const turnId = Schema.decodeUnknownSync(TurnId)(requestId);
 					const generation = options.generation();
@@ -115,6 +150,7 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 						request.keyCode,
 						selected.connectionId,
 						selected.agentId ?? null,
+						request.agentRoute?.modelId ?? null,
 					]);
 					const previous = sessions.get(route);
 					const sessionId =
@@ -179,6 +215,9 @@ export const createAgentHttpVoiceAdapter = Effect.fn(
 								? {}
 								: { agentId: selected.agentId }),
 							...(previous ? { sessionId: previous.local } : {}),
+							...(request.agentRoute?.modelId
+								? { modelId: request.agentRoute.modelId }
+								: {}),
 						})
 						.pipe(
 							Stream.runForEach((envelope) =>

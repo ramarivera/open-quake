@@ -34,8 +34,22 @@ import {
 	ProfileSwitchingPort,
 } from "./profile-switching-service.js";
 
-const seed = () =>
-	installProfileCatalog(createInitialProfileEnvelope(), "win32");
+const seed = (): ReturnType<typeof installProfileCatalog> => {
+	const initial = createInitialProfileEnvelope();
+	const installed = installProfileCatalog(initial, "win32");
+	// Manager rules use actual identities/labels, without dispatching preset keys.
+	// Keep every catalog row for visibility/capacity and use minimal page data.
+	return {
+		...installed,
+		profiles: [
+			{ ...installed.profiles[0], pages: initial.profiles[0].pages },
+			...installed.profiles.slice(1).map((profile) => ({
+				...profile,
+				pages: initial.profiles[0].pages,
+			})),
+		],
+	};
+};
 const makeLayer = (
 	storage: {
 		read: () => Promise<unknown>;

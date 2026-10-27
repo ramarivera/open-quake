@@ -177,7 +177,8 @@ export function registerKeyLibrary<R>(
 				"cancel-icons",
 			].includes(command.type);
 		return (
-			(command.type === "activate" ||
+			(command.type === "panel-message" ||
+				command.type === "activate" ||
 				command.type === "navigate" ||
 				command.type === "player-control") &&
 			(panelSerial
@@ -492,6 +493,9 @@ export function registerKeyLibrary<R>(
 								),
 							};
 						}
+						case "panel-message":
+							yield* KeyRuntime.panelMessage(command.deviceId, command.message);
+							return { _tag: "success" };
 						case "navigate":
 							yield* KeyRuntime.navigate(command.deviceId, command.direction);
 							return { _tag: "success" };

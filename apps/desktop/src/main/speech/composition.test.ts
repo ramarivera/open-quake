@@ -11,6 +11,7 @@ import {
 	Stream,
 } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
 import {
 	ConversationRuntimePort,
 	ConversationService,
@@ -23,11 +24,14 @@ import {
 	SpeechWebSocket,
 } from "../../../../../packages/edge/src/ai/speech/speech-ports";
 import { wav } from "../../../../../packages/edge/src/ai/speech/speech-test-fixtures";
-import { GridVoiceRuntime } from "../../../../../packages/edge/src/voice/surface";
+import {
+	GridVoiceRuntime,
+	VoiceRuntimeUnavailable,
+} from "../../../../../packages/edge/src/voice/surface";
 import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { createAgentHttpVoiceAdapter } from "../agent-http/voice-adapter";
 import { createDirectChat } from "../chat/host";
-import { createDirectChatVoice } from "../chat/voice";
+import { assistantCapturePreparer, createDirectChatVoice } from "../chat/voice";
 import { createDesktopDiagnostics } from "../diagnostics";
 import { makeDesktopRuntime } from "../diagnostics/runtime";
 import { voiceSurfaceLayer } from "../voice";
@@ -63,6 +67,8 @@ async function fixture(
 	selected = true,
 	permission = true,
 	directRoute = false,
+	assistant = false,
+	localModel = true,
 ) {
 	const diagnostics = createDesktopDiagnostics({ directory });
 	const background = makeDesktopRuntime(Layer.empty, diagnostics);
@@ -71,35 +77,70 @@ async function fixture(
 	const old = vi.fn(() => Effect.void);
 	const directRequests: { messages: { role: string; content: string }[] }[] =
 		[];
-	const directChat = directRoute
-		? createDirectChat({
-				directory: join(directory, "chat"),
-				diagnostics,
-				credentials: {
-					resolve: () => Effect.succeed(Redacted.make("private-model-key")),
-					revoked: () => Effect.never,
-				},
-				models: () =>
-					Effect.succeed([
-						{
-							id: "model",
-							role: "default",
-							provider: "generic",
-							model: "synthetic",
-							baseUrl: "http://localhost:8642/v1",
-							credentialRef: "00000000-0000-4000-8000-000000000001",
-							maxTokens: 1024,
-						},
-					]),
-				fetch: async (_url, init) => {
-					directRequests.push(JSON.parse(String(init?.body)));
-					return new Response(
-						'data: {"choices":[{"index":0,"delta":{"content":"Private direct spoken reply."},"finish_reason":null}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
-						{ headers: { "content-type": "text/event-stream" } },
-					);
-				},
-			})
-		: undefined;
+	let generation = 0;
+	let connected = true;
+	let voiceEnabled = true;
+	let delayPreparation = false;
+	let preparationStarted = false;
+	const pinExternal = () =>
+		Effect.suspend(() => {
+			preparationStarted = true;
+			if (delayPreparation) return Effect.never;
+			return !selected
+				? Effect.succeed(undefined)
+				: connected
+					? Effect.succeed({
+							connectionId: connection.id,
+							generation,
+							registryGeneration: generation,
+						})
+					: Effect.fail(new VoiceRuntimeUnavailable());
+		});
+	const directChat =
+		directRoute || assistant
+			? createDirectChat({
+					directory: join(directory, "chat"),
+					diagnostics,
+					credentials: {
+						resolve: () => Effect.succeed(Redacted.make("private-model-key")),
+						revoked: () => Effect.never,
+					},
+					keySettings: () =>
+						Effect.sync(() =>
+							assistant
+								? {
+										...defaultAssistantSettings(),
+										useAgent: false,
+										enableVoiceInput: voiceEnabled,
+									}
+								: undefined,
+						),
+					online: () => true,
+					models: () =>
+						Effect.succeed(
+							localModel
+								? [
+										{
+											id: "model",
+											role: "default",
+											provider: "generic",
+											model: "synthetic",
+											baseUrl: "http://localhost:8642/v1",
+											credentialRef: "00000000-0000-4000-8000-000000000001",
+											maxTokens: 1024,
+										},
+									]
+								: [],
+						),
+					fetch: async (_url, init) => {
+						directRequests.push(JSON.parse(String(init?.body)));
+						return new Response(
+							'data: {"choices":[{"index":0,"delta":{"content":"Private direct spoken reply."},"finish_reason":null}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+							{ headers: { "content-type": "text/event-stream" } },
+						);
+					},
+				})
+			: undefined;
 	let closed = 0;
 	const stopped = await Effect.runPromise(Deferred.make<void>());
 	const messages = await Effect.runPromise(Queue.unbounded<unknown>());
@@ -164,12 +205,21 @@ async function fixture(
 						),
 					stream: service.stream,
 					cancel: service.cancel,
-					generation: () => 0,
+					generation: () => generation,
+					validateAssistantRoute: (route) =>
+						Effect.succeed(
+							connected && selected && route.generation === generation,
+						),
 				},
 				fallback,
 				fallbackTranscript,
 			),
 		speech: {
+			...(assistant && directChat
+				? {
+						prepareAssistant: assistantCapturePreparer(directChat, pinExternal),
+					}
+				: {}),
 			diagnostics,
 			storage: {
 				read: async () => stored,
@@ -323,6 +373,21 @@ async function fixture(
 		drain,
 		played,
 		closed: () => closed,
+		setSelected: (next: boolean) => {
+			selected = next;
+			generation++;
+		},
+		setConnected: (next: boolean) => {
+			connected = next;
+			generation++;
+		},
+		preparationStarted: () => preparationStarted,
+		delayPreparation: (next: boolean) => {
+			delayPreparation = next;
+		},
+		setVoice: (next: boolean) => {
+			voiceEnabled = next;
+		},
 		async close() {
 			await background.runPromise(Deferred.succeed(drain, undefined));
 			await voice.dispose();
@@ -490,4 +555,164 @@ describe("actual root speech and HTTP binding", () => {
 			await rm(directory, { recursive: true });
 		}
 	}, 10000);
+});
+
+// Production capture owner + assistant preparer + direct/HTTP decorators. All IO is fake.
+it("PR128 external assistant capture needs speech and voice readiness but no local model", async () => {
+	const f = await fixture(await scratch(), true, true, false, true, false);
+	try {
+		await f.voice.runPromise(f.runtime.startCapture(capture));
+		await vi.waitFor(() =>
+			expect(
+				f.events.some(
+					(e) =>
+						e._tag === "Stage" &&
+						e.stage._tag === "recording" &&
+						e.stage.status === "listening",
+				),
+			).toBe(true),
+		);
+		await f.voice.runPromise(
+			f.runtime.releaseCapture(capture.serial, capture.keyCode, 1),
+		);
+		await vi.waitFor(() => expect(f.requests).toHaveLength(1));
+		expect(f.requests[0]?.messages.at(-1)?.content).toBe(
+			"Private finalized transcript",
+		);
+		expect(f.directRequests).toHaveLength(0);
+		expect(f.old).not.toHaveBeenCalled();
+	} finally {
+		await f.close();
+	}
+});
+
+it.each(["voice", "speech", "connection", "local-model"])(
+	"PR128 assistant capture preserves %s admission",
+	async (gate) => {
+		const f = await fixture(
+			await scratch(),
+			gate !== "local-model",
+			true,
+			false,
+			true,
+			false,
+		);
+		try {
+			if (gate === "voice") f.setVoice(false);
+			if (gate === "connection") f.setConnected(false);
+			if (gate === "speech")
+				await f.background.runPromise(
+					f.binding.settings.request({
+						_tag: "Save",
+						settings: { version: 1, speakAnswers: false },
+					}),
+				);
+			await f.voice.runPromise(f.runtime.startCapture(capture));
+			await vi.waitFor(() =>
+				expect(
+					f.events.some((e) => e._tag === "Stage" && e.stage._tag === "failed"),
+				).toBe(true),
+			);
+			expect(
+				f.events.some(
+					(e) =>
+						e._tag === "Stage" &&
+						e.stage._tag === "recording" &&
+						e.stage.status === "listening",
+				),
+			).toBe(false);
+			expect(f.requests).toHaveLength(0);
+			expect(f.directRequests).toHaveLength(0);
+			expect(f.closed()).toBe(0);
+		} finally {
+			await f.close();
+		}
+	},
+);
+
+it.each(["external", "direct"])(
+	"PR128 %s capture retains its prepared destination through selection changes",
+	async (route) => {
+		const f = await fixture(
+			await scratch(),
+			route === "external",
+			true,
+			true,
+			true,
+		);
+		try {
+			await f.voice.runPromise(f.runtime.startCapture(capture));
+			await vi.waitFor(() =>
+				expect(
+					f.events.some(
+						(e) =>
+							e._tag === "Stage" &&
+							e.stage._tag === "recording" &&
+							e.stage.status === "listening",
+					),
+				).toBe(true),
+			);
+			f.setSelected(route !== "external");
+			await f.voice.runPromise(
+				f.runtime.releaseCapture(capture.serial, capture.keyCode, 1),
+			);
+			if (route === "external") {
+				await vi.waitFor(() =>
+					expect(
+						f.events.some(
+							(e) => e._tag === "Stage" && e.stage._tag === "failed",
+						),
+					).toBe(true),
+				);
+				expect(f.requests).toHaveLength(0);
+				expect(f.directRequests).toHaveLength(0);
+			} else {
+				await vi.waitFor(() => expect(f.directRequests).toHaveLength(1));
+				expect(f.requests).toHaveLength(0);
+			}
+			expect(f.old).not.toHaveBeenCalled();
+		} finally {
+			await f.close();
+		}
+	},
+);
+
+it("PR128 early release interrupts destination preparation and frees capture admission", async () => {
+	const f = await fixture(await scratch(), true, true, false, true, false);
+	try {
+		f.delayPreparation(true);
+		await f.voice.runPromise(f.runtime.startCapture(capture));
+		await vi.waitFor(() => expect(f.preparationStarted()).toBe(true));
+		await f.voice.runPromise(
+			f.runtime.releaseCapture(capture.serial, capture.keyCode, 1),
+		);
+		expect(f.requests).toHaveLength(0);
+		expect(f.closed()).toBe(0);
+		f.delayPreparation(false);
+		await f.voice.runPromise(
+			f.runtime.startCapture({
+				...capture,
+				generation: 2,
+				captureId: "capture-2",
+			}),
+		);
+		await vi.waitFor(() =>
+			expect(
+				f.events.some(
+					(e) =>
+						e._tag === "Stage" &&
+						e.captureId === "capture-2" &&
+						e.stage._tag === "recording" &&
+						e.stage.status === "listening",
+				),
+			).toBe(true),
+		);
+		await f.voice.runPromise(
+			f.runtime.cancelCapture(capture.serial, capture.keyCode, 2),
+		);
+		expect(f.requests).toHaveLength(0);
+		expect(f.closed()).toBe(1);
+	} finally {
+		await f.close();
+	}
 });

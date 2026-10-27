@@ -8,6 +8,10 @@ import {
 } from "./profile-errors.js";
 import type { ProfileFunctionContract } from "./profile-function-contracts.js";
 import { inspectProfileText, remapImportedProfile } from "./profile-import.js";
+import {
+	PROFILE_LIMIT,
+	visibleProfiles,
+} from "./profile-manager-invariants.js";
 import { editProfilePages, type PageEdit } from "./profile-pages.js";
 import {
 	type ProfileCommitGuard,
@@ -51,7 +55,7 @@ export class ProfileService extends Effect.Service<ProfileService>()(
 								if (
 									!report.profile ||
 									envelope.profiles.some((p) => p.id === id) ||
-									envelope.profiles.length >= 30
+									visibleProfiles(envelope).length >= PROFILE_LIMIT
 								)
 									return yield* ProfileValidationFailed.fromCause(undefined);
 								const decoded = yield* Schema.decodeUnknown(Profile)(

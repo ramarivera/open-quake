@@ -10,6 +10,8 @@ import {
 export const PROFILE_REQUEST = "profiles:request";
 export const PROFILE_SNAPSHOT = "profiles:manager-snapshot";
 export const PROFILE_SELECTION = "profiles:selection";
+export const PROFILE_FOREGROUND_GUIDANCE = "profiles:foreground-guidance";
+export type ProfileForegroundGuidance = "accessibility-denied" | "available";
 export const PROFILE_PROGRESS = "profiles:thumbnail-progress";
 export const ProfileRequest = Schema.Union(
 	Schema.Struct({
@@ -56,6 +58,7 @@ export interface ProfileView {
 		readonly name: string;
 		readonly path: string;
 		readonly identifier: string;
+		readonly icon?: string;
 	}[];
 	readonly thumbnails: Readonly<Record<string, string>>;
 	/** Border style of the returned captures; absent in older snapshots. */
@@ -75,6 +78,9 @@ export interface ProfileBridge {
 	onSnapshot: (callback: (view: ProfileView) => void) => () => void;
 	onSelection: (callback: (selection: ProfileDelivery) => void) => () => void;
 	onProgress: (callback: (progress: ThumbnailProgress) => void) => () => void;
+	onForegroundGuidance?: (
+		callback: (guidance: ProfileForegroundGuidance) => void,
+	) => () => void;
 }
 declare global {
 	interface Window {
@@ -94,6 +100,7 @@ export const ProfileReplySchema = Schema.Union(
 					name: Schema.String,
 					path: Schema.String,
 					identifier: Schema.String,
+					icon: Schema.optional(Schema.String),
 				}),
 			),
 			thumbnails: Schema.Record({ key: Schema.String, value: Schema.String }),

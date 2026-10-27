@@ -1,4 +1,5 @@
 import { Either, Option, Schema } from "effect";
+import { HaKey } from "../actions/ha-key-contracts.js";
 import {
 	type KnobFunction,
 	KnobNavigationActions,
@@ -47,8 +48,36 @@ const validateOwned = (
 		? Either.right(undefined)
 		: Either.left(InvalidKnobConfig.fromCause("function-actions"));
 };
+/** Decode for validation only; retain configData verbatim through Save and import. */
+const validateHa = (
+	assignment: KnobFunction,
+): Either.Either<void, InvalidKnobConfig> => {
+	const actions = assignment.config.actions;
+	const action = actions[0];
+	if (
+		assignment.childrenName !== "homeAssistant" ||
+		assignment.config.type !== "homeAssistant" ||
+		actions.length !== 1 ||
+		action?.type !== "configData" ||
+		typeof action.value !== "string"
+	)
+		return Either.left(InvalidKnobConfig.fromCause("ha-config-data"));
+	const decoded = Schema.decodeUnknownEither(Schema.parseJson(HaKey))(
+		action.value,
+	);
+	return Either.isRight(decoded)
+		? Either.right(undefined)
+		: Either.left(InvalidKnobConfig.fromCause("ha-config-data"));
+};
 /** Runtime availability is separate; these declarations do not enable adapters. */
 export const KNOB_OWNED_CAPABILITIES: KnobRegistry = [
+	{
+		id: "homeAssistant",
+		rotation: false,
+		press: true,
+		hold: false,
+		validate: validateHa,
+	},
 	{
 		id: "previousPage",
 		rotation: true,

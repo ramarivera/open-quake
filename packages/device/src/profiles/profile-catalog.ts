@@ -86,8 +86,16 @@ export const builtinProfiles = (
 					...(key.childrenName ? { childrenName: key.childrenName } : {}),
 					config: {
 						...key.config,
-						// Quick's built-in cells share the immutable preset policy on every OS.
-						...(entry.id === "1-2" && !key.config.basicEditableItems
+						...(entry.id === "1-0" && key.config.type === "gameMode"
+							? { size: [4, 2] }
+							: {}),
+						// Windows/macOS Quick cells are locked; recovered Linux controls remain editable.
+						...(entry.id === "1-2" &&
+						(platform !== "linux" ||
+							!["luminance", "buzzer", "mic"].includes(
+								String(key.config.type),
+							)) &&
+						!key.config.basicEditableItems
 							? {
 									basicEditableItems: {
 										title: false,

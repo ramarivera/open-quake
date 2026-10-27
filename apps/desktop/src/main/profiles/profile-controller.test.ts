@@ -4,13 +4,24 @@ import {
 	Array as EffectArray,
 	Fiber,
 	Layer,
+	Logger,
 	Option,
+	Schema,
 	TestClock,
 } from "effect";
+import {
+	ActionPermissionDenied,
+	HostActionFailed,
+} from "../../../../../packages/device/src/actions/action-errors.js";
+import {
+	KeyRuntime,
+	KeyRuntimePort,
+} from "../../../../../packages/device/src/actions/key-runtime-service.js";
 import {
 	createInitialProfileEnvelope,
 	encodeProfileEnvelope,
 	type Profile,
+	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
 import {
 	installProfileCatalog,
@@ -36,6 +47,7 @@ const layer = (
 		serial: string,
 		profile: Profile,
 	) => Effect.Effect<void, ProfileDeliveryFailed> = () => Effect.void,
+	failWrite: () => boolean = () => false,
 ) => {
 	let saved: unknown = encodeProfileEnvelope(
 		installProfileCatalog(createInitialProfileEnvelope(), "darwin"),
@@ -50,6 +62,7 @@ const layer = (
 					profileStorageLayer({
 						read: async () => saved,
 						write: async (e) => {
+							if (failWrite()) throw new Error("synthetic storage failure");
 							saved = e;
 						},
 					}),
@@ -75,6 +88,72 @@ const port = (): ProfileDesktopPort => ({
 	progress: () => {},
 });
 describe("real profile desktop controller", () => {
+	it.effect(
+		"drops deleted profiles from failed style recaptures without repeated warnings",
+		() =>
+			Effect.gen(function* () {
+				let fail = false;
+				const warnings: unknown[] = [];
+				const controller = yield* makeProfileController({
+					...port(),
+					capture: async () => {
+						if (fail) throw new Error("Capture failed");
+						return "data:image/png;base64,capture";
+					},
+				});
+				const manager = yield* ProfileManager;
+				const created = yield* manager.command({ type: "create" });
+				if (created._tag !== "updated")
+					return yield* Effect.die("Create fixture failed");
+				const custom = created.envelope.profiles.find((p) =>
+					p.id.startsWith("custom-"),
+				);
+				if (!custom) return yield* Effect.die("Missing custom");
+				yield* controller.request({
+					type: "thumbnail",
+					id: custom.id,
+					locale: "en",
+				});
+				fail = true;
+				yield* controller.request({
+					type: "thumbnail-style",
+					showEmptyGridDashedBorder: false,
+				});
+				yield* manager.command({
+					type: "delete",
+					id: custom.id,
+					confirmed: true,
+				});
+				yield* controller
+					.request({
+						type: "thumbnail-style",
+						showEmptyGridDashedBorder: false,
+					})
+					.pipe(
+						Effect.provide(
+							Logger.replace(
+								Logger.defaultLogger,
+								Logger.make((options) => warnings.push(options.message)),
+							),
+						),
+					);
+				yield* controller
+					.request({
+						type: "thumbnail-style",
+						showEmptyGridDashedBorder: false,
+					})
+					.pipe(
+						Effect.provide(
+							Logger.replace(
+								Logger.defaultLogger,
+								Logger.make((options) => warnings.push(options.message)),
+							),
+						),
+					);
+				expect(warnings).toEqual([]);
+			}).pipe(Effect.provide(layer())),
+	);
+
 	it.effect(
 		"continues after a style recapture fails and retries only failures on the same preference",
 		() =>
@@ -476,3 +555,296 @@ import {
 	ProfileThumbnailFailed,
 	ProfileThumbnailUnsupported,
 } from "../../../../../packages/device/src/profiles/profile-errors.js";
+
+for (const nested of [false, true]) {
+	it.effect(
+		`MAIN-071 MGMT-196/210: saved ${nested ? "sequence" : "cmd"} uses exact-content approval, decline and edit reapproval`,
+		() => {
+			let approve = false,
+				prompts = 0;
+			const executed: string[] = [];
+			return Effect.gen(function* () {
+				const owner = yield* makeProfileController({
+					...port(),
+					confirm: async (_message, detail) => {
+						prompts++;
+						expect(detail).toContain("echo");
+						return approve;
+					},
+					execute: async (command) => {
+						executed.push(command);
+					},
+				});
+				const repo = yield* ProfileRepository,
+					manager = yield* ProfileManager;
+				const base = (yield* manager.read()).profiles.find(
+					(p) => p.id === "1-2",
+				);
+				if (!base) throw new Error("Missing profile");
+				const page = base.pages[0];
+				const key = page.keys.find((k) => k.keyCode === "1,7");
+				if (!key) throw new Error("Missing command key");
+
+				const save = (command: string) =>
+					repo.transact((env) =>
+						Effect.succeed({
+							...env,
+							activeByDevice: {
+								device: { profileId: base.id, pageId: page.id },
+							},
+							profiles: EffectArray.map(env.profiles, (p) =>
+								p.id !== base.id
+									? p
+									: {
+											...p,
+											revision: p.revision + 1,
+											pages: EffectArray.map(p.pages, (pg) =>
+												pg.id !== page.id
+													? pg
+													: {
+															...pg,
+															keys: pg.keys.map((k) => {
+																if (k.keyCode !== key.keyCode) return k;
+																const raw = Schema.encodeSync(ProfileKey)(k);
+																return Schema.decodeUnknownSync(ProfileKey)({
+																	...raw,
+																	childrenName: nested ? "multiActions" : "cmd",
+																	config: {
+																		...raw.config,
+																		type: nested ? "multiActions" : "cmd",
+																		actions: nested
+																			? []
+																			: [{ type: "text", value: command }],
+																		...(nested
+																			? {
+																					subActions: [
+																						{
+																							config: {
+																								type: "cmd",
+																								actions: [
+																									{
+																										type: "text",
+																										value: command,
+																									},
+																								],
+																								gap: 0,
+																							},
+																						},
+																						{
+																							config: {
+																								type: "hotkey",
+																								actions: [
+																									{ type: "key", value: "a" },
+																								],
+																								gap: 0,
+																							},
+																						},
+																					],
+																				}
+																			: {}),
+																	},
+																});
+															}),
+														},
+											),
+										},
+							),
+						}),
+					);
+				yield* save("echo first");
+				yield* (yield* ProfileSwitching).connect("device", base.id);
+				const runtimeLayer = KeyRuntime.DefaultWithoutDependencies.pipe(
+					Layer.provide(
+						Layer.succeed(KeyRuntimePort, {
+							read: manager.read().pipe(Effect.orDie),
+							execute: () =>
+								Effect.sync(() => executed.push("after-command")).pipe(
+									Effect.asVoid,
+								),
+							executeOwned: (k, activation) =>
+								owner.runKeyCommand(k, activation).pipe(
+									Effect.mapError((c) => new HostActionFailed(c)),
+									Effect.flatMap((accepted) =>
+										accepted
+											? Effect.succeed(true)
+											: Effect.fail(new ActionPermissionDenied(undefined)),
+									),
+								),
+							publish: () => Effect.void,
+							alarm: () => Effect.void,
+							select: () => Effect.void,
+						}),
+					),
+				);
+				yield* Effect.gen(function* () {
+					const runtime = yield* KeyRuntime;
+					const tap = Effect.gen(function* () {
+						const result = yield* Effect.either(
+							runtime.activate("device", "1,7", "press"),
+						);
+						yield* runtime.activate("device", "1,7", "release");
+						yield* TestClock.adjust(0);
+						return result;
+					});
+					yield* tap;
+					expect(executed).toEqual([]);
+					expect(prompts).toBe(1);
+					approve = true;
+					yield* tap;
+					yield* tap;
+					expect(prompts).toBe(2);
+					expect(executed.filter((c) => c === "echo first")).toHaveLength(2);
+					yield* save("echo changed");
+					yield* tap;
+					expect(prompts).toBe(3);
+					expect(executed).toContain("echo changed");
+					if (nested) expect(executed.at(-1)).toBe("after-command");
+					yield* save("echo first");
+					yield* tap;
+					expect(prompts).toBe(4);
+					yield* tap;
+					expect(prompts).toBe(4);
+					// Restores/imports may reuse a saved revision and approval list.
+					const approvedSnapshot = yield* manager.read();
+					yield* save("echo temporary");
+					yield* repo.transact(() => Effect.succeed(approvedSnapshot));
+					yield* tap;
+					expect(prompts).toBe(5);
+					expect(
+						(yield* manager.read()).profiles.find((p) => p.id === base.id)
+							?.revision,
+					).toBe(
+						approvedSnapshot.profiles.find((p) => p.id === base.id)?.revision,
+					);
+					const switching = yield* ProfileSwitching;
+					yield* switching.disconnect("device");
+					yield* switching.connect("device", base.id);
+					yield* tap;
+					expect(prompts).toBe(6);
+					yield* tap;
+					expect(prompts).toBe(6);
+					const committed = (yield* manager.read()).profiles
+						.find((p) => p.id === base.id)
+						?.pages[0].keys.find((k) => k.keyCode === key.keyCode);
+					if (!committed) throw new Error("Missing restored key");
+					const commandKey = nested
+						? Schema.decodeUnknownSync(ProfileKey)({
+								...Schema.encodeSync(ProfileKey)(committed),
+								config: {
+									...Schema.encodeSync(ProfileKey)(committed).config,
+									type: "cmd",
+									actions: [{ type: "text", value: "echo first" }],
+								},
+							})
+						: committed;
+					yield* switching.connect("other-device", base.id);
+					const current = (yield* manager.read()).profiles.find(
+						(p) => p.id === base.id,
+					);
+					if (!current) throw new Error("Missing command profile");
+					expect(
+						yield* owner.runKeyCommand(commandKey, {
+							deviceId: "other-device",
+							profileId: base.id,
+							pageId: page.id,
+							revision: current.revision,
+						}),
+					).toBe(true);
+					expect(prompts).toBe(7);
+					yield* tap;
+					expect(prompts).toBe(7);
+				}).pipe(Effect.provide(runtimeLayer));
+			}).pipe(Effect.provide(layer()));
+		},
+	);
+}
+
+it.effect(
+	"SETTINGS-059 sends the wizard's committed visible selection to connected mock devices and rolls back storage failures",
+	() => {
+		let fail = false;
+		const pushes: string[] = [];
+		return Effect.gen(function* () {
+			const controller = yield* makeProfileController(port());
+			const switching = yield* ProfileSwitching;
+			const manager = yield* ProfileManager;
+			yield* switching.connect("mock-a", "1-1");
+			yield* switching.connect("mock-b", "1-1");
+			pushes.length = 0;
+			const before = yield* manager.read();
+			fail = true;
+			const failed = yield* controller
+				.request({
+					type: "manage",
+					command: { type: "default-visibility", ids: ["1-2"] },
+				})
+				.pipe(Effect.either);
+			expect(failed._tag).toBe("Left");
+			expect(yield* manager.read()).toBe(before);
+			fail = false;
+			const reply = yield* controller.request({
+				type: "manage",
+				command: { type: "default-visibility", ids: ["1-2"] },
+			});
+			expect(reply._tag).toBe("success");
+			const after = yield* manager.read();
+			expect(after.activeByDevice["mock-a"]?.profileId).toBe("1-2");
+			expect(after.activeByDevice["mock-b"]?.profileId).toBe("1-2");
+			expect(managerState(after).hidden).toContain("1-1");
+			expect(pushes.slice(-2)).toEqual(["mock-a:1-2", "mock-b:1-2"]);
+		}).pipe(
+			Effect.provide(
+				layer(
+					(serial, profile) =>
+						Effect.sync(() => {
+							pushes.push(`${serial}:${profile.id}`);
+						}),
+					() => fail,
+				),
+			),
+		);
+	},
+);
+
+it.effect(
+	"SETTINGS-059 repeated visibility saves preserve connected second pages and folders",
+	() =>
+		Effect.gen(function* () {
+			const controller = yield* makeProfileController(port());
+			const switching = yield* ProfileSwitching;
+			const repository = yield* ProfileRepository;
+			yield* switching.connect("mock", "1-1");
+			for (const pageId of ["second", "folder"]) {
+				yield* repository.transact((current) =>
+					Effect.succeed({
+						...current,
+						profiles: EffectArray.map(current.profiles, (p) =>
+							p.id !== "1-1"
+								? p
+								: {
+										...p,
+										pages: EffectArray.append(
+											p.pages.filter((page) => page.id !== pageId),
+											{ ...p.pages[0], id: pageId },
+										),
+									},
+						),
+						activeByDevice: {
+							...current.activeByDevice,
+							mock: { profileId: "1-1", pageId },
+						},
+					}),
+				);
+				for (let attempt = 0; attempt < 2; attempt++) {
+					const reply = yield* controller.request({
+						type: "manage",
+						command: { type: "default-visibility", ids: ["1-1"] },
+					});
+					expect(reply._tag).toBe("success");
+					expect(
+						(yield* repository.load()).envelope.activeByDevice.mock,
+					).toEqual({ profileId: "1-1", pageId });
+				}
+			}
+		}).pipe(Effect.provide(layer())),
+);

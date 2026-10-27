@@ -1,6 +1,10 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { HardwareControls, QuakeDevice } from "@open-quake/device";
+import {
+	canonicalHidSerial,
+	HardwareControls,
+	QuakeDevice,
+} from "@open-quake/device";
 import { NodeHidLive } from "@open-quake/device/node-hid";
 import { Effect, Fiber, Layer, Stream } from "effect";
 import {
@@ -43,7 +47,7 @@ import { createAssistantHaPort } from "./chat/assistant-ha-port";
 import { createModelCredentials } from "./chat/credentials";
 import { prepareDirectChat } from "./chat/host";
 import { registerDirectChat } from "./chat/registration";
-import { createDirectChatVoice } from "./chat/voice";
+import { assistantCapturePreparer, createDirectChatVoice } from "./chat/voice";
 import { ClockLive, registerClock, registerClockScheme } from "./clock";
 import { registerDeviceReady } from "./device-ready";
 import { type DeviceBus, startDeviceBus } from "./deviceBus";
@@ -56,7 +60,12 @@ import { createEmojiGeneration } from "./emoji/generation";
 import { createEventForwarder } from "./eventForwarding";
 import { registerHardware } from "./hardware";
 import { attachHardware, startMockHardwareBus } from "./hardware/bus";
+import {
+	closeHostKeyboard,
+	hostKeyboardAvailable,
+} from "./hardware/host-keyboard";
 import { hardwarePreferencesLive } from "./hardware/preferences";
+import { registerViaPermissions } from "./hardware/via-permissions";
 import { prepareIntegrations } from "./integrations";
 import { integrationKeyAction } from "./integrations/key-action";
 import { fileStore, systemCredentialVault } from "./integrations/storage";
@@ -278,9 +287,9 @@ if (!app.requestSingleInstanceLock()) {
 								([, entry]) =>
 									!entry.win.isDestroyed() && entry.win.webContents === sender,
 							)?.[0];
-						const currentHardware = () =>
+						const currentHardware = (serial = activeDeviceId()) =>
 							bus?.device
-								? bus.device(activeDeviceId())?.hardware?.()
+								? bus.device(serial)?.hardware?.()
 								: bus?.hardware?.();
 						let settingsSerial: string | undefined;
 						let settingsHardware: ReturnType<typeof currentHardware>;
@@ -302,6 +311,15 @@ if (!app.requestSingleInstanceLock()) {
 						let publishVoice = (_event: VoiceSurfaceEvent): Promise<void> =>
 							Promise.resolve();
 						const httpModule = prepareAgentHttp({
+							localAgents: async () => {
+								const view = await agentsModule.runtime.runPromise(
+									AgentsService.view(),
+								);
+								return {
+									status: view.runtime.status,
+									agentIds: view.agents.map((a) => a.id),
+								};
+							},
 							diagnostics,
 							management: () => managementWin,
 							renderer: rendererURL,
@@ -334,7 +352,8 @@ if (!app.requestSingleInstanceLock()) {
 													?.keys.find((k) => k.keyCode === keyCode);
 												return (
 													key?.config.assistantSettings ??
-													(key?.config.type === "aiChat"
+													(key?.config.type === "aiChat" &&
+													!key.config.aiConfigData
 														? assistantSettingsFromActions(key.config.actions)
 														: undefined)
 												);
@@ -400,6 +419,12 @@ if (!app.requestSingleInstanceLock()) {
 									}),
 								),
 							speech: {
+								pinAgentRoute: (snapshot) => httpModule.pinKnobRoute(snapshot),
+								prepareAssistant: (request) =>
+									assistantCapturePreparer(
+										directChat,
+										httpModule.pinAssistantRoute,
+									)(request),
 								localResume: fileStore(
 									app.getPath("userData"),
 									"local-player-resume-v1.json",
@@ -509,6 +534,7 @@ if (!app.requestSingleInstanceLock()) {
 							mediaActions,
 							speech.resetSoundKeys,
 							panelSerial,
+							{ management: (tab) => desktopShell.open(tab) },
 						);
 						const localAgentState = createLocalAgentState(
 							join(app.getPath("userData"), "channel-runtime-v1"),
@@ -587,6 +613,8 @@ if (!app.requestSingleInstanceLock()) {
 							() => [panelWin, managementWin],
 							{
 								media: mediaActions,
+								homeAssistant: (key, signal, isCurrent) =>
+									integrations.executeHaFromKey(key, signal, isCurrent),
 								readVolume: Effect.tryPromise({
 									try: (signal) =>
 										weatherModule.runtime.runPromise(HostVolume.read, {
@@ -1213,6 +1241,48 @@ if (!app.requestSingleInstanceLock()) {
 							rendererURL,
 							diagnostics,
 							hardwareSessions,
+							panelSerial,
+						);
+						let viaSerial: string | undefined;
+						const disposeVia = registerViaPermissions(
+							managementWin.webContents.session,
+							{
+								origin: process.env.OPEN_QUAKE_VIA_ORIGIN ?? "",
+								isPresent: (serial) =>
+									runtime.runPromise(
+										QuakeDevice.pipe(
+											Effect.flatMap((device) => device.discover()),
+											Effect.map((devices) =>
+												devices.some(
+													(device) =>
+														canonicalHidSerial(device.serialNumber ?? "") ===
+														canonicalHidSerial(serial),
+												),
+											),
+										),
+									),
+								selectedSerial: () => viaSerial ?? activeDeviceId(),
+								release: async (serial) => {
+									const target =
+										bus?.device?.(serial) ??
+										(bus?.serial?.() === serial ? bus : undefined);
+									if (!target?.releaseForVia || mock) return;
+									viaSerial = serial;
+									const resume = await runtime
+										.runPromise(target.releaseForVia())
+										.catch((cause: unknown) => {
+											viaSerial = undefined;
+											throw cause;
+										});
+									return async () => {
+										try {
+											await runtime.runPromise(resume);
+										} finally {
+											viaSerial = undefined;
+										}
+									};
+								},
+							},
 						);
 						let running:
 							| Fiber.RuntimeFiber<void, Effect.Effect.Error<typeof source>>
@@ -1535,6 +1605,8 @@ if (!app.requestSingleInstanceLock()) {
 										mock ? bus : bus?.device?.(serial)
 									)?.hardware?.();
 									if (!hardware) throw new Error("Disconnected");
+									if (!enabled && !mock && !hostKeyboardAvailable())
+										throw new Error("Host keyboard unavailable");
 									await runtime.runPromise(
 										hardware.setInputMode(enabled ? "device" : "host"),
 									);
@@ -1552,11 +1624,7 @@ if (!app.requestSingleInstanceLock()) {
 									);
 								},
 								management: async (tab) => {
-									managementWin.webContents.send(
-										"management:activate",
-										tab ?? "profiles",
-									);
-									managementWin.show();
+									desktopShell.open(tab);
 								},
 							},
 						});
@@ -1587,7 +1655,7 @@ if (!app.requestSingleInstanceLock()) {
 							removeDevicePicker();
 							removeKnobLocale();
 							removeKnobThumbnailStyle();
-							disposeHardware();
+
 							ipcMain.removeListener(QUAKE_STATUS_CHANNEL, sendStatus);
 							removeDeviceReady();
 							removeStripTransport();
@@ -1597,6 +1665,8 @@ if (!app.requestSingleInstanceLock()) {
 								for (const stop of [
 									// Bus teardown joins input work owned by the knob registration.
 									// Cancel its loads/dispatches before waiting for that queue.
+									() => disposeVia(),
+									() => disposeHardware(),
 									() => knob.dispose(),
 									() => stopBus(),
 									() => weatherMedia.dispose(),
@@ -1623,6 +1693,7 @@ if (!app.requestSingleInstanceLock()) {
 									() => clock.dispose(),
 									() => media.dispose(),
 									() => runtime.dispose(),
+									() => closeHostKeyboard(),
 								]) {
 									try {
 										await stop();
@@ -1701,7 +1772,14 @@ if (!app.requestSingleInstanceLock()) {
 							if (quitting) return;
 							if (managementWin.isDestroyed()) {
 								if (panelWin.isDestroyed())
-									syncPanelDisplay(findPanelDisplay(screen.getAllDisplays()));
+									syncPanelDisplay(
+										findPanelDisplay(screen.getAllDisplays()),
+										// Teardown clears activeSerial before reopen. Retain the
+										// panel's identity instead of creating a stray preview.
+										[...stripWindows.entries()].find(
+											([, entry]) => entry.win === panelWin,
+										)?.[0] ?? activeDeviceId(),
+									);
 								managementWin = createManagementWindow();
 								desktopShell.attach(managementWin);
 								removeLifecycle.bindManagement();

@@ -2,10 +2,20 @@ import { EventEmitter } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Effect, Layer, ManagedRuntime, Schema } from "effect";
+import {
+	Effect,
+	Layer,
+	ManagedRuntime,
+	Schema,
+	TestClock,
+	TestContext,
+} from "effect";
 import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron";
 import { afterEach, expect, it, vi } from "vitest";
+import { HostActionFailed } from "../../../../../packages/device/src/actions/action-errors.js";
+import type { ActionConfig } from "../../../../../packages/device/src/actions/action-registry.js";
 import {
+	type KeyFeedback,
 	KeyRuntime,
 	KeyRuntimePort,
 } from "../../../../../packages/device/src/actions/key-runtime-service.js";
@@ -688,10 +698,11 @@ it("refuses knob saves without stranding an unsaved key draft", async () => {
 
 function fixture(
 	config: Readonly<Record<string, unknown>> = {},
-	execute: () => Effect.Effect<void> = () => Effect.void,
+	execute: (config?: ActionConfig) => Effect.Effect<void> = () => Effect.void,
 	executeOwned?: (key: ProfileKey) => Effect.Effect<boolean>,
 	extraKeys: readonly ProfileKey[] = [],
 	twoPanels = false,
+	executePlugin?: KeyRuntimePort["Type"]["executePlugin"],
 ) {
 	let pause: Promise<void> | undefined;
 	const empty = Schema.encodeSync(ProfileKey)(createEmptyProfileKey("1,1"));
@@ -727,7 +738,7 @@ function fixture(
 		],
 		activeByDevice: { device: { profileId: "p", pageId: "one" } },
 	};
-	const published: { countdown?: number; profileId: string }[] = [];
+	const published: KeyFeedback[] = [];
 	const profiles = ProfileService.DefaultWithoutDependencies.pipe(
 		Layer.provideMerge(
 			ProfileRepository.DefaultWithoutDependencies.pipe(
@@ -759,6 +770,7 @@ function fixture(
 									Effect.orDie,
 								),
 							execute,
+							...(executePlugin ? { executePlugin } : {}),
 							holdHotkey: () => execute().pipe(Effect.as(Effect.void)),
 							...(executeOwned ? { executeOwned } : {}),
 							select: (deviceId, profileId, pageId) =>
@@ -766,7 +778,7 @@ function fixture(
 									.selectProfile({ deviceId, profileId, pageId })
 									.pipe(Effect.asVoid, Effect.orDie),
 							alarm: () => Effect.void,
-							publish: (state: { countdown?: number; profileId: string }) =>
+							publish: (state: KeyFeedback) =>
 								Effect.sync(() => {
 									published.push(state);
 								}),
@@ -776,7 +788,9 @@ function fixture(
 			),
 		),
 	).pipe(Layer.provideMerge(profiles));
-	const runtime = ManagedRuntime.make(layer);
+	const runtime = ManagedRuntime.make(
+		layer.pipe(Layer.provideMerge(TestContext.TestContext)),
+	);
 	const manager = new BrowserWindow(),
 		panel = new BrowserWindow(),
 		impostor = new BrowserWindow();
@@ -1174,7 +1188,7 @@ it("refreshes a completed inactive countdown on externally committed selection",
 				pageId: "one",
 			}),
 		);
-		await new Promise((resolve) => setTimeout(resolve, 110));
+		await f.runtime.runPromise(TestClock.adjust(110));
 		const before = f.published.length;
 		await f.runtime.runPromise(
 			ProfileService.selectProfile({
@@ -1206,7 +1220,7 @@ it("rechecks panel authority after waiting for a prior request", async () => {
 		await f.runtime.runPromise(ProfileService.loadProfiles());
 		f.pauseRead(gate);
 		const first = f.request(f.panel, f.activation);
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await f.runtime.runPromise(TestClock.adjust(10));
 		const queued = f.request(f.panel, {
 			type: "navigate",
 			deviceId: "device",
@@ -1409,6 +1423,7 @@ it("keeps live input and timer cancellation responsive during a stalled HA reque
 		tap("1,2");
 		expect(await bounded(shortcut.promise)).toBeUndefined();
 		expect(shortcuts).toBe(1);
+		await f.runtime.runPromise(TestClock.adjust(600));
 		tap("1,3");
 		await vi.waitFor(async () => {
 			const states = await f.runtime.runPromise(KeyRuntime.snapshot);
@@ -1720,3 +1735,200 @@ it("returns actionable app-library size feedback through the authorized save con
 		await f.runtime.dispose();
 	}
 });
+
+it("MAIN-082 SCREEN-108/109: registered panel accepts management and inert multi-screen, rejects other sender/tab/serial", async () => {
+	const calls: string[] = [];
+	const f = fixture(
+		{},
+		() =>
+			Effect.sync(() => {
+				calls.push("management");
+			}),
+		undefined,
+		[],
+		true,
+	);
+	const message = {
+		type: "panel-message",
+		deviceId: "device",
+		message: {
+			type: "functionKeyPressed",
+			functionName: "managementCenter",
+			tabType: "keys",
+		},
+	};
+	try {
+		expect(await f.request(f.panel, message)).toEqual({ _tag: "success" });
+		expect(calls).toEqual(["management"]);
+		for (const [sender, payload] of [
+			[f.impostor, message],
+			[f.panel, { ...message, deviceId: "other" }],
+			[
+				f.panel,
+				{ ...message, message: { ...message.message, tabType: "bad" } },
+			],
+		] as const)
+			expect(await f.request(sender, payload)).toEqual({
+				_tag: "rejected",
+				reason: "unauthorized",
+			});
+		expect(
+			await f.request(f.panel, {
+				...message,
+				message: {
+					type: "globalAlert",
+					alertType: "multi-screen",
+					serials: ["device", "unknown"],
+				},
+			}),
+		).toEqual({ _tag: "success" });
+		expect(calls).toEqual(["management"]);
+	} finally {
+		await f.registration.dispose();
+		await f.runtime.dispose();
+	}
+});
+
+it.each([
+	{ type: "website", actions: [{ type: "url", value: "example.org/{title}" }] },
+	{
+		type: "open",
+		actions: [{ type: "path", value: "/Applications/Example.app" }],
+	},
+	{
+		type: "close",
+		actions: [
+			{ type: "path", value: "/Applications/Example.app" },
+			{ type: "force", value: "" },
+		],
+	},
+	{
+		type: "text",
+		actions: [
+			{ type: "text", value: "saved text" },
+			{ type: "key", value: "control+s" },
+		],
+	},
+	{ type: "managementCenter", actions: [{ type: "tabType", value: "keys" }] },
+	{ type: "screenshot", actions: [] },
+	{ type: "lock", actions: [] },
+])(
+	"MAIN-066: production registration dispatches saved $type once and rejects obsolete revisions",
+	async (config) => {
+		const calls: ActionConfig[] = [];
+		const f = fixture(config, (c) =>
+			Effect.sync(() => {
+				if (c) calls.push(c);
+			}),
+		);
+		try {
+			const stale = await f.request(f.panel, { ...f.activation, revision: 1 });
+			expect(stale._tag).toBe("success");
+			expect(calls).toEqual([]);
+			await f.request(f.panel, { ...f.activation, kind: "release" });
+			await f.request(f.panel, f.activation);
+			await f.request(f.panel, f.activation);
+			await f.request(f.panel, { ...f.activation, kind: "release" });
+			expect(calls).toHaveLength(1);
+			expect(calls[0]?.type).toBe(config.type);
+			if (config.type === "website")
+				expect(calls[0]).toMatchObject({
+					actions: [{ value: "http://example.org/" }],
+				});
+		} finally {
+			await f.registration.dispose();
+			await f.runtime.dispose();
+		}
+	},
+);
+
+for (const mode of ["complete", "cancel", "unavailable", "failure"] as const) {
+	it(`MAIN-076: registered saved sequence awaits typed plugin port, ${mode}`, async () => {
+		const events: string[] = [];
+		let interrupted = false;
+		const f = fixture(
+			{
+				type: "multiActions",
+				subActions: [
+					{
+						config: {
+							type: "delay",
+							actions: [{ type: "time", value: 200 }],
+							gap: 50,
+						},
+					},
+					{
+						isPlugin: true,
+						pluginId: "example.plugin",
+						config: { type: "example.action", actions: [], gap: 100 },
+					},
+					{
+						config: {
+							type: "website",
+							actions: [{ type: "url", value: "https://example.org/" }],
+						},
+					},
+				],
+			},
+			() =>
+				Effect.sync(() => {
+					events.push("native");
+				}),
+			undefined,
+			[],
+			false,
+			mode === "unavailable"
+				? undefined
+				: (step, activation) =>
+						Effect.gen(function* () {
+							expect(step.pluginId).toBe("example.plugin");
+							expect(activation).toMatchObject({
+								deviceId: "device",
+								profileId: "p",
+								pageId: "one",
+								revision: 0,
+								keyCode: "1,1",
+								stepIndex: 1,
+							});
+							events.push("plugin-start");
+							if (mode === "failure")
+								return yield* new HostActionFailed("synthetic-plugin-failure");
+							yield* Effect.sleep(500);
+							events.push("plugin-end");
+						}).pipe(
+							Effect.onInterrupt(() =>
+								Effect.sync(() => {
+									interrupted = true;
+								}),
+							),
+						),
+		);
+		try {
+			await f.request(f.panel, f.activation);
+			await f.request(f.panel, { ...f.activation, kind: "release" });
+			await f.runtime.runPromise(TestClock.adjust(249));
+			expect(events).toEqual([]);
+			await f.runtime.runPromise(TestClock.adjust(1));
+			if (mode === "cancel") await f.request(f.panel, f.activation);
+			await f.runtime.runPromise(TestClock.adjust(500));
+			if (mode === "complete") {
+				expect(events).toEqual(["plugin-start", "plugin-end"]);
+				expect(f.published.at(-1)?.progress).toBe(66);
+			}
+			await f.runtime.runPromise(TestClock.adjust(100));
+			expect(events).toEqual(
+				mode === "complete"
+					? ["plugin-start", "plugin-end", "native"]
+					: mode === "unavailable"
+						? []
+						: ["plugin-start"],
+			);
+			expect(interrupted).toBe(mode === "cancel");
+			if (mode === "failure" || mode === "unavailable")
+				expect(f.published.some((state) => state.alert === 1)).toBe(true);
+		} finally {
+			await f.registration.dispose();
+			await f.runtime.dispose();
+		}
+	});
+}

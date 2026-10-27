@@ -12,7 +12,7 @@ export const DEFAULT_KEEP_ALIVE_MS = 15_000;
 
 /** Native serial normalization is separate from imported socket alias decoding. */
 export const canonicalHidSerial = (serial: string): string =>
-	serial.replaceAll(":", "");
+	serial.replaceAll(":", "").trim();
 export const hidSerialFromAlias = (serial: string): string =>
 	canonicalHidSerial(serial.startsWith("ws_") ? serial.slice(3) : serial);
 export const wsSerialFromHid = (serial: string): string =>

@@ -131,6 +131,7 @@ const keyFunctionUnavailableFields = {
 		"unknown-function",
 		"unresolved",
 		"owning-runtime",
+		"plugin-runtime",
 		"adapter-missing",
 		"unsupported-token",
 		"unsupported-command",

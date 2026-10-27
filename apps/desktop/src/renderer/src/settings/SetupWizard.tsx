@@ -196,6 +196,11 @@ function SetupFlow({
 	const step =
 		chosen && steps.includes(chosen) ? chosen : resumeStep(snapshot, steps);
 	const [regionConfirm, setRegionConfirm] = useState(false);
+	const [profileFailure, setProfileFailure] = useState(false);
+	const [profilePending, setProfilePending] = useState(false);
+	const advancing = useRef(false);
+	const committedVisibility = useRef<readonly string[] | undefined>(undefined);
+	const [visibilitySaved, setVisibilitySaved] = useState(false);
 	const [choices, setChoices] = useState<SetupChoices>(() =>
 		initialChoices(
 			snapshot,
@@ -241,7 +246,7 @@ function SetupFlow({
 		}));
 	}, [step, owners.profiles]);
 	const current = choices;
-	const busy = state.pending !== null;
+	const busy = state.pending !== null || profilePending;
 	const completed = snapshot.completed;
 	const index = steps.indexOf(step);
 	const go = (next: SetupStep): void => setStep(next);
@@ -255,8 +260,43 @@ function SetupFlow({
 			await store.complete();
 			return;
 		}
-		if (await store.save(continueDraft(step, current, locale)))
-			go(nextStep(steps, step));
+		if (advancing.current) return;
+		advancing.current = true;
+		setProfilePending(true);
+		try {
+			if (step === "profiles") setProfileFailure(false);
+			if (
+				step === "profiles" &&
+				JSON.stringify(committedVisibility.current) !==
+					JSON.stringify(current.profileIds)
+			) {
+				try {
+					const reply = await window.quakeProfileManager?.request({
+						type: "manage",
+						command: {
+							type: "default-visibility",
+							ids: [...current.profileIds],
+						},
+					});
+					if (reply?._tag !== "success") {
+						setProfileFailure(true);
+						return;
+					}
+					committedVisibility.current = [...current.profileIds];
+					setVisibilitySaved(true);
+				} catch {
+					setProfileFailure(true);
+					return;
+				}
+			}
+			// Visibility is already committed. A draft failure stays here for an
+			// idempotent retry; rolling back could overwrite another manager edit.
+			if (await store.save(continueDraft(step, current, locale)))
+				go(nextStep(steps, step));
+		} finally {
+			advancing.current = false;
+			setProfilePending(false);
+		}
 	};
 	const ready =
 		step === "profiles" || step === "review"
@@ -291,9 +331,18 @@ function SetupFlow({
 						/>
 						{t("setup.done.hardware")}
 					</p>
-					{state.failure ? (
+					{profileFailure && step === "profiles" && (
 						<p role="alert" className="setup-error">
-							{failureText(t, state.failure)}
+							{t("setup.failure.persist")}
+						</p>
+					)}
+					{state.failure && !(profileFailure && step === "profiles") ? (
+						<p role="alert" className="setup-error">
+							{step === "profiles" &&
+							visibilitySaved &&
+							state.failure.code === "QUAKE.SETTINGS.PERSIST_FAILED"
+								? t("setup.failure.profileProgress")
+								: failureText(t, state.failure)}
 						</p>
 					) : null}
 					<div className="setup-actions">
@@ -332,6 +381,7 @@ function SetupFlow({
 				<button
 					type="button"
 					className="mc-button"
+					disabled={busy}
 					data-variant="quiet"
 					onClick={onLeave}
 				>
@@ -410,9 +460,18 @@ function SetupFlow({
 						}
 						onEdit={go}
 					/>
-					{state.failure ? (
+					{profileFailure && step === "profiles" && (
 						<p role="alert" className="setup-error">
-							{failureText(t, state.failure)}
+							{t("setup.failure.persist")}
+						</p>
+					)}
+					{state.failure && !(profileFailure && step === "profiles") ? (
+						<p role="alert" className="setup-error">
+							{step === "profiles" &&
+							visibilitySaved &&
+							state.failure.code === "QUAKE.SETTINGS.PERSIST_FAILED"
+								? t("setup.failure.profileProgress")
+								: failureText(t, state.failure)}
 							{step === "review" ? ` ${t("setup.failure.notComplete")}` : ""}
 						</p>
 					) : null}
@@ -934,7 +993,9 @@ export function ProfilesStep({
 							type="checkbox"
 							name={`${id}-profiles`}
 							checked={selected.has(profile.id)}
-							disabled={busy}
+							disabled={
+								busy || (selected.has(profile.id) && selected.size === 1)
+							}
 							title={profile.name}
 							badge={
 								profiles.active[activeKey] === profile.id ? (

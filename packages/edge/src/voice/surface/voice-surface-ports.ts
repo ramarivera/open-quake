@@ -32,6 +32,13 @@ export class VoiceTonePort extends Context.Tag("VoiceTonePort")<
 	{ readonly play: (serial: string, tone: VoiceTone) => Effect.Effect<void> }
 >() {}
 
+export interface PinnedAgentRoute {
+	readonly connectionId: string;
+	readonly agentId?: string;
+	readonly modelId?: string;
+	readonly generation: number;
+	readonly registryGeneration: number;
+}
 export interface PinnedDirectModel {
 	readonly profile: ProviderProfile;
 	readonly maxTokens: number;
@@ -40,14 +47,17 @@ export interface KnobCaptureSnapshot {
 	readonly assistantSettings?: AssistantSettings;
 	readonly profileId: string;
 	readonly revision: number;
-	readonly route: "direct";
+	readonly route: "direct" | "dkclaw";
+	readonly agentId?: string;
 	readonly providerId: string;
 	readonly modelId: string;
 }
 export interface CaptureRequest {
+	readonly assistantSettings?: AssistantSettings;
 	/** Committed at the physical hold, never reconstructed from current UI selection. */
 	readonly knob?: KnobCaptureSnapshot;
 	readonly directModel?: PinnedDirectModel;
+	readonly agentRoute?: PinnedAgentRoute;
 	readonly serial: string;
 	readonly keyCode: string;
 	readonly captureId: string;
@@ -57,8 +67,10 @@ export interface CaptureRequest {
 	readonly agentId: Option.Option<string>;
 }
 export interface TextRequest {
+	readonly assistantSettings?: AssistantSettings;
 	readonly knob?: KnobCaptureSnapshot;
 	readonly directModel?: PinnedDirectModel;
+	readonly agentRoute?: PinnedAgentRoute;
 	readonly serial: string;
 	readonly keyCode: string;
 	readonly agentId: string;

@@ -26,6 +26,7 @@ import {
 	ProfileRevisionConflict,
 	ProfileValidationFailed,
 } from "./profile-errors.js";
+import { PROFILE_PAGE_LIMIT } from "./profile-pages.js";
 import { ProfileRepository } from "./profile-repository.js";
 import { ProfileService } from "./profile-service.js";
 
@@ -224,6 +225,13 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 								? key.config.actions.find((action) => action.type === "folder")
 										?.value
 								: undefined;
+						if (
+							typeof folder === "string" &&
+							folder &&
+							!next.pages.some((page) => page.id === folder) &&
+							next.pages.length >= PROFILE_PAGE_LIMIT
+						)
+							return yield* ProfileValidationFailed.fromCause(undefined);
 						const back = createEmptyProfileKey("1,1");
 						const complete =
 							typeof folder === "string" &&
@@ -244,7 +252,7 @@ export class KeyEditing extends Effect.Service<KeyEditing>()(
 														config: {
 															...back.config,
 															type: "back",
-															icon: key.config.icon,
+															icon: "0-5",
 															title: { ...back.config.title, text: "Back" },
 															actions: [
 																{ type: "parentFolder", value: target.pageId },

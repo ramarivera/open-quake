@@ -19,7 +19,12 @@ import {
 	TestContext,
 } from "effect";
 import { describe, expect, it, vi } from "vitest";
-import { defaultAssistantSettings } from "../../../../../packages/device/src/profiles/assistant-contracts";
+import {
+	assistantSettingsFromActions,
+	defaultAssistantSettings,
+} from "../../../../../packages/device/src/profiles/assistant-contracts";
+import copilotKeys from "../../../../../packages/device/src/profiles/builtins/default_ai_copilot_chat_config.json";
+import { inspectProfileImport } from "../../../../../packages/device/src/profiles/profile-import";
 import {
 	SessionId,
 	TurnId,
@@ -48,7 +53,7 @@ import { createModelCredentials } from "./credentials";
 import { createDirectChat, profileFromModel } from "./host";
 import { createDirectChatBridge } from "./preload";
 import { decodeChatRequest, makeDesktopChatConnection } from "./rpc-server";
-import { createDirectChatVoice } from "./voice";
+import { assistantCapturePreparer, createDirectChatVoice } from "./voice";
 
 const sessionId = () => Schema.decodeUnknownSync(SessionId)(randomUUID());
 const turnId = () => Schema.decodeUnknownSync(TurnId)(randomUUID());
@@ -152,7 +157,7 @@ async function fixture(
 	homeAssistant?: AssistantHaPort,
 	extra: Pick<
 		Parameters<typeof createDirectChat>[0],
-		"fetch" | "keySettings"
+		"fetch" | "keySettings" | "online"
 	> = {},
 ) {
 	const directory = await mkdtemp(join(tmpdir(), "oq-direct-chat-"));
@@ -771,6 +776,25 @@ describe("desktop chat RPC through actual SDK and HTTP", () => {
 			}),
 		).toBeUndefined();
 	});
+	it("PR128 rejects unbound or malformed persona updates before dispatch", () => {
+		const base = {
+			_tag: "Request",
+			id: "1",
+			tag: "assistant.update",
+			headers: [],
+		};
+		const settings = { ...defaultAssistantSettings(), useAgent: false };
+		expect(
+			decodeChatRequest({ ...base, payload: { settings, generation: null } }),
+		).toBeDefined();
+		for (const payload of [
+			{ settings },
+			{ settings, generation: "1" },
+			{ settings: { ...settings, temperature: 99 }, generation: null },
+		]) {
+			expect(decodeChatRequest({ ...base, payload })).toBeUndefined();
+		}
+	});
 	it("rejects oversized method inputs and headers before RPC dispatch", () => {
 		const base = {
 			_tag: "Request",
@@ -1247,6 +1271,17 @@ it.each(["allowed", "denied", "revoked"] as const)(
 				if (result._tag === "Left") throw result.left;
 				await f.host.runtime.runPromise(Stream.runDrain(result.right.events));
 				expect(executed).toEqual(["light.allowed"]);
+				// lih.15.12: successful equipment results do not depend on another model response.
+				expect(f.endpoint.calls).toHaveLength(2);
+				const snapshot = await f.host.runtime.runPromise(
+					f.host.snapshot(
+						result.right.selection.sessionId,
+						result.right.selection.turnId,
+					),
+				);
+				expect(snapshot.text).toBe(
+					"Home Assistant: toggle completed for light.allowed.",
+				);
 			} else {
 				if (result._tag === "Left") throw result.left;
 				const chunks = await f.host.runtime.runPromise(
@@ -1629,7 +1664,7 @@ it("pins Auto routing metadata while another session submits plain chat", async 
 			outcome: "completed",
 		});
 		expect(executed).toEqual(["light.allowed"]);
-		expect(f.endpoint.calls).toHaveLength(4);
+		expect(f.endpoint.calls).toHaveLength(3);
 	} finally {
 		release();
 		await f.close();
@@ -1999,6 +2034,689 @@ it.each(["", "qwen3.6-plus", "my-custom-model"])(
 			expect(f.endpoint.calls[1]?.body.enable_thinking).toBeUndefined();
 			expect(f.endpoint.calls[1]?.body.enable_search).toBeUndefined();
 		} finally {
+			await f.close();
+		}
+	},
+);
+
+it("AI-230 pins desktop Update per admitted turn and persists it across reads without changing prior history", async () => {
+	const f = await fixture();
+	try {
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			roleId: -1,
+			customPrompt: "First persona",
+			chatHistoryCount: 4,
+		};
+		await f.bridge.persona?.update(settings);
+		const sid = sessionId(),
+			tid = turnId();
+		await f.bridge.submit({ sessionId: sid, turnId: tid, text: "block" });
+		await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+		await f.bridge.persona?.update({
+			...settings,
+			customPrompt: "Next persona",
+			temperature: 0.35,
+		});
+		expect((await f.bridge.persona?.read())?.customPrompt).toBe("Next persona");
+		expect(f.endpoint.calls[0]?.body.messages[0]).toEqual({
+			role: "system",
+			content: "First persona",
+		});
+		await f.bridge.cancel(sid, tid);
+		const next = await f.host.runtime.runPromise(
+			f.host.submit({ sessionId: sid, turnId: turnId(), text: "next" }),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(next.events));
+		expect(f.endpoint.calls[1]?.body).toMatchObject({
+			temperature: 0.35,
+			messages: [
+				{ role: "system", content: "Next persona" },
+				{ role: "user", content: "next" },
+			],
+		});
+		expect((await f.bridge.history(sid)).turns).toHaveLength(2);
+	} finally {
+		f.endpoint.release();
+		await f.close();
+	}
+});
+
+it("AI-088/241 dictation selects each key's session and settings through typed RPC, and stale acknowledgement can't erase a newer transcript", async () => {
+	const keys = new Map([
+		[
+			"1,1",
+			{
+				...defaultAssistantSettings(),
+				useAgent: false,
+				enableWakeTalkWindow: true,
+				modelId: "first-model",
+				roleId: -1,
+				customPrompt: "First key",
+				chatHistoryCount: 4,
+			},
+		],
+		[
+			"1,2",
+			{
+				...defaultAssistantSettings(),
+				useAgent: false,
+				enableWakeTalkWindow: true,
+				modelId: "second-model",
+				roleId: -1,
+				customPrompt: "Second key",
+				chatHistoryCount: 4,
+			},
+		],
+	]);
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: (_serial, code) => Effect.succeed(keys.get(code)),
+	});
+	const v = voiceFixture(f.host, () => Effect.void);
+	try {
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,1",
+				agentId: "",
+				message: "dictated one",
+			}),
+		);
+		const first = await f.bridge.selection?.();
+		expect(first?.transcript).toBe("dictated one");
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,2",
+				agentId: "",
+				message: "dictated two",
+			}),
+		);
+		await f.bridge.acknowledgeSelection?.(first?.generation ?? 0);
+		const second = await f.bridge.selection?.();
+		expect(second?.transcript).toBe("dictated two");
+		expect(second?.sessionId).not.toBe(first?.sessionId);
+		expect(f.endpoint.calls).toHaveLength(0);
+		if (!first || !second) throw new Error("selection missing");
+		for (const selection of [first, second, first]) {
+			const tid = turnId();
+			await f.bridge.submit({
+				sessionId: selection.sessionId,
+				turnId: tid,
+				text: "typed continuation",
+			});
+			await vi.waitFor(async () =>
+				expect(
+					Option.isSome(
+						(await f.bridge.snapshot(selection.sessionId, tid)).terminal,
+					),
+				).toBe(true),
+			);
+		}
+		expect(f.endpoint.calls.map((c) => c.body.model)).toEqual([
+			"first-model",
+			"second-model",
+			"first-model",
+		]);
+		expect(f.endpoint.calls[0]?.body.messages[0]?.content).toBe("First key");
+		expect(
+			f.endpoint.calls[2]?.body.messages.filter((m) => m.role === "user"),
+		).toHaveLength(2);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("AI-088 mirrors dictation into a visible desktop composer while a non-wake key still submits one direct turn", async () => {
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () =>
+			Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }),
+	});
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(f.host, (event) =>
+		Effect.sync(() => {
+			events.push(event);
+		}),
+	);
+	try {
+		await f.bridge.assistantVisibility?.(true);
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,1",
+				agentId: "",
+				message: "visible dictation",
+			}),
+		);
+		await vi.waitFor(() => expect(f.endpoint.calls).toHaveLength(1));
+		expect((await f.bridge.selection?.())?.transcript).toBe(
+			"visible dictation",
+		);
+		expect(events.filter((e) => e._tag === "TurnStarted")).toHaveLength(1);
+		await f.bridge.assistantVisibility?.(false);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("AI-117 MGMT-358 activates all six saved Copilot keys with Chinese prompts and controls after title-only edits", async () => {
+	const profile = inspectProfileImport(copilotKeys).profile;
+	if (!profile) throw new Error("profile missing");
+	const saved = profile.pages
+		.flatMap((p) => p.keys)
+		.filter((k) => k.config.type === "aiChat")
+		.map((k) => ({
+			...k,
+			config: {
+				...k.config,
+				title: { ...k.config.title, text: `My ${k.keyCode}` },
+			},
+		}));
+	expect(saved).toHaveLength(6);
+	const f = await fixture({}, "qwen", "qwen3.6-plus", undefined, {
+		keySettings: (_serial, code) => {
+			const k = saved.find((k) => k.keyCode === code);
+			return Effect.succeed(
+				k ? assistantSettingsFromActions(k.config.actions ?? []) : undefined,
+			);
+		},
+	});
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(f.host, (event) =>
+		Effect.sync(() => {
+			events.push(event);
+		}),
+	);
+	try {
+		for (const key of saved) {
+			const settings = assistantSettingsFromActions(key.config.actions ?? []);
+			const count = f.endpoint.calls.length;
+			await v.voice.runPromise(
+				GridVoiceRuntime.pipe(
+					Effect.flatMap((r) =>
+						r.sendText({
+							serial: "QK",
+							keyCode: key.keyCode,
+							agentId: "main",
+							message: "Role task",
+						}),
+					),
+				),
+			);
+			await vi.waitFor(() => expect(f.endpoint.calls.length).toBe(count + 2));
+			const body = f.endpoint.calls.at(-1)?.body;
+			expect(body?.messages[0]).toEqual({
+				role: "system",
+				content: settings.rolePrompt,
+			});
+			expect(body).toMatchObject({
+				enable_search: settings.webSearch,
+				enable_thinking: settings.thinking,
+			});
+			expect(settings.rolePrompt).toMatch(/[\u4e00-\u9fff]/);
+			expect(key.config.title.text).toBe(`My ${key.keyCode}`);
+		}
+		expect(events.filter((e) => e._tag === "TurnStarted")).toHaveLength(6);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("AI-081 reviewed settings fail offline preflight before model acquisition", async () => {
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		online: () => false,
+		keySettings: () =>
+			Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }),
+	});
+	try {
+		const result = await Effect.runPromise(
+			assistantCapturePreparer(f.host)({
+				serial: "QK",
+				keyCode: "1,1",
+				type: "aiChat",
+				captureId: "offline",
+				generation: 1,
+				agentId: Option.none(),
+			}).pipe(Effect.either),
+		);
+		expect(result._tag).toBe("Left");
+		expect(f.endpoint.calls).toHaveLength(0);
+	} finally {
+		await f.close();
+	}
+});
+
+it("AI-088 rejected direct voice admission keeps editable dictation", async () => {
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () =>
+			Effect.succeed({ ...defaultAssistantSettings(), useAgent: false }),
+	});
+	const v = voiceFixture(f.host, () => Effect.void);
+	try {
+		f.changeModel("");
+		const rejected = await v.voice.runPromise(
+			v
+				.send({
+					serial: "QK",
+					keyCode: "1,1",
+					agentId: "",
+					message: "Keep this transcript",
+				})
+				.pipe(Effect.either),
+		);
+		expect(rejected._tag).toBe("Left");
+		expect((await f.bridge.selection?.())?.transcript).toBe(
+			"Keep this transcript",
+		);
+		expect(f.endpoint.calls).toHaveLength(0);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("AI-230/241 Update reads and changes only the selected key session for subsequent desktop turns", async () => {
+	const settings = {
+		...defaultAssistantSettings(),
+		useAgent: false,
+		enableWakeTalkWindow: true,
+		roleId: -1,
+		customPrompt: "Key persona",
+		modelId: "key-model",
+	};
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () => Effect.succeed(settings),
+	});
+	const v = voiceFixture(f.host, () => Effect.void);
+	try {
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,2",
+				agentId: "",
+				message: "second key",
+			}),
+		);
+		const other = await f.bridge.selection?.();
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,1",
+				agentId: "",
+				message: "first key",
+			}),
+		);
+		const selected = await f.bridge.selection?.();
+		if (!selected || !other) throw new Error("key selections missing");
+		expect(await f.bridge.persona?.read()).toMatchObject({
+			customPrompt: "Key persona",
+			modelId: "key-model",
+		});
+		await f.bridge.persona?.update(
+			{
+				...settings,
+				customPrompt: "Updated key persona",
+				temperature: 0.4,
+			},
+			selected.generation,
+		);
+		for (const selection of [selected, other]) {
+			const tid = turnId();
+			await f.bridge.submit({
+				sessionId: selection.sessionId,
+				turnId: tid,
+				text: "desktop continuation",
+			});
+			await vi.waitFor(async () =>
+				expect(
+					Option.isSome(
+						(await f.bridge.snapshot(selection.sessionId, tid)).terminal,
+					),
+				).toBe(true),
+			);
+		}
+		expect(f.endpoint.calls.map((c) => c.body.messages[0]?.content)).toEqual([
+			"Updated key persona",
+			"Key persona",
+		]);
+		expect(f.endpoint.calls[0]?.body).toMatchObject({
+			model: "key-model",
+			temperature: 0.4,
+		});
+		const ordinary = await f.host.runtime.runPromise(
+			f.host.submit({
+				sessionId: sessionId(),
+				turnId: turnId(),
+				text: "ordinary",
+			}),
+		);
+		await f.host.runtime.runPromise(Stream.runDrain(ordinary.events));
+		expect(f.endpoint.calls.at(-1)?.body.model).toBe("fixture-model");
+		expect(
+			f.endpoint.calls
+				.at(-1)
+				?.body.messages.some((m) => m.content.includes("Key persona")),
+		).toBe(false);
+		await expect(
+			f.bridge.persona?.update(settings, other.generation),
+		).rejects.toMatchObject({ code: "CHAT.INPUT.INVALID" });
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("PR128 final key selection, typed turn, dictation and reselection share session history", async () => {
+	const settings = {
+		...defaultAssistantSettings(),
+		useAgent: false,
+		enableWakeTalkWindow: true,
+		chatHistoryCount: 4,
+	};
+	const f = await fixture({}, "generic", "fixture-model", undefined, {
+		keySettings: () => Effect.succeed(settings),
+	});
+	const v = voiceFixture(f.host, () => Effect.void);
+	try {
+		const select = () =>
+			v.voice.runPromise(
+				Effect.flatMap(GridVoiceRuntime, (r) =>
+					r.select("QK", "1,1", "aiChat", Option.none()),
+				),
+			);
+		await select();
+		const first = await f.bridge.selection?.();
+		if (!first) throw new Error("missing selection");
+		const typed = turnId();
+		await f.bridge.submit({
+			sessionId: first.sessionId,
+			turnId: typed,
+			text: "typed first",
+		});
+		await vi.waitFor(async () =>
+			expect(
+				Option.isSome(
+					(await f.bridge.snapshot(first.sessionId, typed)).terminal,
+				),
+			).toBe(true),
+		);
+		await v.voice.runPromise(
+			v.send({
+				serial: "QK",
+				keyCode: "1,1",
+				agentId: "",
+				message: "dictated next",
+			}),
+		);
+		const dictated = await f.bridge.selection?.();
+		expect(dictated?.sessionId).toBe(first.sessionId);
+		expect(dictated?.transcript).toBe("dictated next");
+		const next = turnId();
+		await f.bridge.submit({
+			sessionId: first.sessionId,
+			turnId: next,
+			text: dictated?.transcript ?? "",
+		});
+		await vi.waitFor(async () =>
+			expect(
+				Option.isSome(
+					(await f.bridge.snapshot(first.sessionId, next)).terminal,
+				),
+			).toBe(true),
+		);
+		await select();
+		expect((await f.bridge.selection?.())?.sessionId).toBe(first.sessionId);
+		expect(
+			(await f.bridge.history(first.sessionId)).turns.map((t) => t.input),
+		).toEqual(["typed first", "dictated next"]);
+		expect(
+			f.endpoint.calls[1]?.body.messages
+				.filter((m) => m.role === "user")
+				.map((m) => m.content),
+		).toEqual(["typed first", "dictated next"]);
+		expect(await f.bridge.list()).toHaveLength(1);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("PR128 direct model revisions separate history while unchanged pins reuse their key session", async () => {
+	const f = await fixture();
+	const events: VoiceSurfaceEvent[] = [];
+	const v = voiceFixture(f.host, (e) =>
+		Effect.sync(() => {
+			events.push(e);
+		}),
+	);
+	try {
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			chatHistoryCount: 4,
+		};
+		for (const model of ["model-A", "model-A", "model-B"]) {
+			const directModel = await f.host.runtime.runPromise(
+				f.host.pinKnobModel("configured", model),
+			);
+			const before = events.filter(
+				(e) => e._tag === "Chunk" && e.chunk.type === "end",
+			).length;
+			await v.voice.runPromise(
+				v.send({
+					serial: "QK",
+					keyCode: "0,1",
+					agentId: "main",
+					message: model,
+					directModel,
+					assistantSettings: settings,
+					knob: {
+						profileId: "p",
+						revision: 1,
+						route: "direct",
+						providerId: "configured",
+						modelId: model,
+						agentId: "",
+					},
+				}),
+			);
+			await vi.waitFor(() =>
+				expect(
+					events.filter((e) => e._tag === "Chunk" && e.chunk.type === "end")
+						.length,
+				).toBe(before + 1),
+			);
+		}
+		const turns = events.filter((e) => e._tag === "TurnStarted");
+		expect(turns[0]?.sessionId).toBe(turns[1]?.sessionId);
+		expect(turns[2]?.sessionId).not.toBe(turns[0]?.sessionId);
+		expect(
+			f.endpoint.calls.map(
+				(c) => c.body.messages.filter((m) => m.role === "user").length,
+			),
+		).toEqual([1, 2, 1]);
+	} finally {
+		await v.voice.dispose();
+		await f.close();
+	}
+});
+
+it("PR128 explicit desktop persona resolves editor catalog while unset persona follows main", async () => {
+	const f = await fixture();
+	const base = {
+		id: "default-row",
+		role: "default" as const,
+		provider: "generic",
+		model: "editor-model",
+		maxTokens: 512,
+		credentialRef: f.reference,
+	};
+	// Use the same loopback endpoint with distinct scope catalogs.
+	const pinned = await f.host.runtime.runPromise(
+		f.host.pinKnobModel("configured", "fixture-model"),
+	);
+	const directory = await mkdtemp(join(tmpdir(), "persona-catalog-"));
+	const host = createDirectChat({
+		directory,
+		credentials: f.creds.ai,
+		online: () => true,
+		models: (scope) =>
+			Effect.succeed([
+				{
+					...base,
+					baseUrl: pinned.profile.baseUrl,
+					...(scope === "main" ? { id: "main-row", model: "main-model" } : {}),
+				},
+			]),
+	});
+	try {
+		await host.runtime.runPromise(
+			host.persona.update({
+				...defaultAssistantSettings(),
+				useAgent: false,
+				modelRowId: "default-row",
+			}),
+		);
+		const first = await host.runtime.runPromise(
+			host.submit({
+				sessionId: sessionId(),
+				turnId: turnId(),
+				text: "explicit",
+			}),
+		);
+		await host.runtime.runPromise(Stream.runDrain(first.events));
+		await host.runtime.runPromise(
+			host.persona.update({ ...defaultAssistantSettings(), useAgent: false }),
+		);
+		const second = await host.runtime.runPromise(
+			host.submit({
+				sessionId: sessionId(),
+				turnId: turnId(),
+				text: "follow main",
+			}),
+		);
+		await host.runtime.runPromise(Stream.runDrain(second.events));
+		expect(f.endpoint.calls.map((c) => c.body.model)).toEqual([
+			"editor-model",
+			"main-model",
+		]);
+	} finally {
+		await host.dispose();
+		await rm(directory, { recursive: true });
+		await f.close();
+	}
+});
+
+it("PR128 selected assistant RPC claims ownership and rejects another connection", async () => {
+	const f = await fixture();
+	const listeners = new Set<(event: unknown, input: unknown) => void>();
+	const scope = await f.host.runtime.runPromise(Scope.make());
+	const connection = await f.host.runtime.runPromise(
+		makeDesktopChatConnection(f.host, (message) => {
+			for (const listener of listeners) listener({}, message);
+		}).pipe(Scope.extend(scope)),
+	);
+	const other = createDirectChatBridge({
+		invoke: async (channel, input) =>
+			channel === CHAT_REQUEST
+				? f.host.runtime.runPromise(connection.write(input))
+				: f.host.runtime.runPromise(Scope.close(scope, Exit.void)),
+		on: (_channel, cb) => listeners.add(cb),
+		removeListener: (_channel, cb) => listeners.delete(cb),
+	});
+	try {
+		const sid = sessionId();
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			roleId: -1,
+			customPrompt: "Private key",
+		};
+		await f.host.runtime.runPromise(
+			f.host.selectAssistant(sid, settings, "private transcript"),
+		);
+		const selected = await f.bridge.selection?.();
+		if (!selected) throw new Error("missing selection");
+		expect(await f.bridge.persona?.read()).toEqual(settings);
+		await f.bridge.persona?.update(
+			{ ...settings, customPrompt: "owned update" },
+			selected.generation,
+		);
+		for (const operation of [
+			() => other.selection?.(),
+			() => other.persona?.read(),
+			() => other.persona?.update(settings, selected.generation),
+			() => other.acknowledgeSelection?.(selected.generation),
+		]) {
+			await expect(operation()).rejects.toMatchObject({
+				code: "CHAT.INPUT.INVALID",
+			});
+		}
+		expect((await f.bridge.selection?.())?.transcript).toBe(
+			"private transcript",
+		);
+		await f.bridge.acknowledgeSelection?.(selected.generation);
+		expect((await f.bridge.selection?.())?.transcript).toBeUndefined();
+	} finally {
+		await other.dispose();
+		await f.close();
+	}
+});
+
+it.each(["qwen3.6-plus", "private-model"])(
+	"PR128 followed provider change reaches inference with reconciled model %s",
+	async (modelId) => {
+		const settings = {
+			...defaultAssistantSettings(),
+			useAgent: false,
+			modelId,
+		};
+		const f = await fixture({}, "qwen", "qwen3.6-plus", undefined, {
+			keySettings: () => Effect.succeed(settings),
+			online: () => true,
+		});
+		const events: VoiceSurfaceEvent[] = [];
+		const v = voiceFixture(f.host, (e) =>
+			Effect.sync(() => {
+				events.push(e);
+			}),
+		);
+		try {
+			f.changeProvider("deepseek");
+			f.changeModel("deepseek-v4-flash");
+			const prepared = await Effect.runPromise(
+				assistantCapturePreparer(f.host)({
+					serial: "QK",
+					keyCode: "1,1",
+					type: "aiChat",
+					captureId: "follow",
+					generation: 1,
+					agentId: Option.none(),
+				}),
+			);
+			await v.voice.runPromise(
+				v.send({
+					serial: "QK",
+					keyCode: "1,1",
+					agentId: "main",
+					message: "next provider",
+					...prepared,
+				}),
+			);
+			await vi.waitFor(() =>
+				expect(
+					events.some((e) => e._tag === "Chunk" && e.chunk.type === "end"),
+				).toBe(true),
+			);
+			expect(f.endpoint.calls[0]?.body.model).toBe(
+				modelId === "private-model" ? modelId : "deepseek-v4-flash",
+			);
+		} finally {
+			await v.voice.dispose();
 			await f.close();
 		}
 	},

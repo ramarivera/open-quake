@@ -106,5 +106,8 @@ export const executeAssistantHa = Effect.fn("DesktopAssistant.homeAssistant")(
 		});
 		if (!isCurrent()) return yield* new AiUnavailable();
 		yield* port.execute(key, isCurrent);
+		return {
+			answer: `Home Assistant: ${key.service} completed for ${key.entity_id}.`,
+		};
 	},
 );

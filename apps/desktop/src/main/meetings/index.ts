@@ -59,6 +59,7 @@ import type { VoiceSurfaceEvent } from "../../shared/voice-surface";
 import { agentRequestAllowed } from "../agents/controller";
 import type { DesktopDiagnostics } from "../diagnostics";
 import { prepareDesktopModule } from "../diagnostics/module";
+import { meetingHardwareFeedback } from "../hardware/meeting-feedback";
 import { isAppRenderer } from "../profiles/profile-ipc";
 import { audioSetup, openBlackHoleInstaller } from "./audio-setup";
 import { createCapturePort } from "./capture-port";
@@ -110,7 +111,7 @@ export function prepareMeetings(
 		>;
 		locale?: () => string;
 		userData: string;
-		hardware: () => HardwareSession | undefined;
+		hardware: (serial?: string) => HardwareSession | undefined;
 		mock: boolean;
 		renderer?: string;
 		management?: () =>
@@ -237,6 +238,9 @@ export function prepareMeetings(
 			)
 		: (live?.layer ?? MeetingProvider.Default);
 
+	const feedback = meetingHardwareFeedback(options.hardware);
+	let enqueueFeedback: (work: Effect.Effect<void>) => Effect.Effect<void> =
+		() => Effect.void;
 	const prepared = prepareDesktopModule(
 		MeetingService.DefaultWithoutDependencies.pipe(
 			Layer.provideMerge(
@@ -244,22 +248,32 @@ export function prepareMeetings(
 					MeetingRepository.Default(meetingStorage(root)),
 					providers,
 					captureLayer,
-					Layer.succeed(MeetingProgress, {
-						publish: (event) =>
-							Effect.promise(async () => {
-								await options.publishVoice?.({
-									_tag: "MeetingStage",
-									serial:
-										event.origin?.serial ??
-										options.serial?.() ??
-										"desktop-preview",
-									keyCode: event.origin?.keyCode ?? "0,0",
-									meetingId: event.meetingId,
-									stage: event.stage,
-									status: event.status,
-								});
-							}),
-					}),
+					Layer.scoped(
+						MeetingProgress,
+						Effect.gen(function* () {
+							const toneScope = yield* Effect.scope;
+							enqueueFeedback = (work) =>
+								Effect.forkIn(work, toneScope).pipe(Effect.asVoid);
+							return {
+								publish: (event) =>
+									Effect.promise(async () => {
+										await options.publishVoice?.({
+											_tag: "MeetingStage",
+											serial:
+												event.origin?.serial ??
+												options.serial?.() ??
+												"desktop-preview",
+											keyCode: event.origin?.keyCode ?? "0,0",
+											meetingId: event.meetingId,
+											stage: event.stage,
+											status: event.status,
+										});
+									}).pipe(
+										Effect.zipRight(enqueueFeedback(feedback.stage(event))),
+									),
+							};
+						}),
+					),
 				),
 			),
 			Layer.tap((context) =>
@@ -355,6 +369,14 @@ export function prepareMeetings(
 								serial: options.serial?.() ?? "desktop-preview",
 								keyCode: command.keyCode ?? "0,0",
 							});
+							if (command.action === "meetingRecordMark")
+								yield* enqueueFeedback(
+									feedback.mark(
+										before,
+										next,
+										options.serial?.() ?? "desktop-preview",
+									),
+								);
 							for (const record of next.records)
 								if (
 									record.state === "recorded" &&

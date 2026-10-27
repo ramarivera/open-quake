@@ -8,6 +8,7 @@ import {
 	Stream,
 	SubscriptionRef,
 } from "effect";
+import { upgradeAssistantTitles } from "./profile-assistant-migration.js";
 import { profileParseFailure } from "./profile-codec.js";
 import {
 	type EncodedProfileEnvelope,
@@ -103,11 +104,21 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 				ProfileSelectionCommit,
 			);
 			const mutex = yield* Effect.makeSemaphore(1);
+			const contentGenerations = new Map<string, number>();
 			const committed = yield* SubscriptionRef.make(
 				Option.none<ProfileEnvelope>(),
 			);
 			const publishCommitted = Effect.fn("ProfileRepository.publishCommitted")(
 				function* (previous: ProfileEnvelope, next: ProfileEnvelope) {
+					for (const id of new Set([
+						...previous.profiles.map((p) => p.id),
+						...next.profiles.map((p) => p.id),
+					])) {
+						const before = previous.profiles.find((p) => p.id === id);
+						const after = next.profiles.find((p) => p.id === id);
+						if (JSON.stringify(before) !== JSON.stringify(after))
+							contentGenerations.set(id, (contentGenerations.get(id) ?? 0) + 1);
+					}
 					yield* SubscriptionRef.set(committed, Option.some(next));
 					if (Option.isNone(selectionCommit)) return;
 					for (const deviceId of new Set([
@@ -146,7 +157,8 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							Effect.fail(profileParseFailure(cause)),
 						),
 					);
-					const repaired = repairProfileSelections(decoded);
+					const migrated = upgradeAssistantTitles(decoded);
+					const repaired = repairProfileSelections(migrated);
 					const snapshot = yield* committedProfileSnapshot(
 						repaired.envelope,
 					).pipe(
@@ -154,7 +166,8 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 							Effect.fail(profileParseFailure(cause)),
 						),
 					);
-					if (repaired.repairedSelections.length > 0) yield* write(snapshot);
+					if (repaired.repairedSelections.length > 0 || migrated !== decoded)
+						yield* write(snapshot);
 					yield* SubscriptionRef.set(committed, Option.some(snapshot));
 					return { ...repaired, envelope: snapshot };
 				},
@@ -320,6 +333,8 @@ export class ProfileRepository extends Effect.Service<ProfileRepository>()(
 					}).pipe(mutex.withPermits(1), Effect.uninterruptible),
 			);
 			return {
+				contentGeneration: (profileId: string) =>
+					Effect.sync(() => contentGenerations.get(profileId) ?? 0),
 				transact,
 				load,
 				save,

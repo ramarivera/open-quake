@@ -314,7 +314,7 @@ it("discovers a new clickable over a known scroller after invalidation, retainin
 	expect(registry.targets()).toHaveLength(3);
 });
 
-it("activates all five shipped MeetAI keys through native touch without profile flags", () => {
+it("routes native MeetAI recorder keys once and leaves mic to saved-key activation without profile flags", () => {
 	vi.useFakeTimers();
 	try {
 		const profile = builtinProfiles("darwin", "en").find((p) => p.id === "1-1");
@@ -367,7 +367,13 @@ it("activates all five shipped MeetAI keys through native touch without profile 
 				),
 			).toHaveLength(1);
 		}
-		expect(dispatched).toEqual(actions);
+		expect(dispatched).toEqual([
+			"meetingMinutes",
+			"tempMeetingMinutes",
+			"meetingRecordMark",
+			"liveAudioTranslate",
+		]);
+		expect(dispatched).not.toContain("mic");
 		controller.dispose();
 	} finally {
 		vi.useRealTimers();

@@ -112,6 +112,10 @@ async function mountedMatrix(
 	disposals.push(() => runtime.dispose());
 	const pending = new Set<Promise<unknown>>();
 	const request = vi.fn(async (command: KeyRequest) => {
+		if (command.type === "panel-message")
+			await runtime.runPromise(
+				KeyRuntime.panelMessage(command.deviceId, command.message),
+			);
 		if (command.type === "activate") {
 			const work = runtime.runPromise(
 				KeyRuntime.activate(
@@ -185,6 +189,8 @@ async function mountedMatrix(
 		});
 	};
 	return {
+		json: (value: Extract<QuakeEvent, { kind: "json" }>["value"]) =>
+			emit({ source: "mock", kind: "json", value }),
 		clock: (ms: number) => runtime.runPromise(TestClock.adjust(ms)),
 		effects,
 		request,
@@ -367,4 +373,31 @@ it("matrix completed contacts drive mounted knob focus through the same tap path
 	expect(
 		knobRequest.mock.calls.filter(([c]) => c._tag === "TapTile"),
 	).toHaveLength(2);
+});
+
+it("SCREEN-108/109: mounted panel decodes management messages and leaves global alerts inert", async () => {
+	const f = await mountedMatrix();
+	await f.json({
+		type: "functionKeyPressed",
+		functionName: "managementCenter",
+		tabType: "keys",
+	});
+	expect(f.effects).toEqual(["managementCenter"]);
+	const calls = () =>
+		f.request.mock.calls.filter(([c]) => c.type === "panel-message");
+	expect(calls()).toHaveLength(1);
+	await f.json({
+		type: "functionKeyPressed",
+		functionName: "managementCenter",
+		tabType: "unknown",
+	});
+	expect(calls()).toHaveLength(1);
+	await f.json({
+		type: "globalAlert",
+		alertType: "multi-screen",
+		serials: ["matrix-device", "unknown"],
+	});
+	expect(calls()).toHaveLength(2);
+	expect(f.effects).toEqual(["managementCenter"]);
+	expect(f.node.querySelector('[data-key-code="1,1"]')).not.toBeNull();
 });

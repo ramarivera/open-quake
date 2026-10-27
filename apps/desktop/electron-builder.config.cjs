@@ -15,6 +15,7 @@ module.exports = {
 	directories: { output: "dist" },
 	files: ["out/**/*", "package.json"],
 	asar: true,
+	extraResources: [{ from: "resources/linux", to: "linux" }],
 	asarUnpack: [
 		"out/native-media/**/*",
 		"node_modules/node-hid/**/*",

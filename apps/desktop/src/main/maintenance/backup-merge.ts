@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import {
 	builtinProfiles,
 	isBuiltinProfile,
@@ -11,6 +11,11 @@ import {
 	ProfileJsonObject,
 	ProfileKey,
 } from "../../../../../packages/device/src/profiles/profile-contracts.js";
+import { remapProfileDestinations } from "../../../../../packages/device/src/profiles/profile-import.js";
+import {
+	managerState,
+	PROFILE_LIMIT,
+} from "../../../../../packages/device/src/profiles/profile-manager-invariants.js";
 import { BackupInvalid } from "../../../../../packages/edge/src/maintenance/maintenance-errors.js";
 import { ClockRecord } from "../clock/clock-store";
 import {
@@ -108,6 +113,18 @@ function archiveRelative(path: string, base: string): string {
 	if (!normalized.startsWith(`${root}/`)) throw new BackupInvalid();
 	return safeArchivePath(normalized.slice(root.length + 1));
 }
+const assertCapacity = (
+	current: ProfileEnvelope,
+	profiles: readonly Profile[],
+): void => {
+	const hidden = managerState(current).hidden;
+	if (
+		profiles.filter((profile) => !hidden.includes(profile.id)).length >
+		PROFILE_LIMIT
+	)
+		throw new BackupInvalid();
+};
+
 export interface BackupMerge {
 	readonly profileIds?: ReadonlyMap<string, string>;
 	readonly envelope: typeof ProfileEnvelope.Encoded;
@@ -178,6 +195,13 @@ export function mergeBackup(
 			const duplicate = profiles.find((p) => {
 				const existing = Schema.encodeSync(Profile)(p);
 				return (
+					(existing.compatibility?.nativeImportFingerprint === fingerprint &&
+						existing.compatibility?.nativeImportContentFingerprint ===
+							hashBytes(
+								Buffer.from(
+									stable({ pages: existing.pages, knob: existing.knob }),
+								),
+							)) ||
 					hashBytes(
 						Buffer.from(stable({ pages: existing.pages, knob: existing.knob })),
 					) === fingerprint
@@ -193,11 +217,39 @@ export function mergeBackup(
 			let suffix = 1;
 			while (profiles.some((p) => p.id === id)) id = `${base}-${suffix++}`;
 			profiles.push(
-				Schema.decodeUnknownSync(Profile)({ ...encoded, id, revision: 0 }),
+				Schema.decodeUnknownSync(Profile)({
+					...encoded,
+					id,
+					revision: 0,
+					compatibility: {
+						...encoded.compatibility,
+						nativeImportFingerprint: fingerprint,
+					},
+				}),
 			);
 			profileIds.set(profile.id, id);
 			added++;
 		}
+		// Allocate all IDs before rewriting cross-profile and forward references.
+		for (const [i, profile] of profiles.entries()) {
+			if (i < envelope.profiles.length) continue;
+			const rewritten = remapProfileDestinations(
+				Schema.encodeSync(Profile)(profile),
+				profileIds,
+			);
+			profiles[i] = Schema.decodeUnknownSync(Profile)({
+				...rewritten,
+				compatibility: {
+					...rewritten.compatibility,
+					nativeImportContentFingerprint: hashBytes(
+						Buffer.from(
+							stable({ pages: rewritten.pages, knob: rewritten.knob }),
+						),
+					),
+				},
+			});
+		}
+		assertCapacity(envelope, profiles);
 		return {
 			envelope: encodeProfileEnvelope({
 				...envelope,
@@ -219,9 +271,9 @@ export function mergeBackup(
 			skipped,
 		};
 	}
-	const groups = Schema.decodeUnknownSync(ResourceGroups)(
-		json(files.get("app/assets/resources.conf")),
-	);
+	const groups = Schema.decodeUnknownSync(ResourceGroups, {
+		onExcessProperty: "preserve",
+	})(json(files.get("app/assets/resources.conf")));
 	const configEntry = [...files].find(([name]) =>
 		/^[^/]+_config\.json$/.test(name),
 	);
@@ -355,14 +407,28 @@ export function mergeBackup(
 				}),
 			),
 		);
-	const seenProfiles = new Set(
-		profiles.map((profile) => fingerprint(Schema.encodeSync(Profile)(profile))),
-	);
+	const seenProfiles = new Map<string, string>();
+	for (const profile of profiles) {
+		const encoded = Schema.encodeSync(Profile)(profile);
+		const content = fingerprint(encoded);
+		seenProfiles.set(content, profile.id);
+		if (
+			encoded.compatibility?.importedContentFingerprint === content &&
+			typeof encoded.compatibility.sourceFingerprint === "string"
+		) {
+			seenProfiles.set(encoded.compatibility.sourceFingerprint, profile.id);
+		}
+	}
+	const profileIds = new Map<string, string>();
 	const pending = new Map<
 		string,
 		{
 			name: string;
-			pages: { id: string; keys: (typeof ProfileKey.Encoded)[] }[];
+			pages: {
+				id: string;
+				keys: (typeof ProfileKey.Encoded)[];
+				compatibility?: typeof ProfileJsonObject.Type;
+			}[];
 			knob?: { keyCode: "0,1"; config: typeof ProfileJsonObject.Type };
 			unchangedBuiltin: boolean;
 		}
@@ -396,7 +462,15 @@ export function mergeBackup(
 				);
 			});
 		const knob = keys.find((key) => key.keyCode === "0,1");
-		const page = { id: parts[1] ?? "1", keys: pageKeys };
+		const page = {
+			id: parts[1] ?? "1",
+			keys: pageKeys,
+			compatibility: {
+				backupResource: rewrite(
+					withoutCredentials(Schema.decodeUnknownSync(ProfileJson)(resource)),
+				),
+			},
+		};
 		const existing = pending.get(group);
 		if (existing) {
 			existing.pages.push(page);
@@ -448,7 +522,16 @@ export function mergeBackup(
 		const content = fingerprint(
 			Schema.encodeSync(Profile)(Schema.decodeUnknownSync(Profile)(draft)),
 		);
-		if (item.unchangedBuiltin || seenProfiles.has(content)) {
+		const sourceIds = item.pages.flatMap((page) => {
+			const resource = page.compatibility?.backupResource;
+			return Schema.is(ProfileJsonObject)(resource)
+				? [String(resource.id)]
+				: [];
+		});
+		const duplicateId = seenProfiles.get(content);
+		if (item.unchangedBuiltin || duplicateId) {
+			if (duplicateId)
+				for (const source of sourceIds) profileIds.set(source, duplicateId);
 			skipped++;
 			continue;
 		}
@@ -464,9 +547,37 @@ export function mergeBackup(
 				compatibility: { imported: true, sourceFingerprint: content },
 			}),
 		);
-		seenProfiles.add(content);
+		seenProfiles.set(content, id);
+		for (const source of sourceIds) profileIds.set(source, id);
 		added++;
 	}
+	for (const [i, profile] of profiles.entries()) {
+		if (i < envelope.profiles.length) continue;
+		const rewritten = remapProfileDestinations(
+			Schema.encodeSync(Profile)(profile),
+			profileIds,
+		);
+		profiles[i] = Schema.decodeUnknownSync(Profile)({
+			...rewritten,
+			compatibility: {
+				...rewritten.compatibility,
+				importedContentFingerprint: fingerprint(rewritten),
+			},
+		});
+	}
+	// Keep the original taxonomy and extra metadata in existing legacy storage.
+	// The payload uses owned rewritten paths and content IDs, never source paths.
+	const catalog = rewrite(
+		withoutCredentials(
+			Schema.decodeUnknownSync(ProfileJson)([{ data: records }]),
+		),
+	);
+	const catalogBytes = Buffer.from(JSON.stringify(catalog));
+	portable.legacyFiles.set(
+		`resource-catalog-${hashBytes(catalogBytes)}/resources.json`,
+		catalogBytes,
+	);
+	assertCapacity(envelope, profiles);
 	return {
 		envelope: encodeProfileEnvelope({
 			...envelope,
@@ -476,6 +587,7 @@ export function mergeBackup(
 			}).profiles,
 		}),
 		resources,
+		profileIds,
 		legacyFiles: portable.legacyFiles,
 		imported: added + resources.size,
 		skipped,
@@ -494,18 +606,52 @@ export function backupProjection(
 	const current = Schema.decodeUnknownSync(ProfileEnvelope)(envelope);
 	const jsonBytes = (value: unknown) => Buffer.from(JSON.stringify(value));
 	const assetPaths = new Map<string, string>();
-	const resourceRows = assets.map(({ source, bytes }) => {
-		const id = hashBytes(bytes);
-		const relative = `app/assets/resource/${id}`;
-		files.set(relative, bytes);
-		assetPaths.set(source.replaceAll("\\", "/"), `${base}/${relative}`);
-		return {
-			id: `backup-resource:${id}`,
-			name: id,
-			path: `${base}/${relative}`,
-			resourceType: "File",
-		};
-	});
+	const metadata = assets
+		.filter((asset) =>
+			/\/resource-catalog-[a-f0-9]{64}\/resources\.json$/.test(asset.source),
+		)
+		.flatMap(({ bytes }) =>
+			Schema.decodeUnknownSync(ResourceGroups, {
+				onExcessProperty: "preserve",
+			})(json(bytes)).flatMap((group) => group.data),
+		);
+	const resourceRows = assets
+		.filter(
+			(asset) =>
+				!/\/resource-catalog-[a-f0-9]{64}\/resources\.json$/.test(asset.source),
+		)
+		.filter(
+			({ source }) =>
+				!metadata.some(
+					(entry) =>
+						entry.resourceType === "DeviceConfig" &&
+						entry.path.replaceAll("\\", "/") === source.replaceAll("\\", "/"),
+				),
+		)
+		.flatMap(({ source, bytes }) => {
+			const id = hashBytes(bytes);
+			const relative = `app/assets/resource/${id}`;
+			files.set(relative, bytes);
+			assetPaths.set(source.replaceAll("\\", "/"), `${base}/${relative}`);
+			const retained = [
+				...new Map(
+					metadata
+						.filter(
+							(entry) =>
+								entry.path.replaceAll("\\", "/") ===
+								source.replaceAll("\\", "/"),
+						)
+						.map((entry) => [stable(entry), entry]),
+				).values(),
+			];
+			return (retained.length ? retained : [undefined]).map((entry) => ({
+				...entry,
+				id: `backup-resource:${id}`,
+				name: entry?.name ?? id,
+				path: `${base}/${relative}`,
+				resourceType: entry?.resourceType ?? "File",
+			}));
+		});
 	const projectPaths = (value: ProfileJson): ProfileJson => {
 		if (typeof value === "string")
 			return assetPaths.get(value.replaceAll("\\", "/")) ?? value;
@@ -533,7 +679,13 @@ export function backupProjection(
 					),
 				),
 			);
+			const retained =
+				Option.isSome(page.compatibility) &&
+				Schema.is(ProfileJsonObject)(page.compatibility.value.backupResource)
+					? page.compatibility.value.backupResource
+					: {};
 			return {
+				...retained,
 				id,
 				name: `${index + 1},${pageIndex + 1},1`,
 				path: `${base}/${relative}`,

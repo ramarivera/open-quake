@@ -210,7 +210,8 @@
 		"skipForward": "Skip Forward",
 		"stopAudio": "Stop Audio",
 		"stopPlay": "Stop",
-		"vol": "Volume"
+		"vol": "Volume",
+		"nextProfile": "Next Profile"
 	},
 	"zh": {
 		"editor.titleStyle": "标题样式",
@@ -423,7 +424,8 @@
 		"skipForward": "下一首",
 		"stopAudio": "停止播放音频",
 		"stopPlay": "停止",
-		"vol": "音量"
+		"vol": "音量",
+		"nextProfile": "下一个配置"
 	},
 	"de": {
 		"editor.titleStyle": "Titelstil",
@@ -636,7 +638,8 @@
 		"skipForward": "Vorwärts springen",
 		"stopAudio": "Audio stoppen",
 		"stopPlay": "Stopp",
-		"vol": "Lautstärke"
+		"vol": "Lautstärke",
+		"nextProfile": "Nächstes Profil"
 	},
 	"es": {
 		"editor.titleStyle": "Estilo del título",
@@ -849,7 +852,8 @@
 		"skipForward": "Saltar hacia adelante",
 		"stopAudio": "Detener audio",
 		"stopPlay": "Detener",
-		"vol": "Volumen"
+		"vol": "Volumen",
+		"nextProfile": "Siguiente perfil"
 	},
 	"fr": {
 		"editor.titleStyle": "Style du titre",
@@ -1062,7 +1066,8 @@
 		"skipForward": "Avancer",
 		"stopAudio": "Arrêter l'audio",
 		"stopPlay": "Arrêter",
-		"vol": "Volume"
+		"vol": "Volume",
+		"nextProfile": "Profil suivant"
 	},
 	"it": {
 		"editor.titleStyle": "Stile del titolo",
@@ -1275,7 +1280,8 @@
 		"skipForward": "Salta avanti",
 		"stopAudio": "Ferma audio",
 		"stopPlay": "Ferma",
-		"vol": "Volume"
+		"vol": "Volume",
+		"nextProfile": "Profilo successivo"
 	},
 	"ja": {
 		"editor.titleStyle": "タイトルのスタイル",
@@ -1488,7 +1494,8 @@
 		"skipForward": "前にスキップ",
 		"stopAudio": "オーディオを停止",
 		"stopPlay": "停止",
-		"vol": "音量"
+		"vol": "音量",
+		"nextProfile": "次のプロファイル"
 	},
 	"ko": {
 		"editor.titleStyle": "제목 스타일",
@@ -1701,6 +1708,7 @@
 		"skipForward": "앞으로 건너뛰기",
 		"stopAudio": "오디오 중지",
 		"stopPlay": "중지",
-		"vol": "볼륨"
+		"vol": "볼륨",
+		"nextProfile": "다음 프로필"
 	}
 }

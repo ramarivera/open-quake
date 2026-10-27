@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron";
 import {
+	PROFILE_FOREGROUND_GUIDANCE,
 	PROFILE_PROGRESS,
 	PROFILE_REQUEST,
 	PROFILE_SELECTION,
@@ -23,5 +24,7 @@ const bridge: ProfileBridge = {
 	onSnapshot: (callback) => subscribe(PROFILE_SNAPSHOT, callback),
 	onSelection: (callback) => subscribe(PROFILE_SELECTION, callback),
 	onProgress: (callback) => subscribe(PROFILE_PROGRESS, callback),
+	onForegroundGuidance: (callback) =>
+		subscribe(PROFILE_FOREGROUND_GUIDANCE, callback),
 };
 contextBridge.exposeInMainWorld("quakeProfileManager", bridge);
