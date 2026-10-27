@@ -69,7 +69,8 @@ export function githubAppImageConfiguration(options: {
 			);
 			if (release.draft || release.prerelease) return undefined;
 			const version = release.tag_name.replace(/^v/, "");
-			const name = `open-quake-${version}-linux-${options.arch}.AppImage`;
+			const assetArch = options.arch === "x64" ? "x86_64" : options.arch;
+			const name = `open-quake-${version}-linux-${assetArch}.AppImage`;
 			const asset = release.assets.find((candidate) => candidate.name === name);
 			if (!asset) return undefined;
 			const url = new URL(asset.browser_download_url);

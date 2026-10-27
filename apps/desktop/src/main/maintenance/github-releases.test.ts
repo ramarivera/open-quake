@@ -18,21 +18,39 @@ import {
 import { ownedAppUpdater } from "./app-updater";
 import { githubAppImageConfiguration, RELEASES_PAGE } from "./github-releases";
 
-async function fixture(overrides: Record<string, unknown> = {}) {
+const {
+	downloadName,
+}: {
+	downloadName: (
+		version: string,
+		platform: string,
+		arch: string,
+		extension: string,
+	) => string;
+} = await import(new URL("../../../scripts/release.mjs", import.meta.url).href);
+
+async function fixture(
+	overrides: Record<string, unknown> = {},
+	arch: "x64" | "arm64" = "arm64",
+) {
 	const root = await mkdtemp(join(tmpdir(), "github-update-"));
 	const image = join(root, "open-quake.AppImage");
 	await writeFile(image, "old synthetic image");
 	await chmod(image, 0o755);
 	const bytes = Buffer.from("new synthetic image, never executed");
 	const digest = createHash("sha256").update(bytes).digest("hex");
-	const url = `${RELEASES_PAGE}/download/v1.1.0/open-quake-1.1.0-linux-arm64.AppImage`;
+	const name =
+		arch === "x64"
+			? "open-quake-1.1.0-linux-x86_64.AppImage"
+			: "open-quake-1.1.0-linux-arm64.AppImage";
+	const url = `${RELEASES_PAGE}/download/v1.1.0/${name}`;
 	const release = {
 		tag_name: "v1.1.0",
 		draft: false,
 		prerelease: false,
 		assets: [
 			{
-				name: "open-quake-1.1.0-linux-arm64.AppImage",
+				name,
 				size: bytes.length,
 				digest: `sha256:${digest}`,
 				browser_download_url: url,
@@ -55,7 +73,7 @@ async function fixture(overrides: Record<string, unknown> = {}) {
 	});
 	const restart = vi.fn();
 	const configuration = githubAppImageConfiguration({
-		arch: "arm64",
+		arch,
 		image,
 		fetch: transport,
 		restart,
@@ -63,7 +81,7 @@ async function fixture(overrides: Record<string, unknown> = {}) {
 	const port = ownedAppUpdater({
 		root: join(root, "updates"),
 		platform: "linux",
-		arch: "arm64",
+		arch,
 		currentVersion: "1.0.0",
 		configuration,
 	});
@@ -80,36 +98,52 @@ async function fixture(overrides: Record<string, unknown> = {}) {
 		),
 	};
 }
-it("MAIN-114 real update service downloads the owned GitHub asset, verifies it and waits for explicit install", async () => {
-	const f = await fixture();
-	try {
-		await Effect.runPromise(
-			Effect.gen(function* () {
-				const updates = yield* AppUpdates;
-				yield* updates.check();
-				expect(yield* updates.snapshot()).toMatchObject({
-					state: "available",
-					version: "1.1.0",
-				});
-				yield* updates.download();
-				expect(yield* updates.snapshot()).toMatchObject({ state: "ready" });
-				expect(yield* Effect.promise(() => readFile(f.image, "utf8"))).toBe(
-					"old synthetic image",
-				);
-				expect(f.restart).not.toHaveBeenCalled();
-				yield* updates.install();
-			}).pipe(Effect.provide(f.layer), Effect.scoped),
-		);
-		expect(await readFile(f.image)).toEqual(f.bytes);
-		expect((await stat(f.image)).mode & 0o777).toBe(0o755);
-		expect(f.restart).toHaveBeenCalledOnce();
-		expect(f.transport.mock.calls[0]?.[0]).toBe(
-			"https://api.github.com/repos/ramarivera/open-quake/releases/latest",
-		);
-	} finally {
-		await rm(f.root, { recursive: true, force: true });
-	}
-});
+it.each(["x64", "arm64"] as const)(
+	"MAIN-114 real update service downloads the published %s AppImage, verifies it and waits for explicit install",
+	async (arch) => {
+		const f = await fixture({}, arch);
+		const download = vi.spyOn(f.port, "download");
+		try {
+			expect(f.release.assets[0]?.name).toBe(
+				downloadName("1.1.0", "linux", arch, "AppImage"),
+			);
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const updates = yield* AppUpdates;
+					yield* updates.check();
+					expect(yield* updates.snapshot()).toMatchObject({
+						state: "available",
+						version: "1.1.0",
+					});
+					yield* updates.download();
+					expect(download).toHaveBeenCalledWith(
+						expect.objectContaining({
+							arch,
+							artifact: f.release.assets[0]?.browser_download_url,
+						}),
+						expect.any(Function),
+					);
+					expect(yield* updates.snapshot()).toMatchObject({ state: "ready" });
+					expect(yield* Effect.promise(() => readFile(f.image, "utf8"))).toBe(
+						"old synthetic image",
+					);
+					expect(f.restart).not.toHaveBeenCalled();
+					yield* updates.install();
+				}).pipe(Effect.provide(f.layer), Effect.scoped),
+			);
+			expect(await readFile(f.image)).toEqual(f.bytes);
+			expect((await stat(f.image)).mode & 0o777).toBe(0o755);
+			expect(f.restart).toHaveBeenCalledOnce();
+			expect(f.transport.mock.calls.map(([input]) => String(input))).toEqual([
+				"https://api.github.com/repos/ramarivera/open-quake/releases/latest",
+				f.release.assets[0]?.browser_download_url,
+				"https://release-assets.githubusercontent.com/owned/test",
+			]);
+		} finally {
+			await rm(f.root, { recursive: true, force: true });
+		}
+	},
+);
 it.each([
 	{ digest: null },
 	{

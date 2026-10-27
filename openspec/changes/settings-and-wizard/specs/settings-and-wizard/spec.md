@@ -662,6 +662,10 @@ MAIN-114 and SETTINGS-006/049/050 SHALL use only ramarivera/open-quake GitHub Re
 - **WHEN** the feed returns a matching newer stable asset or a corrupt, foreign or digest-less asset
 - **THEN** the real maintenance consumer offers the verified update or reports failure before replacement
 
+#### Scenario: Published AppImage architecture names
+- **WHEN** a Linux x64 or arm64 AppImage checks the stable release
+- **THEN** asset lookup uses the publisher's x86_64 or arm64 filename respectively, while release metadata retains the runtime architecture x64 or arm64
+
 #### Scenario: Other distribution formats
 - **WHEN** a deb, Windows, macOS or development build opens update settings
 - **THEN** it exposes the owned releases page and explains manual installation and signing status
