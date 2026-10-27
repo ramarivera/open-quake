@@ -279,3 +279,40 @@ it("restores a changed lighting value after a lost ACK poisons controls and clos
 		),
 	);
 });
+
+it("returns recorded failures and still checks reconnects and cleanup after a lost lighting ACK", async () => {
+	const fake = await Effect.runPromise(makeFakeHardwareTransport());
+	let dropped = false;
+	const transport = Layer.succeed(HidTransport, {
+		...fake.transport,
+		open: (info) =>
+			fake.transport.open(info).pipe(
+				Effect.map((handle) => ({
+					...handle,
+					reports: handle.reports.pipe(
+						Stream.filter((report) => {
+							if (!dropped && report[0] === 7 && report[1] === 11) {
+								dropped = true;
+								return false;
+							}
+							return true;
+						}),
+					),
+				})),
+			),
+	});
+	const report = await Effect.runPromise(
+		runExtendedAcceptance({
+			serial: "mock-quake",
+			mutations: true,
+			cycles: 1,
+		}).pipe(Effect.provide(transport)),
+	);
+	expect(
+		report.checks.find((row) => row.id === "lighting-effectSpeed-roundtrip")
+			?.status,
+	).toBe("failed");
+	for (const id of ["software-reconnect-stress", "all-native-handles-closed"])
+		expect(report.checks.find((row) => row.id === id)?.status).toBe("passed");
+	expect(report.handlesOpened).toBe(report.handlesClosed);
+});
