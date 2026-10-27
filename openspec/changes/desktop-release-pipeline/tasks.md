@@ -35,3 +35,10 @@ Initial candidate verification before authorized credential setup, 2026-10-27: 1
 - [ ] 4.9 Complete the requested Terra/Sol benchmark comparison under `open-quake-i3j.4`; completed Apple credential/artifact verification does not settle that separate comparison.
 
 Final integration checks: all 20 release/signing tests pass after the documentation merge. Signing source and workflow behavior are unchanged from the locally verified candidate. Current-head hosted checks and review remain pending.
+
+## 5. Hosted signing rehearsal, open-quake-i3j.7
+
+- [x] 5.1 Add a main-only manual nonpublishing rehearsal using the existing signing/package/verification path and preserve PR secret isolation and tag-only publication. Ramiro explicitly approved this CI change. All 22 release/signing checks pass, including untrusted-ref rejection, forced signing on main, read-only contents permissions and tag-only publication.
+- [ ] 5.2 Run the reviewed workflow on GitHub and verify its signed/notarized DMG/ZIP artifacts without creating a tag. Existing local proof does not close this hosted acceptance step.
+
+PR133 reviews 4391645019, 4391676290 and 4391676301: credential documentation and the earlier signing-secret requirement now include both macOS version-tag signing and main-only manual rehearsals. PR and Windows/Linux secret isolation is unchanged. Documentation-only correction; the 22 existing release/signing checks cover the referenced workflow behavior.

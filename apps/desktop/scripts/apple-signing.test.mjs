@@ -232,7 +232,7 @@ test("verification rejects ad-hoc, wrong team, missing runtime/timestamp and fai
 	assert.deepEqual(calls[2], ["xcrun", "stapler", "validate", "/test.app"]);
 });
 
-test("release secrets are confined to the mac tag step and cleanup always follows", async () => {
+test("release secrets are confined to trusted macOS packaging and cleanup always follows", async () => {
 	const { load } = appBuilderRequire("js-yaml");
 	const workflow = load(
 		await readFile(
@@ -250,7 +250,7 @@ test("release secrets are confined to the mac tag step and cleanup always follow
 	);
 	assert.equal(
 		signed.if,
-		"github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && matrix.platform == 'mac'",
+		"((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) && matrix.platform == 'mac'",
 	);
 	const secretSteps = job.steps.filter((step) =>
 		JSON.stringify(step).includes("secrets."),
@@ -288,4 +288,80 @@ test("release secrets are confined to the mac tag step and cleanup always follow
 		"utf8",
 	);
 	assert.equal((smoke.match(/await verifyAppleApp\(/g) || []).length, 2);
+});
+
+test("manual signing rehearsal fails closed off main and cannot opt out on main", () => {
+	const manual = {
+		GITHUB_EVENT_NAME: "workflow_dispatch",
+		GITHUB_REF: "refs/heads/main",
+	};
+	assert.equal(policy.appleSigningRequired(manual, "darwin"), true);
+	assert.equal(
+		policy.appleSigningRequired(
+			{ ...manual, OPEN_QUAKE_APPLE_SIGNING: "0" },
+			"darwin",
+		),
+		true,
+	);
+	assert.throws(
+		() => policy.appleSigningOptions(manual, "darwin"),
+		/Apple release signing:/,
+	);
+	const options = policy.appleSigningOptions(
+		{ ...manual, ...credentials },
+		"darwin",
+	);
+	assert.equal(options.notarize, true);
+	assert.equal(options.hardenedRuntime, true);
+	for (const ref of [
+		"refs/heads/feature",
+		"refs/tags/v1.2.3",
+		"refs/pull/1/merge",
+	]) {
+		const untrusted = { ...manual, GITHUB_REF: ref };
+		assert.equal(policy.appleSigningRequired(untrusted, "darwin"), false);
+		assert.throws(
+			() =>
+				policy.appleSigningOptions({ ...untrusted, ...credentials }, "darwin"),
+			/refs\/heads\/main/,
+		);
+	}
+	for (const platform of ["linux", "win32"])
+		assert.equal(policy.appleSigningRequired(manual, platform), false);
+});
+
+test("manual workflow is read-only, default-branch-only and excluded from publication", async () => {
+	const { load } = appBuilderRequire("js-yaml");
+	const workflow = load(
+		await readFile(
+			new URL(
+				"../../../.github/workflows/desktop-release.yml",
+				import.meta.url,
+			),
+			"utf8",
+		),
+	);
+	assert.equal(workflow.on.workflow_dispatch, null);
+	assert.equal(
+		workflow.jobs.validate.if,
+		"github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'",
+	);
+	assert.deepEqual(workflow.permissions, { contents: "read" });
+	assert.equal(workflow.jobs.package.permissions, undefined);
+	assert.equal(
+		workflow.jobs.publish.if,
+		"github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
+	);
+	assert.equal(workflow.jobs.publish.if.includes("workflow_dispatch"), false);
+	const buildTag = workflow.jobs.validate.steps.find(
+		(step) => step.id === "version",
+	).env.BUILD_TAG;
+	assert.ok(buildTag.includes("v0.0.0-rehearsal.{0}"));
+	assert.equal(
+		workflow.jobs.package.steps.some((step) =>
+			/git (?:push|tag)|gh release|publish-release/.test(step.run ?? ""),
+		),
+		false,
+	);
+	assert.equal(workflow.jobs.package.strategy.matrix.include.length, 5);
 });
